@@ -17,7 +17,7 @@
   "DESKTOP_TTI_EARLY_UPDATE_CHECK": false,
   "DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS": 3000,
   "openasar": {
-    "cmdPreset": "perf",
+    "cmdPreset": "balanced",
     "disableMediaKeys": true,
     "noTrack": true,
     "noTyping": true,

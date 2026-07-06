@@ -37,7 +37,7 @@ if ($Quick) {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.1'
+$Script:DiscOptVersion = '1.1.2'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -768,18 +768,25 @@ function Ensure-EquilotCli {
         return $bundled
     }
 
-    if (-not (Get-BundledEquilotGui)) { return $null }
-
     if (-not (Test-Path $ToolsDir)) {
         New-Item -ItemType Directory -Path $ToolsDir -Force | Out-Null
     }
 
+    # Always prefer the official Equicord installer over our manual patch path -
+    # it is the battle-tested way to install Equicord + OpenASAR.
     $cli = Join-Path $ToolsDir 'EquilotlCli.exe'
-    Write-Step 'Downloading EquilotlCli.exe (automates Equilotl from tools/)...'
-    $ua = @{ 'User-Agent' = 'Disc-Optimizer/1.0 (Windows; PowerShell)' }
-    Invoke-WebRequest -Uri $EquilotCliUrl -OutFile $cli -UseBasicParsing -Headers $ua
+    Write-Step 'Downloading official Equicord installer (EquilotlCli.exe)...'
+    try {
+        $ua = @{ 'User-Agent' = 'Disc-Optimizer/1.0 (Windows; PowerShell)' }
+        Invoke-WebRequest -Uri $EquilotCliUrl -OutFile $cli -UseBasicParsing -Headers $ua
+    } catch {
+        Write-Warn "EquilotlCli download failed: $($_.Exception.Message)"
+        Write-LogLine 'WARN' "EquilotlCli download failed: $($_.Exception.Message)"
+        return $null
+    }
     if (-not (Test-Path $cli) -or (Get-Item $cli).Length -lt 1000000) {
-        throw 'EquilotlCli.exe download failed - place EquilotlCli.exe in tools/ manually'
+        Write-Warn 'EquilotlCli.exe download looked invalid - falling back to direct install'
+        return $null
     }
     Write-Ok "EquilotlCli ready ($([math]::Round((Get-Item $cli).Length / 1MB, 1)) MB)"
     return $cli
@@ -1567,10 +1574,12 @@ function Invoke-Debloat([string]$AppDir, [ref]$Freed) {
             ForEach-Object { if (Remove-Safe $_.FullName $freed) { Write-Ok "Removed locale $($_.Name)" } }
     }
 
+    # NOTE: never remove d3dcompiler_47.dll, vulkan-1.dll, vk_swiftshader*, or
+    # chrome_*_percent.pak - Chromium needs them for rendering and removing them
+    # causes blank/black windows on many GPUs.
     foreach ($pattern in @(
-        '.first-run', 'Discord.exe.sig', 'discord_wer.*', 'vk_swiftshader*.*', 'vulkan-1.*',
-        'Microsoft.Gaming.XboxApp.XboxNetwork.winmd', 'd3dcompiler*.*',
-        'chrome_200_percent.pak'
+        '.first-run', 'Discord.exe.sig', 'discord_wer.*',
+        'Microsoft.Gaming.XboxApp.XboxNetwork.winmd'
     )) {
         Get-ChildItem (Join-Path $AppDir $pattern) -ErrorAction SilentlyContinue | ForEach-Object {
             if ($Protected -contains $_.Name) { return }
@@ -1596,14 +1605,8 @@ function Clear-DiscordSafeCache([ref]$Freed) {
         }
     }
 
-    $discordRootTargets = @('SquirrelSetup.log', 'packages\.betaId', 'packages\RELEASES')
-    foreach ($relative in $discordRootTargets) {
-        $path = Join-Path $DiscordRoot $relative
-        if (Remove-Safe $path $Freed) {
-            Write-Ok "Cleaned Discord\$relative"
-        }
-    }
-
+    # Squirrel state (packages\RELEASES, installer.db) is never touched -
+    # Update.exe silently refuses to launch Discord without it.
     $saved = $Freed.Value - $before
     if ($saved -gt 0) {
         Write-Ok "Safe cache clean saved ~$([math]::Round($saved / 1MB, 1)) MB"
@@ -1716,10 +1719,6 @@ function Test-DebloatNeeded([string]$AppDir) {
         $extraLocales = @(Get-ChildItem "$localePath\*.pak" -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -ne 'en-US.pak' })
         if ($extraLocales.Count -gt 0) { $reasons += "$($extraLocales.Count) extra locale(s)" }
-    }
-
-    foreach ($pattern in @('vk_swiftshader_icd.json', 'vk_swiftshader.dll', 'vulkan-1.dll', 'd3dcompiler_47.dll')) {
-        if (Test-Path (Join-Path $AppDir $pattern)) { $reasons += $pattern }
     }
 
     return @{
@@ -1982,6 +1981,24 @@ function Invoke-DiscordLaunch {
     )
 
     $argStr = ($ExtraArgs | Where-Object { $_ }) -join ' '
+
+    # Launch Discord.exe directly - it is the reliable path. Update.exe
+    # --processStart depends on Squirrel state (RELEASES/installer.db) and
+    # exits silently when that state is unhappy.
+    if (-not $AppDir) {
+        $active = Get-ActiveApp
+        if ($active) { $AppDir = $active.FullName }
+    }
+    $exe = if ($AppDir) { Join-Path $AppDir 'Discord.exe' } else { $null }
+    if ($exe -and (Test-Path $exe)) {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $exe
+        $psi.WorkingDirectory = $AppDir
+        $psi.Arguments = $argStr
+        $psi.UseShellExecute = $true
+        return [System.Diagnostics.Process]::Start($psi)
+    }
+
     $updateExe = Join-Path $DiscordRoot 'Update.exe'
     if (Test-Path $updateExe) {
         $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -1996,14 +2013,7 @@ function Invoke-DiscordLaunch {
         return [System.Diagnostics.Process]::Start($psi)
     }
 
-    $exe = Join-Path $AppDir 'Discord.exe'
-    if (-not (Test-Path $exe)) { throw "Discord.exe not found in $AppDir" }
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $exe
-    $psi.WorkingDirectory = $AppDir
-    $psi.Arguments = $argStr
-    $psi.UseShellExecute = $true
-    return [System.Diagnostics.Process]::Start($psi)
+    throw "Discord.exe not found in $AppDir and Update.exe missing"
 }
 
 function Start-Discord([string]$AppDir) {
@@ -2323,44 +2333,65 @@ function Disable-DiscOptKernelOnDisk([string]$AppDir) {
     }
 }
 
+function Wait-DiscordHealthy {
+    param([int]$TimeoutSec = 120)
+
+    # A blank/black page keeps the plain 'Discord' title forever. A healthy,
+    # logged-in client reaches a real title ('Friends - Discord', '#chan - Discord').
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    $sawWindow = $false
+    while ((Get-Date) -lt $deadline) {
+        $state = Get-DiscordWindowState
+        if ($state -eq 'logged_in') { return $true }
+        if ($state -ne 'none') { $sawWindow = $true }
+        Start-Sleep -Seconds 2
+    }
+    if ($sawWindow) {
+        Write-LogLine 'WARN' "Discord window stayed in state '$(Get-DiscordWindowState)' (blank page?)"
+    } else {
+        Write-LogLine 'WARN' 'Discord window never appeared'
+    }
+    return $false
+}
+
 function Confirm-DiscordBootsAfterMods([string]$AppDir) {
-    Write-Step 'Boot check: verifying Discord opens with all optimizations...'
+    Write-Step 'Boot check: verifying Discord opens and fully loads...'
     Stop-Discord
     [void](Invoke-DiscordLaunch -AppDir $AppDir)
-    if (Wait-DiscordMainWindow 75) {
+    if (Wait-DiscordHealthy 120) {
         Stop-Discord
-        Write-Ok 'Boot check passed (Discord reached its main window)'
+        Write-Ok 'Boot check passed (Discord loaded to a real page)'
         return
     }
 
-    Write-Warn 'Discord did not open - disabling DiscOpt kernel and retrying...'
+    Write-Warn 'Discord did not fully load - disabling DiscOpt kernel and retrying...'
     Write-LogLine 'WARN' 'Boot check failed with kernel - trying without kernel'
     Stop-Discord
     Disable-DiscOptKernelOnDisk $AppDir
     [void](Invoke-DiscordLaunch -AppDir $AppDir)
-    if (Wait-DiscordMainWindow 75) {
+    if (Wait-DiscordHealthy 120) {
         Stop-Discord
         $Script:KernelRolledBack = $true
-        Write-Warn 'Kernel disabled automatically - Discord boots without it on this PC.'
+        Write-Warn 'Kernel disabled automatically - Discord loads without it on this PC.'
         Write-Warn 'Everything else (Equicord, OpenASAR, theme, tweaks) is still active.'
         return
     }
 
-    Write-Warn 'Still not opening - restoring stock Discord (all mods off)...'
+    Write-Warn 'Still not loading - restoring stock Discord (all mods off)...'
     Write-LogLine 'WARN' 'Boot check failed without kernel - restoring stock runtime'
     Stop-Discord
     Use-StockDiscordRuntime $AppDir
     [void](Invoke-DiscordLaunch -AppDir $AppDir)
-    if (Wait-DiscordMainWindow 90) {
+    if (Wait-DiscordHealthy 150) {
         Stop-Discord
         $Script:KernelRolledBack = $true
         $Script:ModsRolledBack = $true
-        Write-Warn 'Stock Discord restored and it boots. Mods were rolled back for safety.'
+        Write-Warn 'Stock Discord restored and it loads. Mods were rolled back for safety.'
         return
     }
 
     Stop-Discord
-    throw 'Discord failed to boot even in stock mode. Run the repair one-liner: irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex'
+    throw 'Discord failed to load even in stock mode. Run the repair one-liner: irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex'
 }
 
 function Disable-Fso([string]$AppDir) {

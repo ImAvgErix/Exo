@@ -105,15 +105,32 @@ function Repair-RepairSettingsJson([string]$AppDataDiscord) {
     Write-RepOk 'settings.json cleaned (updater re-enabled)'
 }
 
-function Start-RepairDiscord([string]$DiscordRoot, [string]$AppDir) {
-    $updateExe = Join-Path $DiscordRoot 'Update.exe'
-    if (Test-Path $updateExe) {
-        Start-Process -FilePath $updateExe -ArgumentList '--processStart', 'Discord.exe' -WorkingDirectory $DiscordRoot | Out-Null
-        return
+function Test-RepairAppComplete([string]$AppDir) {
+    # Older optimizer versions deleted Chromium rendering files, which causes a
+    # blank/black Discord window. If any are missing, only a reinstall fixes it.
+    foreach ($name in @(
+        'Discord.exe', 'd3dcompiler_47.dll', 'vulkan-1.dll',
+        'vk_swiftshader.dll', 'chrome_100_percent.pak'
+    )) {
+        if (-not (Test-Path (Join-Path $AppDir $name))) {
+            Write-RepWarn "Missing $name (needed for rendering)"
+            return $false
+        }
     }
+    return $true
+}
+
+function Start-RepairDiscord([string]$DiscordRoot, [string]$AppDir) {
+    # Launch Discord.exe directly - Update.exe silently does nothing when its
+    # Squirrel state is broken.
     $exe = Join-Path $AppDir 'Discord.exe'
     if (Test-Path $exe) {
         Start-Process -FilePath $exe -WorkingDirectory $AppDir | Out-Null
+        return
+    }
+    $updateExe = Join-Path $DiscordRoot 'Update.exe'
+    if (Test-Path $updateExe) {
+        Start-Process -FilePath $updateExe -ArgumentList '--processStart', 'Discord.exe' -WorkingDirectory $DiscordRoot | Out-Null
     }
 }
 
@@ -178,16 +195,24 @@ try {
     if ($app) {
         Write-RepStep "Repairing $($app.Name)..."
         Remove-RepairKernel $app.FullName
-        if (Restore-RepairStockAsar $app.FullName) {
+        $asarOk = Restore-RepairStockAsar $app.FullName
+        $filesOk = Test-RepairAppComplete $app.FullName
+        if ($asarOk -and $filesOk) {
             $needReinstall = $false
-        } else {
+        } elseif (-not $asarOk) {
             Write-RepWarn 'No stock app.asar backup found - a clean reinstall is needed'
+        } else {
+            Write-RepWarn 'Rendering files were removed by an old debloat - reinstalling to restore them'
         }
     } else {
         Write-RepWarn 'No Discord installation found under %LOCALAPPDATA%\Discord'
     }
 
     if ($needReinstall) {
+        if (Test-Path $discordRoot) {
+            Write-RepStep 'Removing the broken install (your login lives elsewhere and is kept)...'
+            Remove-Item $discordRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
         $app = Install-RepairFreshDiscord $discordRoot
         Write-RepOk "Discord $($app.Name) reinstalled"
         Remove-RepairKernel $app.FullName
