@@ -1,7 +1,11 @@
-# Repair-Discord.ps1 - restores a stock, bootable Discord after a bad optimization run.
-# Safe to run repeatedly. Never touches your login/session data.
+# Repair-Discord.ps1 - full clean reset of Discord after a bad optimization run.
+# Wipes program files AND all cached renderer state (the usual cause of black
+# screens), keeps your login, reinstalls fresh from discord.com.
 #
 #   irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex
+#
+# Optional full logout reset (also clears login/session) - run this first:
+#   $env:DISCOPT_REPAIR_FULL = '1'
 
 $ErrorActionPreference = 'Stop'
 
@@ -24,106 +28,75 @@ function Get-RepairActiveApp([string]$DiscordRoot) {
         Select-Object -First 1
 }
 
-function Restore-RepairStockAsar([string]$AppDir) {
-    $resources = Join-Path $AppDir 'resources'
-    if (-not (Test-Path $resources)) { return $false }
-
-    $appAsar = Join-Path $resources 'app.asar'
-    $candidates = @(
-        (Join-Path $resources '_app.asar.stock'),
-        (Join-Path $resources 'app.asar.backup'),
-        (Join-Path $resources '_app.asar')
-    )
-
-    $currentOk = (Test-Path $appAsar) -and ((Get-Item $appAsar).Length -gt 1000000)
-    if ($currentOk) {
-        Write-RepOk 'app.asar is already the stock bootstrap'
-    } else {
-        $restored = $false
-        foreach ($candidate in $candidates) {
-            if ((Test-Path $candidate) -and ((Get-Item $candidate).Length -gt 1000000)) {
-                Copy-Item $candidate $appAsar -Force
-                Write-RepOk "Restored stock app.asar from $([IO.Path]::GetFileName($candidate))"
-                $restored = $true
-                break
-            }
-        }
-        if (-not $restored) { return $false }
+function Remove-RepairProgramFiles([string]$DiscordRoot) {
+    if (-not (Test-Path $DiscordRoot)) {
+        Write-RepOk 'No old program files to remove'
+        return
     }
-
-    # Remove mod loader leftovers so stock bootstrap runs clean.
-    $innerAsar = Join-Path $resources '_app.asar'
-    if ((Test-Path $innerAsar) -and ((Get-Item $innerAsar).Length -lt 500000)) {
-        Remove-Item $innerAsar -Force -ErrorAction SilentlyContinue
-        Write-RepOk 'Removed OpenASAR loader (_app.asar)'
+    Write-RepStep 'Removing Discord program files completely (login is stored elsewhere)...'
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        Remove-Item $DiscordRoot -Recurse -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path $DiscordRoot)) { break }
+        Start-Sleep -Seconds 2
+        Get-Process Discord, Discord.bin, Update -ErrorAction SilentlyContinue |
+            Stop-Process -Force -ErrorAction SilentlyContinue
     }
-    return $true
+    if (Test-Path $DiscordRoot) {
+        throw "Could not delete $DiscordRoot - close everything Discord-related (check Task Manager) and rerun"
+    }
+    Write-RepOk 'Old program files removed'
 }
 
-function Remove-RepairKernel([string]$AppDir) {
-    $real = Join-Path $AppDir 'ffmpeg_real.dll'
-    $current = Join-Path $AppDir 'ffmpeg.dll'
-    if ((Test-Path $real) -and ((Get-Item $real).Length -gt 500000)) {
-        Copy-Item $real $current -Force
-        Write-RepOk 'Restored stock ffmpeg.dll'
+function Clear-RepairRendererState([string]$AppDataDiscord, [bool]$FullReset) {
+    if (-not (Test-Path $AppDataDiscord)) {
+        Write-RepOk 'No cached app data to clean'
+        return
     }
-    foreach ($name in @('version.dll', 'version.dll.disabled', 'config.ini', 'config.ini.disabled')) {
-        $path = Join-Path $AppDir $name
-        if (Test-Path $path) {
-            attrib -R $path 2>$null
-            Remove-Item $path -Force -ErrorAction SilentlyContinue
-            Write-RepOk "Removed $name"
-        }
+
+    if ($FullReset) {
+        Write-RepStep 'FULL reset requested - clearing app data including login...'
+        Remove-Item $AppDataDiscord -Recurse -Force -ErrorAction SilentlyContinue
+        Write-RepOk 'App data fully cleared (you will need to log in again)'
+        return
     }
+
+    # Black screens are usually corrupt GPU/shader/code caches. Wipe everything
+    # under %APPDATA%\discord EXCEPT the folders that store the login session.
+    $keep = @('Local Storage', 'IndexedDB', 'Cookies', 'Cookies-journal', 'databases', 'Network')
+    Write-RepStep 'Purging all cached renderer state (GPU/shader/code caches, settings)...'
+    $removed = 0
+    Get-ChildItem $AppDataDiscord -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        if ($keep -contains $_.Name) { return }
+        attrib -R $_.FullName 2>$null
+        Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        $removed++
+    }
+    Write-RepOk "Renderer state purged ($removed item(s) removed, login kept)"
 }
 
-function Repair-RepairSettingsJson([string]$AppDataDiscord) {
-    $settingsPath = Join-Path $AppDataDiscord 'settings.json'
-    if (-not (Test-Path $settingsPath)) { return }
-
-    attrib -R $settingsPath 2>$null
-    $settings = @{}
-    try {
-        $parsed = Get-Content $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        foreach ($prop in $parsed.PSObject.Properties) { $settings[$prop.Name] = $prop.Value }
-    } catch {
-        Write-RepWarn 'settings.json was corrupt - resetting to safe defaults'
-        $settings = @{}
+function Install-RepairFreshDiscord([string]$DiscordRoot) {
+    Write-RepStep 'Downloading the official Discord installer...'
+    $setup = Join-Path ([IO.Path]::GetTempPath()) 'DiscordSetup-repair.exe'
+    if (Test-Path $setup) { Remove-Item $setup -Force -ErrorAction SilentlyContinue }
+    $url = 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64'
+    Invoke-WebRequest -Uri $url -OutFile $setup -UseBasicParsing -Headers @{ 'User-Agent' = 'DiscOpt-Repair/1.0' }
+    if (-not (Test-Path $setup) -or ((Get-Item $setup).Length -lt 50000000)) {
+        throw 'Discord installer download failed - check your internet connection'
     }
 
-    foreach ($risky in @('openasar', 'chromiumSwitches')) {
-        if ($settings.ContainsKey($risky)) {
-            $settings.Remove($risky)
-            Write-RepOk "Removed $risky block from settings.json"
-        }
-    }
-    # Let the stock updater repair modules on next launch.
-    $settings['SKIP_HOST_UPDATE'] = $false
+    Write-RepStep 'Installing a brand new Discord (silent)...'
+    Start-Process -FilePath $setup -ArgumentList '-s' -Wait | Out-Null
 
-    $json = $settings | ConvertTo-Json -Depth 20
-    [IO.File]::WriteAllText($settingsPath, $json, [Text.UTF8Encoding]::new($false))
-    Write-RepOk 'settings.json cleaned (updater re-enabled)'
-}
-
-function Test-RepairAppComplete([string]$AppDir) {
-    # Older optimizer versions deleted Chromium rendering files, which causes a
-    # blank/black Discord window. If any are missing, only a reinstall fixes it.
-    foreach ($name in @(
-        'Discord.exe', 'd3dcompiler_47.dll', 'vulkan-1.dll',
-        'vk_swiftshader.dll', 'vk_swiftshader_icd.json',
-        'chrome_100_percent.pak', 'chrome_200_percent.pak'
-    )) {
-        if (-not (Test-Path (Join-Path $AppDir $name))) {
-            Write-RepWarn "Missing $name (needed for rendering)"
-            return $false
-        }
+    $deadline = (Get-Date).AddSeconds(180)
+    while ((Get-Date) -lt $deadline) {
+        $app = Get-RepairActiveApp $DiscordRoot
+        if ($app -and (Test-Path (Join-Path $app.FullName 'Discord.exe'))) { return $app }
+        Start-Sleep -Seconds 3
     }
-    return $true
+    throw 'Discord install did not complete - run the installer from discord.com manually'
 }
 
 function Start-RepairDiscord([string]$DiscordRoot, [string]$AppDir) {
-    # Launch Discord.exe directly - Update.exe silently does nothing when its
-    # Squirrel state is broken.
     $exe = Join-Path $AppDir 'Discord.exe'
     if (Test-Path $exe) {
         Start-Process -FilePath $exe -WorkingDirectory $AppDir | Out-Null
@@ -135,7 +108,7 @@ function Start-RepairDiscord([string]$DiscordRoot, [string]$AppDir) {
     }
 }
 
-function Wait-RepairDiscordWindow([int]$TimeoutSec = 90) {
+function Wait-RepairDiscordWindow([int]$TimeoutSec = 120) {
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     while ((Get-Date) -lt $deadline) {
         $win = Get-Process Discord -ErrorAction SilentlyContinue |
@@ -147,25 +120,31 @@ function Wait-RepairDiscordWindow([int]$TimeoutSec = 90) {
     return $false
 }
 
-function Install-RepairFreshDiscord([string]$DiscordRoot) {
-    Write-RepStep 'Downloading the official Discord installer (login is kept)...'
-    $setup = Join-Path ([IO.Path]::GetTempPath()) 'DiscordSetup-repair.exe'
-    $url = 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64'
-    Invoke-WebRequest -Uri $url -OutFile $setup -UseBasicParsing -Headers @{ 'User-Agent' = 'DiscOpt-Repair/1.0' }
-    if (-not (Test-Path $setup) -or ((Get-Item $setup).Length -lt 50000000)) {
-        throw 'Discord installer download failed - check your internet connection'
+function Set-RepairHardwareAccelerationOff([string]$AppDataDiscord) {
+    if (-not (Test-Path $AppDataDiscord)) {
+        New-Item -ItemType Directory -Path $AppDataDiscord -Force | Out-Null
     }
+    $settingsPath = Join-Path $AppDataDiscord 'settings.json'
+    $json = '{' + [Environment]::NewLine +
+        '  "enableHardwareAcceleration": false,' + [Environment]::NewLine +
+        '  "SKIP_HOST_UPDATE": false' + [Environment]::NewLine +
+        '}'
+    attrib -R $settingsPath 2>$null
+    [IO.File]::WriteAllText($settingsPath, $json, [Text.UTF8Encoding]::new($false))
+    Write-RepOk 'Hardware acceleration disabled (fixes GPU-driver black screens)'
+}
 
-    Write-RepStep 'Reinstalling Discord (silent)...'
-    Start-Process -FilePath $setup -ArgumentList '-s' -Wait | Out-Null
-
-    $deadline = (Get-Date).AddSeconds(180)
-    while ((Get-Date) -lt $deadline) {
-        $app = Get-RepairActiveApp $DiscordRoot
-        if ($app -and (Test-Path (Join-Path $app.FullName 'Discord.exe'))) { return $app }
-        Start-Sleep -Seconds 3
+function Read-RepairYesNo([string]$Question) {
+    while ($true) {
+        try {
+            $answer = Read-Host "$Question (y/n)"
+        } catch {
+            return $true
+        }
+        if ($answer -match '^[yY]') { return $true }
+        if ($answer -match '^[nN]') { return $false }
+        Write-Host 'Please answer y or n.' -ForegroundColor DarkGray
     }
-    throw 'Discord reinstall did not complete - run the installer from discord.com manually'
 }
 
 try {
@@ -180,68 +159,73 @@ try {
 
     $discordRoot = Join-Path $localAppData 'Discord'
     $appDataDiscord = Join-Path $appData 'discord'
+    $fullReset = ([Environment]::GetEnvironmentVariable('DISCOPT_REPAIR_FULL') -eq '1')
 
     Write-Host ''
-    Write-Host '  Discord Repair (DiscOpt rescue)' -ForegroundColor Magenta
-    Write-Host '  Restores stock, bootable Discord. Login/session is preserved.' -ForegroundColor DarkGray
+    Write-Host '  Discord Clean Reset (DiscOpt rescue)' -ForegroundColor Magenta
+    Write-Host '  Fresh install + full cache purge. Login is preserved.' -ForegroundColor DarkGray
     Write-Host ''
 
     Write-RepStep 'Closing Discord...'
     Stop-RepairDiscord
 
-    $app = $null
-    if (Test-Path $discordRoot) { $app = Get-RepairActiveApp $discordRoot }
+    # 1) Brand new program files - never repair-in-place, always clean.
+    Remove-RepairProgramFiles $discordRoot
 
-    $needReinstall = $true
-    if ($app) {
-        Write-RepStep "Repairing $($app.Name)..."
-        Remove-RepairKernel $app.FullName
-        $asarOk = Restore-RepairStockAsar $app.FullName
-        $filesOk = Test-RepairAppComplete $app.FullName
-        if ($asarOk -and $filesOk) {
-            $needReinstall = $false
-        } elseif (-not $asarOk) {
-            Write-RepWarn 'No stock app.asar backup found - a clean reinstall is needed'
-        } else {
-            Write-RepWarn 'Rendering files were removed by an old debloat - reinstalling to restore them'
-        }
-    } else {
-        Write-RepWarn 'No Discord installation found under %LOCALAPPDATA%\Discord'
-    }
+    # 2) Purge every cache that survives a reinstall (the usual black-screen cause).
+    Clear-RepairRendererState $appDataDiscord $fullReset
 
-    if ($needReinstall) {
-        if (Test-Path $discordRoot) {
-            Write-RepStep 'Removing the broken install (your login lives elsewhere and is kept)...'
-            Remove-Item $discordRoot -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        $app = Install-RepairFreshDiscord $discordRoot
-        Write-RepOk "Discord $($app.Name) reinstalled"
-        Remove-RepairKernel $app.FullName
-    }
+    # 3) Fresh install from discord.com.
+    $app = Install-RepairFreshDiscord $discordRoot
+    Write-RepOk "Discord $($app.Name) installed clean"
 
-    Repair-RepairSettingsJson $appDataDiscord
-
-    Write-RepStep 'Starting Discord (stock)...'
+    # 4) Launch and verify with the user.
+    Write-RepStep 'Starting Discord...'
     Start-RepairDiscord $discordRoot $app.FullName
-
-    if (Wait-RepairDiscordWindow 120) {
-        Write-Host ''
-        Write-RepOk 'Discord is open again. Repair complete.'
-        Write-Host '    Your login and settings were preserved.' -ForegroundColor DarkGray
-        Write-Host '    Discord may spend a minute updating its modules on this first launch.' -ForegroundColor DarkGray
-        Write-Host ''
-    } else {
-        Write-Host ''
-        Write-RepWarn 'Discord was repaired on disk but the window was not detected yet.'
-        Write-RepWarn 'Give it a minute; if it still does not open, reinstall from https://discord.com/download'
-        Write-Host ''
+    if (-not (Wait-RepairDiscordWindow 120)) {
+        Write-RepWarn 'Discord window not detected yet - give it a minute.'
     }
+
+    Write-Host ''
+    Write-Host '  >>> Wait for Discord to finish loading (it may update modules first).' -ForegroundColor Yellow
+    Write-Host ''
+    if (Read-RepairYesNo '  Is Discord showing your servers/chat normally') {
+        Write-Host ''
+        Write-RepOk 'Repair complete. Discord is clean and working.'
+        Write-Host ''
+        return
+    }
+
+    # 5) Still black => GPU driver rendering issue. Disable hardware acceleration.
+    Write-Host ''
+    Write-RepStep 'Still black - disabling hardware acceleration and restarting Discord...'
+    Stop-RepairDiscord
+    Set-RepairHardwareAccelerationOff $appDataDiscord
+    Start-RepairDiscord $discordRoot $app.FullName
+    [void](Wait-RepairDiscordWindow 120)
+
+    Write-Host ''
+    if (Read-RepairYesNo '  Is Discord rendering normally now') {
+        Write-Host ''
+        Write-RepOk 'Fixed: your GPU driver was the cause. Hardware acceleration is now off.'
+        Write-Host '    Tip: updating your graphics driver may let you re-enable it later' -ForegroundColor DarkGray
+        Write-Host '    (Discord Settings > Advanced > Hardware Acceleration).' -ForegroundColor DarkGray
+        Write-Host ''
+        return
+    }
+
+    Write-Host ''
+    Write-RepWarn 'Still not rendering. Two remaining options:'
+    Write-Host '    1. Full reset including login (fixes corrupt session storage):' -ForegroundColor Yellow
+    Write-Host '         $env:DISCOPT_REPAIR_FULL = ''1''' -ForegroundColor Cyan
+    Write-Host '         irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
+    Write-Host '    2. Update your GPU drivers (NVIDIA/AMD/Intel), then start Discord again.' -ForegroundColor Yellow
+    Write-Host ''
 } catch {
     Write-Host ''
     Write-RepErr 'Repair failed.'
     Write-RepErr $_.Exception.Message
     Write-Host ''
     Write-Host 'Manual fallback: download the installer from https://discord.com/download and run it.' -ForegroundColor Yellow
-    Write-Host 'A reinstall keeps your login (it lives in %APPDATA%\discord, which is not deleted).' -ForegroundColor Yellow
     Write-Host ''
 }

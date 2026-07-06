@@ -1928,6 +1928,11 @@ function Apply-DiscordProfile([string]$DestPath) {
         $merged.Remove('DANGEROUS_ENABLE_DEVTOOLS_ONLY_ENABLE_IF_YOU_KNOW_WHAT_YOURE_DOING')
     }
 
+    # If hardware acceleration was turned off on this PC (GPU-driver black
+    # screens, repair fallback, or the user's own choice), never force it back on.
+    $hwAccelOff = ($merged.Keys -contains 'enableHardwareAcceleration') -and
+        ($merged['enableHardwareAcceleration'] -eq $false)
+
     $allowed = @(
         'SKIP_HOST_UPDATE', 'OPEN_ON_STARTUP', 'MINIMIZE_TO_TRAY', 'START_MINIMIZED',
         'IS_MAXIMIZED', 'IS_MINIMIZED', 'enableHardwareAcceleration', 'debugLogging', 'offloadAdmControls',
@@ -1938,6 +1943,10 @@ function Apply-DiscordProfile([string]$DestPath) {
     )
     foreach ($key in $allowed) {
         if ($kit.Keys -contains $key) { $merged[$key] = $kit[$key] }
+    }
+    if ($hwAccelOff) {
+        $merged['enableHardwareAcceleration'] = $false
+        Write-LogLine 'OK' 'Hardware acceleration kept OFF (was disabled on this PC)'
     }
 
     if ($kit.chromiumSwitches) {
