@@ -22,7 +22,10 @@ function Wait-DiscOptInstallerClose {
 function Get-DiscOptDocumentsPath {
     $docs = [Environment]::GetFolderPath('MyDocuments')
     if ([string]::IsNullOrWhiteSpace($docs)) {
-        $docs = Join-Path $env:USERPROFILE 'Documents'
+        $profile = [Environment]::GetEnvironmentVariable('USERPROFILE')
+        if (-not [string]::IsNullOrWhiteSpace($profile)) {
+            $docs = Join-Path $profile 'Documents'
+        }
     }
     if ([string]::IsNullOrWhiteSpace($docs)) {
         $docs = (Get-Location).Path
