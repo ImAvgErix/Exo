@@ -1,0 +1,13 @@
+release-artifacts/
+extracted/
+
+# Runtime logs and local caches
+Disc Optimizer/kit/logs/*.log
+Disc Optimizer/kit/logs/last-*.log
+Disc Optimizer/kit/downloads/*
+
+# Large redistributable artifacts are published in GitHub Releases.
+Disc Optimizer/kit/downloads/*.zip
+Disc Optimizer/kit/tools/DiscordSetup*.exe
+Disc Optimizer/kit/tools/Equilotl*.exe
+Disc Optimizer/kit/tools/pwsh/
