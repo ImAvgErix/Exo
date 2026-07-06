@@ -1,5 +1,6 @@
 release-artifacts/
 extracted/
+dist/
 
 # Runtime logs and local caches
 Disc Optimizer/kit/logs/*.log

@@ -1,5 +1,5 @@
 {
-    "enabledThemes": ["amoled-cord.theme.css"],
+    "enabledThemes": ["discopt-amoled-v1.1.theme.css"],
     "useQuickCss": false,
     "autoUpdate": true,
     "autoUpdateNotification": false,
@@ -11,7 +11,7 @@
         "settingsSync": false
     },
     "notifications": {
-        "timeout": 3000,
+        "timeout": 0,
         "position": "bottom-right",
         "useNative": "never",
         "missed": false,
@@ -46,6 +46,13 @@
             "hideFriendRequestsCount": true
         },
         "ClearURLs": { "enabled": true },
+        "AnonymiseFileNames": {
+            "enabled": true,
+            "method": 0,
+            "randomize": true
+        },
+        "NoRPC": { "enabled": true },
+        "DisableCameras": { "enabled": true },
         "ConsoleJanitor": {
             "enabled": true,
             "disableSpotifyLogger": true,
@@ -60,6 +67,8 @@
             }
         },
         "DisableCallIdle": { "enabled": true },
+        "NoF1": { "enabled": true },
+        "NoReplyMention": { "enabled": true },
         "EquicordHelper": {
             "enabled": true,
             "disableAdoptTagPrompt": true,
@@ -85,9 +94,14 @@
             "color": false,
             "open": false
         },
+        "NoBlockedMessages": { "enabled": true },
+        "NoProfileThemes": { "enabled": true },
+        "PlainFolderIcon": { "enabled": true },
         "NoTypingAnimation": { "enabled": true },
         "NoSystemBadge": { "enabled": true },
         "NoOnboardingDelay": { "enabled": true },
+        "StopAutoUnread": { "enabled": true },
+        "StreamerModeOn": { "enabled": true },
         "Settings": {
             "enabled": true,
             "settingsLocation": "aboveNitro",
@@ -95,7 +109,7 @@
         },
         "NotificationVolume": {
             "enabled": true,
-            "notificationVolume": 25
+            "notificationVolume": 0
         },
         "SilentTyping": {
             "enabled": true,
@@ -108,6 +122,17 @@
         },
         "BlockKrisp": { "enabled": false },
         "AltKrispSwitch": { "enabled": false },
+        "MessageNotifier": { "enabled": false },
+        "KeywordNotify": { "enabled": false },
+        "ReplyPingControl": { "enabled": false },
+        "BypassStatus": { "enabled": false },
+        "PingNotifications": { "enabled": false },
+        "NotificationTitle": { "enabled": false },
+        "ToastNotifications": { "enabled": false },
+        "VoiceJoinMessages": { "enabled": false },
+        "VcNarrator": { "enabled": false },
+        "VcNarratorCustom": { "enabled": false },
+        "XSOverlay": { "enabled": false },
         "FakeNitro": {
             "enabled": true,
             "enableEmojiBypass": true,
