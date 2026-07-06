@@ -175,6 +175,15 @@ try {
     # 2) Purge every cache that survives a reinstall (the usual black-screen cause).
     Clear-RepairRendererState $appDataDiscord $fullReset
 
+    # 2b) Remove the broken v1.1 custom theme (painted a black overlay over the
+    # whole app) so it can't come back if Equicord is ever re-enabled.
+    $equicordThemes = Join-Path $appData 'Equicord\themes'
+    Get-ChildItem $equicordThemes -Filter 'discopt-amoled*.css' -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+            Write-RepOk "Removed broken theme: $($_.Name)"
+        }
+
     # 3) Fresh install from discord.com.
     $app = Install-RepairFreshDiscord $discordRoot
     Write-RepOk "Discord $($app.Name) installed clean"

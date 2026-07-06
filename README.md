@@ -48,7 +48,7 @@ The optimizer also has built-in boot safety: after applying mods it verifies Dis
   - Disables native/Equicord notification plugins and tracking-heavy extras.
   - Disables Discord startup entries, scheduled tasks, Windows toast notifications, and tray promotion.
 - **Minimalism / comfort**
-  - Local zero-import `DiscOpt AMOLED` theme; no remote CSS fetch required.
+  - `amoled-cord` AMOLED theme (the original, proven pitch-black theme).
   - Midnight/black app profile, compact display intent, reduced motion, no noisy notification volume, hidden Nitro/profile/quest clutter.
   - Keeps the native noise suppression dropdown working by preserving Krisp module files while forcing Krisp-blocking plugins off.
 - **Ease of use**

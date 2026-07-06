@@ -20,7 +20,7 @@ powershell -ExecutionPolicy Bypass -File "Disc-Optimizer.ps1" -SkipCacheClean
 ## Defaults
 
 - Equicord + OpenASAR installed automatically (verify-then-install, no manual steps).
-- Local `discopt-amoled-v1.1.theme.css` (no remote CSS import).
+- `amoled-cord.theme.css` (the original, proven AMOLED theme).
 - Midnight/black app profile, compact display intent, reduced motion.
 - OpenASAR quickstart + DOM optimizer + no-track/no-typing flags.
 - Safe cache cleanup for cache/log/crash/GPU shader junk while preserving login/session storage.

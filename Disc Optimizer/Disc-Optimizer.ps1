@@ -37,7 +37,7 @@ if ($Quick) {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.2'
+$Script:DiscOptVersion = '1.1.3'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -347,7 +347,10 @@ $KeepModules = @(
     'discord_notifications-1'
 )
 $RuntimeModules = @('discord_notifications')
-$EnabledTheme = 'discopt-amoled-v1.1.theme.css'
+# The original, battle-tested AMOLED theme. Do NOT swap in broad
+# [class*="..."] selector themes: painting layerContainer black covers the
+# whole app with a black overlay (tooltips still show, everything else hidden).
+$EnabledTheme = 'amoled-cord.theme.css'
 $ForceDisabledPlugins = @(
     'BlockKrisp', 'AltKrispSwitch', 'RelationshipNotifier',
     'Dearrow', 'ImplicitRelationships', 'OpenInApp', 'SplitLargeMessages', 'EquicordToolbox',
@@ -2204,6 +2207,14 @@ function Apply-EquicordProfile {
     }
 
     Write-JsonFile $destPath $settings 30
+
+    # Remove the broken v1.1 custom theme from user machines - its broad
+    # [class*="layer"] selector painted a black overlay over the whole app.
+    Get-ChildItem $themesDir -Filter 'discopt-amoled*.theme.css' -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+            Write-Ok "Removed broken theme: $($_.Name)"
+        }
 
     $themeSrc = Join-Path $Themes $EnabledTheme
     if (Test-Path $themeSrc) {

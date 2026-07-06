@@ -26,7 +26,7 @@
     "domOptimizer": false,
     "themeSync": false,
     "autoupdate": false,
-    "css": ":root,.theme-dark,.theme-midnight{--background-primary:#000!important;--background-secondary:#000!important;--background-tertiary:#000!important;--background-floating:#030303!important;--channeltextarea-background:#030303!important;--modal-background:#000!important;--brand-500:#5865f2!important;color-scheme:dark!important}*{scrollbar-color:#202020 #000!important;text-shadow:none!important}"
+    "css": "body { --background-primary: #000000; --background-secondary: #000000; }"
   },
   "chromiumSwitches": {
     "force_high_performance_gpu": 1,

@@ -1,5 +1,5 @@
 {
-    "enabledThemes": ["discopt-amoled-v1.1.theme.css"],
+    "enabledThemes": ["amoled-cord.theme.css"],
     "useQuickCss": false,
     "autoUpdate": true,
     "autoUpdateNotification": false,
