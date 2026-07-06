@@ -4,6 +4,7 @@
 #   Disc-Optimizer.ps1           first-time / full setup (log in when prompted)
 #   Disc-Optimizer.ps1 -Launch   start Discord only (daily)
 #   Disc-Optimizer.ps1 -Quick    re-apply after a Discord update
+#   Disc-Optimizer.ps1 -SkipCacheClean
 
 param(
     [switch]$Launch,
@@ -17,7 +18,8 @@ param(
     [switch]$SkipDiscordInstall,
     [switch]$FreshInstall,
     [switch]$Quick,
-    [switch]$SkipManifestSync
+    [switch]$SkipManifestSync,
+    [switch]$SkipCacheClean
 )
 
 if ($Launch) {
@@ -35,6 +37,7 @@ if ($Quick) {
 }
 
 $ErrorActionPreference = 'Stop'
+$Script:DiscOptVersion = '1.1.0'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -342,22 +345,30 @@ $KeepModules = @(
     'discord_notifications-1'
 )
 $RuntimeModules = @('discord_notifications')
-$EnabledTheme = 'amoled-cord.theme.css'
+$EnabledTheme = 'discopt-amoled-v1.1.theme.css'
 $ForceDisabledPlugins = @(
     'BlockKrisp', 'AltKrispSwitch', 'RelationshipNotifier',
     'Dearrow', 'ImplicitRelationships', 'OpenInApp', 'SplitLargeMessages', 'EquicordToolbox',
     'IdleAutoRestart', 'FixSpotifyEmbeds', 'ReplaceGoogleSearch', 'SupportHelper',
     'BetterUploadButton', 'FixYoutubeEmbeds',
     'ConcatenatedComponentExtractor', 'CancelFriendRequest',
-    'StartupTimings', 'NewPluginsManager', 'WebContextMenus', 'WebKeybinds', 'WebScreenShareFixes'
+    'StartupTimings', 'NewPluginsManager', 'WebContextMenus', 'WebKeybinds', 'WebScreenShareFixes',
+    'MessageNotifier', 'KeywordNotify', 'ReplyPingControl', 'BypassStatus', 'PingNotifications',
+    'NotificationTitle', 'ToastNotifications', 'VoiceJoinMessages', 'VcNarrator', 'VcNarratorCustom',
+    'XSOverlay', 'VoiceChannelLog', 'VoiceStats', 'Streaks', 'FriendshipRanks'
+)
+$SafeCacheTargets = @(
+    'Cache', 'Code Cache', 'GPUCache', 'ShaderCache', 'DawnCache', 'GraphiteDawnCache',
+    'VideoDecodeStats', 'blob_storage', 'CacheStorage', 'Service Worker\CacheStorage',
+    'logs', 'Crashpad', 'crashpad', 'debug', 'sentry', 'Dictionaries', 'Media Cache'
 )
 
 function Write-Banner {
     $psLabel = "PowerShell $($PSVersionTable.PSVersion)"
     if ($PSVersionTable.PSEdition) { $psLabel += " ($($PSVersionTable.PSEdition))" }
     Write-Host ''
-    Write-Host '  Disc Optimizer' -ForegroundColor Magenta
-    Write-Host '  AMOLED | privacy | perf | voice UI' -ForegroundColor DarkGray
+    Write-Host "  Disc Optimizer v$Script:DiscOptVersion" -ForegroundColor Magenta
+    Write-Host '  AMOLED | privacy | perf | cache trim | raw input' -ForegroundColor DarkGray
     Write-Host "  $psLabel" -ForegroundColor Cyan
     if ($env:DISCOPT_PS7 -eq '1') {
         Write-Host '  (upgraded from Windows PowerShell 5.1)' -ForegroundColor DarkGray
@@ -413,8 +424,9 @@ function Initialize-DiscOptimizerLog {
         "Started: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
         "User: $env:USERNAME",
         "Computer: $env:COMPUTERNAME",
+        "DiscOptVersion: $Script:DiscOptVersion",
         "PowerShell: $($PSVersionTable.PSVersion)",
-        "Launch=$Launch SkipDebloat=$SkipDebloat ForceDebloat=$ForceDebloat SkipEquicord=$SkipEquicord SkipOpenAsar=$SkipOpenAsar SkipKernel=$SkipKernel NoLaunch=$NoLaunch VerifyOnly=$VerifyOnly SkipDiscordInstall=$SkipDiscordInstall FreshInstall=$FreshInstall Quick=$Quick SkipManifestSync=$SkipManifestSync",
+        "Launch=$Launch SkipDebloat=$SkipDebloat ForceDebloat=$ForceDebloat SkipEquicord=$SkipEquicord SkipOpenAsar=$SkipOpenAsar SkipKernel=$SkipKernel NoLaunch=$NoLaunch VerifyOnly=$VerifyOnly SkipDiscordInstall=$SkipDiscordInstall FreshInstall=$FreshInstall Quick=$Quick SkipManifestSync=$SkipManifestSync SkipCacheClean=$SkipCacheClean",
         "Kit: $Root",
         "Discord: $DiscordRoot",
         ('=' * 60),
@@ -1567,6 +1579,48 @@ function Invoke-Debloat([string]$AppDir, [ref]$Freed) {
     Write-Ok "Debloat saved ~$([math]::Round($freed.Value / 1MB, 1)) MB"
 }
 
+function Clear-DiscordSafeCache([ref]$Freed) {
+    if ($SkipCacheClean) {
+        Write-Ok 'Cache clean skipped (-SkipCacheClean)'
+        return
+    }
+
+    Write-Step 'Cleaning safe Discord caches (login/session preserved)...'
+    $before = $Freed.Value
+    foreach ($relative in $SafeCacheTargets) {
+        $path = Join-Path $AppData $relative
+        if (Remove-Safe $path $Freed) {
+            Write-Ok "Cleaned $relative"
+        }
+    }
+
+    $discordRootTargets = @('SquirrelSetup.log', 'packages\.betaId', 'packages\RELEASES')
+    foreach ($relative in $discordRootTargets) {
+        $path = Join-Path $DiscordRoot $relative
+        if (Remove-Safe $path $Freed) {
+            Write-Ok "Cleaned Discord\$relative"
+        }
+    }
+
+    $saved = $Freed.Value - $before
+    if ($saved -gt 0) {
+        Write-Ok "Safe cache clean saved ~$([math]::Round($saved / 1MB, 1)) MB"
+    } else {
+        Write-Ok 'Safe cache clean found nothing to remove'
+    }
+}
+
+function Test-CacheCleanNeeded {
+    if ($SkipCacheClean) { return $false }
+    foreach ($relative in $SafeCacheTargets) {
+        $path = Join-Path $AppData $relative
+        if ((Test-Path $path) -and (Get-FolderSize $path) -gt 1MB) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Install-DiscordModuleFromManifest([string]$AppDir, [string]$ModuleName) {
     $folder = Join-Path $AppDir "modules\$ModuleName-1"
     if (Test-Path $folder) { return $true }
@@ -1582,26 +1636,37 @@ function Install-DiscordModuleFromManifest([string]$AppDir, [string]$ModuleName)
     $distro = Join-Path $work 'pkg.distro'
     $tar = Join-Path $work 'pkg.tar'
     $extract = Join-Path $work 'extract'
-    Invoke-WebRequest -Uri $mod.full.url -OutFile $distro -UseBasicParsing
+    try {
+        Invoke-WebRequest -Uri $mod.full.url -OutFile $distro -UseBasicParsing
 
-    $in = [IO.File]::OpenRead($distro)
-    $out = [IO.File]::Create($tar)
-    $br = [System.IO.Compression.BrotliStream]::new($in, [IO.Compression.CompressionMode]::Decompress)
-    $br.CopyTo($out)
-    $br.Close(); $out.Close(); $in.Close()
+        $in = $out = $br = $null
+        try {
+            $in = [IO.File]::OpenRead($distro)
+            $out = [IO.File]::Create($tar)
+            $br = [System.IO.Compression.BrotliStream]::new($in, [IO.Compression.CompressionMode]::Decompress)
+            $br.CopyTo($out)
+        } finally {
+            if ($br) { $br.Dispose() }
+            if ($out) { $out.Dispose() }
+            if ($in) { $in.Dispose() }
+        }
 
-    New-Item -ItemType Directory -Path $extract -Force | Out-Null
-    & tar -xf $tar -C $extract 2>$null
+        New-Item -ItemType Directory -Path $extract -Force | Out-Null
+        $global:LASTEXITCODE = 0
+        & tar -xf $tar -C $extract 2>$null
+        if ($LASTEXITCODE -ne 0) { throw "tar failed while extracting $ModuleName" }
 
-    $files = Join-Path $extract 'files'
-    if (-not (Test-Path $files)) { throw "$ModuleName package had no files/" }
+        $files = Join-Path $extract 'files'
+        if (-not (Test-Path $files)) { throw "$ModuleName package had no files/" }
 
-    $modRoot = Join-Path $AppDir 'modules'
-    if (-not (Test-Path $modRoot)) { New-Item -ItemType Directory -Path $modRoot -Force | Out-Null }
-    New-Item -ItemType Directory -Path $folder -Force | Out-Null
-    Copy-Item -Path (Join-Path $files '*') -Destination $folder -Recurse -Force
-    Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
-    return $true
+        $modRoot = Join-Path $AppDir 'modules'
+        if (-not (Test-Path $modRoot)) { New-Item -ItemType Directory -Path $modRoot -Force | Out-Null }
+        New-Item -ItemType Directory -Path $folder -Force | Out-Null
+        Copy-Item -Path (Join-Path $files '*') -Destination $folder -Recurse -Force
+        return $true
+    } finally {
+        Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Ensure-RuntimeModules([string]$AppDir) {
@@ -1673,6 +1738,33 @@ function Disable-DiscordWindowsAutostart {
             Write-Ok "Removed startup entry: $($prop.Name)"
         }
     }
+
+    $startupApproved = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+    if (Test-Path $startupApproved) {
+        $approved = Get-ItemProperty $startupApproved -ErrorAction SilentlyContinue
+        if ($approved) {
+            foreach ($prop in $approved.PSObject.Properties) {
+                if ($prop.Name -match '^PS') { continue }
+                if ($prop.Name -match 'Discord') {
+                    Remove-ItemProperty -Path $startupApproved -Name $prop.Name -Force -ErrorAction SilentlyContinue
+                    Write-Ok "Removed startup approval: $($prop.Name)"
+                }
+            }
+        }
+    }
+}
+
+function Disable-DiscordScheduledTasks {
+    try {
+        $tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue |
+            Where-Object { $_.TaskName -match 'Discord|Squirrel' -or $_.TaskPath -match 'Discord|Squirrel' })
+        foreach ($task in $tasks) {
+            Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue | Out-Null
+            Write-Ok "Disabled scheduled task: $($task.TaskPath)$($task.TaskName)"
+        }
+    } catch {
+        Write-LogLine 'WARN' "Scheduled task cleanup skipped: $($_.Exception.Message)"
+    }
 }
 
 function Set-DiscordWindowsNotificationsOff {
@@ -1729,6 +1821,7 @@ function Set-DiscordTrayIconHidden([string]$AppDir) {
 function Apply-WindowsTweaks([string]$AppDir) {
     Write-Step 'Applying Windows tweaks (notifications, tray, startup)...'
     Disable-DiscordWindowsAutostart
+    Disable-DiscordScheduledTasks
     Set-DiscordWindowsNotificationsOff
     Set-DiscordTrayIconHidden $AppDir
     Write-Ok 'Windows tweaks applied'
@@ -1836,11 +1929,12 @@ function Apply-DiscordProfile([string]$DestPath) {
 
     $allowed = @(
         'SKIP_HOST_UPDATE', 'OPEN_ON_STARTUP', 'MINIMIZE_TO_TRAY', 'START_MINIMIZED',
-        'enableHardwareAcceleration', 'debugLogging', 'offloadAdmControls',
+        'IS_MAXIMIZED', 'IS_MINIMIZED', 'enableHardwareAcceleration', 'debugLogging', 'offloadAdmControls',
         'asyncVideoInputDeviceInit', 'DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR',
         'DESKTOP_TTI_DNSTCP_WARMUP', 'DESKTOP_TTI_EARLY_UPDATE_CHECK',
         'DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS', 'BACKGROUND_COLOR',
-        'audioSubsystem', 'useLegacyAudioDevice'
+        'audioSubsystem', 'useLegacyAudioDevice', 'theme', 'displayMode',
+        'reducedMotion', 'accessibilityReducedMotion', 'enableHardwareVideoAcceleration'
     )
     foreach ($key in $allowed) {
         if ($kit.Keys -contains $key) { $merged[$key] = $kit[$key] }
@@ -1853,13 +1947,21 @@ function Apply-DiscordProfile([string]$DestPath) {
     if ($kit.openasar) {
         $merged.openasar = ConvertTo-HashtableDeep $kit.openasar
         $merged.openasar.setup = $true
-        $merged.openasar.quickstart = $false
-        $merged.openasar.domOptimizer = $false
+        $merged.openasar.quickstart = $true
+        $merged.openasar.domOptimizer = $true
+        $merged.openasar.themeSync = $false
+        $merged.openasar.noTrack = $true
+        $merged.openasar.noTyping = $true
     }
 
     $merged['DESKTOP_TTI_EARLY_UPDATE_CHECK'] = $false
     $merged['DESKTOP_TTI_DNSTCP_WARMUP'] = $false
     $merged['audioSubsystem'] = 'standard'
+    $merged['BACKGROUND_COLOR'] = '#000000'
+    $merged['theme'] = 'midnight'
+    $merged['displayMode'] = 'compact'
+    $merged['reducedMotion'] = $true
+    $merged['accessibilityReducedMotion'] = $true
 
     if ($merged.audioSubsystem -and $merged.audioSubsystem -ne 'standard') {
         Write-LogLine 'WARN' "Reset audioSubsystem $($merged.audioSubsystem) -> standard"
@@ -2055,8 +2157,21 @@ function Apply-EquicordProfile {
     $settings.enableOnlineThemes = $false
     $settings.useQuickCss = $false
     $settings.enableReactDevtools = $false
+    $settings.mainWindowFrameless = $false
+    $settings.frameless = $false
+    $settings.transparent = $false
+    $settings.windowsMaterial = 'none'
+    $settings.winNativeTitleBar = $false
     $settings.cloud.settingsSync = $false
     $settings.cloud.authenticated = $false
+    $settings.cloud.url = ''
+    $settings.notifications = @{
+        timeout   = 0
+        position  = 'bottom-right'
+        useNative = 'never'
+        missed    = $false
+        logLimit  = 10
+    }
     $settings.enabledThemes = @($EnabledTheme)
 
     foreach ($name in $ForceDisabledPlugins) {
@@ -2195,7 +2310,10 @@ CreateObject("WScript.Shell").Run """" & ps & """ -NoProfile -WindowStyle Hidden
 "@
     Set-Content -Path $vbs -Value $vbsContent -Encoding ASCII
 
-    $icon = Join-Path $app.FullName 'app.ico'
+    $icon = Join-Path $KitDir 'assets\discord-black.ico'
+    if (-not (Test-Path $icon)) {
+        $icon = Join-Path $app.FullName 'app.ico'
+    }
     $folder = Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc'
     if (-not $folder) { throw 'APPDATA is not set; cannot create Start menu shortcut' }
     $shortcut = Join-Path $folder 'Discord.lnk'
@@ -2434,6 +2552,7 @@ if ($SkipDebloat) {
     }
 }
 
+Clear-DiscordSafeCache $freed
 Ensure-KrispModule $app.FullName
 Ensure-RuntimeModules $app.FullName
 if (-not $Quick) {

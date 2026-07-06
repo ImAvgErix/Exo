@@ -1,0 +1,133 @@
+/**
+ * @name DiscOpt AMOLED v1.1
+ * @author DiscOpt
+ * @description Local zero-import AMOLED theme tuned for minimal UI, reduced motion, and OLED black.
+ * @version 1.1.0
+ */
+
+:root,
+.theme-dark,
+.theme-midnight {
+  --discopt-black: #000000;
+  --discopt-panel: #030303;
+  --discopt-panel-2: #070707;
+  --discopt-hover: #111111;
+  --discopt-border: #171717;
+  --discopt-text: #f2f3f5;
+  --discopt-muted: #9ca3af;
+  --discopt-accent: #5865f2;
+
+  --background-primary: var(--discopt-black) !important;
+  --background-secondary: var(--discopt-black) !important;
+  --background-secondary-alt: var(--discopt-panel) !important;
+  --background-tertiary: var(--discopt-black) !important;
+  --background-accent: var(--discopt-hover) !important;
+  --background-floating: var(--discopt-panel) !important;
+  --background-mobile-primary: var(--discopt-black) !important;
+  --background-mobile-secondary: var(--discopt-black) !important;
+  --background-modifier-hover: rgba(255, 255, 255, 0.045) !important;
+  --background-modifier-active: rgba(255, 255, 255, 0.065) !important;
+  --background-modifier-selected: rgba(88, 101, 242, 0.18) !important;
+  --channeltextarea-background: var(--discopt-panel) !important;
+  --modal-background: var(--discopt-black) !important;
+  --modal-footer-background: var(--discopt-black) !important;
+  --input-background: var(--discopt-panel) !important;
+  --card-primary-bg: var(--discopt-panel) !important;
+  --card-secondary-bg: var(--discopt-black) !important;
+  --text-normal: var(--discopt-text) !important;
+  --text-muted: var(--discopt-muted) !important;
+  --interactive-normal: #d7d9df !important;
+  --interactive-hover: #ffffff !important;
+  --interactive-active: #ffffff !important;
+  --brand-experiment: var(--discopt-accent) !important;
+  --brand-500: var(--discopt-accent) !important;
+  color-scheme: dark !important;
+}
+
+body,
+#app-mount,
+[class*="appMount"],
+[class*="bg"],
+[class*="chat"],
+[class*="container"],
+[class*="content"],
+[class*="sidebar"],
+[class*="members"],
+[class*="panels"],
+[class*="layer"],
+[class*="standardSidebarView"],
+[class*="contentRegion"],
+[class*="sidebarRegion"] {
+  background-color: var(--discopt-black) !important;
+}
+
+[class*="panels"],
+[class*="sidebar"],
+[class*="membersWrap"],
+[class*="member"],
+[class*="privateChannels"],
+[class*="scroller"],
+[class*="chatContent"],
+[class*="messagesWrapper"],
+[class*="themedBackground"],
+[class*="channelTextArea"],
+[class*="form"],
+[class*="header"],
+[class*="title"],
+[class*="toolbar"],
+[class*="searchBar"],
+[class*="peopleColumn"],
+[class*="nowPlayingColumn"] {
+  background-color: var(--discopt-black) !important;
+  border-color: var(--discopt-border) !important;
+}
+
+[class*="messageListItem"]:hover,
+[class*="channel"]:hover,
+[class*="interactive"]:hover,
+[class*="clickable"]:hover {
+  background-color: var(--discopt-hover) !important;
+}
+
+[class*="unread"],
+[class*="numberBadge"],
+[class*="mention"],
+[class*="badge"] {
+  box-shadow: none !important;
+}
+
+[class*="avatarDecoration"],
+[class*="profileEffects"],
+[class*="banner"],
+[class*="premium"],
+[class*="upsell"],
+[class*="quest"],
+[class*="nitro"] {
+  display: none !important;
+}
+
+* {
+  text-shadow: none !important;
+  scrollbar-color: #202020 #000000 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.theme-midnight [class*="message"],
+.theme-dark [class*="message"] {
+  background-color: transparent !important;
+}
+
+[class*="newMessagesBar"],
+[class*="jumpToPresentBar"] {
+  background-color: var(--discopt-accent) !important;
+}
