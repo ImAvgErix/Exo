@@ -11,7 +11,7 @@
         "settingsSync": false
     },
     "notifications": {
-        "timeout": 0,
+        "timeout": 3000,
         "position": "bottom-right",
         "useNative": "never",
         "missed": false,

@@ -37,7 +37,7 @@ if ($Quick) {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.0'
+$Script:DiscOptVersion = '1.1.1'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -327,6 +327,8 @@ $AppData = Get-DiscOptEnvPath 'APPDATA' 'discord'
 $EquicordData = Get-DiscOptEnvPath 'APPDATA' 'Equicord'
 $Script:LogPath = $null
 $Script:DiscordInstalledThisRun = $false
+$Script:KernelRolledBack = $false
+$Script:ModsRolledBack = $false
 
 $Protected = @(
     'version.dll', 'config.ini', 'Discord.exe', 'ffmpeg.dll', 'ffmpeg_real.dll',
@@ -357,10 +359,10 @@ $ForceDisabledPlugins = @(
     'NotificationTitle', 'ToastNotifications', 'VoiceJoinMessages', 'VcNarrator', 'VcNarratorCustom',
     'XSOverlay', 'VoiceChannelLog', 'VoiceStats', 'Streaks', 'FriendshipRanks'
 )
+# Pure caches only - never touches web app storage, service workers, or session data.
 $SafeCacheTargets = @(
     'Cache', 'Code Cache', 'GPUCache', 'ShaderCache', 'DawnCache', 'GraphiteDawnCache',
-    'VideoDecodeStats', 'blob_storage', 'CacheStorage', 'Service Worker\CacheStorage',
-    'logs', 'Crashpad', 'crashpad', 'debug', 'sentry', 'Dictionaries', 'Media Cache'
+    'VideoDecodeStats', 'Media Cache', 'logs', 'Crashpad', 'crashpad', 'debug', 'sentry'
 )
 
 function Write-Banner {
@@ -1933,22 +1935,23 @@ function Apply-DiscordProfile([string]$DestPath) {
         'asyncVideoInputDeviceInit', 'DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR',
         'DESKTOP_TTI_DNSTCP_WARMUP', 'DESKTOP_TTI_EARLY_UPDATE_CHECK',
         'DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS', 'BACKGROUND_COLOR',
-        'audioSubsystem', 'useLegacyAudioDevice', 'theme', 'displayMode',
-        'reducedMotion', 'accessibilityReducedMotion', 'enableHardwareVideoAcceleration'
+        'audioSubsystem', 'useLegacyAudioDevice'
     )
     foreach ($key in $allowed) {
         if ($kit.Keys -contains $key) { $merged[$key] = $kit[$key] }
     }
 
     if ($kit.chromiumSwitches) {
-        if (-not $merged.chromiumSwitches) { $merged.chromiumSwitches = @{} }
-        Merge-HashtableDeep $merged.chromiumSwitches (ConvertTo-HashtableDeep $kit.chromiumSwitches)
+        # Replace (not merge) so stale/risky switches from older runs are removed.
+        $merged.chromiumSwitches = ConvertTo-HashtableDeep $kit.chromiumSwitches
     }
     if ($kit.openasar) {
         $merged.openasar = ConvertTo-HashtableDeep $kit.openasar
         $merged.openasar.setup = $true
-        $merged.openasar.quickstart = $true
-        $merged.openasar.domOptimizer = $true
+        # quickstart and domOptimizer are experimental OpenASAR features that can
+        # prevent Discord from booting on some machines - keep them off.
+        $merged.openasar.quickstart = $false
+        $merged.openasar.domOptimizer = $false
         $merged.openasar.themeSync = $false
         $merged.openasar.noTrack = $true
         $merged.openasar.noTyping = $true
@@ -1958,10 +1961,6 @@ function Apply-DiscordProfile([string]$DestPath) {
     $merged['DESKTOP_TTI_DNSTCP_WARMUP'] = $false
     $merged['audioSubsystem'] = 'standard'
     $merged['BACKGROUND_COLOR'] = '#000000'
-    $merged['theme'] = 'midnight'
-    $merged['displayMode'] = 'compact'
-    $merged['reducedMotion'] = $true
-    $merged['accessibilityReducedMotion'] = $true
 
     if ($merged.audioSubsystem -and $merged.audioSubsystem -ne 'standard') {
         Write-LogLine 'WARN' "Reset audioSubsystem $($merged.audioSubsystem) -> standard"
@@ -2014,7 +2013,13 @@ function Start-Discord([string]$AppDir) {
 
     Unlock-DiscordSettings
     Apply-DiscordProfile (Join-Path $AppData 'settings.json')
-    if (-not $SkipKernel) { Install-DiscOptKernel $AppDir }
+    # A version.dll.disabled marker means the kernel was rolled back on this PC
+    # (boot safety). Only a full optimize run re-tests and clears it.
+    $kernelBlocked = Test-Path (Join-Path $AppDir 'version.dll.disabled')
+    if (-not $SkipKernel -and -not $kernelBlocked -and
+        -not $Script:KernelRolledBack -and -not $Script:ModsRolledBack) {
+        Install-DiscOptKernel $AppDir
+    }
 
     [void](Invoke-DiscordLaunch -AppDir $AppDir)
 }
@@ -2164,9 +2169,9 @@ function Apply-EquicordProfile {
     $settings.winNativeTitleBar = $false
     $settings.cloud.settingsSync = $false
     $settings.cloud.authenticated = $false
-    $settings.cloud.url = ''
+    $settings.cloud.url = 'https://cloud.equicord.org/'
     $settings.notifications = @{
-        timeout   = 0
+        timeout   = 3000
         position  = 'bottom-right'
         useNative = 'never'
         missed    = $false
@@ -2300,6 +2305,62 @@ function Install-DiscOptKernel([string]$AppDir) {
     Copy-Item $dll $verDest -Force
     Copy-Item $ini (Join-Path $AppDir 'config.ini') -Force
     Write-Ok 'DiscOpt kernel active (ffmpeg proxy - memory trim loads on start)'
+}
+
+function Disable-DiscOptKernelOnDisk([string]$AppDir) {
+    $real = Join-Path $AppDir 'ffmpeg_real.dll'
+    if ((Test-Path $real) -and ((Get-Item $real).Length -gt 500000)) {
+        Copy-Item $real (Join-Path $AppDir 'ffmpeg.dll') -Force
+    }
+    foreach ($name in @('version.dll', 'config.ini')) {
+        $path = Join-Path $AppDir $name
+        if (Test-Path $path) {
+            attrib -R $path 2>$null
+            $disabled = "$path.disabled"
+            if (Test-Path $disabled) { Remove-Item $disabled -Force -ErrorAction SilentlyContinue }
+            Rename-Item $path $disabled -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Confirm-DiscordBootsAfterMods([string]$AppDir) {
+    Write-Step 'Boot check: verifying Discord opens with all optimizations...'
+    Stop-Discord
+    [void](Invoke-DiscordLaunch -AppDir $AppDir)
+    if (Wait-DiscordMainWindow 75) {
+        Stop-Discord
+        Write-Ok 'Boot check passed (Discord reached its main window)'
+        return
+    }
+
+    Write-Warn 'Discord did not open - disabling DiscOpt kernel and retrying...'
+    Write-LogLine 'WARN' 'Boot check failed with kernel - trying without kernel'
+    Stop-Discord
+    Disable-DiscOptKernelOnDisk $AppDir
+    [void](Invoke-DiscordLaunch -AppDir $AppDir)
+    if (Wait-DiscordMainWindow 75) {
+        Stop-Discord
+        $Script:KernelRolledBack = $true
+        Write-Warn 'Kernel disabled automatically - Discord boots without it on this PC.'
+        Write-Warn 'Everything else (Equicord, OpenASAR, theme, tweaks) is still active.'
+        return
+    }
+
+    Write-Warn 'Still not opening - restoring stock Discord (all mods off)...'
+    Write-LogLine 'WARN' 'Boot check failed without kernel - restoring stock runtime'
+    Stop-Discord
+    Use-StockDiscordRuntime $AppDir
+    [void](Invoke-DiscordLaunch -AppDir $AppDir)
+    if (Wait-DiscordMainWindow 90) {
+        Stop-Discord
+        $Script:KernelRolledBack = $true
+        $Script:ModsRolledBack = $true
+        Write-Warn 'Stock Discord restored and it boots. Mods were rolled back for safety.'
+        return
+    }
+
+    Stop-Discord
+    throw 'Discord failed to boot even in stock mode. Run the repair one-liner: irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex'
 }
 
 function Disable-Fso([string]$AppDir) {
@@ -2477,7 +2538,11 @@ function Write-RunSummary {
         else { $checks.Add("Equicord settings: $($eq.Reason)") }
     }
 
-    if ($AppDir) {
+    if ($Script:ModsRolledBack) {
+        $checks.Add('SAFETY: mods rolled back to stock (Discord would not boot with them)')
+    } elseif ($Script:KernelRolledBack) {
+        $checks.Add('SAFETY: kernel disabled (Discord boots fine without it; all other tweaks active)')
+    } elseif ($AppDir) {
         $ff = Join-Path $AppDir 'ffmpeg.dll'
         if ((Test-Path $ff) -and (Get-Item $ff).Length -lt 500000) {
             $checks.Add('DiscOpt kernel on disk (memory trim)')
@@ -2592,6 +2657,9 @@ if (-not $SkipKernel) {
     Write-Warn 'Skipped DiscOpt kernel (-SkipKernel)'
 }
 
+# 5b) Boot safety: verify Discord actually opens; auto-rollback if it does not
+Confirm-DiscordBootsAfterMods $app.FullName
+
 # 6) Windows tweaks + shortcut
 if (-not $Quick) {
     Apply-WindowsTweaks $app.FullName
@@ -2619,6 +2687,9 @@ exit 0
     Write-Host ''
     Write-Err 'Disc Optimizer failed.'
     Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host ''
+    Write-Host '  If Discord will not open, paste this into PowerShell to restore it:' -ForegroundColor Yellow
+    Write-Host '    irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
     Write-Host ''
     Write-Host "  Error log: $(Join-Path $LogDir 'last-error.log')" -ForegroundColor Yellow
     if ($Script:LogPath) {

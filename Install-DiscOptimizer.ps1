@@ -10,15 +10,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-function Wait-DiscOptInstallerClose {
-    try {
-        Write-Host 'Press Enter to close...'
-        Read-Host | Out-Null
-    } catch {
-        Start-Sleep -Seconds 8
-    }
-}
-
 function Get-DiscOptDocumentsPath {
     $docs = [Environment]::GetFolderPath('MyDocuments')
     if ([string]::IsNullOrWhiteSpace($docs)) {
@@ -85,16 +76,24 @@ try {
     if ($OptimizerArgs) { $runArgs += $OptimizerArgs }
 
     Write-Host '[*] Starting Disc Optimizer...' -ForegroundColor Cyan
+    # Note: no `exit` here - this script is usually run via `irm | iex` inside the
+    # user's own PowerShell session, and `exit` would close their window.
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $optimizer @runArgs
-    $exitCode = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 0 }
-    exit $exitCode
+    if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+        Write-Host ''
+        Write-Host "Disc Optimizer reported an error (exit code $LASTEXITCODE)." -ForegroundColor Yellow
+        Write-Host 'If Discord will not open, paste this to restore it:' -ForegroundColor Yellow
+        Write-Host '  irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
+        Write-Host ''
+    }
 } catch {
     Write-Host ''
     Write-Host 'Disc Optimizer installer failed.' -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host ''
-    Wait-DiscOptInstallerClose
-    exit 1
+    Write-Host 'If Discord will not open, paste this to restore it:' -ForegroundColor Yellow
+    Write-Host '  irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
+    Write-Host ''
 } finally {
     if ($work -and (Test-Path $work)) {
         Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue

@@ -6,16 +6,11 @@
   "IS_MAXIMIZED": true,
   "IS_MINIMIZED": false,
   "enableHardwareAcceleration": true,
-  "enableHardwareVideoAcceleration": true,
   "debugLogging": false,
   "offloadAdmControls": true,
   "useLegacyAudioDevice": false,
   "asyncVideoInputDeviceInit": false,
   "audioSubsystem": "standard",
-  "theme": "midnight",
-  "displayMode": "compact",
-  "reducedMotion": true,
-  "accessibilityReducedMotion": true,
   "BACKGROUND_COLOR": "#000000",
   "DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR": true,
   "DESKTOP_TTI_DNSTCP_WARMUP": false,
@@ -26,21 +21,19 @@
     "disableMediaKeys": true,
     "noTrack": true,
     "noTyping": true,
-    "quickstart": true,
+    "quickstart": false,
     "setup": true,
-    "domOptimizer": true,
+    "domOptimizer": false,
     "themeSync": false,
     "autoupdate": false,
-    "css": ":root,.theme-dark,.theme-midnight{--background-primary:#000!important;--background-secondary:#000!important;--background-tertiary:#000!important;--background-floating:#030303!important;--channeltextarea-background:#030303!important;--modal-background:#000!important;--brand-500:#5865f2!important;color-scheme:dark!important}*{scrollbar-color:#202020 #000!important;text-shadow:none!important}@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.001ms!important;transition-duration:.001ms!important}}"
+    "css": ":root,.theme-dark,.theme-midnight{--background-primary:#000!important;--background-secondary:#000!important;--background-tertiary:#000!important;--background-floating:#030303!important;--channeltextarea-background:#030303!important;--modal-background:#000!important;--brand-500:#5865f2!important;color-scheme:dark!important}*{scrollbar-color:#202020 #000!important;text-shadow:none!important}"
   },
   "chromiumSwitches": {
     "force_high_performance_gpu": 1,
-    "enable-gpu-rasterization": 1,
-    "ignore-gpu-blocklist": 1,
     "disable-breakpad": 1,
     "disable-crash-reporter": 1,
     "disable-domain-reliability": 1,
     "disable-component-update": 1,
-    "disable-features": "CalculateNativeWinOcclusion,WebBluetooth,BluetoothAdapterWinrt,BluetoothScanning,MediaRouter,OptimizationHints,AutofillServerCommunication"
+    "disable-features": "WebBluetooth,BluetoothAdapterWinrt,BluetoothScanning,MediaRouter,OptimizationHints,AutofillServerCommunication"
   }
 }

@@ -25,6 +25,16 @@ irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-DiscOpti
 
 Running it again is always safe — it verifies what's already applied and only fixes what's missing.
 
+## Discord won't open? One-paste repair
+
+If Discord ever fails to start (after an optimization run, a Discord update, or anything else), paste this. It restores stock, bootable Discord while keeping your login and settings:
+
+```powershell
+irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex
+```
+
+The optimizer also has built-in boot safety: after applying mods it verifies Discord actually opens. If it doesn't, it automatically disables the kernel first, and if needed rolls everything back to stock — so you're never left with a broken Discord.
+
 ## What it does
 
 - **Speed / gaming**
