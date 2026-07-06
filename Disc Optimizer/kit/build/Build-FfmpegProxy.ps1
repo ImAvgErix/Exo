@@ -2,7 +2,18 @@
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $KitRoot = Split-Path $Root -Parent
-$Bin = Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\BrechtSanders.WinLibs*\mingw64\bin" -ErrorAction SilentlyContinue |
+
+function Get-DiscOptEnvPath([string]$Name, [string]$Child = '') {
+    $base = [Environment]::GetEnvironmentVariable($Name)
+    if ([string]::IsNullOrWhiteSpace($base)) { return $null }
+    if ([string]::IsNullOrWhiteSpace($Child)) { return $base }
+    return (Join-Path $base $Child)
+}
+
+$LocalAppData = Get-DiscOptEnvPath 'LOCALAPPDATA'
+if (-not $LocalAppData) { throw 'LOCALAPPDATA is not set; this build helper must run on Windows.' }
+
+$Bin = Get-ChildItem (Join-Path $LocalAppData 'Microsoft\WinGet\Packages\BrechtSanders.WinLibs*\mingw64\bin') -ErrorAction SilentlyContinue |
     Select-Object -First 1
 
 if (-not $Bin) {
@@ -12,7 +23,7 @@ if (-not $Bin) {
 $Gcc = Join-Path $Bin.FullName 'gcc.exe'
 $Gendef = Join-Path $Bin.FullName 'gendef.exe'
 
-$discordApp = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Discord') -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+$discordApp = Get-ChildItem (Join-Path $LocalAppData 'Discord') -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
     Sort-Object { [version]($_.Name -replace '^app-', '') } -Descending |
     Select-Object -First 1
 
