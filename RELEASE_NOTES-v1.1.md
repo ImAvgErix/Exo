@@ -5,6 +5,8 @@ Disc Optimizer v1.1 is a full speed/privacy/AMOLED pass over the original toolki
 ## Highlights
 
 - New local **DiscOpt AMOLED v1.1** theme with zero remote CSS imports.
+- New no-release GitHub bootstrap installer: run one PowerShell command to download source into Documents and launch the optimizer.
+- Black Discord in-app icon patching for `app.ico` and `discord_desktop_core` icon assets.
 - Stronger Discord app profile: midnight/black intent, reduced motion, compact display, no verbose logging, high-performance GPU flags, and OpenASAR quickstart/DOM optimizer.
 - Safe cache cleaner that removes Discord cache/log/crash/GPU shader junk without touching login/session storage.
 - Quieter Windows posture: Discord startup entries, scheduled tasks, toast notifications, and tray promotion are disabled.
@@ -19,7 +21,13 @@ Disc Optimizer v1.1 is a full speed/privacy/AMOLED pass over the original toolki
 - Required Discord modules for stable boot and voice.
 - Stock backups for Discord bootstrap/kernel files.
 
-## Release package
+## No-release install
+
+```powershell
+irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-DiscOptimizer.ps1" | iex
+```
+
+## Optional release package
 
 Build from the repository root on Windows after placing release-only binaries in the kit:
 

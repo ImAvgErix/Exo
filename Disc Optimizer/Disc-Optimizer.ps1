@@ -19,7 +19,8 @@ param(
     [switch]$FreshInstall,
     [switch]$Quick,
     [switch]$SkipManifestSync,
-    [switch]$SkipCacheClean
+    [switch]$SkipCacheClean,
+    [switch]$SkipIconPatch
 )
 
 if ($Launch) {
@@ -330,7 +331,8 @@ $Script:DiscordInstalledThisRun = $false
 
 $Protected = @(
     'version.dll', 'config.ini', 'Discord.exe', 'ffmpeg.dll', 'ffmpeg_real.dll',
-    'Discord.bin.exe', 'Update.exe', 'app.asar', '_app.asar', '_app.asar.stock'
+    'Discord.bin.exe', 'Update.exe', 'app.ico', 'app.ico.stock',
+    'app.asar', '_app.asar', '_app.asar.stock'
 )
 $OpenAsarUrl = 'https://github.com/GooseMod/OpenAsar/releases/download/nightly/app.asar'
 $EquilotCliUrl = 'https://github.com/Equicord/Equilotl/releases/latest/download/EquilotlCli.exe'
@@ -426,7 +428,7 @@ function Initialize-DiscOptimizerLog {
         "Computer: $env:COMPUTERNAME",
         "DiscOptVersion: $Script:DiscOptVersion",
         "PowerShell: $($PSVersionTable.PSVersion)",
-        "Launch=$Launch SkipDebloat=$SkipDebloat ForceDebloat=$ForceDebloat SkipEquicord=$SkipEquicord SkipOpenAsar=$SkipOpenAsar SkipKernel=$SkipKernel NoLaunch=$NoLaunch VerifyOnly=$VerifyOnly SkipDiscordInstall=$SkipDiscordInstall FreshInstall=$FreshInstall Quick=$Quick SkipManifestSync=$SkipManifestSync SkipCacheClean=$SkipCacheClean",
+        "Launch=$Launch SkipDebloat=$SkipDebloat ForceDebloat=$ForceDebloat SkipEquicord=$SkipEquicord SkipOpenAsar=$SkipOpenAsar SkipKernel=$SkipKernel NoLaunch=$NoLaunch VerifyOnly=$VerifyOnly SkipDiscordInstall=$SkipDiscordInstall FreshInstall=$FreshInstall Quick=$Quick SkipManifestSync=$SkipManifestSync SkipCacheClean=$SkipCacheClean SkipIconPatch=$SkipIconPatch",
         "Kit: $Root",
         "Discord: $DiscordRoot",
         ('=' * 60),
@@ -1372,6 +1374,7 @@ function Test-KitIntegrity {
         (Join-Path $KitDir 'version.dll'),
         (Join-Path $KitDir 'ffmpeg.dll'),
         (Join-Path $KitDir 'config.ini'),
+        (Join-Path $KitDir 'assets\discord-black.ico'),
         (Join-Path $Profiles 'equicord-overrides.json'),
         (Join-Path $Profiles 'equicordplugins.json'),
         (Join-Path $Profiles 'vencordplugins.json'),
@@ -2015,6 +2018,7 @@ function Start-Discord([string]$AppDir) {
     Unlock-DiscordSettings
     Apply-DiscordProfile (Join-Path $AppData 'settings.json')
     if (-not $SkipKernel) { Install-DiscOptKernel $AppDir }
+    Set-DiscOptBlackIcon $AppDir
 
     [void](Invoke-DiscordLaunch -AppDir $AppDir)
 }
@@ -2285,6 +2289,67 @@ function Install-DiscOptKernel([string]$AppDir) {
     Copy-Item $dll $verDest -Force
     Copy-Item $ini (Join-Path $AppDir 'config.ini') -Force
     Write-Ok 'DiscOpt kernel active (ffmpeg proxy - memory trim loads on start)'
+}
+
+function Get-DiscOptBlackDiscordSvg {
+    return @'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 168 190" role="img" aria-label="DiscOpt">
+  <rect width="168" height="190" rx="22" fill="#000000"/>
+  <path fill="#f4f4f5" d="M148.4 0H19.6C8.8 0 0 8.8 0 19.6v128.4c0 10.8 8.8 19.6 19.6 19.6h108.9l-5.1-17.5 12.3 11.3 11.6 10.7L168 190v-41.9-9.5-119C168 8.8 159.2 0 148.4 0zM111.3 124.1s-3.4-4.1-6.3-7.7c12.6-3.5 17.4-11.3 17.4-11.3-4 2.6-7.7 4.4-11.1 5.6-4.8 2-9.5 3.3-14 4.1-9.2 1.7-17.6 1.3-24.9-.1-5.5-1-10.2-2.5-14.1-4.1-2.2-.8-4.6-1.9-7.1-3.3-.3-.2-.6-.3-.9-.5-.1-.1-.3-.2-.4-.2-1.7-1-2.6-1.6-2.6-1.6s4.6 7.6 16.8 11.2c-2.9 3.6-6.4 7.9-6.4 7.9-21.2-.6-29.3-14.5-29.3-14.5 0-30.6 13.8-55.4 13.8-55.4 13.8-10.3 26.9-10 26.9-10l1 1.1C52.8 50.3 45 57.9 45 57.9s2.1-1.2 5.7-2.7c10.3-4.5 18.4-5.7 21.8-6 .5-.1 1.1-.2 1.6-.2 5.9-.7 12.5-.9 19.4-.2 9.1 1 18.9 3.7 28.9 9.1 0 0-7.5-7.2-23.9-12.1l1.3-1.5s13.1-.3 26.9 10c0 0 13.8 24.8 13.8 55.4.1-.1-8 13.8-29.2 14.4z"/>
+  <circle cx="66.7" cy="90.2" r="10.5" fill="#000000"/>
+  <circle cx="101.7" cy="90.2" r="10.5" fill="#000000"/>
+</svg>
+'@
+}
+
+function Backup-DiscOptFileOnce([string]$Path) {
+    if (-not (Test-Path $Path)) { return }
+    $backup = "$Path.stock"
+    if (-not (Test-Path $backup)) {
+        Copy-Item $Path $backup -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Set-DiscOptBlackIcon([string]$AppDir) {
+    if ($SkipIconPatch) {
+        Write-Ok 'In-app black icon skipped (-SkipIconPatch)'
+        return
+    }
+
+    Write-Step 'Applying black in-app Discord icon...'
+    $patched = 0
+    $ico = Join-Path $KitDir 'assets\discord-black.ico'
+    $appIcon = Join-Path $AppDir 'app.ico'
+    if ((Test-Path $ico) -and (Test-Path $appIcon)) {
+        attrib -R $appIcon 2>$null
+        Backup-DiscOptFileOnce $appIcon
+        Copy-Item $ico $appIcon -Force
+        $patched++
+        Write-Ok 'Patched Discord app.ico'
+    }
+
+    $svg = Get-DiscOptBlackDiscordSvg
+    $svgTargets = @(
+        (Join-Path $AppDir 'modules\discord_desktop_core-1\discord_desktop_core\app\images\discord.svg'),
+        (Join-Path (Get-ModulesBundleDir) 'discord_desktop_core-1\discord_desktop_core\app\images\discord.svg')
+    ) | Select-Object -Unique
+
+    foreach ($target in $svgTargets) {
+        $dir = Split-Path $target -Parent
+        if (-not (Test-Path $dir)) { continue }
+        if (Test-Path $target) {
+            attrib -R $target 2>$null
+            Backup-DiscOptFileOnce $target
+        }
+        Set-Content -Path $target -Value $svg -Encoding UTF8
+        $patched++
+    }
+
+    if ($patched -gt 0) {
+        Write-Ok "Black in-app icon applied ($patched asset(s))"
+    } else {
+        Write-Warn 'Black in-app icon assets were not found yet; run -Quick after Discord finishes updating'
+    }
 }
 
 function Disable-Fso([string]$AppDir) {
@@ -2579,6 +2644,7 @@ if (-not $SkipKernel) {
 } else {
     Write-Warn 'Skipped DiscOpt kernel (-SkipKernel)'
 }
+Set-DiscOptBlackIcon $app.FullName
 
 # 6) Windows tweaks + shortcut
 if (-not $Quick) {

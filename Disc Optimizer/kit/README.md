@@ -1,6 +1,12 @@
 # Disc Optimizer Kit v1.1
 
-One kit: Discord stable, Equicord, OpenASAR, local AMOLED theme, privacy/minimalism plugins, safe cache clean, black shortcut icon, and DiscOpt kernel DLL/config files.
+One kit: Discord stable, Equicord, OpenASAR, local AMOLED theme, privacy/minimalism plugins, safe cache clean, black in-app icon patching, and DiscOpt kernel DLL/config files.
+
+## One-command install from GitHub
+
+```powershell
+irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-DiscOptimizer.ps1" | iex
+```
 
 ## Run
 
@@ -19,7 +25,7 @@ powershell -ExecutionPolicy Bypass -File "Disc-Optimizer.ps1" -SkipCacheClean
 - Safe cache cleanup for cache/log/crash/GPU shader junk while preserving login/session storage.
 - Windows startup entries, scheduled tasks, toast notifications, and tray promotion disabled for Discord.
 - Equicord privacy/minimalism plugins enabled; noisy notification/activity plugins forced off.
-- Black Start menu shortcut icon.
+- Black Discord app/home icon assets plus black launcher icon.
 
 Export live plugin tweaks back into the kit:
 

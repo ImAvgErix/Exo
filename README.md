@@ -22,13 +22,28 @@ Current version: **1.1.0**.
   - Black Start menu shortcut icon.
   - Keeps the native noise suppression dropdown working by preserving Krisp module files while forcing Krisp-blocking plugins off.
 - **Ease of use**
-  - Right-click-run PowerShell script with auto-elevation and portable PowerShell fallback.
+  - No release ZIP required: one PowerShell command downloads the GitHub source into Documents and runs it.
+  - Right-click-run PowerShell script still works with auto-elevation and portable PowerShell fallback.
   - Clear `kit\logs\last-error.log` failure logs instead of auto-closing with no explanation.
   - `-Quick` mode reapplies the profile after Discord updates.
 
-## Download / run
+## One-command install / run
 
-From a release ZIP, extract the folder, then right-click `Disc-Optimizer.ps1` and choose **Run with PowerShell**.
+Run this in PowerShell. It downloads the current GitHub source, installs/updates it under `Documents\Disc Optimizer`, then starts the optimizer.
+
+```powershell
+irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-DiscOptimizer.ps1" | iex
+```
+
+Quick reapply after a Discord update:
+
+```powershell
+& "$env:USERPROFILE\Documents\Disc Optimizer\Disc-Optimizer.ps1" -Quick
+```
+
+## Manual run
+
+If you cloned/downloaded the repo, open the `Disc Optimizer` folder, then right-click `Disc-Optimizer.ps1` and choose **Run with PowerShell**.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File ".\Disc-Optimizer.ps1"
@@ -62,9 +77,9 @@ Most debloaters only delete files. Disc Optimizer also:
 - keeps voice UI compatibility;
 - adds DLL/config-based memory trim, priority, and raw input support.
 
-## Build the v1.1 release ZIP
+## Optional offline release ZIP
 
-Large redistributable binaries are intentionally not committed to git. For an offline-first release, place these files into the kit before packaging:
+You do not need a release ZIP for the normal online install. If you want an offline-first package, large redistributable binaries are intentionally not committed to git. Place these files into the kit before packaging:
 
 - `Disc Optimizer\kit\tools\DiscordSetup.exe`
 - `Disc Optimizer\kit\tools\EquilotlCli.exe`
