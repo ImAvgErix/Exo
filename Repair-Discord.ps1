@@ -110,7 +110,8 @@ function Test-RepairAppComplete([string]$AppDir) {
     # blank/black Discord window. If any are missing, only a reinstall fixes it.
     foreach ($name in @(
         'Discord.exe', 'd3dcompiler_47.dll', 'vulkan-1.dll',
-        'vk_swiftshader.dll', 'chrome_100_percent.pak'
+        'vk_swiftshader.dll', 'vk_swiftshader_icd.json',
+        'chrome_100_percent.pak', 'chrome_200_percent.pak'
     )) {
         if (-not (Test-Path (Join-Path $AppDir $name))) {
             Write-RepWarn "Missing $name (needed for rendering)"
