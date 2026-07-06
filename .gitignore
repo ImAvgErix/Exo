@@ -1,3 +1,4 @@
+# Local scratch (never committed)
 release-artifacts/
 extracted/
 dist/
@@ -7,7 +8,7 @@ Disc Optimizer/kit/logs/*.log
 Disc Optimizer/kit/logs/last-*.log
 Disc Optimizer/kit/downloads/*
 
-# Large redistributable artifacts are published in GitHub Releases.
+# Large binaries the script downloads on demand (kept out of git)
 Disc Optimizer/kit/downloads/*.zip
 Disc Optimizer/kit/tools/DiscordSetup*.exe
 Disc Optimizer/kit/tools/Equilotl*.exe
