@@ -102,6 +102,15 @@
         "NoOnboardingDelay": { "enabled": true },
         "StopAutoUnread": { "enabled": true },
         "StreamerModeOn": { "enabled": true },
+        "OnePingPerDM": {
+            "enabled": true,
+            "allowMentions": false,
+            "allowEveryone": false
+        },
+        "YoutubeAdblock": { "enabled": true },
+        "ValidReply": { "enabled": true },
+        "ValidUser": { "enabled": true },
+        "BetterGifPicker": { "enabled": true },
         "Settings": {
             "enabled": true,
             "settingsLocation": "aboveNitro",

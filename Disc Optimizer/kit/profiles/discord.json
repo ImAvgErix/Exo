@@ -34,6 +34,7 @@
     "disable-crash-reporter": 1,
     "disable-domain-reliability": 1,
     "disable-component-update": 1,
+    "disable-logging": 1,
     "disable-features": "WebBluetooth,BluetoothAdapterWinrt,BluetoothScanning,MediaRouter,OptimizationHints,AutofillServerCommunication"
   }
 }

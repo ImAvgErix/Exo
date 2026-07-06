@@ -37,7 +37,7 @@ if ($Quick) {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.3'
+$Script:DiscOptVersion = '1.1.4'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -393,6 +393,14 @@ function Invoke-KitMaintenance {
             Where-Object { $RequiredModules -notcontains $_.Name } |
             ForEach-Object { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
         Get-ChildItem $bundleDir -Recurse -Filter '*.log' -File -ErrorAction SilentlyContinue |
+            ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+    }
+
+    # installer.db backups accumulate one per repair - keep only the 2 newest.
+    if ($DiscordRoot -and (Test-Path $DiscordRoot)) {
+        Get-ChildItem $DiscordRoot -Filter 'installer.db.bak-*' -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -Skip 2 |
             ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
     }
 
@@ -1426,8 +1434,13 @@ function Sync-PluginManifests {
         return
     }
     foreach ($name in @('equicordplugins.json', 'vencordplugins.json')) {
+        $dest = Join-Path $Profiles $name
+        if ((Test-Path $dest) -and (((Get-Date) - (Get-Item $dest).LastWriteTime).TotalDays -lt 7)) {
+            Write-LogLine 'OK' "Manifest fresh (<7 days), skipping download: $name"
+            continue
+        }
         try {
-            Get-EquicordReleaseFile -FileName $name -OutFile (Join-Path $Profiles $name) | Out-Null
+            Get-EquicordReleaseFile -FileName $name -OutFile $dest | Out-Null
             Write-LogLine 'OK' "Refreshed manifest: $name"
         } catch {
             Write-Warn "Could not refresh $name - using bundled copy"
@@ -1582,7 +1595,7 @@ function Invoke-Debloat([string]$AppDir, [ref]$Freed) {
     # causes blank/black windows on many GPUs.
     foreach ($pattern in @(
         '.first-run', 'Discord.exe.sig', 'discord_wer.*',
-        'Microsoft.Gaming.XboxApp.XboxNetwork.winmd'
+        'Microsoft.Gaming.XboxApp.XboxNetwork.winmd', '*.log'
     )) {
         Get-ChildItem (Join-Path $AppDir $pattern) -ErrorAction SilentlyContinue | ForEach-Object {
             if ($Protected -contains $_.Name) { return }
@@ -1760,8 +1773,10 @@ function Disable-DiscordWindowsAutostart {
 
 function Disable-DiscordScheduledTasks {
     try {
+        # Discord only - matching plain 'Squirrel' would disable other apps'
+        # updaters (Slack, GitHub Desktop, Teams classic all use Squirrel).
         $tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue |
-            Where-Object { $_.TaskName -match 'Discord|Squirrel' -or $_.TaskPath -match 'Discord|Squirrel' })
+            Where-Object { $_.TaskName -match 'Discord' -or $_.TaskPath -match 'Discord' })
         foreach ($task in $tasks) {
             Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue | Out-Null
             Write-Ok "Disabled scheduled task: $($task.TaskPath)$($task.TaskName)"
