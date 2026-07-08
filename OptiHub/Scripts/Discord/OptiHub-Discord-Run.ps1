@@ -96,7 +96,8 @@ function Test-OptiHubDiscordApplied {
     $resources = Join-Path $appDir.FullName 'resources'
     $equicordAsar = Join-Path $appData 'Equicord\equicord.asar'
     $appAsar = Join-Path $resources 'app.asar'
-    $equicordOk = (Test-Path $equicordAsar) -and (Test-Path $appAsar) -and ((Get-Item $appAsar).Length -lt 4096)
+    $loaderLen = if (Test-Path $appAsar) { (Get-Item $appAsar).Length } else { 0 }
+    $equicordOk = (Test-Path $equicordAsar) -and ($loaderLen -ge 64) -and ($loaderLen -lt 4096)
     $inner = Join-Path $resources '_app.asar'
     $openAsarOk = (Test-Path $inner) -and ((Get-Item $inner).Length -gt 10000) -and ((Get-Item $inner).Length -lt 500000)
 
@@ -233,7 +234,12 @@ Write-HubProgress 14 'Preparing Disc Optimizer...'
 $runArgs = @()
 if ($Quick) { $runArgs += '-Quick' }
 if ($SkipCacheClean) { $runArgs += '-SkipCacheClean' }
-$env:OPTIHUB = '1'; $env:DISCOPT_NONINTERACTIVE = '1'; $NoLaunch = $true
+# Always non-interactive under OptiHub so Disc-Optimizer never waits on a keypress.
+$NoLaunch = $true
+$env:OPTIHUB = '1'
+$env:DISCOPT_NONINTERACTIVE = '1'
+$env:OPTIHUB_SKIP_BOOT_FLASH = '1'
+$env:DISCOPT_SKIP_MANIFEST = '1'
 $runArgs += '-NoLaunch'
 $runArgs += '-SkipManifestSync'
 if ($SkipDebloat) { $runArgs += '-SkipDebloat' }
@@ -242,15 +248,6 @@ if ($SkipOpenAsar) { $runArgs += '-SkipOpenAsar' }
 if ($SkipKernel) { $runArgs += '-SkipKernel' }
 if ($FreshInstall) { $runArgs += '-FreshInstall' }
 
-if ($NonInteractive) {
-    $env:DISCOPT_NONINTERACTIVE = '1'
-    $env:OPTIHUB_SKIP_BOOT_FLASH = '1'
-    $env:DISCOPT_SKIP_MANIFEST = '1'
-}
-
-$env:DISCOPT_NONINTERACTIVE = '1'
-$env:OPTIHUB_SKIP_BOOT_FLASH = '1'
-$env:OPTIHUB = '1'
 Write-HubProgress 18 'Running Disc-Optimizer...'
 Write-HubStep "Arguments: $($runArgs -join ' ')"
 
