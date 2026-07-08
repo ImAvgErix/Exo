@@ -34,21 +34,41 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBarHost);
 
+        AppWindow.Changed += (_, _) => UpdateCaptionInset();
+        RootGrid.Loaded += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
+
         ApplyShellChrome();
+        UpdateCaptionInset();
         PlayBackdropPulse();
 
         NavigateHome(suppressTransition: true);
         _ = MaybeAutoUpdateAsync();
     }
 
+    private void UpdateCaptionInset()
+    {
+        try
+        {
+            var right = AppWindow.TitleBar.RightInset;
+            // Fallback when RightInset reports 0 before layout settles
+            if (right < 100) right = 138;
+            CaptionSpacer.Width = new GridLength(right);
+        }
+        catch
+        {
+            CaptionSpacer.Width = new GridLength(138);
+        }
+    }
+
     private void ApplyShellChrome()
     {
         var dark = RootGrid.ActualTheme != ElementTheme.Light;
         RootGrid.Background = new SolidColorBrush(
-            dark ? ColorHelper.FromArgb(255, 0, 0, 0)
-                 : ColorHelper.FromArgb(255, 244, 244, 245));
+            dark ? ColorHelper.FromArgb(255, 11, 11, 12)
+                 : ColorHelper.FromArgb(255, 245, 245, 244));
         App.Services.Theme.Apply();
+        UpdateCaptionInset();
     }
 
     private void PlayBackdropPulse()
@@ -57,9 +77,9 @@ public sealed partial class MainWindow : Window
         {
             var anim = new DoubleAnimation
             {
-                From = 0.4,
-                To = 0.7,
-                Duration = new Duration(TimeSpan.FromSeconds(4.5)),
+                From = 0.35,
+                To = 0.65,
+                Duration = new Duration(TimeSpan.FromSeconds(5)),
                 AutoReverse = true,
                 RepeatBehavior = RepeatBehavior.Forever,
                 EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
@@ -72,7 +92,7 @@ public sealed partial class MainWindow : Window
         }
         catch
         {
-            // animation is decorative
+            // decorative
         }
     }
 

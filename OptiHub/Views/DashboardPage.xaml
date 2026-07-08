@@ -8,21 +8,25 @@
 
     <Page.Transitions>
         <TransitionCollection>
-            <EntranceThemeTransition FromVerticalOffset="18" />
+            <EntranceThemeTransition FromVerticalOffset="16" />
         </TransitionCollection>
     </Page.Transitions>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled"
-                  Padding="32,8,32,28">
+                  Padding="32,4,32,28">
         <StackPanel MaxWidth="{StaticResource OptiPageMaxWidth}"
                     HorizontalAlignment="Center"
-                    Spacing="26">
+                    Spacing="22">
 
-            <TextBlock Text="A calm place for performance, privacy, and gaming tweaks. Pick a card to begin."
-                       Style="{StaticResource OptiTagline}"
-                       HorizontalAlignment="Stretch"
-                       Margin="8,8,8,0" />
+            <StackPanel Spacing="8" Margin="12,10,12,4">
+                <TextBlock Text="A calm place for performance, privacy, and gaming tweaks."
+                           Style="{StaticResource OptiTagline}"
+                           HorizontalAlignment="Stretch" />
+                <TextBlock Text="Pick a card to begin."
+                           Style="{StaticResource OptiTaglineSupport}"
+                           HorizontalAlignment="Stretch" />
+            </StackPanel>
 
             <GridView x:Name="OptimizerGrid"
                       ItemsSource="{x:Bind ViewModel.Cards}"
@@ -32,15 +36,15 @@
                       HorizontalAlignment="Center">
                 <GridView.ItemContainerTransitions>
                     <TransitionCollection>
-                        <EntranceThemeTransition FromVerticalOffset="24" IsStaggeringEnabled="True" />
+                        <EntranceThemeTransition FromVerticalOffset="22" IsStaggeringEnabled="True" />
                     </TransitionCollection>
                 </GridView.ItemContainerTransitions>
                 <GridView.ItemsPanel>
                     <ItemsPanelTemplate>
                         <ItemsWrapGrid Orientation="Horizontal"
                                        MaximumRowsOrColumns="3"
-                                       ItemWidth="200"
-                                       ItemHeight="196"
+                                       ItemWidth="208"
+                                       ItemHeight="204"
                                        HorizontalAlignment="Center" />
                     </ItemsPanelTemplate>
                 </GridView.ItemsPanel>
@@ -51,16 +55,19 @@
                     <DataTemplate x:DataType="vm:OptimizerCardViewModel">
                         <Border Style="{StaticResource OptiCard}"
                                 Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}"
-                                MinHeight="168"
-                                MinWidth="176">
+                                MinHeight="176"
+                                MinWidth="184"
+                                Padding="16,18">
                             <StackPanel HorizontalAlignment="Center"
                                         VerticalAlignment="Center"
                                         Spacing="12">
-                                <Border Width="56" Height="56"
-                                        CornerRadius="14"
+                                <Border Width="60" Height="60"
+                                        CornerRadius="16"
                                         Background="{ThemeResource OptiAccentSoftBrush}"
+                                        BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                                        BorderThickness="1"
                                         HorizontalAlignment="Center">
-                                    <Image Width="36" Height="36"
+                                    <Image Width="34" Height="34"
                                            Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
@@ -77,6 +84,7 @@
                                 <TextBlock Text="Coming soon"
                                            FontFamily="{StaticResource OptiUiFont}"
                                            FontSize="12"
+                                           FontWeight="Medium"
                                            Foreground="{ThemeResource OptiMutedTextBrush}"
                                            TextAlignment="Center"
                                            Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />

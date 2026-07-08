@@ -4,15 +4,15 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:helpers="using:OptiHub.Helpers">
 
-    <!-- Syne (display) · Figtree (UI) -->
-    <FontFamily x:Key="OptiDisplayFont">ms-appx:///Assets/Fonts/Syne-SemiBold.ttf#Syne</FontFamily>
-    <FontFamily x:Key="OptiDisplayFontMedium">ms-appx:///Assets/Fonts/Syne-Medium.ttf#Syne</FontFamily>
-    <FontFamily x:Key="OptiUiFont">ms-appx:///Assets/Fonts/Figtree-Regular.ttf#Figtree</FontFamily>
-    <FontFamily x:Key="OptiUiFontMedium">ms-appx:///Assets/Fonts/Figtree-Medium.ttf#Figtree</FontFamily>
-    <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/Figtree-SemiBold.ttf#Figtree</FontFamily>
+    <!-- Cormorant Garamond (half-cursive display) · Nunito (cozy UI) -->
+    <FontFamily x:Key="OptiDisplayFont">ms-appx:///Assets/Fonts/CormorantGaramond.ttf#Cormorant Garamond</FontFamily>
+    <FontFamily x:Key="OptiDisplayFontItalic">ms-appx:///Assets/Fonts/CormorantGaramond-Italic.ttf#Cormorant Garamond</FontFamily>
+    <FontFamily x:Key="OptiUiFont">ms-appx:///Assets/Fonts/Nunito.ttf#Nunito</FontFamily>
+    <FontFamily x:Key="OptiUiFontMedium">ms-appx:///Assets/Fonts/Nunito.ttf#Nunito</FontFamily>
+    <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/Nunito.ttf#Nunito</FontFamily>
 
-    <CornerRadius x:Key="OptiCardRadius">18</CornerRadius>
-    <x:Double x:Key="OptiPageMaxWidth">720</x:Double>
+    <CornerRadius x:Key="OptiCardRadius">20</CornerRadius>
+    <x:Double x:Key="OptiPageMaxWidth">740</x:Double>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
@@ -20,31 +20,41 @@
     <helpers:AssetPathToImageSourceConverter x:Key="AssetPathToImageSourceConverter" />
 
     <Style x:Key="OptiTagline" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiDisplayFont}" />
-        <Setter Property="FontSize" Value="28" />
+        <Setter Property="FontFamily" Value="{StaticResource OptiDisplayFontItalic}" />
+        <Setter Property="FontSize" Value="34" />
+        <Setter Property="FontStyle" Value="Italic" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="-30" />
+        <Setter Property="CharacterSpacing" Value="-10" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
         <Setter Property="TextAlignment" Value="Center" />
-        <Setter Property="LineHeight" Value="38" />
+        <Setter Property="LineHeight" Value="44" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
 
+    <Style x:Key="OptiTaglineSupport" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="TextWrapping" Value="WrapWholeWords" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
+    </Style>
+
     <Style x:Key="OptiPageTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiDisplayFont}" />
-        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontSize" Value="24" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="-20" />
+        <Setter Property="CharacterSpacing" Value="-10" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
 
     <Style x:Key="OptiSectionTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="11" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="40" />
+        <Setter Property="CharacterSpacing" Value="80" />
         <Setter Property="Margin" Value="0,0,0,8" />
         <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
     </Style>
@@ -52,6 +62,7 @@
     <Style x:Key="OptiBody" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
         <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Foreground" Value="{ThemeResource OptiSecondaryTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="LineHeight" Value="22" />
@@ -74,9 +85,10 @@
 
     <Style x:Key="OptiPrimaryButton" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="Padding" Value="20,12" />
-        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="Padding" Value="22,13" />
+        <Setter Property="CornerRadius" Value="16" />
         <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="15" />
         <Setter Property="Background" Value="{ThemeResource OptiAccentBrush}" />
         <Setter Property="Foreground" Value="{ThemeResource OptiOnAccentBrush}" />
     </Style>
@@ -85,15 +97,22 @@
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontMedium}" />
         <Setter Property="Padding" Value="16,10" />
         <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Background" Value="{ThemeResource OptiQuietButtonFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
 
     <Style x:Key="OptiIconButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
         <Setter Property="Width" Value="36" />
         <Setter Property="Height" Value="36" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="11" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
     </Style>
 
     <Style x:Key="OptiGridViewItemStyle" TargetType="GridViewItem">
@@ -118,20 +137,20 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="ScaleTransform"
                                                          Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.16" />
+                                                         To="1" Duration="0:0:0.18" />
                                         <DoubleAnimation Storyboard.TargetName="ScaleTransform"
                                                          Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.16" />
+                                                         To="1" Duration="0:0:0.18" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="ScaleTransform"
                                                          Storyboard.TargetProperty="ScaleX"
-                                                         To="1.03" Duration="0:0:0.16" />
+                                                         To="1.04" Duration="0:0:0.18" />
                                         <DoubleAnimation Storyboard.TargetName="ScaleTransform"
                                                          Storyboard.TargetProperty="ScaleY"
-                                                         To="1.03" Duration="0:0:0.16" />
+                                                         To="1.04" Duration="0:0:0.18" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">

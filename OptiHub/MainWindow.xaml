@@ -11,29 +11,31 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Soft atmospheric glow behind content -->
+        <!-- Soft atmospheric glow -->
         <Ellipse x:Name="BackdropOrb"
                  Grid.RowSpan="2"
-                 Width="520" Height="520"
+                 Width="640" Height="640"
                  HorizontalAlignment="Center"
                  VerticalAlignment="Top"
-                 Margin="0,-180,0,0"
+                 Margin="0,-220,0,0"
                  IsHitTestVisible="False"
-                 Opacity="0.55"
+                 Opacity="0.5"
                  Fill="{ThemeResource OptiBackdropGlowBrush}">
             <Ellipse.RenderTransform>
-                <CompositeTransform ScaleX="1.35" ScaleY="0.7" />
+                <CompositeTransform ScaleX="1.45" ScaleY="0.62" />
             </Ellipse.RenderTransform>
         </Ellipse>
 
         <Grid x:Name="TitleBarHost"
               Grid.Row="0"
-              Height="52"
-              Padding="12,0,12,0"
+              Height="48"
+              Padding="16,0,0,0"
               Background="Transparent">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <!-- Reserved for Windows caption buttons (min/max/close) -->
+                <ColumnDefinition x:Name="CaptionSpacer" Width="140" />
             </Grid.ColumnDefinitions>
 
             <!-- Home chrome -->
@@ -45,9 +47,9 @@
                            Text="OptiHub"
                            VerticalAlignment="Center"
                            FontFamily="{StaticResource OptiDisplayFont}"
-                           FontSize="20"
+                           FontSize="22"
                            FontWeight="SemiBold"
-                           CharacterSpacing="-30"
+                           CharacterSpacing="-20"
                            Foreground="{ThemeResource OptiPrimaryTextBrush}" />
             </StackPanel>
 
@@ -60,14 +62,12 @@
                 <Button x:Name="BackButton"
                         Style="{StaticResource OptiIconButton}"
                         ToolTipService.ToolTip="Back"
-                        Click="BackButton_Click"
-                        Background="Transparent"
-                        BorderThickness="0">
+                        Click="BackButton_Click">
                     <FontIcon Glyph="&#xE72B;" FontSize="14" />
                 </Button>
                 <Border x:Name="ContextLogoHost"
                         Width="28" Height="28"
-                        CornerRadius="8"
+                        CornerRadius="9"
                         Background="{ThemeResource OptiAccentSoftBrush}"
                         Visibility="Collapsed"
                         VerticalAlignment="Center">
@@ -81,9 +81,9 @@
                            Text=""
                            VerticalAlignment="Center"
                            FontFamily="{StaticResource OptiDisplayFont}"
-                           FontSize="18"
+                           FontSize="20"
                            FontWeight="SemiBold"
-                           CharacterSpacing="-20"
+                           CharacterSpacing="-10"
                            Foreground="{ThemeResource OptiPrimaryTextBrush}" />
             </StackPanel>
 
@@ -93,9 +93,8 @@
                     ToolTipService.ToolTip="Settings"
                     Click="SettingsButton_Click"
                     VerticalAlignment="Center"
-                    Background="Transparent"
-                    BorderThickness="0">
-                <FontIcon Glyph="&#xE713;" FontSize="16" />
+                    Margin="0,0,8,0">
+                <FontIcon Glyph="&#xE713;" FontSize="15" />
             </Button>
         </Grid>
 

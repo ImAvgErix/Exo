@@ -12,9 +12,9 @@ public sealed class ThemeService
     private readonly SettingsService _settings;
     private Window? _window;
 
-    public static readonly Color AmoledBlack = Color.FromArgb(255, 0, 0, 0);
-    public static readonly Color SoftOffWhite = Color.FromArgb(255, 244, 244, 245);
-    public static readonly Color DarkAccent = Color.FromArgb(255, 17, 17, 17);
+    public static readonly Color CozyBlack = Color.FromArgb(255, 11, 11, 12);
+    public static readonly Color SoftStone = Color.FromArgb(255, 245, 245, 244);
+    public static readonly Color DarkAccent = Color.FromArgb(255, 28, 25, 23);
 
     public ThemeService(SettingsService settings)
     {
@@ -40,12 +40,12 @@ public sealed class ThemeService
         if (root is Panel panel)
         {
             panel.Background = new SolidColorBrush(
-                root.ActualTheme == ElementTheme.Light ? SoftOffWhite : AmoledBlack);
+                root.ActualTheme == ElementTheme.Light ? SoftStone : CozyBlack);
         }
         else if (root is Border border)
         {
             border.Background = new SolidColorBrush(
-                root.ActualTheme == ElementTheme.Light ? SoftOffWhite : AmoledBlack);
+                root.ActualTheme == ElementTheme.Light ? SoftStone : CozyBlack);
         }
 
         TrySetTitleBarColors(root.ActualTheme == ElementTheme.Light);
@@ -68,27 +68,34 @@ public sealed class ThemeService
             var titleBar = appWindow.TitleBar;
             if (titleBar is null) return;
 
+            // Transparent caption buttons blend into the custom title bar
+            titleBar.ButtonBackgroundColor = Colors.Transparent;
+            titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
+            titleBar.BackgroundColor = Colors.Transparent;
+            titleBar.InactiveBackgroundColor = Colors.Transparent;
+
             if (light)
             {
-                titleBar.BackgroundColor = SoftOffWhite;
                 titleBar.ForegroundColor = DarkAccent;
-                titleBar.InactiveBackgroundColor = SoftOffWhite;
-                titleBar.ButtonBackgroundColor = SoftOffWhite;
+                titleBar.InactiveForegroundColor = Color.FromArgb(255, 120, 113, 108);
                 titleBar.ButtonForegroundColor = DarkAccent;
-                titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 229, 231, 235);
-                titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 209, 213, 219);
+                titleBar.ButtonInactiveForegroundColor = Color.FromArgb(255, 120, 113, 108);
+                titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 231, 229, 228);
+                titleBar.ButtonHoverForegroundColor = DarkAccent;
+                titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 214, 211, 209);
+                titleBar.ButtonPressedForegroundColor = DarkAccent;
             }
             else
             {
-                titleBar.BackgroundColor = AmoledBlack;
                 titleBar.ForegroundColor = Colors.White;
-                titleBar.InactiveBackgroundColor = AmoledBlack;
-                titleBar.ButtonBackgroundColor = AmoledBlack;
-                titleBar.ButtonForegroundColor = Colors.White;
-                titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 26, 26, 26);
-                titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 42, 42, 42);
+                titleBar.InactiveForegroundColor = Color.FromArgb(255, 168, 162, 158);
+                titleBar.ButtonForegroundColor = Color.FromArgb(255, 245, 245, 244);
+                titleBar.ButtonInactiveForegroundColor = Color.FromArgb(255, 168, 162, 158);
+                titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 36, 36, 40);
+                titleBar.ButtonHoverForegroundColor = Colors.White;
+                titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 52, 52, 56);
+                titleBar.ButtonPressedForegroundColor = Colors.White;
             }
-            titleBar.ButtonInactiveBackgroundColor = light ? SoftOffWhite : AmoledBlack;
         }
         catch
         {
