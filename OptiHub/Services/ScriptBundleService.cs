@@ -1,10 +1,10 @@
 using OptiHub.Helpers;
-using OptiHub.Models;
 
 namespace OptiHub.Services;
 
 /// <summary>
 /// Ensures bundled scripts are available under LocalAppData for updates and runs.
+/// Always keeps the working Discord kit in sync with the app-bundled Scripts\Discord folder.
 /// </summary>
 public sealed class ScriptBundleService
 {
@@ -12,7 +12,6 @@ public sealed class ScriptBundleService
     private readonly object _syncLock = new();
     private string? _cachedRoot;
     private string? _cachedBundledVersion;
-    private string? _lastSyncedBundleVersion;
 
     public ScriptBundleService(SettingsService settings)
     {
@@ -27,12 +26,6 @@ public sealed class ScriptBundleService
 
         lock (_syncLock)
         {
-            if (_cachedRoot is not null && Directory.Exists(_cachedRoot))
-            {
-                EnsureWrappersFresh(_cachedRoot);
-                return _cachedRoot;
-            }
-
             var working = Path.Combine(PathHelper.WorkingScriptsDir, "Discord");
             EnsureDiscordScriptsSynced(working);
             _cachedRoot = working;
@@ -78,42 +71,35 @@ public sealed class ScriptBundleService
 
         Directory.CreateDirectory(working);
 
-        var marker = Path.Combine(working, "Disc-Optimizer.ps1");
-        var hubRun = Path.Combine(working, "OptiHub-Discord-Run.ps1");
         var bundledVersion = GetBundledVersion();
         var workingVersionPath = Path.Combine(working, "VERSION");
         var workingVersion = File.Exists(workingVersionPath)
             ? File.ReadAllText(workingVersionPath).Trim()
             : string.Empty;
 
-        if (!File.Exists(marker) || !File.Exists(hubRun) ||
-            !string.Equals(workingVersion, bundledVersion, StringComparison.OrdinalIgnoreCase))
+        var marker = Path.Combine(working, "Disc-Optimizer.ps1");
+        var hubRun = Path.Combine(working, "OptiHub-Discord-Run.ps1");
+        var desktopAsar = Path.Combine(working, "kit", "tools", "desktop.asar");
+        var needsFullSync =
+            !File.Exists(marker) ||
+            !File.Exists(hubRun) ||
+            !File.Exists(desktopAsar) ||
+            !string.Equals(workingVersion, bundledVersion, StringComparison.OrdinalIgnoreCase) ||
+            !File.ReadAllText(marker).Contains("Install-EquicordDirect", StringComparison.Ordinal);
+
+        if (needsFullSync)
         {
             CopyDirectory(bundled, working);
-            _lastSyncedBundleVersion = bundledVersion;
             return;
         }
-
-        EnsureWrappersFresh(working);
-        _lastSyncedBundleVersion = bundledVersion;
-    }
-
-    private void EnsureWrappersFresh(string working)
-    {
-        var bundled = PathHelper.DiscordScriptsDir;
-        if (!Directory.Exists(bundled))
-            return;
-
-        // Only re-copy wrappers when the app bundle version changed
-        var bundledVersion = GetBundledVersion();
-        if (string.Equals(_lastSyncedBundleVersion, bundledVersion, StringComparison.OrdinalIgnoreCase))
-            return;
 
         foreach (var name in new[]
                  {
                      "OptiHub-Discord-Run.ps1",
                      "OptiHub-Discord-Detect.ps1",
-                     "OptiHub-Discord-Repair.ps1"
+                     "OptiHub-Discord-Repair.ps1",
+                     "Disc-Optimizer.ps1",
+                     "VERSION"
                  })
         {
             var src = Path.Combine(bundled, name);
@@ -121,8 +107,6 @@ public sealed class ScriptBundleService
             if (File.Exists(src))
                 File.Copy(src, dst, overwrite: true);
         }
-
-        _lastSyncedBundleVersion = bundledVersion;
     }
 
     public void ReplaceDiscordScriptsFrom(string sourceDir)
@@ -130,51 +114,11 @@ public sealed class ScriptBundleService
         lock (_syncLock)
         {
             var working = Path.Combine(PathHelper.WorkingScriptsDir, "Discord");
-            if (Directory.Exists(working))
-            {
-                var wrappers = new Dictionary<string, string>();
-                foreach (var name in new[]
-                         {
-                             "OptiHub-Discord-Run.ps1",
-                             "OptiHub-Discord-Detect.ps1",
-                             "OptiHub-Discord-Repair.ps1"
-                         })
-                {
-                    var p = Path.Combine(working, name);
-                    if (File.Exists(p)) wrappers[name] = File.ReadAllText(p);
-                }
-
-                try
-                {
-                    Directory.Delete(working, recursive: true);
-                }
-                catch
-                {
-                    // fall through to overwrite copy
-                }
-
-                Directory.CreateDirectory(working);
-                CopyDirectory(sourceDir, working);
-
-                foreach (var (name, content) in wrappers)
-                {
-                    var dst = Path.Combine(working, name);
-                    if (!File.Exists(dst))
-                        File.WriteAllText(dst, content);
-                }
-
-                EnsureDiscordScriptsSynced(working);
-            }
-            else
-            {
-                Directory.CreateDirectory(working);
-                CopyDirectory(sourceDir, working);
-                EnsureDiscordScriptsSynced(working);
-            }
-
+            Directory.CreateDirectory(working);
+            CopyDirectory(sourceDir, working);
+            EnsureDiscordScriptsSynced(working);
             _cachedRoot = working;
             _cachedBundledVersion = null;
-            _lastSyncedBundleVersion = null;
         }
     }
 

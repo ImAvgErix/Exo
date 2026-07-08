@@ -1,0 +1,22 @@
+---
+description: Always ship OptiHub changes as a new GitHub release
+alwaysApply: true
+---
+
+# Always create a new release
+
+After any user-facing OptiHub change (UI, installer, Discord scripts/kit, runner, detection), **always** ship a new GitHub release before finishing. Do not leave fixes only on `main`.
+
+## Required steps
+
+1. Bump `VERSION` and `OptiHub/OptiHub.csproj` `<Version>` (and kit `OptiHub/Scripts/Discord/VERSION` when scripts change).
+2. Commit and push to `main`.
+3. Run `.\Release-OptiHub.ps1` (publishes + creates the GitHub release with `optihub-build.zip`).
+4. Verify with `gh release list --repo BarcusEric/OptiHub --limit 3` that the new tag is **Latest** and has the `optihub-build.zip` asset.
+5. Tell the user the release URL and the install one-liner.
+
+## Do not
+
+- Skip the release because “it’s already on main”
+- Reuse an old tag without recreating/updating the release asset
+- Finish after commit/push only when the user needs an installable build

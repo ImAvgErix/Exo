@@ -221,7 +221,7 @@ if (-not $Quick -and (Test-OptiHubDiscordApplied)) {
     Write-HubProgress 10 'Quick reapply mode'
 }
 
-if ($CreateRestorePoint) {
+if ($false -and $CreateRestorePoint) {
     New-OptiHubRestorePoint
 }
 
@@ -231,6 +231,7 @@ $runArgs = @()
 if ($Quick) { $runArgs += '-Quick' }
 if ($SkipCacheClean) { $runArgs += '-SkipCacheClean' }
 $runArgs += '-NoLaunch'
+$runArgs += '-SkipManifestSync'
 if ($SkipDebloat) { $runArgs += '-SkipDebloat' }
 if ($SkipEquicord) { $runArgs += '-SkipEquicord' }
 if ($SkipOpenAsar) { $runArgs += '-SkipOpenAsar' }
@@ -240,6 +241,7 @@ if ($FreshInstall) { $runArgs += '-FreshInstall' }
 if ($NonInteractive) {
     $env:DISCOPT_NONINTERACTIVE = '1'
     $env:OPTIHUB_SKIP_BOOT_FLASH = '1'
+    $env:DISCOPT_SKIP_MANIFEST = '1'
 }
 
 Write-HubProgress 18 'Running Disc-Optimizer...'
@@ -285,3 +287,4 @@ try {
     Write-HubProgress 100 'Failed'
     exit 1
 }
+

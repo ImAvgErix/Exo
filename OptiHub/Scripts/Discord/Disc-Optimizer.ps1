@@ -887,6 +887,8 @@ function Invoke-EquilotCli {
 }
 
 function Install-ViaEquilot([string]$AppDir) {
+    Write-Warn 'Equilot disabled in OptiHub - use direct Equicord path'
+    return $false
     $equilot = Ensure-EquilotCli
     if (-not $equilot) { return $false }
 
@@ -2363,23 +2365,15 @@ function Test-EquicordReady([string]$AppDir) {
     return ($loaderOk -and $openAsarOk)
 }
 
-function Install-Equicord([string]$AppDir) {
-    Write-Step 'Verifying Equicord + OpenASAR...'
-    Write-HubProgress 55 'Checking Equicord...'
-    if (Test-EquicordReady $AppDir) {
-        Write-Ok 'Equicord + OpenASAR already installed - applying tweaks only'
-        Apply-EquicordProfile -AppDir $AppDir
-        return
-    }
-
-    Write-Step 'Equicord/OpenASAR missing - installing automatically...'
-    Write-HubProgress 56 'Installing Equicord...'
-    if (Install-ViaEquilot $AppDir) { return }
-
-    Write-Step 'Installing Equicord (direct download)...'
-    Write-HubProgress 57 'Downloading Equicord...'
+function Install-EquicordDirect([string]$AppDir) {
+    # Fast path only: bundled/cached Equicord asar + stub loader + OpenASAR.
+    # Never calls Equilot (interactive CLI hangs OptiHub).
     $equicordAsar = Join-Path $EquicordData 'equicord.asar'
     if (-not (Test-Path $EquicordData)) { New-Item -ItemType Directory -Path $EquicordData -Force | Out-Null }
+
+    Write-HubProgress 56 'Installing Equicord (fast)...'
+    Write-Step 'Installing Equicord + OpenASAR (direct, no Equilot)...'
+    Stop-Discord
 
     $dl = Resolve-EquicordDesktopAsar $equicordAsar
     if ($dl.Size -lt 1000000) { throw 'Equicord desktop.asar looks invalid (too small)' }
@@ -2394,29 +2388,49 @@ function Install-Equicord([string]$AppDir) {
 
     $resources = Join-Path $AppDir 'resources'
     $appAsar = Join-Path $resources 'app.asar'
-    $backupAsar = Join-Path $resources '_app.asar'
     if (-not (Test-Path $resources)) { throw "Missing $resources" }
+
+    Ensure-AsarStockBackup $AppDir
 
     if ((Test-Path $appAsar) -and (Get-Item $appAsar).Length -lt 4096) {
         Write-Ok 'Equicord loader already patched'
     } else {
-        if (-not (Test-Path $backupAsar)) {
-            if (-not (Test-Path $appAsar)) { throw 'Stock app.asar missing - reinstall Discord' }
-            Move-Item $appAsar $backupAsar -Force
-            Write-Ok 'Backed up stock app.asar'
+        $backupAsar = Join-Path $resources '_app.asar'
+        if (-not (Test-Path $backupAsar) -and (Test-Path $appAsar) -and (Get-Item $appAsar).Length -gt 1000000) {
+            Copy-Item $appAsar $backupAsar -Force
         }
         [IO.File]::WriteAllBytes($appAsar, (New-EquicordLoaderAsar $equicordAsar))
-        Write-Ok 'Installed Equicord loader'
+        Write-Ok 'Installed Equicord loader stub'
     }
 
-    Apply-EquicordProfile -AppDir $AppDir
     if (-not $SkipOpenAsar) {
+        Write-HubProgress 66 'Installing OpenASAR...'
         Install-OpenAsar $AppDir
     } else {
         Write-Warn 'Skipped OpenASAR install (-SkipOpenAsar)'
     }
+
+    Write-HubProgress 62 'Applying Equicord profile...'
+    Apply-EquicordProfile -AppDir $AppDir
+
+    if (-not (Test-EquicordReady $AppDir)) {
+        throw 'Direct Equicord install did not verify (loader/OpenASAR check failed)'
+    }
+    Write-Ok 'Equicord + OpenASAR ready (direct path)'
 }
 
+function Install-Equicord([string]$AppDir) {
+    Write-Step 'Verifying Equicord + OpenASAR...'
+    Write-HubProgress 55 'Checking Equicord...'
+    if (Test-EquicordReady $AppDir) {
+        Write-Ok 'Equicord + OpenASAR already installed - applying tweaks only'
+        Apply-EquicordProfile -AppDir $AppDir
+        return
+    }
+
+    Write-Step 'Equicord/OpenASAR missing - installing (fast path)...'
+    Install-EquicordDirect $AppDir
+}
 function Install-DiscOptKernel([string]$AppDir) {
     Write-Step 'Installing DiscOpt kernel (memory trim, priority, raw input)...'
 

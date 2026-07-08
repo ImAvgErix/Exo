@@ -1,9 +1,8 @@
-tools/
-  DiscordSetup.exe       Discord x64 installer
-  EquilotlCli.exe        Equicord + OpenASAR
-  openasar.asar          OpenASAR bootstrap (~40 KB)
-  Install-DiscordModules.ps1
-  Install-KrispModule.ps1
-  discord-modules/       6 core modules + version.txt
+OptiHub Discord kit tools
+=========================
+Bundled for fast offline install (no Equilot wait):
+  desktop.asar   - Equicord payload (copied to %AppData%\Equicord\equicord.asar)
+  openasar.asar  - OpenASAR bootstrap (copied to Discord resources\_app.asar)
 
-Run from parent folder: Disc-Optimizer.ps1  (-Quick after updates)
+Optional (fallback only):
+  EquilotlCli.exe - official Equicord CLI if direct install fails

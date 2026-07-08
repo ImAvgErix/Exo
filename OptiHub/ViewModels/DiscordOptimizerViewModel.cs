@@ -113,7 +113,6 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         {
             var args = new List<string>
             {
-                "-CreateRestorePoint",
                 "-NonInteractive"
             };
 
