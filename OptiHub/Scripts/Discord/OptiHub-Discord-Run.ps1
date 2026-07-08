@@ -1,4 +1,4 @@
-﻿# OptiHub Discord Optimizer runner
+# OptiHub Discord Optimizer runner
 # Wraps Disc-Optimizer.ps1 with live progress markers for the WinUI host.
 
 param(
@@ -97,7 +97,8 @@ function Test-OptiHubDiscordApplied {
     $equicordAsar = Join-Path $appData 'Equicord\equicord.asar'
     $appAsar = Join-Path $resources 'app.asar'
     $equicordOk = (Test-Path $equicordAsar) -and (Test-Path $appAsar) -and ((Get-Item $appAsar).Length -lt 4096)
-    $openAsarOk = Test-Path (Join-Path $resources '_app.asar.stock')
+    $inner = Join-Path $resources '_app.asar'
+    $openAsarOk = (Test-Path $inner) -and ((Get-Item $inner).Length -gt 10000) -and ((Get-Item $inner).Length -lt 500000)
 
     $versionDll = Join-Path $appDir.FullName 'version.dll'
     $ffmpeg = Join-Path $appDir.FullName 'ffmpeg.dll'
@@ -244,6 +245,9 @@ if ($NonInteractive) {
     $env:DISCOPT_SKIP_MANIFEST = '1'
 }
 
+$env:DISCOPT_NONINTERACTIVE = '1'
+$env:OPTIHUB_SKIP_BOOT_FLASH = '1'
+$env:OPTIHUB = '1'
 Write-HubProgress 18 'Running Disc-Optimizer...'
 Write-HubStep "Arguments: $($runArgs -join ' ')"
 

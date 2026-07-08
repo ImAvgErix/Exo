@@ -38,7 +38,7 @@ if (-not (Test-Path $discordRoot)) {
         $resources = Join-Path $app.FullName 'resources'
         $equicordAsar = Join-Path $equicord 'equicord.asar'
         $appAsar = Join-Path $resources 'app.asar'
-        $stock = Join-Path $resources '_app.asar.stock'
+        $openAsarTarget = Join-Path $resources '_app.asar'
         $versionDll = Join-Path $app.FullName 'version.dll'
         $ffmpeg = Join-Path $app.FullName 'ffmpeg.dll'
         $configIni = Join-Path $app.FullName 'config.ini'
@@ -46,7 +46,11 @@ if (-not (Test-Path $discordRoot)) {
         $equicordOk = (Test-Path $equicordAsar) -and (Test-Path $appAsar) -and ((Get-Item $appAsar).Length -lt 4096)
         Add-Feature 'Client mods & privacy' 'Equicord loads privacy plugins and strips noisy telemetry.' $equicordOk
 
-        $openAsarOk = Test-Path $stock
+        $openAsarOk = $false
+        if (Test-Path $openAsarTarget) {
+            $sz = (Get-Item $openAsarTarget).Length
+            if ($sz -gt 10000 -and $sz -lt 500000) { $openAsarOk = $true }
+        }
         Add-Feature 'Faster Discord startup' 'OpenASAR replaces the heavy launcher path so Discord opens quicker.' $openAsarOk
 
         $kernelOk = $false

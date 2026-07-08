@@ -191,7 +191,7 @@ public sealed class OptimizerStateService
             "Equicord loads privacy plugins and strips noisy telemetry.",
             equicordOk));
 
-        var openAsarOk = File.Exists(stock);
+        var innerAsar = Path.Combine(resources, "_app.asar"); var openAsarOk = File.Exists(innerAsar) && new FileInfo(innerAsar).Length > 10000 && new FileInfo(innerAsar).Length < 500000;
         features.Add(MakeFeature(
             "Faster Discord startup",
             "OpenASAR replaces the heavy launcher path so Discord opens quicker.",

@@ -131,6 +131,17 @@ public sealed class ScriptBundleService
         }
     }
 
+    private static bool IsVersionNewer(string candidate, string baseline)
+    {
+        if (string.IsNullOrWhiteSpace(candidate)) return false;
+        if (string.IsNullOrWhiteSpace(baseline)) return true;
+        static string Norm(string v) => v.Trim().TrimStart('v', 'V');
+        if (Version.TryParse(Norm(candidate), out var c) &&
+            Version.TryParse(Norm(baseline), out var b))
+            return c > b;
+        return !string.Equals(candidate, baseline, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void CopyDirectory(string source, string dest)
     {
         Directory.CreateDirectory(dest);
