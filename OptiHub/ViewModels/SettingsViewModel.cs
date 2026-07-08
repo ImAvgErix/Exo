@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OptiHub.Models;
 using OptiHub.Services;
@@ -90,6 +90,13 @@ public partial class SettingsViewModel : ObservableObject
                 var install = await _services.Updater.InstallLatestAppAsync(status: progress);
                 UpdateStatus = install.Message;
                 AppVersion = GetAppVersionText();
+                if (install.ShouldExit)
+                {
+                    // Installer stage-swaps %LocalAppData%\OptiHub\app; exit so files unlock.
+                    await Task.Delay(400);
+                    Microsoft.UI.Xaml.Application.Current?.Exit();
+                    return;
+                }
             }
         }
         catch (Exception ex)

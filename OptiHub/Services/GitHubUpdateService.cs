@@ -228,48 +228,21 @@ public sealed class GitHubUpdateService
             };
         }
 
-        status?.Report($"Downloading OptiHub v{check.RemoteVersion}...");
-        var work = Path.Combine(PathHelper.AppDataDir, "app-update", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(work);
-        var zipPath = Path.Combine(work, "optihub-build.zip");
-        var extract = Path.Combine(work, "extract");
+        // Same stage-and-swap path as Install-OptiHub.ps1. In-place xcopy cannot
+        // replace a locked OptiHub.exe, so the app kept restarting on the old build.
+        status?.Report($"Installing OptiHub v{check.RemoteVersion} (stage + swap)...");
 
         try
         {
-            await using (var fs = File.Create(zipPath))
-            await using (var stream = await Http.GetStreamAsync(check.DownloadUrl, ct))
-                await stream.CopyToAsync(fs, ct);
+            var psExe = ResolvePowerShellForUpdate();
+            var cmd =
+                "$ErrorActionPreference='Stop'; " +
+                "irm 'https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1' | iex";
 
-            status?.Report("Extracting update...");
-            ZipFile.ExtractToDirectory(zipPath, extract, overwriteFiles: true);
-
-            var newExe = Directory.GetFiles(extract, "OptiHub.exe", SearchOption.AllDirectories).FirstOrDefault();
-            if (newExe is null)
-            {
-                return new AppUpdateResult
-                {
-                    UpdateAvailable = true,
-                    LocalVersion = check.LocalVersion,
-                    RemoteVersion = check.RemoteVersion,
-                    Message = "Downloaded update did not contain OptiHub.exe."
-                };
-            }
-
-            var sourceDir = Path.GetDirectoryName(newExe)!;
-            var targetDir = PathHelper.AppDirectory;
-            var bat = Path.Combine(work, "apply-update.bat");
-            var batBody =
-                "@echo off" + Environment.NewLine +
-                "timeout /t 2 /nobreak >nul" + Environment.NewLine +
-                "xcopy /E /Y /I /Q \"" + sourceDir + "\\*\" \"" + targetDir + "\\\" >nul" + Environment.NewLine +
-                "start \"\" \"" + Path.Combine(targetDir, "OptiHub.exe") + "\"" + Environment.NewLine +
-                "rmdir /S /Q \"" + work + "\"" + Environment.NewLine;
-            await File.WriteAllTextAsync(bat, batBody, ct);
-
-            status?.Report("Restarting into the new version...");
             Process.Start(new ProcessStartInfo
             {
-                FileName = bat,
+                FileName = psExe,
+                Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"" + cmd + "\"",
                 UseShellExecute = true,
                 WindowStyle = ProcessWindowStyle.Hidden,
                 CreateNoWindow = true
@@ -280,7 +253,9 @@ public sealed class GitHubUpdateService
                 UpdateAvailable = true,
                 LocalVersion = check.LocalVersion,
                 RemoteVersion = check.RemoteVersion,
-                Message = $"Installing OptiHub v{check.RemoteVersion}. The app will restart."
+                DownloadUrl = check.DownloadUrl,
+                ShouldExit = true,
+                Message = $"Installing OptiHub v{check.RemoteVersion}. OptiHub will close and reopen on the new build."
             };
         }
         catch (Exception ex)
@@ -293,6 +268,26 @@ public sealed class GitHubUpdateService
                 Message = $"App update failed: {ex.Message}"
             };
         }
+    }
+
+    private static string ResolvePowerShellForUpdate()
+    {
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        foreach (var candidate in new[]
+                 {
+                     Path.Combine(local, "Microsoft", "WindowsApps", "Microsoft.PowerShellPreview_8wekyb3d8bbwe", "pwsh.exe"),
+                     Path.Combine(programFiles, "PowerShell", "7-preview", "pwsh.exe"),
+                     Path.Combine(programFiles, "PowerShell", "7", "pwsh.exe"),
+                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
+                         "WindowsPowerShell", "v1.0", "powershell.exe")
+                 })
+        {
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        return "powershell.exe";
     }
 
     private static async Task<string?> TryGetRemoteTextAsync(string url, CancellationToken ct)

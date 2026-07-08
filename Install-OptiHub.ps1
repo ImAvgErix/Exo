@@ -35,12 +35,19 @@ New-Item -ItemType Directory -Path $stage -Force | Out-Null
 $zip = Join-Path $work 'OptiHub.zip'
 
 function Stop-OptiHubProcesses {
-  Get-Process OptiHub -ErrorAction SilentlyContinue | ForEach-Object {
-    try { $_.CloseMainWindow() | Out-Null } catch { }
+  for ($i = 0; $i -lt 20; $i++) {
+    $procs = @(Get-Process OptiHub -ErrorAction SilentlyContinue)
+    if ($procs.Count -eq 0) { break }
+    foreach ($p in $procs) {
+      try { $p.CloseMainWindow() | Out-Null } catch { }
+    }
+    Start-Sleep -Milliseconds 400
+    foreach ($p in @(Get-Process OptiHub -ErrorAction SilentlyContinue)) {
+      try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { }
+    }
     Start-Sleep -Milliseconds 300
-    try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch { }
   }
-  Start-Sleep -Milliseconds 400
+  Start-Sleep -Milliseconds 500
 }
 
 function Remove-TreeBestEffort([string]$Path) {

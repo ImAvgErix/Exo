@@ -80,12 +80,20 @@ public sealed class ScriptBundleService
         var marker = Path.Combine(working, "Disc-Optimizer.ps1");
         var hubRun = Path.Combine(working, "OptiHub-Discord-Run.ps1");
         var desktopAsar = Path.Combine(working, "kit", "tools", "desktop.asar");
-        var needsFullSync =
+        var workingBroken =
             !File.Exists(marker) ||
             !File.Exists(hubRun) ||
             !File.Exists(desktopAsar) ||
-            !string.Equals(workingVersion, bundledVersion, StringComparison.OrdinalIgnoreCase) ||
             !File.ReadAllText(marker).Contains("Install-EquicordDirect", StringComparison.Ordinal);
+
+        // Never overwrite a newer GitHub-updated kit with an older app-bundled kit.
+        // That was why "Update scripts" looked successful then still showed the old version.
+        if (IsVersionNewer(workingVersion, bundledVersion) && !workingBroken)
+            return;
+
+        var needsFullSync =
+            workingBroken ||
+            IsVersionNewer(bundledVersion, workingVersion);
 
         if (needsFullSync)
         {
@@ -93,6 +101,7 @@ public sealed class ScriptBundleService
             return;
         }
 
+        // Same version: refresh wrapper scripts from the app bundle.
         foreach (var name in new[]
                  {
                      "OptiHub-Discord-Run.ps1",
@@ -116,7 +125,7 @@ public sealed class ScriptBundleService
             var working = Path.Combine(PathHelper.WorkingScriptsDir, "Discord");
             Directory.CreateDirectory(working);
             CopyDirectory(sourceDir, working);
-            EnsureDiscordScriptsSynced(working);
+            // Do not call EnsureDiscordScriptsSynced here — that can downgrade a newer kit.
             _cachedRoot = working;
             _cachedBundledVersion = null;
         }
