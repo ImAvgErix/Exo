@@ -11,31 +11,23 @@
 |---|---|
 | Stack | C# · WinUI 3 · Windows App SDK · .NET 8 · MVVM |
 | Theme | AMOLED pure black dark · clean off-white light · **white** accents |
-| Safety | Confirmations · dry-run · optional restore points · Discord repair |
+| Safety | Always confirms · restore point when possible · Discord repair |
 
-This repository was formerly **DiscOpti** (Discord-only PowerShell kit). The Discord kit still lives under `OptiHub/Scripts/Discord/` (kit **v1.1.5**). The GitHub remote may still be named `DiscOpti` until renamed.
+Formerly **DiscOpti**. Discord kit lives under `OptiHub/Scripts/Discord/` (kit **v1.1.5**).
 
 ---
 
-## Get OptiHub (recommended)
+## Get OptiHub
 
-### One-line install (easiest)
+Paste into PowerShell:
 
 ```powershell
 irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1" | iex
 ```
 
-Downloads the latest Release zip into `%LocalAppData%\OptiHub\app` and launches `OptiHub.exe`. Best for most people.
+Installs into `%LocalAppData%\OptiHub\app` and launches `OptiHub.exe`. No separate .NET install. Windows 10 1809+ / Windows 11, 64-bit.
 
-### Manual zip
-
-From [Releases](https://github.com/BarcusEric/OptiHub/releases):
-
-1. Grab `OptiHub-*-win-x64.zip`
-2. Extract anywhere
-3. Run `OptiHub.exe`
-
-Use the zip when you want a portable folder you control. No separate .NET install required (self-contained). Windows 10 1809+ / Windows 11, 64-bit.
+What’s new: [Releases](https://github.com/BarcusEric/OptiHub/releases)
 
 ---
 
@@ -76,28 +68,27 @@ winget install Microsoft.DotNet.SDK.8 --accept-package-agreements --accept-sourc
 ### Run (Debug)
 
 ```powershell
-cd C:\path\to\DiscOpti
+cd C:\path\to\OptiHub
 .\Run-OptiHub.ps1
 ```
 
 Skip rebuild: `.\Run-OptiHub.ps1 -NoBuild`
 
-### Publish Release zip
+### Publish a release (maintainers)
 
 ```powershell
-.\Publish-OptiHub.ps1
+.\Release-OptiHub.ps1
 ```
 
-Output: `release\OptiHub-<version>-win-x64.zip` (self-contained `OptiHub.exe` + dependencies).
+Builds the app, keeps a single GitHub Release (deletes older ones), and writes release notes with the PowerShell install paste. Users install via that paste — not by downloading files from the release page.
 
 ---
 
 ## Using Discord Optimizer
 
 1. Open OptiHub → **Discord Optimizer**
-2. Choose options (dry-run, restore point, quick reapply)
-3. Click **Run** / **Reapply** (UAC when applying)
-4. If Discord will not open afterward, use **Repair Discord** in the app or the repair one-liner above
+2. Click **Run** / **Reapply** (confirms first; UAC when applying; restore point when Windows allows)
+3. If Discord will not open afterward, use **Repair Discord** in the app or the repair one-liner above
 
 Scripts are copied to `%LocalAppData%\OptiHub\scripts\Discord` on first launch. Settings live in `%LocalAppData%\OptiHub\settings.json`.
 
@@ -116,16 +107,12 @@ Scripts are copied to `%LocalAppData%\OptiHub\scripts\Discord` on first launch. 
 ├── OptiHub.sln
 ├── Run-OptiHub.ps1
 ├── Publish-OptiHub.ps1
+├── Release-OptiHub.ps1
 ├── Install-OptiHub.ps1
-├── Install-DiscOptimizer.ps1   ← legacy redirect → Install-OptiHub
-├── Repair-Discord.ps1          ← OptiHub repair one-liner
-├── VERSION                     ← app version
+├── Install-DiscOptimizer.ps1
+├── Repair-Discord.ps1
+├── VERSION
 └── OptiHub/
-    ├── OptiHub.csproj
-    ├── Views / ViewModels / Services / Models / Helpers / Styles / Assets
-    └── Scripts/
-        ├── Discord/            ← kit + OptiHub wrappers
-        └── Placeholders/       ← Brave, Steam, Riot, Epic stubs
 ```
 
 ---

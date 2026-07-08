@@ -1,7 +1,7 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Download the latest OptiHub Release zip and launch OptiHub.exe.
+  Download the latest OptiHub build and launch OptiHub.exe.
 
 .EXAMPLE
   irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1" | iex
@@ -41,17 +41,15 @@ try {
 }
 
 $asset = @($release.assets) |
-    Where-Object { $_.name -match 'OptiHub.*win-x64.*\.zip$' } |
+    Where-Object { $_.name -eq 'optihub-build.zip' } |
     Select-Object -First 1
-
 if (-not $asset) {
     $asset = @($release.assets) |
         Where-Object { $_.name -like '*.zip' } |
         Select-Object -First 1
 }
-
 if (-not $asset) {
-    throw "Latest release ($($release.tag_name)) has no zip asset. Publish with Publish-OptiHub.ps1 first."
+    throw "Latest release ($($release.tag_name)) has no build asset. Maintainers: run Release-OptiHub.ps1."
 }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('optihub-install-' + [guid]::NewGuid().ToString('N'))
@@ -59,7 +57,7 @@ New-Item -ItemType Directory -Path $work -Force | Out-Null
 $zip = Join-Path $work 'OptiHub.zip'
 
 try {
-    Write-Host "[*] Downloading $($asset.name) ($($release.tag_name))..." -ForegroundColor DarkGray
+    Write-Host "[*] Downloading OptiHub $($release.tag_name)..." -ForegroundColor DarkGray
     Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing -Headers @{ 'User-Agent' = 'OptiHub-Installer/1.0' }
 
     if (Test-Path -LiteralPath $InstallDir) {
@@ -68,14 +66,13 @@ try {
     }
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 
-    Write-Host '[*] Extracting...' -ForegroundColor DarkGray
+    Write-Host '[*] Installing...' -ForegroundColor DarkGray
     Expand-Archive -Path $zip -DestinationPath $InstallDir -Force
 
-    # Zip may contain a single top-level folder
     $exe = Get-ChildItem -LiteralPath $InstallDir -Filter 'OptiHub.exe' -Recurse -ErrorAction SilentlyContinue |
         Select-Object -First 1
     if (-not $exe) {
-        throw "OptiHub.exe not found after extract into $InstallDir"
+        throw "OptiHub.exe not found after install into $InstallDir"
     }
 
     Write-Host "[+] Installed to $($exe.DirectoryName)" -ForegroundColor Green
