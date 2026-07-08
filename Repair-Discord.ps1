@@ -1,11 +1,12 @@
-# Repair-Discord.ps1 - full clean reset of Discord after a bad optimization run.
+# Repair-Discord.ps1 - OptiHub / Discord Optimizer clean reset.
 # Wipes program files AND all cached renderer state (the usual cause of black
 # screens), keeps your login, reinstalls fresh from discord.com.
 #
 #   irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex
 #
 # Optional full logout reset (also clears login/session) - run this first:
-#   $env:DISCOPT_REPAIR_FULL = '1'
+#   $env:OPTIHUB_REPAIR_FULL = '1'
+#   # legacy alias still works: $env:DISCOPT_REPAIR_FULL = '1'
 
 $ErrorActionPreference = 'Stop'
 
@@ -79,7 +80,7 @@ function Install-RepairFreshDiscord([string]$DiscordRoot) {
     $setup = Join-Path ([IO.Path]::GetTempPath()) 'DiscordSetup-repair.exe'
     if (Test-Path $setup) { Remove-Item $setup -Force -ErrorAction SilentlyContinue }
     $url = 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64'
-    Invoke-WebRequest -Uri $url -OutFile $setup -UseBasicParsing -Headers @{ 'User-Agent' = 'DiscOpt-Repair/1.0' }
+    Invoke-WebRequest -Uri $url -OutFile $setup -UseBasicParsing -Headers @{ 'User-Agent' = 'OptiHub-Repair/1.0' }
     if (-not (Test-Path $setup) -or ((Get-Item $setup).Length -lt 50000000)) {
         throw 'Discord installer download failed - check your internet connection'
     }
@@ -159,10 +160,13 @@ try {
 
     $discordRoot = Join-Path $localAppData 'Discord'
     $appDataDiscord = Join-Path $appData 'discord'
-    $fullReset = ([Environment]::GetEnvironmentVariable('DISCOPT_REPAIR_FULL') -eq '1')
+    $fullReset = (
+        [Environment]::GetEnvironmentVariable('OPTIHUB_REPAIR_FULL') -eq '1' -or
+        [Environment]::GetEnvironmentVariable('DISCOPT_REPAIR_FULL') -eq '1'
+    )
 
     Write-Host ''
-    Write-Host '  Discord Clean Reset (DiscOpt rescue)' -ForegroundColor Magenta
+    Write-Host '  Discord Clean Reset (OptiHub repair)' -ForegroundColor Cyan
     Write-Host '  Fresh install + full cache purge. Login is preserved.' -ForegroundColor DarkGray
     Write-Host ''
 
@@ -226,7 +230,7 @@ try {
     Write-Host ''
     Write-RepWarn 'Still not rendering. Two remaining options:'
     Write-Host '    1. Full reset including login (fixes corrupt session storage):' -ForegroundColor Yellow
-    Write-Host '         $env:DISCOPT_REPAIR_FULL = ''1''' -ForegroundColor Cyan
+    Write-Host '         $env:OPTIHUB_REPAIR_FULL = ''1''' -ForegroundColor Cyan
     Write-Host '         irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
     Write-Host '    2. Update your GPU drivers (NVIDIA/AMD/Intel), then start Discord again.' -ForegroundColor Yellow
     Write-Host ''

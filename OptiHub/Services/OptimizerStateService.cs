@@ -19,10 +19,14 @@ public sealed class OptimizerStateService
         _settings = settings;
     }
 
-    public async Task<OptimizerStateInfo> DetectDiscordAsync(CancellationToken ct = default)
+    public async Task<OptimizerStateInfo> DetectDiscordAsync(
+        CancellationToken ct = default,
+        bool fastOnly = false)
     {
         // Fast local heuristic first
         var heuristic = DetectDiscordHeuristic();
+        if (fastOnly)
+            return heuristic;
 
         var detectScript = _scripts.DiscordDetectScript;
         if (!File.Exists(detectScript))

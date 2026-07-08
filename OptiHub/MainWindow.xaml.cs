@@ -85,7 +85,8 @@ public sealed partial class MainWindow : Window
         try
         {
             if (!App.Services.Settings.Current.AutoUpdateScripts) return;
-            // Quiet background check — failures are non-fatal
+            // Delay so first paint / detect aren't competing with a GitHub zip download
+            await Task.Delay(8000);
             await App.Services.Updater.CheckAndUpdateDiscordScriptsAsync(force: false);
         }
         catch

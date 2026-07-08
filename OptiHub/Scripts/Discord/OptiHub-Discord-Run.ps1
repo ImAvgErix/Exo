@@ -93,7 +93,7 @@ if (-not (Test-Path $Optimizer)) {
 
 Write-Host ''
 Write-Host '  OptiHub · Discord Optimizer' -ForegroundColor Cyan
-Write-Host '  Safety wrappers around DiscOpti' -ForegroundColor DarkGray
+Write-Host '  OptiHub safety wrappers · progress · dry-run' -ForegroundColor DarkGray
 Write-Host ''
 
 Write-HubProgress 3 'Starting…'

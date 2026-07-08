@@ -114,10 +114,12 @@ try {
     $appData = [Environment]::GetEnvironmentVariable('APPDATA')
     $discordRoot = Join-Path $localAppData 'Discord'
     $appDataDiscord = Join-Path $appData 'discord'
-    $doFull = $FullReset -or ([Environment]::GetEnvironmentVariable('DISCOPT_REPAIR_FULL') -eq '1')
+    $doFull = $FullReset -or
+        ([Environment]::GetEnvironmentVariable('OPTIHUB_REPAIR_FULL') -eq '1') -or
+        ([Environment]::GetEnvironmentVariable('DISCOPT_REPAIR_FULL') -eq '1')
 
     Write-Host ''
-    Write-Host '  OptiHub · Discord Clean Reset' -ForegroundColor Magenta
+    Write-Host '  OptiHub · Discord Clean Reset' -ForegroundColor Cyan
     Write-Host '  Stock reinstall + cache purge. Login preserved by default.' -ForegroundColor DarkGray
     Write-Host ''
 

@@ -282,21 +282,22 @@ public sealed class PowerShellRunnerService
         IProgress<ScriptRunProgress>? progress)
     {
         if (!File.Exists(logPath)) return;
-        string text;
+        string chunk;
         try
         {
             using var fs = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (fs.Length <= lastLength) return;
+            fs.Seek(lastLength, SeekOrigin.Begin);
             using var reader = new StreamReader(fs, Encoding.UTF8);
-            text = reader.ReadToEnd();
+            chunk = reader.ReadToEnd();
+            lastLength = (int)fs.Position;
         }
         catch
         {
             return;
         }
 
-        if (text.Length <= lastLength) return;
-        var chunk = text[lastLength..];
-        lastLength = text.Length;
+        if (string.IsNullOrEmpty(chunk)) return;
         foreach (var line in chunk.Split('\n'))
         {
             var trimmed = line.TrimEnd('\r');
@@ -356,17 +357,25 @@ public sealed class PowerShellRunnerService
         return lines.Length == 0 ? null : string.Join(Environment.NewLine, lines);
     }
 
+    private static string? _cachedPowerShellPath;
+
     /// <summary>
     /// Prefer PowerShell 7.7 (preview) — same target as DiscOpti — then any pwsh, then Windows PowerShell 5.1.
     /// </summary>
     private static string ResolvePowerShell()
     {
+        if (_cachedPowerShellPath is not null && File.Exists(_cachedPowerShellPath))
+            return _cachedPowerShellPath;
+
         foreach (var path in EnumeratePowerShellCandidates())
         {
             try
             {
                 if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                {
+                    _cachedPowerShellPath = path;
                     return path;
+                }
             }
             catch { /* continue */ }
         }
@@ -380,15 +389,20 @@ public sealed class PowerShellRunnerService
                 try
                 {
                     var full = Path.Combine(dir.Trim('"'), name);
-                    if (File.Exists(full)) return full;
+                    if (File.Exists(full))
+                    {
+                        _cachedPowerShellPath = full;
+                        return full;
+                    }
                 }
                 catch { /* continue */ }
             }
         }
 
-        return Path.Combine(
+        _cachedPowerShellPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.System),
             "WindowsPowerShell", "v1.0", "powershell.exe");
+        return _cachedPowerShellPath;
     }
 
     private static IEnumerable<string> EnumeratePowerShellCandidates()

@@ -37,7 +37,7 @@ if ($Quick) {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.4'
+$Script:DiscOptVersion = '1.1.5'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -574,7 +574,7 @@ function Get-ActiveApp {
 function Get-FolderSize([string]$Path) {
     if (-not (Test-Path $Path)) { return 0 }
     try {
-        (Get-ChildItem $Path -Recurse -Force -ErrorAction SilentlyContinue |
+        (Get-ChildItem $Path -Recurse -Force -File -ErrorAction SilentlyContinue |
             Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
     } catch { 0 }
 }
@@ -590,9 +590,17 @@ function Remove-Safe([string]$Path, [ref]$Freed) {
 }
 
 function Stop-Discord {
-    Get-Process Discord, Discord.bin, Update -ErrorAction SilentlyContinue | Stop-Process -Force
-    Start-Sleep -Seconds 3
-    Get-Process Discord, Discord.bin, Update -ErrorAction SilentlyContinue | Stop-Process -Force
+    $procs = @(Get-Process Discord, Discord.bin, Update -ErrorAction SilentlyContinue)
+    if ($procs.Count -eq 0) { return }
+    $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+    try {
+        Wait-Process -Id ($procs.Id) -Timeout 3 -ErrorAction SilentlyContinue
+    } catch { }
+    $left = @(Get-Process Discord, Discord.bin, Update -ErrorAction SilentlyContinue)
+    if ($left.Count -gt 0) {
+        $left | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 400
+    }
 }
 
 function Test-DiscordReady {
@@ -1635,18 +1643,27 @@ function Test-CacheCleanNeeded {
     if ($SkipCacheClean) { return $false }
     foreach ($relative in $SafeCacheTargets) {
         $path = Join-Path $AppData $relative
-        if ((Test-Path $path) -and (Get-FolderSize $path) -gt 1MB) {
-            return $true
-        }
+        if (-not (Test-Path $path)) { continue }
+        # Sample first files only — enough to decide if a clean is worth it
+        $sample = @(Get-ChildItem $path -Recurse -Force -File -ErrorAction SilentlyContinue | Select-Object -First 50)
+        if ($sample.Count -eq 0) { continue }
+        $sum = ($sample | Measure-Object -Property Length -Sum).Sum
+        if ($sum -gt 1MB -or $sample.Count -ge 50) { return $true }
     }
     return $false
+}
+
+function Get-DiscordManifestCached {
+    if ($Script:DiscordManifest) { return $Script:DiscordManifest }
+    $Script:DiscordManifest = Invoke-RestMethod -Uri 'https://updates.discord.com/distributions/app/manifests/latest?channel=stable&platform=win&arch=x64' -Headers @{ 'User-Agent' = 'OptiHub-Discord/1.0' }
+    return $Script:DiscordManifest
 }
 
 function Install-DiscordModuleFromManifest([string]$AppDir, [string]$ModuleName) {
     $folder = Join-Path $AppDir "modules\$ModuleName-1"
     if (Test-Path $folder) { return $true }
 
-    $manifest = Invoke-RestMethod -Uri 'https://updates.discord.com/distributions/app/manifests/latest?channel=stable&platform=win&arch=x64' -Headers @{ 'User-Agent' = 'Disc-Optimizer/1.0' }
+    $manifest = Get-DiscordManifestCached
     $mod = $manifest.modules.$ModuleName
     if (-not $mod -or -not $mod.full.url) { throw "$ModuleName missing from Discord manifest" }
 
@@ -2426,7 +2443,7 @@ function Confirm-DiscordBootsAfterMods([string]$AppDir) {
     }
 
     Stop-Discord
-    throw 'Discord failed to load even in stock mode. Run the repair one-liner: irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex'
+    throw 'Discord failed to load even in stock mode. Use Repair Discord in OptiHub, or: irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex'
 }
 
 function Disable-Fso([string]$AppDir) {
@@ -2695,7 +2712,11 @@ if ($SkipDebloat) {
     }
 }
 
-Clear-DiscordSafeCache $freed
+if ($Quick -and -not (Test-CacheCleanNeeded)) {
+    Write-Ok 'Cache clean skipped (-Quick, caches already lean)'
+} else {
+    Clear-DiscordSafeCache $freed
+}
 Ensure-KrispModule $app.FullName
 Ensure-RuntimeModules $app.FullName
 if (-not $Quick) {
@@ -2723,8 +2744,21 @@ if (-not $SkipKernel) {
     Write-Warn 'Skipped DiscOpt kernel (-SkipKernel)'
 }
 
-# 5b) Boot safety: verify Discord actually opens; auto-rollback if it does not
-Confirm-DiscordBootsAfterMods $app.FullName
+# 5b) Boot safety: full verify on first apply; Quick uses a shorter smoke check
+if ($Quick) {
+    Write-Step 'Quick boot smoke check...'
+    Stop-Discord
+    [void](Invoke-DiscordLaunch -AppDir $app.FullName)
+    if (Wait-DiscordHealthy 45) {
+        Stop-Discord
+        Write-Ok 'Quick boot check passed'
+    } else {
+        Write-Warn 'Quick boot check inconclusive - running full safety check...'
+        Confirm-DiscordBootsAfterMods $app.FullName
+    }
+} else {
+    Confirm-DiscordBootsAfterMods $app.FullName
+}
 
 # 6) Windows tweaks + shortcut
 if (-not $Quick) {

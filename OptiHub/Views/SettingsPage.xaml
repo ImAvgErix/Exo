@@ -86,12 +86,12 @@
                 <StackPanel Spacing="8">
                     <TextBlock Text="About &amp; disclaimer" Style="{StaticResource OptiSectionTitle}" />
                     <TextBlock Style="{StaticResource OptiBody}"
-                               Text="OptiHub is a cozy hub for optional system optimizers. Discord Optimizer builds on DiscOpti (https://github.com/BarcusEric/DiscOpti)." />
+                               Text="OptiHub is a cozy hub for optional system optimizers. Discord Optimizer ships with this app (https://github.com/BarcusEric/DiscOpti)." />
                     <TextBlock Style="{StaticResource OptiBody}"
                                Text="Use at your own risk. Optimizers may modify application files, Windows startup entries, and related settings. Always keep backups of important data. Third-party Discord clients (Equicord) may violate Discord's Terms of Service — you are responsible for compliance." />
                     <TextBlock Style="{StaticResource OptiCaption}"
                                Margin="0,8,0,0"
-                               Text="OptiHub 1.0 · Windows App SDK · WinUI 3" />
+                               Text="OptiHub 1.0.1 · teal accents · Windows App SDK · WinUI 3" />
                 </StackPanel>
             </Border>
         </StackPanel>

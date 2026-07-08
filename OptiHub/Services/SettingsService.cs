@@ -14,6 +14,9 @@ public sealed class SettingsService
 
     private AppSettings _settings = new();
     private readonly object _lock = new();
+    private readonly object _saveLock = new();
+    private CancellationTokenSource? _debounceCts;
+    private bool _dirty;
 
     public AppSettings Current
     {
@@ -64,9 +67,43 @@ public sealed class SettingsService
         lock (_lock)
         {
             mutator(_settings);
-            SaveUnlocked();
+            _dirty = true;
         }
         SettingsChanged?.Invoke(this, EventArgs.Empty);
+        ScheduleDebouncedSave();
+    }
+
+    private void ScheduleDebouncedSave()
+    {
+        lock (_saveLock)
+        {
+            _debounceCts?.Cancel();
+            _debounceCts?.Dispose();
+            _debounceCts = new CancellationTokenSource();
+            var token = _debounceCts.Token;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(400, token);
+                    FlushIfDirty();
+                }
+                catch (OperationCanceledException)
+                {
+                    // newer update scheduled
+                }
+            }, token);
+        }
+    }
+
+    public void FlushIfDirty()
+    {
+        lock (_lock)
+        {
+            if (!_dirty) return;
+            SaveUnlocked();
+            _dirty = false;
+        }
     }
 
     private void SaveUnlocked()

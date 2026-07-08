@@ -12,7 +12,7 @@ public sealed class AppSettings
     public string Theme { get; set; } = DarkTheme;
 
     /// <summary>When true, scripts are updated from GitHub on launch if newer.</summary>
-    public bool AutoUpdateScripts { get; set; } = true;
+    public bool AutoUpdateScripts { get; set; } = false;
 
     /// <summary>Simulate optimizers without modifying the system.</summary>
     public bool DryRun { get; set; }
@@ -36,7 +36,7 @@ public sealed class AppSettings
     public string? LastDiscordRunUtc { get; set; }
 
     /// <summary>Bundled / last known Discord kit version string.</summary>
-    public string DiscordKitVersion { get; set; } = "1.1.4";
+    public string DiscordKitVersion { get; set; } = "1.1.5";
 
     [JsonIgnore]
     public bool IsDarkPreferred =>

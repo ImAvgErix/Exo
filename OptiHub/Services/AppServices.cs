@@ -21,7 +21,11 @@ public sealed class AppServices
     public void Initialize()
     {
         Settings.Load();
-        // Materialize working script copy early
-        _ = Scripts.GetDiscordRoot();
+        // Defer heavy script sync off the UI thread
+        _ = Task.Run(() =>
+        {
+            try { Scripts.GetDiscordRoot(); }
+            catch { /* first-run sync is best-effort */ }
+        });
     }
 }

@@ -1,17 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:helpers="using:OptiHub.Helpers">
 
     <!-- Accent -->
     <Color x:Key="OptiTealColor">#2DD4BF</Color>
     <Color x:Key="OptiCyanColor">#22D3EE</Color>
+    <Color x:Key="OptiTealDarkColor">#14B8A6</Color>
     <SolidColorBrush x:Key="OptiTealBrush" Color="{StaticResource OptiTealColor}" />
     <SolidColorBrush x:Key="OptiCyanBrush" Color="{StaticResource OptiCyanColor}" />
+    <SolidColorBrush x:Key="OptiTealDarkBrush" Color="{StaticResource OptiTealDarkColor}" />
+    <SolidColorBrush x:Key="OptiTealSoftBrush" Color="#332DD4BF" />
 
     <!-- Soft card chrome -->
     <CornerRadius x:Key="OptiCardRadius">16</CornerRadius>
     <x:Double x:Key="OptiPagePadding">32</x:Double>
+
+    <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
+    <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+    <helpers:BoolToOpacityConverter x:Key="BoolToOpacityConverter" />
 
     <Style x:Key="OptiPageTitle" TargetType="TextBlock">
         <Setter Property="FontSize" Value="28" />
@@ -28,29 +36,37 @@
 
     <Style x:Key="OptiBody" TargetType="TextBlock">
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="Opacity" Value="0.78" />
+        <Setter Property="Opacity" Value="0.88" />
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="LineHeight" Value="22" />
     </Style>
 
     <Style x:Key="OptiCaption" TargetType="TextBlock">
         <Setter Property="FontSize" Value="12" />
-        <Setter Property="Opacity" Value="0.55" />
+        <Setter Property="Opacity" Value="0.65" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <Style x:Key="OptiCard" TargetType="Border">
         <Setter Property="CornerRadius" Value="{StaticResource OptiCardRadius}" />
         <Setter Property="Padding" Value="20" />
-        <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style x:Key="OptiAccentCard" TargetType="Border" BasedOn="{StaticResource OptiCard}">
+        <Setter Property="BorderBrush" Value="{StaticResource OptiTealBrush}" />
+        <Setter Property="BorderThickness" Value="1,1,1,1" />
+        <Setter Property="Padding" Value="20,18" />
     </Style>
 
     <Style x:Key="OptiPrimaryButton" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
         <Setter Property="Padding" Value="20,10" />
         <Setter Property="CornerRadius" Value="10" />
         <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Background" Value="{StaticResource OptiTealBrush}" />
+        <Setter Property="Foreground" Value="#041016" />
     </Style>
 
     <Style x:Key="OptiQuietButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">

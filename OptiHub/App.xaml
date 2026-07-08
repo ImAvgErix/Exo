@@ -10,12 +10,53 @@
                 <ResourceDictionary Source="Styles/ThemeResources.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- Dark: pure AMOLED black surfaces -->
-            <ResourceDictionary x:Key="Default">
-                <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#000000" />
-                <SolidColorBrush x:Key="OptiCardFillBrush" Color="#0A0A0A" />
-                <SolidColorBrush x:Key="OptiSubtleBrush" Color="#14FFFFFF" />
-            </ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <Color x:Key="SystemAccentColor">#2DD4BF</Color>
+                    <Color x:Key="SystemAccentColorLight1">#5EEAD4</Color>
+                    <Color x:Key="SystemAccentColorLight2">#99F6E4</Color>
+                    <Color x:Key="SystemAccentColorLight3">#CCFBF1</Color>
+                    <Color x:Key="SystemAccentColorDark1">#14B8A6</Color>
+                    <Color x:Key="SystemAccentColorDark2">#0D9488</Color>
+                    <Color x:Key="SystemAccentColorDark3">#0F766E</Color>
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#2DD4BF" />
+                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#14B8A6" />
+                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#0D9488" />
+                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#2DD4BF" />
+                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#5EEAD4" />
+                    <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#1AFFFFFF" />
+                    <SolidColorBrush x:Key="OptiSubtleBrush" Color="#14FFFFFF" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <Color x:Key="SystemAccentColor">#0D9488</Color>
+                    <Color x:Key="SystemAccentColorLight1">#14B8A6</Color>
+                    <Color x:Key="SystemAccentColorLight2">#2DD4BF</Color>
+                    <Color x:Key="SystemAccentColorLight3">#5EEAD4</Color>
+                    <Color x:Key="SystemAccentColorDark1">#0F766E</Color>
+                    <Color x:Key="SystemAccentColorDark2">#115E59</Color>
+                    <Color x:Key="SystemAccentColorDark3">#134E4A</Color>
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#0D9488" />
+                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#0F766E" />
+                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#115E59" />
+                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#0D9488" />
+                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#0F766E" />
+                    <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#F8F9FA" />
+                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#1A000000" />
+                    <SolidColorBrush x:Key="OptiSubtleBrush" Color="#0F000000" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Default">
+                    <Color x:Key="SystemAccentColor">#2DD4BF</Color>
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#2DD4BF" />
+                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#2DD4BF" />
+                    <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#1AFFFFFF" />
+                    <SolidColorBrush x:Key="OptiSubtleBrush" Color="#14FFFFFF" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

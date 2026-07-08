@@ -109,7 +109,8 @@ public partial class DashboardViewModel : ObservableObject
         discord.IsLoadingState = true;
         try
         {
-            var state = await _services.OptimizerState.DetectDiscordAsync();
+            // Heuristic only on dashboard — full PS detect runs on the Discord page
+            var state = await _services.OptimizerState.DetectDiscordAsync(fastOnly: true);
             discord.ApplyState(state);
         }
         finally

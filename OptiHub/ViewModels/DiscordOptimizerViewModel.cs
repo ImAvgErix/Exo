@@ -1,18 +1,27 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Xaml.Media;
 using OptiHub.Models;
 using OptiHub.Services;
+using Windows.UI;
 
 namespace OptiHub.ViewModels;
 
 public partial class DiscordOptimizerViewModel : ObservableObject
 {
+    private static readonly SolidColorBrush TealBrush =
+        new(Color.FromArgb(255, 45, 212, 191));
+    private static readonly SolidColorBrush ErrorBrush =
+        new(Color.FromArgb(255, 248, 113, 113));
+
     private readonly AppServices _services;
     private CancellationTokenSource? _runCts;
 
     public DiscordOptimizerViewModel(AppServices services)
     {
         _services = services;
+        LastResultBrush = TealBrush;
     }
 
     [ObservableProperty]
@@ -27,8 +36,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     [ObservableProperty]
     private string _detailText = string.Empty;
 
-    [ObservableProperty]
-    private string _checksText = string.Empty;
+    public ObservableCollection<string> Checks { get; } = new();
 
     [ObservableProperty]
     private string _runButtonLabel = "Run";
@@ -50,6 +58,15 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
     [ObservableProperty]
     private string _lastResult = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasLastResult;
+
+    [ObservableProperty]
+    private string _lastResultGlyph = "\uE73E";
+
+    [ObservableProperty]
+    private Brush _lastResultBrush;
 
     [ObservableProperty]
     private bool _useQuickMode;
@@ -109,7 +126,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         IsProgressVisible = true;
         ProgressPercent = 0;
         ProgressStatus = "Preparing…";
-        LastResult = string.Empty;
+        SetResult(string.Empty, success: true);
         _runCts = new CancellationTokenSource();
 
         try
@@ -143,9 +160,11 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
             if (result.Success)
             {
-                LastResult = settings.DryRun
-                    ? "Dry-run finished. No changes were applied."
-                    : "Optimizer finished successfully.";
+                SetResult(
+                    settings.DryRun
+                        ? "Dry-run finished. No changes were applied."
+                        : "Optimizer finished successfully.",
+                    success: true);
                 if (!settings.DryRun)
                 {
                     _services.Settings.Update(s =>
@@ -154,25 +173,23 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             }
             else
             {
-                LastResult = result.ErrorMessage ?? result.Summary;
+                SetResult(result.ErrorMessage ?? result.Summary, success: false);
             }
 
             await RefreshAfterRunAsync();
         }
         catch (Exception ex)
         {
-            LastResult = ex.Message;
+            SetResult(ex.Message, success: false);
             ProgressStatus = "Failed";
         }
         finally
         {
             IsBusy = false;
-            IsProgressVisible = ProgressPercent < 100 && !string.IsNullOrEmpty(LastResult)
-                ? false
-                : IsProgressVisible;
-            // Keep bar visible briefly on success
             if (ProgressPercent >= 100)
                 IsProgressVisible = true;
+            else if (!string.IsNullOrEmpty(LastResult))
+                IsProgressVisible = false;
             _runCts?.Dispose();
             _runCts = null;
         }
@@ -198,7 +215,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         IsProgressVisible = true;
         ProgressPercent = 0;
         ProgressStatus = "Starting repair…";
-        LastResult = string.Empty;
+        SetResult(string.Empty, success: true);
         _runCts = new CancellationTokenSource();
 
         try
@@ -217,15 +234,17 @@ public partial class DiscordOptimizerViewModel : ObservableObject
                 cancellationToken: _runCts.Token,
                 workingDirectory: _services.Scripts.GetDiscordRoot());
 
-            LastResult = result.Success
-                ? "Repair finished. Discord should be stock and bootable."
-                : (result.ErrorMessage ?? result.Summary);
+            SetResult(
+                result.Success
+                    ? "Repair finished. Discord should be stock and bootable."
+                    : (result.ErrorMessage ?? result.Summary),
+                success: result.Success);
 
             await RefreshAfterRunAsync();
         }
         catch (Exception ex)
         {
-            LastResult = ex.Message;
+            SetResult(ex.Message, success: false);
         }
         finally
         {
@@ -239,7 +258,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     {
         try
         {
-            var state = await _services.OptimizerState.DetectDiscordAsync();
+            var state = await _services.OptimizerState.DetectDiscordAsync(fastOnly: false);
             ApplyState(state);
         }
         catch { /* ignore */ }
@@ -250,14 +269,25 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         IsApplied = state.IsApplied;
         StatusText = state.StatusText;
         DetailText = state.Detail;
-        ChecksText = state.Checks.Count == 0
-            ? string.Empty
-            : string.Join(Environment.NewLine, state.Checks.Select(c => "• " + c));
+        Checks.Clear();
+        foreach (var check in state.Checks)
+            Checks.Add(check);
         RunButtonLabel = state.IsApplied ? "Reapply" : "Run";
+    }
+
+    private void SetResult(string message, bool success)
+    {
+        LastResult = message;
+        HasLastResult = !string.IsNullOrWhiteSpace(message);
+        LastResultGlyph = success ? "\uE73E" : "\uE783";
+        LastResultBrush = success ? TealBrush : ErrorBrush;
     }
 
     public async Task InitializeAsync()
     {
-        await RefreshAsync();
+        // Fast heuristic first for snappy UI, then full detect
+        ApplyState(await _services.OptimizerState.DetectDiscordAsync(fastOnly: true));
+        if (!IsBusy)
+            await RefreshAsync();
     }
 }

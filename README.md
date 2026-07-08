@@ -10,30 +10,52 @@
 | | |
 |---|---|
 | Stack | C# · WinUI 3 · Windows App SDK · .NET 8 · MVVM |
-| Theme | AMOLED pure black dark · clean off-white light · teal accents |
+| Theme | AMOLED pure black dark · clean off-white light · **teal** accents (`#2DD4BF`) |
 | Safety | Confirmations · dry-run · optional restore points · Discord repair |
 
-This repository was formerly **DiscOpti** (Discord-only PowerShell kit). The Discord kit still lives under `OptiHub/Scripts/Discord/` (kit **v1.1.4**). The GitHub remote may still be named `DiscOpti` until renamed.
+This repository was formerly **DiscOpti** (Discord-only PowerShell kit). The Discord kit still lives under `OptiHub/Scripts/Discord/` (kit **v1.1.5**). The GitHub remote may still be named `DiscOpti` until renamed.
 
 ---
 
 ## Get OptiHub (recommended)
 
-Download the latest **self-contained** Windows build from [Releases](https://github.com/BarcusEric/DiscOpti/releases):
-
-1. Grab `OptiHub-*-win-x64.zip`
-2. Extract anywhere
-3. Run `OptiHub.exe`
-
-No separate .NET install required (self-contained). Windows 10 1809+ / Windows 11, 64-bit.
-
-### One-line install (PowerShell)
+### One-line install (easiest)
 
 ```powershell
 irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-OptiHub.ps1" | iex
 ```
 
-That downloads the latest Release zip into `%LocalAppData%\OptiHub\app` and launches OptiHub.
+Downloads the latest Release zip into `%LocalAppData%\OptiHub\app` and launches `OptiHub.exe`. Best for most people.
+
+### Manual zip
+
+From [Releases](https://github.com/BarcusEric/DiscOpti/releases):
+
+1. Grab `OptiHub-*-win-x64.zip`
+2. Extract anywhere
+3. Run `OptiHub.exe`
+
+Use the zip when you want a portable folder you control. No separate .NET install required (self-contained). Windows 10 1809+ / Windows 11, 64-bit.
+
+---
+
+## Repair Discord
+
+If Discord will not open after an optimize run:
+
+- In OptiHub: open **Discord Optimizer** → **Repair Discord**
+- Or one-liner (interactive clean reset, keeps login by default):
+
+```powershell
+irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex
+```
+
+Full logout reset (also clears session):
+
+```powershell
+$env:OPTIHUB_REPAIR_FULL = '1'
+irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex
+```
 
 ---
 
@@ -66,7 +88,7 @@ Skip rebuild: `.\Run-OptiHub.ps1 -NoBuild`
 .\Publish-OptiHub.ps1
 ```
 
-Output: `release\OptiHub-1.0.0-win-x64.zip` (self-contained `OptiHub.exe` + dependencies).
+Output: `release\OptiHub-<version>-win-x64.zip` (self-contained `OptiHub.exe` + dependencies).
 
 ---
 
@@ -75,11 +97,7 @@ Output: `release\OptiHub-1.0.0-win-x64.zip` (self-contained `OptiHub.exe` + depe
 1. Open OptiHub → **Discord Optimizer**
 2. Choose options (dry-run, restore point, quick reapply)
 3. Click **Run** / **Reapply** (UAC when applying)
-4. If Discord will not open afterward, use **Repair Discord** in the app, or:
-
-```powershell
-irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex
-```
+4. If Discord will not open afterward, use **Repair Discord** in the app or the repair one-liner above
 
 Scripts are copied to `%LocalAppData%\OptiHub\scripts\Discord` on first launch. Settings live in `%LocalAppData%\OptiHub\settings.json`.
 
@@ -100,13 +118,13 @@ Scripts are copied to `%LocalAppData%\OptiHub\scripts\Discord` on first launch. 
 ├── Publish-OptiHub.ps1
 ├── Install-OptiHub.ps1
 ├── Install-DiscOptimizer.ps1   ← legacy redirect → Install-OptiHub
-├── Repair-Discord.ps1
-├── VERSION                     ← app 1.0.0
+├── Repair-Discord.ps1          ← OptiHub repair one-liner
+├── VERSION                     ← app version
 └── OptiHub/
     ├── OptiHub.csproj
     ├── Views / ViewModels / Services / Models / Helpers / Styles / Assets
     └── Scripts/
-        ├── Discord/            ← kit v1.1.4 + OptiHub wrappers
+        ├── Discord/            ← kit + OptiHub wrappers
         └── Placeholders/       ← Brave, Steam, Riot, Epic stubs
 ```
 
@@ -120,7 +138,7 @@ If you previously used:
 irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-DiscOptimizer.ps1" | iex
 ```
 
-that script now redirects to **Install-OptiHub.ps1**. Prefer the OptiHub app for Discord runs going forward. The old Documents install path is no longer the primary product.
+that script now redirects to **Install-OptiHub.ps1**. Prefer the OptiHub app for Discord runs going forward.
 
 ---
 

@@ -6,7 +6,7 @@
     Background="Transparent">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,8,32,32">
-        <StackPanel MaxWidth="720" Spacing="16">
+        <StackPanel MaxWidth="720" Spacing="20">
 
             <!-- Back + title -->
             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -26,33 +26,68 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Status card -->
-            <Border Style="{StaticResource OptiCard}">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Status" Style="{StaticResource OptiSectionTitle}" />
-                    <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
-                               FontSize="18"
-                               FontWeight="SemiBold"
-                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-                    <TextBlock Text="{x:Bind ViewModel.DetailText, Mode=OneWay}"
-                               Style="{StaticResource OptiBody}" />
-                    <TextBlock Text="{x:Bind ViewModel.ChecksText, Mode=OneWay}"
-                               Style="{StaticResource OptiCaption}"
-                               Margin="0,4,0,0" />
-                </StackPanel>
+            <!-- Status hero -->
+            <Border Style="{StaticResource OptiAccentCard}">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="4" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0"
+                            Background="{StaticResource OptiTealBrush}"
+                            CornerRadius="2"
+                            Width="4"
+                            HorizontalAlignment="Left" />
+                    <StackPanel Grid.Column="1" Spacing="8">
+                        <TextBlock Text="Status" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                        <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource OptiTealBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.DetailText, Mode=OneWay}"
+                                   Style="{StaticResource OptiBody}" />
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.Checks, Mode=OneWay}"
+                                      Margin="0,4,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Border Background="{StaticResource OptiTealSoftBrush}"
+                                            CornerRadius="8"
+                                            Padding="10,4"
+                                            Margin="0,0,0,6"
+                                            HorizontalAlignment="Left">
+                                        <TextBlock Text="{x:Bind}"
+                                                   FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{StaticResource OptiTealBrush}" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Grid>
             </Border>
 
-            <!-- What it does -->
-            <Border Style="{StaticResource OptiCard}">
-                <StackPanel Spacing="6">
-                    <TextBlock Text="What this does" Style="{StaticResource OptiSectionTitle}" />
+            <!-- What it does (collapsed by default) -->
+            <Expander HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Stretch"
+                      IsExpanded="False">
+                <Expander.Header>
+                    <TextBlock Text="What this does" FontWeight="SemiBold" />
+                </Expander.Header>
+                <StackPanel Spacing="8" Padding="0,8,0,0">
                     <TextBlock Style="{StaticResource OptiBody}"
-                               Text="Installs or repairs Discord stable, Equicord + OpenASAR, applies AMOLED/privacy/perf profiles, trims safe caches, installs the DiscOpt kernel (priority, memory trim, raw input), and quiets Windows startup/toasts. Login and session storage stay intact." />
+                               Text="• Installs or repairs Discord stable when needed" />
+                    <TextBlock Style="{StaticResource OptiBody}"
+                               Text="• Equicord + OpenASAR, AMOLED theme, privacy plugins" />
+                    <TextBlock Style="{StaticResource OptiBody}"
+                               Text="• DiscOpt kernel for priority, memory trim, and raw input" />
+                    <TextBlock Style="{StaticResource OptiBody}"
+                               Text="• Safe cache clean + quieter Windows startup/toasts" />
                     <TextBlock Style="{StaticResource OptiCaption}"
-                               Margin="0,8,0,0"
-                               Text="Based on DiscOpti — improved for OptiHub with progress reporting, dry-run, restore points, and non-interactive safety." />
+                               Margin="0,4,0,0"
+                               Text="Login and session storage stay intact. Progress, dry-run, and restore points are OptiHub safety layers." />
                 </StackPanel>
-            </Border>
+            </Expander>
 
             <!-- Options -->
             <Border Style="{StaticResource OptiCard}">
@@ -78,6 +113,7 @@
                                  Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
                                  Height="8"
                                  CornerRadius="4"
+                                 Foreground="{StaticResource OptiTealBrush}"
                                  ShowPaused="False"
                                  ShowError="False" />
                     <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}"
@@ -86,32 +122,47 @@
             </Border>
 
             <!-- Result -->
-            <TextBlock Text="{x:Bind ViewModel.LastResult, Mode=OneWay}"
-                       Style="{StaticResource OptiBody}"
-                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+            <Border Style="{StaticResource OptiCard}"
+                    Visibility="{x:Bind ViewModel.HasLastResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                    BorderBrush="{x:Bind ViewModel.LastResultBrush, Mode=OneWay}"
+                    BorderThickness="1">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon Glyph="{x:Bind ViewModel.LastResultGlyph, Mode=OneWay}"
+                              FontSize="16"
+                              Foreground="{x:Bind ViewModel.LastResultBrush, Mode=OneWay}"
+                              VerticalAlignment="Center" />
+                    <TextBlock Text="{x:Bind ViewModel.LastResult, Mode=OneWay}"
+                               Style="{StaticResource OptiBody}"
+                               Opacity="1"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
 
             <!-- Actions -->
-            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
+            <StackPanel Spacing="10" Margin="0,4,0,0">
                 <Button Style="{StaticResource OptiPrimaryButton}"
                         Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
                         Click="Run_Click"
-                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                        MinWidth="120" />
-                <Button Style="{StaticResource OptiQuietButton}"
-                        Content="Repair Discord"
-                        Click="Repair_Click"
+                        HorizontalAlignment="Stretch"
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                <Button Style="{StaticResource OptiQuietButton}"
-                        Content="Refresh status"
-                        Click="Refresh_Click"
-                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Style="{StaticResource OptiQuietButton}"
+                            Content="Repair Discord"
+                            Click="Repair_Click"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                    <Button Style="{StaticResource OptiQuietButton}"
+                            Content="Refresh status"
+                            Click="Refresh_Click"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                </StackPanel>
             </StackPanel>
 
             <Border Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
                     CornerRadius="12"
                     Padding="16"
-                    Margin="0,8,0,0">
-                <TextBlock Text="Safety: confirmation dialogs are on by default. Use Settings → Dry-run to preview. If Discord fails to open, use Repair Discord above or the DiscOpti one-liner repair from the README."
+                    Margin="0,4,0,0">
+                <TextBlock Text="Safety: confirmations are on by default. Use Settings → Dry-run to preview. If Discord will not open, use Repair Discord above, or run the OptiHub repair one-liner from the README."
                            Style="{StaticResource OptiBody}"
                            Opacity="1" />
             </Border>

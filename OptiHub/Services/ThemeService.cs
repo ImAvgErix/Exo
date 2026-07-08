@@ -95,8 +95,8 @@ public sealed class ThemeService
                 titleBar.InactiveBackgroundColor = AmoledBlack;
                 titleBar.ButtonBackgroundColor = AmoledBlack;
                 titleBar.ButtonForegroundColor = Colors.White;
-                titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 28, 28, 30);
-                titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 40, 40, 44);
+                titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 20, 45, 42);
+                titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 13, 148, 136);
             }
             titleBar.ButtonInactiveBackgroundColor = light ? SoftOffWhite : AmoledBlack;
         }
