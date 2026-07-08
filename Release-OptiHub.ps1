@@ -95,9 +95,13 @@ if ($tagExists) {
     gh release delete $Tag --repo $Repo --yes --cleanup-tag 2>$null
 }
 
-git tag -d $Tag 2>$null | Out-Null
+$prevEap2 = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+git tag -d $Tag 1>$null 2>$null
+$ErrorActionPreference = $prevEap2
+
 git tag -a $Tag -m "OptiHub $Version"
-git push origin $Tag --force 2>&1 | Out-Null
+git push origin $Tag --force 1>$null 2>$null
 
 gh release create $Tag $PayloadZip `
     --repo $Repo `
