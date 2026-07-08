@@ -36,11 +36,11 @@ public sealed partial class MainWindow : Window
 
         AppWindow.Changed += (_, _) => UpdateCaptionInset();
         RootGrid.Loaded += (_, _) => UpdateCaptionInset();
+        RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
 
         ApplyShellChrome();
         UpdateCaptionInset();
-        PlayBackdropPulse();
 
         NavigateHome(suppressTransition: true);
         _ = MaybeAutoUpdateAsync();
@@ -51,7 +51,6 @@ public sealed partial class MainWindow : Window
         try
         {
             var right = AppWindow.TitleBar.RightInset;
-            // Fallback when RightInset reports 0 before layout settles
             if (right < 100) right = 138;
             CaptionSpacer.Width = new GridLength(right);
         }
@@ -69,31 +68,6 @@ public sealed partial class MainWindow : Window
                  : ColorHelper.FromArgb(255, 245, 245, 244));
         App.Services.Theme.Apply();
         UpdateCaptionInset();
-    }
-
-    private void PlayBackdropPulse()
-    {
-        try
-        {
-            var anim = new DoubleAnimation
-            {
-                From = 0.35,
-                To = 0.65,
-                Duration = new Duration(TimeSpan.FromSeconds(5)),
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever,
-                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-            };
-            Storyboard.SetTarget(anim, BackdropOrb);
-            Storyboard.SetTargetProperty(anim, "Opacity");
-            var sb = new Storyboard();
-            sb.Children.Add(anim);
-            sb.Begin();
-        }
-        catch
-        {
-            // decorative
-        }
     }
 
     private void TryCenterOnScreen()
@@ -120,28 +94,15 @@ public sealed partial class MainWindow : Window
     {
         _mode = mode;
         var home = mode == ShellMode.Home;
-        HomeChrome.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
-        ContextChrome.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
-        SettingsButton.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
+        BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
+        ContextLogoHost.Visibility = mode == ShellMode.Discord ? Visibility.Visible : Visibility.Collapsed;
+        SettingsButton.Visibility = mode == ShellMode.Settings ? Visibility.Collapsed : Visibility.Visible;
+        AppTitleText.Text = "OptiHub";
 
-        switch (mode)
-        {
-            case ShellMode.Discord:
-                ContextTitleText.Text = "Discord Optimizer";
-                ContextLogoHost.Visibility = Visibility.Visible;
-                TrySetContextLogo("Assets/Logos/discord.png");
-                break;
-            case ShellMode.Settings:
-                ContextTitleText.Text = "Settings";
-                ContextLogoHost.Visibility = Visibility.Collapsed;
-                ContextLogo.Source = null;
-                break;
-            default:
-                ContextTitleText.Text = string.Empty;
-                ContextLogoHost.Visibility = Visibility.Collapsed;
-                ContextLogo.Source = null;
-                break;
-        }
+        if (mode == ShellMode.Discord)
+            TrySetContextLogo("Assets/Logos/discord.png");
+        else
+            ContextLogo.Source = null;
     }
 
     private void TrySetContextLogo(string relativePath)

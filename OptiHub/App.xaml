@@ -36,7 +36,6 @@
                     <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#A8A29E" />
                     <SolidColorBrush x:Key="OptiSuccessBrush" Color="#4ADE80" />
                     <SolidColorBrush x:Key="OptiErrorBrush" Color="#F87171" />
-                    <SolidColorBrush x:Key="OptiBackdropGlowBrush" Color="#28FFFFFF" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
                     <Color x:Key="SystemAccentColor">#1C1917</Color>
@@ -63,7 +62,6 @@
                     <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#78716C" />
                     <SolidColorBrush x:Key="OptiSuccessBrush" Color="#16A34A" />
                     <SolidColorBrush x:Key="OptiErrorBrush" Color="#DC2626" />
-                    <SolidColorBrush x:Key="OptiBackdropGlowBrush" Color="#14000000" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Default">
                     <Color x:Key="SystemAccentColor">#F5F5F4</Color>
@@ -81,7 +79,6 @@
                     <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#A8A29E" />
                     <SolidColorBrush x:Key="OptiSuccessBrush" Color="#4ADE80" />
                     <SolidColorBrush x:Key="OptiErrorBrush" Color="#F87171" />
-                    <SolidColorBrush x:Key="OptiBackdropGlowBrush" Color="#28FFFFFF" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>

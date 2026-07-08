@@ -11,91 +11,64 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Soft atmospheric glow -->
-        <Ellipse x:Name="BackdropOrb"
-                 Grid.RowSpan="2"
-                 Width="640" Height="640"
-                 HorizontalAlignment="Center"
-                 VerticalAlignment="Top"
-                 Margin="0,-220,0,0"
-                 IsHitTestVisible="False"
-                 Opacity="0.5"
-                 Fill="{ThemeResource OptiBackdropGlowBrush}">
-            <Ellipse.RenderTransform>
-                <CompositeTransform ScaleX="1.45" ScaleY="0.62" />
-            </Ellipse.RenderTransform>
-        </Ellipse>
-
+        <!-- Drag region + chrome; right column reserved for caption buttons -->
         <Grid x:Name="TitleBarHost"
               Grid.Row="0"
-              Height="48"
-              Padding="16,0,0,0"
+              Height="40"
               Background="Transparent">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <!-- Reserved for Windows caption buttons (min/max/close) -->
-                <ColumnDefinition x:Name="CaptionSpacer" Width="140" />
+                <ColumnDefinition x:Name="CaptionSpacer" Width="138" />
             </Grid.ColumnDefinitions>
 
-            <!-- Home chrome -->
-            <StackPanel x:Name="HomeChrome"
-                        Orientation="Horizontal"
-                        Spacing="10"
-                        VerticalAlignment="Center">
-                <TextBlock x:Name="AppTitleText"
-                           Text="OptiHub"
-                           VerticalAlignment="Center"
-                           FontFamily="{StaticResource OptiDisplayFont}"
-                           FontSize="22"
-                           FontWeight="SemiBold"
-                           CharacterSpacing="-20"
-                           Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-            </StackPanel>
-
-            <!-- Contextual chrome (Discord / Settings) -->
-            <StackPanel x:Name="ContextChrome"
-                        Orientation="Horizontal"
-                        Spacing="10"
+            <StackPanel Orientation="Horizontal"
+                        Spacing="6"
                         VerticalAlignment="Center"
-                        Visibility="Collapsed">
+                        Margin="14,0,0,0"
+                        Height="40">
                 <Button x:Name="BackButton"
                         Style="{StaticResource OptiIconButton}"
                         ToolTipService.ToolTip="Back"
-                        Click="BackButton_Click">
-                    <FontIcon Glyph="&#xE72B;" FontSize="14" />
+                        Click="BackButton_Click"
+                        Visibility="Collapsed"
+                        Width="32" Height="32"
+                        VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE72B;" FontSize="13" />
                 </Button>
+
                 <Border x:Name="ContextLogoHost"
-                        Width="28" Height="28"
-                        CornerRadius="9"
+                        Width="24" Height="24"
+                        CornerRadius="7"
                         Background="{ThemeResource OptiAccentSoftBrush}"
                         Visibility="Collapsed"
-                        VerticalAlignment="Center">
+                        VerticalAlignment="Center"
+                        Margin="0,0,2,0">
                     <Image x:Name="ContextLogo"
-                           Width="18" Height="18"
+                           Width="15" Height="15"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            Stretch="Uniform" />
                 </Border>
-                <TextBlock x:Name="ContextTitleText"
-                           Text=""
+
+                <TextBlock x:Name="AppTitleText"
+                           Text="OptiHub"
                            VerticalAlignment="Center"
-                           FontFamily="{StaticResource OptiDisplayFont}"
-                           FontSize="20"
+                           FontFamily="{StaticResource OptiUiFontSemiBold}"
+                           FontSize="16"
                            FontWeight="SemiBold"
                            CharacterSpacing="-10"
-                           Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-            </StackPanel>
+                           Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                           Margin="2,0,2,0" />
 
-            <Button x:Name="SettingsButton"
-                    Grid.Column="1"
-                    Style="{StaticResource OptiIconButton}"
-                    ToolTipService.ToolTip="Settings"
-                    Click="SettingsButton_Click"
-                    VerticalAlignment="Center"
-                    Margin="0,0,8,0">
-                <FontIcon Glyph="&#xE713;" FontSize="15" />
-            </Button>
+                <Button x:Name="SettingsButton"
+                        Style="{StaticResource OptiIconButton}"
+                        ToolTipService.ToolTip="Settings"
+                        Click="SettingsButton_Click"
+                        Width="32" Height="32"
+                        VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE713;" FontSize="14" />
+                </Button>
+            </StackPanel>
         </Grid>
 
         <Frame x:Name="ContentFrame"
