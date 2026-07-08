@@ -1,5 +1,5 @@
 # OptiHub installer — paste into PowerShell:
-#   irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1" | iex
+#   irm "https://cdn.jsdelivr.net/gh/BarcusEric/OptiHub@main/Install-OptiHub.ps1" | iex
 
 $ErrorActionPreference = 'Stop'
 
