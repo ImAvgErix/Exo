@@ -159,8 +159,7 @@ public partial class SettingsViewModel : ObservableObject
         IsLightMode = !dark;
         _suppressThemeSync = false;
         AutoUpdateScripts = s.AutoUpdateScripts;
-        ScriptsRepo = string.IsNullOrWhiteSpace(s.DiscordScriptsRepo) ||
-                      s.DiscordScriptsRepo.Equals("BarcusEric/OptiHub", StringComparison.OrdinalIgnoreCase)
+        ScriptsRepo = string.IsNullOrWhiteSpace(s.DiscordScriptsRepo)
             ? "BarcusEric/OptiHub"
             : s.DiscordScriptsRepo;
         ScriptsBranch = s.DiscordScriptsBranch;

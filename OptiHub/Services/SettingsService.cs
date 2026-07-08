@@ -42,14 +42,31 @@ public sealed class SettingsService
                 else
                 {
                     _settings = new AppSettings();
-                    SaveUnlocked();
                 }
+
+                if (MigrateLegacySettings(_settings))
+                    SaveUnlocked();
+                else if (!File.Exists(PathHelper.SettingsPath))
+                    SaveUnlocked();
             }
             catch
             {
                 _settings = new AppSettings();
             }
         }
+    }
+
+    private static bool MigrateLegacySettings(AppSettings settings)
+    {
+        var changed = false;
+        var repo = (settings.DiscordScriptsRepo ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(repo) ||
+            repo.Contains("DiscOpti", StringComparison.OrdinalIgnoreCase))
+        {
+            settings.DiscordScriptsRepo = "BarcusEric/OptiHub";
+            changed = true;
+        }
+        return changed;
     }
 
     public void Save(AppSettings settings)

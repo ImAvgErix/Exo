@@ -13,7 +13,7 @@
 | Theme | AMOLED pure black dark · clean off-white light · **white** accents |
 | Safety | Always confirms · restore point when possible · Discord repair |
 
-Formerly **DiscOpti**. Discord kit lives under `OptiHub/Scripts/Discord/` (kit **v1.1.5**).
+Discord kit lives under `OptiHub/Scripts/Discord/` (kit **v1.1.5**).
 
 ---
 
@@ -109,7 +109,7 @@ Scripts are copied to `%LocalAppData%\OptiHub\scripts\Discord` on first launch. 
 ├── Publish-OptiHub.ps1
 ├── Release-OptiHub.ps1
 ├── Install-OptiHub.ps1
-├── Install-DiscOptimizer.ps1
+├── Install-DiscOptimizer.ps1   ← legacy redirect → Install-OptiHub
 ├── Repair-Discord.ps1
 ├── VERSION
 └── OptiHub/
@@ -117,25 +117,6 @@ Scripts are copied to `%LocalAppData%\OptiHub\scripts\Discord` on first launch. 
 
 ---
 
-## Migrating from DiscOpti
-
-If you previously used:
-
-```powershell
-irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-DiscOptimizer.ps1" | iex
-```
-
-that script now redirects to **Install-OptiHub.ps1**. Prefer the OptiHub app for Discord runs going forward.
-
----
-
 ## Disclaimer
 
 Optimizers modify application files and Windows settings. Use at your own risk. Keep backups. Third-party Discord clients (e.g. Equicord) may conflict with Discord’s Terms of Service — you are responsible for compliance. OptiHub authors are not liable for data loss or account issues.
-
----
-
-## Credits
-
-- Discord kit lineage: **DiscOpti** / Disc Optimizer
-- **OptiHub** — WinUI 3 shell, safety UX, script orchestration, multi-optimizer hub
