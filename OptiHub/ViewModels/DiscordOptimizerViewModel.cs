@@ -25,7 +25,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     public string LogoPath => "Assets/Logos/discord.png";
 
     [ObservableProperty]
-    private string _statusText = "Checking statusâ€¦";
+    private string _statusText = "Checking status...";
 
     [ObservableProperty]
     private string _detailText = string.Empty;
@@ -76,7 +76,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            StatusText = "Checking statusâ€¦";
+            StatusText = "Checking status...";
             var state = await _services.OptimizerState.DetectDiscordAsync();
             ApplyState(state);
         }
@@ -105,7 +105,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;
-        ProgressStatus = "Preparingâ€¦";
+        ProgressStatus = "Preparing...";
         SetResult(string.Empty, success: true);
         _runCts = new CancellationTokenSource();
 
@@ -183,7 +183,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;
-        ProgressStatus = "Starting repairâ€¦";
+        ProgressStatus = "Starting repair...";
         SetResult(string.Empty, success: true);
         _runCts = new CancellationTokenSource();
 

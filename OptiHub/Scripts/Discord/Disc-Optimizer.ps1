@@ -1,4 +1,4 @@
-﻿# Disc Optimizer - right-click -> Run with PowerShell (auto-installs PS 7.7 + elevates)
+# Disc Optimizer - right-click -> Run with PowerShell (auto-installs PS 7.7 + elevates)
 # First run installs + optimizes Discord. After that, use the Start menu Discord shortcut.
 #
 #   Disc-Optimizer.ps1           first-time / full setup (log in when prompted)
@@ -538,7 +538,7 @@ function Get-GitHubHeaders {
 
 function Get-EquicordLatestRelease {
     try {
-        return Invoke-RestMethod -Uri 'https://api.github.com/repos/Equicord/Equicord/releases/latest' -Headers (Get-GitHubHeaders)
+        return Invoke-RestMethod -Uri 'https://api.github.com/repos/Equicord/Equicord/releases/latest' -Headers (Get-GitHubHeaders) -TimeoutSec 45
     } catch {
         Write-LogLine 'WARN' "GitHub API unavailable: $($_.Exception.Message)"
         return $null
@@ -571,7 +571,7 @@ function Get-EquicordReleaseFile {
 
     $direct = "https://github.com/Equicord/Equicord/releases/latest/download/$FileName"
     Write-Warn "GitHub API blocked - downloading $FileName directly"
-    Invoke-WebRequest -Uri $direct -OutFile $OutFile -UseBasicParsing -Headers $ua
+    Invoke-WebRequest -Uri $direct -OutFile $OutFile -UseBasicParsing -Headers $ua -TimeoutSec 120
     if (-not (Test-Path $OutFile)) { throw "Failed to download $FileName" }
     return @{
         Tag    = 'latest'
@@ -812,7 +812,7 @@ function Ensure-EquilotCli {
     Write-Step 'Downloading official Equicord installer (EquilotlCli.exe)...'
     try {
         $ua = @{ 'User-Agent' = 'Disc-Optimizer/1.0 (Windows; PowerShell)' }
-        Invoke-WebRequest -Uri $EquilotCliUrl -OutFile $cli -UseBasicParsing -Headers $ua
+        Invoke-WebRequest -Uri $EquilotCliUrl -OutFile $cli -UseBasicParsing -Headers $ua -TimeoutSec 90
     } catch {
         Write-Warn "EquilotlCli download failed: $($_.Exception.Message)"
         Write-LogLine 'WARN' "EquilotlCli download failed: $($_.Exception.Message)"
@@ -834,14 +834,56 @@ function Test-EquicordLoaderPatched([string]$AppDir) {
 function Invoke-EquilotCli {
     param(
         [Parameter(Mandatory)][string]$EquilotPath,
-        [Parameter(Mandatory)][string[]]$Arguments
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [int]$TimeoutSec = 480
     )
 
-    Write-LogLine 'STEP' "Equilot: $([IO.Path]::GetFileName($EquilotPath)) $($Arguments -join ' ')"
-    $proc = Start-Process -FilePath $EquilotPath -ArgumentList (Join-DiscOptProcessArguments $Arguments) -Wait -PassThru -NoNewWindow
+    $label = "$([IO.Path]::GetFileName($EquilotPath)) $($Arguments -join ' ')"
+    Write-LogLine 'STEP' "Equilot: $label"
+    Write-Step "Running Equilot ($($Arguments[0]))..."
+    Write-HubProgress 58 "Equilot: $($Arguments[0])..."
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $EquilotPath
+    $psi.Arguments = (Join-DiscOptProcessArguments $Arguments)
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.WorkingDirectory = (Split-Path -Parent $EquilotPath)
+
+    $proc = New-Object System.Diagnostics.Process
+    $proc.StartInfo = $psi
+    [void]$proc.Start()
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    $lastBeat = Get-Date
+    while (-not $proc.HasExited) {
+        if ((Get-Date) -gt $deadline) {
+            try { $proc.Kill() } catch { }
+            throw "Equilot timed out after ${TimeoutSec}s ($label). Falling back to direct install."
+        }
+        if (((Get-Date) - $lastBeat).TotalSeconds -ge 12) {
+            $elapsed = [int]((Get-Date) - ($deadline.AddSeconds(-$TimeoutSec))).TotalSeconds
+            Write-HubProgress 58 "Equilot still working (${elapsed}s)..."
+            Write-LogLine 'STEP' "Equilot heartbeat ${elapsed}s: $label"
+            $lastBeat = Get-Date
+        }
+        Start-Sleep -Milliseconds 400
+    }
+
+    # Drain leftover output into kit log (best-effort)
+    try {
+        $out = $proc.StandardOutput.ReadToEnd()
+        $err = $proc.StandardError.ReadToEnd()
+        if ($out) { Write-LogLine 'INFO' ("Equilot stdout: " + ($out.Substring(0, [Math]::Min(800, $out.Length)))) }
+        if ($err) { Write-LogLine 'WARN' ("Equilot stderr: " + ($err.Substring(0, [Math]::Min(800, $err.Length)))) }
+    } catch { }
+
     if ($null -ne $proc.ExitCode -and $proc.ExitCode -ne 0) {
         throw "Equilot exited with code $($proc.ExitCode)"
     }
+    Write-Ok "Equilot finished: $($Arguments[0])"
 }
 
 function Install-ViaEquilot([string]$AppDir) {
@@ -860,30 +902,35 @@ function Install-ViaEquilot([string]$AppDir) {
     $locArgs = @('--location', $DiscordRoot)
     Stop-Discord
 
-    if (Test-EquicordLoaderPatched $AppDir) {
-        Write-Ok 'Equicord already patched - repairing/updating via Equilot'
-        Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('--repair') + $locArgs)
-    } else {
-        Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('--install') + $locArgs)
-        Write-Ok 'Equicord installed via Equilot'
-    }
-
-    if (-not $SkipOpenAsar) {
-        $resources = Join-Path $AppDir 'resources'
-        if (Test-OpenAsarInstalled $resources) {
-            Write-Ok 'OpenASAR already active'
+    try {
+        if (Test-EquicordLoaderPatched $AppDir) {
+            Write-Ok 'Equicord already patched - repairing/updating via Equilot'
+            Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('--repair') + $locArgs) -TimeoutSec 480
         } else {
-            Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('--install-openasar') + $locArgs)
-            Write-Ok 'OpenASAR installed via Equilot'
+            Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('--install') + $locArgs) -TimeoutSec 480
+            Write-Ok 'Equicord installed via Equilot'
         }
-    } else {
-        Write-Warn 'Skipped OpenASAR install (-SkipOpenAsar)'
+
+        if (-not $SkipOpenAsar) {
+            $resources = Join-Path $AppDir 'resources'
+            if (Test-OpenAsarInstalled $resources) {
+                Write-Ok 'OpenASAR already active'
+            } else {
+                Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('--install-openasar') + $locArgs) -TimeoutSec 300
+                Write-Ok 'OpenASAR installed via Equilot'
+            }
+        } else {
+            Write-Warn 'Skipped OpenASAR install (-SkipOpenAsar)'
+        }
+
+        Apply-EquicordProfile -AppDir $AppDir
+        return $true
+    } catch {
+        Write-Warn "Equilot failed ($($_.Exception.Message)) - falling back to direct Equicord install"
+        Write-LogLine 'WARN' "Equilot failed: $($_.Exception.Message)"
+        return $false
     }
-
-    Apply-EquicordProfile -AppDir $AppDir
-    return $true
 }
-
 function Resolve-EquicordDesktopAsar([string]$DestPath) {
     $bundled = Get-BundledEquicordAsar
     if ($bundled) {
@@ -1939,7 +1986,7 @@ function Install-OpenAsar([string]$AppDir) {
         Copy-Item $bundled $temp -Force
         Write-Ok "Using bundled OpenASAR from tools/ ($([math]::Round((Get-Item $bundled).Length / 1KB, 1)) KB)"
     } else {
-        Invoke-WebRequest -Uri $OpenAsarUrl -OutFile $temp -UseBasicParsing
+        Invoke-WebRequest -Uri $OpenAsarUrl -OutFile $temp -UseBasicParsing -TimeoutSec 90
     }
     if ((Get-Item $temp).Length -lt 10000) {
         throw 'Downloaded OpenASAR app.asar looks invalid'
@@ -2174,6 +2221,13 @@ function Initialize-EquicordSettingsBase([string]$DestPath) {
         return ConvertTo-HashtableDeep (Get-Content $DestPath -Raw -Encoding UTF8 | ConvertFrom-Json)
     }
 
+    # Quick / non-interactive: never launch Discord just to seed settings - use bundled manifests.
+    if ($Quick -or $env:DISCOPT_NONINTERACTIVE -eq '1' -or $env:OPTIHUB_SKIP_BOOT_FLASH -eq '1') {
+        Write-Step 'Building Equicord settings from bundled manifests (no Discord launch)...'
+        Write-Warn 'Skipping Discord bootstrap launch in Quick/non-interactive mode'
+        return Build-FullEquicordSettings
+    }
+
     Write-Step 'Bootstrapping Equicord plugin registry (one quick launch)...'
     [void](Invoke-DiscordLaunch -AppDir (Get-ActiveApp).FullName)
     Start-Sleep -Seconds 12
@@ -2186,11 +2240,12 @@ function Initialize-EquicordSettingsBase([string]$DestPath) {
     Write-Warn 'Using bundled manifests for settings base'
     return Build-FullEquicordSettings
 }
-
 function Apply-EquicordProfile {
     param([string]$AppDir = '')
 
     Write-Step 'Applying Equicord profile (all plugins + your enabled set)...'
+    Write-HubProgress 62 'Applying Equicord profile...'
+    Write-HubProgress 64 'Applying Equicord profile...'
 
     $settingsDir = Join-Path $EquicordData 'settings'
     $themesDir = Join-Path $EquicordData 'themes'
@@ -2310,6 +2365,7 @@ function Test-EquicordReady([string]$AppDir) {
 
 function Install-Equicord([string]$AppDir) {
     Write-Step 'Verifying Equicord + OpenASAR...'
+    Write-HubProgress 55 'Checking Equicord...'
     if (Test-EquicordReady $AppDir) {
         Write-Ok 'Equicord + OpenASAR already installed - applying tweaks only'
         Apply-EquicordProfile -AppDir $AppDir
@@ -2317,9 +2373,11 @@ function Install-Equicord([string]$AppDir) {
     }
 
     Write-Step 'Equicord/OpenASAR missing - installing automatically...'
+    Write-HubProgress 56 'Installing Equicord...'
     if (Install-ViaEquilot $AppDir) { return }
 
     Write-Step 'Installing Equicord (direct download)...'
+    Write-HubProgress 57 'Downloading Equicord...'
     $equicordAsar = Join-Path $EquicordData 'equicord.asar'
     if (-not (Test-Path $EquicordData)) { New-Item -ItemType Directory -Path $EquicordData -Force | Out-Null }
 
