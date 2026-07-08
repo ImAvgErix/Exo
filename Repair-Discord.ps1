@@ -182,10 +182,11 @@ try {
     # 2b) Remove the broken v1.1 custom theme (painted a black overlay over the
     # whole app) so it can't come back if Equicord is ever re-enabled.
     $equicordThemes = Join-Path $appData 'Equicord\themes'
-    Get-ChildItem $equicordThemes -Filter 'discopt-amoled*.css' -ErrorAction SilentlyContinue |
+    Get-ChildItem $equicordThemes -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like 'discopt-amoled*' -or $_.Name -like 'amoled-cord*' } |
         ForEach-Object {
             Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
-            Write-RepOk "Removed broken theme: $($_.Name)"
+            Write-RepOk "Removed theme: $($_.Name)"
         }
 
     # 3) Fresh install from discord.com.

@@ -4,9 +4,6 @@ public sealed class ScriptRunProgress
 {
     public double Percent { get; init; }
     public string Status { get; init; } = string.Empty;
-    public string? DetailLine { get; init; }
-    public bool IsError { get; init; }
-    public bool IsComplete { get; init; }
 }
 
 public sealed class ScriptRunResult

@@ -75,11 +75,6 @@ public sealed partial class MainWindow : Window
         ContentFrame.Navigate(typeof(DiscordOptimizerPage));
     }
 
-    public void NavigateToSettings()
-    {
-        ContentFrame.Navigate(typeof(SettingsPage));
-    }
-
     private async Task MaybeAutoUpdateAsync()
     {
         try

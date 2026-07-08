@@ -27,13 +27,14 @@
                     <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#000000" />
                     <SolidColorBrush x:Key="OptiCardFillBrush" Color="#121212" />
                     <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#22FFFFFF" />
-                    <SolidColorBrush x:Key="OptiSubtleBrush" Color="#14FFFFFF" />
                     <SolidColorBrush x:Key="OptiAccentBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#000000" />
                     <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#1AFFFFFF" />
                     <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#D1D1D1" />
                     <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#9A9A9A" />
+                    <SolidColorBrush x:Key="OptiSuccessBrush" Color="#22C55E" />
+                    <SolidColorBrush x:Key="OptiErrorBrush" Color="#DC2626" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
                     <Color x:Key="SystemAccentColor">#111111</Color>
@@ -51,13 +52,14 @@
                     <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#F4F4F5" />
                     <SolidColorBrush x:Key="OptiCardFillBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#1A000000" />
-                    <SolidColorBrush x:Key="OptiSubtleBrush" Color="#0F000000" />
                     <SolidColorBrush x:Key="OptiAccentBrush" Color="#111111" />
                     <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#0F000000" />
                     <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#111111" />
                     <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#3F3F46" />
                     <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#71717A" />
+                    <SolidColorBrush x:Key="OptiSuccessBrush" Color="#16A34A" />
+                    <SolidColorBrush x:Key="OptiErrorBrush" Color="#DC2626" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Default">
                     <Color x:Key="SystemAccentColor">#FFFFFF</Color>
@@ -66,13 +68,14 @@
                     <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#000000" />
                     <SolidColorBrush x:Key="OptiCardFillBrush" Color="#121212" />
                     <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#22FFFFFF" />
-                    <SolidColorBrush x:Key="OptiSubtleBrush" Color="#14FFFFFF" />
                     <SolidColorBrush x:Key="OptiAccentBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#000000" />
                     <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#1AFFFFFF" />
                     <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#D1D1D1" />
                     <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#9A9A9A" />
+                    <SolidColorBrush x:Key="OptiSuccessBrush" Color="#22C55E" />
+                    <SolidColorBrush x:Key="OptiErrorBrush" Color="#DC2626" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>

@@ -14,7 +14,6 @@ public sealed class ThemeService
 
     public static readonly Color AmoledBlack = Color.FromArgb(255, 0, 0, 0);
     public static readonly Color SoftOffWhite = Color.FromArgb(255, 244, 244, 245);
-    public static readonly Color WhiteAccent = Color.FromArgb(255, 255, 255, 255);
     public static readonly Color DarkAccent = Color.FromArgb(255, 17, 17, 17);
 
     public ThemeService(SettingsService settings)
@@ -34,12 +33,9 @@ public sealed class ThemeService
         if (_window?.Content is not FrameworkElement root) return;
 
         var theme = _settings.Current.Theme;
-        root.RequestedTheme = theme switch
-        {
-            AppSettings.LightTheme => ElementTheme.Light,
-            AppSettings.SystemTheme => ElementTheme.Default,
-            _ => ElementTheme.Dark
-        };
+        root.RequestedTheme = theme.Equals(AppSettings.LightTheme, StringComparison.OrdinalIgnoreCase)
+            ? ElementTheme.Light
+            : ElementTheme.Dark;
 
         if (root is Panel panel)
         {

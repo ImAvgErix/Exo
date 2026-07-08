@@ -6,13 +6,12 @@ public sealed class AppSettings
 {
     public const string DarkTheme = "Dark";
     public const string LightTheme = "Light";
-    public const string SystemTheme = "System";
 
-    /// <summary>Dark | Light | System</summary>
+    /// <summary>Dark | Light</summary>
     public string Theme { get; set; } = DarkTheme;
 
     /// <summary>When true, scripts are updated from GitHub on launch if newer.</summary>
-    public bool AutoUpdateScripts { get; set; } = false;
+    public bool AutoUpdateScripts { get; set; }
 
     /// <summary>GitHub repo for Discord optimizer scripts (owner/name).</summary>
     public string DiscordScriptsRepo { get; set; } = "BarcusEric/OptiHub";
@@ -28,8 +27,4 @@ public sealed class AppSettings
 
     /// <summary>Bundled / last known Discord kit version string.</summary>
     public string DiscordKitVersion { get; set; } = "1.1.5";
-
-    [JsonIgnore]
-    public bool IsDarkPreferred =>
-        Theme.Equals(DarkTheme, StringComparison.OrdinalIgnoreCase);
 }

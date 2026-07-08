@@ -43,6 +43,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _isUpdating;
 
+    public string AboutFooter { get; private set; } = "OptiHub · https://github.com/BarcusEric/OptiHub";
+
     public event EventHandler? RequestGoBack;
 
     [RelayCommand]
@@ -164,5 +166,8 @@ public partial class SettingsViewModel : ObservableObject
         ScriptsBranch = s.DiscordScriptsBranch;
         CustomScriptsPath = s.CustomScriptsPath;
         KitVersion = _services.Scripts.GetWorkingVersion();
+        var ver = typeof(SettingsViewModel).Assembly.GetName().Version;
+        var verText = ver is null ? "1.0" : $"{ver.Major}.{ver.Minor}.{ver.Build}";
+        AboutFooter = $"OptiHub {verText} · https://github.com/BarcusEric/OptiHub";
     }
 }

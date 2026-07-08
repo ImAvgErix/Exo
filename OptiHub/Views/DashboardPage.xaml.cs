@@ -1,6 +1,5 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
-using OptiHub.Helpers;
 using OptiHub.ViewModels;
 
 namespace OptiHub.Views;
@@ -12,8 +11,6 @@ public sealed partial class DashboardPage : Page
     public DashboardPage()
     {
         ViewModel = new DashboardViewModel(App.Services);
-        Resources["BoolToOpacityConverter"] = new BoolToOpacityConverter();
-
         InitializeComponent();
         DataContext = ViewModel;
 
@@ -21,11 +18,6 @@ public sealed partial class DashboardPage : Page
         {
             if (id == "discord" && App.MainAppWindow is MainWindow mw)
                 mw.NavigateToDiscord();
-        };
-        ViewModel.NavigateToSettings += (_, _) =>
-        {
-            if (App.MainAppWindow is MainWindow mw)
-                mw.NavigateToSettings();
         };
     }
 

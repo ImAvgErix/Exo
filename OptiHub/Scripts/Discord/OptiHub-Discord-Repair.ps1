@@ -1,4 +1,4 @@
-# OptiHub non-interactive Discord repair (based on DiscOpti Repair-Discord.ps1)
+# OptiHub non-interactive Discord repair
 # Restores stock, bootable Discord while preserving login by default.
 
 param(
@@ -134,7 +134,8 @@ try {
     Clear-RepairRendererState $appDataDiscord $doFull
 
     $equicordThemes = Join-Path $appData 'Equicord\themes'
-    Get-ChildItem $equicordThemes -Filter 'discopt-amoled*.css' -ErrorAction SilentlyContinue |
+    Get-ChildItem $equicordThemes -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like 'discopt-amoled*' -or $_.Name -like 'amoled-cord*' } |
         ForEach-Object {
             Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
             Write-RepOk "Removed theme: $($_.Name)"

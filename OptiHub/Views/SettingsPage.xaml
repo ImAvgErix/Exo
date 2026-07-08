@@ -76,7 +76,7 @@
                                Text="Use at your own risk. Optimizers may modify application files and Windows settings. Third-party Discord clients (Equicord) may conflict with Discord's Terms of Service — you are responsible for compliance." />
                     <TextBlock Style="{StaticResource OptiCaption}"
                                Margin="0,4,0,0"
-                               Text="OptiHub 1.0.3 · https://github.com/BarcusEric/OptiHub" />
+                               Text="{x:Bind ViewModel.AboutFooter, Mode=OneWay}" />
                 </StackPanel>
             </Border>
         </StackPanel>

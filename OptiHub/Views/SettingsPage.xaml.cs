@@ -1,6 +1,5 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using OptiHub.Helpers;
 using OptiHub.ViewModels;
 
 namespace OptiHub.Views;
@@ -12,7 +11,6 @@ public sealed partial class SettingsPage : Page
     public SettingsPage()
     {
         ViewModel = new SettingsViewModel(App.Services);
-        Resources["InverseBoolConverter"] = new InverseBoolConverter();
         InitializeComponent();
         DataContext = ViewModel;
 

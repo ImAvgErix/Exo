@@ -1,9 +1,8 @@
 # OptiHub Discord Optimizer runner
-# Wraps Disc-Optimizer.ps1 with progress markers, dry-run, restore points, non-interactive mode.
+# Wraps Disc-Optimizer.ps1 with progress markers, restore points, non-interactive mode.
 # Source kit: https://github.com/BarcusEric/OptiHub
 
 param(
-    [switch]$DryRun,
     [switch]$CreateRestorePoint,
     [switch]$Quick,
     [switch]$SkipCacheClean,
@@ -122,7 +121,7 @@ if (-not (Test-Path $Optimizer)) {
 
 Write-Host ''
 Write-Host '  OptiHub · Discord Optimizer' -ForegroundColor Cyan
-Write-Host '  OptiHub safety wrappers · progress · dry-run' -ForegroundColor DarkGray
+Write-Host '  Progress · restore point · auto Quick' -ForegroundColor DarkGray
 Write-Host ''
 
 Write-HubProgress 3 'Starting…'
@@ -133,31 +132,6 @@ if (-not $Quick -and (Test-OptiHubDiscordApplied)) {
     Write-HubStep 'Auto-detected: already optimized — using Quick mode'
 }
 
-if ($DryRun) {
-    Write-HubProgress 10 'Dry-run: verify only'
-    Write-HubStep 'Dry-run enabled — no system changes will be made.'
-    $verifyArgs = @('-VerifyOnly', '-NoLaunch')
-    if ($Quick) { $verifyArgs += '-Quick' }
-
-    try {
-        Write-HubProgress 25 'Running verification…'
-        & $Optimizer @verifyArgs
-        $code = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 0 }
-        if ($code -eq 0) {
-            Write-HubOk 'Dry-run verification completed.'
-            Write-HubProgress 100 'Dry-run complete'
-            exit 0
-        } else {
-            Write-HubWarn "Verify reported exit code $code"
-            Write-HubProgress 100 'Dry-run finished with warnings'
-            exit $code
-        }
-    } catch {
-        Write-HubErr $_.Exception.Message
-        Write-HubProgress 100 'Dry-run failed'
-        exit 1
-    }
-}
 
 if ($CreateRestorePoint) {
     New-OptiHubRestorePoint

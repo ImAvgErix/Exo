@@ -29,8 +29,7 @@ public sealed class BoolToVisibilityConverter : IValueConverter
         return flag ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    public object ConvertBack(object value, Type targetType, object parameter, string language)
-        => value is Visibility.Visible;
+    public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotSupportedException();
 }
 
 /// <summary>Coming-soon cards render slightly dimmed.</summary>

@@ -12,7 +12,6 @@
     <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/Manrope-SemiBold.ttf#Manrope</FontFamily>
 
     <CornerRadius x:Key="OptiCardRadius">16</CornerRadius>
-    <x:Double x:Key="OptiPagePadding">32</x:Double>
     <x:Double x:Key="OptiPageMaxWidth">760</x:Double>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />

@@ -49,8 +49,6 @@ public sealed class PowerShellRunnerService
             {
                 Percent = 0,
                 Status = "Cancelled",
-                IsComplete = true,
-                IsError = true
             });
             return new ScriptRunResult
             {
@@ -69,8 +67,6 @@ public sealed class PowerShellRunnerService
             {
                 Percent = 0,
                 Status = cancelled ? "Elevation cancelled" : "Failed",
-                IsComplete = true,
-                IsError = true
             });
 
             return new ScriptRunResult
@@ -149,8 +145,6 @@ public sealed class PowerShellRunnerService
         {
             Percent = ok ? 100 : lastPercent,
             Status = ok ? "Completed successfully" : "Finished with errors",
-            IsComplete = true,
-            IsError = !ok
         });
 
         return new ScriptRunResult
@@ -268,8 +262,6 @@ public sealed class PowerShellRunnerService
         {
             Percent = ok ? 100 : lastPercent,
             Status = ok ? "Completed successfully" : "Finished with errors",
-            IsComplete = true,
-            IsError = !ok
         });
 
         try { File.Delete(wrapper); } catch { /* ignore */ }
@@ -333,7 +325,6 @@ public sealed class PowerShellRunnerService
             {
                 Percent = lastPercent,
                 Status = lastStatus,
-                DetailLine = line
             });
             return;
         }
@@ -351,8 +342,6 @@ public sealed class PowerShellRunnerService
             {
                 Percent = lastPercent,
                 Status = lastStatus,
-                DetailLine = line,
-                IsError = line.StartsWith("[-]", StringComparison.Ordinal)
             });
         }
     }
@@ -371,7 +360,7 @@ public sealed class PowerShellRunnerService
     private static string? _cachedPowerShellPath;
 
     /// <summary>
-    /// Prefer PowerShell 7.7 (preview) — same target as DiscOpti — then any pwsh, then Windows PowerShell 5.1.
+    /// Prefer PowerShell 7.7 (preview) — same target as the Discord kit — then any pwsh, then Windows PowerShell 5.1.
     /// </summary>
     private static string ResolvePowerShell()
     {
@@ -421,7 +410,7 @@ public sealed class PowerShellRunnerService
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
 
-        // 1) Portable copy next to DiscOpti kit (downloaded by Disc-Optimizer if needed)
+        // 1) Portable copy next to Discord kit (downloaded by Disc-Optimizer if needed)
         yield return Path.Combine(PathHelper.WorkingScriptsDir, "Discord", "kit", "tools", "pwsh", "pwsh.exe");
         yield return Path.Combine(PathHelper.DiscordScriptsDir, "kit", "tools", "pwsh", "pwsh.exe");
 

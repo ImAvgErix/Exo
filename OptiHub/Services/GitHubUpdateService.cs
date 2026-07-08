@@ -91,8 +91,8 @@ public sealed class GitHubUpdateService
             var extract = Path.Combine(work, "extract");
             ZipFile.ExtractToDirectory(zipPath, extract, overwriteFiles: true);
 
-            var discOpt = FindDiscordScriptsRoot(extract);
-            if (discOpt is null)
+            var discordScriptsRoot = FindDiscordScriptsRoot(extract);
+            if (discordScriptsRoot is null)
             {
                 return new ScriptUpdateResult
                 {
@@ -103,21 +103,12 @@ public sealed class GitHubUpdateService
                 };
             }
 
-            // Copy root Repair-Discord.ps1 into the kit folder when present
-            var repoRoot = FindRepoRoot(extract, discOpt);
-            if (repoRoot is not null)
-            {
-                var repair = Path.Combine(repoRoot, "Repair-Discord.ps1");
-                if (File.Exists(repair))
-                    File.Copy(repair, Path.Combine(discOpt, "Repair-Discord.ps1"), overwrite: true);
-            }
-
-            var verFile = Path.Combine(discOpt, "VERSION");
+            var verFile = Path.Combine(discordScriptsRoot, "VERSION");
             if (!File.Exists(verFile))
                 await File.WriteAllTextAsync(verFile, remoteVersion, ct);
 
             status?.Report("Installing updated scripts…");
-            _scripts.ReplaceDiscordScriptsFrom(discOpt);
+            _scripts.ReplaceDiscordScriptsFrom(discordScriptsRoot);
             _settings.Update(s => s.DiscordKitVersion = remoteVersion);
 
             return new ScriptUpdateResult
@@ -159,41 +150,23 @@ public sealed class GitHubUpdateService
     }
 
     /// <summary>
-    /// Locates Discord scripts in new OptiHub layout, then legacy Disc Optimizer folder.
+    /// Locates Discord scripts in OptiHub layout, then legacy Disc Optimizer folder.
     /// </summary>
     private static string? FindDiscordScriptsRoot(string extractRoot)
     {
-        // OptiHub/Scripts/Discord (preferred)
         var modern = Directory.GetDirectories(extractRoot, "Discord", SearchOption.AllDirectories)
             .FirstOrDefault(d =>
                 File.Exists(Path.Combine(d, "Disc-Optimizer.ps1")) &&
                 d.Contains($"{Path.DirectorySeparatorChar}Scripts{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase));
         if (modern is not null) return modern;
 
-        // Any folder containing Disc-Optimizer.ps1 + OptiHub wrappers
         var withWrappers = Directory.GetFiles(extractRoot, "Disc-Optimizer.ps1", SearchOption.AllDirectories)
             .Select(Path.GetDirectoryName)
             .FirstOrDefault(d => d is not null && File.Exists(Path.Combine(d, "OptiHub-Discord-Run.ps1")));
         if (withWrappers is not null) return withWrappers;
 
-        // Legacy: "Disc Optimizer"
         return Directory.GetDirectories(extractRoot, "Disc Optimizer", SearchOption.AllDirectories)
             .FirstOrDefault(d => File.Exists(Path.Combine(d, "Disc-Optimizer.ps1")));
-    }
-
-    private static string? FindRepoRoot(string extractRoot, string discordScripts)
-    {
-        // Walk up until we find Repair-Discord.ps1 or OptiHub.sln, else zip root child
-        var dir = new DirectoryInfo(discordScripts);
-        while (dir is not null && dir.FullName.StartsWith(extractRoot, StringComparison.OrdinalIgnoreCase))
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Repair-Discord.ps1")) ||
-                File.Exists(Path.Combine(dir.FullName, "OptiHub.sln")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-
-        return Directory.GetDirectories(extractRoot).FirstOrDefault();
     }
 
     private static bool VersionsEqualOrLocalNewer(string local, string remote)

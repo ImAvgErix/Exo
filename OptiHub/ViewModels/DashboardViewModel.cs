@@ -20,9 +20,6 @@ public partial class DashboardViewModel : ObservableObject
                 {
                     Id = "discord",
                     Title = "Discord Optimizer",
-                    Subtitle = string.Empty,
-                    Description = string.Empty,
-                    AccentGlyph = "\uE8BD",
                     LogoPath = "Assets/Logos/discord.png",
                     Status = OptimizerStatus.Available
                 }
@@ -33,12 +30,8 @@ public partial class DashboardViewModel : ObservableObject
                 {
                     Id = "brave",
                     Title = "Brave Optimizer",
-                    Subtitle = "Coming soon",
-                    Description = string.Empty,
-                    AccentGlyph = "\uE774",
                     LogoPath = "Assets/Logos/brave.png",
-                    Status = OptimizerStatus.ComingSoon,
-                    Teaser = "Flags, shields, and quiet performance for Brave."
+                    Status = OptimizerStatus.ComingSoon
                 }
             },
             new()
@@ -47,12 +40,8 @@ public partial class DashboardViewModel : ObservableObject
                 {
                     Id = "steam",
                     Title = "Steam Optimizer",
-                    Subtitle = "Coming soon",
-                    Description = string.Empty,
-                    AccentGlyph = "\uE7FC",
                     LogoPath = "Assets/Logos/steam.png",
-                    Status = OptimizerStatus.ComingSoon,
-                    Teaser = "Faster Steam, less clutter, better game-ready defaults."
+                    Status = OptimizerStatus.ComingSoon
                 }
             },
             new()
@@ -61,12 +50,8 @@ public partial class DashboardViewModel : ObservableObject
                 {
                     Id = "riot",
                     Title = "Riot Games Optimizer",
-                    Subtitle = "Coming soon",
-                    Description = string.Empty,
-                    AccentGlyph = "\uE7FC",
                     LogoPath = "Assets/Logos/riot.png",
-                    Status = OptimizerStatus.ComingSoon,
-                    Teaser = "Leaner Riot Client without fighting anti-cheat."
+                    Status = OptimizerStatus.ComingSoon
                 }
             },
             new()
@@ -75,12 +60,8 @@ public partial class DashboardViewModel : ObservableObject
                 {
                     Id = "epic",
                     Title = "Epic Launcher Optimizer",
-                    Subtitle = "Coming soon",
-                    Description = string.Empty,
-                    AccentGlyph = "\uE7FC",
                     LogoPath = "Assets/Logos/epic.png",
-                    Status = OptimizerStatus.ComingSoon,
-                    Teaser = "Less launcher noise, more game time."
+                    Status = OptimizerStatus.ComingSoon
                 }
             }
         };
@@ -92,10 +73,6 @@ public partial class DashboardViewModel : ObservableObject
     public List<OptimizerCardViewModel> Cards { get; }
 
     public event EventHandler<string>? NavigateToOptimizer;
-    public event EventHandler? NavigateToSettings;
-
-    [RelayCommand]
-    private void OpenSettings() => NavigateToSettings?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand]
     private void OpenOptimizer(string? id)

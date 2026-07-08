@@ -16,6 +16,7 @@ _pkginfo.txt
 *.appx
 *.msix
 *.msixbundle
+**/node_modules/
 
 # Local scratch
 release-artifacts/

@@ -24,7 +24,7 @@
     <AssemblyName>OptiHub</AssemblyName>
     <Product>OptiHub</Product>
     <Company>OptiHub</Company>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <Description>Cozy hub for system optimizers — performance, privacy, and gaming.</Description>
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
@@ -38,7 +38,7 @@
 
   <!-- Bundle optimizer scripts next to the app -->
   <ItemGroup>
-    <Content Include="Scripts\**\*">
+    <Content Include="Scripts\**\*" Exclude="Scripts\Placeholders\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Assets\**\*">

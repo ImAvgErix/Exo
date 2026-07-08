@@ -10,16 +10,13 @@ namespace OptiHub.ViewModels;
 
 public partial class DiscordOptimizerViewModel : ObservableObject
 {
-    private static readonly SolidColorBrush ErrorBrush =
-        new(Color.FromArgb(255, 220, 38, 38));
-
     private readonly AppServices _services;
     private CancellationTokenSource? _runCts;
 
     public DiscordOptimizerViewModel(AppServices services)
     {
         _services = services;
-        LastResultBrush = new SolidColorBrush(Color.FromArgb(255, 34, 197, 94));
+        LastResultBrush = ResolveBrush("OptiSuccessBrush", Color.FromArgb(255, 34, 197, 94));
     }
 
     [ObservableProperty]
@@ -246,8 +243,20 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         HasLastResult = !string.IsNullOrWhiteSpace(message);
         LastResultGlyph = success ? "\uE73E" : "\uE783";
         LastResultBrush = success
-            ? new SolidColorBrush(Color.FromArgb(255, 34, 197, 94))
-            : ErrorBrush;
+            ? ResolveBrush("OptiSuccessBrush", Color.FromArgb(255, 34, 197, 94))
+            : ResolveBrush("OptiErrorBrush", Color.FromArgb(255, 220, 38, 38));
+    }
+
+    private static Brush ResolveBrush(string key, Color fallback)
+    {
+        try
+        {
+            if (Microsoft.UI.Xaml.Application.Current?.Resources.TryGetValue(key, out var value) == true
+                && value is Brush brush)
+                return brush;
+        }
+        catch { /* theme resource may be unavailable early */ }
+        return new SolidColorBrush(fallback);
     }
 
     public async Task InitializeAsync()

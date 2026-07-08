@@ -1,7 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
-using OptiHub.Helpers;
 using OptiHub.ViewModels;
 
 namespace OptiHub.Views;
@@ -13,8 +12,6 @@ public sealed partial class DiscordOptimizerPage : Page
     public DiscordOptimizerPage()
     {
         ViewModel = new DiscordOptimizerViewModel(App.Services);
-        Resources["InverseBoolConverter"] = new InverseBoolConverter();
-        Resources["BoolToVisibilityConverter"] = new BoolToVisibilityConverter();
         InitializeComponent();
         DataContext = ViewModel;
 
