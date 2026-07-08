@@ -21,9 +21,6 @@ public sealed partial class SettingsPage : Page
         };
     }
 
-    private void Back_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.GoBackCommand.Execute(null);
-
     private void CheckUpdates_Click(object sender, RoutedEventArgs e) =>
         ViewModel.CheckUpdatesCommand.Execute(null);
 

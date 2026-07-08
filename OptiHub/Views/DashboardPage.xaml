@@ -6,17 +6,23 @@
     xmlns:vm="using:OptiHub.ViewModels"
     Background="Transparent">
 
+    <Page.Transitions>
+        <TransitionCollection>
+            <EntranceThemeTransition FromVerticalOffset="18" />
+        </TransitionCollection>
+    </Page.Transitions>
+
     <ScrollViewer VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled"
-                  Padding="32,16,32,32">
+                  Padding="32,8,32,28">
         <StackPanel MaxWidth="{StaticResource OptiPageMaxWidth}"
                     HorizontalAlignment="Center"
-                    Spacing="28">
+                    Spacing="26">
 
             <TextBlock Text="A calm place for performance, privacy, and gaming tweaks. Pick a card to begin."
                        Style="{StaticResource OptiTagline}"
                        HorizontalAlignment="Stretch"
-                       Margin="8,12,8,4" />
+                       Margin="8,8,8,0" />
 
             <GridView x:Name="OptimizerGrid"
                       ItemsSource="{x:Bind ViewModel.Cards}"
@@ -24,6 +30,11 @@
                       IsItemClickEnabled="True"
                       ItemClick="OptimizerGrid_ItemClick"
                       HorizontalAlignment="Center">
+                <GridView.ItemContainerTransitions>
+                    <TransitionCollection>
+                        <EntranceThemeTransition FromVerticalOffset="24" IsStaggeringEnabled="True" />
+                    </TransitionCollection>
+                </GridView.ItemContainerTransitions>
                 <GridView.ItemsPanel>
                     <ItemsPanelTemplate>
                         <ItemsWrapGrid Orientation="Horizontal"

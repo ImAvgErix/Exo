@@ -5,27 +5,20 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Background="Transparent">
 
+    <Page.Transitions>
+        <TransitionCollection>
+            <EntranceThemeTransition FromVerticalOffset="14" />
+        </TransitionCollection>
+    </Page.Transitions>
+
     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,8,32,32">
         <StackPanel MaxWidth="{StaticResource OptiPageMaxWidth}"
                     HorizontalAlignment="Center"
-                    Spacing="20">
-
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Style="{StaticResource OptiIconButton}"
-                        Click="Back_Click"
-                        ToolTipService.ToolTip="Back"
-                        Background="Transparent"
-                        BorderThickness="0">
-                    <FontIcon Glyph="&#xE72B;" FontSize="14" />
-                </Button>
-                <TextBlock Text="Settings"
-                           Style="{StaticResource OptiPageTitle}"
-                           VerticalAlignment="Center" />
-            </StackPanel>
+                    Spacing="16">
 
             <Border Style="{StaticResource OptiCard}">
                 <StackPanel Spacing="14">
-                    <TextBlock Text="Appearance" Style="{StaticResource OptiSectionTitle}" />
+                    <TextBlock Text="APPEARANCE" Style="{StaticResource OptiSectionTitle}" />
                     <ToggleSwitch Header="Dark"
                                   IsOn="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}" />
                     <ToggleSwitch Header="Light"
@@ -35,7 +28,7 @@
 
             <Border Style="{StaticResource OptiCard}">
                 <StackPanel Spacing="14">
-                    <TextBlock Text="Scripts &amp; updates" Style="{StaticResource OptiSectionTitle}" />
+                    <TextBlock Text="SCRIPTS &amp; UPDATES" Style="{StaticResource OptiSectionTitle}" />
                     <ToggleSwitch Header="Auto-update scripts on launch"
                                   IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}" />
                     <TextBox Header="GitHub repository (owner/name)"
@@ -69,7 +62,7 @@
 
             <Border Style="{StaticResource OptiCard}">
                 <StackPanel Spacing="10">
-                    <TextBlock Text="About" Style="{StaticResource OptiSectionTitle}" />
+                    <TextBlock Text="ABOUT" Style="{StaticResource OptiSectionTitle}" />
                     <TextBlock Style="{StaticResource OptiBody}"
                                Text="OptiHub is a hub for optional system optimizers — performance, privacy, and gaming." />
                     <TextBlock Style="{StaticResource OptiBody}"

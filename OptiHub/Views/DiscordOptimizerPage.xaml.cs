@@ -29,9 +29,6 @@ public sealed partial class DiscordOptimizerPage : Page
         await ViewModel.InitializeAsync();
     }
 
-    private void Back_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.GoBackCommand.Execute(null);
-
     private void Run_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RunCommand.Execute(null);
 
