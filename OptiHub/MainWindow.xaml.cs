@@ -96,8 +96,14 @@ public sealed partial class MainWindow : Window
         var home = mode == ShellMode.Home;
         BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
         ContextLogoHost.Visibility = mode == ShellMode.Discord ? Visibility.Visible : Visibility.Collapsed;
-        SettingsButton.Visibility = mode == ShellMode.Settings ? Visibility.Collapsed : Visibility.Visible;
-        AppTitleText.Text = "OptiHub";
+        // Settings only on home — Discord page keeps chrome clean
+        SettingsButton.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
+        AppTitleText.Text = mode switch
+        {
+            ShellMode.Discord => "Discord",
+            ShellMode.Settings => "Settings",
+            _ => "OptiHub"
+        };
 
         if (mode == ShellMode.Discord)
             TrySetContextLogo("Assets/Logos/discord.png");

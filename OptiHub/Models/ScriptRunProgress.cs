@@ -15,12 +15,20 @@ public sealed class ScriptRunResult
     public string? ErrorMessage { get; init; }
 }
 
+public sealed class OptimizerFeatureInfo
+{
+    public string Title { get; set; } = string.Empty;
+    public string Detail { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+    public string Glyph { get; set; } = "\uE73E";
+}
+
 public sealed class OptimizerStateInfo
 {
     public bool IsApplied { get; init; }
     public string StatusText { get; init; } = "Not applied";
     public string Detail { get; init; } = string.Empty;
-    public IReadOnlyList<string> Checks { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<OptimizerFeatureInfo> Features { get; init; } = Array.Empty<OptimizerFeatureInfo>();
 }
 
 public sealed class ScriptUpdateResult

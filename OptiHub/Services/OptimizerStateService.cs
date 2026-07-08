@@ -23,7 +23,6 @@ public sealed class OptimizerStateService
         CancellationToken ct = default,
         bool fastOnly = false)
     {
-        // Fast local heuristic first
         var heuristic = DetectDiscordHeuristic();
         if (fastOnly)
             return heuristic;
@@ -58,22 +57,17 @@ public sealed class OptimizerStateService
             var applied = root.TryGetProperty("isApplied", out var a) && a.GetBoolean();
             var status = root.TryGetProperty("statusText", out var s) ? s.GetString() ?? heuristic.StatusText : heuristic.StatusText;
             var detail = root.TryGetProperty("detail", out var d) ? d.GetString() ?? string.Empty : string.Empty;
-            var checks = new List<string>();
-            if (root.TryGetProperty("checks", out var c) && c.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in c.EnumerateArray())
-                {
-                    var t = item.GetString();
-                    if (!string.IsNullOrWhiteSpace(t)) checks.Add(t!);
-                }
-            }
+            var features = ParseFeatures(root);
+
+            if (features.Count == 0)
+                features = heuristic.Features.ToList();
 
             return new OptimizerStateInfo
             {
                 IsApplied = applied,
                 StatusText = status,
                 Detail = detail,
-                Checks = checks
+                Features = features
             };
         }
         catch
@@ -82,9 +76,68 @@ public sealed class OptimizerStateService
         }
     }
 
+    private static List<OptimizerFeatureInfo> ParseFeatures(JsonElement root)
+    {
+        var features = new List<OptimizerFeatureInfo>();
+
+        if (root.TryGetProperty("features", out var arr) && arr.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in arr.EnumerateArray())
+            {
+                var title = item.TryGetProperty("title", out var t) ? t.GetString() : null;
+                var detail = item.TryGetProperty("detail", out var d) ? d.GetString() : null;
+                var active = item.TryGetProperty("active", out var a) && a.ValueKind == JsonValueKind.True;
+                if (string.IsNullOrWhiteSpace(title)) continue;
+                features.Add(MakeFeature(title!, detail ?? string.Empty, active));
+            }
+        }
+
+        if (features.Count == 0 &&
+            root.TryGetProperty("checks", out var checks) &&
+            checks.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in checks.EnumerateArray())
+            {
+                var text = item.GetString();
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                features.Add(MapLegacyCheck(text!));
+            }
+        }
+
+        return features;
+    }
+
+    private static OptimizerFeatureInfo MakeFeature(string title, string detail, bool active) =>
+        new()
+        {
+            Title = title,
+            Detail = detail,
+            IsActive = active,
+            Glyph = active ? "\uE73E" : "\uE711"
+        };
+
+    private static OptimizerFeatureInfo MapLegacyCheck(string text)
+    {
+        var lower = text.ToLowerInvariant();
+        var active = !(lower.Contains("not ") || lower.Contains("missing") || lower.Contains("not found") || lower.Contains("not detected"));
+
+        if (lower.Contains("equicord"))
+            return MakeFeature("Client mods & privacy", "Equicord loads privacy plugins and strips noisy telemetry.", active);
+        if (lower.Contains("openasar"))
+            return MakeFeature("Faster Discord startup", "OpenASAR replaces the heavy launcher path so Discord opens quicker.", active);
+        if (lower.Contains("kernel") || lower.Contains("ffmpeg") || lower.Contains("discopt"))
+            return MakeFeature("Lower memory use", "DiscOpt kernel trims idle RAM and keeps Discord on a higher process priority.", active);
+        if (lower.Contains("amoled"))
+            return MakeFeature("True black AMOLED theme", "Pure black UI saves OLED power and cuts eye strain at night.", active);
+        if (lower.Contains("startup"))
+            return MakeFeature("Quieter Windows startup", "Discord stays closed on boot so it is not sitting in the tray.", active);
+
+        return MakeFeature(text, string.Empty, active);
+    }
+
     private OptimizerStateInfo DetectDiscordHeuristic()
     {
-        var checks = new List<string>();
+        var features = new List<OptimizerFeatureInfo>();
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var discordRoot = Path.Combine(local, "Discord");
@@ -96,8 +149,11 @@ public sealed class OptimizerStateService
             {
                 IsApplied = false,
                 StatusText = "Discord not installed",
-                Detail = "Install Discord stable first, or let the optimizer install it.",
-                Checks = new[] { "Discord folder missing under LocalAppData" }
+                Detail = "Install Discord stable first, or let the optimizer install it for you.",
+                Features = new[]
+                {
+                    MakeFeature("Discord install", "Stable Discord is required before optimizations can apply.", false)
+                }
             };
         }
 
@@ -111,8 +167,11 @@ public sealed class OptimizerStateService
             {
                 IsApplied = false,
                 StatusText = "Discord incomplete",
-                Detail = "No app-* folder found.",
-                Checks = new[] { "No active Discord build" }
+                Detail = "No active Discord build folder was found.",
+                Features = new[]
+                {
+                    MakeFeature("Discord build", "No app-* folder under LocalAppData\\Discord.", false)
+                }
             };
         }
 
@@ -127,37 +186,56 @@ public sealed class OptimizerStateService
         var equicordOk = File.Exists(equicordAsar) &&
                          File.Exists(appAsar) &&
                          new FileInfo(appAsar).Length < 4096;
-        if (equicordOk) checks.Add("Equicord loader present");
-        else checks.Add("Equicord not detected");
+        features.Add(MakeFeature(
+            "Client mods & privacy",
+            "Equicord loads privacy plugins and strips noisy telemetry.",
+            equicordOk));
 
         var openAsarOk = File.Exists(stock);
-        if (openAsarOk) checks.Add("OpenASAR stock backup present");
-        else checks.Add("OpenASAR backup not found");
+        features.Add(MakeFeature(
+            "Faster Discord startup",
+            "OpenASAR replaces the heavy launcher path so Discord opens quicker.",
+            openAsarOk));
 
-        var kernelOk = File.Exists(versionDll) && File.Exists(ffmpeg) && File.Exists(configIni);
-        if (kernelOk)
+        var kernelOk = false;
+        if (File.Exists(versionDll) && File.Exists(ffmpeg) && File.Exists(configIni))
+        {
+            try { kernelOk = new FileInfo(ffmpeg).Length < 500_000; }
+            catch { /* ignore */ }
+        }
+        features.Add(MakeFeature(
+            "Lower memory use",
+            "DiscOpt kernel trims idle RAM and keeps Discord on a higher process priority.",
+            kernelOk));
+
+        var amoledOk = false;
+        var startupOk = false;
+        var settingsPath = Path.Combine(appData, "discord", "settings.json");
+        if (File.Exists(settingsPath))
         {
             try
             {
-                // DiscOpt ffmpeg proxy is small (~24KB); stock is multi-MB
-                if (new FileInfo(ffmpeg).Length < 500_000)
-                    checks.Add("DiscOpt kernel on disk");
-                else
-                {
-                    kernelOk = false;
-                    checks.Add("Stock ffmpeg.dll (kernel not applied)");
-                }
+                using var doc = JsonDocument.Parse(File.ReadAllText(settingsPath));
+                if (doc.RootElement.TryGetProperty("BACKGROUND_COLOR", out var bg) &&
+                    bg.GetString() == "#000000")
+                    amoledOk = true;
+                if (doc.RootElement.TryGetProperty("OPEN_ON_STARTUP", out var su) &&
+                    su.ValueKind == JsonValueKind.False)
+                    startupOk = true;
             }
-            catch
-            {
-                checks.Add("Kernel files present");
-            }
+            catch { /* ignore */ }
         }
-        else checks.Add("DiscOpt kernel missing");
 
-        var lastRun = _settings.Current.LastDiscordRunUtc;
-        if (!string.IsNullOrEmpty(lastRun) && DateTime.TryParse(lastRun, out var when))
-            checks.Add($"Last OptiHub run: {when.ToLocalTime():g}");
+        features.Add(MakeFeature(
+            "True black AMOLED theme",
+            "Pure black UI saves OLED power and cuts eye strain at night.",
+            amoledOk));
+        features.Add(MakeFeature(
+            "Quieter Windows startup",
+            "Discord stays closed on boot so it is not sitting in the tray.",
+            startupOk));
+
+        _ = _settings;
 
         var applied = equicordOk && (kernelOk || openAsarOk);
         return new OptimizerStateInfo
@@ -165,9 +243,9 @@ public sealed class OptimizerStateService
             IsApplied = applied,
             StatusText = applied ? "Already optimized" : "Ready to optimize",
             Detail = applied
-                ? "Optimizations detected. You can reapply after Discord updates."
-                : "Run the optimizer to apply performance, privacy, and AMOLED tweaks.",
-            Checks = checks
+                ? "These savings are active. Reapply after Discord updates itself."
+                : "Some pieces are missing. Run to finish setup and unlock the savings below.",
+            Features = features
         };
     }
 }

@@ -1,4 +1,4 @@
-# OptiHub — detect whether Discord Optimizer is already applied.
+# OptiHub - detect whether Discord Optimizer is already applied.
 # Prints a single JSON object to stdout for the WinUI host.
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -8,24 +8,32 @@ $appData = [Environment]::GetFolderPath('ApplicationData')
 $discordRoot = Join-Path $local 'Discord'
 $equicord = Join-Path $appData 'Equicord'
 
-$checks = New-Object System.Collections.Generic.List[string]
+$features = New-Object System.Collections.Generic.List[hashtable]
 $isApplied = $false
 $statusText = 'Ready to optimize'
-$detail = 'Run the optimizer to apply performance, privacy, and AMOLED tweaks.'
+$detail = 'Run the optimizer to cut Discord memory use, speed startup, and quiet background noise.'
+
+function Add-Feature([string]$Title, [string]$Detail, [bool]$Active) {
+    $script:features.Add(@{
+        title  = $Title
+        detail = $Detail
+        active = $Active
+    })
+}
 
 if (-not (Test-Path $discordRoot)) {
-    $checks.Add('Discord folder missing under LocalAppData')
     $statusText = 'Discord not installed'
-    $detail = 'Install Discord stable first, or let the optimizer install it.'
+    $detail = 'Install Discord stable first, or let the optimizer install it for you.'
+    Add-Feature 'Discord install' 'Stable Discord is required before optimizations can apply.' $false
 } else {
     $app = Get-ChildItem $discordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
         Sort-Object { [version]($_.Name -replace '^app-', '') } -Descending |
         Select-Object -First 1
 
     if (-not $app) {
-        $checks.Add('No active Discord build')
         $statusText = 'Discord incomplete'
-        $detail = 'No app-* folder found.'
+        $detail = 'No active Discord build folder was found.'
+        Add-Feature 'Discord build' 'No app-* folder under LocalAppData\Discord.' $false
     } else {
         $resources = Join-Path $app.FullName 'resources'
         $equicordAsar = Join-Path $equicord 'equicord.asar'
@@ -36,40 +44,38 @@ if (-not (Test-Path $discordRoot)) {
         $configIni = Join-Path $app.FullName 'config.ini'
 
         $equicordOk = (Test-Path $equicordAsar) -and (Test-Path $appAsar) -and ((Get-Item $appAsar).Length -lt 4096)
-        if ($equicordOk) { $checks.Add('Equicord loader present') } else { $checks.Add('Equicord not detected') }
+        Add-Feature 'Client mods & privacy' 'Equicord loads privacy plugins and strips noisy telemetry.' $equicordOk
 
         $openAsarOk = Test-Path $stock
-        if ($openAsarOk) { $checks.Add('OpenASAR stock backup present') } else { $checks.Add('OpenASAR backup not found') }
+        Add-Feature 'Faster Discord startup' 'OpenASAR replaces the heavy launcher path so Discord opens quicker.' $openAsarOk
 
         $kernelOk = $false
         if ((Test-Path $versionDll) -and (Test-Path $ffmpeg) -and (Test-Path $configIni)) {
             $ffSize = (Get-Item $ffmpeg).Length
-            if ($ffSize -lt 500000) {
-                $kernelOk = $true
-                $checks.Add('DiscOpt kernel on disk')
-            } else {
-                $checks.Add('Stock ffmpeg.dll (kernel not applied)')
-            }
-        } else {
-            $checks.Add('DiscOpt kernel missing')
+            if ($ffSize -lt 500000) { $kernelOk = $true }
         }
+        Add-Feature 'Lower memory use' 'DiscOpt kernel trims idle RAM and keeps Discord on a higher process priority.' $kernelOk
 
+        $amoledOk = $false
+        $startupOk = $false
         $settingsPath = Join-Path $appData 'discord\settings.json'
         if (Test-Path $settingsPath) {
             try {
                 $sj = Get-Content $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
-                if ($sj.BACKGROUND_COLOR -eq '#000000') { $checks.Add('AMOLED profile flags present') }
-                if ($sj.OPEN_ON_STARTUP -eq $false) { $checks.Add('Startup disabled in Discord settings') }
+                if ($sj.BACKGROUND_COLOR -eq '#000000') { $amoledOk = $true }
+                if ($sj.OPEN_ON_STARTUP -eq $false) { $startupOk = $true }
             } catch {}
         }
+        Add-Feature 'True black AMOLED theme' 'Pure black UI saves OLED power and cuts eye strain at night.' $amoledOk
+        Add-Feature 'Quieter Windows startup' 'Discord stays closed on boot so it is not sitting in the tray.' $startupOk
 
         $isApplied = [bool]($equicordOk -and ($kernelOk -or $openAsarOk))
         if ($isApplied) {
             $statusText = 'Already optimized'
-            $detail = 'Optimizations detected. You can reapply after Discord updates.'
+            $detail = 'These savings are active. Reapply after Discord updates itself.'
         } else {
             $statusText = 'Ready to optimize'
-            $detail = 'Some components are missing. Run to apply or complete setup.'
+            $detail = 'Some pieces are missing. Run to finish setup and unlock the savings below.'
         }
     }
 }
@@ -78,7 +84,7 @@ $payload = [ordered]@{
     isApplied  = $isApplied
     statusText = $statusText
     detail     = $detail
-    checks     = @($checks)
+    features   = @($features)
 }
 
-$payload | ConvertTo-Json -Compress -Depth 4
+$payload | ConvertTo-Json -Compress -Depth 5

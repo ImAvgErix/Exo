@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media;
@@ -113,7 +113,8 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         {
             var args = new List<string>
             {
-                "-CreateRestorePoint",`n                "-NonInteractive"
+                "-CreateRestorePoint",
+                "-NonInteractive"
             };
 
             var progress = new Progress<ScriptRunProgress>(p =>

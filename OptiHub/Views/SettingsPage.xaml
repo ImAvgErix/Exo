@@ -7,18 +7,18 @@
 
     <Page.Transitions>
         <TransitionCollection>
-            <EntranceThemeTransition FromVerticalOffset="14" />
+            <EntranceThemeTransition FromVerticalOffset="10" />
         </TransitionCollection>
     </Page.Transitions>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,8,32,32">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="28,10,28,24">
         <StackPanel MaxWidth="{StaticResource OptiPageMaxWidth}"
-                    HorizontalAlignment="Center"
-                    Spacing="16">
+                    HorizontalAlignment="Stretch"
+                    Spacing="14">
 
-            <Border Style="{StaticResource OptiCard}">
+            <Border Style="{StaticResource OptiCard}" Padding="22,20">
                 <StackPanel Spacing="14">
-                    <TextBlock Text="APPEARANCE" Style="{StaticResource OptiSectionTitle}" />
+                    <TextBlock Text="APPEARANCE" Style="{StaticResource OptiSectionTitle}" Margin="0" />
                     <ToggleSwitch Header="Dark"
                                   IsOn="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}" />
                     <ToggleSwitch Header="Light"
@@ -26,9 +26,9 @@
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource OptiCard}">
+            <Border Style="{StaticResource OptiCard}" Padding="22,20">
                 <StackPanel Spacing="14">
-                    <TextBlock Text="SCRIPTS &amp; UPDATES" Style="{StaticResource OptiSectionTitle}" />
+                    <TextBlock Text="SCRIPTS &amp; UPDATES" Style="{StaticResource OptiSectionTitle}" Margin="0" />
                     <ToggleSwitch Header="Auto-update scripts on launch"
                                   IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}" />
                     <TextBox Header="GitHub repository (owner/name)"
@@ -60,9 +60,9 @@
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource OptiCard}">
+            <Border Style="{StaticResource OptiCard}" Padding="22,20">
                 <StackPanel Spacing="10">
-                    <TextBlock Text="ABOUT" Style="{StaticResource OptiSectionTitle}" />
+                    <TextBlock Text="ABOUT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
                     <TextBlock Style="{StaticResource OptiBody}"
                                Text="OptiHub is a hub for optional system optimizers — performance, privacy, and gaming." />
                     <TextBlock Style="{StaticResource OptiBody}"
