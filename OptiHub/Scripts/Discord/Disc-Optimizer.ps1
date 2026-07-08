@@ -42,7 +42,7 @@ if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.10'
+$Script:DiscOptVersion = '1.1.11'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -655,16 +655,46 @@ function Remove-Safe([string]$Path, [ref]$Freed) {
 }
 
 function Stop-Discord {
-    $procs = @(Get-Process Discord, Discord.bin, Update -ErrorAction SilentlyContinue)
-    if ($procs.Count -eq 0) { return }
-    $procs | Stop-Process -Force -ErrorAction SilentlyContinue
-    try {
-        Wait-Process -Id ($procs.Id) -Timeout 3 -ErrorAction SilentlyContinue
-    } catch { }
-    $left = @(Get-Process Discord, Discord.bin, Update -ErrorAction SilentlyContinue)
-    if ($left.Count -gt 0) {
-        $left | Stop-Process -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Milliseconds 400
+    # Hard-kill Discord/Update so resources\app.asar is not locked during Equicord/OpenASAR writes.
+    $names = @('Discord', 'Discord.bin', 'Update', 'app')
+    for ($round = 1; $round -le 3; $round++) {
+        $procs = @(Get-Process -Name $names -ErrorAction SilentlyContinue | Where-Object {
+            try {
+                $path = $_.Path
+                if (-not $path) { return $true }
+                return ($path -like '*\Discord\*' -or $_.ProcessName -in @('Discord', 'Discord.bin', 'Update'))
+            } catch { return $true }
+        })
+        if ($procs.Count -eq 0) { break }
+        foreach ($p in $procs) {
+            try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { }
+            try { & taskkill.exe /F /PID $p.Id 2>$null | Out-Null } catch { }
+        }
+        Start-Sleep -Milliseconds (250 * $round)
+    }
+    Start-Sleep -Milliseconds 350
+}
+
+function Write-DiscordResourceBytes {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][byte[]]$Bytes,
+        [int]$Attempts = 8
+    )
+
+    for ($i = 1; $i -le $Attempts; $i++) {
+        Stop-Discord
+        try {
+            if (Test-Path -LiteralPath $Path) {
+                attrib -R -S -H "$Path" 2>$null
+            }
+            [IO.File]::WriteAllBytes($Path, $Bytes)
+            return
+        } catch {
+            if ($i -ge $Attempts) { throw }
+            Write-Warn ("Waiting for Discord to release file lock ($i/$Attempts): " + $_.Exception.Message)
+            Start-Sleep -Milliseconds (350 * $i)
+        }
     }
 }
 
@@ -2100,7 +2130,7 @@ function Install-OpenAsar([string]$AppDir) {
     if (-not (Test-Path $ToolsDir)) { New-Item -ItemType Directory -Path $ToolsDir -Force | Out-Null }
     Copy-Item $temp (Join-Path $ToolsDir 'openasar.asar') -Force
 
-    Copy-Item $temp $target -Force
+    Write-DiscordResourceBytes -Path $target -Bytes ([IO.File]::ReadAllBytes($temp))
     Write-Ok "OpenASAR nightly installed ($([math]::Round((Get-Item $target).Length / 1KB, 1)) KB on _app.asar)"
 }
 
@@ -2514,7 +2544,7 @@ function Install-EquicordDirect([string]$AppDir) {
         if (-not (Test-Path $backupAsar) -and (Test-Path $appAsar) -and (Get-Item $appAsar).Length -gt 1000000) {
             Copy-Item $appAsar $backupAsar -Force
         }
-        [IO.File]::WriteAllBytes($appAsar, (New-EquicordLoaderAsar $equicordAsar))
+        Write-DiscordResourceBytes -Path $appAsar -Bytes (New-EquicordLoaderAsar $equicordAsar)
         Write-Ok 'Installed Equicord loader stub'
     }
 
