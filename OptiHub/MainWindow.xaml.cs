@@ -35,7 +35,7 @@ public sealed partial class MainWindow : Window
         var dark = RootGrid.ActualTheme != ElementTheme.Light;
         RootGrid.Background = new SolidColorBrush(
             dark ? ColorHelper.FromArgb(255, 0, 0, 0)
-                 : ColorHelper.FromArgb(255, 248, 249, 250));
+                 : ColorHelper.FromArgb(255, 244, 244, 245));
         App.Services.Theme.Apply();
     }
 

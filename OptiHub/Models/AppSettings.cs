@@ -14,17 +14,8 @@ public sealed class AppSettings
     /// <summary>When true, scripts are updated from GitHub on launch if newer.</summary>
     public bool AutoUpdateScripts { get; set; } = false;
 
-    /// <summary>Simulate optimizers without modifying the system.</summary>
-    public bool DryRun { get; set; }
-
-    /// <summary>Create a Windows restore point before applying optimizers.</summary>
-    public bool AutoRestorePoint { get; set; } = true;
-
-    /// <summary>Confirm before running any optimizer.</summary>
-    public bool ConfirmBeforeRun { get; set; } = true;
-
     /// <summary>GitHub repo for Discord optimizer scripts (owner/name).</summary>
-    public string DiscordScriptsRepo { get; set; } = "BarcusEric/DiscOpti";
+    public string DiscordScriptsRepo { get; set; } = "BarcusEric/OptiHub";
 
     /// <summary>Branch to pull script updates from.</summary>
     public string DiscordScriptsBranch { get; set; } = "main";

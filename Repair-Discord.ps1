@@ -2,7 +2,7 @@
 # Wipes program files AND all cached renderer state (the usual cause of black
 # screens), keeps your login, reinstalls fresh from discord.com.
 #
-#   irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex
+#   irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex
 #
 # Optional full logout reset (also clears login/session) - run this first:
 #   $env:OPTIHUB_REPAIR_FULL = '1'
@@ -231,7 +231,7 @@ try {
     Write-RepWarn 'Still not rendering. Two remaining options:'
     Write-Host '    1. Full reset including login (fixes corrupt session storage):' -ForegroundColor Yellow
     Write-Host '         $env:OPTIHUB_REPAIR_FULL = ''1''' -ForegroundColor Cyan
-    Write-Host '         irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
+    Write-Host '         irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
     Write-Host '    2. Update your GPU drivers (NVIDIA/AMD/Intel), then start Discord again.' -ForegroundColor Yellow
     Write-Host ''
 } catch {

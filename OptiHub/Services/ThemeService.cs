@@ -13,7 +13,7 @@ public sealed class ThemeService
     private Window? _window;
 
     public static readonly Color AmoledBlack = Color.FromArgb(255, 0, 0, 0);
-    public static readonly Color SoftOffWhite = Color.FromArgb(255, 248, 249, 250);
+    public static readonly Color SoftOffWhite = Color.FromArgb(255, 244, 244, 245);
     public static readonly Color WhiteAccent = Color.FromArgb(255, 255, 255, 255);
     public static readonly Color DarkAccent = Color.FromArgb(255, 17, 17, 17);
 

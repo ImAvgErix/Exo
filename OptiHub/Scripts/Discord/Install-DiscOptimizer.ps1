@@ -5,7 +5,7 @@
   Prefer OptiHub (Install-OptiHub.ps1) for the full app experience.
 #>
 param(
-    [string]$Repo = 'BarcusEric/DiscOpti',
+    [string]$Repo = 'BarcusEric/OptiHub',
     [string]$Branch = 'main',
     [string]$InstallDir = '',
     [switch]$Quick,

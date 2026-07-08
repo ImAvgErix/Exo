@@ -10,7 +10,6 @@
                     HorizontalAlignment="Center"
                     Spacing="24">
 
-            <!-- Back + title -->
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Style="{StaticResource OptiIconButton}"
                         Click="Back_Click"
@@ -21,7 +20,7 @@
                 </Button>
                 <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
                     <Border Width="44" Height="44" CornerRadius="12"
-                            Background="{StaticResource OptiAccentSoftBrush}">
+                            Background="{ThemeResource OptiAccentSoftBrush}">
                         <Image Width="28" Height="28"
                                Source="{x:Bind ViewModel.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                HorizontalAlignment="Center"
@@ -34,15 +33,16 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Status -->
             <Border Style="{StaticResource OptiCard}" Padding="24,20">
                 <StackPanel Spacing="12">
                     <TextBlock Text="Status"
                                Style="{StaticResource OptiSectionTitle}"
                                Margin="0" />
                     <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                               FontFamily="{StaticResource OptiDisplayFontMedium}"
                                FontSize="22"
                                FontWeight="SemiBold"
+                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                TextWrapping="Wrap" />
                     <TextBlock Text="{x:Bind ViewModel.DetailText, Mode=OneWay}"
                                Style="{StaticResource OptiBody}" />
@@ -55,13 +55,14 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="x:String">
-                                <Border Background="{StaticResource OptiAccentSoftBrush}"
+                                <Border Background="{ThemeResource OptiAccentSoftBrush}"
                                         CornerRadius="8"
                                         Padding="12,6"
                                         HorizontalAlignment="Left">
                                     <TextBlock Text="{x:Bind}"
+                                               FontFamily="{StaticResource OptiUiFont}"
                                                FontSize="12"
-                                               Opacity="0.9" />
+                                               Foreground="{ThemeResource OptiSecondaryTextBrush}" />
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -69,7 +70,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- What this does -->
             <Border Style="{StaticResource OptiCard}">
                 <StackPanel Spacing="10">
                     <TextBlock Text="What this does"
@@ -77,20 +77,17 @@
                     <TextBlock Style="{StaticResource OptiBody}"
                                Text="Installs or repairs Discord stable when needed, then applies Equicord, OpenASAR, an AMOLED theme, privacy plugins, and the DiscOpt kernel for priority, memory trim, and raw input." />
                     <TextBlock Style="{StaticResource OptiBody}"
-                               Text="Safe cache clean and quieter Windows startup toasts are included. Login and session storage stay intact." />
-                    <TextBlock Style="{StaticResource OptiCaption}"
-                               Text="Dry-run and restore points are configured in Settings. Run mode is detected automatically." />
+                               Text="Safe cache clean and quieter Windows startup toasts are included. Login and session storage stay intact. Run mode is detected automatically." />
                 </StackPanel>
             </Border>
 
-            <!-- Progress (only while applying) -->
             <StackPanel Spacing="10"
                         Visibility="{x:Bind ViewModel.IsProgressVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                 <ProgressBar Minimum="0" Maximum="100"
                              Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
                              Height="6"
                              CornerRadius="3"
-                             Foreground="{StaticResource OptiAccentBrush}"
+                             Foreground="{ThemeResource OptiAccentBrush}"
                              ShowPaused="False"
                              ShowError="False" />
                 <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}"
@@ -99,10 +96,9 @@
                            HorizontalAlignment="Center" />
             </StackPanel>
 
-            <!-- Result -->
             <Border Style="{StaticResource OptiCard}"
                     Visibility="{x:Bind ViewModel.HasLastResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                    Background="{StaticResource OptiAccentSoftBrush}">
+                    Background="{ThemeResource OptiAccentSoftBrush}">
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <FontIcon Glyph="{x:Bind ViewModel.LastResultGlyph, Mode=OneWay}"
                               FontSize="18"
@@ -111,13 +107,11 @@
                               Margin="0,2,0,0" />
                     <TextBlock Text="{x:Bind ViewModel.LastResult, Mode=OneWay}"
                                Style="{StaticResource OptiBody}"
-                               Opacity="1"
                                TextWrapping="Wrap"
                                VerticalAlignment="Center" />
                 </StackPanel>
             </Border>
 
-            <!-- Actions -->
             <StackPanel Spacing="12">
                 <Button Style="{StaticResource OptiPrimaryButton}"
                         Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"

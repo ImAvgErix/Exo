@@ -4,10 +4,10 @@
   Legacy entry point. DiscOpti is now OptiHub — redirects to Install-OptiHub.ps1.
 
 .EXAMPLE
-  irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-DiscOptimizer.ps1" | iex
+  irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-DiscOptimizer.ps1" | iex
 #>
 param(
-    [string]$Repo = 'BarcusEric/DiscOpti',
+    [string]$Repo = 'BarcusEric/OptiHub',
     [string]$Branch = 'main',
     [Parameter(ValueFromRemainingArguments = $true)]
     $Remaining

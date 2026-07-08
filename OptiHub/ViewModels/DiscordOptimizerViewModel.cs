@@ -10,10 +10,8 @@ namespace OptiHub.ViewModels;
 
 public partial class DiscordOptimizerViewModel : ObservableObject
 {
-    private static readonly SolidColorBrush SuccessBrush =
-        new(Color.FromArgb(255, 255, 255, 255));
     private static readonly SolidColorBrush ErrorBrush =
-        new(Color.FromArgb(255, 248, 113, 113));
+        new(Color.FromArgb(255, 220, 38, 38));
 
     private readonly AppServices _services;
     private CancellationTokenSource? _runCts;
@@ -21,7 +19,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     public DiscordOptimizerViewModel(AppServices services)
     {
         _services = services;
-        LastResultBrush = SuccessBrush;
+        LastResultBrush = new SolidColorBrush(Color.FromArgb(255, 34, 197, 94));
     }
 
     [ObservableProperty]
@@ -96,25 +94,16 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
 
-        var settings = _services.Settings.Current;
         var action = IsApplied ? "reapply" : "run";
+        var warning =
+            "This will close Discord, apply optimizations (Equicord, OpenASAR, kernel, cache, Windows tweaks), and may request Administrator approval.\n\n" +
+            "Your login/session is preserved. A repair path is available if anything goes wrong.\n\n" +
+            "Run mode is detected automatically. A system restore point will be created first when Windows allows.";
 
-        if (settings.ConfirmBeforeRun)
-        {
-            var warning = settings.DryRun
-                ? "Dry-run is enabled. No system changes will be made — the optimizer will verify only."
-                : "This will close Discord, apply optimizations (Equicord, OpenASAR, kernel, cache, Windows tweaks), and may request Administrator approval.\n\n" +
-                  "Your login/session is preserved. A repair path is available if anything goes wrong.\n\n" +
-                  "Run mode is detected automatically (Quick reapply when already optimized).";
-
-            if (settings.AutoRestorePoint && !settings.DryRun)
-                warning += "\n\nA system restore point will be created first (if Windows allows).";
-
-            var ok = ConfirmAsync is not null
-                ? await ConfirmAsync($"Confirm Discord Optimizer ({action})", warning)
-                : true;
-            if (!ok) return;
-        }
+        var ok = ConfirmAsync is not null
+            ? await ConfirmAsync($"Confirm Discord Optimizer ({action})", warning)
+            : true;
+        if (!ok) return;
 
         IsBusy = true;
         IsProgressVisible = true;
@@ -125,13 +114,12 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
         try
         {
-            var args = new List<string>();
-            if (settings.DryRun)
-                args.Add("-DryRun");
-            if (settings.AutoRestorePoint && !settings.DryRun)
-                args.Add("-CreateRestorePoint");
-            args.Add("-NoLaunch");
-            args.Add("-NonInteractive");
+            var args = new List<string>
+            {
+                "-CreateRestorePoint",
+                "-NoLaunch",
+                "-NonInteractive"
+            };
 
             var progress = new Progress<ScriptRunProgress>(p =>
             {
@@ -143,23 +131,16 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             var result = await _services.PowerShell.RunAsync(
                 script,
                 arguments: args,
-                elevate: !settings.DryRun,
+                elevate: true,
                 progress: progress,
                 cancellationToken: _runCts.Token,
                 workingDirectory: _services.Scripts.GetDiscordRoot());
 
             if (result.Success)
             {
-                SetResult(
-                    settings.DryRun
-                        ? "Dry-run finished. No changes were applied."
-                        : "Optimizer finished successfully.",
-                    success: true);
-                if (!settings.DryRun)
-                {
-                    _services.Settings.Update(s =>
-                        s.LastDiscordRunUtc = DateTime.UtcNow.ToString("o"));
-                }
+                SetResult("Optimizer finished successfully.", success: true);
+                _services.Settings.Update(s =>
+                    s.LastDiscordRunUtc = DateTime.UtcNow.ToString("o"));
             }
             else
             {
@@ -187,16 +168,12 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
 
-        var settings = _services.Settings.Current;
-        if (settings.ConfirmBeforeRun)
-        {
-            var ok = ConfirmAsync is not null
-                ? await ConfirmAsync(
-                    "Repair Discord?",
-                    "This restores a clean, stock Discord install while keeping your login. Optimizations will be removed. Administrator approval may be required.")
-                : true;
-            if (!ok) return;
-        }
+        var ok = ConfirmAsync is not null
+            ? await ConfirmAsync(
+                "Repair Discord?",
+                "This restores a clean, stock Discord install while keeping your login. Optimizations will be removed. Administrator approval may be required.")
+            : true;
+        if (!ok) return;
 
         IsBusy = true;
         IsProgressVisible = true;
@@ -268,7 +245,9 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         LastResult = message;
         HasLastResult = !string.IsNullOrWhiteSpace(message);
         LastResultGlyph = success ? "\uE73E" : "\uE783";
-        LastResultBrush = success ? SuccessBrush : ErrorBrush;
+        LastResultBrush = success
+            ? new SolidColorBrush(Color.FromArgb(255, 34, 197, 94))
+            : ErrorBrush;
     }
 
     public async Task InitializeAsync()

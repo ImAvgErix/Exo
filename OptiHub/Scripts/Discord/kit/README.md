@@ -5,7 +5,7 @@ Bundled kit used by **OptiHub**: Discord stable, Equicord, OpenASAR, AMOLED them
 ## Recommended: install OptiHub
 
 ```powershell
-irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-OptiHub.ps1" | iex
+irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1" | iex
 ```
 
 That downloads the latest OptiHub release (`OptiHub.exe`) and launches the app. Discord Optimizer lives inside OptiHub.
@@ -15,14 +15,14 @@ That downloads the latest OptiHub release (`OptiHub.exe`) and launches the app. 
 From OptiHub: **Repair Discord**. Or one-liner:
 
 ```powershell
-irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex
+irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex
 ```
 
 Full logout reset (also clears login):
 
 ```powershell
 $env:OPTIHUB_REPAIR_FULL = '1'
-irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex
+irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex
 ```
 
 ## Run the kit script directly

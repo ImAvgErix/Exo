@@ -4,10 +4,10 @@
   Download the latest OptiHub Release zip and launch OptiHub.exe.
 
 .EXAMPLE
-  irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-OptiHub.ps1" | iex
+  irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1" | iex
 #>
 param(
-    [string]$Repo = 'BarcusEric/DiscOpti',
+    [string]$Repo = 'BarcusEric/OptiHub',
     [string]$InstallDir = '',
     [switch]$NoLaunch
 )

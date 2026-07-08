@@ -8,6 +8,7 @@ namespace OptiHub.ViewModels;
 public partial class SettingsViewModel : ObservableObject
 {
     private readonly AppServices _services;
+    private bool _suppressThemeSync;
 
     public SettingsViewModel(AppServices services)
     {
@@ -19,19 +20,13 @@ public partial class SettingsViewModel : ObservableObject
     private bool _isDarkMode = true;
 
     [ObservableProperty]
-    private bool _autoUpdateScripts = true;
+    private bool _isLightMode;
 
     [ObservableProperty]
-    private bool _dryRun;
+    private bool _autoUpdateScripts;
 
     [ObservableProperty]
-    private bool _autoRestorePoint = true;
-
-    [ObservableProperty]
-    private bool _confirmBeforeRun = true;
-
-    [ObservableProperty]
-    private string _scriptsRepo = "BarcusEric/DiscOpti";
+    private string _scriptsRepo = "BarcusEric/OptiHub";
 
     [ObservableProperty]
     private string _scriptsBranch = "main";
@@ -55,23 +50,47 @@ public partial class SettingsViewModel : ObservableObject
 
     partial void OnIsDarkModeChanged(bool value)
     {
-        _services.Theme.SetTheme(value ? AppSettings.DarkTheme : AppSettings.LightTheme);
+        if (_suppressThemeSync) return;
+        if (value)
+        {
+            _suppressThemeSync = true;
+            IsLightMode = false;
+            _suppressThemeSync = false;
+            _services.Theme.SetTheme(AppSettings.DarkTheme);
+        }
+        else if (!IsLightMode)
+        {
+            _suppressThemeSync = true;
+            IsLightMode = true;
+            _suppressThemeSync = false;
+            _services.Theme.SetTheme(AppSettings.LightTheme);
+        }
+    }
+
+    partial void OnIsLightModeChanged(bool value)
+    {
+        if (_suppressThemeSync) return;
+        if (value)
+        {
+            _suppressThemeSync = true;
+            IsDarkMode = false;
+            _suppressThemeSync = false;
+            _services.Theme.SetTheme(AppSettings.LightTheme);
+        }
+        else if (!IsDarkMode)
+        {
+            _suppressThemeSync = true;
+            IsDarkMode = true;
+            _suppressThemeSync = false;
+            _services.Theme.SetTheme(AppSettings.DarkTheme);
+        }
     }
 
     partial void OnAutoUpdateScriptsChanged(bool value) =>
         _services.Settings.Update(s => s.AutoUpdateScripts = value);
 
-    partial void OnDryRunChanged(bool value) =>
-        _services.Settings.Update(s => s.DryRun = value);
-
-    partial void OnAutoRestorePointChanged(bool value) =>
-        _services.Settings.Update(s => s.AutoRestorePoint = value);
-
-    partial void OnConfirmBeforeRunChanged(bool value) =>
-        _services.Settings.Update(s => s.ConfirmBeforeRun = value);
-
     partial void OnScriptsRepoChanged(string value) =>
-        _services.Settings.Update(s => s.DiscordScriptsRepo = value?.Trim() ?? "BarcusEric/DiscOpti");
+        _services.Settings.Update(s => s.DiscordScriptsRepo = value?.Trim() ?? "BarcusEric/OptiHub");
 
     partial void OnScriptsBranchChanged(string value) =>
         _services.Settings.Update(s => s.DiscordScriptsBranch = value?.Trim() ?? "main");
@@ -132,12 +151,16 @@ public partial class SettingsViewModel : ObservableObject
     private void LoadFromSettings()
     {
         var s = _services.Settings.Current;
-        IsDarkMode = !s.Theme.Equals(AppSettings.LightTheme, StringComparison.OrdinalIgnoreCase);
+        var dark = !s.Theme.Equals(AppSettings.LightTheme, StringComparison.OrdinalIgnoreCase);
+        _suppressThemeSync = true;
+        IsDarkMode = dark;
+        IsLightMode = !dark;
+        _suppressThemeSync = false;
         AutoUpdateScripts = s.AutoUpdateScripts;
-        DryRun = s.DryRun;
-        AutoRestorePoint = s.AutoRestorePoint;
-        ConfirmBeforeRun = s.ConfirmBeforeRun;
-        ScriptsRepo = s.DiscordScriptsRepo;
+        ScriptsRepo = string.IsNullOrWhiteSpace(s.DiscordScriptsRepo) ||
+                      s.DiscordScriptsRepo.Equals("BarcusEric/OptiHub", StringComparison.OrdinalIgnoreCase)
+            ? "BarcusEric/OptiHub"
+            : s.DiscordScriptsRepo;
         ScriptsBranch = s.DiscordScriptsBranch;
         CustomScriptsPath = s.CustomScriptsPath;
         KitVersion = _services.Scripts.GetWorkingVersion();

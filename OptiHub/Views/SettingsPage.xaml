@@ -8,7 +8,7 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,8,32,32">
         <StackPanel MaxWidth="{StaticResource OptiPageMaxWidth}"
                     HorizontalAlignment="Center"
-                    Spacing="16">
+                    Spacing="20">
 
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Style="{StaticResource OptiIconButton}"
@@ -23,50 +23,34 @@
                            VerticalAlignment="Center" />
             </StackPanel>
 
-            <!-- Appearance -->
             <Border Style="{StaticResource OptiCard}">
-                <StackPanel Spacing="12">
+                <StackPanel Spacing="14">
                     <TextBlock Text="Appearance" Style="{StaticResource OptiSectionTitle}" />
-                    <ToggleSwitch Header="Dark mode (AMOLED pure black)"
-                                  IsOn="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}"
-                                  OffContent="Light"
-                                  OnContent="Dark" />
-                    <TextBlock Style="{StaticResource OptiCaption}"
-                               Text="Dark uses #000000 with white accents. Light uses a clean off-white surface with strong contrast." />
+                    <ToggleSwitch Header="Dark"
+                                  IsOn="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}" />
+                    <ToggleSwitch Header="Light"
+                                  IsOn="{x:Bind ViewModel.IsLightMode, Mode=TwoWay}" />
                 </StackPanel>
             </Border>
 
-            <!-- Safety -->
             <Border Style="{StaticResource OptiCard}">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Safety" Style="{StaticResource OptiSectionTitle}" />
-                    <ToggleSwitch Header="Confirm before running optimizers"
-                                  IsOn="{x:Bind ViewModel.ConfirmBeforeRun, Mode=TwoWay}" />
-                    <ToggleSwitch Header="Dry-run (verify only — no system changes)"
-                                  IsOn="{x:Bind ViewModel.DryRun, Mode=TwoWay}" />
-                    <ToggleSwitch Header="Create restore point before apply"
-                                  IsOn="{x:Bind ViewModel.AutoRestorePoint, Mode=TwoWay}" />
-                    <TextBlock Style="{StaticResource OptiCaption}"
-                               Text="Restore points require System Restore to be enabled and may need Administrator rights." />
-                </StackPanel>
-            </Border>
-
-            <!-- Scripts / updates -->
-            <Border Style="{StaticResource OptiCard}">
-                <StackPanel Spacing="12">
+                <StackPanel Spacing="14">
                     <TextBlock Text="Scripts &amp; updates" Style="{StaticResource OptiSectionTitle}" />
                     <ToggleSwitch Header="Auto-update scripts on launch"
                                   IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}" />
                     <TextBox Header="GitHub repository (owner/name)"
+                             FontFamily="{StaticResource OptiUiFont}"
                              Text="{x:Bind ViewModel.ScriptsRepo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBox Header="Branch"
+                             FontFamily="{StaticResource OptiUiFont}"
                              Text="{x:Bind ViewModel.ScriptsBranch, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBox Header="Custom scripts folder (optional)"
+                             FontFamily="{StaticResource OptiUiFont}"
                              PlaceholderText="Leave empty to use OptiHub-managed scripts"
                              Text="{x:Bind ViewModel.CustomScriptsPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock>
+                    <TextBlock Style="{StaticResource OptiBody}">
                         <Run Text="Installed kit version: " />
-                        <Run Text="{x:Bind ViewModel.KitVersion, Mode=OneWay}" FontWeight="SemiBold" />
+                        <Run Text="{x:Bind ViewModel.KitVersion, Mode=OneWay}" FontFamily="{StaticResource OptiUiFontSemiBold}" />
                     </TextBlock>
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Style="{StaticResource OptiPrimaryButton}"
@@ -83,17 +67,16 @@
                 </StackPanel>
             </Border>
 
-            <!-- About -->
             <Border Style="{StaticResource OptiCard}">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="About &amp; disclaimer" Style="{StaticResource OptiSectionTitle}" />
+                <StackPanel Spacing="10">
+                    <TextBlock Text="About" Style="{StaticResource OptiSectionTitle}" />
                     <TextBlock Style="{StaticResource OptiBody}"
-                               Text="OptiHub is a cozy hub for optional system optimizers. Discord Optimizer ships with this app (https://github.com/BarcusEric/DiscOpti)." />
+                               Text="OptiHub is a hub for optional system optimizers. Discord Optimizer ships with this app." />
                     <TextBlock Style="{StaticResource OptiBody}"
-                               Text="Use at your own risk. Optimizers may modify application files, Windows startup entries, and related settings. Always keep backups of important data. Third-party Discord clients (Equicord) may violate Discord's Terms of Service — you are responsible for compliance." />
+                               Text="Use at your own risk. Optimizers may modify application files and Windows settings. Third-party Discord clients (Equicord) may conflict with Discord's Terms of Service — you are responsible for compliance." />
                     <TextBlock Style="{StaticResource OptiCaption}"
-                               Margin="0,8,0,0"
-                               Text="OptiHub 1.0.2 · black &amp; white · Windows App SDK · WinUI 3" />
+                               Margin="0,4,0,0"
+                               Text="OptiHub 1.0.3 · https://github.com/BarcusEric/OptiHub" />
                 </StackPanel>
             </Border>
         </StackPanel>

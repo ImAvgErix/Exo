@@ -22,14 +22,14 @@ This repository was formerly **DiscOpti** (Discord-only PowerShell kit). The Dis
 ### One-line install (easiest)
 
 ```powershell
-irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-OptiHub.ps1" | iex
+irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1" | iex
 ```
 
 Downloads the latest Release zip into `%LocalAppData%\OptiHub\app` and launches `OptiHub.exe`. Best for most people.
 
 ### Manual zip
 
-From [Releases](https://github.com/BarcusEric/DiscOpti/releases):
+From [Releases](https://github.com/BarcusEric/OptiHub/releases):
 
 1. Grab `OptiHub-*-win-x64.zip`
 2. Extract anywhere
@@ -47,14 +47,14 @@ If Discord will not open after an optimize run:
 - Or one-liner (interactive clean reset, keeps login by default):
 
 ```powershell
-irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex
+irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex
 ```
 
 Full logout reset (also clears session):
 
 ```powershell
 $env:OPTIHUB_REPAIR_FULL = '1'
-irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex
+irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex
 ```
 
 ---
@@ -135,7 +135,7 @@ Scripts are copied to `%LocalAppData%\OptiHub\scripts\Discord` on first launch. 
 If you previously used:
 
 ```powershell
-irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-DiscOptimizer.ps1" | iex
+irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-DiscOptimizer.ps1" | iex
 ```
 
 that script now redirects to **Install-OptiHub.ps1**. Prefer the OptiHub app for Discord runs going forward.

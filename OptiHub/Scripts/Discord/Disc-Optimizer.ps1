@@ -2443,7 +2443,7 @@ function Confirm-DiscordBootsAfterMods([string]$AppDir) {
     }
 
     Stop-Discord
-    throw 'Discord failed to load even in stock mode. Use Repair Discord in OptiHub, or: irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex'
+    throw 'Discord failed to load even in stock mode. Use Repair Discord in OptiHub, or: irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex'
 }
 
 function Disable-Fso([string]$AppDir) {
@@ -2791,7 +2791,7 @@ exit 0
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host ''
     Write-Host '  If Discord will not open, paste this into PowerShell to restore it:' -ForegroundColor Yellow
-    Write-Host '    irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
+    Write-Host '    irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
     Write-Host ''
     Write-Host "  Error log: $(Join-Path $LogDir 'last-error.log')" -ForegroundColor Yellow
     if ($Script:LogPath) {

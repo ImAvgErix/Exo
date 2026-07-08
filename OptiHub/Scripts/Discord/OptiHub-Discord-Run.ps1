@@ -1,6 +1,6 @@
 # OptiHub Discord Optimizer runner
 # Wraps Disc-Optimizer.ps1 with progress markers, dry-run, restore points, non-interactive mode.
-# Source kit: https://github.com/BarcusEric/DiscOpti
+# Source kit: https://github.com/BarcusEric/OptiHub
 
 param(
     [switch]$DryRun,
@@ -264,7 +264,7 @@ try {
         Write-HubErr "Disc Optimizer exited with code $code"
         Write-HubProgress 100 'Finished with errors'
         Write-HubWarn 'If Discord will not open, use OptiHub → Repair Discord or:'
-        Write-Host '  irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
+        Write-Host '  irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
         exit $code
     }
 } catch {
