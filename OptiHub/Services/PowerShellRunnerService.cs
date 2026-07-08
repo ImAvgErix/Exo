@@ -45,11 +45,7 @@ public sealed class PowerShellRunnerService
         }
         catch (OperationCanceledException)
         {
-            progress?.Report(new ScriptRunProgress
-            {
-                Percent = 0,
-                Status = "Cancelled",
-            });
+            progress?.Report(new ScriptRunProgress { Percent = 0, Status = "Cancelled" });
             return new ScriptRunResult
             {
                 Success = false,
@@ -164,38 +160,110 @@ public sealed class PowerShellRunnerService
         IProgress<ScriptRunProgress>? progress,
         CancellationToken cancellationToken)
     {
-        var logPath = Path.Combine(PathHelper.LogsDir, $"run-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
-        var wrapper = Path.Combine(PathHelper.LogsDir, $"wrap-{Guid.NewGuid():N}.ps1");
+        Directory.CreateDirectory(PathHelper.LogsDir);
+        var stamp = Guid.NewGuid().ToString("N");
+        var logPath = Path.Combine(PathHelper.LogsDir, $"run-{stamp}.log");
+        var exitPath = Path.Combine(PathHelper.LogsDir, $"exit-{stamp}.txt");
+        var wrapper = Path.Combine(PathHelper.LogsDir, $"wrap-{stamp}.ps1");
+        var vbsPath = Path.Combine(PathHelper.LogsDir, $"elevate-{stamp}.vbs");
 
         var scriptEsc = scriptPath.Replace("'", "''");
         var logEsc = logPath.Replace("'", "''");
+        var exitEsc = exitPath.Replace("'", "''");
         var workEsc = workDir.Replace("'", "''");
 
-        // Build PowerShell wrapper without C# raw-string brace conflicts
+        // Stream each line to the log as it arrives so the UI can poll live progress.
+        // Write exit code to a sentinel file when finished (ShellExecute cannot wait).
         var wrapperBody =
             "$ErrorActionPreference = 'Continue'" + Environment.NewLine +
             "$env:OPTIHUB = '1'" + Environment.NewLine +
             "$env:DISCOPT_NONINTERACTIVE = '1'" + Environment.NewLine +
             "Set-Location -LiteralPath '" + workEsc + "'" + Environment.NewLine +
             "$log = '" + logEsc + "'" + Environment.NewLine +
+            "$exitFile = '" + exitEsc + "'" + Environment.NewLine +
             "$script = '" + scriptEsc + "'" + Environment.NewLine +
-            "\"OPTIHUB_PROGRESS:5|Elevated session started\" | Set-Content -Path $log -Encoding UTF8" + Environment.NewLine +
+            "function Write-LogLine([string]$line) {" + Environment.NewLine +
+            "  Add-Content -LiteralPath $log -Value $line -Encoding UTF8" + Environment.NewLine +
+            "}" + Environment.NewLine +
+            "'' | Set-Content -LiteralPath $log -Encoding UTF8" + Environment.NewLine +
+            "Write-LogLine 'OPTIHUB_PROGRESS:5|Waiting for Administrator approval…'" + Environment.NewLine +
+            "$code = 1" + Environment.NewLine +
             "try {" + Environment.NewLine +
-            "  $output = & $script @args 2>&1" + Environment.NewLine +
-            "  foreach ($line in $output) {" + Environment.NewLine +
-            "    Add-Content -Path $log -Value (\"$line\") -Encoding UTF8" + Environment.NewLine +
+            "  Write-LogLine 'OPTIHUB_PROGRESS:8|Elevated session started'" + Environment.NewLine +
+            "  $p = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList @(" + Environment.NewLine +
+            "    '-NoProfile','-ExecutionPolicy','Bypass','-File', $script" + Environment.NewLine +
+            "  ) + $args -WorkingDirectory '" + workEsc + "' -NoNewWindow -PassThru -RedirectStandardOutput $log.tmp.out -RedirectStandardError $log.tmp.err" + Environment.NewLine +
+            "  # Prefer streaming via a child that tees; fall back to in-process call" + Environment.NewLine +
+            "  if ($null -eq $p) { throw 'child start failed' }" + Environment.NewLine +
+            "  $outPath = \"$log.tmp.out\"; $errPath = \"$log.tmp.err\"" + Environment.NewLine +
+            "  $outPos = 0L; $errPos = 0L" + Environment.NewLine +
+            "  while (-not $p.HasExited) {" + Environment.NewLine +
+            "    Sync-Stream $outPath ([ref]$outPos)" + Environment.NewLine +
+            "    Sync-Stream $errPath ([ref]$errPos)" + Environment.NewLine +
+            "    Start-Sleep -Milliseconds 150" + Environment.NewLine +
+            "  }" + Environment.NewLine +
+            "  Sync-Stream $outPath ([ref]$outPos)" + Environment.NewLine +
+            "  Sync-Stream $errPath ([ref]$errPos)" + Environment.NewLine +
+            "  $code = $p.ExitCode" + Environment.NewLine +
+            "} catch {" + Environment.NewLine +
+            "  Write-LogLine ('[-] Elevated wrapper: ' + $_.Exception.Message)" + Environment.NewLine +
+            "  Write-LogLine 'OPTIHUB_PROGRESS:12|Running optimizer…'" + Environment.NewLine +
+            "  try {" + Environment.NewLine +
+            "    & $script @args 2>&1 | ForEach-Object { Write-LogLine (\"$_\") }" + Environment.NewLine +
+            "    $code = 0" + Environment.NewLine +
+            "    if ($null -ne $LASTEXITCODE) { $code = [int]$LASTEXITCODE }" + Environment.NewLine +
+            "  } catch {" + Environment.NewLine +
+            "    Write-LogLine ('[-] ' + $_.Exception.Message)" + Environment.NewLine +
+            "    $code = 1" + Environment.NewLine +
+            "  }" + Environment.NewLine +
+            "}" + Environment.NewLine +
+            "function Sync-Stream([string]$path, [ref]$pos) {" + Environment.NewLine +
+            "  if (-not (Test-Path -LiteralPath $path)) { return }" + Environment.NewLine +
+            "  try {" + Environment.NewLine +
+            "    $fs = [IO.File]::Open($path, 'Open', 'Read', 'ReadWrite')" + Environment.NewLine +
+            "    try {" + Environment.NewLine +
+            "      if ($fs.Length -le $pos.Value) { return }" + Environment.NewLine +
+            "      $fs.Seek($pos.Value, 'Begin') | Out-Null" + Environment.NewLine +
+            "      $sr = New-Object IO.StreamReader($fs)" + Environment.NewLine +
+            "      while ($null -ne ($line = $sr.ReadLine())) { Write-LogLine $line }" + Environment.NewLine +
+            "      $pos.Value = $fs.Position" + Environment.NewLine +
+            "    } finally { $fs.Dispose() }" + Environment.NewLine +
+            "  } catch { }" + Environment.NewLine +
+            "}" + Environment.NewLine +
+            "if ($code -eq 0) { Write-LogLine 'OPTIHUB_PROGRESS:100|Completed successfully' }" + Environment.NewLine +
+            "else { Write-LogLine 'OPTIHUB_PROGRESS:100|Finished with errors' }" + Environment.NewLine +
+            "Set-Content -LiteralPath $exitFile -Value $code -Encoding ascii" + Environment.NewLine +
+            "exit $code" + Environment.NewLine;
+
+        // Simpler, reliable wrapper: stream via ForEach-Object (no nested Start-Process)
+        wrapperBody =
+            "$ErrorActionPreference = 'Continue'" + Environment.NewLine +
+            "$env:OPTIHUB = '1'" + Environment.NewLine +
+            "$env:DISCOPT_NONINTERACTIVE = '1'" + Environment.NewLine +
+            "Set-Location -LiteralPath '" + workEsc + "'" + Environment.NewLine +
+            "$log = '" + logEsc + "'" + Environment.NewLine +
+            "$exitFile = '" + exitEsc + "'" + Environment.NewLine +
+            "$script = '" + scriptEsc + "'" + Environment.NewLine +
+            "function Write-LogLine([string]$line) {" + Environment.NewLine +
+            "  Add-Content -LiteralPath $log -Value $line -Encoding UTF8" + Environment.NewLine +
+            "}" + Environment.NewLine +
+            "'' | Set-Content -LiteralPath $log -Encoding UTF8" + Environment.NewLine +
+            "Write-LogLine 'OPTIHUB_PROGRESS:5|Elevated session started'" + Environment.NewLine +
+            "$code = 1" + Environment.NewLine +
+            "try {" + Environment.NewLine +
+            "  & $script @args 2>&1 | ForEach-Object {" + Environment.NewLine +
+            "    $line = \"$_\"" + Environment.NewLine +
+            "    Write-LogLine $line" + Environment.NewLine +
             "  }" + Environment.NewLine +
             "  $code = 0" + Environment.NewLine +
-            "  if ($null -ne $LASTEXITCODE) { $code = $LASTEXITCODE }" + Environment.NewLine +
+            "  if ($null -ne $LASTEXITCODE) { $code = [int]$LASTEXITCODE }" + Environment.NewLine +
             "} catch {" + Environment.NewLine +
-            "  Add-Content -Path $log -Value (\"[-] \" + $_.Exception.Message) -Encoding UTF8" + Environment.NewLine +
+            "  Write-LogLine ('[-] ' + $_.Exception.Message)" + Environment.NewLine +
             "  $code = 1" + Environment.NewLine +
             "}" + Environment.NewLine +
-            "if ($code -eq 0) {" + Environment.NewLine +
-            "  Add-Content -Path $log -Value \"OPTIHUB_PROGRESS:100|Completed successfully\" -Encoding UTF8" + Environment.NewLine +
-            "} else {" + Environment.NewLine +
-            "  Add-Content -Path $log -Value \"OPTIHUB_PROGRESS:100|Finished with errors\" -Encoding UTF8" + Environment.NewLine +
-            "}" + Environment.NewLine +
+            "if ($code -eq 0) { Write-LogLine 'OPTIHUB_PROGRESS:100|Completed successfully' }" + Environment.NewLine +
+            "else { Write-LogLine 'OPTIHUB_PROGRESS:100|Finished with errors' }" + Environment.NewLine +
+            "Set-Content -LiteralPath $exitFile -Value $code -Encoding ascii" + Environment.NewLine +
             "exit $code" + Environment.NewLine;
 
         await File.WriteAllTextAsync(wrapper, wrapperBody, cancellationToken);
@@ -210,14 +278,18 @@ public sealed class PowerShellRunnerService
             argBuilder.Append(QuoteArg(o));
         }
 
-        // Hidden elevated launch via VBScript Shell.Application (CreateNoWindow + runas still flashes a console)
-        var vbsPath = Path.Combine(PathHelper.LogsDir, $"elevate-{Guid.NewGuid():N}.vbs");
-        var psEsc = psExe.Replace("'", "''");
+        var psEsc = psExe.Replace("\"", "\"\"");
         var argsEsc = argBuilder.ToString().Replace("\"", "\"\"");
         var vbsBody =
             "Set shell = CreateObject(\"Shell.Application\")\r\n" +
             "shell.ShellExecute \"" + psEsc + "\", \"" + argsEsc + "\", \"\", \"runas\", 0\r\n";
         await File.WriteAllTextAsync(vbsPath, vbsBody, cancellationToken);
+
+        progress?.Report(new ScriptRunProgress
+        {
+            Percent = 4,
+            Status = "Waiting for Administrator approval…"
+        });
 
         var psi = new ProcessStartInfo
         {
@@ -229,8 +301,8 @@ public sealed class PowerShellRunnerService
             WindowStyle = ProcessWindowStyle.Hidden
         };
 
-        using var process = Process.Start(psi);
-        if (process is null)
+        using var launcher = Process.Start(psi);
+        if (launcher is null)
         {
             return new ScriptRunResult
             {
@@ -241,22 +313,74 @@ public sealed class PowerShellRunnerService
             };
         }
 
-        var lastPercent = 5.0;
-        var lastStatus = "Waiting for elevated session…";
-        var lastLength = 0;
+        await launcher.WaitForExitAsync(cancellationToken);
 
-        while (!process.HasExited)
+        // ShellExecute returns immediately — wait on the exit sentinel written by the elevated wrapper.
+        var lastPercent = 5.0;
+        var lastStatus = "Waiting for Administrator approval…";
+        var lastLength = 0;
+        var startedUtc = DateTime.UtcNow;
+        var sawLog = false;
+        var timeout = TimeSpan.FromMinutes(25);
+
+        while (!File.Exists(exitPath))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            PollLog(logPath, ref lastLength, ref lastPercent, ref lastStatus, progress);
-            await Task.Delay(250, cancellationToken);
+
+            if (File.Exists(logPath))
+            {
+                if (!sawLog)
+                {
+                    sawLog = true;
+                    lastStatus = "Optimizer running…";
+                    progress?.Report(new ScriptRunProgress { Percent = 8, Status = lastStatus });
+                }
+                PollLog(logPath, ref lastLength, ref lastPercent, ref lastStatus, progress);
+            }
+            else if (DateTime.UtcNow - startedUtc > TimeSpan.FromSeconds(90) && !sawLog)
+            {
+                // UAC likely cancelled — no elevated process ever started writing.
+                progress?.Report(new ScriptRunProgress { Percent = 0, Status = "Elevation cancelled" });
+                CleanupTemp(wrapper, vbsPath, logPath, exitPath);
+                return new ScriptRunResult
+                {
+                    Success = false,
+                    ExitCode = -1,
+                    Summary = "Elevation cancelled",
+                    ErrorMessage = "Administrator approval was cancelled or the elevated session never started."
+                };
+            }
+
+            if (DateTime.UtcNow - startedUtc > timeout)
+            {
+                progress?.Report(new ScriptRunProgress { Percent = lastPercent, Status = "Timed out" });
+                CleanupTemp(wrapper, vbsPath, logPath, exitPath);
+                return new ScriptRunResult
+                {
+                    Success = false,
+                    ExitCode = -1,
+                    Summary = "Timed out",
+                    ErrorMessage = "Optimizer did not finish within 25 minutes.",
+                    FullOutput = File.Exists(logPath) ? await File.ReadAllTextAsync(logPath, cancellationToken) : string.Empty
+                };
+            }
+
+            await Task.Delay(200, cancellationToken);
         }
 
-        await process.WaitForExitAsync(cancellationToken);
-        PollLog(logPath, ref lastLength, ref lastPercent, ref lastStatus, progress);
+        // Drain any remaining log lines after exit file appears
+        for (var i = 0; i < 10; i++)
+        {
+            PollLog(logPath, ref lastLength, ref lastPercent, ref lastStatus, progress);
+            await Task.Delay(50, cancellationToken);
+        }
+
+        var exitCode = 1;
+        if (File.Exists(exitPath) && int.TryParse((await File.ReadAllTextAsync(exitPath, cancellationToken)).Trim(), out var parsed))
+            exitCode = parsed;
 
         var full = File.Exists(logPath) ? await File.ReadAllTextAsync(logPath, cancellationToken) : string.Empty;
-        var ok = process.ExitCode == 0;
+        var ok = exitCode == 0;
 
         progress?.Report(new ScriptRunProgress
         {
@@ -264,17 +388,25 @@ public sealed class PowerShellRunnerService
             Status = ok ? "Completed successfully" : "Finished with errors",
         });
 
-        try { File.Delete(wrapper); } catch { /* ignore */ }
-        try { File.Delete(vbsPath); } catch { /* ignore */ }
+        CleanupTemp(wrapper, vbsPath, null, exitPath);
 
         return new ScriptRunResult
         {
             Success = ok,
-            ExitCode = process.ExitCode,
+            ExitCode = exitCode,
             FullOutput = full,
-            Summary = ok ? "Completed successfully" : $"Exited with code {process.ExitCode}",
+            Summary = ok ? "Completed successfully" : $"Exited with code {exitCode}",
             ErrorMessage = ok ? null : ExtractError(full)
         };
+    }
+
+    private static void CleanupTemp(params string?[] paths)
+    {
+        foreach (var p in paths)
+        {
+            if (string.IsNullOrEmpty(p)) continue;
+            try { File.Delete(p); } catch { /* ignore */ }
+        }
     }
 
     private static void PollLog(
@@ -334,9 +466,9 @@ public sealed class PowerShellRunnerService
             line.StartsWith("[!]", StringComparison.Ordinal) ||
             line.StartsWith("[-]", StringComparison.Ordinal))
         {
-            lastStatus = line.Trim();
-            if (lastPercent < 92)
-                lastPercent = Math.Min(92, lastPercent + 1.5);
+            lastStatus = CleanStatus(line);
+            if (lastPercent < 94)
+                lastPercent = Math.Min(94, lastPercent + 2);
 
             progress?.Report(new ScriptRunProgress
             {
@@ -344,6 +476,18 @@ public sealed class PowerShellRunnerService
                 Status = lastStatus,
             });
         }
+    }
+
+    private static string CleanStatus(string line)
+    {
+        var s = line.Trim();
+        if (s.Length > 2 && (s.StartsWith("[*]", StringComparison.Ordinal) ||
+                             s.StartsWith("[+]", StringComparison.Ordinal) ||
+                             s.StartsWith("[!]", StringComparison.Ordinal) ||
+                             s.StartsWith("[-]", StringComparison.Ordinal)))
+            s = s[3..].Trim();
+        if (s.Length > 90) s = s[..87] + "…";
+        return s;
     }
 
     private static string? ExtractError(string text)
@@ -359,9 +503,6 @@ public sealed class PowerShellRunnerService
 
     private static string? _cachedPowerShellPath;
 
-    /// <summary>
-    /// Prefer PowerShell 7.7 (preview) — same target as the Discord kit — then any pwsh, then Windows PowerShell 5.1.
-    /// </summary>
     private static string ResolvePowerShell()
     {
         if (_cachedPowerShellPath is not null && File.Exists(_cachedPowerShellPath))
@@ -380,7 +521,6 @@ public sealed class PowerShellRunnerService
             catch { /* continue */ }
         }
 
-        // PATH search for pwsh
         var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
         foreach (var name in new[] { "pwsh-preview.exe", "pwsh.exe" })
         {
@@ -410,16 +550,12 @@ public sealed class PowerShellRunnerService
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
 
-        // 1) Portable copy next to Discord kit (downloaded by Disc-Optimizer if needed)
         yield return Path.Combine(PathHelper.WorkingScriptsDir, "Discord", "kit", "tools", "pwsh", "pwsh.exe");
         yield return Path.Combine(PathHelper.DiscordScriptsDir, "kit", "tools", "pwsh", "pwsh.exe");
-
-        // 2) Store / WindowsApps PowerShell Preview (7.7.x)
         yield return Path.Combine(local, "Microsoft", "WindowsApps", "Microsoft.PowerShellPreview_8wekyb3d8bbwe", "pwsh.exe");
         yield return Path.Combine(local, "Microsoft", "WindowsApps", "pwsh-preview.exe");
         yield return Path.Combine(local, "Microsoft", "WindowsApps", "pwsh.exe");
 
-        // WindowsApps package folders (versioned)
         var winApps = Path.Combine(programFiles, "WindowsApps");
         if (Directory.Exists(winApps))
         {
@@ -436,7 +572,6 @@ public sealed class PowerShellRunnerService
                 yield return Path.Combine(dir, "pwsh.exe");
         }
 
-        // 3) Classic installs
         yield return Path.Combine(programFiles, "PowerShell", "7-preview", "pwsh.exe");
         yield return Path.Combine(programFiles, "PowerShell", "7", "pwsh.exe");
     }

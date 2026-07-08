@@ -491,9 +491,21 @@ function Write-LogFailure($ErrorRecord) {
     return $body
 }
 
+function Write-HubProgress([int]$Percent, [string]$Status) {
+    if ($env:OPTIHUB -ne '1') { return }
+    $p = [Math]::Max(0, [Math]::Min(100, $Percent))
+    # Flush-friendly single line for OptiHub's elevated log poller
+    Write-Host "OPTIHUB_PROGRESS:$p|$Status"
+}
+
 function Write-Step([string]$Msg) {
     Write-Host "[*] $Msg" -ForegroundColor Cyan
     Write-LogLine 'STEP' $Msg
+    if ($env:OPTIHUB -eq '1') {
+        if ($null -eq $Script:HubStepPct) { $Script:HubStepPct = 28 }
+        $Script:HubStepPct = [Math]::Min(94, [int]$Script:HubStepPct + 4)
+        Write-HubProgress $Script:HubStepPct $Msg
+    }
 }
 function Write-Ok([string]$Msg) {
     Write-Host "[+] $Msg" -ForegroundColor Green
@@ -2746,12 +2758,26 @@ if (-not $SkipKernel) {
     Write-Warn 'Skipped DiscOpt kernel (-SkipKernel)'
 }
 
-# 5b) Boot safety: full verify on first apply; Quick uses a shorter smoke check
-if ($Quick) {
+# 5b) Boot safety
+# OptiHub Quick + NoLaunch: skip the open/close flash — files were just written and
+# the host already verified state. Manual -Quick still does a short smoke check.
+$optiHubQuiet = ($env:OPTIHUB -eq '1') -and $NoLaunch
+if ($Quick -and $optiHubQuiet) {
+    Write-HubProgress 90 'Verifying files on disk…'
+    Write-Step 'Quiet verify (no Discord window flash)…'
+    $exeOk = Test-Path (Join-Path $app.FullName 'Discord.exe')
+    $asarOk = Test-Path (Join-Path $app.FullName 'resources\app.asar')
+    if ($exeOk -and $asarOk) {
+        Write-Ok 'Quiet verify passed — Discord left closed for you to open when ready'
+    } else {
+        Write-Warn 'Quiet verify incomplete — running full boot safety check…'
+        Confirm-DiscordBootsAfterMods $app.FullName
+    }
+} elseif ($Quick) {
     Write-Step 'Quick boot smoke check...'
     Stop-Discord
     [void](Invoke-DiscordLaunch -AppDir $app.FullName)
-    if (Wait-DiscordHealthy 45) {
+    if (Wait-DiscordHealthy 30) {
         Stop-Discord
         Write-Ok 'Quick boot check passed'
     } else {

@@ -1,6 +1,5 @@
 # OptiHub Discord Optimizer runner
-# Wraps Disc-Optimizer.ps1 with progress markers, restore points, non-interactive mode.
-# Source kit: https://github.com/BarcusEric/OptiHub
+# Wraps Disc-Optimizer.ps1 with live progress markers for the WinUI host.
 
 param(
     [switch]$CreateRestorePoint,
@@ -20,7 +19,9 @@ $env:OPTIHUB = '1'
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
     $p = [Math]::Max(0, [Math]::Min(100, $Percent))
-    Write-Host "OPTIHUB_PROGRESS:$p|$Status"
+    # Flush immediately so elevated log polling sees each step live
+    [Console]::Out.WriteLine("OPTIHUB_PROGRESS:$p|$Status")
+    [Console]::Out.Flush()
 }
 
 function Write-HubStep([string]$Msg) {
@@ -39,6 +40,31 @@ function Write-HubErr([string]$Msg) {
     Write-Host "[-] $Msg" -ForegroundColor Red
 }
 
+function Start-OptiHubDiscord {
+    Write-HubProgress 96 'Opening Discord…'
+    $local = [Environment]::GetFolderPath('LocalApplicationData')
+    $root = Join-Path $local 'Discord'
+    $app = Get-ChildItem $root -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending |
+        Select-Object -First 1
+    if (-not $app) {
+        Write-HubWarn 'Discord install folder not found — open Discord from the Start menu.'
+        return
+    }
+    $exe = Join-Path $app.FullName 'Discord.exe'
+    if (Test-Path $exe) {
+        Start-Process -FilePath $exe -WorkingDirectory $app.FullName | Out-Null
+        Write-HubOk 'Discord opened.'
+        return
+    }
+    $update = Join-Path $root 'Update.exe'
+    if (Test-Path $update) {
+        Start-Process -FilePath $update -ArgumentList '--processStart','Discord.exe' -WorkingDirectory $root | Out-Null
+        Write-HubOk 'Discord opened.'
+        return
+    }
+    Write-HubWarn 'Could not find Discord.exe — open it from the Start menu.'
+}
 function Test-IsElevated {
     try {
         $id = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -62,7 +88,6 @@ function Test-OptiHubDiscordApplied {
     $equicordAsar = Join-Path $appData 'Equicord\equicord.asar'
     $appAsar = Join-Path $resources 'app.asar'
     $equicordOk = (Test-Path $equicordAsar) -and (Test-Path $appAsar) -and ((Get-Item $appAsar).Length -lt 4096)
-
     $openAsarOk = Test-Path (Join-Path $resources '_app.asar.stock')
 
     $versionDll = Join-Path $appDir.FullName 'version.dll'
@@ -84,12 +109,10 @@ function New-OptiHubRestorePoint {
     try {
         Write-HubProgress 8 'Creating system restore point…'
         Write-HubStep 'Creating system restore point (OptiHub-Discord)…'
-        # Checkpoint-Computer can fail if restore is disabled or frequency limited
         Checkpoint-Computer -Description 'OptiHub Discord Optimizer' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop
         Write-HubOk 'Restore point created.'
     } catch {
         Write-HubWarn "Restore point not created: $($_.Exception.Message)"
-        # Fallback: WMI SystemRestore
         try {
             $sr = Get-CimClass -Namespace 'root/default' -ClassName 'SystemRestore' -ErrorAction SilentlyContinue
             if ($sr) {
@@ -110,6 +133,47 @@ function New-OptiHubRestorePoint {
     }
 }
 
+function Get-ProgressForLine([string]$Line, [int]$Current) {
+    $map = [ordered]@{
+        'Closing Discord'            = @{ P = 22; S = 'Closing Discord…' }
+        'Installing Discord'         = @{ P = 28; S = 'Installing Discord…' }
+        'Discord up to date'         = @{ P = 32; S = 'Discord is up to date' }
+        'first-run'                  = @{ P = 34; S = 'Initializing Discord…' }
+        'Debloat'                    = @{ P = 40; S = 'Debloating Discord…' }
+        'cache'                      = @{ P = 48; S = 'Cleaning cache…' }
+        'Equicord'                   = @{ P = 58; S = 'Applying Equicord…' }
+        'OpenASAR'                   = @{ P = 68; S = 'Installing OpenASAR…' }
+        'AMOLED'                     = @{ P = 72; S = 'Applying AMOLED theme…' }
+        'kernel'                     = @{ P = 78; S = 'Installing DiscOpt kernel…' }
+        'Boot check'                 = @{ P = 86; S = 'Verifying Discord still boots…' }
+        'Quick boot'                 = @{ P = 86; S = 'Quick verify (no Discord flash)…' }
+        'Windows'                    = @{ P = 92; S = 'Applying Windows tweaks…' }
+        'Start menu'                 = @{ P = 94; S = 'Refreshing Start menu shortcut…' }
+        'DONE'                       = @{ P = 97; S = 'Finishing…' }
+        'finished successfully'      = @{ P = 99; S = 'Almost done…' }
+        'Disc Optimizer finished'    = @{ P = 99; S = 'Wrapping up…' }
+    }
+
+    foreach ($key in $map.Keys) {
+        if ($Line -match [regex]::Escape($key)) {
+            $hit = $map[$key]
+            if ([int]$hit.P -gt $Current) {
+                return @{ Percent = [int]$hit.P; Status = [string]$hit.S }
+            }
+            return $null
+        }
+    }
+
+    if ($Line -match '^\[\*' -and $Current -lt 94) {
+        $next = [Math]::Min(94, $Current + 2)
+        $status = ($Line -replace '^\[\*\]\s*', '').Trim()
+        if ([string]::IsNullOrWhiteSpace($status)) { $status = 'Working…' }
+        return @{ Percent = $next; Status = $status }
+    }
+
+    return $null
+}
+
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Optimizer = Join-Path $Root 'Disc-Optimizer.ps1'
 
@@ -121,134 +185,109 @@ if (-not (Test-Path $Optimizer)) {
 
 Write-Host ''
 Write-Host '  OptiHub · Discord Optimizer' -ForegroundColor Cyan
-Write-Host '  Progress · restore point · auto Quick' -ForegroundColor DarkGray
+Write-Host '  Live progress · restore point · auto Quick' -ForegroundColor DarkGray
 Write-Host ''
 
 Write-HubProgress 3 'Starting…'
 
-# Auto-detect run mode when caller did not specify Quick
 if (-not $Quick -and (Test-OptiHubDiscordApplied)) {
     $Quick = $true
-    Write-HubStep 'Auto-detected: already optimized — using Quick mode'
+    Write-HubStep 'Already optimized — using Quick reapply'
+    Write-HubProgress 10 'Quick reapply mode'
 }
-
 
 if ($CreateRestorePoint) {
     New-OptiHubRestorePoint
 }
 
-Write-HubProgress 12 'Preparing Disc Optimizer…'
+Write-HubProgress 14 'Preparing Disc Optimizer…'
 
 $runArgs = @()
 if ($Quick) { $runArgs += '-Quick' }
 if ($SkipCacheClean) { $runArgs += '-SkipCacheClean' }
-if ($NoLaunch -or $NonInteractive) { $runArgs += '-NoLaunch' }
+$runArgs += '-NoLaunch'
 if ($SkipDebloat) { $runArgs += '-SkipDebloat' }
 if ($SkipEquicord) { $runArgs += '-SkipEquicord' }
 if ($SkipOpenAsar) { $runArgs += '-SkipOpenAsar' }
 if ($SkipKernel) { $runArgs += '-SkipKernel' }
 if ($FreshInstall) { $runArgs += '-FreshInstall' }
 
-# Non-interactive: suppress Read-Host prompts by pre-setting env + stdin tricks where possible
 if ($NonInteractive) {
     $env:DISCOPT_NONINTERACTIVE = '1'
+    $env:OPTIHUB_SKIP_BOOT_FLASH = '1'
 }
 
-Write-HubProgress 18 'Launching Disc-Optimizer.ps1…'
+Write-HubProgress 18 'Running Disc-Optimizer…'
 Write-HubStep "Arguments: $($runArgs -join ' ')"
-
-# Stream output and translate key steps into progress
-$stepMap = [ordered]@{
-    'Closing Discord'           = 22
-    'Installing Discord'        = 30
-    'Discord'                   = 35
-    'Debloat'                   = 45
-    'cache'                     = 52
-    'Equicord'                  = 62
-    'OpenASAR'                  = 70
-    'kernel'                    = 78
-    'Boot safety'               = 85
-    'Windows'                   = 90
-    'DONE'                      = 96
-    'finished'                  = 98
-}
 
 try {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = (Get-Process -Id $PID).Path
+    try {
+        $psi.FileName = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+    } catch {
+        $psi.FileName = (Get-Process -Id $PID).Path
+    }
     if (-not $psi.FileName -or $psi.FileName -notmatch 'pwsh|powershell') {
         $psi.FileName = 'powershell.exe'
     }
-    # Prefer current host executable
-    try {
-        $psi.FileName = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
-    } catch {}
 
-    $argLine = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$Optimizer`"") + ($runArgs | ForEach-Object { $_ })
+    $argLine = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$Optimizer`"") + $runArgs
     $psi.Arguments = ($argLine -join ' ')
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
     $psi.WorkingDirectory = $Root
+    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
 
     $proc = New-Object System.Diagnostics.Process
     $proc.StartInfo = $psi
-    [void]$proc.Start()
+    $proc.EnableRaisingEvents = $true
 
-    $current = 20
-    while (-not $proc.HasExited) {
-        while (-not $proc.StandardOutput.EndOfStream) {
-            $line = $proc.StandardOutput.ReadLine()
-            if ($null -eq $line) { break }
-            Write-Host $line
-            foreach ($key in $stepMap.Keys) {
-                if ($line -match [regex]::Escape($key)) {
-                    $target = [int]$stepMap[$key]
-                    if ($target -gt $current) {
-                        $current = $target
-                        Write-HubProgress $current ($line.Trim())
-                    }
-                    break
-                }
-            }
-            if ($line -match '^\[\*' -and $current -lt 92) {
-                $current = [Math]::Min(92, $current + 2)
-                Write-HubProgress $current ($line.Trim())
-            }
+    $script:current = 20
+    $handler = {
+        param($sender, $e)
+        if ($null -eq $e.Data) { return }
+        $line = $e.Data
+        Write-Host $line
+        $hit = Get-ProgressForLine $line $script:current
+        if ($null -ne $hit) {
+            $script:current = [int]$hit.Percent
+            Write-HubProgress $script:current ([string]$hit.Status)
         }
-        Start-Sleep -Milliseconds 100
     }
 
-    $err = $proc.StandardError.ReadToEnd()
-    if ($err) { Write-Host $err }
+    $proc.add_OutputDataReceived($handler)
+    $proc.add_ErrorDataReceived($handler)
 
-    # Drain remaining stdout
-    $rest = $proc.StandardOutput.ReadToEnd()
-    if ($rest) {
-        Write-Host $rest
-    }
+    [void]$proc.Start()
+    $proc.BeginOutputReadLine()
+    $proc.BeginErrorReadLine()
+    $proc.WaitForExit()
 
     $code = $proc.ExitCode
     if ($code -eq 0) {
         Write-HubOk 'Discord Optimizer finished successfully.'
+        if (-not $NoLaunch) {
+            Start-OptiHubDiscord
+        }
         Write-HubProgress 100 'Completed successfully'
         exit 0
-    } else {
-        Write-HubErr "Disc Optimizer exited with code $code"
-        Write-HubProgress 100 'Finished with errors'
-        Write-HubWarn 'If Discord will not open, use OptiHub → Repair Discord or:'
-        Write-Host '  irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
-        exit $code
     }
+
+    Write-HubErr "Disc Optimizer exited with code $code"
+    Write-HubProgress 100 'Finished with errors'
+    Write-HubWarn 'If Discord will not open, use OptiHub → Repair Discord'
+    exit $code
 } catch {
-    # Fallback: direct invocation (same process)
     Write-HubWarn "Streamed launch failed ($($_.Exception.Message)); running in-process…"
     Write-HubProgress 25 'Running Disc Optimizer…'
     try {
         & $Optimizer @runArgs
         $code = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 0 }
         if ($code -eq 0) {
+            if (-not $NoLaunch) { Start-OptiHubDiscord }
             Write-HubProgress 100 'Completed successfully'
             exit 0
         }

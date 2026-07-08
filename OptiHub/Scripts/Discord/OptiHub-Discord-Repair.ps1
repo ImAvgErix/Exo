@@ -1,4 +1,4 @@
-# OptiHub non-interactive Discord repair
+﻿# OptiHub non-interactive Discord repair
 # Restores stock, bootable Discord while preserving login by default.
 
 param(
@@ -10,7 +10,8 @@ $ErrorActionPreference = 'Stop'
 $env:OPTIHUB = '1'
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
-    Write-Host "OPTIHUB_PROGRESS:$Percent|$Status"
+    [Console]::Out.WriteLine("OPTIHUB_PROGRESS:$Percent|$Status")
+    [Console]::Out.Flush()
 }
 function Write-RepStep([string]$Msg) { Write-Host "[*] $Msg" -ForegroundColor Cyan }
 function Write-RepOk([string]$Msg)   { Write-Host "[+] $Msg" -ForegroundColor Green }
@@ -36,7 +37,7 @@ function Remove-RepairProgramFiles([string]$DiscordRoot) {
         Write-RepOk 'No old program files to remove'
         return
     }
-    Write-RepStep 'Removing Discord program files…'
+    Write-RepStep 'Removing Discord program filesâ€¦'
     for ($attempt = 1; $attempt -le 3; $attempt++) {
         Remove-Item $DiscordRoot -Recurse -Force -ErrorAction SilentlyContinue
         if (-not (Test-Path $DiscordRoot)) { break }
@@ -44,7 +45,7 @@ function Remove-RepairProgramFiles([string]$DiscordRoot) {
         Stop-RepairDiscord
     }
     if (Test-Path $DiscordRoot) {
-        throw "Could not delete $DiscordRoot — close Discord in Task Manager and retry"
+        throw "Could not delete $DiscordRoot â€” close Discord in Task Manager and retry"
     }
     Write-RepOk 'Old program files removed'
 }
@@ -55,13 +56,13 @@ function Clear-RepairRendererState([string]$AppDataDiscord, [bool]$DoFullReset) 
         return
     }
     if ($DoFullReset) {
-        Write-RepStep 'FULL reset — clearing app data including login…'
+        Write-RepStep 'FULL reset â€” clearing app data including loginâ€¦'
         Remove-Item $AppDataDiscord -Recurse -Force -ErrorAction SilentlyContinue
         Write-RepOk 'App data fully cleared'
         return
     }
     $keep = @('Local Storage', 'IndexedDB', 'Cookies', 'Cookies-journal', 'databases', 'Network')
-    Write-RepStep 'Purging renderer caches (login kept)…'
+    Write-RepStep 'Purging renderer caches (login kept)â€¦'
     $removed = 0
     Get-ChildItem $AppDataDiscord -Force -ErrorAction SilentlyContinue | ForEach-Object {
         if ($keep -contains $_.Name) { return }
@@ -73,15 +74,15 @@ function Clear-RepairRendererState([string]$AppDataDiscord, [bool]$DoFullReset) 
 }
 
 function Install-RepairFreshDiscord([string]$DiscordRoot) {
-    Write-RepStep 'Downloading official Discord installer…'
+    Write-RepStep 'Downloading official Discord installerâ€¦'
     $setup = Join-Path ([IO.Path]::GetTempPath()) 'DiscordSetup-optihub-repair.exe'
     if (Test-Path $setup) { Remove-Item $setup -Force -ErrorAction SilentlyContinue }
     $url = 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64'
     Invoke-WebRequest -Uri $url -OutFile $setup -UseBasicParsing -Headers @{ 'User-Agent' = 'OptiHub-Repair/1.0' }
     if (-not (Test-Path $setup) -or ((Get-Item $setup).Length -lt 50000000)) {
-        throw 'Discord installer download failed — check your internet connection'
+        throw 'Discord installer download failed â€” check your internet connection'
     }
-    Write-RepStep 'Installing Discord (silent)…'
+    Write-RepStep 'Installing Discord (silent)â€¦'
     Start-Process -FilePath $setup -ArgumentList '-s' -Wait | Out-Null
     $deadline = (Get-Date).AddSeconds(180)
     while ((Get-Date) -lt $deadline) {
@@ -89,7 +90,7 @@ function Install-RepairFreshDiscord([string]$DiscordRoot) {
         if ($app -and (Test-Path (Join-Path $app.FullName 'Discord.exe'))) { return $app }
         Start-Sleep -Seconds 3
     }
-    throw 'Discord install did not complete — run the installer from discord.com manually'
+    throw 'Discord install did not complete â€” run the installer from discord.com manually'
 }
 
 function Start-RepairDiscord([string]$DiscordRoot, [string]$AppDir) {
@@ -119,18 +120,18 @@ try {
         ([Environment]::GetEnvironmentVariable('DISCOPT_REPAIR_FULL') -eq '1')
 
     Write-Host ''
-    Write-Host '  OptiHub · Discord Clean Reset' -ForegroundColor Cyan
+    Write-Host '  OptiHub Â· Discord Clean Reset' -ForegroundColor Cyan
     Write-Host '  Stock reinstall + cache purge. Login preserved by default.' -ForegroundColor DarkGray
     Write-Host ''
 
-    Write-HubProgress 5 'Closing Discord…'
-    Write-RepStep 'Closing Discord…'
+    Write-HubProgress 5 'Closing Discordâ€¦'
+    Write-RepStep 'Closing Discordâ€¦'
     Stop-RepairDiscord
 
-    Write-HubProgress 20 'Removing program files…'
+    Write-HubProgress 20 'Removing program filesâ€¦'
     Remove-RepairProgramFiles $discordRoot
 
-    Write-HubProgress 40 'Clearing renderer state…'
+    Write-HubProgress 40 'Clearing renderer stateâ€¦'
     Clear-RepairRendererState $appDataDiscord $doFull
 
     $equicordThemes = Join-Path $appData 'Equicord\themes'
@@ -141,12 +142,12 @@ try {
             Write-RepOk "Removed theme: $($_.Name)"
         }
 
-    Write-HubProgress 55 'Installing fresh Discord…'
+    Write-HubProgress 55 'Installing fresh Discordâ€¦'
     $app = Install-RepairFreshDiscord $discordRoot
     Write-RepOk "Discord $($app.Name) installed clean"
 
-    Write-HubProgress 85 'Starting Discord…'
-    Write-RepStep 'Starting Discord…'
+    Write-HubProgress 85 'Starting Discordâ€¦'
+    Write-RepStep 'Starting Discordâ€¦'
     Start-RepairDiscord $discordRoot $app.FullName
 
     Write-RepOk 'Repair complete. Wait for Discord to finish loading.'
@@ -159,3 +160,4 @@ try {
     Write-Host 'Manual fallback: https://discord.com/download' -ForegroundColor Yellow
     exit 1
 }
+

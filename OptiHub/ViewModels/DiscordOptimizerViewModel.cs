@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media;
@@ -20,17 +20,17 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     }
 
     [ObservableProperty]
-    private string _title = "Discord Optimizer";
+    private string _title = "Discord";
 
     public string LogoPath => "Assets/Logos/discord.png";
 
     [ObservableProperty]
-    private string _statusText = "Checking status…";
+    private string _statusText = "Checking statusâ€¦";
 
     [ObservableProperty]
     private string _detailText = string.Empty;
 
-    public ObservableCollection<string> Checks { get; } = new();
+    public ObservableCollection<FeatureRowViewModel> Features { get; } = new();
 
     [ObservableProperty]
     private string _runButtonLabel = "Run";
@@ -76,7 +76,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            StatusText = "Checking status…";
+            StatusText = "Checking statusâ€¦";
             var state = await _services.OptimizerState.DetectDiscordAsync();
             ApplyState(state);
         }
@@ -105,7 +105,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;
-        ProgressStatus = "Preparing…";
+        ProgressStatus = "Preparingâ€¦";
         SetResult(string.Empty, success: true);
         _runCts = new CancellationTokenSource();
 
@@ -113,15 +113,16 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         {
             var args = new List<string>
             {
-                "-CreateRestorePoint",
-                "-NoLaunch",
-                "-NonInteractive"
+                "-CreateRestorePoint",`n                "-NonInteractive"
             };
 
             var progress = new Progress<ScriptRunProgress>(p =>
             {
-                ProgressPercent = p.Percent;
-                ProgressStatus = p.Status;
+                // Never let the bar jump backwards during a live run
+                if (p.Percent >= ProgressPercent)
+                    ProgressPercent = p.Percent;
+                if (!string.IsNullOrWhiteSpace(p.Status))
+                    ProgressStatus = p.Status;
             });
 
             var script = _services.Scripts.DiscordOptimizerScript;
@@ -135,7 +136,9 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
             if (result.Success)
             {
-                SetResult("Optimizer finished successfully.", success: true);
+                ProgressPercent = 100;
+                ProgressStatus = "Completed successfully";
+                SetResult("Optimizer finished successfully. Open Discord when you are ready.", success: true);
                 _services.Settings.Update(s =>
                     s.LastDiscordRunUtc = DateTime.UtcNow.ToString("o"));
             }
@@ -145,6 +148,8 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             }
 
             await RefreshAfterRunAsync();
+            // Brief hold so the finished bar is visible
+            await Task.Delay(700);
         }
         catch (Exception ex)
         {
@@ -154,6 +159,8 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            if (ProgressPercent >= 100)
+                await Task.Delay(900);
             IsProgressVisible = false;
             _runCts?.Dispose();
             _runCts = null;
@@ -175,7 +182,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;
-        ProgressStatus = "Starting repair…";
+        ProgressStatus = "Starting repairâ€¦";
         SetResult(string.Empty, success: true);
         _runCts = new CancellationTokenSource();
 
@@ -231,9 +238,17 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         IsApplied = state.IsApplied;
         StatusText = state.StatusText;
         DetailText = state.Detail;
-        Checks.Clear();
-        foreach (var check in state.Checks)
-            Checks.Add(check);
+        Features.Clear();
+        foreach (var feature in state.Features)
+        {
+            Features.Add(new FeatureRowViewModel
+            {
+                Title = feature.Title,
+                Detail = feature.Detail,
+                Glyph = feature.IsActive ? "\uE73E" : "\uE711",
+                Opacity = feature.IsActive ? 1.0 : 0.55
+            });
+        }
         RunButtonLabel = state.IsApplied ? "Reapply" : "Run";
     }
 
@@ -265,4 +280,12 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         if (!IsBusy)
             await RefreshAsync();
     }
+}
+
+public sealed class FeatureRowViewModel
+{
+    public string Title { get; init; } = string.Empty;
+    public string Detail { get; init; } = string.Empty;
+    public string Glyph { get; init; } = "\uE73E";
+    public double Opacity { get; init; } = 1.0;
 }
