@@ -98,10 +98,9 @@ if ($tagExists) {
 $prevEap2 = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 git tag -d $Tag 1>$null 2>$null
-$ErrorActionPreference = $prevEap2
-
-git tag -a $Tag -m "OptiHub $Version"
+git tag -a $Tag -m "OptiHub $Version" 1>$null 2>$null
 git push origin $Tag --force 1>$null 2>$null
+$ErrorActionPreference = $prevEap2
 
 gh release create $Tag $PayloadZip `
     --repo $Repo `
