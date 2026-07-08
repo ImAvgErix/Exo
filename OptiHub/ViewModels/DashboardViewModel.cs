@@ -20,9 +20,10 @@ public partial class DashboardViewModel : ObservableObject
                 {
                     Id = "discord",
                     Title = "Discord Optimizer",
-                    Subtitle = "Performance · Privacy · AMOLED",
-                    Description = "Equicord, OpenASAR, DiscOpt kernel, cache trim, and calm gaming-focused tweaks.",
+                    Subtitle = string.Empty,
+                    Description = string.Empty,
                     AccentGlyph = "\uE8BD",
+                    LogoPath = "Assets/Logos/discord.png",
                     Status = OptimizerStatus.Available
                 }
             },
@@ -33,8 +34,9 @@ public partial class DashboardViewModel : ObservableObject
                     Id = "brave",
                     Title = "Brave Optimizer",
                     Subtitle = "Coming soon",
-                    Description = "Privacy flags, debloat, and smoother browsing.",
+                    Description = string.Empty,
                     AccentGlyph = "\uE774",
+                    LogoPath = "Assets/Logos/brave.png",
                     Status = OptimizerStatus.ComingSoon,
                     Teaser = "Flags, shields, and quiet performance for Brave."
                 }
@@ -46,8 +48,9 @@ public partial class DashboardViewModel : ObservableObject
                     Id = "steam",
                     Title = "Steam Optimizer",
                     Subtitle = "Coming soon",
-                    Description = "Launch, overlay, and library smoothness for gamers.",
+                    Description = string.Empty,
                     AccentGlyph = "\uE7FC",
+                    LogoPath = "Assets/Logos/steam.png",
                     Status = OptimizerStatus.ComingSoon,
                     Teaser = "Faster Steam, less clutter, better game-ready defaults."
                 }
@@ -59,8 +62,9 @@ public partial class DashboardViewModel : ObservableObject
                     Id = "riot",
                     Title = "Riot Games Optimizer",
                     Subtitle = "Coming soon",
-                    Description = "Vanguard-aware housekeeping and client polish.",
+                    Description = string.Empty,
                     AccentGlyph = "\uE7FC",
+                    LogoPath = "Assets/Logos/riot.png",
                     Status = OptimizerStatus.ComingSoon,
                     Teaser = "Leaner Riot Client without fighting anti-cheat."
                 }
@@ -72,8 +76,9 @@ public partial class DashboardViewModel : ObservableObject
                     Id = "epic",
                     Title = "Epic Launcher Optimizer",
                     Subtitle = "Coming soon",
-                    Description = "Startup, downloads, and background quieting.",
+                    Description = string.Empty,
                     AccentGlyph = "\uE7FC",
+                    LogoPath = "Assets/Logos/epic.png",
                     Status = OptimizerStatus.ComingSoon,
                     Teaser = "Less launcher noise, more game time."
                 }
@@ -109,7 +114,6 @@ public partial class DashboardViewModel : ObservableObject
         discord.IsLoadingState = true;
         try
         {
-            // Heuristic only on dashboard — full PS detect runs on the Discord page
             var state = await _services.OptimizerState.DetectDiscordAsync(fastOnly: true);
             discord.ApplyState(state);
         }
@@ -128,12 +132,6 @@ public partial class OptimizerCardViewModel : ObservableObject
     private bool _isLoadingState;
 
     [ObservableProperty]
-    private string _statusBadge = "Available";
-
-    [ObservableProperty]
-    private string _statusDetail = string.Empty;
-
-    [ObservableProperty]
     private bool _isComingSoon;
 
     [ObservableProperty]
@@ -142,25 +140,14 @@ public partial class OptimizerCardViewModel : ObservableObject
     public void ApplyState(OptimizerStateInfo state)
     {
         IsComingSoon = Definition.Status == OptimizerStatus.ComingSoon;
-        if (IsComingSoon)
-        {
-            StatusBadge = "Coming soon";
-            StatusDetail = Definition.Teaser ?? string.Empty;
-            return;
-        }
+        if (IsComingSoon) return;
 
         IsApplied = state.IsApplied;
-        StatusBadge = state.IsApplied ? "Applied" : "Ready";
-        StatusDetail = state.StatusText;
         Definition.Status = state.IsApplied ? OptimizerStatus.Applied : OptimizerStatus.Available;
     }
 
     public void InitializePresentation()
     {
         IsComingSoon = Definition.Status == OptimizerStatus.ComingSoon;
-        StatusBadge = IsComingSoon ? "Coming soon" : "Ready";
-        StatusDetail = IsComingSoon
-            ? (Definition.Teaser ?? Definition.Description)
-            : Definition.Description;
     }
 }

@@ -2712,8 +2712,10 @@ if ($SkipDebloat) {
     }
 }
 
-if ($Quick -and -not (Test-CacheCleanNeeded)) {
-    Write-Ok 'Cache clean skipped (-Quick, caches already lean)'
+if ($SkipCacheClean) {
+    Write-Ok 'Cache clean skipped (-SkipCacheClean)'
+} elseif (-not (Test-CacheCleanNeeded)) {
+    Write-Ok 'Cache clean skipped (caches already lean)'
 } else {
     Clear-DiscordSafeCache $freed
 }

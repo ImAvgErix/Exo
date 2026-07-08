@@ -10,7 +10,7 @@
 | | |
 |---|---|
 | Stack | C# · WinUI 3 · Windows App SDK · .NET 8 · MVVM |
-| Theme | AMOLED pure black dark · clean off-white light · **teal** accents (`#2DD4BF`) |
+| Theme | AMOLED pure black dark · clean off-white light · **white** accents |
 | Safety | Confirmations · dry-run · optional restore points · Discord repair |
 
 This repository was formerly **DiscOpti** (Discord-only PowerShell kit). The Discord kit still lives under `OptiHub/Scripts/Discord/` (kit **v1.1.5**). The GitHub remote may still be named `DiscOpti` until renamed.

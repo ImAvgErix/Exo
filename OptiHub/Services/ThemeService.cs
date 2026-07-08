@@ -14,8 +14,8 @@ public sealed class ThemeService
 
     public static readonly Color AmoledBlack = Color.FromArgb(255, 0, 0, 0);
     public static readonly Color SoftOffWhite = Color.FromArgb(255, 248, 249, 250);
-    public static readonly Color TealAccent = Color.FromArgb(255, 45, 212, 191);
-    public static readonly Color CyanAccent = Color.FromArgb(255, 34, 211, 238);
+    public static readonly Color WhiteAccent = Color.FromArgb(255, 255, 255, 255);
+    public static readonly Color DarkAccent = Color.FromArgb(255, 17, 17, 17);
 
     public ThemeService(SettingsService settings)
     {
@@ -40,12 +40,6 @@ public sealed class ThemeService
             AppSettings.SystemTheme => ElementTheme.Default,
             _ => ElementTheme.Dark
         };
-
-        // Pure AMOLED black / clean off-white on the window chrome surface
-        if (_window.Content is FrameworkElement fe && fe.Parent == null)
-        {
-            // Content is already root
-        }
 
         if (root is Panel panel)
         {
@@ -81,10 +75,10 @@ public sealed class ThemeService
             if (light)
             {
                 titleBar.BackgroundColor = SoftOffWhite;
-                titleBar.ForegroundColor = Color.FromArgb(255, 17, 24, 39);
+                titleBar.ForegroundColor = DarkAccent;
                 titleBar.InactiveBackgroundColor = SoftOffWhite;
                 titleBar.ButtonBackgroundColor = SoftOffWhite;
-                titleBar.ButtonForegroundColor = Color.FromArgb(255, 17, 24, 39);
+                titleBar.ButtonForegroundColor = DarkAccent;
                 titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 229, 231, 235);
                 titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 209, 213, 219);
             }
@@ -95,8 +89,8 @@ public sealed class ThemeService
                 titleBar.InactiveBackgroundColor = AmoledBlack;
                 titleBar.ButtonBackgroundColor = AmoledBlack;
                 titleBar.ButtonForegroundColor = Colors.White;
-                titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 20, 45, 42);
-                titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 13, 148, 136);
+                titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 26, 26, 26);
+                titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 42, 42, 42);
             }
             titleBar.ButtonInactiveBackgroundColor = light ? SoftOffWhite : AmoledBlack;
         }

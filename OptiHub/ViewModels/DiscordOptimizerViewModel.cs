@@ -10,8 +10,8 @@ namespace OptiHub.ViewModels;
 
 public partial class DiscordOptimizerViewModel : ObservableObject
 {
-    private static readonly SolidColorBrush TealBrush =
-        new(Color.FromArgb(255, 45, 212, 191));
+    private static readonly SolidColorBrush SuccessBrush =
+        new(Color.FromArgb(255, 255, 255, 255));
     private static readonly SolidColorBrush ErrorBrush =
         new(Color.FromArgb(255, 248, 113, 113));
 
@@ -21,14 +21,13 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     public DiscordOptimizerViewModel(AppServices services)
     {
         _services = services;
-        LastResultBrush = TealBrush;
+        LastResultBrush = SuccessBrush;
     }
 
     [ObservableProperty]
     private string _title = "Discord Optimizer";
 
-    [ObservableProperty]
-    private string _subtitle = "Performance · privacy · AMOLED · gaming";
+    public string LogoPath => "Assets/Logos/discord.png";
 
     [ObservableProperty]
     private string _statusText = "Checking status…";
@@ -68,12 +67,6 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     [ObservableProperty]
     private Brush _lastResultBrush;
 
-    [ObservableProperty]
-    private bool _useQuickMode;
-
-    [ObservableProperty]
-    private bool _skipCacheClean;
-
     public event EventHandler? RequestGoBack;
 
     public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
@@ -111,7 +104,8 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             var warning = settings.DryRun
                 ? "Dry-run is enabled. No system changes will be made — the optimizer will verify only."
                 : "This will close Discord, apply optimizations (Equicord, OpenASAR, kernel, cache, Windows tweaks), and may request Administrator approval.\n\n" +
-                  "Your login/session is preserved. A repair path is available if anything goes wrong.";
+                  "Your login/session is preserved. A repair path is available if anything goes wrong.\n\n" +
+                  "Run mode is detected automatically (Quick reapply when already optimized).";
 
             if (settings.AutoRestorePoint && !settings.DryRun)
                 warning += "\n\nA system restore point will be created first (if Windows allows).";
@@ -136,10 +130,6 @@ public partial class DiscordOptimizerViewModel : ObservableObject
                 args.Add("-DryRun");
             if (settings.AutoRestorePoint && !settings.DryRun)
                 args.Add("-CreateRestorePoint");
-            if (UseQuickMode || IsApplied)
-                args.Add("-Quick");
-            if (SkipCacheClean)
-                args.Add("-SkipCacheClean");
             args.Add("-NoLaunch");
             args.Add("-NonInteractive");
 
@@ -186,10 +176,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         finally
         {
             IsBusy = false;
-            if (ProgressPercent >= 100)
-                IsProgressVisible = true;
-            else if (!string.IsNullOrEmpty(LastResult))
-                IsProgressVisible = false;
+            IsProgressVisible = false;
             _runCts?.Dispose();
             _runCts = null;
         }
@@ -249,6 +236,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            IsProgressVisible = false;
             _runCts?.Dispose();
             _runCts = null;
         }
@@ -280,12 +268,11 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         LastResult = message;
         HasLastResult = !string.IsNullOrWhiteSpace(message);
         LastResultGlyph = success ? "\uE73E" : "\uE783";
-        LastResultBrush = success ? TealBrush : ErrorBrush;
+        LastResultBrush = success ? SuccessBrush : ErrorBrush;
     }
 
     public async Task InitializeAsync()
     {
-        // Fast heuristic first for snappy UI, then full detect
         ApplyState(await _services.OptimizerState.DetectDiscordAsync(fastOnly: true));
         if (!IsBusy)
             await RefreshAsync();

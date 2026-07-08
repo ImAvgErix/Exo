@@ -6,7 +6,9 @@
     Background="Transparent">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,8,32,32">
-        <StackPanel MaxWidth="640" Spacing="16">
+        <StackPanel MaxWidth="{StaticResource OptiPageMaxWidth}"
+                    HorizontalAlignment="Center"
+                    Spacing="16">
 
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Style="{StaticResource OptiIconButton}"
@@ -30,7 +32,7 @@
                                   OffContent="Light"
                                   OnContent="Dark" />
                     <TextBlock Style="{StaticResource OptiCaption}"
-                               Text="Dark uses #000000 with soft teal accents. Light uses a clean off-white surface with strong contrast." />
+                               Text="Dark uses #000000 with white accents. Light uses a clean off-white surface with strong contrast." />
                 </StackPanel>
             </Border>
 
@@ -91,7 +93,7 @@
                                Text="Use at your own risk. Optimizers may modify application files, Windows startup entries, and related settings. Always keep backups of important data. Third-party Discord clients (Equicord) may violate Discord's Terms of Service — you are responsible for compliance." />
                     <TextBlock Style="{StaticResource OptiCaption}"
                                Margin="0,8,0,0"
-                               Text="OptiHub 1.0.1 · teal accents · Windows App SDK · WinUI 3" />
+                               Text="OptiHub 1.0.2 · black &amp; white · Windows App SDK · WinUI 3" />
                 </StackPanel>
             </Border>
         </StackPanel>

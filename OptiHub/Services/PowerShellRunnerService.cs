@@ -206,8 +206,9 @@ public sealed class PowerShellRunnerService
 
         await File.WriteAllTextAsync(wrapper, wrapperBody, cancellationToken);
 
+        var psExe = ResolvePowerShell();
         var argBuilder = new StringBuilder();
-        argBuilder.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+        argBuilder.Append("-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ");
         argBuilder.Append('"').Append(wrapper).Append('"');
         foreach (var o in opts)
         {
@@ -215,14 +216,23 @@ public sealed class PowerShellRunnerService
             argBuilder.Append(QuoteArg(o));
         }
 
+        // Hidden elevated launch via VBScript Shell.Application (CreateNoWindow + runas still flashes a console)
+        var vbsPath = Path.Combine(PathHelper.LogsDir, $"elevate-{Guid.NewGuid():N}.vbs");
+        var psEsc = psExe.Replace("'", "''");
+        var argsEsc = argBuilder.ToString().Replace("\"", "\"\"");
+        var vbsBody =
+            "Set shell = CreateObject(\"Shell.Application\")\r\n" +
+            "shell.ShellExecute \"" + psEsc + "\", \"" + argsEsc + "\", \"\", \"runas\", 0\r\n";
+        await File.WriteAllTextAsync(vbsPath, vbsBody, cancellationToken);
+
         var psi = new ProcessStartInfo
         {
-            FileName = ResolvePowerShell(),
-            Arguments = argBuilder.ToString(),
+            FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "wscript.exe"),
+            Arguments = "//B //Nologo \"" + vbsPath + "\"",
             WorkingDirectory = workDir,
-            UseShellExecute = true,
-            Verb = "runas",
-            CreateNoWindow = false
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden
         };
 
         using var process = Process.Start(psi);
@@ -263,6 +273,7 @@ public sealed class PowerShellRunnerService
         });
 
         try { File.Delete(wrapper); } catch { /* ignore */ }
+        try { File.Delete(vbsPath); } catch { /* ignore */ }
 
         return new ScriptRunResult
         {

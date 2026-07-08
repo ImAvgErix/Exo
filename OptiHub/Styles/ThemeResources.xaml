@@ -4,22 +4,22 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:helpers="using:OptiHub.Helpers">
 
-    <!-- Accent -->
-    <Color x:Key="OptiTealColor">#2DD4BF</Color>
-    <Color x:Key="OptiCyanColor">#22D3EE</Color>
-    <Color x:Key="OptiTealDarkColor">#14B8A6</Color>
-    <SolidColorBrush x:Key="OptiTealBrush" Color="{StaticResource OptiTealColor}" />
-    <SolidColorBrush x:Key="OptiCyanBrush" Color="{StaticResource OptiCyanColor}" />
-    <SolidColorBrush x:Key="OptiTealDarkBrush" Color="{StaticResource OptiTealDarkColor}" />
-    <SolidColorBrush x:Key="OptiTealSoftBrush" Color="#332DD4BF" />
+    <!-- Accent: white on black (no teal) -->
+    <Color x:Key="OptiAccentColor">#FFFFFF</Color>
+    <Color x:Key="OptiAccentMutedColor">#B3FFFFFF</Color>
+    <SolidColorBrush x:Key="OptiAccentBrush" Color="{StaticResource OptiAccentColor}" />
+    <SolidColorBrush x:Key="OptiAccentMutedBrush" Color="{StaticResource OptiAccentMutedColor}" />
+    <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#1AFFFFFF" />
 
     <!-- Soft card chrome -->
     <CornerRadius x:Key="OptiCardRadius">16</CornerRadius>
     <x:Double x:Key="OptiPagePadding">32</x:Double>
+    <x:Double x:Key="OptiPageMaxWidth">720</x:Double>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
     <helpers:BoolToOpacityConverter x:Key="BoolToOpacityConverter" />
+    <helpers:AssetPathToImageSourceConverter x:Key="AssetPathToImageSourceConverter" />
 
     <Style x:Key="OptiPageTitle" TargetType="TextBlock">
         <Setter Property="FontSize" Value="28" />
@@ -56,17 +56,17 @@
     </Style>
 
     <Style x:Key="OptiAccentCard" TargetType="Border" BasedOn="{StaticResource OptiCard}">
-        <Setter Property="BorderBrush" Value="{StaticResource OptiTealBrush}" />
-        <Setter Property="BorderThickness" Value="1,1,1,1" />
-        <Setter Property="Padding" Value="20,18" />
+        <Setter Property="BorderBrush" Value="{StaticResource OptiAccentBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="24,20" />
     </Style>
 
     <Style x:Key="OptiPrimaryButton" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
         <Setter Property="Padding" Value="20,10" />
         <Setter Property="CornerRadius" Value="10" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Background" Value="{StaticResource OptiTealBrush}" />
-        <Setter Property="Foreground" Value="#041016" />
+        <Setter Property="Background" Value="{StaticResource OptiAccentBrush}" />
+        <Setter Property="Foreground" Value="#000000" />
     </Style>
 
     <Style x:Key="OptiQuietButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">

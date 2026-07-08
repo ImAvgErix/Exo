@@ -48,6 +48,35 @@ function Test-IsElevated {
     } catch { return $false }
 }
 
+function Test-OptiHubDiscordApplied {
+    $local = [Environment]::GetFolderPath('LocalApplicationData')
+    $appData = [Environment]::GetFolderPath('ApplicationData')
+    $discordRoot = Join-Path $local 'Discord'
+    if (-not (Test-Path $discordRoot)) { return $false }
+
+    $appDir = Get-ChildItem $discordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending |
+        Select-Object -First 1
+    if (-not $appDir) { return $false }
+
+    $resources = Join-Path $appDir.FullName 'resources'
+    $equicordAsar = Join-Path $appData 'Equicord\equicord.asar'
+    $appAsar = Join-Path $resources 'app.asar'
+    $equicordOk = (Test-Path $equicordAsar) -and (Test-Path $appAsar) -and ((Get-Item $appAsar).Length -lt 4096)
+
+    $openAsarOk = Test-Path (Join-Path $resources '_app.asar.stock')
+
+    $versionDll = Join-Path $appDir.FullName 'version.dll'
+    $ffmpeg = Join-Path $appDir.FullName 'ffmpeg.dll'
+    $configIni = Join-Path $appDir.FullName 'config.ini'
+    $kernelOk = (Test-Path $versionDll) -and (Test-Path $ffmpeg) -and (Test-Path $configIni)
+    if ($kernelOk) {
+        try { $kernelOk = (Get-Item $ffmpeg).Length -lt 500000 } catch { }
+    }
+
+    return $equicordOk -and ($kernelOk -or $openAsarOk)
+}
+
 function New-OptiHubRestorePoint {
     if (-not (Test-IsElevated)) {
         Write-HubWarn 'Restore point skipped (not elevated).'
@@ -97,6 +126,12 @@ Write-Host '  OptiHub safety wrappers · progress · dry-run' -ForegroundColor D
 Write-Host ''
 
 Write-HubProgress 3 'Starting…'
+
+# Auto-detect run mode when caller did not specify Quick
+if (-not $Quick -and (Test-OptiHubDiscordApplied)) {
+    $Quick = $true
+    Write-HubStep 'Auto-detected: already optimized — using Quick mode'
+}
 
 if ($DryRun) {
     Write-HubProgress 10 'Dry-run: verify only'

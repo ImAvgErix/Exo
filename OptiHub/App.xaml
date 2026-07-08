@@ -12,45 +12,45 @@
 
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Dark">
-                    <Color x:Key="SystemAccentColor">#2DD4BF</Color>
-                    <Color x:Key="SystemAccentColorLight1">#5EEAD4</Color>
-                    <Color x:Key="SystemAccentColorLight2">#99F6E4</Color>
-                    <Color x:Key="SystemAccentColorLight3">#CCFBF1</Color>
-                    <Color x:Key="SystemAccentColorDark1">#14B8A6</Color>
-                    <Color x:Key="SystemAccentColorDark2">#0D9488</Color>
-                    <Color x:Key="SystemAccentColorDark3">#0F766E</Color>
-                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#2DD4BF" />
-                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#14B8A6" />
-                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#0D9488" />
-                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#2DD4BF" />
-                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#5EEAD4" />
+                    <Color x:Key="SystemAccentColor">#FFFFFF</Color>
+                    <Color x:Key="SystemAccentColorLight1">#FFFFFF</Color>
+                    <Color x:Key="SystemAccentColorLight2">#E5E5E5</Color>
+                    <Color x:Key="SystemAccentColorLight3">#CCCCCC</Color>
+                    <Color x:Key="SystemAccentColorDark1">#B3B3B3</Color>
+                    <Color x:Key="SystemAccentColorDark2">#808080</Color>
+                    <Color x:Key="SystemAccentColorDark3">#666666</Color>
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#E5E5E5" />
+                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#CCCCCC" />
+                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#B3B3B3" />
                     <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#000000" />
                     <SolidColorBrush x:Key="OptiCardFillBrush" Color="#0A0A0A" />
                     <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#1AFFFFFF" />
                     <SolidColorBrush x:Key="OptiSubtleBrush" Color="#14FFFFFF" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
-                    <Color x:Key="SystemAccentColor">#0D9488</Color>
-                    <Color x:Key="SystemAccentColorLight1">#14B8A6</Color>
-                    <Color x:Key="SystemAccentColorLight2">#2DD4BF</Color>
-                    <Color x:Key="SystemAccentColorLight3">#5EEAD4</Color>
-                    <Color x:Key="SystemAccentColorDark1">#0F766E</Color>
-                    <Color x:Key="SystemAccentColorDark2">#115E59</Color>
-                    <Color x:Key="SystemAccentColorDark3">#134E4A</Color>
-                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#0D9488" />
-                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#0F766E" />
-                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#115E59" />
-                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#0D9488" />
-                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#0F766E" />
+                    <Color x:Key="SystemAccentColor">#111111</Color>
+                    <Color x:Key="SystemAccentColorLight1">#333333</Color>
+                    <Color x:Key="SystemAccentColorLight2">#555555</Color>
+                    <Color x:Key="SystemAccentColorLight3">#777777</Color>
+                    <Color x:Key="SystemAccentColorDark1">#000000</Color>
+                    <Color x:Key="SystemAccentColorDark2">#000000</Color>
+                    <Color x:Key="SystemAccentColorDark3">#000000</Color>
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#111111" />
+                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#333333" />
+                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#555555" />
+                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#111111" />
+                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#333333" />
                     <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#F8F9FA" />
                     <SolidColorBrush x:Key="OptiCardFillBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#1A000000" />
                     <SolidColorBrush x:Key="OptiSubtleBrush" Color="#0F000000" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Default">
-                    <Color x:Key="SystemAccentColor">#2DD4BF</Color>
-                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#2DD4BF" />
-                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#2DD4BF" />
+                    <Color x:Key="SystemAccentColor">#FFFFFF</Color>
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#000000" />
                     <SolidColorBrush x:Key="OptiCardFillBrush" Color="#0A0A0A" />
                     <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#1AFFFFFF" />
