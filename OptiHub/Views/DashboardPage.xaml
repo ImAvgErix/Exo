@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="OptiHub.Views.DashboardPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -14,7 +14,7 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled"
-                  Padding="32,4,32,28">
+                  Padding="20,4,20,20">
         <StackPanel MaxWidth="{StaticResource OptiPageMaxWidth}"
                     HorizontalAlignment="Center"
                     Spacing="22">
@@ -43,8 +43,8 @@
                     <ItemsPanelTemplate>
                         <ItemsWrapGrid Orientation="Horizontal"
                                        MaximumRowsOrColumns="3"
-                                       ItemWidth="208"
-                                       ItemHeight="204"
+                                       ItemWidth="196"
+                                       ItemHeight="188"
                                        HorizontalAlignment="Center" />
                     </ItemsPanelTemplate>
                 </GridView.ItemsPanel>
@@ -96,3 +96,4 @@
         </StackPanel>
     </ScrollViewer>
 </Page>
+

@@ -1,4 +1,4 @@
-namespace OptiHub.Models;
+﻿namespace OptiHub.Models;
 
 public sealed class ScriptRunProgress
 {
@@ -38,4 +38,14 @@ public sealed class ScriptUpdateResult
     public string LocalVersion { get; init; } = string.Empty;
     public string RemoteVersion { get; init; } = string.Empty;
     public string Message { get; init; } = string.Empty;
+}
+
+public sealed class AppUpdateResult
+{
+    public bool UpdateAvailable { get; init; }
+    public bool AlreadyLatest { get; init; }
+    public string LocalVersion { get; init; } = string.Empty;
+    public string RemoteVersion { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+    public string? DownloadUrl { get; init; }
 }

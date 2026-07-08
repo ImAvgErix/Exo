@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http.Headers;
+using System.Text.Json;
 using OptiHub.Helpers;
 using OptiHub.Models;
 
@@ -35,12 +37,11 @@ public sealed class GitHubUpdateService
         var branch = settings.DiscordScriptsBranch;
         var localVersion = _scripts.GetWorkingVersion();
 
-        status?.Report("Checking remote Discord kit VERSION…");
+        status?.Report("Checking remote Discord kit VERSION...");
 
         string remoteVersion;
         try
         {
-            // Prefer per-kit VERSION under OptiHub/Scripts/Discord; fall back to repo root VERSION.
             remoteVersion = await TryGetRemoteTextAsync(
                 $"https://raw.githubusercontent.com/{repo}/{branch}/OptiHub/Scripts/Discord/VERSION", ct)
                 ?? await TryGetRemoteTextAsync(
@@ -72,7 +73,7 @@ public sealed class GitHubUpdateService
             };
         }
 
-        status?.Report($"Downloading Discord kit {remoteVersion}…");
+        status?.Report($"Downloading Discord kit {remoteVersion}...");
 
         var work = Path.Combine(PathHelper.AppDataDir, "updates", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
@@ -87,7 +88,7 @@ public sealed class GitHubUpdateService
                 await stream.CopyToAsync(fs, ct);
             }
 
-            status?.Report("Extracting…");
+            status?.Report("Extracting...");
             var extract = Path.Combine(work, "extract");
             ZipFile.ExtractToDirectory(zipPath, extract, overwriteFiles: true);
 
@@ -107,7 +108,7 @@ public sealed class GitHubUpdateService
             if (!File.Exists(verFile))
                 await File.WriteAllTextAsync(verFile, remoteVersion, ct);
 
-            status?.Report("Installing updated scripts…");
+            status?.Report("Installing updated scripts...");
             _scripts.ReplaceDiscordScriptsFrom(discordScriptsRoot);
             _settings.Update(s => s.DiscordKitVersion = remoteVersion);
 
@@ -131,7 +132,166 @@ public sealed class GitHubUpdateService
         }
         finally
         {
-            try { Directory.Delete(work, recursive: true); } catch { /* ignore */ }
+            try { Directory.Delete(work, recursive: true); } catch { }
+        }
+    }
+
+    public async Task<AppUpdateResult> CheckAppUpdateAsync(
+        IProgress<string>? status = null,
+        CancellationToken ct = default)
+    {
+        var local = typeof(GitHubUpdateService).Assembly.GetName().Version;
+        var localText = local is null ? "0.0.0" : $"{local.Major}.{local.Minor}.{local.Build}";
+        status?.Report("Checking GitHub releases...");
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/BarcusEric/OptiHub/releases/latest");
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+            using var resp = await Http.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                return new AppUpdateResult
+                {
+                    LocalVersion = localText,
+                    RemoteVersion = "?",
+                    Message = $"Could not check releases ({(int)resp.StatusCode})."
+                };
+            }
+
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            var root = doc.RootElement;
+            var tag = root.TryGetProperty("tag_name", out var t) ? (t.GetString() ?? "") : "";
+            var remote = tag.Trim().TrimStart('v', 'V');
+            string? zipUrl = null;
+            if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var a in assets.EnumerateArray())
+                {
+                    var name = a.TryGetProperty("name", out var n) ? n.GetString() : null;
+                    if (string.Equals(name, "optihub-build.zip", StringComparison.OrdinalIgnoreCase) ||
+                        (name?.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) == true))
+                    {
+                        zipUrl = a.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
+                        if (string.Equals(name, "optihub-build.zip", StringComparison.OrdinalIgnoreCase))
+                            break;
+                    }
+                }
+            }
+
+            if (VersionsEqualOrLocalNewer(localText, remote))
+            {
+                return new AppUpdateResult
+                {
+                    AlreadyLatest = true,
+                    LocalVersion = localText,
+                    RemoteVersion = remote,
+                    Message = $"OptiHub is up to date (v{localText})."
+                };
+            }
+
+            return new AppUpdateResult
+            {
+                UpdateAvailable = true,
+                LocalVersion = localText,
+                RemoteVersion = remote,
+                DownloadUrl = zipUrl,
+                Message = $"OptiHub v{remote} is available (you have v{localText})."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new AppUpdateResult
+            {
+                LocalVersion = localText,
+                RemoteVersion = "?",
+                Message = $"Could not check for app updates: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<AppUpdateResult> InstallLatestAppAsync(
+        IProgress<string>? status = null,
+        CancellationToken ct = default)
+    {
+        var check = await CheckAppUpdateAsync(status, ct);
+        if (!check.UpdateAvailable)
+            return check;
+        if (string.IsNullOrWhiteSpace(check.DownloadUrl))
+        {
+            return new AppUpdateResult
+            {
+                UpdateAvailable = true,
+                LocalVersion = check.LocalVersion,
+                RemoteVersion = check.RemoteVersion,
+                Message = "Update found but no download asset was available."
+            };
+        }
+
+        status?.Report($"Downloading OptiHub v{check.RemoteVersion}...");
+        var work = Path.Combine(PathHelper.AppDataDir, "app-update", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        var zipPath = Path.Combine(work, "optihub-build.zip");
+        var extract = Path.Combine(work, "extract");
+
+        try
+        {
+            await using (var fs = File.Create(zipPath))
+            await using (var stream = await Http.GetStreamAsync(check.DownloadUrl, ct))
+                await stream.CopyToAsync(fs, ct);
+
+            status?.Report("Extracting update...");
+            ZipFile.ExtractToDirectory(zipPath, extract, overwriteFiles: true);
+
+            var newExe = Directory.GetFiles(extract, "OptiHub.exe", SearchOption.AllDirectories).FirstOrDefault();
+            if (newExe is null)
+            {
+                return new AppUpdateResult
+                {
+                    UpdateAvailable = true,
+                    LocalVersion = check.LocalVersion,
+                    RemoteVersion = check.RemoteVersion,
+                    Message = "Downloaded update did not contain OptiHub.exe."
+                };
+            }
+
+            var sourceDir = Path.GetDirectoryName(newExe)!;
+            var targetDir = PathHelper.AppDirectory;
+            var bat = Path.Combine(work, "apply-update.bat");
+            var batBody =
+                "@echo off" + Environment.NewLine +
+                "timeout /t 2 /nobreak >nul" + Environment.NewLine +
+                "xcopy /E /Y /I /Q \"" + sourceDir + "\\*\" \"" + targetDir + "\\\" >nul" + Environment.NewLine +
+                "start \"\" \"" + Path.Combine(targetDir, "OptiHub.exe") + "\"" + Environment.NewLine +
+                "rmdir /S /Q \"" + work + "\"" + Environment.NewLine;
+            await File.WriteAllTextAsync(bat, batBody, ct);
+
+            status?.Report("Restarting into the new version...");
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = bat,
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                CreateNoWindow = true
+            });
+
+            return new AppUpdateResult
+            {
+                UpdateAvailable = true,
+                LocalVersion = check.LocalVersion,
+                RemoteVersion = check.RemoteVersion,
+                Message = $"Installing OptiHub v{check.RemoteVersion}. The app will restart."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new AppUpdateResult
+            {
+                UpdateAvailable = true,
+                LocalVersion = check.LocalVersion,
+                RemoteVersion = check.RemoteVersion,
+                Message = $"App update failed: {ex.Message}"
+            };
         }
     }
 
@@ -149,9 +309,6 @@ public sealed class GitHubUpdateService
         }
     }
 
-    /// <summary>
-    /// Locates Discord scripts in OptiHub layout, then legacy Disc Optimizer folder.
-    /// </summary>
     private static string? FindDiscordScriptsRoot(string extractRoot)
     {
         var modern = Directory.GetDirectories(extractRoot, "Discord", SearchOption.AllDirectories)

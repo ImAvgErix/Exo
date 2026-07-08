@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
@@ -24,7 +24,7 @@
     <AssemblyName>OptiHub</AssemblyName>
     <Product>OptiHub</Product>
     <Company>OptiHub</Company>
-    <Version>1.0.11</Version>
+    <Version>1.0.12</Version>
     <Description>Cozy hub for system optimizers â€” performance, privacy, and gaming.</Description>
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
@@ -51,4 +51,5 @@
     <ProjectCapability Include="Msix" />
   </ItemGroup>
 </Project>
+
 

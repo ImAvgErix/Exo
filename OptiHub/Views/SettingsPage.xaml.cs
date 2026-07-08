@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using OptiHub.ViewModels;
 
@@ -21,9 +21,9 @@ public sealed partial class SettingsPage : Page
         };
     }
 
-    private void CheckUpdates_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.CheckUpdatesCommand.Execute(null);
+    private void CheckScriptUpdates_Click(object sender, RoutedEventArgs e) =>
+        ViewModel.CheckScriptUpdatesCommand.Execute(null);
 
-    private void ForceUpdate_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.ForceUpdateCommand.Execute(null);
+    private void CheckAppUpdates_Click(object sender, RoutedEventArgs e) =>
+        ViewModel.CheckAppUpdatesCommand.Execute(null);
 }

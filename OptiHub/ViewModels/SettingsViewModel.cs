@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OptiHub.Models;
 using OptiHub.Services;
@@ -16,34 +16,15 @@ public partial class SettingsViewModel : ObservableObject
         LoadFromSettings();
     }
 
-    [ObservableProperty]
-    private bool _isDarkMode = true;
+    [ObservableProperty] private bool _isDarkMode = true;
+    [ObservableProperty] private bool _isLightMode;
+    [ObservableProperty] private bool _autoUpdateScripts;
+    [ObservableProperty] private string _appVersion = "-";
+    [ObservableProperty] private string _kitVersion = "-";
+    [ObservableProperty] private string _updateStatus = string.Empty;
+    [ObservableProperty] private bool _isUpdating;
 
-    [ObservableProperty]
-    private bool _isLightMode;
-
-    [ObservableProperty]
-    private bool _autoUpdateScripts;
-
-    [ObservableProperty]
-    private string _scriptsRepo = "BarcusEric/OptiHub";
-
-    [ObservableProperty]
-    private string _scriptsBranch = "main";
-
-    [ObservableProperty]
-    private string _customScriptsPath = string.Empty;
-
-    [ObservableProperty]
-    private string _kitVersion = "—";
-
-    [ObservableProperty]
-    private string _updateStatus = string.Empty;
-
-    [ObservableProperty]
-    private bool _isUpdating;
-
-    public string AboutFooter { get; private set; } = "OptiHub · https://github.com/BarcusEric/OptiHub";
+    public string AboutFooter { get; private set; } = "OptiHub";
 
     public event EventHandler? RequestGoBack;
 
@@ -91,29 +72,25 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnAutoUpdateScriptsChanged(bool value) =>
         _services.Settings.Update(s => s.AutoUpdateScripts = value);
 
-    partial void OnScriptsRepoChanged(string value) =>
-        _services.Settings.Update(s => s.DiscordScriptsRepo = value?.Trim() ?? "BarcusEric/OptiHub");
-
-    partial void OnScriptsBranchChanged(string value) =>
-        _services.Settings.Update(s => s.DiscordScriptsBranch = value?.Trim() ?? "main");
-
-    partial void OnCustomScriptsPathChanged(string value) =>
-        _services.Settings.Update(s => s.CustomScriptsPath = value?.Trim() ?? string.Empty);
-
     [RelayCommand]
-    private async Task CheckUpdatesAsync()
+    private async Task CheckAppUpdatesAsync()
     {
         if (IsUpdating) return;
         IsUpdating = true;
-        UpdateStatus = "Checking GitHub…";
+        UpdateStatus = "Checking for OptiHub updates...";
         try
         {
             var progress = new Progress<string>(m => UpdateStatus = m);
-            var result = await _services.Updater.CheckAndUpdateDiscordScriptsAsync(
-                force: false,
-                status: progress);
+            var result = await _services.Updater.CheckAppUpdateAsync(status: progress);
             UpdateStatus = result.Message;
-            KitVersion = _services.Scripts.GetWorkingVersion();
+            AppVersion = GetAppVersionText();
+            if (result.UpdateAvailable)
+            {
+                UpdateStatus = result.Message + " Installing...";
+                var install = await _services.Updater.InstallLatestAppAsync(status: progress);
+                UpdateStatus = install.Message;
+                AppVersion = GetAppVersionText();
+            }
         }
         catch (Exception ex)
         {
@@ -126,17 +103,15 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task ForceUpdateAsync()
+    private async Task CheckScriptUpdatesAsync()
     {
         if (IsUpdating) return;
         IsUpdating = true;
-        UpdateStatus = "Force-downloading latest scripts…";
+        UpdateStatus = "Checking script updates...";
         try
         {
             var progress = new Progress<string>(m => UpdateStatus = m);
-            var result = await _services.Updater.CheckAndUpdateDiscordScriptsAsync(
-                force: true,
-                status: progress);
+            var result = await _services.Updater.CheckAndUpdateDiscordScriptsAsync(force: false, status: progress);
             UpdateStatus = result.Message;
             KitVersion = _services.Scripts.GetWorkingVersion();
         }
@@ -159,14 +134,14 @@ public partial class SettingsViewModel : ObservableObject
         IsLightMode = !dark;
         _suppressThemeSync = false;
         AutoUpdateScripts = s.AutoUpdateScripts;
-        ScriptsRepo = string.IsNullOrWhiteSpace(s.DiscordScriptsRepo)
-            ? "BarcusEric/OptiHub"
-            : s.DiscordScriptsRepo;
-        ScriptsBranch = s.DiscordScriptsBranch;
-        CustomScriptsPath = s.CustomScriptsPath;
         KitVersion = _services.Scripts.GetWorkingVersion();
+        AppVersion = GetAppVersionText();
+        AboutFooter = "OptiHub " + AppVersion + " · https://github.com/BarcusEric/OptiHub";
+    }
+
+    private static string GetAppVersionText()
+    {
         var ver = typeof(SettingsViewModel).Assembly.GetName().Version;
-        var verText = ver is null ? "1.0" : $"{ver.Major}.{ver.Minor}.{ver.Build}";
-        AboutFooter = $"OptiHub {verText} · https://github.com/BarcusEric/OptiHub";
+        return ver is null ? "1.0.0" : $"{ver.Major}.{ver.Minor}.{ver.Build}";
     }
 }
