@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using OptiHub.ViewModels;
@@ -27,11 +28,14 @@ public sealed partial class DashboardPage : Page
         await ViewModel.RefreshStatesAsync();
     }
 
-    private void OptimizerGrid_ItemClick(object sender, ItemClickEventArgs e)
+    private void CardButton_Click(object sender, RoutedEventArgs e)
     {
-        if (e.ClickedItem is not OptimizerCardViewModel card) return;
-        if (card.IsComingSoon || card.Definition.Status == Models.OptimizerStatus.ComingSoon)
+        if (sender is not Button btn) return;
+        var id = btn.Tag as string;
+        if (string.IsNullOrWhiteSpace(id)) return;
+        var card = ViewModel.Cards.FirstOrDefault(c => c.Definition.Id == id);
+        if (card is null || card.IsComingSoon || card.Definition.Status == Models.OptimizerStatus.ComingSoon)
             return;
-        ViewModel.OpenOptimizerCommand.Execute(card.Definition.Id);
+        ViewModel.OpenOptimizerCommand.Execute(id);
     }
 }

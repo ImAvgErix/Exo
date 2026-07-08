@@ -1,16 +1,16 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Page x:Class="OptiHub.Views.SettingsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       Background="Transparent">
-  <Grid Padding="24,10,24,16">
+  <Grid Padding="18,6,18,12">
     <Border Style="{StaticResource OptiCard}"
-            Padding="22,18"
+            Padding="18,16"
             MaxWidth="{StaticResource OptiPageMaxWidth}"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch">
-      <StackPanel Spacing="14">
-        <StackPanel Spacing="10">
+      <StackPanel Spacing="12" VerticalAlignment="Top">
+        <StackPanel Spacing="8">
           <TextBlock Text="APPEARANCE" Style="{StaticResource OptiSectionTitle}" Margin="0" />
           <StackPanel Orientation="Horizontal" Spacing="28">
             <ToggleSwitch Header="Dark" IsOn="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}" />
@@ -20,7 +20,7 @@
 
         <Border Height="1" Background="{ThemeResource OptiCardStrokeBrush}" Opacity="0.5" />
 
-        <StackPanel Spacing="10">
+        <StackPanel Spacing="8">
           <TextBlock Text="UPDATES" Style="{StaticResource OptiSectionTitle}" Margin="0" />
           <ToggleSwitch Header="Auto-update scripts on launch"
                         IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}" />
@@ -56,7 +56,7 @@
                     HorizontalAlignment="Stretch"
                     IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
             <Button Grid.Column="1"
-                    Style="{StaticResource OptiQuietButton}"
+                    Style="{StaticResource OptiPrimaryButton}"
                     Content="Check script update"
                     Click="CheckScriptUpdates_Click"
                     HorizontalAlignment="Stretch"
@@ -64,16 +64,18 @@
           </Grid>
           <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
                      Style="{StaticResource OptiBody}"
-                     FontSize="13"
+                     FontSize="12"
+                     Foreground="{ThemeResource OptiPrimaryTextBrush}"
                      TextWrapping="Wrap"
-                     MinHeight="20" />
+                     MinHeight="18" />
         </StackPanel>
 
         <Border Height="1" Background="{ThemeResource OptiCardStrokeBrush}" Opacity="0.5" />
 
         <StackPanel Spacing="6">
           <TextBlock Text="ABOUT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-          <TextBlock Style="{StaticResource OptiBody}" FontSize="13" LineHeight="20"
+          <TextBlock Style="{StaticResource OptiBody}" FontSize="12" LineHeight="18"
+                     Foreground="{ThemeResource OptiPrimaryTextBrush}"
                      Text="OptiHub is a hub for optional system optimizers - performance, privacy, and gaming. Use at your own risk." />
           <TextBlock Style="{StaticResource OptiCaption}"
                      Text="{x:Bind ViewModel.AboutFooter, Mode=OneWay}" />

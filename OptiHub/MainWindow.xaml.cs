@@ -28,7 +28,14 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         App.MainAppWindow = this;
 
-        AppWindow.Resize(new SizeInt32(1100, 720));
+        // Compact fixed window — no maximize / resize
+        AppWindow.Resize(new SizeInt32(900, 640));
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.IsMaximizable = false;
+            presenter.IsResizable = false;
+            presenter.IsMinimizable = true;
+        }
         TryCenterOnScreen();
 
         ExtendsContentIntoTitleBar = true;
