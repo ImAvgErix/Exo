@@ -1,8 +1,9 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Publish OptiHub and create a GitHub Release that is the installer Latest.
+  Publish OptiHub and create a single GitHub Release that is the installer Latest.
   Verifies GET /repos/{repo}/releases/latest — tags alone are NOT enough.
+  Deletes every older release + orphan tags after Latest is confirmed.
 
 .EXAMPLE
   .\Release-OptiHub.ps1
@@ -42,6 +43,44 @@ function Test-LatestIsTag([string]$ExpectedTag) {
     }
 }
 
+function Get-AllReleaseTags {
+    # Prefer API JSON over `gh release list` text parsing (Latest column is empty for non-latest).
+    $json = gh api "repos/$Repo/releases?per_page=100" 2>$null
+    if (-not $json) { return @() }
+    $rels = $json | ConvertFrom-Json
+    return @($rels | ForEach-Object { $_.tag_name } | Where-Object { $_ })
+}
+
+function Remove-OldReleasesAndTags([string]$KeepTag) {
+    Write-Host "[*] Deleting older releases (keeping $KeepTag)..." -ForegroundColor Cyan
+
+    $tags = Get-AllReleaseTags
+    foreach ($old in $tags) {
+        if ($old -eq $KeepTag) { continue }
+        Write-Host "    delete release $old" -ForegroundColor DarkGray
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        gh release delete $old --repo $Repo --yes --cleanup-tag 2>&1 | Out-Null
+        $ErrorActionPreference = $prev
+    }
+
+    # Prune leftover tags that are not the keep tag (orphans from failed creates)
+    $prev2 = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $remoteTags = @(git ls-remote --tags origin 2>$null | ForEach-Object {
+        if ($_ -match 'refs/tags/(v[\w\.\-]+)$') { $Matches[1] }
+    } | Sort-Object -Unique)
+    foreach ($t in $remoteTags) {
+        if ($t -eq $KeepTag) { continue }
+        # Only prune OptiHub version tags (v1.x.x), not unrelated tags
+        if ($t -notmatch '^v\d+\.\d+\.\d+') { continue }
+        Write-Host "    delete orphan tag $t" -ForegroundColor DarkGray
+        git push origin ":refs/tags/$t" 1>$null 2>$null
+        git tag -d $t 1>$null 2>$null
+    }
+    $ErrorActionPreference = $prev2
+}
+
 Write-Host ''
 Write-Host "  OptiHub release  ·  $Tag" -ForegroundColor Cyan
 Write-Host ''
@@ -60,9 +99,10 @@ if ($NotesFile -and (Test-Path $NotesFile)) {
     $body = @"
 ## What's new in $Version
 
-- Repair Discord installs missing resources/app.asar (reinstall instead of failing)
-- Direct Equicord/OpenASAR path (no Equilot hang)
-- Release script verifies GitHub /releases/latest, not just tags
+- Fix Discord hang after BlockKrisp (no interactive keypress under OptiHub)
+- OpenASAR status detects ``_app.asar`` correctly
+- In-app update uses stage-and-swap installer
+- Release script deletes older releases after Latest is verified
 
 ## Install / update
 
@@ -89,8 +129,8 @@ irm "https://raw.githubusercontent.com/$Repo/main/Install-OptiHub.ps1" | iex
 "@
 }
 
-# Replace this tag's release if it already exists (do NOT delete other releases first —
-# that can leave /releases/latest stuck on an older published release).
+# Recreate this tag's release if it already exists. Do NOT delete other releases first —
+# that can leave /releases/latest stuck on an older published release.
 $prevEap = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 gh release view $Tag --repo $Repo 1>$null 2>$null
@@ -99,7 +139,9 @@ $ErrorActionPreference = $prevEap
 
 if ($tagReleaseExists) {
     Write-Host "[*] Deleting existing release $Tag before recreate" -ForegroundColor DarkGray
+    $ErrorActionPreference = 'Continue'
     gh release delete $Tag --repo $Repo --yes 2>$null
+    $ErrorActionPreference = $prevEap
 }
 
 $ErrorActionPreference = 'Continue'
@@ -134,18 +176,8 @@ if (-not $ok) {
     throw "RELEASE VERIFY FAILED: /releases/latest is '$($last.Tag)' not '$Tag' with optihub-build.zip. A tag alone is NOT a release."
 }
 
-# Only after Latest is confirmed, remove older releases so Latest stays unambiguous
-$existing = gh release list --repo $Repo --limit 50 2>$null
-if ($existing) {
-    foreach ($line in ($existing -split "`n")) {
-        if ($line -match '\t(v[\w\.\-]+)\t') {
-            $old = $Matches[1]
-            if ($old -eq $Tag) { continue }
-            Write-Host "[*] Deleting old release $old" -ForegroundColor DarkGray
-            gh release delete $old --repo $Repo --yes --cleanup-tag 2>$null
-        }
-    }
-}
+# Only after Latest is confirmed, remove older releases + orphan tags
+Remove-OldReleasesAndTags -KeepTag $Tag
 
 # Re-verify after cleanup (deletes must not demote Latest)
 $last = $null
@@ -164,8 +196,15 @@ if (-not $ok) {
     throw "RELEASE VERIFY FAILED after cleanup: /releases/latest is '$($last.Tag)' not '$Tag'."
 }
 
+$remaining = Get-AllReleaseTags
+$extra = @($remaining | Where-Object { $_ -ne $Tag })
+if ($extra.Count -gt 0) {
+    throw "CLEANUP FAILED: still have old releases: $($extra -join ', ')"
+}
+
 Write-Host ''
 Write-Host "[+] VERIFIED Latest release: https://github.com/$Repo/releases/tag/$Tag" -ForegroundColor Green
 Write-Host "    API /releases/latest = $Tag + optihub-build.zip" -ForegroundColor Green
+Write-Host "    Old releases deleted (only $Tag remains)" -ForegroundColor Green
 Write-Host "    Install: irm `"https://raw.githubusercontent.com/$Repo/main/Install-OptiHub.ps1`" | iex" -ForegroundColor DarkGray
 Write-Host ''
