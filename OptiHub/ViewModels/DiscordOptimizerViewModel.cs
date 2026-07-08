@@ -95,7 +95,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         var warning =
             "This will close Discord, apply optimizations (Equicord, OpenASAR, kernel, cache, Windows tweaks), and may request Administrator approval.\n\n" +
             "Your login/session is preserved. A repair path is available if anything goes wrong.\n\n" +
-            "Run mode is detected automatically. A system restore point will be created first when Windows allows.";
+            "Run mode is detected automatically.";
 
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync($"Confirm Discord Optimizer ({action})", warning)
@@ -138,7 +138,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             {
                 ProgressPercent = 100;
                 ProgressStatus = "Completed successfully";
-                SetResult("Completed successfully. Equicord, OpenASAR, kernel, and tweaks were applied. Open Discord when ready.", success: true);
+                SetResult("Completed successfully. Open Discord when ready.", success: true);
                 _services.Settings.Update(s =>
                     s.LastDiscordRunUtc = DateTime.UtcNow.ToString("o"));
             }

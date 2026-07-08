@@ -178,14 +178,14 @@ public sealed class OptimizerStateService
         var resources = Path.Combine(appDir, "resources");
         var equicordAsar = Path.Combine(equicord, "equicord.asar");
         var appAsar = Path.Combine(resources, "app.asar");
-        var stock = Path.Combine(resources, "_app.asar.stock");
         var versionDll = Path.Combine(appDir, "version.dll");
         var ffmpeg = Path.Combine(appDir, "ffmpeg.dll");
         var configIni = Path.Combine(appDir, "config.ini");
 
+        var loaderLen = File.Exists(appAsar) ? new FileInfo(appAsar).Length : 0L;
         var equicordOk = File.Exists(equicordAsar) &&
-                         File.Exists(appAsar) &&
-                         new FileInfo(appAsar).Length < 4096;
+                         loaderLen >= 64 &&
+                         loaderLen < 4096;
         features.Add(MakeFeature(
             "Client mods & privacy",
             "Equicord loads privacy plugins and strips noisy telemetry.",
@@ -234,8 +234,6 @@ public sealed class OptimizerStateService
             "Quieter Windows startup",
             "Discord stays closed on boot so it is not sitting in the tray.",
             startupOk));
-
-        _ = _settings;
 
         var applied = equicordOk && (kernelOk || openAsarOk);
         return new OptimizerStateInfo

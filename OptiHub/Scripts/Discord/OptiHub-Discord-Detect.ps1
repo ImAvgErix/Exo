@@ -43,7 +43,8 @@ if (-not (Test-Path $discordRoot)) {
         $ffmpeg = Join-Path $app.FullName 'ffmpeg.dll'
         $configIni = Join-Path $app.FullName 'config.ini'
 
-        $equicordOk = (Test-Path $equicordAsar) -and (Test-Path $appAsar) -and ((Get-Item $appAsar).Length -lt 4096)
+        $loaderLen = if (Test-Path $appAsar) { (Get-Item $appAsar).Length } else { 0 }
+        $equicordOk = (Test-Path $equicordAsar) -and ($loaderLen -ge 64) -and ($loaderLen -lt 4096)
         Add-Feature 'Client mods & privacy' 'Equicord loads privacy plugins and strips noisy telemetry.' $equicordOk
 
         $openAsarOk = $false

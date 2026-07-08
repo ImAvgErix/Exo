@@ -42,7 +42,7 @@ if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.11'
+$Script:DiscOptVersion = '1.1.12'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -345,7 +345,6 @@ $Protected = @(
     'Discord.bin.exe', 'Update.exe', 'app.asar', '_app.asar', '_app.asar.stock'
 )
 $OpenAsarUrl = 'https://github.com/GooseMod/OpenAsar/releases/download/nightly/app.asar'
-$EquilotCliUrl = 'https://github.com/Equicord/Equilotl/releases/latest/download/EquilotlCli.exe'
 $DiscordSetupUrl = 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64'
 $RequiredModules = @(
     'discord_desktop_core-1', 'discord_dispatch-1', 'discord_media-1',
@@ -657,7 +656,7 @@ function Remove-Safe([string]$Path, [ref]$Freed) {
 function Stop-Discord {
     # Hard-kill Discord/Update so resources\app.asar is not locked during Equicord/OpenASAR writes.
     $names = @('Discord', 'Discord.bin', 'Update', 'app')
-    for ($round = 1; $round -le 3; $round++) {
+    for ($round = 1; $round -le 4; $round++) {
         $procs = @(Get-Process -Name $names -ErrorAction SilentlyContinue | Where-Object {
             try {
                 $path = $_.Path
@@ -668,32 +667,62 @@ function Stop-Discord {
         if ($procs.Count -eq 0) { break }
         foreach ($p in $procs) {
             try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { }
-            try { & taskkill.exe /F /PID $p.Id 2>$null | Out-Null } catch { }
+            try { & taskkill.exe /F /T /PID $p.Id 2>$null | Out-Null } catch { }
         }
-        Start-Sleep -Milliseconds (250 * $round)
+        Start-Sleep -Milliseconds (300 * $round)
     }
-    Start-Sleep -Milliseconds 350
+    try { & taskkill.exe /F /IM Discord.exe /T 2>$null | Out-Null } catch { }
+    try { & taskkill.exe /F /IM Update.exe /T 2>$null | Out-Null } catch { }
+    Start-Sleep -Milliseconds 500
 }
 
 function Write-DiscordResourceBytes {
     param(
         [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)][byte[]]$Bytes,
-        [int]$Attempts = 8
+        [int]$Attempts = 10
     )
+
+    $dir = Split-Path -Parent $Path
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
 
     for ($i = 1; $i -le $Attempts; $i++) {
         Stop-Discord
+        Write-HubProgress 57 ("Rewriting Discord resources ($i/$Attempts)...")
         try {
             if (Test-Path -LiteralPath $Path) {
                 attrib -R -S -H "$Path" 2>$null
+                try { & icacls.exe "$Path" /grant "*S-1-5-32-544:F" /C 2>$null | Out-Null } catch { }
+                try { & icacls.exe "$Path" /grant "${env:USERNAME}:F" /C 2>$null | Out-Null } catch { }
+
+                $bak = "$Path.lockbak"
+                try {
+                    if (Test-Path -LiteralPath $bak) { Remove-Item -LiteralPath $bak -Force -ErrorAction SilentlyContinue }
+                    Move-Item -LiteralPath $Path -Destination $bak -Force -ErrorAction Stop
+                    Remove-Item -LiteralPath $bak -Force -ErrorAction SilentlyContinue
+                } catch {
+                    try { Remove-Item -LiteralPath $Path -Force -ErrorAction Stop } catch { }
+                }
             }
-            [IO.File]::WriteAllBytes($Path, $Bytes)
-            return
+
+            $tmp = "$Path.tmpwrite"
+            [IO.File]::WriteAllBytes($tmp, $Bytes)
+            if (Test-Path -LiteralPath $Path) {
+                attrib -R -S -H "$Path" 2>$null
+                Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+            }
+            Move-Item -LiteralPath $tmp -Destination $Path -Force
+            if ((Test-Path -LiteralPath $Path) -and ((Get-Item -LiteralPath $Path).Length -eq $Bytes.Length)) {
+                return
+            }
+            throw "Write verify failed for $Path"
         } catch {
+            try { Remove-Item -LiteralPath "$Path.tmpwrite" -Force -ErrorAction SilentlyContinue } catch { }
             if ($i -ge $Attempts) { throw }
             Write-Warn ("Waiting for Discord to release file lock ($i/$Attempts): " + $_.Exception.Message)
-            Start-Sleep -Milliseconds (350 * $i)
+            Start-Sleep -Milliseconds (500 * $i)
         }
     }
 }
@@ -704,10 +733,12 @@ function Test-DiscordReady {
     $app = Get-ActiveApp
     if (-not $app) { return $false }
     if (-not (Test-Path (Join-Path $app.FullName 'Discord.exe'))) { return $false }
-    # Broken installs often keep Discord.exe but wipe resources/app.asar
+    # Broken installs often keep Discord.exe but wipe/corrupt resources/app.asar
     $resources = Join-Path $app.FullName 'resources'
     $appAsar = Join-Path $resources 'app.asar'
-    return ((Test-Path $resources) -and (Test-Path $appAsar))
+    if (-not ((Test-Path $resources) -and (Test-Path $appAsar))) { return $false }
+    # 1-byte stubs are corrupt - treat as not ready so repair can restore stock
+    return ((Get-Item $appAsar).Length -ge 64)
 }
 
 function Confirm-WindowsDiscordTarget {
@@ -866,53 +897,6 @@ function Get-BundledOpenAsar {
     return $null
 }
 
-function Get-BundledEquilotGui {
-    foreach ($name in @('Equilotl.exe', 'equilotl.exe')) {
-        $path = Join-Path $ToolsDir $name
-        if ((Test-Path $path) -and (Get-Item $path).Length -gt 1000000) { return $path }
-    }
-    return $null
-}
-
-function Get-BundledEquilotCli {
-    foreach ($name in @('EquilotlCli.exe', 'equilotlcli.exe')) {
-        $path = Join-Path $ToolsDir $name
-        if ((Test-Path $path) -and (Get-Item $path).Length -gt 1000000) { return $path }
-    }
-    return $null
-}
-
-function Ensure-EquilotCli {
-    $bundled = Get-BundledEquilotCli
-    if ($bundled) {
-        Write-Ok "Using bundled EquilotlCli ($([math]::Round((Get-Item $bundled).Length / 1MB, 1)) MB from tools/)"
-        return $bundled
-    }
-
-    if (-not (Test-Path $ToolsDir)) {
-        New-Item -ItemType Directory -Path $ToolsDir -Force | Out-Null
-    }
-
-    # Always prefer the official Equicord installer over our manual patch path -
-    # it is the battle-tested way to install Equicord + OpenASAR.
-    $cli = Join-Path $ToolsDir 'EquilotlCli.exe'
-    Write-Step 'Downloading official Equicord installer (EquilotlCli.exe)...'
-    try {
-        $ua = @{ 'User-Agent' = 'Disc-Optimizer/1.0 (Windows; PowerShell)' }
-        Invoke-WebRequest -Uri $EquilotCliUrl -OutFile $cli -UseBasicParsing -Headers $ua -TimeoutSec 90
-    } catch {
-        Write-Warn "EquilotlCli download failed: $($_.Exception.Message)"
-        Write-LogLine 'WARN' "EquilotlCli download failed: $($_.Exception.Message)"
-        return $null
-    }
-    if (-not (Test-Path $cli) -or (Get-Item $cli).Length -lt 1000000) {
-        Write-Warn 'EquilotlCli.exe download looked invalid - falling back to direct install'
-        return $null
-    }
-    Write-Ok "EquilotlCli ready ($([math]::Round((Get-Item $cli).Length / 1MB, 1)) MB)"
-    return $cli
-}
-
 function Test-EquicordLoaderPatched([string]$AppDir) {
     $appAsar = Join-Path $AppDir 'resources\app.asar'
     if (-not (Test-Path $appAsar)) { return $false }
@@ -921,108 +905,6 @@ function Test-EquicordLoaderPatched([string]$AppDir) {
     return ($len -ge 64 -and $len -lt 4096)
 }
 
-function Invoke-EquilotCli {
-    param(
-        [Parameter(Mandatory)][string]$EquilotPath,
-        [Parameter(Mandatory)][string[]]$Arguments,
-        [int]$TimeoutSec = 480
-    )
-
-    $label = "$([IO.Path]::GetFileName($EquilotPath)) $($Arguments -join ' ')"
-    Write-LogLine 'STEP' "Equilot: $label"
-    Write-Step "Running Equilot ($($Arguments[0]))..."
-    Write-HubProgress 58 "Equilot: $($Arguments[0])..."
-
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $EquilotPath
-    $psi.Arguments = (Join-DiscOptProcessArguments $Arguments)
-    $psi.UseShellExecute = $false
-    $psi.CreateNoWindow = $true
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    $psi.WorkingDirectory = (Split-Path -Parent $EquilotPath)
-
-    $proc = New-Object System.Diagnostics.Process
-    $proc.StartInfo = $psi
-    [void]$proc.Start()
-
-    $deadline = (Get-Date).AddSeconds($TimeoutSec)
-    $lastBeat = Get-Date
-    while (-not $proc.HasExited) {
-        if ((Get-Date) -gt $deadline) {
-            try { $proc.Kill() } catch { }
-            throw "Equilot timed out after ${TimeoutSec}s ($label). Falling back to direct install."
-        }
-        if (((Get-Date) - $lastBeat).TotalSeconds -ge 12) {
-            $elapsed = [int]((Get-Date) - ($deadline.AddSeconds(-$TimeoutSec))).TotalSeconds
-            Write-HubProgress 58 "Equilot still working (${elapsed}s)..."
-            Write-LogLine 'STEP' "Equilot heartbeat ${elapsed}s: $label"
-            $lastBeat = Get-Date
-        }
-        Start-Sleep -Milliseconds 400
-    }
-
-    # Drain leftover output into kit log (best-effort)
-    try {
-        $out = $proc.StandardOutput.ReadToEnd()
-        $err = $proc.StandardError.ReadToEnd()
-        if ($out) { Write-LogLine 'INFO' ("Equilot stdout: " + ($out.Substring(0, [Math]::Min(800, $out.Length)))) }
-        if ($err) { Write-LogLine 'WARN' ("Equilot stderr: " + ($err.Substring(0, [Math]::Min(800, $err.Length)))) }
-    } catch { }
-
-    if ($null -ne $proc.ExitCode -and $proc.ExitCode -ne 0) {
-        throw "Equilot exited with code $($proc.ExitCode)"
-    }
-    Write-Ok "Equilot finished: $($Arguments[0])"
-}
-
-function Install-ViaEquilot([string]$AppDir) {
-    Write-Warn 'Equilot disabled in OptiHub - use direct Equicord path'
-    return $false
-    $equilot = Ensure-EquilotCli
-    if (-not $equilot) { return $false }
-
-    $resources = Join-Path $AppDir 'resources'
-    $openasarOk = $SkipOpenAsar -or (Test-OpenAsarInstalled $resources)
-    if ((Test-EquicordLoaderPatched $AppDir) -and $openasarOk) {
-        Write-Ok 'Equicord + OpenASAR OK - skipped Equilot repair (already patched)'
-        Apply-EquicordProfile -AppDir $AppDir
-        return $true
-    }
-
-    Write-Step 'Installing Equicord + OpenASAR via Equilot (tools/)...'
-    $locArgs = @('-location', $DiscordRoot)
-    Stop-Discord
-
-    try {
-        if (Test-EquicordLoaderPatched $AppDir) {
-            Write-Ok 'Equicord already patched - repairing/updating via Equilot'
-            Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('-repair') + $locArgs) -TimeoutSec 480
-        } else {
-            Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('-install') + $locArgs) -TimeoutSec 480
-            Write-Ok 'Equicord installed via Equilot'
-        }
-
-        if (-not $SkipOpenAsar) {
-            $resources = Join-Path $AppDir 'resources'
-            if (Test-OpenAsarInstalled $resources) {
-                Write-Ok 'OpenASAR already active'
-            } else {
-                Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('-install-openasar') + $locArgs) -TimeoutSec 300
-                Write-Ok 'OpenASAR installed via Equilot'
-            }
-        } else {
-            Write-Warn 'Skipped OpenASAR install (-SkipOpenAsar)'
-        }
-
-        Apply-EquicordProfile -AppDir $AppDir
-        return $true
-    } catch {
-        Write-Warn "Equilot failed ($($_.Exception.Message)) - falling back to direct Equicord install"
-        Write-LogLine 'WARN' "Equilot failed: $($_.Exception.Message)"
-        return $false
-    }
-}
 function Resolve-EquicordDesktopAsar([string]$DestPath) {
     $bundled = Get-BundledEquicordAsar
     if ($bundled) {
@@ -1622,18 +1504,16 @@ function Test-KitIntegrity {
         Write-Warn "Missing theme: $EnabledTheme"
     }
     $hasDiscordSetup = $null -ne (Get-BundledDiscordSetup)
-    $hasEquilotCli = $null -ne (Get-BundledEquilotCli)
     $hasModulesBundle = Test-ModulesBundleReady
-    if ($hasDiscordSetup -and $hasEquilotCli -and $hasModulesBundle) {
-        Write-Ok "tools/ fully ready: Discord + EquilotlCli + modules ($(Get-ModulesBundleVersion))"
-    } elseif ($hasDiscordSetup -and $hasEquilotCli) {
-        Write-Ok 'tools/ has Discord + EquilotlCli (modules bundle will cache on first run)'
-    } elseif ($hasDiscordSetup -and (Get-BundledEquilotGui)) {
-        Write-Ok 'tools/ has Discord + Equilotl GUI (add EquilotlCli.exe to skip CLI download)'
+    $hasEquicord = $null -ne (Get-BundledEquicordAsar)
+    if ($hasDiscordSetup -and $hasEquicord -and $hasModulesBundle) {
+        Write-Ok "tools/ fully ready: Discord + Equicord + modules ($(Get-ModulesBundleVersion))"
+    } elseif ($hasDiscordSetup -and $hasEquicord) {
+        Write-Ok 'tools/ has Discord + Equicord (modules bundle will cache on first run)'
     } elseif ($hasDiscordSetup) {
         Write-Ok 'tools/ has Discord installer'
     } else {
-        Write-Ok 'Tip: put DiscordSetup.exe + EquilotlCli.exe in tools/ for fast setup'
+        Write-Ok 'Tip: put DiscordSetup.exe + desktop.asar in tools/ for fast setup'
     }
 }
 

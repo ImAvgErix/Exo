@@ -323,7 +323,7 @@ public sealed class PowerShellRunnerService
                 }
                 PollLog(logPath, ref lastLength, ref lastPercent, ref lastStatus, progress);
             }
-            else if (DateTime.UtcNow - startedUtc > TimeSpan.FromSeconds(90) && !sawLog)
+            else if (DateTime.UtcNow - startedUtc > TimeSpan.FromSeconds(180) && !sawLog)
             {
                 progress?.Report(new ScriptRunProgress { Percent = 0, Status = "Elevation cancelled" });
                 CleanupTemp(wrapper, vbsPath, logPath, exitPath, outTmp, errTmp);

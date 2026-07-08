@@ -4,7 +4,7 @@ namespace OptiHub.Services;
 
 /// <summary>
 /// Ensures bundled scripts are available under LocalAppData for updates and runs.
-/// Always keeps the working Discord kit in sync with the app-bundled Scripts\Discord folder.
+/// Syncs the working Discord kit from the app-bundled Scripts\Discord folder when needed.
 /// </summary>
 public sealed class ScriptBundleService
 {
@@ -12,6 +12,9 @@ public sealed class ScriptBundleService
     private readonly object _syncLock = new();
     private string? _cachedRoot;
     private string? _cachedBundledVersion;
+    private string? _lastSyncedWorkingVersion;
+    private string? _lastSyncedBundledVersion;
+    private bool _syncDone;
 
     public ScriptBundleService(SettingsService settings)
     {
@@ -77,6 +80,16 @@ public sealed class ScriptBundleService
             ? File.ReadAllText(workingVersionPath).Trim()
             : string.Empty;
 
+        // Skip filesystem work when this process already synced the same versions.
+        if (_syncDone &&
+            string.Equals(_lastSyncedBundledVersion, bundledVersion, StringComparison.Ordinal) &&
+            string.Equals(_lastSyncedWorkingVersion, workingVersion, StringComparison.Ordinal) &&
+            File.Exists(Path.Combine(working, "Disc-Optimizer.ps1")) &&
+            File.Exists(Path.Combine(working, "OptiHub-Discord-Run.ps1")))
+        {
+            return;
+        }
+
         var marker = Path.Combine(working, "Disc-Optimizer.ps1");
         var hubRun = Path.Combine(working, "OptiHub-Discord-Run.ps1");
         var desktopAsar = Path.Combine(working, "kit", "tools", "desktop.asar");
@@ -84,12 +97,15 @@ public sealed class ScriptBundleService
             !File.Exists(marker) ||
             !File.Exists(hubRun) ||
             !File.Exists(desktopAsar) ||
-            !File.ReadAllText(marker).Contains("Install-EquicordDirect", StringComparison.Ordinal);
+            !File.ReadAllText(marker).Contains("Install-EquicordDirect", StringComparison.Ordinal) ||
+            !File.ReadAllText(marker).Contains("Write-DiscordResourceBytes", StringComparison.Ordinal);
 
         // Never overwrite a newer GitHub-updated kit with an older app-bundled kit.
-        // That was why "Update scripts" looked successful then still showed the old version.
         if (IsVersionNewer(workingVersion, bundledVersion) && !workingBroken)
+        {
+            RememberSync(bundledVersion, workingVersion);
             return;
+        }
 
         var needsFullSync =
             workingBroken ||
@@ -98,6 +114,10 @@ public sealed class ScriptBundleService
         if (needsFullSync)
         {
             CopyDirectory(bundled, working);
+            workingVersion = File.Exists(workingVersionPath)
+                ? File.ReadAllText(workingVersionPath).Trim()
+                : bundledVersion;
+            RememberSync(bundledVersion, workingVersion);
             return;
         }
 
@@ -116,6 +136,15 @@ public sealed class ScriptBundleService
             if (File.Exists(src))
                 File.Copy(src, dst, overwrite: true);
         }
+
+        RememberSync(bundledVersion, workingVersion);
+    }
+
+    private void RememberSync(string bundledVersion, string workingVersion)
+    {
+        _lastSyncedBundledVersion = bundledVersion;
+        _lastSyncedWorkingVersion = workingVersion;
+        _syncDone = true;
     }
 
     public void ReplaceDiscordScriptsFrom(string sourceDir)
@@ -128,6 +157,9 @@ public sealed class ScriptBundleService
             // Do not call EnsureDiscordScriptsSynced here — that can downgrade a newer kit.
             _cachedRoot = working;
             _cachedBundledVersion = null;
+            _syncDone = false;
+            _lastSyncedBundledVersion = null;
+            _lastSyncedWorkingVersion = null;
         }
     }
 
