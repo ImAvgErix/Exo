@@ -37,7 +37,7 @@ if ($Quick) {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.8'
+$Script:DiscOptVersion = '1.1.9'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -223,8 +223,8 @@ function Install-DiscOptPwsh77 {
         if ($winget) {
             Write-Host '[*] Installing PowerShell 7.7 via winget...' -ForegroundColor Cyan
             $proc = Start-Process -FilePath $winget.Source -ArgumentList @(
-                'install', '-e', '--id', 'Microsoft.PowerShell.Preview',
-                '--accept-package-agreements', '--accept-source-agreements', '--silent'
+                'install', '-e', '-id', 'Microsoft.PowerShell.Preview',
+                '-accept-package-agreements', '-accept-source-agreements', '-silent'
             ) -PassThru -Wait -WindowStyle Hidden
             if ($proc.ExitCode -ne 0) {
                 Write-Host '[!] winget install returned non-zero - trying portable download' -ForegroundColor Yellow
@@ -948,15 +948,15 @@ function Install-ViaEquilot([string]$AppDir) {
     }
 
     Write-Step 'Installing Equicord + OpenASAR via Equilot (tools/)...'
-    $locArgs = @('--location', $DiscordRoot)
+    $locArgs = @('-location', $DiscordRoot)
     Stop-Discord
 
     try {
         if (Test-EquicordLoaderPatched $AppDir) {
             Write-Ok 'Equicord already patched - repairing/updating via Equilot'
-            Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('--repair') + $locArgs) -TimeoutSec 480
+            Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('-repair') + $locArgs) -TimeoutSec 480
         } else {
-            Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('--install') + $locArgs) -TimeoutSec 480
+            Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('-install') + $locArgs) -TimeoutSec 480
             Write-Ok 'Equicord installed via Equilot'
         }
 
@@ -965,7 +965,7 @@ function Install-ViaEquilot([string]$AppDir) {
             if (Test-OpenAsarInstalled $resources) {
                 Write-Ok 'OpenASAR already active'
             } else {
-                Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('--install-openasar') + $locArgs) -TimeoutSec 300
+                Invoke-EquilotCli -EquilotPath $equilot -Arguments (@('-install-openasar') + $locArgs) -TimeoutSec 300
                 Write-Ok 'OpenASAR installed via Equilot'
             }
         } else {
@@ -1100,10 +1100,10 @@ function Update-DiscordSilent {
 function Invoke-SquirrelFirstRun([string]$AppDir) {
     $exe = Join-Path $AppDir 'Discord.exe'
     if (-not (Test-Path $exe)) { return }
-    Write-Step 'Discord first-run init (--squirrel-firstrun)...'
+    Write-Step 'Discord first-run init (-squirrel-firstrun)...'
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $exe
-    $psi.Arguments = '--squirrel-firstrun'
+    $psi.Arguments = '-squirrel-firstrun'
     $psi.WorkingDirectory = $AppDir
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
@@ -1389,7 +1389,7 @@ function Initialize-DiscordModules([string]$AppDir) {
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
         if ($nupkg) {
             Write-LogLine 'STEP' "Applying pending package: $($nupkg.Name)"
-            Start-Process -FilePath $updateExe -ArgumentList (Join-DiscOptProcessArguments @('--update', $nupkg.FullName)) -Wait -ErrorAction SilentlyContinue | Out-Null
+            Start-Process -FilePath $updateExe -ArgumentList (Join-DiscOptProcessArguments @('-update', $nupkg.FullName)) -Wait -ErrorAction SilentlyContinue | Out-Null
             if (Test-DiscordModulesReady $AppDir) {
                 Write-Ok 'Discord modules installed via update package'
                 Stop-Discord
@@ -1802,7 +1802,7 @@ function Test-CacheCleanNeeded {
     foreach ($relative in $SafeCacheTargets) {
         $path = Join-Path $AppData $relative
         if (-not (Test-Path $path)) { continue }
-        # Sample first files only Ã¢â‚¬â€ enough to decide if a clean is worth it
+        # Sample first files only          enough to decide if a clean is worth it
         $sample = @(Get-ChildItem $path -Recurse -Force -File -ErrorAction SilentlyContinue | Select-Object -First 50)
         if ($sample.Count -eq 0) { continue }
         $sum = ($sample | Measure-Object -Property Length -Sum).Sum
@@ -2179,13 +2179,13 @@ function Apply-DiscordProfile([string]$DestPath) {
 function Invoke-DiscordLaunch {
     param(
         [string]$AppDir,
-        [string[]]$ExtraArgs = @('--disable-logging', '--log-level=3')
+        [string[]]$ExtraArgs = @('-disable-logging', '-log-level=3')
     )
 
     $argStr = ($ExtraArgs | Where-Object { $_ }) -join ' '
 
     # Launch Discord.exe directly - it is the reliable path. Update.exe
-    # --processStart depends on Squirrel state (RELEASES/installer.db) and
+    # -processStart depends on Squirrel state (RELEASES/installer.db) and
     # exits silently when that state is unhappy.
     if (-not $AppDir) {
         $active = Get-ActiveApp
@@ -2206,9 +2206,9 @@ function Invoke-DiscordLaunch {
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = $updateExe
         if ($argStr) {
-            $psi.Arguments = "--processStart Discord.exe --process-start-args `"$argStr`""
+            $psi.Arguments = "-processStart Discord.exe -process-start-args `"$argStr`""
         } else {
-            $psi.Arguments = '--processStart Discord.exe'
+            $psi.Arguments = '-processStart Discord.exe'
         }
         $psi.WorkingDirectory = $DiscordRoot
         $psi.UseShellExecute = $true
@@ -2849,7 +2849,7 @@ function Write-RunSummary {
     Write-Host ''
 }
 
-# --- main ---
+# - main -
 try {
 Initialize-Network
 
@@ -2947,18 +2947,18 @@ if (-not $SkipKernel) {
 }
 
 # 5b) Boot safety
-# OptiHub Quick + NoLaunch: skip the open/close flash Ã¢â‚¬â€ files were just written and
+# OptiHub Quick + NoLaunch: skip the open/close flash - files were just written and
 # the host already verified state. Manual -Quick still does a short smoke check.
 $optiHubQuiet = ($env:OPTIHUB -eq '1') -and $NoLaunch
 if ($Quick -and $optiHubQuiet) {
-    Write-HubProgress 90 'Verifying files on diskÃ¢â‚¬Â¦'
-    Write-Step 'Quiet verify (no Discord window flash)Ã¢â‚¬Â¦'
+    Write-HubProgress 90 'Verifying files on disk...'
+    Write-Step 'Quiet verify (no Discord window flash)...'
     $exeOk = Test-Path (Join-Path $app.FullName 'Discord.exe')
     $asarOk = Test-Path (Join-Path $app.FullName 'resources\app.asar')
     if ($exeOk -and $asarOk) {
-        Write-Ok 'Quiet verify passed Ã¢â‚¬â€ Discord left closed for you to open when ready'
+        Write-Ok 'Quiet verify passed - Discord left closed for you to open when ready'
     } else {
-        Write-Warn 'Quiet verify incomplete Ã¢â‚¬â€ running full boot safety checkÃ¢â‚¬Â¦'
+        Write-Warn 'Quiet verify incomplete - running full boot safety check...'
         Confirm-DiscordBootsAfterMods $app.FullName
     }
 } elseif ($Quick) {
