@@ -284,6 +284,11 @@ try {
     exit $code
 } catch {
     Write-HubErr $_.Exception.Message
+    $kitErr = Join-Path $Root 'kit\logs\last-error.log'
+    $hubErr = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub\logs\last-discord-error.log'
+    if (Test-Path -LiteralPath $kitErr) { Write-HubErr "Error log: $kitErr" }
+    if (Test-Path -LiteralPath $hubErr) { Write-HubErr "Error log: $hubErr" }
+    elseif ($env:OPTIHUB_LOG) { Write-HubErr "OptiHub log: $env:OPTIHUB_LOG" }
     Write-HubProgress 100 'Failed'
     exit 1
 }

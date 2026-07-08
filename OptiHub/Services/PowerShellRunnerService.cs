@@ -157,7 +157,8 @@ public sealed class PowerShellRunnerService
             ExitCode = process.ExitCode,
             FullOutput = text,
             Summary = ok ? "Completed successfully" : $"Exited with code {process.ExitCode}",
-            ErrorMessage = ok ? null : ExtractError(text)
+            ErrorMessage = ok ? null : ExtractError(text, logPath),
+            LogPath = logPath
         };
     }
 
@@ -379,7 +380,8 @@ public sealed class PowerShellRunnerService
             ExitCode = exitCode,
             FullOutput = full,
             Summary = ok ? "Completed successfully" : $"Exited with code {exitCode}",
-            ErrorMessage = ok ? null : ExtractError(full)
+            ErrorMessage = ok ? null : ExtractError(full, logPath),
+            LogPath = logPath
         };
     }
 
@@ -473,15 +475,27 @@ public sealed class PowerShellRunnerService
         return s;
     }
 
-    private static string? ExtractError(string text)
+    private static string? ExtractError(string text, string? runLogPath = null)
     {
         var lines = text.Split('\n')
             .Select(l => l.TrimEnd('\r'))
             .Where(l => l.StartsWith("[-]", StringComparison.Ordinal) ||
-                        l.Contains("failed", StringComparison.OrdinalIgnoreCase))
-            .TakeLast(3)
+                        l.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+                        l.Contains("Error log:", StringComparison.OrdinalIgnoreCase) ||
+                        l.Contains("Full log:", StringComparison.OrdinalIgnoreCase) ||
+                        l.StartsWith("Message:", StringComparison.OrdinalIgnoreCase))
+            .TakeLast(6)
             .ToArray();
-        return lines.Length == 0 ? null : string.Join(Environment.NewLine, lines);
+
+        var message = lines.Length == 0 ? "Optimizer failed." : string.Join(Environment.NewLine, lines);
+
+        var lastError = Path.Combine(PathHelper.LogsDir, "last-discord-error.log");
+        if (File.Exists(lastError))
+            message += Environment.NewLine + "Error log: " + lastError;
+        else if (!string.IsNullOrWhiteSpace(runLogPath) && File.Exists(runLogPath))
+            message += Environment.NewLine + "OptiHub log: " + runLogPath;
+
+        return message;
     }
 
     private static string? _cachedPowerShellPath;

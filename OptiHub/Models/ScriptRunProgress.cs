@@ -13,6 +13,7 @@ public sealed class ScriptRunResult
     public string Summary { get; init; } = string.Empty;
     public string FullOutput { get; init; } = string.Empty;
     public string? ErrorMessage { get; init; }
+    public string? LogPath { get; init; }
 }
 
 public sealed class OptimizerFeatureInfo

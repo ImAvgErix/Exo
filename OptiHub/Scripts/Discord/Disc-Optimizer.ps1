@@ -37,7 +37,7 @@ if ($Quick) {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.5'
+$Script:DiscOptVersion = '1.1.6'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -448,10 +448,24 @@ function Initialize-DiscOptimizerLog {
     Set-Content -Path $Script:LogPath -Value $header -Encoding UTF8
 }
 
+function Write-OptiHubLogMirror([string]$Line) {
+    if (-not $env:OPTIHUB_LOG) { return }
+    if ([string]::IsNullOrWhiteSpace($Line)) { return }
+    try {
+        $dir = Split-Path -Parent $env:OPTIHUB_LOG
+        if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $Line -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch { }
+}
+
 function Write-LogLine([string]$Level, [string]$Msg) {
     if (-not $Script:LogPath) { return }
     $line = "[$(Get-Date -Format 'HH:mm:ss')] [$Level] $Msg"
     Add-Content -Path $Script:LogPath -Value $line -Encoding UTF8
+    # Mirror into OptiHub run log so elevated UI polling always has the trail
+    Write-OptiHubLogMirror $line
 }
 
 function Write-LogFailure($ErrorRecord) {
@@ -459,6 +473,7 @@ function Write-LogFailure($ErrorRecord) {
 
     $err = $ErrorRecord.Exception
     $inv = $ErrorRecord.InvocationInfo
+    $hubLog = if ($env:OPTIHUB_LOG) { $env:OPTIHUB_LOG } else { '(none)' }
     $lines = @(
         '',
         ('=' * 60),
@@ -471,6 +486,10 @@ function Write-LogFailure($ErrorRecord) {
         "Line: $($inv.ScriptLineNumber)",
         "Command: $($inv.Line.Trim())",
         "Position: $($ErrorRecord.InvocationInfo.PositionMessage)",
+        "KitLog: $Script:LogPath",
+        "OptiHubLog: $hubLog",
+        "PSVersion: $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))",
+        "Elevated: $(([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))",
         'Stack trace:',
         $err.StackTrace
     )
@@ -488,6 +507,24 @@ function Write-LogFailure($ErrorRecord) {
 
     Add-Content -Path $Script:LogPath -Value $body -Encoding UTF8
     Set-Content -Path (Join-Path $LogDir 'last-error.log') -Value $body -Encoding UTF8
+
+    # Always copy failure into OptiHub logs so we can find it without digging kit/
+    try {
+        $optiLogs = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub\logs'
+        if (-not (Test-Path -LiteralPath $optiLogs)) {
+            New-Item -ItemType Directory -Path $optiLogs -Force | Out-Null
+        }
+        Set-Content -LiteralPath (Join-Path $optiLogs 'last-discord-error.log') -Value $body -Encoding UTF8
+        if ($Script:LogPath -and (Test-Path -LiteralPath $Script:LogPath)) {
+            Copy-Item -LiteralPath $Script:LogPath -Destination (Join-Path $optiLogs 'last-discord-run.log') -Force
+        }
+    } catch { }
+
+    Write-OptiHubLogMirror ('[-] FAIL: ' + $err.Message)
+    Write-OptiHubLogMirror ("[-] See: $(Join-Path $LogDir 'last-error.log')")
+    if ($env:OPTIHUB_LOG) {
+        Write-OptiHubLogMirror ('[-] OptiHub log: ' + $env:OPTIHUB_LOG)
+    }
     return $body
 }
 
@@ -495,9 +532,12 @@ function Write-HubProgress([int]$Percent, [string]$Status) {
     if ($env:OPTIHUB -ne '1') { return }
     $p = [Math]::Max(0, [Math]::Min(100, $Percent))
     $line = "OPTIHUB_PROGRESS:$p|$Status"
-    Write-Output $line
+    # Prefer OPTIHUB_LOG so progress never pollutes function return values
+    # (Write-Output inside Get-DiscordSetup made Start-Process -FilePath an Object[]).
     if ($env:OPTIHUB_LOG) {
-        try { Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
+        Write-OptiHubLogMirror $line
+    } else {
+        Write-Output $line
     }
 }
 
@@ -662,7 +702,8 @@ function Get-DiscordSetup {
     $bundled = Get-BundledDiscordSetup
     if ($bundled) {
         Write-Ok "Using bundled Discord installer ($([math]::Round((Get-Item $bundled).Length / 1MB, 1)) MB from tools/)"
-        return $bundled
+        Write-LogLine 'DIAG' "DiscordSetup path=$bundled size=$((Get-Item $bundled).Length)"
+        return ,([string]$bundled)
     }
 
     $cached = Join-Path $DownloadDir 'DiscordSetup-x64.exe'
@@ -670,7 +711,8 @@ function Get-DiscordSetup {
         $age = (Get-Date) - (Get-Item $cached).LastWriteTime
         if ($age.TotalDays -lt 7) {
             Write-Ok "Using cached x64 installer ($([math]::Round((Get-Item $cached).Length / 1MB, 1)) MB)"
-            return $cached
+            Write-LogLine 'DIAG' "DiscordSetup cached path=$cached size=$((Get-Item $cached).Length)"
+            return ,([string]$cached)
         }
     }
 
@@ -682,7 +724,8 @@ function Get-DiscordSetup {
         throw 'Discord x64 installer download failed'
     }
     Write-Ok "Downloaded x64 installer to tools/ ($([math]::Round((Get-Item $bundled).Length / 1MB, 1)) MB)"
-    return $bundled
+    Write-LogLine 'DIAG' "DiscordSetup downloaded path=$bundled size=$((Get-Item $bundled).Length)"
+    return ,([string]$bundled)
 }
 
 function Get-ModulesBundleDir {
@@ -1032,10 +1075,11 @@ function Restore-StockDiscordBase {
 
 function Update-DiscordSilent {
     Repair-DiscordInstallerState
-    $setup = Get-DiscordSetup
+    $setup = Resolve-DiscordSetupPath
     $before = if (Test-DiscordReady) { (Get-ActiveApp).Name } else { $null }
 
     Write-Step 'Updating Discord to latest stable x64 (silent, keeps your install)...'
+    Write-LogLine 'DIAG' "Update DiscordSetup FilePath=$setup"
     $proc = Start-Process -FilePath $setup -ArgumentList '-s' -PassThru -Wait
     if ($null -ne $proc.ExitCode -and $proc.ExitCode -ne 0) {
         Write-Warn "DiscordSetup exited with code $($proc.ExitCode)"
@@ -1079,9 +1123,24 @@ function Invoke-SquirrelFirstRun([string]$AppDir) {
     Write-Ok 'Discord first-run init done'
 }
 
+function Resolve-DiscordSetupPath {
+    $raw = @(Get-DiscordSetup)
+    $setup = [string]($raw | Where-Object { $_ -is [string] -and $_ -like '*.exe' } | Select-Object -Last 1)
+    if ([string]::IsNullOrWhiteSpace($setup)) {
+        $setup = [string]($raw | Select-Object -Last 1)
+    }
+    if ([string]::IsNullOrWhiteSpace($setup) -or -not (Test-Path -LiteralPath $setup)) {
+        $dump = ($raw | ForEach-Object { "$_ ($($_.GetType().FullName))" }) -join '; '
+        throw "DiscordSetup path invalid. Get-DiscordSetup returned: $dump"
+    }
+    Write-LogLine 'DIAG' "Resolved DiscordSetup FilePath=$setup"
+    return $setup
+}
+
 function Invoke-DiscordSetupSilent {
-    $setup = Get-DiscordSetup
+    $setup = Resolve-DiscordSetupPath
     Write-Step 'Installing Discord (stock, silent)...'
+    Write-LogLine 'DIAG' "Start-Process DiscordSetup FilePath=$setup Args=-s"
     $proc = Start-Process -FilePath $setup -ArgumentList '-s' -PassThru -Wait
     if ($null -ne $proc.ExitCode -and $proc.ExitCode -ne 0) {
         Write-Warn "DiscordSetup exited with code $($proc.ExitCode)"
@@ -1743,7 +1802,7 @@ function Test-CacheCleanNeeded {
     foreach ($relative in $SafeCacheTargets) {
         $path = Join-Path $AppData $relative
         if (-not (Test-Path $path)) { continue }
-        # Sample first files only â€” enough to decide if a clean is worth it
+        # Sample first files only Ã¢â‚¬â€ enough to decide if a clean is worth it
         $sample = @(Get-ChildItem $path -Recurse -Force -File -ErrorAction SilentlyContinue | Select-Object -First 50)
         if ($sample.Count -eq 0) { continue }
         $sum = ($sample | Measure-Object -Property Length -Sum).Sum
@@ -2888,18 +2947,18 @@ if (-not $SkipKernel) {
 }
 
 # 5b) Boot safety
-# OptiHub Quick + NoLaunch: skip the open/close flash â€” files were just written and
+# OptiHub Quick + NoLaunch: skip the open/close flash Ã¢â‚¬â€ files were just written and
 # the host already verified state. Manual -Quick still does a short smoke check.
 $optiHubQuiet = ($env:OPTIHUB -eq '1') -and $NoLaunch
 if ($Quick -and $optiHubQuiet) {
-    Write-HubProgress 90 'Verifying files on diskâ€¦'
-    Write-Step 'Quiet verify (no Discord window flash)â€¦'
+    Write-HubProgress 90 'Verifying files on diskÃ¢â‚¬Â¦'
+    Write-Step 'Quiet verify (no Discord window flash)Ã¢â‚¬Â¦'
     $exeOk = Test-Path (Join-Path $app.FullName 'Discord.exe')
     $asarOk = Test-Path (Join-Path $app.FullName 'resources\app.asar')
     if ($exeOk -and $asarOk) {
-        Write-Ok 'Quiet verify passed â€” Discord left closed for you to open when ready'
+        Write-Ok 'Quiet verify passed Ã¢â‚¬â€ Discord left closed for you to open when ready'
     } else {
-        Write-Warn 'Quiet verify incomplete â€” running full boot safety checkâ€¦'
+        Write-Warn 'Quiet verify incomplete Ã¢â‚¬â€ running full boot safety checkÃ¢â‚¬Â¦'
         Confirm-DiscordBootsAfterMods $app.FullName
     }
 } elseif ($Quick) {
