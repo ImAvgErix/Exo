@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
   Publish OptiHub and create a single GitHub Release (changelog + PowerShell install paste).

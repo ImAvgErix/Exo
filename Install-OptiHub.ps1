@@ -1,16 +1,5 @@
-﻿#Requires -Version 5.1
-<#
-.SYNOPSIS
-  Download the latest OptiHub build and launch OptiHub.exe.
-
-.EXAMPLE
-  irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1" | iex
-#>
-param(
-    [string]$Repo = 'BarcusEric/OptiHub',
-    [string]$InstallDir = '',
-    [switch]$NoLaunch
-)
+# OptiHub installer — paste into PowerShell:
+#   irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1" | iex
 
 $ErrorActionPreference = 'Stop'
 
@@ -20,9 +9,9 @@ if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-if ([string]::IsNullOrWhiteSpace($InstallDir)) {
-    $InstallDir = Join-Path $env:LOCALAPPDATA 'OptiHub\app'
-}
+$Repo = 'BarcusEric/OptiHub'
+$InstallDir = Join-Path $env:LOCALAPPDATA 'OptiHub\app'
+$NoLaunch = $false
 
 Write-Host ''
 Write-Host '  OptiHub installer' -ForegroundColor Cyan
@@ -37,7 +26,7 @@ $headers = @{
 try {
     $release = Invoke-RestMethod -Uri $api -Headers $headers
 } catch {
-    throw "Could not fetch latest release from $Repo. Build from source with Run-OptiHub.ps1, or check https://github.com/$Repo/releases. ($_)"
+    throw "Could not fetch latest release from $Repo. Check https://github.com/$Repo/releases. ($_)"
 }
 
 $asset = @($release.assets) |
@@ -49,7 +38,7 @@ if (-not $asset) {
         Select-Object -First 1
 }
 if (-not $asset) {
-    throw "Latest release ($($release.tag_name)) has no build asset. Maintainers: run Release-OptiHub.ps1."
+    throw "Latest release ($($release.tag_name)) has no build asset."
 }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('optihub-install-' + [guid]::NewGuid().ToString('N'))

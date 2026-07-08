@@ -71,9 +71,9 @@
                 <StackPanel Spacing="10">
                     <TextBlock Text="About" Style="{StaticResource OptiSectionTitle}" />
                     <TextBlock Style="{StaticResource OptiBody}"
-                               Text="OptiHub is a hub for optional system optimizers. Discord Optimizer is included." />
+                               Text="OptiHub is a hub for optional system optimizers — performance, privacy, and gaming." />
                     <TextBlock Style="{StaticResource OptiBody}"
-                               Text="Use at your own risk. Optimizers may modify application files and Windows settings. Third-party Discord clients (Equicord) may conflict with Discord's Terms of Service — you are responsible for compliance." />
+                               Text="Use at your own risk. Optimizers may modify application files and Windows settings. You are responsible for compliance with any third-party terms." />
                     <TextBlock Style="{StaticResource OptiCaption}"
                                Margin="0,4,0,0"
                                Text="{x:Bind ViewModel.AboutFooter, Mode=OneWay}" />
