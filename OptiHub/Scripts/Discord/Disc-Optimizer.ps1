@@ -95,6 +95,11 @@ function Join-DiscOptProcessArguments([string[]]$Args) {
 function Wait-DiscOptClosePrompt {
     param([string]$Prompt = 'Press Enter to close...')
 
+    # OptiHub / non-interactive must never block on a keypress.
+    if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1' -or $NoLaunch) {
+        return
+    }
+
     try {
         Write-Host $Prompt
         Read-Host | Out-Null
@@ -880,7 +885,10 @@ function Ensure-EquilotCli {
 
 function Test-EquicordLoaderPatched([string]$AppDir) {
     $appAsar = Join-Path $AppDir 'resources\app.asar'
-    return (Test-Path $appAsar) -and (Get-Item $appAsar).Length -lt 4096
+    if (-not (Test-Path $appAsar)) { return $false }
+    $len = (Get-Item $appAsar).Length
+    # Real Equicord stub is small but not empty/corrupt (1-byte stubs were skipping repair).
+    return ($len -ge 64 -and $len -lt 4096)
 }
 
 function Invoke-EquilotCli {
@@ -2242,25 +2250,9 @@ function Start-Discord([string]$AppDir) {
 }
 
 function Wait-UserThenStartDiscord([string]$AppDir) {
-    if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1' -or $NoLaunch -or $env:OPTIHUB_SKIP_BOOT_FLASH -eq '1') {
-        Write-HubProgress 98 'Finishing...'
-        Write-Ok 'Skipping interactive Discord restart prompt (OptiHub)'
-        return
-    }
-    Write-Host '   >> Press any key to restart Discord and close this window.' -ForegroundColor Cyan
-    Write-Host ''
-    try {
-        if ($Host.Name -eq 'ConsoleHost' -and $Host.UI.RawUI) {
-            $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-        } else {
-            Read-Host 'Press Enter to restart Discord' | Out-Null
-        }
-    } catch {
-        Wait-DiscOptClosePrompt 'Press Enter to restart Discord...'
-    }
-    Write-Step 'Restarting Discord...'
-    Start-Discord $AppDir
-    Write-Ok 'Discord restarted - closing this window.'
+    # Always skip under OptiHub; interactive restart is not used from the app.
+    Write-Ok 'Skipping interactive Discord restart prompt'
+    Write-HubProgress 98 'Finishing...'
 }
 
 function Write-JsonFile([string]$Path, $Object, [int]$Depth = 20) {
@@ -2829,7 +2821,7 @@ function Write-RunSummary {
         if ($proc) { $checks.Add("Discord running (PID $($proc.Id))") }
         else { $checks.Add('Discord launch requested (process not seen yet)') }
     } elseif (-not $NoLaunch) {
-        if ($env:OPTIHUB -eq '1' -or $NoLaunch) { $checks.Add('Discord left closed - open when ready') } else { $checks.Add('Discord will restart when you press a key below') }
+        $checks.Add('Discord left closed - open when ready')
     } else {
         $checks.Add('Discord not started (use Start menu or -Launch)')
     }
