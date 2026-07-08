@@ -28,21 +28,26 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         App.MainAppWindow = this;
 
-        // Compact fixed window — no maximize / resize
-        AppWindow.Resize(new SizeInt32(900, 640));
-        if (AppWindow.Presenter is OverlappedPresenter presenter)
-        {
-            presenter.IsMaximizable = false;
-            presenter.IsResizable = false;
-            presenter.IsMinimizable = true;
-        }
+        // Fixed window — roomy enough for home cards + Discord features without scroll
+        AppWindow.Resize(new SizeInt32(1020, 740));
+        ApplyFixedWindowChrome();
         TryCenterOnScreen();
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBarHost);
 
-        AppWindow.Changed += (_, _) => UpdateCaptionInset();
-        RootGrid.Loaded += (_, _) => UpdateCaptionInset();
+        AppWindow.Changed += (_, args) =>
+        {
+            UpdateCaptionInset();
+            // Re-assert fixed chrome if the system tries to maximize via title-bar double-click
+            if (args.DidPresenterChange || args.DidSizeChange)
+                ApplyFixedWindowChrome();
+        };
+        RootGrid.Loaded += (_, _) =>
+        {
+            UpdateCaptionInset();
+            ApplyFixedWindowChrome();
+        };
         RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
 
@@ -51,6 +56,28 @@ public sealed partial class MainWindow : Window
 
         NavigateHome(suppressTransition: true);
         _ = MaybeAutoUpdateAsync();
+    }
+
+    private void ApplyFixedWindowChrome()
+    {
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.IsMaximizable = false;
+            presenter.IsResizable = false;
+            presenter.IsMinimizable = true;
+            if (presenter.State == OverlappedPresenterState.Maximized)
+                presenter.Restore();
+        }
+
+        try
+        {
+            var hwnd = WindowNative.GetWindowHandle(this);
+            NativeWindowHelper.DisableMaximizeViaSystemMenu(hwnd);
+        }
+        catch
+        {
+            // best-effort
+        }
     }
 
     private void UpdateCaptionInset()
