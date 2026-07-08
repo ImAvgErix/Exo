@@ -180,7 +180,9 @@ function Get-ProgressForLine([string]$Line, [int]$Current) {
         'Quick boot'                 = @{ P = 86; S = 'Quick verify (no Discord flash)...' }
         'Windows'                    = @{ P = 92; S = 'Applying Windows tweaks...' }
         'Start menu'                 = @{ P = 94; S = 'Refreshing Start menu shortcut...' }
-        'DONE'                       = @{ P = 97; S = 'Finishing...' }
+        'DONE'                       = @{ P = 100; S = 'Completed successfully' }
+        'BlockKrisp'                 = @{ P = 96; S = 'Finishing checks...' }
+        'everything applied successfully' = @{ P = 100; S = 'Completed successfully' }
         'finished successfully'      = @{ P = 99; S = 'Almost done...' }
         'Disc Optimizer finished'    = @{ P = 99; S = 'Wrapping up...' }
     }
@@ -231,6 +233,7 @@ Write-HubProgress 14 'Preparing Disc Optimizer...'
 $runArgs = @()
 if ($Quick) { $runArgs += '-Quick' }
 if ($SkipCacheClean) { $runArgs += '-SkipCacheClean' }
+$env:OPTIHUB = '1'; $env:DISCOPT_NONINTERACTIVE = '1'; $NoLaunch = $true
 $runArgs += '-NoLaunch'
 $runArgs += '-SkipManifestSync'
 if ($SkipDebloat) { $runArgs += '-SkipDebloat' }

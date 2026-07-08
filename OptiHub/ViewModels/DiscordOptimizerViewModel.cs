@@ -138,7 +138,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             {
                 ProgressPercent = 100;
                 ProgressStatus = "Completed successfully";
-                SetResult("Optimizer finished successfully. Open Discord when you are ready.", success: true);
+                SetResult("Completed successfully. Equicord, OpenASAR, kernel, and tweaks were applied. Open Discord when ready.", success: true);
                 _services.Settings.Update(s =>
                     s.LastDiscordRunUtc = DateTime.UtcNow.ToString("o"));
             }

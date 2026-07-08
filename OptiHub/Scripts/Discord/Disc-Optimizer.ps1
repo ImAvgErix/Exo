@@ -37,7 +37,7 @@ if ($Quick) {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.9'
+$Script:DiscOptVersion = '1.1.10'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -2237,6 +2237,11 @@ function Start-Discord([string]$AppDir) {
 }
 
 function Wait-UserThenStartDiscord([string]$AppDir) {
+    if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1' -or $NoLaunch -or $env:OPTIHUB_SKIP_BOOT_FLASH -eq '1') {
+        Write-HubProgress 98 'Finishing...'
+        Write-Ok 'Skipping interactive Discord restart prompt (OptiHub)'
+        return
+    }
     Write-Host '   >> Press any key to restart Discord and close this window.' -ForegroundColor Cyan
     Write-Host ''
     try {
@@ -2809,7 +2814,7 @@ function Write-RunSummary {
         if ($proc) { $checks.Add("Discord running (PID $($proc.Id))") }
         else { $checks.Add('Discord launch requested (process not seen yet)') }
     } elseif (-not $NoLaunch) {
-        $checks.Add('Discord will restart when you press a key below')
+        if ($env:OPTIHUB -eq '1' -or $NoLaunch) { $checks.Add('Discord left closed - open when ready') } else { $checks.Add('Discord will restart when you press a key below') }
     } else {
         $checks.Add('Discord not started (use Start menu or -Launch)')
     }
@@ -2995,6 +3000,7 @@ if (-not $NoLaunch) {
     Write-Ok 'Disc Optimizer finished (no launch - use Start menu or -Launch).'
 }
 
+Write-HubProgress 100 'Completed successfully'
 Write-LogLine 'OK' 'Run finished successfully'
 Copy-Item -Path $Script:LogPath -Destination (Join-Path $LogDir 'last-run.log') -Force
 exit 0
