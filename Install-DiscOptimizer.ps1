@@ -1,6 +1,6 @@
-# Legacy redirect -> Install-OptiHub.ps1
+# Legacy redirect to OptiHub installer
 $ErrorActionPreference = "Stop"
 Write-Host ""
 Write-Host "  Redirecting to OptiHub installer..." -ForegroundColor Cyan
 Write-Host ""
-irm "https://cdn.jsdelivr.net/gh/BarcusEric/OptiHub@main/Install-OptiHub.ps1" | iex
+irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1" | iex

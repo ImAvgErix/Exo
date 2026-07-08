@@ -20,7 +20,7 @@
 Paste into PowerShell:
 
 ```powershell
-irm "https://cdn.jsdelivr.net/gh/BarcusEric/OptiHub@main/Install-OptiHub.ps1" | iex
+irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1" | iex
 ```
 
 Installs into `%LocalAppData%\OptiHub\app` and launches OptiHub. Windows 10 1809+ / Windows 11, 64-bit.
@@ -37,14 +37,14 @@ If Discord will not open after an optimize run:
 - Or:
 
 ```powershell
-irm "https://cdn.jsdelivr.net/gh/BarcusEric/OptiHub@main/Repair-Discord.ps1" | iex
+irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex
 ```
 
 Full logout reset:
 
 ```powershell
 $env:OPTIHUB_REPAIR_FULL = '1'
-irm "https://cdn.jsdelivr.net/gh/BarcusEric/OptiHub@main/Repair-Discord.ps1" | iex
+irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex
 ```
 
 ---
