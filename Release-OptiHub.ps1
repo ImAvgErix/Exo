@@ -111,12 +111,55 @@ git tag -a $Tag -m "OptiHub $Version" 1>$null 2>$null
 git push origin $Tag --force 1>$null 2>$null
 $ErrorActionPreference = $prevEap2
 
+Write-Host "[*] Creating GitHub Release $Tag with asset..." -ForegroundColor Cyan
 gh release create $Tag $PayloadZip `
     --repo $Repo `
     --title "OptiHub $Version" `
-    --notes $body
+    --notes $body `
+    --latest
+if ($LASTEXITCODE -ne 0) { throw "gh release create failed for $Tag" }
+
+# HARD VERIFY: installer uses GET /repos/{repo}/releases/latest — not tags
+Write-Host "[*] Verifying /releases/latest (installer endpoint)..." -ForegroundColor Cyan
+$ok = $false
+for ($i = 1; $i -le 8; $i++) {
+    Start-Sleep -Seconds 2
+    try {
+        $latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers @{
+            'User-Agent' = 'OptiHub-Release/1.0'
+            'Accept' = 'application/vnd.github+json'
+        }
+        $assetNames = @($latest.assets | ForEach-Object { $_.name })
+        Write-Host ("    attempt $i : tag=$($latest.tag_name) assets=$($assetNames -join ',')" ) -ForegroundColor DarkGray
+        if ($latest.tag_name -eq $Tag -and ($assetNames -contains 'optihub-build.zip')) {
+            $ok = $true
+            break
+        }
+    } catch {
+        Write-Host ("    attempt $i : $($_.Exception.Message)") -ForegroundColor DarkGray
+    }
+}
+
+if (-not $ok) {
+    throw "RELEASE VERIFY FAILED: /releases/latest is not $Tag with optihub-build.zip. Tag-only is NOT enough."
+}
+
+# Delete older releases so Latest stays unambiguous
+$existing = gh release list --repo $Repo --limit 50 2>$null
+if ($existing) {
+    foreach ($line in ($existing -split "`n")) {
+        if ($line -match '\t(v[\w\.\-]+)\t') {
+            $old = $Matches[1]
+            if ($old -ne $Tag) {
+                Write-Host "[*] Deleting old release $old" -ForegroundColor DarkGray
+                gh release delete $old --repo $Repo --yes --cleanup-tag 2>$null
+            }
+        }
+    }
+}
 
 Write-Host ''
-Write-Host "[+] Release: https://github.com/$Repo/releases/tag/$Tag" -ForegroundColor Green
-Write-Host '    Users install via PowerShell paste.' -ForegroundColor DarkGray
+Write-Host "[+] VERIFIED Latest release: https://github.com/$Repo/releases/tag/$Tag" -ForegroundColor Green
+Write-Host "    API /releases/latest = $Tag + optihub-build.zip" -ForegroundColor Green
+Write-Host "    Install: irm `"https://raw.githubusercontent.com/$Repo/main/Install-OptiHub.ps1`" | iex" -ForegroundColor DarkGray
 Write-Host ''
