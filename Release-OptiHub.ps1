@@ -83,8 +83,14 @@ if ($existing) {
     }
 }
 
-$view = gh release view $Tag --repo $Repo 2>$null
-if ($LASTEXITCODE -eq 0) {
+# gh writes "release not found" to stderr; don't let Stop kill the script
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+gh release view $Tag --repo $Repo 1>$null 2>$null
+$tagExists = ($LASTEXITCODE -eq 0)
+$ErrorActionPreference = $prevEap
+
+if ($tagExists) {
     Write-Host "[*] Replacing existing $Tag" -ForegroundColor DarkGray
     gh release delete $Tag --repo $Repo --yes --cleanup-tag 2>$null
 }
