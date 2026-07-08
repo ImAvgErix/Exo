@@ -36,6 +36,11 @@ if ($Quick) {
     $SkipManifestSync = $true
 }
 
+if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
+    $NoLaunch = $true
+    $SkipManifestSync = $true
+}
+
 $ErrorActionPreference = 'Stop'
 $Script:DiscOptVersion = '1.1.10'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
@@ -2506,9 +2511,13 @@ function Install-EquicordDirect([string]$AppDir) {
 
     Ensure-AsarStockBackup $AppDir
 
-    if ((Test-Path $appAsar) -and (Get-Item $appAsar).Length -lt 4096) {
+    $loaderLen = if (Test-Path $appAsar) { (Get-Item $appAsar).Length } else { 0 }
+    if ($loaderLen -ge 64 -and $loaderLen -lt 4096) {
         Write-Ok 'Equicord loader already patched'
     } else {
+        if ($loaderLen -gt 0 -and $loaderLen -lt 64) {
+            Write-Warn "Equicord loader corrupt ($loaderLen bytes) - rewriting stub"
+        }
         $backupAsar = Join-Path $resources '_app.asar'
         if (-not (Test-Path $backupAsar) -and (Test-Path $appAsar) -and (Get-Item $appAsar).Length -gt 1000000) {
             Copy-Item $appAsar $backupAsar -Force
@@ -2536,10 +2545,16 @@ function Install-EquicordDirect([string]$AppDir) {
 function Install-Equicord([string]$AppDir) {
     Write-Step 'Verifying Equicord + OpenASAR...'
     Write-HubProgress 55 'Checking Equicord...'
-    if (Test-EquicordReady $AppDir) {
+    $resources = Join-Path $AppDir 'resources'
+    $loaderOk = Test-EquicordLoaderPatched $AppDir
+    $openOk = $SkipOpenAsar -or (Test-OpenAsarInstalled $resources)
+    if ($loaderOk -and $openOk) {
         Write-Ok 'Equicord + OpenASAR already installed - applying tweaks only'
         Apply-EquicordProfile -AppDir $AppDir
         return
+    }
+    if (-not $loaderOk) {
+        Write-Warn 'Equicord loader missing/corrupt - repairing via direct install'
     }
 
     Write-Step 'Equicord/OpenASAR missing - installing (fast path)...'
