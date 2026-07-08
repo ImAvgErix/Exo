@@ -623,7 +623,11 @@ function Test-DiscordReady {
     if (-not (Test-Path (Join-Path $DiscordRoot 'Update.exe'))) { return $false }
     $app = Get-ActiveApp
     if (-not $app) { return $false }
-    return (Test-Path (Join-Path $app.FullName 'Discord.exe'))
+    if (-not (Test-Path (Join-Path $app.FullName 'Discord.exe'))) { return $false }
+    # Broken installs often keep Discord.exe but wipe resources/app.asar
+    $resources = Join-Path $app.FullName 'resources'
+    $appAsar = Join-Path $resources 'app.asar'
+    return ((Test-Path $resources) -and (Test-Path $appAsar))
 }
 
 function Confirm-WindowsDiscordTarget {
@@ -1414,6 +1418,28 @@ function Prepare-Discord {
         return
     }
 
+    # Half-broken Discord: exe present, resources/app.asar gone
+    $active = Get-ActiveApp
+    if ($active) {
+        $resources = Join-Path $active.FullName 'resources'
+        $appAsar = Join-Path $resources 'app.asar'
+        if (-not (Test-Path $resources) -or -not (Test-Path $appAsar)) {
+            Write-Warn "Discord resources missing under $($active.FullName) - wiping and reinstalling..."
+            Write-HubProgress 18 'Reinstalling Discord (resources missing)...'
+            Remove-DiscordInstall
+            Invoke-DiscordSetupSilent
+            $app = Get-ActiveApp
+            Invoke-SquirrelFirstRun $app.FullName
+            if (-not (Test-DiscordModulesReady $app.FullName)) {
+                Initialize-DiscordModules $app.FullName
+            }
+            Stop-Discord
+            Sync-DiscordModulesBundle $app.FullName
+            Write-Ok "Discord $($app.Name) x64 reinstalled (resources restored)"
+            return
+        }
+    }
+
     if (Test-DiscordReady) {
         $app = Get-ActiveApp
         if (Test-DiscordModulesReady $app.FullName) {
@@ -1459,6 +1485,11 @@ function Assert-DiscordInstall {
     }
     $app = Get-ActiveApp
     if (-not $app) { throw 'No app-* folder found. Finish the Discord installer first.' }
+    $resources = Join-Path $app.FullName 'resources'
+    $appAsar = Join-Path $resources 'app.asar'
+    if (-not (Test-Path $resources) -or -not (Test-Path $appAsar)) {
+        throw "Discord resources/app.asar missing under $($app.FullName). Re-run without -SkipDiscordInstall."
+    }
     return $app
 }
 
@@ -2388,7 +2419,26 @@ function Install-EquicordDirect([string]$AppDir) {
 
     $resources = Join-Path $AppDir 'resources'
     $appAsar = Join-Path $resources 'app.asar'
-    if (-not (Test-Path $resources)) { throw "Missing $resources" }
+    if (-not (Test-Path $resources) -or -not (Test-Path $appAsar)) {
+        Write-Warn "Discord resources missing under $AppDir - repairing Discord install..."
+        Write-HubProgress 30 'Repairing Discord resources...'
+        Remove-DiscordInstall
+        Invoke-DiscordSetupSilent
+        $repaired = Get-ActiveApp
+        if (-not $repaired) { throw 'Discord reinstall failed - no app-* folder' }
+        Invoke-SquirrelFirstRun $repaired.FullName
+        if (-not (Test-DiscordModulesReady $repaired.FullName)) {
+            Initialize-DiscordModules $repaired.FullName
+        }
+        Stop-Discord
+        $AppDir = $repaired.FullName
+        $resources = Join-Path $AppDir 'resources'
+        $appAsar = Join-Path $resources 'app.asar'
+        if (-not (Test-Path $resources) -or -not (Test-Path $appAsar)) {
+            throw "Discord still missing resources after reinstall: $resources"
+        }
+        Write-Ok "Discord resources restored ($($repaired.Name))"
+    }
 
     Ensure-AsarStockBackup $AppDir
 
