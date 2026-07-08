@@ -1,4 +1,4 @@
-# Disc Optimizer - right-click -> Run with PowerShell (auto-installs PS 7.7 + elevates)
+﻿# Disc Optimizer - right-click -> Run with PowerShell (auto-installs PS 7.7 + elevates)
 # First run installs + optimizes Discord. After that, use the Start menu Discord shortcut.
 #
 #   Disc-Optimizer.ps1           first-time / full setup (log in when prompted)
@@ -494,8 +494,11 @@ function Write-LogFailure($ErrorRecord) {
 function Write-HubProgress([int]$Percent, [string]$Status) {
     if ($env:OPTIHUB -ne '1') { return }
     $p = [Math]::Max(0, [Math]::Min(100, $Percent))
-    # Flush-friendly single line for OptiHub's elevated log poller
-    Write-Host "OPTIHUB_PROGRESS:$p|$Status"
+    $line = "OPTIHUB_PROGRESS:$p|$Status"
+    Write-Output $line
+    if ($env:OPTIHUB_LOG) {
+        try { Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
+    }
 }
 
 function Write-Step([string]$Msg) {
@@ -1129,6 +1132,10 @@ function Ensure-DiscordLoggedIn([string]$AppDir) {
         return
     }
 
+    if ($env:DISCOPT_NONINTERACTIVE -eq '1') {
+        throw 'Discord is not logged in. Open Discord, log in once, then rerun OptiHub.'
+    }
+
     Write-Host ''
     Write-Host '  >>> Log in to Discord in the window that opens.' -ForegroundColor Yellow
     Write-Host '  >>> The optimizer waits until you are logged in, then applies mods.' -ForegroundColor Yellow
@@ -1656,7 +1663,7 @@ function Test-CacheCleanNeeded {
     foreach ($relative in $SafeCacheTargets) {
         $path = Join-Path $AppData $relative
         if (-not (Test-Path $path)) { continue }
-        # Sample first files only — enough to decide if a clean is worth it
+        # Sample first files only â€” enough to decide if a clean is worth it
         $sample = @(Get-ChildItem $path -Recurse -Force -File -ErrorAction SilentlyContinue | Select-Object -First 50)
         if ($sample.Count -eq 0) { continue }
         $sum = ($sample | Measure-Object -Property Length -Sum).Sum
@@ -2759,18 +2766,18 @@ if (-not $SkipKernel) {
 }
 
 # 5b) Boot safety
-# OptiHub Quick + NoLaunch: skip the open/close flash — files were just written and
+# OptiHub Quick + NoLaunch: skip the open/close flash â€” files were just written and
 # the host already verified state. Manual -Quick still does a short smoke check.
 $optiHubQuiet = ($env:OPTIHUB -eq '1') -and $NoLaunch
 if ($Quick -and $optiHubQuiet) {
-    Write-HubProgress 90 'Verifying files on disk…'
-    Write-Step 'Quiet verify (no Discord window flash)…'
+    Write-HubProgress 90 'Verifying files on diskâ€¦'
+    Write-Step 'Quiet verify (no Discord window flash)â€¦'
     $exeOk = Test-Path (Join-Path $app.FullName 'Discord.exe')
     $asarOk = Test-Path (Join-Path $app.FullName 'resources\app.asar')
     if ($exeOk -and $asarOk) {
-        Write-Ok 'Quiet verify passed — Discord left closed for you to open when ready'
+        Write-Ok 'Quiet verify passed â€” Discord left closed for you to open when ready'
     } else {
-        Write-Warn 'Quiet verify incomplete — running full boot safety check…'
+        Write-Warn 'Quiet verify incomplete â€” running full boot safety checkâ€¦'
         Confirm-DiscordBootsAfterMods $app.FullName
     }
 } elseif ($Quick) {
