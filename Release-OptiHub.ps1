@@ -26,7 +26,7 @@ $ZipPath = Join-Path $ReleaseDir "OptiHub-$Version-win-x64.zip"
 $PayloadZip = Join-Path $ReleaseDir 'optihub-build.zip'
 
 Write-Host ''
-Write-Host "  OptiHub release  ·  $Tag" -ForegroundColor Cyan
+Write-Host "  OptiHub release  Â·  $Tag" -ForegroundColor Cyan
 Write-Host ''
 
 & (Join-Path $Root 'Publish-OptiHub.ps1') -Configuration $Configuration
@@ -75,10 +75,19 @@ if ($existing) {
     foreach ($line in ($existing -split "`n")) {
         if ($line -match '\t(v[\w\.\-]+)\t') {
             $old = $Matches[1]
-            if ($old -ne $Tag) {
-                Write-Host "[*] Deleting old release $old" -ForegroundColor DarkGray
-                gh release delete $old --repo $Repo --yes --cleanup-tag 2>$null
+            if ($old -eq $Tag) { continue }
+            # Skip deleting newer tags if a race left a higher version around
+            $oldVer = ($old -replace '^v','')
+            if ([version]::TryParse($oldVer, [ref]([version]$null)) -and [version]::TryParse($Version, [ref]([version]$null))) {
+                try {
+                    if ([version]$oldVer -gt [version]$Version) {
+                        Write-Host "[!] Skipping newer release $old" -ForegroundColor Yellow
+                        continue
+                    }
+                } catch { }
             }
+            Write-Host "[*] Deleting old release $old" -ForegroundColor DarkGray
+            gh release delete $old --repo $Repo --yes --cleanup-tag 2>$null
         }
     }
 }
