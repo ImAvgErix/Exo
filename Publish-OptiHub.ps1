@@ -18,17 +18,32 @@ $Project = Join-Path $Root 'OptiHub\OptiHub.csproj'
 $VersionFile = Join-Path $Root 'VERSION'
 $Version = if (Test-Path $VersionFile) { (Get-Content $VersionFile -Raw).Trim() } else { '1.0.0' }
 
-$OutDir = Join-Path $Root 'publish\OptiHub-win-x64'
 $ReleaseDir = Join-Path $Root 'release'
 $ZipPath = Join-Path $ReleaseDir "OptiHub-$Version-win-x64.zip"
+# Prefer a clean versioned folder; fall back if an older publish dir is file-locked (e.g. core.asar).
+$OutDir = Join-Path $Root "publish\OptiHub-win-x64-v$Version"
+$LegacyOutDir = Join-Path $Root 'publish\OptiHub-win-x64'
 
 Write-Host ''
 Write-Host "  OptiHub publish  ·  v$Version  ·  self-contained win-x64" -ForegroundColor Cyan
 Write-Host ''
 
-if (Test-Path $OutDir) {
-    Remove-Item -LiteralPath $OutDir -Recurse -Force
+function Clear-PublishDir([string]$Path) {
+    if (-not (Test-Path $Path)) { return $true }
+    try {
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+        return $true
+    } catch {
+        Write-Host "[!] Could not clear $Path (file lock). Using a fresh folder." -ForegroundColor DarkYellow
+        return $false
+    }
 }
+
+if (-not (Clear-PublishDir $OutDir)) {
+    $stamp = Get-Date -Format 'yyyyMMddHHmmss'
+    $OutDir = Join-Path $Root "publish\OptiHub-win-x64-v$Version-$stamp"
+}
+Clear-PublishDir $LegacyOutDir | Out-Null
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
 
