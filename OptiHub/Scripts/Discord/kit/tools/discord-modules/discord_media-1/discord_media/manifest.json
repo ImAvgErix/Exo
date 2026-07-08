@@ -1,0 +1,8 @@
+{
+  "files": [
+    "discord_media.node",
+    "package.json",
+    "index.js",
+    "manifest.json"
+  ]
+}

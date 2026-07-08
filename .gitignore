@@ -1,15 +1,40 @@
-# Local scratch (never committed)
+# Build / publish
+**/[Bb]in/
+**/[Oo]bj/
+**/[Dd]ebug/
+**/[Rr]elease/
+publish/
+release/
+.vs/
+*.user
+*.suo
+*.cache
+AppPackages/
+BundleArtifacts/
+Package.StoreAssociation.xml
+_pkginfo.txt
+*.appx
+*.msix
+*.msixbundle
+
+# Local scratch
 release-artifacts/
 extracted/
 dist/
+_DELETE_ME_*/
+_old_*/
 
-# Runtime logs and local caches
-Disc Optimizer/kit/logs/*.log
-Disc Optimizer/kit/logs/last-*.log
-Disc Optimizer/kit/downloads/*
+# Legacy leftover (locked files during migration — safe to delete manually)
+Disc Optimizer/
 
-# Large binaries the script downloads on demand (kept out of git)
-Disc Optimizer/kit/downloads/*.zip
-Disc Optimizer/kit/tools/DiscordSetup*.exe
-Disc Optimizer/kit/tools/Equilotl*.exe
-Disc Optimizer/kit/tools/pwsh/
+# Runtime logs and local caches (Discord kit)
+OptiHub/Scripts/Discord/kit/logs/*.log
+OptiHub/Scripts/Discord/kit/logs/last-*.log
+OptiHub/Scripts/Discord/kit/downloads/*
+OptiHub/Scripts/Discord/kit/downloads/*.zip
+OptiHub/Scripts/Discord/kit/tools/DiscordSetup*.exe
+OptiHub/Scripts/Discord/kit/tools/Equilotl*.exe
+OptiHub/Scripts/Discord/kit/tools/pwsh/
+
+# App logs
+*.log

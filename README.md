@@ -1,90 +1,136 @@
-# Disc Optimizer
+# OptiHub
 
-Disc Optimizer is a Windows Discord performance kit focused on gaming, OLED-black visuals, privacy, and low distraction. It does more than a normal file debloater: it installs/repairs Discord stable, installs Equicord + OpenASAR automatically, writes a tuned Discord profile, cleans safe caches, applies Windows startup/notification tweaks, and installs the DiscOpt DLL/config layer for priority, memory trim, and raw input support.
+**OptiHub** is an all-in-one Windows optimizer hub — a cozy WinUI 3 app for performance, privacy, and gaming-focused tweaks.
 
-## Install & run — one copy-paste
+| Optimizer | Status |
+|---|---|
+| **Discord Optimizer** | Live (Equicord, OpenASAR, DiscOpt kernel, AMOLED, privacy, debloat) |
+| Brave · Steam · Riot · Epic | Coming soon |
 
-Open PowerShell and paste this single line. It downloads the current source, installs/updates it under `Documents\Disc Optimizer`, and runs the optimizer. No release download, no extra steps.
+| | |
+|---|---|
+| Stack | C# · WinUI 3 · Windows App SDK · .NET 8 · MVVM |
+| Theme | AMOLED pure black dark · clean off-white light · teal accents |
+| Safety | Confirmations · dry-run · optional restore points · Discord repair |
+
+This repository was formerly **DiscOpti** (Discord-only PowerShell kit). The Discord kit still lives under `OptiHub/Scripts/Discord/` (kit **v1.1.4**). The GitHub remote may still be named `DiscOpti` until renamed.
+
+---
+
+## Get OptiHub (recommended)
+
+Download the latest **self-contained** Windows build from [Releases](https://github.com/BarcusEric/DiscOpti/releases):
+
+1. Grab `OptiHub-*-win-x64.zip`
+2. Extract anywhere
+3. Run `OptiHub.exe`
+
+No separate .NET install required (self-contained). Windows 10 1809+ / Windows 11, 64-bit.
+
+### One-line install (PowerShell)
 
 ```powershell
-irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-DiscOptimizer.ps1" | iex
+irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-OptiHub.ps1" | iex
 ```
 
-That is all you need. The script will:
+That downloads the latest Release zip into `%LocalAppData%\OptiHub\app` and launches OptiHub.
 
-1. Install or repair Discord stable if needed.
-2. Verify Equicord + OpenASAR and install them automatically if missing.
-3. Apply all performance / privacy / AMOLED / minimalism tweaks.
-4. Restart Discord.
+---
 
-Reapply after a Discord update (optional):
+## Build from source
+
+### Prerequisites
+
+| Requirement | Notes |
+|---|---|
+| Windows 10 1809+ / Windows 11 | 64-bit |
+| [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) | Required to build |
+| PowerShell 7+ | Preferred for `Run-OptiHub.ps1` |
 
 ```powershell
-irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-DiscOptimizer.ps1" | iex
+winget install Microsoft.DotNet.SDK.8 --accept-package-agreements --accept-source-agreements
 ```
 
-Running it again is always safe — it verifies what's already applied and only fixes what's missing.
+### Run (Debug)
 
-## Discord won't open? One-paste repair
+```powershell
+cd C:\path\to\DiscOpti
+.\Run-OptiHub.ps1
+```
 
-If Discord ever fails to start (after an optimization run, a Discord update, or anything else), paste this. It restores stock, bootable Discord while keeping your login and settings:
+Skip rebuild: `.\Run-OptiHub.ps1 -NoBuild`
+
+### Publish Release zip
+
+```powershell
+.\Publish-OptiHub.ps1
+```
+
+Output: `release\OptiHub-1.0.0-win-x64.zip` (self-contained `OptiHub.exe` + dependencies).
+
+---
+
+## Using Discord Optimizer
+
+1. Open OptiHub → **Discord Optimizer**
+2. Choose options (dry-run, restore point, quick reapply)
+3. Click **Run** / **Reapply** (UAC when applying)
+4. If Discord will not open afterward, use **Repair Discord** in the app, or:
 
 ```powershell
 irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex
 ```
 
-The optimizer also has built-in boot safety: after applying mods it verifies Discord actually opens. If it doesn't, it automatically disables the kernel first, and if needed rolls everything back to stock — so you're never left with a broken Discord.
+Scripts are copied to `%LocalAppData%\OptiHub\scripts\Discord` on first launch. Settings live in `%LocalAppData%\OptiHub\settings.json`.
 
-## What it does
+### What Discord Optimizer does
 
-- **Speed / gaming**
-  - Keeps only the Discord modules needed for stable boot, voice, and notifications.
-  - Removes old `app-*` builds, unused locales, GPU/SwiftShader junk, crash/log/cache clutter, and stale package metadata.
-  - Uses OpenASAR quickstart + DOM optimizer settings.
-  - Enables high-performance GPU Chromium switches and disables unnecessary Chromium telemetry/background features.
-  - Installs the DiscOpt kernel files (`ffmpeg.dll`, `version.dll`, `config.ini`) for memory trim, priority, thread priority, and raw input behavior.
-- **Privacy**
-  - Enables NoTrack, ClearURLs, AnonymiseFileNames, SilentTyping, StreamerModeOn, and NoRPC.
-  - Disables native/Equicord notification plugins and tracking-heavy extras.
-  - Disables Discord startup entries, scheduled tasks, Windows toast notifications, and tray promotion.
-- **Minimalism / comfort**
-  - `amoled-cord` AMOLED theme (the original, proven pitch-black theme).
-  - Midnight/black app profile, compact display intent, reduced motion, no noisy notification volume, hidden Nitro/profile/quest clutter.
-  - Keeps the native noise suppression dropdown working by preserving Krisp module files while forcing Krisp-blocking plugins off.
-- **Ease of use**
-  - One-line install; Equicord and OpenASAR are installed for you (verify-then-install, no manual steps).
-  - Clear `kit\logs\last-error.log` failure logs instead of auto-closing with no explanation.
+- Installs/repairs Discord stable when needed; Equicord + OpenASAR automatically
+- AMOLED theme, privacy plugins, cache/debloat, Windows startup/toast quieting
+- DiscOpt kernel (`ffmpeg.dll` / `version.dll` / `config.ini`) for priority, memory trim, raw input
+- Boot safety: verifies Discord starts; rolls back if needed
 
-## What it does not touch
+---
 
-- Discord account/session storage is preserved.
-- `Local Storage`, `IndexedDB`, cookies, and core session DBs are not cache-cleaned.
-- Stock Discord bootstrap/kernel backups are kept when available.
-- Discord's icon is left at default.
+## Project layout
 
-## How it compares to a basic debloater
+```
+├── OptiHub.sln
+├── Run-OptiHub.ps1
+├── Publish-OptiHub.ps1
+├── Install-OptiHub.ps1
+├── Install-DiscOptimizer.ps1   ← legacy redirect → Install-OptiHub
+├── Repair-Discord.ps1
+├── VERSION                     ← app 1.0.0
+└── OptiHub/
+    ├── OptiHub.csproj
+    ├── Views / ViewModels / Services / Models / Helpers / Styles / Assets
+    └── Scripts/
+        ├── Discord/            ← kit v1.1.4 + OptiHub wrappers
+        └── Placeholders/       ← Brave, Steam, Riot, Epic stubs
+```
 
-Most debloaters only delete files. Disc Optimizer also:
+---
 
-- repairs/installs Discord stable when needed;
-- restores bundled core modules for fast recovery;
-- installs Equicord/OpenASAR automatically and applies a local AMOLED theme;
-- writes Discord launch/profile flags;
-- disables Windows startup/toast/task entries;
-- keeps voice UI compatibility;
-- adds DLL/config-based memory trim, priority, and raw input support.
+## Migrating from DiscOpti
 
-## Advanced flags
+If you previously used:
 
-If you run `Disc-Optimizer.ps1` directly, these switches are available:
+```powershell
+irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-DiscOptimizer.ps1" | iex
+```
 
-- `-Quick` reapplies settings after a Discord update.
-- `-VerifyOnly` checks the local kit without changing Discord.
-- `-NoLaunch` applies changes but does not restart Discord at the end.
-- `-SkipCacheClean` preserves all cache folders.
-- `-SkipKernel`, `-SkipOpenAsar`, `-SkipEquicord`, and `-SkipDebloat` disable individual steps.
+that script now redirects to **Install-OptiHub.ps1**. Prefer the OptiHub app for Discord runs going forward. The old Documents install path is no longer the primary product.
 
-## Requirements
+---
 
-- 64-bit Windows.
-- Internet connection (the script downloads Discord, Equicord, and OpenASAR as needed).
+## Disclaimer
+
+Optimizers modify application files and Windows settings. Use at your own risk. Keep backups. Third-party Discord clients (e.g. Equicord) may conflict with Discord’s Terms of Service — you are responsible for compliance. OptiHub authors are not liable for data loss or account issues.
+
+---
+
+## Credits
+
+- Discord kit lineage: **DiscOpti** / Disc Optimizer
+- **OptiHub** — WinUI 3 shell, safety UX, script orchestration, multi-optimizer hub

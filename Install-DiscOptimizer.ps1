@@ -1,101 +1,32 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+  Legacy entry point. DiscOpti is now OptiHub — redirects to Install-OptiHub.ps1.
+
+.EXAMPLE
+  irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Install-DiscOptimizer.ps1" | iex
+#>
 param(
     [string]$Repo = 'BarcusEric/DiscOpti',
     [string]$Branch = 'main',
-    [string]$InstallDir = '',
-    [switch]$Quick,
-    [switch]$FreshInstall,
-    [switch]$NoLaunch,
-    [string[]]$OptimizerArgs = @()
+    [Parameter(ValueFromRemainingArguments = $true)]
+    $Remaining
 )
 
 $ErrorActionPreference = 'Stop'
 
-function Get-DiscOptDocumentsPath {
-    $docs = [Environment]::GetFolderPath('MyDocuments')
-    if ([string]::IsNullOrWhiteSpace($docs)) {
-        $profile = [Environment]::GetEnvironmentVariable('USERPROFILE')
-        if (-not [string]::IsNullOrWhiteSpace($profile)) {
-            $docs = Join-Path $profile 'Documents'
-        }
-    }
-    if ([string]::IsNullOrWhiteSpace($docs)) {
-        $docs = (Get-Location).Path
-    }
-    return $docs
-}
+Write-Host ''
+Write-Host '  Disc Optimizer is now OptiHub' -ForegroundColor Cyan
+Write-Host '  Redirecting to Install-OptiHub.ps1...' -ForegroundColor DarkGray
+Write-Host ''
 
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$url = "https://raw.githubusercontent.com/$Repo/$Branch/Install-OptiHub.ps1"
+$script = Invoke-WebRequest -Uri $url -UseBasicParsing -Headers @{ 'User-Agent' = 'OptiHub-LegacyRedirect/1.0' }
+$temp = Join-Path ([IO.Path]::GetTempPath()) ('Install-OptiHub-' + [guid]::NewGuid().ToString('N') + '.ps1')
+Set-Content -LiteralPath $temp -Value $script.Content -Encoding UTF8
 try {
-    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
-        throw 'Install-DiscOptimizer.ps1 must be run on Windows.'
-    }
-
-    if ([string]::IsNullOrWhiteSpace($InstallDir)) {
-        $InstallDir = Join-Path (Get-DiscOptDocumentsPath) 'Disc Optimizer'
-    }
-
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-    $work = Join-Path ([IO.Path]::GetTempPath()) ('discopt-source-' + [guid]::NewGuid().ToString('N'))
-    $zip = Join-Path $work 'source.zip'
-    $extract = Join-Path $work 'extract'
-    New-Item -ItemType Directory -Path $work, $extract -Force | Out-Null
-
-    $branchRef = [uri]::EscapeDataString($Branch)
-    $url = "https://codeload.github.com/$Repo/zip/refs/heads/$branchRef"
-    Write-Host "[*] Downloading Disc Optimizer from $Repo ($Branch)..." -ForegroundColor Cyan
-    Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing -Headers @{ 'User-Agent' = 'DiscOpt-Installer/1.1' }
-
-    Expand-Archive -Path $zip -DestinationPath $extract -Force
-    $source = Get-ChildItem $extract -Directory -Recurse -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -eq 'Disc Optimizer' -and (Test-Path (Join-Path $_.FullName 'Disc-Optimizer.ps1')) } |
-        Select-Object -First 1
-    if (-not $source) {
-        throw 'Downloaded source did not contain Disc Optimizer/Disc-Optimizer.ps1.'
-    }
-
-    $parent = Split-Path $InstallDir -Parent
-    if (-not (Test-Path $parent)) {
-        New-Item -ItemType Directory -Path $parent -Force | Out-Null
-    }
-    if (-not (Test-Path $InstallDir)) {
-        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-    }
-
-    Write-Host "[*] Installing/updating files in $InstallDir..." -ForegroundColor Cyan
-    Copy-Item -Path (Join-Path $source.FullName '*') -Destination $InstallDir -Recurse -Force
-
-    $optimizer = Join-Path $InstallDir 'Disc-Optimizer.ps1'
-    if (-not (Test-Path $optimizer)) {
-        throw "Optimizer was not copied to $optimizer"
-    }
-
-    $runArgs = @()
-    if ($Quick) { $runArgs += '-Quick' }
-    if ($FreshInstall) { $runArgs += '-FreshInstall' }
-    if ($NoLaunch) { $runArgs += '-NoLaunch' }
-    if ($OptimizerArgs) { $runArgs += $OptimizerArgs }
-
-    Write-Host '[*] Starting Disc Optimizer...' -ForegroundColor Cyan
-    # Note: no `exit` here - this script is usually run via `irm | iex` inside the
-    # user's own PowerShell session, and `exit` would close their window.
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $optimizer @runArgs
-    if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-        Write-Host ''
-        Write-Host "Disc Optimizer reported an error (exit code $LASTEXITCODE)." -ForegroundColor Yellow
-        Write-Host 'If Discord will not open, paste this to restore it:' -ForegroundColor Yellow
-        Write-Host '  irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
-        Write-Host ''
-    }
-} catch {
-    Write-Host ''
-    Write-Host 'Disc Optimizer installer failed.' -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host ''
-    Write-Host 'If Discord will not open, paste this to restore it:' -ForegroundColor Yellow
-    Write-Host '  irm "https://raw.githubusercontent.com/BarcusEric/DiscOpti/main/Repair-Discord.ps1" | iex' -ForegroundColor Cyan
-    Write-Host ''
+    & $temp -Repo $Repo
 } finally {
-    if ($work -and (Test-Path $work)) {
-        Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
 }

@@ -1,0 +1,263 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using OptiHub.Models;
+using OptiHub.Services;
+
+namespace OptiHub.ViewModels;
+
+public partial class DiscordOptimizerViewModel : ObservableObject
+{
+    private readonly AppServices _services;
+    private CancellationTokenSource? _runCts;
+
+    public DiscordOptimizerViewModel(AppServices services)
+    {
+        _services = services;
+    }
+
+    [ObservableProperty]
+    private string _title = "Discord Optimizer";
+
+    [ObservableProperty]
+    private string _subtitle = "Performance · privacy · AMOLED · gaming";
+
+    [ObservableProperty]
+    private string _statusText = "Checking status…";
+
+    [ObservableProperty]
+    private string _detailText = string.Empty;
+
+    [ObservableProperty]
+    private string _checksText = string.Empty;
+
+    [ObservableProperty]
+    private string _runButtonLabel = "Run";
+
+    [ObservableProperty]
+    private bool _isApplied;
+
+    [ObservableProperty]
+    private bool _isBusy;
+
+    [ObservableProperty]
+    private bool _isProgressVisible;
+
+    [ObservableProperty]
+    private double _progressPercent;
+
+    [ObservableProperty]
+    private string _progressStatus = string.Empty;
+
+    [ObservableProperty]
+    private string _lastResult = string.Empty;
+
+    [ObservableProperty]
+    private bool _useQuickMode;
+
+    [ObservableProperty]
+    private bool _skipCacheClean;
+
+    public event EventHandler? RequestGoBack;
+
+    public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
+
+    [RelayCommand]
+    private void GoBack() => RequestGoBack?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        if (IsBusy) return;
+        IsBusy = true;
+        try
+        {
+            StatusText = "Checking status…";
+            var state = await _services.OptimizerState.DetectDiscordAsync();
+            ApplyState(state);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task RunAsync()
+    {
+        if (IsBusy) return;
+
+        var settings = _services.Settings.Current;
+        var action = IsApplied ? "reapply" : "run";
+
+        if (settings.ConfirmBeforeRun)
+        {
+            var warning = settings.DryRun
+                ? "Dry-run is enabled. No system changes will be made — the optimizer will verify only."
+                : "This will close Discord, apply optimizations (Equicord, OpenASAR, kernel, cache, Windows tweaks), and may request Administrator approval.\n\n" +
+                  "Your login/session is preserved. A repair path is available if anything goes wrong.";
+
+            if (settings.AutoRestorePoint && !settings.DryRun)
+                warning += "\n\nA system restore point will be created first (if Windows allows).";
+
+            var ok = ConfirmAsync is not null
+                ? await ConfirmAsync($"Confirm Discord Optimizer ({action})", warning)
+                : true;
+            if (!ok) return;
+        }
+
+        IsBusy = true;
+        IsProgressVisible = true;
+        ProgressPercent = 0;
+        ProgressStatus = "Preparing…";
+        LastResult = string.Empty;
+        _runCts = new CancellationTokenSource();
+
+        try
+        {
+            var args = new List<string>();
+            if (settings.DryRun)
+                args.Add("-DryRun");
+            if (settings.AutoRestorePoint && !settings.DryRun)
+                args.Add("-CreateRestorePoint");
+            if (UseQuickMode || IsApplied)
+                args.Add("-Quick");
+            if (SkipCacheClean)
+                args.Add("-SkipCacheClean");
+            args.Add("-NoLaunch");
+            args.Add("-NonInteractive");
+
+            var progress = new Progress<ScriptRunProgress>(p =>
+            {
+                ProgressPercent = p.Percent;
+                ProgressStatus = p.Status;
+            });
+
+            var script = _services.Scripts.DiscordOptimizerScript;
+            var result = await _services.PowerShell.RunAsync(
+                script,
+                arguments: args,
+                elevate: !settings.DryRun,
+                progress: progress,
+                cancellationToken: _runCts.Token,
+                workingDirectory: _services.Scripts.GetDiscordRoot());
+
+            if (result.Success)
+            {
+                LastResult = settings.DryRun
+                    ? "Dry-run finished. No changes were applied."
+                    : "Optimizer finished successfully.";
+                if (!settings.DryRun)
+                {
+                    _services.Settings.Update(s =>
+                        s.LastDiscordRunUtc = DateTime.UtcNow.ToString("o"));
+                }
+            }
+            else
+            {
+                LastResult = result.ErrorMessage ?? result.Summary;
+            }
+
+            await RefreshAfterRunAsync();
+        }
+        catch (Exception ex)
+        {
+            LastResult = ex.Message;
+            ProgressStatus = "Failed";
+        }
+        finally
+        {
+            IsBusy = false;
+            IsProgressVisible = ProgressPercent < 100 && !string.IsNullOrEmpty(LastResult)
+                ? false
+                : IsProgressVisible;
+            // Keep bar visible briefly on success
+            if (ProgressPercent >= 100)
+                IsProgressVisible = true;
+            _runCts?.Dispose();
+            _runCts = null;
+        }
+    }
+
+    [RelayCommand]
+    private async Task RepairAsync()
+    {
+        if (IsBusy) return;
+
+        var settings = _services.Settings.Current;
+        if (settings.ConfirmBeforeRun)
+        {
+            var ok = ConfirmAsync is not null
+                ? await ConfirmAsync(
+                    "Repair Discord?",
+                    "This restores a clean, stock Discord install while keeping your login. Optimizations will be removed. Administrator approval may be required.")
+                : true;
+            if (!ok) return;
+        }
+
+        IsBusy = true;
+        IsProgressVisible = true;
+        ProgressPercent = 0;
+        ProgressStatus = "Starting repair…";
+        LastResult = string.Empty;
+        _runCts = new CancellationTokenSource();
+
+        try
+        {
+            var progress = new Progress<ScriptRunProgress>(p =>
+            {
+                ProgressPercent = p.Percent;
+                ProgressStatus = p.Status;
+            });
+
+            var result = await _services.PowerShell.RunAsync(
+                _services.Scripts.DiscordRepairScript,
+                arguments: new[] { "-NonInteractive" },
+                elevate: true,
+                progress: progress,
+                cancellationToken: _runCts.Token,
+                workingDirectory: _services.Scripts.GetDiscordRoot());
+
+            LastResult = result.Success
+                ? "Repair finished. Discord should be stock and bootable."
+                : (result.ErrorMessage ?? result.Summary);
+
+            await RefreshAfterRunAsync();
+        }
+        catch (Exception ex)
+        {
+            LastResult = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+            _runCts?.Dispose();
+            _runCts = null;
+        }
+    }
+
+    private async Task RefreshAfterRunAsync()
+    {
+        try
+        {
+            var state = await _services.OptimizerState.DetectDiscordAsync();
+            ApplyState(state);
+        }
+        catch { /* ignore */ }
+    }
+
+    private void ApplyState(OptimizerStateInfo state)
+    {
+        IsApplied = state.IsApplied;
+        StatusText = state.StatusText;
+        DetailText = state.Detail;
+        ChecksText = state.Checks.Count == 0
+            ? string.Empty
+            : string.Join(Environment.NewLine, state.Checks.Select(c => "• " + c));
+        RunButtonLabel = state.IsApplied ? "Reapply" : "Run";
+    }
+
+    public async Task InitializeAsync()
+    {
+        await RefreshAsync();
+    }
+}

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="OptiHub.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="Transparent">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,8,32,32">
+        <StackPanel MaxWidth="640" Spacing="16">
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Style="{StaticResource OptiIconButton}"
+                        Click="Back_Click"
+                        ToolTipService.ToolTip="Back"
+                        Background="Transparent"
+                        BorderThickness="0">
+                    <FontIcon Glyph="&#xE72B;" FontSize="14" />
+                </Button>
+                <TextBlock Text="Settings"
+                           Style="{StaticResource OptiPageTitle}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+
+            <!-- Appearance -->
+            <Border Style="{StaticResource OptiCard}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Appearance" Style="{StaticResource OptiSectionTitle}" />
+                    <ToggleSwitch Header="Dark mode (AMOLED pure black)"
+                                  IsOn="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}"
+                                  OffContent="Light"
+                                  OnContent="Dark" />
+                    <TextBlock Style="{StaticResource OptiCaption}"
+                               Text="Dark uses #000000 with soft teal accents. Light uses a clean off-white surface with strong contrast." />
+                </StackPanel>
+            </Border>
+
+            <!-- Safety -->
+            <Border Style="{StaticResource OptiCard}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Safety" Style="{StaticResource OptiSectionTitle}" />
+                    <ToggleSwitch Header="Confirm before running optimizers"
+                                  IsOn="{x:Bind ViewModel.ConfirmBeforeRun, Mode=TwoWay}" />
+                    <ToggleSwitch Header="Dry-run (verify only — no system changes)"
+                                  IsOn="{x:Bind ViewModel.DryRun, Mode=TwoWay}" />
+                    <ToggleSwitch Header="Create restore point before apply"
+                                  IsOn="{x:Bind ViewModel.AutoRestorePoint, Mode=TwoWay}" />
+                    <TextBlock Style="{StaticResource OptiCaption}"
+                               Text="Restore points require System Restore to be enabled and may need Administrator rights." />
+                </StackPanel>
+            </Border>
+
+            <!-- Scripts / updates -->
+            <Border Style="{StaticResource OptiCard}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Scripts &amp; updates" Style="{StaticResource OptiSectionTitle}" />
+                    <ToggleSwitch Header="Auto-update scripts on launch"
+                                  IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}" />
+                    <TextBox Header="GitHub repository (owner/name)"
+                             Text="{x:Bind ViewModel.ScriptsRepo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox Header="Branch"
+                             Text="{x:Bind ViewModel.ScriptsBranch, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox Header="Custom scripts folder (optional)"
+                             PlaceholderText="Leave empty to use OptiHub-managed scripts"
+                             Text="{x:Bind ViewModel.CustomScriptsPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock>
+                        <Run Text="Installed kit version: " />
+                        <Run Text="{x:Bind ViewModel.KitVersion, Mode=OneWay}" FontWeight="SemiBold" />
+                    </TextBlock>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Style="{StaticResource OptiPrimaryButton}"
+                                Content="Check for script updates"
+                                Click="CheckUpdates_Click"
+                                IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                        <Button Style="{StaticResource OptiQuietButton}"
+                                Content="Force re-download"
+                                Click="ForceUpdate_Click"
+                                IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                    </StackPanel>
+                    <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
+                               Style="{StaticResource OptiBody}" />
+                </StackPanel>
+            </Border>
+
+            <!-- About -->
+            <Border Style="{StaticResource OptiCard}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="About &amp; disclaimer" Style="{StaticResource OptiSectionTitle}" />
+                    <TextBlock Style="{StaticResource OptiBody}"
+                               Text="OptiHub is a cozy hub for optional system optimizers. Discord Optimizer builds on DiscOpti (https://github.com/BarcusEric/DiscOpti)." />
+                    <TextBlock Style="{StaticResource OptiBody}"
+                               Text="Use at your own risk. Optimizers may modify application files, Windows startup entries, and related settings. Always keep backups of important data. Third-party Discord clients (Equicord) may violate Discord's Terms of Service — you are responsible for compliance." />
+                    <TextBlock Style="{StaticResource OptiCaption}"
+                               Margin="0,8,0,0"
+                               Text="OptiHub 1.0 · Windows App SDK · WinUI 3" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>
