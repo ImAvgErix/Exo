@@ -1,4 +1,4 @@
-# OptiHub - detect Steam optimizer status. Prints one JSON object.
+# OptiHub - detect Steam optimizer status (JSON for WinUI).
 $ErrorActionPreference = 'SilentlyContinue'
 
 function Get-SteamInstallPath {
@@ -28,12 +28,15 @@ if (Test-Path $statePath) {
 }
 
 $steamOk = [bool]$steam
-$features.Add(@{ title = 'Steam install'; detail = $(if ($steamOk) { $steam } else { 'Install Steam, open it once, then return.' }); active = $steamOk })
+$features.Add(@{
+    title  = 'Steam install'
+    detail = $(if ($steamOk) { $steam } else { 'Install Steam, open it once, then return.' })
+    active = $steamOk
+})
 
 $startupOk = $false
 if ($state -and $state.startupDisabled) { $startupOk = $true }
 else {
-    # Heuristic: no Run key pointing at steam.exe
     $startupOk = $true
     try {
         $run = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
@@ -43,29 +46,58 @@ else {
         }
     } catch { }
 }
-$features.Add(@{ title = 'Quieter Windows startup'; detail = 'Steam is not forced to launch when Windows starts.'; active = $startupOk })
+$features.Add(@{
+    title  = 'Quieter Windows startup'
+    detail = 'Steam is not forced to launch when Windows starts.'
+    active = $startupOk
+})
 
-$cacheOk = [bool]($state -and $state.cacheFreedBytes -ge 0 -and $state.appliedUtc)
-$features.Add(@{ title = 'Lean client caches'; detail = 'HTML/log/temp download caches cleaned safely (games files kept).'; active = $cacheOk })
+$cefOk = $false
+if ($steam -and (Test-Path (Join-Path $steam 'Steam-OptiHub.cmd'))) { $cefOk = $true }
+if ($state -and $state.cefLeanLaunch) { $cefOk = $true }
+$features.Add(@{
+    title  = 'Lean steamwebhelper (CEF)'
+    detail = '-cef-disable-gpu launch flags cut Chromium webhelper RAM/GPU.'
+    active = $cefOk
+})
 
-$configOk = [bool]($state -and $state.configTouched)
-$features.Add(@{ title = 'Client config tuned'; detail = 'Download throttle / web-GPU hints applied when Steam keys exist.'; active = $configOk })
+$dlOk = [bool]($state -and $state.downloadOptimized)
+$features.Add(@{
+    title  = 'Faster downloads'
+    detail = 'Throttle cleared when possible; stuck download/temp staging cleaned.'
+    active = $dlOk
+})
+
+$snapOk = [bool]($state -and ($state.snappyUi -or $state.highPriority -or $state.cefLeanLaunch))
+$features.Add(@{
+    title  = 'Snappier client'
+    detail = 'HIGH process priority, cache wipe, library/UI performance hints.'
+    active = $snapOk
+})
+
+$trimOk = $false
+if ($steam -and (Test-Path (Join-Path $steam 'OptiHub-SteamWebHelperTrim.ps1'))) { $trimOk = $true }
+if ($state -and $state.webHelperTrim) { $trimOk = $true }
+$features.Add(@{
+    title  = 'Idle webhelper RAM trim'
+    detail = 'Trims steamwebhelper working sets when no game is running.'
+    active = $trimOk
+})
 
 $markerOk = [bool]$state
-$isApplied = $steamOk -and $markerOk -and $startupOk
+$isApplied = $steamOk -and $markerOk -and $cefOk
 
 $statusText = if (-not $steamOk) { 'Steam not installed' }
 elseif ($isApplied) { 'Already optimized' }
 else { 'Ready to optimize' }
 
-$detail = if (-not $steamOk) { 'Install Steam stable, open it once, then run OptiHub.' }
-elseif ($isApplied) { 'These savings are active. Reapply after big Steam updates.' }
-else { 'Run to quiet startup, clear safe caches, and apply client performance hints.' }
+$detail = if (-not $steamOk) { 'Install Steam, open it once, then run OptiHub.' }
+elseif ($isApplied) { 'Performance pack active. Start Steam from your shortcut or Desktop: Steam (OptiHub Lean).' }
+else { 'Run for webhelper lean mode, faster downloads, and a snappier Steam client.' }
 
-$result = [ordered]@{
+[ordered]@{
     isApplied  = $isApplied
     statusText = $statusText
     detail     = $detail
     features   = @($features)
-}
-$result | ConvertTo-Json -Compress -Depth 5
+} | ConvertTo-Json -Compress -Depth 5

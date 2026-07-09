@@ -102,7 +102,7 @@
                                FontSize="13"
                                LineHeight="20"
                                Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                               Text="Quiets Steam on Windows startup, clears safe HTML/log/temp caches (never your games), and applies light client performance hints when Steam exposes the settings. Safe on any normal Steam install." />
+                               Text="Performance pack for steamwebhelper + downloads: CEF -disable-gpu launch, HIGH priority client, CEF/HTML cache wipe, idle webhelper RAM trim, unlimited download throttle when possible, snappier library hints, quieter startup. Not Electron (no Discord-style asar inject). Games/VAC untouched. Use the patched Steam shortcut so flags apply." />
                 </StackPanel>
 
                 <StackPanel Grid.Row="3" Spacing="6"

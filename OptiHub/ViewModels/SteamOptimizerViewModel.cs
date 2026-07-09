@@ -67,11 +67,13 @@ public partial class SteamOptimizerViewModel : ObservableObject
 
         var action = IsApplied ? "reapply" : "run";
         var warning =
-            "This will close Steam and apply safe optimizations:\n\n" +
-            "• Stop Steam from auto-starting with Windows\n" +
-            "• Clear HTML/log/temp caches (game installs kept)\n" +
-            "• Soft client config hints when Steam keys exist\n\n" +
-            "No game files or anti-cheat components are modified.";
+            "This will close Steam and apply webhelper-focused optimizations:\n\n" +
+            "• Lean CEF launch flags (-cef-disable-gpu) to cut steamwebhelper RAM/GPU\n" +
+            "• Clear CEF/HTML/GPU caches (games installs kept)\n" +
+            "• Idle webhelper working-set trim when no game is running\n" +
+            "• Stop Steam auto-start with Windows\n\n" +
+            "Steam is Chromium-based (not Electron), so Discord-style asar/kernel inject is not used. Games/VAC are not modified.\n\n" +
+            "Use your Steam shortcut after (or Desktop: Steam (OptiHub Lean)).";
 
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync($"Confirm Steam Optimizer ({action})", warning)
