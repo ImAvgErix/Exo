@@ -19,7 +19,9 @@
 
 ## Get OptiHub
 
-Paste into PowerShell:
+**Recommended:** download **[OptiHub.exe](https://github.com/BarcusEric/OptiHub/releases/latest/download/OptiHub.exe)** and double-click it.
+
+Or paste into PowerShell:
 
 ```powershell
 irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1" | iex

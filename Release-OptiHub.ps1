@@ -25,6 +25,7 @@ $Tag = "v$Version"
 $ReleaseDir = Join-Path $Root 'release'
 $ZipPath = Join-Path $ReleaseDir "OptiHub-$Version-win-x64.zip"
 $PayloadZip = Join-Path $ReleaseDir 'optihub-build.zip'
+$SfxPath = Join-Path $ReleaseDir 'OptiHub.exe'
 
 function Get-LatestReleaseInfo {
     Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers @{
@@ -36,10 +37,13 @@ function Get-LatestReleaseInfo {
 function Test-LatestIsTag([string]$ExpectedTag) {
     $latest = Get-LatestReleaseInfo
     $assetNames = @($latest.assets | ForEach-Object { $_.name })
+    # Prefer double-click OptiHub.exe; zip kept for the PowerShell installer.
+    $hasExe = ($assetNames -contains 'OptiHub.exe')
+    $hasZip = ($assetNames -contains 'optihub-build.zip')
     [pscustomobject]@{
         Tag    = $latest.tag_name
         Assets = $assetNames
-        Ok     = ($latest.tag_name -eq $ExpectedTag -and ($assetNames -contains 'optihub-build.zip'))
+        Ok     = ($latest.tag_name -eq $ExpectedTag -and $hasExe -and $hasZip)
     }
 }
 
@@ -89,6 +93,9 @@ Write-Host ''
 if (-not (Test-Path $ZipPath)) {
     throw "Missing publish zip: $ZipPath"
 }
+if (-not (Test-Path $SfxPath)) {
+    throw "Missing self-extracting OptiHub.exe: $SfxPath"
+}
 Copy-Item -LiteralPath $ZipPath -Destination $PayloadZip -Force
 
 if ($NotesFile -and (Test-Path $NotesFile)) {
@@ -99,20 +106,24 @@ if ($NotesFile -and (Test-Path $NotesFile)) {
     $body = @"
 ## What's new in $Version
 
-- Fix Discord hang after BlockKrisp (no interactive keypress under OptiHub)
-- OpenASAR status detects ``_app.asar`` correctly
-- In-app update uses stage-and-swap installer
-- Release script deletes older releases after Latest is verified
+Self-extracting **OptiHub.exe** on the release (double-click install).
+
+## Download
+
+- **OptiHub.exe** — double-click installer (recommended)
+- ``optihub-build.zip`` — portable folder (used by the PowerShell one-liner)
 
 ## Install / update
 
-Paste this into PowerShell:
+**Option A — exe:** download ``OptiHub.exe`` from this release and run it.
+
+**Option B — PowerShell:**
 
 ``````powershell
 irm "https://raw.githubusercontent.com/$Repo/main/Install-OptiHub.ps1" | iex
 ``````
 
-That downloads the latest build into ``%LocalAppData%\OptiHub\app`` and launches OptiHub.
+Installs into ``%LocalAppData%\OptiHub\app`` and launches OptiHub.
 "@
 }
 
@@ -121,7 +132,7 @@ if ($body -notmatch 'Install-OptiHub\.ps1') {
 
 ## Install / update
 
-Paste this into PowerShell:
+Download **OptiHub.exe** from this release and double-click it, or:
 
 ``````powershell
 irm "https://raw.githubusercontent.com/$Repo/main/Install-OptiHub.ps1" | iex
@@ -149,8 +160,9 @@ git tag -d $Tag 1>$null 2>$null
 git push origin ":refs/tags/$Tag" 1>$null 2>$null
 $ErrorActionPreference = $prevEap
 
-Write-Host "[*] Creating GitHub Release $Tag with optihub-build.zip (--latest)..." -ForegroundColor Cyan
-gh release create $Tag $PayloadZip `
+Write-Host "[*] Creating GitHub Release $Tag with OptiHub.exe + optihub-build.zip (--latest)..." -ForegroundColor Cyan
+# OptiHub.exe first so it appears as the primary download on GitHub.
+gh release create $Tag $SfxPath $PayloadZip `
     --repo $Repo `
     --title "OptiHub $Version" `
     --notes $body `
@@ -158,7 +170,7 @@ gh release create $Tag $PayloadZip `
     --target main
 if ($LASTEXITCODE -ne 0) { throw "gh release create failed for $Tag" }
 
-Write-Host "[*] Verifying API /releases/latest == $Tag + optihub-build.zip ..." -ForegroundColor Cyan
+Write-Host "[*] Verifying API /releases/latest == $Tag + OptiHub.exe + zip ..." -ForegroundColor Cyan
 $ok = $false
 $last = $null
 for ($i = 1; $i -le 12; $i++) {
@@ -173,7 +185,7 @@ for ($i = 1; $i -le 12; $i++) {
 }
 
 if (-not $ok) {
-    throw "RELEASE VERIFY FAILED: /releases/latest is '$($last.Tag)' not '$Tag' with optihub-build.zip. A tag alone is NOT a release."
+    throw "RELEASE VERIFY FAILED: /releases/latest is '$($last.Tag)' not '$Tag' with OptiHub.exe + optihub-build.zip. A tag alone is NOT a release."
 }
 
 # Only after Latest is confirmed, remove older releases + orphan tags
@@ -204,7 +216,8 @@ if ($extra.Count -gt 0) {
 
 Write-Host ''
 Write-Host "[+] VERIFIED Latest release: https://github.com/$Repo/releases/tag/$Tag" -ForegroundColor Green
-Write-Host "    API /releases/latest = $Tag + optihub-build.zip" -ForegroundColor Green
+Write-Host "    API /releases/latest = $Tag + OptiHub.exe + optihub-build.zip" -ForegroundColor Green
 Write-Host "    Old releases deleted (only $Tag remains)" -ForegroundColor Green
-Write-Host "    Install: irm `"https://raw.githubusercontent.com/$Repo/main/Install-OptiHub.ps1`" | iex" -ForegroundColor DarkGray
+Write-Host "    Download: https://github.com/$Repo/releases/latest/download/OptiHub.exe" -ForegroundColor DarkGray
+Write-Host "    Or: irm `"https://raw.githubusercontent.com/$Repo/main/Install-OptiHub.ps1`" | iex" -ForegroundColor DarkGray
 Write-Host ''

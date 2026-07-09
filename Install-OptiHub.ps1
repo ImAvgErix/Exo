@@ -23,11 +23,13 @@ try {
   throw "Could not fetch latest release from $Repo. $_"
 }
 
+# Prefer zip for scripted installs (reliable extract). SFX OptiHub.exe is for double-click downloads.
 $asset = @($release.assets) | Where-Object { $_.name -eq 'optihub-build.zip' } | Select-Object -First 1
 if (-not $asset) {
   $asset = @($release.assets) | Where-Object { $_.name -like '*.zip' } | Select-Object -First 1
 }
-if (-not $asset) { throw 'Latest release has no build asset.' }
+$sfxAsset = @($release.assets) | Where-Object { $_.name -eq 'OptiHub.exe' } | Select-Object -First 1
+if (-not $asset -and -not $sfxAsset) { throw 'Latest release has no OptiHub.exe or zip asset.' }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('optihub-' + [guid]::NewGuid().ToString('N'))
 $stage = Join-Path $work 'stage'
@@ -78,38 +80,52 @@ function Remove-TreeBestEffort([string]$Path) {
 
 try {
   Write-Host "[*] Downloading OptiHub $($release.tag_name)..." -ForegroundColor DarkGray
-  Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing -Headers @{ 'User-Agent' = 'OptiHub-Installer/1.0' }
-
-  Write-Host '[*] Preparing install...' -ForegroundColor DarkGray
   Stop-OptiHubProcesses
-
-  # Extract to a clean staging folder first. Expand-Archive -Force into an existing
-  # app dir calls Remove-Item on locale .mui files and can fail on PS7 races.
-  Expand-Archive -Path $zip -DestinationPath $stage -Force
-
-  $exe = Get-ChildItem -LiteralPath $stage -Filter 'OptiHub.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-  if (-not $exe) { throw "OptiHub.exe not found in downloaded package" }
-
-  # Stage contents may be nested (zip root folder) or flat
-  $payload = $exe.Directory.FullName
 
   if (-not (Test-Path -LiteralPath $RootDir)) {
     New-Item -ItemType Directory -Path $RootDir -Force | Out-Null
   }
 
-  Write-Host '[*] Installing...' -ForegroundColor DarkGray
-  if (Test-Path -LiteralPath $InstallDir) {
-    Remove-TreeBestEffort $InstallDir
-  }
+  if ($asset) {
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing -Headers @{ 'User-Agent' = 'OptiHub-Installer/1.0' }
 
-  # Prefer atomic-ish move from stage; fall back to copy
-  $moved = $false
-  try {
-    Move-Item -LiteralPath $payload -Destination $InstallDir -Force -ErrorAction Stop
-    $moved = $true
-  } catch {
-    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-    Copy-Item -Path (Join-Path $payload '*') -Destination $InstallDir -Recurse -Force
+    Write-Host '[*] Preparing install...' -ForegroundColor DarkGray
+    # Extract to a clean staging folder first. Expand-Archive -Force into an existing
+    # app dir calls Remove-Item on locale .mui files and can fail on PS7 races.
+    Expand-Archive -Path $zip -DestinationPath $stage -Force
+
+    $exe = Get-ChildItem -LiteralPath $stage -Filter 'OptiHub.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $exe) { throw "OptiHub.exe not found in downloaded package" }
+
+    # Stage contents may be nested (zip root folder) or flat
+    $payload = $exe.Directory.FullName
+
+    Write-Host '[*] Installing...' -ForegroundColor DarkGray
+    if (Test-Path -LiteralPath $InstallDir) {
+      Remove-TreeBestEffort $InstallDir
+    }
+
+    # Prefer atomic-ish move from stage; fall back to copy
+    try {
+      Move-Item -LiteralPath $payload -Destination $InstallDir -Force -ErrorAction Stop
+    } catch {
+      New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+      Copy-Item -Path (Join-Path $payload '*') -Destination $InstallDir -Recurse -Force
+    }
+  } else {
+    # Fallback: run the self-extracting OptiHub.exe (installs + launches itself)
+    $sfx = Join-Path $work 'OptiHub-Setup.exe'
+    Invoke-WebRequest -Uri $sfxAsset.browser_download_url -OutFile $sfx -UseBasicParsing -Headers @{ 'User-Agent' = 'OptiHub-Installer/1.0' }
+    Write-Host '[*] Running OptiHub.exe installer...' -ForegroundColor DarkGray
+    $p = Start-Process -FilePath $sfx -Wait -PassThru
+    if ($p.ExitCode -ne 0) { throw "OptiHub.exe installer exited with code $($p.ExitCode)" }
+    $finalExe = Join-Path $InstallDir 'OptiHub.exe'
+    if (-not (Test-Path -LiteralPath $finalExe)) {
+      throw "OptiHub.exe missing after SFX install at $InstallDir"
+    }
+    Write-Host "[+] Installed: $finalExe" -ForegroundColor Green
+    Write-Host ''
+    return
   }
 
   $finalExe = Join-Path $InstallDir 'OptiHub.exe'
