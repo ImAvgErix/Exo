@@ -163,21 +163,31 @@ public sealed class GitHubUpdateService
             var root = doc.RootElement;
             var tag = root.TryGetProperty("tag_name", out var t) ? (t.GetString() ?? "") : "";
             var remote = tag.Trim().TrimStart('v', 'V');
-            string? zipUrl = null;
+            // Releases ship OptiHub.exe only (self-extracting installer). Prefer that;
+            // fall back to legacy zip names if an old release is still Latest.
+            string? downloadUrl = null;
             if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
             {
+                string? exeUrl = null;
+                string? zipUrl = null;
                 foreach (var a in assets.EnumerateArray())
                 {
                     var name = a.TryGetProperty("name", out var n) ? n.GetString() : null;
-                    if (string.Equals(name, "optihub-build.zip", StringComparison.OrdinalIgnoreCase) ||
-                        (name?.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) == true))
-                    {
-                        zipUrl = a.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
-                        if (string.Equals(name, "optihub-build.zip", StringComparison.OrdinalIgnoreCase))
-                            break;
-                    }
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    var url = a.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
+                    if (string.IsNullOrWhiteSpace(url)) continue;
+
+                    if (string.Equals(name, "OptiHub.exe", StringComparison.OrdinalIgnoreCase))
+                        exeUrl = url;
+                    else if (string.Equals(name, "optihub-build.zip", StringComparison.OrdinalIgnoreCase) ||
+                             name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                        zipUrl ??= url;
                 }
+                downloadUrl = exeUrl ?? zipUrl;
             }
+
+            // Always fall back to the canonical latest exe URL when assets list is empty/misnamed.
+            downloadUrl ??= "https://github.com/BarcusEric/OptiHub/releases/latest/download/OptiHub.exe";
 
             if (VersionsEqualOrLocalNewer(localText, remote))
             {
@@ -195,7 +205,7 @@ public sealed class GitHubUpdateService
                 UpdateAvailable = true,
                 LocalVersion = localText,
                 RemoteVersion = remote,
-                DownloadUrl = zipUrl,
+                DownloadUrl = downloadUrl,
                 Message = $"OptiHub v{remote} is available (you have v{localText})."
             };
         }
@@ -217,35 +227,43 @@ public sealed class GitHubUpdateService
         var check = await CheckAppUpdateAsync(status, ct);
         if (!check.UpdateAvailable)
             return check;
-        if (string.IsNullOrWhiteSpace(check.DownloadUrl))
-        {
-            return new AppUpdateResult
-            {
-                UpdateAvailable = true,
-                LocalVersion = check.LocalVersion,
-                RemoteVersion = check.RemoteVersion,
-                Message = "Update found but no download asset was available."
-            };
-        }
+        var url = check.DownloadUrl;
+        if (string.IsNullOrWhiteSpace(url))
+            url = "https://github.com/BarcusEric/OptiHub/releases/latest/download/OptiHub.exe";
 
-        // Same stage-and-swap path as Install-OptiHub.ps1. In-place xcopy cannot
-        // replace a locked OptiHub.exe, so the app kept restarting on the old build.
-        status?.Report($"Installing OptiHub v{check.RemoteVersion} (stage + swap)...");
+        // Download OptiHub.exe (SFX installer) and run it. In-place replace cannot
+        // overwrite a locked running OptiHub.exe, so the installer stage-swaps under
+        // %LocalAppData%\OptiHub\app after we exit.
+        status?.Report($"Downloading OptiHub v{check.RemoteVersion}...");
 
         try
         {
-            var psExe = ResolvePowerShellForUpdate();
-            var cmd =
-                "$ErrorActionPreference='Stop'; " +
-                "irm 'https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Install-OptiHub.ps1' | iex";
+            var work = Path.Combine(PathHelper.AppDataDir, "updates");
+            Directory.CreateDirectory(work);
+            var setupPath = Path.Combine(work, $"OptiHub-update-{check.RemoteVersion}.exe");
 
+            await using (var fs = File.Create(setupPath))
+            {
+                await using var stream = await Http.GetStreamAsync(url, ct);
+                await stream.CopyToAsync(fs, ct);
+            }
+
+            if (!File.Exists(setupPath) || new FileInfo(setupPath).Length < 1_000_000)
+            {
+                return new AppUpdateResult
+                {
+                    UpdateAvailable = true,
+                    LocalVersion = check.LocalVersion,
+                    RemoteVersion = check.RemoteVersion,
+                    Message = "Downloaded update looks invalid. Try again, or reinstall from GitHub Releases."
+                };
+            }
+
+            status?.Report($"Installing OptiHub v{check.RemoteVersion}...");
             Process.Start(new ProcessStartInfo
             {
-                FileName = psExe,
-                Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"" + cmd + "\"",
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
-                CreateNoWindow = true
+                FileName = setupPath,
+                UseShellExecute = true
             });
 
             return new AppUpdateResult
@@ -253,9 +271,9 @@ public sealed class GitHubUpdateService
                 UpdateAvailable = true,
                 LocalVersion = check.LocalVersion,
                 RemoteVersion = check.RemoteVersion,
-                DownloadUrl = check.DownloadUrl,
+                DownloadUrl = url,
                 ShouldExit = true,
-                Message = $"Installing OptiHub v{check.RemoteVersion}. OptiHub will close and reopen on the new build."
+                Message = $"Installing OptiHub v{check.RemoteVersion}. OptiHub will close and reopen."
             };
         }
         catch (Exception ex)
@@ -268,26 +286,6 @@ public sealed class GitHubUpdateService
                 Message = $"App update failed: {ex.Message}"
             };
         }
-    }
-
-    private static string ResolvePowerShellForUpdate()
-    {
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-        foreach (var candidate in new[]
-                 {
-                     Path.Combine(local, "Microsoft", "WindowsApps", "Microsoft.PowerShellPreview_8wekyb3d8bbwe", "pwsh.exe"),
-                     Path.Combine(programFiles, "PowerShell", "7-preview", "pwsh.exe"),
-                     Path.Combine(programFiles, "PowerShell", "7", "pwsh.exe"),
-                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
-                         "WindowsPowerShell", "v1.0", "powershell.exe")
-                 })
-        {
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        return "powershell.exe";
     }
 
     private static async Task<string?> TryGetRemoteTextAsync(string url, CancellationToken ct)
