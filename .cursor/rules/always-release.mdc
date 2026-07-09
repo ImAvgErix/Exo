@@ -7,7 +7,7 @@ alwaysApply: true
 
 After any user-facing OptiHub change, ship a **real GitHub Release** before finishing.
 
-A git tag alone is NOT a release. The installer uses:
+A git tag alone is NOT a release. The download uses:
 `GET https://api.github.com/repos/BarcusEric/OptiHub/releases/latest`
 
 ## Required steps
@@ -20,11 +20,13 @@ A git tag alone is NOT a release. The installer uses:
    (Invoke-RestMethod https://api.github.com/repos/BarcusEric/OptiHub/releases/latest).tag_name
    (Invoke-RestMethod https://api.github.com/repos/BarcusEric/OptiHub/releases/latest).assets.name
    ```
-   Must equal the new version and include `optihub-build.zip`.
-5. Tell the user the release URL and install one-liner.
+   Must equal the new version and include **`OptiHub.exe` only** (no zip required).
+5. Tell the user the release URL and direct exe download:
+   `https://github.com/BarcusEric/OptiHub/releases/latest/download/OptiHub.exe`
 
 ## Do not
 
 - Treat `gh release create` success or a pushed tag as done without API `/releases/latest` verification
 - Finish after commit/push only
 - Leave an older release marked Latest
+- Ship zip-only releases; the primary asset is double-click **OptiHub.exe**
