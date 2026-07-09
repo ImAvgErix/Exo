@@ -102,7 +102,7 @@
                                FontSize="13"
                                LineHeight="20"
                                Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                               Text="Performance pack for steamwebhelper + downloads: CEF -disable-gpu launch, HIGH priority client, CEF/HTML cache wipe, 5s webhelper RAM trim (always) + suspend while a game runs, unlimited download throttle when possible, snappier library hints, quieter startup. Not Electron (no Discord-style asar inject). Games/VAC untouched. Overlay may pause in-game. Use the patched Steam shortcut so flags apply." />
+                               Text="Performance pack: lean CEF launch + optional Aggressive shortcut, 5s webhelper RAM trim (library + in-game, no suspend), BELOW_NORMAL steam/webhelper while gaming, shader pre-cache clean, download staging clean, overlay/library hints, quieter startup. Not Electron (no Discord-style asar inject). Games/VAC untouched. Use Steam (OptiHub Lean) or Aggressive on Desktop." />
                 </StackPanel>
 
                 <StackPanel Grid.Row="3" Spacing="6"

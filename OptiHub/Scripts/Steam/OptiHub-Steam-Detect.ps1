@@ -57,21 +57,30 @@ if ($steam -and (Test-Path (Join-Path $steam 'Steam-OptiHub.cmd'))) { $cefOk = $
 if ($state -and $state.cefLeanLaunch) { $cefOk = $true }
 $features.Add(@{
     title  = 'Lean steamwebhelper (CEF)'
-    detail = '-cef-disable-gpu launch flags cut Chromium webhelper RAM/GPU.'
+    detail = 'Default lean CEF flags (-cef-disable-gpu). Desktop also gets Aggressive shortcut.'
     active = $cefOk
+})
+
+$aggOk = $false
+if ($steam -and (Test-Path (Join-Path $steam 'Steam-OptiHub-Aggressive.cmd'))) { $aggOk = $true }
+if ($state -and $state.cefAggressiveLaunch) { $aggOk = $true }
+$features.Add(@{
+    title  = 'Aggressive launcher (optional)'
+    detail = 'Steam (OptiHub Aggressive): nofriendsui, nointro, nobigpicture, vrdisable, etc.'
+    active = $aggOk
 })
 
 $dlOk = [bool]($state -and $state.downloadOptimized)
 $features.Add(@{
-    title  = 'Faster downloads'
-    detail = 'Throttle cleared when possible; stuck download/temp staging cleaned.'
+    title  = 'Faster downloads + shader clean'
+    detail = 'Throttle cleared when possible; staging + shader pre-cache cleaned (rebuilds next launch).'
     active = $dlOk
 })
 
-$snapOk = [bool]($state -and ($state.snappyUi -or $state.highPriority -or $state.cefLeanLaunch))
+$snapOk = [bool]($state -and ($state.snappyUi -or $state.highPriority -or $state.overlayTweaks))
 $features.Add(@{
-    title  = 'Snappier client'
-    detail = 'HIGH process priority, cache wipe, library/UI performance hints.'
+    title  = 'Overlay / library client tweaks'
+    detail = 'GPU web views off, quieter overlay noise, no downloads while playing when keys exist.'
     active = $snapOk
 })
 
@@ -79,8 +88,8 @@ $trimOk = $false
 if ($steam -and (Test-Path (Join-Path $steam 'OptiHub-SteamWebHelperTrim.ps1'))) { $trimOk = $true }
 if ($state -and $state.webHelperTrim) { $trimOk = $true }
 $features.Add(@{
-    title  = 'Webhelper RAM trim + in-game suspend'
-    detail = 'Every 5s (like DiscOpt): EmptyWorkingSet always; suspend steamwebhelper while a Steam game runs (overlay may pause).'
+    title  = '5s webhelper trim + in-game priority yield'
+    detail = 'EmptyWorkingSet every 5s (idle + in-game). BELOW_NORMAL steam/webhelper while gaming. No suspend.'
     active = $trimOk
 })
 
@@ -92,8 +101,8 @@ elseif ($isApplied) { 'Already optimized' }
 else { 'Ready to optimize' }
 
 $detail = if (-not $steamOk) { 'Install Steam, open it once, then run OptiHub.' }
-elseif ($isApplied) { 'Performance pack active. Start Steam from your shortcut or Desktop: Steam (OptiHub Lean).' }
-else { 'Run for webhelper lean mode, faster downloads, and a snappier Steam client.' }
+elseif ($isApplied) { 'Performance pack active. Use Steam (OptiHub Lean) or Aggressive on Desktop.' }
+else { 'Run for lean/aggressive CEF, 5s trim, priority yield, shader clean, downloads.' }
 
 [ordered]@{
     isApplied  = $isApplied

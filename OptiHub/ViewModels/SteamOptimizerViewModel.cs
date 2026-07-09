@@ -68,12 +68,13 @@ public partial class SteamOptimizerViewModel : ObservableObject
         var action = IsApplied ? "reapply" : "run";
         var warning =
             "This will close Steam and apply a performance pack:\n\n" +
-            "• steamwebhelper: CEF -disable-gpu + 5s RAM trim always + suspend while gaming\n" +
-            "• Faster downloads: clear throttle when possible, clean staging\n" +
-            "• Snappier client: HIGH priority, cache wipe, library/UI hints\n" +
+            "• Lean CEF launch + optional Aggressive shortcut (nofriendsui/nointro/etc.)\n" +
+            "• 5s steamwebhelper RAM trim (library + in-game) - no process suspend\n" +
+            "• In-game: lower steam/webhelper priority so the game wins CPU\n" +
+            "• Shader pre-cache clean, download staging clean, overlay/library hints\n" +
             "• Quieter Windows startup\n\n" +
             "Steam is Chromium CEF (not Electron) - no Discord-style asar inject. VAC-safe.\n\n" +
-            "Start Steam from your shortcut or Desktop: Steam (OptiHub Lean).";
+            "Default: Desktop Steam (OptiHub Lean). Optional: Steam (OptiHub Aggressive).";
 
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync($"Confirm Steam Optimizer ({action})", warning)

@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.2.1'
+$Script:SteamOptVersion = '1.3.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Official Valve CEF flags (see Valve wiki: Command line options (Steam)).
@@ -23,6 +23,18 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Script:LeanCefArgs = @(
     '-cef-disable-gpu',
     '-cef-disable-gpu-compositing'
+)
+# Optional aggressive tier (extra client quieting). May hide friends UI / intro.
+# Avoid sandbox/single-process flags - those crash on some PCs.
+$Script:AggressiveCefArgs = @(
+    '-cef-disable-gpu',
+    '-cef-disable-gpu-compositing',
+    '-nofriendsui',
+    '-nointro',
+    '-nobigpicture',
+    '-vrdisable',
+    '-no-dwrite',
+    '-cef-disable-breakpad'
 )
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
@@ -151,30 +163,67 @@ function Disable-SteamWindowsStartup {
     return $removed
 }
 
+function Get-SteamLibraryRoots([string]$SteamPath) {
+    $roots = New-Object System.Collections.Generic.List[string]
+    [void]$roots.Add($SteamPath)
+    $vdf = Join-Path $SteamPath 'steamapps\libraryfolders.vdf'
+    if (Test-Path -LiteralPath $vdf) {
+        try {
+            $text = [IO.File]::ReadAllText($vdf)
+            foreach ($m in [regex]::Matches($text, '"path"\s+"([^"]+)"')) {
+                $p = $m.Groups[1].Value -replace '\\\\', '\'
+                if ($p -and (Test-Path -LiteralPath $p) -and -not $roots.Contains($p)) {
+                    [void]$roots.Add($p)
+                }
+            }
+        } catch { }
+    }
+    return @($roots)
+}
+
+function Clear-PathTree([string]$Path) {
+    [long]$freed = 0
+    if (-not (Test-Path -LiteralPath $Path)) { return 0L }
+    try {
+        $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+        if ($item.PSIsContainer) {
+            $sumObj = Get-ChildItem -LiteralPath $item.FullName -Recurse -Force -File -ErrorAction SilentlyContinue |
+                Measure-Object -Property Length -Sum
+            $size = if ($null -ne $sumObj -and $null -ne $sumObj.Sum) { [long]$sumObj.Sum } else { 0L }
+            Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction SilentlyContinue
+            $freed = $size
+            if ($size -gt 0) {
+                Write-Ok ("Cleared {0} (~{1:N1} MB)" -f $item.Name, ($size / 1MB))
+            }
+        } else {
+            $freed = [long]$item.Length
+            Remove-Item -LiteralPath $item.FullName -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        Write-Warn ("Skip cache {0}: {1}" -f $Path, $_.Exception.Message)
+    }
+    return $freed
+}
+
 function Clear-SteamSafeCaches([string]$SteamPath) {
-    $targets = @(
-        (Join-Path $SteamPath 'htmlcache'),
-        (Join-Path $SteamPath 'logs'),
-        (Join-Path $SteamPath 'dumps'),
-        (Join-Path $SteamPath 'crashhandler.log'),
-        (Join-Path $SteamPath 'appcache\httpcache'),
-        (Join-Path $SteamPath 'steamapps\temp'),
-        (Join-Path $SteamPath 'steamapps\downloading')
-    )
+    $targets = New-Object System.Collections.Generic.List[string]
+    foreach ($lib in (Get-SteamLibraryRoots $SteamPath)) {
+        foreach ($rel in @(
+            'htmlcache', 'logs', 'dumps', 'crashhandler.log',
+            'appcache\httpcache', 'appcache\shader',
+            'steamapps\temp', 'steamapps\downloading'
+        )) {
+            [void]$targets.Add((Join-Path $lib $rel))
+        }
+    }
 
     $localSteam = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Steam'
     if (Test-Path $localSteam) {
-        $targets += @(
-            (Join-Path $localSteam 'htmlcache'),
-            (Join-Path $localSteam 'GPUCache'),
-            (Join-Path $localSteam 'Code Cache'),
-            (Join-Path $localSteam 'ShaderCache'),
-            (Join-Path $localSteam 'DawnCache'),
-            (Join-Path $localSteam 'GrShaderCache')
-        )
+        foreach ($rel in @('htmlcache', 'GPUCache', 'Code Cache', 'ShaderCache', 'DawnCache', 'GrShaderCache')) {
+            [void]$targets.Add((Join-Path $localSteam $rel))
+        }
     }
 
-    # CEF cache next to bin
     $cefRoots = @(
         (Join-Path $SteamPath 'bin\cef'),
         (Join-Path $SteamPath 'bin\cef\cef.win7x64'),
@@ -182,34 +231,14 @@ function Clear-SteamSafeCaches([string]$SteamPath) {
     )
     foreach ($cr in $cefRoots) {
         if (Test-Path $cr) {
-            $targets += (Join-Path $cr 'GPUCache')
-            $targets += (Join-Path $cr 'Code Cache')
-            $targets += (Join-Path $cr 'Cache')
+            [void]$targets.Add((Join-Path $cr 'GPUCache'))
+            [void]$targets.Add((Join-Path $cr 'Code Cache'))
+            [void]$targets.Add((Join-Path $cr 'Cache'))
         }
     }
 
     [long]$freed = 0
-    foreach ($t in $targets) {
-        if (-not (Test-Path -LiteralPath $t)) { continue }
-        try {
-            $item = Get-Item -LiteralPath $t -Force -ErrorAction Stop
-            if ($item.PSIsContainer) {
-                $sumObj = Get-ChildItem -LiteralPath $item.FullName -Recurse -Force -File -ErrorAction SilentlyContinue |
-                    Measure-Object -Property Length -Sum
-                $size = if ($null -ne $sumObj -and $null -ne $sumObj.Sum) { [long]$sumObj.Sum } else { 0L }
-                Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction SilentlyContinue
-                $freed += $size
-                if ($size -gt 0) {
-                    Write-Ok ("Cleared {0} (~{1:N1} MB)" -f $item.Name, ($size / 1MB))
-                }
-            } else {
-                $freed += [long]$item.Length
-                Remove-Item -LiteralPath $item.FullName -Force -ErrorAction SilentlyContinue
-            }
-        } catch {
-            Write-Warn ("Skip cache {0}: {1}" -f $t, $_.Exception.Message)
-        }
-    }
+    foreach ($t in $targets) { $freed += (Clear-PathTree $t) }
 
     Get-ChildItem -LiteralPath $SteamPath -Filter '*.log' -File -ErrorAction SilentlyContinue | ForEach-Object {
         try {
@@ -218,6 +247,23 @@ function Clear-SteamSafeCaches([string]$SteamPath) {
         } catch { }
     }
 
+    return $freed
+}
+
+function Clear-SteamShaderCaches([string]$SteamPath) {
+    # Game shader pre-cache rebuilds on next launch - free disk / stale GPU state.
+    Write-Step 'Clearing Steam shader pre-caches (rebuild on next game launch)...'
+    [long]$freed = 0
+    foreach ($lib in (Get-SteamLibraryRoots $SteamPath)) {
+        $freed += (Clear-PathTree (Join-Path $lib 'steamapps\shadercache'))
+        $freed += (Clear-PathTree (Join-Path $lib 'appcache\shader'))
+    }
+    $local = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Steam'
+    if (Test-Path $local) {
+        $freed += (Clear-PathTree (Join-Path $local 'ShaderCache'))
+        $freed += (Clear-PathTree (Join-Path $local 'shadercache'))
+    }
+    Write-Ok ("Shader cache cleanup freed ~{0:N1} MB" -f ($freed / 1MB))
     return $freed
 }
 
@@ -271,7 +317,7 @@ function Set-SteamLocalConfigTweaks {
                 if ($raw -ne $before) { $anyGpu = $true }
             }
 
-            # Snappier feel: less animation chrome, no low-bandwidth library (faster page loads)
+            # Snappier feel: less animation chrome, keep library responsive
             foreach ($pair in @(
                 @{ K = 'SmoothScrollWebViews'; V = '0' },
                 @{ K = 'LibraryLowBandwidthMode'; V = '0' },
@@ -285,14 +331,28 @@ function Set-SteamLocalConfigTweaks {
                 if ($raw -ne $before) { $anySnappy = $true }
             }
 
+            # Overlay extras: keep overlay on, cut browser/noise hitch sources when keys exist
+            foreach ($pair in @(
+                @{ K = 'EnableGameOverlay'; V = '1' },
+                @{ K = 'InGameOverlayScreenshotNotification'; V = '0' },
+                @{ K = 'InGameOverlayShowFPSCounterHotKey'; V = '0' },
+                @{ K = 'SteamInputConfigEnabled'; V = '1' },
+                @{ K = 'Controller_EnableChrome'; V = '0' },
+                @{ K = 'BigPictureInForeground'; V = '0' }
+            )) {
+                $before = $raw
+                $raw = Set-SteamVdfKey $raw $pair.K $pair.V
+                if ($raw -ne $before) { $anySnappy = $true }
+            }
+
             # Quieter / less background wakeups
             foreach ($k in @('NotifyAvailableGames', 'SoundPlay_DownloadComplete', 'SoundPlay_FriendOnline', 'FriendsAlwaysShowAvatars')) {
                 $raw = Set-SteamVdfKey $raw $k '0'
             }
 
-            # Downloads while playing / allow high rate when keys exist
+            # Prefer not downloading while playing (smoother 1% lows); cloud stays on
             foreach ($pair in @(
-                @{ K = 'AllowDownloadsDuringGameplay'; V = '1' },
+                @{ K = 'AllowDownloadsDuringGameplay'; V = '0' },
                 @{ K = 'CloudEnabled'; V = '1' }
             )) {
                 $raw = Set-SteamVdfKey $raw $pair.K $pair.V
@@ -377,23 +437,31 @@ function Optimize-SteamDownloadFolder([string]$SteamPath) {
     return $n
 }
 
-function Install-LeanSteamLauncher([string]$SteamPath) {
-    # Write a launcher that always starts Steam with CEF GPU disabled (webhelper RAM).
+function Write-SteamLaunchCmd([string]$CmdPath, [string]$SteamPath, [string]$HelperPath, [string[]]$CefArgs, [string]$Label) {
     $exe = Join-Path $SteamPath 'steam.exe'
-    $cmdPath = Join-Path $SteamPath 'Steam-OptiHub.cmd'
-    $args = ($Script:LeanCefArgs -join ' ')
+    $args = ($CefArgs -join ' ')
+    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $cmd = @(
         '@echo off'
-        'rem OptiHub lean Steam launcher - CEF flags cut steamwebhelper GPU/RAM'
-        'rem Stock steam.exe is untouched; this is an alternate start path.'
-        'rem /HIGH = snappier Steam process priority while client is open'
+        ("rem OptiHub {0} - 5s webhelper trim + in-game BELOW_NORMAL for steam/webhelper" -f $Label)
+        ('start "" /MIN "{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $ps, $HelperPath)
         ('start "" /HIGH /D "{0}" "{1}" {2}' -f $SteamPath, $exe, $args)
     ) -join "`r`n"
-    [IO.File]::WriteAllText($cmdPath, $cmd + "`r`n", [Text.UTF8Encoding]::new($false))
-    Write-Ok "Lean launcher: $cmdPath"
-    Write-Ok ("CEF flags: {0}" -f $args)
+    [IO.File]::WriteAllText($CmdPath, $cmd + "`r`n", [Text.UTF8Encoding]::new($false))
+}
 
-    # Start Menu + Desktop shortcuts point at lean launcher (games files untouched).
+function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
+    # Default lean + optional aggressive launchers (stock steam.exe untouched).
+    $exe = Join-Path $SteamPath 'steam.exe'
+    $cmdLean = Join-Path $SteamPath 'Steam-OptiHub.cmd'
+    $cmdAgg = Join-Path $SteamPath 'Steam-OptiHub-Aggressive.cmd'
+    Write-SteamLaunchCmd $cmdLean $SteamPath $HelperPath $Script:LeanCefArgs 'lean CEF'
+    Write-SteamLaunchCmd $cmdAgg $SteamPath $HelperPath $Script:AggressiveCefArgs 'aggressive CEF'
+    Write-Ok "Lean launcher: $cmdLean"
+    Write-Ok ("Lean CEF: {0}" -f ($Script:LeanCefArgs -join ' '))
+    Write-Ok "Aggressive launcher: $cmdAgg"
+    Write-Ok ("Aggressive CEF: {0}" -f ($Script:AggressiveCefArgs -join ' '))
+
     $targets = @()
     $programs = [Environment]::GetFolderPath('Programs')
     $desktop = [Environment]::GetFolderPath('Desktop')
@@ -408,7 +476,7 @@ function Install-LeanSteamLauncher([string]$SteamPath) {
     foreach ($lnk in $targets) {
         try {
             $sc = $wsh.CreateShortcut($lnk.FullName)
-            $sc.TargetPath = $cmdPath
+            $sc.TargetPath = $cmdLean
             $sc.WorkingDirectory = $SteamPath
             $sc.IconLocation = "$exe,0"
             $sc.Description = 'Steam (OptiHub lean CEF - lower steamwebhelper RAM)'
@@ -419,34 +487,51 @@ function Install-LeanSteamLauncher([string]$SteamPath) {
         }
     }
 
-    # Always ensure a Desktop OptiHub Steam shortcut exists
     try {
         $deskLnk = Join-Path $desktop 'Steam (OptiHub Lean).lnk'
         $sc = $wsh.CreateShortcut($deskLnk)
-        $sc.TargetPath = $cmdPath
+        $sc.TargetPath = $cmdLean
         $sc.WorkingDirectory = $SteamPath
         $sc.IconLocation = "$exe,0"
-        $sc.Description = 'Steam with OptiHub CEF flags for lower webhelper memory'
+        $sc.Description = 'Steam with OptiHub lean CEF flags + 5s webhelper trim'
         $sc.Save()
         Write-Ok 'Desktop shortcut: Steam (OptiHub Lean).lnk'
         $patched++
     } catch {
-        Write-Warn "Desktop shortcut: $($_.Exception.Message)"
+        Write-Warn "Desktop lean shortcut: $($_.Exception.Message)"
     }
 
-    Write-Ok "Updated $patched Steam shortcut(s) to lean CEF launch"
-    return @{ Cmd = $cmdPath; Args = $args; Shortcuts = $patched }
+    try {
+        $deskAgg = Join-Path $desktop 'Steam (OptiHub Aggressive).lnk'
+        $sc = $wsh.CreateShortcut($deskAgg)
+        $sc.TargetPath = $cmdAgg
+        $sc.WorkingDirectory = $SteamPath
+        $sc.IconLocation = "$exe,0"
+        $sc.Description = 'Steam OptiHub aggressive: lean CEF + nofriendsui/nointro/etc. Friends list may be limited.'
+        $sc.Save()
+        Write-Ok 'Desktop shortcut: Steam (OptiHub Aggressive).lnk'
+        $patched++
+    } catch {
+        Write-Warn "Desktop aggressive shortcut: $($_.Exception.Message)"
+    }
+
+    Write-Ok "Updated $patched Steam shortcut(s)"
+    return @{
+        Cmd        = $cmdLean
+        Aggressive = $cmdAgg
+        Args       = ($Script:LeanCefArgs -join ' ')
+        AggArgs    = ($Script:AggressiveCefArgs -join ' ')
+        Shortcuts  = $patched
+    }
 }
 
 function Install-WebHelperTrimHelper([string]$SteamPath) {
-    # Always-on steamwebhelper trim (matches DiscOpt ~5s cadence).
-    # Idle + in-game: EmptyWorkingSet. While a Steam game is running: also
-    # suspend webhelper so CEF stops burning CPU/RAM pressure (overlay may pause).
-    # No game inject / no game process touches - VAC-safe.
+    # 5s EmptyWorkingSet always (idle + in-game). No suspend.
+    # In-game: lower steam + steamwebhelper priority so the game wins CPU.
     $helper = Join-Path $SteamPath 'OptiHub-SteamWebHelperTrim.ps1'
     $body = @'
-# OptiHub - steamwebhelper RAM trim (always) + suspend while a Steam game runs.
-# Interval matches DiscOpt TrimIntervalMs=5000. Exit when Steam exits.
+# OptiHub - steamwebhelper soft trim every 5s (idle + in-game) + in-game priority yield.
+# No NtSuspendProcess (suspend caused FPS cliffs via Steam IPC).
 $ErrorActionPreference = 'SilentlyContinue'
 Add-Type -TypeDefinition @"
 using System;
@@ -455,101 +540,64 @@ public static class OptiHubWs {
   [DllImport("psapi.dll")] public static extern bool EmptyWorkingSet(IntPtr hProcess);
   [DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint a, bool b, int c);
   [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
-  [DllImport("ntdll.dll")] public static extern int NtSuspendProcess(IntPtr h);
-  [DllImport("ntdll.dll")] public static extern int NtResumeProcess(IntPtr h);
-  public const uint ACCESS = 0x0D00; // SET_QUOTA | QUERY_INFORMATION | SUSPEND_RESUME
+  public const uint ACCESS = 0x0500;
 }
 "@
-# Track PIDs we suspended so we only suspend once (NtSuspendProcess nests).
-$script:SuspendedPids = @{}
 
 function Test-SteamGameRunning {
-  $skip = '^(steam|steamwebhelper|steamservice|GameOverlayUI|SteamService|steamerrorreporter|svchost|explorer|dwm|csrss|fontdrvhost)\.exe$'
   try {
-    $hit = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-      if (-not $_.Name -or $_.Name -match $skip) { return $false }
-      $p = $_.ExecutablePath
-      if (-not $p) { return $false }
-      return ($p -match '(?i)[\\/]steamapps[\\/]common[\\/]') -or ($p -match '(?i)[\\/]Steam[\\/]steamapps[\\/]')
-    })
-    if ($hit.Count -gt 0) { return $true }
+    $appsKey = 'HKCU:\Software\Valve\Steam\Apps'
+    if (Test-Path $appsKey) {
+      foreach ($app in @(Get-ChildItem $appsKey -ErrorAction SilentlyContinue)) {
+        $props = Get-ItemProperty -LiteralPath $app.PSPath -ErrorAction SilentlyContinue
+        if ($props -and [int]$props.Running -eq 1) { return $true }
+      }
+    }
   } catch {}
-  # Fallback: Get-Process Path (may miss protected processes)
-  $hit2 = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-    $_.ProcessName -notmatch '^(steam|steamwebhelper|steamservice|GameOverlayUI|SteamService|steamerrorreporter)$' -and
-    $_.MainWindowHandle -ne [IntPtr]::Zero -and
-    $_.Path -and (
-      $_.Path -like '*steamapps\common*' -or $_.Path -like '*Steam\steamapps*'
-    )
-  })
-  return ($hit2.Count -gt 0)
+  if (Get-Process -Name 'gameoverlayui','gameoverlayui64','GameOverlayUI' -ErrorAction SilentlyContinue) {
+    return $true
+  }
+  return $false
 }
 
-function Invoke-WebHelperTrim([bool]$Suspend) {
-  $alive = @{}
+function Trim-WebHelpers {
   Get-Process steamwebhelper -ErrorAction SilentlyContinue | ForEach-Object {
-    $whId = $_.Id
-    $alive[$whId] = $true
     try {
-      $h = [OptiHubWs]::OpenProcess([OptiHubWs]::ACCESS, $false, $whId)
+      $h = [OptiHubWs]::OpenProcess([OptiHubWs]::ACCESS, $false, $_.Id)
       if ($h -eq [IntPtr]::Zero) { return }
-      try {
-        [void][OptiHubWs]::EmptyWorkingSet($h)
-        if ($Suspend) {
-          if (-not $script:SuspendedPids.ContainsKey($whId)) {
-            [void][OptiHubWs]::NtSuspendProcess($h)
-            $script:SuspendedPids[$whId] = $true
-          }
-        } else {
-          if ($script:SuspendedPids.ContainsKey($whId)) {
-            [void][OptiHubWs]::NtResumeProcess($h)
-            $script:SuspendedPids.Remove($whId)
-          }
-        }
-      } finally {
-        [void][OptiHubWs]::CloseHandle($h)
-      }
+      try { [void][OptiHubWs]::EmptyWorkingSet($h) }
+      finally { [void][OptiHubWs]::CloseHandle($h) }
     } catch {}
   }
-  # Drop PIDs that exited
-  @($script:SuspendedPids.Keys) | ForEach-Object {
-    if (-not $alive.ContainsKey($_)) { $script:SuspendedPids.Remove($_) }
+}
+
+function Set-SteamClientPriority([bool]$InGame) {
+  $cls = if ($InGame) {
+    [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+  } else {
+    [System.Diagnostics.ProcessPriorityClass]::High
+  }
+  foreach ($name in @('steam', 'steamwebhelper')) {
+    Get-Process -Name $name -ErrorAction SilentlyContinue | ForEach-Object {
+      try {
+        if ($_.PriorityClass -ne $cls) { $_.PriorityClass = $cls }
+      } catch {}
+    }
   }
 }
 
 while (Get-Process steam -ErrorAction SilentlyContinue) {
-  Start-Sleep -Seconds 5
   $inGame = Test-SteamGameRunning
-  Invoke-WebHelperTrim -Suspend:$inGame
+  Set-SteamClientPriority -InGame:$inGame
+  Trim-WebHelpers
+  Start-Sleep -Seconds 5
 }
-# Resume any leftover suspended helpers if Steam exited while suspended
-try {
-  Get-Process steamwebhelper -ErrorAction SilentlyContinue | ForEach-Object {
-    $h = [OptiHubWs]::OpenProcess([OptiHubWs]::ACCESS, $false, $_.Id)
-    if ($h -ne [IntPtr]::Zero) {
-      [void][OptiHubWs]::NtResumeProcess($h)
-      [void][OptiHubWs]::CloseHandle($h)
-    }
-  }
-} catch {}
 '@
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
-
-    # Wire trimmer into lean cmd launcher
-    $cmdPath = Join-Path $SteamPath 'Steam-OptiHub.cmd'
-    $exe = Join-Path $SteamPath 'steam.exe'
-    $args = ($Script:LeanCefArgs -join ' ')
-    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $cmd = @(
-        '@echo off'
-        'rem OptiHub lean Steam + webhelper trim (5s, always + suspend in-game) + HIGH priority'
-        ('start "" /MIN "{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $ps, $helper)
-        ('start "" /HIGH /D "{0}" "{1}" {2}' -f $SteamPath, $exe, $args)
-    ) -join "`r`n"
-    [IO.File]::WriteAllText($cmdPath, $cmd + "`r`n", [Text.UTF8Encoding]::new($false))
-    Write-Ok 'WebHelper trim helper installed (5s trim always; suspend while gaming)'
+    Write-Ok 'WebHelper helper installed (5s trim always; BELOW_NORMAL steam/webhelper while gaming; no suspend)'
     return $helper
 }
+
 
 function Invoke-SteamRepair([string]$SteamPath) {
     Write-Step 'Repair: restoring backups and stock Steam shortcuts...'
@@ -596,7 +644,7 @@ function Invoke-SteamRepair([string]$SteamPath) {
         }
     }
 
-    foreach ($f in @('Steam-OptiHub.cmd', 'OptiHub-SteamWebHelperTrim.ps1')) {
+    foreach ($f in @('Steam-OptiHub.cmd', 'Steam-OptiHub-Aggressive.cmd', 'OptiHub-SteamWebHelperTrim.ps1')) {
         $p = Join-Path $SteamPath $f
         if (Test-Path $p) {
             Remove-Item $p -Force -ErrorAction SilentlyContinue
@@ -604,10 +652,13 @@ function Invoke-SteamRepair([string]$SteamPath) {
         }
     }
 
-    $deskLean = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Steam (OptiHub Lean).lnk'
-    if (Test-Path $deskLean) {
-        Remove-Item $deskLean -Force -ErrorAction SilentlyContinue
-        Write-Ok 'Removed Desktop Steam (OptiHub Lean).lnk'
+    $desktop = [Environment]::GetFolderPath('Desktop')
+    foreach ($name in @('Steam (OptiHub Lean).lnk', 'Steam (OptiHub Aggressive).lnk')) {
+        $deskLnk = Join-Path $desktop $name
+        if (Test-Path $deskLnk) {
+            Remove-Item $deskLnk -Force -ErrorAction SilentlyContinue
+            Write-Ok "Removed Desktop $name"
+        }
     }
 
     $statePath = Get-OptiHubSteamStatePath
@@ -645,51 +696,60 @@ try {
 
     Write-HubProgress 40 'Cleaning webhelper / CEF caches...'
     $freed = 0L
+    $shaderFreed = 0L
     if (-not $Quick) {
         $freed = [long](Clear-SteamSafeCaches $steam)
-        Write-HubProgress 48 'Clearing stuck download staging...'
+        Write-HubProgress 46 'Clearing shader pre-caches...'
+        $shaderFreed = [long](Clear-SteamShaderCaches $steam)
+        $freed += $shaderFreed
+        Write-HubProgress 50 'Clearing stuck download staging...'
         [void](Optimize-SteamDownloadFolder $steam)
     } else {
-        Write-Ok 'Deep cache clean skipped (-Quick) - still applying CEF lean + download hints'
+        Write-Ok 'Deep cache/shader clean skipped (-Quick) - still applying CEF lean + helpers'
     }
     Write-Ok ("Cache cleanup freed ~{0:N1} MB" -f ($freed / 1MB))
 
-    Write-HubProgress 55 'Writing steamwebhelper CEF lean launcher...'
-    $launch = Install-LeanSteamLauncher $steam
-    Write-HubProgress 65 'Installing webhelper trim helper (5s + in-game suspend)...'
-    [void](Install-WebHelperTrimHelper $steam)
+    Write-HubProgress 58 'Installing webhelper trim + priority helper...'
+    $helper = Install-WebHelperTrimHelper $steam
+    Write-HubProgress 68 'Writing lean + aggressive CEF launchers...'
+    $launch = Install-LeanSteamLauncher $steam $helper
 
-    Write-HubProgress 75 'Download speed / config.vdf...'
+    Write-HubProgress 78 'Download speed / config.vdf...'
     $cfgOk = Set-SteamLibraryConfigHints $steam
-    Write-HubProgress 85 'Snappier library / localconfig...'
+    Write-HubProgress 88 'Overlay / library / localconfig...'
     $local = Set-SteamLocalConfigTweaks
 
     Write-HubProgress 94 'Saving status...'
     $state = @{
-        version           = $Script:SteamOptVersion
-        appliedUtc        = (Get-Date).ToUniversalTime().ToString('o')
-        steamPath         = $steam
-        startupDisabled   = $true
-        startupRemoved    = $startupRemoved
-        cacheFreedBytes   = $freed
-        configTouched     = [bool]$cfgOk
-        webGpuReduced     = [bool]$local.Gpu
-        # HIGH priority + lean CEF always applied; localconfig hints are best-effort
-        snappyUi          = $true
-        cefLeanLaunch     = $true
-        cefArgs           = ($Script:LeanCefArgs -join ' ')
-        leanCmd           = $launch.Cmd
-        webHelperTrim     = $true
-        highPriority      = $true
-        downloadOptimized = $true
-        quick             = [bool]$Quick
+        version              = $Script:SteamOptVersion
+        appliedUtc           = (Get-Date).ToUniversalTime().ToString('o')
+        steamPath            = $steam
+        startupDisabled      = $true
+        startupRemoved       = $startupRemoved
+        cacheFreedBytes      = $freed
+        shaderCacheFreedBytes = $shaderFreed
+        configTouched        = [bool]$cfgOk
+        webGpuReduced        = [bool]$local.Gpu
+        snappyUi             = $true
+        overlayTweaks        = $true
+        cefLeanLaunch        = $true
+        cefAggressiveLaunch  = $true
+        cefArgs              = ($Script:LeanCefArgs -join ' ')
+        cefAggressiveArgs    = ($Script:AggressiveCefArgs -join ' ')
+        leanCmd              = $launch.Cmd
+        aggressiveCmd        = $launch.Aggressive
+        webHelperTrim        = $true
+        inGamePriorityYield  = $true
+        highPriority         = $true
+        downloadOptimized    = $true
+        quick                = [bool]$Quick
     }
     Save-SteamOptState $state
 
-    Write-Ok 'Steam Optimizer finished (webhelper lean + faster downloads + snappier client)'
-    Write-Ok 'Start Steam via your Steam shortcut or Desktop "Steam (OptiHub Lean)" so CEF flags apply.'
+    Write-Ok 'Steam Optimizer finished (lean + aggressive launchers, 5s trim, in-game priority yield, shader clean)'
+    Write-Ok 'Default: Desktop "Steam (OptiHub Lean)". Optional: "Steam (OptiHub Aggressive)".'
     Write-HubProgress 100 'Completed successfully'
-    Write-Output 'DONE - Steam optimized (webhelper lean + download/snappy)'
+    Write-Output 'DONE - Steam optimized (lean/aggressive + trim + priority yield)'
     exit 0
 } catch {
     Write-Err $_.Exception.Message

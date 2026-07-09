@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.5
+
+- **Steam aggressive launcher** (optional Desktop shortcut): nofriendsui, nointro, nobigpicture, vrdisable, no-dwrite, cef-disable-breakpad
+- **In-game priority yield**: steam + steamwebhelper set BELOW_NORMAL while a game runs; HIGH in library
+- **5s webhelper EmptyWorkingSet** idle + in-game (no suspend)
+- **Shader pre-cache clean** + multi-library cache paths
+- **Overlay/library VDF hints**: quieter overlay noise, no downloads while playing when keys exist
+- Lean default launcher remains **Steam (OptiHub Lean)**
+
 ## 1.1.4
 
 - **Steam webhelper**: trim every 5s (DiscOpt cadence), always on idle + in-game
