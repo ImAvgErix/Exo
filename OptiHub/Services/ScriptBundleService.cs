@@ -93,10 +93,21 @@ public sealed class ScriptBundleService
         var marker = Path.Combine(working, "Disc-Optimizer.ps1");
         var hubRun = Path.Combine(working, "OptiHub-Discord-Run.ps1");
         var desktopAsar = Path.Combine(working, "kit", "tools", "desktop.asar");
+        var repairScript = Path.Combine(working, "OptiHub-Discord-Repair.ps1");
+        var repairText = File.Exists(repairScript) ? File.ReadAllText(repairScript) : string.Empty;
+        // Corrupted Unicode punctuation (mojibake em-dashes) breaks PowerShell parsing.
+        // Fixed kit ships an ASCII-only repair script with this marker comment.
+        var repairBroken =
+            !File.Exists(repairScript) ||
+            !repairText.Contains("ASCII-only source", StringComparison.Ordinal) ||
+            !repairText.Contains("Write-HubProgress", StringComparison.Ordinal) ||
+            repairText.Any(c => c > 127);
+
         var workingBroken =
             !File.Exists(marker) ||
             !File.Exists(hubRun) ||
             !File.Exists(desktopAsar) ||
+            repairBroken ||
             !File.ReadAllText(marker).Contains("Install-EquicordDirect", StringComparison.Ordinal) ||
             !File.ReadAllText(marker).Contains("Write-DiscordResourceBytes", StringComparison.Ordinal);
 

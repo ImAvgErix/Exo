@@ -16,8 +16,11 @@ param(
 $ErrorActionPreference = 'Stop'
 $env:OPTIHUB = '1'
 $env:DISCOPT_NONINTERACTIVE = '1'
+# Never open Discord from elevated OptiHub - causes black screens and false boot failures.
 $env:OPTIHUB_SKIP_BOOT_FLASH = '1'
 $env:DISCOPT_SKIP_MANIFEST = '1'
+# Force NoLaunch for every OptiHub-hosted run (UI owns launch).
+$NoLaunch = $true
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
     $p = [Math]::Max(0, [Math]::Min(100, $Percent))

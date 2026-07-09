@@ -109,6 +109,8 @@ public sealed class PowerShellRunnerService
         psi.Environment["OPTIHUB"] = "1";
         psi.Environment["OPTIHUB_LOG"] = logPath;
         psi.Environment["DISCOPT_NONINTERACTIVE"] = "1";
+        psi.Environment["OPTIHUB_SKIP_BOOT_FLASH"] = "1";
+        psi.Environment["DISCOPT_SKIP_MANIFEST"] = "1";
 
         var output = new StringBuilder();
         var lastStatus = "Starting...";
@@ -193,6 +195,8 @@ public sealed class PowerShellRunnerService
             "$ErrorActionPreference = 'Continue'",
             "$env:OPTIHUB = '1'",
             "$env:DISCOPT_NONINTERACTIVE = '1'",
+            "$env:OPTIHUB_SKIP_BOOT_FLASH = '1'",
+            "$env:DISCOPT_SKIP_MANIFEST = '1'",
             "$env:OPTIHUB_LOG = '" + logEsc + "'",
             "Set-Location -LiteralPath '" + workEsc + "'",
             "$log = '" + logEsc + "'",

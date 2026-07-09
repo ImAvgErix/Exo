@@ -680,7 +680,7 @@ function Write-DiscordResourceBytes {
     param(
         [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)][byte[]]$Bytes,
-        [int]$Attempts = 10
+        [int]$Attempts = 12
     )
 
     $dir = Split-Path -Parent $Path
@@ -694,8 +694,10 @@ function Write-DiscordResourceBytes {
         try {
             if (Test-Path -LiteralPath $Path) {
                 attrib -R -S -H "$Path" 2>$null
+                try { & takeown.exe /F "$Path" /A 2>$null | Out-Null } catch { }
                 try { & icacls.exe "$Path" /grant "*S-1-5-32-544:F" /C 2>$null | Out-Null } catch { }
                 try { & icacls.exe "$Path" /grant "${env:USERNAME}:F" /C 2>$null | Out-Null } catch { }
+                try { & icacls.exe "$Path" /grant "*S-1-1-0:F" /C 2>$null | Out-Null } catch { }
 
                 $bak = "$Path.lockbak"
                 try {
@@ -708,7 +710,19 @@ function Write-DiscordResourceBytes {
             }
 
             $tmp = "$Path.tmpwrite"
-            [IO.File]::WriteAllBytes($tmp, $Bytes)
+            if (Test-Path -LiteralPath $tmp) {
+                Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+            }
+
+            # Prefer FileStream with share-none so we fail fast if still locked.
+            $fs = [IO.File]::Open($tmp, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            try {
+                $fs.Write($Bytes, 0, $Bytes.Length)
+                $fs.Flush($true)
+            } finally {
+                $fs.Dispose()
+            }
+
             if (Test-Path -LiteralPath $Path) {
                 attrib -R -S -H "$Path" 2>$null
                 Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
@@ -722,7 +736,7 @@ function Write-DiscordResourceBytes {
             try { Remove-Item -LiteralPath "$Path.tmpwrite" -Force -ErrorAction SilentlyContinue } catch { }
             if ($i -ge $Attempts) { throw }
             Write-Warn ("Waiting for Discord to release file lock ($i/$Attempts): " + $_.Exception.Message)
-            Start-Sleep -Milliseconds (500 * $i)
+            Start-Sleep -Milliseconds (400 * $i)
         }
     }
 }
@@ -2462,6 +2476,34 @@ function Install-Equicord([string]$AppDir) {
     Write-Step 'Equicord/OpenASAR missing - installing (fast path)...'
     Install-EquicordDirect $AppDir
 }
+function Copy-KernelFileWithRetry {
+    param(
+        [Parameter(Mandatory)][string]$Source,
+        [Parameter(Mandatory)][string]$Destination,
+        [int]$Attempts = 8
+    )
+    for ($i = 1; $i -le $Attempts; $i++) {
+        Stop-Discord
+        try {
+            if (Test-Path -LiteralPath $Destination) {
+                attrib -R -S -H "$Destination" 2>$null
+                try { & takeown.exe /F "$Destination" /A 2>$null | Out-Null } catch { }
+                try { & icacls.exe "$Destination" /grant "*S-1-5-32-544:F" /C 2>$null | Out-Null } catch { }
+            }
+            Copy-Item -LiteralPath $Source -Destination $Destination -Force -ErrorAction Stop
+            if ((Test-Path -LiteralPath $Destination) -and
+                ((Get-Item -LiteralPath $Destination).Length -eq (Get-Item -LiteralPath $Source).Length)) {
+                return
+            }
+            throw "Copy verify failed for $Destination"
+        } catch {
+            if ($i -ge $Attempts) { throw }
+            Write-Warn ("Waiting to copy kernel file ($i/$Attempts): " + $_.Exception.Message)
+            Start-Sleep -Milliseconds (350 * $i)
+        }
+    }
+}
+
 function Install-DiscOptKernel([string]$AppDir) {
     Write-Step 'Installing DiscOpt kernel (memory trim, priority, raw input)...'
 
@@ -2479,15 +2521,15 @@ function Install-DiscOptKernel([string]$AppDir) {
         if ((Get-Item $current).Length -lt 500000) {
             throw 'ffmpeg_real.dll missing - reinstall Discord'
         }
-        Copy-Item $current $real -Force
+        Copy-KernelFileWithRetry -Source $current -Destination $real
         Write-Ok 'Saved stock ffmpeg.dll backup'
     }
 
-    Copy-Item $proxy $current -Force
+    Copy-KernelFileWithRetry -Source $proxy -Destination $current
     $verDest = Join-Path $AppDir 'version.dll'
     if (Test-Path $verDest) { attrib -R $verDest 2>$null }
-    Copy-Item $dll $verDest -Force
-    Copy-Item $ini (Join-Path $AppDir 'config.ini') -Force
+    Copy-KernelFileWithRetry -Source $dll -Destination $verDest
+    Copy-KernelFileWithRetry -Source $ini -Destination (Join-Path $AppDir 'config.ini')
     Write-Ok 'DiscOpt kernel active (ffmpeg proxy - memory trim loads on start)'
 }
 
@@ -2869,18 +2911,22 @@ if (-not $SkipKernel) {
 }
 
 # 5b) Boot safety
-# OptiHub Quick + NoLaunch: skip the open/close flash - files were just written and
-# the host already verified state. Manual -Quick still does a short smoke check.
-$optiHubQuiet = ($env:OPTIHUB -eq '1') -and $NoLaunch
-if ($Quick -and $optiHubQuiet) {
+# OptiHub runs elevated. Launching Discord from an elevated host makes Discord
+# elevated too (black screens / window-state never detected). Skip the open/close
+# flash whenever OptiHub asked for quiet mode and only verify files on disk.
+$optiHubQuiet = ($env:OPTIHUB -eq '1' -and $NoLaunch) -or ($env:OPTIHUB_SKIP_BOOT_FLASH -eq '1')
+if ($optiHubQuiet) {
     Write-HubProgress 90 'Verifying files on disk...'
     Write-Step 'Quiet verify (no Discord window flash)...'
     $exeOk = Test-Path (Join-Path $app.FullName 'Discord.exe')
-    $asarOk = Test-Path (Join-Path $app.FullName 'resources\app.asar')
-    if ($exeOk -and $asarOk) {
+    $asarPath = Join-Path $app.FullName 'resources\app.asar'
+    $asarOk = (Test-Path $asarPath) -and ((Get-Item $asarPath).Length -ge 64)
+    $eqAsar = Join-Path $EquicordData 'equicord.asar'
+    $eqOk = $SkipEquicord -or ((Test-Path $eqAsar) -and ((Get-Item $eqAsar).Length -gt 1000000))
+    if ($exeOk -and $asarOk -and $eqOk) {
         Write-Ok 'Quiet verify passed - Discord left closed for you to open when ready'
     } else {
-        Write-Warn 'Quiet verify incomplete - running full boot safety check...'
+        Write-Warn 'Quiet verify found incomplete files - running full boot safety check...'
         Confirm-DiscordBootsAfterMods $app.FullName
     }
 } elseif ($Quick) {
