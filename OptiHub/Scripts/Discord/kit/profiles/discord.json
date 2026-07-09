@@ -1,5 +1,5 @@
 {
-  "SKIP_HOST_UPDATE": true,
+  "SKIP_HOST_UPDATE": false,
   "OPEN_ON_STARTUP": false,
   "MINIMIZE_TO_TRAY": true,
   "START_MINIMIZED": false,
@@ -17,7 +17,7 @@
   "DESKTOP_TTI_EARLY_UPDATE_CHECK": false,
   "DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS": 3000,
   "openasar": {
-    "cmdPreset": "balanced",
+    "cmdPreset": "perf",
     "disableMediaKeys": true,
     "noTrack": true,
     "noTyping": true,
@@ -29,12 +29,10 @@
     "css": "body { --background-primary: #000000; --background-secondary: #000000; }"
   },
   "chromiumSwitches": {
-    "force_high_performance_gpu": 1,
     "disable-breakpad": 1,
     "disable-crash-reporter": 1,
     "disable-domain-reliability": 1,
-    "disable-component-update": 1,
     "disable-logging": 1,
-    "disable-features": "WebBluetooth,BluetoothAdapterWinrt,BluetoothScanning,MediaRouter,OptimizationHints,AutofillServerCommunication"
+    "disable-features": "WebBluetooth,BluetoothAdapterWinrt,BluetoothScanning,MediaRouter,OptimizationHints,AutofillServerCommunication,CalculateNativeWinOcclusion"
   }
 }

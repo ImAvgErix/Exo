@@ -24,7 +24,7 @@
     <AssemblyName>OptiHub</AssemblyName>
     <Product>OptiHub</Product>
     <Company>OptiHub</Company>
-    <Version>1.0.33</Version>
+    <Version>1.0.34</Version>
     <Description>Cozy hub for system optimizers - performance, privacy, and gaming.</Description>
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
@@ -36,9 +36,9 @@
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
-  <!-- Bundle optimizer scripts next to the app -->
+  <!-- Bundle optimizer scripts next to the app (exclude multi-MB caches; download on demand) -->
   <ItemGroup>
-    <Content Include="Scripts\**\*" Exclude="Scripts\Placeholders\**\*">
+    <Content Include="Scripts\**\*" Exclude="Scripts\Placeholders\**\*;Scripts\Discord\kit\tools\discord-modules\**\*;Scripts\Discord\kit\tools\desktop.asar;Scripts\Discord\kit\tools\equicord.asar;Scripts\Discord\kit\tools\DiscordSetup*.exe;Scripts\Discord\kit\tools\Equilotl*.exe;Scripts\Discord\kit\tools\pwsh\**\*;Scripts\Discord\kit\downloads\**\*;Scripts\Discord\kit\logs\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Assets\**\*">

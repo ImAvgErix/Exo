@@ -138,7 +138,10 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             {
                 ProgressPercent = 100;
                 ProgressStatus = "Completed successfully";
-                SetResult("Completed successfully. Open Discord when ready.", success: true);
+                SetResult(
+                    "Completed successfully. Open Discord from the Start menu (not as admin). " +
+                    "Equicord privacy + OpenASAR startup + AMOLED should be active.",
+                    success: true);
                 _services.Settings.Update(s =>
                     s.LastDiscordRunUtc = DateTime.UtcNow.ToString("o"));
             }
