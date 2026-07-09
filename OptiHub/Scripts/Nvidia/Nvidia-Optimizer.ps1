@@ -24,12 +24,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.3.5'
+$Script:NvidiaOptVersion = '1.3.7'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
 $StatePath = Join-Path $StateDir 'nvidia-optimizer.json'
-$NpiDir = Join-Path $StateDir 'nvidia-profile-inspector'
+# Fresh managed NPI always lives in Documents (user-visible clean canvas).
+$NpiDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'nvidiaProfileInspector'
 $DriverCacheDir = Join-Path $StateDir 'drivers'
 $NpiExeName = 'nvidiaProfileInspector.exe'
 
@@ -108,116 +109,213 @@ function Get-ProfileFile([string]$SeriesId, [bool]$UseGsync) {
     return $null
 }
 
-function Find-NpiExe {
-    # Prefer OptiHub-managed copy only (Documents NPI often opens GUI / replace dialogs).
-    $managed = Join-Path $NpiDir $NpiExeName
-    if (Test-Path -LiteralPath $managed) { return $managed }
-    $tools = Join-Path $Root "tools\$NpiExeName"
-    if (Test-Path -LiteralPath $tools) { return $tools }
-    return $null
-}
-
 function Stop-NpiProcesses {
     Get-Process -Name 'nvidiaProfileInspector' -ErrorAction SilentlyContinue | ForEach-Object {
         try {
-            Write-Ok "Stopping stuck Profile Inspector PID $($_.Id)"
+            Write-Ok "Stopping Profile Inspector PID $($_.Id)"
             Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
         } catch { }
     }
-    Start-Sleep -Milliseconds 400
+    Start-Sleep -Milliseconds 500
 }
 
-function Install-Npi {
-    Write-Step 'Installing NVIDIA Profile Inspector (OptiHub managed)...'
+function Remove-AllNpiTraces {
+    # Wipe EVERY Profile Inspector copy so we never import with a stale tool / mixed profiles.
+    Write-Step 'Wiping ALL NVIDIA Profile Inspector copies (clean canvas)...'
+    Stop-NpiProcesses
+
+    $folderTargets = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in @(
+        $NpiDir,
+        (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'nvidiaProfileInspector'),
+        (Join-Path $env:USERPROFILE 'Documents\nvidiaProfileInspector'),
+        (Join-Path $env:LOCALAPPDATA 'nvidiaProfileInspector'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\nvidiaProfileInspector'),
+        (Join-Path $StateDir 'nvidia-profile-inspector'),
+        (Join-Path $env:ProgramData 'nvidiaProfileInspector'),
+        'C:\nvidiaProfileInspector',
+        'C:\Tools\nvidiaProfileInspector',
+        'C:\Program Files\nvidiaProfileInspector',
+        'C:\Program Files (x86)\nvidiaProfileInspector'
+    )) {
+        if ($p -and -not $folderTargets.Contains($p)) { [void]$folderTargets.Add($p) }
+    }
+
+    foreach ($p in $folderTargets) {
+        try {
+            if (Test-Path -LiteralPath $p) {
+                Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Ok "Removed NPI folder: $p"
+            }
+        } catch {
+            Write-Warn "Could not fully remove folder $p"
+        }
+    }
+
+    # Known one-off exe locations (e.g. Nexus packs)
+    $fileTargets = @(
+        (Join-Path $Root 'tools\nvidiaProfileInspector.exe'),
+        'C:\Program Files\Nexus\Bin\nvidiaProfileInspector.exe',
+        'C:\Program Files (x86)\Nexus\Bin\nvidiaProfileInspector.exe'
+    )
+    foreach ($f in $fileTargets) {
+        try {
+            if (Test-Path -LiteralPath $f) {
+                Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue
+                Write-Ok "Removed NPI exe: $f"
+            }
+        } catch {
+            Write-Warn "Could not remove $f"
+        }
+    }
+
+    # WinGet leftover packages
+    $wg = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    if (Test-Path -LiteralPath $wg) {
+        Get-ChildItem $wg -Directory -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -match '(?i)nvidiaProfileInspector|Orbmu2k'
+        } | ForEach-Object {
+            try {
+                Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Ok "Removed WinGet NPI package: $($_.Name)"
+            } catch { }
+        }
+    }
+
+    # Bounded leftover scan (skip C:\Windows). Depth limited so Apply doesn't hang.
+    $scanJobs = @(
+        @{ Root = $env:USERPROFILE; Depth = 6 },
+        @{ Root = $env:LOCALAPPDATA; Depth = 5 },
+        @{ Root = $env:ProgramData; Depth = 4 },
+        @{ Root = ${env:ProgramFiles}; Depth = 4 },
+        @{ Root = ${env:ProgramFiles(x86)}; Depth = 4 },
+        @{ Root = 'C:\Tools'; Depth = 3 },
+        @{ Root = 'C:\Games'; Depth = 3 },
+        @{ Root = 'C:\Nexus'; Depth = 3 }
+    )
+    foreach ($job in $scanJobs) {
+        $root = $job.Root
+        if (-not $root -or -not (Test-Path -LiteralPath $root)) { continue }
+        try {
+            Get-ChildItem -LiteralPath $root -Recurse -Filter $NpiExeName -Depth ([int]$job.Depth) -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    try {
+                        if ($_.DirectoryName -and ($_.DirectoryName -eq $NpiDir)) { return }
+                        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+                        Write-Ok "Removed leftover NPI: $($_.FullName)"
+                        $parent = $_.DirectoryName
+                        if ($parent -and (Test-Path -LiteralPath $parent)) {
+                            Get-ChildItem -LiteralPath $parent -ErrorAction SilentlyContinue | Where-Object {
+                                $_.Name -match '(?i)nvidiaProfileInspector|Reference\.xml|CustomSettingNames'
+                            } | ForEach-Object {
+                                Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+                            }
+                        }
+                    } catch { }
+                }
+        } catch { }
+    }
+
+    Write-Ok 'NPI wipe complete — clean canvas ready for fresh install'
+}
+
+function Install-NpiFresh {
+    # Always download latest into Documents\nvidiaProfileInspector only.
+    Write-Step 'Downloading latest NVIDIA Profile Inspector into Documents (fresh)...'
+    if (Test-Path -LiteralPath $NpiDir) {
+        Remove-Item -LiteralPath $NpiDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
     New-Item -ItemType Directory -Force -Path $NpiDir | Out-Null
 
     $api = 'https://api.github.com/repos/Orbmu2k/nvidiaProfileInspector/releases/latest'
-    $headers = @{ 'User-Agent' = 'OptiHub-Nvidia/1.2'; 'Accept' = 'application/vnd.github+json' }
+    $headers = @{ 'User-Agent' = 'OptiHub-Nvidia/1.3.7'; 'Accept' = 'application/vnd.github+json' }
     $rel = Invoke-RestMethod -Uri $api -Headers $headers
+    $tag = [string]$rel.tag_name
     $asset = @($rel.assets | Where-Object { $_.name -match '\.zip$' }) | Select-Object -First 1
     if (-not $asset) { throw 'No zip on nvidiaProfileInspector latest release' }
-    $zip = Join-Path $env:TEMP ("npi-" + $rel.tag_name + ".zip")
-    Write-Ok "Downloading $($asset.name) ($($rel.tag_name))..."
-    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing -Headers @{ 'User-Agent' = 'OptiHub-Nvidia/1.2' }
+    $zip = Join-Path $env:TEMP ("npi-" + $tag + ".zip")
+    Write-Ok "Latest NPI release: $tag ($($asset.name))"
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing -Headers @{ 'User-Agent' = 'OptiHub-Nvidia/1.3.7' }
     $extract = Join-Path $env:TEMP ("npi-extract-" + [guid]::NewGuid().ToString('n'))
     New-Item -ItemType Directory -Force -Path $extract | Out-Null
     Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
     $found = Get-ChildItem -LiteralPath $extract -Recurse -Filter $NpiExeName -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $found) { throw 'nvidiaProfileInspector.exe missing from zip' }
     Copy-Item $found.FullName (Join-Path $NpiDir $NpiExeName) -Force
-    foreach ($extra in @('Reference.xml', 'CustomSettingNames.xml', 'nvidiaProfileInspector.exe.config')) {
+    foreach ($extra in @('Reference.xml', 'CustomSettingNames.xml', 'nvidiaProfileInspector.exe.config', 'nvidiaProfileInspector.pdb')) {
         $hit = Get-ChildItem -LiteralPath $extract -Recurse -Filter $extra -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($hit) { Copy-Item $hit.FullName (Join-Path $NpiDir $extra) -Force -ErrorAction SilentlyContinue }
     }
-    Write-Ok "Installed NPI to $NpiDir"
-    return (Join-Path $NpiDir $NpiExeName)
+    # Stamp version so logs / folder prove we used latest
+    $stamp = @"
+tag=$tag
+installedUtc=$((Get-Date).ToUniversalTime().ToString('o'))
+source=$($asset.browser_download_url)
+managedBy=OptiHub
+"@
+    [IO.File]::WriteAllText((Join-Path $NpiDir 'OPTIHUB-NPI-VERSION.txt'), $stamp.Trim() + "`n", [Text.UTF8Encoding]::new($false))
+    $target = Join-Path $NpiDir $NpiExeName
+    if (-not (Test-Path -LiteralPath $target)) { throw "Fresh NPI missing at $target" }
+    Write-Ok "Fresh NPI ready: $target ($tag)"
+    try { Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue } catch { }
+    try { Remove-Item $zip -Force -ErrorAction SilentlyContinue } catch { }
+    return $target
 }
 
 function Import-OptiHubNipProfile {
     param(
         [Parameter(Mandatory)][string]$NipPath,
-        [int]$TimeoutSec = 90
+        [int]$TimeoutSec = 120
     )
-    # Fully silent import: kill GUI instances, use managed NPI, short path, -silentImport,
-    # auto-accept replace dialogs if any, timeout so we never hang OptiHub forever.
+    # ALWAYS: wipe every NPI copy → download latest to Documents → silent-import OptiHub .nip
     if (-not (Test-Path -LiteralPath $NipPath)) {
         throw "NIP profile missing: $NipPath"
     }
 
-    Stop-NpiProcesses
-
-    $npi = Find-NpiExe
-    if (-not $npi) { $npi = Install-Npi }
-    if (-not $npi -or -not (Test-Path -LiteralPath $npi)) {
-        throw 'nvidiaProfileInspector.exe not available'
+    Remove-AllNpiTraces
+    $npi = Install-NpiFresh
+    if (-not (Test-Path -LiteralPath $npi)) {
+        throw 'Fresh Profile Inspector install failed'
     }
-    Write-Ok "Inspector: $npi"
 
-    # Avoid spaces / long paths that break some NPI CLI parsing
-    $safeNip = Join-Path $env:TEMP ('optihub-' + [IO.Path]::GetFileNameWithoutExtension($NipPath).Replace(' ', '') + '.nip')
+    $safeNip = Join-Path $env:TEMP 'optihub-profile.nip'
     Copy-Item -LiteralPath $NipPath -Destination $safeNip -Force
-    Write-Ok "Importing: $(Split-Path $NipPath -Leaf) via silent CLI"
+    Write-Ok "Importing profile with FRESH NPI: $(Split-Path $NipPath -Leaf)"
+    Write-Ok "NPI: $npi"
+    Write-Ok "NIP: $safeNip"
 
-    # Background dialog dismisser (replace / confirm / import prompts)
     $dismissJob = Start-Job -ScriptBlock {
         param([int]$Seconds)
         $end = [datetime]::UtcNow.AddSeconds($Seconds)
         try { $wshell = New-Object -ComObject WScript.Shell } catch { return }
         while ([datetime]::UtcNow -lt $end) {
             foreach ($title in @(
-                'NVIDIA Profile Inspector',
-                'Profile Inspector',
-                'Import',
-                'Confirm',
-                'Replace',
-                'Warning',
-                'nvidiaProfileInspector'
+                'NVIDIA Profile Inspector', 'Profile Inspector', 'Import', 'Confirm', 'Replace', 'Warning', 'nvidiaProfileInspector'
             )) {
                 try {
                     if ($wshell.AppActivate($title)) {
-                        Start-Sleep -Milliseconds 150
-                        # Prefer default button (Yes / Replace / OK)
-                        $wshell.SendKeys('{ENTER}')
                         Start-Sleep -Milliseconds 120
-                        $wshell.SendKeys('y')
+                        $wshell.SendKeys('{ENTER}')
                         Start-Sleep -Milliseconds 80
+                        $wshell.SendKeys('y')
+                        Start-Sleep -Milliseconds 60
                         $wshell.SendKeys('{ENTER}')
                     }
                 } catch { }
             }
-            Start-Sleep -Milliseconds 350
+            Start-Sleep -Milliseconds 300
         }
     } -ArgumentList $TimeoutSec
 
     $exitCode = -1
-    $timedOut = $false
-    $npiDir = Split-Path -Parent $npi
+    $npiWorkDir = Split-Path -Parent $npi
     try {
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = $npi
-        # Docs: nvidiaProfileInspector.exe -silentImport "profile.nip"
-        $psi.Arguments = '-silentImport "' + $safeNip + '"'
-        $psi.WorkingDirectory = $npiDir
+        # Use ArgumentList (no shell quoting bugs)
+        $psi.ArgumentList.Add('-silentImport')
+        $psi.ArgumentList.Add($safeNip)
+        $psi.WorkingDirectory = $npiWorkDir
         $psi.UseShellExecute = $false
         $psi.CreateNoWindow = $true
         $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
@@ -225,13 +323,12 @@ function Import-OptiHubNipProfile {
         if (-not $proc) { throw 'Failed to start Profile Inspector' }
 
         if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
-            $timedOut = $true
             try { $proc.Kill() } catch { }
-            try { $proc.WaitForExit(5000) } catch { }
             Stop-NpiProcesses
-            throw "Profile Inspector silent import timed out after ${TimeoutSec}s (GUI/replace dialog stuck). Profile NOT marked applied."
+            throw "Profile Inspector silent import timed out after ${TimeoutSec}s. Profile NOT marked applied."
         }
         $exitCode = [int]$proc.ExitCode
+        Write-Ok "NPI silent import exit code: $exitCode"
     } finally {
         try { Stop-Job $dismissJob -ErrorAction SilentlyContinue; Remove-Job $dismissJob -Force -ErrorAction SilentlyContinue } catch { }
         Stop-NpiProcesses
@@ -241,16 +338,15 @@ function Import-OptiHubNipProfile {
     if ($exitCode -ne 0) {
         throw "Profile Inspector silent import failed (exit $exitCode). Profile NOT marked applied."
     }
-    if ($timedOut) {
-        throw 'Profile import timed out. Profile NOT marked applied.'
-    }
 
-    Write-Ok '3D Base Profile imported silently (no GUI / replace click needed)'
+    Write-Ok '3D Base Profile imported with fresh NPI (Documents clean canvas)'
     return @{
-        Success  = $true
-        ExitCode = $exitCode
-        NpiPath  = $npi
-        NipFile  = (Split-Path $NipPath -Leaf)
+        Success   = $true
+        ExitCode  = $exitCode
+        NpiPath   = $npi
+        NipFile   = (Split-Path $NipPath -Leaf)
+        FreshNpi  = $true
+        NpiFolder = $NpiDir
     }
 }
 
@@ -1346,12 +1442,12 @@ function Set-NvidiaDisplayPreferences {
         colorSource         = 'NVIDIA'
         outputColorFormat   = 'RGB'
         outputDynamicRange  = 'Full'
-        outputColorDepth    = '10 bpc when available'
+        outputColorDepth    = 'highest bpc available'
         performScalingOn    = 'GPU'
         scalingMode         = 'No scaling'
         overrideGameScaling = $true
         appliedVia          = 'ControlPanel-UI-Apply-Keep'
-        flow                = 'Use NVIDIA color settings -> RGB/Full/10bpc -> Apply -> Keep; then GPU/No scaling/Override -> Apply -> Keep'
+        flow                = 'Use NVIDIA color settings -> RGB/Full/highest-bpc -> Apply -> Keep; then GPU/No scaling/Override -> Apply -> Keep'
     }
     [IO.File]::WriteAllText($pref, ($obj | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     [void]$applied.Add('Saved OptiHub display preference manifest')

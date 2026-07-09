@@ -131,8 +131,9 @@ public partial class SettingsViewModel : ObservableObject
                 AppVersion = GetAppVersionText();
                 if (install.ShouldExit)
                 {
-                    // Installer stage-swaps %LocalAppData%\OptiHub\app; exit so files unlock.
-                    await Task.Delay(400);
+                    // Give the SFX a moment to start, then exit so %LocalAppData%\OptiHub\app unlocks.
+                    UpdateStatus = install.Message;
+                    await Task.Delay(900);
                     Microsoft.UI.Xaml.Application.Current?.Exit();
                     return;
                 }

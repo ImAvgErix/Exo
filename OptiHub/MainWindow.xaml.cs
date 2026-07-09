@@ -254,7 +254,7 @@ public sealed partial class MainWindow : Window
                         var install = await App.Services.Updater.InstallLatestAppAsync();
                         if (install.ShouldExit)
                         {
-                            await Task.Delay(400);
+                            await Task.Delay(900);
                             Microsoft.UI.Xaml.Application.Current?.Exit();
                             return;
                         }

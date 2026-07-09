@@ -259,12 +259,25 @@ public sealed class GitHubUpdateService
                 };
             }
 
-            status?.Report($"Installing OptiHub v{check.RemoteVersion}...");
-            Process.Start(new ProcessStartInfo
+            status?.Report($"Starting installer for OptiHub v{check.RemoteVersion}...");
+            // SFX installs to %LocalAppData%\OptiHub\app and relaunches. We must exit
+            // so files unlock; installer kills any leftover OptiHub.exe by name.
+            var started = Process.Start(new ProcessStartInfo
             {
                 FileName = setupPath,
-                UseShellExecute = true
+                UseShellExecute = true,
+                WorkingDirectory = work
             });
+            if (started is null)
+            {
+                return new AppUpdateResult
+                {
+                    UpdateAvailable = true,
+                    LocalVersion = check.LocalVersion,
+                    RemoteVersion = check.RemoteVersion,
+                    Message = "Could not start the installer. Run the file manually from %LocalAppData%\\OptiHub\\updates, or reinstall from GitHub Releases."
+                };
+            }
 
             return new AppUpdateResult
             {
@@ -273,7 +286,7 @@ public sealed class GitHubUpdateService
                 RemoteVersion = check.RemoteVersion,
                 DownloadUrl = url,
                 ShouldExit = true,
-                Message = $"Installing OptiHub v{check.RemoteVersion}. OptiHub will close and reopen."
+                Message = $"Installing OptiHub v{check.RemoteVersion}. Closing so the installer can replace files..."
             };
         }
         catch (Exception ex)

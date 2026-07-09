@@ -111,7 +111,14 @@ Clear-PublishDir $LegacyOutDir | Out-Null
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
 
-Write-Host '[*] dotnet publish...' -ForegroundColor DarkGray
+# Stamp assembly version from VERSION file so Settings + auto-update compare correctly.
+# Without this, GitHub tag can be v1.3.7 while FileVersion stays stuck at an old csproj value.
+$asmVersion = $Version
+if ($asmVersion -notmatch '^\d+\.\d+\.\d+') { $asmVersion = '1.0.0' }
+# AssemblyVersion needs 4 parts for some hosts; FileVersion/Informational use 3.
+$asmFour = if ($asmVersion -match '^\d+\.\d+\.\d+$') { "$asmVersion.0" } else { $asmVersion }
+
+Write-Host "[*] dotnet publish (Version=$asmVersion)..." -ForegroundColor DarkGray
 & dotnet publish $Project `
     -c $Configuration `
     -r win-x64 `
@@ -119,13 +126,24 @@ Write-Host '[*] dotnet publish...' -ForegroundColor DarkGray
     -p:WindowsPackageType=None `
     -p:WindowsAppSDKSelfContained=true `
     -p:PublishReadyToRun=true `
+    -p:Version=$asmVersion `
+    -p:AssemblyVersion=$asmFour `
+    -p:FileVersion=$asmFour `
+    -p:InformationalVersion=$asmVersion `
     -o $OutDir
 
 if ($LASTEXITCODE -ne 0) { throw "Publish failed (exit $LASTEXITCODE)" }
 
 $publishedExe = Join-Path $OutDir 'OptiHub.exe'
 if (-not (Test-Path $publishedExe)) { throw "OptiHub.exe not found in $OutDir" }
+
+$fv = (Get-Item $publishedExe).VersionInfo.FileVersion
+$pv = (Get-Item $publishedExe).VersionInfo.ProductVersion
 Write-Host "[+] Published app folder: $publishedExe" -ForegroundColor Green
+Write-Host "[+] Embedded version FileVersion=$fv ProductVersion=$pv (expected $asmVersion)" -ForegroundColor Green
+if ($fv -notlike "$asmVersion*") {
+    throw "Publish version stamp failed: FileVersion is '$fv' but VERSION file says '$asmVersion'. Fix csproj/publish props."
+}
 
 if (Test-Path $ZipPath) { Remove-Item -LiteralPath $ZipPath -Force }
 Write-Host '[*] Packing payload zip (internal only)...' -ForegroundColor DarkGray
