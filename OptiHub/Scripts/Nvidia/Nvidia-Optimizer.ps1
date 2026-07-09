@@ -24,7 +24,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.3.7'
+$Script:NvidiaOptVersion = '1.4.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -1364,17 +1364,29 @@ function Disable-NvidiaTelemetry {
     Write-Ok 'Telemetry / auto-download privacy hints applied'
 }
 
+function Get-OptiHubNvDisplayExe {
+    # Prefer tools next to scripts, then managed LocalAppData, then repo build output.
+    $candidates = @(
+        (Join-Path $Root 'tools\OptiHub.NvDisplay.exe'),
+        (Join-Path $Root 'tools\OptiHub.NvDisplay\OptiHub.NvDisplay.exe'),
+        (Join-Path $StateDir 'tools\OptiHub.NvDisplay.exe'),
+        (Join-Path $env:LOCALAPPDATA 'OptiHub\app\Scripts\Nvidia\tools\OptiHub.NvDisplay.exe'),
+        (Join-Path $PSScriptRoot 'tools\OptiHub.NvDisplay.exe')
+    )
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path -LiteralPath $c)) { return $c }
+    }
+    return $null
+}
+
 function Set-NvidiaDisplayPreferences {
-    # Real apply path: drive NVIDIA Control Panel UI.
-    # Order matters: Use NVIDIA color settings → unlock RGB/Full/bpc → Apply → Keep/don't-revert.
-    # Then scaling page: GPU + No scaling + Override → Apply → Keep.
-    Write-Step 'Display color / scaling via Control Panel UI (NVIDIA color + Apply + Keep)...'
+    # NVAPI path — no Control Panel window, no mouse clicks, no custom-res dialogs.
+    # Applies: Use NVIDIA color (User policy), RGB, Full (VESA), highest supported BPC,
+    # and GPU no-scaling (GPUScanOutToNative) on all active displays.
+    Write-Step 'Display color / scaling via NVAPI (no Control Panel UI)...'
     $applied = New-Object System.Collections.Generic.List[string]
 
-    [void](Ensure-NvidiaControlPanel)
-    $eulaJob = Accept-NvidiaControlPanelEula
-
-    # Registry hints still help Gestalt / future CPL sessions
+    # Soft registry hints (Gestalt / EULA) — does not open CPL
     foreach ($nvTweak in @(
         'HKCU:\Software\NVIDIA Corporation\Global\NVTweak',
         'HKLM:\SOFTWARE\NVIDIA Corporation\Global\NVTweak'
@@ -1391,63 +1403,68 @@ function Set-NvidiaDisplayPreferences {
         Set-ItemProperty -Path $client -Name 'EulaAccepted' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
     }
 
-    # Wait for EULA assist briefly
-    try {
-        if ($eulaJob) {
-            Wait-Job $eulaJob -Timeout 12 | Out-Null
-            Stop-Job $eulaJob -ErrorAction SilentlyContinue
-            Remove-Job $eulaJob -Force -ErrorAction SilentlyContinue
-        }
-    } catch { }
-
-    # Full UI automation: NVIDIA color unlock → values → Apply → Keep changes / don't revert
-    $cplScript = Join-Path $Root 'OptiHub-Cpl-ApplyDisplay.ps1'
-    if (-not (Test-Path -LiteralPath $cplScript)) {
-        Write-Warn "Missing $cplScript — cannot auto-click CPL Apply/Keep"
-        [void]$applied.Add('CPL UI script missing')
+    $nvExe = Get-OptiHubNvDisplayExe
+    if (-not $nvExe) {
+        Write-Warn 'OptiHub.NvDisplay.exe missing — display color/scaling not applied via NVAPI'
+        Write-Warn 'Reinstall OptiHub or rebuild tools/OptiHub.NvDisplay'
+        [void]$applied.Add('NVAPI helper missing')
     } else {
-        Write-Ok 'Driving Control Panel UI (this clicks Apply and confirms Keep/Yes)...'
-        Write-HubProgress 92 'Control Panel: NVIDIA color + Apply + Keep...'
-        $prev = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            & $cplScript 2>&1 | ForEach-Object {
-                $s = "$_"
-                if ($s) {
-                    Write-Host $s
-                    if ($env:OPTIHUB_LOG) {
-                        try { Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $s -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
-                    }
+        Write-Ok "NVAPI helper: $nvExe"
+        Write-HubProgress 92 'NVAPI: RGB Full + highest BPC + GPU no-scaling...'
+        # Never leave nvcplui open from older runs — kill if present (we do not use it)
+        Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $nvExe
+        $psi.ArgumentList.Add('--apply')
+        $psi.WorkingDirectory = (Split-Path -Parent $nvExe)
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $proc = [Diagnostics.Process]::Start($psi)
+        $stdout = $proc.StandardOutput.ReadToEnd()
+        $stderr = $proc.StandardError.ReadToEnd()
+        if (-not $proc.WaitForExit(120000)) {
+            try { $proc.Kill() } catch { }
+            Write-Warn 'NVAPI display helper timed out'
+            [void]$applied.Add('NVAPI helper timeout')
+        } else {
+            foreach ($line in ($stdout -split "`r?`n")) {
+                if ([string]::IsNullOrWhiteSpace($line)) { continue }
+                Write-Host $line
+                if ($env:OPTIHUB_LOG) {
+                    try { Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
                 }
             }
-            $code = 0
-            if ($null -ne $LASTEXITCODE) { $code = [int]$LASTEXITCODE }
-            if ($code -eq 0) {
-                [void]$applied.Add('CPL UI automation completed (Apply + Keep handled)')
-                Write-Ok 'Control Panel settings applied (including Apply + keep confirmation)'
-            } else {
-                [void]$applied.Add("CPL UI automation exit $code")
-                Write-Warn "CPL UI automation exit $code — open Control Panel and Apply once if needed"
+            if ($stderr) {
+                foreach ($line in ($stderr -split "`r?`n")) {
+                    if ([string]::IsNullOrWhiteSpace($line)) { continue }
+                    Write-Warn $line
+                }
             }
-        } catch {
-            Write-Warn "CPL UI automation failed: $($_.Exception.Message)"
-            [void]$applied.Add("CPL UI error: $($_.Exception.Message)")
-        } finally {
-            $ErrorActionPreference = $prev
+            $code = [int]$proc.ExitCode
+            if ($code -eq 0) {
+                [void]$applied.Add('NVAPI display apply completed (RGB/Full/BPC + GPU no-scaling)')
+                Write-Ok 'Display settings applied via NVIDIA driver API (no Control Panel UI)'
+            } else {
+                [void]$applied.Add("NVAPI helper exit $code")
+                Write-Warn "NVAPI helper exit $code"
+            }
         }
     }
 
     $pref = Join-Path $StateDir 'nvidia-display-prefs.json'
     $obj = [ordered]@{
-        colorSource         = 'NVIDIA'
+        colorSource         = 'NVIDIA (User policy)'
         outputColorFormat   = 'RGB'
-        outputDynamicRange  = 'Full'
-        outputColorDepth    = 'highest bpc available'
+        outputDynamicRange  = 'Full (VESA)'
+        outputColorDepth    = 'highest bpc supported per display'
         performScalingOn    = 'GPU'
-        scalingMode         = 'No scaling'
+        scalingMode         = 'No scaling (GPUScanOutToNative)'
         overrideGameScaling = $true
-        appliedVia          = 'ControlPanel-UI-Apply-Keep'
-        flow                = 'Use NVIDIA color settings -> RGB/Full/highest-bpc -> Apply -> Keep; then GPU/No scaling/Override -> Apply -> Keep'
+        appliedVia          = 'NVAPI-OptiHub.NvDisplay'
+        flow                = 'NVAPI ColorControl + PathInfo SetDisplaysConfig (no nvcplui clicks)'
     }
     [IO.File]::WriteAllText($pref, ($obj | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     [void]$applied.Add('Saved OptiHub display preference manifest')

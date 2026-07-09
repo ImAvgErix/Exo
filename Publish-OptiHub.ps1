@@ -118,6 +118,31 @@ if ($asmVersion -notmatch '^\d+\.\d+\.\d+') { $asmVersion = '1.0.0' }
 # AssemblyVersion needs 4 parts for some hosts; FileVersion/Informational use 3.
 $asmFour = if ($asmVersion -match '^\d+\.\d+\.\d+$') { "$asmVersion.0" } else { $asmVersion }
 
+# Build NVIDIA NVAPI display helper into Scripts\Nvidia\tools (no Control Panel UI).
+$nvDisplayProj = Join-Path $Root 'tools\OptiHub.NvDisplay\OptiHub.NvDisplay.csproj'
+$nvDisplayOut = Join-Path $Root 'OptiHub\Scripts\Nvidia\tools'
+if (Test-Path -LiteralPath $nvDisplayProj) {
+    Write-Host '[*] Building OptiHub.NvDisplay (NVAPI display helper)...' -ForegroundColor DarkGray
+    New-Item -ItemType Directory -Force -Path $nvDisplayOut | Out-Null
+    Get-ChildItem -LiteralPath $nvDisplayOut -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+    & dotnet publish $nvDisplayProj `
+        -c $Configuration `
+        -r win-x64 `
+        --self-contained true `
+        -p:PublishSingleFile=true `
+        -p:PublishTrimmed=true `
+        -p:IncludeNativeLibrariesForSelfExtract=true `
+        -p:DebugType=none `
+        -p:DebugSymbols=false `
+        -o $nvDisplayOut
+    if ($LASTEXITCODE -ne 0) { throw "OptiHub.NvDisplay publish failed (exit $LASTEXITCODE)" }
+    $nvExe = Join-Path $nvDisplayOut 'OptiHub.NvDisplay.exe'
+    if (-not (Test-Path -LiteralPath $nvExe)) { throw "Missing $nvExe after publish" }
+    Write-Host "[+] NVAPI helper: $nvExe ($([math]::Round((Get-Item $nvExe).Length/1MB,1)) MB)" -ForegroundColor Green
+} else {
+    Write-Host "[!] OptiHub.NvDisplay project missing at $nvDisplayProj" -ForegroundColor DarkYellow
+}
+
 Write-Host "[*] dotnet publish (Version=$asmVersion)..." -ForegroundColor DarkGray
 & dotnet publish $Project `
     -c $Configuration `
