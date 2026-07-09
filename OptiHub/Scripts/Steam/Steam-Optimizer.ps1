@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.3.0'
+$Script:SteamOptVersion = '1.3.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Official Valve CEF flags (see Valve wiki: Command line options (Steam)).
@@ -450,8 +450,64 @@ function Write-SteamLaunchCmd([string]$CmdPath, [string]$SteamPath, [string]$Hel
     [IO.File]::WriteAllText($CmdPath, $cmd + "`r`n", [Text.UTF8Encoding]::new($false))
 }
 
+function Get-SteamShortcutSearchRoots {
+    $roots = New-Object System.Collections.Generic.List[string]
+    $candidates = @(
+        [Environment]::GetFolderPath('Programs'),              # Start Menu (user)
+        [Environment]::GetFolderPath('CommonPrograms'),        # Start Menu (all users)
+        [Environment]::GetFolderPath('Desktop'),
+        [Environment]::GetFolderPath('CommonDesktopDirectory'),
+        (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch'),
+        (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar'),
+        (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\StartMenu'),
+        (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu'),
+        (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu')
+    )
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path -LiteralPath $c) -and -not $roots.Contains($c)) {
+            [void]$roots.Add($c)
+        }
+    }
+    return @($roots)
+}
+
+function Test-LnkIsSteamClient([string]$LnkPath, [string]$SteamExe, $Wsh) {
+    try {
+        $sc = $Wsh.CreateShortcut($LnkPath)
+        $target = [string]$sc.TargetPath
+        if ([string]::IsNullOrWhiteSpace($target)) { return $false }
+        # Stock steam.exe or our launchers
+        if ($target -match '(?i)Steam-OptiHub(\.cmd|-Aggressive\.cmd)$') { return $true }
+        if ($target -match '(?i)[\\/]steam\.exe$') { return $true }
+        # Same install dir steam.exe (path normalize)
+        try {
+            $fullT = [IO.Path]::GetFullPath($target)
+            $fullE = [IO.Path]::GetFullPath($SteamExe)
+            if ($fullT -eq $fullE) { return $true }
+        } catch { }
+        # Name-based Start Menu entries often "Steam.lnk" / "Steam Client.lnk"
+        $base = [IO.Path]::GetFileNameWithoutExtension($LnkPath)
+        if ($base -match '^(?i)steam(\s+client)?$' -and $target -match '(?i)steam') { return $true }
+        return $false
+    } catch {
+        return $false
+    }
+}
+
+function Set-SteamShortcutTarget([string]$LnkPath, [string]$TargetCmd, [string]$SteamPath, [string]$SteamExe, [string]$Description, $Wsh) {
+    $sc = $Wsh.CreateShortcut($LnkPath)
+    $sc.TargetPath = $TargetCmd
+    $sc.Arguments = ''
+    $sc.WorkingDirectory = $SteamPath
+    $sc.IconLocation = "$SteamExe,0"
+    $sc.WindowStyle = 1
+    $sc.Description = $Description
+    $sc.Save()
+}
+
 function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
-    # Default lean + optional aggressive launchers (stock steam.exe untouched).
+    # Default lean + optional aggressive. Patch Start Menu / taskbar / desktop so
+    # opening Steam from Start apps uses OptiHub flags + trim helper.
     $exe = Join-Path $SteamPath 'steam.exe'
     $cmdLean = Join-Path $SteamPath 'Steam-OptiHub.cmd'
     $cmdAgg = Join-Path $SteamPath 'Steam-OptiHub-Aggressive.cmd'
@@ -462,39 +518,58 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
     Write-Ok "Aggressive launcher: $cmdAgg"
     Write-Ok ("Aggressive CEF: {0}" -f ($Script:AggressiveCefArgs -join ' '))
 
-    $targets = @()
-    $programs = [Environment]::GetFolderPath('Programs')
-    $desktop = [Environment]::GetFolderPath('Desktop')
-    $commonPrograms = [Environment]::GetFolderPath('CommonPrograms')
-    foreach ($base in @($programs, $desktop, $commonPrograms)) {
-        if (-not $base -or -not (Test-Path $base)) { continue }
-        $targets += Get-ChildItem -LiteralPath $base -Filter 'Steam.lnk' -Recurse -ErrorAction SilentlyContinue
-    }
-
     $wsh = New-Object -ComObject WScript.Shell
     $patched = 0
-    foreach ($lnk in $targets) {
-        try {
-            $sc = $wsh.CreateShortcut($lnk.FullName)
-            $sc.TargetPath = $cmdLean
-            $sc.WorkingDirectory = $SteamPath
-            $sc.IconLocation = "$exe,0"
-            $sc.Description = 'Steam (OptiHub lean CEF - lower steamwebhelper RAM)'
-            $sc.Save()
-            $patched++
-        } catch {
-            Write-Warn "Shortcut skip $($lnk.FullName): $($_.Exception.Message)"
+    $seen = @{}
+    $descLean = 'Steam (OptiHub lean CEF + 5s webhelper trim)'
+
+    foreach ($root in (Get-SteamShortcutSearchRoots)) {
+        $lnks = @(Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse -Force -ErrorAction SilentlyContinue)
+        foreach ($lnk in $lnks) {
+            $key = $lnk.FullName.ToLowerInvariant()
+            if ($seen.ContainsKey($key)) { continue }
+            if (-not (Test-LnkIsSteamClient $lnk.FullName $exe $wsh)) { continue }
+            # Do not rewrite the Aggressive-named shortcuts to lean
+            if ($lnk.Name -match '(?i)aggressive') { continue }
+            try {
+                Set-SteamShortcutTarget $lnk.FullName $cmdLean $SteamPath $exe $descLean $wsh
+                $seen[$key] = $true
+                $patched++
+                Write-Ok ("Shortcut -> lean: {0}" -f $lnk.FullName.Replace($env:USERPROFILE, '~').Replace($env:ProgramData, '%ProgramData%'))
+            } catch {
+                Write-Warn "Shortcut skip $($lnk.FullName): $($_.Exception.Message)"
+            }
         }
     }
 
+    # Ensure primary Start Menu "Steam" entries exist (user + all-users) for Start search/apps
+    $startSteamDirs = @(
+        (Join-Path ([Environment]::GetFolderPath('Programs')) 'Steam'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Steam')
+    )
+    foreach ($dir in $startSteamDirs) {
+        if (-not $dir) { continue }
+        try {
+            if (-not (Test-Path -LiteralPath $dir)) {
+                New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            }
+            $mainLnk = Join-Path $dir 'Steam.lnk'
+            Set-SteamShortcutTarget $mainLnk $cmdLean $SteamPath $exe $descLean $wsh
+            $patched++
+            Write-Ok "Start Menu Steam.lnk: $mainLnk"
+
+            $aggLnk = Join-Path $dir 'Steam (OptiHub Aggressive).lnk'
+            Set-SteamShortcutTarget $aggLnk $cmdAgg $SteamPath $exe 'Steam OptiHub aggressive CEF (optional)' $wsh
+            $patched++
+        } catch {
+            Write-Warn "Start Menu Steam folder: $($_.Exception.Message)"
+        }
+    }
+
+    $desktop = [Environment]::GetFolderPath('Desktop')
     try {
         $deskLnk = Join-Path $desktop 'Steam (OptiHub Lean).lnk'
-        $sc = $wsh.CreateShortcut($deskLnk)
-        $sc.TargetPath = $cmdLean
-        $sc.WorkingDirectory = $SteamPath
-        $sc.IconLocation = "$exe,0"
-        $sc.Description = 'Steam with OptiHub lean CEF flags + 5s webhelper trim'
-        $sc.Save()
+        Set-SteamShortcutTarget $deskLnk $cmdLean $SteamPath $exe 'Steam with OptiHub lean CEF flags + 5s webhelper trim' $wsh
         Write-Ok 'Desktop shortcut: Steam (OptiHub Lean).lnk'
         $patched++
     } catch {
@@ -503,19 +578,24 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
 
     try {
         $deskAgg = Join-Path $desktop 'Steam (OptiHub Aggressive).lnk'
-        $sc = $wsh.CreateShortcut($deskAgg)
-        $sc.TargetPath = $cmdAgg
-        $sc.WorkingDirectory = $SteamPath
-        $sc.IconLocation = "$exe,0"
-        $sc.Description = 'Steam OptiHub aggressive: lean CEF + nofriendsui/nointro/etc. Friends list may be limited.'
-        $sc.Save()
+        Set-SteamShortcutTarget $deskAgg $cmdAgg $SteamPath $exe 'Steam OptiHub aggressive: lean CEF + nofriendsui/nointro/etc.' $wsh
         Write-Ok 'Desktop shortcut: Steam (OptiHub Aggressive).lnk'
         $patched++
     } catch {
         Write-Warn "Desktop aggressive shortcut: $($_.Exception.Message)"
     }
 
-    Write-Ok "Updated $patched Steam shortcut(s)"
+    # App Paths: Start/Run "steam" resolution still points at real steam.exe (some tools require .exe).
+    # We cannot put .cmd here reliably; Start Menu shortcuts above cover the UI launch path.
+    try {
+        $appPaths = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\steam.exe'
+        if (-not (Test-Path $appPaths)) { New-Item -Path $appPaths -Force | Out-Null }
+        # Keep Default as steam.exe for compatibility; document lean via shortcuts.
+        Set-ItemProperty -Path $appPaths -Name '(default)' -Value $exe -Force
+        Set-ItemProperty -Path $appPaths -Name 'Path' -Value $SteamPath -Force
+    } catch { }
+
+    Write-Ok "Updated $patched Steam shortcut(s) (Start Menu / taskbar pins / desktop)"
     return @{
         Cmd        = $cmdLean
         Aggressive = $cmdAgg

@@ -74,7 +74,8 @@ public partial class SteamOptimizerViewModel : ObservableObject
             "• Shader pre-cache clean, download staging clean, overlay/library hints\n" +
             "• Quieter Windows startup\n\n" +
             "Steam is Chromium CEF (not Electron) - no Discord-style asar inject. VAC-safe.\n\n" +
-            "Default: Desktop Steam (OptiHub Lean). Optional: Steam (OptiHub Aggressive).";
+            "Start Menu / taskbar / Desktop Steam entries are retargeted to the lean launcher.\n" +
+            "Optional: Steam (OptiHub Aggressive) on Desktop and Start Menu.";
 
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync($"Confirm Steam Optimizer ({action})", warning)

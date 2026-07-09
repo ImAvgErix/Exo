@@ -173,7 +173,11 @@ function Disable-Fso([string]$AppDir) {
 }
 
 function Restore-StartMenu {
+    # Point Start Menu / taskbar / desktop Discord shortcuts at Discord.vbs (-Launch)
+    # so OpenASAR + kernel + flags load no matter how the user opens Discord.
     $app = Get-ActiveApp
+    if (-not $app) { throw 'No Discord app folder - cannot refresh shortcuts' }
+
     $vbs = Join-Path $KitDir 'Discord.vbs'
     $psExe = (Get-DiscOptPowerShellExe) -replace '"', '""'
     $vbsContent = @"
@@ -186,22 +190,104 @@ CreateObject("WScript.Shell").Run """" & ps & """ -NoProfile -WindowStyle Hidden
 "@
     Set-Content -Path $vbs -Value $vbsContent -Encoding ASCII
 
-    $icon = Join-Path $app.FullName 'app.ico'
-    $folder = Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc'
-    if (-not $folder) { throw 'APPDATA is not set; cannot create Start menu shortcut' }
-    $shortcut = Join-Path $folder 'Discord.lnk'
-    if (-not (Test-Path $folder)) { New-Item -ItemType Directory -Path $folder -Force | Out-Null }
-    Remove-Item (Join-Path (Split-Path $folder -Parent) 'Discord.lnk') -Force -ErrorAction SilentlyContinue
-    $sc = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
     $wscript = Get-DiscOptEnvPath 'SystemRoot' 'System32\wscript.exe'
-    if (-not $wscript) { throw 'SystemRoot is not set; cannot find wscript.exe' }
-    $sc.TargetPath = $wscript
-    $sc.Arguments = "`"$vbs`" //B"
-    $sc.WorkingDirectory = $Root
-    $sc.Description = 'Discord (Disc Optimizer)'
-    if (Test-Path $icon) { $sc.IconLocation = "$icon,0" }
-    $sc.Save()
-    Write-Ok 'Start menu -> Discord.vbs (-Launch)'
+    if (-not $wscript -or -not (Test-Path -LiteralPath $wscript)) {
+        throw 'wscript.exe not found; cannot create Discord shortcuts'
+    }
+    $icon = Join-Path $app.FullName 'app.ico'
+    $iconLoc = if (Test-Path -LiteralPath $icon) { "$icon,0" } else { "$($app.FullName)\Discord.exe,0" }
+    $discordExe = Join-Path $app.FullName 'Discord.exe'
+    $updateExe = Get-DiscOptEnvPath 'LOCALAPPDATA' 'Discord\Update.exe'
+    $desc = 'Discord (OptiHub - Launch path)'
+    $wsh = New-Object -ComObject WScript.Shell
+
+    function Set-DiscordLnk([string]$Path) {
+        $dir = Split-Path -Parent $Path
+        if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        $sc = $wsh.CreateShortcut($Path)
+        $sc.TargetPath = $wscript
+        $sc.Arguments = "`"$vbs`" //B"
+        $sc.WorkingDirectory = $Root
+        $sc.Description = $desc
+        $sc.IconLocation = $iconLoc
+        $sc.WindowStyle = 1
+        $sc.Save()
+    }
+
+    function Test-IsDiscordClientLnk([string]$LnkPath) {
+        try {
+            $sc = $wsh.CreateShortcut($LnkPath)
+            $t = [string]$sc.TargetPath
+            $a = [string]$sc.Arguments
+            if ($t -match '(?i)wscript\.exe$' -and $a -match '(?i)Discord\.vbs') { return $true }
+            if ($t -match '(?i)[\\/]Discord\.exe$') { return $true }
+            if ($t -match '(?i)[\\/]Update\.exe$' -and $a -match '(?i)Discord') { return $true }
+            if ($discordExe -and $t -and ([IO.Path]::GetFullPath($t) -eq [IO.Path]::GetFullPath($discordExe))) { return $true }
+            $base = [IO.Path]::GetFileNameWithoutExtension($LnkPath)
+            if ($base -match '^(?i)discord(\s+(canary|ptb|development))?$') { return $true }
+            return $false
+        } catch { return $false }
+    }
+
+    $roots = @(
+        [Environment]::GetFolderPath('Programs'),
+        [Environment]::GetFolderPath('CommonPrograms'),
+        [Environment]::GetFolderPath('Desktop'),
+        [Environment]::GetFolderPath('CommonDesktopDirectory'),
+        (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch'),
+        (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar'),
+        (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\StartMenu'),
+        (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu'),
+        (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu')
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+
+    $patched = 0
+    $seen = @{}
+    foreach ($root in $roots) {
+        Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            $key = $_.FullName.ToLowerInvariant()
+            if ($seen.ContainsKey($key)) { return }
+            if (-not (Test-IsDiscordClientLnk $_.FullName)) { return }
+            try {
+                Set-DiscordLnk $_.FullName
+                $seen[$key] = $true
+                $patched++
+            } catch {
+                Write-Warn "Discord shortcut skip $($_.FullName): $($_.Exception.Message)"
+            }
+        }
+    }
+
+    # Canonical Start Menu locations (user + all-users)
+    $ensure = @(
+        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk'),
+        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord Inc\Discord.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Discord.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Discord (OptiHub).lnk')
+    ) | Where-Object { $_ }
+
+    foreach ($path in $ensure) {
+        try {
+            Set-DiscordLnk $path
+            $patched++
+            Write-Ok ("Shortcut -> Discord.vbs: {0}" -f ($path -replace [regex]::Escape($env:USERPROFILE), '~' -replace [regex]::Escape($env:ProgramData), '%ProgramData%'))
+        } catch {
+            Write-Warn "Ensure shortcut failed ($path): $($_.Exception.Message)"
+        }
+    }
+
+    # Remove orphaned top-level duplicate only if we have Discord Inc entry
+    $inc = Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk'
+    $top = Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord.lnk'
+    if ($inc -and (Test-Path -LiteralPath $inc) -and $top -and (Test-Path -LiteralPath $top)) {
+        # Keep both so Start search finds either name; both point at vbs.
+    }
+
+    Write-Ok "Discord launch shortcuts refreshed ($patched) - Start Menu / taskbar / desktop -> Discord.vbs (-Launch)"
 }
 
 function Test-KernelOnDisk([string]$AppDir) {
