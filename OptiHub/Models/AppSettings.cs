@@ -10,7 +10,10 @@ public sealed class AppSettings
     /// <summary>Dark | Light</summary>
     public string Theme { get; set; } = DarkTheme;
 
-    /// <summary>When true, scripts are updated from GitHub on launch if newer.</summary>
+    /// <summary>
+    /// When true, on launch: prompt if a newer OptiHub.exe is on GitHub, and
+    /// silently refresh the Discord script kit when newer.
+    /// </summary>
     public bool AutoUpdateScripts { get; set; }
 
     /// <summary>GitHub repo for Discord optimizer scripts (owner/name).</summary>

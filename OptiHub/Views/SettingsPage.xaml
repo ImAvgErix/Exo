@@ -47,6 +47,11 @@
                                       IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
                                       OnContent="On"
                                       OffContent="Off" />
+                        <TextBlock Text="On launch: prompt when a new OptiHub app is available, and refresh optimizer scripts in the background."
+                                   Style="{StaticResource OptiCaption}"
+                                   TextWrapping="WrapWholeWords"
+                                   Opacity="0.85"
+                                   Margin="0,-4,0,0" />
 
                         <Grid ColumnSpacing="28" Margin="0,2,0,0">
                             <Grid.ColumnDefinitions>

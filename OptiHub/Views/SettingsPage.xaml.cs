@@ -13,12 +13,28 @@ public sealed partial class SettingsPage : Page
         ViewModel = new SettingsViewModel(App.Services);
         InitializeComponent();
         DataContext = ViewModel;
+        ViewModel.ConfirmAsync = ConfirmAsync;
 
         ViewModel.RequestGoBack += (_, _) =>
         {
             if (App.MainAppWindow is MainWindow mw)
                 mw.NavigateToDashboard();
         };
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = message,
+            PrimaryButtonText = "Install",
+            CloseButtonText = "Later",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+        var result = await dialog.ShowAsync();
+        return result == ContentDialogResult.Primary;
     }
 
     private void CheckScriptUpdates_Click(object sender, RoutedEventArgs e) =>

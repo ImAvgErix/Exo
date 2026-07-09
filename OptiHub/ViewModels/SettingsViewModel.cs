@@ -27,6 +27,7 @@ public partial class SettingsViewModel : ObservableObject
     public string AboutFooter { get; private set; } = "OptiHub";
 
     public event EventHandler? RequestGoBack;
+    public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
 
     [RelayCommand]
     private void GoBack() => RequestGoBack?.Invoke(this, EventArgs.Empty);
@@ -108,6 +109,22 @@ public partial class SettingsViewModel : ObservableObject
             AppVersion = GetAppVersionText();
             if (result.UpdateAvailable)
             {
+                // Manual check: still ask before replacing the running install.
+                var installNow = true;
+                if (ConfirmAsync is not null)
+                {
+                    installNow = await ConfirmAsync(
+                        "Install OptiHub update?",
+                        $"Version {result.RemoteVersion} is available (you have {result.LocalVersion}).\n\n" +
+                        "OptiHub will close, install in place, and reopen.");
+                }
+
+                if (!installNow)
+                {
+                    UpdateStatus = $"Update v{result.RemoteVersion} available — install skipped.";
+                    return;
+                }
+
                 UpdateStatus = result.Message + " Installing...";
                 var install = await _services.Updater.InstallLatestAppAsync(status: progress);
                 UpdateStatus = install.Message;

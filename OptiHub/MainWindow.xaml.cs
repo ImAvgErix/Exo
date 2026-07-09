@@ -222,8 +222,64 @@ public sealed partial class MainWindow : Window
     {
         try
         {
+            // Toggle label: "Check for updates automatically" — covers OptiHub app + script kit.
             if (!App.Services.Settings.Current.AutoUpdateScripts) return;
-            await Task.Delay(8000);
+
+            // Let the window finish loading so ContentDialog has a valid XamlRoot.
+            await Task.Delay(1200);
+            for (var i = 0; i < 10 && RootGrid.XamlRoot is null; i++)
+                await Task.Delay(200);
+
+            // 1) App update — prompt to install (does not silent-install without consent).
+            try
+            {
+                var appCheck = await App.Services.Updater.CheckAppUpdateAsync();
+                if (appCheck.UpdateAvailable && RootGrid.XamlRoot is not null)
+                {
+                    var dialog = new ContentDialog
+                    {
+                        Title = "OptiHub update available",
+                        Content =
+                            $"Version {appCheck.RemoteVersion} is available.\n" +
+                            $"You have {appCheck.LocalVersion}.\n\n" +
+                            "Install now? OptiHub will close, update in place, and reopen.",
+                        PrimaryButtonText = "Install",
+                        CloseButtonText = "Later",
+                        DefaultButton = ContentDialogButton.Primary,
+                        XamlRoot = RootGrid.XamlRoot
+                    };
+                    var choice = await dialog.ShowAsync();
+                    if (choice == ContentDialogResult.Primary)
+                    {
+                        var install = await App.Services.Updater.InstallLatestAppAsync();
+                        if (install.ShouldExit)
+                        {
+                            await Task.Delay(400);
+                            Microsoft.UI.Xaml.Application.Current?.Exit();
+                            return;
+                        }
+
+                        // Install failed — surface once
+                        if (RootGrid.XamlRoot is not null)
+                        {
+                            var err = new ContentDialog
+                            {
+                                Title = "Update could not finish",
+                                Content = install.Message,
+                                CloseButtonText = "OK",
+                                XamlRoot = RootGrid.XamlRoot
+                            };
+                            await err.ShowAsync();
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // network / dialog issues — still try scripts
+            }
+
+            // 2) Discord script kit — silent (no prompt)
             await App.Services.Updater.CheckAndUpdateDiscordScriptsAsync(force: false);
         }
         catch
