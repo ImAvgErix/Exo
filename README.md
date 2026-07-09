@@ -2,7 +2,7 @@
 
 **One hub. Max performance.**
 
-Windows optimizer hub for performance, privacy, and gaming. Works on **stock Discord** on any PC — OptiHub installs Equicord, OpenASAR, the DiscOpt kernel, and a full universal plugin profile for everyone.
+Windows optimizer hub for performance, privacy, and gaming. **Discord** and **Steam** are live; Brave, Riot, and Epic are on the way — one place for client tweaks without hunting scripts.
 
 | Optimizer | Status |
 |---|---|

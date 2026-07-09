@@ -13,7 +13,7 @@ public sealed class ThemeService
     private Window? _window;
 
     public static readonly Color CozyBlack = Color.FromArgb(255, 11, 11, 12);
-    public static readonly Color SoftStone = Color.FromArgb(255, 245, 245, 244);
+    public static readonly Color SoftStone = Color.FromArgb(255, 240, 239, 238);
     public static readonly Color DarkAccent = Color.FromArgb(255, 28, 25, 23);
 
     public ThemeService(SettingsService settings)

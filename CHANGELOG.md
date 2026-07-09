@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.8
+
+- **Light mode**: stronger charcoal outlines; dark logo wells so white Steam/Epic marks stay visible
+- **About / README**: hub wording for Discord, Steam, and more (not Discord-only)
+
 ## 1.1.7
 
 - **Steam**: former aggressive CEF flags are now the only/default launcher (nofriendsui, nointro, etc.)

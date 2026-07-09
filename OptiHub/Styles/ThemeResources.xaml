@@ -80,6 +80,25 @@
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 
+    <!-- App logos sit in a well: dark fill + hard outline in light mode so white marks stay visible -->
+    <Style x:Key="OptiLogoWell" TargetType="Border">
+        <Setter Property="Width" Value="64" />
+        <Setter Property="Height" Value="64" />
+        <Setter Property="CornerRadius" Value="18" />
+        <Setter Property="Background" Value="{ThemeResource OptiLogoWellFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource OptiLogoWellStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1.5" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="OptiLogoWellSmall" TargetType="Border" BasedOn="{StaticResource OptiLogoWell}">
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
     <Style x:Key="OptiPrimaryButton" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
         <Setter Property="Padding" Value="18,12" />
@@ -97,7 +116,7 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Background" Value="{ThemeResource OptiQuietButtonFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderThickness" Value="1.5" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
 

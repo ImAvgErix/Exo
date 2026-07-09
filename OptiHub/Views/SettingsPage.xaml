@@ -116,7 +116,7 @@
                                    FontSize="13"
                                    LineHeight="20"
                                    Foreground="{ThemeResource OptiSecondaryTextBrush}"
-                                   Text="One hub. Max performance. Works on stock Discord on any PC."
+                                   Text="One hub. Max performance. Optimizers for Discord, Steam, and more - gaming and client tweaks in one place."
                                    TextWrapping="WrapWholeWords" />
                         <TextBlock Style="{StaticResource OptiCaption}"
                                    FontSize="11"

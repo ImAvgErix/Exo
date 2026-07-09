@@ -29,7 +29,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         App.MainAppWindow = this;
 
-        // Fixed window — roomy enough for home cards + Discord features without scroll
+        // Fixed window — roomy enough for home cards + optimizer feature lists
         AppWindow.Resize(new SizeInt32(1020, 740));
         ApplyFixedWindowChrome();
         TryCenterOnScreen();
@@ -100,7 +100,7 @@ public sealed partial class MainWindow : Window
         var dark = RootGrid.ActualTheme != ElementTheme.Light;
         RootGrid.Background = new SolidColorBrush(
             dark ? ColorHelper.FromArgb(255, 11, 11, 12)
-                 : ColorHelper.FromArgb(255, 245, 245, 244));
+                 : ColorHelper.FromArgb(255, 240, 239, 238));
         App.Services.Theme.Apply();
         UpdateCaptionInset();
     }

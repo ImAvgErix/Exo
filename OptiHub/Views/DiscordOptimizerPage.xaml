@@ -61,7 +61,7 @@
                                         CornerRadius="10"
                                         Background="{ThemeResource OptiAccentSoftBrush}"
                                         BorderBrush="{ThemeResource OptiCardStrokeBrush}"
-                                        BorderThickness="1"
+                                        BorderThickness="1.5"
                                         VerticalAlignment="Center">
                                     <FontIcon Glyph="{x:Bind Glyph}"
                                               FontSize="15"
