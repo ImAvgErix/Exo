@@ -24,7 +24,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.4.4'
+$Script:NvidiaOptVersion = '1.4.5'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -1365,11 +1365,12 @@ function Disable-NvidiaTelemetry {
 }
 
 function Set-NvidiaDisplayPreferences {
-    # 1.4.3+: zero Control Panel mouse automation.
-    # OptiHub-Display-Apply.ps1 writes NVTweak for ALL monitors, runs NVAPI for color,
-    # reloads NVIDIA display stack so every monitor gets GPU / No scaling / Override ON.
-    # No Override toggle-clicks. No GPU combo. No per-monitor UI race.
-    Write-Step 'Display prefs: registry + NVAPI + driver reload (no CPL clicking)...'
+    # 1.4.5+: sticky display path
+    # - NVTweak stamp all monitors (GPU / NoScale / Override / Full / Video NVIDIA)
+    # - NVAPI: native res + max Hz + Full RGB
+    # - Pixel-safe CPL: one monitor per CPL restart; Override only clicked when OFF (blue=ON)
+    # - Logon scheduled task re-stamps registry
+    Write-Step 'Display prefs: sticky NVAPI + registry + pixel-safe Override commit...'
     $applied = New-Object System.Collections.Generic.List[string]
 
     Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -1379,9 +1380,7 @@ function Set-NvidiaDisplayPreferences {
         Write-Warn "Missing $dispScript"
         [void]$applied.Add('Display apply script missing')
     } else {
-        Write-HubProgress 90 'Display: GPU + No scaling + Override (all monitors)...'
-        # Hard adapter bounce so BOTH monitors re-read prefs (brief black screen).
-        $env:OPTIHUB_DISPLAY_HARD_RELOAD = '1'
+        Write-HubProgress 90 'Display: all monitors (res/Hz + GPU/Override)...'
         $prev = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         try {
@@ -1397,8 +1396,8 @@ function Set-NvidiaDisplayPreferences {
             $code = 0
             if ($null -ne $LASTEXITCODE) { $code = [int]$LASTEXITCODE }
             if ($code -eq 0) {
-                [void]$applied.Add('All monitors: GPU + No scaling + Override ON (registry+NVAPI+driver reload)')
-                Write-Ok 'Display settings applied without Control Panel UI'
+                [void]$applied.Add('All monitors: native@maxHz + GPU/NoScale/Override (pixel-safe commit)')
+                Write-Ok 'Display settings applied (sticky path)'
             } else {
                 [void]$applied.Add("Display apply exit $code")
                 Write-Warn "Display apply exit $code"
@@ -1408,7 +1407,6 @@ function Set-NvidiaDisplayPreferences {
             [void]$applied.Add("Display apply error: $($_.Exception.Message)")
         } finally {
             $ErrorActionPreference = $prev
-            Remove-Item Env:\OPTIHUB_DISPLAY_HARD_RELOAD -ErrorAction SilentlyContinue
             Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
         }
     }
@@ -1419,13 +1417,14 @@ function Set-NvidiaDisplayPreferences {
         outputColorFormat   = 'RGB'
         outputDynamicRange  = 'Full'
         outputColorDepth    = 'highest supported per display'
+        resolutionRefresh   = 'native res + highest Hz per monitor'
         performScalingOn    = 'GPU'
         scalingMode         = 'No scaling'
         overrideGameScaling = $true
         videoColor          = 'NVIDIA (NVTweak Video*Source=1)'
         videoImage          = 'NVIDIA (NVTweak Video*Source=1)'
-        appliedVia          = 'OptiHub-Display-Apply (no CPL mouse)'
-        flow                = 'NVTweak all devices -> NVAPI color/path -> display driver reload'
+        appliedVia          = 'OptiHub-Display-Apply + pixel-safe ScalingCommit'
+        flow                = 'NVTweak -> NVAPI modes/color -> soft reload -> per-mon CPL Override only if OFF'
         note                = 'Open CPL only to VERIFY. Re-Apply in CPL can overwrite OptiHub prefs.'
     }
     [IO.File]::WriteAllText($pref, ($obj | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
