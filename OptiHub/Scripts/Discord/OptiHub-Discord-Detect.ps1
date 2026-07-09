@@ -74,10 +74,20 @@ if (-not (Test-Path $discordRoot)) {
         Add-Feature 'True black AMOLED theme' 'Pure black UI saves OLED power and cuts eye strain at night.' $amoledOk
         Add-Feature 'Quieter Windows startup' 'Discord stays closed on boot so it is not sitting in the tray.' $startupOk
 
+        $launchOk = $false
+        try {
+            $sm = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk'
+            if (Test-Path $sm) {
+                $sc = (New-Object -ComObject WScript.Shell).CreateShortcut($sm)
+                if ([string]$sc.Arguments -match '(?i)Discord\.vbs') { $launchOk = $true }
+            }
+        } catch {}
+        Add-Feature 'Start Menu / apps launch path' 'Start Menu, taskbar, and Desktop Discord shortcuts use the OptiHub -Launch path (OpenASAR + kernel).' $launchOk
+
         $isApplied = [bool]($equicordOk -and ($kernelOk -or $openAsarOk))
         if ($isApplied) {
             $statusText = 'Already optimized'
-            $detail = 'These savings are active. Reapply after Discord updates itself.'
+            $detail = 'These savings are active. Open Discord from Start Menu or apps - launch path is patched. Reapply after Discord updates itself.'
         } else {
             $statusText = 'Ready to optimize'
             $detail = 'Some pieces are missing. Run to finish setup and unlock the savings below.'
