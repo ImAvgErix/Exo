@@ -14,7 +14,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.0.0'
+$Script:SteamOptVersion = '1.0.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
@@ -25,10 +25,18 @@ function Write-HubProgress([int]$Percent, [string]$Status) {
         try { Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
     }
 }
-function Write-Step([string]$Msg) { Write-Output "[*] $Msg" }
-function Write-Ok([string]$Msg)   { Write-Output "[+] $Msg" }
-function Write-Warn([string]$Msg) { Write-Output "[!] $Msg" }
-function Write-Err([string]$Msg)  { Write-Output "[-] $Msg" }
+function Write-SteamLog([string]$Prefix, [string]$Msg) {
+    $line = "$Prefix $Msg"
+    # Host + log only (not pipeline) so function returns stay clean.
+    Write-Host $line
+    if ($env:OPTIHUB_LOG) {
+        try { Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
+    }
+}
+function Write-Step([string]$Msg) { Write-SteamLog '[*]' $Msg }
+function Write-Ok([string]$Msg)   { Write-SteamLog '[+]' $Msg }
+function Write-Warn([string]$Msg) { Write-SteamLog '[!]' $Msg }
+function Write-Err([string]$Msg)  { Write-SteamLog '[-]' $Msg }
 
 function Get-SteamInstallPath {
     $candidates = @()
@@ -167,7 +175,7 @@ function Clear-SteamSafeCaches([string]$SteamPath) {
         )
     }
 
-    $freed = [long]0
+    [long]$freed = 0
     foreach ($t in $targets) {
         $items = @()
         if ($t -match '[\*\?]') {
@@ -182,11 +190,11 @@ function Clear-SteamSafeCaches([string]$SteamPath) {
         foreach ($item in $items) {
             try {
                 if ($item.PSIsContainer) {
-                    $size = (Get-ChildItem -LiteralPath $item.FullName -Recurse -Force -ErrorAction SilentlyContinue |
-                        Measure-Object -Property Length -Sum).Sum
-                    if ($null -eq $size) { $size = 0 }
+                    $sumObj = Get-ChildItem -LiteralPath $item.FullName -Recurse -Force -File -ErrorAction SilentlyContinue |
+                        Measure-Object -Property Length -Sum
+                    $size = if ($null -ne $sumObj -and $null -ne $sumObj.Sum) { [long]$sumObj.Sum } else { 0L }
                     Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction SilentlyContinue
-                    $freed += [long]$size
+                    $freed += $size
                     Write-Ok ("Cleared {0} (~{1:N1} MB)" -f $item.Name, ($size / 1MB))
                 } else {
                     $freed += [long]$item.Length
@@ -202,7 +210,7 @@ function Clear-SteamSafeCaches([string]$SteamPath) {
     # Old *.log next to steam.exe
     Get-ChildItem -LiteralPath $SteamPath -Filter '*.log' -File -ErrorAction SilentlyContinue | ForEach-Object {
         try {
-            $freed += $_.Length
+            $freed += [long]$_.Length
             Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
         } catch { }
     }
@@ -420,3 +428,4 @@ try {
     Write-HubProgress 100 'Failed'
     exit 1
 }
+
