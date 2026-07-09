@@ -39,10 +39,6 @@
                                Style="{StaticResource OptiBody}"
                                FontSize="13"
                                LineHeight="19" />
-                    <TextBlock Text="{x:Bind ViewModel.SeriesHint, Mode=OneWay}"
-                               Style="{StaticResource OptiCaption}"
-                               FontSize="12"
-                               Margin="0,4,0,0" />
                     <ToggleSwitch Header="G-SYNC profile (adaptive sync monitors)"
                                   IsOn="{x:Bind ViewModel.UseGsync, Mode=TwoWay}"
                                   OnContent="G-SYNC on"

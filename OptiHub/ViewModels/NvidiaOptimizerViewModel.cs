@@ -37,7 +37,6 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     [ObservableProperty] private string _lastResultGlyph = "\uE73E";
     [ObservableProperty] private Brush _lastResultBrush;
     [ObservableProperty] private bool _useGsync;
-    [ObservableProperty] private string _seriesHint = string.Empty;
 
     public event EventHandler? RequestGoBack;
     public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
@@ -212,9 +211,6 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         IsApplied = state.IsApplied;
         StatusText = state.StatusText;
         DetailText = state.Detail;
-        SeriesHint = state.Extra is { Count: > 0 } && state.Extra.TryGetValue("series", out var s) && !string.IsNullOrWhiteSpace(s)
-            ? $"Detected series: {s}"
-            : string.Empty;
         if (state.Extra is { Count: > 0 } && state.Extra.TryGetValue("gsync", out var g) &&
             bool.TryParse(g, out var gsyncApplied) && IsApplied)
             UseGsync = gsyncApplied;

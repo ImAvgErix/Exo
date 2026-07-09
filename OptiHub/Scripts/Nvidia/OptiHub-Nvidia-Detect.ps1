@@ -35,16 +35,17 @@ if (Test-Path $statePath) {
     try { $state = Get-Content $statePath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
 }
 
+$gpuDetail = if (-not $gpuOk) {
+    'NVIDIA GPU + drivers required.'
+} elseif ($series) {
+    "$($primary.Name)  ·  $series Series profile pack"
+} else {
+    "$($primary.Name)  ·  series not mapped (use Apply anyway if supported)"
+}
 $features.Add(@{
     title  = 'NVIDIA GPU'
-    detail = $(if ($gpuOk) { $primary.Name } else { 'NVIDIA GPU + drivers required.' })
+    detail = $gpuDetail
     active = $gpuOk
-})
-
-$features.Add(@{
-    title  = 'GPU series mapped'
-    detail = $(if ($series) { "$series Series OptiHub .nip pack" } else { 'Map to 10/20/30/40/50 series.' })
-    active = [bool]$series
 })
 
 $appOk = Test-NvidiaApp
@@ -135,8 +136,8 @@ elseif ($isApplied) { 'Already optimized' }
 else { 'Ready to optimize' }
 
 $detail = if (-not $gpuOk) { 'Needs an NVIDIA GPU and current drivers.' }
-elseif ($isApplied) { "Applied $($state.series) Series$(if($state.gsync){' G-SYNC'}). Re-apply after big driver upgrades." }
-else { "Detected $(if($series){"$series Series"}else{'NVIDIA'}). Toggle G-SYNC if your monitor supports it, then Apply." }
+elseif ($isApplied) { "Profile applied$(if($state.gsync){' (G-SYNC)'}). Re-apply after big driver upgrades." }
+else { 'Toggle G-SYNC if your monitor supports it, then Apply.' }
 
 [ordered]@{
     isApplied          = $isApplied
