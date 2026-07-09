@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.42
+
+- Deeper kit split: `kit/lib/10-Logging` … `60-KernelBoot` (easier multi-PC maintenance)
+- Universal Equicord profile unchanged (full manifests on every machine)
+
 ## 1.0.41
 
 - Universal Equicord profile: full plugin manifests applied on every machine (stock Discord ready)
@@ -28,3 +33,4 @@
 
 - Discord boot fixes, module-safe debloat, kernel on by default
 - Slim kit (download Equicord on demand)
+
