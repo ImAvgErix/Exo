@@ -1,5 +1,5 @@
 // OptiHub self-extracting installer.
-// Embeds payload.zip, installs to %LocalAppData%\OptiHub\app, launches the app.
+// Embeds payload.zip, installs to %LocalAppData%\OptiHub\app, creates shortcuts, launches the app.
 //
 // IMPORTANT: This binary is also named OptiHub.exe. Never kill our own process
 // when stopping older OptiHub instances.
@@ -18,6 +18,7 @@ internal static class Program
     private const string InstallSubdir = "app";
     private const string ExeName = "OptiHub.exe";
     private const string ResourceName = "payload.zip";
+    private const string MutexName = "Local\\OptiHubInstallerSingleton";
     private static readonly int SelfPid = Process.GetCurrentProcess().Id;
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -33,8 +34,30 @@ internal static class Program
     private static int Main()
     {
         bool consoleOpen = false;
+        bool mutexOwned = false;
+        Mutex mutex = null;
         try
         {
+            // Only one installer at a time — concurrent SFXes were racing and
+            // leaving older app.old payloads as the live "app" folder.
+            mutex = new Mutex(true, MutexName, out mutexOwned);
+            if (!mutexOwned)
+            {
+                try
+                {
+                    // Wait briefly for an in-flight install to finish.
+                    mutexOwned = mutex.WaitOne(TimeSpan.FromSeconds(90));
+                }
+                catch { mutexOwned = false; }
+            }
+            if (!mutexOwned)
+            {
+                MessageBoxW(IntPtr.Zero,
+                    "Another OptiHub installer is already running.\n\nWait for it to finish, then open OptiHub from the Start menu.",
+                    "OptiHub", 0x40);
+                return 2;
+            }
+
             consoleOpen = AllocConsole();
             Console.Title = "OptiHub Installer";
             Log("OptiHub installer starting...");
@@ -54,6 +77,9 @@ internal static class Program
             catch { }
 
             Log("Closing any running OptiHub app (not this installer)...");
+            StopOtherOptiHub();
+            // Extra settle time so file locks release.
+            Thread.Sleep(600);
             StopOtherOptiHub();
 
             string work = Path.Combine(Path.GetTempPath(), "optihub-sfx-" + Guid.NewGuid().ToString("N"));
@@ -77,6 +103,10 @@ internal static class Program
                 if (payloadDir == null)
                     throw new InvalidOperationException("OptiHub.exe missing from package payload.");
 
+                string payloadExe = Path.Combine(payloadDir, ExeName);
+                string expectedVersion = ReadFileVersion(payloadExe);
+                Log("Payload version: " + expectedVersion);
+
                 Log("Installing to: " + installDir);
                 Directory.CreateDirectory(root);
                 ReplaceDirectory(payloadDir, installDir);
@@ -84,7 +114,7 @@ internal static class Program
                 if (!File.Exists(targetExe))
                     throw new InvalidOperationException("Install failed: " + targetExe + " not found.");
 
-                // Sanity: real app folder has companion DLLs; bare 200KB exe alone is broken.
+                // Sanity: real app folder has companion DLLs.
                 string winUi = Path.Combine(installDir, "Microsoft.ui.xaml.dll");
                 string core = Path.Combine(installDir, "coreclr.dll");
                 if (!File.Exists(winUi) && !File.Exists(core))
@@ -95,7 +125,47 @@ internal static class Program
                             "Install looks incomplete (" + fileCount + " files). Payload may be corrupt.");
                 }
 
-                Log("Launching OptiHub...");
+                // CRITICAL: verify the live exe is actually the payload we just staged.
+                string installedVersion = ReadFileVersion(targetExe);
+                Log("Installed version: " + installedVersion);
+                if (!string.IsNullOrEmpty(expectedVersion) &&
+                    !string.IsNullOrEmpty(installedVersion) &&
+                    !VersionsLooselyEqual(expectedVersion, installedVersion))
+                {
+                    throw new InvalidOperationException(
+                        "Install verification failed.\n" +
+                        "Expected: " + expectedVersion + "\n" +
+                        "Got:      " + installedVersion + "\n\n" +
+                        "Close every OptiHub window (and anything locking the folder), then run this installer again.");
+                }
+
+                // Stamp a plain-text version for easy checking.
+                try
+                {
+                    File.WriteAllText(
+                        Path.Combine(installDir, "OPTIHUB-INSTALLED-VERSION.txt"),
+                        installedVersion + Environment.NewLine +
+                        "installedUtc=" + DateTime.UtcNow.ToString("o") + Environment.NewLine +
+                        "path=" + targetExe + Environment.NewLine);
+                }
+                catch { }
+
+                // Shortcuts always point at the live install, not this SFX / not repo publish folders.
+                try
+                {
+                    CreateShortcuts(targetExe, installDir);
+                    Log("Shortcuts updated (Start Menu + Desktop).");
+                }
+                catch (Exception scEx)
+                {
+                    Log("Shortcut warning: " + scEx.Message);
+                }
+
+                // Clean stale installer leftovers so an old update EXE cannot re-run later.
+                try { CleanupStaleInstallArtifacts(root, keepInstallDir: installDir); }
+                catch (Exception cuEx) { Log("Cleanup warning: " + cuEx.Message); }
+
+                Log("Launching OptiHub from " + targetExe + " ...");
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = targetExe,
@@ -105,12 +175,13 @@ internal static class Program
 
                 try
                 {
-                    File.AppendAllText(logPath, DateTime.Now.ToString("o") + " ok -> " + targetExe + Environment.NewLine);
+                    File.AppendAllText(logPath,
+                        DateTime.Now.ToString("o") + " ok v=" + installedVersion + " -> " + targetExe + Environment.NewLine);
                 }
                 catch { }
 
-                Log("Done.");
-                Thread.Sleep(800);
+                Log("Done. Installed v" + installedVersion);
+                Thread.Sleep(900);
                 return 0;
             }
             finally
@@ -155,6 +226,14 @@ internal static class Program
         }
         finally
         {
+            if (mutexOwned && mutex != null)
+            {
+                try { mutex.ReleaseMutex(); } catch { }
+            }
+            if (mutex != null)
+            {
+                try { mutex.Dispose(); } catch { }
+            }
             if (consoleOpen)
             {
                 try { FreeConsole(); } catch { }
@@ -164,10 +243,7 @@ internal static class Program
 
     private static void Log(string msg)
     {
-        try
-        {
-            Console.WriteLine("  " + msg);
-        }
+        try { Console.WriteLine("  " + msg); }
         catch { }
     }
 
@@ -176,6 +252,46 @@ internal static class Program
         if (bytes > 1024L * 1024L)
             return (bytes / (1024.0 * 1024.0)).ToString("0.0") + " MB";
         return (bytes / 1024.0).ToString("0") + " KB";
+    }
+
+    private static string ReadFileVersion(string exePath)
+    {
+        try
+        {
+            if (!File.Exists(exePath)) return "";
+            FileVersionInfo vi = FileVersionInfo.GetVersionInfo(exePath);
+            if (!string.IsNullOrWhiteSpace(vi.FileVersion))
+                return vi.FileVersion.Trim();
+            if (!string.IsNullOrWhiteSpace(vi.ProductVersion))
+                return vi.ProductVersion.Trim();
+        }
+        catch { }
+        return "";
+    }
+
+    private static bool VersionsLooselyEqual(string a, string b)
+    {
+        string na = NormalizeVersion(a);
+        string nb = NormalizeVersion(b);
+        if (string.Equals(na, nb, StringComparison.OrdinalIgnoreCase))
+            return true;
+        // 1.3.8 vs 1.3.8.0
+        Version va, vb;
+        if (Version.TryParse(na, out va) && Version.TryParse(nb, out vb))
+            return va.Major == vb.Major && va.Minor == vb.Minor && va.Build == vb.Build;
+        return false;
+    }
+
+    private static string NormalizeVersion(string v)
+    {
+        if (string.IsNullOrWhiteSpace(v)) return "";
+        v = v.Trim();
+        int plus = v.IndexOf('+');
+        if (plus >= 0) v = v.Substring(0, plus);
+        if (v.StartsWith("v", StringComparison.OrdinalIgnoreCase) ||
+            v.StartsWith("V", StringComparison.OrdinalIgnoreCase))
+            v = v.Substring(1);
+        return v.Trim();
     }
 
     private static void ExtractPayloadZip(string zipPath)
@@ -219,6 +335,14 @@ internal static class Program
             return stage;
 
         foreach (string file in Directory.GetFiles(stage, ExeName, SearchOption.AllDirectories))
+        {
+            // Prefer the folder that also has OptiHub.dll (real app, not a nested tool).
+            string dir = Path.GetDirectoryName(file);
+            if (dir != null && File.Exists(Path.Combine(dir, "OptiHub.dll")))
+                return dir;
+        }
+
+        foreach (string file in Directory.GetFiles(stage, ExeName, SearchOption.AllDirectories))
             return Path.GetDirectoryName(file);
 
         return null;
@@ -226,44 +350,72 @@ internal static class Program
 
     private static void ReplaceDirectory(string source, string dest)
     {
+        // Always install via fresh folder rename so we never half-merge over an old tree.
+        string parent = Path.GetDirectoryName(dest);
+        if (string.IsNullOrEmpty(parent))
+            throw new InvalidOperationException("Invalid install path: " + dest);
+
+        string incoming = dest + ".incoming-" + DateTime.Now.ToString("yyyyMMddHHmmss");
+        if (Directory.Exists(incoming))
+        {
+            try { Directory.Delete(incoming, true); } catch { }
+        }
+
+        // Prefer atomic move of staged payload into *.incoming
+        bool staged = false;
+        try
+        {
+            Directory.Move(source, incoming);
+            staged = true;
+        }
+        catch
+        {
+            CopyTree(source, incoming);
+            staged = true;
+        }
+
+        if (!staged || !Directory.Exists(incoming) || !File.Exists(Path.Combine(incoming, ExeName)))
+            throw new InvalidOperationException("Could not stage new OptiHub files.");
+
+        // Move live app out of the way
         if (Directory.Exists(dest))
         {
             string backup = dest + ".old-" + DateTime.Now.ToString("yyyyMMddHHmmss");
             try
             {
-                // Prefer rename so locked files don't block a full delete mid-install.
                 if (Directory.Exists(backup))
                 {
                     try { Directory.Delete(backup, true); } catch { }
                 }
                 Directory.Move(dest, backup);
-                ThreadPool.QueueUserWorkItem(_ =>
-                {
-                    try
-                    {
-                        Thread.Sleep(2000);
-                        if (Directory.Exists(backup))
-                            Directory.Delete(backup, true);
-                    }
-                    catch { }
-                });
             }
             catch
             {
-                // Best-effort wipe then copy over.
-                try { DeleteTreeBestEffort(dest); } catch { }
+                // Fallback: wipe dest in place
+                DeleteTreeBestEffort(dest);
+                try
+                {
+                    if (Directory.Exists(dest))
+                        Directory.Delete(dest, true);
+                }
+                catch { }
             }
         }
 
+        // Promote incoming -> app
         try
         {
-            Directory.Move(source, dest);
-            return;
+            Directory.Move(incoming, dest);
         }
         catch
         {
-            CopyTree(source, dest);
+            // Last resort copy
+            CopyTree(incoming, dest);
+            try { Directory.Delete(incoming, true); } catch { }
         }
+
+        if (!File.Exists(Path.Combine(dest, ExeName)))
+            throw new InvalidOperationException("ReplaceDirectory finished but OptiHub.exe is missing.");
     }
 
     private static void DeleteTreeBestEffort(string path)
@@ -296,7 +448,96 @@ internal static class Program
             string parent = Path.GetDirectoryName(target);
             if (!string.IsNullOrEmpty(parent))
                 Directory.CreateDirectory(parent);
-            File.Copy(file, target, true);
+            // Retry copy a few times for AV scanners
+            Exception last = null;
+            for (int i = 0; i < 5; i++)
+            {
+                try
+                {
+                    File.Copy(file, target, true);
+                    last = null;
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    last = ex;
+                    Thread.Sleep(120 * (i + 1));
+                }
+            }
+            if (last != null) throw last;
+        }
+    }
+
+    private static void CreateShortcuts(string targetExe, string workingDir)
+    {
+        string startMenu = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
+            "Programs",
+            "OptiHub.lnk");
+        string desktop = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            "OptiHub.lnk");
+
+        WriteShortcut(startMenu, targetExe, workingDir);
+        WriteShortcut(desktop, targetExe, workingDir);
+    }
+
+    private static void WriteShortcut(string lnkPath, string targetExe, string workingDir)
+    {
+        string parent = Path.GetDirectoryName(lnkPath);
+        if (!string.IsNullOrEmpty(parent))
+            Directory.CreateDirectory(parent);
+
+        // Late-bound WScript.Shell — no extra assembly refs needed for csc.
+        Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+        if (shellType == null)
+            throw new InvalidOperationException("WScript.Shell not available.");
+
+        object shell = Activator.CreateInstance(shellType);
+        object shortcut = shellType.InvokeMember(
+            "CreateShortcut",
+            BindingFlags.InvokeMethod,
+            null,
+            shell,
+            new object[] { lnkPath });
+
+        Type scType = shortcut.GetType();
+        scType.InvokeMember("TargetPath", BindingFlags.SetProperty, null, shortcut, new object[] { targetExe });
+        scType.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, shortcut, new object[] { workingDir });
+        scType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, new object[] { "OptiHub" });
+        scType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, shortcut, new object[] { targetExe + ",0" });
+        scType.InvokeMember("Save", BindingFlags.InvokeMethod, null, shortcut, null);
+    }
+
+    private static void CleanupStaleInstallArtifacts(string root, string keepInstallDir)
+    {
+        // Remove old app.old-* / app.incoming-* / app.broken-* folders (keep none — live app is enough).
+        foreach (string dir in Directory.GetDirectories(root))
+        {
+            string name = Path.GetFileName(dir);
+            if (name == null) continue;
+            if (string.Equals(dir, keepInstallDir, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (name.StartsWith("app.old-", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("app.incoming-", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("app.broken-", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, "app-update", StringComparison.OrdinalIgnoreCase))
+            {
+                try { Directory.Delete(dir, true); }
+                catch { }
+            }
+        }
+
+        // Delete ALL cached update SFXes — next update will re-download latest.
+        // Leaving OptiHub-update-1.2.x.exe around caused reinstall races that restored old versions.
+        string updates = Path.Combine(root, "updates");
+        if (Directory.Exists(updates))
+        {
+            foreach (string file in Directory.GetFiles(updates, "OptiHub*.exe"))
+            {
+                try { File.Delete(file); }
+                catch { }
+            }
         }
     }
 
@@ -305,7 +546,7 @@ internal static class Program
     /// </summary>
     private static void StopOtherOptiHub()
     {
-        for (int i = 0; i < 20; i++)
+        for (int i = 0; i < 24; i++)
         {
             Process[] procs = Process.GetProcessesByName("OptiHub");
             bool anyOther = false;
@@ -345,6 +586,6 @@ internal static class Program
             if (!anyOther) break;
             Thread.Sleep(200);
         }
-        Thread.Sleep(400);
+        Thread.Sleep(500);
     }
 }

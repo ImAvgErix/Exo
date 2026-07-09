@@ -240,7 +240,15 @@ public sealed class GitHubUpdateService
         {
             var work = Path.Combine(PathHelper.AppDataDir, "updates");
             Directory.CreateDirectory(work);
-            var setupPath = Path.Combine(work, $"OptiHub-update-{check.RemoteVersion}.exe");
+
+            // Single fixed path — never pile up OptiHub-update-1.2.x.exe that can be
+            // re-run later and downgrade a good install.
+            foreach (var old in Directory.GetFiles(work, "OptiHub*.exe"))
+            {
+                try { File.Delete(old); } catch { /* locked */ }
+            }
+
+            var setupPath = Path.Combine(work, "OptiHub-Setup.exe");
 
             await using (var fs = File.Create(setupPath))
             {
@@ -260,8 +268,8 @@ public sealed class GitHubUpdateService
             }
 
             status?.Report($"Starting installer for OptiHub v{check.RemoteVersion}...");
-            // SFX installs to %LocalAppData%\OptiHub\app and relaunches. We must exit
-            // so files unlock; installer kills any leftover OptiHub.exe by name.
+            // SFX installs ONLY to %LocalAppData%\OptiHub\app, writes Start Menu + Desktop
+            // shortcuts, verifies FileVersion, then relaunches. We exit so files unlock.
             var started = Process.Start(new ProcessStartInfo
             {
                 FileName = setupPath,
@@ -275,7 +283,7 @@ public sealed class GitHubUpdateService
                     UpdateAvailable = true,
                     LocalVersion = check.LocalVersion,
                     RemoteVersion = check.RemoteVersion,
-                    Message = "Could not start the installer. Run the file manually from %LocalAppData%\\OptiHub\\updates, or reinstall from GitHub Releases."
+                    Message = "Could not start the installer. Run %LocalAppData%\\OptiHub\\updates\\OptiHub-Setup.exe, or reinstall from GitHub Releases."
                 };
             }
 
@@ -286,7 +294,7 @@ public sealed class GitHubUpdateService
                 RemoteVersion = check.RemoteVersion,
                 DownloadUrl = url,
                 ShouldExit = true,
-                Message = $"Installing OptiHub v{check.RemoteVersion}. Closing so the installer can replace files..."
+                Message = $"Installing OptiHub v{check.RemoteVersion} to %LocalAppData%\\OptiHub\\app. Closing now..."
             };
         }
         catch (Exception ex)
