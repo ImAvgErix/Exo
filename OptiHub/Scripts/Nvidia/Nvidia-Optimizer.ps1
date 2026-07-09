@@ -710,14 +710,10 @@ function Expand-NvidiaDriverPackage {
     $existingSetup = Join-Path $DestDir 'setup.exe'
     $existingDriver = Join-Path $DestDir 'Display.Driver'
     if ((Test-Path -LiteralPath $existingSetup) -and (Test-Path -LiteralPath $existingDriver)) {
-        # Reject extracts that look stripped (missing common folders we used to delete)
-        $need = @('NVI2', 'HDAudio')
-        $ok = $true
-        foreach ($n in $need) {
-            if (-not (Test-Path -LiteralPath (Join-Path $DestDir $n))) { $ok = $false; break }
-        }
+        # Need Display.Driver + NVI2 only (HD Audio is intentionally NOT installed)
+        $ok = (Test-Path -LiteralPath (Join-Path $DestDir 'NVI2'))
         if ($ok) {
-            Write-Ok "Using existing full extract: $DestDir"
+            Write-Ok "Using existing extract: $DestDir"
             return $existingSetup
         }
     }
@@ -769,13 +765,13 @@ function Install-OptiHubCleanDriver {
         [Parameter(Mandatory)][string]$DownloadUrl,
         [Parameter(Mandatory)][string]$Version
     )
-    # OptiHub Clean Driver (NVCleanstall-class, our rules):
-    #  1) Official Game Ready download (once, cached)
-    #  2) Extract full package with NanaZip (keep ALL folders — setup needs them on disk)
-    #  3) Silent CLEAN install of only Display.Driver + HDAudio (component list = slim install)
-    #  4) Post-install MSI/privacy tweaks; continue pipeline (no forced reboot)
-    # Deleting bloat folders breaks setup (exit 0x80070003 path-not-found). Slim via args only.
-    Write-Step "OptiHub Clean Driver install ($Version) — slim components + clean + silent"
+    # OptiHub Clean Driver (NVCleanstall-class, OUR rules — better for silent):
+    #  1) Official Game Ready once (cached)
+    #  2) Extract (folders stay on disk so setup.exe resolves; we do NOT install bloat)
+    #  3) Silent CLEAN install of Display.Driver ONLY — NO HD Audio, NO App, NO telemetry packages
+    #  4) Post-install expert tweaks (MSI High, telemetry off, Ansel off, no HD Audio leftovers)
+    #  5) Continue pipeline (no forced reboot)
+    Write-Step "OptiHub Clean Driver install ($Version) — Display.Driver ONLY (no HD Audio)"
     Write-HubProgress 20 "OptiHub Clean Driver $Version..."
 
     $package = Coerce-StringPath (Download-NvidiaDriverPackage -Url $DownloadUrl -Version $Version)
@@ -791,28 +787,24 @@ function Install-OptiHubCleanDriver {
     $exitCode = -1
     if ($setup -and (Test-Path -LiteralPath $setup)) {
         $setupDir = Split-Path -Parent $setup
-        # Component filter = only install these (folders stay so setup resolves paths).
-        # -clean = clean install (NVCleanstall-style). -noreboot = keep going in same OptiHub run.
+        # ONLY Display.Driver — matches NVCleanstall-style "Display Driver required", HD Audio off
         $argVariants = @(
-            @('Display.Driver', 'HDAudio.Driver', '-s', '-clean', '-noreboot', '-noeula'),
-            @('-s', '-clean', '-noreboot', '-noeula', 'Display.Driver', 'HDAudio.Driver'),
+            @('Display.Driver', '-s', '-clean', '-noreboot', '-noeula'),
+            @('-s', '-clean', '-noreboot', '-noeula', 'Display.Driver'),
             @('-s', '-noreboot', '-clean', 'Display.Driver')
         )
-        Write-HubProgress 55 'Clean-installing slim display driver (silent, no reboot)...'
+        Write-HubProgress 55 'Clean-installing Display.Driver only (silent, no HD Audio, no reboot)...'
         foreach ($setupArgs in $argVariants) {
             Write-Ok ("Running: setup.exe " + ($setupArgs -join ' ') + " (cwd=$setupDir)")
             $p = Start-Process -FilePath $setup -ArgumentList $setupArgs -WorkingDirectory $setupDir -Wait -PassThru -WindowStyle Hidden
             if ($p) { $exitCode = [int]$p.ExitCode }
             Write-Ok "setup.exe exit: $exitCode"
             if (@(0, 1, 2, 3, 5) -contains $exitCode) { break }
-            # 0x80070003 = path not found from bad args/cwd; try next variant
             if ($exitCode -ne -2147024893) { break }
         }
     } else {
-        Write-Warn 'Extract failed — falling back to silent SFX clean install (post-tweaks still apply)'
-        Write-HubProgress 55 'Clean-installing driver package (silent SFX fallback)...'
-        $p = Start-Process -FilePath $package -ArgumentList '-s', '-noreboot', '-clean' -Wait -PassThru -WindowStyle Hidden
-        if ($p) { $exitCode = [int]$p.ExitCode }
+        Write-Warn 'Extract failed — cannot safely silent-install without component filter (would pull HD Audio/bloat)'
+        return @{ Success = $false; ExitCode = -1; Error = 'extract-failed'; Method = 'optihub-clean' }
     }
 
     $okCodes = @(0, 1, 2, 3, 5)
@@ -838,10 +830,15 @@ function Install-OptiHubCleanDriver {
     }
 }
 function Apply-OptiHubDriverInstallTweaks {
-    # Post-install performance + privacy (our expert-tweak set).
-    Write-Step 'Applying OptiHub driver tweaks (performance + privacy)...'
+    # Post-install expert set (NVCleanstall-equivalent where possible, only tweaks that matter):
+    #  KEEP: MSI High, disable telemetry, disable Ansel/NvCamera, strip HD Audio leftovers,
+    #        quiet auto-download / telemetry consent RIDs
+    #  SKIP: HD Audio sleep timer (we do NOT install HD Audio), unsigned-driver accept (install-time only),
+    #        EAC-compatible strip method (install-time INF only — not safe on stock silent setup),
+    #        Disable HDCP (unsigned/risky; skip), fake OptiHub-only tags that drivers ignore
+    Write-Step 'Applying OptiHub driver expert tweaks (MSI High, telemetry off, no HD Audio, Ansel off)...'
 
-    # MSI + High interrupt priority on NVIDIA PCI devices
+    # --- MSI High (real interrupt mode tweak) ---
     $msiCount = 0
     try {
         $pci = 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI'
@@ -851,6 +848,8 @@ function Apply-OptiHubDriverInstallTweaks {
             } | ForEach-Object {
                 Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue | ForEach-Object {
                     $dev = $_.PSPath
+                    # Only GPU-class nodes when possible (CC_03)
+                    if ($_.PSChildName -notmatch 'DEV_|CC_03' -and $_.Name -notmatch 'VEN_10DE') { }
                     $msiKey = Join-Path $dev 'Device Parameters\Interrupt Management\MessageSignaledInterruptProperties'
                     if (-not (Test-Path $msiKey)) {
                         New-Item -Path $msiKey -Force -ErrorAction SilentlyContinue | Out-Null
@@ -864,7 +863,7 @@ function Apply-OptiHubDriverInstallTweaks {
                         New-Item -Path $aff -Force -ErrorAction SilentlyContinue | Out-Null
                     }
                     if (Test-Path $aff) {
-                        # 3 = High
+                        # 3 = High priority (NVCleanstall MSI High)
                         New-ItemProperty -LiteralPath $aff -Name 'DevicePriority' -Value 3 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
                     }
                 }
@@ -873,64 +872,76 @@ function Apply-OptiHubDriverInstallTweaks {
     } catch {
         Write-Warn "MSI tweak: $($_.Exception.Message)"
     }
-    if ($msiCount -gt 0) { Write-Ok "MSI High enabled on $msiCount NVIDIA device node(s)" }
-    else { Write-Ok 'MSI registry apply attempted (nodes may appear after reboot)' }
+    if ($msiCount -gt 0) { Write-Ok "MSI High on $msiCount NVIDIA PCI node(s)" }
+    else { Write-Ok 'MSI registry apply attempted (may need reboot to bind)' }
 
-    # HD Audio device sleep timer off
+    # --- No HD Audio: disable leftovers from prior stock installs (we never install HDAudio.Driver) ---
+    foreach ($svcName in @('NVHDA', 'nvhda', 'HDAudBus')) {
+        $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+        if (-not $svc) { continue }
+        # Only touch NVIDIA HD audio, not the system HDAudBus generic stack if shared — NVHDA only
+        if ($svcName -eq 'HDAudBus') { continue }
+        try {
+            if ($svc.Status -eq 'Running') { Stop-Service -Name $svcName -Force -ErrorAction SilentlyContinue }
+            Set-Service -Name $svcName -StartupType Disabled -ErrorAction SilentlyContinue
+            Write-Ok "Disabled leftover HD Audio service: $svcName"
+        } catch { }
+    }
+    # Disable NVHDA devices in PnP if present
     try {
-        $hd = 'HKLM:\SYSTEM\CurrentControlSet\Services\NVHDA\Parameters'
-        if (-not (Test-Path $hd)) { New-Item -Path $hd -Force -ErrorAction SilentlyContinue | Out-Null }
-        if (Test-Path $hd) {
-            New-ItemProperty -LiteralPath $hd -Name 'PowerSavingDisable' -Value 1 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
-            Write-Ok 'NVIDIA HD Audio power-saving disabled'
+        Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {
+            $_.FriendlyName -match '(?i)NVIDIA High Definition Audio|NVIDIA Virtual Audio'
+        } | ForEach-Object {
+            try {
+                Disable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+                Write-Ok "Disabled PnP: $($_.FriendlyName)"
+            } catch { }
         }
     } catch { }
 
-    # Disable Ansel / NvCamera leftovers if still present
-    foreach ($svcName in @('NvCamera', 'NvTelemetryContainer', 'NvContainerLocalSystem')) {
+    # --- Ansel / camera off (NVCleanstall Disable Ansel) ---
+    foreach ($svcName in @('NvCamera', 'NvTelemetryContainer')) {
         $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
-        if ($svc -and $svcName -ne 'NvContainerLocalSystem') {
-            try {
-                if ($svc.Status -eq 'Running') { Stop-Service -Name $svcName -Force -ErrorAction SilentlyContinue }
-                Set-Service -Name $svcName -StartupType Disabled -ErrorAction SilentlyContinue
-                Write-Ok "Service disabled: $svcName"
-            } catch { }
-        }
+        if (-not $svc) { continue }
+        try {
+            if ($svc.Status -eq 'Running') { Stop-Service -Name $svcName -Force -ErrorAction SilentlyContinue }
+            Set-Service -Name $svcName -StartupType Disabled -ErrorAction SilentlyContinue
+            Write-Ok "Service disabled: $svcName"
+        } catch { }
     }
+    # Never disable NvContainerLocalSystem — required for modern DCH driver stack
 
-    # Privacy registry hints (auto-download / telemetry consent)
+    # --- Telemetry / advertising consent (installer telemetry analogue) ---
     try {
-        $paths = @(
+        foreach ($p in @(
             'HKLM:\SOFTWARE\NVIDIA Corporation\Global\FTS',
             'HKLM:\SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client',
             'HKCU:\Software\NVIDIA Corporation\Global\FTS',
             'HKCU:\Software\NVIDIA Corporation\NVControlPanel2\Client'
-        )
-        foreach ($p in $paths) {
+        )) {
             if (-not (Test-Path $p)) { New-Item -Path $p -Force -ErrorAction SilentlyContinue | Out-Null }
             if (Test-Path $p) {
-                New-ItemProperty -LiteralPath $p -Name 'EnableRID44231' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
-                New-ItemProperty -LiteralPath $p -Name 'EnableRID64640' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
-                New-ItemProperty -LiteralPath $p -Name 'EnableRID66610' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+                # Known telemetry/advertising feature RIDs
+                foreach ($rid in @('EnableRID44231', 'EnableRID64640', 'EnableRID66610', 'EnableRID73779', 'EnableRID73780')) {
+                    New-ItemProperty -LiteralPath $p -Name $rid -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+                }
             }
         }
         $gf = 'HKCU:\Software\NVIDIA Corporation\Global\GFExperience'
         if (-not (Test-Path $gf)) { New-Item -Path $gf -Force -ErrorAction SilentlyContinue | Out-Null }
         if (Test-Path $gf) {
             New-ItemProperty -LiteralPath $gf -Name 'AllowAutoDownload' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+            New-ItemProperty -LiteralPath $gf -Name 'SilentInstalls' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
         }
-        Write-Ok 'Privacy registry hints applied'
+        Write-Ok 'Installer telemetry / advertising RIDs off'
     } catch { }
 
-    # Telemetry tasks/services (full pass)
     Disable-NvidiaTelemetry
-
-    Write-Ok 'OptiHub driver tweaks applied (reboot recommended for MSI/driver swap)'
+    Write-Ok 'Expert tweaks done (MSI High, telemetry off, Ansel off, no HD Audio)'
 }
 
 function Test-OptiHubDriverInstallTweaks {
-    # Heuristic: stock Game Ready vs NVCleanstall-style install.
-    # Not every tweak is readable; we check signals that usually differ.
+    # Signals that OptiHub clean install + expert tweaks actually landed.
     $issues = New-Object System.Collections.Generic.List[string]
     $oks = New-Object System.Collections.Generic.List[string]
 
@@ -944,6 +955,14 @@ function Test-OptiHubDriverInstallTweaks {
         }
     } else {
         [void]$oks.Add('NvTelemetryContainer absent')
+    }
+
+    # HD Audio should not be running (we never install it)
+    $hda = Get-Service -Name 'NVHDA' -ErrorAction SilentlyContinue
+    if ($hda -and $hda.Status -eq 'Running') {
+        [void]$issues.Add('NVIDIA HD Audio service running (should not install HD Audio)')
+    } else {
+        [void]$oks.Add('NVIDIA HD Audio not active')
     }
 
     # GeForce Experience tree suggests bloated stock package still present

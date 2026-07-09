@@ -72,7 +72,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             : "• Max FPS / latency pack (Ultra Low Latency Ultra; G-SYNC off)";
         var warning =
             "Apply order (correct stack):\n\n" +
-            "1) OptiHub Clean Driver — official Game Ready, clean silent install (Display Driver + HD Audio) + MSI/privacy tweaks\n" +
+            "1) OptiHub Clean Driver — official Game Ready, clean silent install (Display Driver ONLY — no HD Audio) + MSI High / telemetry / Ansel off\n" +
             "2) 3D Base Profile — series pack via Profile Inspector silent import (max FPS or G-SYNC pack)\n" +
             "3) Control Panel UI (not NVIDIA App) — for each relevant page, change settings then Apply + Keep:\n" +
             "   • advanced 3D image settings\n" +
