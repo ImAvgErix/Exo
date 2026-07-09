@@ -72,11 +72,17 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             : "• Max FPS / latency pack (Ultra Low Latency Ultra; G-SYNC off)";
         var warning =
             "Apply order (correct stack):\n\n" +
-            "1) Driver — check newest Game Ready; if behind, open NVCleanstall (your install/expert checklist)\n" +
-            "2) 3D Base Profile — series pack right after driver is current\n" +
-            "3) App stack — wipe old App/GFE/CPL leftovers, fresh NVIDIA App, telemetry trim, display prefs\n\n" +
+            "1) OptiHub Clean Driver — official Game Ready, clean silent install (Display Driver + HD Audio) + MSI/privacy tweaks\n" +
+            "2) 3D Base Profile — series pack via Profile Inspector silent import (max FPS or G-SYNC pack)\n" +
+            "3) Control Panel UI (not NVIDIA App) — for each relevant page, change settings then Apply + Keep:\n" +
+            "   • advanced 3D image settings\n" +
+            "   • PhysX processor = your NVIDIA GPU\n" +
+            "   • Use NVIDIA color settings → RGB / Full / 10 bpc\n" +
+            "   • Desktop size/position → GPU + No scaling + Override\n" +
+            "   • Video color + video image → NVIDIA settings\n" +
+            "4) Overlay off + telemetry trim\n\n" +
             gsyncLine + "\n\n" +
-            "If a driver update is needed, Apply stops after launching NVCleanstall — reboot, then Reapply.\n" +
+            "Leave the PC alone during Control Panel automation (Apply/Keep dialogs).\n" +
             "Administrator approval may be required.";
 
         var ok = ConfirmAsync is not null
@@ -116,8 +122,29 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             if (result.Success)
             {
                 ProgressPercent = 100;
-                ProgressStatus = "Completed successfully";
-                SetResult("Done. Profile imported into the NVIDIA driver.", success: true);
+                var output = $"{result.FullOutput}\n{result.Summary}";
+                if (output.Contains("Clean Driver failed", StringComparison.OrdinalIgnoreCase) ||
+                    output.Contains("Clean driver failed", StringComparison.OrdinalIgnoreCase))
+                {
+                    ProgressStatus = "Clean driver failed";
+                    SetResult(
+                        "OptiHub Clean Driver did not finish. Check the log, free disk space, close games, and Apply again as Administrator.",
+                        success: false);
+                }
+                else if (output.Contains("clean driver -> 3D", StringComparison.OrdinalIgnoreCase) ||
+                         output.Contains("Completed successfully", StringComparison.OrdinalIgnoreCase) ||
+                         output.Contains("one pass", StringComparison.OrdinalIgnoreCase))
+                {
+                    ProgressStatus = "Completed successfully";
+                    SetResult(
+                        "Done in one pass: clean driver (if needed) + 3D profile + App polish. No reboot required unless Windows prompts.",
+                        success: true);
+                }
+                else
+                {
+                    ProgressStatus = "Completed successfully";
+                    SetResult("Done. Profile imported into the NVIDIA driver.", success: true);
+                }
             }
             else
             {

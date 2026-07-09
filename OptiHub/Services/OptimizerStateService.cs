@@ -471,6 +471,14 @@ public sealed class OptimizerStateService
                 extra["needsDriverUpdate"] = nd.ValueKind == JsonValueKind.True ? "true"
                     : nd.ValueKind == JsonValueKind.False ? "false"
                     : nd.ToString();
+            if (root.TryGetProperty("needsDriverRetweak", out var nr))
+                extra["needsDriverRetweak"] = nr.ValueKind == JsonValueKind.True ? "true"
+                    : nr.ValueKind == JsonValueKind.False ? "false"
+                    : nr.ToString();
+            if (root.TryGetProperty("driverTweaksOk", out var dt))
+                extra["driverTweaksOk"] = dt.ValueKind == JsonValueKind.True ? "true"
+                    : dt.ValueKind == JsonValueKind.False ? "false"
+                    : dt.ToString();
 
             return new OptimizerStateInfo
             {
@@ -520,7 +528,7 @@ public sealed class OptimizerStateService
         features.Add(MakeFeature(
             "OptiHub profile applied",
             hasMarker
-                ? $"Marker present{(string.IsNullOrEmpty(series) ? "" : $" ({series} Series)")}."
+                ? "Marker present."
                 : "Not applied yet.",
             hasMarker));
 
