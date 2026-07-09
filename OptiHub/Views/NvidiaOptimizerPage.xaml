@@ -43,6 +43,13 @@
                                Style="{StaticResource OptiCaption}"
                                FontSize="12"
                                Margin="0,4,0,0" />
+                    <TextBlock Text="{x:Bind ViewModel.DriverUpdateHint, Mode=OneWay}"
+                               Style="{StaticResource OptiCaption}"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                               Margin="0,2,0,0"
+                               TextWrapping="Wrap" />
                     <ToggleSwitch Header="G-SYNC profile (adaptive sync monitors)"
                                   IsOn="{x:Bind ViewModel.UseGsync, Mode=TwoWay}"
                                   OnContent="G-SYNC on"

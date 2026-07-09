@@ -251,17 +251,6 @@ function Install-NvidiaApp {
     return $false
 }
 
-function Get-DriverAgeDays {
-    try {
-        $gpu = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -match '(?i)nvidia|geforce|rtx|gtx' } |
-            Select-Object -First 1
-        if (-not $gpu -or -not $gpu.DriverDate) { return 999 }
-        $dt = [Management.ManagementDateTimeConverter]::ToDateTime($gpu.DriverDate)
-        return [int]((Get-Date) - $dt).TotalDays
-    } catch { return 999 }
-}
-
 function Get-WindowsDriverVersionString {
     try {
         $gpu = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
@@ -269,6 +258,64 @@ function Get-WindowsDriverVersionString {
             Select-Object -First 1
         return [string]$gpu.DriverVersion
     } catch { return '' }
+}
+
+function Convert-WindowsDriverToNvidia([string]$WinVer) {
+    # WDDM DCH encoding: last 5 digits of c*10000+d => major.minor (e.g. 32.0.15.6094 -> 560.94)
+    try {
+        $parts = $WinVer -split '\.'
+        if ($parts.Count -lt 4) { return $null }
+        $c = [int]$parts[2]
+        $d = [int]$parts[3]
+        $combined = ($c * 10000 + $d).ToString()
+        if ($combined.Length -lt 5) { $combined = $combined.PadLeft(5, '0') }
+        $last5 = $combined.Substring($combined.Length - 5)
+        $major = [int]$last5.Substring(0, 3)
+        $minor = [int]$last5.Substring(3, 2)
+        return ('{0}.{1:D2}' -f $major, $minor)
+    } catch { return $null }
+}
+
+function Get-LatestGameReadyDriver {
+    # Always query NVIDIA for newest Game Ready (desktop Win10/11 x64 DCH WHQL).
+    # psid/pfid picks a current desktop matrix; Version is the same GRD branch for 20-50 series.
+    $urls = @(
+        'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&psid=129&pfid=995&osID=57&languageCode=1033&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0&ctk=null&windowsVersion=10.0&windowsArchitecture=64bit',
+        'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&psid=120&pfid=929&osID=57&languageCode=1033&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0'
+    )
+    foreach ($url in $urls) {
+        try {
+            $r = Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'OptiHub-Nvidia/1.2' } -TimeoutSec 25
+            if (-not $r -or $r.Success -ne '1') { continue }
+            $info = $r.IDS[0].downloadInfo
+            if (-not $info -or -not $info.Version) { continue }
+            return [pscustomobject]@{
+                Version     = [string]$info.Version
+                DownloadUrl = [uri]::UnescapeDataString([string]$info.DownloadURL)
+                Name        = [uri]::UnescapeDataString([string]$info.Name)
+                ReleaseDate = [string]$info.ReleaseDateTime
+                Size        = [string]$info.DownloadURLFileSize
+            }
+        } catch {
+            Write-Warn "Latest-driver lookup failed: $($_.Exception.Message)"
+        }
+    }
+    return $null
+}
+
+function Compare-NvidiaVersion([string]$A, [string]$B) {
+    # returns: -1 if A<B, 0 equal, 1 if A>B
+    try {
+        $va = [version](($A -replace '[^\d\.]', '') -replace '^\.', '0.')
+        $vb = [version](($B -replace '[^\d\.]', '') -replace '^\.', '0.')
+        if ($va -lt $vb) { return -1 }
+        if ($va -gt $vb) { return 1 }
+        return 0
+    } catch {
+        if ($A -eq $B) { return 0 }
+        if ($A -lt $B) { return -1 }
+        return 1
+    }
 }
 
 function Install-NVCleanstall {
@@ -292,34 +339,44 @@ function Install-NVCleanstall {
         Select-Object -First 1
     if ($hit) { return $hit.FullName }
 
-    # Direct download fallback
-    $url = 'https://www.techpowerup.com/download/techpowerup-nvcleanstall/'
-    Write-Warn 'NVCleanstall not found after winget - download from techpowerup.com/nvcleanstall if needed'
+    Write-Warn 'NVCleanstall not found after winget - install from techpowerup.com/nvcleanstall'
     return $null
 }
 
-function Write-NVCleanstallGuide([string]$OutDir) {
+function Write-NVCleanstallGuide([string]$OutDir, [string]$CurrentNv, [string]$LatestNv, [string]$DownloadUrl) {
     $path = Join-Path $OutDir 'OptiHub-NVCleanstall-Recommended.txt'
     $text = @"
-OptiHub recommended NVCleanstall settings (QoL + performance + privacy + speed)
-================================================================================
-1) Download latest Game Ready driver for your GPU inside NVCleanstall.
-2) Components: keep Display Driver (+ HD Audio if you use HDMI/DP audio).
-   Uncheck: GeForce Experience / NVIDIA App components here if you install App separately,
-   Telemetry, ShadowPlay/Overlay extras you do not use, backend leftovers.
-3) Installation Tweaks:
-   [x] Disable Installer Telemetry & Advertising
+OptiHub NVCleanstall checklist (best QoL / performance / privacy / speed)
+========================================================================
+Installed NVIDIA driver : $CurrentNv
+Newest Game Ready found : $LatestNv
+Official download URL   : $DownloadUrl
+
+In NVCleanstall:
+1) Use "Download and install latest" (or point it at the Game Ready package above).
+2) Components: Display Driver required. HD Audio only if you use HDMI/DP audio.
+   Leave NVIDIA App out of the driver package (OptiHub installs a clean App separately).
+
+Installation Tweaks - enable ALL of these:
+   [x] Disable Installer Telemetry and Advertising
+   [x] Unattended Express Installation
+   [x] Automatic Reboot if Needed
    [x] Perform a Clean Installation
-   [x] Disable Ansel (or leave if you use freecam tools)
+   [x] Disable Ansel
    [x] Show Expert Tweaks
-4) Expert Tweaks (recommended for gaming QoL / latency / privacy):
+
+Expert Tweaks - enable ALL of these:
    [x] Disable driver telemetry
-   [x] Enable Message Signaled Interrupts (MSI) - Priority High when offered
-   [x] Disable HDCP (if you do not need protected video playback)
-   [x] Disable NVIDIA HD Audio device sleep timer (if using NV audio)
-   [ ] Disable driver signature / re-sign packages - leave OFF for anti-cheat safety
-5) Install, reboot if asked, then re-run OptiHub NVIDIA Optimizer Apply
-   to import series .nip profile + App/debloat + display prefs.
+   [x] Disable NVIDIA HD Audio device sleep timer
+   [x] Enable Message Signaled Interrupts (MSI)
+         - First option: Default (as offered)
+         - Second / priority: High
+   [x] Disable HDCP
+   [x] Use method compatible with Easy Anti-Cheat
+   [x] Auto-accept / allow unsigned driver (accept the unsigned driver prompt)
+
+Then Install. After reboot, open OptiHub -> NVIDIA -> Reapply to import series
+profiles, App/debloat, and display Full RGB / high bpc prefs.
 
 Generated by OptiHub NVIDIA pack $Script:NvidiaOptVersion
 "@
@@ -331,36 +388,79 @@ Generated by OptiHub NVIDIA pack $Script:NvidiaOptVersion
 function Start-DriverUpdateIfNeeded {
     param([bool]$Force)
 
-    $age = Get-DriverAgeDays
-    $ver = Get-WindowsDriverVersionString
-    Write-Ok "Current driver version string: $ver (age ~$age days)"
+    $winVer = Get-WindowsDriverVersionString
+    $currentNv = Convert-WindowsDriverToNvidia $winVer
+    Write-Ok "Installed Windows driver string: $winVer"
+    Write-Ok "Decoded NVIDIA version: $(if($currentNv){$currentNv}else{'unknown'})"
 
-    $stale = $Force -or ($age -ge 45)
-    if (-not $stale) {
-        Write-Ok 'Driver looks recent - skipping NVCleanstall driver pass (use -ForceDriver to run anyway)'
-        return @{ Ran = $false; AgeDays = $age; Version = $ver }
+    Write-Step 'Checking NVIDIA for the newest Game Ready driver...'
+    $latest = Get-LatestGameReadyDriver
+    if (-not $latest) {
+        Write-Warn 'Could not reach NVIDIA driver API - launching NVCleanstall so you can still grab the newest package'
+        $needUpdate = $true
+        $latestVer = 'unknown'
+        $dl = ''
+    } else {
+        $latestVer = $latest.Version
+        $dl = $latest.DownloadUrl
+        Write-Ok "Newest Game Ready: $latestVer ($($latest.ReleaseDate)) size $($latest.Size)"
+        if ($dl) { Write-Ok "Download: $dl" }
+        $needUpdate = $Force
+        if (-not $currentNv) {
+            $needUpdate = $true
+            Write-Warn 'Could not decode installed version - treating as outdated'
+        } elseif ((Compare-NvidiaVersion $currentNv $latestVer) -lt 0) {
+            $needUpdate = $true
+            Write-Warn "Outdated: $currentNv < newest $latestVer"
+        } else {
+            Write-Ok "Already on newest (or newer): $currentNv"
+        }
     }
 
-    Write-Step 'Driver is outdated or -ForceDriver set - launching NVCleanstall pipeline...'
+    if (-not $needUpdate) {
+        return @{
+            Ran            = $false
+            NeedsUpdate    = $false
+            CurrentVersion = $currentNv
+            LatestVersion  = $latestVer
+            WindowsVersion = $winVer
+            DownloadUrl    = $dl
+        }
+    }
+
+    Write-Step 'Prompting newest-driver install via NVCleanstall...'
     $exe = Install-NVCleanstall
-    $guide = Write-NVCleanstallGuide $StateDir
+    $guide = Write-NVCleanstallGuide $StateDir $(if($currentNv){$currentNv}else{$winVer}) $latestVer $dl
 
     if ($exe -and (Test-Path $exe)) {
         try {
             Start-Process -FilePath $exe -Verb RunAs -ErrorAction SilentlyContinue
             Write-Ok "Launched NVCleanstall: $exe"
-            Write-Ok 'Complete the clean driver install using OptiHub recommended tweaks, reboot if needed, then Reapply NVIDIA in OptiHub.'
-            try { Start-Process notepad.exe -ArgumentList $guide -ErrorAction SilentlyContinue } catch { }
+            Write-Ok 'Install the newest Game Ready driver with the OptiHub checklist, reboot if asked, then Reapply NVIDIA.'
+            try { Start-Process notepad.exe -ArgumentList "`"$guide`"" -ErrorAction SilentlyContinue } catch { }
+            if ($dl) {
+                try { Start-Process $dl -ErrorAction SilentlyContinue } catch { }
+            }
         } catch {
             Write-Warn "Could not launch NVCleanstall elevated: $($_.Exception.Message)"
             Write-Ok "Open NVCleanstall manually and follow: $guide"
         }
     } else {
-        Write-Warn 'Install NVCleanstall from TechPowerUp, then re-run Apply with -ForceDriver'
+        Write-Warn 'Install NVCleanstall from TechPowerUp, then re-run Apply'
         Write-Ok "Guide: $guide"
+        if ($dl) { try { Start-Process $dl -ErrorAction SilentlyContinue } catch { } }
     }
 
-    return @{ Ran = $true; AgeDays = $age; Version = $ver; Guide = $guide; Exe = $exe }
+    return @{
+        Ran            = $true
+        NeedsUpdate    = $true
+        CurrentVersion = $currentNv
+        LatestVersion  = $latestVer
+        WindowsVersion = $winVer
+        DownloadUrl    = $dl
+        Guide          = $guide
+        Exe            = $exe
+    }
 }
 
 function Disable-NvidiaTelemetry {

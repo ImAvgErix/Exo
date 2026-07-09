@@ -38,6 +38,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     [ObservableProperty] private Brush _lastResultBrush;
     [ObservableProperty] private bool _useGsync;
     [ObservableProperty] private string _seriesHint = string.Empty;
+    [ObservableProperty] private string _driverUpdateHint = string.Empty;
 
     public event EventHandler? RequestGoBack;
     public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
@@ -71,10 +72,15 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         var gsyncLine = UseGsync
             ? "• G-SYNC pack (adaptive sync friendly; ultra low latency off)"
             : "• Max FPS / latency pack (Ultra Low Latency Ultra; G-SYNC off)";
+        var driverLine = !string.IsNullOrWhiteSpace(DriverUpdateHint)
+            ? "• Driver: " + DriverUpdateHint + "\n"
+            : "• Always checks NVIDIA for the newest Game Ready driver; if behind, opens NVCleanstall + checklist\n";
         var warning =
             "This will run the full NVIDIA pack:\n\n" +
-            "• If the driver is older than ~45 days: install/launch NVCleanstall (clean install + expert privacy/perf tweaks)\n" +
-            "• Delete conflicting old NVIDIA App / GFE / Control Panel leftovers, then install a fresh NVIDIA App\n" +
+            driverLine +
+            "• NVCleanstall checklist: unattended express, auto reboot, clean install, disable Ansel,\n" +
+            "  disable installer+driver telemetry, MSI High, disable HDCP, EAC-compatible method, accept unsigned\n" +
+            "• Delete conflicting old NVIDIA App / GFE / CPL leftovers, then install a fresh NVIDIA App\n" +
             "• Telemetry trim + display Full RGB / high bpc guidance\n" +
             gsyncLine + "\n" +
             "• Import series Base Profile (power, latency, rBAR/DLSS by generation)\n\n" +
@@ -216,6 +222,18 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         if (state.Extra is { Count: > 0 } && state.Extra.TryGetValue("gsync", out var g) &&
             bool.TryParse(g, out var gsyncApplied) && IsApplied)
             UseGsync = gsyncApplied;
+
+        DriverUpdateHint = string.Empty;
+        if (state.Extra is { Count: > 0 })
+        {
+            state.Extra.TryGetValue("currentDriver", out var cur);
+            state.Extra.TryGetValue("latestDriver", out var lat);
+            state.Extra.TryGetValue("needsDriverUpdate", out var need);
+            if (string.Equals(need, "true", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(lat))
+                DriverUpdateHint = $"Update available: {cur ?? "?"} → {lat} (Apply opens NVCleanstall)";
+            else if (!string.IsNullOrWhiteSpace(lat) && !string.IsNullOrWhiteSpace(cur))
+                DriverUpdateHint = $"Driver current: {cur} (newest {lat})";
+        }
 
         Features.Clear();
         foreach (var feature in state.Features)

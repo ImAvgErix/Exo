@@ -67,18 +67,52 @@ $features.Add(@{
     active = [bool]($state -and $state.debloatApplied)
 })
 
-$driverNote = 'NVCleanstall launches when the driver is older than ~45 days (or ForceDriver).'
-if ($state -and $state.driverUpdatePass) {
+function Convert-WindowsDriverToNvidia([string]$WinVer) {
     try {
-        $dup = $state.driverUpdatePass
-        if ($dup.Ran) { $driverNote = "NVCleanstall pass ran (driver age ~$($dup.AgeDays)d)." }
-        else { $driverNote = "Driver looked recent (~$($dup.AgeDays)d) - NVCleanstall skipped." }
-    } catch { }
+        $parts = $WinVer -split '\.'
+        if ($parts.Count -lt 4) { return $null }
+        $c = [int]$parts[2]; $d = [int]$parts[3]
+        $combined = ($c * 10000 + $d).ToString()
+        if ($combined.Length -lt 5) { $combined = $combined.PadLeft(5, '0') }
+        $last5 = $combined.Substring($combined.Length - 5)
+        return ('{0}.{1:D2}' -f [int]$last5.Substring(0, 3), [int]$last5.Substring(3, 2))
+    } catch { return $null }
+}
+
+$winDrv = if ($primary) { [string](Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $primary.Name } | Select-Object -First 1 -ExpandProperty DriverVersion) } else { '' }
+if (-not $winDrv -and $primary) {
+    try { $winDrv = [string](Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match 'nvidia|geforce' } | Select-Object -First 1).DriverVersion } catch { }
+}
+$currentNv = Convert-WindowsDriverToNvidia $winDrv
+$latestNv = $null
+$needsUpdate = $false
+try {
+    $url = 'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&psid=129&pfid=995&osID=57&languageCode=1033&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0&ctk=null&windowsVersion=10.0&windowsArchitecture=64bit'
+    $r = Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'OptiHub-Nvidia/1.2' } -TimeoutSec 12
+    if ($r.Success -eq '1') { $latestNv = [string]$r.IDS[0].downloadInfo.Version }
+} catch { }
+
+if ($latestNv -and $currentNv) {
+    try {
+        if ([version]$currentNv -lt [version]$latestNv) { $needsUpdate = $true }
+    } catch {
+        if ($currentNv -ne $latestNv) { $needsUpdate = $true }
+    }
+} elseif ($latestNv -and -not $currentNv) {
+    $needsUpdate = $true
+}
+
+$driverNote = if ($needsUpdate) {
+    "Update available: installed $(if($currentNv){$currentNv}else{'?'}) -> newest $latestNv. Apply prompts NVCleanstall."
+} elseif ($latestNv) {
+    "On newest Game Ready ($currentNv)."
+} else {
+    'Could not reach NVIDIA for newest version; Apply still checks and can open NVCleanstall.'
 }
 $features.Add(@{
-    title  = 'Driver update (NVCleanstall)'
+    title  = 'Newest driver check'
     detail = $driverNote
-    active = $true
+    active = (-not $needsUpdate) -and [bool]$latestNv
 })
 
 $features.Add(@{
@@ -105,11 +139,14 @@ elseif ($isApplied) { "Applied $($state.series) Series$(if($state.gsync){' G-SYN
 else { "Detected $(if($series){"$series Series"}else{'NVIDIA'}). Toggle G-SYNC if your monitor supports it, then Apply." }
 
 [ordered]@{
-    isApplied  = $isApplied
-    statusText = $statusText
-    detail     = $detail
-    features   = @($features)
-    gpuName    = $(if ($primary) { $primary.Name } else { $null })
-    series     = $series
-    gsync      = [bool]($state -and $state.gsync)
+    isApplied          = $isApplied
+    statusText         = $statusText
+    detail             = $detail
+    features           = @($features)
+    gpuName            = $(if ($primary) { $primary.Name } else { $null })
+    series             = $series
+    gsync              = [bool]($state -and $state.gsync)
+    currentDriver      = $currentNv
+    latestDriver       = $latestNv
+    needsDriverUpdate  = $needsUpdate
 } | ConvertTo-Json -Compress -Depth 5

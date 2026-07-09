@@ -463,6 +463,14 @@ public sealed class OptimizerStateService
                     : gs.ToString();
             if (root.TryGetProperty("gpuName", out var gn) && gn.ValueKind == JsonValueKind.String)
                 extra["gpuName"] = gn.GetString() ?? "";
+            if (root.TryGetProperty("currentDriver", out var cd) && cd.ValueKind == JsonValueKind.String)
+                extra["currentDriver"] = cd.GetString() ?? "";
+            if (root.TryGetProperty("latestDriver", out var ld) && ld.ValueKind == JsonValueKind.String)
+                extra["latestDriver"] = ld.GetString() ?? "";
+            if (root.TryGetProperty("needsDriverUpdate", out var nd))
+                extra["needsDriverUpdate"] = nd.ValueKind == JsonValueKind.True ? "true"
+                    : nd.ValueKind == JsonValueKind.False ? "false"
+                    : nd.ToString();
 
             return new OptimizerStateInfo
             {
