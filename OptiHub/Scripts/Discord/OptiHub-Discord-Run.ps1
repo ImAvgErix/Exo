@@ -21,11 +21,8 @@ $env:OPTIHUB_SKIP_BOOT_FLASH = '1'
 $env:DISCOPT_SKIP_MANIFEST = '1'
 # Force NoLaunch for every OptiHub-hosted run (UI owns launch).
 $NoLaunch = $true
-# DiscOpt kernel (version.dll/ffmpeg proxy) crashes Discord on some PCs.
-# Default OFF under OptiHub for reliability. Set OPTIHUB_KERNEL=1 to force it.
-if ($env:OPTIHUB_KERNEL -ne '1') {
-    $SkipKernel = $true
-}
+# DiscOpt kernel (memory trim + raw input + priority) stays ON - core OptiHub feature.
+# Only skip when the user/host explicitly passes -SkipKernel.
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
     $p = [Math]::Max(0, [Math]::Min(100, $Percent))

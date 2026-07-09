@@ -42,7 +42,7 @@ if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.14'
+$Script:DiscOptVersion = '1.1.15'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -2187,12 +2187,15 @@ function Start-Discord([string]$AppDir) {
 
     Unlock-DiscordSettings
     Apply-DiscordProfile (Join-Path $AppData 'settings.json')
-    # A version.dll.disabled marker means the kernel was rolled back on this PC
-    # (boot safety). Only a full optimize run re-tests and clears it.
-    $kernelBlocked = Test-Path (Join-Path $AppDir 'version.dll.disabled')
-    if (-not $SkipKernel -and -not $kernelBlocked -and
+    # Always re-enable kernel on normal launch unless this run just rolled it back
+    # or the user passed -SkipKernel. .disabled is only a soft temporary marker.
+    if (-not $SkipKernel -and
         -not $Script:KernelRolledBack -and -not $Script:ModsRolledBack) {
-        Install-DiscOptKernel $AppDir
+        try {
+            Install-DiscOptKernel $AppDir
+        } catch {
+            Write-Warn "Kernel re-enable on launch failed: $($_.Exception.Message)"
+        }
     }
 
     [void](Invoke-DiscordLaunch -AppDir $AppDir)
@@ -2531,6 +2534,7 @@ function Copy-KernelFileWithRetry {
 
 function Install-DiscOptKernel([string]$AppDir) {
     Write-Step 'Installing DiscOpt kernel (memory trim, priority, raw input)...'
+    Write-HubProgress 78 'Installing DiscOpt kernel...'
 
     $proxy = Join-Path $KitDir 'ffmpeg.dll'
     $dll = Join-Path $KitDir 'version.dll'
@@ -2538,24 +2542,50 @@ function Install-DiscOptKernel([string]$AppDir) {
     foreach ($file in @($proxy, $dll, $ini)) {
         if (-not (Test-Path $file)) { throw "Missing kernel file: $file" }
     }
+    if ((Get-Item $proxy).Length -lt 10000) { throw 'Bundled ffmpeg proxy looks invalid' }
+    if ((Get-Item $dll).Length -lt 50000) { throw 'Bundled version.dll looks invalid' }
+
+    Stop-Discord
+
+    # Clear any previous soft-disable markers so Reapply always reactivates the kernel.
+    foreach ($name in @('version.dll', 'config.ini')) {
+        $disabled = Join-Path $AppDir "$name.disabled"
+        if (Test-Path -LiteralPath $disabled) {
+            Remove-Item -LiteralPath $disabled -Force -ErrorAction SilentlyContinue
+            Write-Ok "Cleared $name.disabled (re-enabling kernel)"
+        }
+    }
 
     $real = Join-Path $AppDir 'ffmpeg_real.dll'
     $current = Join-Path $AppDir 'ffmpeg.dll'
     if (-not (Test-Path $real)) {
         if (-not (Test-Path $current)) { throw 'Stock ffmpeg.dll missing' }
         if ((Get-Item $current).Length -lt 500000) {
-            throw 'ffmpeg_real.dll missing - reinstall Discord'
+            throw 'ffmpeg_real.dll missing - reinstall Discord (stock ffmpeg not found)'
         }
         Copy-KernelFileWithRetry -Source $current -Destination $real
-        Write-Ok 'Saved stock ffmpeg.dll backup'
+        Write-Ok 'Saved stock ffmpeg.dll backup (ffmpeg_real.dll)'
+    } elseif ((Get-Item $real).Length -lt 500000) {
+        throw 'ffmpeg_real.dll is corrupt - reinstall Discord'
     }
 
-    Copy-KernelFileWithRetry -Source $proxy -Destination $current
+    # Order matters: version.dll + config.ini first, proxy last (proxy loads version.dll).
     $verDest = Join-Path $AppDir 'version.dll'
     if (Test-Path $verDest) { attrib -R $verDest 2>$null }
     Copy-KernelFileWithRetry -Source $dll -Destination $verDest
     Copy-KernelFileWithRetry -Source $ini -Destination (Join-Path $AppDir 'config.ini')
-    Write-Ok 'DiscOpt kernel active (ffmpeg proxy - memory trim loads on start)'
+    Copy-KernelFileWithRetry -Source $proxy -Destination $current
+
+    # Sanity: proxy small, real large, version present.
+    $proxyLen = (Get-Item $current).Length
+    $realLen = (Get-Item $real).Length
+    $verLen = (Get-Item $verDest).Length
+    if ($proxyLen -ge 500000) { throw "Kernel install failed: ffmpeg.dll still stock ($proxyLen bytes)" }
+    if ($realLen -lt 500000) { throw "Kernel install failed: ffmpeg_real.dll too small ($realLen bytes)" }
+    if ($verLen -lt 50000) { throw "Kernel install failed: version.dll too small ($verLen bytes)" }
+
+    Write-Ok "DiscOpt kernel active (proxy $([math]::Round($proxyLen/1KB,0)) KB + version.dll + config.ini)"
+    Write-Ok 'Features: idle RAM trim, process priority, raw input'
 }
 
 function Disable-DiscOptKernelOnDisk([string]$AppDir) {
@@ -2928,13 +2958,11 @@ if (-not $SkipEquicord) {
     }
 }
 
-# 5) DiscOpt kernel (memory trim) - optional. Crashes Discord on some GPUs/drivers.
+# 5) DiscOpt kernel - core feature (memory trim + raw input + priority)
 if (-not $SkipKernel) {
     Install-DiscOptKernel $app.FullName
 } else {
-    # Ensure a previous kernel install cannot keep Discord from booting.
-    Disable-DiscOptKernelOnDisk $app.FullName
-    Write-Ok 'DiscOpt kernel left off (safer boot). Set OPTIHUB_KERNEL=1 to enable.'
+    Write-Warn 'Skipped DiscOpt kernel (-SkipKernel) - memory trim / raw input not installed'
 }
 
 # 5b) Boot safety
@@ -2951,15 +2979,24 @@ if ($optiHubQuiet) {
     $eqAsar = Join-Path $EquicordData 'equicord.asar'
     $eqOk = $SkipEquicord -or ((Test-Path $eqAsar) -and ((Get-Item $eqAsar).Length -gt 1000000))
     $modsOk = Test-DiscordModulesReady $app.FullName
-    if ($exeOk -and $asarOk -and $eqOk -and $modsOk) {
-        Write-Ok 'Quiet verify passed - Discord left closed for you to open when ready'
-        Write-Ok 'Tip: open Discord from the Start menu (not as admin)'
+    $kernelOk = $SkipKernel -or (
+        (Test-Path (Join-Path $app.FullName 'version.dll')) -and
+        (Test-Path (Join-Path $app.FullName 'config.ini')) -and
+        (Test-Path (Join-Path $app.FullName 'ffmpeg_real.dll')) -and
+        (Test-Path (Join-Path $app.FullName 'ffmpeg.dll')) -and
+        ((Get-Item (Join-Path $app.FullName 'ffmpeg.dll')).Length -lt 500000)
+    )
+    if ($exeOk -and $asarOk -and $eqOk -and $modsOk -and $kernelOk) {
+        Write-Ok 'Quiet verify passed (loader + modules + kernel on disk)'
+        Write-Ok 'Open Discord from the Start menu (not as admin) when ready'
     } else {
-        Write-Warn "Quiet verify incomplete (exe=$exeOk asar=$asarOk eq=$eqOk mods=$modsOk)"
-        # Do not flash Discord elevated - roll back risky bits instead.
+        Write-Warn "Quiet verify incomplete (exe=$exeOk asar=$asarOk eq=$eqOk mods=$modsOk kernel=$kernelOk)"
         if (-not $modsOk) {
             Write-Warn 'Modules incomplete - leaving runtime stock-safe'
             Use-StockDiscordRuntime $app.FullName
+        } elseif (-not $kernelOk -and -not $SkipKernel) {
+            Write-Warn 'Kernel files incomplete - reinstalling kernel...'
+            try { Install-DiscOptKernel $app.FullName } catch { Write-Warn $_.Exception.Message }
         }
     }
 } elseif ($Quick) {
