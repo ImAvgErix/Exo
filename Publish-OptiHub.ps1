@@ -88,26 +88,27 @@ function New-OptiHubSfx {
         Copy-Item -LiteralPath $SourceCs -Destination $srcCopy -Force
         $outCopy = Join-Path $work 'OptiHub.exe'
 
-        # Resource name must match Program constant "payload.zip"
-        $args = @(
-            '/nologo',
-            '/target:winexe',
-            '/optimize+',
-            '/platform:anycpu',
-            '/out:' + $outCopy,
-            '/resource:' + $payloadCopy + ',payload.zip',
-            '/r:System.IO.Compression.dll',
-            '/r:System.IO.Compression.FileSystem.dll',
+        # Response file avoids PowerShell mangling /out:C:\... paths.
+        $rsp = Join-Path $work 'build.rsp'
+        @(
+            '/nologo'
+            '/target:winexe'
+            '/optimize+'
+            '/platform:anycpu'
+            "/out:$outCopy"
+            "/resource:$payloadCopy,payload.zip"
+            '/r:System.IO.Compression.dll'
+            '/r:System.IO.Compression.FileSystem.dll'
             $srcCopy
-        )
+        ) | Set-Content -LiteralPath $rsp -Encoding ASCII
 
         Write-Host "[*] Building self-extracting OptiHub.exe (csc)..." -ForegroundColor DarkGray
         $prev = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
-        $output = & $csc @args 2>&1
+        $output = & $csc ("@" + $rsp) 2>&1
         $code = $LASTEXITCODE
         $ErrorActionPreference = $prev
-        if ($code -ne 0 -or -not (Test-Path $outCopy)) {
+        if ($code -ne 0 -or -not (Test-Path -LiteralPath $outCopy)) {
             $output | ForEach-Object { Write-Host $_ }
             throw "csc failed building SFX (exit $code)"
         }
