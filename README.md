@@ -7,7 +7,8 @@ Windows optimizer hub for performance, privacy, and gaming. Works on **stock Dis
 | Optimizer | Status |
 |---|---|
 | **Discord** | Live |
-| Brave · Steam · Riot · Epic | Coming soon |
+| **Steam** | Live |
+| Brave · Riot · Epic | Coming soon |
 
 ---
 

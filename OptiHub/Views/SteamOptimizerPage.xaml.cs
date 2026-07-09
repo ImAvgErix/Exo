@@ -1,0 +1,60 @@
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Navigation;
+using OptiHub.ViewModels;
+
+namespace OptiHub.Views;
+
+public sealed partial class SteamOptimizerPage : Page
+{
+    public SteamOptimizerViewModel ViewModel { get; }
+
+    public SteamOptimizerPage()
+    {
+        ViewModel = new SteamOptimizerViewModel(App.Services);
+        InitializeComponent();
+        DataContext = ViewModel;
+
+        ViewModel.ConfirmAsync = ConfirmAsync;
+        ViewModel.RequestGoBack += (_, _) =>
+        {
+            if (App.MainAppWindow is MainWindow mw)
+                mw.NavigateToDashboard();
+        };
+    }
+
+    protected override async void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        await ViewModel.InitializeAsync();
+    }
+
+    private void Run_Click(object sender, RoutedEventArgs e) =>
+        ViewModel.RunCommand.Execute(null);
+
+    private void Repair_Click(object sender, RoutedEventArgs e) =>
+        ViewModel.RepairCommand.Execute(null);
+
+    private void Refresh_Click(object sender, RoutedEventArgs e) =>
+        ViewModel.RefreshCommand.Execute(null);
+
+    private async Task<bool> ConfirmAsync(string title, string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = new TextBlock
+            {
+                Text = message,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 420
+            },
+            PrimaryButtonText = "Continue",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+        var result = await dialog.ShowAsync();
+        return result == ContentDialogResult.Primary;
+    }
+}

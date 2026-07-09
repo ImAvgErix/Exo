@@ -41,7 +41,7 @@ public partial class DashboardViewModel : ObservableObject
                     Id = "steam",
                     Title = "Steam Optimizer",
                     LogoPath = "Assets/Logos/steam.png",
-                    Status = OptimizerStatus.ComingSoon
+                    Status = OptimizerStatus.Available
                 }
             },
             new()
@@ -86,17 +86,34 @@ public partial class DashboardViewModel : ObservableObject
     public async Task RefreshStatesAsync()
     {
         var discord = Cards.FirstOrDefault(c => c.Definition.Id == "discord");
-        if (discord is null) return;
+        var steam = Cards.FirstOrDefault(c => c.Definition.Id == "steam");
 
-        discord.IsLoadingState = true;
-        try
+        if (discord is not null)
         {
-            var state = await _services.OptimizerState.DetectDiscordAsync(fastOnly: true);
-            discord.ApplyState(state);
+            discord.IsLoadingState = true;
+            try
+            {
+                var state = await _services.OptimizerState.DetectDiscordAsync(fastOnly: true);
+                discord.ApplyState(state);
+            }
+            finally
+            {
+                discord.IsLoadingState = false;
+            }
         }
-        finally
+
+        if (steam is not null)
         {
-            discord.IsLoadingState = false;
+            steam.IsLoadingState = true;
+            try
+            {
+                var state = await _services.OptimizerState.DetectSteamAsync(fastOnly: true);
+                steam.ApplyState(state);
+            }
+            finally
+            {
+                steam.IsLoadingState = false;
+            }
         }
     }
 }

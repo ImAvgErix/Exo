@@ -16,6 +16,8 @@ public static class PathHelper
 
     public static string DiscordScriptsDir => Path.Combine(ScriptsRoot, "Discord");
 
+    public static string SteamScriptsDir => Path.Combine(ScriptsRoot, "Steam");
+
     public static string AppDataDir
     {
         get

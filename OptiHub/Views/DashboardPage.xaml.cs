@@ -17,8 +17,9 @@ public sealed partial class DashboardPage : Page
 
         ViewModel.NavigateToOptimizer += (_, id) =>
         {
-            if (id == "discord" && App.MainAppWindow is MainWindow mw)
-                mw.NavigateToDiscord();
+            if (App.MainAppWindow is not MainWindow mw) return;
+            if (id == "discord") mw.NavigateToDiscord();
+            else if (id == "steam") mw.NavigateToSteam();
         };
     }
 

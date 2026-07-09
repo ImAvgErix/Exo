@@ -18,6 +18,7 @@ public sealed partial class MainWindow : Window
     {
         Home,
         Discord,
+        Steam,
         Settings
     }
 
@@ -129,18 +130,23 @@ public sealed partial class MainWindow : Window
         _mode = mode;
         var home = mode == ShellMode.Home;
         BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
-        ContextLogoHost.Visibility = mode == ShellMode.Discord ? Visibility.Visible : Visibility.Collapsed;
-        // Settings only on home — Discord page keeps chrome clean
+        ContextLogoHost.Visibility = mode is ShellMode.Discord or ShellMode.Steam
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        // Settings only on home — optimizer pages keep chrome clean
         SettingsButton.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
         AppTitleText.Text = mode switch
         {
             ShellMode.Discord => "Discord",
+            ShellMode.Steam => "Steam",
             ShellMode.Settings => "Settings",
             _ => "OptiHub"
         };
 
         if (mode == ShellMode.Discord)
             TrySetContextLogo("Assets/Logos/discord.png");
+        else if (mode == ShellMode.Steam)
+            TrySetContextLogo("Assets/Logos/steam.png");
         else
             ContextLogo.Source = null;
     }
@@ -184,6 +190,12 @@ public sealed partial class MainWindow : Window
     {
         ApplyChrome(ShellMode.Discord);
         ContentFrame.Navigate(typeof(DiscordOptimizerPage), null, Slide());
+    }
+
+    public void NavigateToSteam()
+    {
+        ApplyChrome(ShellMode.Steam);
+        ContentFrame.Navigate(typeof(SteamOptimizerPage), null, Slide());
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)

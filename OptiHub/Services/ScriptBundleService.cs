@@ -4,17 +4,19 @@ namespace OptiHub.Services;
 
 /// <summary>
 /// Ensures bundled scripts are available under LocalAppData for updates and runs.
-/// Syncs the working Discord kit from the app-bundled Scripts\Discord folder when needed.
+/// Syncs Discord and Steam kits from the app-bundled Scripts folders when needed.
 /// </summary>
 public sealed class ScriptBundleService
 {
     private readonly SettingsService _settings;
     private readonly object _syncLock = new();
-    private string? _cachedRoot;
+    private string? _cachedDiscordRoot;
+    private string? _cachedSteamRoot;
     private string? _cachedBundledVersion;
     private string? _lastSyncedWorkingVersion;
     private string? _lastSyncedBundledVersion;
-    private bool _syncDone;
+    private bool _discordSyncDone;
+    private bool _steamSyncDone;
 
     public ScriptBundleService(SettingsService settings)
     {
@@ -31,7 +33,18 @@ public sealed class ScriptBundleService
         {
             var working = Path.Combine(PathHelper.WorkingScriptsDir, "Discord");
             EnsureDiscordScriptsSynced(working);
-            _cachedRoot = working;
+            _cachedDiscordRoot = working;
+            return working;
+        }
+    }
+
+    public string GetSteamRoot()
+    {
+        lock (_syncLock)
+        {
+            var working = Path.Combine(PathHelper.WorkingScriptsDir, "Steam");
+            EnsureSteamScriptsSynced(working);
+            _cachedSteamRoot = working;
             return working;
         }
     }
@@ -44,6 +57,15 @@ public sealed class ScriptBundleService
 
     public string DiscordRepairScript =>
         Path.Combine(GetDiscordRoot(), "OptiHub-Discord-Repair.ps1");
+
+    public string SteamOptimizerScript =>
+        Path.Combine(GetSteamRoot(), "OptiHub-Steam-Run.ps1");
+
+    public string SteamDetectScript =>
+        Path.Combine(GetSteamRoot(), "OptiHub-Steam-Detect.ps1");
+
+    public string SteamRepairScript =>
+        Path.Combine(GetSteamRoot(), "OptiHub-Steam-Repair.ps1");
 
     public string GetBundledVersion()
     {
@@ -66,6 +88,60 @@ public sealed class ScriptBundleService
         return GetBundledVersion();
     }
 
+    private void EnsureSteamScriptsSynced(string working)
+    {
+        var bundled = PathHelper.SteamScriptsDir;
+        if (!Directory.Exists(bundled))
+            return;
+
+        Directory.CreateDirectory(working);
+
+        var marker = Path.Combine(working, "Steam-Optimizer.ps1");
+        var hubRun = Path.Combine(working, "OptiHub-Steam-Run.ps1");
+        var bundledVersionPath = Path.Combine(bundled, "VERSION");
+        var workingVersionPath = Path.Combine(working, "VERSION");
+        var bundledVersion = File.Exists(bundledVersionPath)
+            ? File.ReadAllText(bundledVersionPath).Trim()
+            : "0";
+        var workingVersion = File.Exists(workingVersionPath)
+            ? File.ReadAllText(workingVersionPath).Trim()
+            : "";
+
+        if (_steamSyncDone &&
+            File.Exists(marker) &&
+            File.Exists(hubRun) &&
+            string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))
+            return;
+
+        var broken =
+            !File.Exists(marker) ||
+            !File.Exists(hubRun) ||
+            !File.Exists(Path.Combine(working, "OptiHub-Steam-Detect.ps1")) ||
+            IsVersionNewer(bundledVersion, workingVersion);
+
+        if (broken || IsVersionNewer(bundledVersion, workingVersion))
+            CopyDirectory(bundled, working);
+        else
+        {
+            foreach (var name in new[]
+                     {
+                         "Steam-Optimizer.ps1",
+                         "OptiHub-Steam-Run.ps1",
+                         "OptiHub-Steam-Detect.ps1",
+                         "OptiHub-Steam-Repair.ps1",
+                         "VERSION"
+                     })
+            {
+                var src = Path.Combine(bundled, name);
+                var dst = Path.Combine(working, name);
+                if (File.Exists(src))
+                    File.Copy(src, dst, overwrite: true);
+            }
+        }
+
+        _steamSyncDone = true;
+    }
+
     private void EnsureDiscordScriptsSynced(string working)
     {
         var bundled = PathHelper.DiscordScriptsDir;
@@ -80,8 +156,7 @@ public sealed class ScriptBundleService
             ? File.ReadAllText(workingVersionPath).Trim()
             : string.Empty;
 
-        // Skip filesystem work when this process already synced the same versions.
-        if (_syncDone &&
+        if (_discordSyncDone &&
             string.Equals(_lastSyncedBundledVersion, bundledVersion, StringComparison.Ordinal) &&
             string.Equals(_lastSyncedWorkingVersion, workingVersion, StringComparison.Ordinal) &&
             File.Exists(Path.Combine(working, "Disc-Optimizer.ps1")) &&
@@ -92,43 +167,37 @@ public sealed class ScriptBundleService
 
         var marker = Path.Combine(working, "Disc-Optimizer.ps1");
         var hubRun = Path.Combine(working, "OptiHub-Discord-Run.ps1");
-        var desktopAsar = Path.Combine(working, "kit", "tools", "desktop.asar");
         var repairScript = Path.Combine(working, "OptiHub-Discord-Repair.ps1");
         var repairText = File.Exists(repairScript) ? File.ReadAllText(repairScript) : string.Empty;
-        // Corrupted Unicode punctuation (mojibake em-dashes) breaks PowerShell parsing.
-        // Fixed kit ships an ASCII-only repair script with this marker comment.
         var repairBroken =
             !File.Exists(repairScript) ||
             !repairText.Contains("ASCII-only source", StringComparison.Ordinal) ||
             !repairText.Contains("Write-HubProgress", StringComparison.Ordinal) ||
             repairText.Any(c => c > 127);
 
-        // Universal kit: full Equicord manifests required so stock Discord PCs get every plugin.
         var profilesDir = Path.Combine(working, "kit", "profiles");
         var eqManifest = Path.Combine(profilesDir, "equicordplugins.json");
         var vcManifest = Path.Combine(profilesDir, "vencordplugins.json");
         var overrides = Path.Combine(profilesDir, "equicord-overrides.json");
-        var libFunctions = Path.Combine(working, "kit", "lib", "Functions.ps1");
+        var libLogging = Path.Combine(working, "kit", "lib", "10-Logging.ps1");
         var manifestsBroken =
             !File.Exists(eqManifest) ||
             !File.Exists(vcManifest) ||
             !File.Exists(overrides) ||
-            !File.Exists(libFunctions) ||
+            !File.Exists(libLogging) ||
             new FileInfo(eqManifest).Length < 10_000;
 
         var workingBroken =
             !File.Exists(marker) ||
             !File.Exists(hubRun) ||
-            !File.Exists(desktopAsar) ||
             repairBroken ||
             manifestsBroken ||
             !File.ReadAllText(marker).Contains("Install-EquicordDirect", StringComparison.Ordinal) ||
             !File.ReadAllText(marker).Contains("Write-DiscordResourceBytes", StringComparison.Ordinal);
 
-        // Never overwrite a newer GitHub-updated kit with an older app-bundled kit.
         if (IsVersionNewer(workingVersion, bundledVersion) && !workingBroken)
         {
-            RememberSync(bundledVersion, workingVersion);
+            RememberDiscordSync(bundledVersion, workingVersion);
             return;
         }
 
@@ -142,11 +211,10 @@ public sealed class ScriptBundleService
             workingVersion = File.Exists(workingVersionPath)
                 ? File.ReadAllText(workingVersionPath).Trim()
                 : bundledVersion;
-            RememberSync(bundledVersion, workingVersion);
+            RememberDiscordSync(bundledVersion, workingVersion);
             return;
         }
 
-        // Same version: refresh wrapper scripts from the app bundle.
         foreach (var name in new[]
                  {
                      "OptiHub-Discord-Run.ps1",
@@ -162,14 +230,20 @@ public sealed class ScriptBundleService
                 File.Copy(src, dst, overwrite: true);
         }
 
-        RememberSync(bundledVersion, workingVersion);
+        // Always refresh modular lib when present in bundle.
+        var libSrc = Path.Combine(bundled, "kit", "lib");
+        var libDst = Path.Combine(working, "kit", "lib");
+        if (Directory.Exists(libSrc))
+            CopyDirectory(libSrc, libDst);
+
+        RememberDiscordSync(bundledVersion, workingVersion);
     }
 
-    private void RememberSync(string bundledVersion, string workingVersion)
+    private void RememberDiscordSync(string bundledVersion, string workingVersion)
     {
         _lastSyncedBundledVersion = bundledVersion;
         _lastSyncedWorkingVersion = workingVersion;
-        _syncDone = true;
+        _discordSyncDone = true;
     }
 
     public void ReplaceDiscordScriptsFrom(string sourceDir)
@@ -179,10 +253,9 @@ public sealed class ScriptBundleService
             var working = Path.Combine(PathHelper.WorkingScriptsDir, "Discord");
             Directory.CreateDirectory(working);
             CopyDirectory(sourceDir, working);
-            // Do not call EnsureDiscordScriptsSynced here — that can downgrade a newer kit.
-            _cachedRoot = working;
+            _cachedDiscordRoot = working;
             _cachedBundledVersion = null;
-            _syncDone = false;
+            _discordSyncDone = false;
             _lastSyncedBundledVersion = null;
             _lastSyncedWorkingVersion = null;
         }

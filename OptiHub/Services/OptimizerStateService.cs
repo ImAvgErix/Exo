@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OptiHub.Helpers;
 using OptiHub.Models;
 
 namespace OptiHub.Services;
@@ -245,5 +246,169 @@ public sealed class OptimizerStateService
                 : "Some pieces are missing. Run to finish setup and unlock the savings below.",
             Features = features
         };
+    }
+
+    public async Task<OptimizerStateInfo> DetectSteamAsync(
+        CancellationToken ct = default,
+        bool fastOnly = false)
+    {
+        var heuristic = DetectSteamHeuristic();
+        if (fastOnly)
+            return heuristic;
+
+        var detectScript = _scripts.SteamDetectScript;
+        if (!File.Exists(detectScript))
+            return heuristic;
+
+        try
+        {
+            var result = await _runner.RunAsync(
+                detectScript,
+                arguments: Array.Empty<string>(),
+                elevate: false,
+                progress: null,
+                cancellationToken: ct,
+                workingDirectory: _scripts.GetSteamRoot());
+
+            if (!result.Success && string.IsNullOrWhiteSpace(result.FullOutput))
+                return heuristic;
+
+            var jsonLine = result.FullOutput
+                .Split('\n')
+                .Select(l => l.TrimEnd('\r').Trim())
+                .LastOrDefault(l => l.StartsWith('{') && l.Contains("isApplied", StringComparison.OrdinalIgnoreCase));
+
+            if (jsonLine is null)
+                return heuristic;
+
+            using var doc = JsonDocument.Parse(jsonLine);
+            var root = doc.RootElement;
+            var applied = root.TryGetProperty("isApplied", out var a) && a.GetBoolean();
+            var status = root.TryGetProperty("statusText", out var s) ? s.GetString() ?? heuristic.StatusText : heuristic.StatusText;
+            var detail = root.TryGetProperty("detail", out var d) ? d.GetString() ?? string.Empty : string.Empty;
+            var features = ParseFeatures(root);
+            if (features.Count == 0)
+                features = heuristic.Features.ToList();
+
+            return new OptimizerStateInfo
+            {
+                IsApplied = applied,
+                StatusText = status,
+                Detail = detail,
+                Features = features
+            };
+        }
+        catch
+        {
+            return heuristic;
+        }
+    }
+
+    private OptimizerStateInfo DetectSteamHeuristic()
+    {
+        var features = new List<OptimizerFeatureInfo>();
+        var steam = FindSteamPath();
+        var statePath = Path.Combine(PathHelper.AppDataDir, "steam-optimizer.json");
+        var hasMarker = File.Exists(statePath);
+
+        if (steam is null)
+        {
+            return new OptimizerStateInfo
+            {
+                IsApplied = false,
+                StatusText = "Steam not installed",
+                Detail = "Install Steam, open it once, then return to OptiHub.",
+                Features = new[]
+                {
+                    MakeFeature("Steam install", "steam.exe was not found in the usual locations.", false)
+                }
+            };
+        }
+
+        features.Add(MakeFeature("Steam install", steam, true));
+
+        var startupOk = true;
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Run");
+            if (key is not null)
+            {
+                foreach (var name in key.GetValueNames())
+                {
+                    var val = key.GetValue(name)?.ToString() ?? "";
+                    if (val.Contains("steam.exe", StringComparison.OrdinalIgnoreCase))
+                    {
+                        startupOk = false;
+                        break;
+                    }
+                }
+            }
+        }
+        catch { /* ignore */ }
+
+        if (hasMarker)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(statePath));
+                if (doc.RootElement.TryGetProperty("startupDisabled", out var sd) &&
+                    sd.ValueKind == JsonValueKind.True)
+                    startupOk = true;
+            }
+            catch { /* ignore */ }
+        }
+
+        features.Add(MakeFeature(
+            "Quieter Windows startup",
+            "Steam is not forced to launch when Windows starts.",
+            startupOk));
+        features.Add(MakeFeature(
+            "Lean client caches",
+            "HTML/log/temp caches cleaned safely; game installs kept.",
+            hasMarker));
+        features.Add(MakeFeature(
+            "Client config tuned",
+            "Download / web-client hints applied when Steam exposes them.",
+            hasMarker));
+
+        var applied = hasMarker && startupOk;
+        return new OptimizerStateInfo
+        {
+            IsApplied = applied,
+            StatusText = applied ? "Already optimized" : "Ready to optimize",
+            Detail = applied
+                ? "These savings are active. Reapply after big Steam updates."
+                : "Run to quiet startup, clear safe caches, and apply client hints.",
+            Features = features
+        };
+    }
+
+    private static string? FindSteamPath()
+    {
+        try
+        {
+            using var hkcu = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
+            var p = hkcu?.GetValue("SteamPath") as string;
+            if (!string.IsNullOrWhiteSpace(p) && File.Exists(Path.Combine(p, "steam.exe")))
+                return p.Replace('/', '\\');
+        }
+        catch { /* ignore */ }
+
+        try
+        {
+            using var hklm = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\Valve\Steam");
+            var p = hklm?.GetValue("InstallPath") as string;
+            if (!string.IsNullOrWhiteSpace(p) && File.Exists(Path.Combine(p, "steam.exe")))
+                return p;
+        }
+        catch { /* ignore */ }
+
+        var pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        var classic = Path.Combine(pf86, "Steam");
+        if (File.Exists(Path.Combine(classic, "steam.exe")))
+            return classic;
+
+        return null;
     }
 }
