@@ -18,7 +18,7 @@
                     Spacing="24">
 
             <StackPanel Spacing="8" Margin="12,0,12,2">
-                <TextBlock Text="A calm place for performance, privacy, and gaming tweaks."
+                <TextBlock Text="The central hub for optimizing."
                            Style="{StaticResource OptiTagline}"
                            HorizontalAlignment="Stretch" />
                 <TextBlock Text="Pick a card to begin."

@@ -106,7 +106,7 @@
                                    FontSize="13"
                                    LineHeight="20"
                                    Foreground="{ThemeResource OptiSecondaryTextBrush}"
-                                   Text="OptiHub keeps Discord leaner and quieter. More optimizers are on the way."
+                                   Text="Discord optimizer hub. More apps coming soon."
                                    TextWrapping="WrapWholeWords" />
                         <TextBlock Style="{StaticResource OptiCaption}"
                                    FontSize="11"

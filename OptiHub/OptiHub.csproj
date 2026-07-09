@@ -24,8 +24,8 @@
     <AssemblyName>OptiHub</AssemblyName>
     <Product>OptiHub</Product>
     <Company>OptiHub</Company>
-    <Version>1.0.38</Version>
-    <Description>Cozy hub for system optimizers - performance, privacy, and gaming.</Description>
+    <Version>1.0.39</Version>
+    <Description>The central hub for optimizing - performance, privacy, and gaming.</Description>
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
 
