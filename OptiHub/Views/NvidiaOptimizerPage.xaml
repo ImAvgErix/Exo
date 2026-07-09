@@ -39,10 +39,10 @@
                                Style="{StaticResource OptiBody}"
                                FontSize="13"
                                LineHeight="19" />
-                    <ToggleSwitch Header="G-SYNC profile (adaptive sync monitors)"
+                    <ToggleSwitch Header="GSync"
                                   IsOn="{x:Bind ViewModel.UseGsync, Mode=TwoWay}"
-                                  OnContent="G-SYNC on"
-                                  OffContent="Max FPS / ULL"
+                                  OnContent="GSync"
+                                  OffContent="No Gsync"
                                   Margin="0,10,0,0" />
                 </StackPanel>
 
