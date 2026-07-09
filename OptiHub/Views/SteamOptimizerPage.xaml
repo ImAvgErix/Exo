@@ -83,7 +83,7 @@
                                                LineHeight="18"
                                                Foreground="{ThemeResource OptiMutedTextBrush}"
                                                TextWrapping="WrapWholeWords"
-                                               MaxLines="2"
+                                               MaxLines="4"
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                             </Grid>

@@ -31,7 +31,8 @@ public sealed partial class MainWindow : Window
         App.MainAppWindow = this;
 
         // Fixed window — roomy enough for home cards + optimizer feature lists
-        AppWindow.Resize(new SizeInt32(1020, 740));
+        // Taller window so optimizer feature lists are not clipped
+        AppWindow.Resize(new SizeInt32(1080, 860));
         ApplyFixedWindowChrome();
         TryCenterOnScreen();
 
