@@ -2,20 +2,23 @@
 // No Control Panel mouse automation for color/scaling.
 //
 // Applies per active display:
+//   - Best native resolution + highest refresh rate (Windows EnumDisplaySettings)
 //   - Color policy User (NVIDIA color settings)
 //   - RGB + Full (VESA) + highest supported BPC
 //   - HDMI info-frame RGB quantization Full (fixes "Limited" on HDMI)
 //   - GPU no-scaling path where the driver allows it
 //   - NVTweak: PerformScalingOn=GPU, ScalingOverride=ON, No-scaling mode
-//   - Video color/image sources = NVIDIA (registry; CPL video page may still need Apply once)
+//   - Video color/image sources = NVIDIA
 //
 // Usage: OptiHub.NvDisplay.exe [--apply|--status]
 
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Win32;
 using NvAPIWrapper;
 using NvAPIWrapper.Display;
 using NvAPIWrapper.GPU;
+using NvAPIWrapper.Native;
 using NvAPIWrapper.Native.Display;
 using NvAPIWrapper.Native.Display.Structures;
 using NvAPIWrapper.Native.Exceptions;
@@ -64,8 +67,17 @@ static class Program
 
             Console.WriteLine($"[NVAPI] Displays: {devices.Count}");
             PrintPathScaling("BEFORE");
+            PrintWindowsModes("AVAILABLE");
 
             var results = new List<object>();
+            Dictionary<string, BestMode>? bestModes = null;
+
+            if (apply)
+            {
+                // 0) Native resolution + highest refresh for every GDI display
+                bestModes = ApplyBestNativeModes();
+            }
+
             foreach (var dev in devices)
             {
                 ColorData before;
@@ -116,16 +128,17 @@ static class Program
 
             if (apply)
             {
-                // 3) Path scaling — GPU no-scaling where driver allows
-                ApplyGpuNoScaling();
+                // 3) Path scaling + push native res / max Hz into NVAPI path where possible
+                ApplyGpuNoScaling(bestModes);
 
-                // 4) NVTweak registry — what CPL shows: GPU + No scaling + Override ON + Full
+                // 4) NVTweak registry — GPU + No scaling + Override ON + Full
                 ApplyNvtweakRegistry();
 
                 // 5) Video color/image = NVIDIA (registry sources)
                 ApplyVideoNvidiaSources();
 
                 PrintPathScaling("AFTER");
+                PrintWindowsModes("CURRENT");
                 DumpNvtweakSummary();
             }
 
@@ -300,7 +313,150 @@ static class Program
         }
     }
 
-    static void ApplyGpuNoScaling()
+    sealed class BestMode
+    {
+        public int Width;
+        public int Height;
+        public int Hz;
+        public int Bpp = 32;
+        public override string ToString() => $"{Width}x{Height}@{Hz}";
+    }
+
+    static Dictionary<string, BestMode> EnumerateBestModes()
+    {
+        var map = new Dictionary<string, BestMode>(StringComparer.OrdinalIgnoreCase);
+        // Enumerate \\.\DISPLAYn devices via EnumDisplayDevices
+        for (uint i = 0; ; i++)
+        {
+            var dd = new Win32.DISPLAY_DEVICE { cb = Marshal.SizeOf<Win32.DISPLAY_DEVICE>() };
+            if (!Win32.EnumDisplayDevices(null, i, ref dd, 0)) break;
+            if ((dd.StateFlags & Win32.DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) == 0) continue;
+            var device = dd.DeviceName; // \\.\DISPLAY1
+            var best = FindBestModeForDevice(device);
+            if (best != null)
+            {
+                map[device] = best;
+                Console.WriteLine($"[MODE] {device}: best native candidate {best}");
+            }
+        }
+        return map;
+    }
+
+    static BestMode? FindBestModeForDevice(string device)
+    {
+        var modes = new List<BestMode>();
+        var dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+        for (int i = 0; Win32.EnumDisplaySettings(device, i, ref dm); i++)
+        {
+            if (dm.dmPelsWidth < 640 || dm.dmPelsHeight < 480) continue;
+            if (dm.dmDisplayFrequency < 30 || dm.dmDisplayFrequency > 1000) continue;
+            modes.Add(new BestMode
+            {
+                Width = dm.dmPelsWidth,
+                Height = dm.dmPelsHeight,
+                Hz = dm.dmDisplayFrequency,
+                Bpp = dm.dmBitsPerPel > 0 ? dm.dmBitsPerPel : 32
+            });
+            dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+        }
+        if (modes.Count == 0) return null;
+
+        // "Native" = largest pixel area advertised; at that res, pick highest refresh.
+        var maxArea = modes.Max(m => m.Width * m.Height);
+        var atNative = modes.Where(m => m.Width * m.Height == maxArea).ToList();
+        return atNative.OrderByDescending(m => m.Hz).ThenByDescending(m => m.Bpp).First();
+    }
+
+    static Dictionary<string, BestMode> ApplyBestNativeModes()
+    {
+        Console.WriteLine("[MODE] Applying best native resolution + highest refresh per monitor...");
+        var best = EnumerateBestModes();
+        if (best.Count == 0)
+        {
+            Console.WriteLine("[MODE] No modes enumerated");
+            return best;
+        }
+
+        // Stage each display with CDS_NORESET|CDS_UPDATEREGISTRY, then one global apply.
+        foreach (var kv in best)
+        {
+            var device = kv.Key;
+            var mode = kv.Value;
+            var dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+            if (!Win32.EnumDisplaySettings(device, Win32.ENUM_CURRENT_SETTINGS, ref dm))
+            {
+                Console.WriteLine($"[MODE] {device}: could not read current mode");
+                continue;
+            }
+
+            var cur = $"{dm.dmPelsWidth}x{dm.dmPelsHeight}@{dm.dmDisplayFrequency}";
+            if (dm.dmPelsWidth == mode.Width && dm.dmPelsHeight == mode.Height && dm.dmDisplayFrequency == mode.Hz)
+            {
+                Console.WriteLine($"[MODE] {device}: already {mode}");
+                continue;
+            }
+
+            dm.dmPelsWidth = mode.Width;
+            dm.dmPelsHeight = mode.Height;
+            dm.dmDisplayFrequency = mode.Hz;
+            dm.dmBitsPerPel = mode.Bpp > 0 ? mode.Bpp : 32;
+            dm.dmFields = Win32.DM_PELSWIDTH | Win32.DM_PELSHEIGHT | Win32.DM_DISPLAYFREQUENCY | Win32.DM_BITSPERPEL;
+
+            var flags = Win32.CDS_UPDATEREGISTRY | Win32.CDS_NORESET;
+            var rc = Win32.ChangeDisplaySettingsEx(device, ref dm, IntPtr.Zero, flags, IntPtr.Zero);
+            Console.WriteLine($"[MODE] {device}: stage {cur} -> {mode} (cds={rc})");
+        }
+
+        // Apply staged multi-mon changes
+        var applyRc = Win32.ChangeDisplaySettingsEx(null, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
+        Console.WriteLine($"[MODE] Commit modes result={applyRc} (0=SUCCESSFUL)");
+        // Brief settle — path handles invalidate after mode-set
+        Thread.Sleep(800);
+        return best;
+    }
+
+    static void PrintWindowsModes(string label)
+    {
+        try
+        {
+            var best = EnumerateBestModes();
+            foreach (var kv in best)
+            {
+                var dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+                if (Win32.EnumDisplaySettings(kv.Key, Win32.ENUM_CURRENT_SETTINGS, ref dm))
+                {
+                    Console.WriteLine(
+                        $"[MODE] {label} {kv.Key}: current {dm.dmPelsWidth}x{dm.dmPelsHeight}@{dm.dmDisplayFrequency} | best {kv.Value}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MODE] {label} failed: {ex.Message}");
+        }
+    }
+
+    static Dictionary<uint, string> MapDisplayIdToGdiName()
+    {
+        var map = new Dictionary<uint, string>();
+        try
+        {
+            foreach (var h in DisplayApi.EnumNvidiaDisplayHandle())
+            {
+                try
+                {
+                    var name = DisplayApi.GetAssociatedNvidiaDisplayName(h);
+                    var id = DisplayApi.GetDisplayIdByDisplayName(name);
+                    map[id] = name;
+                }
+                catch { }
+            }
+        }
+        catch { }
+        return map;
+    }
+
+    static void ApplyGpuNoScaling(Dictionary<string, BestMode>? bestModes)
     {
         PathInfo[] paths;
         try { paths = PathInfo.GetDisplaysConfig(); }
@@ -316,21 +472,35 @@ static class Program
             return;
         }
 
+        var idToGdi = MapDisplayIdToGdiName();
+
         var rebuilt = new List<PathInfo>();
         foreach (var path in paths)
         {
             var targets = new List<PathTargetInfo>();
+            BestMode? pathBest = null;
             foreach (var t in path.TargetsInfo)
             {
+                uint hzMHz = t.RefreshRateInMillihertz;
+                if (bestModes != null &&
+                    idToGdi.TryGetValue(t.DisplayDevice.DisplayId, out var gdi) &&
+                    bestModes.TryGetValue(gdi, out var bm))
+                {
+                    pathBest = bm;
+                    hzMHz = (uint)(bm.Hz * 1000);
+                    Console.WriteLine(
+                        $"[NVAPI] Path target #{t.DisplayDevice.DisplayId} ({gdi}): use mode {bm} ({hzMHz} mHz)");
+                }
+
                 var nt = new PathTargetInfo(t.DisplayDevice)
                 {
                     // Prefer GPU no-scaling. Some HDMI sinks refuse this and stay GPUScanOutToClosest (still GPU).
                     Scaling = Scaling.GPUScanOutToNative,
                     IsPreferredUnscaledTarget = true,
                     Rotation = t.Rotation,
-                    RefreshRateInMillihertz = t.RefreshRateInMillihertz,
+                    RefreshRateInMillihertz = hzMHz,
                     TimingOverride = t.TimingOverride,
-                    IsInterlaced = t.IsInterlaced,
+                    IsInterlaced = false,
                     TVFormat = t.TVFormat,
                     TVConnectorType = t.TVConnectorType,
                     IsClonePrimary = t.IsClonePrimary,
@@ -338,11 +508,18 @@ static class Program
                     DisableVirtualModeSupport = t.DisableVirtualModeSupport
                 };
                 Console.WriteLine(
-                    $"[NVAPI] Path target #{t.DisplayDevice.DisplayId}: {t.Scaling} -> GPUScanOutToNative (request)");
+                    $"[NVAPI] Path target #{t.DisplayDevice.DisplayId}: {t.Scaling} -> GPUScanOutToNative, refresh={hzMHz}mHz");
                 targets.Add(nt);
             }
 
-            var np = new PathInfo(path.Resolution, path.ColorFormat, targets.ToArray())
+            var res = path.Resolution;
+            if (pathBest != null)
+            {
+                try { res = new Resolution(pathBest.Width, pathBest.Height, 32); }
+                catch { res = path.Resolution; }
+            }
+
+            var np = new PathInfo(res, path.ColorFormat, targets.ToArray())
             {
                 SourceId = path.SourceId,
                 IsGDIPrimary = path.IsGDIPrimary,
@@ -529,4 +706,74 @@ static class Program
         depth = c.ColorDepth?.ToString(),
         policy = c.SelectionPolicy?.ToString()
     };
+
+    static class Win32
+    {
+        public const int ENUM_CURRENT_SETTINGS = -1;
+        public const int DM_BITSPERPEL = 0x00040000;
+        public const int DM_PELSWIDTH = 0x00080000;
+        public const int DM_PELSHEIGHT = 0x00100000;
+        public const int DM_DISPLAYFREQUENCY = 0x00400000;
+        public const uint CDS_UPDATEREGISTRY = 0x00000001;
+        public const uint CDS_NORESET = 0x10000000;
+        public const uint DISPLAY_DEVICE_ATTACHED_TO_DESKTOP = 0x00000001;
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+        public struct DEVMODE
+        {
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+            public short dmSpecVersion;
+            public short dmDriverVersion;
+            public short dmSize;
+            public short dmDriverExtra;
+            public int dmFields;
+            public int dmPositionX;
+            public int dmPositionY;
+            public int dmDisplayOrientation;
+            public int dmDisplayFixedOutput;
+            public short dmColor;
+            public short dmDuplex;
+            public short dmYResolution;
+            public short dmTTOption;
+            public short dmCollate;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+            public short dmLogPixels;
+            public int dmBitsPerPel;
+            public int dmPelsWidth;
+            public int dmPelsHeight;
+            public int dmDisplayFlags;
+            public int dmDisplayFrequency;
+            public int dmICMMethod;
+            public int dmICMIntent;
+            public int dmMediaType;
+            public int dmDitherType;
+            public int dmReserved1;
+            public int dmReserved2;
+            public int dmPanningWidth;
+            public int dmPanningHeight;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+        public struct DISPLAY_DEVICE
+        {
+            public int cb;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceString;
+            public uint StateFlags;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceID;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey;
+        }
+
+        [DllImport("user32.dll", CharSet = CharSet.Ansi)]
+        public static extern bool EnumDisplaySettings(string? lpszDeviceName, int iModeNum, ref DEVMODE lpDevMode);
+
+        [DllImport("user32.dll", CharSet = CharSet.Ansi)]
+        public static extern bool EnumDisplayDevices(string? lpDevice, uint iDevNum, ref DISPLAY_DEVICE lpDisplayDevice, uint dwFlags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Ansi)]
+        public static extern int ChangeDisplaySettingsEx(string? lpszDeviceName, ref DEVMODE lpDevMode, IntPtr hwnd, uint dwflags, IntPtr lParam);
+
+        [DllImport("user32.dll", CharSet = CharSet.Ansi)]
+        public static extern int ChangeDisplaySettingsEx(string? lpszDeviceName, IntPtr lpDevMode, IntPtr hwnd, uint dwflags, IntPtr lParam);
+    }
 }

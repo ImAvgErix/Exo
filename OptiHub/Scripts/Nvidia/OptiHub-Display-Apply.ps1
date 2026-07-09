@@ -1,6 +1,7 @@
 # OptiHub — Display performance apply (NO Control Panel mouse automation).
 #
 # Applies for EVERY connected NVIDIA display (multi-mon):
+#   Best native resolution + highest refresh rate (Windows modes)
 #   GPU scaling, No scaling mode, Override games ON
 #   RGB + Full dynamic range + NVIDIA color policy
 #   Video color/image sources = NVIDIA
