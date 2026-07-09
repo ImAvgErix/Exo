@@ -42,7 +42,7 @@ if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.15'
+$Script:DiscOptVersion = '1.1.16'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -367,6 +367,8 @@ $RuntimeModules = @('discord_notifications')
 # whole app with a black overlay (tooltips still show, everything else hidden).
 $EnabledTheme = 'amoled-cord.theme.css'
 $ForceDisabledPlugins = @(
+    # StreamerModeOn forces Discord Streamer Mode while live even if the user turned it off.
+    'StreamerModeOn',
     'BlockKrisp', 'AltKrispSwitch', 'RelationshipNotifier',
     'Dearrow', 'ImplicitRelationships', 'OpenInApp', 'SplitLargeMessages', 'EquicordToolbox',
     'IdleAutoRestart', 'FixSpotifyEmbeds', 'ReplaceGoogleSearch', 'SupportHelper',
@@ -375,7 +377,8 @@ $ForceDisabledPlugins = @(
     'StartupTimings', 'NewPluginsManager', 'WebContextMenus', 'WebKeybinds', 'WebScreenShareFixes',
     'MessageNotifier', 'KeywordNotify', 'ReplyPingControl', 'BypassStatus', 'PingNotifications',
     'NotificationTitle', 'ToastNotifications', 'VoiceJoinMessages', 'VcNarrator', 'VcNarratorCustom',
-    'XSOverlay', 'VoiceChannelLog', 'VoiceStats', 'Streaks', 'FriendshipRanks'
+    'XSOverlay', 'VoiceChannelLog', 'VoiceStats', 'Streaks', 'FriendshipRanks',
+    'DisableCameras'
 )
 # Pure caches only - never touches web app storage, service workers, or session data.
 $SafeCacheTargets = @(
@@ -2072,8 +2075,13 @@ function Apply-DiscordProfile([string]$DestPath) {
         } catch {}
     }
 
-    if ($merged.ContainsKey('DANGEROUS_ENABLE_DEVTOOLS_ONLY_ENABLE_IF_YOU_KNOW_WHAT_YOURE_DOING')) {
-        $merged.Remove('DANGEROUS_ENABLE_DEVTOOLS_ONLY_ENABLE_IF_YOU_KNOW_WHAT_YOURE_DOING')
+    # Strip noisy/debug keys Discord or older kits may leave behind.
+    foreach ($drop in @(
+        'DANGEROUS_ENABLE_DEVTOOLS_ONLY_ENABLE_IF_YOU_KNOW_WHAT_YOURE_DOING',
+        'devTools',
+        'OPENASAR_HARDCODED'
+    )) {
+        if ($merged.ContainsKey($drop)) { $merged.Remove($drop) }
     }
 
     # If hardware acceleration was turned off on this PC (GPU-driver black
@@ -2097,26 +2105,46 @@ function Apply-DiscordProfile([string]$DestPath) {
         Write-LogLine 'OK' 'Hardware acceleration kept OFF (was disabled on this PC)'
     }
 
+    # Always re-stamp chromium + OpenASAR from kit so Discord updates cannot wipe them to {}.
     if ($kit.chromiumSwitches) {
-        # Replace (not merge) so stale/risky switches from older runs are removed.
         $merged.chromiumSwitches = ConvertTo-HashtableDeep $kit.chromiumSwitches
+    } else {
+        $merged.chromiumSwitches = @{
+            'disable-breakpad'          = 1
+            'disable-crash-reporter'    = 1
+            'disable-domain-reliability' = 1
+            'disable-logging'           = 1
+        }
     }
     if ($kit.openasar) {
         $merged.openasar = ConvertTo-HashtableDeep $kit.openasar
-        $merged.openasar.setup = $true
-        # quickstart and domOptimizer are experimental OpenASAR features that can
-        # prevent Discord from booting on some machines - keep them off.
-        $merged.openasar.quickstart = $false
-        $merged.openasar.domOptimizer = $false
-        $merged.openasar.themeSync = $false
-        $merged.openasar.noTrack = $true
-        $merged.openasar.noTyping = $true
+    } else {
+        $merged.openasar = @{}
+    }
+    $merged.openasar.setup = $true
+    $merged.openasar.cmdPreset = 'perf'
+    $merged.openasar.quickstart = $false
+    $merged.openasar.domOptimizer = $false
+    $merged.openasar.themeSync = $false
+    $merged.openasar.autoupdate = $false
+    $merged.openasar.noTrack = $true
+    $merged.openasar.noTyping = $true
+    $merged.openasar.disableMediaKeys = $true
+    if (-not $merged.openasar.css) {
+        $merged.openasar.css = 'body { --background-primary: #000000; --background-secondary: #000000; }'
     }
 
+    # Hard overrides every run (Discord sometimes rewrites these mid-session).
     $merged['DESKTOP_TTI_EARLY_UPDATE_CHECK'] = $false
     $merged['DESKTOP_TTI_DNSTCP_WARMUP'] = $false
+    $merged['DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR'] = $true
     $merged['audioSubsystem'] = 'standard'
+    $merged['useLegacyAudioDevice'] = $false
+    $merged['asyncVideoInputDeviceInit'] = $false
+    $merged['debugLogging'] = $false
     $merged['BACKGROUND_COLOR'] = '#000000'
+    $merged['OPEN_ON_STARTUP'] = $false
+
     # Never force host-update skip until modules are healthy - SKIP_HOST_UPDATE=true
     # with a broken installer.db freezes Discord on "Starting...".
     $activeForSkip = Get-ActiveApp
@@ -2125,17 +2153,12 @@ function Apply-DiscordProfile([string]$DestPath) {
         Write-LogLine 'OK' 'SKIP_HOST_UPDATE left false until modules are healthy'
     }
 
-    if ($merged.audioSubsystem -and $merged.audioSubsystem -ne 'standard') {
-        Write-LogLine 'WARN' "Reset audioSubsystem $($merged.audioSubsystem) -> standard"
-        $merged.audioSubsystem = 'standard'
-    }
-
     $dir = Split-Path $DestPath -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     Unlock-DiscordSettings $DestPath
 
     Write-JsonFile $DestPath $merged 20
-    Write-Ok 'Boot/optimizer flags applied (audioSubsystem + TTI flags from profile)'
+    Write-Ok 'Boot/optimizer flags applied (OpenASAR perf + chromium + standard audio)'
 }
 
 function Invoke-DiscordLaunch {
@@ -2357,6 +2380,17 @@ function Apply-EquicordProfile {
         if (-not ($settings.plugins.Keys -contains $name)) { $settings.plugins[$name] = @{} }
         $settings.plugins[$name].enabled = $false
     }
+
+    # Belt-and-suspenders: never leave StreamerModeOn active after a reapply.
+    if (-not ($settings.plugins.Keys -contains 'StreamerModeOn')) { $settings.plugins['StreamerModeOn'] = @{} }
+    $settings.plugins['StreamerModeOn'].enabled = $false
+
+    if (-not ($settings.plugins.Keys -contains 'NotificationVolume')) { $settings.plugins['NotificationVolume'] = @{} }
+    $settings.plugins['NotificationVolume'].enabled = $true
+    $settings.plugins['NotificationVolume'].notificationVolume = 25
+
+    if ($settings.Keys -contains 'eagerPatches') { $settings.eagerPatches = $true }
+    else { $settings.eagerPatches = $true }
 
     Write-JsonFile $destPath $settings 30
 

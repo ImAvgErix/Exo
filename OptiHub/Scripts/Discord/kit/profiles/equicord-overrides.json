@@ -3,7 +3,7 @@
     "useQuickCss": false,
     "autoUpdate": true,
     "autoUpdateNotification": false,
-    "eagerPatches": false,
+    "eagerPatches": true,
     "enableOnlineThemes": false,
     "enableReactDevtools": false,
     "cloud": {
@@ -52,7 +52,7 @@
             "randomize": true
         },
         "NoRPC": { "enabled": true },
-        "DisableCameras": { "enabled": true },
+        "DisableCameras": { "enabled": false },
         "ConsoleJanitor": {
             "enabled": true,
             "disableSpotifyLogger": true,
@@ -101,7 +101,7 @@
         "NoSystemBadge": { "enabled": true },
         "NoOnboardingDelay": { "enabled": true },
         "StopAutoUnread": { "enabled": true },
-        "StreamerModeOn": { "enabled": true },
+        "StreamerModeOn": { "enabled": false },
         "OnePingPerDM": {
             "enabled": true,
             "allowMentions": false,
@@ -118,7 +118,7 @@
         },
         "NotificationVolume": {
             "enabled": true,
-            "notificationVolume": 0
+            "notificationVolume": 25
         },
         "SilentTyping": {
             "enabled": true,
