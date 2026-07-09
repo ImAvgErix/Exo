@@ -100,13 +100,23 @@
 
                     <Border Height="1" Background="{ThemeResource OptiCardStrokeBrush}" Opacity="0.4" />
 
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="SUPPORT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                        <Button Style="{StaticResource OptiPrimaryButton}"
+                                Content="Open logs folder"
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
+                    </StackPanel>
+
+                    <Border Height="1" Background="{ThemeResource OptiCardStrokeBrush}" Opacity="0.4" />
+
                     <StackPanel Spacing="8">
                         <TextBlock Text="ABOUT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
                         <TextBlock Style="{StaticResource OptiBody}"
                                    FontSize="13"
                                    LineHeight="20"
                                    Foreground="{ThemeResource OptiSecondaryTextBrush}"
-                                   Text="Discord optimizer hub. More apps coming soon."
+                                   Text="One hub. Max performance. Works on stock Discord on any PC."
                                    TextWrapping="WrapWholeWords" />
                         <TextBlock Style="{StaticResource OptiCaption}"
                                    FontSize="11"

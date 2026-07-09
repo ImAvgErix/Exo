@@ -1,0 +1,2535 @@
+# Auto-split from Disc-Optimizer.ps1 - functions only (dot-sourced).
+# Requires caller to set kit paths and switches ($KitDir, $Quick, ...).
+
+function Write-Banner {
+    $psLabel = "PowerShell $($PSVersionTable.PSVersion)"
+    if ($PSVersionTable.PSEdition) { $psLabel += " ($($PSVersionTable.PSEdition))" }
+    Write-Host ''
+    Write-Host "  Disc Optimizer v$Script:DiscOptVersion" -ForegroundColor Magenta
+    Write-Host '  AMOLED | privacy | perf | cache trim | raw input' -ForegroundColor DarkGray
+    Write-Host "  $psLabel" -ForegroundColor Cyan
+    if ($env:DISCOPT_PS7 -eq '1') {
+        Write-Host '  (upgraded from Windows PowerShell 5.1)' -ForegroundColor DarkGray
+    }
+    if ($env:DISCOPT_ELEVATED -eq '1') {
+        Write-Host '  (running as Administrator)' -ForegroundColor DarkGray
+    }
+    Write-Host ''
+}
+
+function Invoke-KitMaintenance {
+    Prune-DiscOptimizerLogs -Keep 5
+
+    # Drop legacy multi-MB module/equicord caches from older kits (download on demand now).
+    foreach ($legacy in @(
+        (Join-Path $ToolsDir 'discord-modules'),
+        (Join-Path $ToolsDir 'desktop.asar'),
+        (Join-Path $ToolsDir 'equicord.asar'),
+        (Join-Path $ToolsDir 'DiscordSetup.exe'),
+        (Join-Path $ToolsDir 'DiscordSetup-x64.exe'),
+        (Join-Path $ToolsDir 'Equilotl.exe'),
+        (Join-Path $ToolsDir 'EquilotlCli.exe')
+    )) {
+        if (Test-Path -LiteralPath $legacy) {
+            Remove-Item -LiteralPath $legacy -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    # installer.db backups accumulate one per repair - keep only the 2 newest.
+    if ($DiscordRoot -and (Test-Path $DiscordRoot)) {
+        Get-ChildItem $DiscordRoot -Filter 'installer.db.bak-*' -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -Skip 2 |
+            ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+    }
+
+    if (Test-Path $DownloadDir) {
+        Get-ChildItem $DownloadDir -File -ErrorAction SilentlyContinue |
+            Where-Object { ((Get-Date) - $_.LastWriteTime).TotalDays -gt 7 } |
+            ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+function Prune-DiscOptimizerLogs([int]$Keep = 5) {
+    if (-not (Test-Path $LogDir)) { return }
+    Get-ChildItem $LogDir -Filter 'disc-optimizer-*.log' -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -Skip $Keep |
+        ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+}
+
+function Initialize-DiscOptimizerLog {
+    if (-not (Test-Path $LogDir)) {
+        New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+    }
+    Prune-DiscOptimizerLogs
+    $stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
+    $Script:LogPath = Join-Path $LogDir "disc-optimizer-$stamp.log"
+    $header = @(
+        'Disc Optimizer log',
+        "Started: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
+        "User: $env:USERNAME",
+        "Computer: $env:COMPUTERNAME",
+        "DiscOptVersion: $Script:DiscOptVersion",
+        "PowerShell: $($PSVersionTable.PSVersion)",
+        "Launch=$Launch SkipDebloat=$SkipDebloat ForceDebloat=$ForceDebloat SkipEquicord=$SkipEquicord SkipOpenAsar=$SkipOpenAsar SkipKernel=$SkipKernel NoLaunch=$NoLaunch VerifyOnly=$VerifyOnly SkipDiscordInstall=$SkipDiscordInstall FreshInstall=$FreshInstall Quick=$Quick SkipManifestSync=$SkipManifestSync SkipCacheClean=$SkipCacheClean",
+        "Kit: $Root",
+        "Discord: $DiscordRoot",
+        ('=' * 60),
+        ''
+    ) -join [Environment]::NewLine
+    Set-Content -Path $Script:LogPath -Value $header -Encoding UTF8
+}
+
+function Write-OptiHubLogMirror([string]$Line) {
+    if (-not $env:OPTIHUB_LOG) { return }
+    if ([string]::IsNullOrWhiteSpace($Line)) { return }
+    try {
+        $dir = Split-Path -Parent $env:OPTIHUB_LOG
+        if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $Line -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch { }
+}
+
+function Write-LogLine([string]$Level, [string]$Msg) {
+    if (-not $Script:LogPath) { return }
+    $line = "[$(Get-Date -Format 'HH:mm:ss')] [$Level] $Msg"
+    Add-Content -Path $Script:LogPath -Value $line -Encoding UTF8
+    # Mirror into OptiHub run log so elevated UI polling always has the trail
+    Write-OptiHubLogMirror $line
+}
+
+function Write-LogFailure($ErrorRecord) {
+    if (-not $Script:LogPath) { Initialize-DiscOptimizerLog }
+
+    $err = $ErrorRecord.Exception
+    $inv = $ErrorRecord.InvocationInfo
+    $hubLog = if ($env:OPTIHUB_LOG) { $env:OPTIHUB_LOG } else { '(none)' }
+    $lines = @(
+        '',
+        ('=' * 60),
+        "FAILED: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
+        "Message: $($err.Message)",
+        "Type: $($err.GetType().FullName)",
+        "ErrorId: $($ErrorRecord.FullyQualifiedErrorId)",
+        "Category: $($ErrorRecord.CategoryInfo)",
+        "Script: $($inv.ScriptName)",
+        "Line: $($inv.ScriptLineNumber)",
+        "Command: $($inv.Line.Trim())",
+        "Position: $($ErrorRecord.InvocationInfo.PositionMessage)",
+        "KitLog: $Script:LogPath",
+        "OptiHubLog: $hubLog",
+        "PSVersion: $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))",
+        "Elevated: $(([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))",
+        'Stack trace:',
+        $err.StackTrace
+    )
+    if ($err.InnerException) {
+        $lines += @(
+            '',
+            'Inner exception:',
+            "  Message: $($err.InnerException.Message)",
+            "  Type: $($err.InnerException.GetType().FullName)",
+            "  Stack: $($err.InnerException.StackTrace)"
+        )
+    }
+    $lines += @('', "Full log: $Script:LogPath", ('=' * 60), '')
+    $body = $lines -join [Environment]::NewLine
+
+    Add-Content -Path $Script:LogPath -Value $body -Encoding UTF8
+    Set-Content -Path (Join-Path $LogDir 'last-error.log') -Value $body -Encoding UTF8
+
+    # Always copy failure into OptiHub logs so we can find it without digging kit/
+    try {
+        $optiLogs = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub\logs'
+        if (-not (Test-Path -LiteralPath $optiLogs)) {
+            New-Item -ItemType Directory -Path $optiLogs -Force | Out-Null
+        }
+        Set-Content -LiteralPath (Join-Path $optiLogs 'last-discord-error.log') -Value $body -Encoding UTF8
+        if ($Script:LogPath -and (Test-Path -LiteralPath $Script:LogPath)) {
+            Copy-Item -LiteralPath $Script:LogPath -Destination (Join-Path $optiLogs 'last-discord-run.log') -Force
+        }
+    } catch { }
+
+    Write-OptiHubLogMirror ('[-] FAIL: ' + $err.Message)
+    Write-OptiHubLogMirror ("[-] See: $(Join-Path $LogDir 'last-error.log')")
+    if ($env:OPTIHUB_LOG) {
+        Write-OptiHubLogMirror ('[-] OptiHub log: ' + $env:OPTIHUB_LOG)
+    }
+    return $body
+}
+
+function Write-HubProgress([int]$Percent, [string]$Status) {
+    if ($env:OPTIHUB -ne '1') { return }
+    $p = [Math]::Max(0, [Math]::Min(100, $Percent))
+    $line = "OPTIHUB_PROGRESS:$p|$Status"
+    # Prefer OPTIHUB_LOG so progress never pollutes function return values
+    # (Write-Output inside Get-DiscordSetup made Start-Process -FilePath an Object[]).
+    if ($env:OPTIHUB_LOG) {
+        Write-OptiHubLogMirror $line
+    } else {
+        Write-Output $line
+    }
+}
+
+function Write-Step([string]$Msg) {
+    Write-Host "[*] $Msg" -ForegroundColor Cyan
+    Write-LogLine 'STEP' $Msg
+    if ($env:OPTIHUB -eq '1') {
+        if ($null -eq $Script:HubStepPct) { $Script:HubStepPct = 28 }
+        $Script:HubStepPct = [Math]::Min(94, [int]$Script:HubStepPct + 4)
+        Write-HubProgress $Script:HubStepPct $Msg
+    }
+}
+function Write-Ok([string]$Msg) {
+    Write-Host "[+] $Msg" -ForegroundColor Green
+    Write-LogLine 'OK' $Msg
+}
+function Write-Warn([string]$Msg) {
+    Write-Host "[!] $Msg" -ForegroundColor Yellow
+    Write-LogLine 'WARN' $Msg
+}
+function Write-Err([string]$Msg) {
+    Write-Host "[-] $Msg" -ForegroundColor Red
+    Write-LogLine 'ERROR' $Msg
+}
+
+function Initialize-Network {
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    } catch {}
+}
+
+function Get-GitHubHeaders {
+    return @{
+        'User-Agent' = 'Disc-Optimizer/1.0 (Windows; PowerShell)'
+        'Accept'     = 'application/vnd.github+json'
+    }
+}
+
+function Get-EquicordLatestRelease {
+    try {
+        return Invoke-RestMethod -Uri 'https://api.github.com/repos/Equicord/Equicord/releases/latest' -Headers (Get-GitHubHeaders) -TimeoutSec 45
+    } catch {
+        Write-LogLine 'WARN' "GitHub API unavailable: $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function Get-EquicordReleaseFile {
+    param(
+        [Parameter(Mandatory)][string]$FileName,
+        [Parameter(Mandatory)][string]$OutFile
+    )
+
+    $ua = @{ 'User-Agent' = 'Disc-Optimizer/1.0 (Windows; PowerShell)' }
+    $release = Get-EquicordLatestRelease
+    if ($release) {
+        $asset = $release.assets | Where-Object { $_.name -eq $FileName } | Select-Object -First 1
+        if ($asset) {
+            try {
+                Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $OutFile -UseBasicParsing -Headers $ua
+                return @{
+                    Tag    = $release.tag_name
+                    Size   = $asset.size
+                    Source = 'api'
+                }
+            } catch {
+                Write-LogLine 'WARN' "GitHub asset download failed ($FileName): $($_.Exception.Message)"
+            }
+        }
+    }
+
+    $direct = "https://github.com/Equicord/Equicord/releases/latest/download/$FileName"
+    Write-Warn "GitHub API blocked - downloading $FileName directly"
+    Invoke-WebRequest -Uri $direct -OutFile $OutFile -UseBasicParsing -Headers $ua -TimeoutSec 120
+    if (-not (Test-Path $OutFile)) { throw "Failed to download $FileName" }
+    return @{
+        Tag    = 'latest'
+        Size   = (Get-Item $OutFile).Length
+        Source = 'direct'
+    }
+}
+
+function Get-ActiveApp {
+    Get-ChildItem $DiscordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+        Sort-Object { [version]($_.Name -replace '^app-', '') } -Descending |
+        Select-Object -First 1
+}
+
+function Get-FolderSize([string]$Path) {
+    if (-not (Test-Path $Path)) { return 0 }
+    try {
+        (Get-ChildItem $Path -Recurse -Force -File -ErrorAction SilentlyContinue |
+            Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
+    } catch { 0 }
+}
+
+function Remove-Safe([string]$Path, [ref]$Freed) {
+    if (-not (Test-Path $Path)) { return $false }
+    $item = Get-Item $Path -ErrorAction SilentlyContinue
+    if (-not $item) { return $false }
+    $size = if ($item.PSIsContainer) { Get-FolderSize $Path } else { $item.Length }
+    Remove-Item $Path -Recurse -Force -ErrorAction SilentlyContinue
+    $Freed.Value += [long]$size
+    return $true
+}
+
+function Stop-Discord {
+    # Hard-kill Discord/Update so resources\app.asar is not locked during Equicord/OpenASAR writes.
+    $names = @('Discord', 'Discord.bin', 'Update', 'app')
+    for ($round = 1; $round -le 4; $round++) {
+        $procs = @(Get-Process -Name $names -ErrorAction SilentlyContinue | Where-Object {
+            try {
+                $path = $_.Path
+                if (-not $path) { return $true }
+                return ($path -like '*\Discord\*' -or $_.ProcessName -in @('Discord', 'Discord.bin', 'Update'))
+            } catch { return $true }
+        })
+        if ($procs.Count -eq 0) { break }
+        foreach ($p in $procs) {
+            try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { }
+            try { & taskkill.exe /F /T /PID $p.Id 2>$null | Out-Null } catch { }
+        }
+        Start-Sleep -Milliseconds (300 * $round)
+    }
+    try { & taskkill.exe /F /IM Discord.exe /T 2>$null | Out-Null } catch { }
+    try { & taskkill.exe /F /IM Update.exe /T 2>$null | Out-Null } catch { }
+    Start-Sleep -Milliseconds 500
+}
+
+function Write-DiscordResourceBytes {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][byte[]]$Bytes,
+        [int]$Attempts = 12
+    )
+
+    $dir = Split-Path -Parent $Path
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+
+    for ($i = 1; $i -le $Attempts; $i++) {
+        Stop-Discord
+        Write-HubProgress 57 ("Rewriting Discord resources ($i/$Attempts)...")
+        try {
+            if (Test-Path -LiteralPath $Path) {
+                attrib -R -S -H "$Path" 2>$null
+                try { & takeown.exe /F "$Path" /A 2>$null | Out-Null } catch { }
+                try { & icacls.exe "$Path" /grant "*S-1-5-32-544:F" /C 2>$null | Out-Null } catch { }
+                try { & icacls.exe "$Path" /grant "${env:USERNAME}:F" /C 2>$null | Out-Null } catch { }
+                try { & icacls.exe "$Path" /grant "*S-1-1-0:F" /C 2>$null | Out-Null } catch { }
+
+                $bak = "$Path.lockbak"
+                try {
+                    if (Test-Path -LiteralPath $bak) { Remove-Item -LiteralPath $bak -Force -ErrorAction SilentlyContinue }
+                    Move-Item -LiteralPath $Path -Destination $bak -Force -ErrorAction Stop
+                    Remove-Item -LiteralPath $bak -Force -ErrorAction SilentlyContinue
+                } catch {
+                    try { Remove-Item -LiteralPath $Path -Force -ErrorAction Stop } catch { }
+                }
+            }
+
+            $tmp = "$Path.tmpwrite"
+            if (Test-Path -LiteralPath $tmp) {
+                Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+            }
+
+            # Prefer FileStream with share-none so we fail fast if still locked.
+            $fs = [IO.File]::Open($tmp, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            try {
+                $fs.Write($Bytes, 0, $Bytes.Length)
+                $fs.Flush($true)
+            } finally {
+                $fs.Dispose()
+            }
+
+            if (Test-Path -LiteralPath $Path) {
+                attrib -R -S -H "$Path" 2>$null
+                Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+            }
+            Move-Item -LiteralPath $tmp -Destination $Path -Force
+            if ((Test-Path -LiteralPath $Path) -and ((Get-Item -LiteralPath $Path).Length -eq $Bytes.Length)) {
+                return
+            }
+            throw "Write verify failed for $Path"
+        } catch {
+            try { Remove-Item -LiteralPath "$Path.tmpwrite" -Force -ErrorAction SilentlyContinue } catch { }
+            if ($i -ge $Attempts) { throw }
+            Write-Warn ("Waiting for Discord to release file lock ($i/$Attempts): " + $_.Exception.Message)
+            Start-Sleep -Milliseconds (400 * $i)
+        }
+    }
+}
+
+function Test-DiscordReady {
+    if (-not (Test-Path $DiscordRoot)) { return $false }
+    if (-not (Test-Path (Join-Path $DiscordRoot 'Update.exe'))) { return $false }
+    $app = Get-ActiveApp
+    if (-not $app) { return $false }
+    if (-not (Test-Path (Join-Path $app.FullName 'Discord.exe'))) { return $false }
+    # Broken installs often keep Discord.exe but wipe/corrupt resources/app.asar
+    $resources = Join-Path $app.FullName 'resources'
+    $appAsar = Join-Path $resources 'app.asar'
+    if (-not ((Test-Path $resources) -and (Test-Path $appAsar))) { return $false }
+    # 1-byte stubs are corrupt - treat as not ready so repair can restore stock
+    return ((Get-Item $appAsar).Length -ge 64)
+}
+
+function Confirm-WindowsDiscordTarget {
+    $os64 = [Environment]::Is64BitOperatingSystem
+    if (-not $os64) {
+        throw 'Disc Optimizer requires 64-bit Windows. Discord desktop is x64-only.'
+    }
+    Write-Ok 'Target: Discord stable x64 for Windows'
+}
+
+function Test-ValidDiscordSetup([string]$Path) {
+    return (Test-Path $Path) -and (Get-Item $Path).Length -gt 50000000
+}
+
+function Test-ValidEquicordAsar([string]$Path) {
+    return (Test-Path $Path) -and (Get-Item $Path).Length -gt 1000000
+}
+
+function Get-BundledDiscordSetup {
+    foreach ($name in @('DiscordSetup.exe', 'DiscordSetup-x64.exe')) {
+        $path = Join-Path $ToolsDir $name
+        if (Test-ValidDiscordSetup $path) { return $path }
+    }
+    return $null
+}
+
+function Test-WingetAvailable {
+    try {
+        $cmd = Get-Command winget -ErrorAction SilentlyContinue
+        return [bool]$cmd
+    } catch { return $false }
+}
+
+function Install-DiscordViaWinget {
+    if (-not (Test-WingetAvailable)) { return $false }
+    Write-Step 'Installing Discord via winget (no bulky local installer)...'
+    Write-HubProgress 22 'Installing Discord (winget)...'
+    try {
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & winget install --id Discord.Discord -e --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-Null
+        $code = $LASTEXITCODE
+        $ErrorActionPreference = $prev
+        # 0 = installed, -1978335189 / other codes can mean already installed
+        if (Test-DiscordReady) {
+            Write-Ok 'Discord ready via winget'
+            return $true
+        }
+        if ($code -eq 0 -and (Wait-DiscordReady 120)) {
+            Write-Ok 'Discord installed via winget'
+            return $true
+        }
+    } catch {
+        Write-Warn "winget Discord install failed: $($_.Exception.Message)"
+    }
+    return $false
+}
+
+function Get-DiscordSetup {
+    if (-not (Test-Path $DownloadDir)) {
+        New-Item -ItemType Directory -Path $DownloadDir -Force | Out-Null
+    }
+
+    $bundled = Get-BundledDiscordSetup
+    if ($bundled) {
+        Write-Ok "Using bundled Discord installer ($([math]::Round((Get-Item $bundled).Length / 1MB, 1)) MB from tools/)"
+        Write-LogLine 'DIAG' "DiscordSetup path=$bundled size=$((Get-Item $bundled).Length)"
+        return ,([string]$bundled)
+    }
+
+    $cached = Join-Path $DownloadDir 'DiscordSetup-x64.exe'
+    if (Test-ValidDiscordSetup $cached) {
+        $age = (Get-Date) - (Get-Item $cached).LastWriteTime
+        if ($age.TotalDays -lt 7) {
+            Write-Ok "Using cached x64 installer ($([math]::Round((Get-Item $cached).Length / 1MB, 1)) MB)"
+            Write-LogLine 'DIAG' "DiscordSetup cached path=$cached size=$((Get-Item $cached).Length)"
+            return ,([string]$cached)
+        }
+    }
+
+    Write-Step 'Downloading latest Discord stable x64...'
+    $ua = @{ 'User-Agent' = 'OptiHub/1.0 (Windows; PowerShell)' }
+    Invoke-WebRequest -Uri $DiscordSetupUrl -OutFile $cached -UseBasicParsing -Headers $ua
+    if (-not (Test-ValidDiscordSetup $cached)) {
+        throw 'Discord x64 installer download failed'
+    }
+    Write-Ok "Downloaded x64 installer ($([math]::Round((Get-Item $cached).Length / 1MB, 1)) MB temp cache)"
+    Write-LogLine 'DIAG' "DiscordSetup downloaded path=$cached size=$((Get-Item $cached).Length)"
+    return ,([string]$cached)
+}
+
+function Get-ModulesBundleDir {
+    return Join-Path $ToolsDir 'discord-modules'
+}
+
+function Get-ModulesBundleVersion {
+    $versionFile = Join-Path (Get-ModulesBundleDir) 'version.txt'
+    if (-not (Test-Path $versionFile)) { return $null }
+    return (Get-Content $versionFile -Raw).Trim()
+}
+
+function Test-ModulesBundleReady {
+    $bundleDir = Get-ModulesBundleDir
+    if (-not (Test-Path $bundleDir)) { return $false }
+    foreach ($name in $RequiredModules) {
+        if (-not (Test-Path (Join-Path $bundleDir $name))) { return $false }
+    }
+    return $true
+}
+
+function Export-DiscordModulesBundle([string]$AppDir) {
+    # Intentionally no-op: shipping multi-MB module trees bloats OptiHub.
+    # Modules come from Discord's own updater / CDN on demand.
+    return
+}
+
+function Restore-DiscordModulesBundle([string]$AppDir) {
+    # Legacy kits may still have tools/discord-modules - never restore stale ones.
+    return $false
+}
+
+function Get-BundledEquicordAsar {
+    foreach ($name in @('desktop.asar', 'equicord.asar')) {
+        $path = Join-Path $ToolsDir $name
+        if (Test-ValidEquicordAsar $path) { return $path }
+    }
+    return $null
+}
+
+function Get-BundledOpenAsar {
+    foreach ($name in @('openasar.asar', 'OpenAsar.asar')) {
+        $path = Join-Path $ToolsDir $name
+        if ((Test-Path $path) -and (Get-Item $path).Length -gt 10000 -and (Get-Item $path).Length -lt 500000) {
+            return $path
+        }
+    }
+    return $null
+}
+
+function Test-EquicordLoaderPatched([string]$AppDir) {
+    $appAsar = Join-Path $AppDir 'resources\app.asar'
+    if (-not (Test-Path $appAsar)) { return $false }
+    $len = (Get-Item $appAsar).Length
+    # Real Equicord stub is small but not empty/corrupt (1-byte stubs were skipping repair).
+    return ($len -ge 64 -and $len -lt 4096)
+}
+
+function Resolve-EquicordDesktopAsar([string]$DestPath) {
+    # Prefer already-installed/cached Equicord under %APPDATA% (no kit bloat).
+    if (Test-ValidEquicordAsar $DestPath) {
+        $ageHours = ((Get-Date) - (Get-Item $DestPath).LastWriteTime).TotalHours
+        if ($ageHours -lt 168) {
+            $size = (Get-Item $DestPath).Length
+            Write-Ok "Using cached Equicord ($([math]::Round($size / 1MB, 1)) MB)"
+            return @{ Tag = 'cached'; Size = $size; Source = 'cache' }
+        }
+    }
+
+    $bundled = Get-BundledEquicordAsar
+    if ($bundled) {
+        Copy-Item $bundled $DestPath -Force
+        Write-Ok "Using bundled Equicord ($([math]::Round((Get-Item $bundled).Length / 1MB, 1)) MB from tools/)"
+        return @{ Tag = 'bundled'; Size = (Get-Item $bundled).Length; Source = 'tools' }
+    }
+
+    try {
+        Write-Step 'Downloading latest Equicord desktop.asar...'
+        Write-HubProgress 56 'Downloading Equicord...'
+        $result = Get-EquicordReleaseFile -FileName 'desktop.asar' -OutFile $DestPath
+        return $result
+    } catch {
+        if (Test-ValidEquicordAsar $DestPath) {
+            $cached = (Get-Item $DestPath).Length
+            Write-Warn "Download failed - using cached equicord.asar ($([math]::Round($cached / 1MB, 1)) MB)"
+            Write-LogLine 'WARN' "Equicord download failed, using cache: $($_.Exception.Message)"
+            return @{ Tag = 'cached'; Size = $cached; Source = 'cache' }
+        }
+        throw
+    }
+}
+
+function Wait-DiscordReady {
+    param([int]$TimeoutSec = 180)
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        if (Test-DiscordReady) { return $true }
+        Start-Sleep -Seconds 2
+    }
+    return $false
+}
+
+function Test-DiscordModulesReady([string]$AppDir) {
+    $modPath = Join-Path $AppDir 'modules'
+    if (-not (Test-Path $modPath)) { return $false }
+    foreach ($name in $RequiredModules) {
+        if (-not (Test-Path (Join-Path $modPath $name))) { return $false }
+    }
+    return $true
+}
+
+function Use-StockDiscordRuntime([string]$AppDir) {
+    $resources = Join-Path $AppDir 'resources'
+    $appAsar = Join-Path $resources 'app.asar'
+    $innerAsar = Join-Path $resources '_app.asar'
+    $stockBackup = Join-Path $resources '_app.asar.stock'
+    $equilotBackup = Join-Path $resources 'app.asar.backup'
+
+    if ((Test-Path $appAsar) -and (Get-Item $appAsar).Length -lt 4096) {
+        if (Test-Path $stockBackup) {
+            Copy-Item $stockBackup $appAsar -Force
+        } elseif (Test-Path $equilotBackup) {
+            Copy-Item $equilotBackup $appAsar -Force
+        } elseif (Test-Path $innerAsar) {
+            $inner = Get-Item $innerAsar
+            if ($inner.Length -gt 1000000) { Copy-Item $inner.FullName $appAsar -Force }
+        }
+    }
+
+    if ((Test-Path $innerAsar) -and (Get-Item $innerAsar).Length -lt 500000) {
+        if (Test-Path $stockBackup) {
+            Copy-Item $stockBackup $innerAsar -Force
+        } elseif (Test-Path $equilotBackup) {
+            Copy-Item $equilotBackup $innerAsar -Force
+        }
+    }
+
+    $ffmpegReal = Join-Path $AppDir 'ffmpeg_real.dll'
+    if (Test-Path $ffmpegReal) {
+        Copy-Item $ffmpegReal (Join-Path $AppDir 'ffmpeg.dll') -Force
+    }
+
+    foreach ($name in @('version.dll', 'config.ini')) {
+        $path = Join-Path $AppDir $name
+        if (Test-Path $path) {
+            $disabled = "$path.disabled"
+            if (Test-Path $disabled) { Remove-Item $disabled -Force }
+            Rename-Item $path $disabled -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Restore-StockDiscordBase {
+    if (-not (Test-DiscordReady)) { return }
+    $app = Get-ActiveApp
+    Write-Step 'Restoring stock Discord base (default, before updates/mods)...'
+    Use-StockDiscordRuntime $app.FullName
+    Write-Ok 'Stock Discord base restored'
+}
+
+function Update-DiscordSilent {
+    Repair-DiscordInstallerState
+    $setup = Resolve-DiscordSetupPath
+    $before = if (Test-DiscordReady) { (Get-ActiveApp).Name } else { $null }
+
+    Write-Step 'Updating Discord to latest stable x64 (silent, keeps your install)...'
+    Write-LogLine 'DIAG' "Update DiscordSetup FilePath=$setup"
+    $proc = Start-Process -FilePath $setup -ArgumentList '-s' -PassThru -Wait
+    if ($null -ne $proc.ExitCode -and $proc.ExitCode -ne 0) {
+        Write-Warn "DiscordSetup exited with code $($proc.ExitCode)"
+    }
+
+    if (-not (Wait-DiscordReady 120)) {
+        throw 'Discord update timed out - check internet or put DiscordSetup-x64.exe in tools/'
+    }
+
+    $after = (Get-ActiveApp).Name
+    if ($before -and $before -ne $after) {
+        Write-Ok "Discord updated: $before -> $after"
+    } else {
+        Write-Ok "Discord up to date ($after)"
+    }
+}
+
+function Invoke-SquirrelFirstRun([string]$AppDir) {
+    $exe = Join-Path $AppDir 'Discord.exe'
+    if (-not (Test-Path $exe)) { return }
+    Write-Step 'Discord first-run init (-squirrel-firstrun)...'
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $exe
+    $psi.Arguments = '-squirrel-firstrun'
+    $psi.WorkingDirectory = $AppDir
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardError = $true
+    $psi.RedirectStandardOutput = $true
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $null = $proc.StandardError.ReadToEndAsync()
+    $null = $proc.StandardOutput.ReadToEndAsync()
+    $deadline = (Get-Date).AddSeconds(60)
+    while (-not $proc.HasExited -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 1
+    }
+    if (-not $proc.HasExited) {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    }
+    Stop-Discord
+    Write-Ok 'Discord first-run init done'
+}
+
+function Resolve-DiscordSetupPath {
+    $raw = @(Get-DiscordSetup)
+    $setup = [string]($raw | Where-Object { $_ -is [string] -and $_ -like '*.exe' } | Select-Object -Last 1)
+    if ([string]::IsNullOrWhiteSpace($setup)) {
+        $setup = [string]($raw | Select-Object -Last 1)
+    }
+    if ([string]::IsNullOrWhiteSpace($setup) -or -not (Test-Path -LiteralPath $setup)) {
+        $dump = ($raw | ForEach-Object { "$_ ($($_.GetType().FullName))" }) -join '; '
+        throw "DiscordSetup path invalid. Get-DiscordSetup returned: $dump"
+    }
+    Write-LogLine 'DIAG' "Resolved DiscordSetup FilePath=$setup"
+    return $setup
+}
+
+function Invoke-DiscordSetupSilent {
+    # Prefer winget (no multi-MB installer stored in the kit). Fall back to CDN setup.
+    if (-not (Test-DiscordReady)) {
+        if (Install-DiscordViaWinget) {
+            $app = Get-ActiveApp
+            if ($app) {
+                Invoke-SquirrelFirstRun $app.FullName
+                $Script:DiscordInstalledThisRun = $true
+                return
+            }
+        }
+    }
+
+    $setup = Resolve-DiscordSetupPath
+    Write-Step 'Installing Discord (stock, silent)...'
+    Write-LogLine 'DIAG' "Start-Process DiscordSetup FilePath=$setup Args=-s"
+    $proc = Start-Process -FilePath $setup -ArgumentList '-s' -PassThru -Wait
+    if ($null -ne $proc.ExitCode -and $proc.ExitCode -ne 0) {
+        Write-Warn "DiscordSetup exited with code $($proc.ExitCode)"
+    }
+    if (-not (Wait-DiscordReady 120)) {
+        throw 'Discord install timed out - check internet, install Discord from winget, or retry.'
+    }
+    $app = Get-ActiveApp
+    Invoke-SquirrelFirstRun $app.FullName
+    $Script:DiscordInstalledThisRun = $true
+}
+
+function Backup-DiscordInstallerDb {
+    $src = Join-Path $DiscordRoot 'installer.db'
+    if (-not (Test-Path $src)) { return }
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    Copy-Item $src (Join-Path $DiscordRoot "installer.db.bak-$stamp") -Force -ErrorAction SilentlyContinue
+}
+
+function Test-DiscordInstallerHealthy {
+    $db = Join-Path $DiscordRoot 'installer.db'
+    if (-not (Test-Path $db)) { return $false }
+    if ((Get-Item $db).Length -lt 4096) { return $false }
+    $log = Join-Path $AppData 'logs\Discord_updater_rCURRENT.log'
+    if (Test-Path $log) {
+        $last = Select-String -Path $log -Pattern 'hosts_req_modules_installed: true' -ErrorAction SilentlyContinue |
+            Select-Object -Last 1
+        if ($last) { return $true }
+    }
+    return (Test-DiscordModulesReady (Get-ActiveApp).FullName)
+}
+
+function Repair-DiscordInstallerState {
+    Stop-Discord
+    Start-Sleep -Seconds 3
+    Get-Process Discord, Discord.bin, Update -ErrorAction SilentlyContinue | Stop-Process -Force
+    Backup-DiscordInstallerDb
+    $log = Join-Path $DiscordRoot 'SquirrelSetup.log'
+    if (Test-Path $log) { Remove-Item $log -Force -ErrorAction SilentlyContinue }
+}
+
+function Wait-DiscordMainWindow {
+    param([int]$TimeoutSec = 90)
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        $win = Get-Process Discord -ErrorAction SilentlyContinue |
+            Where-Object { $_.MainWindowTitle -like '*Discord*' } |
+            Select-Object -First 1
+        if ($win) { return $true }
+        Start-Sleep -Seconds 2
+    }
+    return $false
+}
+
+function Get-DiscordWindowState {
+    $win = Get-Process Discord -ErrorAction SilentlyContinue |
+        Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero -and $_.MainWindowTitle } |
+        Sort-Object WorkingSet64 -Descending |
+        Select-Object -First 1
+    if (-not $win) { return 'none' }
+
+    $title = $win.MainWindowTitle
+    # Fully loaded client: "Friends - Discord", "#channel - Server - Discord", etc.
+    if ($title -match '^(Friends|Inbox|Library|Nitro|Shop|Discover|Activity) - Discord$') { return 'logged_in' }
+    if ($title -match ' - Discord$' -and $title -notmatch 'discord(app)?\.com' -and $title -ne 'Discord') {
+        return 'logged_in'
+    }
+    # Early boot / webview bridge titles
+    if ($title -match 'discord(app)?\.com') { return 'loading' }
+    if ($title -eq 'Discord' -or $title -eq 'discord' -or $title -match 'Updater') { return 'login_or_loading' }
+    return 'unknown'
+}
+
+function Test-DiscordSessionStorage {
+    param([string]$DbDir, [int]$MinBytes = 2048)
+    if (-not (Test-Path $DbDir)) { return $false }
+    $files = Get-ChildItem $DbDir -File -ErrorAction SilentlyContinue |
+        Where-Object { ($_.Extension -in @('.ldb', '.log')) -and $_.Name -ne 'LOCK' }
+    if (-not $files) { return $false }
+    return (($files | Measure-Object -Property Length -Sum).Sum -ge $MinBytes)
+}
+
+function Test-DiscordLoggedIn {
+    $indexedDb = Join-Path $AppData 'IndexedDB\https_discord.com_0.indexeddb.leveldb'
+    $localDb = Join-Path $AppData 'Local Storage\leveldb'
+    if ((Test-DiscordSessionStorage $indexedDb) -and (Test-DiscordSessionStorage $localDb)) {
+        return $true
+    }
+
+    if ((Get-DiscordWindowState) -eq 'logged_in') {
+        $rendererLog = Join-Path $AppData 'logs\renderer_js.log'
+        if (Test-Path $rendererLog) {
+            $tail = @(Get-Content $rendererLog -Tail 100 -ErrorAction SilentlyContinue) -join "`n"
+            if ($tail -match 'Dispatching CONNECTION_OPEN|Dispatching LOGIN_SUCCESS|\[GatewaySocket\] \[READY\]') {
+                return $true
+            }
+        }
+    }
+    return $false
+}
+
+function Ensure-DiscordLoggedIn([string]$AppDir) {
+    if (Test-DiscordLoggedIn) {
+        Write-Ok 'Discord session found - already logged in (session will not be touched)'
+        return
+    }
+
+    if ($env:DISCOPT_NONINTERACTIVE -eq '1') {
+        throw 'Discord is not logged in. Open Discord, log in once, then rerun OptiHub.'
+    }
+
+    Write-Host ''
+    Write-Host '  >>> Log in to Discord in the window that opens.' -ForegroundColor Yellow
+    Write-Host '  >>> The optimizer waits until you are logged in, then applies mods.' -ForegroundColor Yellow
+    Write-Host '  >>> Your login is saved before any optimization runs.' -ForegroundColor Yellow
+    Write-Host ''
+
+    if (-not (Get-Process Discord -ErrorAction SilentlyContinue)) {
+        [void](Invoke-DiscordLaunch -AppDir $AppDir)
+    }
+
+    $deadline = (Get-Date).AddMinutes(15)
+    $lastHint = [DateTime]::MinValue
+    while ((Get-Date) -lt $deadline) {
+        if (Test-DiscordLoggedIn) { break }
+
+        $state = Get-DiscordWindowState
+        if ($state -eq 'logged_in') {
+            Start-Sleep -Seconds 5
+            if (Test-DiscordLoggedIn) { break }
+        }
+
+        if (((Get-Date) - $lastHint).TotalSeconds -ge 30) {
+            Write-Host "  ... waiting for login (window: $state)" -ForegroundColor DarkGray
+            $lastHint = Get-Date
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    if (-not (Test-DiscordLoggedIn)) {
+        Stop-Discord
+        throw 'Login not detected within 15 minutes. Log in to Discord, then rerun Disc-Optimizer.ps1'
+    }
+
+    Write-Ok 'Login verified - session saved; applying optimizations now'
+    Start-Sleep -Seconds 4
+    Stop-Discord
+    Start-Sleep -Seconds 2
+}
+
+function Ensure-DiscordBootReady([string]$AppDir) {
+    if (Test-DiscordInstallerHealthy) {
+        Write-Ok 'Discord installer state healthy'
+        return
+    }
+
+    $ffmpegReal = Join-Path $AppDir 'ffmpeg_real.dll'
+    if (Test-Path $ffmpegReal) {
+        Copy-Item $ffmpegReal (Join-Path $AppDir 'ffmpeg.dll') -Force
+    }
+
+    Write-Step 'Repairing Discord boot (installer DB + module handshake)...'
+    Repair-DiscordInstallerState
+    Invoke-SquirrelFirstRun $AppDir
+    $updateExe = Join-Path $DiscordRoot 'Update.exe'
+
+    if (-not (Test-DiscordModulesReady $AppDir)) {
+        Write-Step 'Waiting for Discord updater to install required modules...'
+        [void](Invoke-DiscordLaunch -AppDir $AppDir)
+        $deadline = (Get-Date).AddMinutes(6)
+        while ((Get-Date) -lt $deadline) {
+            if (Test-DiscordModulesReady $AppDir) { break }
+            Start-Sleep -Seconds 2
+        }
+        Stop-Discord
+    }
+
+    if (-not (Test-DiscordModulesReady $AppDir)) {
+        throw 'Discord modules not ready - quit Discord from tray, rerun Disc-Optimizer.ps1'
+    }
+
+    [void](Invoke-DiscordLaunch -AppDir $AppDir)
+    if (-not (Wait-DiscordMainWindow 90)) {
+        Stop-Discord
+        throw 'Discord did not reach the main window - boot repair failed'
+    }
+    Stop-Discord
+    if (-not $SkipKernel) { Install-DiscOptKernel $AppDir }
+    Write-Ok 'Discord boot verified (main window reached)'
+}
+
+function Install-DiscordModulesFromManifest([string]$AppDir) {
+    $helper = Join-Path $ToolsDir 'Install-DiscordModules.ps1'
+    if (-not (Test-Path $helper)) { return $false }
+
+    $version = (Split-Path $AppDir -Leaf) -replace '^app-', ''
+    Write-Step 'Downloading Discord modules from CDN (fast)...'
+
+    $helperPwsh = Get-DiscOptPowerShellExe
+    if (-not (Test-Path $helperPwsh)) {
+        Write-Warn 'PowerShell 7 (pwsh) required for fast module download - using stock first-run'
+        return $false
+    }
+
+    $global:LASTEXITCODE = 0
+    & $helperPwsh -NoProfile -File $helper -AppDir $AppDir -Version $version
+    $helperExit = $LASTEXITCODE
+    if ($null -ne $helperExit -and $helperExit -ne 0) {
+        Write-Warn 'CDN module install failed - falling back to stock first-run'
+        return $false
+    }
+
+    if (Test-DiscordModulesReady $AppDir) {
+        Write-Ok 'Discord modules installed from CDN'
+        Export-DiscordModulesBundle $AppDir
+        return $true
+    }
+
+    Write-Warn 'CDN modules incomplete - falling back to stock first-run'
+    return $false
+}
+
+function Initialize-DiscordModules([string]$AppDir) {
+    if (Test-DiscordModulesReady $AppDir) {
+        Write-Ok 'Discord modules already installed'
+        return
+    }
+
+    if (Restore-DiscordModulesBundle $AppDir) {
+        return
+    }
+
+    if (Test-DiscordInstallerHealthy) {
+        if (Install-DiscordModulesFromManifest $AppDir) {
+            return
+        }
+    } else {
+        Write-Warn 'Installer DB not healthy - skipping CDN module drop (use updater first)'
+    }
+
+    Repair-DiscordInstallerState
+
+    Write-Step 'Installing Discord modules (stock first-run - needs internet)...'
+    Use-StockDiscordRuntime $AppDir
+
+    $updateExe = Join-Path $DiscordRoot 'Update.exe'
+    $packagesDir = Join-Path $DiscordRoot 'packages'
+    if (Test-Path $packagesDir) {
+        $nupkg = Get-ChildItem $packagesDir -Filter '*.nupkg' -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($nupkg) {
+            Write-LogLine 'STEP' "Applying pending package: $($nupkg.Name)"
+            Start-Process -FilePath $updateExe -ArgumentList (Join-DiscOptProcessArguments @('-update', $nupkg.FullName)) -Wait -ErrorAction SilentlyContinue | Out-Null
+            if (Test-DiscordModulesReady $AppDir) {
+                Write-Ok 'Discord modules installed via update package'
+                Stop-Discord
+                Export-DiscordModulesBundle $AppDir
+                return
+            }
+        }
+    }
+
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        if ($attempt -gt 1) {
+            Write-Warn 'Retrying module install (one more stock launch)...'
+        }
+        [void](Invoke-DiscordLaunch -AppDir $AppDir)
+
+        $deadline = (Get-Date).AddMinutes(6)
+        $lastMsg = Get-Date
+        while ((Get-Date) -lt $deadline) {
+        if (Test-DiscordModulesReady $AppDir) {
+            Write-Ok 'Discord modules installed'
+            Stop-Discord
+            Export-DiscordModulesBundle $AppDir
+            return
+        }
+            if (((Get-Date) - $lastMsg).TotalSeconds -ge 10) {
+                $missing = @($RequiredModules | Where-Object { -not (Test-Path (Join-Path $AppDir "modules\$_")) })
+                Write-LogLine 'STEP' "Waiting for modules: $($missing -join ', ')"
+                $lastMsg = Get-Date
+            }
+            Start-Sleep -Seconds 1
+        }
+        Stop-Discord
+        Start-Sleep -Seconds 1
+    }
+
+    throw 'Discord module install timed out - open stock Discord once manually, then run -Quick'
+}
+
+function Remove-DiscordInstall {
+    Write-Step 'Removing existing Discord install...'
+    Stop-Discord
+
+    if (Test-Path $DiscordRoot) {
+        Remove-Item $DiscordRoot -Recurse -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        if (Test-Path $DiscordRoot) {
+            Get-ChildItem $DiscordRoot -Recurse -Force -ErrorAction SilentlyContinue |
+                Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+            Remove-Item $DiscordRoot -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    foreach ($shortcut in @(
+        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc'),
+        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord.lnk')
+    )) {
+        if ($shortcut -and (Test-Path $shortcut)) {
+            Remove-Item $shortcut -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    if (Test-Path $DiscordRoot) {
+        throw 'Could not remove Discord folder - close Discord completely and run again'
+    }
+    Write-Ok 'Old Discord install removed'
+}
+
+function Prepare-Discord {
+    if ($SkipDiscordInstall) {
+        Write-Ok 'Discord prep skipped (-SkipDiscordInstall / -Quick)'
+        return
+    }
+
+    if ($FreshInstall) {
+        Remove-DiscordInstall
+        Invoke-DiscordSetupSilent
+        $app = Get-ActiveApp
+        Invoke-SquirrelFirstRun $app.FullName
+        if (-not (Test-DiscordModulesReady $app.FullName)) {
+            Initialize-DiscordModules $app.FullName
+        }
+        Stop-Discord
+        Sync-DiscordModulesBundle $app.FullName
+        Write-Ok "Discord $($app.Name) x64 fresh install ready"
+        return
+    }
+
+    # Half-broken Discord: exe present, resources/app.asar gone
+    $active = Get-ActiveApp
+    if ($active) {
+        $resources = Join-Path $active.FullName 'resources'
+        $appAsar = Join-Path $resources 'app.asar'
+        if (-not (Test-Path $resources) -or -not (Test-Path $appAsar)) {
+            Write-Warn "Discord resources missing under $($active.FullName) - wiping and reinstalling..."
+            Write-HubProgress 18 'Reinstalling Discord (resources missing)...'
+            Remove-DiscordInstall
+            Invoke-DiscordSetupSilent
+            $app = Get-ActiveApp
+            Invoke-SquirrelFirstRun $app.FullName
+            if (-not (Test-DiscordModulesReady $app.FullName)) {
+                Initialize-DiscordModules $app.FullName
+            }
+            Stop-Discord
+            Sync-DiscordModulesBundle $app.FullName
+            Write-Ok "Discord $($app.Name) x64 reinstalled (resources restored)"
+            return
+        }
+    }
+
+    if (Test-DiscordReady) {
+        $app = Get-ActiveApp
+        if (Test-DiscordModulesReady $app.FullName) {
+            Sync-DiscordModulesBundle $app.FullName
+            Write-Ok "Discord $($app.Name) ready (modules OK - skipping host update)"
+            return
+        }
+        Write-Warn 'Modules missing - repairing without wiping install...'
+        Repair-DiscordInstallerState
+        Invoke-SquirrelFirstRun $app.FullName
+        Initialize-DiscordModules $app.FullName
+        Stop-Discord
+        Sync-DiscordModulesBundle $app.FullName
+        return
+    }
+
+    Invoke-DiscordSetupSilent
+    $app = Get-ActiveApp
+    if (-not (Test-DiscordModulesReady $app.FullName)) {
+        Initialize-DiscordModules $app.FullName
+    }
+    Stop-Discord
+    Sync-DiscordModulesBundle $app.FullName
+    Write-Ok "Discord $($app.Name) x64 installed"
+}
+
+function Sync-DiscordModulesBundle([string]$AppDir) {
+    if (Test-DiscordModulesReady $AppDir) {
+        $bundleVersion = Get-ModulesBundleVersion
+        $appVersion = (Split-Path $AppDir -Leaf) -replace '^app-', ''
+        if (-not (Test-ModulesBundleReady) -or $bundleVersion -ne $appVersion) {
+            Export-DiscordModulesBundle $AppDir
+        }
+    }
+}
+
+function Assert-DiscordInstall {
+    if (-not (Test-Path $DiscordRoot)) {
+        throw 'Discord not installed. Run without -SkipDiscordInstall to download fresh x64 Discord.'
+    }
+    if (-not (Test-Path (Join-Path $DiscordRoot 'Update.exe'))) {
+        throw 'Update.exe missing. Run without -SkipDiscordInstall to reinstall Discord.'
+    }
+    $app = Get-ActiveApp
+    if (-not $app) { throw 'No app-* folder found. Finish the Discord installer first.' }
+    $resources = Join-Path $app.FullName 'resources'
+    $appAsar = Join-Path $resources 'app.asar'
+    if (-not (Test-Path $resources) -or -not (Test-Path $appAsar)) {
+        throw "Discord resources/app.asar missing under $($app.FullName). Re-run without -SkipDiscordInstall."
+    }
+    return $app
+}
+
+function Test-KitIntegrity {
+    Write-Step 'Checking kit (portable / new-PC ready)...'
+    $required = @(
+        (Join-Path $KitDir 'version.dll'),
+        (Join-Path $KitDir 'ffmpeg.dll'),
+        (Join-Path $KitDir 'config.ini'),
+        (Join-Path $Profiles 'equicord-overrides.json'),
+        (Join-Path $Profiles 'equicordplugins.json'),
+        (Join-Path $Profiles 'vencordplugins.json'),
+        (Join-Path $Profiles 'discord.json')
+    )
+    foreach ($file in $required) {
+        if (-not (Test-Path $file)) { throw "Kit incomplete - missing $file" }
+    }
+    if ((Get-Item (Join-Path $KitDir 'ffmpeg.dll')).Length -lt 10000) {
+        throw 'Bundled ffmpeg.dll proxy looks invalid'
+    }
+    if ((Get-Item (Join-Path $KitDir 'version.dll')).Length -lt 50000) {
+        throw 'Bundled version.dll looks invalid'
+    }
+    Write-Ok 'Kit OK (kernel: ffmpeg proxy + version.dll + config.ini)'
+    if (Test-Path (Join-Path $Themes $EnabledTheme)) {
+        Write-Ok "Theme: $EnabledTheme"
+    } else {
+        Write-Warn "Missing theme: $EnabledTheme"
+    }
+    $hasDiscordSetup = $null -ne (Get-BundledDiscordSetup)
+    $hasModulesBundle = Test-ModulesBundleReady
+    $hasEquicord = $null -ne (Get-BundledEquicordAsar)
+    if ($hasDiscordSetup -and $hasEquicord -and $hasModulesBundle) {
+        Write-Ok "tools/ fully ready: Discord + Equicord + modules ($(Get-ModulesBundleVersion))"
+    } elseif ($hasDiscordSetup -and $hasEquicord) {
+        Write-Ok 'tools/ has Discord + Equicord (modules bundle will cache on first run)'
+    } elseif ($hasDiscordSetup) {
+        Write-Ok 'tools/ has Discord installer'
+    } else {
+        Write-Ok 'Tip: put DiscordSetup.exe + desktop.asar in tools/ for fast setup'
+    }
+}
+
+function Sync-PluginManifests {
+    # Always require local manifests (shipped with OptiHub) so ANY machine can
+    # apply the full plugin list offline. Optionally refresh from GitHub when allowed.
+    foreach ($name in @('equicordplugins.json', 'vencordplugins.json')) {
+        $dest = Join-Path $Profiles $name
+        if (-not (Test-Path $dest)) {
+            Write-Warn "Bundled $name missing - downloading for this PC..."
+            try {
+                Get-EquicordReleaseFile -FileName $name -OutFile $dest | Out-Null
+                Write-Ok "Downloaded $name"
+            } catch {
+                throw "Missing $name and download failed. Reinstall OptiHub. $($_.Exception.Message)"
+            }
+            continue
+        }
+
+        if ($SkipManifestSync) {
+            continue
+        }
+
+        if (((Get-Date) - (Get-Item $dest).LastWriteTime).TotalDays -lt 7) {
+            Write-LogLine 'OK' "Manifest fresh (<7 days), skipping download: $name"
+            continue
+        }
+        try {
+            Get-EquicordReleaseFile -FileName $name -OutFile $dest | Out-Null
+            Write-LogLine 'OK' "Refreshed manifest: $name"
+        } catch {
+            Write-Warn "Could not refresh $name - using bundled copy"
+            Write-LogLine 'WARN' "Manifest refresh failed ($name): $($_.Exception.Message)"
+        }
+    }
+    if ($SkipManifestSync) {
+        Write-Ok 'Using bundled plugin manifests (universal offline profile)'
+    }
+}
+
+function Build-FullEquicordSettings {
+    # UNIVERSAL profile for any PC: register EVERY known Equicord/Vencord plugin from
+    # shipped manifests, then apply OptiHub overrides (enabled set + options).
+    # Stock Discord users have no Equicord settings - this is the source of truth.
+    $overridesPath = Join-Path $Profiles 'equicord-overrides.json'
+    if (-not (Test-Path $overridesPath)) {
+        $overridesPath = Join-Path $Profiles 'equicord.json'
+    }
+    if (-not (Test-Path $overridesPath)) { throw 'Missing equicord-overrides.json (kit incomplete)' }
+
+    $eqManifest = Join-Path $Profiles 'equicordplugins.json'
+    $vcManifest = Join-Path $Profiles 'vencordplugins.json'
+    if (-not (Test-Path $eqManifest)) { throw 'Missing equicordplugins.json - required for universal plugin apply' }
+    if (-not (Test-Path $vcManifest)) { throw 'Missing vencordplugins.json - required for universal plugin apply' }
+
+    $overrides = ConvertTo-HashtableDeep (Get-Content $overridesPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+    $eq = Get-Content $eqManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+    $vc = Get-Content $vcManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+
+    # Upstream defaults first (required/core plugins often enabledByDefault).
+    $defaultOn = @{}
+    foreach ($p in (@($eq) + @($vc))) {
+        if ($p.enabledByDefault -eq $true) { $defaultOn[$p.name] = $true }
+    }
+
+    $allNames = @($eq.name) + @($vc.name) | Select-Object -Unique
+    if ($allNames.Count -lt 100) {
+        throw "Plugin manifests look incomplete ($($allNames.Count) plugins). Reinstall OptiHub."
+    }
+
+    $plugins = [ordered]@{}
+    foreach ($name in ($allNames | Sort-Object)) {
+        $plugins[$name] = @{ enabled = [bool]$defaultOn[$name] }
+    }
+
+    # OptiHub curated enable/disable + per-plugin settings (privacy, perf, streamer, etc.).
+    if ($overrides.plugins) {
+        foreach ($key in @($overrides.plugins.Keys)) {
+            $plugins[$key] = ConvertTo-HashtableDeep $overrides.plugins[$key]
+        }
+    }
+
+    $enabledThemes = @($EnabledTheme)
+    if ($overrides.enabledThemes) { $enabledThemes = @($overrides.enabledThemes) }
+
+    $eager = $true
+    if ($overrides.Keys -contains 'eagerPatches') { $eager = [bool]$overrides.eagerPatches }
+
+    $settings = [ordered]@{
+        autoUpdate             = $true
+        autoUpdateNotification = $false
+        useQuickCss            = $false
+        themeLinks             = @()
+        eagerPatches           = $eager
+        enabledThemes          = $enabledThemes
+        enabledThemeLinks      = @()
+        enableOnlineThemes     = $false
+        enableReactDevtools    = $false
+        pinnedThemes           = @()
+        themeNames             = @{}
+        themeActivationModes   = @{}
+        mainWindowFrameless    = $false
+        frameless              = $false
+        transparent            = $false
+        winCtrlQ               = $false
+        windowsMaterial        = 'none'
+        disableMinSize         = $false
+        winNativeTitleBar      = $false
+        cloud                  = @{
+            authenticated       = $false
+            url                 = 'https://cloud.equicord.org/'
+            settingsSync        = $false
+            settingsSyncVersion = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        }
+        notifications          = @{
+            timeout   = 3000
+            position  = 'bottom-right'
+            useNative = 'never'
+            missed    = $false
+            logLimit  = 10
+        }
+        uiElements             = @{
+            chatBarButtons        = @{}
+            messagePopoverButtons = @{}
+        }
+        ignoreResetWarning     = $false
+        userCssVars            = @{}
+        plugins                = $plugins
+    }
+
+    if ($overrides.notifications) {
+        $settings.notifications = ConvertTo-HashtableDeep $overrides.notifications
+    }
+    if ($overrides.Keys -contains 'autoUpdate') { $settings.autoUpdate = [bool]$overrides.autoUpdate }
+    if ($overrides.Keys -contains 'autoUpdateNotification') {
+        $settings.autoUpdateNotification = [bool]$overrides.autoUpdateNotification
+    }
+    if ($overrides.Keys -contains 'enableOnlineThemes') {
+        $settings.enableOnlineThemes = [bool]$overrides.enableOnlineThemes
+    }
+    if ($overrides.Keys -contains 'useQuickCss') { $settings.useQuickCss = [bool]$overrides.useQuickCss }
+
+    $enabledCount = @($plugins.Values | Where-Object { $_.enabled -eq $true }).Count
+    Write-Ok "Universal Equicord profile: $($allNames.Count) plugins registered, $enabledCount enabled (works on stock Discord)"
+
+    return $settings
+}
+
+function ConvertTo-HashtableDeep($InputObject) {
+    if ($null -eq $InputObject) { return $null }
+    if ($InputObject -is [string]) { return $InputObject }
+    if ($InputObject -is [System.Collections.IDictionary]) {
+        $table = @{}
+        foreach ($key in $InputObject.Keys) { $table[$key] = ConvertTo-HashtableDeep $InputObject[$key] }
+        return $table
+    }
+    if ($InputObject -is [System.Array]) {
+        if ($InputObject.Length -eq 0) { return ,@() }
+        return [object[]]@($InputObject | ForEach-Object { ConvertTo-HashtableDeep $_ })
+    }
+    if ($InputObject -is [System.Collections.IEnumerable] -and -not ($InputObject -is [string])) {
+        $items = @($InputObject | ForEach-Object { ConvertTo-HashtableDeep $_ })
+        if ($items.Count -eq 0) { return ,@() }
+        return [object[]]$items
+    }
+    if ($InputObject -is [pscustomobject]) {
+        $table = @{}
+        foreach ($prop in $InputObject.PSObject.Properties) {
+            $table[$prop.Name] = ConvertTo-HashtableDeep $prop.Value
+        }
+        return $table
+    }
+    return $InputObject
+}
+
+function Set-DeepValue([hashtable]$Root, [string[]]$Path, $Value) {
+    $node = $Root
+    for ($i = 0; $i -lt $Path.Length - 1; $i++) {
+        $key = $Path[$i]
+        if (-not $node.ContainsKey($key) -or -not ($node[$key] -is [hashtable])) {
+            $node[$key] = @{}
+        }
+        $node = $node[$key]
+    }
+    $node[$Path[-1]] = $Value
+}
+
+function Invoke-Debloat([string]$AppDir, [ref]$Freed) {
+    Write-Step 'Debloating Discord...'
+
+    # Old app-* hosts only (safe). Never wipe the active build.
+    Get-ChildItem $DiscordRoot -Directory -Filter 'app-*' |
+        Where-Object { $_.FullName -ne $AppDir } |
+        ForEach-Object { if (Remove-Safe $_.FullName $freed) { Write-Ok "Removed $($_.Name)" } }
+
+    # Only strip known-optional modules. Deleting unknown modules broke Discord
+    # 1.0.92xx+ (stuck on Starting / hosts_req_modules_installed=false).
+    $modPath = Join-Path $AppDir 'modules'
+    if (Test-Path $modPath) {
+        foreach ($name in $OptionalModules) {
+            $folder = Join-Path $modPath $name
+            if (Test-Path -LiteralPath $folder) {
+                if (Remove-Safe $folder $freed) { Write-Ok "Removed optional module $name" }
+            }
+        }
+        Get-ChildItem $modPath -Recurse -Filter 'discord_game_sdk_*.dll' -ErrorAction SilentlyContinue |
+            ForEach-Object { if (Remove-Safe $_.FullName $freed) { Write-Ok 'Removed game SDK' } }
+    }
+
+    $localePath = Join-Path $AppDir 'locales'
+    if (Test-Path $localePath) {
+        Get-ChildItem "$localePath\*.pak" | Where-Object { $_.Name -ne 'en-US.pak' } |
+            ForEach-Object { if (Remove-Safe $_.FullName $freed) { Write-Ok "Removed locale $($_.Name)" } }
+    }
+
+    # NOTE: never remove d3dcompiler_47.dll, vulkan-1.dll, vk_swiftshader*, or
+    # chrome_*_percent.pak - Chromium needs them for rendering and removing them
+    # causes blank/black windows on many GPUs.
+    foreach ($pattern in @(
+        '.first-run', 'Discord.exe.sig', 'discord_wer.*',
+        'Microsoft.Gaming.XboxApp.XboxNetwork.winmd', '*.log'
+    )) {
+        Get-ChildItem (Join-Path $AppDir $pattern) -ErrorAction SilentlyContinue | ForEach-Object {
+            if ($Protected -contains $_.Name) { return }
+            if (Remove-Safe $_.FullName $freed) { Write-Ok "Removed $($_.Name)" }
+        }
+    }
+
+    Write-Ok "Debloat saved ~$([math]::Round($freed.Value / 1MB, 1)) MB"
+}
+
+function Clear-DiscordSafeCache([ref]$Freed) {
+    if ($SkipCacheClean) {
+        Write-Ok 'Cache clean skipped (-SkipCacheClean)'
+        return
+    }
+
+    Write-Step 'Cleaning safe Discord caches (login/session preserved)...'
+    $before = $Freed.Value
+    foreach ($relative in $SafeCacheTargets) {
+        $path = Join-Path $AppData $relative
+        if (Remove-Safe $path $Freed) {
+            Write-Ok "Cleaned $relative"
+        }
+    }
+
+    # Squirrel state (packages\RELEASES, installer.db) is never touched -
+    # Update.exe silently refuses to launch Discord without it.
+    $saved = $Freed.Value - $before
+    if ($saved -gt 0) {
+        Write-Ok "Safe cache clean saved ~$([math]::Round($saved / 1MB, 1)) MB"
+    } else {
+        Write-Ok 'Safe cache clean found nothing to remove'
+    }
+}
+
+function Test-CacheCleanNeeded {
+    if ($SkipCacheClean) { return $false }
+    foreach ($relative in $SafeCacheTargets) {
+        $path = Join-Path $AppData $relative
+        if (-not (Test-Path $path)) { continue }
+        # Sample first files only          enough to decide if a clean is worth it
+        $sample = @(Get-ChildItem $path -Recurse -Force -File -ErrorAction SilentlyContinue | Select-Object -First 50)
+        if ($sample.Count -eq 0) { continue }
+        $sum = ($sample | Measure-Object -Property Length -Sum).Sum
+        if ($sum -gt 1MB -or $sample.Count -ge 50) { return $true }
+    }
+    return $false
+}
+
+function Get-DiscordManifestCached {
+    if ($Script:DiscordManifest) { return $Script:DiscordManifest }
+    $Script:DiscordManifest = Invoke-RestMethod -Uri 'https://updates.discord.com/distributions/app/manifests/latest?channel=stable&platform=win&arch=x64' -Headers @{ 'User-Agent' = 'OptiHub-Discord/1.0' }
+    return $Script:DiscordManifest
+}
+
+function Install-DiscordModuleFromManifest([string]$AppDir, [string]$ModuleName) {
+    $folder = Join-Path $AppDir "modules\$ModuleName-1"
+    if (Test-Path $folder) { return $true }
+
+    $manifest = Get-DiscordManifestCached
+    $mod = $manifest.modules.$ModuleName
+    if (-not $mod -or -not $mod.full.url) { throw "$ModuleName missing from Discord manifest" }
+
+    $work = Get-DiscOptTempPath "discopt-$ModuleName"
+    if (Test-Path $work) { Remove-Item $work -Recurse -Force }
+    New-Item -ItemType Directory -Path $work -Force | Out-Null
+
+    $distro = Join-Path $work 'pkg.distro'
+    $tar = Join-Path $work 'pkg.tar'
+    $extract = Join-Path $work 'extract'
+    try {
+        Invoke-WebRequest -Uri $mod.full.url -OutFile $distro -UseBasicParsing
+
+        $in = $out = $br = $null
+        try {
+            $in = [IO.File]::OpenRead($distro)
+            $out = [IO.File]::Create($tar)
+            $br = [System.IO.Compression.BrotliStream]::new($in, [IO.Compression.CompressionMode]::Decompress)
+            $br.CopyTo($out)
+        } finally {
+            if ($br) { $br.Dispose() }
+            if ($out) { $out.Dispose() }
+            if ($in) { $in.Dispose() }
+        }
+
+        New-Item -ItemType Directory -Path $extract -Force | Out-Null
+        $global:LASTEXITCODE = 0
+        & tar -xf $tar -C $extract 2>$null
+        if ($LASTEXITCODE -ne 0) { throw "tar failed while extracting $ModuleName" }
+
+        $files = Join-Path $extract 'files'
+        if (-not (Test-Path $files)) { throw "$ModuleName package had no files/" }
+
+        $modRoot = Join-Path $AppDir 'modules'
+        if (-not (Test-Path $modRoot)) { New-Item -ItemType Directory -Path $modRoot -Force | Out-Null }
+        New-Item -ItemType Directory -Path $folder -Force | Out-Null
+        Copy-Item -Path (Join-Path $files '*') -Destination $folder -Recurse -Force
+        return $true
+    } finally {
+        Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Ensure-RuntimeModules([string]$AppDir) {
+    foreach ($name in $RuntimeModules) {
+        $folder = Join-Path $AppDir "modules\$name-1"
+        if (Test-Path $folder) {
+            Write-Ok "$name module present"
+            continue
+        }
+        Write-Step "Installing $name module (required by Discord core)..."
+        Install-DiscordModuleFromManifest $AppDir $name | Out-Null
+        Write-Ok "$name module installed"
+    }
+}
+
+function Ensure-KrispModule([string]$AppDir) {
+    $krisp = Join-Path $AppDir 'modules\discord_krisp-1'
+    if (Test-Path $krisp) {
+        Write-Ok 'Krisp module present (noise suppression UI)'
+        return
+    }
+
+    Write-Step 'Installing Krisp module (noise suppression dropdown)...'
+    Install-DiscordModuleFromManifest $AppDir 'discord_krisp' | Out-Null
+    if (-not (Test-Path $krisp)) { throw 'Krisp module missing after CDN install' }
+    Write-Ok 'Krisp module installed'
+}
+
+function Test-DebloatNeeded([string]$AppDir) {
+    $reasons = @()
+
+    $oldApps = @(Get-ChildItem $DiscordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -ne $AppDir })
+    if ($oldApps.Count -gt 0) { $reasons += "$($oldApps.Count) old app-* folder(s)" }
+
+    $modPath = Join-Path $AppDir 'modules'
+    if (Test-Path $modPath) {
+        $optionalPresent = @($OptionalModules | Where-Object { Test-Path (Join-Path $modPath $_) })
+        if ($optionalPresent.Count -gt 0) { $reasons += "$($optionalPresent.Count) optional module(s)" }
+    }
+
+    $localePath = Join-Path $AppDir 'locales'
+    if (Test-Path $localePath) {
+        $extraLocales = @(Get-ChildItem "$localePath\*.pak" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ne 'en-US.pak' })
+        if ($extraLocales.Count -gt 0) { $reasons += "$($extraLocales.Count) extra locale(s)" }
+    }
+
+    return @{
+        Needed  = ($reasons.Count -gt 0)
+        Reasons = $reasons
+    }
+}
+
+function Disable-DiscordWindowsAutostart {
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    if (-not (Test-Path $runKey)) { return }
+    $props = Get-ItemProperty $runKey -ErrorAction SilentlyContinue
+    if (-not $props) { return }
+    foreach ($prop in $props.PSObject.Properties) {
+        if ($prop.Name -match '^PS') { continue }
+        if ($prop.Value -match 'Discord') {
+            Remove-ItemProperty -Path $runKey -Name $prop.Name -Force -ErrorAction SilentlyContinue
+            Write-Ok "Removed startup entry: $($prop.Name)"
+        }
+    }
+
+    $startupApproved = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+    if (Test-Path $startupApproved) {
+        $approved = Get-ItemProperty $startupApproved -ErrorAction SilentlyContinue
+        if ($approved) {
+            foreach ($prop in $approved.PSObject.Properties) {
+                if ($prop.Name -match '^PS') { continue }
+                if ($prop.Name -match 'Discord') {
+                    Remove-ItemProperty -Path $startupApproved -Name $prop.Name -Force -ErrorAction SilentlyContinue
+                    Write-Ok "Removed startup approval: $($prop.Name)"
+                }
+            }
+        }
+    }
+}
+
+function Disable-DiscordScheduledTasks {
+    try {
+        # Discord only - matching plain 'Squirrel' would disable other apps'
+        # updaters (Slack, GitHub Desktop, Teams classic all use Squirrel).
+        $tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue |
+            Where-Object { $_.TaskName -match 'Discord' -or $_.TaskPath -match 'Discord' })
+        foreach ($task in $tasks) {
+            Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue | Out-Null
+            Write-Ok "Disabled scheduled task: $($task.TaskPath)$($task.TaskName)"
+        }
+    } catch {
+        Write-LogLine 'WARN' "Scheduled task cleanup skipped: $($_.Exception.Message)"
+    }
+}
+
+function Set-DiscordWindowsNotificationsOff {
+    $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    if (-not (Test-Path $base)) { New-Item -Path $base -Force | Out-Null }
+
+    $setOff = {
+        param([string]$Id)
+        $path = Join-Path $base $Id
+        if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
+        Set-ItemProperty -Path $path -Name 'Enabled' -Value 0 -Type DWord -Force
+    }
+
+    foreach ($id in @('Discord', 'Discord.Desktop', 'DiscordInc.Discord', 'com.squirrel.Discord.Discord')) {
+        & $setOff $id
+    }
+
+    Get-ChildItem $base -ErrorAction SilentlyContinue |
+        Where-Object { $_.PSChildName -match 'Discord' } |
+        ForEach-Object {
+            Set-ItemProperty -Path $_.PSPath -Name 'Enabled' -Value 0 -Type DWord -Force
+            Write-Ok "Windows toasts off: $($_.PSChildName)"
+        }
+}
+
+function Set-DiscordTrayIconHidden([string]$AppDir) {
+    $notifyKey = 'HKCU:\Control Panel\NotifyIconSettings'
+    if (-not (Test-Path $notifyKey)) { return }
+
+    $targets = @(
+        (Join-Path $AppDir 'Discord.exe'),
+        (Get-DiscOptEnvPath 'LOCALAPPDATA' 'Discord\Update.exe'),
+        (Join-Path $AppDir 'Discord.bin.exe')
+    ) | Where-Object { Test-Path $_ }
+
+    $hidden = 0
+    Get-ChildItem $notifyKey -ErrorAction SilentlyContinue | ForEach-Object {
+        $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+        $path = $props.ExecutablePath
+        if (-not $path) { return }
+        foreach ($target in $targets) {
+            if ($path -ieq $target -or $path -match [regex]::Escape('Discord')) {
+                Set-ItemProperty -Path $_.PSPath -Name 'IsPromoted' -Value 0 -Type DWord -Force
+                $hidden++
+                break
+            }
+        }
+    }
+
+    if ($hidden -gt 0) { Write-Ok "Tray icon hidden ($hidden entries)" }
+    else { Write-Warn 'Tray icon registry entry not found yet - launch once, then re-run' }
+}
+
+function Apply-WindowsTweaks([string]$AppDir) {
+    Write-Step 'Applying Windows tweaks (notifications, tray, startup)...'
+    Disable-DiscordWindowsAutostart
+    Disable-DiscordScheduledTasks
+    Set-DiscordWindowsNotificationsOff
+    Set-DiscordTrayIconHidden $AppDir
+    Write-Ok 'Windows tweaks applied'
+}
+
+function Test-OpenAsarInstalled([string]$ResourcesDir) {
+    $target = Join-Path $ResourcesDir '_app.asar'
+    if (-not (Test-Path $target)) { return $false }
+    $size = (Get-Item $target).Length
+    return ($size -gt 10000 -and $size -lt 500000)
+}
+
+function Ensure-AsarStockBackup([string]$AppDir) {
+    $resources = Join-Path $AppDir 'resources'
+    $stockBackup = Join-Path $resources '_app.asar.stock'
+    if (Test-Path $stockBackup) { return }
+
+    $candidates = @(
+        (Join-Path $resources 'app.asar.backup'),
+        (Join-Path $resources '_app.asar'),
+        (Join-Path $resources 'app.asar')
+    )
+    foreach ($src in $candidates) {
+        if ((Test-Path $src) -and (Get-Item $src).Length -gt 1000000) {
+            Copy-Item $src $stockBackup -Force
+            Write-Ok 'Backed up stock bootstrap -> _app.asar.stock'
+            return
+        }
+    }
+    Write-Warn 'No _app.asar.stock backup yet'
+}
+
+function Install-OpenAsar([string]$AppDir) {
+    Write-Step 'Installing OpenASAR (Equicord-compatible)...'
+    $resources = Join-Path $AppDir 'resources'
+    $target = Join-Path $resources '_app.asar'
+    $stockBackup = Join-Path $resources '_app.asar.stock'
+
+    if ($Quick -and (Test-OpenAsarInstalled $resources)) {
+        Write-Ok 'OpenASAR already active on _app.asar (-Quick)'
+        return
+    }
+
+    Ensure-AsarStockBackup $AppDir
+
+    if (-not (Test-Path $target)) {
+        throw 'Missing _app.asar - install Equicord loader first'
+    }
+
+    if (-not (Test-Path $stockBackup)) {
+        if ((Get-Item $target).Length -gt 1000000) {
+            Copy-Item $target $stockBackup -Force
+            Write-Ok 'Backed up stock Discord bootstrap -> _app.asar.stock'
+        }
+    }
+
+    $temp = Get-DiscOptTempPath 'discopt-openasar-app.asar'
+    $bundled = Get-BundledOpenAsar
+    if ($bundled) {
+        Copy-Item $bundled $temp -Force
+        Write-Ok "Using bundled OpenASAR from tools/ ($([math]::Round((Get-Item $bundled).Length / 1KB, 1)) KB)"
+    } else {
+        Invoke-WebRequest -Uri $OpenAsarUrl -OutFile $temp -UseBasicParsing -TimeoutSec 90
+    }
+    if ((Get-Item $temp).Length -lt 10000) {
+        throw 'Downloaded OpenASAR app.asar looks invalid'
+    }
+
+    if (-not (Test-Path $ToolsDir)) { New-Item -ItemType Directory -Path $ToolsDir -Force | Out-Null }
+    Copy-Item $temp (Join-Path $ToolsDir 'openasar.asar') -Force
+
+    Write-DiscordResourceBytes -Path $target -Bytes ([IO.File]::ReadAllBytes($temp))
+    Write-Ok "OpenASAR nightly installed ($([math]::Round((Get-Item $target).Length / 1KB, 1)) KB on _app.asar)"
+}
+
+function Unlock-DiscordSettings([string]$DestPath = '') {
+    if (-not $DestPath) { $DestPath = Join-Path $AppData 'settings.json' }
+    if (Test-Path $DestPath) { attrib -R $DestPath 2>$null }
+}
+
+function Get-DiscOptPowerShellExe {
+    $found = Get-DiscOptPwsh77
+    if ($found) { return $found.Exe }
+    $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($pwsh) { return $pwsh.Source }
+    return (Get-DiscOptEnvPath 'SystemRoot' 'System32\WindowsPowerShell\v1.0\powershell.exe')
+}
+
+function Apply-DiscordProfile([string]$DestPath) {
+    Write-Step 'Applying boot/optimizer flags (preserving your in-app settings)...'
+    $profilePath = Join-Path $Profiles 'discord.json'
+    if (-not (Test-Path $profilePath)) { throw 'Missing profiles/discord.json' }
+
+    $kit = ConvertTo-HashtableDeep (Get-Content $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json)
+    $merged = @{}
+    if (Test-Path $DestPath) {
+        try {
+            $merged = ConvertTo-HashtableDeep (Get-Content $DestPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+        } catch {}
+    }
+
+    # Strip noisy/debug keys Discord or older kits may leave behind.
+    foreach ($drop in @(
+        'DANGEROUS_ENABLE_DEVTOOLS_ONLY_ENABLE_IF_YOU_KNOW_WHAT_YOURE_DOING',
+        'devTools',
+        'OPENASAR_HARDCODED'
+    )) {
+        if ($merged.ContainsKey($drop)) { $merged.Remove($drop) }
+    }
+
+    # If hardware acceleration was turned off on this PC (GPU-driver black
+    # screens, repair fallback, or the user's own choice), never force it back on.
+    $hwAccelOff = ($merged.Keys -contains 'enableHardwareAcceleration') -and
+        ($merged['enableHardwareAcceleration'] -eq $false)
+
+    $allowed = @(
+        'SKIP_HOST_UPDATE', 'OPEN_ON_STARTUP', 'MINIMIZE_TO_TRAY', 'START_MINIMIZED',
+        'IS_MAXIMIZED', 'IS_MINIMIZED', 'enableHardwareAcceleration', 'debugLogging', 'offloadAdmControls',
+        'asyncVideoInputDeviceInit', 'DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR',
+        'DESKTOP_TTI_DNSTCP_WARMUP', 'DESKTOP_TTI_EARLY_UPDATE_CHECK',
+        'DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS', 'BACKGROUND_COLOR',
+        'audioSubsystem', 'useLegacyAudioDevice'
+    )
+    foreach ($key in $allowed) {
+        if ($kit.Keys -contains $key) { $merged[$key] = $kit[$key] }
+    }
+    if ($hwAccelOff) {
+        $merged['enableHardwareAcceleration'] = $false
+        Write-LogLine 'OK' 'Hardware acceleration kept OFF (was disabled on this PC)'
+    }
+
+    # Always re-stamp chromium + OpenASAR from kit so Discord updates cannot wipe them to {}.
+    if ($kit.chromiumSwitches) {
+        $merged.chromiumSwitches = ConvertTo-HashtableDeep $kit.chromiumSwitches
+    } else {
+        $merged.chromiumSwitches = @{
+            'disable-breakpad'          = 1
+            'disable-crash-reporter'    = 1
+            'disable-domain-reliability' = 1
+            'disable-logging'           = 1
+        }
+    }
+    if ($kit.openasar) {
+        $merged.openasar = ConvertTo-HashtableDeep $kit.openasar
+    } else {
+        $merged.openasar = @{}
+    }
+    $merged.openasar.setup = $true
+    $merged.openasar.cmdPreset = 'perf'
+    $merged.openasar.quickstart = $false
+    $merged.openasar.domOptimizer = $false
+    $merged.openasar.themeSync = $false
+    $merged.openasar.autoupdate = $false
+    $merged.openasar.noTrack = $true
+    $merged.openasar.noTyping = $true
+    $merged.openasar.disableMediaKeys = $true
+    if (-not $merged.openasar.css) {
+        $merged.openasar.css = 'body { --background-primary: #000000; --background-secondary: #000000; }'
+    }
+
+    # Hard overrides every run (Discord sometimes rewrites these mid-session).
+    $merged['DESKTOP_TTI_EARLY_UPDATE_CHECK'] = $false
+    $merged['DESKTOP_TTI_DNSTCP_WARMUP'] = $false
+    $merged['DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR'] = $true
+    $merged['audioSubsystem'] = 'standard'
+    $merged['useLegacyAudioDevice'] = $false
+    $merged['asyncVideoInputDeviceInit'] = $false
+    $merged['debugLogging'] = $false
+    $merged['BACKGROUND_COLOR'] = '#000000'
+    $merged['OPEN_ON_STARTUP'] = $false
+
+    # Never force host-update skip until modules are healthy - SKIP_HOST_UPDATE=true
+    # with a broken installer.db freezes Discord on "Starting...".
+    $activeForSkip = Get-ActiveApp
+    if (-not $activeForSkip -or -not (Test-DiscordModulesReady $activeForSkip.FullName)) {
+        $merged['SKIP_HOST_UPDATE'] = $false
+        Write-LogLine 'OK' 'SKIP_HOST_UPDATE left false until modules are healthy'
+    }
+
+    $dir = Split-Path $DestPath -Parent
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    Unlock-DiscordSettings $DestPath
+
+    Write-JsonFile $DestPath $merged 20
+    Write-Ok 'Boot/optimizer flags applied (OpenASAR perf + chromium + standard audio)'
+}
+
+function Invoke-DiscordLaunch {
+    param(
+        [string]$AppDir,
+        [string[]]$ExtraArgs = @('-disable-logging', '-log-level=3')
+    )
+
+    $argStr = ($ExtraArgs | Where-Object { $_ }) -join ' '
+
+    # Launch Discord.exe directly - it is the reliable path. Update.exe
+    # -processStart depends on Squirrel state (RELEASES/installer.db) and
+    # exits silently when that state is unhappy.
+    if (-not $AppDir) {
+        $active = Get-ActiveApp
+        if ($active) { $AppDir = $active.FullName }
+    }
+    $exe = if ($AppDir) { Join-Path $AppDir 'Discord.exe' } else { $null }
+    if ($exe -and (Test-Path $exe)) {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $exe
+        $psi.WorkingDirectory = $AppDir
+        $psi.Arguments = $argStr
+        $psi.UseShellExecute = $true
+        return [System.Diagnostics.Process]::Start($psi)
+    }
+
+    $updateExe = Join-Path $DiscordRoot 'Update.exe'
+    if (Test-Path $updateExe) {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $updateExe
+        if ($argStr) {
+            $psi.Arguments = "-processStart Discord.exe -process-start-args `"$argStr`""
+        } else {
+            $psi.Arguments = '-processStart Discord.exe'
+        }
+        $psi.WorkingDirectory = $DiscordRoot
+        $psi.UseShellExecute = $true
+        return [System.Diagnostics.Process]::Start($psi)
+    }
+
+    throw "Discord.exe not found in $AppDir and Update.exe missing"
+}
+
+function Start-Discord([string]$AppDir) {
+    Get-Process Discord, Discord.bin, Update -ErrorAction SilentlyContinue |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+
+    Unlock-DiscordSettings
+    Apply-DiscordProfile (Join-Path $AppData 'settings.json')
+    # Always re-enable kernel on normal launch unless this run just rolled it back
+    # or the user passed -SkipKernel. .disabled is only a soft temporary marker.
+    if (-not $SkipKernel -and
+        -not $Script:KernelRolledBack -and -not $Script:ModsRolledBack) {
+        try {
+            Install-DiscOptKernel $AppDir
+        } catch {
+            Write-Warn "Kernel re-enable on launch failed: $($_.Exception.Message)"
+        }
+    }
+
+    [void](Invoke-DiscordLaunch -AppDir $AppDir)
+}
+
+function Wait-UserThenStartDiscord([string]$AppDir) {
+    # Always skip under OptiHub; interactive restart is not used from the app.
+    Write-Ok 'Skipping interactive Discord restart prompt'
+    Write-HubProgress 98 'Finishing...'
+}
+
+function Write-JsonFile([string]$Path, $Object, [int]$Depth = 20) {
+    $dir = Split-Path $Path -Parent
+    if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $json = $Object | ConvertTo-Json -Depth $Depth -Compress:$false
+    [System.IO.File]::WriteAllText($Path, $json, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Merge-HashtableDeep([hashtable]$Base, [hashtable]$Overlay) {
+    foreach ($key in @($Overlay.Keys)) {
+        $val = $Overlay[$key]
+        if ($val -is [hashtable] -and ($Base.Keys -contains $key) -and $Base[$key] -is [hashtable]) {
+            Merge-HashtableDeep $Base[$key] $val
+        } else {
+            $Base[$key] = $val
+        }
+    }
+}
+
+function Get-EquicordSettingsHealth([string]$Path) {
+    $result = @{
+        Healthy = $false
+        Reason  = 'missing'
+        Size    = 0
+        Plugins = 0
+        Enabled = 0
+        HasBom  = $false
+    }
+    if (-not (Test-Path $Path)) { return $result }
+
+    $result.Size = (Get-Item $Path).Length
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    $result.HasBom = ($bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191)
+    if ($result.HasBom) { $result.Reason = 'utf8-bom'; return $result }
+    if ($result.Size -lt 8000) { $result.Reason = 'too-small'; return $result }
+
+    try {
+        $s = Get-Content $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+        if (-not $s.plugins) { $result.Reason = 'no-plugins'; return $result }
+        $props = @($s.plugins.PSObject.Properties)
+        $result.Plugins = $props.Count
+        $result.Enabled = (@($props | Where-Object { $_.Value.enabled -eq $true })).Count
+        if ($result.Plugins -lt 200) { $result.Reason = 'plugin-count-low'; return $result }
+        if ($props.Name -notcontains 'NoTrack') { $result.Reason = 'missing-notrack'; return $result }
+        $result.Healthy = $true
+        $result.Reason = 'ok'
+    } catch {
+        $result.Reason = 'parse-error'
+    }
+    return $result
+}
+
+function Test-EquicordSettingsHealthy([string]$Path) {
+    return (Get-EquicordSettingsHealth $Path).Healthy
+}
+
+function Initialize-EquicordSettingsBase([string]$DestPath) {
+    if (Test-EquicordSettingsHealthy $DestPath) {
+        return ConvertTo-HashtableDeep (Get-Content $DestPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+    }
+
+    # Quick / non-interactive: never launch Discord just to seed settings - use bundled manifests.
+    if ($Quick -or $env:DISCOPT_NONINTERACTIVE -eq '1' -or $env:OPTIHUB_SKIP_BOOT_FLASH -eq '1') {
+        Write-Step 'Building Equicord settings from bundled manifests (no Discord launch)...'
+        Write-Warn 'Skipping Discord bootstrap launch in Quick/non-interactive mode'
+        return Build-FullEquicordSettings
+    }
+
+    Write-Step 'Bootstrapping Equicord plugin registry (one quick launch)...'
+    [void](Invoke-DiscordLaunch -AppDir (Get-ActiveApp).FullName)
+    Start-Sleep -Seconds 12
+    Stop-Discord
+
+    if (Test-EquicordSettingsHealthy $DestPath) {
+        return ConvertTo-HashtableDeep (Get-Content $DestPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+    }
+
+    Write-Warn 'Using bundled manifests for settings base'
+    return Build-FullEquicordSettings
+}
+function Apply-EquicordProfile {
+    param([string]$AppDir = '')
+
+    # UNIVERSAL: same profile on every machine. Stock Discord / fresh Equicord /
+    # existing users all get the full manifest + OptiHub overrides written to disk.
+    Write-Step 'Applying universal Equicord profile (all plugins for any PC)...'
+    Write-HubProgress 62 'Applying Equicord profile...'
+    Write-HubProgress 64 'Writing plugin settings...'
+
+    $settingsDir = Join-Path $EquicordData 'settings'
+    $themesDir = Join-Path $EquicordData 'themes'
+    $destPath = Join-Path $settingsDir 'settings.json'
+    if (-not (Test-Path $settingsDir)) { New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null }
+    if (-not (Test-Path $themesDir)) { New-Item -ItemType Directory -Path $themesDir -Force | Out-Null }
+
+    # Refresh manifests when allowed so new Equicord plugins still get registered.
+    Sync-PluginManifests
+
+    # Full rebuild - do not trust an existing partial settings.json from a stock install.
+    $settings = Build-FullEquicordSettings
+
+    # Hard safety locks (always, every machine).
+    $settings.autoUpdateNotification = $false
+    $settings.eagerPatches = $true
+    $settings.enableOnlineThemes = $false
+    $settings.useQuickCss = $false
+    $settings.enableReactDevtools = $false
+    $settings.mainWindowFrameless = $false
+    $settings.frameless = $false
+    $settings.transparent = $false
+    $settings.windowsMaterial = 'none'
+    $settings.winNativeTitleBar = $false
+    if (-not $settings.cloud) { $settings.cloud = @{} }
+    $settings.cloud.settingsSync = $false
+    $settings.cloud.authenticated = $false
+    $settings.cloud.url = 'https://cloud.equicord.org/'
+    $settings.enabledThemes = @($EnabledTheme)
+
+    foreach ($name in $ForceDisabledPlugins) {
+        if (-not ($settings.plugins.Keys -contains $name)) { $settings.plugins[$name] = @{} }
+        $settings.plugins[$name].enabled = $false
+    }
+
+    if (-not ($settings.plugins.Keys -contains 'StreamerModeOn')) { $settings.plugins['StreamerModeOn'] = @{} }
+    $settings.plugins['StreamerModeOn'].enabled = $false
+
+    if (-not ($settings.plugins.Keys -contains 'NotificationVolume')) { $settings.plugins['NotificationVolume'] = @{} }
+    $settings.plugins['NotificationVolume'].enabled = $true
+    $settings.plugins['NotificationVolume'].notificationVolume = 25
+
+    if (-not ($settings.plugins.Keys -contains 'NoTrack')) { $settings.plugins['NoTrack'] = @{} }
+    $settings.plugins['NoTrack'].enabled = $true
+    $settings.plugins['NoTrack'].disableAnalytics = $true
+
+    Write-JsonFile $destPath $settings 30
+
+    # Broken custom themes from older kits.
+    Get-ChildItem $themesDir -Filter 'discopt-amoled*.theme.css' -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+            Write-Ok "Removed broken theme: $($_.Name)"
+        }
+
+    $themeSrc = Join-Path $Themes $EnabledTheme
+    if (Test-Path $themeSrc) {
+        Copy-Item $themeSrc (Join-Path $themesDir $EnabledTheme) -Force
+    } else {
+        Write-Warn "AMOLED theme missing from kit: $EnabledTheme"
+    }
+
+    $enabled = @($settings.plugins.Values | Where-Object { $_.enabled -eq $true }).Count
+    $total = @($settings.plugins.Keys).Count
+    Write-Ok "Universal profile written: $enabled / $total plugins enabled, AMOLED on"
+    Write-Ok "Themes: $($settings.enabledThemes -join ', ')"
+    Write-Ok "Settings: $destPath"
+}
+
+function New-EquicordLoaderAsar([string]$EquicordAsarPath) {
+    $escaped = $EquicordAsarPath.Replace('\', '\\')
+    $indexJs = "require(`"$escaped`")`n"
+    $packageJson = "{`n`t`"name`": `"discord`",`n`t`"main`": `"index.js`"`n}"
+    $indexBytes = [Text.Encoding]::UTF8.GetBytes($indexJs)
+    $pkgBytes = [Text.Encoding]::UTF8.GetBytes($packageJson)
+    $json = '{"files":{"index.js":{"size":' + $indexBytes.Length + ',"offset":"0"},"package.json":{"size":' + $pkgBytes.Length + ',"offset":"' + $indexBytes.Length + '"}}}'
+    $jsonBytes = [Text.Encoding]::UTF8.GetBytes($json)
+    $jsonPad = (4 - ($jsonBytes.Length % 4)) % 4
+    $ms = [IO.MemoryStream]::new()
+    $bw = [IO.BinaryWriter]::new($ms)
+    $bw.Write([uint32]4)
+    $bw.Write([uint32](8 + $jsonBytes.Length))
+    $bw.Write([uint32]($jsonBytes.Length + 4))
+    $bw.Write([uint32]$jsonBytes.Length)
+    $bw.Write($jsonBytes)
+    for ($i = 0; $i -lt $jsonPad; $i++) { $bw.Write([byte]0) }
+    $bw.Write($indexBytes)
+    $bw.Write($pkgBytes)
+    $bw.Close()
+    return $ms.ToArray()
+}
+
+function Test-EquicordReady([string]$AppDir) {
+    $resources = Join-Path $AppDir 'resources'
+    $loaderOk = Test-EquicordLoaderPatched $AppDir
+    $openAsarOk = $SkipOpenAsar -or (Test-OpenAsarInstalled $resources)
+    return ($loaderOk -and $openAsarOk)
+}
+
+function Install-EquicordDirect([string]$AppDir) {
+    # Fast path only: bundled/cached Equicord asar + stub loader + OpenASAR.
+    # Never calls Equilot (interactive CLI hangs OptiHub).
+    $equicordAsar = Join-Path $EquicordData 'equicord.asar'
+    if (-not (Test-Path $EquicordData)) { New-Item -ItemType Directory -Path $EquicordData -Force | Out-Null }
+
+    Write-HubProgress 56 'Installing Equicord (fast)...'
+    Write-Step 'Installing Equicord + OpenASAR (direct, no Equilot)...'
+    Stop-Discord
+
+    $dl = Resolve-EquicordDesktopAsar $equicordAsar
+    if ($dl.Size -lt 1000000) { throw 'Equicord desktop.asar looks invalid (too small)' }
+    $tagLabel = switch ($dl.Source) {
+        'tools'   { 'bundled (tools/)' }
+        'cache'   { 'cached' }
+        'direct'  { 'latest (direct)' }
+        'api'     { $dl.Tag }
+        default   { $dl.Tag }
+    }
+    Write-Ok "Equicord $tagLabel ($([math]::Round($dl.Size / 1MB, 1)) MB)"
+
+    $resources = Join-Path $AppDir 'resources'
+    $appAsar = Join-Path $resources 'app.asar'
+    if (-not (Test-Path $resources) -or -not (Test-Path $appAsar)) {
+        Write-Warn "Discord resources missing under $AppDir - repairing Discord install..."
+        Write-HubProgress 30 'Repairing Discord resources...'
+        Remove-DiscordInstall
+        Invoke-DiscordSetupSilent
+        $repaired = Get-ActiveApp
+        if (-not $repaired) { throw 'Discord reinstall failed - no app-* folder' }
+        Invoke-SquirrelFirstRun $repaired.FullName
+        if (-not (Test-DiscordModulesReady $repaired.FullName)) {
+            Initialize-DiscordModules $repaired.FullName
+        }
+        Stop-Discord
+        $AppDir = $repaired.FullName
+        $resources = Join-Path $AppDir 'resources'
+        $appAsar = Join-Path $resources 'app.asar'
+        if (-not (Test-Path $resources) -or -not (Test-Path $appAsar)) {
+            throw "Discord still missing resources after reinstall: $resources"
+        }
+        Write-Ok "Discord resources restored ($($repaired.Name))"
+    }
+
+    Ensure-AsarStockBackup $AppDir
+
+    $loaderLen = if (Test-Path $appAsar) { (Get-Item $appAsar).Length } else { 0 }
+    if ($loaderLen -ge 64 -and $loaderLen -lt 4096) {
+        Write-Ok 'Equicord loader already patched'
+    } else {
+        if ($loaderLen -gt 0 -and $loaderLen -lt 64) {
+            Write-Warn "Equicord loader corrupt ($loaderLen bytes) - rewriting stub"
+        }
+        $backupAsar = Join-Path $resources '_app.asar'
+        if (-not (Test-Path $backupAsar) -and (Test-Path $appAsar) -and (Get-Item $appAsar).Length -gt 1000000) {
+            Copy-Item $appAsar $backupAsar -Force
+        }
+        Write-DiscordResourceBytes -Path $appAsar -Bytes (New-EquicordLoaderAsar $equicordAsar)
+        Write-Ok 'Installed Equicord loader stub'
+    }
+
+    if (-not $SkipOpenAsar) {
+        Write-HubProgress 66 'Installing OpenASAR...'
+        Install-OpenAsar $AppDir
+    } else {
+        Write-Warn 'Skipped OpenASAR install (-SkipOpenAsar)'
+    }
+
+    Write-HubProgress 62 'Applying Equicord profile...'
+    Apply-EquicordProfile -AppDir $AppDir
+
+    if (-not (Test-EquicordReady $AppDir)) {
+        throw 'Direct Equicord install did not verify (loader/OpenASAR check failed)'
+    }
+    Write-Ok 'Equicord + OpenASAR ready (direct path)'
+}
+
+function Install-Equicord([string]$AppDir) {
+    Write-Step 'Verifying Equicord + OpenASAR...'
+    Write-HubProgress 55 'Checking Equicord...'
+    $resources = Join-Path $AppDir 'resources'
+    $loaderOk = Test-EquicordLoaderPatched $AppDir
+    $openOk = $SkipOpenAsar -or (Test-OpenAsarInstalled $resources)
+    if ($loaderOk -and $openOk) {
+        Write-Ok 'Equicord + OpenASAR already installed - applying tweaks only'
+        Apply-EquicordProfile -AppDir $AppDir
+        return
+    }
+    if (-not $loaderOk) {
+        Write-Warn 'Equicord loader missing/corrupt - repairing via direct install'
+    }
+
+    Write-Step 'Equicord/OpenASAR missing - installing (fast path)...'
+    Install-EquicordDirect $AppDir
+}
+function Copy-KernelFileWithRetry {
+    param(
+        [Parameter(Mandatory)][string]$Source,
+        [Parameter(Mandatory)][string]$Destination,
+        [int]$Attempts = 8
+    )
+    for ($i = 1; $i -le $Attempts; $i++) {
+        Stop-Discord
+        try {
+            if (Test-Path -LiteralPath $Destination) {
+                attrib -R -S -H "$Destination" 2>$null
+                try { & takeown.exe /F "$Destination" /A 2>$null | Out-Null } catch { }
+                try { & icacls.exe "$Destination" /grant "*S-1-5-32-544:F" /C 2>$null | Out-Null } catch { }
+            }
+            Copy-Item -LiteralPath $Source -Destination $Destination -Force -ErrorAction Stop
+            if ((Test-Path -LiteralPath $Destination) -and
+                ((Get-Item -LiteralPath $Destination).Length -eq (Get-Item -LiteralPath $Source).Length)) {
+                return
+            }
+            throw "Copy verify failed for $Destination"
+        } catch {
+            if ($i -ge $Attempts) { throw }
+            Write-Warn ("Waiting to copy kernel file ($i/$Attempts): " + $_.Exception.Message)
+            Start-Sleep -Milliseconds (350 * $i)
+        }
+    }
+}
+
+function Install-DiscOptKernel([string]$AppDir) {
+    Write-Step 'Installing DiscOpt kernel (memory trim, priority, raw input)...'
+    Write-HubProgress 78 'Installing DiscOpt kernel...'
+
+    $proxy = Join-Path $KitDir 'ffmpeg.dll'
+    $dll = Join-Path $KitDir 'version.dll'
+    $ini = Join-Path $KitDir 'config.ini'
+    foreach ($file in @($proxy, $dll, $ini)) {
+        if (-not (Test-Path $file)) { throw "Missing kernel file: $file" }
+    }
+    if ((Get-Item $proxy).Length -lt 10000) { throw 'Bundled ffmpeg proxy looks invalid' }
+    if ((Get-Item $dll).Length -lt 50000) { throw 'Bundled version.dll looks invalid' }
+
+    Stop-Discord
+
+    # Clear any previous soft-disable markers so Reapply always reactivates the kernel.
+    foreach ($name in @('version.dll', 'config.ini')) {
+        $disabled = Join-Path $AppDir "$name.disabled"
+        if (Test-Path -LiteralPath $disabled) {
+            Remove-Item -LiteralPath $disabled -Force -ErrorAction SilentlyContinue
+            Write-Ok "Cleared $name.disabled (re-enabling kernel)"
+        }
+    }
+
+    $real = Join-Path $AppDir 'ffmpeg_real.dll'
+    $current = Join-Path $AppDir 'ffmpeg.dll'
+    if (-not (Test-Path $real)) {
+        if (-not (Test-Path $current)) { throw 'Stock ffmpeg.dll missing' }
+        if ((Get-Item $current).Length -lt 500000) {
+            throw 'ffmpeg_real.dll missing - reinstall Discord (stock ffmpeg not found)'
+        }
+        Copy-KernelFileWithRetry -Source $current -Destination $real
+        Write-Ok 'Saved stock ffmpeg.dll backup (ffmpeg_real.dll)'
+    } elseif ((Get-Item $real).Length -lt 500000) {
+        throw 'ffmpeg_real.dll is corrupt - reinstall Discord'
+    }
+
+    # Order matters: version.dll + config.ini first, proxy last (proxy loads version.dll).
+    $verDest = Join-Path $AppDir 'version.dll'
+    if (Test-Path $verDest) { attrib -R $verDest 2>$null }
+    Copy-KernelFileWithRetry -Source $dll -Destination $verDest
+    Copy-KernelFileWithRetry -Source $ini -Destination (Join-Path $AppDir 'config.ini')
+    Copy-KernelFileWithRetry -Source $proxy -Destination $current
+
+    # Sanity: proxy small, real large, version present.
+    $proxyLen = (Get-Item $current).Length
+    $realLen = (Get-Item $real).Length
+    $verLen = (Get-Item $verDest).Length
+    if ($proxyLen -ge 500000) { throw "Kernel install failed: ffmpeg.dll still stock ($proxyLen bytes)" }
+    if ($realLen -lt 500000) { throw "Kernel install failed: ffmpeg_real.dll too small ($realLen bytes)" }
+    if ($verLen -lt 50000) { throw "Kernel install failed: version.dll too small ($verLen bytes)" }
+
+    Write-Ok "DiscOpt kernel active (proxy $([math]::Round($proxyLen/1KB,0)) KB + version.dll + config.ini)"
+    Write-Ok 'Features: idle RAM trim, process priority, raw input'
+}
+
+function Disable-DiscOptKernelOnDisk([string]$AppDir) {
+    $real = Join-Path $AppDir 'ffmpeg_real.dll'
+    if ((Test-Path $real) -and ((Get-Item $real).Length -gt 500000)) {
+        Copy-Item $real (Join-Path $AppDir 'ffmpeg.dll') -Force
+    }
+    foreach ($name in @('version.dll', 'config.ini')) {
+        $path = Join-Path $AppDir $name
+        if (Test-Path $path) {
+            attrib -R $path 2>$null
+            $disabled = "$path.disabled"
+            if (Test-Path $disabled) { Remove-Item $disabled -Force -ErrorAction SilentlyContinue }
+            Rename-Item $path $disabled -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Wait-DiscordHealthy {
+    param([int]$TimeoutSec = 120)
+
+    # A blank/black page keeps the plain 'Discord' title forever. A healthy,
+    # logged-in client reaches a real title ('Friends - Discord', '#chan - Discord').
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    $sawWindow = $false
+    while ((Get-Date) -lt $deadline) {
+        $state = Get-DiscordWindowState
+        if ($state -eq 'logged_in') { return $true }
+        if ($state -ne 'none') { $sawWindow = $true }
+        Start-Sleep -Seconds 2
+    }
+    if ($sawWindow) {
+        Write-LogLine 'WARN' "Discord window stayed in state '$(Get-DiscordWindowState)' (blank page?)"
+    } else {
+        Write-LogLine 'WARN' 'Discord window never appeared'
+    }
+    return $false
+}
+
+function Confirm-DiscordBootsAfterMods([string]$AppDir) {
+    Write-Step 'Boot check: verifying Discord opens and fully loads...'
+    Stop-Discord
+    [void](Invoke-DiscordLaunch -AppDir $AppDir)
+    if (Wait-DiscordHealthy 120) {
+        Stop-Discord
+        Write-Ok 'Boot check passed (Discord loaded to a real page)'
+        return
+    }
+
+    Write-Warn 'Discord did not fully load - disabling DiscOpt kernel and retrying...'
+    Write-LogLine 'WARN' 'Boot check failed with kernel - trying without kernel'
+    Stop-Discord
+    Disable-DiscOptKernelOnDisk $AppDir
+    [void](Invoke-DiscordLaunch -AppDir $AppDir)
+    if (Wait-DiscordHealthy 120) {
+        Stop-Discord
+        $Script:KernelRolledBack = $true
+        Write-Warn 'Kernel disabled automatically - Discord loads without it on this PC.'
+        Write-Warn 'Everything else (Equicord, OpenASAR, theme, tweaks) is still active.'
+        return
+    }
+
+    Write-Warn 'Still not loading - restoring stock Discord (all mods off)...'
+    Write-LogLine 'WARN' 'Boot check failed without kernel - restoring stock runtime'
+    Stop-Discord
+    Use-StockDiscordRuntime $AppDir
+    [void](Invoke-DiscordLaunch -AppDir $AppDir)
+    if (Wait-DiscordHealthy 150) {
+        Stop-Discord
+        $Script:KernelRolledBack = $true
+        $Script:ModsRolledBack = $true
+        Write-Warn 'Stock Discord restored and it loads. Mods were rolled back for safety.'
+        return
+    }
+
+    Stop-Discord
+    throw 'Discord failed to load even in stock mode. Use Repair Discord in OptiHub, or: irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex'
+}
+
+function Disable-Fso([string]$AppDir) {
+    $exe = Join-Path $AppDir 'Discord.exe'
+    if (-not (Test-Path $exe)) { return }
+    $key = 'HKCU:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
+    if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+    Set-ItemProperty -Path $key -Name $exe -Value '~ DISABLEDXMAXIMIZEDWINDOWEDMODE' -Force
+    Write-Ok 'Disabled fullscreen optimizations'
+}
+
+function Restore-StartMenu {
+    $app = Get-ActiveApp
+    $vbs = Join-Path $KitDir 'Discord.vbs'
+    $psExe = (Get-DiscOptPowerShellExe) -replace '"', '""'
+    $vbsContent = @"
+Set fso = CreateObject("Scripting.FileSystemObject")
+kitDir = fso.GetParentFolderName(WScript.ScriptFullName)
+rootDir = fso.GetParentFolderName(kitDir)
+optimizer = rootDir & "\Disc-Optimizer.ps1"
+ps = "$psExe"
+CreateObject("WScript.Shell").Run """" & ps & """ -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File """ & optimizer & """ -Launch", 0, False
+"@
+    Set-Content -Path $vbs -Value $vbsContent -Encoding ASCII
+
+    $icon = Join-Path $app.FullName 'app.ico'
+    $folder = Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc'
+    if (-not $folder) { throw 'APPDATA is not set; cannot create Start menu shortcut' }
+    $shortcut = Join-Path $folder 'Discord.lnk'
+    if (-not (Test-Path $folder)) { New-Item -ItemType Directory -Path $folder -Force | Out-Null }
+    Remove-Item (Join-Path (Split-Path $folder -Parent) 'Discord.lnk') -Force -ErrorAction SilentlyContinue
+    $sc = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
+    $wscript = Get-DiscOptEnvPath 'SystemRoot' 'System32\wscript.exe'
+    if (-not $wscript) { throw 'SystemRoot is not set; cannot find wscript.exe' }
+    $sc.TargetPath = $wscript
+    $sc.Arguments = "`"$vbs`" //B"
+    $sc.WorkingDirectory = $Root
+    $sc.Description = 'Discord (Disc Optimizer)'
+    if (Test-Path $icon) { $sc.IconLocation = "$icon,0" }
+    $sc.Save()
+    Write-Ok 'Start menu -> Discord.vbs (-Launch)'
+}
+
+function Test-KernelOnDisk([string]$AppDir) {
+    $ok = $true
+    foreach ($name in @('version.dll', 'config.ini')) {
+        $path = Join-Path $AppDir $name
+        if (-not (Test-Path $path)) {
+            Write-Warn "Kernel file missing on disk: $name"
+            $ok = $false
+            continue
+        }
+        if ($name -eq 'version.dll' -and (Get-Item $path).Length -lt 50000) {
+            Write-Warn 'version.dll looks invalid'
+            $ok = $false
+        } else {
+            Write-Ok "Kernel on disk: $name"
+        }
+    }
+    $ffmpegReal = Join-Path $AppDir 'ffmpeg_real.dll'
+    if (Test-Path $ffmpegReal) { Write-Ok 'Kernel on disk: ffmpeg_real.dll (stock backup)' }
+    $ffmpeg = Join-Path $AppDir 'ffmpeg.dll'
+    if (Test-Path $ffmpeg) {
+        if ((Get-Item $ffmpeg).Length -lt 500000) {
+            Write-Ok 'Kernel on disk: ffmpeg.dll (proxy - memory trim active)'
+        } else {
+            Write-Warn 'Kernel on disk: ffmpeg.dll still stock (trim inactive until -Launch)'
+            $ok = $false
+        }
+    }
+    return $ok
+}
+
+function Test-DiscOptimizer {
+    $app = Get-ActiveApp
+    if (-not $app) { Write-Warn 'No active Discord app folder'; return }
+
+    $resources = Join-Path $app.FullName 'resources'
+    $loader = Join-Path $resources 'app.asar'
+    $bootstrap = Join-Path $resources '_app.asar'
+    $stockBackup = Join-Path $resources '_app.asar.stock'
+
+    if ((Test-Path (Join-Path $EquicordData 'equicord.asar')) -and (Test-Path $loader) -and (Get-Item $loader).Length -lt 4096) {
+        Write-Ok 'Equicord loader active (app.asar stub)'
+    } elseif (-not $SkipEquicord) {
+        Write-Warn 'Equicord loader not verified'
+    }
+
+    if (Test-OpenAsarInstalled $resources) {
+        $size = [math]::Round((Get-Item $bootstrap).Length / 1KB, 1)
+        Write-Ok "OpenASAR active on _app.asar ($size KB)"
+    } elseif (-not $SkipOpenAsar -and -not $SkipEquicord) {
+        Write-Warn 'OpenASAR not detected on _app.asar'
+    }
+
+    if (Test-Path $stockBackup) {
+        Write-Ok 'Stock bootstrap backup present (_app.asar.stock)'
+    } elseif (-not $SkipOpenAsar -and -not $SkipEquicord) {
+        Write-Warn 'No _app.asar.stock backup yet'
+    }
+
+    $krispPath = Join-Path $app.FullName 'modules\discord_krisp-1'
+    if (Test-Path $krispPath) { Write-Ok 'Krisp module present (voice UI)' }
+    else { Write-Warn 'Krisp module missing - None dropdown may not work' }
+
+    if (-not $SkipKernel) {
+        if (-not (Test-KernelOnDisk $app.FullName)) {
+            Write-Warn 'DiscOpt kernel files incomplete on disk'
+        }
+        if (Get-Process Discord -ErrorAction SilentlyContinue) {
+            try {
+                $kernelRunning = Get-Process Discord -ErrorAction SilentlyContinue | ForEach-Object {
+                    $ff = $_.Modules | Where-Object { $_.FileName -like '*\Discord\app-*\ffmpeg.dll' } | Select-Object -First 1
+                    if ($ff -and (Get-Item $ff.FileName -ErrorAction SilentlyContinue).Length -lt 500000) { return $true }
+                } | Select-Object -First 1
+                if ($kernelRunning) { Write-Ok 'DiscOpt kernel loaded (ffmpeg proxy in process)' }
+            } catch {
+                Write-Warn 'Could not inspect running Discord modules; on-disk kernel check completed'
+                Write-LogLine 'WARN' "Process module inspection failed: $($_.Exception.Message)"
+            }
+        }
+    }
+
+    $settingsPath = Join-Path $EquicordData 'settings\settings.json'
+    if (Test-Path $settingsPath) {
+        $eqHealth = Get-EquicordSettingsHealth $settingsPath
+        if ($eqHealth.Healthy) {
+            $sizeKb = [math]::Round($eqHealth.Size / 1KB, 1)
+            Write-Ok "Equicord settings OK ($($eqHealth.Plugins) plugins, $sizeKb KB, no BOM)"
+        } else {
+            Write-Warn "Equicord settings issue: $($eqHealth.Reason) ($($eqHealth.Plugins) plugins, $($eqHealth.Size) bytes)"
+        }
+        try {
+            $s = Get-Content $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            Write-Ok "Equicord plugins: $($eqHealth.Enabled) enabled / $($eqHealth.Plugins) listed"
+            if ($s.enabledThemes -and $s.enabledThemes.Count -gt 0) {
+                Write-Ok "Themes on: $($s.enabledThemes -join ', ')"
+            } else {
+                Write-Warn 'No themes enabled in settings'
+            }
+            $bk = $s.plugins.BlockKrisp
+            if ($bk -and $bk.enabled -eq $true) { Write-Warn 'BlockKrisp enabled - None dropdown may break' }
+            else { Write-Ok 'BlockKrisp off (native noise UI)' }
+            $dc = $s.plugins.Declutter
+            if ($dc -and $dc.removeAudioMenus -eq $true) { Write-Warn 'Declutter hiding audio menus' }
+        } catch {}
+    }
+}
+
+function Write-RunSummary {
+    param(
+        [string]$AppDir,
+        [bool]$Launched
+    )
+
+    $checks = [System.Collections.Generic.List[string]]::new()
+    $psLabel = "PowerShell $($PSVersionTable.PSVersion)"
+    if ($PSVersionTable.PSEdition) { $psLabel += " ($($PSVersionTable.PSEdition))" }
+    $checks.Add($psLabel)
+
+    if ($Launched) {
+        $proc = Get-Process Discord -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($proc) { $checks.Add("Discord running (PID $($proc.Id))") }
+        else { $checks.Add('Discord launch requested (process not seen yet)') }
+    } elseif (-not $NoLaunch) {
+        $checks.Add('Discord left closed - open when ready')
+    } else {
+        $checks.Add('Discord not started (use Start menu or -Launch)')
+    }
+
+    $settingsPath = Join-Path $EquicordData 'settings\settings.json'
+    if (Test-Path $settingsPath) {
+        $eq = Get-EquicordSettingsHealth $settingsPath
+        if ($eq.Healthy) { $checks.Add("Equicord OK - $($eq.Enabled) plugins on") }
+        else { $checks.Add("Equicord settings: $($eq.Reason)") }
+    }
+
+    if ($Script:ModsRolledBack) {
+        $checks.Add('SAFETY: mods rolled back to stock (Discord would not boot with them)')
+    } elseif ($Script:KernelRolledBack) {
+        $checks.Add('SAFETY: kernel disabled (Discord boots fine without it; all other tweaks active)')
+    } elseif ($AppDir) {
+        $ff = Join-Path $AppDir 'ffmpeg.dll'
+        if ((Test-Path $ff) -and (Get-Item $ff).Length -lt 500000) {
+            $checks.Add('DiscOpt kernel on disk (memory trim)')
+        } elseif (Test-Path $ff) {
+            $checks.Add('Kernel proxy installs on next Discord start')
+        }
+    }
+
+    if (Test-DiscordLoggedIn) {
+        $checks.Add('Login session preserved')
+    }
+
+    Write-Host ''
+    Write-Host '  ========================================' -ForegroundColor DarkGray
+    Write-Host '   DONE - everything applied successfully' -ForegroundColor Green
+    Write-Host '  ========================================' -ForegroundColor DarkGray
+    foreach ($line in $checks) {
+        Write-Host "   [+] $line" -ForegroundColor Green
+    }
+    Write-Host "   [i] Log: $(Join-Path $LogDir 'last-run.log')" -ForegroundColor DarkGray
+    Write-Host ''
+}
+

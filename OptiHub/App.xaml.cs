@@ -35,6 +35,19 @@ public partial class App : Application
         _window = new MainWindow();
         Services.Theme.Attach(_window);
         _window.Activate();
+
+        // Background auto-update for Discord kit when enabled (any machine).
+        if (Services.Settings.Current.AutoUpdateScripts)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Services.Updater.CheckAndUpdateDiscordScriptsAsync(force: false);
+                }
+                catch { /* best-effort */ }
+            });
+        }
     }
 
     public static Window? MainAppWindow { get; set; }

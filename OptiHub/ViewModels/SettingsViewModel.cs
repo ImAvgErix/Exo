@@ -31,6 +31,28 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void GoBack() => RequestGoBack?.Invoke(this, EventArgs.Empty);
 
+    [RelayCommand]
+    private void OpenLogsFolder()
+    {
+        try
+        {
+            var logs = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "OptiHub", "logs");
+            Directory.CreateDirectory(logs);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = logs,
+                UseShellExecute = true
+            });
+            UpdateStatus = "Opened logs folder.";
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus = "Could not open logs: " + ex.Message;
+        }
+    }
+
     partial void OnIsDarkModeChanged(bool value)
     {
         if (_suppressThemeSync) return;

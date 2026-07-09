@@ -103,11 +103,25 @@ public sealed class ScriptBundleService
             !repairText.Contains("Write-HubProgress", StringComparison.Ordinal) ||
             repairText.Any(c => c > 127);
 
+        // Universal kit: full Equicord manifests required so stock Discord PCs get every plugin.
+        var profilesDir = Path.Combine(working, "kit", "profiles");
+        var eqManifest = Path.Combine(profilesDir, "equicordplugins.json");
+        var vcManifest = Path.Combine(profilesDir, "vencordplugins.json");
+        var overrides = Path.Combine(profilesDir, "equicord-overrides.json");
+        var libFunctions = Path.Combine(working, "kit", "lib", "Functions.ps1");
+        var manifestsBroken =
+            !File.Exists(eqManifest) ||
+            !File.Exists(vcManifest) ||
+            !File.Exists(overrides) ||
+            !File.Exists(libFunctions) ||
+            new FileInfo(eqManifest).Length < 10_000;
+
         var workingBroken =
             !File.Exists(marker) ||
             !File.Exists(hubRun) ||
             !File.Exists(desktopAsar) ||
             repairBroken ||
+            manifestsBroken ||
             !File.ReadAllText(marker).Contains("Install-EquicordDirect", StringComparison.Ordinal) ||
             !File.ReadAllText(marker).Contains("Write-DiscordResourceBytes", StringComparison.Ordinal);
 

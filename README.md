@@ -1,77 +1,78 @@
 # OptiHub
 
-**OptiHub** is an all-in-one Windows optimizer hub — performance, privacy, and gaming-focused tweaks.
+**One hub. Max performance.**
+
+Windows optimizer hub for performance, privacy, and gaming. Works on **stock Discord** on any PC — OptiHub installs Equicord, OpenASAR, the DiscOpt kernel, and a full universal plugin profile for everyone.
 
 | Optimizer | Status |
 |---|---|
 | **Discord** | Live |
 | Brave · Steam · Riot · Epic | Coming soon |
 
-| | |
-|---|---|
-| Stack | C# · WinUI 3 · Windows App SDK · .NET 8 |
-| Theme | AMOLED black · clean light · white accents |
-| Kernel | DiscOpt memory trim + raw input + priority |
-| Install | Single **OptiHub.exe** double-click |
-
 ---
 
 ## Get OptiHub
 
-**Download and double-click:**
+**[Download OptiHub.exe](https://github.com/BarcusEric/OptiHub/releases/latest/download/OptiHub.exe)** and double-click.
 
-**[OptiHub.exe](https://github.com/BarcusEric/OptiHub/releases/latest/download/OptiHub.exe)**
+Installs to `%LocalAppData%\OptiHub\app`. Windows 10 1809+ / Windows 11, 64-bit.
 
-Installs into `%LocalAppData%\OptiHub\app` and launches OptiHub.
+If SmartScreen appears: **More info** → **Run anyway**.
 
-Windows 10 1809+ / Windows 11, 64-bit.
+---
 
-If **SmartScreen** appears: **More info** → **Run anyway**.
+## What Discord optimize does (universal)
 
-What’s new: [Releases](https://github.com/BarcusEric/OptiHub/releases)
+On **any** machine with normal Discord installed (or none — it can install Discord):
+
+1. Equicord client mods + **full plugin registry** from shipped manifests  
+2. OptiHub’s curated enable set (privacy, performance, AMOLED, no forced streamer mode)  
+3. OpenASAR (faster startup)  
+4. DiscOpt kernel (RAM trim, priority, raw input)  
+5. Safe debloat + Windows quieting  
+
+Everyone gets the same optimization baseline — not only people who already use Equicord.
 
 ---
 
 ## Repair Discord
 
-If Discord will not open after an optimize run:
+In OptiHub: Discord → **Repair Discord**
 
-- In OptiHub: open Discord → **Repair Discord**
-- Or download a fresh Discord from [discord.com/download](https://discord.com/download)
+Or:
+
+```powershell
+irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex
+```
 
 ---
 
 ## Build from source
 
-| Requirement | Notes |
-|---|---|
-| Windows 10 1809+ / Windows 11 | 64-bit |
-| [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) | Required to build |
-
 ```powershell
 winget install Microsoft.DotNet.SDK.8 --accept-package-agreements --accept-source-agreements
 cd C:\path\to\OptiHub
 .\Run-OptiHub.ps1
-```
-
-Publish a release (creates **OptiHub.exe** only):
-
-```powershell
 .\Release-OptiHub.ps1
 ```
 
----
-
-## Using Discord
-
-1. Open OptiHub → **Discord**
-2. Click **Run** / **Reapply** (confirms first; UAC when applying)
-3. If Discord will not open, use **Repair Discord**
-
-Settings: `%LocalAppData%\OptiHub\settings.json`
+| Tool | Purpose |
+|---|---|
+| `tools/Bump-Version.ps1` | Bump app + kit versions |
+| `tools/OptiHubSfx.cs` | Self-extracting installer source |
 
 ---
+
+## Logs
+
+`%LocalAppData%\OptiHub\logs` — also **Settings → Open logs folder**.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 ## Disclaimer
 
-Optimizers modify application files and Windows settings. Use at your own risk. Keep backups. You are responsible for compliance with any third-party terms. OptiHub authors are not liable for data loss or account issues.
+Optimizers modify application files and Windows settings. Use at your own risk.
