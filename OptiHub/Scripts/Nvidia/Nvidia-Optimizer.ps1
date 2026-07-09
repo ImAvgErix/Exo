@@ -24,7 +24,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.4.0'
+$Script:NvidiaOptVersion = '1.4.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -1410,8 +1410,7 @@ function Set-NvidiaDisplayPreferences {
         [void]$applied.Add('NVAPI helper missing')
     } else {
         Write-Ok "NVAPI helper: $nvExe"
-        Write-HubProgress 92 'NVAPI: RGB Full + highest BPC + GPU no-scaling...'
-        # Never leave nvcplui open from older runs — kill if present (we do not use it)
+        Write-HubProgress 90 'NVAPI: Full RGB + GPU scaling prefs + video sources...'
         Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
         $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -1445,8 +1444,8 @@ function Set-NvidiaDisplayPreferences {
             }
             $code = [int]$proc.ExitCode
             if ($code -eq 0) {
-                [void]$applied.Add('NVAPI display apply completed (RGB/Full/BPC + GPU no-scaling)')
-                Write-Ok 'Display settings applied via NVIDIA driver API (no Control Panel UI)'
+                [void]$applied.Add('NVAPI+NVTweak: Full RGB, GPU no-scaling prefs, Override ON, video sources NVIDIA')
+                Write-Ok 'Display color/scaling prefs applied via NVAPI + NVTweak registry'
             } else {
                 [void]$applied.Add("NVAPI helper exit $code")
                 Write-Warn "NVAPI helper exit $code"
@@ -1454,17 +1453,57 @@ function Set-NvidiaDisplayPreferences {
         }
     }
 
+    # Surgical CPL pass: video NVIDIA radios + per-monitor GPU/No scaling/Override checkbox.
+    # Never opens resolution lists or custom-res dialogs.
+    $videoScript = Join-Path $Root 'OptiHub-Cpl-VideoOnly.ps1'
+    if (Test-Path -LiteralPath $videoScript) {
+        Write-HubProgress 93 'Control Panel video + scaling checkboxes (surgical)...'
+        Write-Ok 'Video/scaling CPL: only NVIDIA radios + Override (no custom resolution)'
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & $videoScript 2>&1 | ForEach-Object {
+                $s = "$_"
+                if ($s) {
+                    Write-Host $s
+                    if ($env:OPTIHUB_LOG) {
+                        try { Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $s -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
+                    }
+                }
+            }
+            $vcode = 0
+            if ($null -ne $LASTEXITCODE) { $vcode = [int]$LASTEXITCODE }
+            if ($vcode -eq 0) {
+                [void]$applied.Add('Video CPL: NVIDIA color/image + GPU/No scaling/Override per monitor')
+                Write-Ok 'Video settings + Override applied in Control Panel'
+            } else {
+                [void]$applied.Add("Video CPL exit $vcode")
+                Write-Warn "Video CPL exit $vcode"
+            }
+        } catch {
+            Write-Warn "Video CPL failed: $($_.Exception.Message)"
+            [void]$applied.Add("Video CPL error: $($_.Exception.Message)")
+        } finally {
+            $ErrorActionPreference = $prev
+            Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+    } else {
+        Write-Warn "Missing $videoScript — video radios not force-clicked"
+    }
+
     $pref = Join-Path $StateDir 'nvidia-display-prefs.json'
     $obj = [ordered]@{
         colorSource         = 'NVIDIA (User policy)'
         outputColorFormat   = 'RGB'
-        outputDynamicRange  = 'Full (VESA)'
+        outputDynamicRange  = 'Full (VESA + HDMI FullRange info-frame)'
         outputColorDepth    = 'highest bpc supported per display'
-        performScalingOn    = 'GPU'
-        scalingMode         = 'No scaling (GPUScanOutToNative)'
+        performScalingOn    = 'GPU (PerformScalingOn=0)'
+        scalingMode         = 'No scaling (ScalingMode=2)'
         overrideGameScaling = $true
-        appliedVia          = 'NVAPI-OptiHub.NvDisplay'
-        flow                = 'NVAPI ColorControl + PathInfo SetDisplaysConfig (no nvcplui clicks)'
+        videoColor          = 'NVIDIA settings'
+        videoImage          = 'NVIDIA settings'
+        appliedVia          = 'NVAPI + NVTweak + surgical video CPL'
+        flow                = 'NVAPI color/path + registry GPU/Override/Full + CPL video radios only'
     }
     [IO.File]::WriteAllText($pref, ($obj | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     [void]$applied.Add('Saved OptiHub display preference manifest')
