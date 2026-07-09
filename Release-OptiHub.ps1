@@ -72,7 +72,7 @@ function Remove-OldReleasesAndTags([string]$KeepTag) {
 }
 
 Write-Host ''
-Write-Host "  OptiHub release  ·  $Tag  ·  OptiHub.exe only" -ForegroundColor Cyan
+Write-Host "  OptiHub release  -  $Tag  -  OptiHub.exe only" -ForegroundColor Cyan
 Write-Host ''
 
 & (Join-Path $Root 'Publish-OptiHub.ps1') -Configuration $Configuration
@@ -89,13 +89,13 @@ if ($NotesFile -and (Test-Path $NotesFile)) {
 ## OptiHub $Version
 
 ### Download
-**[OptiHub.exe](https://github.com/$Repo/releases/latest/download/OptiHub.exe)** — double-click to install and launch.
+**[OptiHub.exe](https://github.com/$Repo/releases/latest/download/OptiHub.exe)** - double-click to install and launch.
 
 Installs to ``%LocalAppData%\OptiHub\app``.
 
 Windows 10 1809+ / Windows 11, 64-bit.
 
-If Windows SmartScreen appears: **More info** → **Run anyway** (unsigned local build).
+If Windows SmartScreen appears: **More info** -> **Run anyway** (unsigned local build).
 "@
 }
 

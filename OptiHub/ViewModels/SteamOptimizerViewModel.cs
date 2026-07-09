@@ -68,7 +68,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
         var action = IsApplied ? "reapply" : "run";
         var warning =
             "This will close Steam and apply a performance pack:\n\n" +
-            "• steamwebhelper: CEF -disable-gpu flags + idle RAM trim\n" +
+            "• steamwebhelper: CEF -disable-gpu + 5s RAM trim always + suspend while gaming\n" +
             "• Faster downloads: clear throttle when possible, clean staging\n" +
             "• Snappier client: HIGH priority, cache wipe, library/UI hints\n" +
             "• Quieter Windows startup\n\n" +

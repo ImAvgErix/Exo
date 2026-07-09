@@ -31,7 +31,7 @@ function Get-OptiHubExe {
 }
 
 Write-Host ''
-Write-Host "  OptiHub launcher  ·  PowerShell $($PSVersionTable.PSVersion)" -ForegroundColor Cyan
+Write-Host "  OptiHub launcher  -  PowerShell $($PSVersionTable.PSVersion)" -ForegroundColor Cyan
 Write-Host ''
 
 if (-not $NoBuild) {

@@ -53,4 +53,4 @@ if (Test-Path $opt) {
 }
 
 Write-Host ''
-Write-Host "App $App · Kit $Kit" -ForegroundColor Cyan
+Write-Host "App $App - Kit $Kit" -ForegroundColor Cyan

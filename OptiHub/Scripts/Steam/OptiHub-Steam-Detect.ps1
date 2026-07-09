@@ -79,8 +79,8 @@ $trimOk = $false
 if ($steam -and (Test-Path (Join-Path $steam 'OptiHub-SteamWebHelperTrim.ps1'))) { $trimOk = $true }
 if ($state -and $state.webHelperTrim) { $trimOk = $true }
 $features.Add(@{
-    title  = 'Idle webhelper RAM trim'
-    detail = 'Trims steamwebhelper working sets when no game is running.'
+    title  = 'Webhelper RAM trim + in-game suspend'
+    detail = 'Every 5s (like DiscOpt): EmptyWorkingSet always; suspend steamwebhelper while a Steam game runs (overlay may pause).'
     active = $trimOk
 })
 

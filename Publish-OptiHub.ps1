@@ -25,7 +25,7 @@ $LegacyOutDir = Join-Path $Root 'publish\OptiHub-win-x64'
 $SfxSource = Join-Path $Root 'tools\OptiHubSfx.cs'
 
 Write-Host ''
-Write-Host "  OptiHub publish  ·  v$Version  ·  self-contained win-x64 → OptiHub.exe" -ForegroundColor Cyan
+Write-Host "  OptiHub publish  -  v$Version  -  self-contained win-x64 -> OptiHub.exe" -ForegroundColor Cyan
 Write-Host ''
 
 function Clear-PublishDir([string]$Path) {

@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.2.0'
+$Script:SteamOptVersion = '1.2.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Official Valve CEF flags (see Valve wiki: Command line options (Steam)).
@@ -439,12 +439,14 @@ function Install-LeanSteamLauncher([string]$SteamPath) {
 }
 
 function Install-WebHelperTrimHelper([string]$SteamPath) {
-    # Optional idle trimmer: lowers working set of steamwebhelper when no game is running.
-    # Does not inject into games; only EmptyWorkingSet on steamwebhelper.exe.
+    # Always-on steamwebhelper trim (matches DiscOpt ~5s cadence).
+    # Idle + in-game: EmptyWorkingSet. While a Steam game is running: also
+    # suspend webhelper so CEF stops burning CPU/RAM pressure (overlay may pause).
+    # No game inject / no game process touches - VAC-safe.
     $helper = Join-Path $SteamPath 'OptiHub-SteamWebHelperTrim.ps1'
     $body = @'
-# OptiHub - idle steamwebhelper working-set trim (safe, no game inject).
-# Started minimized with lean Steam launch. Exit when Steam exits.
+# OptiHub - steamwebhelper RAM trim (always) + suspend while a Steam game runs.
+# Interval matches DiscOpt TrimIntervalMs=5000. Exit when Steam exits.
 $ErrorActionPreference = 'SilentlyContinue'
 Add-Type -TypeDefinition @"
 using System;
@@ -453,31 +455,83 @@ public static class OptiHubWs {
   [DllImport("psapi.dll")] public static extern bool EmptyWorkingSet(IntPtr hProcess);
   [DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint a, bool b, int c);
   [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
-  public const uint PROCESS_SET_QUOTA = 0x0100;
-  public const uint PROCESS_QUERY_INFORMATION = 0x0400;
+  [DllImport("ntdll.dll")] public static extern int NtSuspendProcess(IntPtr h);
+  [DllImport("ntdll.dll")] public static extern int NtResumeProcess(IntPtr h);
+  public const uint ACCESS = 0x0D00; // SET_QUOTA | QUERY_INFORMATION | SUSPEND_RESUME
 }
 "@
+# Track PIDs we suspended so we only suspend once (NtSuspendProcess nests).
+$script:SuspendedPids = @{}
+
 function Test-SteamGameRunning {
-  $gamesLike = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-    $_.ProcessName -notmatch '^(steam|steamwebhelper|steamservice|GameOverlayUI|SteamService|svchost|explorer)$' -and
+  $skip = '^(steam|steamwebhelper|steamservice|GameOverlayUI|SteamService|steamerrorreporter|svchost|explorer|dwm|csrss|fontdrvhost)\.exe$'
+  try {
+    $hit = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+      if (-not $_.Name -or $_.Name -match $skip) { return $false }
+      $p = $_.ExecutablePath
+      if (-not $p) { return $false }
+      return ($p -match '(?i)[\\/]steamapps[\\/]common[\\/]') -or ($p -match '(?i)[\\/]Steam[\\/]steamapps[\\/]')
+    })
+    if ($hit.Count -gt 0) { return $true }
+  } catch {}
+  # Fallback: Get-Process Path (may miss protected processes)
+  $hit2 = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.ProcessName -notmatch '^(steam|steamwebhelper|steamservice|GameOverlayUI|SteamService|steamerrorreporter)$' -and
     $_.MainWindowHandle -ne [IntPtr]::Zero -and
-    ($_.Path -like '*steamapps\common*' -or $_.Path -like '*Steam\steamapps*')
+    $_.Path -and (
+      $_.Path -like '*steamapps\common*' -or $_.Path -like '*Steam\steamapps*'
+    )
   })
-  return ($gameLike.Count -gt 0)
+  return ($hit2.Count -gt 0)
 }
-while (Get-Process steam -ErrorAction SilentlyContinue) {
-  Start-Sleep -Seconds 90
-  if (Test-SteamGameRunning) { continue }
+
+function Invoke-WebHelperTrim([bool]$Suspend) {
+  $alive = @{}
   Get-Process steamwebhelper -ErrorAction SilentlyContinue | ForEach-Object {
+    $whId = $_.Id
+    $alive[$whId] = $true
     try {
-      $h = [OptiHubWs]::OpenProcess(0x0500, $false, $_.Id)
-      if ($h -ne [IntPtr]::Zero) {
+      $h = [OptiHubWs]::OpenProcess([OptiHubWs]::ACCESS, $false, $whId)
+      if ($h -eq [IntPtr]::Zero) { return }
+      try {
         [void][OptiHubWs]::EmptyWorkingSet($h)
+        if ($Suspend) {
+          if (-not $script:SuspendedPids.ContainsKey($whId)) {
+            [void][OptiHubWs]::NtSuspendProcess($h)
+            $script:SuspendedPids[$whId] = $true
+          }
+        } else {
+          if ($script:SuspendedPids.ContainsKey($whId)) {
+            [void][OptiHubWs]::NtResumeProcess($h)
+            $script:SuspendedPids.Remove($whId)
+          }
+        }
+      } finally {
         [void][OptiHubWs]::CloseHandle($h)
       }
     } catch {}
   }
+  # Drop PIDs that exited
+  @($script:SuspendedPids.Keys) | ForEach-Object {
+    if (-not $alive.ContainsKey($_)) { $script:SuspendedPids.Remove($_) }
+  }
 }
+
+while (Get-Process steam -ErrorAction SilentlyContinue) {
+  Start-Sleep -Seconds 5
+  $inGame = Test-SteamGameRunning
+  Invoke-WebHelperTrim -Suspend:$inGame
+}
+# Resume any leftover suspended helpers if Steam exited while suspended
+try {
+  Get-Process steamwebhelper -ErrorAction SilentlyContinue | ForEach-Object {
+    $h = [OptiHubWs]::OpenProcess([OptiHubWs]::ACCESS, $false, $_.Id)
+    if ($h -ne [IntPtr]::Zero) {
+      [void][OptiHubWs]::NtResumeProcess($h)
+      [void][OptiHubWs]::CloseHandle($h)
+    }
+  }
+} catch {}
 '@
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
 
@@ -488,12 +542,12 @@ while (Get-Process steam -ErrorAction SilentlyContinue) {
     $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $cmd = @(
         '@echo off'
-        'rem OptiHub lean Steam + webhelper idle trim + high priority client'
+        'rem OptiHub lean Steam + webhelper trim (5s, always + suspend in-game) + HIGH priority'
         ('start "" /MIN "{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $ps, $helper)
         ('start "" /HIGH /D "{0}" "{1}" {2}' -f $SteamPath, $exe, $args)
     ) -join "`r`n"
     [IO.File]::WriteAllText($cmdPath, $cmd + "`r`n", [Text.UTF8Encoding]::new($false))
-    Write-Ok 'WebHelper idle trim helper installed (runs with lean Steam)'
+    Write-Ok 'WebHelper trim helper installed (5s trim always; suspend while gaming)'
     return $helper
 }
 
@@ -602,7 +656,7 @@ try {
 
     Write-HubProgress 55 'Writing steamwebhelper CEF lean launcher...'
     $launch = Install-LeanSteamLauncher $steam
-    Write-HubProgress 65 'Installing idle webhelper trim helper...'
+    Write-HubProgress 65 'Installing webhelper trim helper (5s + in-game suspend)...'
     [void](Install-WebHelperTrimHelper $steam)
 
     Write-HubProgress 75 'Download speed / config.vdf...'
@@ -620,7 +674,8 @@ try {
         cacheFreedBytes   = $freed
         configTouched     = [bool]$cfgOk
         webGpuReduced     = [bool]$local.Gpu
-        snappyUi          = [bool]$local.Snappy
+        # HIGH priority + lean CEF always applied; localconfig hints are best-effort
+        snappyUi          = $true
         cefLeanLaunch     = $true
         cefArgs           = ($Script:LeanCefArgs -join ' ')
         leanCmd           = $launch.Cmd

@@ -1,4 +1,4 @@
-# OptiHub placeholder — Brave Optimizer (Coming Soon)
+# OptiHub placeholder - Brave Optimizer (Coming Soon)
 Write-Host "OPTIHUB_PROGRESS:0|Coming soon"
 Write-Host "[!] Brave Optimizer is not available yet." -ForegroundColor Yellow
 Write-Host "    Planned: privacy flags, debloat, quieter background behavior." -ForegroundColor DarkGray
