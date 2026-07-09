@@ -20,6 +20,7 @@ public sealed partial class DashboardPage : Page
             if (App.MainAppWindow is not MainWindow mw) return;
             if (id == "discord") mw.NavigateToDiscord();
             else if (id == "steam") mw.NavigateToSteam();
+            else if (id == "nvidia") mw.NavigateToNvidia();
         };
     }
 

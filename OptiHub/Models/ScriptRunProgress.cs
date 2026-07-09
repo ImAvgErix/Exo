@@ -30,6 +30,8 @@ public sealed class OptimizerStateInfo
     public string StatusText { get; init; } = "Not applied";
     public string Detail { get; init; } = string.Empty;
     public IReadOnlyList<OptimizerFeatureInfo> Features { get; init; } = Array.Empty<OptimizerFeatureInfo>();
+    /// <summary>Optional extra fields from detect scripts (series, gsync, etc.).</summary>
+    public IReadOnlyDictionary<string, string>? Extra { get; init; }
 }
 
 public sealed class ScriptUpdateResult

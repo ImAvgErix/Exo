@@ -411,4 +411,127 @@ public sealed class OptimizerStateService
 
         return null;
     }
+
+    public async Task<OptimizerStateInfo> DetectNvidiaAsync(
+        CancellationToken ct = default,
+        bool fastOnly = false)
+    {
+        var heuristic = DetectNvidiaHeuristic();
+        if (fastOnly)
+            return heuristic;
+
+        var detectScript = _scripts.NvidiaDetectScript;
+        if (!File.Exists(detectScript))
+            return heuristic;
+
+        try
+        {
+            var result = await _runner.RunAsync(
+                detectScript,
+                arguments: Array.Empty<string>(),
+                elevate: false,
+                progress: null,
+                cancellationToken: ct,
+                workingDirectory: _scripts.GetNvidiaRoot());
+
+            if (!result.Success && string.IsNullOrWhiteSpace(result.FullOutput))
+                return heuristic;
+
+            var jsonLine = result.FullOutput
+                .Split('\n')
+                .Select(l => l.TrimEnd('\r').Trim())
+                .LastOrDefault(l => l.StartsWith('{') && l.Contains("isApplied", StringComparison.OrdinalIgnoreCase));
+
+            if (jsonLine is null)
+                return heuristic;
+
+            using var doc = JsonDocument.Parse(jsonLine);
+            var root = doc.RootElement;
+            var applied = root.TryGetProperty("isApplied", out var a) && a.GetBoolean();
+            var status = root.TryGetProperty("statusText", out var s) ? s.GetString() ?? heuristic.StatusText : heuristic.StatusText;
+            var detail = root.TryGetProperty("detail", out var d) ? d.GetString() ?? string.Empty : string.Empty;
+            var features = ParseFeatures(root);
+            if (features.Count == 0)
+                features = heuristic.Features.ToList();
+
+            var extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (root.TryGetProperty("series", out var ser) && ser.ValueKind == JsonValueKind.String)
+                extra["series"] = ser.GetString() ?? "";
+            if (root.TryGetProperty("gsync", out var gs))
+                extra["gsync"] = gs.ValueKind == JsonValueKind.True ? "true"
+                    : gs.ValueKind == JsonValueKind.False ? "false"
+                    : gs.ToString();
+            if (root.TryGetProperty("gpuName", out var gn) && gn.ValueKind == JsonValueKind.String)
+                extra["gpuName"] = gn.GetString() ?? "";
+
+            return new OptimizerStateInfo
+            {
+                IsApplied = applied,
+                StatusText = status,
+                Detail = detail,
+                Features = features,
+                Extra = extra
+            };
+        }
+        catch
+        {
+            return heuristic;
+        }
+    }
+
+    private OptimizerStateInfo DetectNvidiaHeuristic()
+    {
+        var features = new List<OptimizerFeatureInfo>();
+        var statePath = Path.Combine(PathHelper.AppDataDir, "nvidia-optimizer.json");
+        var hasMarker = File.Exists(statePath);
+
+        string? gpuName = null;
+        string? series = null;
+        if (hasMarker)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(statePath));
+                if (doc.RootElement.TryGetProperty("gpuName", out var g))
+                    gpuName = g.GetString();
+                if (doc.RootElement.TryGetProperty("series", out var s))
+                    series = s.GetString();
+            }
+            catch { /* ignore */ }
+        }
+
+        var nvidiaDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "NVIDIA Corporation");
+        var gpuOk = hasMarker || Directory.Exists(nvidiaDir);
+
+        features.Add(MakeFeature(
+            "NVIDIA stack",
+            gpuName ?? (gpuOk ? "NVIDIA software present" : "No NVIDIA GPU/driver found yet."),
+            gpuOk));
+        features.Add(MakeFeature(
+            "OptiHub profile applied",
+            hasMarker
+                ? $"Marker present{(string.IsNullOrEmpty(series) ? "" : $" ({series} Series)")}."
+                : "Not applied yet.",
+            hasMarker));
+
+        var extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrEmpty(series))
+            extra["series"] = series!;
+        if (!string.IsNullOrEmpty(gpuName))
+            extra["gpuName"] = gpuName!;
+
+        return new OptimizerStateInfo
+        {
+            IsApplied = hasMarker,
+            StatusText = hasMarker ? "Already optimized" : (gpuOk ? "Ready to optimize" : "No NVIDIA GPU"),
+            Detail = hasMarker
+                ? "NVIDIA pack marker found. Refresh for live detect details."
+                : "Apply series profile, App/debloat, and display prefs.",
+            Features = features,
+            Extra = extra
+        };
+    }
 }
+

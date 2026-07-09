@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+
+- **NVIDIA Optimizer** (live card): auto-detect GPU series, G-SYNC toggle, import OptiHub Base Profile via Profile Inspector
+- Improved public .nip packs for 10/20/30/40/50 series (FPS/latency + series rBAR/DLSS)
+- Downloads Profile Inspector + optional NVIDIA App; telemetry task/service trim; display Full RGB / high bpc guidance
+
 ## 1.1.8
 
 - **Light mode**: stronger charcoal outlines; dark logo wells so white Steam/Epic marks stay visible

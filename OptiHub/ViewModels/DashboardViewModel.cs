@@ -28,20 +28,30 @@ public partial class DashboardViewModel : ObservableObject
             {
                 Definition = new OptimizerDefinition
                 {
-                    Id = "brave",
-                    Title = "Brave Optimizer",
-                    LogoPath = "Assets/Logos/brave.png",
-                    Status = OptimizerStatus.ComingSoon
+                    Id = "steam",
+                    Title = "Steam Optimizer",
+                    LogoPath = "Assets/Logos/steam.png",
+                    Status = OptimizerStatus.Available
                 }
             },
             new()
             {
                 Definition = new OptimizerDefinition
                 {
-                    Id = "steam",
-                    Title = "Steam Optimizer",
-                    LogoPath = "Assets/Logos/steam.png",
+                    Id = "nvidia",
+                    Title = "NVIDIA Optimizer",
+                    LogoPath = "Assets/Logos/nvidia.png",
                     Status = OptimizerStatus.Available
+                }
+            },
+            new()
+            {
+                Definition = new OptimizerDefinition
+                {
+                    Id = "brave",
+                    Title = "Brave Optimizer",
+                    LogoPath = "Assets/Logos/brave.png",
+                    Status = OptimizerStatus.ComingSoon
                 }
             },
             new()
@@ -85,35 +95,24 @@ public partial class DashboardViewModel : ObservableObject
 
     public async Task RefreshStatesAsync()
     {
-        var discord = Cards.FirstOrDefault(c => c.Definition.Id == "discord");
-        var steam = Cards.FirstOrDefault(c => c.Definition.Id == "steam");
+        await RefreshOneAsync("discord", () => _services.OptimizerState.DetectDiscordAsync(fastOnly: true));
+        await RefreshOneAsync("steam", () => _services.OptimizerState.DetectSteamAsync(fastOnly: true));
+        await RefreshOneAsync("nvidia", () => _services.OptimizerState.DetectNvidiaAsync(fastOnly: true));
+    }
 
-        if (discord is not null)
+    private async Task RefreshOneAsync(string id, Func<Task<OptimizerStateInfo>> detect)
+    {
+        var card = Cards.FirstOrDefault(c => c.Definition.Id == id);
+        if (card is null) return;
+        card.IsLoadingState = true;
+        try
         {
-            discord.IsLoadingState = true;
-            try
-            {
-                var state = await _services.OptimizerState.DetectDiscordAsync(fastOnly: true);
-                discord.ApplyState(state);
-            }
-            finally
-            {
-                discord.IsLoadingState = false;
-            }
+            var state = await detect();
+            card.ApplyState(state);
         }
-
-        if (steam is not null)
+        finally
         {
-            steam.IsLoadingState = true;
-            try
-            {
-                var state = await _services.OptimizerState.DetectSteamAsync(fastOnly: true);
-                steam.ApplyState(state);
-            }
-            finally
-            {
-                steam.IsLoadingState = false;
-            }
+            card.IsLoadingState = false;
         }
     }
 }

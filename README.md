@@ -8,6 +8,7 @@ Windows optimizer hub for performance, privacy, and gaming. **Discord** and **St
 |---|---|
 | **Discord** | Live |
 | **Steam** | Live |
+| **NVIDIA** | Live (series profiles + App/debloat + display prefs) |
 | Brave · Riot · Epic | Coming soon |
 
 ---

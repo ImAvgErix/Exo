@@ -4,7 +4,7 @@ namespace OptiHub.Services;
 
 /// <summary>
 /// Ensures bundled scripts are available under LocalAppData for updates and runs.
-/// Syncs Discord and Steam kits from the app-bundled Scripts folders when needed.
+/// Syncs Discord, Steam, and NVIDIA kits from the app-bundled Scripts folders when needed.
 /// </summary>
 public sealed class ScriptBundleService
 {
@@ -12,11 +12,13 @@ public sealed class ScriptBundleService
     private readonly object _syncLock = new();
     private string? _cachedDiscordRoot;
     private string? _cachedSteamRoot;
+    private string? _cachedNvidiaRoot;
     private string? _cachedBundledVersion;
     private string? _lastSyncedWorkingVersion;
     private string? _lastSyncedBundledVersion;
     private bool _discordSyncDone;
     private bool _steamSyncDone;
+    private bool _nvidiaSyncDone;
 
     public ScriptBundleService(SettingsService settings)
     {
@@ -49,6 +51,17 @@ public sealed class ScriptBundleService
         }
     }
 
+    public string GetNvidiaRoot()
+    {
+        lock (_syncLock)
+        {
+            var working = Path.Combine(PathHelper.WorkingScriptsDir, "Nvidia");
+            EnsureNvidiaScriptsSynced(working);
+            _cachedNvidiaRoot = working;
+            return working;
+        }
+    }
+
     public string DiscordOptimizerScript =>
         Path.Combine(GetDiscordRoot(), "OptiHub-Discord-Run.ps1");
 
@@ -66,6 +79,15 @@ public sealed class ScriptBundleService
 
     public string SteamRepairScript =>
         Path.Combine(GetSteamRoot(), "OptiHub-Steam-Repair.ps1");
+
+    public string NvidiaOptimizerScript =>
+        Path.Combine(GetNvidiaRoot(), "OptiHub-Nvidia-Run.ps1");
+
+    public string NvidiaDetectScript =>
+        Path.Combine(GetNvidiaRoot(), "OptiHub-Nvidia-Detect.ps1");
+
+    public string NvidiaRepairScript =>
+        Path.Combine(GetNvidiaRoot(), "OptiHub-Nvidia-Repair.ps1");
 
     public string GetBundledVersion()
     {
@@ -140,6 +162,45 @@ public sealed class ScriptBundleService
         }
 
         _steamSyncDone = true;
+    }
+
+    private void EnsureNvidiaScriptsSynced(string working)
+    {
+        var bundled = PathHelper.NvidiaScriptsDir;
+        if (!Directory.Exists(bundled))
+            return;
+
+        Directory.CreateDirectory(working);
+
+        var marker = Path.Combine(working, "Nvidia-Optimizer.ps1");
+        var hubRun = Path.Combine(working, "OptiHub-Nvidia-Run.ps1");
+        var bundledVersionPath = Path.Combine(bundled, "VERSION");
+        var workingVersionPath = Path.Combine(working, "VERSION");
+        var bundledVersion = File.Exists(bundledVersionPath)
+            ? File.ReadAllText(bundledVersionPath).Trim()
+            : "0";
+        var workingVersion = File.Exists(workingVersionPath)
+            ? File.ReadAllText(workingVersionPath).Trim()
+            : "";
+
+        if (_nvidiaSyncDone &&
+            File.Exists(marker) &&
+            File.Exists(hubRun) &&
+            Directory.Exists(Path.Combine(working, "profiles")) &&
+            string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))
+            return;
+
+        var broken =
+            !File.Exists(marker) ||
+            !File.Exists(hubRun) ||
+            !File.Exists(Path.Combine(working, "OptiHub-Nvidia-Detect.ps1")) ||
+            !Directory.Exists(Path.Combine(working, "profiles")) ||
+            IsVersionNewer(bundledVersion, workingVersion);
+
+        if (broken || IsVersionNewer(bundledVersion, workingVersion))
+            CopyDirectory(bundled, working);
+
+        _nvidiaSyncDone = true;
     }
 
     private void EnsureDiscordScriptsSynced(string working)

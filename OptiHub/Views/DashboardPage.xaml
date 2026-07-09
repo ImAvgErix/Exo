@@ -144,6 +144,29 @@
                             </StackPanel>
                         </StackPanel>
                     </Button>
+
+                    <Button Style="{StaticResource OptiCardButton}"
+                            Width="200" Height="156"
+                            Click="CardButton_Click" Tag="{x:Bind ViewModel.Cards[5].Definition.Id}"
+                            IsEnabled="{x:Bind ViewModel.Cards[5].IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                            Opacity="{x:Bind ViewModel.Cards[5].IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                            <Border Style="{StaticResource OptiLogoWell}">
+                                <Image Width="40" Height="40"
+                                       Source="{x:Bind ViewModel.Cards[5].Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="Uniform" />
+                            </Border>
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{x:Bind ViewModel.Cards[5].Definition.Title}"
+                                           FontFamily="{StaticResource OptiUiFontSemiBold}" FontWeight="SemiBold" FontSize="13"
+                                           Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                                           TextAlignment="Center" TextWrapping="Wrap" MaxWidth="168" />
+                                <TextBlock Text="Coming soon" FontFamily="{StaticResource OptiUiFont}" FontSize="11"
+                                           Foreground="{ThemeResource OptiMutedTextBrush}" TextAlignment="Center"
+                                           Visibility="{x:Bind ViewModel.Cards[5].IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </StackPanel>
         </StackPanel>
