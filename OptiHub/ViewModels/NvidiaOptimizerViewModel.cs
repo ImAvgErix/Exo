@@ -71,15 +71,13 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             ? "• G-SYNC pack (adaptive sync friendly; ultra low latency off)"
             : "• Max FPS / latency pack (Ultra Low Latency Ultra; G-SYNC off)";
         var warning =
-            "This will run the full NVIDIA pack:\n\n" +
-            "• Checks NVIDIA for the newest Game Ready driver; if behind, opens NVCleanstall + checklist\n" +
-            "• NVCleanstall checklist: unattended express, auto reboot, clean install, disable Ansel,\n" +
-            "  disable installer+driver telemetry, MSI High, disable HDCP, EAC-compatible method, accept unsigned\n" +
-            "• Delete conflicting old NVIDIA App / GFE / CPL leftovers, then install a fresh NVIDIA App\n" +
-            "• Telemetry trim + display Full RGB / high bpc guidance\n" +
-            gsyncLine + "\n" +
-            "• Import series Base Profile (power, latency, rBAR/DLSS by generation)\n\n" +
-            "Administrator approval may be required. After a driver install, reboot then Reapply.";
+            "Apply order (correct stack):\n\n" +
+            "1) Driver — check newest Game Ready; if behind, open NVCleanstall (your install/expert checklist)\n" +
+            "2) 3D Base Profile — series pack right after driver is current\n" +
+            "3) App stack — wipe old App/GFE/CPL leftovers, fresh NVIDIA App, telemetry trim, display prefs\n\n" +
+            gsyncLine + "\n\n" +
+            "If a driver update is needed, Apply stops after launching NVCleanstall — reboot, then Reapply.\n" +
+            "Administrator approval may be required.";
 
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync($"Confirm NVIDIA Optimizer ({action})", warning)
@@ -150,8 +148,8 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
 
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync(
-                "Clear NVIDIA optimizer marker?",
-                "Removes OptiHub's applied marker only. Driver profiles stay until you re-apply or reset them in NVIDIA tools.")
+                "Reset OptiHub NVIDIA status?",
+                "Only clears OptiHub's record that this pack was applied (status checks reset). Does not uninstall the driver, remove 3D profiles, or remove NVIDIA App.")
             : true;
         if (!ok) return;
 
@@ -179,7 +177,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                 workingDirectory: _services.Scripts.GetNvidiaRoot());
 
             SetResult(
-                result.Success ? "Marker cleared. Apply again to re-import OptiHub profiles." : (result.ErrorMessage ?? result.Summary),
+                result.Success ? "OptiHub status reset. Apply again to re-run the full NVIDIA pack." : (result.ErrorMessage ?? result.Summary),
                 success: result.Success);
 
             await RefreshAfterRunAsync();

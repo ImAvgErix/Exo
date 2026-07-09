@@ -614,61 +614,54 @@ try {
     }
     Write-Ok "Series: $seriesId"
     $useGsync = [bool]$Gsync
-    Write-Ok ("G-SYNC profile: {0}" -f $(if ($useGsync) { 'Yes' } else { 'No (ULL Ultra / max FPS)' }))
-    Write-HubProgress 18 "Series $seriesId"
+    Write-Ok ("G-SYNC profile: {0}" -f $(if ($useGsync) { 'Yes' } else { 'No Gsync' }))
+    Write-HubProgress 15 "Series $seriesId"
 
-    # --- Driver currency via NVCleanstall (if stale) ---
-    $driverInfo = @{ Ran = $false }
+    # Pipeline order (correct stack):
+    #  1) Driver first (everything else sits on it)
+    #  2) 3D Base Profile next (driver-level FPS/latency)
+    #  3) Then client stack: wipe conflicts, App, privacy, display
+
+    # --- 1) Newest driver ---
+    $driverInfo = @{ Ran = $false; NeedsUpdate = $false }
     if (-not $SkipDriver) {
-        Write-HubProgress 22 'Checking driver age / NVCleanstall...'
+        Write-HubProgress 20 'Checking for newest Game Ready driver...'
         $driverInfo = Start-DriverUpdateIfNeeded -Force:([bool]$ForceDriver)
-        if ($driverInfo.Ran) {
-            Write-Warn 'If you install a new driver now, reboot, then Reapply NVIDIA in OptiHub for profiles + App polish.'
+        if ($driverInfo.NeedsUpdate -and $driverInfo.Ran) {
+            # New driver install wipes 3D settings - stop here so user reboots then Reapply
+            Save-State @{
+                version          = $Script:NvidiaOptVersion
+                appliedUtc       = (Get-Date).ToUniversalTime().ToString('o')
+                gpuName          = $primary.Name
+                driver           = $primary.Driver
+                series           = $seriesId
+                gsync            = $useGsync
+                driverUpdatePass = $driverInfo
+                pendingAfterDriver = $true
+            }
+            Write-Warn 'Finish NVCleanstall + reboot, then Reapply NVIDIA (3D profile + App polish run after driver is current).'
+            Write-HubProgress 100 'Driver update started - reapply after reboot'
+            Write-Output 'DONE - Driver update prompted. Reapply after NVCleanstall + reboot.'
+            exit 0
         }
     } else {
-        Write-Ok 'Driver/NVCleanstall step skipped (-SkipDriver)'
+        Write-Ok 'Driver check skipped (-SkipDriver)'
     }
 
-    # --- Strip conflicting App/GFE/CPL leftovers, then fresh App ---
-    Write-HubProgress 30 'Cleaning conflicting NVIDIA App / GFE / CPL leftovers...'
-    $cleaned = 0
-    if (-not $SkipApp) {
-        $cleaned = [int](Remove-ConflictingNvidiaClients)
-    }
-
-    $appInstalled = Test-NvidiaAppInstalled
-    if (-not $SkipApp) {
-        Write-HubProgress 38 'NVIDIA App (clean install)...'
-        if ($SkipDownload -and -not $appInstalled) {
-            Write-Warn 'NVIDIA App not installed and -SkipDownload set'
-        } else {
-            [void](Install-NvidiaApp)
-            $appInstalled = Test-NvidiaAppInstalled
-        }
-    } else {
-        Write-Ok 'NVIDIA App step skipped (-SkipApp)'
-    }
-
-    Write-HubProgress 48 'Privacy / debloat...'
-    Disable-NvidiaTelemetry
-
-    Write-HubProgress 55 'Display preferences...'
-    $disp = @(Set-NvidiaDisplayPreferences)
-
-    # --- Profile Inspector import ---
+    # --- 2) 3D Base Profile (right after driver) ---
     $nip = $null
     $npi = $null
     if (-not $SkipProfile) {
         $nip = Get-ProfileFile $seriesId $useGsync
         if (-not $nip) { throw "Missing profile for series $seriesId (G-SYNC=$useGsync)" }
         Write-Ok "Profile: $(Split-Path $nip -Leaf)"
-        Write-HubProgress 65 'Profile Inspector...'
+        Write-HubProgress 40 'Profile Inspector (3D settings)...'
 
         $npi = Find-NpiExe
         if (-not $npi -and -not $SkipDownload) { $npi = Install-Npi }
         if (-not $npi) { throw 'nvidiaProfileInspector.exe not found' }
         Write-Ok "Inspector: $npi"
-        Write-HubProgress 78 'Importing Base Profile (may need Administrator)...'
+        Write-HubProgress 48 'Importing 3D Base Profile...'
 
         $importArgs = @('-silentImport', $nip)
         $p = Start-Process -FilePath $npi -ArgumentList $importArgs -Wait -PassThru -WindowStyle Hidden
@@ -681,35 +674,59 @@ try {
                 throw "Profile import failed (exit $($p2.ExitCode)). Run OptiHub as Administrator."
             }
         }
-        Write-Ok 'OptiHub Base Profile imported (3D / latency / series tweaks)'
+        Write-Ok '3D Base Profile imported (FPS / latency / series tweaks)'
     } else {
-        Write-Ok 'Profile import skipped (-SkipProfile)'
+        Write-Ok '3D profile import skipped (-SkipProfile)'
     }
 
-    Write-HubProgress 92 'Saving status...'
+    # --- 3) Client stack: conflicts -> App -> privacy -> display ---
+    Write-HubProgress 58 'Cleaning conflicting NVIDIA App / GFE / CPL leftovers...'
+    $cleaned = 0
+    if (-not $SkipApp) {
+        $cleaned = [int](Remove-ConflictingNvidiaClients)
+    }
+
+    $appInstalled = Test-NvidiaAppInstalled
+    if (-not $SkipApp) {
+        Write-HubProgress 68 'NVIDIA App (clean install)...'
+        if ($SkipDownload -and -not $appInstalled) {
+            Write-Warn 'NVIDIA App not installed and -SkipDownload set'
+        } else {
+            [void](Install-NvidiaApp)
+            $appInstalled = Test-NvidiaAppInstalled
+        }
+    } else {
+        Write-Ok 'NVIDIA App step skipped (-SkipApp)'
+    }
+
+    Write-HubProgress 80 'Privacy / debloat...'
+    Disable-NvidiaTelemetry
+
+    Write-HubProgress 88 'Display preferences...'
+    $disp = @(Set-NvidiaDisplayPreferences)
+
+    Write-HubProgress 94 'Saving status...'
     Save-State @{
-        version          = $Script:NvidiaOptVersion
-        appliedUtc       = (Get-Date).ToUniversalTime().ToString('o')
-        gpuName          = $primary.Name
-        driver           = $primary.Driver
-        series           = $seriesId
-        gsync            = $useGsync
-        profileFile      = $(if ($nip) { Split-Path $nip -Leaf } else { $null })
-        npiPath          = $npi
-        nvidiaApp        = $appInstalled
-        displayPrefs     = $disp
-        debloatApplied   = $true
-        conflictCleanup  = $cleaned
-        driverUpdatePass = $driverInfo
+        version            = $Script:NvidiaOptVersion
+        appliedUtc         = (Get-Date).ToUniversalTime().ToString('o')
+        gpuName            = $primary.Name
+        driver             = $primary.Driver
+        series             = $seriesId
+        gsync              = $useGsync
+        profileFile        = $(if ($nip) { Split-Path $nip -Leaf } else { $null })
+        npiPath            = $npi
+        nvidiaApp          = $appInstalled
+        displayPrefs       = $disp
+        debloatApplied     = $true
+        conflictCleanup    = $cleaned
+        driverUpdatePass   = $driverInfo
+        pendingAfterDriver = $false
     }
 
     Write-Ok 'NVIDIA Optimizer finished'
-    Write-Ok 'Confirm in NVIDIA App/Control Panel: Full RGB, highest bpc, preferred scaling.'
-    if ($driverInfo.Ran) {
-        Write-Ok 'After NVCleanstall driver install + reboot, Reapply this optimizer for profiles.'
-    }
+    Write-Ok 'Confirm Full RGB / highest bpc / scaling in NVIDIA App or Control Panel if needed.'
     Write-HubProgress 100 'Completed successfully'
-    Write-Output "DONE - NVIDIA $seriesId$(if($useGsync){' G-SYNC'}) + clean App + debloat + display prefs"
+    Write-Output "DONE - NVIDIA $seriesId$(if($useGsync){' GSync'}else{' No Gsync'}) (driver ok -> 3D profile -> App/display)"
     exit 0
 } catch {
     Write-Err $_.Exception.Message

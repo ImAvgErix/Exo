@@ -1,4 +1,5 @@
 # OptiHub - detect NVIDIA optimizer status (JSON for WinUI).
+# Feature order matches apply pipeline: GPU -> driver -> 3D profile -> App stack.
 $ErrorActionPreference = 'SilentlyContinue'
 
 function Get-NvidiaGpus {
@@ -23,51 +24,6 @@ function Test-NvidiaApp {
     return [bool]$a
 }
 
-$features = New-Object System.Collections.Generic.List[hashtable]
-$gpus = Get-NvidiaGpus
-$gpuOk = $gpus.Count -gt 0
-$primary = if ($gpuOk) { $gpus[0] } else { $null }
-$series = if ($primary) { Get-GpuSeriesFromName $primary.Name } else { $null }
-
-$statePath = Join-Path $env:LOCALAPPDATA 'OptiHub\nvidia-optimizer.json'
-$state = $null
-if (Test-Path $statePath) {
-    try { $state = Get-Content $statePath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
-}
-
-$gpuDetail = if (-not $gpuOk) {
-    'NVIDIA GPU + drivers required.'
-} elseif ($series) {
-    "$($primary.Name)  ·  $series Series profile pack"
-} else {
-    "$($primary.Name)  ·  series not mapped (use Apply anyway if supported)"
-}
-$features.Add(@{
-    title  = 'NVIDIA GPU'
-    detail = $gpuDetail
-    active = $gpuOk
-})
-
-$appOk = Test-NvidiaApp
-if ($state -and $state.nvidiaApp) { $appOk = $true }
-$features.Add(@{
-    title  = 'NVIDIA App'
-    detail = 'Downloads NVIDIA App when missing (MS Store / winget) for display and 3D UI.'
-    active = $appOk
-})
-
-$features.Add(@{
-    title  = 'Conflict cleanup + fresh App'
-    detail = 'Removes old NVIDIA App / GFE / CPL leftovers before reinstall so nothing fights the new stack.'
-    active = [bool]($state -and ($state.conflictCleanup -ge 0 -or $state.nvidiaApp))
-})
-
-$features.Add(@{
-    title  = 'Privacy / telemetry trim'
-    detail = 'Disables NvTelemetry tasks/services and quiet auto-download hints where possible.'
-    active = [bool]($state -and $state.debloatApplied)
-})
-
 function Convert-WindowsDriverToNvidia([string]$WinVer) {
     try {
         $parts = $WinVer -split '\.'
@@ -80,9 +36,47 @@ function Convert-WindowsDriverToNvidia([string]$WinVer) {
     } catch { return $null }
 }
 
-$winDrv = if ($primary) { [string](Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $primary.Name } | Select-Object -First 1 -ExpandProperty DriverVersion) } else { '' }
-if (-not $winDrv -and $primary) {
-    try { $winDrv = [string](Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match 'nvidia|geforce' } | Select-Object -First 1).DriverVersion } catch { }
+$features = New-Object System.Collections.Generic.List[hashtable]
+$gpus = Get-NvidiaGpus
+$gpuOk = $gpus.Count -gt 0
+$primary = if ($gpuOk) { $gpus[0] } else { $null }
+$series = if ($primary) { Get-GpuSeriesFromName $primary.Name } else { $null }
+
+$statePath = Join-Path $env:LOCALAPPDATA 'OptiHub\nvidia-optimizer.json'
+$state = $null
+if (Test-Path $statePath) {
+    try { $state = Get-Content $statePath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
+}
+
+# 1) GPU
+$gpuDetail = if (-not $gpuOk) {
+    'NVIDIA GPU + drivers required.'
+} elseif ($series) {
+    "$($primary.Name)  ·  $series Series"
+} else {
+    "$($primary.Name)"
+}
+$features.Add(@{
+    title  = 'NVIDIA GPU'
+    detail = $gpuDetail
+    active = $gpuOk
+})
+
+# 2) Driver (first pipeline step)
+$winDrv = ''
+if ($primary) {
+    try {
+        $winDrv = [string](Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -eq $primary.Name } |
+            Select-Object -First 1 -ExpandProperty DriverVersion)
+    } catch { }
+}
+if (-not $winDrv) {
+    try {
+        $winDrv = [string](Get-CimInstance Win32_VideoController |
+            Where-Object { $_.Name -match 'nvidia|geforce' } |
+            Select-Object -First 1).DriverVersion
+    } catch { }
 }
 $currentNv = Convert-WindowsDriverToNvidia $winDrv
 $latestNv = $null
@@ -104,50 +98,69 @@ if ($latestNv -and $currentNv) {
 }
 
 $driverNote = if ($needsUpdate) {
-    "Update available: installed $(if($currentNv){$currentNv}else{'?'}) -> newest $latestNv. Apply prompts NVCleanstall."
+    "Update available: $(if($currentNv){$currentNv}else{'?'}) -> $latestNv. Apply opens NVCleanstall first."
 } elseif ($latestNv) {
     "On newest Game Ready ($currentNv)."
 } else {
-    'Could not reach NVIDIA for newest version; Apply still checks and can open NVCleanstall.'
+    'Could not reach NVIDIA; Apply still checks and can open NVCleanstall.'
 }
 $features.Add(@{
-    title  = 'Newest driver check'
+    title  = 'Driver (newest Game Ready)'
     detail = $driverNote
     active = (-not $needsUpdate) -and [bool]$latestNv
 })
 
+# 3) 3D profile (second pipeline step)
+$applied = [bool]($state -and $state.profileFile -and -not $state.pendingAfterDriver)
+if ($state -and $state.pendingAfterDriver) { $applied = $false }
+$gsyncDetail = if ($state -and $state.gsync) { 'GSync pack' } else { 'No Gsync pack' }
 $features.Add(@{
-    title  = 'Display color / scaling prefs'
-    detail = 'Prefers NVIDIA color path + Full RGB / high bpc guidance; confirm in NVIDIA App once.'
-    active = [bool]($state -and $state.displayPrefs)
-})
-
-$applied = [bool]$state
-$gsyncDetail = if ($state -and $state.gsync) { 'G-SYNC pack' } else { 'Low-latency pack' }
-$features.Add(@{
-    title  = '3D Base Profile applied'
-    detail = $(if ($applied) { "$($state.series) Series $gsyncDetail ($($state.profileFile))" } else { 'FPS/latency Base Profile via Profile Inspector.' })
+    title  = '3D Base Profile'
+    detail = $(if ($applied) { "$($state.series) Series · $gsyncDetail · $($state.profileFile)" } else { 'FPS/latency Base Profile via Profile Inspector (after driver is current).' })
     active = $applied
 })
 
-$isApplied = $gpuOk -and $applied
+# 4+) App stack
+$appOk = Test-NvidiaApp
+if ($state -and $state.nvidiaApp) { $appOk = $true }
+$features.Add(@{
+    title  = 'NVIDIA App'
+    detail = 'Conflict cleanup, then fresh App install for display/3D UI.'
+    active = $appOk
+})
+
+$features.Add(@{
+    title  = 'Privacy / telemetry trim'
+    detail = 'Disables NvTelemetry tasks/services and quiet auto-download hints where possible.'
+    active = [bool]($state -and $state.debloatApplied)
+})
+
+$features.Add(@{
+    title  = 'Display color / scaling prefs'
+    detail = 'NVIDIA color path + Full RGB / high bpc guidance.'
+    active = [bool]($state -and $state.displayPrefs)
+})
+
+$isApplied = $gpuOk -and $applied -and (-not $needsUpdate)
 $statusText = if (-not $gpuOk) { 'No NVIDIA GPU' }
+elseif ($needsUpdate) { 'Driver update available' }
 elseif ($isApplied) { 'Already optimized' }
 else { 'Ready to optimize' }
 
 $detail = if (-not $gpuOk) { 'Needs an NVIDIA GPU and current drivers.' }
-elseif ($isApplied) { "Profile applied$(if($state.gsync){' (G-SYNC)'}). Re-apply after big driver upgrades." }
-else { 'Toggle G-SYNC if your monitor supports it, then Apply.' }
+elseif ($needsUpdate) { 'Update the driver first (Apply), reboot, then Reapply for 3D profile + App polish.' }
+elseif ($isApplied) { 'Driver current and 3D profile applied. Re-apply after big driver upgrades.' }
+else { 'Toggle GSync if needed, then Apply.' }
 
 [ordered]@{
-    isApplied          = $isApplied
-    statusText         = $statusText
-    detail             = $detail
-    features           = @($features)
-    gpuName            = $(if ($primary) { $primary.Name } else { $null })
-    series             = $series
-    gsync              = [bool]($state -and $state.gsync)
-    currentDriver      = $currentNv
-    latestDriver       = $latestNv
-    needsDriverUpdate  = $needsUpdate
+    isApplied         = $isApplied
+    statusText        = $statusText
+    detail            = $detail
+    features          = @($features)
+    gpuName           = $(if ($primary) { $primary.Name } else { $null })
+    series            = $series
+    gsync             = [bool]($state -and $state.gsync)
+    currentDriver     = $currentNv
+    latestDriver      = $latestNv
+    needsDriverUpdate = $needsUpdate
 } | ConvertTo-Json -Compress -Depth 5

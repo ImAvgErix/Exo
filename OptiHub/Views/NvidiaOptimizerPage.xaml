@@ -135,7 +135,7 @@
                                 HorizontalAlignment="Center"
                                 Spacing="10">
                         <Button Style="{StaticResource OptiQuietButton}"
-                                Content="Clear marker"
+                                Content="Reset OptiHub status"
                                 Click="Repair_Click"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                         <Button Style="{StaticResource OptiQuietButton}"
