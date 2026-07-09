@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.7
+
+- **Steam**: former aggressive CEF flags are now the only/default launcher (nofriendsui, nointro, etc.)
+- **No desktop shortcuts** created for Steam or Discord; removes prior OptiHub desktop icons
+- Start Menu / taskbar still retargeted to OptiHub launchers
+
 ## 1.1.6
 
 - **Steam**: retarget Start Menu, taskbar pins, and Desktop shortcuts to lean launcher (Open Steam from Start apps still gets CEF flags + trim helper)

@@ -56,18 +56,9 @@ $cefOk = $false
 if ($steam -and (Test-Path (Join-Path $steam 'Steam-OptiHub.cmd'))) { $cefOk = $true }
 if ($state -and $state.cefLeanLaunch) { $cefOk = $true }
 $features.Add(@{
-    title  = 'Lean steamwebhelper (CEF)'
-    detail = 'Lean CEF flags. Start Menu / taskbar / Desktop Steam shortcuts retargeted to Steam-OptiHub.cmd.'
+    title  = 'Quiet CEF launcher (default)'
+    detail = 'Start Menu / taskbar Steam uses Steam-OptiHub.cmd (disable-gpu, nofriendsui, nointro, etc.). No desktop icons.'
     active = $cefOk
-})
-
-$aggOk = $false
-if ($steam -and (Test-Path (Join-Path $steam 'Steam-OptiHub-Aggressive.cmd'))) { $aggOk = $true }
-if ($state -and $state.cefAggressiveLaunch) { $aggOk = $true }
-$features.Add(@{
-    title  = 'Aggressive launcher (optional)'
-    detail = 'Steam (OptiHub Aggressive): nofriendsui, nointro, nobigpicture, vrdisable, etc.'
-    active = $aggOk
 })
 
 $dlOk = [bool]($state -and $state.downloadOptimized)
@@ -101,8 +92,8 @@ elseif ($isApplied) { 'Already optimized' }
 else { 'Ready to optimize' }
 
 $detail = if (-not $steamOk) { 'Install Steam, open it once, then run OptiHub.' }
-elseif ($isApplied) { 'Performance pack active. Start Menu, taskbar, and Desktop Steam entries use the lean launcher.' }
-else { 'Run for lean/aggressive CEF, 5s trim, priority yield, shader clean, downloads.' }
+elseif ($isApplied) { 'Performance pack active. Open Steam from Start Menu or taskbar (no desktop shortcuts).' }
+else { 'Run for quiet CEF launcher, 5s trim, priority yield, shader clean, downloads.' }
 
 [ordered]@{
     isApplied  = $isApplied

@@ -250,6 +250,12 @@ CreateObject("WScript.Shell").Run """" & ps & """ -NoProfile -WindowStyle Hidden
             $key = $_.FullName.ToLowerInvariant()
             if ($seen.ContainsKey($key)) { return }
             if (-not (Test-IsDiscordClientLnk $_.FullName)) { return }
+            # Do not create OptiHub desktop brands; remove if present
+            if ($_.FullName -match '(?i)[\\/]Desktop[\\/]' -and $_.Name -match '(?i)OptiHub') {
+                try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue } catch { }
+                $seen[$key] = $true
+                return
+            }
             try {
                 Set-DiscordLnk $_.FullName
                 $seen[$key] = $true
@@ -260,14 +266,12 @@ CreateObject("WScript.Shell").Run """" & ps & """ -NoProfile -WindowStyle Hidden
         }
     }
 
-    # Canonical Start Menu locations (user + all-users)
+    # Canonical Start Menu only (never create Desktop shortcuts)
     $ensure = @(
         (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk'),
         (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord.lnk'),
         (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord Inc\Discord.lnk'),
-        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord.lnk'),
-        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Discord.lnk'),
-        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Discord (OptiHub).lnk')
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord.lnk')
     ) | Where-Object { $_ }
 
     foreach ($path in $ensure) {
@@ -280,14 +284,16 @@ CreateObject("WScript.Shell").Run """" & ps & """ -NoProfile -WindowStyle Hidden
         }
     }
 
-    # Remove orphaned top-level duplicate only if we have Discord Inc entry
-    $inc = Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk'
-    $top = Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord.lnk'
-    if ($inc -and (Test-Path -LiteralPath $inc) -and $top -and (Test-Path -LiteralPath $top)) {
-        # Keep both so Start search finds either name; both point at vbs.
+    # Remove OptiHub-branded desktop icons if we created them earlier
+    foreach ($name in @('Discord (OptiHub).lnk')) {
+        $desk = Join-Path ([Environment]::GetFolderPath('Desktop')) $name
+        if (Test-Path -LiteralPath $desk) {
+            Remove-Item -LiteralPath $desk -Force -ErrorAction SilentlyContinue
+            Write-Ok "Removed desktop shortcut: $name"
+        }
     }
 
-    Write-Ok "Discord launch shortcuts refreshed ($patched) - Start Menu / taskbar / desktop -> Discord.vbs (-Launch)"
+    Write-Ok "Discord launch shortcuts refreshed ($patched) - Start Menu / taskbar (no desktop icons created)"
 }
 
 function Test-KernelOnDisk([string]$AppDir) {

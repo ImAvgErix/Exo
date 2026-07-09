@@ -24,7 +24,6 @@
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
@@ -92,20 +91,7 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <StackPanel Grid.Row="2" Spacing="4" Margin="0,0,0,14">
-                    <Border Height="1"
-                            Background="{ThemeResource OptiCardStrokeBrush}"
-                            Opacity="0.4"
-                            Margin="0,0,0,10" />
-                    <TextBlock Text="WHAT THIS DOES" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                    <TextBlock Style="{StaticResource OptiBody}"
-                               FontSize="13"
-                               LineHeight="20"
-                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                               Text="Performance pack: lean CEF launch + optional Aggressive, Start Menu/taskbar/Desktop Steam shortcuts retargeted to lean launcher, 5s webhelper RAM trim (library + in-game, no suspend), BELOW_NORMAL steam/webhelper while gaming, shader pre-cache clean, download staging clean, overlay/library hints, quieter startup. Games/VAC untouched." />
-                </StackPanel>
-
-                <StackPanel Grid.Row="3" Spacing="6"
+                <StackPanel Grid.Row="2" Spacing="6"
                             Visibility="{x:Bind ViewModel.IsProgressVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                             Margin="0,0,0,12">
                     <ProgressBar Minimum="0" Maximum="100"
@@ -119,7 +105,7 @@
                                HorizontalAlignment="Center" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="4" Spacing="10">
+                <StackPanel Grid.Row="3" Spacing="10">
                     <Border Style="{StaticResource OptiCard}"
                             Padding="12,10"
                             Visibility="{x:Bind ViewModel.HasLastResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"

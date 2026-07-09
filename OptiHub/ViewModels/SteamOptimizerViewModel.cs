@@ -68,14 +68,13 @@ public partial class SteamOptimizerViewModel : ObservableObject
         var action = IsApplied ? "reapply" : "run";
         var warning =
             "This will close Steam and apply a performance pack:\n\n" +
-            "• Lean CEF launch + optional Aggressive shortcut (nofriendsui/nointro/etc.)\n" +
+            "• Default CEF quiet launcher (disable-gpu, nofriendsui, nointro, etc.)\n" +
             "• 5s steamwebhelper RAM trim (library + in-game) - no process suspend\n" +
             "• In-game: lower steam/webhelper priority so the game wins CPU\n" +
             "• Shader pre-cache clean, download staging clean, overlay/library hints\n" +
             "• Quieter Windows startup\n\n" +
             "Steam is Chromium CEF (not Electron) - no Discord-style asar inject. VAC-safe.\n\n" +
-            "Start Menu / taskbar / Desktop Steam entries are retargeted to the lean launcher.\n" +
-            "Optional: Steam (OptiHub Aggressive) on Desktop and Start Menu.";
+            "Start Menu / taskbar Steam entries are retargeted. No desktop shortcuts are created.";
 
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync($"Confirm Steam Optimizer ({action})", warning)

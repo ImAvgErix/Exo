@@ -15,18 +15,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.3.1'
+$Script:SteamOptVersion = '1.3.2'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# Official Valve CEF flags (see Valve wiki: Command line options (Steam)).
-# These cut steamwebhelper GPU/RAM without touching game binaries or VAC.
-$Script:LeanCefArgs = @(
-    '-cef-disable-gpu',
-    '-cef-disable-gpu-compositing'
-)
-# Optional aggressive tier (extra client quieting). May hide friends UI / intro.
+# Default Steam launch flags (formerly "aggressive" - this is the only tier).
 # Avoid sandbox/single-process flags - those crash on some PCs.
-$Script:AggressiveCefArgs = @(
+$Script:DefaultCefArgs = @(
     '-cef-disable-gpu',
     '-cef-disable-gpu-compositing',
     '-nofriendsui',
@@ -506,22 +500,25 @@ function Set-SteamShortcutTarget([string]$LnkPath, [string]$TargetCmd, [string]$
 }
 
 function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
-    # Default lean + optional aggressive. Patch Start Menu / taskbar / desktop so
-    # opening Steam from Start apps uses OptiHub flags + trim helper.
+    # Single default launcher (full CEF quiet flags). Patch Start Menu / taskbar only.
+    # Never create Desktop shortcuts.
     $exe = Join-Path $SteamPath 'steam.exe'
-    $cmdLean = Join-Path $SteamPath 'Steam-OptiHub.cmd'
-    $cmdAgg = Join-Path $SteamPath 'Steam-OptiHub-Aggressive.cmd'
-    Write-SteamLaunchCmd $cmdLean $SteamPath $HelperPath $Script:LeanCefArgs 'lean CEF'
-    Write-SteamLaunchCmd $cmdAgg $SteamPath $HelperPath $Script:AggressiveCefArgs 'aggressive CEF'
-    Write-Ok "Lean launcher: $cmdLean"
-    Write-Ok ("Lean CEF: {0}" -f ($Script:LeanCefArgs -join ' '))
-    Write-Ok "Aggressive launcher: $cmdAgg"
-    Write-Ok ("Aggressive CEF: {0}" -f ($Script:AggressiveCefArgs -join ' '))
+    $cmdPath = Join-Path $SteamPath 'Steam-OptiHub.cmd'
+    Write-SteamLaunchCmd $cmdPath $SteamPath $HelperPath $Script:DefaultCefArgs 'default CEF'
+    Write-Ok "Steam launcher: $cmdPath"
+    Write-Ok ("CEF flags: {0}" -f ($Script:DefaultCefArgs -join ' '))
+
+    # Remove old optional aggressive launcher if present
+    $oldAgg = Join-Path $SteamPath 'Steam-OptiHub-Aggressive.cmd'
+    if (Test-Path -LiteralPath $oldAgg) {
+        Remove-Item -LiteralPath $oldAgg -Force -ErrorAction SilentlyContinue
+        Write-Ok 'Removed old Steam-OptiHub-Aggressive.cmd'
+    }
 
     $wsh = New-Object -ComObject WScript.Shell
     $patched = 0
     $seen = @{}
-    $descLean = 'Steam (OptiHub lean CEF + 5s webhelper trim)'
+    $desc = 'Steam (OptiHub - CEF quiet + 5s webhelper trim)'
 
     foreach ($root in (Get-SteamShortcutSearchRoots)) {
         $lnks = @(Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse -Force -ErrorAction SilentlyContinue)
@@ -529,20 +526,28 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
             $key = $lnk.FullName.ToLowerInvariant()
             if ($seen.ContainsKey($key)) { continue }
             if (-not (Test-LnkIsSteamClient $lnk.FullName $exe $wsh)) { continue }
-            # Do not rewrite the Aggressive-named shortcuts to lean
-            if ($lnk.Name -match '(?i)aggressive') { continue }
+            # Never create/keep OptiHub-branded desktop entries - remove if found
+            $onDesktop = $lnk.FullName -match '(?i)[\\/]Desktop[\\/]'
+            if ($onDesktop -and $lnk.Name -match '(?i)OptiHub') {
+                try {
+                    Remove-Item -LiteralPath $lnk.FullName -Force -ErrorAction SilentlyContinue
+                    Write-Ok ("Removed OptiHub desktop shortcut: {0}" -f $lnk.Name)
+                } catch { }
+                $seen[$key] = $true
+                continue
+            }
             try {
-                Set-SteamShortcutTarget $lnk.FullName $cmdLean $SteamPath $exe $descLean $wsh
+                Set-SteamShortcutTarget $lnk.FullName $cmdPath $SteamPath $exe $desc $wsh
                 $seen[$key] = $true
                 $patched++
-                Write-Ok ("Shortcut -> lean: {0}" -f $lnk.FullName.Replace($env:USERPROFILE, '~').Replace($env:ProgramData, '%ProgramData%'))
+                Write-Ok ("Shortcut -> OptiHub launcher: {0}" -f $lnk.FullName.Replace($env:USERPROFILE, '~').Replace($env:ProgramData, '%ProgramData%'))
             } catch {
                 Write-Warn "Shortcut skip $($lnk.FullName): $($_.Exception.Message)"
             }
         }
     }
 
-    # Ensure primary Start Menu "Steam" entries exist (user + all-users) for Start search/apps
+    # Ensure Start Menu Steam.lnk only (no Desktop, no Aggressive clone)
     $startSteamDirs = @(
         (Join-Path ([Environment]::GetFolderPath('Programs')) 'Steam'),
         (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Steam')
@@ -554,54 +559,42 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
                 New-Item -ItemType Directory -Path $dir -Force | Out-Null
             }
             $mainLnk = Join-Path $dir 'Steam.lnk'
-            Set-SteamShortcutTarget $mainLnk $cmdLean $SteamPath $exe $descLean $wsh
+            Set-SteamShortcutTarget $mainLnk $cmdPath $SteamPath $exe $desc $wsh
             $patched++
             Write-Ok "Start Menu Steam.lnk: $mainLnk"
 
             $aggLnk = Join-Path $dir 'Steam (OptiHub Aggressive).lnk'
-            Set-SteamShortcutTarget $aggLnk $cmdAgg $SteamPath $exe 'Steam OptiHub aggressive CEF (optional)' $wsh
-            $patched++
+            if (Test-Path -LiteralPath $aggLnk) {
+                Remove-Item -LiteralPath $aggLnk -Force -ErrorAction SilentlyContinue
+                Write-Ok 'Removed Start Menu Aggressive shortcut (now default launcher)'
+            }
         } catch {
             Write-Warn "Start Menu Steam folder: $($_.Exception.Message)"
         }
     }
 
+    # Cleanup any leftover OptiHub desktop shortcuts we may have created earlier
     $desktop = [Environment]::GetFolderPath('Desktop')
-    try {
-        $deskLnk = Join-Path $desktop 'Steam (OptiHub Lean).lnk'
-        Set-SteamShortcutTarget $deskLnk $cmdLean $SteamPath $exe 'Steam with OptiHub lean CEF flags + 5s webhelper trim' $wsh
-        Write-Ok 'Desktop shortcut: Steam (OptiHub Lean).lnk'
-        $patched++
-    } catch {
-        Write-Warn "Desktop lean shortcut: $($_.Exception.Message)"
+    foreach ($name in @('Steam (OptiHub Lean).lnk', 'Steam (OptiHub Aggressive).lnk', 'Steam (OptiHub).lnk')) {
+        $p = Join-Path $desktop $name
+        if (Test-Path -LiteralPath $p) {
+            Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue
+            Write-Ok "Removed desktop shortcut: $name"
+        }
     }
 
-    try {
-        $deskAgg = Join-Path $desktop 'Steam (OptiHub Aggressive).lnk'
-        Set-SteamShortcutTarget $deskAgg $cmdAgg $SteamPath $exe 'Steam OptiHub aggressive: lean CEF + nofriendsui/nointro/etc.' $wsh
-        Write-Ok 'Desktop shortcut: Steam (OptiHub Aggressive).lnk'
-        $patched++
-    } catch {
-        Write-Warn "Desktop aggressive shortcut: $($_.Exception.Message)"
-    }
-
-    # App Paths: Start/Run "steam" resolution still points at real steam.exe (some tools require .exe).
-    # We cannot put .cmd here reliably; Start Menu shortcuts above cover the UI launch path.
     try {
         $appPaths = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\steam.exe'
         if (-not (Test-Path $appPaths)) { New-Item -Path $appPaths -Force | Out-Null }
-        # Keep Default as steam.exe for compatibility; document lean via shortcuts.
         Set-ItemProperty -Path $appPaths -Name '(default)' -Value $exe -Force
         Set-ItemProperty -Path $appPaths -Name 'Path' -Value $SteamPath -Force
     } catch { }
 
-    Write-Ok "Updated $patched Steam shortcut(s) (Start Menu / taskbar pins / desktop)"
+    Write-Ok "Updated $patched Steam shortcut(s) (Start Menu / taskbar; no desktop icons created)"
     return @{
-        Cmd        = $cmdLean
-        Aggressive = $cmdAgg
-        Args       = ($Script:LeanCefArgs -join ' ')
-        AggArgs    = ($Script:AggressiveCefArgs -join ' ')
-        Shortcuts  = $patched
+        Cmd       = $cmdPath
+        Args      = ($Script:DefaultCefArgs -join ' ')
+        Shortcuts = $patched
     }
 }
 
@@ -733,11 +726,21 @@ function Invoke-SteamRepair([string]$SteamPath) {
     }
 
     $desktop = [Environment]::GetFolderPath('Desktop')
-    foreach ($name in @('Steam (OptiHub Lean).lnk', 'Steam (OptiHub Aggressive).lnk')) {
+    foreach ($name in @('Steam (OptiHub Lean).lnk', 'Steam (OptiHub Aggressive).lnk', 'Steam (OptiHub).lnk')) {
         $deskLnk = Join-Path $desktop $name
         if (Test-Path $deskLnk) {
             Remove-Item $deskLnk -Force -ErrorAction SilentlyContinue
             Write-Ok "Removed Desktop $name"
+        }
+    }
+    foreach ($dir in @(
+        (Join-Path ([Environment]::GetFolderPath('Programs')) 'Steam'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Steam')
+    )) {
+        $agg = Join-Path $dir 'Steam (OptiHub Aggressive).lnk'
+        if (Test-Path $agg) {
+            Remove-Item $agg -Force -ErrorAction SilentlyContinue
+            Write-Ok "Removed $agg"
         }
     }
 
@@ -813,23 +816,21 @@ try {
         snappyUi             = $true
         overlayTweaks        = $true
         cefLeanLaunch        = $true
-        cefAggressiveLaunch  = $true
-        cefArgs              = ($Script:LeanCefArgs -join ' ')
-        cefAggressiveArgs    = ($Script:AggressiveCefArgs -join ' ')
+        cefArgs              = ($Script:DefaultCefArgs -join ' ')
         leanCmd              = $launch.Cmd
-        aggressiveCmd        = $launch.Aggressive
         webHelperTrim        = $true
         inGamePriorityYield  = $true
         highPriority         = $true
         downloadOptimized    = $true
+        noDesktopShortcuts   = $true
         quick                = [bool]$Quick
     }
     Save-SteamOptState $state
 
-    Write-Ok 'Steam Optimizer finished (lean + aggressive launchers, 5s trim, in-game priority yield, shader clean)'
-    Write-Ok 'Default: Desktop "Steam (OptiHub Lean)". Optional: "Steam (OptiHub Aggressive)".'
+    Write-Ok 'Steam Optimizer finished (default CEF quiet launcher, 5s trim, in-game priority yield, shader clean)'
+    Write-Ok 'Start Steam from Start Menu / taskbar (no desktop shortcuts created).'
     Write-HubProgress 100 'Completed successfully'
-    Write-Output 'DONE - Steam optimized (lean/aggressive + trim + priority yield)'
+    Write-Output 'DONE - Steam optimized (default CEF launcher + trim + priority yield)'
     exit 0
 } catch {
     Write-Err $_.Exception.Message

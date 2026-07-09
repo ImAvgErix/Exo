@@ -82,7 +82,7 @@ if (-not (Test-Path $discordRoot)) {
                 if ([string]$sc.Arguments -match '(?i)Discord\.vbs') { $launchOk = $true }
             }
         } catch {}
-        Add-Feature 'Start Menu / apps launch path' 'Start Menu, taskbar, and Desktop Discord shortcuts use the OptiHub -Launch path (OpenASAR + kernel).' $launchOk
+        Add-Feature 'Start Menu / apps launch path' 'Start Menu and taskbar Discord shortcuts use the OptiHub -Launch path (OpenASAR + kernel). No desktop icons created.' $launchOk
 
         $isApplied = [bool]($equicordOk -and ($kernelOk -or $openAsarOk))
         if ($isApplied) {
