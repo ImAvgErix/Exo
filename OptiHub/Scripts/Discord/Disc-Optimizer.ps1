@@ -45,7 +45,7 @@ if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.22'
+$Script:DiscOptVersion = '1.1.23'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -465,6 +465,7 @@ if ($SkipCacheClean) {
 } elseif (-not (Test-CacheCleanNeeded)) {
     Write-Ok 'Cache clean skipped (caches already lean)'
 } else {
+    Clear-DiscordConflictLeftovers | Out-Null
     Clear-DiscordSafeCache $freed
 }
 Ensure-KrispModule $app.FullName

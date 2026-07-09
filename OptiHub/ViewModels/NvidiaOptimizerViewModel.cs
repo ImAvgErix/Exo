@@ -72,11 +72,13 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             ? "• G-SYNC pack (adaptive sync friendly; ultra low latency off)"
             : "• Max FPS / latency pack (Ultra Low Latency Ultra; G-SYNC off)";
         var warning =
-            "This will import an OptiHub NVIDIA Base Profile via Profile Inspector:\n\n" +
+            "This will run the full NVIDIA pack:\n\n" +
+            "• If the driver is older than ~45 days: install/launch NVCleanstall (clean install + expert privacy/perf tweaks)\n" +
+            "• Delete conflicting old NVIDIA App / GFE / Control Panel leftovers, then install a fresh NVIDIA App\n" +
+            "• Telemetry trim + display Full RGB / high bpc guidance\n" +
             gsyncLine + "\n" +
-            "• Prefer maximum performance, prerender 1, shader cache, series rBAR/DLSS\n" +
-            "• Downloads nvidiaProfileInspector if needed (Orbmu2k, MIT)\n\n" +
-            "Administrator approval may be required. Re-apply after major driver updates.";
+            "• Import series Base Profile (power, latency, rBAR/DLSS by generation)\n\n" +
+            "Administrator approval may be required. After a driver install, reboot then Reapply.";
 
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync($"Confirm NVIDIA Optimizer ({action})", warning)

@@ -46,6 +46,35 @@ function Invoke-Debloat([string]$AppDir, [ref]$Freed) {
     Write-Ok "Debloat saved ~$([math]::Round($freed.Value / 1MB, 1)) MB"
 }
 
+function Clear-DiscordConflictLeftovers {
+    # Remove stale OptiHub / crash / GPU caches that can fight a fresh apply.
+    Write-Step 'Clearing conflicting Discord leftovers (login preserved)...'
+    $n = 0
+    $desk = [Environment]::GetFolderPath('Desktop')
+    foreach ($name in @('Discord (OptiHub).lnk')) {
+        $p = Join-Path $desk $name
+        if (Test-Path -LiteralPath $p) {
+            Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue
+            $n++; Write-Ok "Removed $name"
+        }
+    }
+    $local = Join-Path $env:LOCALAPPDATA 'Discord'
+    if (Test-Path $local) {
+        foreach ($rel in @('GPUCache', 'Code Cache', 'ShaderCache', 'Crashpad', 'DawnCache', 'GrShaderCache')) {
+            $p = Join-Path $local $rel
+            if (Test-Path $p) {
+                try {
+                    Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue
+                    $n++
+                    Write-Ok "Cleared LocalAppData\Discord\$rel"
+                } catch { }
+            }
+        }
+    }
+    Write-Ok "Discord conflict cleanup items: $n"
+    return $n
+}
+
 function Clear-DiscordSafeCache([ref]$Freed) {
     if ($SkipCacheClean) {
         Write-Ok 'Cache clean skipped (-SkipCacheClean)'

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1
+
+- **NVIDIA**: remove conflicting App/GFE/CPL leftovers before fresh NVIDIA App install
+- **NVIDIA**: NVCleanstall when driver is older than ~45 days (recommended expert tweaks guide + launch)
+- **Steam / Discord**: clear conflicting leftovers/caches at apply time so nothing fights a fresh optimize
+
 ## 1.2.0
 
 - **NVIDIA Optimizer** (live card): auto-detect GPU series, G-SYNC toggle, import OptiHub Base Profile via Profile Inspector

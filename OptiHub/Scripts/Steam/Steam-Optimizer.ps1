@@ -774,6 +774,29 @@ try {
         exit 0
     }
 
+    # Remove leftover OptiHub/Steam client junk that can conflict with lean launch
+    Write-HubProgress 25 'Clearing conflicting Steam leftovers...'
+    foreach ($f in @(
+        (Join-Path $steam 'Steam-OptiHub-Aggressive.cmd'),
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Steam (OptiHub Lean).lnk'),
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Steam (OptiHub Aggressive).lnk'),
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Steam (OptiHub).lnk')
+    )) {
+        if (Test-Path -LiteralPath $f) {
+            Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue
+            Write-Ok "Removed conflict leftover: $(Split-Path $f -Leaf)"
+        }
+    }
+    # Stale CEF crashpads / htmlcache that fight fresh lean flags
+    foreach ($d in @(
+        (Join-Path $env:LOCALAPPDATA 'Steam\htmlcache\Crashpad'),
+        (Join-Path $env:LOCALAPPDATA 'Steam\Crashpad')
+    )) {
+        if (Test-Path $d) {
+            try { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue; Write-Ok "Cleared $d" } catch { }
+        }
+    }
+
     Write-HubProgress 30 'Disabling Windows startup...'
     $startupRemoved = Disable-SteamWindowsStartup
 

@@ -56,9 +56,29 @@ $features.Add(@{
 })
 
 $features.Add(@{
+    title  = 'Conflict cleanup + fresh App'
+    detail = 'Removes old NVIDIA App / GFE / CPL leftovers before reinstall so nothing fights the new stack.'
+    active = [bool]($state -and ($state.conflictCleanup -ge 0 -or $state.nvidiaApp))
+})
+
+$features.Add(@{
     title  = 'Privacy / telemetry trim'
     detail = 'Disables NvTelemetry tasks/services and quiet auto-download hints where possible.'
     active = [bool]($state -and $state.debloatApplied)
+})
+
+$driverNote = 'NVCleanstall launches when the driver is older than ~45 days (or ForceDriver).'
+if ($state -and $state.driverUpdatePass) {
+    try {
+        $dup = $state.driverUpdatePass
+        if ($dup.Ran) { $driverNote = "NVCleanstall pass ran (driver age ~$($dup.AgeDays)d)." }
+        else { $driverNote = "Driver looked recent (~$($dup.AgeDays)d) - NVCleanstall skipped." }
+    } catch { }
+}
+$features.Add(@{
+    title  = 'Driver update (NVCleanstall)'
+    detail = $driverNote
+    active = $true
 })
 
 $features.Add(@{
