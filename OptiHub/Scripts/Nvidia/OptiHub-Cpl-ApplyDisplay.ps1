@@ -1,13 +1,7 @@
-# OptiHub — full NVIDIA Control Panel automation.
-# Every page: change settings -> Apply -> confirm Keep/Yes (don't let them revert).
-#
-# Pages:
-#  1) Adjust image settings -> Use the advanced 3D image settings
-#  2) Configure Surround, PhysX -> Processor = NVIDIA GPU
-#  3) Change resolution -> Use NVIDIA color settings + RGB + Full + 10 bpc (per display)
-#  4) Adjust desktop size and position -> No scaling + GPU + Override (per display)
-#  5) Adjust video color settings -> With the NVIDIA settings
-#  6) Adjust video image settings -> Use the NVIDIA setting
+# OptiHub — NVIDIA Control Panel automation (robust)
+# Maximize CPL, skip PhysX/Surround, per-monitor color+scaling, highest BPC,
+# skip already-correct controls, Apply + Keep after every page that changes.
+# Continues on failure so later pages still run.
 $ErrorActionPreference = 'Continue'
 
 function Write-CplLog([string]$Msg) {
@@ -22,16 +16,19 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Windows.Forms
 
-if (-not ('OptiHubMouse' -as [type])) {
+if (-not ('OptiHubWin' -as [type])) {
     Add-Type @"
 using System;
 using System.Runtime.InteropServices;
-public static class OptiHubMouse {
+public static class OptiHubWin {
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
   [DllImport("user32.dll")] public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
+  public const int SW_MAXIMIZE = 3;
   public const int MOUSEEVENTF_LEFTDOWN = 0x02;
   public const int MOUSEEVENTF_LEFTUP = 0x04;
+  public static void Maximize(IntPtr h) { ShowWindow(h, SW_MAXIMIZE); }
   public static void Click(int x, int y) {
     SetCursorPos(x, y);
     mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
@@ -47,129 +44,178 @@ function Get-NvcplProcess {
         Select-Object -First 1
 }
 
+function Focus-Nvcpl {
+    $p = Get-NvcplProcess
+    if ($p) {
+        [void][OptiHubWin]::SetForegroundWindow($p.MainWindowHandle)
+        [void][OptiHubWin]::Maximize($p.MainWindowHandle)
+    }
+}
+
 function Get-NvcplRoot {
     $p = Get-NvcplProcess
     if (-not $p) { return $null }
-    try { return [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle) }
-    catch { return $null }
+    try {
+        [void][OptiHubWin]::Maximize($p.MainWindowHandle)
+        return [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+    } catch { return $null }
 }
 
-function Focus-Nvcpl {
-    $p = Get-NvcplProcess
-    if ($p) { [void][OptiHubMouse]::SetForegroundWindow($p.MainWindowHandle) }
-}
-
-function Find-ElByName($Root, [string]$Name) {
+function Find-ByName($Root, [string]$Name) {
     if (-not $Root -or [string]::IsNullOrWhiteSpace($Name)) { return $null }
-    $cond = New-Object System.Windows.Automation.PropertyCondition(
+    $c = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::NameProperty, $Name)
-    return $Root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+    return $Root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $c)
 }
 
-function Find-ElById($Root, [string]$Id) {
+function Find-ById($Root, [string]$Id) {
     if (-not $Root) { return $null }
-    $cond = New-Object System.Windows.Automation.PropertyCondition(
+    $c = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::AutomationIdProperty, $Id)
-    return $Root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+    return $Root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $c)
 }
 
 function Click-El($El) {
     if (-not $El) { return $false }
     Focus-Nvcpl
-    Start-Sleep -Milliseconds 60
+    Start-Sleep -Milliseconds 50
     try {
         $inv = $El.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-        $inv.Invoke()
-        return $true
+        $inv.Invoke(); return $true
     } catch { }
     try {
         $pt = $El.GetClickablePoint()
-        [OptiHubMouse]::Click([int]$pt.X, [int]$pt.Y)
-        return $true
+        [OptiHubWin]::Click([int]$pt.X, [int]$pt.Y); return $true
     } catch { }
     try {
-        $rect = $El.Current.BoundingRectangle
-        if ($rect.Width -gt 1 -and $rect.Height -gt 1) {
-            [OptiHubMouse]::Click([int]($rect.X + $rect.Width / 2), [int]($rect.Y + $rect.Height / 2))
+        $r = $El.Current.BoundingRectangle
+        if ($r.Width -gt 1 -and $r.Height -gt 1) {
+            [OptiHubWin]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height / 2))
             return $true
         }
     } catch { }
     return $false
 }
 
-function Click-ByNameOrId {
+function Click-NameOrId {
     param($Root, [string[]]$Names = @(), [string[]]$Ids = @())
     foreach ($id in $Ids) {
-        $el = Find-ElById $Root $id
-        if ($el -and (Click-El $el)) { Write-CplLog "Clicked id=$id ($($el.Current.Name))"; return $true }
+        $el = Find-ById $Root $id
+        if ($el -and (Click-El $el)) { Write-CplLog "Click id=$id ($($el.Current.Name))"; return $true }
     }
     foreach ($n in $Names) {
-        $el = Find-ElByName $Root $n
-        if ($el -and (Click-El $el)) { Write-CplLog "Clicked name='$n'"; return $true }
+        $el = Find-ByName $Root $n
+        if ($el -and (Click-El $el)) { Write-CplLog "Click '$n'"; return $true }
     }
     return $false
 }
 
-function Select-ComboOption {
-    param($Root, [string[]]$CurrentCandidates, [string]$WantName)
+function Test-NamePresent($Root, [string]$Name) {
+    return [bool](Find-ByName $Root $Name)
+}
+
+function Get-OpenListOptions {
+    # After opening a dropdown, collect option names from desktop
+    $desk = [System.Windows.Automation.AutomationElement]::RootElement
+    $all = $desk.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition)
+    $opts = New-Object System.Collections.Generic.List[string]
+    $limit = [Math]::Min(400, $all.Count)
+    for ($i = 0; $i -lt $limit; $i++) {
+        $n = [string]$all.Item($i).Current.Name
+        if ([string]::IsNullOrWhiteSpace($n)) { continue }
+        if ($n.Length -gt 40) { continue }
+        [void]$opts.Add($n)
+    }
+    return @($opts | Select-Object -Unique)
+}
+
+function Select-FromCombo {
+    param($Root, [string[]]$CurrentLabels, [string]$WantExact = $null, [scriptblock]$PickBest = $null)
     $combo = $null
-    $current = $null
-    foreach ($c in $CurrentCandidates) {
-        $el = Find-ElByName $Root $c
-        if ($el) { $combo = $el; $current = $c; break }
+    $cur = $null
+    foreach ($c in $CurrentLabels) {
+        $el = Find-ByName $Root $c
+        if ($el) { $combo = $el; $cur = $c; break }
     }
     if (-not $combo) {
-        # already want?
-        if (Find-ElByName $Root $WantName) { Write-CplLog "Already '$WantName'"; return $true }
-        Write-CplLog "Combo not found for want='$WantName' (cands: $($CurrentCandidates -join ','))"
+        Write-CplLog "Combo not found (looking for: $($CurrentLabels -join ', '))"
         return $false
     }
-    if ($current -eq $WantName) { Write-CplLog "Already '$WantName'"; return $true }
 
-    if (-not (Click-El $combo)) { Write-CplLog "Open combo '$current' failed"; return $false }
-    Start-Sleep -Milliseconds 400
-
-    $root2 = Get-NvcplRoot
-    $item = Find-ElByName $root2 $WantName
-    if (-not $item) {
-        try {
-            $desk = [System.Windows.Automation.AutomationElement]::RootElement
-            $item = Find-ElByName $desk $WantName
-        } catch { }
+    # Determine target
+    $target = $WantExact
+    if ($PickBest) {
+        # open list to inspect options
+        [void](Click-El $combo)
+        Start-Sleep -Milliseconds 450
+        $opts = Get-OpenListOptions
+        $target = & $PickBest $opts $cur
+        if (-not $target) {
+            Write-CplLog "No suitable option in list; closing"
+            [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+            return $false
+        }
+        if ($cur -eq $target) {
+            Write-CplLog "Already best/current: $target"
+            [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+            return $true
+        }
+        # list still open - click target
+        $item = Find-ByName (Get-NvcplRoot) $target
+        if (-not $item) { $item = Find-ByName ([System.Windows.Automation.AutomationElement]::RootElement) $target }
+        if ($item -and (Click-El $item)) {
+            Write-CplLog "Selected '$target' (was '$cur')"
+            Start-Sleep -Milliseconds 250
+            return $true
+        }
+        # keyboard fallback
+        Focus-Nvcpl
+        try { $combo.SetFocus() } catch { }
+        [System.Windows.Forms.SendKeys]::SendWait('{HOME}')
+        foreach ($ch in $target.ToCharArray()) {
+            if ($ch -match '\s') { continue }
+            [System.Windows.Forms.SendKeys]::SendWait([string]$ch)
+            Start-Sleep -Milliseconds 30
+        }
+        [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+        Write-CplLog "Selected '$target' via keyboard"
+        Start-Sleep -Milliseconds 200
+        return $true
     }
+
+    if ($WantExact -and $cur -eq $WantExact) {
+        Write-CplLog "Already '$WantExact' — skip"
+        return $true
+    }
+
+    [void](Click-El $combo)
+    Start-Sleep -Milliseconds 400
+    $item = Find-ByName (Get-NvcplRoot) $WantExact
+    if (-not $item) { $item = Find-ByName ([System.Windows.Automation.AutomationElement]::RootElement) $WantExact }
     if ($item -and (Click-El $item)) {
-        Write-CplLog "Selected '$WantName'"
+        Write-CplLog "Selected '$WantExact' (was '$cur')"
         Start-Sleep -Milliseconds 250
         return $true
     }
-
-    # keyboard
-    try {
-        Focus-Nvcpl
-        $combo.SetFocus()
-        Start-Sleep -Milliseconds 80
-        [System.Windows.Forms.SendKeys]::SendWait('{HOME}')
-        foreach ($ch in $WantName.ToCharArray()) {
-            if ($ch -match '\s') { continue }
-            [System.Windows.Forms.SendKeys]::SendWait([string]$ch)
-            Start-Sleep -Milliseconds 35
-        }
-        [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-        Write-CplLog "Selected '$WantName' via keyboard"
-        Start-Sleep -Milliseconds 200
-        return $true
-    } catch {
-        Write-CplLog "Failed to select '$WantName'"
-        return $false
+    Focus-Nvcpl
+    try { $combo.SetFocus() } catch { }
+    [System.Windows.Forms.SendKeys]::SendWait('{HOME}')
+    foreach ($ch in $WantExact.ToCharArray()) {
+        if ($ch -match '\s') { continue }
+        [System.Windows.Forms.SendKeys]::SendWait([string]$ch)
+        Start-Sleep -Milliseconds 30
     }
+    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    Write-CplLog "Selected '$WantExact' via keyboard"
+    Start-Sleep -Milliseconds 200
+    return $true
 }
 
-function Confirm-KeepChanges {
-    param([int]$Seconds = 14)
-    # Must click Keep/Yes or Windows/NVIDIA reverts the change.
+function Confirm-KeepChanges([int]$Seconds = 12) {
     $deadline = [datetime]::UtcNow.AddSeconds($Seconds)
     $clicked = $false
-    Write-CplLog "Waiting for Keep/Yes (do not revert) up to ${Seconds}s..."
+    Write-CplLog "Waiting for Keep/Yes dialog (${Seconds}s)..."
     while ([datetime]::UtcNow -lt $deadline) {
         try {
             $desk = [System.Windows.Automation.AutomationElement]::RootElement
@@ -179,76 +225,60 @@ function Confirm-KeepChanges {
             $windows = $desk.FindAll([System.Windows.Automation.TreeScope]::Children, $winCond)
             for ($wi = 0; $wi -lt $windows.Count; $wi++) {
                 $win = $windows.Item($wi)
-                $wname = [string]$win.Current.Name
-                $blob = $wname
+                $blob = [string]$win.Current.Name
                 try {
                     $nodes = $win.FindAll([System.Windows.Automation.TreeScope]::Descendants,
                         [System.Windows.Automation.Condition]::TrueCondition)
-                    $lim = [Math]::Min(60, $nodes.Count)
+                    $lim = [Math]::Min(50, $nodes.Count)
                     for ($ti = 0; $ti -lt $lim; $ti++) {
                         $tn = [string]$nodes.Item($ti).Current.Name
-                        if ($tn) { $blob += ' ' + $tn }
+                        if ($tn) { $blob += " $tn" }
                     }
                 } catch { }
-
-                $isConfirm = $blob -match '(?i)keep these|do you want to keep|revert|display settings|seconds remaining|keep changes'
-                if (-not $isConfirm -and $wname -notmatch '(?i)nvidia|display') { continue }
-
+                if ($blob -notmatch '(?i)keep these|do you want to keep|revert|display settings|seconds remaining|keep changes') {
+                    continue
+                }
                 foreach ($n in @('Yes', 'Keep changes', 'Keep Changes', 'Keep these settings', 'Keep', 'OK', '&Yes')) {
-                    $el = Find-ElByName $win $n
-                    if (-not $el) { $el = Find-ElByName $desk $n }
+                    $el = Find-ByName $win $n
+                    if (-not $el) { $el = Find-ByName $desk $n }
                     if ($el -and $el.Current.IsEnabled -and $el.Current.Name -notmatch '(?i)^no$|revert') {
                         if (Click-El $el) {
-                            Write-CplLog "KEEP confirmed via '$($el.Current.Name)' ($wname)"
+                            Write-CplLog "KEEP via '$($el.Current.Name)'"
                             $clicked = $true
-                            Start-Sleep -Milliseconds 450
+                            Start-Sleep -Milliseconds 400
                         }
                     }
                 }
-                if ($isConfirm) {
-                    try { $win.SetFocus() } catch { }
-                    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-                    Write-CplLog "KEEP via ENTER on confirm dialog ($wname)"
-                    $clicked = $true
-                    Start-Sleep -Milliseconds 350
-                }
+                try { $win.SetFocus() } catch { }
+                [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+                Write-CplLog 'KEEP via ENTER'
+                $clicked = $true
+                Start-Sleep -Milliseconds 300
             }
         } catch { }
         Start-Sleep -Milliseconds 280
     }
-    if (-not $clicked) { Write-CplLog 'No Keep dialog appeared (Apply may have been disabled)' }
     return $clicked
 }
 
 function Click-ApplyAndKeep {
-    param($Root)
+    param($Root, [switch]$Force)
     Focus-Nvcpl
-    $apply = Find-ElByName $Root 'Apply'
+    $apply = Find-ByName $Root 'Apply'
     if (-not $apply) {
-        $all = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-            [System.Windows.Automation.Condition]::TrueCondition)
-        for ($i = 0; $i -lt $all.Count; $i++) {
-            $e = $all.Item($i)
-            if ($e.Current.Name -eq 'Apply') { $apply = $e; break }
-        }
-    }
-    if ($apply) {
-        if ($apply.Current.IsEnabled) {
-            Write-CplLog 'Clicking Apply...'
-            [void](Click-El $apply)
-        } else {
-            Write-CplLog 'Apply disabled (no change pending on this page)'
-            return $false
-        }
-    } else {
-        Write-CplLog 'Apply not found — Alt+A then Enter'
         Focus-Nvcpl
         [System.Windows.Forms.SendKeys]::SendWait('%a')
-        Start-Sleep -Milliseconds 150
-        [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+        Start-Sleep -Milliseconds 200
+    } else {
+        if (-not $apply.Current.IsEnabled -and -not $Force) {
+            Write-CplLog 'Apply disabled — page already correct, skip keep wait'
+            return $false
+        }
+        Write-CplLog 'Apply...'
+        [void](Click-El $apply)
     }
-    Start-Sleep -Milliseconds 400
-    [void](Confirm-KeepChanges -Seconds 14)
+    Start-Sleep -Milliseconds 350
+    [void](Confirm-KeepChanges -Seconds 12)
     return $true
 }
 
@@ -275,258 +305,263 @@ function Ensure-NvcplRunning {
         }
         Start-Sleep -Seconds 3
     }
-    Focus-Nvcpl
-    return [bool](Get-NvcplProcess)
+    $p = Get-NvcplProcess
+    if ($p) {
+        [void][OptiHubWin]::Maximize($p.MainWindowHandle)
+        Focus-Nvcpl
+        Start-Sleep -Milliseconds 400
+        [void][OptiHubWin]::Maximize($p.MainWindowHandle)
+    }
+    return [bool]$p
 }
 
 function Navigate-Page([string]$PageName) {
     $root = Get-NvcplRoot
     if (-not $root) { return $false }
-    $nav = Find-ElByName $root $PageName
-    if (-not $nav) { Write-CplLog "Page missing: $PageName"; return $false }
+    Focus-Nvcpl
+    $nav = Find-ByName $root $PageName
+    if (-not $nav) { Write-CplLog "Missing page: $PageName"; return $false }
     $ok = Click-El $nav
-    Write-CplLog "Navigate -> $PageName ($ok)"
-    Start-Sleep -Milliseconds 900
+    Write-CplLog "Page -> $PageName ($ok)"
+    Start-Sleep -Milliseconds 1000
+    Focus-Nvcpl
     return $ok
 }
 
-function Get-DisplaySelectors($Root) {
-    $found = New-Object System.Collections.Generic.List[object]
-    $seen = @{}
-    $all = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-        [System.Windows.Automation.Condition]::TrueCondition)
-    for ($i = 0; $i -lt $all.Count; $i++) {
-        $e = $all.Item($i)
-        $n = [string]$e.Current.Name
-        if ([string]::IsNullOrWhiteSpace($n)) { continue }
-        if ($n -match '(?i)select the display|connector:|resolution:|refresh rate:|apply the following|how do you') { continue }
-        # list-style displays: "1. ...", model names, or connector lines
-        $isDisp = $n -match '^\d+\.\s' -or
-            $n -match '(?i)\(NVIDIA|GeForce|RTX|GTX|DisplayPort|HDMI' -or
-            ($n -match '(?i)monitor|display' -and $n.Length -lt 80)
-        if (-not $isDisp) { continue }
-        if ($seen.ContainsKey($n)) { continue }
-        $seen[$n] = $true
-        [void]$found.Add($e)
-    }
-    return @($found)
-}
-
-function For-EachDisplay {
-    param([scriptblock]$Action)
+function Get-MonitorClickPoints {
+    # Display icons live in pane AutomationId=528 under Change resolution / size pages
     $root = Get-NvcplRoot
-    $displays = @(Get-DisplaySelectors $root)
-    if ($displays.Count -eq 0) {
-        Write-CplLog 'Single/current display only'
-        & $Action
-        return
+    $strip = Find-ById $root '528'
+    $screenCount = [Math]::Max(1, [System.Windows.Forms.Screen]::AllScreens.Count)
+    $points = New-Object System.Collections.Generic.List[object]
+
+    if ($strip) {
+        $r = $strip.Current.BoundingRectangle
+        if ($r.Width -gt 20 -and $r.Height -gt 20) {
+            for ($i = 0; $i -lt $screenCount; $i++) {
+                # evenly spaced clicks across the strip
+                $x = [int]($r.X + ($r.Width * ($i + 0.5) / $screenCount))
+                $y = [int]($r.Y + $r.Height / 2)
+                [void]$points.Add([pscustomobject]@{ Index = $i; X = $x; Y = $y; Label = "strip[$i]" })
+            }
+            Write-CplLog "Display strip 528: $screenCount slot(s) across ${([int]$r.Width)}px"
+            return @($points)
+        }
     }
-    $i = 0
-    foreach ($d in $displays) {
-        $i++
-        Write-CplLog "--- Display $i : $($d.Current.Name) ---"
-        [void](Click-El $d)
-        Start-Sleep -Milliseconds 750
-        & $Action
+
+    # Fallback: single current display
+    [void]$points.Add([pscustomobject]@{ Index = 0; X = 0; Y = 0; Label = 'current' })
+    Write-CplLog 'No display strip — using current display only'
+    return @($points)
+}
+
+function Select-MonitorSlot($Point) {
+    if ($Point.X -le 0) { return }
+    Focus-Nvcpl
+    [OptiHubWin]::Click([int]$Point.X, [int]$Point.Y)
+    Write-CplLog "Selected monitor $($Point.Label) @ $($Point.X),$($Point.Y)"
+    Start-Sleep -Milliseconds 800
+}
+
+function Invoke-Safe([string]$Label, [scriptblock]$Body) {
+    try {
+        Write-CplLog "BEGIN $Label"
+        & $Body
+        Write-CplLog "END $Label OK"
+    } catch {
+        Write-CplLog "END $Label FAIL: $($_.Exception.Message)"
     }
 }
 
-# ---------------- pages ----------------
+# -------- pages --------
 
-function Apply-Page-3DImageSettings {
-    Write-CplLog '=== Adjust image settings with preview ==='
+function Apply-3DImageSettings {
     if (-not (Navigate-Page 'Adjust image settings with preview')) { return }
     $root = Get-NvcplRoot
-    # "Use my 3D settings" path = advanced 3D image settings (our NIP / Manage 3D)
-    $ok = Click-ByNameOrId -Root $root `
-        -Names @('Use the advanced 3D image settings') `
-        -Ids @('321')
-    if (-not $ok) {
-        # fallback preference emphasizing Performance
-        [void](Click-ByNameOrId -Root $root -Names @('Use my preference emphasizing:') -Ids @('322'))
-        [void](Click-ByNameOrId -Root $root -Names @('Performance') -Ids @('468', '298'))
+    # Already advanced?
+    # If "Let the 3D application decide" is selected we need advanced. Hard to know selection state —
+    # click advanced 3D always (id 321) unless already the active path; clicking again is fine.
+    $need = $true
+    # Prefer advanced 3D (uses Manage 3D / our profile) = "use my 3D settings"
+    if ($need) {
+        if (-not (Click-NameOrId -Root $root -Names @('Use the advanced 3D image settings') -Ids @('321'))) {
+            Write-CplLog 'Advanced 3D control missing'
+            return
+        }
     }
     $root = Get-NvcplRoot
     Click-ApplyAndKeep -Root $root
 }
 
-function Apply-Page-PhysX {
-    Write-CplLog '=== Configure Surround, PhysX ==='
-    if (-not (Navigate-Page 'Configure Surround, PhysX')) { return }
-    $root = Get-NvcplRoot
-    # Processor combo is often AutomationId 1515 (garbled name)
-    $combo = Find-ElById $root '1515'
-    if (-not $combo) {
-        # find near "Processor:"
-        $procLabel = Find-ElByName $root 'Processor:'
-        if ($procLabel) {
-            # try next siblings via search of combos on page
-            $all = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-                [System.Windows.Automation.Condition]::TrueCondition)
-            for ($i = 0; $i -lt $all.Count; $i++) {
-                $e = $all.Item($i)
-                if ($e.Current.ControlType.ProgrammaticName -match 'ComboBox' -or $e.Current.AutomationId -eq '1515') {
-                    $combo = $e; break
-                }
-                # pane that acts as combo
-                if ($e.Current.AutomationId -eq '1515') { $combo = $e; break }
-            }
-        }
-    }
-    if ($combo) {
-        [void](Click-El $combo)
-        Start-Sleep -Milliseconds 400
-        $root2 = Get-NvcplRoot
-        $desk = [System.Windows.Automation.AutomationElement]::RootElement
-        $picked = $false
-        foreach ($scope in @($root2, $desk)) {
-            $all = $scope.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-                [System.Windows.Automation.Condition]::TrueCondition)
-            for ($i = 0; $i -lt [Math]::Min($all.Count, 200); $i++) {
-                $n = [string]$all.Item($i).Current.Name
-                if ($n -match '(?i)GeForce|RTX|GTX|NVIDIA' -and $n -notmatch '(?i)auto-select|CPU|Intel|AMD') {
-                    if (Click-El $all.Item($i)) {
-                        Write-CplLog "PhysX processor set to GPU: $n"
-                        $picked = $true
-                        break
-                    }
-                }
-            }
-            if ($picked) { break }
-        }
-        if (-not $picked) {
-            # Auto-select is OK if only one GPU
-            $auto = Find-ElByName $root2 'Auto-select'
-            if (-not $auto) { $auto = Find-ElByName $desk 'Auto-select' }
-            if ($auto) { [void](Click-El $auto); Write-CplLog 'PhysX Auto-select' }
-            else { Write-CplLog 'Could not set PhysX GPU explicitly' }
-        }
-    } else {
-        Write-CplLog 'PhysX processor control not found'
-    }
-    Start-Sleep -Milliseconds 300
-    $root = Get-NvcplRoot
-    Click-ApplyAndKeep -Root $root
-}
-
-function Apply-Page-ChangeResolution {
-    Write-CplLog '=== Change resolution (NVIDIA color / Full / 10 bpc) ==='
+function Apply-ChangeResolution {
     if (-not (Navigate-Page 'Change resolution')) { return }
-    For-EachDisplay {
+    $slots = @(Get-MonitorClickPoints)
+    foreach ($slot in $slots) {
+        Select-MonitorSlot $slot
         $root = Get-NvcplRoot
-        [void](Click-ByNameOrId -Root $root -Names @('Use NVIDIA color settings') -Ids @('34606'))
-        Start-Sleep -Milliseconds 500
+
+        # Unlock: Use NVIDIA color settings (skip if already implied by enabled Full/RGB controls and nvidia radio)
+        $nvidia = Find-ById $root '34606'
+        if (-not $nvidia) { $nvidia = Find-ByName $root 'Use NVIDIA color settings' }
+        $default = Find-ById $root '34605'
+        if (-not $default) { $default = Find-ByName $root 'Use default color settings' }
+
+        # Always click NVIDIA color to unlock dropdowns (required before Full/bpc work)
+        if ($nvidia) {
+            [void](Click-El $nvidia)
+            Write-CplLog 'Use NVIDIA color settings'
+            Start-Sleep -Milliseconds 600
+        }
+
         $root = Get-NvcplRoot
-        [void](Select-ComboOption -Root $root -CurrentCandidates @('RGB', 'YCbCr420', 'YCbCr422', 'YCbCr444') -WantName 'RGB')
-        [void](Select-ComboOption -Root $root -CurrentCandidates @('Full', 'Limited') -WantName 'Full')
-        $ok10 = Select-ComboOption -Root $root -CurrentCandidates @('8 bpc', '10 bpc', '12 bpc', '6 bpc') -WantName '10 bpc'
-        if (-not $ok10) { Write-CplLog '10 bpc unavailable for this mode — left depth as-is' }
+        # RGB
+        [void](Select-FromCombo -Root $root -CurrentLabels @('RGB', 'YCbCr420', 'YCbCr422', 'YCbCr444') -WantExact 'RGB')
+        # Full
+        [void](Select-FromCombo -Root $root -CurrentLabels @('Full', 'Limited') -WantExact 'Full')
+        # Highest BPC available
+        [void](Select-FromCombo -Root $root -CurrentLabels @('8 bpc', '10 bpc', '12 bpc', '6 bpc', '16 bpc') -PickBest {
+            param($opts, $cur)
+            $bpc = @()
+            foreach ($o in $opts) {
+                if ($o -match '^\s*(\d+)\s*bpc\s*$') { $bpc += [int]$Matches[1] }
+            }
+            if ($bpc.Count -eq 0) {
+                # list might only show current; try known descending
+                foreach ($try in @(16, 12, 10, 8, 6)) {
+                    $label = "$try bpc"
+                    if ($opts -contains $label -or $cur -eq $label) { return $label }
+                }
+                return $null
+            }
+            $best = ($bpc | Measure-Object -Maximum).Maximum
+            return "$best bpc"
+        })
+
         $root = Get-NvcplRoot
         Click-ApplyAndKeep -Root $root
     }
 }
 
-function Apply-Page-DesktopSizePosition {
-    Write-CplLog '=== Adjust desktop size and position (GPU / No scaling / Override) ==='
+function Apply-DesktopSizePosition {
     if (-not (Navigate-Page 'Adjust desktop size and position')) { return }
-    For-EachDisplay {
+    $slots = @(Get-MonitorClickPoints)
+    foreach ($slot in $slots) {
+        Select-MonitorSlot $slot
         $root = Get-NvcplRoot
-        # Scaling mode
-        [void](Click-ByNameOrId -Root $root -Names @('No scaling', 'No Scaling') -Ids @('327'))
+
+        # No scaling (skip if already selected - click anyway if Apply enables)
+        $noScale = Find-ById $root '327'
+        if (-not $noScale) { $noScale = Find-ByName $root 'No scaling' }
+        if ($noScale) { [void](Click-El $noScale); Write-CplLog 'No scaling' }
         Start-Sleep -Milliseconds 250
+
         # Perform scaling on: GPU (combo 9329)
-        $scaleOn = Find-ElById $root '9329'
-        if ($scaleOn) {
-            [void](Click-El $scaleOn)
-            Start-Sleep -Milliseconds 350
-            $desk = [System.Windows.Automation.AutomationElement]::RootElement
-            $gpuItem = Find-ElByName (Get-NvcplRoot) 'GPU'
-            if (-not $gpuItem) { $gpuItem = Find-ElByName $desk 'GPU' }
-            if ($gpuItem) { [void](Click-El $gpuItem); Write-CplLog 'Perform scaling on: GPU' }
+        $scaleCombo = Find-ById $root '9329'
+        if ($scaleCombo) {
+            $curName = [string]$scaleCombo.Current.Name
+            if ($curName -match '(?i)GPU') {
+                Write-CplLog "Perform scaling on already: $curName"
+            }
+            [void](Click-El $scaleCombo)
+            Start-Sleep -Milliseconds 400
+            $gpu = Find-ByName (Get-NvcplRoot) 'GPU'
+            if (-not $gpu) { $gpu = Find-ByName ([System.Windows.Automation.AutomationElement]::RootElement) 'GPU' }
+            if ($gpu) { [void](Click-El $gpu); Write-CplLog 'Perform scaling on: GPU' }
             else {
-                # keyboard G
                 Focus-Nvcpl
                 [System.Windows.Forms.SendKeys]::SendWait('g')
-                Start-Sleep -Milliseconds 100
+                Start-Sleep -Milliseconds 80
                 [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-                Write-CplLog 'Perform scaling on: GPU (keyboard)'
+                Write-CplLog 'Perform scaling on: GPU (keys)'
             }
-        } else {
-            [void](Click-ByNameOrId -Root $root -Names @('GPU') -Ids @())
         }
-        Start-Sleep -Milliseconds 250
+
         # Override checkbox 9330
-        $ovr = Find-ElById $root '9330'
-        if (-not $ovr) { $ovr = Find-ElByName $root 'Override the scaling mode set by games and programs' }
+        $ovr = Find-ById $root '9330'
+        if (-not $ovr) { $ovr = Find-ByName $root 'Override the scaling mode set by games and programs' }
         if ($ovr) {
+            $alreadyOn = $false
             try {
                 $tp = $ovr.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
-                if ($tp.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::On) { $tp.Toggle() }
-                Write-CplLog 'Override scaling = On (toggle)'
+                if ($tp.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::On) { $alreadyOn = $true }
+                else { $tp.Toggle() }
             } catch {
                 [void](Click-El $ovr)
-                Write-CplLog 'Override scaling clicked'
             }
+            if ($alreadyOn) { Write-CplLog 'Override already On — skip toggle' }
+            else { Write-CplLog 'Override = On' }
+        }
+
+        $root = Get-NvcplRoot
+        Click-ApplyAndKeep -Root $root
+    }
+}
+
+function Apply-VideoColor {
+    if (-not (Navigate-Page 'Adjust video color settings')) { return }
+    $slots = @(Get-MonitorClickPoints)
+    foreach ($slot in $slots) {
+        Select-MonitorSlot $slot
+        $root = Get-NvcplRoot
+        # Skip if already NVIDIA
+        # Click NVIDIA settings (id 1302)
+        if (Click-NameOrId -Root $root -Names @('With the NVIDIA settings') -Ids @('1302')) {
+            Write-CplLog 'Video color -> NVIDIA'
         }
         $root = Get-NvcplRoot
         Click-ApplyAndKeep -Root $root
     }
 }
 
-function Apply-Page-VideoColor {
-    Write-CplLog '=== Adjust video color settings (NVIDIA) ==='
-    if (-not (Navigate-Page 'Adjust video color settings')) { return }
-    For-EachDisplay {
-        $root = Get-NvcplRoot
-        [void](Click-ByNameOrId -Root $root -Names @('With the NVIDIA settings') -Ids @('1302'))
-        $root = Get-NvcplRoot
-        Click-ApplyAndKeep -Root $root
-    }
-}
-
-function Apply-Page-VideoImage {
-    Write-CplLog '=== Adjust video image settings (NVIDIA) ==='
+function Apply-VideoImage {
     if (-not (Navigate-Page 'Adjust video image settings')) { return }
-    For-EachDisplay {
+    $slots = @(Get-MonitorClickPoints)
+    foreach ($slot in $slots) {
+        Select-MonitorSlot $slot
         $root = Get-NvcplRoot
-        # Two separate "Use the NVIDIA setting" radios (edge + noise) — click both by id
-        [void](Click-ByNameOrId -Root $root -Names @() -Ids @('1402'))  # edge enhancement NVIDIA
-        Start-Sleep -Milliseconds 200
-        [void](Click-ByNameOrId -Root $root -Names @() -Ids @('1409'))  # noise reduction NVIDIA
-        # Also try by name if multiple
-        $root = Get-NvcplRoot
+        # Edge enhancement + noise reduction NVIDIA (ids 1402, 1409)
+        [void](Click-NameOrId -Root $root -Ids @('1402') -Names @())
+        Start-Sleep -Milliseconds 150
+        [void](Click-NameOrId -Root $root -Ids @('1409') -Names @())
+        # click all "Use the NVIDIA setting" radios
         $all = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
             [System.Windows.Automation.Condition]::TrueCondition)
         for ($i = 0; $i -lt $all.Count; $i++) {
-            $e = $all.Item($i)
-            if ($e.Current.Name -eq 'Use the NVIDIA setting') { [void](Click-El $e); Start-Sleep -Milliseconds 150 }
+            if ($all.Item($i).Current.Name -eq 'Use the NVIDIA setting') {
+                [void](Click-El $all.Item($i))
+                Start-Sleep -Milliseconds 100
+            }
         }
+        Write-CplLog 'Video image -> NVIDIA settings'
         $root = Get-NvcplRoot
         Click-ApplyAndKeep -Root $root
     }
 }
 
 # ---------------- main ----------------
-Write-CplLog 'FULL Control Panel pass starting (Apply + Keep after every page)...'
+Write-CplLog 'FULL CPL pass (max window, multi-monitor, highest BPC, Apply+Keep, skip PhysX)...'
 if (-not (Ensure-NvcplRunning)) {
-    Write-CplLog 'FATAL: NVIDIA Control Panel failed to start'
+    Write-CplLog 'FATAL: cannot start Control Panel'
     exit 1
 }
-Start-Sleep -Seconds 2
 
-# EULA if present
+# EULA
 $desk = [System.Windows.Automation.AutomationElement]::RootElement
 foreach ($n in @('Agree and continue', 'Agree', 'Continue', 'I Agree', 'Accept')) {
-    $el = Find-ElByName $desk $n
-    if ($el) { [void](Click-El $el); Write-CplLog "EULA '$n'"; Start-Sleep 1 }
+    $el = Find-ByName $desk $n
+    if ($el) { [void](Click-El $el); Write-CplLog "EULA $n"; Start-Sleep 1 }
 }
 
-Apply-Page-3DImageSettings
-Apply-Page-PhysX
-Apply-Page-ChangeResolution
-Apply-Page-DesktopSizePosition
-Apply-Page-VideoColor
-Apply-Page-VideoImage
+# Re-max after EULA
+$p = Get-NvcplProcess
+if ($p) { [void][OptiHubWin]::Maximize($p.MainWindowHandle) }
 
-Write-CplLog 'FULL Control Panel pass finished'
+Invoke-Safe '3D image settings' { Apply-3DImageSettings }
+# PhysX / Surround intentionally skipped
+Invoke-Safe 'Change resolution / color' { Apply-ChangeResolution }
+Invoke-Safe 'Desktop size and position' { Apply-DesktopSizePosition }
+Invoke-Safe 'Video color' { Apply-VideoColor }
+Invoke-Safe 'Video image' { Apply-VideoImage }
+
+Write-CplLog 'FULL CPL pass complete'
 exit 0
