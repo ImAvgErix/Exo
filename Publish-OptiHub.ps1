@@ -16,6 +16,9 @@ $Root = $PSScriptRoot
 $Project = Join-Path $Root 'OptiHub\OptiHub.csproj'
 $VersionFile = Join-Path $Root 'VERSION'
 $Version = if (Test-Path $VersionFile) { (Get-Content $VersionFile -Raw).Trim() } else { '1.0.0' }
+if ($Version -notmatch '^\d+\.\d+\.\d+$') {
+    throw "VERSION must contain an exact semantic version (x.y.z); got '$Version'."
+}
 
 $ReleaseDir = Join-Path $Root 'release'
 $ZipPath = Join-Path $ReleaseDir "OptiHub-$Version-win-x64.zip"
@@ -53,13 +56,16 @@ function New-OptiHubSfx {
     param(
         [Parameter(Mandatory)][string]$PayloadZipPath,
         [Parameter(Mandatory)][string]$OutputExe,
-        [Parameter(Mandatory)][string]$SourceCs
+        [Parameter(Mandatory)][string]$SourceCs,
+        [Parameter(Mandatory)][string]$AppVersion,
+        [Parameter(Mandatory)][string]$IconPath
     )
 
     $csc = Get-CscPath
     if (-not $csc) { throw 'csc.exe not found (.NET Framework 4.x).' }
     if (-not (Test-Path -LiteralPath $SourceCs)) { throw "SFX source missing: $SourceCs" }
     if (-not (Test-Path -LiteralPath $PayloadZipPath)) { throw "Payload zip missing: $PayloadZipPath" }
+    if (-not (Test-Path -LiteralPath $IconPath)) { throw "App icon missing: $IconPath" }
 
     $work = Join-Path ([IO.Path]::GetTempPath()) ('optihub-sfx-build-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $work -Force | Out-Null
@@ -68,20 +74,36 @@ function New-OptiHubSfx {
         $srcCopy = Join-Path $work 'OptiHubSfx.cs'
         $outCopy = Join-Path $work 'OptiHub.exe'
         $rsp = Join-Path $work 'build.rsp'
+        $assemblyInfo = Join-Path $work 'AssemblyInfo.cs'
 
         Copy-Item -LiteralPath $PayloadZipPath -Destination $payloadCopy -Force
         Copy-Item -LiteralPath $SourceCs -Destination $srcCopy -Force
 
+        $fourPartVersion = if ($AppVersion -match '^\d+\.\d+\.\d+$') { "$AppVersion.0" } else { $AppVersion }
+        @"
+using System.Reflection;
+[assembly: AssemblyTitle("OptiHub Installer")]
+[assembly: AssemblyProduct("OptiHub")]
+[assembly: AssemblyDescription("OptiHub self-contained Windows installer")]
+[assembly: AssemblyVersion("$fourPartVersion")]
+[assembly: AssemblyFileVersion("$fourPartVersion")]
+[assembly: AssemblyInformationalVersion("$AppVersion")]
+"@ | Set-Content -LiteralPath $assemblyInfo -Encoding ASCII
+
+        # Response-file paths must be quoted: publishing from folders such as
+        # "C:\Users\Name\Source Projects" otherwise splits csc arguments.
         @(
             '/nologo'
             '/target:winexe'
             '/optimize+'
             '/platform:anycpu'
-            "/out:$outCopy"
-            "/resource:$payloadCopy,payload.zip"
+            "/out:`"$outCopy`""
+            "/win32icon:`"$IconPath`""
+            "/resource:`"$payloadCopy`",payload.zip"
             '/r:System.IO.Compression.dll'
             '/r:System.IO.Compression.FileSystem.dll'
-            $srcCopy
+            "`"$srcCopy`""
+            "`"$assemblyInfo`""
         ) | Set-Content -LiteralPath $rsp -Encoding ASCII
 
         Write-Host '[*] Building self-extracting OptiHub.exe...' -ForegroundColor DarkGray
@@ -114,7 +136,6 @@ New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
 # Stamp assembly version from VERSION file so Settings + auto-update compare correctly.
 # Without this, GitHub tag can be v1.3.7 while FileVersion stays stuck at an old csproj value.
 $asmVersion = $Version
-if ($asmVersion -notmatch '^\d+\.\d+\.\d+') { $asmVersion = '1.0.0' }
 # AssemblyVersion needs 4 parts for some hosts; FileVersion/Informational use 3.
 $asmFour = if ($asmVersion -match '^\d+\.\d+\.\d+$') { "$asmVersion.0" } else { $asmVersion }
 
@@ -130,7 +151,7 @@ if (Test-Path -LiteralPath $nvDisplayProj) {
         -r win-x64 `
         --self-contained true `
         -p:PublishSingleFile=true `
-        -p:PublishTrimmed=true `
+        -p:PublishTrimmed=false `
         -p:IncludeNativeLibrariesForSelfExtract=true `
         -p:DebugType=none `
         -p:DebugSymbols=false `
@@ -175,7 +196,12 @@ Write-Host '[*] Packing payload zip (internal only)...' -ForegroundColor DarkGra
 Compress-Archive -Path (Join-Path $OutDir '*') -DestinationPath $ZipPath -CompressionLevel Optimal
 
 if (Test-Path $SfxPath) { Remove-Item -LiteralPath $SfxPath -Force }
-New-OptiHubSfx -PayloadZipPath $ZipPath -OutputExe $SfxPath -SourceCs $SfxSource
+New-OptiHubSfx `
+    -PayloadZipPath $ZipPath `
+    -OutputExe $SfxPath `
+    -SourceCs $SfxSource `
+    -AppVersion $Version `
+    -IconPath (Join-Path $Root 'OptiHub\Assets\OptiHub.ico')
 
 # Keep intermediate zip on disk for rebuilds; release script ships EXE only.
 Write-Host ''

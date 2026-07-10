@@ -51,5 +51,7 @@ public sealed class AppUpdateResult
     public string RemoteVersion { get; init; } = string.Empty;
     public string Message { get; init; } = string.Empty;
     public string? DownloadUrl { get; init; }
+    public long? DownloadSize { get; init; }
+    public string? Sha256 { get; init; }
     public bool ShouldExit { get; init; }
 }

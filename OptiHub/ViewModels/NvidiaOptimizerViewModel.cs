@@ -19,9 +19,6 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         LastResultBrush = ResolveBrush("OptiSuccessBrush", Color.FromArgb(255, 34, 197, 94));
     }
 
-    [ObservableProperty] private string _title = "NVIDIA";
-    public string LogoPath => "Assets/Logos/nvidia.png";
-
     [ObservableProperty] private string _statusText = "Checking status...";
     [ObservableProperty] private string _detailText = string.Empty;
     public ObservableCollection<FeatureRowViewModel> Features { get; } = new();
@@ -30,6 +27,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     [ObservableProperty] private bool _isApplied;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private bool _isProgressVisible;
+    [ObservableProperty] private bool _isStatusLoading = true;
     [ObservableProperty] private double _progressPercent;
     [ObservableProperty] private string _progressStatus = string.Empty;
     [ObservableProperty] private string _lastResult = string.Empty;
@@ -38,25 +36,29 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     [ObservableProperty] private Brush _lastResultBrush;
     [ObservableProperty] private bool _useGsync;
 
-    public event EventHandler? RequestGoBack;
     public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
-
-    [RelayCommand]
-    private void GoBack() => RequestGoBack?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
         if (IsBusy) return;
         IsBusy = true;
+        IsStatusLoading = true;
         try
         {
             StatusText = "Checking status...";
             var state = await _services.OptimizerState.DetectNvidiaAsync();
             ApplyState(state);
         }
+        catch (Exception ex)
+        {
+            StatusText = "Status unavailable";
+            DetailText = "OptiHub could not read the NVIDIA driver state. You can retry without applying changes.";
+            SetResult($"Status refresh failed: {ex.Message}", success: false);
+        }
         finally
         {
+            IsStatusLoading = false;
             IsBusy = false;
         }
     }
@@ -68,22 +70,18 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
 
         var action = IsApplied ? "reapply" : "apply";
         var gsyncLine = UseGsync
-            ? "• G-SYNC pack (adaptive sync friendly; ultra low latency off)"
-            : "• Max FPS / latency pack (Ultra Low Latency Ultra; G-SYNC off)";
+            ? "• G-SYNC pack: adaptive sync stays on; Ultra Low Latency is off to avoid conflicts."
+            : "• Max FPS / latency pack: Ultra Low Latency Ultra; G-SYNC and V-Sync forced off.";
         var warning =
-            "Apply order (correct stack):\n\n" +
-            "1) OptiHub Clean Driver — official Game Ready, clean silent install (Display Driver ONLY — no HD Audio) + MSI High / telemetry / Ansel off\n" +
-            "2) 3D Base Profile — series pack via Profile Inspector silent import (max FPS or G-SYNC pack)\n" +
-            "3) Control Panel UI (not NVIDIA App) — for each relevant page, change settings then Apply + Keep:\n" +
-            "   • advanced 3D image settings\n" +
-            "   • PhysX processor = your NVIDIA GPU\n" +
-            "   • Use NVIDIA color settings → RGB / Full / 10 bpc\n" +
-            "   • Desktop size/position → GPU + No scaling + Override\n" +
-            "   • Video color + video image → NVIDIA settings\n" +
-            "4) Overlay off + telemetry trim\n\n" +
+            "This is an aggressive maximum-performance pass. It prioritizes FPS and input latency over power savings, NVIDIA background features, and recording tools.\n\n" +
+            "OptiHub will:\n" +
+            "1) Update the Game Ready display driver only when needed, then enable MSI High priority and disable Ansel/telemetry services.\n" +
+            "2) Import the matching 3D Base Profile (maximum-performance power mode, high-performance filtering, max refresh, shader cache, and latency settings).\n" +
+            "3) Keep each NVIDIA-connected display's current resolution, select its highest verified refresh rate, and apply Full RGB plus GPU no-scaling.\n" +
+            "4) Stop NVIDIA App/GFE background clients and disable overlay, FrameView, updater, telemetry, and auto-start paths while preserving installed files and HDMI/DisplayPort audio.\n\n" +
             gsyncLine + "\n\n" +
-            "Leave the PC alone during Control Panel automation (Apply/Keep dialogs).\n" +
-            "Administrator approval may be required.";
+            "Tradeoffs: higher idle power/heat, no NVIDIA overlay or background recording, and a brief display flicker. A driver update may require a restart.\n\n" +
+            "Reset OptiHub status only clears OptiHub's record; it does not undo driver/profile/display changes. Undo through NVIDIA settings or a driver reinstall. Administrator approval is required.";
 
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync($"Confirm NVIDIA Optimizer ({action})", warning)
@@ -123,7 +121,14 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             {
                 ProgressPercent = 100;
                 var output = $"{result.FullOutput}\n{result.Summary}";
-                if (output.Contains("Clean Driver failed", StringComparison.OrdinalIgnoreCase) ||
+                if (output.Contains("RESTART_REQUIRED", StringComparison.OrdinalIgnoreCase))
+                {
+                    ProgressStatus = "Restart required";
+                    SetResult(
+                        "The display driver installed successfully. Restart Windows, then Apply once more to finish the 3D profile and display settings.",
+                        success: true);
+                }
+                else if (output.Contains("Clean Driver failed", StringComparison.OrdinalIgnoreCase) ||
                     output.Contains("Clean driver failed", StringComparison.OrdinalIgnoreCase))
                 {
                     ProgressStatus = "Clean driver failed";
@@ -137,7 +142,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                 {
                     ProgressStatus = "Completed successfully";
                     SetResult(
-                        "Done in one pass: clean driver (if needed) + 3D profile + App polish. No reboot required unless Windows prompts.",
+                        "Done in one pass: clean driver (if needed), 3D profile, privacy preferences, and verified NVAPI display settings. No reboot required unless Windows prompts.",
                         success: true);
                 }
                 else
@@ -148,11 +153,16 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             }
             else
             {
+                ProgressStatus = result.ExitCode == -2 ? "Cancelled" : "Failed";
                 SetResult(result.ErrorMessage ?? result.Summary, success: false);
             }
 
             await RefreshAfterRunAsync();
-            await Task.Delay(500);
+        }
+        catch (OperationCanceledException)
+        {
+            SetResult("NVIDIA optimization was cancelled. Changes completed before cancellation were kept.", success: false);
+            ProgressStatus = "Cancelled";
         }
         catch (Exception ex)
         {
@@ -209,6 +219,11 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
 
             await RefreshAfterRunAsync();
         }
+        catch (OperationCanceledException)
+        {
+            SetResult("Status reset was cancelled.", success: false);
+            ProgressStatus = "Cancelled";
+        }
         catch (Exception ex)
         {
             SetResult(ex.Message, success: false);
@@ -233,6 +248,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
 
     private void ApplyState(OptimizerStateInfo state)
     {
+        IsStatusLoading = false;
         IsApplied = state.IsApplied;
         StatusText = state.StatusText;
         DetailText = state.Detail;
@@ -278,8 +294,22 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        ApplyState(await _services.OptimizerState.DetectNvidiaAsync(fastOnly: true));
-        if (!IsBusy)
-            await RefreshAsync();
+        IsStatusLoading = true;
+        try
+        {
+            ApplyState(await _services.OptimizerState.DetectNvidiaAsync(fastOnly: true));
+            if (!IsBusy)
+                await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText = "Status unavailable";
+            DetailText = "OptiHub could not initialize the NVIDIA optimizer.";
+            SetResult(ex.Message, success: false);
+        }
+        finally
+        {
+            IsStatusLoading = false;
+        }
     }
 }

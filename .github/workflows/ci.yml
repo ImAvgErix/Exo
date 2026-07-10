@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  build-and-parse:
+  build-and-validate:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,49 +17,23 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Build OptiHub
-        run: dotnet build OptiHub/OptiHub.csproj -c Release -p:Platform=x64
+      - name: Build OptiHub and NVIDIA display helper
+        run: |
+          dotnet build OptiHub.sln -c Release -p:Platform=x64
+          dotnet build tools/OptiHub.NvDisplay/OptiHub.NvDisplay.csproj -c Release
 
-      - name: Parse PowerShell scripts (no non-ASCII, syntax OK)
+      - name: Verify C# formatting
+        run: |
+          dotnet format OptiHub.sln --verify-no-changes --no-restore
+          dotnet format tools/OptiHub.NvDisplay/OptiHub.NvDisplay.csproj --verify-no-changes --no-restore
+
+      - name: Compile self-extracting installer source
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $files = Get-ChildItem -Recurse -Include *.ps1 -File |
-            Where-Object { $_.FullName -notmatch '\\(bin|obj|publish|release|node_modules)\\' }
+          $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+          & $csc /nologo /target:winexe /optimize+ /out:"$env:RUNNER_TEMP\OptiHubSfx-test.exe" /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll tools/OptiHubSfx.cs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          $fail = $false
-          foreach ($f in $files) {
-            $text = [IO.File]::ReadAllText($f.FullName)
-            if ($text -match '[^\x00-\x7F]') {
-              # Allow UTF-8 BOM only
-              $noBom = $text
-              if ($noBom.Length -ge 1 -and [int][char]$noBom[0] -eq 0xFEFF) { $noBom = $noBom.Substring(1) }
-              if ($noBom -match '[^\x00-\x7F]') {
-                Write-Host "NON-ASCII: $($f.FullName)"
-                $fail = $true
-              }
-            }
-            $tokens = $null; $errs = $null
-            $null = [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$tokens, [ref]$errs)
-            if ($errs -and $errs.Count) {
-              Write-Host "PARSE FAIL: $($f.FullName)"
-              $errs | ForEach-Object { Write-Host "  $($_.Message)" }
-              $fail = $true
-            } else {
-              Write-Host "OK $($f.Name)"
-            }
-          }
-
-          # Universal kit must ship full plugin manifests
-          $eq = 'OptiHub/Scripts/Discord/kit/profiles/equicordplugins.json'
-          $vc = 'OptiHub/Scripts/Discord/kit/profiles/vencordplugins.json'
-          $ov = 'OptiHub/Scripts/Discord/kit/profiles/equicord-overrides.json'
-          foreach ($p in @($eq, $vc, $ov)) {
-            if (-not (Test-Path $p)) { Write-Host "MISSING $p"; $fail = $true }
-          }
-          $eqCount = @(Get-Content $eq -Raw | ConvertFrom-Json).Count
-          if ($eqCount -lt 100) { Write-Host "equicordplugins too small: $eqCount"; $fail = $true }
-          else { Write-Host "equicordplugins count=$eqCount" }
-
-          if ($fail) { exit 1 }
-          Write-Host 'All PowerShell checks passed.'
+      - name: Validate scripts and bundled data
+        shell: pwsh
+        run: ./tools/Test-Repository.ps1

@@ -16,11 +16,6 @@ public sealed partial class SteamOptimizerPage : Page
         DataContext = ViewModel;
 
         ViewModel.ConfirmAsync = ConfirmAsync;
-        ViewModel.RequestGoBack += (_, _) =>
-        {
-            if (App.MainAppWindow is MainWindow mw)
-                mw.NavigateToDashboard();
-        };
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -43,11 +38,15 @@ public sealed partial class SteamOptimizerPage : Page
         var dialog = new ContentDialog
         {
             Title = title,
-            Content = new TextBlock
+            Content = new ScrollViewer
             {
-                Text = message,
-                TextWrapping = TextWrapping.Wrap,
-                MaxWidth = 420
+                MaxHeight = 420,
+                Content = new TextBlock
+                {
+                    Text = message,
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 420
+                }
             },
             PrimaryButtonText = "Continue",
             CloseButtonText = "Cancel",

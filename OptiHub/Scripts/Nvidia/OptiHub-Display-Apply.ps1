@@ -1,13 +1,9 @@
-# OptiHub — Display performance apply (sticky).
+# OptiHub - Display performance apply (sticky).
 #
-# Order is critical:
-#   1) Kill CPL (so it cannot race)
-#   2) Write NVTweak for ALL device keys (GPU / NoScaling / Override / Full / Video NVIDIA)
-#   3) NVAPI: native res + max Hz, Full RGB, path scaling
-#   4) Soft container restart + re-write registry
-#   5) Pixel-safe CPL scaling commit (one monitor per CPL session; Override only if OFF)
-#   6) Final registry stamp — NO hard adapter bounce after CPL (that wiped live prefs)
-#   7) Register logon scheduled task to re-stamp registry (survives reboots)
+# Uses NVAPI plus existing NVTweak device keys; it never drives the mouse or keyboard.
+# -Light is used by the logon task and skips the service refresh/task registration.
+param([switch]$Light)
+
 $ErrorActionPreference = 'Continue'
 
 function Write-DLog([string]$Msg) {
@@ -37,14 +33,7 @@ function Set-AllNvtweakDevices {
 
     $names = @(Get-ChildItem -LiteralPath $devicesRoot -ErrorAction SilentlyContinue | ForEach-Object { $_.PSChildName })
     if ($names.Count -eq 0) {
-        try { Add-Type -AssemblyName System.Windows.Forms } catch { }
-        $n = 1
-        try { $n = [Math]::Max(1, [System.Windows.Forms.Screen]::AllScreens.Count) } catch { }
-        for ($i = 0; $i -lt $n; $i++) {
-            $key = "OptiHubMon$i-0"
-            New-Item -Path (Join-Path $devicesRoot $key) -Force | Out-Null
-            $names += $key
-        }
+        Write-DLog 'NVTweak has no driver-created device keys yet; NVAPI will apply active-display settings directly'
     }
 
     Write-DLog "NVTweak stamp: $($names.Count) device key(s)"
@@ -66,42 +55,23 @@ function Set-AllNvtweakDevices {
         Set-ItemProperty -LiteralPath $colorPath -Name 'NvCplDigitalColorFormat' -Value 0 -Type DWord -Force
         Set-ItemProperty -LiteralPath $colorPath -Name 'DynamicRange' -Value 0 -Type DWord -Force
         Set-ItemProperty -LiteralPath $colorPath -Name 'NvCplDynamicRange' -Value 0 -Type DWord -Force
-        Set-ItemProperty -LiteralPath $colorPath -Name 'ColorDepth' -Value 10 -Type DWord -Force
-        Set-ItemProperty -LiteralPath $colorPath -Name 'NvCplOutputColorDepthBpc' -Value 10 -Type DWord -Force
-        Set-ItemProperty -LiteralPath $colorPath -Name 'NvCplOutputColorDepth' -Value 3 -Type DWord -Force
-
-        $videoPath = Join-Path $devPath 'Video'
-        if (-not (Test-Path $videoPath)) { New-Item -Path $videoPath -Force | Out-Null }
-        foreach ($kv in @{
-            VideoColorSettingsSource = 1; VideoImageSettingsSource = 1
-            VideoColorSettings = 1; VideoImageSettings = 1
-            UseNVIDIAColorSettings = 1; UseNVIDIAImageSettings = 1
-            ColorSetting = 1; EdgeEnhanceSetting = 1; NoiseReductionSetting = 1
-            EdgeEnhanceSource = 1; NoiseReductionSource = 1
-            DynamicRange = 0; ColorRange = 0
-        }.GetEnumerator()) {
-            Set-ItemProperty -LiteralPath $videoPath -Name $kv.Key -Value $kv.Value -Type DWord -Force
-        }
+        # Do not hard-code color depth here. NVAPI chooses a depth supported by the
+        # active resolution/refresh pair; a stale 10-bpc cache can lower refresh rate.
 
         $d = Get-ItemProperty -LiteralPath $devPath
         Write-DLog ("  {0}: GPU={1} Override={2} NoScale={3}" -f $name, ($d.PerformScalingOn -eq 0), ($d.ScalingOverride -eq 1), ($d.ScalingMode -eq 2))
     }
 
-    foreach ($g in @(
-        'HKCU:\Software\NVIDIA Corporation\Global\NVTweak',
-        'HKLM:\SOFTWARE\NVIDIA Corporation\Global\NVTweak'
-    )) {
-        if (-not (Test-Path $g)) { New-Item -Path $g -Force | Out-Null }
-        Set-ItemProperty -LiteralPath $g -Name 'Gestalt' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-    }
-    $client = 'HKCU:\Software\NVIDIA Corporation\NVControlPanel2\Client'
-    if (-not (Test-Path $client)) { New-Item -Path $client -Force | Out-Null }
-    foreach ($kv in @{
-        OptiHubPreferGpuScaling = 1; OptiHubPreferNoScaling = 1
-        OptiHubPreferScalingOverride = 1; OptiHubPreferFullRgb = 1
-        EulaAccepted = 1; ShowSedoanEula = 0
-    }.GetEnumerator()) {
-        Set-ItemProperty -LiteralPath $client -Name $kv.Key -Value $kv.Value -Type DWord -Force -ErrorAction SilentlyContinue
+    # Remove markers written by older OptiHub builds. They were never consumed
+    # by the NVIDIA driver and should not accumulate in Control Panel storage.
+    $legacyClient = 'HKCU:\Software\NVIDIA Corporation\NVControlPanel2\Client'
+    if (Test-Path -LiteralPath $legacyClient) {
+        foreach ($name in @(
+            'OptiHubPreferGpuScaling', 'OptiHubPreferNoScaling',
+            'OptiHubPreferScalingOverride', 'OptiHubPreferFullRgb'
+        )) {
+            Remove-ItemProperty -LiteralPath $legacyClient -Name $name -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -112,27 +82,38 @@ function Invoke-NvApiHelper {
         return $false
     }
     Write-DLog "NVAPI: $exe"
-    Get-Process nvcplui -EA 0 | Stop-Process -Force -EA 0
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $exe
-    $psi.ArgumentList.Add('--apply')
+    # ProcessStartInfo.ArgumentList is unavailable in Windows PowerShell 5.1/.NET Framework.
+    $psi.Arguments = '--apply'
     $psi.WorkingDirectory = (Split-Path -Parent $exe)
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
-    $proc = [Diagnostics.Process]::Start($psi)
-    $stdout = $proc.StandardOutput.ReadToEnd()
-    $stderr = $proc.StandardError.ReadToEnd()
-    if (-not $proc.WaitForExit(180000)) {
-        try { $proc.Kill() } catch { }
-        Write-DLog 'NVAPI timeout'
+    $proc = $null
+    try {
+        $proc = [Diagnostics.Process]::Start($psi)
+        if (-not $proc) { throw 'Process did not start' }
+        $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+        $stderrTask = $proc.StandardError.ReadToEndAsync()
+        if (-not $proc.WaitForExit(180000)) {
+            try { $proc.Kill() } catch { }
+            Write-DLog 'NVAPI timeout'
+            return $false
+        }
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        foreach ($line in ($stdout -split "`r?`n")) { if ($line) { Write-DLog $line.TrimEnd() } }
+        foreach ($line in ($stderr -split "`r?`n")) { if ($line) { Write-DLog "ERR $line" } }
+        Write-DLog "NVAPI exit $($proc.ExitCode)"
+        return ($proc.ExitCode -eq 0)
+    } catch {
+        Write-DLog "NVAPI launch failed: $($_.Exception.Message)"
         return $false
+    } finally {
+        if ($proc) { try { $proc.Dispose() } catch { } }
     }
-    foreach ($line in ($stdout -split "`r?`n")) { if ($line) { Write-DLog $line.TrimEnd() } }
-    foreach ($line in ($stderr -split "`r?`n")) { if ($line) { Write-DLog "ERR $line" } }
-    Write-DLog "NVAPI exit $($proc.ExitCode)"
-    return ($proc.ExitCode -eq 0)
 }
 
 function Invoke-SoftDriverRefresh {
@@ -154,13 +135,9 @@ function Register-PersistTask {
     $taskName = 'OptiHub-NvidiaDisplayPersist'
     $script = Join-Path $Root 'OptiHub-Display-Apply.ps1'
     $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    # Persist task only re-stamps registry + NVAPI (no hard reload, no CPL) via env flag
-    $arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script`""
+    # -Light prevents service restarts, UI work, and recursive task registration at logon.
+    $arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script`" -Light"
     try {
-        $exists = schtasks /Query /TN $taskName 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            schtasks /Delete /TN $taskName /F 2>$null | Out-Null
-        }
         # Run as current user at logon
         $user = "$env:USERDOMAIN\$env:USERNAME"
         schtasks /Create /TN $taskName /TR "`"$ps`" $arg" /SC ONLOGON /RL HIGHEST /F /RU $user 2>&1 | Out-Null
@@ -176,66 +153,42 @@ function Register-PersistTask {
 
 # ---- main ----
 Write-DLog '=== Display apply (sticky path) ==='
-Get-Process nvcplui -EA 0 | Stop-Process -Force -EA 0
-
-# Persist flag: logon task only does light path
-$light = ($env:OPTIHUB_DISPLAY_LIGHT -eq '1')
+$light = [bool]$Light -or ($env:OPTIHUB_DISPLAY_LIGHT -eq '1')
+if (-not $light) {
+    Get-Process nvcplui -EA 0 | Stop-Process -Force -EA 0
+}
 
 # 1) Registry
 Set-AllNvtweakDevices
 
-# 2) NVAPI modes + color + path
-[void](Invoke-NvApiHelper)
-Set-AllNvtweakDevices
-
 if (-not $light) {
-    # 3) Soft refresh then re-stamp (do NOT hard-bounce after CPL)
+    # Refresh the user-mode display container once before the final NVAPI apply.
     [void](Invoke-SoftDriverRefresh)
     Set-AllNvtweakDevices
-    [void](Invoke-NvApiHelper)
-    Set-AllNvtweakDevices
-
-    # 4) Pixel-safe CPL commit for Override/No scaling per monitor
-    $scaleScript = Join-Path $Root 'OptiHub-Cpl-ScalingCommit.ps1'
-    if (Test-Path -LiteralPath $scaleScript) {
-        Write-DLog 'CPL scaling commit (pixel-safe Override, one mon per session)...'
-        $prev = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            & $scaleScript 2>&1 | ForEach-Object {
-                if ($_) { Write-DLog "$_" }
-            }
-            Write-DLog "Scaling commit exit $LASTEXITCODE"
-        } catch {
-            Write-DLog "Scaling commit error: $($_.Exception.Message)"
-        } finally {
-            $ErrorActionPreference = $prev
-            Get-Process nvcplui -EA 0 | Stop-Process -Force -EA 0
-        }
-    } else {
-        Write-DLog 'WARN: OptiHub-Cpl-ScalingCommit.ps1 missing'
-    }
-
-    # 5) Final stamp (never hard-reload after CPL — that undoes live Override)
-    Set-AllNvtweakDevices
-    Register-PersistTask
 }
 
-# Verify
-$ok = $true
-Get-ChildItem 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak\Devices' -EA 0 | ForEach-Object {
+# 2) Final NVAPI modes/color/path apply, then registry stamp.
+$nvApiOk = Invoke-NvApiHelper
+Set-AllNvtweakDevices
+if (-not $light) { Register-PersistTask }
+
+# Verify any driver-created registry keys. NVAPI success remains required.
+$registryOk = $true
+$deviceKeys = @(Get-ChildItem 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak\Devices' -EA 0)
+$deviceKeys | ForEach-Object {
     $d = Get-ItemProperty $_.PSPath
     if ([int]$d.PerformScalingOn -ne 0 -or [int]$d.ScalingOverride -ne 1 -or [int]$d.ScalingMode -ne 2) {
         Write-DLog "VERIFY FAIL $($_.PSChildName)"
-        $ok = $false
+        $registryOk = $false
     } else {
         Write-DLog "VERIFY OK $($_.PSChildName): GPU + Override + NoScale"
     }
 }
+$ok = [bool]$nvApiOk -and [bool]$registryOk
 
 if ($ok) {
     Write-DLog 'SUCCESS'
-    Write-DLog 'Verify in CPL: both monitors = No scaling + Override ON. GPU is forced via registry.'
+    Write-DLog 'Active NVIDIA displays were applied without Control Panel mouse/keyboard automation.'
     exit 0
 }
 Write-DLog 'FAIL verify'

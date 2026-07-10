@@ -20,11 +20,6 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     }
 
     [ObservableProperty]
-    private string _title = "Discord";
-
-    public string LogoPath => "Assets/Logos/discord.png";
-
-    [ObservableProperty]
     private string _statusText = "Checking status...";
 
     [ObservableProperty]
@@ -40,6 +35,12 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isBusy;
+
+    [ObservableProperty]
+    private bool _isStatusLoading = true;
+
+    [ObservableProperty]
+    private bool _isFeatureListVisible;
 
     [ObservableProperty]
     private bool _isProgressVisible;
@@ -62,26 +63,32 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     [ObservableProperty]
     private Brush _lastResultBrush;
 
-    public event EventHandler? RequestGoBack;
-
     public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
-
-    [RelayCommand]
-    private void GoBack() => RequestGoBack?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
         if (IsBusy) return;
         IsBusy = true;
+        IsStatusLoading = true;
+        IsFeatureListVisible = false;
         try
         {
             StatusText = "Checking status...";
             var state = await _services.OptimizerState.DetectDiscordAsync();
             ApplyState(state);
         }
+        catch (Exception ex)
+        {
+            StatusText = "Status check failed";
+            DetailText = "Discord was not changed. Try Refresh status again.";
+            Features.Clear();
+            SetResult($"Could not check Discord: {ex.Message}", success: false);
+        }
         finally
         {
+            IsStatusLoading = false;
+            IsFeatureListVisible = Features.Count > 0;
             IsBusy = false;
         }
     }
@@ -93,12 +100,17 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
         var action = IsApplied ? "reapply" : "run";
         var warning =
-            "This will close Discord, apply optimizations (Equicord, OpenASAR, kernel, cache, Windows tweaks), and may request Administrator approval.\n\n" +
-            "Your login/session is preserved. A repair path is available if anything goes wrong.\n\n" +
-            "Run mode is detected automatically.";
+            "This is an AGGRESSIVE, no-compromise performance pass. It will close Discord and apply:\n\n" +
+            "• Equicord + OpenASAR privacy/startup tuning\n" +
+            "• DiscOpt kernel RAM reclamation every 5 seconds, Above Normal priority, and raw-input/thread tuning\n" +
+            "• Deep cache cleaning and full allowlisted debloat\n" +
+            "• Removal of clips/hook modules, game SDK files, and non-English locale packs\n" +
+            "• Disabled Windows startup, scheduled tasks, toasts, and tray promotion\n\n" +
+            "This trades background convenience, multilingual UI assets, notifications, and optional Discord features for latency, RAM, and startup performance. Your login/session and updater integrity data are preserved. Administrator approval is required.\n\n" +
+            "Use Repair Discord to return to a clean stock client.";
 
         var ok = ConfirmAsync is not null
-            ? await ConfirmAsync($"Confirm Discord Optimizer ({action})", warning)
+            ? await ConfirmAsync($"Confirm aggressive Discord optimizer ({action})", warning)
             : true;
         if (!ok) return;
 
@@ -139,17 +151,29 @@ public partial class DiscordOptimizerViewModel : ObservableObject
                 ProgressPercent = 100;
                 ProgressStatus = "Completed successfully";
                 SetResult("Done. Open Discord when ready.", success: true);
-                _services.Settings.Update(s =>
-                    s.LastDiscordRunUtc = DateTime.UtcNow.ToString("o"));
+                try
+                {
+                    _services.Settings.Update(s =>
+                        s.LastDiscordRunUtc = DateTime.UtcNow.ToString("o"));
+                }
+                catch
+                {
+                    // The optimization succeeded even if optional run history
+                    // could not be persisted.
+                }
             }
             else
             {
+                ProgressStatus = result.ExitCode == -2 ? "Cancelled" : "Failed";
                 SetResult(result.ErrorMessage ?? result.Summary, success: false);
             }
 
             await RefreshAfterRunAsync();
-            // Brief hold so the finished bar is visible
-            await Task.Delay(700);
+        }
+        catch (OperationCanceledException)
+        {
+            ProgressStatus = "Cancelled";
+            SetResult("Discord optimization was cancelled.", success: false);
         }
         catch (Exception ex)
         {
@@ -159,8 +183,6 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         finally
         {
             IsBusy = false;
-            if (ProgressPercent >= 100)
-                await Task.Delay(900);
             IsProgressVisible = false;
             _runCts?.Dispose();
             _runCts = null;
@@ -207,8 +229,16 @@ public partial class DiscordOptimizerViewModel : ObservableObject
                     ? "Repair finished. Discord should be stock and bootable."
                     : (result.ErrorMessage ?? result.Summary),
                 success: result.Success);
+            ProgressStatus = result.Success ? "Repair complete" : (result.ExitCode == -2 ? "Cancelled" : "Repair failed");
+            if (result.Success)
+                ProgressPercent = 100;
 
             await RefreshAfterRunAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            ProgressStatus = "Cancelled";
+            SetResult("Discord repair was cancelled.", success: false);
         }
         catch (Exception ex)
         {
@@ -250,6 +280,8 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             });
         }
         RunButtonLabel = state.IsApplied ? "Reapply" : "Run";
+        if (!IsStatusLoading)
+            IsFeatureListVisible = Features.Count > 0;
     }
 
     private void SetResult(string message, bool success)
@@ -276,9 +308,22 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        ApplyState(await _services.OptimizerState.DetectDiscordAsync(fastOnly: true));
-        if (!IsBusy)
-            await RefreshAsync();
+        if (IsBusy) return;
+        IsStatusLoading = true;
+        IsFeatureListVisible = false;
+        try
+        {
+            ApplyState(await _services.OptimizerState.DetectDiscordAsync(fastOnly: true));
+            if (!IsBusy)
+                await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            IsStatusLoading = false;
+            StatusText = "Status check failed";
+            DetailText = "Discord was not changed. Try Refresh status again.";
+            SetResult($"Could not check Discord: {ex.Message}", success: false);
+        }
     }
 }
 

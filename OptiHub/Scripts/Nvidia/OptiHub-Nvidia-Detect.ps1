@@ -1,27 +1,30 @@
 # OptiHub - detect NVIDIA optimizer status (JSON for WinUI).
-# Feature order matches apply pipeline: GPU -> driver -> 3D profile -> App stack.
+# Feature order matches apply pipeline: GPU -> driver -> 3D profile -> display/privacy.
 $ErrorActionPreference = 'SilentlyContinue'
 
 function Get-NvidiaGpus {
     @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object {
         $_.Name -match '(?i)nvidia|geforce|rtx|gtx|quadro|titan'
-    } | ForEach-Object { [pscustomobject]@{ Name = $_.Name; Driver = $_.DriverVersion } })
+    } | ForEach-Object {
+        [pscustomobject]@{
+            Name   = [string]$_.Name
+            Driver = [string]$_.DriverVersion
+            PnpId  = [string]$_.PNPDeviceID
+        }
+    })
 }
 
 function Get-GpuSeriesFromName([string]$Name) {
     if ($Name -match '(?i)\b(?:RTX|GTX)\s*([1-5])0\d{2}\b') { return $Matches[1] + '0' }
     if ($Name -match '(?i)\b([1-5])0\d{2}\b') { return $Matches[1] + '0' }
-    if ($Name -match '(?i)\b16\d{2}\b') { return '20' }
+    # GTX 16 has no RT/DLSS/rBAR; use the non-RTX performance pack.
+    if ($Name -match '(?i)\b16\d{2}\b') { return '10' }
     return $null
 }
 
-function Test-NvidiaApp {
-    foreach ($p in @(
-        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe'),
-        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe')
-    )) { if (Test-Path $p) { return $true } }
-    $a = Get-AppxPackage -Name '*NVIDIA*' -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)App|GeForce' }
-    return [bool]$a
+function Test-IsNotebookGpuName([string]$Name) {
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
+    return [bool]($Name -match '(?i)\b(?:Laptop GPU|Notebook|Mobile|Max-Q)\b|\bMX\d+\b|\b\d{3,4}M\b')
 }
 
 function Convert-WindowsDriverToNvidia([string]$WinVer) {
@@ -40,23 +43,19 @@ function Test-OptiHubDriverInstallTweaks([string]$CurrentNv, $State) {
     # Same signals as Nvidia-Optimizer.ps1: stock Game Ready vs NVCleanstall-style install.
     $issues = New-Object System.Collections.Generic.List[string]
 
-    $svc = Get-Service -Name 'NvTelemetryContainer' -ErrorAction SilentlyContinue
-    if ($svc -and $svc.StartType -ne 'Disabled') {
-        [void]$issues.Add('NvTelemetryContainer still enabled')
-    }
-
-    foreach ($p in @(
-        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA GeForce Experience'),
-        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\GeForce Experience')
-    )) {
-        if (Test-Path -LiteralPath $p) {
-            [void]$issues.Add('GeForce Experience leftovers')
-            break
+    foreach ($serviceName in @('NvTelemetryContainer', 'NvCamera', 'FvSvc')) {
+        $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($svc -and $svc.StartType -ne 'Disabled') {
+            [void]$issues.Add("$serviceName still enabled")
         }
     }
+    $networkService = Get-Service -Name 'NvContainerNetworkService' -ErrorAction SilentlyContinue
+    if ($networkService -and ($networkService.StartType -eq 'Automatic' -or $networkService.Status -eq 'Running')) {
+        [void]$issues.Add('NvContainerNetworkService still starts automatically or is running')
+    }
 
-    $msiSeen = $false
-    $msiOn = $false
+    $msiSeen = 0
+    $msiGaps = 0
     try {
         $pci = 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI'
         if (Test-Path $pci) {
@@ -64,37 +63,178 @@ function Test-OptiHubDriverInstallTweaks([string]$CurrentNv, $State) {
                 $_.PSChildName -match 'VEN_10DE'
             } | ForEach-Object {
                 Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue | ForEach-Object {
+                    $device = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
+                    if ($device.Class -ne 'Display' -and
+                        $device.ClassGUID -ne '{4d36e968-e325-11ce-bfc1-08002be10318}') {
+                        return
+                    }
+                    $msiSeen++
                     $msiKey = Join-Path $_.PSPath 'Device Parameters\Interrupt Management\MessageSignaledInterruptProperties'
-                    if (-not (Test-Path $msiKey)) { return }
-                    $msiSeen = $true
+                    $aff = Join-Path $_.PSPath 'Device Parameters\Interrupt Management\Affinity Policy'
                     $v = (Get-ItemProperty -LiteralPath $msiKey -ErrorAction SilentlyContinue).MSISupported
-                    if ($v -eq 1) { $msiOn = $true }
+                    $priority = (Get-ItemProperty -LiteralPath $aff -ErrorAction SilentlyContinue).DevicePriority
+                    if ($v -ne 1 -or $priority -ne 3) { $msiGaps++ }
                 }
             }
         }
     } catch { }
-    if ($msiSeen -and -not $msiOn) {
-        [void]$issues.Add('MSI not High/enabled (stock interrupt mode)')
+    if ($msiSeen -eq 0) {
+        [void]$issues.Add('NVIDIA display PCI node unavailable for MSI verification')
+    } elseif ($msiGaps -gt 0) {
+        [void]$issues.Add("MSI High missing on $msiGaps of $msiSeen NVIDIA display device(s)")
     }
 
     $remembered = $false
-    if ($State -and $State.driverTweaksVersion -and $CurrentNv -and
+    if ($State -and $State.driverTweaksVerified -and $State.driverTweaksVersion -and $CurrentNv -and
         [string]$State.driverTweaksVersion -eq [string]$CurrentNv) {
         $remembered = $true
     }
 
     return [pscustomobject]@{
-        Ok         = [bool]($remembered -or ($issues.Count -eq 0))
+        Ok         = [bool]($issues.Count -eq 0)
         Remembered = $remembered
         Issues     = @($issues)
     }
 }
 
 $features = New-Object System.Collections.Generic.List[hashtable]
-$gpus = Get-NvidiaGpus
+$gpus = @(Get-NvidiaGpus)
 $gpuOk = $gpus.Count -gt 0
 $primary = if ($gpuOk) { $gpus[0] } else { $null }
 $series = if ($primary) { Get-GpuSeriesFromName $primary.Name } else { $null }
+$isNotebookGpu = [bool]($primary -and (Test-IsNotebookGpuName $primary.Name))
+$profilesDir = Join-Path $PSScriptRoot 'profiles'
+$profilePackVersion = ''
+$profileVersionPath = Join-Path $profilesDir 'PROFILE_VERSION'
+if (Test-Path -LiteralPath $profileVersionPath) {
+    $profilePackVersion = (Get-Content -LiteralPath $profileVersionPath -Raw -ErrorAction SilentlyContinue).Trim()
+}
+
+function Test-NvidiaPerformanceDebloat {
+    $issues = New-Object System.Collections.Generic.List[string]
+    foreach ($serviceName in @('NvTelemetryContainer', 'NvCamera', 'FvSvc')) {
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($service -and ($service.StartType -ne 'Disabled' -or $service.Status -eq 'Running')) {
+            [void]$issues.Add("Service active: $serviceName")
+        }
+    }
+    $networkService = Get-Service -Name 'NvContainerNetworkService' -ErrorAction SilentlyContinue
+    if ($networkService -and ($networkService.StartType -eq 'Automatic' -or $networkService.Status -eq 'Running')) {
+        [void]$issues.Add('NVIDIA network container starts automatically or is running')
+    }
+
+    $background = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.ProcessName -match '(?i)^NVIDIA (App|Overlay|Share|Web Helper)$|^GFExperience$|^nvsphelper(64)?$'
+    })
+    if ($background.Count -gt 0) {
+        [void]$issues.Add("Background clients running: $($background.ProcessName -join ', ')")
+    }
+
+    $patterns = @('*NvTm*', '*NVIDIA*Telemetry*', '*NvProfile*', '*NvNode*', '*NvBackend*', '*NVIDIA*App*', '*FrameView*', 'NvDriverUpdateCheckDaily*', 'NVIDIA GeForce Experience SelfUpdate*')
+    Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.State -ne 'Disabled' } | ForEach-Object {
+        $full = "$($_.TaskPath)$($_.TaskName)"
+        if ($_.TaskName -match '(?i)Display|LocalSystem') { return }
+        foreach ($pattern in $patterns) {
+            if ($_.TaskName -like $pattern -or $full -like $pattern) {
+                [void]$issues.Add("Task enabled: $full")
+                break
+            }
+        }
+    }
+
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    if (Test-Path -LiteralPath $runKey) {
+        $runValues = Get-ItemProperty -LiteralPath $runKey -ErrorAction SilentlyContinue
+        foreach ($property in $runValues.PSObject.Properties) {
+            if ($property.Name -like 'PS*') { continue }
+            if ("$($property.Name) $($property.Value)" -match '(?i)NVIDIA App|GeForce Experience|GFExperience|NvBackend|ShadowPlay|FrameView') {
+                [void]$issues.Add("Auto-start enabled: $($property.Name)")
+            }
+        }
+    }
+
+    return [pscustomobject]@{ Ok = [bool]($issues.Count -eq 0); Issues = @($issues) }
+}
+
+function Test-NvidiaOverlayDisabled {
+    $issues = New-Object System.Collections.Generic.List[string]
+    $processes = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.ProcessName -match '(?i)^NVIDIA (Overlay|Share)$|^nvsphelper(64)?$'
+    })
+    if ($processes.Count -gt 0) {
+        [void]$issues.Add("Overlay processes running: $($processes.ProcessName -join ', ')")
+    }
+
+    foreach ($path in @(
+        'HKCU:\Software\NVIDIA Corporation\NVIDIA App',
+        'HKCU:\Software\NVIDIA Corporation\Global\GFExperience'
+    )) {
+        $properties = Get-ItemProperty -LiteralPath $path -ErrorAction SilentlyContinue
+        foreach ($name in @('OverlayEnabled', 'EnableOverlay')) {
+            $property = if ($properties) { $properties.PSObject.Properties[$name] } else { $null }
+            if (-not $property -or [int]$property.Value -ne 0) {
+                [void]$issues.Add("Overlay preference active or missing: $path\\$name")
+            }
+        }
+    }
+
+    $capsPath = 'HKCU:\Software\NVIDIA Corporation\Global\ShadowPlay\NVSPCAPS'
+    $caps = Get-ItemProperty -LiteralPath $capsPath -ErrorAction SilentlyContinue
+    foreach ($name in @('RecEnabled', 'DwmEnabled', 'DwmDvrEnabledV1', 'DisplayRecordingIndicator', 'DisplayGamecastIndicator', 'GameStreamPortal')) {
+        $property = if ($caps) { $caps.PSObject.Properties[$name] } else { $null }
+        $bytes = if ($property) { @($property.Value) } else { @() }
+        if ($bytes.Count -eq 0 -or @($bytes | Where-Object { [int]$_ -ne 0 }).Count -gt 0) {
+            [void]$issues.Add("ShadowPlay preference active or missing: $name")
+        }
+    }
+
+    return [pscustomobject]@{ Ok = [bool]($issues.Count -eq 0); Issues = @($issues) }
+}
+
+function Test-NvidiaDisplayLive {
+    $exe = $null
+    foreach ($candidate in @(
+        (Join-Path $PSScriptRoot 'tools\OptiHub.NvDisplay.exe'),
+        (Join-Path $env:LOCALAPPDATA 'OptiHub\scripts\Nvidia\tools\OptiHub.NvDisplay.exe'),
+        (Join-Path $env:LOCALAPPDATA 'OptiHub\app\Scripts\Nvidia\tools\OptiHub.NvDisplay.exe')
+    )) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate)) { $exe = $candidate; break }
+    }
+    if (-not $exe) { return [pscustomobject]@{ Available = $false; Ok = $false; Detail = 'helper unavailable' } }
+
+    $process = $null
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $exe
+        $psi.Arguments = '--status'
+        $psi.WorkingDirectory = Split-Path -Parent $exe
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $process = [Diagnostics.Process]::Start($psi)
+        if (-not $process) { throw 'display helper did not start' }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(15000)) {
+            try { $process.Kill() } catch { }
+            throw 'display status timed out'
+        }
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        $jsonLine = @($stdout -split "`r?`n") | Where-Object { $_ -like 'OPTIHUB_NVDISPLAY_JSON:*' } | Select-Object -Last 1
+        if (-not $jsonLine) { throw "display helper returned no status JSON: $stderr" }
+        $status = $jsonLine.Substring('OPTIHUB_NVDISPLAY_JSON:'.Length) | ConvertFrom-Json
+        $detail = if ($status.skipped) { [string]$status.skipped } elseif ($status.checks) {
+            "color=$($status.checks.colorOk), refresh=$($status.checks.refreshOk), scaling=$($status.checks.scalingOk), registry=$($status.checks.registryOk)"
+        } else { "exit=$($process.ExitCode)" }
+        return [pscustomobject]@{ Available = $true; Ok = [bool]$status.ok; Detail = $detail }
+    } catch {
+        return [pscustomobject]@{ Available = $true; Ok = $false; Detail = $_.Exception.Message }
+    } finally {
+        if ($process) { try { $process.Dispose() } catch { } }
+    }
+}
 
 $statePath = Join-Path $env:LOCALAPPDATA 'OptiHub\nvidia-optimizer.json'
 $state = $null
@@ -102,7 +242,7 @@ if (Test-Path $statePath) {
     try { $state = Get-Content $statePath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
 }
 
-# 1) GPU — name only (series is for profile pick; no "30 Series" suffix, no fancy dots that turn into ?)
+# 1) GPU - name only (series is for profile pick; no "30 Series" suffix, no fancy dots that turn into ?)
 $gpuDetail = if (-not $gpuOk) {
     'NVIDIA GPU + drivers required.'
 } else {
@@ -117,72 +257,93 @@ $features.Add(@{
 # 2) Driver (first pipeline step)
 $winDrv = ''
 if ($primary) {
-    try {
-        $winDrv = [string](Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -eq $primary.Name } |
-            Select-Object -First 1 -ExpandProperty DriverVersion)
-    } catch { }
-}
-if (-not $winDrv) {
-    try {
-        $winDrv = [string](Get-CimInstance Win32_VideoController |
-            Where-Object { $_.Name -match 'nvidia|geforce' } |
-            Select-Object -First 1).DriverVersion
-    } catch { }
+    $winDrv = [string]$primary.Driver
 }
 $currentNv = Convert-WindowsDriverToNvidia $winDrv
 $latestNv = $null
 $needsUpdate = $false
-try {
-    $url = 'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&psid=129&pfid=995&osID=57&languageCode=1033&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0&ctk=null&windowsVersion=10.0&windowsArchitecture=64bit'
-    $r = Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'OptiHub-Nvidia/1.2' } -TimeoutSec 12
-    if ($r.Success -eq '1') { $latestNv = [string]$r.IDS[0].downloadInfo.Version }
-} catch { }
+if (-not $isNotebookGpu) {
+    try {
+        $url = 'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&psid=129&pfid=995&osID=57&languageCode=1033&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0&ctk=null&windowsVersion=10.0&windowsArchitecture=64bit'
+        $r = Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'OptiHub-Nvidia/1.2' } -TimeoutSec 12
+        if ($r.Success -eq '1') { $latestNv = [string]$r.IDS[0].downloadInfo.Version }
+    } catch { }
+}
 
+$needsUpdate = -not [bool]$currentNv
 if ($latestNv -and $currentNv) {
     try {
         if ([version]$currentNv -lt [version]$latestNv) { $needsUpdate = $true }
     } catch {
         if ($currentNv -ne $latestNv) { $needsUpdate = $true }
     }
-} elseif ($latestNv -and -not $currentNv) {
-    $needsUpdate = $true
 }
 
-# Newest version alone is not enough — stock installs need NVCleanstall reinstall with tweaks.
+# Newest version alone is not enough - stock installs need NVCleanstall reinstall with tweaks.
 $tweaks = Test-OptiHubDriverInstallTweaks $currentNv $state
-$needsRetweak = (-not $needsUpdate) -and [bool]$latestNv -and [bool]$currentNv -and (-not $tweaks.Ok)
-$needsDriverAction = $needsUpdate -or $needsRetweak
+$debloat = Test-NvidiaPerformanceDebloat
+$overlay = Test-NvidiaOverlayDisabled
+$needsRetweak = (-not $needsUpdate) -and [bool]$currentNv -and (-not $tweaks.Ok)
+$needsDriverAction = $needsUpdate -or $needsRetweak -or $isNotebookGpu
 
-$driverNote = if ($needsUpdate) {
+$driverNote = if ($isNotebookGpu) {
+    'Notebook/Laptop GPU detected. Desktop driver metadata is blocked; install the official NVIDIA notebook driver manually.'
+} elseif (-not $currentNv) {
+    'NVIDIA driver version could not be read. Install or repair the display driver, then refresh.'
+} elseif ($needsUpdate) {
     $curLabel = if ($currentNv) { $currentNv } else { 'unknown' }
     "Update available: $curLabel -> $latestNv. Apply runs OptiHub Clean Driver (slim + silent + our tweaks)."
 } elseif ($needsRetweak) {
     $gap = if ($tweaks.Issues.Count -gt 0) { ($tweaks.Issues -join '; ') } else { 'stock-style install signals' }
     "On newest Game Ready ($currentNv) but without OptiHub tweaks ($gap). Apply fixes MSI/privacy in-place."
-} elseif ($latestNv) {
+} elseif ($latestNv -and $currentNv) {
     "On newest Game Ready ($currentNv) with OptiHub clean-driver tweaks."
-} else {
-    'Could not reach NVIDIA; Apply still runs Clean Driver when online.'
+} elseif ($currentNv) {
+    "Installed Game Ready $currentNv with OptiHub tweaks. NVIDIA's update service is currently unavailable."
 }
 $features.Add(@{
     title  = 'Driver (newest + install tweaks)'
     detail = $driverNote
-    active = (-not $needsDriverAction) -and [bool]$latestNv
+    active = (-not $needsDriverAction) -and [bool]$currentNv
 })
 
-# 3) 3D profile — only "active" if we recorded a successful silent import (not just a filename)
+# 3) 3D profile - fail closed on interrupted runs, driver changes, legacy
+# markers, missing pack metadata, or an asset hash mismatch.
+$pendingAfterDriver = [bool]($state -and $state.pendingAfterDriver)
+$applyInProgress = [bool]($state -and $state.applyInProgress)
 $profileOk = $false
-if ($state -and -not $state.pendingAfterDriver) {
-    if ($state.PSObject.Properties.Name -contains 'profileApplied') {
-        $profileOk = [bool]$state.profileApplied -and [bool]$state.profileFile
-    } else {
-        # Legacy marker without profileApplied = untrusted (may be false positive)
-        $profileOk = $false
+if ($state -and -not $pendingAfterDriver -and -not $applyInProgress) {
+    $requiredProfileFields = @('profileApplied', 'profileFile', 'profileVersion', 'profileSha256', 'profileDriverVersion')
+    $hasProfileContract = @($requiredProfileFields | Where-Object {
+        $state.PSObject.Properties.Name -notcontains $_
+    }).Count -eq 0
+    if ($hasProfileContract) {
+        $profileHash = [string]$state.profileSha256
+        $profileOk = [bool]$state.profileApplied -and
+                     [bool]$state.profileFile -and
+                     [bool]$state.profileVersion -and
+                     $profileHash -match '^[a-fA-F0-9]{64}$' -and
+                     [bool]$state.profileDriverVersion -and
+                     [bool]$series -and
+                     [string]$state.series -eq [string]$series -and
+                     [bool]$profilePackVersion -and
+                     [string]$state.profileVersion -eq $profilePackVersion -and
+                     [bool]$currentNv -and
+                     [string]$state.profileDriverVersion -eq [string]$currentNv
+
+        $expectedProfile = if ([bool]$state.gsync) { "$series Series G-SYNC.nip" } else { "$series Series.nip" }
+        if ($profileOk -and [string]$state.profileFile -ne $expectedProfile) { $profileOk = $false }
+        $expectedPath = Join-Path $profilesDir $expectedProfile
+        if ($profileOk -and (Test-Path -LiteralPath $expectedPath)) {
+            $currentHash = (Get-FileHash -LiteralPath $expectedPath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
+            if (-not $currentHash -or $currentHash -ine $profileHash) { $profileOk = $false }
+        } elseif ($profileOk) {
+            $profileOk = $false
+        }
     }
 }
 $applied = $profileOk
-$gsyncDetail = if ($state -and $state.gsync) { 'GSync pack' } else { 'No Gsync pack' }
+$gsyncDetail = if ($state -and $state.gsync) { 'G-SYNC pack' } else { 'Max FPS / latency pack' }
 $features.Add(@{
     title  = '3D Base Profile'
     detail = $(if ($applied) {
@@ -194,43 +355,58 @@ $features.Add(@{
     active = $applied
 })
 
-# 4+) App stack
-$appOk = Test-NvidiaApp
-if ($state -and $state.nvidiaApp) { $appOk = $true }
-$cplOk = [bool]($state -and $state.nvidiaControlPanel)
-if (-not $cplOk) {
-    $cplOk = [bool](Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)^NVIDIACorp\.NVIDIAControlPanel$' })
-}
-$features.Add(@{
-    title  = 'NVIDIA Control Panel'
-    detail = 'Display UI only path: color = NVIDIA, scaling = GPU + No scaling + Override (both monitors). App not used.'
-    active = $cplOk
-})
-
-$features.Add(@{
-    title  = 'Privacy / telemetry / overlay off'
-    detail = 'Telemetry trim + NVIDIA Overlay / ShadowPlay forced off when possible.'
-    active = [bool]($state -and ($state.debloatApplied -or $state.overlayDisabled))
-})
-
+# 4+) Display then privacy stack (same order as status priority)
+$displayMarkerOk = [bool]($state -and $state.displayPrefs -and [string]$state.displayMethod -eq 'nvapi')
+$displayLive = Test-NvidiaDisplayLive
+$displayOk = $displayMarkerOk -and [bool]$displayLive.Available -and [bool]$displayLive.Ok -and
+             (-not $pendingAfterDriver) -and (-not $applyInProgress)
 $features.Add(@{
     title  = 'Display color / scaling prefs'
-    detail = 'GPU + No scaling + Override; color source NVIDIA / Full RGB when exposed.'
-    active = [bool]($state -and $state.displayPrefs)
+    detail = $(if ($displayLive.Available) {
+        "Live NVAPI verification: $($displayLive.Detail)"
+    } else {
+        'Live NVAPI helper unavailable; display state cannot be verified.'
+    })
+    active = $displayOk
 })
 
-$isApplied = $gpuOk -and $applied -and (-not $needsDriverAction)
+$backgroundOk = [bool]$debloat.Ok -and [bool]$overlay.Ok
+$backgroundIssues = @($debloat.Issues) + @($overlay.Issues)
+$features.Add(@{
+    title  = 'Privacy / telemetry / overlay off'
+    detail = $(if ($backgroundOk) {
+        'Overlay preferences, capture, telemetry, updater, background clients, and auto-start paths are inactive.'
+    } else {
+        "Performance background gap: $($backgroundIssues -join '; ')"
+    })
+    active = $backgroundOk
+})
+
+$isApplied = $gpuOk -and (-not $pendingAfterDriver) -and (-not $applyInProgress) -and
+             $applied -and $displayOk -and $backgroundOk -and (-not $needsDriverAction)
 $statusText = if (-not $gpuOk) { 'No NVIDIA GPU' }
+elseif ($pendingAfterDriver) { 'Restart required' }
+elseif ($isNotebookGpu) { 'Notebook driver requires manual action' }
+elseif (-not $currentNv) { 'Driver status unavailable' }
 elseif ($needsUpdate) { 'Driver update available' }
-elseif ($needsRetweak) { 'Reinstall driver with tweaks' }
+elseif ($needsRetweak) { 'Driver tweaks available' }
+elseif (-not $profileOk) { '3D profile incomplete' }
+elseif (-not $displayOk) { 'Display setup incomplete' }
+elseif (-not $backgroundOk) { 'Background debloat incomplete' }
 elseif ($isApplied) { 'Already optimized' }
 else { 'Ready to optimize' }
 
 $detail = if (-not $gpuOk) { 'Needs an NVIDIA GPU and current drivers.' }
-elseif ($needsUpdate) { 'Apply runs OptiHub Clean Driver (official package, stripped, silent), reboot, then Reapply for 3D + App.' }
+elseif ($pendingAfterDriver) { 'Restart Windows, then Apply once more to import and verify the profile, display, and background stages.' }
+elseif ($isNotebookGpu) { 'OptiHub blocks desktop driver metadata on Laptop/Notebook GPUs. Install the official NVIDIA notebook driver manually.' }
+elseif (-not $currentNv) { 'OptiHub could not read a valid NVIDIA driver version. Repair the driver, then refresh.' }
+elseif ($needsUpdate) { 'Apply runs OptiHub Clean Driver (official display-driver package), then continues with the profile and display preferences.' }
 elseif ($needsRetweak) { 'Version is newest; Apply will apply OptiHub MSI/privacy tweaks in-place (no re-download).' }
-elseif ($isApplied) { 'Driver current with tweaks and 3D profile applied. Re-apply after big driver upgrades.' }
-else { 'Toggle GSync if needed, then Apply.' }
+elseif (-not $profileOk) { $(if ($applyInProgress) { 'The previous Apply was interrupted before a verified profile marker was saved. Apply again.' } else { 'The profile file, pack version, hash, or imported driver version is not verified. Apply again.' }) }
+elseif (-not $displayOk) { 'The 3D profile is verified, but live NVAPI display verification is incomplete. Restore the helper or Apply again.' }
+elseif (-not $backgroundOk) { 'NVIDIA background services, tasks, auto-start entries, or overlay preferences are active. Apply again.' }
+elseif ($isApplied) { 'Driver current with tweaks and 3D profile applied. Reapply after major driver upgrades.' }
+else { 'Choose the G-SYNC pack only for a compatible display, then Apply.' }
 
 [ordered]@{
     isApplied          = $isApplied
@@ -242,7 +418,8 @@ else { 'Toggle GSync if needed, then Apply.' }
     gsync              = [bool]($state -and $state.gsync)
     currentDriver      = $currentNv
     latestDriver       = $latestNv
-    needsDriverUpdate  = $needsDriverAction
+    notebookGpu        = $isNotebookGpu
+    needsDriverUpdate  = $needsUpdate
     needsDriverRetweak = $needsRetweak
     driverTweaksOk     = [bool]$tweaks.Ok
 } | ConvertTo-Json -Compress -Depth 5

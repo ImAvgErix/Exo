@@ -6,7 +6,7 @@
 
     <Grid Padding="36,16,36,20">
         <Border Style="{StaticResource OptiCard}"
-                Padding="28,22"
+                Padding="28,18"
                 MaxWidth="{StaticResource OptiPageMaxWidth}"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch">
@@ -16,27 +16,63 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Spacing="4" Margin="0,0,0,18">
+                <StackPanel Spacing="4" Margin="0,0,0,14">
                     <TextBlock Text="Settings"
                                FontFamily="{StaticResource OptiUiFontSemiBold}"
                                FontSize="22"
                                FontWeight="SemiBold"
                                CharacterSpacing="-20"
                                Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                    <TextBlock Text="Theme, updates, and a little about OptiHub."
+                    <TextBlock Text="Appearance, updates, and performance policy."
                                Style="{StaticResource OptiCaption}"
                                FontSize="13" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="1" Spacing="18" VerticalAlignment="Top">
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              AutomationProperties.Name="Settings content">
+                <StackPanel Spacing="14" VerticalAlignment="Top" Margin="0,0,8,0">
                     <StackPanel Spacing="10">
                         <TextBlock Text="APPEARANCE" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                        <StackPanel Orientation="Horizontal" Spacing="36">
-                            <ToggleSwitch Header="Dark"
-                                          IsOn="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}" />
-                            <ToggleSwitch Header="Light"
-                                          IsOn="{x:Bind ViewModel.IsLightMode, Mode=TwoWay}" />
+                        <StackPanel Orientation="Horizontal" Spacing="28">
+                            <RadioButton Content="Dark"
+                                         GroupName="ThemeChoice"
+                                         AutomationProperties.Name="Use dark theme"
+                                         IsChecked="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}" />
+                            <RadioButton Content="Light"
+                                         GroupName="ThemeChoice"
+                                         AutomationProperties.Name="Use light theme"
+                                         IsChecked="{x:Bind ViewModel.IsLightMode, Mode=TwoWay}" />
                         </StackPanel>
+                    </StackPanel>
+
+                    <Border Height="1" Background="{ThemeResource OptiCardStrokeBrush}" Opacity="0.4" />
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="PERFORMANCE POLICY" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                        <Border Style="{StaticResource OptiRiskCard}">
+                            <Grid ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Glyph="&#xE7BA;"
+                                          FontSize="14"
+                                          Foreground="{ThemeResource OptiWarningBrush}"
+                                          VerticalAlignment="Top"
+                                          Margin="0,1,0,0" />
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="MAXIMUM PERFORMANCE IS THE DEFAULT"
+                                               Style="{StaticResource OptiRiskLabel}" />
+                                    <TextBlock Text="OptiHub intentionally uses aggressive profiles. A profile may reduce visual effects, background convenience, vendor extras, or power-saving behavior. Discord and Steam Repair restore OptiHub-managed changes. NVIDIA Reset only clears status; undo NVIDIA changes manually in NVIDIA settings or with a driver reinstall."
+                                               Style="{StaticResource OptiCaption}"
+                                               Foreground="{ThemeResource OptiSecondaryTextBrush}"
+                                               LineHeight="17"
+                                               TextWrapping="WrapWholeWords" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
                     </StackPanel>
 
                     <Border Height="1" Background="{ThemeResource OptiCardStrokeBrush}" Opacity="0.4" />
@@ -44,10 +80,11 @@
                     <StackPanel Spacing="12">
                         <TextBlock Text="UPDATES" Style="{StaticResource OptiSectionTitle}" Margin="0" />
                         <ToggleSwitch Header="Check for updates automatically"
+                                      AutomationProperties.Name="Check for updates automatically"
                                       IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
                                       OnContent="On"
                                       OffContent="Off" />
-                        <TextBlock Text="On launch: prompt when a new OptiHub app is available, and refresh optimizer scripts in the background."
+                        <TextBlock Text="On launch: prompt when a new OptiHub app is available, and refresh the Discord optimizer kit in the background."
                                    Style="{StaticResource OptiCaption}"
                                    TextWrapping="WrapWholeWords"
                                    Opacity="0.85"
@@ -67,7 +104,7 @@
                                            Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Spacing="3">
-                                <TextBlock Text="Script version" Style="{StaticResource OptiCaption}" />
+                                <TextBlock Text="Discord kit version" Style="{StaticResource OptiCaption}" />
                                 <TextBlock Text="{x:Bind ViewModel.KitVersion, Mode=OneWay}"
                                            FontFamily="{StaticResource OptiUiFontSemiBold}"
                                            FontSize="15"
@@ -83,14 +120,16 @@
                             </Grid.ColumnDefinitions>
                             <Button Grid.Column="0"
                                     Style="{StaticResource OptiPrimaryButton}"
-                                    Content="Check app update"
-                                    Click="CheckAppUpdates_Click"
+                                    Content="Check for app updates"
+                                    AutomationProperties.Name="Check for OptiHub app updates"
+                                    Command="{x:Bind ViewModel.CheckAppUpdatesCommand}"
                                     HorizontalAlignment="Stretch"
                                     IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                             <Button Grid.Column="1"
-                                    Style="{StaticResource OptiPrimaryButton}"
-                                    Content="Check script update"
-                                    Click="CheckScriptUpdates_Click"
+                                    Style="{StaticResource OptiQuietButton}"
+                                    Content="Check Discord kit updates"
+                                    AutomationProperties.Name="Check for Discord optimizer kit updates"
+                                    Command="{x:Bind ViewModel.CheckScriptUpdatesCommand}"
                                     HorizontalAlignment="Stretch"
                                     IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                         </Grid>
@@ -100,6 +139,7 @@
                                    FontSize="12"
                                    Foreground="{ThemeResource OptiSecondaryTextBrush}"
                                    TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite"
                                    MinHeight="16" />
                     </StackPanel>
 
@@ -107,8 +147,9 @@
 
                     <StackPanel Spacing="10">
                         <TextBlock Text="SUPPORT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                        <Button Style="{StaticResource OptiPrimaryButton}"
+                        <Button Style="{StaticResource OptiQuietButton}"
                                 Content="Open logs folder"
+                                AutomationProperties.Name="Open OptiHub logs folder"
                                 HorizontalAlignment="Stretch"
                                 Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
                     </StackPanel>
@@ -121,14 +162,22 @@
                                    FontSize="13"
                                    LineHeight="20"
                                    Foreground="{ThemeResource OptiSecondaryTextBrush}"
-                                   Text="One hub. Max performance. Optimizers for Discord, Steam, and more - gaming and client tweaks in one place."
+                                   Text="OptiHub is for users who prioritize latency, FPS, and low background overhead over convenience defaults. Discord and Steam provide Repair for OptiHub-managed changes. NVIDIA Reset only clears OptiHub's status record; recovery is manual through NVIDIA settings or a driver reinstall."
                                    TextWrapping="WrapWholeWords" />
-                        <TextBlock Style="{StaticResource OptiCaption}"
-                                   FontSize="11"
-                                   Margin="0,4,0,0"
-                                   Text="{x:Bind ViewModel.AboutFooter, Mode=OneWay}" />
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                            <TextBlock Style="{StaticResource OptiCaption}"
+                                       FontSize="11"
+                                       VerticalAlignment="Center"
+                                       Text="{x:Bind ViewModel.AboutFooter, Mode=OneWay}" />
+                            <HyperlinkButton Content="View on GitHub"
+                                             FontSize="11"
+                                             Padding="0"
+                                             NavigateUri="https://github.com/BarcusEric/OptiHub"
+                                             AutomationProperties.Name="Open the OptiHub project on GitHub" />
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
+                </ScrollViewer>
             </Grid>
         </Border>
     </Grid>

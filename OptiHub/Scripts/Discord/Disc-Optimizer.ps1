@@ -1,4 +1,4 @@
-# Disc Optimizer - right-click -> Run with PowerShell (auto-installs PS 7.7 + elevates)
+# Disc Optimizer - right-click -> Run with PowerShell (uses stable PS 7 + elevates)
 # First run installs + optimizes Discord. After that, use the Start menu Discord shortcut.
 #
 #   Disc-Optimizer.ps1           first-time / full setup (log in when prompted)
@@ -45,7 +45,7 @@ if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.1.29'
+$Script:DiscOptVersion = '1.3.0'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -53,8 +53,7 @@ if (-not (Test-Path $KitDir)) { $KitDir = $Root }
 $ToolsDir = Join-Path $KitDir 'tools'
 $DownloadDir = Join-Path $KitDir 'downloads'
 $BootstrapLogDir = Join-Path $KitDir 'logs'
-$Script:DiscOptPwshZipName = 'PowerShell-7.7.0-preview.2-win-x64.zip'
-$Script:DiscOptPwshZipUrl = 'https://github.com/PowerShell/PowerShell/releases/download/v7.7.0-preview.2/PowerShell-7.7.0-preview.2-win-x64.zip'
+$Script:DiscOptPwshReleaseApi = 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest'
 
 function Test-DiscOptIsWindows {
     return [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
@@ -137,11 +136,9 @@ function Write-DiscOptBootstrapFailure($ErrorRecord) {
 
 function Test-DiscOptPwshVersionMeetsMinimum([string]$VersionText) {
     if (-not $VersionText) { return $false }
-    if ($VersionText -match '^(\d+)\.(\d+)\.') {
+    if ($VersionText -match '^(\d+)\.') {
         $major = [int]$Matches[1]
-        $minor = [int]$Matches[2]
-        if ($major -gt 7) { return $true }
-        if ($major -eq 7 -and $minor -ge 7) { return $true }
+        return $major -ge 7
     }
     return $false
 }
@@ -155,7 +152,7 @@ function Get-DiscOptPwshVersion([string]$Exe) {
     return $null
 }
 
-function Get-DiscOptPwsh77 {
+function Get-DiscOptPwsh7 {
     $candidates = [System.Collections.Generic.List[string]]::new()
     $portable = Join-Path $ToolsDir 'pwsh\pwsh.exe'
     if (Test-Path $portable) { $candidates.Add($portable) }
@@ -189,11 +186,28 @@ function Get-DiscOptPwsh77 {
     return $null
 }
 
-function Install-DiscOptPwsh77Portable {
+function Get-DiscOptLatestPwshAsset {
+    $headers = @{ 'User-Agent' = 'OptiHub-Discord/1.2' }
+    $release = Invoke-RestMethod -Uri $Script:DiscOptPwshReleaseApi -Headers $headers -TimeoutSec 45
+    $asset = $release.assets |
+        Where-Object { $_.name -match '^PowerShell-\d+\.\d+\.\d+-win-x64\.zip$' } |
+        Select-Object -First 1
+    $hashes = $release.assets | Where-Object { $_.name -eq 'hashes.sha256' } | Select-Object -First 1
+    if (-not $asset -or -not $hashes) {
+        throw 'Latest stable PowerShell release is missing its x64 ZIP or checksum manifest'
+    }
+    return @{
+        Name      = [string]$asset.name
+        Url       = [string]$asset.browser_download_url
+        HashesUrl = [string]$hashes.browser_download_url
+        Version   = ([string]$release.tag_name).TrimStart('v')
+    }
+}
+
+function Install-DiscOptPwsh7Portable {
     if (-not (Test-Path $ToolsDir)) { New-Item -ItemType Directory -Path $ToolsDir -Force | Out-Null }
     if (-not (Test-Path $DownloadDir)) { New-Item -ItemType Directory -Path $DownloadDir -Force | Out-Null }
 
-    $zipPath = Join-Path $DownloadDir $Script:DiscOptPwshZipName
     $destDir = Join-Path $ToolsDir 'pwsh'
     $pwshExe = Join-Path $destDir 'pwsh.exe'
     $cachedVer = Get-DiscOptPwshVersion $pwshExe
@@ -201,10 +215,32 @@ function Install-DiscOptPwsh77Portable {
         return @{ Exe = $pwshExe; Version = $cachedVer }
     }
 
-    if (-not (Test-Path $zipPath) -or (Get-Item $zipPath).Length -lt 50000000) {
-        Write-Host '[*] Downloading portable PowerShell 7.7...' -ForegroundColor Cyan
-        $ua = @{ 'User-Agent' = 'Disc-Optimizer/1.0 (Windows; PowerShell)' }
-        Invoke-WebRequest -Uri $Script:DiscOptPwshZipUrl -OutFile $zipPath -UseBasicParsing -Headers $ua
+    $asset = Get-DiscOptLatestPwshAsset
+    $zipPath = Join-Path $DownloadDir $asset.Name
+    $hashPath = Join-Path $DownloadDir 'powershell-hashes.sha256'
+    $ua = @{ 'User-Agent' = 'OptiHub-Discord/1.2' }
+    if (-not (Test-Path -LiteralPath $zipPath) -or (Get-Item -LiteralPath $zipPath).Length -lt 50000000) {
+        Write-Host "[*] Downloading portable PowerShell $($asset.Version)..." -ForegroundColor Cyan
+        $partial = "$zipPath.partial"
+        Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+        Invoke-WebRequest -Uri $asset.Url -OutFile $partial -UseBasicParsing -Headers $ua -TimeoutSec 180
+        if ((Get-Item -LiteralPath $partial).Length -lt 50000000) {
+            Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+            throw 'Portable PowerShell download is incomplete'
+        }
+        Move-Item -LiteralPath $partial -Destination $zipPath -Force
+    }
+
+    Invoke-WebRequest -Uri $asset.HashesUrl -OutFile $hashPath -UseBasicParsing -Headers $ua -TimeoutSec 45
+    $hashLine = Get-Content -LiteralPath $hashPath -ErrorAction Stop |
+        Where-Object { $_ -match ('(?i)\*?' + [regex]::Escape($asset.Name) + '$') } |
+        Select-Object -First 1
+    $expectedHash = if ($hashLine -match '^([0-9a-fA-F]{64})\s+') { $Matches[1] } else { $null }
+    $actualHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
+    Remove-Item -LiteralPath $hashPath -Force -ErrorAction SilentlyContinue
+    if (-not $expectedHash -or $actualHash -ine $expectedHash) {
+        Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
+        throw 'Portable PowerShell checksum verification failed'
     }
 
     $tempDir = Join-Path $DownloadDir 'pwsh-extract'
@@ -230,26 +266,29 @@ function Install-DiscOptPwsh77Portable {
     return $null
 }
 
-function Install-DiscOptPwsh77 {
+function Install-DiscOptPwsh7 {
     if (Test-DiscOptIsElevated) {
         $winget = Get-Command winget -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($winget) {
-            Write-Host '[*] Installing PowerShell 7.7 via winget...' -ForegroundColor Cyan
+            Write-Host '[*] Installing stable PowerShell 7 via winget...' -ForegroundColor Cyan
             $proc = Start-Process -FilePath $winget.Source -ArgumentList @(
-                'install', '-e', '-id', 'Microsoft.PowerShell.Preview',
+                'install', '-e', '-id', 'Microsoft.PowerShell',
                 '-accept-package-agreements', '-accept-source-agreements', '-silent'
-            ) -PassThru -Wait -WindowStyle Hidden
-            if ($proc.ExitCode -ne 0) {
+            ) -PassThru -WindowStyle Hidden
+            if (-not $proc.WaitForExit(600000)) {
+                try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch { }
+                Write-Host '[!] winget PowerShell install timed out - trying portable download' -ForegroundColor Yellow
+            } elseif ($proc.ExitCode -ne 0) {
                 Write-Host '[!] winget install returned non-zero - trying portable download' -ForegroundColor Yellow
             } else {
                 Start-Sleep -Seconds 3
-                $found = Get-DiscOptPwsh77
+                $found = Get-DiscOptPwsh7
                 if ($found) { return $found }
             }
         }
     }
 
-    return Install-DiscOptPwsh77Portable
+    return Install-DiscOptPwsh7Portable
 }
 
 function Get-DiscOptBoundScriptArgs {
@@ -271,28 +310,30 @@ function Initialize-DiscOptRuntime {
 
     if ($PSVersionTable.PSVersion.Major -lt 7) { $env:DISCOPT_PS7 = '1' }
 
-    $pwshInfo = Get-DiscOptPwsh77
+    $isCore7 = ($PSVersionTable.PSEdition -eq 'Core') -and (Test-DiscOptPwshVersionMeetsMinimum $PSVersionTable.PSVersion.ToString())
+    $isAdmin = Test-DiscOptIsElevated
+    $needElevate = (-not $Launch) -and (-not $isAdmin)
+
+    # Fast path for normal launches and already-elevated OptiHub runs. Avoid
+    # spawning another pwsh merely to query the version we are already using.
+    if ($isCore7 -and -not $needElevate) {
+        $env:DISCOPT_RUNTIME_READY = '1'
+        if ($isAdmin) { $env:DISCOPT_ELEVATED = '1' }
+        return
+    }
+
+    $pwshInfo = Get-DiscOptPwsh7
     if (-not $pwshInfo) {
         Write-Host ''
-        Write-Host '  Disc Optimizer - PowerShell 7.7 setup' -ForegroundColor Magenta
-        Write-Host '[*] PowerShell 7.7 not found - installing...' -ForegroundColor Cyan
-        $pwshInfo = Install-DiscOptPwsh77
+        Write-Host '  Disc Optimizer - PowerShell 7 setup' -ForegroundColor Magenta
+        Write-Host '[*] PowerShell 7 not found - installing the current stable release...' -ForegroundColor Cyan
+        $pwshInfo = Install-DiscOptPwsh7
         if (-not $pwshInfo) {
-            Write-Host '[-] Could not install PowerShell 7.7. Check internet and try again.' -ForegroundColor Red
+            Write-Host '[-] Could not install PowerShell 7. Check internet and try again.' -ForegroundColor Red
             Wait-DiscOptClosePrompt
             exit 1
         }
         Write-Host "[+] Installed PowerShell $($pwshInfo.Version)" -ForegroundColor Green
-    }
-
-    $isCore77 = ($PSVersionTable.PSEdition -eq 'Core') -and (Test-DiscOptPwshVersionMeetsMinimum $PSVersionTable.PSVersion.ToString())
-    $isAdmin = Test-DiscOptIsElevated
-    $needElevate = (-not $Launch) -and (-not $isAdmin)
-
-    if ($isCore77 -and -not $needElevate) {
-        $env:DISCOPT_RUNTIME_READY = '1'
-        if ($isAdmin) { $env:DISCOPT_ELEVATED = '1' }
-        return
     }
 
     $extraArgs = Get-DiscOptBoundScriptArgs
@@ -357,9 +398,8 @@ $RequiredModules = @(
     'discord_voice-1',
     'discord_media-1'
 )
-# Never delete unknown modules - Discord adds/renames them across versions.
-# Only strip modules that are purely optional and never required at boot.
-# (cloudsync/rpc/overlay/game_utils are REQUIRED by modern desktop_core.)
+# Known nonessential modules removed by the no-compromise debloat pass. Never
+# remove unknown modules: Discord can add new boot dependencies at any time.
 $OptionalModules = @(
     'discord_hook-1',
     'discord_clips-1'
@@ -422,6 +462,7 @@ if ($VerifyOnly) {
 Stop-Discord
 Unlock-DiscordSettings
 Confirm-WindowsDiscordTarget
+$Script:DiscordWindowsRecovery = Initialize-DiscordApplyState
 
 # 1) Discord - restore stock + update latest, or fresh install (-FreshInstall)
 Prepare-Discord
@@ -454,6 +495,7 @@ if ($SkipDebloat) {
     } elseif ($ForceDebloat -or $debloatCheck.Needed) {
         Write-Step "Debloating Discord ($($debloatCheck.Reasons -join ', '))..."
         Invoke-Debloat $app.FullName $freed
+        Ensure-DiscordCompatibilityRecovery $app.FullName
         Disable-Fso $app.FullName
     } else {
         Write-Ok 'Debloat skipped (already lean)'
@@ -462,8 +504,6 @@ if ($SkipDebloat) {
 
 if ($SkipCacheClean) {
     Write-Ok 'Cache clean skipped (-SkipCacheClean)'
-} elseif (-not (Test-CacheCleanNeeded)) {
-    Write-Ok 'Cache clean skipped (caches already lean)'
 } else {
     Clear-DiscordConflictLeftovers | Out-Null
     Clear-DiscordSafeCache $freed
@@ -488,11 +528,11 @@ if (-not $SkipEquicord) {
     }
 }
 
-# 5) DiscOpt kernel - core feature (memory trim + raw input + priority)
+# 5) DiscOpt kernel - core feature (aggressive 5s trim + raw input + Above Normal priority)
 if (-not $SkipKernel) {
     Install-DiscOptKernel $app.FullName
 } else {
-    Write-Warn 'Skipped DiscOpt kernel (-SkipKernel) - memory trim / raw input not installed'
+    Write-Warn 'Skipped DiscOpt kernel (-SkipKernel) - aggressive trim / raw input not installed'
 }
 
 # 5b) Boot safety
@@ -548,12 +588,42 @@ if ($optiHubQuiet) {
 if (-not $Quick) {
     Apply-WindowsTweaks $app.FullName
 } else {
+    Refresh-DiscordWindowsRecovery
     Disable-DiscordWindowsAutostart
     Write-Ok 'Windows tweaks skipped (-Quick)'
 }
 Restore-StartMenu
 
 Test-DiscOptimizer
+
+if ($Quick) {
+    Save-DiscordOptState @{
+        version       = $Script:DiscOptVersion
+        applyStatus   = 'incomplete'
+        applied       = $false
+        fullApply     = $false
+        quick         = $true
+        recovery      = $Script:DiscordWindowsRecovery
+        appliedUtc    = (Get-Date).ToUniversalTime().ToString('o')
+    }
+    Write-Warn 'Quick pass completed; the verified no-compromise applied state still requires a full run'
+} else {
+    $debloatState = Test-DebloatNeeded $app.FullName
+    if ($debloatState.Needed) {
+        throw "Discord debloat verification incomplete: $($debloatState.Reasons -join ', ')"
+    }
+    if (-not (Test-DiscordWindowsSuppression)) {
+        throw 'Stable Discord Windows suppression verification failed after apply'
+    }
+    $settingsPath = Join-Path $AppData 'settings.json'
+    try {
+        $settingsState = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json
+        if ($settingsState.OPEN_ON_STARTUP -ne $false) { throw 'OPEN_ON_STARTUP is not false' }
+    } catch {
+        throw "Discord startup settings verification failed: $($_.Exception.Message)"
+    }
+    $fullApplyVerified = $true
+}
 
 Write-RunSummary -AppDir $app.FullName -Launched $false
 
@@ -566,6 +636,9 @@ if (-not $NoLaunch) {
 Write-HubProgress 100 'Completed successfully'
 Write-LogLine 'OK' 'Run finished successfully'
 Copy-Item -Path $Script:LogPath -Destination (Join-Path $LogDir 'last-run.log') -Force
+if (-not $Quick -and $fullApplyVerified) {
+    Complete-DiscordApplyState $app.FullName
+}
 exit 0
 } catch {
     $detail = Write-LogFailure $_

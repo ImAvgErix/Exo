@@ -22,7 +22,7 @@ public sealed class SettingsService
     {
         get
         {
-            lock (_lock) return _settings;
+            lock (_lock) return _settings.Clone();
         }
     }
 
@@ -44,14 +44,25 @@ public sealed class SettingsService
                     _settings = new AppSettings();
                 }
 
-                if (MigrateLegacySettings(_settings))
-                    SaveUnlocked();
-                else if (!File.Exists(PathHelper.SettingsPath))
-                    SaveUnlocked();
+                _dirty = false;
+                if (MigrateLegacySettings(_settings) || !File.Exists(PathHelper.SettingsPath))
+                    _dirty = !TrySaveUnlocked();
             }
-            catch
+            catch (JsonException)
             {
                 _settings = new AppSettings();
+                BackupInvalidSettings();
+                _dirty = !TrySaveUnlocked();
+            }
+            catch (IOException)
+            {
+                _settings = new AppSettings();
+                _dirty = true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                _settings = new AppSettings();
+                _dirty = true;
             }
         }
     }
@@ -66,28 +77,57 @@ public sealed class SettingsService
             settings.DiscordScriptsRepo = "BarcusEric/OptiHub";
             changed = true;
         }
+
+        if (string.IsNullOrWhiteSpace(settings.DiscordScriptsBranch))
+        {
+            settings.DiscordScriptsBranch = "main";
+            changed = true;
+        }
+
+        if (!string.Equals(settings.Theme, AppSettings.DarkTheme, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(settings.Theme, AppSettings.LightTheme, StringComparison.OrdinalIgnoreCase))
+        {
+            settings.Theme = AppSettings.DarkTheme;
+            changed = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.DiscordKitVersion))
+        {
+            settings.DiscordKitVersion = "1.3.0";
+            changed = true;
+        }
+
         return changed;
     }
 
     public void Save(AppSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        bool needsRetry;
         lock (_lock)
         {
-            _settings = settings;
-            SaveUnlocked();
+            _settings = settings.Clone();
+            _dirty = !TrySaveUnlocked();
+            needsRetry = _dirty;
         }
+        if (needsRetry)
+            ScheduleDebouncedSave();
+
         SettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void Update(Action<AppSettings> mutator)
     {
+        ArgumentNullException.ThrowIfNull(mutator);
+
         lock (_lock)
         {
             mutator(_settings);
             _dirty = true;
         }
-        SettingsChanged?.Invoke(this, EventArgs.Empty);
         ScheduleDebouncedSave();
+        SettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void ScheduleDebouncedSave()
@@ -102,12 +142,20 @@ public sealed class SettingsService
             {
                 try
                 {
-                    await Task.Delay(400, token);
+                    await Task.Delay(400, token).ConfigureAwait(false);
                     FlushIfDirty();
                 }
                 catch (OperationCanceledException)
                 {
                     // newer update scheduled
+                }
+                catch (IOException)
+                {
+                    // Keep the dirty flag set so shutdown or a later update can retry.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Keep the dirty flag set so shutdown or a later update can retry.
                 }
             }, token);
         }
@@ -118,15 +166,73 @@ public sealed class SettingsService
         lock (_lock)
         {
             if (!_dirty) return;
-            SaveUnlocked();
-            _dirty = false;
+            _dirty = !TrySaveUnlocked();
         }
     }
 
-    private void SaveUnlocked()
+    public void Flush()
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(PathHelper.SettingsPath)!);
-        var json = JsonSerializer.Serialize(_settings, JsonOptions);
-        File.WriteAllText(PathHelper.SettingsPath, json);
+        lock (_saveLock)
+        {
+            _debounceCts?.Cancel();
+            _debounceCts?.Dispose();
+            _debounceCts = null;
+        }
+
+        try
+        {
+            FlushIfDirty();
+        }
+        catch (IOException)
+        {
+            // The application is closing; there is no safe recovery path here.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The application is closing; there is no safe recovery path here.
+        }
+    }
+
+    private bool TrySaveUnlocked()
+    {
+        var settingsPath = PathHelper.SettingsPath;
+        var directory = Path.GetDirectoryName(settingsPath)!;
+        var tempPath = settingsPath + $".{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var json = JsonSerializer.Serialize(_settings, JsonOptions);
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, settingsPath, overwrite: true);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        finally
+        {
+            try { File.Delete(tempPath); } catch { /* best-effort cleanup */ }
+        }
+    }
+
+    private static void BackupInvalidSettings()
+    {
+        var settingsPath = PathHelper.SettingsPath;
+        if (!File.Exists(settingsPath)) return;
+
+        try
+        {
+            var backupPath = settingsPath + $".invalid-{DateTime.UtcNow:yyyyMMddHHmmss}";
+            File.Move(settingsPath, backupPath, overwrite: true);
+        }
+        catch
+        {
+            // Preserve the original if it cannot be moved.
+        }
     }
 }

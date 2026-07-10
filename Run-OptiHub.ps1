@@ -1,7 +1,7 @@
-#Requires -Version 7.0
+#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Build (if needed) and launch OptiHub from PowerShell 7.7+.
+  Build (if needed) and launch OptiHub from Windows PowerShell 5.1 or PowerShell 7.
 
 .EXAMPLE
   pwsh -File .\Run-OptiHub.ps1

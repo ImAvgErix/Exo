@@ -4,7 +4,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using Microsoft.UI.Xaml.Media.Imaging;
 using OptiHub.Helpers;
 using OptiHub.Views;
 using Windows.Graphics;
@@ -24,14 +23,14 @@ public sealed partial class MainWindow : Window
     }
 
     private ShellMode _mode = ShellMode.Home;
+    private readonly CancellationTokenSource _lifetimeCts = new();
 
     public MainWindow()
     {
         InitializeComponent();
         App.MainAppWindow = this;
 
-        // Fixed window — roomy enough for home cards + optimizer feature lists
-        // Taller window so optimizer feature lists are not clipped
+        // Fixed window, roomy enough for home cards and optimizer feature lists.
         AppWindow.Resize(new SizeInt32(1080, 860));
         ApplyFixedWindowChrome();
         TryCenterOnScreen();
@@ -53,12 +52,27 @@ public sealed partial class MainWindow : Window
         };
         RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
+        Closed += (_, _) =>
+        {
+            _lifetimeCts.Cancel();
+            App.Services.Settings.Flush();
+            App.MainAppWindow = null;
+
+            try
+            {
+                NativeWindowHelper.RestoreWindowProcedure(WindowNative.GetWindowHandle(this));
+            }
+            catch
+            {
+                // The native window may already have been released.
+            }
+        };
 
         ApplyShellChrome();
         UpdateCaptionInset();
 
         NavigateHome(suppressTransition: true);
-        _ = MaybeAutoUpdateAsync();
+        _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
     }
 
     private void ApplyFixedWindowChrome()
@@ -158,20 +172,7 @@ public sealed partial class MainWindow : Window
 
     private void TrySetContextLogo(string relativePath)
     {
-        try
-        {
-            var full = Path.Combine(PathHelper.AppDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(full))
-            {
-                ContextLogo.Source = null;
-                return;
-            }
-            ContextLogo.Source = new BitmapImage(new Uri(full));
-        }
-        catch
-        {
-            ContextLogo.Source = null;
-        }
+        ContextLogo.Source = AssetPathToImageSourceConverter.Resolve(relativePath);
     }
 
     private static NavigationTransitionInfo Slide() =>
@@ -182,43 +183,45 @@ public sealed partial class MainWindow : Window
 
     public void NavigateHome(bool suppressTransition = false)
     {
-        ApplyChrome(ShellMode.Home);
-        ContentFrame.Navigate(
+        Navigate(
+            ShellMode.Home,
             typeof(DashboardPage),
-            null,
             suppressTransition ? (NavigationTransitionInfo)new SuppressNavigationTransitionInfo() : SlideBack());
     }
 
-    public void NavigateToDashboard() => NavigateHome();
-
     public void NavigateToDiscord()
     {
-        ApplyChrome(ShellMode.Discord);
-        ContentFrame.Navigate(typeof(DiscordOptimizerPage), null, Slide());
+        Navigate(ShellMode.Discord, typeof(DiscordOptimizerPage), Slide());
     }
 
     public void NavigateToSteam()
     {
-        ApplyChrome(ShellMode.Steam);
-        ContentFrame.Navigate(typeof(SteamOptimizerPage), null, Slide());
+        Navigate(ShellMode.Steam, typeof(SteamOptimizerPage), Slide());
     }
 
     public void NavigateToNvidia()
     {
-        ApplyChrome(ShellMode.Nvidia);
-        ContentFrame.Navigate(typeof(NvidiaOptimizerPage), null, Slide());
+        Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), Slide());
+    }
+
+    private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
+    {
+        if (_mode == mode && ContentFrame.CurrentSourcePageType == pageType)
+            return;
+
+        if (ContentFrame.Navigate(pageType, null, transition))
+            ApplyChrome(mode);
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         if (_mode == ShellMode.Settings) return;
-        ApplyChrome(ShellMode.Settings);
-        ContentFrame.Navigate(typeof(SettingsPage), null, Slide());
+        Navigate(ShellMode.Settings, typeof(SettingsPage), Slide());
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e) => NavigateHome();
 
-    private async Task MaybeAutoUpdateAsync()
+    private async Task MaybeAutoUpdateAsync(CancellationToken ct)
     {
         try
         {
@@ -226,14 +229,14 @@ public sealed partial class MainWindow : Window
             if (!App.Services.Settings.Current.AutoUpdateScripts) return;
 
             // Let the window finish loading so ContentDialog has a valid XamlRoot.
-            await Task.Delay(1200);
+            await Task.Delay(1200, ct);
             for (var i = 0; i < 10 && RootGrid.XamlRoot is null; i++)
-                await Task.Delay(200);
+                await Task.Delay(200, ct);
 
             // 1) App update — prompt to install (does not silent-install without consent).
             try
             {
-                var appCheck = await App.Services.Updater.CheckAppUpdateAsync();
+                var appCheck = await App.Services.Updater.CheckAppUpdateAsync(ct: ct);
                 if (appCheck.UpdateAvailable && RootGrid.XamlRoot is not null)
                 {
                     var dialog = new ContentDialog
@@ -249,12 +252,13 @@ public sealed partial class MainWindow : Window
                         XamlRoot = RootGrid.XamlRoot
                     };
                     var choice = await dialog.ShowAsync();
+                    ct.ThrowIfCancellationRequested();
                     if (choice == ContentDialogResult.Primary)
                     {
-                        var install = await App.Services.Updater.InstallLatestAppAsync();
+                        var install = await App.Services.Updater.InstallAppUpdateAsync(appCheck, ct: ct);
                         if (install.ShouldExit)
                         {
-                            await Task.Delay(900);
+                            await Task.Delay(900, ct);
                             Microsoft.UI.Xaml.Application.Current?.Exit();
                             return;
                         }
@@ -274,13 +278,21 @@ public sealed partial class MainWindow : Window
                     }
                 }
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch
             {
                 // network / dialog issues — still try scripts
             }
 
             // 2) Discord script kit — silent (no prompt)
-            await App.Services.Updater.CheckAndUpdateDiscordScriptsAsync(force: false);
+            await App.Services.Updater.CheckAndUpdateDiscordScriptsAsync(force: false, ct: ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Window is closing.
         }
         catch
         {

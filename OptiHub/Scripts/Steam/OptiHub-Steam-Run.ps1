@@ -28,12 +28,11 @@ if (-not (Test-Path $Optimizer)) {
 
 Write-HubProgress 4 'Starting Steam Optimizer...'
 
-# Auto-quick if already applied
-$statePath = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub\steam-optimizer.json'
-if (-not $Quick -and -not $Repair -and (Test-Path $statePath)) {
-    $Quick = $true
-    Write-Output '[*] Already optimized - Quick reapply'
-    Write-HubProgress 10 'Quick reapply mode'
+# Reapply is intentionally a full maximum-performance pass. Quick mode remains
+# available only when explicitly requested by a script caller.
+if (-not $Quick -and -not $Repair) {
+    Write-Output '[*] Full aggressive apply mode'
+    Write-HubProgress 10 'Full performance pass'
 }
 
 $runArgs = @()
@@ -46,7 +45,10 @@ try {
     & $Optimizer @runArgs 2>&1 | ForEach-Object {
         $line = "$_"
         if ([string]::IsNullOrWhiteSpace($line)) { return }
-        if ($line -notmatch '^OPTIHUB_PROGRESS:') { Write-Output $line }
+        # Steam runs through redirected (non-elevated) PowerShell, which reads
+        # stdout rather than polling OPTIHUB_LOG. Forward progress markers so
+        # the WinUI progress bar receives every optimizer stage.
+        Write-Output $line
     }
     $code = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
     if ($code -eq 0) {

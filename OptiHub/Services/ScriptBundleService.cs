@@ -1,4 +1,5 @@
 using OptiHub.Helpers;
+using System.Security.Cryptography;
 
 namespace OptiHub.Services;
 
@@ -10,9 +11,6 @@ public sealed class ScriptBundleService
 {
     private readonly SettingsService _settings;
     private readonly object _syncLock = new();
-    private string? _cachedDiscordRoot;
-    private string? _cachedSteamRoot;
-    private string? _cachedNvidiaRoot;
     private string? _cachedBundledVersion;
     private string? _lastSyncedWorkingVersion;
     private string? _lastSyncedBundledVersion;
@@ -35,7 +33,6 @@ public sealed class ScriptBundleService
         {
             var working = Path.Combine(PathHelper.WorkingScriptsDir, "Discord");
             EnsureDiscordScriptsSynced(working);
-            _cachedDiscordRoot = working;
             return working;
         }
     }
@@ -46,7 +43,6 @@ public sealed class ScriptBundleService
         {
             var working = Path.Combine(PathHelper.WorkingScriptsDir, "Steam");
             EnsureSteamScriptsSynced(working);
-            _cachedSteamRoot = working;
             return working;
         }
     }
@@ -57,7 +53,6 @@ public sealed class ScriptBundleService
         {
             var working = Path.Combine(PathHelper.WorkingScriptsDir, "Nvidia");
             EnsureNvidiaScriptsSynced(working);
-            _cachedNvidiaRoot = working;
             return working;
         }
     }
@@ -91,23 +86,29 @@ public sealed class ScriptBundleService
 
     public string GetBundledVersion()
     {
-        if (_cachedBundledVersion is not null)
-            return _cachedBundledVersion;
+        lock (_syncLock)
+        {
+            if (_cachedBundledVersion is not null)
+                return _cachedBundledVersion;
 
-        var versionFile = Path.Combine(PathHelper.DiscordScriptsDir, "VERSION");
-        _cachedBundledVersion = File.Exists(versionFile)
-            ? File.ReadAllText(versionFile).Trim()
-            : _settings.Current.DiscordKitVersion;
-        return _cachedBundledVersion;
+            var versionFile = Path.Combine(PathHelper.DiscordScriptsDir, "VERSION");
+            _cachedBundledVersion = File.Exists(versionFile)
+                ? File.ReadAllText(versionFile).Trim()
+                : _settings.Current.DiscordKitVersion;
+            return _cachedBundledVersion;
+        }
     }
 
     public string GetWorkingVersion()
     {
-        var root = GetDiscordRoot();
-        var versionFile = Path.Combine(root, "VERSION");
-        if (File.Exists(versionFile))
-            return File.ReadAllText(versionFile).Trim();
-        return GetBundledVersion();
+        lock (_syncLock)
+        {
+            var root = GetDiscordRoot();
+            var versionFile = Path.Combine(root, "VERSION");
+            if (File.Exists(versionFile))
+                return File.ReadAllText(versionFile).Trim();
+            return GetBundledVersion();
+        }
     }
 
     private void EnsureSteamScriptsSynced(string working)
@@ -182,11 +183,15 @@ public sealed class ScriptBundleService
         var workingVersion = File.Exists(workingVersionPath)
             ? File.ReadAllText(workingVersionPath).Trim()
             : "";
+        var bundledHelper = Path.Combine(bundled, "tools", "OptiHub.NvDisplay.exe");
+        var workingHelper = Path.Combine(working, "tools", "OptiHub.NvDisplay.exe");
+        var helperMismatch = File.Exists(bundledHelper) && !FilesMatch(bundledHelper, workingHelper);
 
         if (_nvidiaSyncDone &&
             File.Exists(marker) &&
             File.Exists(hubRun) &&
             Directory.Exists(Path.Combine(working, "profiles")) &&
+            !helperMismatch &&
             string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))
             return;
 
@@ -195,10 +200,15 @@ public sealed class ScriptBundleService
             !File.Exists(hubRun) ||
             !File.Exists(Path.Combine(working, "OptiHub-Nvidia-Detect.ps1")) ||
             !Directory.Exists(Path.Combine(working, "profiles")) ||
+            helperMismatch ||
             IsVersionNewer(bundledVersion, workingVersion);
 
         if (broken || IsVersionNewer(bundledVersion, workingVersion))
+        {
             CopyDirectory(bundled, working);
+            if (File.Exists(bundledHelper) && !FilesMatch(bundledHelper, workingHelper))
+                throw new InvalidDataException("The NVIDIA display helper did not synchronize correctly.");
+        }
 
         _nvidiaSyncDone = true;
     }
@@ -309,17 +319,56 @@ public sealed class ScriptBundleService
 
     public void ReplaceDiscordScriptsFrom(string sourceDir)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceDir);
+
         lock (_syncLock)
         {
             var working = Path.Combine(PathHelper.WorkingScriptsDir, "Discord");
-            Directory.CreateDirectory(working);
-            CopyDirectory(sourceDir, working);
-            _cachedDiscordRoot = working;
-            _cachedBundledVersion = null;
-            _discordSyncDone = false;
-            _lastSyncedBundledVersion = null;
-            _lastSyncedWorkingVersion = null;
+            var staging = Path.Combine(PathHelper.WorkingScriptsDir, $"Discord.update-{Guid.NewGuid():N}");
+            var backup = Path.Combine(PathHelper.WorkingScriptsDir, $"Discord.backup-{Guid.NewGuid():N}");
+            var movedCurrent = false;
+
+            try
+            {
+                CopyDirectory(sourceDir, staging);
+                if (!File.Exists(Path.Combine(staging, "Disc-Optimizer.ps1")) ||
+                    !File.Exists(Path.Combine(staging, "OptiHub-Discord-Run.ps1")))
+                {
+                    throw new InvalidDataException("Updated Discord script bundle is incomplete.");
+                }
+
+                if (Directory.Exists(working))
+                {
+                    Directory.Move(working, backup);
+                    movedCurrent = true;
+                }
+
+                Directory.Move(staging, working);
+                ResetDiscordCache();
+            }
+            catch
+            {
+                if (movedCurrent && !Directory.Exists(working) && Directory.Exists(backup))
+                {
+                    try { Directory.Move(backup, working); } catch { /* preserve original exception */ }
+                }
+                throw;
+            }
+            finally
+            {
+                TryDeleteDirectory(staging);
+                if (Directory.Exists(working))
+                    TryDeleteDirectory(backup);
+            }
         }
+    }
+
+    private void ResetDiscordCache()
+    {
+        _cachedBundledVersion = null;
+        _discordSyncDone = false;
+        _lastSyncedBundledVersion = null;
+        _lastSyncedWorkingVersion = null;
     }
 
     private static bool IsVersionNewer(string candidate, string baseline)
@@ -333,18 +382,56 @@ public sealed class ScriptBundleService
         return !string.Equals(candidate, baseline, StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool FilesMatch(string source, string destination)
+    {
+        try
+        {
+            if (!File.Exists(source) || !File.Exists(destination))
+                return false;
+            if (new FileInfo(source).Length != new FileInfo(destination).Length)
+                return false;
+
+            using var sourceStream = File.OpenRead(source);
+            using var destinationStream = File.OpenRead(destination);
+            var sourceHash = SHA256.HashData(sourceStream);
+            var destinationHash = SHA256.HashData(destinationStream);
+            return sourceHash.AsSpan().SequenceEqual(destinationHash);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static void CopyDirectory(string source, string dest)
     {
         Directory.CreateDirectory(dest);
-        foreach (var file in Directory.GetFiles(source))
+        foreach (var file in Directory.EnumerateFiles(source))
         {
+            if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
+                continue;
             var name = Path.GetFileName(file);
             File.Copy(file, Path.Combine(dest, name), overwrite: true);
         }
-        foreach (var dir in Directory.GetDirectories(source))
+        foreach (var dir in Directory.EnumerateDirectories(source))
         {
+            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
+                continue;
             var name = Path.GetFileName(dir);
             CopyDirectory(dir, Path.Combine(dest, name));
+        }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+        }
+        catch
+        {
+            // The active bundle is already selected; stale cleanup is best-effort.
         }
     }
 }

@@ -80,7 +80,7 @@ public partial class DashboardViewModel : ObservableObject
             card.InitializePresentation();
     }
 
-    public List<OptimizerCardViewModel> Cards { get; }
+    public IReadOnlyList<OptimizerCardViewModel> Cards { get; }
 
     public event EventHandler<string>? NavigateToOptimizer;
 
@@ -93,22 +93,32 @@ public partial class DashboardViewModel : ObservableObject
         NavigateToOptimizer?.Invoke(this, id);
     }
 
-    public async Task RefreshStatesAsync()
-    {
-        await RefreshOneAsync("discord", () => _services.OptimizerState.DetectDiscordAsync(fastOnly: true));
-        await RefreshOneAsync("steam", () => _services.OptimizerState.DetectSteamAsync(fastOnly: true));
-        await RefreshOneAsync("nvidia", () => _services.OptimizerState.DetectNvidiaAsync(fastOnly: true));
-    }
+    public Task RefreshStatesAsync(CancellationToken ct = default) =>
+        Task.WhenAll(
+            RefreshOneAsync("discord", token => _services.OptimizerState.DetectDiscordAsync(token, fastOnly: true), ct),
+            RefreshOneAsync("steam", token => _services.OptimizerState.DetectSteamAsync(token, fastOnly: true), ct),
+            RefreshOneAsync("nvidia", token => _services.OptimizerState.DetectNvidiaAsync(token, fastOnly: true), ct));
 
-    private async Task RefreshOneAsync(string id, Func<Task<OptimizerStateInfo>> detect)
+    private async Task RefreshOneAsync(
+        string id,
+        Func<CancellationToken, Task<OptimizerStateInfo>> detect,
+        CancellationToken ct)
     {
         var card = Cards.FirstOrDefault(c => c.Definition.Id == id);
         if (card is null) return;
         card.IsLoadingState = true;
         try
         {
-            var state = await detect();
+            var state = await detect(ct);
             card.ApplyState(state);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The dashboard was navigated away from; no status update is needed.
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Could not detect {id} state: {ex}");
         }
         finally
         {

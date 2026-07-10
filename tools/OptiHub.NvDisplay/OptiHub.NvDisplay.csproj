@@ -7,6 +7,8 @@
     <AssemblyName>OptiHub.NvDisplay</AssemblyName>
     <RootNamespace>OptiHub.NvDisplay</RootNamespace>
     <PublishSingleFile>false</PublishSingleFile>
+    <!-- NvAPIWrapper performs runtime API binding that is not trim-safe. -->
+    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NvAPIWrapper.Net" Version="0.8.1.101" />

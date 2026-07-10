@@ -3,50 +3,64 @@
 # Universal multi-PC kit - do not assume Equicord/Discord already configured.
 
 function Get-ActiveApp {
-    Get-ChildItem $DiscordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
-        Sort-Object { [version]($_.Name -replace '^app-', '') } -Descending |
+    if (-not $DiscordRoot -or -not (Test-Path -LiteralPath $DiscordRoot)) { return $null }
+    Get-ChildItem -LiteralPath $DiscordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+        Sort-Object {
+            $parsed = [version]'0.0.0.0'
+            [void][version]::TryParse(($_.Name -replace '^app-', ''), [ref]$parsed)
+            $parsed
+        } -Descending |
         Select-Object -First 1
 }
 
 function Get-FolderSize([string]$Path) {
-    if (-not (Test-Path $Path)) { return 0 }
+    if (-not (Test-Path -LiteralPath $Path)) { return 0 }
     try {
-        (Get-ChildItem $Path -Recurse -Force -File -ErrorAction SilentlyContinue |
+        (Get-ChildItem -LiteralPath $Path -Recurse -Force -File -ErrorAction SilentlyContinue |
             Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
     } catch { 0 }
 }
 
 function Remove-Safe([string]$Path, [ref]$Freed) {
-    if (-not (Test-Path $Path)) { return $false }
-    $item = Get-Item $Path -ErrorAction SilentlyContinue
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    $item = Get-Item -LiteralPath $Path -ErrorAction SilentlyContinue
     if (-not $item) { return $false }
     $size = if ($item.PSIsContainer) { Get-FolderSize $Path } else { $item.Length }
-    Remove-Item $Path -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $Path) {
+        Write-Warn "Could not fully remove $Path"
+        return $false
+    }
     $Freed.Value += [long]$size
     return $true
 }
 
 function Stop-Discord {
     # Hard-kill Discord/Update so resources\app.asar is not locked during Equicord/OpenASAR writes.
-    $names = @('Discord', 'Discord.bin', 'Update', 'app')
+    # Update.exe is a common process name, so path-scope every candidate to this
+    # Discord install before terminating it. Never use image-name taskkill here.
+    $names = @('Discord', 'Discord.bin', 'Update')
+    $rootPrefix = $null
+    try { $rootPrefix = [IO.Path]::GetFullPath($DiscordRoot).TrimEnd('\') + '\' } catch { }
     for ($round = 1; $round -le 4; $round++) {
         $procs = @(Get-Process -Name $names -ErrorAction SilentlyContinue | Where-Object {
             try {
                 $path = $_.Path
-                if (-not $path) { return $true }
-                return ($path -like '*\Discord\*' -or $_.ProcessName -in @('Discord', 'Discord.bin', 'Update'))
-            } catch { return $true }
+                if ($path -and $rootPrefix) {
+                    return [IO.Path]::GetFullPath($path).StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)
+                }
+            } catch { }
+            # Discord/Discord.bin are product-specific; do not fall back for the
+            # generic Update name when its executable path cannot be confirmed.
+            return $_.ProcessName -in @('Discord', 'Discord.bin')
         })
         if ($procs.Count -eq 0) { break }
         foreach ($p in $procs) {
             try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { }
             try { & taskkill.exe /F /T /PID $p.Id 2>$null | Out-Null } catch { }
         }
-        Start-Sleep -Milliseconds (300 * $round)
+        Start-Sleep -Milliseconds (175 * $round)
     }
-    try { & taskkill.exe /F /IM Discord.exe /T 2>$null | Out-Null } catch { }
-    try { & taskkill.exe /F /IM Update.exe /T 2>$null | Out-Null } catch { }
-    Start-Sleep -Milliseconds 500
 }
 
 function Write-DiscordResourceBytes {
@@ -69,8 +83,10 @@ function Write-DiscordResourceBytes {
                 attrib -R -S -H "$Path" 2>$null
                 try { & takeown.exe /F "$Path" /A 2>$null | Out-Null } catch { }
                 try { & icacls.exe "$Path" /grant "*S-1-5-32-544:F" /C 2>$null | Out-Null } catch { }
-                try { & icacls.exe "$Path" /grant "${env:USERNAME}:F" /C 2>$null | Out-Null } catch { }
-                try { & icacls.exe "$Path" /grant "*S-1-1-0:F" /C 2>$null | Out-Null } catch { }
+                try {
+                    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+                    if ($sid) { & icacls.exe "$Path" /grant "*$sid`:F" /C 2>$null | Out-Null }
+                } catch { }
 
                 $bak = "$Path.lockbak"
                 try {
@@ -137,7 +153,15 @@ function Confirm-WindowsDiscordTarget {
 }
 
 function Test-ValidDiscordSetup([string]$Path) {
-    return (Test-Path $Path) -and (Get-Item $Path).Length -gt 50000000
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    if ((Get-Item -LiteralPath $Path).Length -le 50000000) { return $false }
+    try {
+        $signature = Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
+        return $signature.Status -eq [System.Management.Automation.SignatureStatus]::Valid -and
+            $signature.SignerCertificate.Subject -match '(?i)\bDiscord\b'
+    } catch {
+        return $false
+    }
 }
 
 function Test-ValidEquicordAsar([string]$Path) {
@@ -163,12 +187,11 @@ function Install-DiscordViaWinget {
     if (-not (Test-WingetAvailable)) { return $false }
     Write-Step 'Installing Discord via winget (no bulky local installer)...'
     Write-HubProgress 22 'Installing Discord (winget)...'
+    $prev = $ErrorActionPreference
     try {
-        $prev = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         & winget install --id Discord.Discord -e --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-Null
         $code = $LASTEXITCODE
-        $ErrorActionPreference = $prev
         # 0 = installed, -1978335189 / other codes can mean already installed
         if (Test-DiscordReady) {
             Write-Ok 'Discord ready via winget'
@@ -180,6 +203,8 @@ function Install-DiscordViaWinget {
         }
     } catch {
         Write-Warn "winget Discord install failed: $($_.Exception.Message)"
+    } finally {
+        $ErrorActionPreference = $prev
     }
     return $false
 }
@@ -208,9 +233,17 @@ function Get-DiscordSetup {
 
     Write-Step 'Downloading latest Discord stable x64...'
     $ua = @{ 'User-Agent' = 'OptiHub/1.0 (Windows; PowerShell)' }
-    Invoke-WebRequest -Uri $DiscordSetupUrl -OutFile $cached -UseBasicParsing -Headers $ua
-    if (-not (Test-ValidDiscordSetup $cached)) {
-        throw 'Discord x64 installer download failed'
+    $partial = "$cached.partial"
+    Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+    try {
+        Invoke-WebRequest -Uri $DiscordSetupUrl -OutFile $partial -UseBasicParsing -Headers $ua -TimeoutSec 180
+        if (-not (Test-ValidDiscordSetup $partial)) {
+            throw 'downloaded installer is incomplete or its Discord signature is invalid'
+        }
+        Move-Item -LiteralPath $partial -Destination $cached -Force
+    } catch {
+        Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+        throw "Discord x64 installer download failed: $($_.Exception.Message)"
     }
     Write-Ok "Downloaded x64 installer ($([math]::Round((Get-Item $cached).Length / 1MB, 1)) MB temp cache)"
     Write-LogLine 'DIAG' "DiscordSetup downloaded path=$cached size=$((Get-Item $cached).Length)"
@@ -382,7 +415,11 @@ function Update-DiscordSilent {
 
     Write-Step 'Updating Discord to latest stable x64 (silent, keeps your install)...'
     Write-LogLine 'DIAG' "Update DiscordSetup FilePath=$setup"
-    $proc = Start-Process -FilePath $setup -ArgumentList '-s' -PassThru -Wait
+    $proc = Start-Process -FilePath $setup -ArgumentList '-s' -PassThru -WindowStyle Hidden
+    if (-not $proc.WaitForExit(300000)) {
+        try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch { }
+        throw 'Discord update installer timed out after 5 minutes'
+    }
     if ($null -ne $proc.ExitCode -and $proc.ExitCode -ne 0) {
         Write-Warn "DiscordSetup exited with code $($proc.ExitCode)"
     }
@@ -455,7 +492,11 @@ function Invoke-DiscordSetupSilent {
     $setup = Resolve-DiscordSetupPath
     Write-Step 'Installing Discord (stock, silent)...'
     Write-LogLine 'DIAG' "Start-Process DiscordSetup FilePath=$setup Args=-s"
-    $proc = Start-Process -FilePath $setup -ArgumentList '-s' -PassThru -Wait
+    $proc = Start-Process -FilePath $setup -ArgumentList '-s' -PassThru -WindowStyle Hidden
+    if (-not $proc.WaitForExit(300000)) {
+        try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch { }
+        throw 'Discord installer timed out after 5 minutes'
+    }
     if ($null -ne $proc.ExitCode -and $proc.ExitCode -ne 0) {
         Write-Warn "DiscordSetup exited with code $($proc.ExitCode)"
     }
@@ -484,13 +525,13 @@ function Test-DiscordInstallerHealthy {
             Select-Object -Last 1
         if ($last) { return $true }
     }
-    return (Test-DiscordModulesReady (Get-ActiveApp).FullName)
+    $app = Get-ActiveApp
+    return $null -ne $app -and (Test-DiscordModulesReady $app.FullName)
 }
 
 function Repair-DiscordInstallerState {
     Stop-Discord
-    Start-Sleep -Seconds 3
-    Get-Process Discord, Discord.bin, Update -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Milliseconds 500
     Backup-DiscordInstallerDb
     $log = Join-Path $DiscordRoot 'SquirrelSetup.log'
     if (Test-Path $log) { Remove-Item $log -Force -ErrorAction SilentlyContinue }
@@ -654,7 +695,7 @@ function Install-DiscordModulesFromManifest([string]$AppDir) {
     Write-Step 'Downloading Discord modules from CDN (fast)...'
 
     $helperPwsh = Get-DiscOptPowerShellExe
-    if (-not (Test-Path $helperPwsh)) {
+    if (-not $helperPwsh -or -not (Test-Path -LiteralPath $helperPwsh)) {
         Write-Warn 'PowerShell 7 (pwsh) required for fast module download - using stock first-run'
         return $false
     }

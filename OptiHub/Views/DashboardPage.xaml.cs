@@ -7,6 +7,8 @@ namespace OptiHub.Views;
 
 public sealed partial class DashboardPage : Page
 {
+    private CancellationTokenSource? _refreshCts;
+
     public DashboardViewModel ViewModel { get; }
 
     public DashboardPage()
@@ -27,7 +29,18 @@ public sealed partial class DashboardPage : Page
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        await ViewModel.RefreshStatesAsync();
+        _refreshCts?.Cancel();
+        _refreshCts?.Dispose();
+        _refreshCts = new CancellationTokenSource();
+        await ViewModel.RefreshStatesAsync(_refreshCts.Token);
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        _refreshCts?.Cancel();
+        _refreshCts?.Dispose();
+        _refreshCts = null;
+        base.OnNavigatedFrom(e);
     }
 
     private void CardButton_Click(object sender, RoutedEventArgs e)

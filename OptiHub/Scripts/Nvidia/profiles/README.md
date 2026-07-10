@@ -1,7 +1,16 @@
 # OptiHub NVIDIA profiles (v1.1.0)
 
-Performance-focused **Base Profile** packs for GeForce 10/20/30/40/50 series.
+Maximum-performance **Base Profile** packs for GeForce 10/20/30/40/50 series.
 Applied with nvidiaProfileInspector `-silentImport` (no GUI).
+
+These packs intentionally favor FPS and latency over idle power, background
+features, and driver-default image-quality choices. OptiHub validates the
+performance-critical settings and records the exact profile SHA-256 before
+marking an import complete.
+
+Apply state is fail-closed: OptiHub invalidates its previous success marker
+before driver/profile work begins and ties a successful import to the active
+driver version. An interrupted or failed import must be applied again.
 
 | File | Use when |
 |------|----------|
@@ -40,13 +49,23 @@ Applied with nvidiaProfileInspector `-silentImport` (no GUI).
 | Series | Extras |
 |--------|--------|
 | **10** | No rBAR; RT forced off |
+| **GTX 16** | Uses the 10-series pack so unsupported RT/DLSS/rBAR flags are not imported |
 | **20** | rBAR on; DLSS DLL override + preset |
 | **30** | rBAR full; DLSS + DLSS-RR overrides |
 | **40 / 50** | rBAR + DLSS + Frame Gen + RR overrides |
 
+Laptop/Notebook GPU names still select the matching profile series, but the
+automatic clean-driver stage is intentionally blocked until OptiHub has an
+official notebook-specific lookup. It never substitutes desktop driver
+metadata or packages. Install the official NVIDIA notebook driver manually.
+
 ## Display (not in .nip)
 
-Desktop **color / scaling** are applied via **NVIDIA Control Panel** (not the NVIDIA App):
-GPU scaling + No scaling + Override, color source NVIDIA.
+Desktop **color / scaling** are applied through **NVAPI** (not mouse/keyboard automation):
+current resolution at its highest supported refresh rate, supported color depth,
+Full RGB, GPU scaling + No scaling + Override.
+Live status requires the bundled NVAPI helper and complete enumeration/mapping
+of every active NVIDIA-connected display; unavailable or partial checks fail
+closed. Overlay preferences are verified separately from service/task debloat.
 
 Profile pack version: see `PROFILE_VERSION`.

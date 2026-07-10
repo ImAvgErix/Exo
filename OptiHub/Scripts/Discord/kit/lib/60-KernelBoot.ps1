@@ -2,6 +2,26 @@
 # Dot-sourced by Disc-Optimizer.ps1 (load order = filename sort).
 # Universal multi-PC kit - do not assume Equicord/Discord already configured.
 
+function Test-DiscOptKernelCurrent([string]$AppDir) {
+    $pairs = @(
+        @{ Source = Join-Path $KitDir 'ffmpeg.dll'; Destination = Join-Path $AppDir 'ffmpeg.dll' },
+        @{ Source = Join-Path $KitDir 'version.dll'; Destination = Join-Path $AppDir 'version.dll' },
+        @{ Source = Join-Path $KitDir 'config.ini'; Destination = Join-Path $AppDir 'config.ini' }
+    )
+    if (-not (Test-Path -LiteralPath (Join-Path $AppDir 'ffmpeg_real.dll'))) { return $false }
+    if ((Get-Item -LiteralPath (Join-Path $AppDir 'ffmpeg_real.dll')).Length -lt 500000) { return $false }
+    foreach ($pair in $pairs) {
+        if (-not (Test-Path -LiteralPath $pair.Source) -or -not (Test-Path -LiteralPath $pair.Destination)) {
+            return $false
+        }
+        try {
+            if ((Get-FileHash -LiteralPath $pair.Source -Algorithm SHA256).Hash -ine
+                (Get-FileHash -LiteralPath $pair.Destination -Algorithm SHA256).Hash) { return $false }
+        } catch { return $false }
+    }
+    return $true
+}
+
 function Copy-KernelFileWithRetry {
     param(
         [Parameter(Mandatory)][string]$Source,
@@ -31,7 +51,11 @@ function Copy-KernelFileWithRetry {
 }
 
 function Install-DiscOptKernel([string]$AppDir) {
-    Write-Step 'Installing DiscOpt kernel (memory trim, priority, raw input)...'
+    if (Test-DiscOptKernelCurrent $AppDir) {
+        Write-Ok 'DiscOpt kernel already current'
+        return
+    }
+    Write-Step 'Installing DiscOpt kernel (aggressive 5s trim, Above Normal priority, raw input)...'
     Write-HubProgress 78 'Installing DiscOpt kernel...'
 
     $proxy = Join-Path $KitDir 'ffmpeg.dll'
@@ -83,7 +107,7 @@ function Install-DiscOptKernel([string]$AppDir) {
     if ($verLen -lt 50000) { throw "Kernel install failed: version.dll too small ($verLen bytes)" }
 
     Write-Ok "DiscOpt kernel active (proxy $([math]::Round($proxyLen/1KB,0)) KB + version.dll + config.ini)"
-    Write-Ok 'Features: idle RAM trim, process priority, raw input'
+    Write-Ok 'Features: aggressive 5s RAM trim, Above Normal process priority, raw input'
 }
 
 function Disable-DiscOptKernelOnDisk([string]$AppDir) {
@@ -179,14 +203,23 @@ function Restore-StartMenu {
     if (-not $app) { throw 'No Discord app folder - cannot refresh shortcuts' }
 
     $vbs = Join-Path $KitDir 'Discord.vbs'
-    $psExe = (Get-DiscOptPowerShellExe) -replace '"', '""'
     $vbsContent = @"
 Set fso = CreateObject("Scripting.FileSystemObject")
+Set shell = CreateObject("WScript.Shell")
 kitDir = fso.GetParentFolderName(WScript.ScriptFullName)
 rootDir = fso.GetParentFolderName(kitDir)
 optimizer = rootDir & "\Disc-Optimizer.ps1"
-ps = "$psExe"
-CreateObject("WScript.Shell").Run """" & ps & """ -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File """ & optimizer & """ -Launch", 0, False
+portable = kitDir & "\tools\pwsh\pwsh.exe"
+stable = shell.ExpandEnvironmentStrings("%ProgramFiles%\PowerShell\7\pwsh.exe")
+fallback = shell.ExpandEnvironmentStrings("%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe")
+If fso.FileExists(portable) Then
+  ps = portable
+ElseIf fso.FileExists(stable) Then
+  ps = stable
+Else
+  ps = fallback
+End If
+shell.Run """" & ps & """ -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File """ & optimizer & """ -Launch", 0, False
 "@
     Set-Content -Path $vbs -Value $vbsContent -Encoding ASCII
 
@@ -222,11 +255,15 @@ CreateObject("WScript.Shell").Run """" & ps & """ -NoProfile -WindowStyle Hidden
             $t = [string]$sc.TargetPath
             $a = [string]$sc.Arguments
             if ($t -match '(?i)wscript\.exe$' -and $a -match '(?i)Discord\.vbs') { return $true }
-            if ($t -match '(?i)[\\/]Discord\.exe$') { return $true }
-            if ($t -match '(?i)[\\/]Update\.exe$' -and $a -match '(?i)Discord') { return $true }
             if ($discordExe -and $t -and ([IO.Path]::GetFullPath($t) -eq [IO.Path]::GetFullPath($discordExe))) { return $true }
+            if ($updateExe -and $t -and
+                ([IO.Path]::GetFullPath($t) -eq [IO.Path]::GetFullPath($updateExe)) -and
+                $a -match '(?i)Discord') { return $true }
             $base = [IO.Path]::GetFileNameWithoutExtension($LnkPath)
-            if ($base -match '^(?i)discord(\s+(canary|ptb|development))?$') { return $true }
+            if ($base -match '^(?i)discord$' -and $t -and
+                [IO.Path]::GetFullPath($t).StartsWith(
+                    [IO.Path]::GetFullPath($DiscordRoot).TrimEnd('\') + '\',
+                    [StringComparison]::OrdinalIgnoreCase)) { return $true }
             return $false
         } catch { return $false }
     }
@@ -268,10 +305,7 @@ CreateObject("WScript.Shell").Run """" & ps & """ -NoProfile -WindowStyle Hidden
 
     # Canonical Start Menu only (never create Desktop shortcuts)
     $ensure = @(
-        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk'),
-        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord.lnk'),
-        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord Inc\Discord.lnk'),
-        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord.lnk')
+        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk')
     ) | Where-Object { $_ }
 
     foreach ($path in $ensure) {
@@ -282,6 +316,23 @@ CreateObject("WScript.Shell").Run """" & ps & """ -NoProfile -WindowStyle Hidden
         } catch {
             Write-Warn "Ensure shortcut failed ($path): $($_.Exception.Message)"
         }
+    }
+
+    # Older packs created duplicate root/all-users Start menu entries. Remove
+    # only links that still point at OptiHub's VBS; never delete a stock link.
+    foreach ($legacy in @(
+        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord Inc\Discord.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord.lnk')
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }) {
+        try {
+            $legacyShortcut = $wsh.CreateShortcut($legacy)
+            if ([string]$legacyShortcut.TargetPath -match '(?i)wscript\.exe$' -and
+                [string]$legacyShortcut.Arguments -match '(?i)Discord\.vbs') {
+                Remove-Item -LiteralPath $legacy -Force -ErrorAction SilentlyContinue
+                Write-Ok "Removed duplicate Start menu shortcut: $legacy"
+            }
+        } catch { }
     }
 
     # Remove OptiHub-branded desktop icons if we created them earlier

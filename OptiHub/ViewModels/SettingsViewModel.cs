@@ -9,6 +9,7 @@ public partial class SettingsViewModel : ObservableObject
 {
     private readonly AppServices _services;
     private bool _suppressThemeSync;
+    private bool _suppressSettingsSync;
 
     public SettingsViewModel(AppServices services)
     {
@@ -26,11 +27,7 @@ public partial class SettingsViewModel : ObservableObject
 
     public string AboutFooter { get; private set; } = "OptiHub";
 
-    public event EventHandler? RequestGoBack;
     public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
-
-    [RelayCommand]
-    private void GoBack() => RequestGoBack?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand]
     private void OpenLogsFolder()
@@ -41,7 +38,7 @@ public partial class SettingsViewModel : ObservableObject
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "OptiHub", "logs");
             Directory.CreateDirectory(logs);
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = logs,
                 UseShellExecute = true
@@ -92,8 +89,11 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
-    partial void OnAutoUpdateScriptsChanged(bool value) =>
-        _services.Settings.Update(s => s.AutoUpdateScripts = value);
+    partial void OnAutoUpdateScriptsChanged(bool value)
+    {
+        if (!_suppressSettingsSync)
+            _services.Settings.Update(s => s.AutoUpdateScripts = value);
+    }
 
     [RelayCommand]
     private async Task CheckAppUpdatesAsync()
@@ -126,7 +126,7 @@ public partial class SettingsViewModel : ObservableObject
                 }
 
                 UpdateStatus = result.Message + " Installing...";
-                var install = await _services.Updater.InstallLatestAppAsync(status: progress);
+                var install = await _services.Updater.InstallAppUpdateAsync(result, status: progress);
                 UpdateStatus = install.Message;
                 AppVersion = GetAppVersionText();
                 if (install.ShouldExit)
@@ -154,7 +154,7 @@ public partial class SettingsViewModel : ObservableObject
     {
         if (IsUpdating) return;
         IsUpdating = true;
-        UpdateStatus = "Checking script updates...";
+        UpdateStatus = "Checking Discord kit updates...";
         try
         {
             var progress = new Progress<string>(m => UpdateStatus = m);
@@ -175,15 +175,24 @@ public partial class SettingsViewModel : ObservableObject
     private void LoadFromSettings()
     {
         var s = _services.Settings.Current;
-        var dark = !s.Theme.Equals(AppSettings.LightTheme, StringComparison.OrdinalIgnoreCase);
+        var dark = !string.Equals(s.Theme, AppSettings.LightTheme, StringComparison.OrdinalIgnoreCase);
+        _suppressSettingsSync = true;
         _suppressThemeSync = true;
-        IsDarkMode = dark;
-        IsLightMode = !dark;
-        _suppressThemeSync = false;
-        AutoUpdateScripts = s.AutoUpdateScripts;
+        try
+        {
+            IsDarkMode = dark;
+            IsLightMode = !dark;
+            AutoUpdateScripts = s.AutoUpdateScripts;
+        }
+        finally
+        {
+            _suppressThemeSync = false;
+            _suppressSettingsSync = false;
+        }
+
         KitVersion = _services.Scripts.GetWorkingVersion();
         AppVersion = GetAppVersionText();
-        AboutFooter = "OptiHub " + AppVersion + " · https://github.com/BarcusEric/OptiHub";
+        AboutFooter = "OptiHub " + AppVersion;
     }
 
     private static string GetAppVersionText()

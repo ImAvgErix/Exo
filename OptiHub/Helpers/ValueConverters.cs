@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -48,16 +49,40 @@ public sealed class BoolToOpacityConverter : IValueConverter
 /// <summary>Resolves bundled asset paths (e.g. Assets/Logos/discord.png) to BitmapImage.</summary>
 public sealed class AssetPathToImageSourceConverter : IValueConverter
 {
+    private static readonly ConcurrentDictionary<string, BitmapImage> ImageCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public object? Convert(object value, Type targetType, object parameter, string language)
     {
         if (value is not string relative || string.IsNullOrWhiteSpace(relative))
             return null;
 
-        var full = Path.Combine(PathHelper.AppDirectory, relative.Replace('/', Path.DirectorySeparatorChar));
-        if (!File.Exists(full))
-            return null;
+        return Resolve(relative);
+    }
 
-        return new BitmapImage(new Uri(full));
+    public static BitmapImage? Resolve(string relative)
+    {
+        try
+        {
+            var appDirectory = Path.GetFullPath(PathHelper.AppDirectory);
+            var full = Path.GetFullPath(Path.Combine(
+                appDirectory,
+                relative.Replace('/', Path.DirectorySeparatorChar)));
+            var appPrefix = appDirectory + Path.DirectorySeparatorChar;
+            if (!full.StartsWith(appPrefix, StringComparison.OrdinalIgnoreCase) || !File.Exists(full))
+                return null;
+
+            return ImageCache.GetOrAdd(full, static path =>
+            {
+                var image = new BitmapImage { DecodePixelWidth = 64 };
+                image.UriSource = new Uri(path, UriKind.Absolute);
+                return image;
+            });
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)

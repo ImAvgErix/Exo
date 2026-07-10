@@ -14,12 +14,6 @@ public sealed partial class SettingsPage : Page
         InitializeComponent();
         DataContext = ViewModel;
         ViewModel.ConfirmAsync = ConfirmAsync;
-
-        ViewModel.RequestGoBack += (_, _) =>
-        {
-            if (App.MainAppWindow is MainWindow mw)
-                mw.NavigateToDashboard();
-        };
     }
 
     private async Task<bool> ConfirmAsync(string title, string message)
@@ -37,9 +31,4 @@ public sealed partial class SettingsPage : Page
         return result == ContentDialogResult.Primary;
     }
 
-    private void CheckScriptUpdates_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.CheckScriptUpdatesCommand.Execute(null);
-
-    private void CheckAppUpdates_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.CheckAppUpdatesCommand.Execute(null);
 }

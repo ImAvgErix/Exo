@@ -377,45 +377,88 @@ internal static class Program
         if (!staged || !Directory.Exists(incoming) || !File.Exists(Path.Combine(incoming, ExeName)))
             throw new InvalidOperationException("Could not stage new OptiHub files.");
 
-        // Move live app out of the way
+        string incomingExe = Path.Combine(incoming, ExeName);
+        long expectedExeLength = new FileInfo(incomingExe).Length;
+        int expectedFileCount = Directory.GetFiles(incoming, "*", SearchOption.AllDirectories).Length;
+        if (expectedExeLength < 100000 || expectedFileCount < 20)
+            throw new InvalidOperationException(
+                "Staged OptiHub payload looks incomplete (" + expectedFileCount + " files)."
+            );
+
+        // Move the live app out of the way. Keep the backup until the new
+        // payload is verified so a failed promotion cannot leave users with
+        // no runnable installation.
+        string backup = null;
+        bool liveMoved = false;
         if (Directory.Exists(dest))
         {
-            string backup = dest + ".old-" + DateTime.Now.ToString("yyyyMMddHHmmss");
+            backup = dest + ".old-" + DateTime.Now.ToString("yyyyMMddHHmmss");
             try
             {
                 if (Directory.Exists(backup))
                 {
-                    try { Directory.Delete(backup, true); } catch { }
+                    Directory.Delete(backup, true);
                 }
                 Directory.Move(dest, backup);
+                liveMoved = true;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "Could not move the current OptiHub installation out of the way. " +
+                    "Close OptiHub and any antivirus scan using the app folder, then retry.",
+                    ex);
+            }
+        }
+
+        // Promote incoming -> app. If both the atomic move and copy fallback
+        // fail, restore the verified previous installation.
+        try
+        {
+            try
+            {
+                Directory.Move(incoming, dest);
             }
             catch
             {
-                // Fallback: wipe dest in place
-                DeleteTreeBestEffort(dest);
+                CopyTree(incoming, dest);
+                try { Directory.Delete(incoming, true); } catch { }
+            }
+
+            string promotedExe = Path.Combine(dest, ExeName);
+            if (!File.Exists(promotedExe))
+                throw new InvalidOperationException("The promoted app folder is missing OptiHub.exe.");
+            int promotedFileCount = Directory.GetFiles(dest, "*", SearchOption.AllDirectories).Length;
+            long promotedExeLength = new FileInfo(promotedExe).Length;
+            if (promotedFileCount != expectedFileCount || promotedExeLength != expectedExeLength)
+                throw new InvalidOperationException(
+                    "Promoted payload verification failed (expected " + expectedFileCount +
+                    " files, found " + promotedFileCount + ").");
+        }
+        catch (Exception installEx)
+        {
+            string rollbackStatus = "";
+            DeleteTreeBestEffort(dest);
+            if (liveMoved && !string.IsNullOrEmpty(backup) && Directory.Exists(backup))
+            {
                 try
                 {
                     if (Directory.Exists(dest))
                         Directory.Delete(dest, true);
+                    Directory.Move(backup, dest);
+                    rollbackStatus = " The previous version was restored.";
                 }
-                catch { }
+                catch (Exception rollbackEx)
+                {
+                    rollbackStatus = " Automatic rollback also failed (" + rollbackEx.Message +
+                        "). The previous version remains at: " + backup;
+                }
             }
-        }
 
-        // Promote incoming -> app
-        try
-        {
-            Directory.Move(incoming, dest);
+            throw new InvalidOperationException(
+                "Could not activate the new OptiHub installation." + rollbackStatus,
+                installEx);
         }
-        catch
-        {
-            // Last resort copy
-            CopyTree(incoming, dest);
-            try { Directory.Delete(incoming, true); } catch { }
-        }
-
-        if (!File.Exists(Path.Combine(dest, ExeName)))
-            throw new InvalidOperationException("ReplaceDirectory finished but OptiHub.exe is missing.");
     }
 
     private static void DeleteTreeBestEffort(string path)

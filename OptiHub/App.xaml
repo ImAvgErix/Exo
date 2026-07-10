@@ -38,6 +38,8 @@
                     <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#D6D3D1" />
                     <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#A8A29E" />
                     <SolidColorBrush x:Key="OptiSuccessBrush" Color="#4ADE80" />
+                    <SolidColorBrush x:Key="OptiWarningBrush" Color="#FBBF24" />
+                    <SolidColorBrush x:Key="OptiWarningSoftBrush" Color="#22F59E0B" />
                     <SolidColorBrush x:Key="OptiErrorBrush" Color="#F87171" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
@@ -68,6 +70,8 @@
                     <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#292524" />
                     <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#57534E" />
                     <SolidColorBrush x:Key="OptiSuccessBrush" Color="#15803D" />
+                    <SolidColorBrush x:Key="OptiWarningBrush" Color="#B45309" />
+                    <SolidColorBrush x:Key="OptiWarningSoftBrush" Color="#18B45309" />
                     <SolidColorBrush x:Key="OptiErrorBrush" Color="#B91C1C" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Default">
@@ -87,6 +91,8 @@
                     <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#D6D3D1" />
                     <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#A8A29E" />
                     <SolidColorBrush x:Key="OptiSuccessBrush" Color="#4ADE80" />
+                    <SolidColorBrush x:Key="OptiWarningBrush" Color="#FBBF24" />
+                    <SolidColorBrush x:Key="OptiWarningSoftBrush" Color="#22F59E0B" />
                     <SolidColorBrush x:Key="OptiErrorBrush" Color="#F87171" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>

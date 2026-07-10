@@ -30,27 +30,35 @@ function Write-RepOk([string]$Msg)   { Write-Host "[+] $Msg" -ForegroundColor Gr
 function Write-RepWarn([string]$Msg) { Write-Host "[!] $Msg" -ForegroundColor Yellow }
 function Write-RepErr([string]$Msg)  { Write-Host "[-] $Msg" -ForegroundColor Red }
 
-function Stop-RepairDiscord {
-    $names = @('Discord', 'Discord.bin', 'Update', 'app')
+function Stop-RepairDiscord([string]$DiscordRoot) {
+    $names = @('Discord', 'Discord.bin', 'Update')
+    $rootPrefix = $null
+    try { $rootPrefix = [IO.Path]::GetFullPath($DiscordRoot).TrimEnd('\') + '\' } catch { }
     for ($round = 1; $round -le 4; $round++) {
-        $procs = @(Get-Process -Name $names -ErrorAction SilentlyContinue)
+        $procs = @(Get-Process -Name $names -ErrorAction SilentlyContinue | Where-Object {
+            try {
+                $path = $_.Path
+                if ($path -and $rootPrefix) {
+                    return [IO.Path]::GetFullPath($path).StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)
+                }
+            } catch { }
+            return $_.ProcessName -in @('Discord', 'Discord.bin')
+        })
         if ($procs.Count -eq 0) { break }
         foreach ($p in $procs) {
             try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { }
             try { & taskkill.exe /F /T /PID $p.Id 2>$null | Out-Null } catch { }
         }
-        Start-Sleep -Milliseconds (250 * $round)
+        Start-Sleep -Milliseconds (175 * $round)
     }
-    try { & taskkill.exe /F /IM Discord.exe /T 2>$null | Out-Null } catch { }
-    try { & taskkill.exe /F /IM Update.exe /T 2>$null | Out-Null } catch { }
-    Start-Sleep -Milliseconds 600
 }
 
 function Get-RepairActiveApp([string]$DiscordRoot) {
     Get-ChildItem -LiteralPath $DiscordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
         Sort-Object {
-            try { [version]($_.Name -replace '^app-', '') }
-            catch { [version]'0.0.0.0' }
+            $parsed = [version]'0.0.0.0'
+            [void][version]::TryParse(($_.Name -replace '^app-', ''), [ref]$parsed)
+            $parsed
         } -Descending |
         Select-Object -First 1
 }
@@ -60,15 +68,13 @@ function Remove-RepairProgramFiles([string]$DiscordRoot) {
         Write-RepOk 'No old program files to remove'
         return
     }
+    $expectedRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Discord'
+    if ([IO.Path]::GetFullPath($DiscordRoot).TrimEnd('\') -ine [IO.Path]::GetFullPath($expectedRoot).TrimEnd('\')) {
+        throw "Refusing to remove unexpected Discord path: $DiscordRoot"
+    }
     Write-RepStep 'Removing Discord program files...'
     for ($attempt = 1; $attempt -le 5; $attempt++) {
-        Stop-RepairDiscord
-        try {
-            Get-ChildItem -LiteralPath $DiscordRoot -Recurse -Force -ErrorAction SilentlyContinue |
-                ForEach-Object {
-                    try { attrib -R -S -H $_.FullName 2>$null } catch { }
-                }
-        } catch { }
+        Stop-RepairDiscord $DiscordRoot
         Remove-Item -LiteralPath $DiscordRoot -Recurse -Force -ErrorAction SilentlyContinue
         if (-not (Test-Path -LiteralPath $DiscordRoot)) { break }
         Start-Sleep -Seconds 2
@@ -112,26 +118,39 @@ function Install-RepairFreshDiscord([string]$DiscordRoot) {
     $url = 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64'
     $headers = @{ 'User-Agent' = 'OptiHub-Repair/1.0' }
     try {
-        Invoke-WebRequest -Uri $url -OutFile $setup -UseBasicParsing -Headers $headers
-    } catch {
-        throw "Discord installer download failed - check your internet connection ($($_.Exception.Message))"
-    }
-    if (-not (Test-Path -LiteralPath $setup) -or ((Get-Item -LiteralPath $setup).Length -lt 50000000)) {
-        throw 'Discord installer download failed - file missing or too small'
-    }
-    Write-RepStep 'Installing Discord (silent)...'
-    $p = Start-Process -FilePath $setup -ArgumentList '-s' -PassThru -WindowStyle Hidden
-    if ($null -eq $p) { throw 'Failed to start Discord installer' }
-    $p.WaitForExit()
-    $deadline = (Get-Date).AddSeconds(180)
-    while ((Get-Date) -lt $deadline) {
-        $app = Get-RepairActiveApp $DiscordRoot
-        if ($app -and (Test-Path -LiteralPath (Join-Path $app.FullName 'Discord.exe'))) {
-            return $app
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $setup -UseBasicParsing -Headers $headers -TimeoutSec 180
+        } catch {
+            throw "Discord installer download failed - check your internet connection ($($_.Exception.Message))"
         }
-        Start-Sleep -Seconds 3
+        if (-not (Test-Path -LiteralPath $setup) -or ((Get-Item -LiteralPath $setup).Length -lt 50000000)) {
+            throw 'Discord installer download failed - file missing or too small'
+        }
+        $signature = Get-AuthenticodeSignature -LiteralPath $setup -ErrorAction Stop
+        if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid -or
+            $signature.SignerCertificate.Subject -notmatch '(?i)\bDiscord\b') {
+            throw "Discord installer signature is invalid ($($signature.Status))"
+        }
+
+        Write-RepStep 'Installing Discord (silent)...'
+        $p = Start-Process -FilePath $setup -ArgumentList '-s' -PassThru -WindowStyle Hidden
+        if ($null -eq $p) { throw 'Failed to start Discord installer' }
+        if (-not $p.WaitForExit(300000)) {
+            try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { }
+            throw 'Discord installer timed out after 5 minutes'
+        }
+        $deadline = (Get-Date).AddSeconds(180)
+        while ((Get-Date) -lt $deadline) {
+            $app = Get-RepairActiveApp $DiscordRoot
+            if ($app -and (Test-Path -LiteralPath (Join-Path $app.FullName 'Discord.exe'))) {
+                return $app
+            }
+            Start-Sleep -Seconds 3
+        }
+        throw 'Discord install did not complete - run the installer from discord.com manually'
+    } finally {
+        Remove-Item -LiteralPath $setup -Force -ErrorAction SilentlyContinue
     }
-    throw 'Discord install did not complete - run the installer from discord.com manually'
 }
 
 function Start-RepairDiscord([string]$DiscordRoot, [string]$AppDir) {
@@ -148,6 +167,167 @@ function Start-RepairDiscord([string]$DiscordRoot, [string]$AppDir) {
     $updateExe = Join-Path $DiscordRoot 'Update.exe'
     if (Test-Path -LiteralPath $updateExe) {
         Start-Process -FilePath $updateExe -ArgumentList '--processStart', 'Discord.exe' -WorkingDirectory $DiscordRoot | Out-Null
+    }
+}
+
+function Restore-RepairDiscordShortcuts([string]$AppDir) {
+    $exe = Join-Path $AppDir 'Discord.exe'
+    if (-not (Test-Path -LiteralPath $exe)) { return }
+    $roots = @(
+        [Environment]::GetFolderPath('Programs'),
+        [Environment]::GetFolderPath('CommonPrograms'),
+        [Environment]::GetFolderPath('Desktop'),
+        [Environment]::GetFolderPath('CommonDesktopDirectory'),
+        (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch')
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique
+
+    $wsh = New-Object -ComObject WScript.Shell
+    $restored = 0
+    foreach ($root in $roots) {
+        foreach ($link in @(Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse -Force -ErrorAction SilentlyContinue)) {
+            try {
+                $shortcut = $wsh.CreateShortcut($link.FullName)
+                if ([string]$shortcut.TargetPath -notmatch '(?i)wscript\.exe$' -or
+                    [string]$shortcut.Arguments -notmatch '(?i)Discord\.vbs') { continue }
+                $shortcut.TargetPath = $exe
+                $shortcut.Arguments = ''
+                $shortcut.WorkingDirectory = $AppDir
+                $shortcut.IconLocation = "$exe,0"
+                $shortcut.Description = 'Discord'
+                $shortcut.Save()
+                $restored++
+            } catch { }
+        }
+    }
+    if ($restored -gt 0) { Write-RepOk "Restored $restored Discord shortcut(s) to the stock client" }
+}
+
+function Get-RepairDiscordStatePath {
+    $dir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    return (Join-Path $dir 'discord-optimizer.json')
+}
+
+function Read-RepairDiscordState {
+    $path = Get-RepairDiscordStatePath
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    try { return (Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json) }
+    catch { return $null }
+}
+
+function Save-RepairDiscordState([hashtable]$State) {
+    $path = Get-RepairDiscordStatePath
+    $temp = "$path.$PID.$([Guid]::NewGuid().ToString('N')).tmp"
+    try {
+        $json = $State | ConvertTo-Json -Depth 12
+        [IO.File]::WriteAllText($temp, $json, [Text.UTF8Encoding]::new($false))
+        Move-Item -LiteralPath $temp -Destination $path -Force
+    } finally {
+        Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Restore-RepairRegistryValue($Entry) {
+    if (-not (Test-Path $Entry.Key)) { New-Item -Path $Entry.Key -Force -ErrorAction Stop | Out-Null }
+    $kind = if ([string]$Entry.Kind -in @('String', 'ExpandString', 'Binary', 'DWord', 'MultiString', 'QWord')) {
+        [string]$Entry.Kind
+    } else { 'String' }
+    $value = switch ($kind) {
+        'Binary' { [byte[]]$Entry.Value; break }
+        'DWord' { [int]$Entry.Value; break }
+        'QWord' { [long]$Entry.Value; break }
+        'MultiString' { [string[]]$Entry.Value; break }
+        default { [string]$Entry.Value }
+    }
+    New-ItemProperty -Path $Entry.Key -Name ([string]$Entry.Name) -Value $value -PropertyType $kind -Force -ErrorAction Stop | Out-Null
+    $item = Get-Item -Path $Entry.Key -ErrorAction Stop
+    if ($item.GetValueNames() -notcontains [string]$Entry.Name) { throw 'registry value missing after restore' }
+    $actual = $item.GetValue([string]$Entry.Name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    if ($item.GetValueKind([string]$Entry.Name).ToString() -ne $kind -or
+        (($actual | ConvertTo-Json -Compress -Depth 4) -ne ($value | ConvertTo-Json -Compress -Depth 4))) {
+        throw 'registry value verification failed'
+    }
+}
+
+function Restore-RepairWindowsTweaks([string]$DiscordRoot, $Recovery, [ref]$Failures) {
+    Write-RepStep 'Restoring captured stable Discord Windows integration...'
+    if (-not $Recovery) {
+        Write-RepWarn 'No Windows recovery snapshot exists (older optimizer state); unrelated integration was left untouched'
+        return
+    }
+
+    foreach ($entry in @($Recovery.RunEntries) + @($Recovery.StartupApproved)) {
+        try {
+            Restore-RepairRegistryValue $entry
+            Write-RepOk "Restored registry value: $($entry.Name)"
+        } catch { $Failures.Value.Add("Registry $($entry.Name): $($_.Exception.Message)") }
+    }
+
+    $notificationRoot = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    foreach ($entry in @($Recovery.Notifications)) {
+        $path = Join-Path $notificationRoot ([string]$entry.Id)
+        try {
+            if ([bool]$entry.EnabledExisted) {
+                Restore-RepairRegistryValue @{
+                    Key = $path; Name = 'Enabled'; Value = $entry.EnabledValue; Kind = $entry.EnabledKind
+                }
+            } elseif (Test-Path $path) {
+                Remove-ItemProperty -Path $path -Name 'Enabled' -Force -ErrorAction SilentlyContinue
+                if ((Get-Item -Path $path -ErrorAction Stop).GetValueNames() -contains 'Enabled') {
+                    throw 'Enabled value is still present'
+                }
+            }
+            Write-RepOk "Restored notification state: $($entry.Id)"
+        } catch { $Failures.Value.Add("Notification $($entry.Id): $($_.Exception.Message)") }
+    }
+
+    foreach ($entry in @($Recovery.ScheduledTasks)) {
+        try {
+            $task = Get-ScheduledTask -TaskName $entry.TaskName -TaskPath $entry.TaskPath -ErrorAction SilentlyContinue
+            if (-not $task) {
+                if ([string]::IsNullOrWhiteSpace([string]$entry.Xml)) { throw 'captured task XML is missing' }
+                Register-ScheduledTask -TaskName $entry.TaskName -TaskPath $entry.TaskPath -Xml ([string]$entry.Xml) -Force -ErrorAction Stop | Out-Null
+            }
+            if ([bool]$entry.Enabled) {
+                Enable-ScheduledTask -TaskName $entry.TaskName -TaskPath $entry.TaskPath -ErrorAction Stop | Out-Null
+            } else {
+                Disable-ScheduledTask -TaskName $entry.TaskName -TaskPath $entry.TaskPath -ErrorAction Stop | Out-Null
+            }
+            $verified = Get-ScheduledTask -TaskName $entry.TaskName -TaskPath $entry.TaskPath -ErrorAction Stop
+            if ([bool]$verified.Settings.Enabled -ne [bool]$entry.Enabled) { throw 'task enabled state verification failed' }
+            Write-RepOk "Restored task state: $($entry.TaskPath)$($entry.TaskName)"
+        } catch { $Failures.Value.Add("Task $($entry.TaskPath)$($entry.TaskName): $($_.Exception.Message)") }
+    }
+
+    foreach ($entry in @($Recovery.TrayEntries)) {
+        try {
+            if (-not (Test-Path $entry.Key)) { throw 'captured tray key no longer exists' }
+            if ([bool]$entry.IsPromotedExisted) {
+                Restore-RepairRegistryValue @{
+                    Key = $entry.Key; Name = 'IsPromoted'; Value = $entry.IsPromotedValue; Kind = $entry.IsPromotedKind
+                }
+            } else {
+                Remove-ItemProperty -Path $entry.Key -Name 'IsPromoted' -Force -ErrorAction SilentlyContinue
+                if ((Get-Item -Path $entry.Key -ErrorAction Stop).GetValueNames() -contains 'IsPromoted') {
+                    throw 'IsPromoted value is still present'
+                }
+            }
+            Write-RepOk "Restored tray state: $($entry.ExecutablePath)"
+        } catch { $Failures.Value.Add("Tray $($entry.ExecutablePath): $($_.Exception.Message)") }
+    }
+
+    foreach ($entry in @($Recovery.Compatibility)) {
+        try {
+            if ([bool]$entry.Existed) {
+                Restore-RepairRegistryValue $entry
+            } elseif (Test-Path $entry.Key) {
+                Remove-ItemProperty -Path $entry.Key -Name $entry.Name -Force -ErrorAction SilentlyContinue
+                if ((Get-Item -Path $entry.Key -ErrorAction Stop).GetValueNames() -contains [string]$entry.Name) {
+                    throw 'compatibility value is still present'
+                }
+            }
+            Write-RepOk "Restored compatibility state: $($entry.Name)"
+        } catch { $Failures.Value.Add("Compatibility $($entry.Name): $($_.Exception.Message)") }
     }
 }
 
@@ -176,6 +356,21 @@ try {
 
     $discordRoot = Join-Path $localAppData 'Discord'
     $appDataDiscord = Join-Path $appData 'discord'
+    $optimizerState = Read-RepairDiscordState
+    $recovery = if ($optimizerState -and ($optimizerState.PSObject.Properties.Name -contains 'recovery')) {
+        $optimizerState.recovery
+    } else { $null }
+    $repairFailures = [Collections.Generic.List[string]]::new()
+    if ($optimizerState) {
+        Save-RepairDiscordState @{
+            version          = '1.3.0'
+            applyStatus      = 'repairing'
+            applied          = $false
+            recovery         = $recovery
+            repairFailures   = @()
+            repairStartedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        }
+    }
     $doFull = $FullReset -or
         ([Environment]::GetEnvironmentVariable('OPTIHUB_REPAIR_FULL') -eq '1') -or
         ([Environment]::GetEnvironmentVariable('DISCOPT_REPAIR_FULL') -eq '1')
@@ -187,7 +382,7 @@ try {
 
     Write-HubProgress 5 'Closing Discord...'
     Write-RepStep 'Closing Discord...'
-    Stop-RepairDiscord
+    Stop-RepairDiscord $discordRoot
 
     Write-HubProgress 20 'Removing program files...'
     Remove-RepairProgramFiles $discordRoot
@@ -200,16 +395,57 @@ try {
     $app = Install-RepairFreshDiscord $discordRoot
     Write-RepOk "Discord $($app.Name) installed clean"
 
+    Write-HubProgress 82 'Restoring stock shortcuts...'
+    Restore-RepairDiscordShortcuts $app.FullName
+    Write-HubProgress 83 'Restoring Windows integration...'
+    Restore-RepairWindowsTweaks $discordRoot $recovery ([ref]$repairFailures)
+    if ($repairFailures.Count -gt 0) {
+        Save-RepairDiscordState @{
+            version        = '1.3.0'
+            applyStatus    = 'repair-pending'
+            applied        = $false
+            recovery       = $recovery
+            repairFailures = @($repairFailures)
+            lastRepairUtc  = (Get-Date).ToUniversalTime().ToString('o')
+        }
+        throw "Windows integration restore incomplete ($($repairFailures.Count) item(s)); recovery state was kept for retry"
+    }
+
     Write-HubProgress 85 'Starting Discord...'
     Write-RepStep 'Starting Discord...'
     Start-RepairDiscord $discordRoot $app.FullName
+
+    $statePath = Get-RepairDiscordStatePath
+    if (Test-Path -LiteralPath $statePath) {
+        Remove-Item -LiteralPath $statePath -Force -ErrorAction Stop
+        if (Test-Path -LiteralPath $statePath) { throw 'Could not clear Discord recovery state' }
+        Write-RepOk 'Cleared OptiHub Discord recovery state'
+    }
 
     Write-RepOk 'Repair complete. Wait for Discord to finish loading.'
     Write-HubProgress 100 'Repair complete'
     exit 0
 } catch {
+    $failureRecord = $_
+    try {
+        $failedState = Read-RepairDiscordState
+        if ($failedState) {
+            $failedRecovery = if ($failedState.PSObject.Properties.Name -contains 'recovery') { $failedState.recovery } else { $recovery }
+            $recordedFailures = if ($failedState.PSObject.Properties.Name -contains 'repairFailures') {
+                @($failedState.repairFailures)
+            } else { @() }
+            Save-RepairDiscordState @{
+                version        = '1.3.0'
+                applyStatus    = 'repair-pending'
+                applied        = $false
+                recovery       = $failedRecovery
+                repairFailures = @($recordedFailures) + @([string]$failureRecord.Exception.Message)
+                lastRepairUtc  = (Get-Date).ToUniversalTime().ToString('o')
+            }
+        }
+    } catch { }
     Write-RepErr 'Repair failed.'
-    Write-RepErr $_.Exception.Message
+    Write-RepErr $failureRecord.Exception.Message
     Write-HubProgress 100 'Repair failed'
     Write-Host 'Manual fallback: https://discord.com/download' -ForegroundColor Yellow
     exit 1

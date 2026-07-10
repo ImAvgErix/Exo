@@ -1,6 +1,4 @@
 ﻿using System.Runtime.InteropServices;
-using WinRT.Interop;
-
 namespace OptiHub.Helpers;
 
 internal static class NativeWindowHelper
@@ -10,13 +8,13 @@ internal static class NativeWindowHelper
     private const int WM_NCLBUTTONDBLCLK = 0x00A3;
     private const int WM_SYSCOMMAND = 0x0112;
     private const int SC_MAXIMIZE = 0xF030;
-    private const int SC_RESTORE = 0xF120;
     private const int SC_SIZE = 0xF000;
     private const int GWLP_WNDPROC = -4;
 
+    private static readonly object HookLock = new();
     private static IntPtr _oldWndProc = IntPtr.Zero;
+    private static IntPtr _hookedWindow = IntPtr.Zero;
     private static WndProcDelegate? _newWndProc;
-    private static bool _hooked;
 
     private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
@@ -27,11 +25,45 @@ internal static class NativeWindowHelper
         var style = GetWindowLongPtr(hwnd, GWL_STYLE);
         SetWindowLongPtr(hwnd, GWL_STYLE, new IntPtr(style.ToInt64() & ~WS_MAXIMIZEBOX));
 
-        if (_hooked) return;
-        _hooked = true;
+        lock (HookLock)
+        {
+            if (_hookedWindow == hwnd) return;
+            RestoreWindowProcedureCore();
 
-        _newWndProc = WndProc;
-        _oldWndProc = SetWindowLongPtr(hwnd, GWLP_WNDPROC, Marshal.GetFunctionPointerForDelegate(_newWndProc));
+            _newWndProc = WndProc;
+            var oldWndProc = SetWindowLongPtr(
+                hwnd,
+                GWLP_WNDPROC,
+                Marshal.GetFunctionPointerForDelegate(_newWndProc));
+
+            if (oldWndProc == IntPtr.Zero)
+            {
+                _newWndProc = null;
+                return;
+            }
+
+            _oldWndProc = oldWndProc;
+            _hookedWindow = hwnd;
+        }
+    }
+
+    public static void RestoreWindowProcedure(IntPtr hwnd)
+    {
+        lock (HookLock)
+        {
+            if (_hookedWindow != hwnd) return;
+            RestoreWindowProcedureCore();
+        }
+    }
+
+    private static void RestoreWindowProcedureCore()
+    {
+        if (_hookedWindow != IntPtr.Zero && _oldWndProc != IntPtr.Zero)
+            SetWindowLongPtr(_hookedWindow, GWLP_WNDPROC, _oldWndProc);
+
+        _hookedWindow = IntPtr.Zero;
+        _oldWndProc = IntPtr.Zero;
+        _newWndProc = null;
     }
 
     private static IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
@@ -42,11 +74,13 @@ internal static class NativeWindowHelper
         if (msg == WM_SYSCOMMAND)
         {
             var cmd = wParam.ToInt32() & 0xFFF0;
-            if (cmd is SC_MAXIMIZE or SC_RESTORE or SC_SIZE)
+            if (cmd is SC_MAXIMIZE or SC_SIZE)
                 return IntPtr.Zero;
         }
 
-        return CallWindowProc(_oldWndProc, hWnd, msg, wParam, lParam);
+        return _oldWndProc != IntPtr.Zero
+            ? CallWindowProc(_oldWndProc, hWnd, msg, wParam, lParam)
+            : DefWindowProc(hWnd, msg, wParam, lParam);
     }
 
     private static IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex) =>
@@ -71,4 +105,7 @@ internal static class NativeWindowHelper
 
     [DllImport("user32.dll", EntryPoint = "CallWindowProcW")]
     private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", EntryPoint = "DefWindowProcW")]
+    private static extern IntPtr DefWindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 }

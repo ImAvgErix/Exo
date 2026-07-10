@@ -12,6 +12,12 @@ $features = New-Object System.Collections.Generic.List[hashtable]
 $isApplied = $false
 $statusText = 'Ready to optimize'
 $detail = 'Run the optimizer to cut Discord memory use, speed startup, and quiet background noise.'
+$statePath = Join-Path $local 'OptiHub\discord-optimizer.json'
+$state = $null
+if (Test-Path -LiteralPath $statePath) {
+    try { $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json }
+    catch { $state = $null }
+}
 
 function Add-Feature([string]$Title, [string]$Detail, [bool]$Active) {
     $script:features.Add(@{
@@ -21,13 +27,73 @@ function Add-Feature([string]$Title, [string]$Detail, [bool]$Active) {
     })
 }
 
+function Test-StableDiscordText([string]$Text, [string]$Root) {
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
+    try {
+        $prefix = [IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
+        $expanded = [Environment]::ExpandEnvironmentVariables($Text).Replace('/', '\')
+        return $expanded.IndexOf($prefix, [StringComparison]::OrdinalIgnoreCase) -ge 0
+    } catch { return $false }
+}
+
+function Test-StableDiscordWindowsQuiet([string]$Root) {
+    try {
+        $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+        if (Test-Path $runKey) {
+            $run = Get-Item -Path $runKey -ErrorAction Stop
+            foreach ($name in @($run.GetValueNames())) {
+                if (Test-StableDiscordText ([string]$run.GetValue($name)) $Root) { return $false }
+            }
+        }
+
+        foreach ($task in @(Get-ScheduledTask -ErrorAction Stop)) {
+            $stable = $false
+            foreach ($action in @($task.Actions)) {
+                if ((Test-StableDiscordText ([string]$action.Execute) $Root) -or
+                    (Test-StableDiscordText ([string]$action.Arguments) $Root) -or
+                    (Test-StableDiscordText ([string]$action.WorkingDirectory) $Root)) {
+                    $stable = $true
+                    break
+                }
+            }
+            if ($stable -and [bool]$task.Settings.Enabled) { return $false }
+        }
+
+        $trayRoot = 'HKCU:\Control Panel\NotifyIconSettings'
+        if (Test-Path $trayRoot) {
+            foreach ($key in @(Get-ChildItem -Path $trayRoot -ErrorAction Stop)) {
+                $item = Get-Item -Path $key.PSPath -ErrorAction Stop
+                if (-not (Test-StableDiscordText ([string]$item.GetValue('ExecutablePath')) $Root)) { continue }
+                if ($item.GetValueNames() -notcontains 'IsPromoted' -or [int]$item.GetValue('IsPromoted') -ne 0) {
+                    return $false
+                }
+            }
+        }
+        return $true
+    } catch { return $false }
+}
+
+function Test-EquicordLoader([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    try {
+        $bytes = [IO.File]::ReadAllBytes($Path)
+        if ($bytes.Length -lt 64 -or $bytes.Length -ge 4096) { return $false }
+        $text = [Text.Encoding]::UTF8.GetString($bytes)
+        return $text -match '(?i)equicord\.asar' -and $text -match '(?i)require'
+    } catch { return $false }
+}
+
 if (-not (Test-Path $discordRoot)) {
     $statusText = 'Discord not installed'
     $detail = 'Install Discord stable first, or let the optimizer install it for you.'
     Add-Feature 'Discord install' 'Stable Discord is required before optimizations can apply.' $false
 } else {
-    $app = Get-ChildItem $discordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
-        Sort-Object { [version]($_.Name -replace '^app-', '') } -Descending |
+    $app = Get-ChildItem -LiteralPath $discordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+        Sort-Object {
+            $parsed = [version]'0.0.0.0'
+            [void][version]::TryParse(($_.Name -replace '^app-', ''), [ref]$parsed)
+            $parsed
+        } -Descending |
         Select-Object -First 1
 
     if (-not $app) {
@@ -43,28 +109,75 @@ if (-not (Test-Path $discordRoot)) {
         $ffmpeg = Join-Path $app.FullName 'ffmpeg.dll'
         $configIni = Join-Path $app.FullName 'config.ini'
 
-        $loaderLen = if (Test-Path $appAsar) { (Get-Item $appAsar).Length } else { 0 }
-        $equicordOk = (Test-Path $equicordAsar) -and ($loaderLen -ge 64) -and ($loaderLen -lt 4096)
+        $equicordOk = (Test-Path -LiteralPath $equicordAsar) -and
+            ((Get-Item -LiteralPath $equicordAsar).Length -gt 1000000) -and
+            (Test-EquicordLoader $appAsar)
         Add-Feature 'Client mods & privacy' 'Equicord loads privacy plugins and strips noisy telemetry.' $equicordOk
 
         $openAsarOk = $false
-        if (Test-Path $openAsarTarget) {
-            $sz = (Get-Item $openAsarTarget).Length
+        if (Test-Path -LiteralPath $openAsarTarget) {
+            $sz = (Get-Item -LiteralPath $openAsarTarget).Length
             if ($sz -gt 10000 -and $sz -lt 500000) { $openAsarOk = $true }
         }
         Add-Feature 'Faster Discord startup' 'OpenASAR replaces the heavy launcher path so Discord opens quicker.' $openAsarOk
 
         $kernelOk = $false
-        if ((Test-Path $versionDll) -and (Test-Path $ffmpeg) -and (Test-Path $configIni)) {
-            $ffSize = (Get-Item $ffmpeg).Length
-            if ($ffSize -lt 500000) { $kernelOk = $true }
+        $ffmpegReal = Join-Path $app.FullName 'ffmpeg_real.dll'
+        if ((Test-Path -LiteralPath $versionDll) -and (Test-Path -LiteralPath $ffmpeg) -and
+            (Test-Path -LiteralPath $ffmpegReal) -and (Test-Path -LiteralPath $configIni)) {
+            $ffSize = (Get-Item -LiteralPath $ffmpeg).Length
+            $realSize = (Get-Item -LiteralPath $ffmpegReal).Length
+            $verSize = (Get-Item -LiteralPath $versionDll).Length
+            $configText = Get-Content -LiteralPath $configIni -Raw -ErrorAction SilentlyContinue
+            $hashesOk = $true
+            foreach ($pair in @(
+                @{ Source = Join-Path $PSScriptRoot 'kit\ffmpeg.dll'; Destination = $ffmpeg },
+                @{ Source = Join-Path $PSScriptRoot 'kit\version.dll'; Destination = $versionDll },
+                @{ Source = Join-Path $PSScriptRoot 'kit\config.ini'; Destination = $configIni }
+            )) {
+                try {
+                    if (-not (Test-Path -LiteralPath $pair.Source) -or
+                        (Get-FileHash -LiteralPath $pair.Source -Algorithm SHA256 -ErrorAction Stop).Hash -ine
+                        (Get-FileHash -LiteralPath $pair.Destination -Algorithm SHA256 -ErrorAction Stop).Hash) {
+                        $hashesOk = $false
+                    }
+                } catch { $hashesOk = $false }
+            }
+            if ($ffSize -lt 500000 -and $realSize -gt 500000 -and $verSize -gt 50000 -and
+                $configText -match '(?m)^TrimIntervalMs=5000\s*$' -and
+                $configText -match '(?m)^PriorityClass=3\s*$' -and $hashesOk) { $kernelOk = $true }
         }
-        Add-Feature 'Lower memory use' 'DiscOpt kernel trims idle RAM and keeps Discord on a higher process priority.' $kernelOk
+        Add-Feature 'Aggressive RAM + latency kernel' 'DiscOpt reclaims memory every 5s, uses Above Normal process priority, and enables thread/raw-input tuning.' $kernelOk
+
+        $modPath = Join-Path $app.FullName 'modules'
+        $optionalModules = @('discord_hook-1', 'discord_clips-1')
+        $debloatOk = $false
+        try {
+            $oldApps = @(Get-ChildItem -LiteralPath $discordRoot -Directory -Filter 'app-*' -ErrorAction Stop |
+                Where-Object { $_.FullName -ne $app.FullName })
+            $optionalPresent = @($optionalModules | Where-Object { Test-Path -LiteralPath (Join-Path $modPath $_) })
+            $gameSdk = if (Test-Path -LiteralPath $modPath) {
+                @(Get-ChildItem -LiteralPath $modPath -Recurse -Filter 'discord_game_sdk_*.dll' -ErrorAction Stop)
+            } else { @() }
+            $localePath = Join-Path $app.FullName 'locales'
+            $extraLocales = if (Test-Path -LiteralPath $localePath) {
+                @(Get-ChildItem -LiteralPath $localePath -Filter '*.pak' -ErrorAction Stop |
+                    Where-Object { $_.Name -ne 'en-US.pak' })
+            } else { @() }
+            $debloatOk = $oldApps.Count -eq 0 -and $optionalPresent.Count -eq 0 -and
+                $gameSdk.Count -eq 0 -and $extraLocales.Count -eq 0
+        } catch { $debloatOk = $false }
+        Add-Feature 'Complete client debloat' 'Old builds, optional hook/clips modules, game SDK files, extra locales, and disposable caches are removed.' $debloatOk
+
+        $missingRuntime = @(@('discord_desktop_core-1', 'discord_utils-1', 'discord_voice-1', 'discord_media-1') |
+            Where-Object { -not (Test-Path -LiteralPath (Join-Path $modPath $_)) })
+        $runtimeOk = $missingRuntime.Count -eq 0
+        Add-Feature 'Discord runtime integrity' 'Required desktop, utility, voice, and media modules remain installed.' $runtimeOk
 
         $amoledOk = $false
         $startupOk = $false
         $settingsPath = Join-Path $appData 'discord\settings.json'
-        if (Test-Path $settingsPath) {
+        if (Test-Path -LiteralPath $settingsPath) {
             try {
                 $sj = Get-Content $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
                 if ($sj.BACKGROUND_COLOR -eq '#000000') { $amoledOk = $true }
@@ -72,22 +185,49 @@ if (-not (Test-Path $discordRoot)) {
             } catch {}
         }
         Add-Feature 'True black AMOLED theme' 'Pure black UI saves OLED power and cuts eye strain at night.' $amoledOk
-        Add-Feature 'Quieter Windows startup' 'Discord stays closed on boot so it is not sitting in the tray.' $startupOk
+
+        $notificationsOk = $true
+        $notificationRoot = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+        foreach ($id in @('Discord', 'Discord.Desktop', 'DiscordInc.Discord', 'com.squirrel.Discord.Discord')) {
+            $entry = Get-ItemProperty -Path (Join-Path $notificationRoot $id) -ErrorAction SilentlyContinue
+            $enabledProperty = if ($entry) { $entry.PSObject.Properties['Enabled'] } else { $null }
+            if (-not $enabledProperty -or [int]$enabledProperty.Value -ne 0) { $notificationsOk = $false; break }
+        }
+        $windowsQuietOk = $startupOk -and $notificationsOk -and
+            (Test-StableDiscordWindowsQuiet $discordRoot)
+        Add-Feature 'Windows background suppression' 'Startup, scheduled background noise, Windows toasts, and tray promotion are disabled.' $windowsQuietOk
 
         $launchOk = $false
         try {
             $sm = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk'
             if (Test-Path $sm) {
                 $sc = (New-Object -ComObject WScript.Shell).CreateShortcut($sm)
-                if ([string]$sc.Arguments -match '(?i)Discord\.vbs') { $launchOk = $true }
+                if ([string]$sc.TargetPath -match '(?i)wscript\.exe$' -and
+                    [string]$sc.Arguments -match '(?i)Discord\.vbs') { $launchOk = $true }
             }
         } catch {}
         Add-Feature 'Start Menu / apps launch path' 'Start Menu and taskbar Discord shortcuts use the OptiHub -Launch path (OpenASAR + kernel). No desktop icons created.' $launchOk
 
-        $isApplied = [bool]($equicordOk -and ($kernelOk -or $openAsarOk))
+        $stateAppOk = $false
+        try {
+            $stateAppOk = [IO.Path]::GetFullPath([string]$state.appDir).TrimEnd('\') -ieq
+                [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')
+        } catch { }
+        $markerOk = [bool]($state -and
+            [string]$state.version -eq '1.3.0' -and
+            [string]$state.applyStatus -eq 'applied' -and
+            $state.applied -eq $true -and
+            $state.fullApply -eq $true -and
+            $state.windowsVerified -eq $true -and
+            $state.debloatVerified -eq $true -and
+            $stateAppOk)
+        Add-Feature 'Verified optimizer record' 'A completed 1.3.0 full apply is recorded for this exact Discord build.' $markerOk
+
+        $isApplied = [bool]($markerOk -and $equicordOk -and $openAsarOk -and $kernelOk -and
+            $debloatOk -and $windowsQuietOk -and $amoledOk -and $runtimeOk -and $launchOk)
         if ($isApplied) {
             $statusText = 'Already optimized'
-            $detail = 'These savings are active. Open Discord from Start Menu or apps - launch path is patched. Reapply after Discord updates itself.'
+            $detail = 'No-compromise pack active: aggressive trim, Above Normal priority, full debloat, OpenASAR, and Equicord.'
         } else {
             $statusText = 'Ready to optimize'
             $detail = 'Some pieces are missing. Run to finish setup and unlock the savings below.'

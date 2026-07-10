@@ -2,13 +2,12 @@
 // No Control Panel mouse automation for color/scaling.
 //
 // Applies per active display:
-//   - Best native resolution + highest refresh rate (Windows EnumDisplaySettings)
+//   - Current resolution + highest supported refresh rate (Windows EnumDisplaySettings)
 //   - Color policy User (NVIDIA color settings)
-//   - RGB + Full (VESA) + highest supported BPC
+//   - RGB + Full (VESA) + current supported color depth (10/8 bpc fallback)
 //   - HDMI info-frame RGB quantization Full (fixes "Limited" on HDMI)
 //   - GPU no-scaling path where the driver allows it
 //   - NVTweak: PerformScalingOn=GPU, ScalingOverride=ON, No-scaling mode
-//   - Video color/image sources = NVIDIA
 //
 // Usage: OptiHub.NvDisplay.exe [--apply|--status]
 
@@ -38,14 +37,31 @@ static class Program
 
     static int Main(string[] args)
     {
-        var statusOnly = args.Any(a => a is "--status" or "-s" or "/status");
+        var normalizedArgs = args.Select(a => a.Trim().ToLowerInvariant()).ToArray();
+        var knownArgs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "--status", "-s", "/status", "--apply", "-a", "/apply", "--help", "-h", "/?"
+        };
+        var unknown = normalizedArgs.FirstOrDefault(a => !knownArgs.Contains(a));
+        if (unknown != null)
+        {
+            Console.Error.WriteLine($"Unknown argument: {unknown}");
+            return 64;
+        }
+
+        var statusOnly = normalizedArgs.Any(a => a is "--status" or "-s" or "/status");
         var apply = !statusOnly;
-        if (args.Any(a => a is "--apply" or "-a" or "/apply")) apply = true;
-        if (args.Any(a => a is "--help" or "-h" or "/?"))
+        if (normalizedArgs.Any(a => a is "--apply" or "-a" or "/apply")) apply = true;
+        if (statusOnly && apply)
+        {
+            Console.Error.WriteLine("Choose either --status or --apply, not both.");
+            return 64;
+        }
+        if (normalizedArgs.Any(a => a is "--help" or "-h" or "/?"))
         {
             Console.WriteLine("OptiHub.NvDisplay — NVAPI + NVTweak display performance settings");
-            Console.WriteLine("  --apply   Apply Full RGB, GPU no-scaling, override ON, video=NVIDIA (default)");
-            Console.WriteLine("  --status  Print current color + path scaling only");
+            Console.WriteLine("  --apply   Apply Full RGB, maximum refresh, GPU no-scaling, and override ON (default)");
+            Console.WriteLine("  --status  Verify Full RGB, max refresh, and GPU no-scaling without changing settings");
             return 0;
         }
 
@@ -58,24 +74,85 @@ static class Program
 
         try
         {
-            var devices = GetActiveDisplays().ToList();
+            var enumeration = GetActiveDisplays();
+            if (!enumeration.Succeeded)
+            {
+                Console.Error.WriteLine("[NVAPI] Active-display enumeration failed: " + enumeration.Error);
+                var failureJson = JsonSerializer.Serialize(new
+                {
+                    ok = false,
+                    mode = apply ? "apply" : "status",
+                    error = "active-display-enumeration-failed",
+                    detail = enumeration.Error
+                });
+                Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + failureJson);
+                return 6;
+            }
+
+            var devices = enumeration.Devices;
             if (devices.Count == 0)
             {
-                Console.Error.WriteLine("[NVAPI] No active NVIDIA displays found.");
-                return 3;
+                // Hybrid/Optimus laptops can have an NVIDIA render GPU while every
+                // active panel is wired to the integrated GPU. Display tuning is
+                // not applicable there, but profile/driver optimization can still
+                // complete successfully.
+                Console.WriteLine("[NVAPI] No active NVIDIA-connected displays; display step skipped.");
+                var json = JsonSerializer.Serialize(new
+                {
+                    ok = true,
+                    mode = apply ? "apply" : "status",
+                    displays = Array.Empty<object>(),
+                    skipped = "no-active-nvidia-displays"
+                });
+                Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + json);
+                return 0;
             }
 
             Console.WriteLine($"[NVAPI] Displays: {devices.Count}");
             PrintPathScaling("BEFORE");
-            PrintWindowsModes("AVAILABLE");
+            var idToGdi = MapDisplayIdToGdiName();
+            var missingDisplayIds = devices
+                .Where(d => !idToGdi.TryGetValue(d.DisplayId, out var name) || string.IsNullOrWhiteSpace(name))
+                .Select(d => d.DisplayId)
+                .ToArray();
+            if (missingDisplayIds.Length > 0)
+            {
+                var missing = string.Join(", ", missingDisplayIds.Select(id => $"#{id}"));
+                Console.Error.WriteLine($"[MODE] Complete NVIDIA-to-Windows mapping unavailable: {missing}");
+                var mappingJson = JsonSerializer.Serialize(new
+                {
+                    ok = false,
+                    mode = apply ? "apply" : "status",
+                    error = "incomplete-display-mapping",
+                    missingDisplayIds
+                });
+                Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + mappingJson);
+                return 6;
+            }
+            var nvidiaGdiNames = devices
+                .Select(d => idToGdi[d.DisplayId])
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (nvidiaGdiNames.Count == 0)
+            {
+                Console.Error.WriteLine("[MODE] No usable Windows display names were mapped.");
+                return 6;
+            }
+            PrintWindowsModes("AVAILABLE", nvidiaGdiNames);
 
             var results = new List<object>();
             Dictionary<string, BestMode>? bestModes = null;
+            var modesOk = true;
+            var colorReadCount = 0;
+            var colorAppliedCount = 0;
+            var colorOptimalCount = 0;
 
-            if (apply)
+            if (apply && nvidiaGdiNames.Count > 0)
             {
-                // 0) Native resolution + highest refresh for every GDI display
-                bestModes = ApplyBestNativeModes();
+                // Keep each NVIDIA-connected display's current resolution and select
+                // the highest refresh advertised for that same resolution.
+                var modeResult = ApplyBestNativeModes(nvidiaGdiNames);
+                bestModes = modeResult.Modes;
+                modesOk = modeResult.Success;
             }
 
             foreach (var dev in devices)
@@ -87,6 +164,7 @@ static class Program
                     Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: read color failed: {ex.Message}");
                     continue;
                 }
+                colorReadCount++;
 
                 Console.WriteLine(
                     $"[NVAPI] Display #{dev.DisplayId} ({dev.ConnectionType}) BEFORE: " +
@@ -94,6 +172,7 @@ static class Program
 
                 if (!apply)
                 {
+                    if (IsFullRgbUserColor(before)) colorOptimalCount++;
                     results.Add(new { displayId = dev.DisplayId, connection = dev.ConnectionType.ToString(), before = Snapshot(before) });
                     continue;
                 }
@@ -112,6 +191,8 @@ static class Program
                 ColorData after;
                 try { after = dev.CurrentColorData; }
                 catch { after = appliedColor ?? before; }
+                if (appliedColor != null && IsFullRgbUserColor(after))
+                    colorAppliedCount++;
 
                 Console.WriteLine(
                     $"[NVAPI] Display #{dev.DisplayId} AFTER: " +
@@ -128,26 +209,59 @@ static class Program
 
             if (apply)
             {
-                // 3) Path scaling + push native res / max Hz into NVAPI path where possible
-                ApplyGpuNoScaling(bestModes);
+                // 3) Path scaling + push current-resolution / max-Hz mode into NVAPI where possible
+                var scalingOk = ApplyGpuNoScaling(bestModes);
 
                 // 4) NVTweak registry — GPU + No scaling + Override ON + Full
                 ApplyNvtweakRegistry();
 
-                // 5) Video color/image = NVIDIA (registry sources)
-                ApplyVideoNvidiaSources();
-
                 PrintPathScaling("AFTER");
-                PrintWindowsModes("CURRENT");
+                PrintWindowsModes("CURRENT", nvidiaGdiNames);
                 DumpNvtweakSummary();
-            }
 
-            try
-            {
-                var json = JsonSerializer.Serialize(new { ok = true, mode = statusOnly ? "status" : "apply", displays = results });
-                Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + json);
+                var colorOk = colorReadCount == devices.Count && colorAppliedCount == devices.Count;
+                var ok = colorOk && modesOk && scalingOk;
+                try
+                {
+                    var json = JsonSerializer.Serialize(new
+                    {
+                        ok,
+                        mode = "apply",
+                        displays = results,
+                        checks = new { colorOk, modesOk, scalingOk }
+                    });
+                    Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + json);
+                }
+                catch { }
+
+                if (!ok)
+                {
+                    Console.Error.WriteLine(
+                        $"[NVAPI] Apply incomplete: color={colorOk}, modes={modesOk}, scaling={scalingOk}");
+                    return 6;
+                }
             }
-            catch { }
+            else
+            {
+                var colorOk = colorReadCount == devices.Count && colorOptimalCount == devices.Count;
+                var refreshOk = VerifyBestRefreshModes(nvidiaGdiNames);
+                var scalingOk = VerifyGpuScaling();
+                var registryOk = VerifyNvtweakRegistry();
+                var ok = colorOk && refreshOk && scalingOk && registryOk;
+                try
+                {
+                    var json = JsonSerializer.Serialize(new
+                    {
+                        ok,
+                        mode = "status",
+                        displays = results,
+                        checks = new { colorOk, refreshOk, scalingOk, registryOk }
+                    });
+                    Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + json);
+                }
+                catch { }
+                if (!ok) return 6;
+            }
 
             return 0;
         }
@@ -167,54 +281,86 @@ static class Program
         }
     }
 
-    static IEnumerable<DisplayDevice> GetActiveDisplays()
+    sealed class DisplayEnumerationResult
+    {
+        public bool Succeeded { get; init; }
+        public List<DisplayDevice> Devices { get; init; } = new();
+        public string? Error { get; init; }
+    }
+
+    static DisplayEnumerationResult GetActiveDisplays()
     {
         var list = new List<DisplayDevice>();
+        PhysicalGPU[] gpus;
         try
         {
-            foreach (var gpu in PhysicalGPU.GetPhysicalGPUs())
-            {
-                DisplayDevice[] connected;
-                try { connected = gpu.GetConnectedDisplayDevices(ConnectedIdsFlag.None); }
-                catch
-                {
-                    try { connected = gpu.GetConnectedDisplayDevices(ConnectedIdsFlag.UnCached); }
-                    catch { continue; }
-                }
-
-                foreach (var dev in connected)
-                {
-                    if (dev == null) continue;
-                    if (!(dev.IsActive || dev.IsOSVisible || dev.IsConnected)) continue;
-                    list.Add(dev);
-                }
-            }
+            gpus = PhysicalGPU.GetPhysicalGPUs();
         }
         catch (Exception ex)
         {
-            Console.WriteLine("[NVAPI] Enum GPUs/displays: " + ex.Message);
+            return new DisplayEnumerationResult
+            {
+                Succeeded = false,
+                Error = "physical GPU enumeration failed: " + ex.Message
+            };
+        }
+
+        if (gpus.Length == 0)
+        {
+            return new DisplayEnumerationResult
+            {
+                Succeeded = false,
+                Error = "NVAPI initialized but returned no physical NVIDIA GPUs"
+            };
+        }
+
+        foreach (var gpu in gpus)
+        {
+            DisplayDevice[] connected;
+            try
+            {
+                connected = gpu.GetConnectedDisplayDevices(ConnectedIdsFlag.None);
+            }
+            catch (Exception cachedError)
+            {
+                try
+                {
+                    connected = gpu.GetConnectedDisplayDevices(ConnectedIdsFlag.UnCached);
+                }
+                catch (Exception uncachedError)
+                {
+                    return new DisplayEnumerationResult
+                    {
+                        Succeeded = false,
+                        Error = "connected-display enumeration failed: " +
+                                cachedError.Message + " / " + uncachedError.Message
+                    };
+                }
+            }
+
+            foreach (var dev in connected)
+            {
+                if (dev == null) continue;
+                if (!(dev.IsActive || dev.IsOSVisible)) continue;
+                list.Add(dev);
+            }
         }
 
         list = list.GroupBy(d => d.DisplayId).Select(g => g.First()).ToList();
-        if (list.Count > 0) return list;
-
-        try
-        {
-            var primary = DisplayDevice.GetGDIPrimaryDisplayDevice();
-            if (primary != null) return new[] { primary };
-        }
-        catch { }
-
-        return Array.Empty<DisplayDevice>();
+        return new DisplayEnumerationResult { Succeeded = true, Devices = list };
     }
 
     static ColorDataDepth PickBestDepth(DisplayDevice dev, ColorDataDepth? current)
     {
-        foreach (var depth in new[]
-                 {
-                     ColorDataDepth.BPC16, ColorDataDepth.BPC12, ColorDataDepth.BPC10,
-                     ColorDataDepth.BPC8, ColorDataDepth.BPC6
-                 })
+        // Preserve the current color depth when the target mode supports it. This
+        // avoids needlessly downgrading a valid 12 bpc HDMI mode. If it is no
+        // longer valid at the selected refresh rate, prefer 10 bpc and then 8 bpc.
+        var candidates = current is null
+            ? new[] { ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6 }
+            : new[] { current.Value, ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6 }
+                .Distinct();
+
+        foreach (var depth in candidates)
         {
             var probe = new ColorData(
                 ColorDataFormat.RGB, ColorDataColorimetry.Auto, ColorDataDynamicRange.VESA,
@@ -234,34 +380,39 @@ static class Program
     {
         foreach (var depth in new[]
                  {
-                     preferredDepth, ColorDataDepth.BPC12, ColorDataDepth.BPC10, ColorDataDepth.BPC8,
-                     ColorDataDepth.Default, ColorDataDepth.BPC16, ColorDataDepth.BPC6
+                     preferredDepth, ColorDataDepth.BPC10, ColorDataDepth.BPC8,
+                     ColorDataDepth.Default, ColorDataDepth.BPC6
                  }.Distinct())
-        foreach (var range in new[] { ColorDataDynamicRange.VESA, ColorDataDynamicRange.Auto })
-        {
-            var candidate = new ColorData(
-                ColorDataFormat.RGB,
-                ColorDataColorimetry.Auto,
-                range,
-                depth,
-                ColorDataSelectionPolicy.User,
-                ColorDataDesktopDepth.Default);
-            try
+            foreach (var range in new[] { ColorDataDynamicRange.VESA, ColorDataDynamicRange.Auto })
             {
-                dev.SetColorData(candidate);
-                Console.WriteLine(
-                    $"[NVAPI] Display #{dev.DisplayId} SET color: format=RGB range={range} depth={depth} policy=User");
-                return candidate;
+                var candidate = new ColorData(
+                    ColorDataFormat.RGB,
+                    ColorDataColorimetry.Auto,
+                    range,
+                    depth,
+                    ColorDataSelectionPolicy.User,
+                    ColorDataDesktopDepth.Default);
+                try
+                {
+                    dev.SetColorData(candidate);
+                    Console.WriteLine(
+                        $"[NVAPI] Display #{dev.DisplayId} SET color: format=RGB range={range} depth={depth} policy=User");
+                    return candidate;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: try {depth}/{range} failed: {ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: try {depth}/{range} failed: {ex.Message}");
-            }
-        }
 
         Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: all SetColorData attempts failed");
         return null;
     }
+
+    static bool IsFullRgbUserColor(ColorData color) =>
+        color.ColorFormat == ColorDataFormat.RGB &&
+        color.DynamicRange == ColorDataDynamicRange.VESA &&
+        color.SelectionPolicy == ColorDataSelectionPolicy.User;
 
     static void ApplyHdmiFullRange(DisplayDevice dev)
     {
@@ -322,7 +473,14 @@ static class Program
         public override string ToString() => $"{Width}x{Height}@{Hz}";
     }
 
-    static Dictionary<string, BestMode> EnumerateBestModes()
+    sealed class ModeApplyResult
+    {
+        public Dictionary<string, BestMode> Modes { get; init; } =
+            new(StringComparer.OrdinalIgnoreCase);
+        public bool Success { get; init; }
+    }
+
+    static Dictionary<string, BestMode> EnumerateBestModes(IReadOnlySet<string>? allowedDevices)
     {
         var map = new Dictionary<string, BestMode>(StringComparer.OrdinalIgnoreCase);
         // Enumerate \\.\DISPLAYn devices via EnumDisplayDevices
@@ -332,11 +490,12 @@ static class Program
             if (!Win32.EnumDisplayDevices(null, i, ref dd, 0)) break;
             if ((dd.StateFlags & Win32.DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) == 0) continue;
             var device = dd.DeviceName; // \\.\DISPLAY1
+            if (allowedDevices != null && !allowedDevices.Contains(device)) continue;
             var best = FindBestModeForDevice(device);
             if (best != null)
             {
                 map[device] = best;
-                Console.WriteLine($"[MODE] {device}: best native candidate {best}");
+                Console.WriteLine($"[MODE] {device}: current-resolution max-Hz candidate {best}");
             }
         }
         return map;
@@ -344,6 +503,10 @@ static class Program
 
     static BestMode? FindBestModeForDevice(string device)
     {
+        var current = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+        if (!Win32.EnumDisplaySettings(device, Win32.ENUM_CURRENT_SETTINGS, ref current))
+            return null;
+
         var modes = new List<BestMode>();
         var dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
         for (int i = 0; Win32.EnumDisplaySettings(device, i, ref dm); i++)
@@ -359,24 +522,42 @@ static class Program
             });
             dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
         }
-        if (modes.Count == 0) return null;
-
-        // "Native" = largest pixel area advertised; at that res, pick highest refresh.
-        var maxArea = modes.Max(m => m.Width * m.Height);
-        var atNative = modes.Where(m => m.Width * m.Height == maxArea).ToList();
-        return atNative.OrderByDescending(m => m.Hz).ThenByDescending(m => m.Bpp).First();
-    }
-
-    static Dictionary<string, BestMode> ApplyBestNativeModes()
-    {
-        Console.WriteLine("[MODE] Applying best native resolution + highest refresh per monitor...");
-        var best = EnumerateBestModes();
-        if (best.Count == 0)
+        if (modes.Count == 0)
         {
-            Console.WriteLine("[MODE] No modes enumerated");
-            return best;
+            Console.WriteLine($"[MODE] {device}: Windows returned no modes; maximum refresh cannot be verified");
+            return null;
         }
 
+        // Preserve the user's current resolution. "Largest advertised" is unsafe for
+        // TVs that expose 4096x2160 in addition to their native 3840x2160 mode.
+        var sameResolution = modes
+            .Where(m => m.Width == current.dmPelsWidth && m.Height == current.dmPelsHeight)
+            .ToList();
+        if (sameResolution.Count == 0)
+        {
+            Console.WriteLine($"[MODE] {device}: current resolution is not in the mode list; maximum refresh cannot be verified");
+            return null;
+        }
+
+        return sameResolution.OrderByDescending(m => m.Hz).ThenByDescending(m => m.Bpp).First();
+    }
+
+    static ModeApplyResult ApplyBestNativeModes(IReadOnlySet<string> allowedDevices)
+    {
+        if (allowedDevices.Count == 0)
+            return new ModeApplyResult { Success = true };
+
+        Console.WriteLine("[MODE] Keeping current resolution and applying its highest refresh on NVIDIA displays...");
+        var best = EnumerateBestModes(allowedDevices);
+        if (best.Count != allowedDevices.Count)
+        {
+            Console.WriteLine($"[MODE] Complete mode coverage required: {best.Count}/{allowedDevices.Count} displays enumerated");
+            return new ModeApplyResult { Success = false };
+        }
+
+        var usable = new Dictionary<string, BestMode>(StringComparer.OrdinalIgnoreCase);
+        var success = true;
+        var staged = 0;
         // Stage each display with CDS_NORESET|CDS_UPDATEREGISTRY, then one global apply.
         foreach (var kv in best)
         {
@@ -386,6 +567,7 @@ static class Program
             if (!Win32.EnumDisplaySettings(device, Win32.ENUM_CURRENT_SETTINGS, ref dm))
             {
                 Console.WriteLine($"[MODE] {device}: could not read current mode");
+                success = false;
                 continue;
             }
 
@@ -393,6 +575,7 @@ static class Program
             if (dm.dmPelsWidth == mode.Width && dm.dmPelsHeight == mode.Height && dm.dmDisplayFrequency == mode.Hz)
             {
                 Console.WriteLine($"[MODE] {device}: already {mode}");
+                usable[device] = mode;
                 continue;
             }
 
@@ -402,31 +585,63 @@ static class Program
             dm.dmBitsPerPel = mode.Bpp > 0 ? mode.Bpp : 32;
             dm.dmFields = Win32.DM_PELSWIDTH | Win32.DM_PELSHEIGHT | Win32.DM_DISPLAYFREQUENCY | Win32.DM_BITSPERPEL;
 
+            var testRc = Win32.ChangeDisplaySettingsEx(device, ref dm, IntPtr.Zero, Win32.CDS_TEST, IntPtr.Zero);
+            if (testRc != Win32.DISP_CHANGE_SUCCESSFUL)
+            {
+                Console.WriteLine($"[MODE] {device}: rejected {mode} during validation (cds={testRc}); unchanged");
+                success = false;
+                continue;
+            }
+
             var flags = Win32.CDS_UPDATEREGISTRY | Win32.CDS_NORESET;
             var rc = Win32.ChangeDisplaySettingsEx(device, ref dm, IntPtr.Zero, flags, IntPtr.Zero);
             Console.WriteLine($"[MODE] {device}: stage {cur} -> {mode} (cds={rc})");
+            if (rc == Win32.DISP_CHANGE_SUCCESSFUL)
+            {
+                usable[device] = mode;
+                staged++;
+            }
+            else
+            {
+                success = false;
+            }
         }
 
-        // Apply staged multi-mon changes
-        var applyRc = Win32.ChangeDisplaySettingsEx(null, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
-        Console.WriteLine($"[MODE] Commit modes result={applyRc} (0=SUCCESSFUL)");
-        // Brief settle — path handles invalidate after mode-set
-        Thread.Sleep(800);
-        return best;
+        if (staged > 0)
+        {
+            var applyRc = Win32.ChangeDisplaySettingsEx(null, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
+            Console.WriteLine($"[MODE] Commit modes result={applyRc} (0=SUCCESSFUL)");
+            success &= applyRc == Win32.DISP_CHANGE_SUCCESSFUL;
+            // Brief settle - path handles invalidate after mode-set.
+            Thread.Sleep(800);
+        }
+
+        foreach (var kv in usable)
+        {
+            var current = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+            var verified = Win32.EnumDisplaySettings(kv.Key, Win32.ENUM_CURRENT_SETTINGS, ref current) &&
+                           current.dmPelsWidth == kv.Value.Width &&
+                           current.dmPelsHeight == kv.Value.Height &&
+                           current.dmDisplayFrequency == kv.Value.Hz;
+            Console.WriteLine($"[MODE] Verify {kv.Key}: target {kv.Value}, applied={verified}");
+            success &= verified;
+        }
+
+        return new ModeApplyResult { Modes = usable, Success = success };
     }
 
-    static void PrintWindowsModes(string label)
+    static void PrintWindowsModes(string label, IReadOnlySet<string> allowedDevices)
     {
         try
         {
-            var best = EnumerateBestModes();
+            var best = EnumerateBestModes(allowedDevices);
             foreach (var kv in best)
             {
                 var dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
                 if (Win32.EnumDisplaySettings(kv.Key, Win32.ENUM_CURRENT_SETTINGS, ref dm))
                 {
                     Console.WriteLine(
-                        $"[MODE] {label} {kv.Key}: current {dm.dmPelsWidth}x{dm.dmPelsHeight}@{dm.dmDisplayFrequency} | best {kv.Value}");
+                        $"[MODE] {label} {kv.Key}: current {dm.dmPelsWidth}x{dm.dmPelsHeight}@{dm.dmDisplayFrequency} | target {kv.Value}");
                 }
             }
         }
@@ -456,20 +671,20 @@ static class Program
         return map;
     }
 
-    static void ApplyGpuNoScaling(Dictionary<string, BestMode>? bestModes)
+    static bool ApplyGpuNoScaling(Dictionary<string, BestMode>? bestModes)
     {
         PathInfo[] paths;
         try { paths = PathInfo.GetDisplaysConfig(); }
         catch (Exception ex)
         {
             Console.WriteLine("[NVAPI] GetDisplaysConfig: " + ex.Message);
-            return;
+            return false;
         }
 
         if (paths == null || paths.Length == 0)
         {
             Console.WriteLine("[NVAPI] No path config.");
-            return;
+            return false;
         }
 
         var idToGdi = MapDisplayIdToGdiName();
@@ -533,6 +748,7 @@ static class Program
             PathInfo.SetDisplaysConfig(rebuilt.ToArray(),
                 DisplayConfigFlags.SaveToPersistence | DisplayConfigFlags.ForceModeEnumeration);
             Console.WriteLine("[NVAPI] SetDisplaysConfig (GPU no-scaling request) OK");
+            return VerifyGpuScaling();
         }
         catch (Exception ex1)
         {
@@ -540,11 +756,63 @@ static class Program
             {
                 PathInfo.SetDisplaysConfig(rebuilt.ToArray(), DisplayConfigFlags.SaveToPersistence);
                 Console.WriteLine("[NVAPI] SetDisplaysConfig SaveToPersistence OK");
+                return VerifyGpuScaling();
             }
             catch (Exception ex2)
             {
                 Console.WriteLine("[NVAPI] SetDisplaysConfig failed: " + ex1.Message + " / " + ex2.Message);
+                return false;
             }
+        }
+    }
+
+    static bool VerifyBestRefreshModes(IReadOnlySet<string> allowedDevices)
+    {
+        if (allowedDevices.Count == 0) return false;
+        var allOptimal = true;
+        foreach (var device in allowedDevices)
+        {
+            var current = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+            var best = FindBestModeForDevice(device);
+            if (best == null || !Win32.EnumDisplaySettings(device, Win32.ENUM_CURRENT_SETTINGS, ref current))
+            {
+                Console.WriteLine($"[MODE] Verify {device}: unable to read current/best mode");
+                allOptimal = false;
+                continue;
+            }
+            var optimal = current.dmPelsWidth == best.Width && current.dmPelsHeight == best.Height &&
+                          current.dmDisplayFrequency == best.Hz;
+            Console.WriteLine($"[MODE] Verify {device}: current {current.dmPelsWidth}x{current.dmPelsHeight}@{current.dmDisplayFrequency}, best {best}, optimal={optimal}");
+            allOptimal &= optimal;
+        }
+        return allOptimal;
+    }
+
+    static bool VerifyGpuScaling()
+    {
+        try
+        {
+            var targets = PathInfo.GetDisplaysConfig()
+                .SelectMany(path => path.TargetsInfo)
+                .ToArray();
+            if (targets.Length == 0)
+                return false;
+
+            var allGpu = true;
+            foreach (var target in targets)
+            {
+                var scaling = target.Scaling.ToString();
+                var gpu = scaling.StartsWith("GPUScanOut", StringComparison.Ordinal);
+                Console.WriteLine($"[NVAPI] Verify path #{target.DisplayDevice.DisplayId}: Scaling={scaling} GPU={gpu}");
+                allGpu &= gpu;
+            }
+
+            return allGpu;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("[NVAPI] Scaling verification failed: " + ex.Message);
+            return false;
         }
     }
 
@@ -557,9 +825,7 @@ static class Program
             if (root == null) return;
             var subnames = root.GetSubKeyNames();
             if (subnames.Length == 0)
-            {
-                Console.WriteLine("[NVTweak] No device keys yet — creating from display IDs");
-            }
+                Console.WriteLine("[NVTweak] No driver-created device keys; NVAPI remains authoritative");
 
             // Update every existing device key (covers multi-mon)
             foreach (var name in root.GetSubKeyNames())
@@ -584,10 +850,8 @@ static class Program
                         color.SetValue("NvCplDigitalColorFormat", 0, RegistryValueKind.DWord);
                         color.SetValue("DynamicRange", RegFullRange, RegistryValueKind.DWord); // Full
                         color.SetValue("NvCplDynamicRange", RegFullRange, RegistryValueKind.DWord);
-                        // Prefer 10 bpc in CPL cache; NVAPI already set highest supported
-                        color.SetValue("ColorDepth", 10, RegistryValueKind.DWord);
-                        color.SetValue("NvCplOutputColorDepthBpc", 10, RegistryValueKind.DWord);
-                        color.SetValue("NvCplOutputColorDepth", 3, RegistryValueKind.DWord);
+                        // NVAPI selected a depth valid for the active mode. Do not
+                        // overwrite it with a hard-coded cache value here.
                     }
                 }
 
@@ -595,66 +859,6 @@ static class Program
             }
         }
 
-        // Global Gestalt (unlock advanced UI)
-        using (var g = Registry.CurrentUser.CreateSubKey(@"Software\NVIDIA Corporation\Global\NVTweak"))
-        {
-            g?.SetValue("Gestalt", 1, RegistryValueKind.DWord);
-        }
-
-        using (var g = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\NVIDIA Corporation\Global\NVTweak"))
-        {
-            g?.SetValue("Gestalt", 1, RegistryValueKind.DWord);
-        }
-
-        // Client prefs (OptiHub markers + EULA)
-        using (var c = Registry.CurrentUser.CreateSubKey(@"Software\NVIDIA Corporation\NVControlPanel2\Client"))
-        {
-            if (c != null)
-            {
-                c.SetValue("OptiHubPreferGpuScaling", 1, RegistryValueKind.DWord);
-                c.SetValue("OptiHubPreferNoScaling", 1, RegistryValueKind.DWord);
-                c.SetValue("OptiHubPreferScalingOverride", 1, RegistryValueKind.DWord);
-                c.SetValue("OptiHubPreferFullRgb", 1, RegistryValueKind.DWord);
-                c.SetValue("EulaAccepted", 1, RegistryValueKind.DWord);
-                c.SetValue("ShowSedoanEula", 0, RegistryValueKind.DWord);
-            }
-        }
-    }
-
-    static void ApplyVideoNvidiaSources()
-    {
-        // Adjust video color / image settings → "With the NVIDIA settings"
-        // Stored under each device\Video (driver/CPL may pick these up on next apply/session).
-        var devicesRoot = @"Software\NVIDIA Corporation\Global\NVTweak\Devices";
-        using var root = Registry.CurrentUser.CreateSubKey(devicesRoot);
-        if (root == null) return;
-
-        foreach (var name in root.GetSubKeyNames())
-        {
-            using var dev = root.OpenSubKey(name, writable: true);
-            if (dev == null) continue;
-            using var video = dev.CreateSubKey("Video");
-            if (video == null) continue;
-
-            // 1 = use NVIDIA settings (not player / not default)
-            void D(string n, int v) => video.SetValue(n, v, RegistryValueKind.DWord);
-
-            D("VideoColorSettingsSource", 1);
-            D("VideoImageSettingsSource", 1);
-            D("VideoColorSettings", 1);
-            D("VideoImageSettings", 1);
-            D("UseNVIDIAColorSettings", 1);
-            D("UseNVIDIAImageSettings", 1);
-            D("ColorSetting", 1);
-            D("EdgeEnhanceSetting", 1);
-            D("NoiseReductionSetting", 1);
-            D("EdgeEnhanceSource", 1);
-            D("NoiseReductionSource", 1);
-            D("DynamicRange", RegFullRange);
-            D("ColorRange", RegFullRange);
-
-            Console.WriteLine($"[NVTweak] {name}\\Video: color/image source = NVIDIA");
-        }
     }
 
     static void PrintPathScaling(string label)
@@ -663,11 +867,11 @@ static class Program
         {
             var paths = PathInfo.GetDisplaysConfig();
             foreach (var p in paths)
-            foreach (var t in p.TargetsInfo)
-            {
-                Console.WriteLine(
-                    $"[NVAPI] {label} path #{t.DisplayDevice.DisplayId}: Scaling={t.Scaling} UnscaledPreferred={t.IsPreferredUnscaledTarget}");
-            }
+                foreach (var t in p.TargetsInfo)
+                {
+                    Console.WriteLine(
+                        $"[NVAPI] {label} path #{t.DisplayDevice.DisplayId}: Scaling={t.Scaling} UnscaledPreferred={t.IsPreferredUnscaledTarget}");
+                }
         }
         catch (Exception ex)
         {
@@ -699,6 +903,32 @@ static class Program
         catch { }
     }
 
+    static bool VerifyNvtweakRegistry()
+    {
+        try
+        {
+            using var root = Registry.CurrentUser.OpenSubKey(@"Software\NVIDIA Corporation\Global\NVTweak\Devices");
+            if (root == null || root.GetSubKeyNames().Length == 0) return true;
+            var ok = true;
+            foreach (var name in root.GetSubKeyNames())
+            {
+                using var dev = root.OpenSubKey(name);
+                if (dev == null) { ok = false; continue; }
+                var deviceOk = Convert.ToInt32(dev.GetValue("PerformScalingOn", -1)) == RegGpu &&
+                               Convert.ToInt32(dev.GetValue("ScalingOverride", -1)) == 1 &&
+                               Convert.ToInt32(dev.GetValue("ScalingMode", -1)) == RegNoScaling;
+                Console.WriteLine($"[NVTweak] Verify {name}: performance scaling={deviceOk}");
+                ok &= deviceOk;
+            }
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("[NVTweak] Verification failed: " + ex.Message);
+            return false;
+        }
+    }
+
     static object Snapshot(ColorData c) => new
     {
         format = c.ColorFormat.ToString(),
@@ -715,7 +945,9 @@ static class Program
         public const int DM_PELSHEIGHT = 0x00100000;
         public const int DM_DISPLAYFREQUENCY = 0x00400000;
         public const uint CDS_UPDATEREGISTRY = 0x00000001;
+        public const uint CDS_TEST = 0x00000002;
         public const uint CDS_NORESET = 0x10000000;
+        public const int DISP_CHANGE_SUCCESSFUL = 0;
         public const uint DISPLAY_DEVICE_ATTACHED_TO_DESKTOP = 0x00000001;
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]

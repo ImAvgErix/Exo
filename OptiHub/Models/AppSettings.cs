@@ -29,5 +29,16 @@ public sealed class AppSettings
     public string? LastDiscordRunUtc { get; set; }
 
     /// <summary>Bundled / last known Discord kit version string.</summary>
-    public string DiscordKitVersion { get; set; } = "1.1.5";
+    public string DiscordKitVersion { get; set; } = "1.3.0";
+
+    public AppSettings Clone() => new()
+    {
+        Theme = Theme,
+        AutoUpdateScripts = AutoUpdateScripts,
+        DiscordScriptsRepo = DiscordScriptsRepo,
+        DiscordScriptsBranch = DiscordScriptsBranch,
+        CustomScriptsPath = CustomScriptsPath,
+        LastDiscordRunUtc = LastDiscordRunUtc,
+        DiscordKitVersion = DiscordKitVersion
+    };
 }

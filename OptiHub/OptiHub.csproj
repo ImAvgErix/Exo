@@ -24,15 +24,15 @@
     <AssemblyName>OptiHub</AssemblyName>
     <Product>OptiHub</Product>
     <Company>OptiHub</Company>
-    <Version>1.4.5</Version>
+    <Version>1.5.0</Version>
     <Description>One hub. Max performance.</Description>
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 

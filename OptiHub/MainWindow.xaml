@@ -29,6 +29,7 @@
                 <Button x:Name="BackButton"
                         Style="{StaticResource OptiIconButton}"
                         ToolTipService.ToolTip="Back"
+                        AutomationProperties.Name="Back to dashboard"
                         Click="BackButton_Click"
                         Visibility="Collapsed"
                         Width="32" Height="32"
@@ -46,7 +47,8 @@
                            Width="16" Height="16"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
-                           Stretch="Uniform" />
+                           Stretch="Uniform"
+                           AutomationProperties.AccessibilityView="Raw" />
                 </Border>
 
                 <TextBlock x:Name="AppTitleText"
@@ -62,6 +64,7 @@
                 <Button x:Name="SettingsButton"
                         Style="{StaticResource OptiIconButton}"
                         ToolTipService.ToolTip="Settings"
+                        AutomationProperties.Name="Settings"
                         Click="SettingsButton_Click"
                         Width="32" Height="32"
                         VerticalAlignment="Center">

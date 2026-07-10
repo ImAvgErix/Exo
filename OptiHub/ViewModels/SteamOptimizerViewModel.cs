@@ -19,9 +19,6 @@ public partial class SteamOptimizerViewModel : ObservableObject
         LastResultBrush = ResolveBrush("OptiSuccessBrush", Color.FromArgb(255, 34, 197, 94));
     }
 
-    [ObservableProperty] private string _title = "Steam";
-    public string LogoPath => "Assets/Logos/steam.png";
-
     [ObservableProperty] private string _statusText = "Checking status...";
     [ObservableProperty] private string _detailText = string.Empty;
     public ObservableCollection<FeatureRowViewModel> Features { get; } = new();
@@ -29,6 +26,8 @@ public partial class SteamOptimizerViewModel : ObservableObject
     [ObservableProperty] private string _runButtonLabel = "Run";
     [ObservableProperty] private bool _isApplied;
     [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private bool _isStatusLoading = true;
+    [ObservableProperty] private bool _isFeatureListVisible;
     [ObservableProperty] private bool _isProgressVisible;
     [ObservableProperty] private double _progressPercent;
     [ObservableProperty] private string _progressStatus = string.Empty;
@@ -37,25 +36,32 @@ public partial class SteamOptimizerViewModel : ObservableObject
     [ObservableProperty] private string _lastResultGlyph = "\uE73E";
     [ObservableProperty] private Brush _lastResultBrush;
 
-    public event EventHandler? RequestGoBack;
     public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
-
-    [RelayCommand]
-    private void GoBack() => RequestGoBack?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
         if (IsBusy) return;
         IsBusy = true;
+        IsStatusLoading = true;
+        IsFeatureListVisible = false;
         try
         {
             StatusText = "Checking status...";
             var state = await _services.OptimizerState.DetectSteamAsync();
             ApplyState(state);
         }
+        catch (Exception ex)
+        {
+            StatusText = "Status check failed";
+            DetailText = "Steam was not changed. Try Refresh status again.";
+            Features.Clear();
+            SetResult($"Could not check Steam: {ex.Message}", success: false);
+        }
         finally
         {
+            IsStatusLoading = false;
+            IsFeatureListVisible = Features.Count > 0;
             IsBusy = false;
         }
     }
@@ -67,17 +73,17 @@ public partial class SteamOptimizerViewModel : ObservableObject
 
         var action = IsApplied ? "reapply" : "run";
         var warning =
-            "This will close Steam and apply a performance pack:\n\n" +
+            "This is an AGGRESSIVE, no-compromise performance pass. It will close Steam and apply:\n\n" +
             "• Default CEF quiet launcher (disable-gpu, nofriendsui, nointro, etc.)\n" +
-            "• 5s steamwebhelper RAM trim (library + in-game) - no process suspend\n" +
-            "• In-game: lower steam/webhelper priority so the game wins CPU\n" +
-            "• Shader pre-cache clean, download staging clean, overlay/library hints\n" +
+            "• steamwebhelper working-set reclamation every 5 seconds - no process suspend\n" +
+            "• High Steam priority while idle; Below Normal while gaming so the game wins CPU\n" +
+            "• Deep disposable client-cache cleanup and aggressive overlay/library hints\n" +
             "• Quieter Windows startup\n\n" +
-            "Steam is Chromium CEF (not Electron) - no Discord-style asar inject. VAC-safe.\n\n" +
-            "Start Menu / taskbar Steam entries are retargeted. No desktop shortcuts are created.";
+            "This trades background convenience and some client visual features for lower RAM use and latency. Active downloads, game installs, and game shader pre-caches are preserved. Game executables are never modified.\n\n" +
+            "Start Menu / taskbar Steam entries are retargeted. No desktop shortcuts are created. Use Repair Steam to undo OptiHub changes.";
 
         var ok = ConfirmAsync is not null
-            ? await ConfirmAsync($"Confirm Steam Optimizer ({action})", warning)
+            ? await ConfirmAsync($"Confirm aggressive Steam optimizer ({action})", warning)
             : true;
         if (!ok) return;
 
@@ -114,11 +120,16 @@ public partial class SteamOptimizerViewModel : ObservableObject
             }
             else
             {
+                ProgressStatus = result.ExitCode == -2 ? "Cancelled" : "Failed";
                 SetResult(result.ErrorMessage ?? result.Summary, success: false);
             }
 
             await RefreshAfterRunAsync();
-            await Task.Delay(500);
+        }
+        catch (OperationCanceledException)
+        {
+            ProgressStatus = "Cancelled";
+            SetResult("Steam optimization was cancelled.", success: false);
         }
         catch (Exception ex)
         {
@@ -172,8 +183,16 @@ public partial class SteamOptimizerViewModel : ObservableObject
             SetResult(
                 result.Success ? "Repair finished. Start Steam normally." : (result.ErrorMessage ?? result.Summary),
                 success: result.Success);
+            ProgressStatus = result.Success ? "Repair complete" : (result.ExitCode == -2 ? "Cancelled" : "Repair failed");
+            if (result.Success)
+                ProgressPercent = 100;
 
             await RefreshAfterRunAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            ProgressStatus = "Cancelled";
+            SetResult("Steam repair was cancelled.", success: false);
         }
         catch (Exception ex)
         {
@@ -214,6 +233,8 @@ public partial class SteamOptimizerViewModel : ObservableObject
             });
         }
         RunButtonLabel = state.IsApplied ? "Reapply" : "Run";
+        if (!IsStatusLoading)
+            IsFeatureListVisible = Features.Count > 0;
     }
 
     private void SetResult(string message, bool success)
@@ -240,8 +261,21 @@ public partial class SteamOptimizerViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        ApplyState(await _services.OptimizerState.DetectSteamAsync(fastOnly: true));
-        if (!IsBusy)
-            await RefreshAsync();
+        if (IsBusy) return;
+        IsStatusLoading = true;
+        IsFeatureListVisible = false;
+        try
+        {
+            ApplyState(await _services.OptimizerState.DetectSteamAsync(fastOnly: true));
+            if (!IsBusy)
+                await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            IsStatusLoading = false;
+            StatusText = "Status check failed";
+            DetailText = "Steam was not changed. Try Refresh status again.";
+            SetResult($"Could not check Steam: {ex.Message}", success: false);
+        }
     }
 }

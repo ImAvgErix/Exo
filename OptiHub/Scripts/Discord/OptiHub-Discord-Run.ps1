@@ -21,7 +21,7 @@ $env:OPTIHUB_SKIP_BOOT_FLASH = '1'
 $env:DISCOPT_SKIP_MANIFEST = '1'
 # Force NoLaunch for every OptiHub-hosted run (UI owns launch).
 $NoLaunch = $true
-# DiscOpt kernel (memory trim + raw input + priority) stays ON - core OptiHub feature.
+# DiscOpt kernel (aggressive 5s trim + raw input + Above Normal priority) stays ON.
 # Only skip when the user/host explicitly passes -SkipKernel.
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
@@ -47,36 +47,6 @@ function Write-HubWarn([string]$Msg) {
 
 function Write-HubErr([string]$Msg) {
     Write-Output "[-] $Msg"
-}
-
-function Test-OptiHubDiscordApplied {
-    $local = [Environment]::GetFolderPath('LocalApplicationData')
-    $appData = [Environment]::GetFolderPath('ApplicationData')
-    $discordRoot = Join-Path $local 'Discord'
-    if (-not (Test-Path $discordRoot)) { return $false }
-
-    $appDir = Get-ChildItem $discordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
-        Sort-Object { try { [version]($_.Name -replace '^app-', '') } catch { $_.Name } } -Descending |
-        Select-Object -First 1
-    if (-not $appDir) { return $false }
-
-    $resources = Join-Path $appDir.FullName 'resources'
-    $equicordAsar = Join-Path $appData 'Equicord\equicord.asar'
-    $appAsar = Join-Path $resources 'app.asar'
-    $loaderLen = if (Test-Path $appAsar) { (Get-Item $appAsar).Length } else { 0 }
-    $equicordOk = (Test-Path $equicordAsar) -and ($loaderLen -ge 64) -and ($loaderLen -lt 4096)
-    $inner = Join-Path $resources '_app.asar'
-    $openAsarOk = (Test-Path $inner) -and ((Get-Item $inner).Length -gt 10000) -and ((Get-Item $inner).Length -lt 500000)
-
-    $versionDll = Join-Path $appDir.FullName 'version.dll'
-    $ffmpeg = Join-Path $appDir.FullName 'ffmpeg.dll'
-    $configIni = Join-Path $appDir.FullName 'config.ini'
-    $kernelOk = (Test-Path $versionDll) -and (Test-Path $ffmpeg) -and (Test-Path $configIni)
-    if ($kernelOk) {
-        try { $kernelOk = (Get-Item $ffmpeg).Length -lt 500000 } catch { }
-    }
-
-    return $equicordOk -and ($kernelOk -or $openAsarOk)
 }
 
 function Get-ProgressForLine([string]$Line, [int]$Current) {
@@ -134,10 +104,9 @@ if (-not (Test-Path $Optimizer)) {
 
 Write-HubProgress 3 'Starting...'
 
-if (-not $Quick -and (Test-OptiHubDiscordApplied)) {
-    $Quick = $true
-    Write-HubStep 'Already optimized - using Quick reapply'
-    Write-HubProgress 10 'Quick reapply mode'
+if (-not $Quick) {
+    Write-HubStep 'Full aggressive apply mode'
+    Write-HubProgress 10 'Full performance pass'
 }
 
 Write-HubProgress 14 'Preparing Disc Optimizer...'

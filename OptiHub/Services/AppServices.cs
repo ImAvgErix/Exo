@@ -14,7 +14,7 @@ public sealed class AppServices
     {
         Theme = new ThemeService(Settings);
         Scripts = new ScriptBundleService(Settings);
-        OptimizerState = new OptimizerStateService(PowerShell, Scripts, Settings);
+        OptimizerState = new OptimizerStateService(PowerShell, Scripts);
         Updater = new GitHubUpdateService(Settings, Scripts);
     }
 

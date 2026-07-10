@@ -32,8 +32,14 @@ public sealed class ThemeService
     {
         if (_window?.Content is not FrameworkElement root) return;
 
+        if (!root.DispatcherQueue.HasThreadAccess)
+        {
+            _ = root.DispatcherQueue.TryEnqueue(Apply);
+            return;
+        }
+
         var theme = _settings.Current.Theme;
-        root.RequestedTheme = theme.Equals(AppSettings.LightTheme, StringComparison.OrdinalIgnoreCase)
+        root.RequestedTheme = string.Equals(theme, AppSettings.LightTheme, StringComparison.OrdinalIgnoreCase)
             ? ElementTheme.Light
             : ElementTheme.Dark;
 
@@ -54,7 +60,6 @@ public sealed class ThemeService
     public void SetTheme(string theme)
     {
         _settings.Update(s => s.Theme = theme);
-        Apply();
     }
 
     private void TrySetTitleBarColors(bool light)

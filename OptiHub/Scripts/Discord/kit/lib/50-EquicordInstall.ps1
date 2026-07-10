@@ -45,9 +45,7 @@ function Invoke-DiscordLaunch {
 }
 
 function Start-Discord([string]$AppDir) {
-    Get-Process Discord, Discord.bin, Update -ErrorAction SilentlyContinue |
-        Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
+    Stop-Discord
 
     Unlock-DiscordSettings
     Apply-DiscordProfile (Join-Path $AppData 'settings.json')

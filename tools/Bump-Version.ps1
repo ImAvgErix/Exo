@@ -20,7 +20,7 @@ function Set-TextFile([string]$Path, [string]$Text) {
     Write-Host "[+] $Path -> $Text" -ForegroundColor Green
 }
 
-if ($App -notmatch '^\d+\.\d+\.\d+') { throw "App version must be x.y.z (got $App)" }
+if ($App -notmatch '^\d+\.\d+\.\d+$') { throw "App version must be x.y.z (got $App)" }
 
 Set-TextFile (Join-Path $Root 'VERSION') $App
 
@@ -42,6 +42,8 @@ if (-not $Kit) {
     }
 }
 
+if ($Kit -notmatch '^\d+\.\d+\.\d+$') { throw "Kit version must be x.y.z (got $Kit)" }
+
 Set-TextFile (Join-Path $Root 'OptiHub\Scripts\Discord\VERSION') $Kit
 
 $opt = Join-Path $Root 'OptiHub\Scripts\Discord\Disc-Optimizer.ps1'
@@ -50,6 +52,25 @@ if (Test-Path $opt) {
     $raw2 = [regex]::Replace($raw, "\`$Script:DiscOptVersion = '[^']+'", "`$Script:DiscOptVersion = '$Kit'")
     [IO.File]::WriteAllText($opt, $raw2, [Text.UTF8Encoding]::new($false))
     Write-Host "[+] Disc-Optimizer DiscOptVersion=$Kit" -ForegroundColor Green
+}
+
+foreach ($update in @(
+    @{
+        Path = Join-Path $Root 'OptiHub\Models\AppSettings.cs'
+        Pattern = 'DiscordKitVersion\s*\{\s*get;\s*set;\s*\}\s*=\s*"[^"]+"'
+        Replacement = "DiscordKitVersion { get; set; } = `"$Kit`""
+    },
+    @{
+        Path = Join-Path $Root 'OptiHub\Services\SettingsService.cs'
+        Pattern = 'settings\.DiscordKitVersion\s*=\s*"[^"]+"'
+        Replacement = "settings.DiscordKitVersion = `"$Kit`""
+    }
+)) {
+    $raw = Get-Content -LiteralPath $update.Path -Raw
+    $updated = [regex]::Replace($raw, $update.Pattern, $update.Replacement, 1)
+    if ($updated -eq $raw) { throw "Version marker not found in $($update.Path)" }
+    [IO.File]::WriteAllText($update.Path, $updated, [Text.UTF8Encoding]::new($false))
+    Write-Host "[+] $($update.Path) DiscordKitVersion=$Kit" -ForegroundColor Green
 }
 
 Write-Host ''
