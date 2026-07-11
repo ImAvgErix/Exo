@@ -212,6 +212,10 @@ function Apply-EquicordProfile {
     if (-not ($settings.plugins.Keys -contains 'StreamerModeOn')) { $settings.plugins['StreamerModeOn'] = @{} }
     $settings.plugins['StreamerModeOn'].enabled = $false
 
+    # Always restore member-list role headers (even when preserving an older profile that enabled NoRoleHeaders).
+    if (-not ($settings.plugins.Keys -contains 'NoRoleHeaders')) { $settings.plugins['NoRoleHeaders'] = @{} }
+    $settings.plugins['NoRoleHeaders'].enabled = $false
+
     if (-not ($settings.plugins.Keys -contains 'NotificationVolume')) { $settings.plugins['NotificationVolume'] = @{} }
     $settings.plugins['NotificationVolume'].enabled = $true
     $settings.plugins['NotificationVolume'].notificationVolume = 25

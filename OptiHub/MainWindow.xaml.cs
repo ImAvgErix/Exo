@@ -175,11 +175,12 @@ public sealed partial class MainWindow : Window
         ContextLogo.Source = AssetPathToImageSourceConverter.Resolve(relativePath);
     }
 
+    // Continuum + drill: heavier "weight" than a flat slide (Kinetics / Amicro motion language).
     private static NavigationTransitionInfo Slide() =>
-        new SlideNavigationTransitionInfo { Effect = SlideNavigationTransitionEffect.FromRight };
+        new DrillInNavigationTransitionInfo();
 
     private static NavigationTransitionInfo SlideBack() =>
-        new SlideNavigationTransitionInfo { Effect = SlideNavigationTransitionEffect.FromLeft };
+        new ContinuumNavigationTransitionInfo();
 
     public void NavigateHome(bool suppressTransition = false)
     {

@@ -7,7 +7,7 @@
     Background="Transparent">
 
     <!-- Full-frame centered composition: fills the fixed window without looking sparse. -->
-    <Grid Padding="40,28,40,32">
+    <Grid x:Name="PageRoot" Padding="40,28,40,32" Loaded="PageRoot_Loaded">
         <Grid MaxWidth="1000"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
@@ -16,7 +16,15 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <StackPanel Spacing="8" Margin="0,0,0,22" HorizontalAlignment="Center">
+            <StackPanel x:Name="HeroPanel"
+                        Spacing="8"
+                        Margin="0,0,0,22"
+                        HorizontalAlignment="Center"
+                        Opacity="0"
+                        RenderTransformOrigin="0.5,0.5">
+                <StackPanel.RenderTransform>
+                    <CompositeTransform x:Name="HeroTransform" TranslateY="12" />
+                </StackPanel.RenderTransform>
                 <TextBlock Text="Maximum performance. No compromise."
                            Style="{StaticResource OptiTagline}"
                            FontSize="34"
@@ -31,7 +39,8 @@
             <Grid Grid.Row="1"
                   HorizontalAlignment="Stretch"
                   VerticalAlignment="Stretch">
-                <ItemsControl HorizontalAlignment="Center"
+                <ItemsControl x:Name="CardList"
+                              HorizontalAlignment="Center"
                               VerticalAlignment="Center"
                               ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}">
                     <ItemsControl.ItemsPanel>

@@ -412,6 +412,8 @@ $EnabledTheme = 'amoled-cord.theme.css'
 $ForceDisabledPlugins = @(
     # StreamerModeOn forces Discord Streamer Mode while live even if the user turned it off.
     'StreamerModeOn',
+    # Keep member-list role section headers (Admin, Mods, etc.) — NoRoleHeaders strips them.
+    'NoRoleHeaders',
     # Lean minimalism: cut convenience / UI chrome plugins (overhead for little gain)
     'ImageZoom', 'ViewIcons', 'CopyUserURLs', 'ReadAllNotificationsButton',
     'FixImagesQuality', 'CallTimer', 'RoleColorEverywhere', 'ShowTimeouts',

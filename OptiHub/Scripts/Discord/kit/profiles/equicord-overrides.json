@@ -97,7 +97,7 @@
     "NoSystemBadge": { "enabled": true },
     "NoBlockedMessages": { "enabled": true },
     "CleanChannelName": { "enabled": true },
-    "NoRoleHeaders": { "enabled": true },
+    "NoRoleHeaders": { "enabled": false },
     "NoServerEmojis": { "enabled": true },
     "NoF1": { "enabled": true },
     "NoOnboardingDelay": { "enabled": true },
