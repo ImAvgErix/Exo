@@ -263,34 +263,33 @@ function Disable-DiscordScheduledTasks {
     }
 }
 
-function Set-DiscordWindowsNotificationsOn {
-    # Keep Windows toast notifications ENABLED for Discord.
-    # Older builds force-disabled these as "debloat" and broke message alerts after re-apply.
+function Set-DiscordWindowsNotificationsOff {
+    # Quiet Windows: disable Discord toast banners (in-app Discord alerts still work).
     $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
     if (-not (Test-Path $base)) { New-Item -Path $base -Force | Out-Null }
 
-    $setOn = {
+    $setOff = {
         param([string]$Id)
         $path = Join-Path $base $Id
         if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
-        Set-ItemProperty -Path $path -Name 'Enabled' -Value 1 -Type DWord -Force
+        Set-ItemProperty -Path $path -Name 'Enabled' -Value 0 -Type DWord -Force
     }
 
     foreach ($id in @('Discord', 'Discord.Desktop', 'DiscordInc.Discord', 'com.squirrel.Discord.Discord')) {
-        & $setOn $id
+        & $setOff $id
     }
 
     Get-ChildItem $base -ErrorAction SilentlyContinue |
         Where-Object { $_.PSChildName -match 'Discord' } |
         ForEach-Object {
-            Set-ItemProperty -Path $_.PSPath -Name 'Enabled' -Value 1 -Type DWord -Force
-            Write-Ok "Windows toasts on: $($_.PSChildName)"
+            Set-ItemProperty -Path $_.PSPath -Name 'Enabled' -Value 0 -Type DWord -Force
+            Write-Ok "Windows toasts off: $($_.PSChildName)"
         }
 }
 
-# Back-compat alias (do not kill notifications)
-function Set-DiscordWindowsNotificationsOff {
-    Set-DiscordWindowsNotificationsOn
+# Back-compat alias name used by older call sites
+function Set-DiscordWindowsNotificationsOn {
+    Set-DiscordWindowsNotificationsOff
 }
 
 function Set-DiscordTrayIconHidden([string]$AppDir) {
@@ -325,20 +324,9 @@ function Apply-WindowsTweaks([string]$AppDir) {
     Write-Step 'Applying Windows tweaks (notifications, tray, startup)...'
     Disable-DiscordWindowsAutostart
     Disable-DiscordScheduledTasks
-    Set-DiscordWindowsNotificationsOn
-    # Keep tray visible so Discord is discoverable after apply (was hidden as debloat)
-    try {
-        $notifyKey = 'HKCU:\Control Panel\NotifyIconSettings'
-        if (Test-Path $notifyKey) {
-            Get-ChildItem $notifyKey -ErrorAction SilentlyContinue | ForEach-Object {
-                $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
-                if ($props.ExecutablePath -match 'Discord') {
-                    Set-ItemProperty -Path $_.PSPath -Name 'IsPromoted' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-                }
-            }
-        }
-    } catch { }
-    Write-Ok 'Windows tweaks applied (toasts ON, tray visible, no autostart)'
+    Set-DiscordWindowsNotificationsOff
+    Set-DiscordTrayIconHidden $AppDir
+    Write-Ok 'Windows tweaks applied (toasts OFF, tray hidden, no autostart)'
 }
 
 function Test-OpenAsarInstalled([string]$ResourcesDir) {

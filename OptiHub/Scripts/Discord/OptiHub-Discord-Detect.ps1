@@ -37,10 +37,7 @@ function Test-StableDiscordText([string]$Text, [string]$Root) {
 }
 
 function Test-StableDiscordWindowsQuiet([string]$Root) {
-    # Policy (matches Apply-WindowsTweaks):
-    # - no Discord autostart (Run key / scheduled tasks)
-    # - Windows toasts ON (message alerts)
-    # - tray icon visible (IsPromoted=1) when a NotifyIcon entry exists
+    # Policy (matches Apply-WindowsTweaks): no autostart/tasks; tray hidden when entries exist.
     try {
         $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
         if (Test-Path $runKey) {
@@ -67,8 +64,6 @@ function Test-StableDiscordWindowsQuiet([string]$Root) {
             if ($stable -and [bool]$task.Settings.Enabled) { return $false }
         }
 
-        # Tray: when Discord notify-icon entries exist, prefer promoted/visible (1).
-        # Missing NotifyIconSettings entries are OK (Windows creates them after first launch).
         $trayRoot = 'HKCU:\Control Panel\NotifyIconSettings'
         if (Test-Path $trayRoot) {
             foreach ($key in @(Get-ChildItem -Path $trayRoot -ErrorAction SilentlyContinue)) {
@@ -77,30 +72,32 @@ function Test-StableDiscordWindowsQuiet([string]$Root) {
                 $exe = [string]$item.GetValue('ExecutablePath')
                 if (-not $exe) { continue }
                 if (-not ((Test-StableDiscordText $exe $Root) -or ($exe -match '(?i)Discord'))) { continue }
-                # Do not require IsPromoted=0 (that was "hide tray" debloat — we keep tray visible)
+                if ($item.GetValueNames() -notcontains 'IsPromoted' -or [int]$item.GetValue('IsPromoted') -ne 0) {
+                    return $false
+                }
             }
         }
         return $true
     } catch { return $false }
 }
 
-function Test-DiscordToastsOn {
-    # Product policy: Windows toast notifications stay ENABLED for Discord message alerts.
+function Test-DiscordToastsOff {
+    # Product policy: Windows toast banners OFF for Discord (quiet OS shell).
     $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
     $ids = @('Discord', 'Discord.Desktop', 'DiscordInc.Discord', 'com.squirrel.Discord.Discord')
-    $any = $false
+    $seen = $false
     foreach ($id in $ids) {
         $path = Join-Path $base $id
         if (-not (Test-Path -LiteralPath $path)) { continue }
-        $any = $true
+        $seen = $true
         try {
             $entry = Get-ItemProperty -Path $path -ErrorAction Stop
             $prop = $entry.PSObject.Properties['Enabled']
-            if (-not $prop -or [int]$prop.Value -ne 1) { return $false }
+            if (-not $prop -or [int]$prop.Value -ne 0) { return $false }
         } catch { return $false }
     }
-    # If no keys exist yet, treat as OK (Windows may create them later); apply path stamps them on.
-    return $true
+    # Keys should exist after apply; if none yet, not fully applied.
+    return $seen
 }
 
 function Test-EquicordLoader([string]$Path) {
@@ -232,11 +229,11 @@ if (-not (Test-Path $discordRoot)) {
         }
         Add-Feature 'True black AMOLED theme' 'Equicord amoled-cord theme (not forced OpenAsar CSS).' $amoledOk
 
-        # Toasts ON (message alerts), no autostart, no Discord scheduled tasks — matches Apply-WindowsTweaks
-        $notificationsOk = Test-DiscordToastsOn
+        # Toasts OFF, tray hidden, no autostart/tasks — matches Apply-WindowsTweaks
+        $notificationsOk = Test-DiscordToastsOff
         $windowsQuietOk = $startupOk -and $notificationsOk -and
             (Test-StableDiscordWindowsQuiet $discordRoot)
-        Add-Feature 'Windows background suppression' 'No Discord autostart or scheduled tasks; Windows toasts stay ON for messages; tray stays usable.' $windowsQuietOk
+        Add-Feature 'Windows background suppression' 'No Discord autostart or scheduled tasks; Windows toasts off; tray icon not promoted.' $windowsQuietOk
 
         $launchOk = $false
         try {
