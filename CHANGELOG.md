@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.2
+
+- **Brand icon**: clean **OH** monogram (OptiHub) — fused O+H on pure black with mint accent; multi-size Start Menu ICO
 ## 1.8.1
 
 - **Brand icon**: new unique OptiHub mark (hex hub + performance bars + mint accent) on pure black
