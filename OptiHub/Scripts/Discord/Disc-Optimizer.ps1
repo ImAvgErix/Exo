@@ -45,7 +45,7 @@ if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.3.1'
+$Script:DiscOptVersion = '1.3.2'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -444,11 +444,9 @@ Get-ChildItem -LiteralPath $script:DiscOptLibDir -Filter '*.ps1' | Sort-Object N
 
 # - main -
 try {
-Initialize-Network
-
+# Fast daily launch: no network init, no banner/kit maintenance. Only heal if
+# OpenAsar/kernel/Equicord files are missing (Discord update), then start.
 if ($Launch) {
-    # Daily path: if Discord updated and stripped OpenAsar/kernel/Equicord, restore
-    # them silently before starting. No full debloat here (fast, non-experimental).
     $app = Assert-DiscordInstall
     try {
         $resources = Join-Path $app.FullName 'resources'
@@ -458,9 +456,13 @@ if ($Launch) {
             (Test-Path (Join-Path $app.FullName 'ffmpeg_real.dll')) -and
             (Test-Path (Join-Path $app.FullName 'ffmpeg.dll')) -and
             ((Get-Item (Join-Path $app.FullName 'ffmpeg.dll') -ErrorAction SilentlyContinue).Length -lt 500000)
-        $equicordOk = Test-EquicordReady $app.FullName
+        # Skip heavy EquicordReady (settings parse) when loader + asar look present.
+        $eqAsar = Join-Path $EquicordData 'equicord.asar'
+        $equicordOk = (Test-Path -LiteralPath $eqAsar) -and
+            ((Get-Item -LiteralPath $eqAsar -ErrorAction SilentlyContinue).Length -gt 1000000) -and
+            (Test-EquicordLoaderPatched $app.FullName)
         if (-not $openAsarOk -or -not $kernelOk -or -not $equicordOk) {
-            Write-Host '[*] Discord client changed - restoring OptiHub mods (OpenAsar / Equicord / kernel)...'
+            Write-Host '[*] Discord client changed - restoring OptiHub mods...'
             Stop-Discord
             if (-not $openAsarOk -or -not $equicordOk) {
                 try { Install-Equicord $app.FullName } catch {
@@ -472,15 +474,13 @@ if ($Launch) {
                 try { Install-DiscOptKernel $app.FullName } catch { }
             }
             try { Restore-StartMenu } catch { }
-            Write-Host '[+] OptiHub mods restored; starting Discord'
         }
-    } catch {
-        # Never block launch if heal fails
-    }
+    } catch { }
     Start-Discord $app.FullName
     exit 0
 }
 
+Initialize-Network
 Initialize-DiscOptimizerLog
 Invoke-KitMaintenance
 Write-Banner

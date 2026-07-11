@@ -289,10 +289,12 @@ if (-not $steamOk) {
             $launcherText = Get-Content -LiteralPath $launcher -Raw -ErrorAction Stop
             $cefOk = $launcherText -match '(?i)steam\.exe' -and
                 $launcherText -match '-cef-disable-gpu' -and
+                $launcherText -match '-nofriendsui' -and
+                $launcherText -match '-nointro' -and
                 $launcherText -match '(?i)start\s+""\s+/HIGH'
         } catch { }
     }
-    Add-Feature 'Quiet CEF launcher' 'Lean launch flags + High priority client start.' $cefOk
+    Add-Feature 'Quiet CEF launcher' 'Fast quiet CEF flags + High priority Steam start (Steam launches before the trim helper).' $cefOk
 
     # DiscOpt kernel equivalent
     $trimOk = $false
@@ -327,7 +329,7 @@ if (-not $steamOk) {
 
     $runtimeOk = Test-SteamRuntimeIntegrity $steam
     $markerOk = [bool]($state -and
-        ([string]$state.version -eq '1.6.0' -or [string]$state.version -eq '1.7.0') -and
+        ([string]$state.version -eq '1.6.0' -or [string]$state.version -eq '1.7.0' -or [string]$state.version -eq '1.7.1') -and
         [string]$state.applyStatus -eq 'applied' -and
         $state.applied -eq $true -and
         $state.quick -eq $false -and

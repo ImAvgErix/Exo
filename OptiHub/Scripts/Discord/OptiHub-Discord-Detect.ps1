@@ -146,7 +146,15 @@ if (-not (Test-Path $discordRoot)) {
             $sz = (Get-Item -LiteralPath $openAsarTarget).Length
             if ($sz -gt 10000 -and $sz -lt 500000) { $openAsarOk = $true }
         }
-        Add-Feature 'Faster Discord startup' 'OpenASAR replaces the heavy launcher path so Discord opens quicker.' $openAsarOk
+        $quickStartOk = $false
+        $settingsPathForQs = Join-Path $appData 'discord\settings.json'
+        if (Test-Path -LiteralPath $settingsPathForQs) {
+            try {
+                $sjQs = Get-Content $settingsPathForQs -Raw -Encoding UTF8 | ConvertFrom-Json
+                if ($sjQs.openasar -and $sjQs.openasar.quickstart -eq $true) { $quickStartOk = $true }
+            } catch { }
+        }
+        Add-Feature 'Faster Discord startup' 'OpenASAR + quickstart and lean Chromium switches so Discord opens quicker.' ($openAsarOk -and $quickStartOk)
 
         $kernelOk = $false
         $ffmpegReal = Join-Path $app.FullName 'ffmpeg_real.dll'
@@ -252,7 +260,7 @@ if (-not (Test-Path $discordRoot)) {
                 [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')
         } catch { }
         $markerOk = [bool]($state -and
-            ([string]$state.version -eq '1.3.0' -or [string]$state.version -eq '1.3.1') -and
+            ([string]$state.version -eq '1.3.0' -or [string]$state.version -eq '1.3.1' -or [string]$state.version -eq '1.3.2') -and
             [string]$state.applyStatus -eq 'applied' -and
             $state.applied -eq $true -and
             $state.fullApply -eq $true -and

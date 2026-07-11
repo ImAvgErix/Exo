@@ -15,11 +15,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.7.0'
+$Script:SteamOptVersion = '1.7.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Default Steam launch flags (formerly "aggressive" - this is the only tier).
-# Avoid sandbox/single-process flags - those crash on some PCs.
+# Tuned for faster cold start + lower CEF cost. Avoid sandbox/single-process
+# flags - those crash on some PCs.
 $Script:DefaultCefArgs = @(
     '-cef-disable-gpu',
     '-cef-disable-gpu-compositing',
@@ -28,7 +29,10 @@ $Script:DefaultCefArgs = @(
     '-nobigpicture',
     '-vrdisable',
     '-no-dwrite',
-    '-cef-disable-breakpad'
+    '-cef-disable-breakpad',
+    # Startup / CEF noise reduction (safe flags; no single-process/sandbox)
+    '-cef-disable-spell-checking',
+    '-cef-disable-extensions'
 )
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
@@ -1043,11 +1047,13 @@ function Write-SteamLaunchCmd([string]$CmdPath, [string]$SteamPath, [string]$Hel
     $cmdExe = $exe.Replace('%', '%%')
     $cmdHelper = $HelperPath.Replace('%', '%%')
     $cmdPs = $ps.Replace('%', '%%')
+    # Start Steam first (HIGH) so the UI appears ASAP; kick the trim helper right
+    # after without waiting for it. Helper self-limits with a mutex.
     $cmd = @(
         '@echo off'
-        ("rem OptiHub {0} - aggressive webhelper trim + in-game priority yield" -f $Label)
-        ('start "" /MIN "{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $cmdPs, $cmdHelper)
+        ("rem OptiHub {0} - fast quiet CEF + aggressive webhelper trim" -f $Label)
         ('start "" /HIGH /D "{0}" "{1}" {2} %*' -f $cmdSteamPath, $cmdExe, $args)
+        ('start "" /MIN "{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $cmdPs, $cmdHelper)
     ) -join "`r`n"
     [IO.File]::WriteAllText($CmdPath, $cmd + "`r`n", [Text.UTF8Encoding]::new($false))
 }

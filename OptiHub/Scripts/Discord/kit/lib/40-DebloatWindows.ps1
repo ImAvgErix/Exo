@@ -714,12 +714,17 @@ function Apply-DiscordProfile([string]$DestPath) {
         }
     }
 
-    # Conservative chromium flags only (no aggressive disable-features list).
+    # Startup-lean Chromium flags (safe; no single-process / sandbox kills).
     $merged.chromiumSwitches = @{
-        'disable-breakpad'           = 1
-        'disable-crash-reporter'     = 1
-        'disable-domain-reliability' = 1
-        'disable-logging'            = 1
+        'disable-breakpad'                        = 1
+        'disable-crash-reporter'                  = 1
+        'disable-domain-reliability'              = 1
+        'disable-logging'                         = 1
+        'disable-component-update'                = 1
+        'disable-background-networking'           = 1
+        'no-pings'                                = 1
+        'disable-renderer-backgrounding'          = 1
+        'disable-backgrounding-occluded-windows'  = 1
     }
     if ($kit.openasar) {
         $merged.openasar = ConvertTo-HashtableDeep $kit.openasar
@@ -730,7 +735,8 @@ function Apply-DiscordProfile([string]$DestPath) {
     # No cmdPreset=perf (blank client risk). No OpenAsar CSS — Equicord themes handle dark mode.
     if ($merged.openasar.Keys -contains 'cmdPreset') { $merged.openasar.Remove('cmdPreset') }
     if ($merged.openasar.Keys -contains 'css') { $merged.openasar.Remove('css') }
-    $merged.openasar.quickstart = $false
+    # OpenAsar quickstart skips slow host waits so Discord paints sooner.
+    $merged.openasar.quickstart = $true
     $merged.openasar.domOptimizer = $false
     $merged.openasar.themeSync = $false
     $merged.openasar.autoupdate = $false
@@ -740,8 +746,10 @@ function Apply-DiscordProfile([string]$DestPath) {
 
     # Stable boot flags (do not force BACKGROUND_COLOR — Equicord AMOLED theme owns look)
     $merged['DESKTOP_TTI_EARLY_UPDATE_CHECK'] = $false
-    $merged['DESKTOP_TTI_DNSTCP_WARMUP'] = $false
+    # Warm DNS/TCP early so first UI is ready sooner after launch.
+    $merged['DESKTOP_TTI_DNSTCP_WARMUP'] = $true
     $merged['DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR'] = $true
+    $merged['DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS'] = 2000
     $merged['audioSubsystem'] = 'standard'
     $merged['useLegacyAudioDevice'] = $false
     $merged['asyncVideoInputDeviceInit'] = $false
