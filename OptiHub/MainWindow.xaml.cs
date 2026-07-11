@@ -34,6 +34,7 @@ public sealed partial class MainWindow : Window
         AppWindow.Resize(new SizeInt32(1080, 860));
         ApplyFixedWindowChrome();
         TryCenterOnScreen();
+        TrySetWindowIcon();
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBarHost);
@@ -146,9 +147,8 @@ public sealed partial class MainWindow : Window
         _mode = mode;
         var home = mode == ShellMode.Home;
         BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
-        ContextLogoHost.Visibility = mode is ShellMode.Discord or ShellMode.Steam or ShellMode.Nvidia
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        // Always show a mark: OptiHub logo on home/settings, product logos on optimizers.
+        ContextLogoHost.Visibility = Visibility.Visible;
         // Settings only on home — optimizer pages keep chrome clean
         SettingsButton.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
         AppTitleText.Text = mode switch
@@ -167,7 +167,31 @@ public sealed partial class MainWindow : Window
         else if (mode == ShellMode.Nvidia)
             TrySetContextLogo("Assets/Logos/nvidia.png");
         else
-            ContextLogo.Source = null;
+            TrySetContextLogo("Assets/Logos/optihub.png");
+    }
+
+    private void TrySetWindowIcon()
+    {
+        try
+        {
+            // Taskbar / alt-tab / title-bar system icon (ApplicationIcon alone is not always enough for WinUI unpackaged).
+            var baseDir = AppContext.BaseDirectory;
+            foreach (var rel in new[]
+                     {
+                         Path.Combine("Assets", "OptiHub.ico"),
+                         Path.Combine("Assets", "Logos", "optihub.png")
+                     })
+            {
+                var path = Path.Combine(baseDir, rel);
+                if (!File.Exists(path)) continue;
+                AppWindow.SetIcon(path);
+                return;
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
     }
 
     private void TrySetContextLogo(string relativePath)
