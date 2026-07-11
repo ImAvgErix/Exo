@@ -121,6 +121,7 @@ public sealed class ScriptBundleService
 
         var marker = Path.Combine(working, "Steam-Optimizer.ps1");
         var hubRun = Path.Combine(working, "OptiHub-Steam-Run.ps1");
+        var detect = Path.Combine(working, "OptiHub-Steam-Detect.ps1");
         var bundledVersionPath = Path.Combine(bundled, "VERSION");
         var workingVersionPath = Path.Combine(working, "VERSION");
         var bundledVersion = File.Exists(bundledVersionPath)
@@ -133,34 +134,25 @@ public sealed class ScriptBundleService
         if (_steamSyncDone &&
             File.Exists(marker) &&
             File.Exists(hubRun) &&
+            File.Exists(detect) &&
             string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))
             return;
 
-        var broken =
+        // Keep GitHub-updated kits that are newer than the app-bundled copy.
+        // (Old logic always overwrote working with the bundle, which pinned Steam at 1.5.x.)
+        var workingBroken =
             !File.Exists(marker) ||
             !File.Exists(hubRun) ||
-            !File.Exists(Path.Combine(working, "OptiHub-Steam-Detect.ps1")) ||
-            IsVersionNewer(bundledVersion, workingVersion);
+            !File.Exists(detect);
 
-        if (broken || IsVersionNewer(bundledVersion, workingVersion))
-            CopyDirectory(bundled, working);
-        else
+        if (IsVersionNewer(workingVersion, bundledVersion) && !workingBroken)
         {
-            foreach (var name in new[]
-                     {
-                         "Steam-Optimizer.ps1",
-                         "OptiHub-Steam-Run.ps1",
-                         "OptiHub-Steam-Detect.ps1",
-                         "OptiHub-Steam-Repair.ps1",
-                         "VERSION"
-                     })
-            {
-                var src = Path.Combine(bundled, name);
-                var dst = Path.Combine(working, name);
-                if (File.Exists(src))
-                    File.Copy(src, dst, overwrite: true);
-            }
+            _steamSyncDone = true;
+            return;
         }
+
+        if (workingBroken || IsVersionNewer(bundledVersion, workingVersion) || string.IsNullOrWhiteSpace(workingVersion))
+            CopyDirectory(bundled, working);
 
         _steamSyncDone = true;
     }
@@ -175,6 +167,7 @@ public sealed class ScriptBundleService
 
         var marker = Path.Combine(working, "Nvidia-Optimizer.ps1");
         var hubRun = Path.Combine(working, "OptiHub-Nvidia-Run.ps1");
+        var detect = Path.Combine(working, "OptiHub-Nvidia-Detect.ps1");
         var bundledVersionPath = Path.Combine(bundled, "VERSION");
         var workingVersionPath = Path.Combine(working, "VERSION");
         var bundledVersion = File.Exists(bundledVersionPath)
@@ -195,15 +188,21 @@ public sealed class ScriptBundleService
             string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))
             return;
 
-        var broken =
+        var workingBroken =
             !File.Exists(marker) ||
             !File.Exists(hubRun) ||
-            !File.Exists(Path.Combine(working, "OptiHub-Nvidia-Detect.ps1")) ||
+            !File.Exists(detect) ||
             !Directory.Exists(Path.Combine(working, "profiles")) ||
-            helperMismatch ||
-            IsVersionNewer(bundledVersion, workingVersion);
+            helperMismatch;
 
-        if (broken || IsVersionNewer(bundledVersion, workingVersion))
+        // Preserve a newer working kit (GitHub pull) over an older app bundle.
+        if (IsVersionNewer(workingVersion, bundledVersion) && !workingBroken)
+        {
+            _nvidiaSyncDone = true;
+            return;
+        }
+
+        if (workingBroken || IsVersionNewer(bundledVersion, workingVersion) || string.IsNullOrWhiteSpace(workingVersion))
         {
             CopyDirectory(bundled, working);
             if (File.Exists(bundledHelper) && !FilesMatch(bundledHelper, workingHelper))

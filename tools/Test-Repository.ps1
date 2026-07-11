@@ -166,11 +166,15 @@ foreach ($marker in @(
     Assert-ContainsText $steamOptimizer $marker 'Steam durable state/fail-closed contract'
 }
 foreach ($marker in @(
-    "[string]`$state.version -eq '1.5.0'",
+    "[string]`$state.version -eq '1.6.0'",
     "[string]`$state.applyStatus -eq 'applied'",
     'Test-SteamStartupQuiet',
     'Test-SteamDownloadConfig',
-    'Test-SteamClientTweaks'
+    'Test-SteamClientTweaks',
+    'Complete client debloat',
+    'Windows background suppression',
+    'Test-SteamCompleteClientDebloat',
+    'Test-SteamWindowsQuiet'
 )) {
     Assert-ContainsText $steamDetect $marker 'Steam live applied-state contract'
 }

@@ -84,7 +84,7 @@
                                       IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
                                       OnContent="On"
                                       OffContent="Off" />
-                        <TextBlock Text="On launch: prompt when a new OptiHub app is available, and refresh the Discord optimizer kit in the background."
+                        <TextBlock Text="On launch: prompt for a new OptiHub app (ships matching Discord / Steam / NVIDIA scripts), then refresh kits from GitHub."
                                    Style="{StaticResource OptiCaption}"
                                    TextWrapping="WrapWholeWords"
                                    Opacity="0.85"
@@ -104,7 +104,7 @@
                                            Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Spacing="3">
-                                <TextBlock Text="Discord kit version" Style="{StaticResource OptiCaption}" />
+                                <TextBlock Text="Optimizer kits (Discord / Steam / NVIDIA)" Style="{StaticResource OptiCaption}" />
                                 <TextBlock Text="{x:Bind ViewModel.KitVersion, Mode=OneWay}"
                                            FontFamily="{StaticResource OptiUiFontSemiBold}"
                                            FontSize="15"
@@ -113,26 +113,14 @@
                             </StackPanel>
                         </Grid>
 
-                        <Grid ColumnSpacing="12" Margin="0,2,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0"
-                                    Style="{StaticResource OptiPrimaryButton}"
-                                    Content="Check for app updates"
-                                    AutomationProperties.Name="Check for OptiHub app updates"
-                                    Command="{x:Bind ViewModel.CheckAppUpdatesCommand}"
-                                    HorizontalAlignment="Stretch"
-                                    IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                            <Button Grid.Column="1"
-                                    Style="{StaticResource OptiQuietButton}"
-                                    Content="Check Discord kit updates"
-                                    AutomationProperties.Name="Check for Discord optimizer kit updates"
-                                    Command="{x:Bind ViewModel.CheckScriptUpdatesCommand}"
-                                    HorizontalAlignment="Stretch"
-                                    IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                        </Grid>
+                        <Button Style="{StaticResource OptiPrimaryButton}"
+                                Content="Check for updates"
+                                AutomationProperties.Name="Check for OptiHub app and optimizer kit updates"
+                                AutomationProperties.HelpText="Checks for a new OptiHub app release and refreshes Discord, Steam, and NVIDIA optimizer scripts."
+                                Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
+                                HorizontalAlignment="Stretch"
+                                Margin="0,2,0,0"
+                                IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
 
                         <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
                                    Style="{StaticResource OptiBody}"

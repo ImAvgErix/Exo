@@ -95,49 +95,68 @@ public partial class SettingsViewModel : ObservableObject
             _services.Settings.Update(s => s.AutoUpdateScripts = value);
     }
 
+    /// <summary>
+    /// Single update path: app release (includes shipped scripts) then refresh
+    /// Discord / Steam / NVIDIA kits from GitHub so one button covers everything.
+    /// </summary>
     [RelayCommand]
-    private async Task CheckAppUpdatesAsync()
+    private async Task CheckForUpdatesAsync()
     {
         if (IsUpdating) return;
         IsUpdating = true;
-        UpdateStatus = "Checking for OptiHub updates...";
+        UpdateStatus = "Checking for OptiHub + optimizer kit updates...";
         try
         {
             var progress = new Progress<string>(m => UpdateStatus = m);
-            var result = await _services.Updater.CheckAppUpdateAsync(status: progress);
-            UpdateStatus = result.Message;
+            var parts = new List<string>();
+
+            // 1) App release (bundles the latest scripts for that version).
+            var app = await _services.Updater.CheckAppUpdateAsync(status: progress);
             AppVersion = GetAppVersionText();
-            if (result.UpdateAvailable)
+            if (app.UpdateAvailable)
             {
-                // Manual check: still ask before replacing the running install.
                 var installNow = true;
                 if (ConfirmAsync is not null)
                 {
                     installNow = await ConfirmAsync(
                         "Install OptiHub update?",
-                        $"Version {result.RemoteVersion} is available (you have {result.LocalVersion}).\n\n" +
+                        $"Version {app.RemoteVersion} is available (you have {app.LocalVersion}).\n\n" +
+                        "This app release includes the matching Discord / Steam / NVIDIA scripts.\n" +
                         "OptiHub will close, install in place, and reopen.");
                 }
 
-                if (!installNow)
+                if (installNow)
                 {
-                    UpdateStatus = $"Update v{result.RemoteVersion} available — install skipped.";
-                    return;
-                }
-
-                UpdateStatus = result.Message + " Installing...";
-                var install = await _services.Updater.InstallAppUpdateAsync(result, status: progress);
-                UpdateStatus = install.Message;
-                AppVersion = GetAppVersionText();
-                if (install.ShouldExit)
-                {
-                    // Give the SFX a moment to start, then exit so %LocalAppData%\OptiHub\app unlocks.
+                    UpdateStatus = app.Message + " Installing...";
+                    var install = await _services.Updater.InstallAppUpdateAsync(app, status: progress);
                     UpdateStatus = install.Message;
-                    await Task.Delay(900);
-                    Microsoft.UI.Xaml.Application.Current?.Exit();
-                    return;
+                    AppVersion = GetAppVersionText();
+                    if (install.ShouldExit)
+                    {
+                        await Task.Delay(900);
+                        Microsoft.UI.Xaml.Application.Current?.Exit();
+                        return;
+                    }
+
+                    parts.Add(install.Message);
+                }
+                else
+                {
+                    parts.Add($"App v{app.RemoteVersion} available — install skipped.");
                 }
             }
+            else
+            {
+                parts.Add(app.Message);
+            }
+
+            // 2) Always refresh optimizer kits too (covers script-only fixes on main).
+            UpdateStatus = "Refreshing Discord / Steam / NVIDIA kits...";
+            var scripts = await _services.Updater.CheckAndUpdateAllScriptsAsync(force: true, status: progress);
+            parts.Add(scripts.Message);
+            RefreshKitVersionText();
+
+            UpdateStatus = string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
         }
         catch (Exception ex)
         {
@@ -149,33 +168,12 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
+    // Back-compat command names (XAML / callers that still bind old names).
     [RelayCommand]
-    private async Task CheckScriptUpdatesAsync()
-    {
-        if (IsUpdating) return;
-        IsUpdating = true;
-        UpdateStatus = "Checking Discord / Steam / NVIDIA script updates...";
-        try
-        {
-            var progress = new Progress<string>(m => UpdateStatus = m);
-            // force:true so a stuck equal/older VERSION still re-pulls kits from GitHub main
-            // when the user explicitly clicks Update Scripts.
-            var result = await _services.Updater.CheckAndUpdateAllScriptsAsync(force: true, status: progress);
-            UpdateStatus = result.Message;
-            KitVersion =
-                $"D{_services.Scripts.GetWorkingKitVersion("Discord")} / " +
-                $"S{_services.Scripts.GetWorkingKitVersion("Steam")} / " +
-                $"N{_services.Scripts.GetWorkingKitVersion("Nvidia")}";
-        }
-        catch (Exception ex)
-        {
-            UpdateStatus = ex.Message;
-        }
-        finally
-        {
-            IsUpdating = false;
-        }
-    }
+    private Task CheckAppUpdatesAsync() => CheckForUpdatesAsync();
+
+    [RelayCommand]
+    private Task CheckScriptUpdatesAsync() => CheckForUpdatesAsync();
 
     private void LoadFromSettings()
     {
@@ -195,9 +193,17 @@ public partial class SettingsViewModel : ObservableObject
             _suppressSettingsSync = false;
         }
 
-        KitVersion = _services.Scripts.GetWorkingVersion();
+        RefreshKitVersionText();
         AppVersion = GetAppVersionText();
         AboutFooter = "OptiHub " + AppVersion;
+    }
+
+    private void RefreshKitVersionText()
+    {
+        KitVersion =
+            $"D{_services.Scripts.GetWorkingKitVersion("Discord")} / " +
+            $"S{_services.Scripts.GetWorkingKitVersion("Steam")} / " +
+            $"N{_services.Scripts.GetWorkingKitVersion("Nvidia")}";
     }
 
     private static string GetAppVersionText()

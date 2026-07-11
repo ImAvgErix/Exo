@@ -635,11 +635,14 @@ public sealed class OptimizerStateService
                 downloadMarkerOk = IsTrue(root, "configVerified") && IsTrue(root, "downloadOptimized");
                 clientMarkerOk = IsTrue(root, "clientTweaksVerified") &&
                                  IsTrue(root, "snappyUi") && IsTrue(root, "overlayTweaks");
-                markerOk = string.Equals(markerVersion, "1.5.0", StringComparison.Ordinal) &&
+                markerOk = string.Equals(markerVersion, "1.6.0", StringComparison.Ordinal) &&
                            string.Equals(applyStatus, "applied", StringComparison.Ordinal) &&
                            IsTrue(root, "applied") &&
                            root.TryGetProperty("quick", out var quickValue) &&
                            quickValue.ValueKind == JsonValueKind.False &&
+                           IsTrue(root, "fullApply") &&
+                           IsTrue(root, "windowsVerified") &&
+                           IsTrue(root, "debloatVerified") &&
                            IsTrue(root, "cacheCleanupCompleted") &&
                            IsTrue(root, "shaderInventoryVerified") &&
                            IsTrue(root, "installedShaderCachesPreserved") &&

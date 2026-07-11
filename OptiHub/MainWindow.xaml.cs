@@ -287,8 +287,9 @@ public sealed partial class MainWindow : Window
                 // network / dialog issues — still try scripts
             }
 
-            // 2) Discord script kit — silent (no prompt)
-            await App.Services.Updater.CheckAndUpdateDiscordScriptsAsync(force: false, ct: ct);
+            // 2) Optimizer kits (Discord / Steam / NVIDIA) — silent refresh from GitHub.
+            // App releases already ship matching kits; this still picks up script-only fixes.
+            await App.Services.Updater.CheckAndUpdateAllScriptsAsync(force: false, ct: ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
