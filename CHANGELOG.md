@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.1
+
+- **Brand icon**: new unique OptiHub mark (hex hub + performance bars + mint accent) on pure black
+- **Start Menu / pin**: multi-size .ico (16–256) so the glyph fills Windows Start tiles like other modern apps
+- Packaged as ApplicationIcon + Start Menu shortcut IconLocation (versioned path + shell refresh)
 ## 1.8.0
 
 - **Shell**: pure **WinUI 3** again — exact **1.6.13** UI (Jakarta/Cormorant fonts, hover cards, full names, Coming soon, Settings, AMOLED/cream)
