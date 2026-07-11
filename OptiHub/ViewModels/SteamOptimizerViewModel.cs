@@ -261,21 +261,8 @@ public partial class SteamOptimizerViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
+        // Full live detect only — no fast heuristic flash of "Already optimized".
         if (IsBusy) return;
-        IsStatusLoading = true;
-        IsFeatureListVisible = false;
-        try
-        {
-            ApplyState(await _services.OptimizerState.DetectSteamAsync(fastOnly: true));
-            if (!IsBusy)
-                await RefreshAsync();
-        }
-        catch (Exception ex)
-        {
-            IsStatusLoading = false;
-            StatusText = "Status check failed";
-            DetailText = "Steam was not changed. Try Refresh status again.";
-            SetResult($"Could not check Steam: {ex.Message}", success: false);
-        }
+        await RefreshAsync();
     }
 }

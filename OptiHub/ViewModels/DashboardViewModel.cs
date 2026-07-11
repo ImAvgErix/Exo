@@ -93,37 +93,16 @@ public partial class DashboardViewModel : ObservableObject
         NavigateToOptimizer?.Invoke(this, id);
     }
 
-    public Task RefreshStatesAsync(CancellationToken ct = default) =>
-        Task.WhenAll(
-            RefreshOneAsync("discord", token => _services.OptimizerState.DetectDiscordAsync(token, fastOnly: true), ct),
-            RefreshOneAsync("steam", token => _services.OptimizerState.DetectSteamAsync(token, fastOnly: true), ct),
-            RefreshOneAsync("nvidia", token => _services.OptimizerState.DetectNvidiaAsync(token, fastOnly: true), ct));
-
-    private async Task RefreshOneAsync(
-        string id,
-        Func<CancellationToken, Task<OptimizerStateInfo>> detect,
-        CancellationToken ct)
+    /// <summary>
+    /// Home cards no longer pre-claim "Optimized" from a fast heuristic.
+    /// Live status is only computed when the user opens that optimizer page.
+    /// </summary>
+    public Task RefreshStatesAsync(CancellationToken ct = default)
     {
-        var card = Cards.FirstOrDefault(c => c.Definition.Id == id);
-        if (card is null) return;
-        card.IsLoadingState = true;
-        try
-        {
-            var state = await detect(ct);
-            card.ApplyState(state);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            // The dashboard was navigated away from; no status update is needed.
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Could not detect {id} state: {ex}");
-        }
-        finally
-        {
+        ct.ThrowIfCancellationRequested();
+        foreach (var card in Cards)
             card.IsLoadingState = false;
-        }
+        return Task.CompletedTask;
     }
 }
 
@@ -136,18 +115,6 @@ public partial class OptimizerCardViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isComingSoon;
-
-    [ObservableProperty]
-    private bool _isApplied;
-
-    public void ApplyState(OptimizerStateInfo state)
-    {
-        IsComingSoon = Definition.Status == OptimizerStatus.ComingSoon;
-        if (IsComingSoon) return;
-
-        IsApplied = state.IsApplied;
-        Definition.Status = state.IsApplied ? OptimizerStatus.Applied : OptimizerStatus.Available;
-    }
 
     public void InitializePresentation()
     {

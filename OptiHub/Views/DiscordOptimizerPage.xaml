@@ -9,8 +9,9 @@
     <Grid Padding="28,12,28,18">
         <Border Style="{StaticResource OptiCard}"
                 Padding="24,20"
-                MaxWidth="{StaticResource OptiPageMaxWidth}"
-                HorizontalAlignment="Stretch"
+                Width="720"
+                MaxWidth="720"
+                HorizontalAlignment="Center"
                 VerticalAlignment="Stretch">
             <Grid>
                 <Grid.RowDefinitions>

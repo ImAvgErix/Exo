@@ -308,22 +308,9 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
+        // Full live detect only — no fast heuristic flash of "Already optimized".
         if (IsBusy) return;
-        IsStatusLoading = true;
-        IsFeatureListVisible = false;
-        try
-        {
-            ApplyState(await _services.OptimizerState.DetectDiscordAsync(fastOnly: true));
-            if (!IsBusy)
-                await RefreshAsync();
-        }
-        catch (Exception ex)
-        {
-            IsStatusLoading = false;
-            StatusText = "Status check failed";
-            DetailText = "Discord was not changed. Try Refresh status again.";
-            SetResult($"Could not check Discord: {ex.Message}", success: false);
-        }
+        await RefreshAsync();
     }
 }
 

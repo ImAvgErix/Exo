@@ -294,22 +294,8 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        IsStatusLoading = true;
-        try
-        {
-            ApplyState(await _services.OptimizerState.DetectNvidiaAsync(fastOnly: true));
-            if (!IsBusy)
-                await RefreshAsync();
-        }
-        catch (Exception ex)
-        {
-            StatusText = "Status unavailable";
-            DetailText = "OptiHub could not initialize the NVIDIA optimizer.";
-            SetResult(ex.Message, success: false);
-        }
-        finally
-        {
-            IsStatusLoading = false;
-        }
+        // Full live detect only — no fast heuristic flash of "Already optimized".
+        if (IsBusy) return;
+        await RefreshAsync();
     }
 }

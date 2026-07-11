@@ -6,65 +6,38 @@
     xmlns:viewModels="using:OptiHub.ViewModels"
     Background="Transparent">
 
-    <Grid Padding="32,18,32,26">
-        <ScrollViewer VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled"
-                      HorizontalContentAlignment="Stretch"
-                      VerticalContentAlignment="Center"
-                      AutomationProperties.Name="Optimizer dashboard">
-            <StackPanel MaxWidth="{StaticResource OptiPageMaxWidth}"
-                        HorizontalAlignment="Stretch"
-                        Spacing="18"
-                        Margin="0,0,8,0">
+    <Grid Padding="28,16,28,22">
+        <StackPanel MaxWidth="760"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="16">
 
-            <StackPanel Spacing="6" Margin="12,0,12,2">
+            <StackPanel Spacing="4" Margin="0,0,0,2">
                 <TextBlock Text="Maximum performance. No compromise."
                            Style="{StaticResource OptiTagline}"
+                           FontSize="30"
+                           LineHeight="36"
                            HorizontalAlignment="Stretch" />
-                <TextBlock Text="Choose a target. OptiHub will show exactly what changes before it runs."
+                <TextBlock Text="Choose a target. Status is verified when you open it."
                            Style="{StaticResource OptiTaglineSupport}"
+                           FontSize="13"
                            HorizontalAlignment="Stretch" />
             </StackPanel>
 
-                <Border Style="{StaticResource OptiRiskCard}"
-                        MaxWidth="728"
-                        HorizontalAlignment="Stretch"
-                        AutomationProperties.Name="No-compromise tuning notice">
-                <Grid ColumnSpacing="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <FontIcon Glyph="&#xE7BA;"
-                              FontSize="15"
-                              Foreground="{ThemeResource OptiWarningBrush}"
-                              VerticalAlignment="Top"
-                              Margin="0,1,0,0" />
-                    <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock Text="NO-COMPROMISE TUNING"
-                                   Style="{StaticResource OptiRiskLabel}" />
-                        <TextBlock Text="Profiles favor latency, FPS, and lower overhead over visual effects, background convenience, and vendor defaults. Discord and Steam Repair restore OptiHub-managed changes. NVIDIA Reset only clears OptiHub status; undo NVIDIA changes manually in NVIDIA settings or with a driver reinstall."
-                                   Style="{StaticResource OptiCaption}"
-                                   Foreground="{ThemeResource OptiSecondaryTextBrush}"
-                                   LineHeight="17"
-                                   TextWrapping="WrapWholeWords" />
-                    </StackPanel>
-                </Grid>
-                </Border>
-
-                <ItemsControl MaxWidth="744"
-                              HorizontalAlignment="Center"
-                              ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}">
+            <ItemsControl HorizontalAlignment="Center"
+                          ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <ItemsWrapGrid Orientation="Horizontal" />
+                        <ItemsWrapGrid Orientation="Horizontal"
+                                       MaximumRowsOrColumns="3"
+                                       HorizontalAlignment="Center" />
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
                         <Button Style="{StaticResource OptiCardButton}"
-                                Width="232"
-                                MinHeight="156"
+                                Width="220"
+                                MinHeight="148"
                                 Margin="8"
                                 Click="CardButton_Click"
                                 Tag="{x:Bind Definition.Id}"
@@ -73,12 +46,12 @@
                                 IsEnabled="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                 Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
                             <Border Style="{StaticResource OptiCard}"
-                                    Width="232"
-                                    MinHeight="156"
-                                    Padding="16,14">
+                                    Width="220"
+                                    MinHeight="148"
+                                    Padding="14,12">
                                 <StackPanel HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
-                                            Spacing="10">
+                                            Spacing="8">
                                     <Border Style="{StaticResource OptiLogoWell}">
                                         <Image Width="40"
                                                Height="40"
@@ -95,34 +68,19 @@
                                                Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                                TextAlignment="Center"
                                                TextWrapping="Wrap"
-                                               MaxWidth="200" />
-                                    <Grid MinHeight="15" MinWidth="100">
-                                        <ProgressRing Width="14"
-                                                      Height="14"
-                                                      HorizontalAlignment="Center"
-                                                      IsActive="{x:Bind IsLoadingState, Mode=OneWay}"
-                                                      Visibility="{x:Bind IsLoadingState, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                      AutomationProperties.Name="Checking optimization status" />
-                                        <TextBlock Text="Optimized"
-                                                   FontFamily="{StaticResource OptiUiFont}"
-                                                   FontSize="11"
-                                                   Foreground="{ThemeResource OptiSuccessBrush}"
-                                                   TextAlignment="Center"
-                                                   Visibility="{x:Bind IsApplied, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                        <TextBlock Text="Coming soon"
-                                                   FontFamily="{StaticResource OptiUiFont}"
-                                                   FontSize="11"
-                                                   Foreground="{ThemeResource OptiMutedTextBrush}"
-                                                   TextAlignment="Center"
-                                                   Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                    </Grid>
+                                               MaxWidth="190" />
+                                    <TextBlock Text="Coming soon"
+                                               FontFamily="{StaticResource OptiUiFont}"
+                                               FontSize="11"
+                                               Foreground="{ThemeResource OptiMutedTextBrush}"
+                                               TextAlignment="Center"
+                                               Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                 </StackPanel>
                             </Border>
                         </Button>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
-        </ScrollViewer>
+            </ItemsControl>
+        </StackPanel>
     </Grid>
 </Page>
