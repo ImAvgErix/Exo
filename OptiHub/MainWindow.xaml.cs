@@ -17,9 +17,9 @@ namespace OptiHub;
 public sealed partial class MainWindow : Window
 {
     private readonly CancellationTokenSource _lifetimeCts = new();
+    private readonly SemaphoreSlim _initGate = new(1, 1);
     private WebUiBridge? _bridge;
     private bool _webReady;
-    private int _initAttempts;
 
     public MainWindow()
     {
@@ -42,14 +42,12 @@ public sealed partial class MainWindow : Window
                 ApplyFixedWindowChrome();
         };
 
-        // Init when the WebView control itself is ready (not only the grid).
         WebView.Loaded += async (_, _) => await InitWebViewAsync();
-        RootGrid.Loaded += (_, _) =>
+        RootGrid.Loaded += async (_, _) =>
         {
             UpdateCaptionInset();
             ApplyFixedWindowChrome();
-            // Fallback if WebView.Loaded already fired before we subscribed.
-            _ = InitWebViewAsync();
+            await InitWebViewAsync();
         };
         RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
@@ -73,27 +71,109 @@ public sealed partial class MainWindow : Window
     private async Task InitWebViewAsync()
     {
         if (_webReady) return;
-        if (Interlocked.Increment(ref _initAttempts) > 8) return;
+        if (!await _initGate.WaitAsync(0)) return; // another init in flight
 
         try
         {
+            if (_webReady) return;
             SetHostStatus("Starting WebView2…");
-            await WebView.EnsureCoreWebView2Async();
 
-            var core = WebView.CoreWebView2;
-            if (core is null)
+            // WebView2 needs a real HWND — wait until it is in the live tree.
+            for (var i = 0; i < 80 && (WebView.XamlRoot is null || !WebView.IsLoaded); i++)
+                await Task.Delay(50);
+
+            if (WebView.XamlRoot is null)
+                throw new InvalidOperationException("WebView is not in the visual tree yet (XamlRoot null).");
+
+            var userData = Path.Combine(PathHelper.AppDataDir, "WebView2");
+            Directory.CreateDirectory(userData);
+
+            // Capture init result via the WinUI event (more reliable than reading CoreWebView2 immediately).
+            var initTcs = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            void OnInitialized(WebView2 sender, CoreWebView2InitializedEventArgs args)
             {
-                SetHostStatus("WebView2 core is null");
-                return;
+                try
+                {
+                    initTcs.TrySetResult(args.Exception);
+                }
+                catch (Exception ex)
+                {
+                    initTcs.TrySetException(ex);
+                }
             }
 
-            core.Settings.AreDefaultContextMenusEnabled = true;
-            core.Settings.AreDevToolsEnabled = true; // F12 if needed while diagnosing
+            WebView.CoreWebView2Initialized += OnInitialized;
+            try
+            {
+                // WinAppSDK 2.2: CreateWithOptionsAsync(browserFolder, userDataFolder, options)
+                // Explicit user-data folder under %LocalAppData% is required for reliable init.
+                CoreWebView2Environment? env = null;
+                try
+                {
+                    env = await CoreWebView2Environment.CreateWithOptionsAsync(
+                        null,
+                        userData,
+                        null);
+                }
+                catch (Exception envEx)
+                {
+                    LogWeb("CreateWithOptionsAsync failed: " + envEx);
+                    // Fallback: default environment
+                    try { env = await CoreWebView2Environment.CreateAsync(); }
+                    catch (Exception envEx2)
+                    {
+                        throw new InvalidOperationException(
+                            "Could not create WebView2 environment. " +
+                            "Install/repair the Evergreen WebView2 Runtime.\n\n" + envEx2.Message,
+                            envEx2);
+                    }
+                }
+
+                if (env is not null)
+                    await WebView.EnsureCoreWebView2Async(env);
+                else
+                    await WebView.EnsureCoreWebView2Async();
+
+                // Wait for the initialized event (or short timeout, then re-check property).
+                var finished = await Task.WhenAny(initTcs.Task, Task.Delay(15000));
+                if (finished == initTcs.Task)
+                {
+                    var initEx = await initTcs.Task;
+                    if (initEx is not null)
+                        throw new InvalidOperationException("WebView2 initialization failed: " + initEx.Message, initEx);
+                }
+            }
+            finally
+            {
+                WebView.CoreWebView2Initialized -= OnInitialized;
+            }
+
+            // Give the control a beat to publish CoreWebView2 after the event.
+            CoreWebView2? core = null;
+            for (var i = 0; i < 40; i++)
+            {
+                core = WebView.CoreWebView2;
+                if (core is not null) break;
+                await Task.Delay(50);
+            }
+
+            if (core is null)
+            {
+                throw new InvalidOperationException(
+                    "WebView2 Runtime did not attach (CoreWebView2 stayed null).\n\n" +
+                    "Fix:\n" +
+                    "1) Install/repair Evergreen WebView2 Runtime (x64)\n" +
+                    "   https://go.microsoft.com/fwlink/p/?LinkId=2124703\n" +
+                    "2) Reboot once after install\n" +
+                    "3) Delete %LocalAppData%\\OptiHub\\WebView2 and reopen OptiHub\n\n" +
+                    "Runtime looks for Edge WebView under Program Files (x86)\\Microsoft\\EdgeWebView.");
+            }
+
+            core.Settings.AreDefaultContextMenusEnabled = false;
+            core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.IsZoomControlEnabled = false;
-            core.Settings.AreBrowserAcceleratorKeysEnabled = true;
 
-            // Opaque fill — Transparent WebView2 is a known blank-screen footgun.
             WebView.DefaultBackgroundColor = Windows.UI.Color.FromArgb(255, 0, 0, 0);
 
             var webRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Assets", "Web"));
@@ -104,7 +184,6 @@ public sealed partial class MainWindow : Window
             if (!File.Exists(indexPath))
                 throw new FileNotFoundException("index.html missing", indexPath);
 
-            // Virtual host for clean https origins; file:// is the reliable fallback.
             try
             {
                 core.SetVirtualHostNameToFolderMapping(
@@ -114,7 +193,7 @@ public sealed partial class MainWindow : Window
             }
             catch (Exception mapEx)
             {
-                SetHostStatus("Virtual host map failed: " + mapEx.Message);
+                LogWeb("Virtual host map failed: " + mapEx);
             }
 
             _bridge = new WebUiBridge(
@@ -123,10 +202,7 @@ public sealed partial class MainWindow : Window
                 this,
                 async json =>
                 {
-                    try
-                    {
-                        WebView.CoreWebView2?.PostWebMessageAsJson(json);
-                    }
+                    try { WebView.CoreWebView2?.PostWebMessageAsJson(json); }
                     catch { /* ignore */ }
                     await Task.CompletedTask;
                 });
@@ -140,7 +216,6 @@ public sealed partial class MainWindow : Window
                         raw = args.WebMessageAsJson;
                     if (string.IsNullOrWhiteSpace(raw)) return;
 
-                    // JS postMessage(string) often arrives as a JSON-encoded string literal.
                     if (raw.Length >= 2 && raw[0] == '"' && raw[^1] == '"')
                     {
                         try { raw = System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? raw; }
@@ -152,13 +227,7 @@ public sealed partial class MainWindow : Window
                 }
                 catch (Exception ex)
                 {
-                    try
-                    {
-                        File.AppendAllText(
-                            Path.Combine(PathHelper.LogsDir, "webview-bridge.log"),
-                            $"[{DateTime.UtcNow:O}] {ex}\n");
-                    }
-                    catch { /* ignore */ }
+                    LogWeb("bridge: " + ex);
                 }
             };
 
@@ -166,26 +235,17 @@ public sealed partial class MainWindow : Window
             {
                 if (!args.IsSuccess)
                 {
-                    SetHostStatus($"Navigation failed (0x{args.WebErrorStatus}) — trying file fallback…");
-                    try
-                    {
-                        // file:// fallback if virtual host is blocked
-                        var fileUri = new Uri(indexPath).AbsoluteUri;
-                        core.Navigate(fileUri);
-                    }
-                    catch (Exception ex2)
-                    {
-                        SetHostStatus("Load failed: " + ex2.Message);
-                    }
+                    SetHostStatus("Retrying UI load…");
+                    try { await LoadWebUiDocumentAsync(core, webRoot, indexPath); }
+                    catch (Exception ex) { SetHostStatus("Load failed: " + ex.Message); }
                     return;
                 }
 
                 SetHostStatus(string.Empty);
                 try
                 {
-                    var theme = App.Services.Settings.Current.Theme;
                     if (_bridge is not null)
-                        await _bridge.PushThemeAsync(theme);
+                        await _bridge.PushThemeAsync(App.Services.Settings.Current.Theme);
                 }
                 catch { /* best-effort */ }
             };
@@ -197,44 +257,19 @@ public sealed partial class MainWindow : Window
             };
 
             SetHostStatus("Loading UI…");
-            // Most reliable for unpackaged apps: load HTML as string with absolute
-            // file:// links so CSS/JS/images always resolve (virtual host can silent-fail).
             await LoadWebUiDocumentAsync(core, webRoot, indexPath);
             _webReady = true;
+            SetHostStatus(string.Empty);
         }
         catch (Exception ex)
         {
-            SetHostStatus("WebView2 error");
-            try
-            {
-                File.AppendAllText(
-                    Path.Combine(PathHelper.LogsDir, "webview-init.log"),
-                    $"[{DateTime.UtcNow:O}] {ex}\n");
-            }
-            catch { /* ignore */ }
-
-            // Visible in-window error (not only a blank black frame).
-            await DispatcherQueue.EnqueueAsync(() =>
-            {
-                var msg =
-                    "WebView2 failed to start.\n\n" +
-                    ex.Message +
-                    "\n\nInstall/repair the Evergreen WebView2 Runtime, then reopen OptiHub.\n" +
-                    "Log: %LocalAppData%\\OptiHub\\logs\\webview-init.log";
-
-                // Replace webview area with text
-                if (RootGrid.Children.Contains(WebView))
-                    RootGrid.Children.Remove(WebView);
-
-                RootGrid.Children.Add(new TextBlock
-                {
-                    Text = msg,
-                    TextWrapping = TextWrapping.WrapWholeWords,
-                    Margin = new Thickness(28, 48, 28, 28),
-                    Foreground = new SolidColorBrush(Colors.White),
-                    FontSize = 14
-                });
-            });
+            LogWeb(ex.ToString());
+            SetHostStatus("WebView2 failed");
+            await ShowFatalWebViewErrorAsync(ex);
+        }
+        finally
+        {
+            _initGate.Release();
         }
     }
 
@@ -252,8 +287,7 @@ public sealed partial class MainWindow : Window
         var rootUri = new Uri(webRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar);
         var logosUri = new Uri(rootUri, "logos/").AbsoluteUri;
 
-        // Inline CSS/JS so NavigateToString cannot fail to load external files
-        // (about:blank origin often blocks file:// script tags).
+        // Inline CSS/JS — NavigateToString + external file:// scripts often block.
         html = html
             .Replace(
                 "<link rel=\"stylesheet\" href=\"app.css\" />",
@@ -264,13 +298,46 @@ public sealed partial class MainWindow : Window
                 System.Text.Json.JsonSerializer.Serialize(logosUri) +
                 ";\n" + js + "\n</script>");
 
-        // 1) Virtual host (best case for messaging + relative logos).
         try { core.Navigate("https://app.optihub.local/index.html"); }
-        catch { /* fall through */ }
+        catch { /* optional */ }
 
-        // 2) Guaranteed paint: fully inlined document.
         await Task.Delay(30);
         core.NavigateToString(html);
+    }
+
+    private async Task ShowFatalWebViewErrorAsync(Exception ex)
+    {
+        var msg =
+            "WebView2 failed to start.\n\n" +
+            ex.Message +
+            "\n\n1) Install Evergreen WebView2 Runtime (x64):\n" +
+            "   https://go.microsoft.com/fwlink/p/?LinkId=2124703\n" +
+            "2) Delete folder: %LocalAppData%\\OptiHub\\WebView2\n" +
+            "3) Reopen OptiHub\n\n" +
+            "Log: %LocalAppData%\\OptiHub\\logs\\webview-init.log";
+
+        await DispatcherQueue.EnqueueAsync(() =>
+        {
+            try
+            {
+                if (RootGrid.Children.Contains(WebView))
+                    RootGrid.Children.Remove(WebView);
+            }
+            catch { /* ignore */ }
+
+            RootGrid.Children.Add(new ScrollViewer
+            {
+                Margin = new Thickness(28, 48, 28, 28),
+                Content = new TextBlock
+                {
+                    Text = msg,
+                    TextWrapping = TextWrapping.WrapWholeWords,
+                    Foreground = new SolidColorBrush(Colors.White),
+                    FontSize = 14,
+                    IsTextSelectionEnabled = true
+                }
+            });
+        });
     }
 
     private void SetHostStatus(string text)
@@ -287,6 +354,17 @@ public sealed partial class MainWindow : Window
             HostStatus.Visibility = string.IsNullOrWhiteSpace(text)
                 ? Visibility.Collapsed
                 : Visibility.Visible;
+        }
+        catch { /* ignore */ }
+    }
+
+    private static void LogWeb(string text)
+    {
+        try
+        {
+            File.AppendAllText(
+                Path.Combine(PathHelper.LogsDir, "webview-init.log"),
+                $"[{DateTime.UtcNow:O}] {text}\n");
         }
         catch { /* ignore */ }
     }
