@@ -277,9 +277,9 @@ $steamOk = [bool]$steam
 if (-not $steamOk) {
     $statusText = 'Steam not installed'
     $detail = 'Install Steam, open it once, then return.'
-    Add-Feature 'Steam install' 'Steam is required before optimizations can apply.' $false
+    Add-Feature 'Steam install' 'Required before optimizations can apply.' $false
 } else {
-    Add-Feature 'Steam install' $steam $true
+    Add-Feature 'Steam install' 'Client found and ready.' $true
 
     # OpenAsar equivalent: quiet CEF launcher
     $cefOk = $false
@@ -292,7 +292,7 @@ if (-not $steamOk) {
                 $launcherText -match '(?i)start\s+""\s+/HIGH'
         } catch { }
     }
-    Add-Feature 'Faster quiet Steam client' 'Steam-OptiHub.cmd replaces the stock launch path (disable-gpu, nofriendsui, nointro, High priority).' $cefOk
+    Add-Feature 'Quiet CEF launcher' 'Lean launch flags + High priority client start.' $cefOk
 
     # DiscOpt kernel equivalent
     $trimOk = $false
@@ -307,28 +307,25 @@ if (-not $steamOk) {
                 $helperText -match 'ProcessPriorityClass\]::BelowNormal'
         } catch { }
     }
-    Add-Feature 'Aggressive RAM + priority kernel' 'Reclaims steamwebhelper working sets every 5s, High priority when idle, BelowNormal while gaming. No suspend.' $trimOk
+    Add-Feature 'RAM trim + priority' '5s webhelper reclaim; yields CPU while gaming.' $trimOk
 
     $debloatOk = Test-SteamCompleteClientDebloat $steam
-    Add-Feature 'Complete client debloat' 'Leftover OptiHub launchers, desktop icons, crashpads, dumps/logs, and disposable CEF caches are removed. Installed games and shader caches stay intact.' $debloatOk
-
-    $runtimeOk = Test-SteamRuntimeIntegrity $steam
-    Add-Feature 'Steam runtime integrity' 'steam.exe, bin/, and steamwebhelper (CEF) remain installed.' $runtimeOk
-
     $dlOk = [bool]($state -and $state.configVerified -and $state.downloadOptimized) -and
         (Test-SteamDownloadConfig $steam)
-    Add-Feature 'Download tuning + deep cache clean' 'Throttle is cleared and disposable/orphaned caches are purged. Active downloads and installed-game shader caches stay intact.' $dlOk
+    $debloatCombined = $debloatOk -and $dlOk
+    Add-Feature 'Complete client debloat' 'Caches, leftovers, crashpads cleaned; games preserved.' $debloatCombined
 
     $snapOk = [bool]($state -and $state.clientTweaksVerified -and $state.snappyUi -and $state.overlayTweaks) -and
         (Test-SteamClientTweaks $steam)
-    Add-Feature 'Overlay / library client tweaks' 'GPU web views off, quieter overlay noise, no downloads while playing when keys exist.' $snapOk
+    Add-Feature 'Library / overlay tweaks' 'Quieter overlay and lighter library web views.' $snapOk
 
     $windowsQuietOk = Test-SteamWindowsQuiet $steam
-    Add-Feature 'Windows background suppression' 'No Steam autostart or scheduled tasks; Windows toasts off; tray icon not promoted.' $windowsQuietOk
+    Add-Feature 'Windows quiet shell' 'No autostart; toasts off; tray not promoted.' $windowsQuietOk
 
     $launchOk = Test-SteamStartMenuLaunchPath $steam
-    Add-Feature 'Start Menu / apps launch path' 'Start Menu and taskbar Steam shortcuts use Steam-OptiHub.cmd. No desktop icons.' $launchOk
+    Add-Feature 'Start Menu launch path' 'Shortcuts use OptiHub launcher; no desktop icons.' $launchOk
 
+    $runtimeOk = Test-SteamRuntimeIntegrity $steam
     $markerOk = [bool]($state -and
         [string]$state.version -eq '1.6.0' -and
         [string]$state.applyStatus -eq 'applied' -and
@@ -340,16 +337,16 @@ if (-not $steamOk) {
         $state.cacheCleanupCompleted -eq $true -and
         $state.shaderInventoryVerified -eq $true -and
         $state.installedShaderCachesPreserved -eq $true)
-    Add-Feature 'Verified optimizer record' 'A completed 1.6.0 full apply is recorded with Windows quiet, debloat, and cache verification.' $markerOk
+    Add-Feature 'Verified apply' 'Full 1.6.0 apply recorded and runtime intact.' ($markerOk -and $runtimeOk)
 
     $isApplied = $steamOk -and $markerOk -and $cefOk -and $trimOk -and $debloatOk -and
         $runtimeOk -and $dlOk -and $snapOk -and $windowsQuietOk -and $launchOk
 
     $statusText = if ($isApplied) { 'Already optimized' } else { 'Ready to optimize' }
     $detail = if ($isApplied) {
-        'No-compromise pack active: quiet CEF, full debloat, Windows quiet, aggressive 5s trim, priority yield.'
+        'Quiet CEF, debloat, Windows quiet, and 5s RAM trim are active.'
     } else {
-        'Some pieces are missing. Run to finish setup and unlock the savings below.'
+        'Some pieces are missing. Run to finish the checklist below.'
     }
 }
 

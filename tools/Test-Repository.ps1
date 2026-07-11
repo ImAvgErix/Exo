@@ -172,7 +172,7 @@ foreach ($marker in @(
     'Test-SteamDownloadConfig',
     'Test-SteamClientTweaks',
     'Complete client debloat',
-    'Windows background suppression',
+    'Windows quiet shell',
     'Test-SteamCompleteClientDebloat',
     'Test-SteamWindowsQuiet'
 )) {

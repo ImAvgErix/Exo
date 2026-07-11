@@ -65,43 +65,43 @@
                                   VerticalAlignment="Top">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <StackPanel Spacing="10" />
+                                <StackPanel Spacing="7" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:FeatureRowViewModel">
-                                <Grid ColumnSpacing="12" Opacity="{x:Bind Opacity}">
+                                <Grid ColumnSpacing="10" Opacity="{x:Bind Opacity}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <Border Width="34" Height="34"
-                                            CornerRadius="10"
+                                    <Border Width="28" Height="28"
+                                            CornerRadius="8"
                                             Background="{ThemeResource OptiAccentSoftBrush}"
                                             BorderBrush="{ThemeResource OptiCardStrokeBrush}"
-                                            BorderThickness="1.5"
+                                            BorderThickness="1"
                                             VerticalAlignment="Center">
                                         <FontIcon Glyph="{x:Bind Glyph}"
-                                                  FontSize="15"
+                                                  FontSize="13"
                                                   Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                                   HorizontalAlignment="Center"
                                                   VerticalAlignment="Center" />
                                     </Border>
-                                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                    <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
                                         <TextBlock Text="{x:Bind Title}"
                                                    FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                                   FontSize="14.5"
+                                                   FontSize="13.5"
                                                    FontWeight="SemiBold"
                                                    Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                                    TextTrimming="CharacterEllipsis"
                                                    MaxLines="1" />
                                         <TextBlock Text="{x:Bind Detail}"
                                                    FontFamily="{StaticResource OptiUiFont}"
-                                                   FontSize="12.5"
-                                                   LineHeight="18"
+                                                   FontSize="12"
+                                                   LineHeight="16"
                                                    Foreground="{ThemeResource OptiMutedTextBrush}"
-                                                   TextWrapping="WrapWholeWords"
-                                                   MaxLines="4"
+                                                   TextWrapping="NoWrap"
+                                                   MaxLines="1"
                                                    TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                 </Grid>

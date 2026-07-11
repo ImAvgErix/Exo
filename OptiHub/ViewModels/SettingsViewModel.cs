@@ -156,7 +156,14 @@ public partial class SettingsViewModel : ObservableObject
             parts.Add(scripts.Message);
             RefreshKitVersionText();
 
-            UpdateStatus = string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+            // Keep status short so Settings stays readable.
+            var clean = parts
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => p.Trim().TrimEnd('.'))
+                .ToList();
+            UpdateStatus = clean.Count == 0
+                ? "Up to date."
+                : string.Join(" · ", clean) + ".";
         }
         catch (Exception ex)
         {
@@ -200,10 +207,11 @@ public partial class SettingsViewModel : ObservableObject
 
     private void RefreshKitVersionText()
     {
+        // Compact: Discord · Steam · NVIDIA
         KitVersion =
-            $"D{_services.Scripts.GetWorkingKitVersion("Discord")} / " +
-            $"S{_services.Scripts.GetWorkingKitVersion("Steam")} / " +
-            $"N{_services.Scripts.GetWorkingKitVersion("Nvidia")}";
+            $"{_services.Scripts.GetWorkingKitVersion("Discord")} · " +
+            $"{_services.Scripts.GetWorkingKitVersion("Steam")} · " +
+            $"{_services.Scripts.GetWorkingKitVersion("Nvidia")}";
     }
 
     private static string GetAppVersionText()
