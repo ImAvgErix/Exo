@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.5.0'
+$Script:SteamOptVersion = '1.6.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Default Steam launch flags (formerly "aggressive" - this is the only tier).
@@ -324,6 +324,327 @@ function Test-SteamWindowsStartupDisabled {
     try {
         return [int](Get-ItemPropertyValue -Path 'HKCU:\Software\Valve\Steam' -Name 'StartupMode' -ErrorAction Stop) -eq 0
     } catch { return $false }
+}
+
+function Disable-SteamScheduledTasks {
+    try {
+        $tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue |
+            Where-Object {
+                ($_.TaskName -match '(?i)\bSteam\b' -or $_.TaskPath -match '(?i)\\Steam\\') -and
+                $_.TaskName -notmatch '(?i)Steam(VR|Link|OS|Deck)' -and
+                $_.TaskPath -notmatch '(?i)Steam(VR|Link|OS|Deck)'
+            })
+        foreach ($task in $tasks) {
+            if (-not [bool]$task.Settings.Enabled) { continue }
+            Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue | Out-Null
+            Write-Ok "Disabled scheduled task: $($task.TaskPath)$($task.TaskName)"
+        }
+    } catch {
+        Write-Warn "Scheduled task cleanup skipped: $($_.Exception.Message)"
+    }
+}
+
+function Set-SteamWindowsNotificationsOff {
+    # Quiet Windows: disable Steam toast banners (in-client Steam alerts still work).
+    $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    if (-not (Test-Path $base)) { New-Item -Path $base -Force | Out-Null }
+
+    $setOff = {
+        param([string]$Id)
+        $path = Join-Path $base $Id
+        if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
+        Set-ItemProperty -Path $path -Name 'Enabled' -Value 0 -Type DWord -Force
+    }
+
+    foreach ($id in @(
+        'Steam',
+        'Valve.Steam',
+        'Valve.Steam.Client',
+        'com.valvesoftware.Steam',
+        'steam.exe'
+    )) {
+        & $setOff $id
+    }
+
+    Get-ChildItem $base -ErrorAction SilentlyContinue |
+        Where-Object { $_.PSChildName -match '(?i)steam' -and $_.PSChildName -notmatch '(?i)steam(vr|link|os|deck)' } |
+        ForEach-Object {
+            Set-ItemProperty -Path $_.PSPath -Name 'Enabled' -Value 0 -Type DWord -Force
+            Write-Ok "Windows toasts off: $($_.PSChildName)"
+        }
+}
+
+function Set-SteamTrayIconHidden([string]$SteamPath) {
+    $notifyKey = 'HKCU:\Control Panel\NotifyIconSettings'
+    if (-not (Test-Path $notifyKey)) { return }
+
+    $steamExe = Join-Path $SteamPath 'steam.exe'
+    $prefix = $null
+    try { $prefix = [IO.Path]::GetFullPath($SteamPath).TrimEnd('\') + '\' } catch { }
+
+    $hidden = 0
+    Get-ChildItem $notifyKey -ErrorAction SilentlyContinue | ForEach-Object {
+        $item = Get-Item -Path $_.PSPath -ErrorAction SilentlyContinue
+        if (-not $item) { return }
+        $path = [string]$item.GetValue('ExecutablePath')
+        if (-not $path) { return }
+        $isSteam = $false
+        if ($path -match '(?i)[\\/]steam\.exe$' -or $path -match '(?i)\\Steam\\') { $isSteam = $true }
+        if (-not $isSteam -and $prefix) {
+            try {
+                $full = [IO.Path]::GetFullPath($path)
+                if ($full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { $isSteam = $true }
+            } catch { }
+        }
+        if (-not $isSteam) { return }
+        Set-ItemProperty -Path $_.PSPath -Name 'IsPromoted' -Value 0 -Type DWord -Force
+        $hidden++
+    }
+
+    if ($hidden -gt 0) { Write-Ok "Tray icon hidden ($hidden entries)" }
+    else { Write-Warn 'Steam tray registry entry not found yet - launch once, then re-run' }
+}
+
+function Apply-SteamWindowsQuiet([string]$SteamPath) {
+    Write-Step 'Applying Windows quiet shell (toasts, tray, tasks)...'
+    Disable-SteamScheduledTasks
+    Set-SteamWindowsNotificationsOff
+    Set-SteamTrayIconHidden $SteamPath
+    Write-Ok 'Windows quiet applied (toasts OFF, tray not promoted, no Steam scheduled tasks)'
+}
+
+function Test-SteamToastsOff {
+    $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    $ids = @('Steam', 'Valve.Steam', 'Valve.Steam.Client', 'com.valvesoftware.Steam', 'steam.exe')
+    $seen = $false
+    foreach ($id in $ids) {
+        $path = Join-Path $base $id
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        $seen = $true
+        try {
+            $entry = Get-ItemProperty -Path $path -ErrorAction Stop
+            $prop = $entry.PSObject.Properties['Enabled']
+            if (-not $prop -or [int]$prop.Value -ne 0) { return $false }
+        } catch { return $false }
+    }
+    return $seen
+}
+
+function Test-SteamTrayQuiet([string]$SteamPath) {
+    $notifyKey = 'HKCU:\Control Panel\NotifyIconSettings'
+    if (-not (Test-Path $notifyKey)) { return $true }
+    $prefix = $null
+    try { $prefix = [IO.Path]::GetFullPath($SteamPath).TrimEnd('\') + '\' } catch { }
+    foreach ($key in @(Get-ChildItem -Path $notifyKey -ErrorAction SilentlyContinue)) {
+        $item = Get-Item -Path $key.PSPath -ErrorAction SilentlyContinue
+        if (-not $item) { continue }
+        $exe = [string]$item.GetValue('ExecutablePath')
+        if (-not $exe) { continue }
+        $isSteam = ($exe -match '(?i)[\\/]steam\.exe$' -or $exe -match '(?i)\\Steam\\')
+        if (-not $isSteam -and $prefix) {
+            try {
+                $full = [IO.Path]::GetFullPath($exe)
+                if ($full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { $isSteam = $true }
+            } catch { }
+        }
+        if (-not $isSteam) { continue }
+        if ($item.GetValueNames() -notcontains 'IsPromoted' -or [int]$item.GetValue('IsPromoted') -ne 0) {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Test-SteamScheduledTasksQuiet {
+    try {
+        foreach ($task in @(Get-ScheduledTask -ErrorAction SilentlyContinue)) {
+            if ($task.TaskName -notmatch '(?i)\bSteam\b' -and $task.TaskPath -notmatch '(?i)\\Steam\\') { continue }
+            if ($task.TaskName -match '(?i)Steam(VR|Link|OS|Deck)' -or $task.TaskPath -match '(?i)Steam(VR|Link|OS|Deck)') { continue }
+            if ([bool]$task.Settings.Enabled) { return $false }
+        }
+        return $true
+    } catch { return $true }
+}
+
+function Test-SteamWindowsQuiet([string]$SteamPath) {
+    return (Test-SteamWindowsStartupDisabled) -and
+        (Test-SteamToastsOff) -and
+        (Test-SteamTrayQuiet $SteamPath) -and
+        (Test-SteamScheduledTasksQuiet)
+}
+
+function Clear-SteamDesktopShortcuts {
+    $removed = 0
+    foreach ($desktop in @(
+        [Environment]::GetFolderPath('Desktop'),
+        [Environment]::GetFolderPath('CommonDesktopDirectory')
+    )) {
+        if (-not $desktop -or -not (Test-Path -LiteralPath $desktop)) { continue }
+        Get-ChildItem -LiteralPath $desktop -Filter 'Steam*.lnk' -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            try {
+                Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
+                $removed++
+                Write-Ok "Removed desktop shortcut: $($_.Name)"
+            } catch { }
+        }
+    }
+    return $removed
+}
+
+function Invoke-SteamCompleteClientDebloat([string]$SteamPath) {
+    # Discord-parity "complete client debloat": leftovers, disposable caches,
+    # crashpads, desktop icons, orphaned OptiHub launchers. Never touch
+    # installed games, userdata login, or active shader caches for installed apps.
+    Write-Step 'Complete client debloat (leftovers, crashpads, disposable caches)...'
+    [long]$freed = 0
+    $actions = 0
+
+    foreach ($f in @(
+        (Join-Path $SteamPath 'Steam-OptiHub-Aggressive.cmd'),
+        (Join-Path $SteamPath 'Steam-OptiHub-Lean.cmd'),
+        (Join-Path $SteamPath 'Steam-OptiHub-Legacy.cmd')
+    )) {
+        if (Test-Path -LiteralPath $f) {
+            Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue
+            $actions++
+            Write-Ok "Removed leftover launcher: $(Split-Path $f -Leaf)"
+        }
+    }
+
+    $actions += [int](Clear-SteamDesktopShortcuts)
+
+    foreach ($d in @(
+        (Join-Path $env:LOCALAPPDATA 'Steam\htmlcache\Crashpad'),
+        (Join-Path $env:LOCALAPPDATA 'Steam\Crashpad'),
+        (Join-Path $SteamPath 'dumps'),
+        (Join-Path $SteamPath 'logs')
+    )) {
+        if (Test-Path -LiteralPath $d) {
+            $freed += Clear-PathTree $d
+            $actions++
+            Write-Ok "Cleared debloat path: $d"
+        }
+    }
+
+    # Stale package bootstrap leftovers (safe; Steam re-downloads if needed)
+    $package = Join-Path $SteamPath 'package'
+    if (Test-Path -LiteralPath $package) {
+        Get-ChildItem -LiteralPath $package -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -match '(?i)^\.(tmp|old|bak)$' -or $_.Name -match '(?i)\.(tmp|old|bak)$' } |
+            ForEach-Object {
+                try {
+                    $freed += [long]$_.Length
+                    Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
+                    $actions++
+                } catch { }
+            }
+    }
+
+    # Root-level junk logs already handled in Clear-SteamSafeCaches; wipe known temp
+    foreach ($pat in @('*.dmp', 'steam_log*.txt', 'bootstrap_log.txt')) {
+        Get-ChildItem -LiteralPath $SteamPath -Filter $pat -File -ErrorAction SilentlyContinue | ForEach-Object {
+            try {
+                $freed += [long]$_.Length
+                Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
+                $actions++
+            } catch { }
+        }
+    }
+
+    Write-Ok ("Client debloat actions={0}, freed ~{1:N1} MB" -f $actions, ($freed / 1MB))
+    return @{
+        Freed   = $freed
+        Actions = $actions
+    }
+}
+
+function Test-SteamCompleteClientDebloat([string]$SteamPath) {
+    if (-not $SteamPath -or -not (Test-Path -LiteralPath $SteamPath)) { return $false }
+
+    foreach ($f in @(
+        (Join-Path $SteamPath 'Steam-OptiHub-Aggressive.cmd'),
+        (Join-Path $SteamPath 'Steam-OptiHub-Lean.cmd'),
+        (Join-Path $SteamPath 'Steam-OptiHub-Legacy.cmd')
+    )) {
+        if (Test-Path -LiteralPath $f) { return $false }
+    }
+
+    foreach ($desktop in @(
+        [Environment]::GetFolderPath('Desktop'),
+        [Environment]::GetFolderPath('CommonDesktopDirectory')
+    )) {
+        if (-not $desktop -or -not (Test-Path -LiteralPath $desktop)) { continue }
+        $hits = @(Get-ChildItem -LiteralPath $desktop -Filter 'Steam*.lnk' -Force -ErrorAction SilentlyContinue)
+        if ($hits.Count -gt 0) { return $false }
+    }
+
+    foreach ($d in @(
+        (Join-Path $env:LOCALAPPDATA 'Steam\htmlcache\Crashpad'),
+        (Join-Path $env:LOCALAPPDATA 'Steam\Crashpad')
+    )) {
+        if (Test-Path -LiteralPath $d) {
+            $kids = @(Get-ChildItem -LiteralPath $d -Force -ErrorAction SilentlyContinue)
+            if ($kids.Count -gt 0) { return $false }
+        }
+    }
+
+    # Must have the lean launcher present after a full apply
+    if (-not (Test-Path -LiteralPath (Join-Path $SteamPath 'Steam-OptiHub.cmd'))) { return $false }
+    return $true
+}
+
+function Test-SteamRuntimeIntegrity([string]$SteamPath) {
+    if (-not $SteamPath) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $SteamPath 'steam.exe'))) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $SteamPath 'bin'))) { return $false }
+    # Modern Steam ships steamwebhelper under bin\cef\cef.win*\steamwebhelper.exe
+    $helpers = @(
+        (Join-Path $SteamPath 'steamwebhelper.exe'),
+        (Join-Path $SteamPath 'bin\cef\cef.win64\steamwebhelper.exe'),
+        (Join-Path $SteamPath 'bin\cef\cef.win7x64\steamwebhelper.exe'),
+        (Join-Path $SteamPath 'bin\cef\cef.win7\steamwebhelper.exe')
+    )
+    foreach ($h in $helpers) {
+        if (Test-Path -LiteralPath $h) { return $true }
+    }
+    try {
+        $found = Get-ChildItem -LiteralPath (Join-Path $SteamPath 'bin') -Filter 'steamwebhelper.exe' -Recurse -ErrorAction Stop |
+            Select-Object -First 1
+        return [bool]$found
+    } catch { return $false }
+}
+
+function Test-SteamStartMenuLaunchPath([string]$SteamPath) {
+    if (-not $SteamPath) { return $false }
+    $cmdPath = Join-Path $SteamPath 'Steam-OptiHub.cmd'
+    if (-not (Test-Path -LiteralPath $cmdPath)) { return $false }
+
+    $candidates = @(
+        (Join-Path ([Environment]::GetFolderPath('Programs')) 'Steam\Steam.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Steam\Steam.lnk'),
+        (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Steam\Steam.lnk'),
+        (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Steam\Steam.lnk')
+    )
+
+    $wsh = $null
+    try { $wsh = New-Object -ComObject WScript.Shell } catch { return $false }
+
+    $found = $false
+    foreach ($lnk in $candidates) {
+        if (-not (Test-Path -LiteralPath $lnk)) { continue }
+        try {
+            $sc = $wsh.CreateShortcut($lnk)
+            $target = [string]$sc.TargetPath
+            if ($target -and (
+                    $target -ieq $cmdPath -or
+                    $target -match '(?i)Steam-OptiHub\.cmd$'
+                )) {
+                $found = $true
+                break
+            }
+        } catch { }
+    }
+    return $found
 }
 
 function Get-SteamLibraryRoots([string]$SteamPath) {
@@ -1217,28 +1538,8 @@ try {
         recovery        = $recovery
     }
 
-    # Remove leftover OptiHub/Steam client junk that can conflict with lean launch
-    Write-HubProgress 25 'Clearing conflicting Steam leftovers...'
-    foreach ($f in @(
-        (Join-Path $steam 'Steam-OptiHub-Aggressive.cmd'),
-        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Steam (OptiHub Lean).lnk'),
-        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Steam (OptiHub Aggressive).lnk'),
-        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Steam (OptiHub).lnk')
-    )) {
-        if (Test-Path -LiteralPath $f) {
-            Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue
-            Write-Ok "Removed conflict leftover: $(Split-Path $f -Leaf)"
-        }
-    }
-    # Stale CEF crashpads / htmlcache that fight fresh lean flags
-    foreach ($d in @(
-        (Join-Path $env:LOCALAPPDATA 'Steam\htmlcache\Crashpad'),
-        (Join-Path $env:LOCALAPPDATA 'Steam\Crashpad')
-    )) {
-        if (Test-Path $d) {
-            try { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue; Write-Ok "Cleared $d" } catch { }
-        }
-    }
+    Write-HubProgress 24 'Complete client debloat...'
+    $debloatResult = Invoke-SteamCompleteClientDebloat $steam
 
     Write-HubProgress 30 'Disabling Windows startup...'
     $startupResult = Disable-SteamWindowsStartup $currentStartup
@@ -1246,12 +1547,15 @@ try {
         throw 'Steam startup suppression could not be fully verified; recovery state was kept'
     }
 
+    Write-HubProgress 34 'Windows quiet shell (toasts / tray / tasks)...'
+    Apply-SteamWindowsQuiet $steam
+
     Write-HubProgress 40 'Cleaning webhelper / CEF caches...'
-    $freed = 0L
+    $freed = [long]$debloatResult.Freed
     $shaderFreed = 0L
     $shaderInventoryVerified = $false
     if (-not $Quick) {
-        $freed = [long](Clear-SteamSafeCaches $steam)
+        $freed += [long](Clear-SteamSafeCaches $steam)
         Write-HubProgress 46 'Cleaning orphaned shader pre-caches...'
         $shaderResult = Clear-SteamShaderCaches $steam
         $shaderFreed = [long]$shaderResult.Freed
@@ -1279,6 +1583,10 @@ try {
 
     Write-HubProgress 94 'Saving status...'
     $startupOk = Test-SteamWindowsStartupDisabled
+    $windowsQuietOk = Test-SteamWindowsQuiet $steam
+    $debloatOk = Test-SteamCompleteClientDebloat $steam
+    $runtimeOk = Test-SteamRuntimeIntegrity $steam
+    $launchPathOk = Test-SteamStartMenuLaunchPath $steam
     $launcherOk = $false
     try {
         $launcherText = Get-Content -LiteralPath $launch.Cmd -Raw -ErrorAction Stop
@@ -1297,7 +1605,8 @@ try {
     } catch { }
     $clientTweaksOk = [bool]$local.Verified
     $fullPassOk = -not [bool]$Quick
-    $essentialOk = $startupOk -and $launcherOk -and $helperOk -and [bool]$cfgOk -and
+    $essentialOk = $startupOk -and $windowsQuietOk -and $debloatOk -and $runtimeOk -and
+        $launchPathOk -and $launcherOk -and $helperOk -and [bool]$cfgOk -and
         $clientTweaksOk -and $fullPassOk -and $shaderInventoryVerified
     $state = @{
         version              = $Script:SteamOptVersion
@@ -1313,6 +1622,10 @@ try {
         hadStartupMode       = [bool]$recovery.HadStartupMode
         previousStartupMode  = $recovery.PreviousStartupMode
         previousStartupModeKind = $recovery.PreviousStartupModeKind
+        windowsVerified      = $windowsQuietOk
+        debloatVerified      = $debloatOk
+        launchPathVerified   = $launchPathOk
+        runtimeVerified      = $runtimeOk
         cacheFreedBytes      = $freed
         cacheCleanupCompleted = $fullPassOk
         shaderCacheFreedBytes = $shaderFreed
@@ -1332,7 +1645,8 @@ try {
         highPriority         = $helperOk
         downloadOptimized    = [bool]$cfgOk
         installedShaderCachesPreserved = $shaderInventoryVerified
-        noDesktopShortcuts   = $true
+        noDesktopShortcuts   = $debloatOk
+        fullApply            = $fullPassOk
         quick                = [bool]$Quick
     }
     Save-SteamOptState $state
@@ -1344,13 +1658,24 @@ try {
             Write-Output 'DONE - Steam quick pass complete; run full Apply for verified no-compromise state'
             exit 0
         }
-        throw 'Steam apply finished with an incomplete live startup/config/client verification state'
+        $missing = @()
+        if (-not $startupOk) { $missing += 'startup' }
+        if (-not $windowsQuietOk) { $missing += 'windows-quiet' }
+        if (-not $debloatOk) { $missing += 'debloat' }
+        if (-not $runtimeOk) { $missing += 'runtime' }
+        if (-not $launchPathOk) { $missing += 'launch-path' }
+        if (-not $launcherOk) { $missing += 'cef-launcher' }
+        if (-not $helperOk) { $missing += 'webhelper-trim' }
+        if (-not $cfgOk) { $missing += 'download-config' }
+        if (-not $clientTweaksOk) { $missing += 'client-tweaks' }
+        if (-not $shaderInventoryVerified) { $missing += 'shader-inventory' }
+        throw ("Steam apply finished with incomplete verification: {0}" -f ($missing -join ', '))
     }
 
-    Write-Ok 'Steam Optimizer finished (quiet CEF launcher, aggressive 5s trim, in-game priority yield)'
+    Write-Ok 'Steam Optimizer finished (CEF quiet, full debloat, Windows quiet, 5s trim, priority yield)'
     Write-Ok 'Start Steam from Start Menu / taskbar (no desktop shortcuts created).'
     Write-HubProgress 100 'Completed successfully'
-    Write-Output 'DONE - Steam optimized (quiet CEF launcher + aggressive trim + priority yield)'
+    Write-Output 'DONE - Steam optimized (debloat + Windows quiet + CEF + aggressive trim)'
     exit 0
 } catch {
     $failureRecord = $_

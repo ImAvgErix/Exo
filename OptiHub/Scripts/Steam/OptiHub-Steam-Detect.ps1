@@ -1,4 +1,6 @@
 # OptiHub - detect Steam optimizer status (JSON for WinUI).
+# Checklist mirrors Discord parity: quiet launch, RAM kernel, complete debloat,
+# Windows suppression, Start Menu path, verified record.
 $ErrorActionPreference = 'SilentlyContinue'
 
 function Get-SteamInstallPath {
@@ -29,6 +31,14 @@ function Get-SteamInstallPath {
     return $null
 }
 
+function Add-Feature([string]$Title, [string]$Detail, [bool]$Active) {
+    $script:features.Add(@{
+        title  = $Title
+        detail = $Detail
+        active = $Active
+    })
+}
+
 function Test-SteamStartupQuiet {
     foreach ($key in @(
         'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
@@ -48,6 +58,66 @@ function Test-SteamStartupQuiet {
     try {
         return [int](Get-ItemPropertyValue -Path 'HKCU:\Software\Valve\Steam' -Name 'StartupMode' -ErrorAction Stop) -eq 0
     } catch { return $false }
+}
+
+function Test-SteamToastsOff {
+    $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    $ids = @('Steam', 'Valve.Steam', 'Valve.Steam.Client', 'com.valvesoftware.Steam', 'steam.exe')
+    $seen = $false
+    foreach ($id in $ids) {
+        $path = Join-Path $base $id
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        $seen = $true
+        try {
+            $entry = Get-ItemProperty -Path $path -ErrorAction Stop
+            $prop = $entry.PSObject.Properties['Enabled']
+            if (-not $prop -or [int]$prop.Value -ne 0) { return $false }
+        } catch { return $false }
+    }
+    return $seen
+}
+
+function Test-SteamTrayQuiet([string]$SteamPath) {
+    $notifyKey = 'HKCU:\Control Panel\NotifyIconSettings'
+    if (-not (Test-Path $notifyKey)) { return $true }
+    $prefix = $null
+    try { $prefix = [IO.Path]::GetFullPath($SteamPath).TrimEnd('\') + '\' } catch { }
+    foreach ($key in @(Get-ChildItem -Path $notifyKey -ErrorAction SilentlyContinue)) {
+        $item = Get-Item -Path $key.PSPath -ErrorAction SilentlyContinue
+        if (-not $item) { continue }
+        $exe = [string]$item.GetValue('ExecutablePath')
+        if (-not $exe) { continue }
+        $isSteam = ($exe -match '(?i)[\\/]steam\.exe$' -or $exe -match '(?i)\\Steam\\')
+        if (-not $isSteam -and $prefix) {
+            try {
+                $full = [IO.Path]::GetFullPath($exe)
+                if ($full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { $isSteam = $true }
+            } catch { }
+        }
+        if (-not $isSteam) { continue }
+        if ($item.GetValueNames() -notcontains 'IsPromoted' -or [int]$item.GetValue('IsPromoted') -ne 0) {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Test-SteamScheduledTasksQuiet {
+    try {
+        foreach ($task in @(Get-ScheduledTask -ErrorAction SilentlyContinue)) {
+            if ($task.TaskName -notmatch '(?i)\bSteam\b' -and $task.TaskPath -notmatch '(?i)\\Steam\\') { continue }
+            if ($task.TaskName -match '(?i)Steam(VR|Link|OS|Deck)' -or $task.TaskPath -match '(?i)Steam(VR|Link|OS|Deck)') { continue }
+            if ([bool]$task.Settings.Enabled) { return $false }
+        }
+        return $true
+    } catch { return $true }
+}
+
+function Test-SteamWindowsQuiet([string]$SteamPath) {
+    return (Test-SteamStartupQuiet) -and
+        (Test-SteamToastsOff) -and
+        (Test-SteamTrayQuiet $SteamPath) -and
+        (Test-SteamScheduledTasksQuiet)
 }
 
 function Test-VdfExpectations([string]$Raw, [object[]]$Expectations, [bool]$RequireObserved) {
@@ -110,6 +180,91 @@ function Test-SteamClientTweaks([string]$SteamPath) {
     } catch { return $false }
 }
 
+function Test-SteamCompleteClientDebloat([string]$SteamPath) {
+    if (-not $SteamPath -or -not (Test-Path -LiteralPath $SteamPath)) { return $false }
+
+    foreach ($f in @(
+        (Join-Path $SteamPath 'Steam-OptiHub-Aggressive.cmd'),
+        (Join-Path $SteamPath 'Steam-OptiHub-Lean.cmd'),
+        (Join-Path $SteamPath 'Steam-OptiHub-Legacy.cmd')
+    )) {
+        if (Test-Path -LiteralPath $f) { return $false }
+    }
+
+    foreach ($desktop in @(
+        [Environment]::GetFolderPath('Desktop'),
+        [Environment]::GetFolderPath('CommonDesktopDirectory')
+    )) {
+        if (-not $desktop -or -not (Test-Path -LiteralPath $desktop)) { continue }
+        $hits = @(Get-ChildItem -LiteralPath $desktop -Filter 'Steam*.lnk' -Force -ErrorAction SilentlyContinue)
+        if ($hits.Count -gt 0) { return $false }
+    }
+
+    foreach ($d in @(
+        (Join-Path $env:LOCALAPPDATA 'Steam\htmlcache\Crashpad'),
+        (Join-Path $env:LOCALAPPDATA 'Steam\Crashpad')
+    )) {
+        if (Test-Path -LiteralPath $d) {
+            $kids = @(Get-ChildItem -LiteralPath $d -Force -ErrorAction SilentlyContinue)
+            if ($kids.Count -gt 0) { return $false }
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath (Join-Path $SteamPath 'Steam-OptiHub.cmd'))) { return $false }
+    return $true
+}
+
+function Test-SteamRuntimeIntegrity([string]$SteamPath) {
+    if (-not $SteamPath) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $SteamPath 'steam.exe'))) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $SteamPath 'bin'))) { return $false }
+    # Modern Steam ships steamwebhelper under bin\cef\cef.win*\steamwebhelper.exe
+    foreach ($h in @(
+        (Join-Path $SteamPath 'steamwebhelper.exe'),
+        (Join-Path $SteamPath 'bin\cef\cef.win64\steamwebhelper.exe'),
+        (Join-Path $SteamPath 'bin\cef\cef.win7x64\steamwebhelper.exe'),
+        (Join-Path $SteamPath 'bin\cef\cef.win7\steamwebhelper.exe')
+    )) {
+        if (Test-Path -LiteralPath $h) { return $true }
+    }
+    try {
+        $found = Get-ChildItem -LiteralPath (Join-Path $SteamPath 'bin') -Filter 'steamwebhelper.exe' -Recurse -ErrorAction Stop |
+            Select-Object -First 1
+        return [bool]$found
+    } catch { return $false }
+}
+
+function Test-SteamStartMenuLaunchPath([string]$SteamPath) {
+    if (-not $SteamPath) { return $false }
+    $cmdPath = Join-Path $SteamPath 'Steam-OptiHub.cmd'
+    if (-not (Test-Path -LiteralPath $cmdPath)) { return $false }
+
+    $candidates = @(
+        (Join-Path ([Environment]::GetFolderPath('Programs')) 'Steam\Steam.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Steam\Steam.lnk'),
+        (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Steam\Steam.lnk'),
+        (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Steam\Steam.lnk')
+    )
+
+    try {
+        $wsh = New-Object -ComObject WScript.Shell
+        foreach ($lnk in $candidates) {
+            if (-not (Test-Path -LiteralPath $lnk)) { continue }
+            try {
+                $sc = $wsh.CreateShortcut($lnk)
+                $target = [string]$sc.TargetPath
+                if ($target -and (
+                        $target -ieq $cmdPath -or
+                        $target -match '(?i)Steam-OptiHub\.cmd$'
+                    )) {
+                    return $true
+                }
+            } catch { }
+        }
+    } catch { }
+    return $false
+}
+
 $features = New-Object System.Collections.Generic.List[hashtable]
 $steam = Get-SteamInstallPath
 $statePath = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub\steam-optimizer.json'
@@ -119,89 +274,91 @@ if (Test-Path $statePath) {
 }
 
 $steamOk = [bool]$steam
-$features.Add(@{
-    title  = 'Steam install'
-    detail = $(if ($steamOk) { $steam } else { 'Install Steam, open it once, then return.' })
-    active = $steamOk
-})
+if (-not $steamOk) {
+    $statusText = 'Steam not installed'
+    $detail = 'Install Steam, open it once, then return.'
+    Add-Feature 'Steam install' 'Steam is required before optimizations can apply.' $false
+} else {
+    Add-Feature 'Steam install' $steam $true
 
-$startupOk = Test-SteamStartupQuiet
-$features.Add(@{
-    title  = 'Quieter Windows startup'
-    detail = 'Steam is not forced to launch when Windows starts.'
-    active = $startupOk
-})
+    # OpenAsar equivalent: quiet CEF launcher
+    $cefOk = $false
+    $launcher = Join-Path $steam 'Steam-OptiHub.cmd'
+    if (Test-Path -LiteralPath $launcher) {
+        try {
+            $launcherText = Get-Content -LiteralPath $launcher -Raw -ErrorAction Stop
+            $cefOk = $launcherText -match '(?i)steam\.exe' -and
+                $launcherText -match '-cef-disable-gpu' -and
+                $launcherText -match '(?i)start\s+""\s+/HIGH'
+        } catch { }
+    }
+    Add-Feature 'Faster quiet Steam client' 'Steam-OptiHub.cmd replaces the stock launch path (disable-gpu, nofriendsui, nointro, High priority).' $cefOk
 
-$cefOk = $false
-$launcher = if ($steam) { Join-Path $steam 'Steam-OptiHub.cmd' } else { $null }
-if ($launcher -and (Test-Path -LiteralPath $launcher)) {
-    try {
-        $launcherText = Get-Content -LiteralPath $launcher -Raw -ErrorAction Stop
-        $cefOk = $launcherText -match '(?i)steam\.exe' -and
-            $launcherText -match '-cef-disable-gpu' -and
-            $launcherText -match '(?i)start\s+""\s+/HIGH'
-    } catch { }
+    # DiscOpt kernel equivalent
+    $trimOk = $false
+    $helper = Join-Path $steam 'OptiHub-SteamWebHelperTrim.ps1'
+    if (Test-Path -LiteralPath $helper) {
+        try {
+            $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
+            $trimOk = $helperText -match 'OptiHub\.SteamWebHelper' -and
+                $helperText -match 'EmptyWorkingSet' -and
+                $helperText -match 'Start-Sleep -Seconds 5' -and
+                $helperText -match 'ProcessPriorityClass\]::High' -and
+                $helperText -match 'ProcessPriorityClass\]::BelowNormal'
+        } catch { }
+    }
+    Add-Feature 'Aggressive RAM + priority kernel' 'Reclaims steamwebhelper working sets every 5s, High priority when idle, BelowNormal while gaming. No suspend.' $trimOk
+
+    $debloatOk = Test-SteamCompleteClientDebloat $steam
+    Add-Feature 'Complete client debloat' 'Leftover OptiHub launchers, desktop icons, crashpads, dumps/logs, and disposable CEF caches are removed. Installed games and shader caches stay intact.' $debloatOk
+
+    $runtimeOk = Test-SteamRuntimeIntegrity $steam
+    Add-Feature 'Steam runtime integrity' 'steam.exe, bin/, and steamwebhelper (CEF) remain installed.' $runtimeOk
+
+    $dlOk = [bool]($state -and $state.configVerified -and $state.downloadOptimized) -and
+        (Test-SteamDownloadConfig $steam)
+    Add-Feature 'Download tuning + deep cache clean' 'Throttle is cleared and disposable/orphaned caches are purged. Active downloads and installed-game shader caches stay intact.' $dlOk
+
+    $snapOk = [bool]($state -and $state.clientTweaksVerified -and $state.snappyUi -and $state.overlayTweaks) -and
+        (Test-SteamClientTweaks $steam)
+    Add-Feature 'Overlay / library client tweaks' 'GPU web views off, quieter overlay noise, no downloads while playing when keys exist.' $snapOk
+
+    $windowsQuietOk = Test-SteamWindowsQuiet $steam
+    Add-Feature 'Windows background suppression' 'No Steam autostart or scheduled tasks; Windows toasts off; tray icon not promoted.' $windowsQuietOk
+
+    $launchOk = Test-SteamStartMenuLaunchPath $steam
+    Add-Feature 'Start Menu / apps launch path' 'Start Menu and taskbar Steam shortcuts use Steam-OptiHub.cmd. No desktop icons.' $launchOk
+
+    $markerOk = [bool]($state -and
+        [string]$state.version -eq '1.6.0' -and
+        [string]$state.applyStatus -eq 'applied' -and
+        $state.applied -eq $true -and
+        $state.quick -eq $false -and
+        $state.fullApply -eq $true -and
+        $state.windowsVerified -eq $true -and
+        $state.debloatVerified -eq $true -and
+        $state.cacheCleanupCompleted -eq $true -and
+        $state.shaderInventoryVerified -eq $true -and
+        $state.installedShaderCachesPreserved -eq $true)
+    Add-Feature 'Verified optimizer record' 'A completed 1.6.0 full apply is recorded with Windows quiet, debloat, and cache verification.' $markerOk
+
+    $isApplied = $steamOk -and $markerOk -and $cefOk -and $trimOk -and $debloatOk -and
+        $runtimeOk -and $dlOk -and $snapOk -and $windowsQuietOk -and $launchOk
+
+    $statusText = if ($isApplied) { 'Already optimized' } else { 'Ready to optimize' }
+    $detail = if ($isApplied) {
+        'No-compromise pack active: quiet CEF, full debloat, Windows quiet, aggressive 5s trim, priority yield.'
+    } else {
+        'Some pieces are missing. Run to finish setup and unlock the savings below.'
+    }
 }
-$features.Add(@{
-    title  = 'Quiet CEF launcher (default)'
-    detail = 'Start Menu / taskbar Steam uses Steam-OptiHub.cmd (disable-gpu, nofriendsui, nointro, etc.). No desktop icons.'
-    active = $cefOk
-})
 
-$dlOk = [bool]($state -and $state.configVerified -and $state.downloadOptimized) -and
-    (Test-SteamDownloadConfig $steam)
-$features.Add(@{
-    title  = 'Download tuning + deep client cache clean'
-    detail = 'Throttle is cleared and disposable/orphaned caches are purged. Active downloads and installed-game shader caches stay intact.'
-    active = $dlOk
-})
-
-$snapOk = [bool]($state -and $state.clientTweaksVerified -and $state.snappyUi -and $state.overlayTweaks) -and
-    (Test-SteamClientTweaks $steam)
-$features.Add(@{
-    title  = 'Overlay / library client tweaks'
-    detail = 'GPU web views off, quieter overlay noise, no downloads while playing when keys exist.'
-    active = $snapOk
-})
-
-$trimOk = $false
-$helper = if ($steam) { Join-Path $steam 'OptiHub-SteamWebHelperTrim.ps1' } else { $null }
-if ($helper -and (Test-Path -LiteralPath $helper)) {
-    try {
-        $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
-        $trimOk = $helperText -match 'OptiHub\.SteamWebHelper' -and
-            $helperText -match 'EmptyWorkingSet' -and
-            $helperText -match 'Start-Sleep -Seconds 5' -and
-            $helperText -match 'ProcessPriorityClass\]::High' -and
-            $helperText -match 'ProcessPriorityClass\]::BelowNormal'
-    } catch { }
+if (-not $steamOk) {
+    $isApplied = $false
 }
-$features.Add(@{
-    title  = 'Aggressive 5s RAM trim + priority control'
-    detail = 'Reclaims steamwebhelper working sets every 5s, runs the client High when idle, then yields CPU while gaming. No suspend.'
-    active = $trimOk
-})
-
-$markerOk = [bool]($state -and
-    [string]$state.version -eq '1.5.0' -and
-    [string]$state.applyStatus -eq 'applied' -and
-    $state.applied -eq $true -and
-    $state.quick -eq $false -and
-    $state.cacheCleanupCompleted -eq $true -and
-    $state.shaderInventoryVerified -eq $true -and
-    $state.installedShaderCachesPreserved -eq $true)
-$isApplied = $steamOk -and $markerOk -and $startupOk -and $cefOk -and $trimOk -and $dlOk -and $snapOk
-
-$statusText = if (-not $steamOk) { 'Steam not installed' }
-elseif ($isApplied) { 'Already optimized' }
-else { 'Ready to optimize' }
-
-$detail = if (-not $steamOk) { 'Install Steam, open it once, then run OptiHub.' }
-elseif ($isApplied) { 'Performance pack active. Open Steam from Start Menu or taskbar (no desktop shortcuts).' }
-else { 'Run for the quiet CEF launcher, aggressive RAM reclamation, priority control, and deep client cleanup.' }
 
 [ordered]@{
-    isApplied  = $isApplied
+    isApplied  = [bool]$isApplied
     statusText = $statusText
     detail     = $detail
     features   = @($features)
