@@ -153,24 +153,36 @@ function Get-DiscOptPwshVersion([string]$Exe) {
 }
 
 function Get-DiscOptPwsh7 {
+    # Prefer PowerShell 7 Preview, then stable 7.x. Never Windows PowerShell 5.1.
     $candidates = [System.Collections.Generic.List[string]]::new()
     $portable = Join-Path $ToolsDir 'pwsh\pwsh.exe'
     if (Test-Path $portable) { $candidates.Add($portable) }
 
-    $cmd = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($cmd) { $candidates.Add($cmd.Source) }
-
     foreach ($path in @(
-        (Get-DiscOptEnvPath 'ProgramFiles' 'PowerShell\7\pwsh.exe'),
         (Get-DiscOptEnvPath 'ProgramFiles' 'PowerShell\7-preview\pwsh.exe'),
+        (Get-DiscOptEnvPath 'LOCALAPPDATA' 'Microsoft\WindowsApps\pwsh-preview.exe'),
+        (Get-DiscOptEnvPath 'ProgramFiles' 'PowerShell\7\pwsh.exe'),
         (Get-DiscOptEnvPath 'LOCALAPPDATA' 'Microsoft\WindowsApps\pwsh.exe')
     )) {
         if ($path) { $candidates.Add($path) }
     }
 
+    $cmdPreview = Get-Command pwsh-preview -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmdPreview) { $candidates.Add($cmdPreview.Source) }
+    $cmd = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd) { $candidates.Add($cmd.Source) }
+
     $appsRoot = Get-DiscOptEnvPath 'ProgramFiles' 'WindowsApps'
     if ($appsRoot -and (Test-Path $appsRoot)) {
-        Get-ChildItem $appsRoot -Directory -Filter 'Microsoft.PowerShell*' -ErrorAction SilentlyContinue |
+        # Preview packages first
+        Get-ChildItem $appsRoot -Directory -Filter 'Microsoft.PowerShellPreview*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object {
+                $exe = Join-Path $_.FullName 'pwsh.exe'
+                if (Test-Path $exe) { $candidates.Add($exe) }
+            }
+        Get-ChildItem $appsRoot -Directory -Filter 'Microsoft.PowerShell_*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
             ForEach-Object {
                 $exe = Join-Path $_.FullName 'pwsh.exe'
                 if (Test-Path $exe) { $candidates.Add($exe) }
@@ -178,6 +190,7 @@ function Get-DiscOptPwsh7 {
     }
 
     foreach ($exe in ($candidates | Select-Object -Unique)) {
+        if ($exe -match 'WindowsPowerShell') { continue }
         $ver = Get-DiscOptPwshVersion $exe
         if ($ver) {
             return @{ Exe = $exe; Version = $ver }

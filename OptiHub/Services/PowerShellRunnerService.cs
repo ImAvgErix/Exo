@@ -612,7 +612,10 @@ public sealed class PowerShellRunnerService
 
     private static string? _cachedPowerShellPath;
 
-    private static string ResolvePowerShell()
+    /// <summary>
+    /// Path to PowerShell 7+ (prefers preview). Never Windows PowerShell 5.1.
+    /// </summary>
+    public static string ResolvePowerShell()
     {
         if (_cachedPowerShellPath is not null && File.Exists(_cachedPowerShellPath))
             return _cachedPowerShellPath;
@@ -621,7 +624,7 @@ public sealed class PowerShellRunnerService
         {
             try
             {
-                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path) && LooksLikePowerShell7(path))
                 {
                     _cachedPowerShellPath = path;
                     return path;
@@ -631,14 +634,14 @@ public sealed class PowerShellRunnerService
         }
 
         var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-        foreach (var name in new[] { "pwsh.exe", "pwsh-preview.exe" })
+        foreach (var name in new[] { "pwsh-preview.exe", "pwsh.exe" })
         {
             foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
             {
                 try
                 {
                     var full = Path.Combine(dir.Trim('"'), name);
-                    if (File.Exists(full))
+                    if (File.Exists(full) && LooksLikePowerShell7(full))
                     {
                         _cachedPowerShellPath = full;
                         return full;
@@ -648,28 +651,63 @@ public sealed class PowerShellRunnerService
             }
         }
 
-        _cachedPowerShellPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.System),
-            "WindowsPowerShell", "v1.0", "powershell.exe");
-        return _cachedPowerShellPath;
+        throw new InvalidOperationException(
+            "PowerShell 7 (pwsh) is required. Install PowerShell 7 or PowerShell 7 Preview, then restart OptiHub. " +
+            "Windows PowerShell 5.1 is not supported.");
+    }
+
+    public static string? TryGetPowerShellPath()
+    {
+        try { return ResolvePowerShell(); }
+        catch { return null; }
+    }
+
+    private static bool LooksLikePowerShell7(string path)
+    {
+        // Never use Windows PowerShell 5.1 host.
+        if (path.Contains("WindowsPowerShell", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var name = Path.GetFileName(path);
+        return name.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase)
+               || name.Equals("pwsh-preview.exe", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IEnumerable<string> EnumeratePowerShellCandidates()
     {
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var winApps = Path.Combine(programFiles, "WindowsApps");
 
-        // Prefer supported stable PowerShell 7 before preview/portable builds.
+        // Prefer PowerShell 7 Preview (user runs preview), then stable 7.x.
+        yield return Path.Combine(programFiles, "PowerShell", "7-preview", "pwsh.exe");
+        yield return Path.Combine(local, "Microsoft", "WindowsApps", "pwsh-preview.exe");
+        yield return Path.Combine(local, "Microsoft", "WindowsApps", "Microsoft.PowerShellPreview_8wekyb3d8bbwe", "pwsh.exe");
+
+        if (Directory.Exists(winApps))
+        {
+            string[] previewMatches = Array.Empty<string>();
+            try
+            {
+                previewMatches = Directory.GetDirectories(winApps, "Microsoft.PowerShellPreview_*_x64__*")
+                    .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+            catch { /* access denied is common */ }
+
+            foreach (var dir in previewMatches)
+                yield return Path.Combine(dir, "pwsh.exe");
+        }
+
         yield return Path.Combine(programFiles, "PowerShell", "7", "pwsh.exe");
         yield return Path.Combine(local, "Microsoft", "WindowsApps", "pwsh.exe");
 
-        var winApps = Path.Combine(programFiles, "WindowsApps");
         if (Directory.Exists(winApps))
         {
             string[] stableMatches = Array.Empty<string>();
             try
             {
                 stableMatches = Directory.GetDirectories(winApps, "Microsoft.PowerShell_*_x64__*")
+                    .Where(d => !d.Contains("Preview", StringComparison.OrdinalIgnoreCase))
                     .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase)
                     .ToArray();
             }
@@ -681,25 +719,6 @@ public sealed class PowerShellRunnerService
 
         yield return Path.Combine(PathHelper.WorkingScriptsDir, "Discord", "kit", "tools", "pwsh", "pwsh.exe");
         yield return Path.Combine(PathHelper.DiscordScriptsDir, "kit", "tools", "pwsh", "pwsh.exe");
-        yield return Path.Combine(local, "Microsoft", "WindowsApps", "Microsoft.PowerShellPreview_8wekyb3d8bbwe", "pwsh.exe");
-        yield return Path.Combine(local, "Microsoft", "WindowsApps", "pwsh-preview.exe");
-
-        if (Directory.Exists(winApps))
-        {
-            string[] matches = Array.Empty<string>();
-            try
-            {
-                matches = Directory.GetDirectories(winApps, "Microsoft.PowerShellPreview_*_x64__*")
-                    .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-            }
-            catch { /* access denied is common */ }
-
-            foreach (var dir in matches)
-                yield return Path.Combine(dir, "pwsh.exe");
-        }
-
-        yield return Path.Combine(programFiles, "PowerShell", "7-preview", "pwsh.exe");
     }
 
     private static string QuoteArg(string arg)

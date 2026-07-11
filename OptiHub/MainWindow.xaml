@@ -5,78 +5,24 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="OptiHub">
 
+    <!-- Thin WinUI host: drag title bar + full WebView2 product UI -->
     <Grid x:Name="RootGrid" Background="{ThemeResource OptiPageBackgroundBrush}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="40" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Drag region + chrome; right column reserved for caption buttons -->
         <Grid x:Name="TitleBarHost"
               Grid.Row="0"
-              Height="40"
               Background="Transparent">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition x:Name="CaptionSpacer" Width="138" />
             </Grid.ColumnDefinitions>
-
-            <StackPanel Orientation="Horizontal"
-                        Spacing="8"
-                        VerticalAlignment="Center"
-                        Margin="12,0,0,0"
-                        Height="40">
-                <Button x:Name="BackButton"
-                        Style="{StaticResource OptiIconButton}"
-                        ToolTipService.ToolTip="{x:Null}"
-                        AutomationProperties.Name="Back to dashboard"
-                        Click="BackButton_Click"
-                        Visibility="Collapsed"
-                        Width="32" Height="32"
-                        VerticalAlignment="Center">
-                    <FontIcon Glyph="&#xE72B;" FontSize="13" />
-                </Button>
-
-                <!-- Product mark only on optimizer pages (no OptiHub wordmark / logo on home). -->
-                <Border x:Name="ContextLogoHost"
-                        Width="28" Height="28"
-                        CornerRadius="8"
-                        Background="Transparent"
-                        Visibility="Collapsed"
-                        VerticalAlignment="Center">
-                    <Image x:Name="ContextLogo"
-                           Width="20" Height="20"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           Stretch="Uniform"
-                           AutomationProperties.AccessibilityView="Raw" />
-                </Border>
-
-                <TextBlock x:Name="AppTitleText"
-                           Text=""
-                           VerticalAlignment="Center"
-                           FontFamily="{StaticResource OptiUiFontSemiBold}"
-                           FontSize="15"
-                           FontWeight="SemiBold"
-                           CharacterSpacing="-8"
-                           Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                           Margin="0,0,2,0" />
-
-                <Button x:Name="SettingsButton"
-                        Style="{StaticResource OptiIconButton}"
-                        ToolTipService.ToolTip="{x:Null}"
-                        AutomationProperties.Name="Settings"
-                        Click="SettingsButton_Click"
-                        Width="32" Height="32"
-                        VerticalAlignment="Center">
-                    <FontIcon Glyph="&#xE713;" FontSize="14" />
-                </Button>
-            </StackPanel>
         </Grid>
 
-        <Frame x:Name="ContentFrame"
-               Grid.Row="1"
-               Padding="0"
-               IsNavigationStackEnabled="False" />
+        <WebView2 x:Name="WebView"
+                  Grid.Row="1"
+                  DefaultBackgroundColor="Transparent" />
     </Grid>
 </Window>

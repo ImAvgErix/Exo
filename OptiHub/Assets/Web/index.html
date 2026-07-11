@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OptiHub</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="titlebar" id="titlebar">
+      <button type="button" class="icon-btn hidden" id="btnBack" aria-label="Back">←</button>
+      <img class="ctx-logo hidden" id="ctxLogo" alt="" width="20" height="20" />
+      <span class="ctx-title" id="ctxTitle"></span>
+      <button type="button" class="icon-btn" id="btnSettings" aria-label="Settings">⚙</button>
+    </header>
+
+    <main id="view" class="view"></main>
+
+    <div id="toast" class="toast hidden" role="status"></div>
+    <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <h2 id="modalTitle"></h2>
+        <p id="modalBody"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn quiet" id="modalCancel">Later</button>
+          <button type="button" class="btn primary" id="modalOk">Continue</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

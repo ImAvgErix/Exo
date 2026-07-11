@@ -663,11 +663,12 @@ function Unlock-DiscordSettings([string]$DestPath = '') {
 }
 
 function Get-DiscOptPowerShellExe {
+    # PowerShell 7+ only — never fall back to Windows PowerShell 5.1.
     $found = Get-DiscOptPwsh7
-    if ($found) { return $found.Exe }
+    if ($found -and $found.Exe) { return $found.Exe }
     $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($pwsh) { return $pwsh.Source }
-    return (Get-DiscOptEnvPath 'SystemRoot' 'System32\WindowsPowerShell\v1.0\powershell.exe')
+    if ($pwsh -and $pwsh.Source -and ($pwsh.Source -notmatch 'WindowsPowerShell')) { return $pwsh.Source }
+    throw 'PowerShell 7 (pwsh) is required. Install PowerShell 7 or PowerShell 7 Preview.'
 }
 
 function Apply-DiscordProfile([string]$DestPath) {

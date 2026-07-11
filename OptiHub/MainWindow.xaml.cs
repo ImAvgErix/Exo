@@ -3,34 +3,28 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Animation;
+using Microsoft.Web.WebView2.Core;
 using OptiHub.Helpers;
-using OptiHub.Views;
+using OptiHub.Services;
 using Windows.Graphics;
 using WinRT.Interop;
 
 namespace OptiHub;
 
+/// <summary>
+/// Minimal WinUI 3 host window. All product UI lives in WebView2 (Assets/Web).
+/// </summary>
 public sealed partial class MainWindow : Window
 {
-    private enum ShellMode
-    {
-        Home,
-        Discord,
-        Steam,
-        Nvidia,
-        Settings
-    }
-
-    private ShellMode _mode = ShellMode.Home;
     private readonly CancellationTokenSource _lifetimeCts = new();
+    private WebUiBridge? _bridge;
+    private bool _webReady;
 
     public MainWindow()
     {
         InitializeComponent();
         App.MainAppWindow = this;
 
-        // Fixed window, roomy enough for home cards and optimizer feature lists.
         AppWindow.Resize(new SizeInt32(1080, 860));
         ApplyFixedWindowChrome();
         TryCenterOnScreen();
@@ -38,18 +32,19 @@ public sealed partial class MainWindow : Window
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBarHost);
+        UpdateCaptionInset();
 
         AppWindow.Changed += (_, args) =>
         {
             UpdateCaptionInset();
-            // Re-assert fixed chrome if the system tries to maximize via title-bar double-click
             if (args.DidPresenterChange || args.DidSizeChange)
                 ApplyFixedWindowChrome();
         };
-        RootGrid.Loaded += (_, _) =>
+        RootGrid.Loaded += async (_, _) =>
         {
             UpdateCaptionInset();
             ApplyFixedWindowChrome();
+            await InitWebViewAsync();
         };
         RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
@@ -58,22 +53,100 @@ public sealed partial class MainWindow : Window
             _lifetimeCts.Cancel();
             App.Services.Settings.Flush();
             App.MainAppWindow = null;
-
             try
             {
                 NativeWindowHelper.RestoreWindowProcedure(WindowNative.GetWindowHandle(this));
             }
-            catch
-            {
-                // The native window may already have been released.
-            }
+            catch { /* best-effort */ }
         };
 
         ApplyShellChrome();
-        UpdateCaptionInset();
-
-        NavigateHome(suppressTransition: true);
         _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
+    }
+
+    private async Task InitWebViewAsync()
+    {
+        if (_webReady) return;
+        try
+        {
+            await WebView.EnsureCoreWebView2Async();
+            var core = WebView.CoreWebView2;
+            if (core is null) return;
+
+            core.Settings.AreDefaultContextMenusEnabled = false;
+            core.Settings.AreDevToolsEnabled = false;
+            core.Settings.IsStatusBarEnabled = false;
+            core.Settings.IsZoomControlEnabled = false;
+
+            var webRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Web");
+            if (!Directory.Exists(webRoot))
+                throw new DirectoryNotFoundException("Web UI assets missing: " + webRoot);
+
+            core.SetVirtualHostNameToFolderMapping(
+                "app.optihub",
+                webRoot,
+                CoreWebView2HostResourceAccessKind.Allow);
+
+            _bridge = new WebUiBridge(
+                App.Services,
+                DispatcherQueue,
+                this,
+                async json =>
+                {
+                    if (WebView.CoreWebView2 is null) return;
+                    WebView.CoreWebView2.PostWebMessageAsJson(json);
+                    await Task.CompletedTask;
+                });
+
+            core.WebMessageReceived += async (_, args) =>
+            {
+                try
+                {
+                    var raw = args.TryGetWebMessageAsString() ?? args.WebMessageAsJson;
+                    if (string.IsNullOrWhiteSpace(raw)) return;
+                    // PostMessage from JS may wrap a JSON string; unwrap if needed.
+                    if (raw.Length >= 2 && raw[0] == '"' && raw[^1] == '"')
+                    {
+                        try { raw = System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? raw; }
+                        catch { /* keep raw */ }
+                    }
+                    if (_bridge is not null)
+                        await _bridge.HandleMessageAsync(raw);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(ex);
+                }
+            };
+
+            core.NavigationCompleted += async (_, args) =>
+            {
+                if (!args.IsSuccess) return;
+                try
+                {
+                    var theme = App.Services.Settings.Current.Theme;
+                    if (_bridge is not null)
+                        await _bridge.PushThemeAsync(theme);
+                }
+                catch { /* best-effort */ }
+            };
+
+            core.Navigate("https://app.optihub/index.html");
+            _webReady = true;
+        }
+        catch (Exception ex)
+        {
+            // Surface a hard failure in the window if WebView2 cannot start.
+            RootGrid.Children.Clear();
+            RootGrid.Children.Add(new TextBlock
+            {
+                Text = "WebView2 failed to start.\n\n" + ex.Message +
+                       "\n\nInstall the WebView2 Runtime, then reopen OptiHub.",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(32),
+                Foreground = new SolidColorBrush(Colors.White)
+            });
+        }
     }
 
     private void ApplyFixedWindowChrome()
@@ -92,10 +165,7 @@ public sealed partial class MainWindow : Window
             var hwnd = WindowNative.GetWindowHandle(this);
             NativeWindowHelper.DisableMaximizeViaSystemMenu(hwnd);
         }
-        catch
-        {
-            // best-effort
-        }
+        catch { /* best-effort */ }
     }
 
     private void UpdateCaptionInset()
@@ -115,12 +185,17 @@ public sealed partial class MainWindow : Window
     private void ApplyShellChrome()
     {
         var dark = RootGrid.ActualTheme != ElementTheme.Light;
-        // Keep shell fill in sync with theme dictionaries (AMOLED black / cream beige).
         RootGrid.Background = new SolidColorBrush(
             dark ? ColorHelper.FromArgb(255, 0, 0, 0)
                  : ColorHelper.FromArgb(255, 243, 237, 227));
         App.Services.Theme.Apply();
-        UpdateCaptionInset();
+        try
+        {
+            WebView.DefaultBackgroundColor = dark
+                ? Windows.UI.Color.FromArgb(255, 0, 0, 0)
+                : Windows.UI.Color.FromArgb(255, 243, 237, 227);
+        }
+        catch { /* WebView may not be ready */ }
     }
 
     private void TryCenterOnScreen()
@@ -137,50 +212,13 @@ public sealed partial class MainWindow : Window
             var y = work.Y + (work.Height - appWindow.Size.Height) / 2;
             appWindow.Move(new PointInt32(x, y));
         }
-        catch
-        {
-            // best-effort
-        }
-    }
-
-    private void ApplyChrome(ShellMode mode)
-    {
-        _mode = mode;
-        var home = mode == ShellMode.Home;
-        var optimizer = mode is ShellMode.Discord or ShellMode.Steam or ShellMode.Nvidia;
-
-        BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
-        // Home: only settings gear. Optimizers: back + product logo + short title. No "OptiHub" wordmark.
-        ContextLogoHost.Visibility = optimizer ? Visibility.Visible : Visibility.Collapsed;
-        SettingsButton.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
-
-        AppTitleText.Text = mode switch
-        {
-            ShellMode.Discord => "Discord",
-            ShellMode.Steam => "Steam",
-            ShellMode.Nvidia => "NVIDIA",
-            ShellMode.Settings => "Settings",
-            _ => string.Empty
-        };
-        AppTitleText.Visibility = string.IsNullOrEmpty(AppTitleText.Text)
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-
-        if (mode == ShellMode.Discord)
-            TrySetContextLogo("Assets/Logos/discord.png");
-        else if (mode == ShellMode.Steam)
-            TrySetContextLogo("Assets/Logos/steam.png");
-        else if (mode == ShellMode.Nvidia)
-            TrySetContextLogo("Assets/Logos/nvidia.png");
-        else
-            ContextLogo.Source = null;
+        catch { /* best-effort */ }
     }
 
     private void TrySetWindowIcon()
     {
         try
         {
-            // Taskbar / alt-tab / title-bar system icon (ApplicationIcon alone is not always enough for WinUI unpackaged).
             var baseDir = AppContext.BaseDirectory;
             foreach (var rel in new[]
                      {
@@ -194,125 +232,48 @@ public sealed partial class MainWindow : Window
                 return;
             }
         }
-        catch
-        {
-            // best-effort
-        }
+        catch { /* best-effort */ }
     }
 
-    private void TrySetContextLogo(string relativePath)
-    {
-        ContextLogo.Source = AssetPathToImageSourceConverter.Resolve(relativePath);
-    }
-
-    // Continuum + drill: heavier "weight" than a flat slide (Kinetics / Amicro motion language).
-    private static NavigationTransitionInfo Slide() =>
-        new DrillInNavigationTransitionInfo();
-
-    private static NavigationTransitionInfo SlideBack() =>
-        new ContinuumNavigationTransitionInfo();
-
-    public void NavigateHome(bool suppressTransition = false)
-    {
-        Navigate(
-            ShellMode.Home,
-            typeof(DashboardPage),
-            suppressTransition ? (NavigationTransitionInfo)new SuppressNavigationTransitionInfo() : SlideBack());
-    }
-
-    public void NavigateToDiscord()
-    {
-        Navigate(ShellMode.Discord, typeof(DiscordOptimizerPage), Slide());
-    }
-
-    public void NavigateToSteam()
-    {
-        Navigate(ShellMode.Steam, typeof(SteamOptimizerPage), Slide());
-    }
-
-    public void NavigateToNvidia()
-    {
-        Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), Slide());
-    }
-
-    private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
-    {
-        if (_mode == mode && ContentFrame.CurrentSourcePageType == pageType)
-            return;
-
-        if (ContentFrame.Navigate(pageType, null, transition))
-            ApplyChrome(mode);
-    }
-
-    private void SettingsButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_mode == ShellMode.Settings) return;
-        Navigate(ShellMode.Settings, typeof(SettingsPage), Slide());
-    }
-
-    private void BackButton_Click(object sender, RoutedEventArgs e) => NavigateHome();
+    // Kept for any residual ViewModel navigation hooks (legacy XAML pages).
+    public void NavigateHome(bool suppressTransition = false) { }
+    public void NavigateToDiscord() { }
+    public void NavigateToSteam() { }
+    public void NavigateToNvidia() { }
 
     private async Task MaybeAutoUpdateAsync(CancellationToken ct)
     {
         try
         {
-            // App-only: each release ships matching optimizer kits. No separate script pull.
             if (!App.Services.Settings.Current.AutoUpdateScripts) return;
-
-            // Let the window finish loading so ContentDialog has a valid XamlRoot.
-            await Task.Delay(1200, ct);
-            for (var i = 0; i < 10 && RootGrid.XamlRoot is null; i++)
-                await Task.Delay(200, ct);
-
+            await Task.Delay(1800, ct);
             var appCheck = await App.Services.Updater.CheckAppUpdateAsync(ct: ct);
-            if (appCheck.UpdateAvailable && RootGrid.XamlRoot is not null)
-            {
-                var dialog = new ContentDialog
-                {
-                    Title = "OptiHub update available",
-                    Content =
-                        $"Version {appCheck.RemoteVersion} is available.\n" +
-                        $"You have {appCheck.LocalVersion}.\n\n" +
-                        "Install now? OptiHub will close, update in place, and reopen.\n" +
-                        "This release includes the matching optimizers.",
-                    PrimaryButtonText = "Install",
-                    CloseButtonText = "Later",
-                    DefaultButton = ContentDialogButton.Primary,
-                    XamlRoot = RootGrid.XamlRoot
-                };
-                var choice = await dialog.ShowAsync();
-                ct.ThrowIfCancellationRequested();
-                if (choice == ContentDialogResult.Primary)
-                {
-                    var install = await App.Services.Updater.InstallAppUpdateAsync(appCheck, ct: ct);
-                    if (install.ShouldExit)
-                    {
-                        await Task.Delay(900, ct);
-                        Microsoft.UI.Xaml.Application.Current?.Exit();
-                        return;
-                    }
+            if (!appCheck.UpdateAvailable || RootGrid.XamlRoot is null) return;
 
-                    if (RootGrid.XamlRoot is not null)
-                    {
-                        var err = new ContentDialog
-                        {
-                            Title = "Update could not finish",
-                            Content = install.Message,
-                            CloseButtonText = "OK",
-                            XamlRoot = RootGrid.XamlRoot
-                        };
-                        await err.ShowAsync();
-                    }
-                }
+            var dialog = new ContentDialog
+            {
+                Title = "OptiHub update available",
+                Content =
+                    $"Version {appCheck.RemoteVersion} is available.\n" +
+                    $"You have {appCheck.LocalVersion}.\n\n" +
+                    "Install now? OptiHub will close, update in place, and reopen.",
+                PrimaryButtonText = "Install",
+                CloseButtonText = "Later",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = RootGrid.XamlRoot
+            };
+            var choice = await dialog.ShowAsync();
+            ct.ThrowIfCancellationRequested();
+            if (choice != ContentDialogResult.Primary) return;
+
+            var install = await App.Services.Updater.InstallAppUpdateAsync(appCheck, ct: ct);
+            if (install.ShouldExit)
+            {
+                await Task.Delay(900, ct);
+                Application.Current?.Exit();
             }
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            // Window is closing.
-        }
-        catch
-        {
-            // ignore network issues on startup
-        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch { /* ignore network issues on startup */ }
     }
 }

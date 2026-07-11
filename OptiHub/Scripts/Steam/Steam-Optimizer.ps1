@@ -1120,10 +1120,26 @@ function Optimize-SteamDownloadFolder([string]$SteamPath) {
     return $n
 }
 
+function Get-OptiHubPwsh {
+    # PowerShell 7+ only (prefer preview). Never Windows PowerShell 5.1.
+    $candidates = @(
+        (Join-Path $env:ProgramFiles 'PowerShell\7-preview\pwsh.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh-preview.exe'),
+        (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh.exe')
+    )
+    foreach ($p in $candidates) {
+        if ($p -and (Test-Path -LiteralPath $p)) { return $p }
+    }
+    $cmd = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd -and $cmd.Source -and ($cmd.Source -notmatch 'WindowsPowerShell')) { return $cmd.Source }
+    throw 'PowerShell 7 (pwsh) is required for OptiHub Steam helpers. Install PowerShell 7 or 7 Preview.'
+}
+
 function Write-SteamLaunchCmd([string]$CmdPath, [string]$SteamPath, [string]$HelperPath, [string[]]$CefArgs, [string]$Label) {
     $exe = Join-Path $SteamPath 'steam.exe'
     $args = ($CefArgs -join ' ')
-    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $ps = Get-OptiHubPwsh
     # Percent signs are expanded while a .cmd file is parsed.
     $cmdSteamPath = $SteamPath.Replace('%', '%%')
     $cmdExe = $exe.Replace('%', '%%')
@@ -1133,7 +1149,7 @@ function Write-SteamLaunchCmd([string]$CmdPath, [string]$SteamPath, [string]$Hel
     # after without waiting for it. Helper self-limits with a mutex.
     $cmd = @(
         '@echo off'
-        ("rem OptiHub {0} - fast quiet CEF + aggressive webhelper trim" -f $Label)
+        ("rem OptiHub {0} - fast quiet CEF + aggressive webhelper trim (pwsh 7+)" -f $Label)
         ('start "" /HIGH /D "{0}" "{1}" {2} %*' -f $cmdSteamPath, $cmdExe, $args)
         ('start "" /MIN "{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $cmdPs, $cmdHelper)
     ) -join "`r`n"
