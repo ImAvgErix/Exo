@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.3
+
+- **Brand icon**: real **Lucide** `gauge` icon (ISC license, free commercial use) on pure black Start Menu tile
+- Multi-size ICO 16–256; source SVG under Assets/Icons with LICENSE note
 ## 1.8.2
 
 - **Brand icon**: clean **OH** monogram (OptiHub) — fused O+H on pure black with mint accent; multi-size Start Menu ICO
