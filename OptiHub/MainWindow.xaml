@@ -5,24 +5,32 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="OptiHub">
 
-    <!-- Thin WinUI host: drag title bar + full WebView2 product UI -->
-    <Grid x:Name="RootGrid" Background="{ThemeResource OptiPageBackgroundBrush}">
+    <Grid x:Name="RootGrid" Background="#000000">
         <Grid.RowDefinitions>
             <RowDefinition Height="40" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
+        <!-- Drag region for system caption buttons -->
         <Grid x:Name="TitleBarHost"
               Grid.Row="0"
-              Background="Transparent">
+              Background="#000000">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition x:Name="CaptionSpacer" Width="138" />
             </Grid.ColumnDefinitions>
+            <TextBlock x:Name="HostStatus"
+                       Grid.Column="0"
+                       Margin="14,0,0,0"
+                       VerticalAlignment="Center"
+                       FontSize="12"
+                       Foreground="#A8A29E"
+                       Text="Starting…" />
         </Grid>
 
         <WebView2 x:Name="WebView"
                   Grid.Row="1"
-                  DefaultBackgroundColor="Transparent" />
+                  HorizontalAlignment="Stretch"
+                  VerticalAlignment="Stretch" />
     </Grid>
 </Window>

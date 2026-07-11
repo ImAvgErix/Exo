@@ -127,10 +127,10 @@
   function navigate(route, opts = {}) {
     state.route = route;
     setChrome(route);
-    if (route === "home") renderHome();
-    else if (route === "settings") renderSettings();
-    else if (route === "discord" || route === "steam" || route === "nvidia")
-      renderOptimizer(route, opts);
+    if (route === "home") return renderHome();
+    if (route === "settings") return renderSettings();
+    if (route === "discord" || route === "steam" || route === "nvidia")
+      return renderOptimizer(route, opts);
   }
 
   async function renderHome() {
@@ -149,10 +149,15 @@
       return;
     }
 
+    const logoBase = window.__OPTIHUB_LOGOS__ || "";
     const html = cards.map((c) => {
       const soon = c.comingSoon;
+      let logo = c.logo || "";
+      if (logoBase && logo && !/^https?:|^file:|^data:/i.test(logo)) {
+        logo = logoBase + logo.replace(/^logos\//, "");
+      }
       return `<button type="button" class="card-btn" data-id="${esc(c.id)}" ${soon ? "disabled" : ""}>
-        <img src="${esc(c.logo)}" alt="" draggable="false" />
+        <img src="${esc(logo)}" alt="" draggable="false" />
         <span>${esc(c.title)}</span>
         ${soon ? `<span class="soon">Coming soon</span>` : ""}
       </button>`;
@@ -422,6 +427,12 @@
   btnBack.addEventListener("click", () => navigate("home"));
   btnSettings.addEventListener("click", () => navigate("settings"));
 
-  // Boot
-  navigate("home");
+  // Boot: always paint HTML first so a failed bridge never looks blank.
+  view.innerHTML = `<div class="page"><div class="hero"><h1>OptiHub</h1><p>Connecting to host…</p></div></div>`;
+  Promise.resolve()
+    .then(() => navigate("home"))
+    .catch((e) => {
+      view.innerHTML = `<div class="page"><div class="panel result bad">${esc(e && e.message ? e.message : e)}</div>
+        <p style="margin-top:12px;color:var(--muted);font-size:12px">If this persists, reinstall WebView2 Runtime and OptiHub 1.7.1+.</p></div>`;
+    });
 })();

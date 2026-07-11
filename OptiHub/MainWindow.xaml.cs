@@ -12,13 +12,14 @@ using WinRT.Interop;
 namespace OptiHub;
 
 /// <summary>
-/// Minimal WinUI 3 host window. All product UI lives in WebView2 (Assets/Web).
+/// Minimal WinUI 3 host. Product UI is WebView2 (Assets/Web).
 /// </summary>
 public sealed partial class MainWindow : Window
 {
     private readonly CancellationTokenSource _lifetimeCts = new();
     private WebUiBridge? _bridge;
     private bool _webReady;
+    private int _initAttempts;
 
     public MainWindow()
     {
@@ -40,14 +41,19 @@ public sealed partial class MainWindow : Window
             if (args.DidPresenterChange || args.DidSizeChange)
                 ApplyFixedWindowChrome();
         };
-        RootGrid.Loaded += async (_, _) =>
+
+        // Init when the WebView control itself is ready (not only the grid).
+        WebView.Loaded += async (_, _) => await InitWebViewAsync();
+        RootGrid.Loaded += (_, _) =>
         {
             UpdateCaptionInset();
             ApplyFixedWindowChrome();
-            await InitWebViewAsync();
+            // Fallback if WebView.Loaded already fired before we subscribed.
+            _ = InitWebViewAsync();
         };
         RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
+
         Closed += (_, _) =>
         {
             _lifetimeCts.Cancel();
@@ -67,25 +73,49 @@ public sealed partial class MainWindow : Window
     private async Task InitWebViewAsync()
     {
         if (_webReady) return;
+        if (Interlocked.Increment(ref _initAttempts) > 8) return;
+
         try
         {
+            SetHostStatus("Starting WebView2…");
             await WebView.EnsureCoreWebView2Async();
-            var core = WebView.CoreWebView2;
-            if (core is null) return;
 
-            core.Settings.AreDefaultContextMenusEnabled = false;
-            core.Settings.AreDevToolsEnabled = false;
+            var core = WebView.CoreWebView2;
+            if (core is null)
+            {
+                SetHostStatus("WebView2 core is null");
+                return;
+            }
+
+            core.Settings.AreDefaultContextMenusEnabled = true;
+            core.Settings.AreDevToolsEnabled = true; // F12 if needed while diagnosing
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.IsZoomControlEnabled = false;
+            core.Settings.AreBrowserAcceleratorKeysEnabled = true;
 
-            var webRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Web");
+            // Opaque fill — Transparent WebView2 is a known blank-screen footgun.
+            WebView.DefaultBackgroundColor = Windows.UI.Color.FromArgb(255, 0, 0, 0);
+
+            var webRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Assets", "Web"));
             if (!Directory.Exists(webRoot))
                 throw new DirectoryNotFoundException("Web UI assets missing: " + webRoot);
 
-            core.SetVirtualHostNameToFolderMapping(
-                "app.optihub",
-                webRoot,
-                CoreWebView2HostResourceAccessKind.Allow);
+            var indexPath = Path.Combine(webRoot, "index.html");
+            if (!File.Exists(indexPath))
+                throw new FileNotFoundException("index.html missing", indexPath);
+
+            // Virtual host for clean https origins; file:// is the reliable fallback.
+            try
+            {
+                core.SetVirtualHostNameToFolderMapping(
+                    "app.optihub.local",
+                    webRoot,
+                    CoreWebView2HostResourceAccessKind.Allow);
+            }
+            catch (Exception mapEx)
+            {
+                SetHostStatus("Virtual host map failed: " + mapEx.Message);
+            }
 
             _bridge = new WebUiBridge(
                 App.Services,
@@ -93,8 +123,11 @@ public sealed partial class MainWindow : Window
                 this,
                 async json =>
                 {
-                    if (WebView.CoreWebView2 is null) return;
-                    WebView.CoreWebView2.PostWebMessageAsJson(json);
+                    try
+                    {
+                        WebView.CoreWebView2?.PostWebMessageAsJson(json);
+                    }
+                    catch { /* ignore */ }
                     await Task.CompletedTask;
                 });
 
@@ -102,26 +135,52 @@ public sealed partial class MainWindow : Window
             {
                 try
                 {
-                    var raw = args.TryGetWebMessageAsString() ?? args.WebMessageAsJson;
+                    var raw = args.TryGetWebMessageAsString();
+                    if (string.IsNullOrWhiteSpace(raw))
+                        raw = args.WebMessageAsJson;
                     if (string.IsNullOrWhiteSpace(raw)) return;
-                    // PostMessage from JS may wrap a JSON string; unwrap if needed.
+
+                    // JS postMessage(string) often arrives as a JSON-encoded string literal.
                     if (raw.Length >= 2 && raw[0] == '"' && raw[^1] == '"')
                     {
                         try { raw = System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? raw; }
-                        catch { /* keep raw */ }
+                        catch { /* keep */ }
                     }
+
                     if (_bridge is not null)
                         await _bridge.HandleMessageAsync(raw);
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine(ex);
+                    try
+                    {
+                        File.AppendAllText(
+                            Path.Combine(PathHelper.LogsDir, "webview-bridge.log"),
+                            $"[{DateTime.UtcNow:O}] {ex}\n");
+                    }
+                    catch { /* ignore */ }
                 }
             };
 
             core.NavigationCompleted += async (_, args) =>
             {
-                if (!args.IsSuccess) return;
+                if (!args.IsSuccess)
+                {
+                    SetHostStatus($"Navigation failed (0x{args.WebErrorStatus}) — trying file fallback…");
+                    try
+                    {
+                        // file:// fallback if virtual host is blocked
+                        var fileUri = new Uri(indexPath).AbsoluteUri;
+                        core.Navigate(fileUri);
+                    }
+                    catch (Exception ex2)
+                    {
+                        SetHostStatus("Load failed: " + ex2.Message);
+                    }
+                    return;
+                }
+
+                SetHostStatus(string.Empty);
                 try
                 {
                     var theme = App.Services.Settings.Current.Theme;
@@ -131,22 +190,105 @@ public sealed partial class MainWindow : Window
                 catch { /* best-effort */ }
             };
 
-            core.Navigate("https://app.optihub/index.html");
+            core.ProcessFailed += (_, args) =>
+            {
+                SetHostStatus("WebView process failed: " + args.ProcessFailedKind);
+                _webReady = false;
+            };
+
+            SetHostStatus("Loading UI…");
+            // Most reliable for unpackaged apps: load HTML as string with absolute
+            // file:// links so CSS/JS/images always resolve (virtual host can silent-fail).
+            await LoadWebUiDocumentAsync(core, webRoot, indexPath);
             _webReady = true;
         }
         catch (Exception ex)
         {
-            // Surface a hard failure in the window if WebView2 cannot start.
-            RootGrid.Children.Clear();
-            RootGrid.Children.Add(new TextBlock
+            SetHostStatus("WebView2 error");
+            try
             {
-                Text = "WebView2 failed to start.\n\n" + ex.Message +
-                       "\n\nInstall the WebView2 Runtime, then reopen OptiHub.",
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(32),
-                Foreground = new SolidColorBrush(Colors.White)
+                File.AppendAllText(
+                    Path.Combine(PathHelper.LogsDir, "webview-init.log"),
+                    $"[{DateTime.UtcNow:O}] {ex}\n");
+            }
+            catch { /* ignore */ }
+
+            // Visible in-window error (not only a blank black frame).
+            await DispatcherQueue.EnqueueAsync(() =>
+            {
+                var msg =
+                    "WebView2 failed to start.\n\n" +
+                    ex.Message +
+                    "\n\nInstall/repair the Evergreen WebView2 Runtime, then reopen OptiHub.\n" +
+                    "Log: %LocalAppData%\\OptiHub\\logs\\webview-init.log";
+
+                // Replace webview area with text
+                if (RootGrid.Children.Contains(WebView))
+                    RootGrid.Children.Remove(WebView);
+
+                RootGrid.Children.Add(new TextBlock
+                {
+                    Text = msg,
+                    TextWrapping = TextWrapping.WrapWholeWords,
+                    Margin = new Thickness(28, 48, 28, 28),
+                    Foreground = new SolidColorBrush(Colors.White),
+                    FontSize = 14
+                });
             });
         }
+    }
+
+    private static async Task LoadWebUiDocumentAsync(
+        CoreWebView2 core,
+        string webRoot,
+        string indexPath)
+    {
+        var html = await File.ReadAllTextAsync(indexPath);
+        var cssPath = Path.Combine(webRoot, "app.css");
+        var jsPath = Path.Combine(webRoot, "app.js");
+        var css = File.Exists(cssPath) ? await File.ReadAllTextAsync(cssPath) : "";
+        var js = File.Exists(jsPath) ? await File.ReadAllTextAsync(jsPath) : "";
+
+        var rootUri = new Uri(webRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar);
+        var logosUri = new Uri(rootUri, "logos/").AbsoluteUri;
+
+        // Inline CSS/JS so NavigateToString cannot fail to load external files
+        // (about:blank origin often blocks file:// script tags).
+        html = html
+            .Replace(
+                "<link rel=\"stylesheet\" href=\"app.css\" />",
+                "<style>\n" + css + "\n</style>")
+            .Replace(
+                "<script src=\"app.js\"></script>",
+                "<script>\nwindow.__OPTIHUB_LOGOS__ = " +
+                System.Text.Json.JsonSerializer.Serialize(logosUri) +
+                ";\n" + js + "\n</script>");
+
+        // 1) Virtual host (best case for messaging + relative logos).
+        try { core.Navigate("https://app.optihub.local/index.html"); }
+        catch { /* fall through */ }
+
+        // 2) Guaranteed paint: fully inlined document.
+        await Task.Delay(30);
+        core.NavigateToString(html);
+    }
+
+    private void SetHostStatus(string text)
+    {
+        try
+        {
+            if (!DispatcherQueue.HasThreadAccess)
+            {
+                DispatcherQueue.TryEnqueue(() => SetHostStatus(text));
+                return;
+            }
+            if (HostStatus is null) return;
+            HostStatus.Text = text ?? string.Empty;
+            HostStatus.Visibility = string.IsNullOrWhiteSpace(text)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        }
+        catch { /* ignore */ }
     }
 
     private void ApplyFixedWindowChrome()
@@ -185,17 +327,19 @@ public sealed partial class MainWindow : Window
     private void ApplyShellChrome()
     {
         var dark = RootGrid.ActualTheme != ElementTheme.Light;
-        RootGrid.Background = new SolidColorBrush(
-            dark ? ColorHelper.FromArgb(255, 0, 0, 0)
-                 : ColorHelper.FromArgb(255, 243, 237, 227));
-        App.Services.Theme.Apply();
+        var bg = dark
+            ? ColorHelper.FromArgb(255, 0, 0, 0)
+            : ColorHelper.FromArgb(255, 243, 237, 227);
+        RootGrid.Background = new SolidColorBrush(bg);
+        TitleBarHost.Background = new SolidColorBrush(bg);
         try
         {
             WebView.DefaultBackgroundColor = dark
                 ? Windows.UI.Color.FromArgb(255, 0, 0, 0)
                 : Windows.UI.Color.FromArgb(255, 243, 237, 227);
         }
-        catch { /* WebView may not be ready */ }
+        catch { /* not ready */ }
+        App.Services.Theme.Apply();
     }
 
     private void TryCenterOnScreen()
@@ -219,23 +363,13 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var baseDir = AppContext.BaseDirectory;
-            foreach (var rel in new[]
-                     {
-                         Path.Combine("Assets", "OptiHub.ico"),
-                         Path.Combine("Assets", "Logos", "optihub.png")
-                     })
-            {
-                var path = Path.Combine(baseDir, rel);
-                if (!File.Exists(path)) continue;
+            var path = Path.Combine(AppContext.BaseDirectory, "Assets", "OptiHub.ico");
+            if (File.Exists(path))
                 AppWindow.SetIcon(path);
-                return;
-            }
         }
         catch { /* best-effort */ }
     }
 
-    // Kept for any residual ViewModel navigation hooks (legacy XAML pages).
     public void NavigateHome(bool suppressTransition = false) { }
     public void NavigateToDiscord() { }
     public void NavigateToSteam() { }
@@ -246,7 +380,7 @@ public sealed partial class MainWindow : Window
         try
         {
             if (!App.Services.Settings.Current.AutoUpdateScripts) return;
-            await Task.Delay(1800, ct);
+            await Task.Delay(2000, ct);
             var appCheck = await App.Services.Updater.CheckAppUpdateAsync(ct: ct);
             if (!appCheck.UpdateAvailable || RootGrid.XamlRoot is null) return;
 
@@ -255,17 +389,13 @@ public sealed partial class MainWindow : Window
                 Title = "OptiHub update available",
                 Content =
                     $"Version {appCheck.RemoteVersion} is available.\n" +
-                    $"You have {appCheck.LocalVersion}.\n\n" +
-                    "Install now? OptiHub will close, update in place, and reopen.",
+                    $"You have {appCheck.LocalVersion}.\n\nInstall now?",
                 PrimaryButtonText = "Install",
                 CloseButtonText = "Later",
                 DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = RootGrid.XamlRoot
             };
-            var choice = await dialog.ShowAsync();
-            ct.ThrowIfCancellationRequested();
-            if (choice != ContentDialogResult.Primary) return;
-
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
             var install = await App.Services.Updater.InstallAppUpdateAsync(appCheck, ct: ct);
             if (install.ShouldExit)
             {
@@ -274,6 +404,30 @@ public sealed partial class MainWindow : Window
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-        catch { /* ignore network issues on startup */ }
+        catch { /* ignore */ }
+    }
+}
+
+internal static class DispatcherQueueExtensions
+{
+    public static Task EnqueueAsync(this Microsoft.UI.Dispatching.DispatcherQueue queue, Action action)
+    {
+        var tcs = new TaskCompletionSource();
+        if (!queue.TryEnqueue(() =>
+            {
+                try
+                {
+                    action();
+                    tcs.TrySetResult();
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            }))
+        {
+            tcs.TrySetException(new InvalidOperationException("DispatcherQueue unavailable"));
+        }
+        return tcs.Task;
     }
 }
