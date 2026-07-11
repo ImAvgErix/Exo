@@ -115,9 +115,10 @@ public sealed partial class MainWindow : Window
     private void ApplyShellChrome()
     {
         var dark = RootGrid.ActualTheme != ElementTheme.Light;
+        // Keep shell fill in sync with theme dictionaries (AMOLED black / cream beige).
         RootGrid.Background = new SolidColorBrush(
-            dark ? ColorHelper.FromArgb(255, 11, 11, 12)
-                 : ColorHelper.FromArgb(255, 240, 239, 238));
+            dark ? ColorHelper.FromArgb(255, 0, 0, 0)
+                 : ColorHelper.FromArgb(255, 243, 237, 227));
         App.Services.Theme.Apply();
         UpdateCaptionInset();
     }
