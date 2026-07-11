@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.8
+
+- **UI overhaul**: minimal Raycast/Linear-style SPA — tight 8px rhythm, hairline cards, no page scroll
+- **Home / Settings / Optimizer**: fit the fixed window; compact status, denser feature grid, clean updates strip
+- Removed heavy ambient chrome, italic hero type, oversized status wells, and version footer clutter
 ## 1.7.7
 
 - **WebView2**: detect incomplete Evergreen Runtime (missing icudtl/resources) and repair on launch + install
