@@ -180,11 +180,27 @@ if (-not (Test-Path $discordRoot)) {
         if (Test-Path -LiteralPath $settingsPath) {
             try {
                 $sj = Get-Content $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                # Legacy OptiHub stamp (no longer forced — pure #000 can blank the client)
                 if ($sj.BACKGROUND_COLOR -eq '#000000') { $amoledOk = $true }
                 if ($sj.OPEN_ON_STARTUP -eq $false) { $startupOk = $true }
             } catch {}
         }
-        Add-Feature 'True black AMOLED theme' 'Pure black UI saves OLED power and cuts eye strain at night.' $amoledOk
+        # Preferred: Equicord AMOLED theme (amoled-cord) enabled — real dark UI without forced CSS
+        $eqRoot = Join-Path $appData 'Equicord'
+        $eqThemeFile = Join-Path $eqRoot 'themes\amoled-cord.theme.css'
+        $eqSettings = Join-Path $eqRoot 'settings\settings.json'
+        if ((Test-Path -LiteralPath $eqThemeFile) -and (Test-Path -LiteralPath $eqSettings)) {
+            try {
+                $eqSj = Get-Content $eqSettings -Raw -Encoding UTF8 | ConvertFrom-Json
+                $enabled = @($eqSj.enabledThemes)
+                if ($enabled | Where-Object { "$_" -match '(?i)amoled' }) { $amoledOk = $true }
+            } catch {
+                if (Test-Path -LiteralPath $eqThemeFile) { $amoledOk = $true }
+            }
+        } elseif (Test-Path -LiteralPath $eqThemeFile) {
+            $amoledOk = $true
+        }
+        Add-Feature 'True black AMOLED theme' 'Equicord amoled-cord theme (not forced OpenAsar CSS).' $amoledOk
 
         $notificationsOk = $true
         $notificationRoot = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
