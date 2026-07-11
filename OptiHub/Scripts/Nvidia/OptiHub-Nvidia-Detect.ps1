@@ -357,6 +357,31 @@ $features.Add(@{
     active = $applied
 })
 
+$gameOk = $false
+$gameDetail = 'Per-game profiles not recorded. Apply to import Base + Val/CS2/R6/Rivals and other big titles.'
+if ($state -and $applied) {
+    $count = 0
+    if ($state.PSObject.Properties.Name -contains 'gameProfileCount') {
+        try { $count = [int]$state.gameProfileCount } catch { $count = 0 }
+    }
+    $names = @()
+    if ($state.PSObject.Properties.Name -contains 'gameProfiles' -and $state.gameProfiles) {
+        $names = @($state.gameProfiles | ForEach-Object { "$_" })
+    }
+    $gameOk = [bool]$state.gameProfilesApplied -and $count -ge 10
+    if ($gameOk) {
+        $sample = ($names | Select-Object -First 6) -join ', '
+        $gameDetail = "Imported $count game profiles from your series pack ($sample...)."
+    } elseif ($count -gt 0) {
+        $gameDetail = "Only $count game profiles recorded - reapply for the full catalog."
+    }
+}
+$features.Add(@{
+    title  = 'Per-game profiles'
+    detail = $gameDetail
+    active = $gameOk
+})
+
 # 4+) Display then privacy stack (same order as status priority)
 $displayMarkerOk = [bool]($state -and $state.displayPrefs -and [string]$state.displayMethod -eq 'nvapi')
 $displayLive = Test-NvidiaDisplayLive
@@ -385,16 +410,25 @@ $features.Add(@{
 })
 
 $isApplied = $gpuOk -and (-not $pendingAfterDriver) -and (-not $applyInProgress) -and
-             $applied -and $displayOk -and $backgroundOk -and (-not $needsDriverAction)
+             $applied -and $gameOk -and $displayOk -and $backgroundOk -and (-not $needsDriverAction)
+
+$driverChanged = $false
+if ($state -and $currentNv -and $state.profileDriverVersion -and
+    [string]$state.profileDriverVersion -ne [string]$currentNv) {
+    $driverChanged = $true
+}
+
 $statusText = if (-not $gpuOk) { 'No NVIDIA GPU' }
 elseif ($pendingAfterDriver) { 'Restart required' }
 elseif ($isNotebookGpu) { 'Notebook driver requires manual action' }
 elseif (-not $currentNv) { 'Driver status unavailable' }
 elseif ($needsUpdate) { 'Driver update available' }
 elseif ($needsRetweak) { 'Driver tweaks available' }
+elseif ($driverChanged -or (-not $profileOk -and $state -and $state.profileApplied)) { 'Driver changed — reapply' }
 elseif (-not $profileOk) { '3D profile incomplete' }
+elseif (-not $gameOk) { 'Game profiles incomplete' }
 elseif (-not $displayOk) { 'Display setup incomplete' }
-elseif (-not $backgroundOk) { 'Background debloat incomplete' }
+elseif (-not $backgroundOk) { 'Background re-armed — reapply' }
 elseif ($isApplied) { 'Already optimized' }
 else { 'Ready to optimize' }
 
@@ -404,10 +438,12 @@ elseif ($isNotebookGpu) { 'OptiHub blocks desktop driver metadata on Laptop/Note
 elseif (-not $currentNv) { 'OptiHub could not read a valid NVIDIA driver version. Repair the driver, then refresh.' }
 elseif ($needsUpdate) { 'Apply runs OptiHub Clean Driver (official display-driver package), then continues with the profile and display preferences.' }
 elseif ($needsRetweak) { 'Version is newest; Apply will apply OptiHub MSI/privacy tweaks in-place (no re-download).' }
+elseif ($driverChanged) { "Driver is now $currentNv but OptiHub last verified $($state.profileDriverVersion). Apply again for base + per-game profiles and display prefs." }
 elseif (-not $profileOk) { $(if ($applyInProgress) { 'The previous Apply was interrupted before a verified profile marker was saved. Apply again.' } else { 'The profile file, pack version, hash, or imported driver version is not verified. Apply again.' }) }
+elseif (-not $gameOk) { 'Base profile is present but the per-game catalog was not fully recorded. Apply again.' }
 elseif (-not $displayOk) { 'The 3D profile is verified, but live NVAPI display verification is incomplete. Restore the helper or Apply again.' }
-elseif (-not $backgroundOk) { 'NVIDIA background services, tasks, auto-start entries, or overlay preferences are active. Apply again.' }
-elseif ($isApplied) { 'Driver current with tweaks, 3D profile, and display prefs applied. Reapply after major driver upgrades or if NVIDIA App re-enables SelfUpdate.' }
+elseif (-not $backgroundOk) { "NVIDIA App re-enabled background noise ($($backgroundIssues -join '; ')). Apply again to re-disable (no logon task)." }
+elseif ($isApplied) { 'Driver current with tweaks, Base + per-game profiles, and display prefs applied. Reapply after major driver upgrades or if NVIDIA App re-enables SelfUpdate.' }
 else { 'Choose the G-SYNC pack only for a compatible display, then Apply.' }
 
 [ordered]@{

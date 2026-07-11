@@ -1,7 +1,12 @@
-# OptiHub NVIDIA profiles (v1.1.0)
+# OptiHub NVIDIA profiles (v1.3.0)
 
 Maximum-performance **Base Profile** packs for GeForce 10/20/30/40/50 series.
 Applied with nvidiaProfileInspector `-silentImport` (no GUI).
+
+On Apply, OptiHub clones the selected series pack into **per-game application
+profiles** (Valorant, CS2, Marvel Rivals, R6, Fortnite, Apex, and more) so all
+10 base packs (max FPS + G-SYNC × series) feed the same game catalog without
+shipping 10×N separate NIP files.
 
 These packs intentionally favor FPS and latency over idle power, background
 features, and driver-default image-quality choices. OptiHub validates the

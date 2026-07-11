@@ -24,7 +24,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.6.1'
+$Script:NvidiaOptVersion = '1.7.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -109,6 +109,91 @@ function Get-ProfileFile([string]$SeriesId, [bool]$UseGsync) {
     $path = Join-Path $ProfilesDir $name
     if (Test-Path -LiteralPath $path) { return $path }
     return $null
+}
+
+function Get-OptiHubGameProfileCatalog {
+    # Application profiles clone the active series Base pack (all 10 packs work:
+    # we generate from whichever XX Series / G-SYNC NIP was selected at apply).
+    @(
+        @{ Name = 'Valorant';            Exes = @('VALORANT-Win64-Shipping.exe') },
+        @{ Name = 'Counter-Strike 2';    Exes = @('cs2.exe') },
+        @{ Name = 'Marvel Rivals';       Exes = @('Marvel-Win64-Shipping.exe', 'MarvelRivals-Win64-Shipping.exe') },
+        @{ Name = 'Rainbow Six Siege';   Exes = @('RainbowSix.exe', 'RainbowSix_Vulkan.exe', 'RainbowSixGame.exe') },
+        @{ Name = 'Fortnite';            Exes = @('FortniteClient-Win64-Shipping.exe') },
+        @{ Name = 'Apex Legends';        Exes = @('r5apex.exe', 'r5apex_dx12.exe') },
+        @{ Name = 'League of Legends';   Exes = @('League of Legends.exe') },
+        @{ Name = 'Overwatch 2';         Exes = @('Overwatch.exe') },
+        @{ Name = 'Rocket League';       Exes = @('RocketLeague.exe') },
+        @{ Name = 'Call of Duty';        Exes = @('cod.exe', 'cod24.exe', 'cod23.exe', 'cod22.exe') },
+        @{ Name = 'Destiny 2';           Exes = @('destiny2.exe') },
+        @{ Name = 'PUBG';                Exes = @('TslGame.exe') },
+        @{ Name = 'Escape from Tarkov';  Exes = @('EscapeFromTarkov.exe', 'EscapeFromTarkov_BE.exe') },
+        @{ Name = 'The Finals';          Exes = @('Discovery.exe') },
+        @{ Name = 'Delta Force';         Exes = @('DeltaForceClient-Win64-Shipping.exe') }
+    )
+}
+
+function New-OptiHubCombinedProfileNip {
+    param(
+        [Parameter(Mandatory)][string]$BaseNipPath,
+        [Parameter(Mandatory)][string]$OutPath
+    )
+    if (-not (Test-Path -LiteralPath $BaseNipPath)) {
+        throw "Base NIP missing: $BaseNipPath"
+    }
+
+    # Profiles ship as UTF-16 XML.
+    [xml]$doc = [IO.File]::ReadAllText($BaseNipPath)
+    $array = $doc.ArrayOfProfile
+    if (-not $array) { throw 'Base NIP missing ArrayOfProfile root' }
+    $base = @($array.Profile) | Select-Object -First 1
+    if (-not $base -or [string]$base.ProfileName -ne 'Base Profile') {
+        throw 'Base NIP must start with a Base Profile entry'
+    }
+
+    $games = @(Get-OptiHubGameProfileCatalog)
+    foreach ($game in $games) {
+        $clone = $base.CloneNode($true)
+        $nameNode = $clone.SelectSingleNode('ProfileName')
+        if (-not $nameNode) { throw 'Cloned profile missing ProfileName' }
+        $nameNode.InnerText = "OptiHub - $($game.Name)"
+
+        $execNode = $clone.SelectSingleNode('Executeables')
+        if (-not $execNode) {
+            $execNode = $doc.CreateElement('Executeables')
+            [void]$clone.InsertAfter($execNode, $nameNode)
+        } else {
+            $execNode.RemoveAll()
+        }
+        foreach ($exe in @($game.Exes)) {
+            $s = $doc.CreateElement('string')
+            $s.InnerText = [string]$exe
+            [void]$execNode.AppendChild($s)
+        }
+        [void]$array.AppendChild($clone)
+    }
+
+    $settings = New-Object System.Xml.XmlWriterSettings
+    # UTF-16 LE + BOM (matches shipped .nip packs). Constructor is (bigEndian, byteOrderMark).
+    $settings.Encoding = New-Object System.Text.UnicodeEncoding $false, $true
+    $settings.Indent = $true
+    $settings.OmitXmlDeclaration = $false
+    $writer = [System.Xml.XmlWriter]::Create($OutPath, $settings)
+    try {
+        $doc.Save($writer)
+    } finally {
+        $writer.Dispose()
+    }
+
+    if (-not (Test-Path -LiteralPath $OutPath) -or (Get-Item -LiteralPath $OutPath).Length -lt 1000) {
+        throw "Combined NIP write failed: $OutPath"
+    }
+
+    return @{
+        Path      = $OutPath
+        GameCount = $games.Count
+        Games     = @($games | ForEach-Object { [string]$_.Name })
+    }
 }
 
 function Test-IsNotebookGpuName([string]$Name) {
@@ -1258,30 +1343,39 @@ function Disable-NvidiaTelemetry {
         '*NVIDIA*App*',
         '*NVIDIA*SelfUpdate*',
         'NVIDIA App SelfUpdate*',
+        '*SelfUpdate*NVIDIA*',
         '*FrameView*',
         'NvDriverUpdateCheckDaily*',
-        'NVIDIA GeForce Experience SelfUpdate*'
+        'NVIDIA GeForce Experience SelfUpdate*',
+        '*GeForce*Experience*SelfUpdate*'
     )
     $disabled = 0
-    Get-ScheduledTask -ErrorAction SilentlyContinue | ForEach-Object {
-        $tn = $_.TaskName
-        $tp = $_.TaskPath
-        $full = "$tp$tn"
-        if ($tn -match '(?i)^OptiHub') { return }
-        $hit = $false
-        foreach ($pat in $taskPatterns) {
-            if ($tn -like $pat -or $full -like $pat) { $hit = $true; break }
+    # Two passes: NVIDIA App sometimes re-enables SelfUpdate during the first pass.
+    for ($pass = 1; $pass -le 2; $pass++) {
+        Get-ScheduledTask -ErrorAction SilentlyContinue | ForEach-Object {
+            $tn = $_.TaskName
+            $tp = $_.TaskPath
+            $full = "$tp$tn"
+            if ($tn -match '(?i)^OptiHub') { return }
+            $hit = $false
+            foreach ($pat in $taskPatterns) {
+                if ($tn -like $pat -or $full -like $pat) { $hit = $true; break }
+            }
+            if (-not $hit) { return }
+            # Keep essential display tasks
+            if ($tn -match '(?i)Display|LocalSystem') { return }
+            try {
+                if ([bool]$_.Settings.Enabled -or $_.State -ne 'Disabled') {
+                    Disable-ScheduledTask -TaskName $tn -TaskPath $tp -ErrorAction Stop | Out-Null
+                    $disabled++
+                    if ($pass -eq 1) { Write-Ok "Task disabled: $full" }
+                }
+            } catch { }
         }
-        if (-not $hit) { return }
-        # Keep essential display tasks
-        if ($tn -match '(?i)Display|LocalSystem') { return }
-        try {
-            Disable-ScheduledTask -TaskName $tn -TaskPath $tp -ErrorAction Stop | Out-Null
-            $disabled++
-            Write-Ok "Task disabled: $full"
-        } catch { }
+        if ($pass -eq 1) { Start-Sleep -Milliseconds 400 }
     }
     if ($disabled -eq 0) { Write-Ok 'No telemetry tasks matched (already clean or names differ)' }
+    else { Write-Ok "Telemetry/SelfUpdate tasks disabled ($disabled disable action(s))" }
 
     # No logon persist task — scheduled tasks are background overhead. Quiet is
     # re-applied only when the user runs OptiHub NVIDIA Apply (or Repair).
@@ -1588,6 +1682,8 @@ try {
     if (Test-Path -LiteralPath $profileVersionPath) {
         $profilePackVersion = (Get-Content -LiteralPath $profileVersionPath -Raw -ErrorAction SilentlyContinue).Trim()
     }
+    $gameProfiles = @()
+    $gameProfilesApplied = $false
     if (-not $SkipProfile) {
         if ([string]::IsNullOrWhiteSpace($profilePackVersion)) {
             throw 'NVIDIA profile pack version is missing; refusing an unverifiable import.'
@@ -1596,15 +1692,28 @@ try {
         if (-not $nip) { throw "Missing profile for series $seriesId (G-SYNC=$useGsync)" }
         Assert-OptiHubNipProfile -Path $nip -UseGsync $useGsync
         $profileSha256 = (Get-FileHash -LiteralPath $nip -Algorithm SHA256 -ErrorAction Stop).Hash
-        Write-Ok "Profile: $(Split-Path $nip -Leaf)"
+        Write-Ok "Base profile: $(Split-Path $nip -Leaf)"
+
+        # Clone base settings into per-game application profiles (same pack for all 10 series variants).
+        $combinedPath = Join-Path $env:TEMP ("optihub-combined-$([guid]::NewGuid().ToString('n')).nip")
+        $built = New-OptiHubCombinedProfileNip -BaseNipPath $nip -OutPath $combinedPath
+        $gameProfiles = @($built.Games)
+        Write-Ok ("Per-game profiles prepared: {0} titles from {1}" -f $built.GameCount, (Split-Path $nip -Leaf))
+
         Write-HubProgress 40 'Profile Inspector (3D settings)...'
-        Write-HubProgress 48 'Importing 3D Base Profile (silent)...'
-        $profileImport = Import-OptiHubNipProfile -NipPath $nip -TimeoutSec 90
+        Write-HubProgress 48 'Importing Base + per-game profiles (silent)...'
+        try {
+            $profileImport = Import-OptiHubNipProfile -NipPath $combinedPath -TimeoutSec 120
+        } finally {
+            try { Remove-Item -LiteralPath $combinedPath -Force -ErrorAction SilentlyContinue } catch { }
+        }
         $npi = $profileImport.NpiPath
         $profileApplied = [bool]$profileImport.Success
+        $gameProfilesApplied = $profileApplied -and $gameProfiles.Count -gt 0
         if (-not $profileApplied) {
             throw '3D Base Profile was NOT applied (silent import did not succeed).'
         }
+        Write-Ok ("Imported Base Profile + {0} game profiles" -f $gameProfiles.Count)
     } else {
         Write-Ok '3D profile import skipped (-SkipProfile)'
     }
@@ -1696,6 +1805,9 @@ try {
         pendingAfterDriver  = $false
         driverTweaksVerified = [bool]$driverTweaksVerified
         driverTweaksVersion = $tweaksVer
+        gameProfilesApplied = [bool]$gameProfilesApplied
+        gameProfiles        = @($gameProfiles)
+        gameProfileCount    = @($gameProfiles).Count
     }
 
     if (-not [bool]$dispResult.Success) {
@@ -1715,7 +1827,8 @@ try {
         Write-Ok 'Clean install completed in one pass (driver + 3D + NVAPI display). No forced reboot.'
     }
     Write-HubProgress 100 'Completed successfully'
-    Write-Output "DONE - NVIDIA $seriesId$(if($useGsync){' G-SYNC'}else{' max FPS / latency'}) (driver -> 3D profile -> NVAPI display)"
+    Write-Output ("DONE - NVIDIA {0}{1} (driver -> base+{2} games -> NVAPI display)" -f `
+        $seriesId, $(if ($useGsync) { ' G-SYNC' } else { ' max FPS / latency' }), @($gameProfiles).Count)
     exit 0
 } catch {
     Write-Err $_.Exception.Message
