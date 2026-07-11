@@ -138,7 +138,7 @@
                             </Border>
                         </Grid>
 
-                        <TextBlock Text="One check covers the OptiHub app and all optimizer kits."
+                        <TextBlock Text="Each app version ships matching Discord / Steam / NVIDIA kits. Installing an update replaces the app and kits cleanly — no mix of old and new."
                                    Style="{StaticResource OptiCaption}"
                                    FontSize="12"
                                    Opacity="0.9"

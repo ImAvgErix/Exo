@@ -166,6 +166,32 @@ internal static class Program
                 try { CleanupStaleInstallArtifacts(root, keepInstallDir: installDir); }
                 catch (Exception cuEx) { Log("Cleanup warning: " + cuEx.Message); }
 
+                // Drop working kits so the new app re-materializes a full matching set
+                // from its bundled Scripts/ tree. Prevents old-UI + new-scripts hybrids.
+                try
+                {
+                    string scriptsDir = Path.Combine(root, "scripts");
+                    if (Directory.Exists(scriptsDir))
+                    {
+                        Directory.Delete(scriptsDir, true);
+                        Log("Cleared working optimizer kits for clean rebind.");
+                    }
+                }
+                catch (Exception scEx)
+                {
+                    Log("Script kit cleanup warning: " + scEx.Message);
+                    // Stamp force-resync even if delete partially failed.
+                    try
+                    {
+                        string scriptsDir = Path.Combine(root, "scripts");
+                        Directory.CreateDirectory(scriptsDir);
+                        File.WriteAllText(
+                            Path.Combine(scriptsDir, ".app-kit-stamp"),
+                            "force-resync" + Environment.NewLine);
+                    }
+                    catch { }
+                }
+
                 Log("Launching OptiHub from " + targetExe + " ...");
                 Process.Start(new ProcessStartInfo
                 {

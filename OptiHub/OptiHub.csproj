@@ -24,7 +24,7 @@
     <AssemblyName>OptiHub</AssemblyName>
     <Product>OptiHub</Product>
     <Company>OptiHub</Company>
-    <Version>1.6.1</Version>
+    <Version>1.6.2</Version>
     <Description>One hub. Max performance.</Description>
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>

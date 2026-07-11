@@ -4,8 +4,10 @@ using System.Security.Cryptography;
 namespace OptiHub.Services;
 
 /// <summary>
-/// Ensures bundled scripts are available under LocalAppData for updates and runs.
-/// Syncs Discord, Steam, and NVIDIA kits from the app-bundled Scripts folders when needed.
+/// Materializes optimizer kits under LocalAppData for runs and GitHub refreshes.
+/// Policy: each OptiHub app version owns a complete kit set. When the app version
+/// changes, working kits are fully replaced from the bundled Scripts tree — never
+/// merged with leftovers from an older install.
 /// </summary>
 public sealed class ScriptBundleService
 {
@@ -17,10 +19,36 @@ public sealed class ScriptBundleService
     private bool _discordSyncDone;
     private bool _steamSyncDone;
     private bool _nvidiaSyncDone;
+    private bool _appKitStampChecked;
 
     public ScriptBundleService(SettingsService settings)
     {
         _settings = settings;
+    }
+
+    private static string AppVersionText
+    {
+        get
+        {
+            var ver = typeof(ScriptBundleService).Assembly.GetName().Version;
+            return ver is null ? "0.0.0" : $"{ver.Major}.{ver.Minor}.{ver.Build}";
+        }
+    }
+
+    private static string KitStampPath =>
+        Path.Combine(PathHelper.WorkingScriptsDir, ".app-kit-stamp");
+
+    /// <summary>
+    /// Call once at startup. If this OptiHub build differs from the stamp left by
+    /// the previous run/install, wipe and reinstall Discord/Steam/NVIDIA kits from
+    /// the app bundle so the UI and scripts always match.
+    /// </summary>
+    public void EnsureKitsMatchThisApp()
+    {
+        lock (_syncLock)
+        {
+            EnsureAppKitStampCore();
+        }
     }
 
     public string GetDiscordRoot()
@@ -31,6 +59,7 @@ public sealed class ScriptBundleService
 
         lock (_syncLock)
         {
+            EnsureAppKitStampCore();
             var working = Path.Combine(PathHelper.WorkingScriptsDir, "Discord");
             EnsureDiscordScriptsSynced(working);
             return working;
@@ -41,6 +70,7 @@ public sealed class ScriptBundleService
     {
         lock (_syncLock)
         {
+            EnsureAppKitStampCore();
             var working = Path.Combine(PathHelper.WorkingScriptsDir, "Steam");
             EnsureSteamScriptsSynced(working);
             return working;
@@ -51,6 +81,7 @@ public sealed class ScriptBundleService
     {
         lock (_syncLock)
         {
+            EnsureAppKitStampCore();
             var working = Path.Combine(PathHelper.WorkingScriptsDir, "Nvidia");
             EnsureNvidiaScriptsSynced(working);
             return working;
@@ -111,25 +142,117 @@ public sealed class ScriptBundleService
         }
     }
 
+    private void EnsureAppKitStampCore()
+    {
+        if (_appKitStampChecked)
+            return;
+
+        var appVersion = AppVersionText;
+        var stamp = File.Exists(KitStampPath)
+            ? File.ReadAllText(KitStampPath).Trim()
+            : string.Empty;
+
+        if (!string.Equals(stamp, appVersion, StringComparison.Ordinal))
+        {
+            // New app install/upgrade: full kit replace from this binary's Scripts/.
+            // Never keep half of an older kit next to a newer UI.
+            ResetWorkingKitsFromBundledUnlocked();
+            try
+            {
+                Directory.CreateDirectory(PathHelper.WorkingScriptsDir);
+                File.WriteAllText(KitStampPath, appVersion + Environment.NewLine);
+            }
+            catch
+            {
+                // Next launch will retry the stamp; kits were still refreshed best-effort.
+            }
+        }
+
+        _appKitStampChecked = true;
+    }
+
+    /// <summary>
+    /// Atomically reinstall Discord / Steam / NVIDIA working kits from the app bundle.
+    /// </summary>
+    private void ResetWorkingKitsFromBundledUnlocked()
+    {
+        ReplaceWorkingKitFromBundled("Discord", PathHelper.DiscordScriptsDir,
+            ["Disc-Optimizer.ps1", "OptiHub-Discord-Run.ps1"]);
+        ReplaceWorkingKitFromBundled("Steam", PathHelper.SteamScriptsDir,
+            ["Steam-Optimizer.ps1", "OptiHub-Steam-Run.ps1", "OptiHub-Steam-Detect.ps1"]);
+        ReplaceWorkingKitFromBundled("Nvidia", PathHelper.NvidiaScriptsDir,
+            ["Nvidia-Optimizer.ps1", "OptiHub-Nvidia-Run.ps1", "OptiHub-Nvidia-Detect.ps1"]);
+
+        _discordSyncDone = false;
+        _steamSyncDone = false;
+        _nvidiaSyncDone = false;
+        _cachedBundledVersion = null;
+        _lastSyncedBundledVersion = null;
+        _lastSyncedWorkingVersion = null;
+    }
+
+    private static void ReplaceWorkingKitFromBundled(string kitName, string bundled, string[] requiredFiles)
+    {
+        if (!Directory.Exists(bundled))
+            return;
+
+        foreach (var required in requiredFiles)
+        {
+            if (!File.Exists(Path.Combine(bundled, required)))
+                return; // incomplete bundle; leave existing working kit alone
+        }
+
+        var working = Path.Combine(PathHelper.WorkingScriptsDir, kitName);
+        var staging = Path.Combine(PathHelper.WorkingScriptsDir, $"{kitName}.fresh-{Guid.NewGuid():N}");
+        var backup = Path.Combine(PathHelper.WorkingScriptsDir, $"{kitName}.prev-{Guid.NewGuid():N}");
+        var moved = false;
+
+        try
+        {
+            CopyDirectory(bundled, staging);
+            foreach (var required in requiredFiles)
+            {
+                if (!File.Exists(Path.Combine(staging, required)))
+                    throw new InvalidDataException($"Bundled {kitName} kit is incomplete (missing {required}).");
+            }
+
+            if (Directory.Exists(working))
+            {
+                Directory.Move(working, backup);
+                moved = true;
+            }
+
+            Directory.Move(staging, working);
+        }
+        catch
+        {
+            if (moved && !Directory.Exists(working) && Directory.Exists(backup))
+            {
+                try { Directory.Move(backup, working); } catch { /* preserve original */ }
+            }
+            throw;
+        }
+        finally
+        {
+            TryDeleteDirectory(staging);
+            if (Directory.Exists(working))
+                TryDeleteDirectory(backup);
+        }
+    }
+
     private void EnsureSteamScriptsSynced(string working)
     {
         var bundled = PathHelper.SteamScriptsDir;
         if (!Directory.Exists(bundled))
             return;
 
-        Directory.CreateDirectory(working);
+        Directory.CreateDirectory(Path.GetDirectoryName(working)!);
 
         var marker = Path.Combine(working, "Steam-Optimizer.ps1");
         var hubRun = Path.Combine(working, "OptiHub-Steam-Run.ps1");
         var detect = Path.Combine(working, "OptiHub-Steam-Detect.ps1");
-        var bundledVersionPath = Path.Combine(bundled, "VERSION");
-        var workingVersionPath = Path.Combine(working, "VERSION");
-        var bundledVersion = File.Exists(bundledVersionPath)
-            ? File.ReadAllText(bundledVersionPath).Trim()
-            : "0";
-        var workingVersion = File.Exists(workingVersionPath)
-            ? File.ReadAllText(workingVersionPath).Trim()
-            : "";
+        var bundledVersion = ReadVersionFile(Path.Combine(bundled, "VERSION")) ?? "0";
+        var workingVersion = ReadVersionFile(Path.Combine(working, "VERSION")) ?? "";
 
         if (_steamSyncDone &&
             File.Exists(marker) &&
@@ -138,21 +261,28 @@ public sealed class ScriptBundleService
             string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))
             return;
 
-        // Keep GitHub-updated kits that are newer than the app-bundled copy.
-        // (Old logic always overwrote working with the bundle, which pinned Steam at 1.5.x.)
         var workingBroken =
             !File.Exists(marker) ||
             !File.Exists(hubRun) ||
             !File.Exists(detect);
 
-        if (IsVersionNewer(workingVersion, bundledVersion) && !workingBroken)
+        // After an app upgrade stamp reset, kits already match the bundle.
+        // Mid-version GitHub pulls may leave working newer than bundle — keep those.
+        if (!workingBroken &&
+            IsVersionNewer(workingVersion, bundledVersion))
         {
             _steamSyncDone = true;
             return;
         }
 
-        if (workingBroken || IsVersionNewer(bundledVersion, workingVersion) || string.IsNullOrWhiteSpace(workingVersion))
-            CopyDirectory(bundled, working);
+        if (workingBroken ||
+            IsVersionNewer(bundledVersion, workingVersion) ||
+            string.IsNullOrWhiteSpace(workingVersion) ||
+            !string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))
+        {
+            ReplaceWorkingKitFromBundled("Steam", bundled,
+                ["Steam-Optimizer.ps1", "OptiHub-Steam-Run.ps1", "OptiHub-Steam-Detect.ps1"]);
+        }
 
         _steamSyncDone = true;
     }
@@ -163,19 +293,11 @@ public sealed class ScriptBundleService
         if (!Directory.Exists(bundled))
             return;
 
-        Directory.CreateDirectory(working);
-
         var marker = Path.Combine(working, "Nvidia-Optimizer.ps1");
         var hubRun = Path.Combine(working, "OptiHub-Nvidia-Run.ps1");
         var detect = Path.Combine(working, "OptiHub-Nvidia-Detect.ps1");
-        var bundledVersionPath = Path.Combine(bundled, "VERSION");
-        var workingVersionPath = Path.Combine(working, "VERSION");
-        var bundledVersion = File.Exists(bundledVersionPath)
-            ? File.ReadAllText(bundledVersionPath).Trim()
-            : "0";
-        var workingVersion = File.Exists(workingVersionPath)
-            ? File.ReadAllText(workingVersionPath).Trim()
-            : "";
+        var bundledVersion = ReadVersionFile(Path.Combine(bundled, "VERSION")) ?? "0";
+        var workingVersion = ReadVersionFile(Path.Combine(working, "VERSION")) ?? "";
         var bundledHelper = Path.Combine(bundled, "tools", "OptiHub.NvDisplay.exe");
         var workingHelper = Path.Combine(working, "tools", "OptiHub.NvDisplay.exe");
         var helperMismatch = File.Exists(bundledHelper) && !FilesMatch(bundledHelper, workingHelper);
@@ -195,17 +317,21 @@ public sealed class ScriptBundleService
             !Directory.Exists(Path.Combine(working, "profiles")) ||
             helperMismatch;
 
-        // Preserve a newer working kit (GitHub pull) over an older app bundle.
-        if (IsVersionNewer(workingVersion, bundledVersion) && !workingBroken)
+        if (!workingBroken && IsVersionNewer(workingVersion, bundledVersion))
         {
             _nvidiaSyncDone = true;
             return;
         }
 
-        if (workingBroken || IsVersionNewer(bundledVersion, workingVersion) || string.IsNullOrWhiteSpace(workingVersion))
+        if (workingBroken ||
+            IsVersionNewer(bundledVersion, workingVersion) ||
+            string.IsNullOrWhiteSpace(workingVersion) ||
+            !string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))
         {
-            CopyDirectory(bundled, working);
-            if (File.Exists(bundledHelper) && !FilesMatch(bundledHelper, workingHelper))
+            ReplaceWorkingKitFromBundled("Nvidia", bundled,
+                ["Nvidia-Optimizer.ps1", "OptiHub-Nvidia-Run.ps1", "OptiHub-Nvidia-Detect.ps1"]);
+            if (File.Exists(bundledHelper) &&
+                !FilesMatch(bundledHelper, Path.Combine(working, "tools", "OptiHub.NvDisplay.exe")))
                 throw new InvalidDataException("The NVIDIA display helper did not synchronize correctly.");
         }
 
@@ -218,13 +344,9 @@ public sealed class ScriptBundleService
         if (!Directory.Exists(bundled))
             return;
 
-        Directory.CreateDirectory(working);
-
         var bundledVersion = GetBundledVersion();
         var workingVersionPath = Path.Combine(working, "VERSION");
-        var workingVersion = File.Exists(workingVersionPath)
-            ? File.ReadAllText(workingVersionPath).Trim()
-            : string.Empty;
+        var workingVersion = ReadVersionFile(workingVersionPath) ?? string.Empty;
 
         if (_discordSyncDone &&
             string.Equals(_lastSyncedBundledVersion, bundledVersion, StringComparison.Ordinal) &&
@@ -265,46 +387,23 @@ public sealed class ScriptBundleService
             !File.ReadAllText(marker).Contains("Install-EquicordDirect", StringComparison.Ordinal) ||
             !File.ReadAllText(marker).Contains("Write-DiscordResourceBytes", StringComparison.Ordinal);
 
+        // Mid-version GitHub kit may be newer than this app's bundle — keep it intact.
         if (IsVersionNewer(workingVersion, bundledVersion) && !workingBroken)
         {
             RememberDiscordSync(bundledVersion, workingVersion);
             return;
         }
 
-        var needsFullSync =
-            workingBroken ||
-            IsVersionNewer(bundledVersion, workingVersion);
-
-        if (needsFullSync)
+        // Always full-tree replace. Never partial-copy a few .ps1 files over an old kit.
+        if (workingBroken ||
+            IsVersionNewer(bundledVersion, workingVersion) ||
+            string.IsNullOrWhiteSpace(workingVersion) ||
+            !string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))
         {
-            CopyDirectory(bundled, working);
-            workingVersion = File.Exists(workingVersionPath)
-                ? File.ReadAllText(workingVersionPath).Trim()
-                : bundledVersion;
-            RememberDiscordSync(bundledVersion, workingVersion);
-            return;
+            ReplaceWorkingKitFromBundled("Discord", bundled,
+                ["Disc-Optimizer.ps1", "OptiHub-Discord-Run.ps1"]);
+            workingVersion = ReadVersionFile(workingVersionPath) ?? bundledVersion;
         }
-
-        foreach (var name in new[]
-                 {
-                     "OptiHub-Discord-Run.ps1",
-                     "OptiHub-Discord-Detect.ps1",
-                     "OptiHub-Discord-Repair.ps1",
-                     "Disc-Optimizer.ps1",
-                     "VERSION"
-                 })
-        {
-            var src = Path.Combine(bundled, name);
-            var dst = Path.Combine(working, name);
-            if (File.Exists(src))
-                File.Copy(src, dst, overwrite: true);
-        }
-
-        // Always refresh modular lib when present in bundle.
-        var libSrc = Path.Combine(bundled, "kit", "lib");
-        var libDst = Path.Combine(working, "kit", "lib");
-        if (Directory.Exists(libSrc))
-            CopyDirectory(libSrc, libDst);
 
         RememberDiscordSync(bundledVersion, workingVersion);
     }
@@ -406,6 +505,19 @@ public sealed class ScriptBundleService
         _discordSyncDone = false;
         _lastSyncedBundledVersion = null;
         _lastSyncedWorkingVersion = null;
+    }
+
+    private static string? ReadVersionFile(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            return File.ReadAllText(path).Trim();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static bool IsVersionNewer(string candidate, string baseline)

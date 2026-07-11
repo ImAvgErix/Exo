@@ -21,10 +21,19 @@ public sealed class AppServices
     public void Initialize()
     {
         Settings.Load();
-        // Defer heavy script sync off the UI thread
+        // Bind working kits to this exact app version first (full replace on upgrade),
+        // then warm Discord root off the UI thread.
+        try { Scripts.EnsureKitsMatchThisApp(); }
+        catch { /* first-run stamp is best-effort; Get*Root retries */ }
+
         _ = Task.Run(() =>
         {
-            try { Scripts.GetDiscordRoot(); }
+            try
+            {
+                Scripts.GetDiscordRoot();
+                Scripts.GetSteamRoot();
+                Scripts.GetNvidiaRoot();
+            }
             catch { /* first-run sync is best-effort */ }
         });
     }
