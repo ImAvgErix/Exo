@@ -96,23 +96,22 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Single update path: app release (includes shipped scripts) then refresh
-    /// Discord / Steam / NVIDIA kits from GitHub so one button covers everything.
+    /// App-only update path. Each app release ships matching optimizer kits —
+    /// no separate script refresh from GitHub.
     /// </summary>
     [RelayCommand]
     private async Task CheckForUpdatesAsync()
     {
         if (IsUpdating) return;
         IsUpdating = true;
-        UpdateStatus = "Checking for OptiHub + optimizer kit updates...";
+        UpdateStatus = "Checking for OptiHub updates...";
         try
         {
             var progress = new Progress<string>(m => UpdateStatus = m);
-            var parts = new List<string>();
-
-            // 1) App release (bundles the latest scripts for that version).
             var app = await _services.Updater.CheckAppUpdateAsync(status: progress);
             AppVersion = GetAppVersionText();
+            RefreshKitVersionText();
+
             if (app.UpdateAvailable)
             {
                 var installNow = true;
@@ -121,7 +120,7 @@ public partial class SettingsViewModel : ObservableObject
                     installNow = await ConfirmAsync(
                         "Install OptiHub update?",
                         $"Version {app.RemoteVersion} is available (you have {app.LocalVersion}).\n\n" +
-                        "This app release includes the matching Discord / Steam / NVIDIA scripts.\n" +
+                        "This release includes the matching Discord / Steam / NVIDIA optimizers.\n" +
                         "OptiHub will close, install in place, and reopen.");
                 }
 
@@ -131,39 +130,25 @@ public partial class SettingsViewModel : ObservableObject
                     var install = await _services.Updater.InstallAppUpdateAsync(app, status: progress);
                     UpdateStatus = install.Message;
                     AppVersion = GetAppVersionText();
+                    RefreshKitVersionText();
                     if (install.ShouldExit)
                     {
                         await Task.Delay(900);
                         Microsoft.UI.Xaml.Application.Current?.Exit();
                         return;
                     }
-
-                    parts.Add(install.Message);
                 }
                 else
                 {
-                    parts.Add($"App v{app.RemoteVersion} available — install skipped.");
+                    UpdateStatus = $"v{app.RemoteVersion} available — install skipped.";
                 }
             }
             else
             {
-                parts.Add(app.Message);
+                UpdateStatus = string.IsNullOrWhiteSpace(app.Message)
+                    ? $"You're on the latest OptiHub ({AppVersion})."
+                    : app.Message.Trim().TrimEnd('.') + ".";
             }
-
-            // 2) Always refresh optimizer kits too (covers script-only fixes on main).
-            UpdateStatus = "Refreshing Discord / Steam / NVIDIA kits...";
-            var scripts = await _services.Updater.CheckAndUpdateAllScriptsAsync(force: true, status: progress);
-            parts.Add(scripts.Message);
-            RefreshKitVersionText();
-
-            // Keep status short so Settings stays readable.
-            var clean = parts
-                .Where(p => !string.IsNullOrWhiteSpace(p))
-                .Select(p => p.Trim().TrimEnd('.'))
-                .ToList();
-            UpdateStatus = clean.Count == 0
-                ? "Up to date."
-                : string.Join(" · ", clean) + ".";
         }
         catch (Exception ex)
         {

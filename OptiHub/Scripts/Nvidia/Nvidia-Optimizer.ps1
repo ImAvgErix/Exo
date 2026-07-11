@@ -24,7 +24,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.7.2'
+$Script:NvidiaOptVersion = '1.7.3'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -101,6 +101,16 @@ function Get-GpuSeriesFromName([string]$Name) {
     # GTX 16 is Turing without RT/DLSS/rBAR. The 10-series pack avoids
     # unsupported RTX-only profile flags while keeping the same FPS tweaks.
     if ($Name -match '(?i)\b16\d{2}\b') { return '10' }
+    return $null
+}
+
+function Get-DriverBranchSeriesFromName([string]$Name) {
+    # Driver package branch is NOT the same as profile pack series.
+    # GTX 16xx still receives modern Game Ready drivers; GTX 10xx is legacy (~582.x).
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $null }
+    if ($Name -match '(?i)\b16\d{2}\b') { return '20' }
+    if ($Name -match '(?i)\b(?:RTX|GTX)\s*([1-5])0\d{2}\b') { return $Matches[1] + '0' }
+    if ($Name -match '(?i)\b([1-5])0\d{2}\s*(?:Ti|SUPER)?\b') { return $Matches[1] + '0' }
     return $null
 }
 
@@ -737,13 +747,60 @@ function Convert-WindowsDriverToNvidia([string]$WinVer) {
     } catch { return $null }
 }
 
+function Get-OptiHubDriverLookupTargets {
+    param([string]$SeriesId = '')
+    # NVIDIA menu product series (psid) + representative desktop product (pfid).
+    # CRITICAL: 10-series (GTX 1080 etc.) is on a legacy security branch (~582.x), NOT the
+    # modern 20/30/40/50 Game Ready line (610.x). Using a 40/50 product ID offers an
+    # unusable package to Pascal GPUs.
+    $base = 'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup'
+    $q = '&osID=57&languageCode=1033&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0&ctk=null&windowsVersion=10.0&windowsArchitecture=64bit'
+    switch ($SeriesId) {
+        '10' {
+            # GeForce 10 Series / GTX 1080 (psid=101, pfid=815)
+            return @(
+                "$base&psid=101&pfid=815$q",
+                "$base&psid=101&pfid=817$q"   # GTX 1060 fallback
+            )
+        }
+        '20' {
+            return @(
+                "$base&psid=107&pfid=879$q",  # RTX 2080
+                "$base&psid=107&pfid=887$q"   # RTX 2060
+            )
+        }
+        '30' {
+            return @(
+                "$base&psid=120&pfid=933$q",  # RTX 3070
+                "$base&psid=120&pfid=929$q"   # RTX 3080
+            )
+        }
+        '40' {
+            return @(
+                "$base&psid=127&pfid=995$q",  # RTX 4090
+                "$base&psid=127&pfid=1015$q"  # RTX 4070
+            )
+        }
+        '50' {
+            return @(
+                "$base&psid=131&pfid=1066$q", # RTX 5090
+                "$base&psid=131&pfid=1070$q"  # RTX 5070
+            )
+        }
+        default {
+            # Unknown series: prefer 30/40 desktop matrix (not 10-series legacy, not notebook psid).
+            return @(
+                "$base&psid=120&pfid=933$q",
+                "$base&psid=127&pfid=995$q"
+            )
+        }
+    }
+}
+
 function Get-LatestGameReadyDriver {
-    # Always query NVIDIA for newest Game Ready (desktop Win10/11 x64 DCH WHQL).
-    # psid/pfid picks a current desktop matrix; Version is the same GRD branch for 20-50 series.
-    $urls = @(
-        'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&psid=129&pfid=995&osID=57&languageCode=1033&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0&ctk=null&windowsVersion=10.0&windowsArchitecture=64bit',
-        'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&psid=120&pfid=929&osID=57&languageCode=1033&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0'
-    )
+    param([string]$SeriesId = '')
+    # Query the newest driver package that is valid for THIS GPU series branch.
+    $urls = @(Get-OptiHubDriverLookupTargets -SeriesId $SeriesId)
     foreach ($url in $urls) {
         try {
             $r = Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'OptiHub-Nvidia/1.2' } -TimeoutSec 25
@@ -756,6 +813,7 @@ function Get-LatestGameReadyDriver {
                 Name        = [uri]::UnescapeDataString([string]$info.Name)
                 ReleaseDate = [string]$info.ReleaseDateTime
                 Size        = [string]$info.DownloadURLFileSize
+                SeriesId    = [string]$SeriesId
             }
         } catch {
             Write-Warn "Latest-driver lookup failed: $($_.Exception.Message)"
@@ -1241,15 +1299,18 @@ function Test-OptiHubDriverInstallTweaks {
 }
 
 function Start-DriverUpdateIfNeeded {
-    param([bool]$Force)
+    param(
+        [bool]$Force,
+        [string]$SeriesId = ''
+    )
 
     $winVer = Get-WindowsDriverVersionString
     $currentNv = Convert-WindowsDriverToNvidia $winVer
     Write-Ok "Installed Windows driver string: $winVer"
     Write-Ok "Decoded NVIDIA version: $(if($currentNv){$currentNv}else{'unknown'})"
 
-    Write-Step 'Checking NVIDIA for the newest Game Ready driver...'
-    $latest = Get-LatestGameReadyDriver
+    Write-Step "Checking NVIDIA for the newest driver package for series $(if($SeriesId){$SeriesId}else{'auto'})..."
+    $latest = Get-LatestGameReadyDriver -SeriesId $SeriesId
     $latestVer = 'unknown'
     $dl = ''
     $versionBehind = $false
@@ -1261,16 +1322,20 @@ function Start-DriverUpdateIfNeeded {
     } else {
         $latestVer = $latest.Version
         $dl = $latest.DownloadUrl
-        Write-Ok "Newest Game Ready: $latestVer ($($latest.ReleaseDate)) size $($latest.Size)"
+        $branchNote = if ($SeriesId -eq '10') {
+            ' (10-series / Pascal security branch — not the modern 20-50 Game Ready line)'
+        } else { '' }
+        Write-Ok "Newest package for this GPU series: $latestVer$branchNote ($($latest.ReleaseDate)) size $($latest.Size)"
+        if ($latest.Name) { Write-Ok "Package: $($latest.Name)" }
         if ($dl) { Write-Ok "Download: $dl" }
         if (-not $currentNv) {
             $versionBehind = $true
             Write-Warn 'Could not decode installed version'
         } elseif ((Compare-NvidiaVersion $currentNv $latestVer) -lt 0) {
             $versionBehind = $true
-            Write-Warn "Outdated: $currentNv < newest $latestVer"
+            Write-Warn "Outdated for this series: $currentNv < $latestVer"
         } else {
-            Write-Ok "Version is newest (or newer): $currentNv"
+            Write-Ok "Version is newest for this series (or newer): $currentNv"
         }
     }
 
@@ -1834,7 +1899,9 @@ try {
     $driverInfo = @{ Ran = $false; NeedsUpdate = $false; TweaksOk = $true; Method = 'none' }
     if (-not $SkipDriver) {
         Write-HubProgress 20 'Checking for newest Game Ready driver...'
-        $driverInfo = Coerce-Hashtable (Start-DriverUpdateIfNeeded -Force:([bool]$ForceDriver))
+        $driverBranch = Get-DriverBranchSeriesFromName $primary.Name
+        if (-not $driverBranch) { $driverBranch = $seriesId }
+        $driverInfo = Coerce-Hashtable (Start-DriverUpdateIfNeeded -Force:([bool]$ForceDriver) -SeriesId $driverBranch)
         if (-not $driverInfo) { $driverInfo = @{ Ran = $false; NeedsUpdate = $false; TweaksOk = $true; Method = 'none' } }
 
         $method = [string]$driverInfo.Method

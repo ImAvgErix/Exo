@@ -95,58 +95,60 @@
                             VerticalAlignment="Stretch"
                             Margin="0,0,0,8" />
 
-                    <!-- Right column: updates (primary action area) -->
-                    <StackPanel Grid.Column="2" Spacing="14" VerticalAlignment="Top">
+                    <!-- Right column: app updates only (kits ship inside each release) -->
+                    <StackPanel Grid.Column="2" Spacing="16" VerticalAlignment="Top">
                         <TextBlock Text="UPDATES" Style="{StaticResource OptiSectionTitle}" Margin="0" />
                         <ToggleSwitch Header="Check for updates on launch"
-                                      AutomationProperties.Name="Check for updates automatically"
+                                      AutomationProperties.Name="Check for OptiHub app updates automatically"
                                       IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
                                       OnContent="On"
                                       OffContent="Off" />
 
-                        <Grid ColumnSpacing="24" Margin="0,4,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Border Style="{StaticResource OptiCard}"
-                                    Padding="14,12"
-                                    Background="{ThemeResource OptiAccentSoftBrush}">
-                                <StackPanel Spacing="3">
-                                    <TextBlock Text="App" Style="{StaticResource OptiCaption}" />
+                        <Border Style="{StaticResource OptiCard}"
+                                Padding="16,14"
+                                Background="{ThemeResource OptiAccentSoftBrush}">
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="4" VerticalAlignment="Center">
+                                    <TextBlock Text="OptiHub"
+                                               Style="{StaticResource OptiCaption}"
+                                               CharacterSpacing="40" />
                                     <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
                                                FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                               FontSize="20"
+                                               FontSize="28"
                                                FontWeight="SemiBold"
                                                Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Grid.Column="1"
-                                    Style="{StaticResource OptiCard}"
-                                    Padding="14,12"
-                                    Background="{ThemeResource OptiAccentSoftBrush}">
-                                <StackPanel Spacing="3">
-                                    <TextBlock Text="Kits (Discord · Steam · NVIDIA)" Style="{StaticResource OptiCaption}" />
                                     <TextBlock Text="{x:Bind ViewModel.KitVersion, Mode=OneWay}"
-                                               FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                               FontSize="16"
-                                               FontWeight="SemiBold"
-                                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                                               Style="{StaticResource OptiCaption}"
+                                               FontSize="11"
+                                               Opacity="0.85"
                                                TextWrapping="NoWrap"
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                            </Border>
-                        </Grid>
+                                <Border Grid.Column="1"
+                                        Width="10"
+                                        Height="10"
+                                        CornerRadius="5"
+                                        VerticalAlignment="Top"
+                                        Margin="0,6,0,0"
+                                        Background="{ThemeResource OptiAccentBrush}"
+                                        Opacity="0.9" />
+                            </Grid>
+                        </Border>
 
-                        <TextBlock Text="Each app version ships matching kits and replaces them cleanly on update. No extra OptiHub background tasks — quiet is reapplied only when you run an optimizer or open Discord/Steam through OptiHub launchers."
+                        <TextBlock Text="One button. App releases ship matching Discord, Steam, and NVIDIA optimizers — no separate script update."
                                    Style="{StaticResource OptiCaption}"
                                    FontSize="12"
                                    Opacity="0.9"
-                                   TextWrapping="WrapWholeWords" />
+                                   TextWrapping="WrapWholeWords"
+                                   LineHeight="18" />
 
                         <Button Style="{StaticResource OptiPrimaryButton}"
                                 Content="Check for updates"
-                                AutomationProperties.Name="Check for OptiHub app and optimizer kit updates"
+                                AutomationProperties.Name="Check for OptiHub app updates"
                                 Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
                                 HorizontalAlignment="Stretch"
                                 MinHeight="48"

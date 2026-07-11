@@ -168,14 +168,22 @@ function Test-SteamClientTweaks([string]$SteamPath) {
             @{ K = 'AllowDownloadsDuringGameplay'; V = '0' }
         )
         $observedAnywhere = $false
+        $anyExpectationKeyPresent = $false
         foreach ($file in $files) {
             $raw = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction Stop
             if (Test-VdfExpectations $raw $expectations $true) {
                 $observedAnywhere = $true
             } elseif ($expectations | Where-Object { $raw -match ('"' + [regex]::Escape([string]$_.K) + '"') }) {
+                # Key exists but value is wrong — fail closed.
+                $anyExpectationKeyPresent = $true
                 return $false
             }
+            if ($expectations | Where-Object { $raw -match ('"' + [regex]::Escape([string]$_.K) + '"') }) {
+                $anyExpectationKeyPresent = $true
+            }
         }
+        # Soft-pass: modern Steam often has none of these keys; CEF launcher still optimizes UI.
+        if (-not $anyExpectationKeyPresent) { return $true }
         return $observedAnywhere
     } catch { return $false }
 }

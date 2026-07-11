@@ -225,7 +225,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            // Toggle label: "Check for updates automatically" — covers OptiHub app + script kit.
+            // App-only: each release ships matching optimizer kits. No separate script pull.
             if (!App.Services.Settings.Current.AutoUpdateScripts) return;
 
             // Let the window finish loading so ContentDialog has a valid XamlRoot.
@@ -233,63 +233,47 @@ public sealed partial class MainWindow : Window
             for (var i = 0; i < 10 && RootGrid.XamlRoot is null; i++)
                 await Task.Delay(200, ct);
 
-            // 1) App update — prompt to install (does not silent-install without consent).
-            try
+            var appCheck = await App.Services.Updater.CheckAppUpdateAsync(ct: ct);
+            if (appCheck.UpdateAvailable && RootGrid.XamlRoot is not null)
             {
-                var appCheck = await App.Services.Updater.CheckAppUpdateAsync(ct: ct);
-                if (appCheck.UpdateAvailable && RootGrid.XamlRoot is not null)
+                var dialog = new ContentDialog
                 {
-                    var dialog = new ContentDialog
+                    Title = "OptiHub update available",
+                    Content =
+                        $"Version {appCheck.RemoteVersion} is available.\n" +
+                        $"You have {appCheck.LocalVersion}.\n\n" +
+                        "Install now? OptiHub will close, update in place, and reopen.\n" +
+                        "This release includes the matching optimizers.",
+                    PrimaryButtonText = "Install",
+                    CloseButtonText = "Later",
+                    DefaultButton = ContentDialogButton.Primary,
+                    XamlRoot = RootGrid.XamlRoot
+                };
+                var choice = await dialog.ShowAsync();
+                ct.ThrowIfCancellationRequested();
+                if (choice == ContentDialogResult.Primary)
+                {
+                    var install = await App.Services.Updater.InstallAppUpdateAsync(appCheck, ct: ct);
+                    if (install.ShouldExit)
                     {
-                        Title = "OptiHub update available",
-                        Content =
-                            $"Version {appCheck.RemoteVersion} is available.\n" +
-                            $"You have {appCheck.LocalVersion}.\n\n" +
-                            "Install now? OptiHub will close, update in place, and reopen.",
-                        PrimaryButtonText = "Install",
-                        CloseButtonText = "Later",
-                        DefaultButton = ContentDialogButton.Primary,
-                        XamlRoot = RootGrid.XamlRoot
-                    };
-                    var choice = await dialog.ShowAsync();
-                    ct.ThrowIfCancellationRequested();
-                    if (choice == ContentDialogResult.Primary)
-                    {
-                        var install = await App.Services.Updater.InstallAppUpdateAsync(appCheck, ct: ct);
-                        if (install.ShouldExit)
-                        {
-                            await Task.Delay(900, ct);
-                            Microsoft.UI.Xaml.Application.Current?.Exit();
-                            return;
-                        }
+                        await Task.Delay(900, ct);
+                        Microsoft.UI.Xaml.Application.Current?.Exit();
+                        return;
+                    }
 
-                        // Install failed — surface once
-                        if (RootGrid.XamlRoot is not null)
+                    if (RootGrid.XamlRoot is not null)
+                    {
+                        var err = new ContentDialog
                         {
-                            var err = new ContentDialog
-                            {
-                                Title = "Update could not finish",
-                                Content = install.Message,
-                                CloseButtonText = "OK",
-                                XamlRoot = RootGrid.XamlRoot
-                            };
-                            await err.ShowAsync();
-                        }
+                            Title = "Update could not finish",
+                            Content = install.Message,
+                            CloseButtonText = "OK",
+                            XamlRoot = RootGrid.XamlRoot
+                        };
+                        await err.ShowAsync();
                     }
                 }
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch
-            {
-                // network / dialog issues — still try scripts
-            }
-
-            // 2) Optimizer kits (Discord / Steam / NVIDIA) — silent refresh from GitHub.
-            // App releases already ship matching kits; this still picks up script-only fixes.
-            await App.Services.Updater.CheckAndUpdateAllScriptsAsync(force: false, ct: ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

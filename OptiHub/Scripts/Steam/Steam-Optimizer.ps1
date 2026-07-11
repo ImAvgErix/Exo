@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.7.2'
+$Script:SteamOptVersion = '1.7.3'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Default Steam launch flags (formerly "aggressive" - this is the only tier).
@@ -959,6 +959,9 @@ function Set-SteamLocalConfigTweaks {
     }
 
     if (-not $anyPatched) {
+        # Modern Steam builds often omit the old localconfig web-GPU keys entirely.
+        # CEF launch flags + download config still deliver the performance win — do not
+        # fail the whole apply when there is nothing to patch and nothing conflicting.
         Write-Ok 'localconfig.vdf: no matching keys - CEF launch flags + download config still apply'
     }
 
@@ -967,7 +970,9 @@ function Set-SteamLocalConfigTweaks {
         Patched = $anyPatched
         Path    = $lastPath
         Snappy  = $anySnappy
-        Verified = ($files.Count -gt 0 -and $verificationObserved -gt 0 -and $verificationOk)
+        # Soft-pass when keys are absent (Observed=0). Fail only on present-but-wrong values.
+        Verified = ($files.Count -gt 0 -and $verificationOk)
+        Observed = $verificationObserved
     }
 }
 

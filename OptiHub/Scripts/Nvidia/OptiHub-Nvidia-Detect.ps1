@@ -22,6 +22,38 @@ function Get-GpuSeriesFromName([string]$Name) {
     return $null
 }
 
+function Get-DriverBranchSeriesFromName([string]$Name) {
+    # GTX 16xx still on modern GRD; GTX 10xx (1080 etc.) is legacy security branch.
+    if ($Name -match '(?i)\b16\d{2}\b') { return '20' }
+    if ($Name -match '(?i)\b(?:RTX|GTX)\s*([1-5])0\d{2}\b') { return $Matches[1] + '0' }
+    if ($Name -match '(?i)\b([1-5])0\d{2}\b') { return $Matches[1] + '0' }
+    return $null
+}
+
+function Get-LatestDriverForSeries([string]$SeriesId) {
+    $base = 'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup'
+    $q = '&osID=57&languageCode=1033&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0&ctk=null&windowsVersion=10.0&windowsArchitecture=64bit'
+    $pairs = switch ($SeriesId) {
+        '10' { @(@{ psid = 101; pfid = 815 }, @{ psid = 101; pfid = 817 }) }
+        '20' { @(@{ psid = 107; pfid = 879 }, @{ psid = 107; pfid = 887 }) }
+        '30' { @(@{ psid = 120; pfid = 933 }, @{ psid = 120; pfid = 929 }) }
+        '40' { @(@{ psid = 127; pfid = 995 }, @{ psid = 127; pfid = 1015 }) }
+        '50' { @(@{ psid = 131; pfid = 1066 }, @{ psid = 131; pfid = 1070 }) }
+        default { @(@{ psid = 120; pfid = 933 }, @{ psid = 127; pfid = 995 }) }
+    }
+    foreach ($p in $pairs) {
+        try {
+            $url = "$base&psid=$($p.psid)&pfid=$($p.pfid)$q"
+            $r = Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'OptiHub-Nvidia/1.2' } -TimeoutSec 12
+            if ($r.Success -eq '1') {
+                $ver = [string]$r.IDS[0].downloadInfo.Version
+                if ($ver -match '^\d{3}\.\d{2}$') { return $ver }
+            }
+        } catch { }
+    }
+    return $null
+}
+
 function Test-IsNotebookGpuName([string]$Name) {
     if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
     return [bool]($Name -match '(?i)\b(?:Laptop GPU|Notebook|Mobile|Max-Q)\b|\bMX\d+\b|\b\d{3,4}M\b')
@@ -264,12 +296,10 @@ if ($primary) {
 $currentNv = Convert-WindowsDriverToNvidia $winDrv
 $latestNv = $null
 $needsUpdate = $false
-if (-not $isNotebookGpu) {
-    try {
-        $url = 'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&psid=129&pfid=995&osID=57&languageCode=1033&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0&ctk=null&windowsVersion=10.0&windowsArchitecture=64bit'
-        $r = Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'OptiHub-Nvidia/1.2' } -TimeoutSec 12
-        if ($r.Success -eq '1') { $latestNv = [string]$r.IDS[0].downloadInfo.Version }
-    } catch { }
+$driverBranch = if ($primary) { Get-DriverBranchSeriesFromName $primary.Name } else { $null }
+if (-not $driverBranch) { $driverBranch = $series }
+if (-not $isNotebookGpu -and $driverBranch) {
+    $latestNv = Get-LatestDriverForSeries $driverBranch
 }
 
 $needsUpdate = -not [bool]$currentNv
@@ -294,7 +324,8 @@ $driverNote = if ($isNotebookGpu) {
     'NVIDIA driver version could not be read. Install or repair the display driver, then refresh.'
 } elseif ($needsUpdate) {
     $curLabel = if ($currentNv) { $currentNv } else { 'unknown' }
-    "Update available: $curLabel -> $latestNv. Apply runs OptiHub Clean Driver (slim + silent + our tweaks)."
+    $branchHint = if ($driverBranch -eq '10') { ' (10-series security branch)' } else { '' }
+    "Update available for this GPU series$branchHint: $curLabel -> $latestNv. Apply runs OptiHub Clean Driver."
 } elseif ($needsRetweak) {
     $gap = if ($tweaks.Issues.Count -gt 0) { ($tweaks.Issues -join '; ') } else { 'stock-style install signals' }
     "On newest Game Ready ($currentNv) but without OptiHub tweaks ($gap). Apply fixes MSI/privacy in-place."
