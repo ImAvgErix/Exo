@@ -651,18 +651,24 @@ button { cursor: pointer; border: none; background: none; }
 .status-well {
   margin-top: 12px;
   min-height: 56px;
-  padding: 14px 16px;
+  padding: 14px 18px;
   border-radius: var(--radius-sm);
   background: var(--soft);
   border: 1px solid var(--stroke);
   color: var(--text2);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
-  text-align: center;
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
   transition: border-color 0.25s ease, background 0.25s ease;
+}
+.status-well .status-text {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin: 0;
 }
 .status-well.busy {
   background: linear-gradient(90deg, var(--soft), var(--soft-strong), var(--soft));

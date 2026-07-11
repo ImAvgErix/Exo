@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.7
+
+- **WebView2**: detect incomplete Evergreen Runtime (missing icudtl/resources) and repair on launch + install
+- **WebView2**: create environment before Ensure; clear bad browser-folder env; init after window Activated
+- **Settings**: centered update status text only; removed duplicate version footer under the status well
+- **SPA**: update status well fully centered (no misaligned icon)
 ## 1.7.6
 
 - **Settings**: center the Updates status well (check-result text + icon)

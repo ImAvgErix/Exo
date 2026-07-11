@@ -739,7 +739,33 @@ internal static class Program
         catch { }
     }
 
-    private static bool IsWebView2RuntimeInstalled()
+    /// <summary>
+    /// Healthy = real browser data files, not just registry + msedgewebview2.exe.
+    /// Incomplete installs (~15 files, no icudtl.dat) make WebView2 FileNotFound.
+    /// </summary>
+    private static bool IsWebView2RuntimeHealthy()
+    {
+        try
+        {
+            string folder = FindWebView2BrowserFolder();
+            if (string.IsNullOrEmpty(folder)) return false;
+            if (!File.Exists(Path.Combine(folder, "msedgewebview2.exe"))) return false;
+            if (File.Exists(Path.Combine(folder, "icudtl.dat"))) return true;
+            if (File.Exists(Path.Combine(folder, "resources.pak"))) return true;
+            try
+            {
+                foreach (string f in Directory.GetFiles(folder, "icudtl.dat", SearchOption.AllDirectories))
+                    if (File.Exists(f)) return true;
+                foreach (string f in Directory.GetFiles(folder, "resources.pak", SearchOption.AllDirectories))
+                    if (File.Exists(f)) return true;
+            }
+            catch { }
+            return false;
+        }
+        catch { return false; }
+    }
+
+    private static string FindWebView2BrowserFolder()
     {
         try
         {
@@ -753,9 +779,14 @@ internal static class Program
                 using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(k))
                 {
                     if (key == null) continue;
+                    object loc = key.GetValue("location");
                     object pv = key.GetValue("pv");
-                    if (pv != null && !string.IsNullOrWhiteSpace(pv.ToString()) && pv.ToString() != "0.0.0.0")
-                        return true;
+                    if (loc != null && pv != null)
+                    {
+                        string dir = Path.Combine(loc.ToString(), pv.ToString());
+                        if (File.Exists(Path.Combine(dir, "msedgewebview2.exe")))
+                            return dir;
+                    }
                 }
             }
         }
@@ -768,27 +799,35 @@ internal static class Program
                 "Microsoft", "EdgeWebView", "Application");
             if (Directory.Exists(root))
             {
-                foreach (string dir in Directory.GetDirectories(root))
+                string[] dirs = Directory.GetDirectories(root);
+                Array.Sort(dirs);
+                Array.Reverse(dirs);
+                foreach (string dir in dirs)
                 {
                     if (File.Exists(Path.Combine(dir, "msedgewebview2.exe")))
-                        return true;
+                        return dir;
                 }
             }
         }
         catch { }
 
-        return false;
+        return null;
     }
 
     private static void EnsureWebView2Runtime(string root, string logPath)
     {
-        if (IsWebView2RuntimeInstalled())
+        if (IsWebView2RuntimeHealthy())
         {
-            Log("WebView2 Runtime already installed.");
+            Log("WebView2 Runtime healthy: " + FindWebView2BrowserFolder());
             return;
         }
 
-        Log("WebView2 Runtime missing — downloading Evergreen bootstrapper...");
+        string existing = FindWebView2BrowserFolder();
+        if (!string.IsNullOrEmpty(existing))
+            Log("WebView2 Runtime INCOMPLETE at " + existing + " — repairing…");
+        else
+            Log("WebView2 Runtime missing — downloading Evergreen bootstrapper...");
+
         string prereqDir = Path.Combine(root, "prereqs");
         Directory.CreateDirectory(prereqDir);
         string setupPath = Path.Combine(prereqDir, "MicrosoftEdgeWebview2Setup.exe");
@@ -849,10 +888,14 @@ internal static class Program
             Log("WebView2 install failed: " + runEx.Message);
         }
 
-        if (IsWebView2RuntimeInstalled())
-            Log("WebView2 Runtime is ready.");
+        // EdgeUpdate may still be unpacking — poll briefly for browser data files.
+        for (int i = 0; i < 30 && !IsWebView2RuntimeHealthy(); i++)
+            Thread.Sleep(1000);
+
+        if (IsWebView2RuntimeHealthy())
+            Log("WebView2 Runtime is healthy: " + FindWebView2BrowserFolder());
         else
-            Log("WebView2 still not detected — OptiHub will use classic UI fallback until Runtime is installed.");
+            Log("WebView2 still incomplete — OptiHub will repair on next launch or fall back to classic UI.");
     }
 
     private static void CleanupStaleInstallArtifacts(string root, string keepInstallDir)

@@ -45,12 +45,8 @@ public sealed partial class MainWindow : Window
                 ApplyFixedWindowChrome();
         };
 
-        // Init only after layout so WebView has a non-zero size + HWND.
-        WebView.Loaded += async (_, _) =>
-        {
-            await Task.Delay(100);
-            await TryInitWebViewAsync();
-        };
+        // Init after first activate so the HWND + composition island exist.
+        Activated += OnFirstActivated;
         RootGrid.Loaded += (_, _) =>
         {
             UpdateCaptionInset();
@@ -70,10 +66,20 @@ public sealed partial class MainWindow : Window
         };
 
         ApplyShellChrome();
-        // Default to XAML until WebView proves healthy (or takes over).
+        // XAML shell until WebView proves healthy (then SPA takes over).
         ContentFrame.Visibility = Visibility.Visible;
         NavigateHome(suppressTransition: true);
         _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
+    }
+
+    private bool _activatedOnce;
+
+    private void OnFirstActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (_activatedOnce) return;
+        _activatedOnce = true;
+        Activated -= OnFirstActivated;
+        _ = TryInitWebViewAsync();
     }
 
     private async Task TryInitWebViewAsync()
@@ -88,10 +94,10 @@ public sealed partial class MainWindow : Window
 
             // CRITICAL: WebView must be Visible with real size (not Collapsed).
             WebView.Visibility = Visibility.Visible;
-            WebView.Opacity = 0.01; // nearly invisible but still composited
+            WebView.Opacity = 0.01;
             WebView.IsHitTestVisible = false;
 
-            for (var i = 0; i < 40; i++)
+            for (var i = 0; i < 60; i++)
             {
                 if (WebView.XamlRoot is not null && WebView.ActualWidth > 8 && WebView.ActualHeight > 8)
                     break;
@@ -101,88 +107,99 @@ public sealed partial class MainWindow : Window
             if (WebView.ActualWidth < 8 || WebView.ActualHeight < 8)
                 throw new InvalidOperationException($"WebView has no size ({WebView.ActualWidth}x{WebView.ActualHeight}).");
 
+            // Force native HWND creation for the window / island.
+            try { _ = WindowNative.GetWindowHandle(this); } catch { }
+
+            LogWeb(WebView2RuntimeHelper.Describe());
+
+            // Broken Evergreen installs (exe present, data files missing) cause FileNotFound.
+            if (!WebView2RuntimeHelper.IsHealthy())
+            {
+                SetHostStatus("Repairing WebView2 Runtime…");
+                var progress = new Progress<string>(m => SetHostStatus(m));
+                var repaired = await WebView2RuntimeHelper.EnsureHealthyAsync(progress, _lifetimeCts.Token);
+                LogWeb("repair: " + WebView2RuntimeHelper.Describe());
+                if (!repaired)
+                    throw new InvalidOperationException(
+                        "WebView2 Runtime is incomplete. OptiHub needs a full Microsoft Edge WebView2 install.");
+            }
+
             var userData = Path.Combine(PathHelper.AppDataDir, "WebView2");
             try
             {
-                if (Directory.Exists(userData))
+                // Fresh profile after runtime repair so a half-created UDF cannot stick.
+                var marker = Path.Combine(userData, ".optihub-reset-v3");
+                if (Directory.Exists(userData) && !File.Exists(marker))
                 {
-                    // Clear corrupt profile once if previous runs failed.
-                    var marker = Path.Combine(userData, ".optihub-reset-v2");
-                    if (!File.Exists(marker))
-                    {
-                        try { Directory.Delete(userData, true); } catch { }
-                        Directory.CreateDirectory(userData);
-                        File.WriteAllText(marker, DateTime.UtcNow.ToString("o"));
-                    }
+                    try { Directory.Delete(userData, true); } catch { }
                 }
-                else Directory.CreateDirectory(userData);
+                Directory.CreateDirectory(userData);
+                if (!File.Exists(marker))
+                    File.WriteAllText(marker, DateTime.UtcNow.ToString("o"));
             }
             catch { Directory.CreateDirectory(userData); }
 
-            var browserFolder = FindWebView2BrowserFolder();
-            LogWeb($"size={WebView.ActualWidth}x{WebView.ActualHeight} browser={browserFolder ?? "auto"} udf={userData}");
-
-            if (!string.IsNullOrWhiteSpace(browserFolder))
-                Environment.SetEnvironmentVariable("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", browserFolder);
+            // Do NOT pin WEBVIEW2_BROWSER_EXECUTABLE_FOLDER — a partial path breaks the controller.
+            // Let the loader pick Evergreen; only pin the user data folder.
+            Environment.SetEnvironmentVariable("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", null);
             Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", userData);
+
+            LogWeb($"size={WebView.ActualWidth}x{WebView.ActualHeight} udf={userData}");
+
+            Exception? last = null;
+            CoreWebView2Environment? env = null;
+            try
+            {
+                // WinRT projection: CreateWithOptionsAsync(browserFolder, userData, options)
+                env = await CoreWebView2Environment.CreateWithOptionsAsync(null, userData, null);
+                LogWeb("env ok " + env.BrowserVersionString);
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+                LogWeb("CreateWithOptionsAsync: " + ex);
+                try
+                {
+                    var browser = WebView2RuntimeHelper.FindBrowserFolder();
+                    if (browser is not null)
+                    {
+                        env = await CoreWebView2Environment.CreateWithOptionsAsync(browser, userData, null);
+                        LogWeb("env explicit ok " + env.BrowserVersionString);
+                    }
+                }
+                catch (Exception ex2)
+                {
+                    last = ex2;
+                    LogWeb("CreateWithOptionsAsync explicit: " + ex2);
+                }
+            }
+
+            if (env is null)
+                throw last ?? new InvalidOperationException("Could not create WebView2 environment.");
 
             var initTcs = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
             void OnInit(WebView2 s, CoreWebView2InitializedEventArgs e) => initTcs.TrySetResult(e.Exception);
             WebView.CoreWebView2Initialized += OnInit;
-
             try
             {
-                // Prefer simplest path first: default Ensure (loader finds Evergreen).
-                // Explicit folder paths sometimes throw FileNotFound with WinUI projection.
-                Exception? last = null;
-                var attempts = new List<Func<Task>>
+                await WebView.EnsureCoreWebView2Async(env);
+
+                var raced = await Task.WhenAny(initTcs.Task, Task.Delay(12_000));
+                if (raced == initTcs.Task)
                 {
-                    async () => await WebView.EnsureCoreWebView2Async(),
-                    async () =>
+                    var ex = await initTcs.Task;
+                    if (ex is not null)
                     {
-                        var env = await CoreWebView2Environment.CreateAsync();
-                        await WebView.EnsureCoreWebView2Async(env);
-                    },
-                    async () =>
-                    {
-                        if (browserFolder is null) throw new InvalidOperationException("no browser folder");
-                        var env = await CoreWebView2Environment.CreateWithOptionsAsync(browserFolder, userData, null);
-                        await WebView.EnsureCoreWebView2Async(env);
-                    }
-                };
-
-                var ok = false;
-                foreach (var attempt in attempts)
-                {
-                    try
-                    {
-                        if (initTcs.Task.IsCompleted)
-                            initTcs = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-                        await attempt();
-
-                        var raced = await Task.WhenAny(initTcs.Task, Task.Delay(8000));
-                        if (raced == initTcs.Task)
-                        {
-                            var ex = await initTcs.Task;
-                            if (ex is not null) { last = ex; LogWeb("init event: " + ex.Message); continue; }
-                        }
-
-                        for (var i = 0; i < 30 && WebView.CoreWebView2 is null; i++)
-                            await Task.Delay(50);
-
-                        if (WebView.CoreWebView2 is not null) { ok = true; break; }
-                        last = new InvalidOperationException("CoreWebView2 still null");
-                    }
-                    catch (Exception ex)
-                    {
-                        last = ex;
-                        LogWeb("attempt: " + ex);
+                        LogWeb("init event: " + ex);
+                        throw ex;
                     }
                 }
 
-                if (!ok || WebView.CoreWebView2 is null)
-                    throw last ?? new InvalidOperationException("WebView2 failed to start");
+                for (var i = 0; i < 40 && WebView.CoreWebView2 is null; i++)
+                    await Task.Delay(50);
+
+                if (WebView.CoreWebView2 is null)
+                    throw new InvalidOperationException("CoreWebView2 still null after Ensure.");
             }
             finally
             {
@@ -252,27 +269,23 @@ public sealed partial class MainWindow : Window
 
             await LoadWebUiDocumentAsync(core, webRoot, indexPath);
 
-            // Hand UI to WebView; keep WinUI settings gear top-left always.
             ContentFrame.Visibility = Visibility.Collapsed;
             WebView.Opacity = 1;
             WebView.IsHitTestVisible = true;
-            // Hide SPA chrome settings (host owns top-left gear). Inject CSS/JS to hide #btnSettings.
             try
             {
                 await core.ExecuteScriptAsync(
-                    "document.documentElement.style.setProperty('--chrome-pad-left','0px');" +
+                    "document.documentElement.classList.add('host-chrome');" +
                     "var s=document.getElementById('btnSettings'); if(s) s.style.display='none';" +
                     "var c=document.getElementById('chrome'); if(c) c.style.display='none';");
             }
             catch { }
 
-            // When using WebView full-bleed under title bar, SPA shouldn't duplicate chrome.
-            // Host settings button navigates SPA via bridge message.
             _webReady = true;
             _useXamlFallback = false;
             SetHostStatus(string.Empty);
             ApplyChrome(ShellMode.Home);
-            LogWeb("WebView2 ready");
+            LogWeb("WebView2 ready " + env.BrowserVersionString);
         }
         catch (Exception ex)
         {
@@ -324,51 +337,6 @@ public sealed partial class MainWindow : Window
                 ";window.__OPTIHUB_HOST_CHROME__=true;\n" + js + "\n</script>");
 
         core.NavigateToString(html);
-    }
-
-    private static string? FindWebView2BrowserFolder()
-    {
-        try
-        {
-            foreach (var keyPath in new[]
-                     {
-                         @"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
-                         @"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-                     })
-            {
-                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(keyPath);
-                var loc = key?.GetValue("location") as string;
-                var pv = key?.GetValue("pv") as string;
-                if (!string.IsNullOrWhiteSpace(loc) && !string.IsNullOrWhiteSpace(pv))
-                {
-                    var dir = Path.Combine(loc, pv);
-                    if (File.Exists(Path.Combine(dir, "msedgewebview2.exe")))
-                        return dir;
-                }
-            }
-        }
-        catch { }
-
-        foreach (var root in new[]
-                 {
-                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                         "Microsoft", "EdgeWebView", "Application"),
-                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                         "Microsoft", "EdgeWebView", "Application")
-                 })
-        {
-            if (!Directory.Exists(root)) continue;
-            try
-            {
-                foreach (var dir in Directory.GetDirectories(root).OrderByDescending(d => d))
-                {
-                    if (File.Exists(Path.Combine(dir, "msedgewebview2.exe")))
-                        return dir;
-                }
-            }
-            catch { }
-        }
-        return null;
     }
 
     public void NavigateHome(bool suppressTransition = false)

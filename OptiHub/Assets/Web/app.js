@@ -272,7 +272,9 @@
             </label>
           </div>
           <button type="button" class="btn primary block" id="btnUpdate">Check for updates</button>
-          <div class="status-well" id="updateStatus">You're set. Check anytime for a newer OptiHub.</div>
+          <div class="status-well" id="updateStatus" role="status" aria-live="polite">
+            <span class="status-text">You're set. Check anytime for a newer OptiHub.</span>
+          </div>
         </div>
       </div>`;
 
@@ -297,34 +299,35 @@
       catch (err) { toast(err.message); }
     };
 
-    document.getElementById("btnUpdate").onclick = async () => {
+    const setUpdateStatus = (text, busy = false) => {
       const status = document.getElementById("updateStatus");
+      if (!status) return;
+      status.classList.toggle("busy", !!busy);
+      status.innerHTML = `<span class="status-text">${esc(text)}</span>`;
+    };
+
+    document.getElementById("btnUpdate").onclick = async () => {
       const btn = document.getElementById("btnUpdate");
       btn.disabled = true;
-      status.classList.add("busy");
-      status.textContent = "Checking GitHub for a newer OptiHub…";
+      setUpdateStatus("Checking GitHub for a newer OptiHub…", true);
       try {
         const r = await post("checkUpdates");
-        status.classList.remove("busy");
-        status.textContent = r.message || "Done.";
+        setUpdateStatus(r.message || "Done.", false);
         if (r.updateAvailable) {
           const ok = await confirmModal(
             "Install OptiHub update?",
             `Version ${r.remoteVersion} is available (you have ${r.localVersion}).\n\nThis release includes matching optimizers. OptiHub will close, install, and reopen.`
           );
           if (ok) {
-            status.classList.add("busy");
-            status.textContent = "Installing…";
+            setUpdateStatus("Applying update quietly…", true);
             const inst = await post("installUpdate");
-            status.classList.remove("busy");
-            status.textContent = inst.message || "Install started.";
+            setUpdateStatus(inst.message || "Update started — OptiHub will restart.", false);
           } else {
-            status.textContent = `v${r.remoteVersion} available — install skipped.`;
+            setUpdateStatus(`v${r.remoteVersion} available — install skipped.`, false);
           }
         }
       } catch (e) {
-        status.classList.remove("busy");
-        status.textContent = e.message;
+        setUpdateStatus(e.message || "Update check failed.", false);
       } finally {
         btn.disabled = false;
       }
