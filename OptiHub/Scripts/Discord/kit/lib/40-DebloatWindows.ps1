@@ -1,6 +1,244 @@
 # 40-DebloatWindows.ps1 - Debloat, cache, Windows tweaks, OpenASAR, profile flags
 # Dot-sourced by Disc-Optimizer.ps1 (load order = filename sort).
 # Universal multi-PC kit - do not assume Equicord/Discord already configured.
+function Get-DiscordOptStatePath {
+    $dir = Get-DiscOptEnvPath 'LOCALAPPDATA' 'OptiHub'
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    return (Join-Path $dir 'discord-optimizer.json')
+}
+
+function Read-DiscordOptState {
+    $path = Get-DiscordOptStatePath
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    try { return (Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json) }
+    catch { return $null }
+}
+
+function Save-DiscordOptState([hashtable]$State) {
+    $path = Get-DiscordOptStatePath
+    $temp = "$path.$PID.$([Guid]::NewGuid().ToString('N')).tmp"
+    try {
+        $json = $State | ConvertTo-Json -Depth 12
+        [IO.File]::WriteAllText($temp, $json, [Text.UTF8Encoding]::new($false))
+        Move-Item -LiteralPath $temp -Destination $path -Force
+    } finally {
+        Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Test-StableDiscordText([string]$Text) {
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
+    try {
+        $rootPrefix = [IO.Path]::GetFullPath($DiscordRoot).TrimEnd('\') + '\'
+        $expanded = [Environment]::ExpandEnvironmentVariables($Text).Replace('/', '\')
+        return $expanded.IndexOf($rootPrefix, [StringComparison]::OrdinalIgnoreCase) -ge 0
+    } catch { return $false }
+}
+
+function Get-RegistryValueSnapshot([string]$Key, [string]$Name) {
+    $item = Get-Item -Path $Key -ErrorAction Stop
+    if ($item.GetValueNames() -notcontains $Name) { return $null }
+    return @{
+        Key   = $Key
+        Name  = $Name
+        Value = $item.GetValue($Name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        Kind  = $item.GetValueKind($Name).ToString()
+    }
+}
+
+function Get-StableDiscordRunSnapshot {
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    $entries = [Collections.Generic.List[hashtable]]::new()
+    if (-not (Test-Path $runKey)) { return @($entries) }
+    $item = Get-Item -Path $runKey -ErrorAction Stop
+    foreach ($name in @($item.GetValueNames())) {
+        $value = $item.GetValue($name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        if (Test-StableDiscordText ([string]$value)) {
+            $entries.Add(@{ Key = $runKey; Name = $name; Value = $value; Kind = $item.GetValueKind($name).ToString() })
+        }
+    }
+    return @($entries)
+}
+
+function Get-StableDiscordTasks {
+    $tasks = [Collections.Generic.List[object]]::new()
+    foreach ($task in @(Get-ScheduledTask -ErrorAction Stop)) {
+        $stable = $false
+        foreach ($action in @($task.Actions)) {
+            if ((Test-StableDiscordText ([string]$action.Execute)) -or
+                (Test-StableDiscordText ([string]$action.Arguments)) -or
+                (Test-StableDiscordText ([string]$action.WorkingDirectory))) {
+                $stable = $true
+                break
+            }
+        }
+        if ($stable) { $tasks.Add($task) }
+    }
+    return @($tasks)
+}
+
+function Get-StableDiscordTrayEntries {
+    $entries = [Collections.Generic.List[hashtable]]::new()
+    $trayRoot = 'HKCU:\Control Panel\NotifyIconSettings'
+    if (-not (Test-Path $trayRoot)) { return @($entries) }
+    foreach ($key in @(Get-ChildItem -Path $trayRoot -ErrorAction Stop)) {
+        $item = Get-Item -Path $key.PSPath -ErrorAction Stop
+        $exe = [string]$item.GetValue('ExecutablePath')
+        if (-not (Test-StableDiscordText $exe)) { continue }
+        $hasPromoted = $item.GetValueNames() -contains 'IsPromoted'
+        $entries.Add(@{
+            Key              = $key.PSPath
+            Name             = $key.PSChildName
+            ExecutablePath   = $exe
+            IsPromotedExisted = $hasPromoted
+            IsPromotedValue  = if ($hasPromoted) { $item.GetValue('IsPromoted') } else { $null }
+            IsPromotedKind   = if ($hasPromoted) { $item.GetValueKind('IsPromoted').ToString() } else { 'DWord' }
+        })
+    }
+    return @($entries)
+}
+
+function Get-DiscordWindowsSnapshot {
+    $runEntries = @(Get-StableDiscordRunSnapshot)
+    $startupApproved = [Collections.Generic.List[hashtable]]::new()
+    $approvedKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+    if (Test-Path $approvedKey) {
+        foreach ($entry in $runEntries) {
+            $snapshot = Get-RegistryValueSnapshot $approvedKey ([string]$entry.Name)
+            if ($snapshot) { $startupApproved.Add($snapshot) }
+        }
+    }
+
+    $notifications = [Collections.Generic.List[hashtable]]::new()
+    $notificationRoot = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    foreach ($id in @('Discord', 'Discord.Desktop', 'DiscordInc.Discord', 'com.squirrel.Discord.Discord')) {
+        $path = Join-Path $notificationRoot $id
+        $keyExisted = Test-Path $path
+        $enabled = if ($keyExisted) { Get-RegistryValueSnapshot $path 'Enabled' } else { $null }
+        $notifications.Add(@{
+            Id             = $id
+            KeyExisted     = $keyExisted
+            EnabledExisted = [bool]$enabled
+            EnabledValue   = if ($enabled) { $enabled.Value } else { $null }
+            EnabledKind    = if ($enabled) { $enabled.Kind } else { 'DWord' }
+        })
+    }
+
+    $scheduledTasks = [Collections.Generic.List[hashtable]]::new()
+    foreach ($task in @(Get-StableDiscordTasks)) {
+        $scheduledTasks.Add(@{
+            TaskName = [string]$task.TaskName
+            TaskPath = [string]$task.TaskPath
+            Enabled  = [bool]$task.Settings.Enabled
+            Xml      = [string](Export-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction Stop)
+        })
+    }
+
+    return @{
+        RunEntries       = $runEntries
+        StartupApproved  = @($startupApproved)
+        Notifications    = @($notifications)
+        ScheduledTasks   = @($scheduledTasks)
+        TrayEntries      = @(Get-StableDiscordTrayEntries)
+        Compatibility    = @()
+    }
+}
+
+function Merge-DiscordRecoveryItems($Prior, $Current, [string[]]$IdentityFields) {
+    $result = [Collections.Generic.List[object]]::new()
+    $seen = @{}
+    foreach ($set in @($Prior, $Current)) {
+        foreach ($item in @($set | Where-Object { $_ })) {
+            $parts = foreach ($field in $IdentityFields) { [string]$item.$field }
+            $id = ($parts -join "`0").ToLowerInvariant()
+            if ($seen.ContainsKey($id)) { continue }
+            $seen[$id] = $true
+            $result.Add($item)
+        }
+    }
+    return @($result)
+}
+
+function Merge-DiscordWindowsRecovery($Prior, [hashtable]$Current) {
+    if (-not $Prior) { return $Current }
+    return @{
+        RunEntries      = @(Merge-DiscordRecoveryItems $Prior.RunEntries $Current.RunEntries @('Key', 'Name'))
+        StartupApproved = @(Merge-DiscordRecoveryItems $Prior.StartupApproved $Current.StartupApproved @('Key', 'Name'))
+        Notifications   = @(Merge-DiscordRecoveryItems $Prior.Notifications $Current.Notifications @('Id'))
+        ScheduledTasks  = @(Merge-DiscordRecoveryItems $Prior.ScheduledTasks $Current.ScheduledTasks @('TaskPath', 'TaskName'))
+        TrayEntries     = @(Merge-DiscordRecoveryItems $Prior.TrayEntries $Current.TrayEntries @('Key'))
+        Compatibility   = @(Merge-DiscordRecoveryItems $Prior.Compatibility $Current.Compatibility @('Key', 'Name'))
+    }
+}
+
+function Initialize-DiscordApplyState {
+    $prior = Read-DiscordOptState
+    $priorRecovery = if ($prior -and ($prior.PSObject.Properties.Name -contains 'recovery')) { $prior.recovery } else { $null }
+    $current = Get-DiscordWindowsSnapshot
+    $recovery = Merge-DiscordWindowsRecovery $priorRecovery $current
+    Save-DiscordOptState @{
+        version         = $Script:DiscOptVersion
+        applyStatus     = 'applying'
+        applied         = $false
+        applyStartedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        recovery        = $recovery
+    }
+    $Script:DiscordWindowsRecovery = $recovery
+    return $recovery
+}
+
+function Refresh-DiscordWindowsRecovery {
+    $current = Get-DiscordWindowsSnapshot
+    $Script:DiscordWindowsRecovery = Merge-DiscordWindowsRecovery $Script:DiscordWindowsRecovery $current
+    Save-DiscordOptState @{
+        version         = $Script:DiscOptVersion
+        applyStatus     = 'applying'
+        applied         = $false
+        applyStartedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        recovery        = $Script:DiscordWindowsRecovery
+    }
+}
+
+function Complete-DiscordApplyState([string]$AppDir) {
+    $state = Read-DiscordOptState
+    $recovery = if ($state -and ($state.PSObject.Properties.Name -contains 'recovery')) { $state.recovery } else { $Script:DiscordWindowsRecovery }
+    Save-DiscordOptState @{
+        version           = $Script:DiscOptVersion
+        applyStatus       = 'applied'
+        applied           = $true
+        fullApply         = $true
+        windowsVerified   = $true
+        debloatVerified   = $true
+        appDir            = $AppDir
+        appliedUtc        = (Get-Date).ToUniversalTime().ToString('o')
+        recovery          = $recovery
+    }
+}
+
+function Ensure-DiscordCompatibilityRecovery([string]$AppDir) {
+    $exe = Join-Path $AppDir 'Discord.exe'
+    $key = 'HKCU:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
+    $existing = @($Script:DiscordWindowsRecovery.Compatibility)
+    if ($existing | Where-Object { [string]$_.Name -ieq $exe }) { return }
+
+    $snapshot = if (Test-Path $key) { Get-RegistryValueSnapshot $key $exe } else { $null }
+    $record = @{
+        Key     = $key
+        Name    = $exe
+        Existed = [bool]$snapshot
+        Value   = if ($snapshot) { $snapshot.Value } else { $null }
+        Kind    = if ($snapshot) { $snapshot.Kind } else { 'String' }
+    }
+    $Script:DiscordWindowsRecovery.Compatibility = @($existing) + @($record)
+    Save-DiscordOptState @{
+        version         = $Script:DiscOptVersion
+        applyStatus     = 'applying'
+        applied         = $false
+        applyStartedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        recovery        = $Script:DiscordWindowsRecovery
+    }
+}
+
 
 function Invoke-Debloat([string]$AppDir, [ref]$Freed) {
     Write-Step 'Debloating Discord...'
@@ -320,6 +558,26 @@ function Set-DiscordTrayIconHidden([string]$AppDir) {
     else { Write-Warn 'Tray icon registry entry not found yet - launch once, then re-run' }
 }
 
+function Test-DiscordWindowsSuppression {
+    try {
+        if (@(Get-StableDiscordRunSnapshot).Count -ne 0) { return $false }
+
+        $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+        foreach ($id in @('Discord', 'Discord.Desktop', 'DiscordInc.Discord', 'com.squirrel.Discord.Discord')) {
+            $path = Join-Path $base $id
+            if (-not (Test-Path -LiteralPath $path)) { return $false }
+            if ([int](Get-ItemPropertyValue -Path $path -Name 'Enabled' -ErrorAction Stop) -ne 0) { return $false }
+        }
+
+        foreach ($task in @(Get-StableDiscordTasks)) {
+            if ([bool]$task.Settings.Enabled) { return $false }
+        }
+        foreach ($entry in @(Get-StableDiscordTrayEntries)) {
+            if (-not $entry.IsPromotedExisted -or [int]$entry.IsPromotedValue -ne 0) { return $false }
+        }
+        return $true
+    } catch { return $false }
+}
 function Apply-WindowsTweaks([string]$AppDir) {
     Write-Step 'Applying Windows tweaks (notifications, tray, startup)...'
     Disable-DiscordWindowsAutostart
@@ -405,7 +663,7 @@ function Unlock-DiscordSettings([string]$DestPath = '') {
 }
 
 function Get-DiscOptPowerShellExe {
-    $found = Get-DiscOptPwsh77
+    $found = Get-DiscOptPwsh7
     if ($found) { return $found.Exe }
     $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($pwsh) { return $pwsh.Source }

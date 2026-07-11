@@ -1159,7 +1159,12 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
                 $patched++
                 Write-Ok ("Shortcut -> OptiHub launcher: {0}" -f $lnk.FullName.Replace($env:USERPROFILE, '~').Replace($env:ProgramData, '%ProgramData%'))
             } catch {
-                Write-Warn "Shortcut skip $($lnk.FullName): $($_.Exception.Message)"
+                # ProgramData / all-users Start Menu often needs elevation; user Start Menu is enough.
+                if ($lnk.FullName -match '(?i)\\ProgramData\\') {
+                    Write-Ok ("Skipped all-users shortcut (needs admin): {0}" -f $lnk.Name)
+                } else {
+                    Write-Warn "Shortcut skip $($lnk.Name): $($_.Exception.Message)"
+                }
             }
         }
     }
