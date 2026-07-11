@@ -45,18 +45,21 @@ function Invoke-DiscordLaunch {
 }
 
 function Start-Discord([string]$AppDir) {
-    Stop-Discord
+    # Fast path: do not rewrite settings.json or reinstall the kernel on every
+    # launch - that was the hitch. Heal is Discord.vbs / -Launch when files missing.
+    if (-not $AppDir) {
+        $active = Get-ActiveApp
+        if ($active) { $AppDir = $active.FullName }
+    }
+    if (-not $AppDir) { throw 'No Discord app folder to launch' }
 
-    Unlock-DiscordSettings
-    Apply-DiscordProfile (Join-Path $AppData 'settings.json')
-    # Always re-enable kernel on normal launch unless this run just rolled it back
-    # or the user passed -SkipKernel. .disabled is only a soft temporary marker.
-    if (-not $SkipKernel -and
-        -not $Script:KernelRolledBack -and -not $Script:ModsRolledBack) {
-        try {
-            Install-DiscOptKernel $AppDir
-        } catch {
-            Write-Warn "Kernel re-enable on launch failed: $($_.Exception.Message)"
+    # Soft re-enable only if kernel was renamed to .disabled (rollback marker).
+    if (-not $SkipKernel -and -not $Script:KernelRolledBack -and -not $Script:ModsRolledBack) {
+        $verDisabled = Join-Path $AppDir 'version.dll.disabled'
+        if (Test-Path -LiteralPath $verDisabled) {
+            try { Install-DiscOptKernel $AppDir } catch {
+                Write-Warn "Kernel re-enable on launch failed: $($_.Exception.Message)"
+            }
         }
     }
 

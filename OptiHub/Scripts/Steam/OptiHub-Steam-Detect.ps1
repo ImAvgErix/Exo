@@ -329,7 +329,8 @@ if (-not $steamOk) {
 
     $runtimeOk = Test-SteamRuntimeIntegrity $steam
     $markerOk = [bool]($state -and
-        ([string]$state.version -eq '1.6.0' -or [string]$state.version -eq '1.7.0' -or [string]$state.version -eq '1.7.1') -and
+        ([string]$state.version -eq '1.6.0' -or [string]$state.version -eq '1.7.0' -or
+         [string]$state.version -eq '1.7.1' -or [string]$state.version -eq '1.7.2') -and
         [string]$state.applyStatus -eq 'applied' -and
         $state.applied -eq $true -and
         $state.quick -eq $false -and

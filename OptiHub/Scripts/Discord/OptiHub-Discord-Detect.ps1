@@ -260,7 +260,8 @@ if (-not (Test-Path $discordRoot)) {
                 [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')
         } catch { }
         $markerOk = [bool]($state -and
-            ([string]$state.version -eq '1.3.0' -or [string]$state.version -eq '1.3.1' -or [string]$state.version -eq '1.3.2') -and
+            ([string]$state.version -eq '1.3.0' -or [string]$state.version -eq '1.3.1' -or
+             [string]$state.version -eq '1.3.2' -or [string]$state.version -eq '1.3.3') -and
             [string]$state.applyStatus -eq 'applied' -and
             $state.applied -eq $true -and
             $state.fullApply -eq $true -and

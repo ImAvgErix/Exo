@@ -179,16 +179,11 @@ function Restore-StartMenu {
     if (-not $app) { throw 'No Discord app folder - cannot refresh shortcuts' }
 
     $vbs = Join-Path $KitDir 'Discord.vbs'
-    $psExe = (Get-DiscOptPowerShellExe) -replace '"', '""'
-    $vbsContent = @"
-Set fso = CreateObject("Scripting.FileSystemObject")
-kitDir = fso.GetParentFolderName(WScript.ScriptFullName)
-rootDir = fso.GetParentFolderName(kitDir)
-optimizer = rootDir & "\Disc-Optimizer.ps1"
-ps = "$psExe"
-CreateObject("WScript.Shell").Run """" & ps & """ -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File """ & optimizer & """ -Launch", 0, False
-"@
-    Set-Content -Path $vbs -Value $vbsContent -Encoding ASCII
+    # Never overwrite Discord.vbs here - the kit ships a direct Discord.exe launcher
+    # (PowerShell only if mods are missing). Overwriting it caused a launch hitch.
+    if (-not (Test-Path -LiteralPath $vbs)) {
+        throw "Missing Discord.vbs at $vbs - reinstall OptiHub Discord kit"
+    }
 
     $wscript = Get-DiscOptEnvPath 'SystemRoot' 'System32\wscript.exe'
     if (-not $wscript -or -not (Test-Path -LiteralPath $wscript)) {

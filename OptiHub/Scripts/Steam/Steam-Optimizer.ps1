@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.7.1'
+$Script:SteamOptVersion = '1.7.2'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Default Steam launch flags (formerly "aggressive" - this is the only tier).
@@ -971,6 +971,83 @@ function Set-SteamLocalConfigTweaks {
     }
 }
 
+function Set-SteamFastLoginHints([string]$SteamPath) {
+    # Single-account machines still show a "loading profile" path if MostRecent is unset.
+    # Mark the only / most recent saved user so Steam auto-continues.
+    $path = Join-Path $SteamPath 'config\loginusers.vdf'
+    if (-not (Test-Path -LiteralPath $path)) {
+        Write-Ok 'loginusers.vdf not present yet (open Steam once) - skip profile hint'
+        return $false
+    }
+    try {
+        attrib -R $path 2>$null
+        $raw = [IO.File]::ReadAllText($path)
+        $orig = $raw
+        # Ensure AutoLogin / RememberPassword / MostRecent for every listed account block.
+        foreach ($pair in @(
+            @{ K = 'RememberPassword'; V = '1' },
+            @{ K = 'AutoLogin'; V = '1' },
+            @{ K = 'WantsOfflineMode'; V = '0' }
+        )) {
+            $raw = Set-SteamVdfKey $raw $pair.K $pair.V
+        }
+        # Inject MostRecent if missing (Set-SteamVdfKey only rewrites existing keys).
+        if ($raw -notmatch '"MostRecent"') {
+            if ($raw -match '"AutoLogin"\s+"[^"]*"') {
+                $raw = [regex]::Replace($raw, '("AutoLogin"\s+"[^"]*")', "`$1`r`n`"MostRecent`"`t`t`"1`"", 1)
+            } elseif ($raw -match '"RememberPassword"\s+"[^"]*"') {
+                $raw = [regex]::Replace($raw, '("RememberPassword"\s+"[^"]*")', "`$1`r`n`"MostRecent`"`t`t`"1`"", 1)
+            }
+        } else {
+            $raw = Set-SteamVdfKey $raw 'MostRecent' '1'
+        }
+        $userBlocks = [regex]::Matches($raw, '"\d{17}"')
+        if ($userBlocks.Count -gt 1) {
+            Write-Ok "loginusers.vdf has $($userBlocks.Count) accounts - stamped AutoLogin/RememberPassword"
+        }
+        if ($raw -ne $orig) {
+            $bak = $path + '.optihub-bak'
+            if (-not (Test-Path $bak)) { Copy-Item $path $bak -Force }
+            [IO.File]::WriteAllText($path, $raw, [Text.UTF8Encoding]::new($false))
+            Write-Ok 'loginusers.vdf: auto-login / most-recent profile hints applied'
+            return $true
+        }
+        Write-Ok 'loginusers.vdf: profile hints already set'
+        return $true
+    } catch {
+        Write-Warn "loginusers.vdf: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Set-SteamBootstrapFastStart([string]$SteamPath) {
+    # steam.cfg next to steam.exe stops the bootstrapper "Checking for updates" pause
+    # on every launch. Client can still update via Steam > Check for Steam Client Updates.
+    $cfg = Join-Path $SteamPath 'steam.cfg'
+    $body = @(
+        'BootStrapperInhibitAll=enable'
+        'BootStrapperForceSelfUpdate=disable'
+    ) -join "`r`n"
+    try {
+        $existing = if (Test-Path -LiteralPath $cfg) {
+            [IO.File]::ReadAllText($cfg)
+        } else { '' }
+        if ($existing -match '(?i)BootStrapperInhibitAll\s*=\s*enable') {
+            Write-Ok 'steam.cfg: bootstrap update check already inhibited'
+            return $true
+        }
+        if ((Test-Path -LiteralPath $cfg) -and -not (Test-Path -LiteralPath ($cfg + '.optihub-bak'))) {
+            Copy-Item -LiteralPath $cfg -Destination ($cfg + '.optihub-bak') -Force
+        }
+        [IO.File]::WriteAllText($cfg, $body + "`r`n", [Text.UTF8Encoding]::new($false))
+        Write-Ok 'steam.cfg: skip bootstrap update check on launch (manual client update still available)'
+        return $true
+    } catch {
+        Write-Warn "steam.cfg: $($_.Exception.Message)"
+        return $false
+    }
+}
+
 function Set-SteamLibraryConfigHints([string]$SteamPath) {
     $config = Join-Path $SteamPath 'config\config.vdf'
     if (-not (Test-Path -LiteralPath $config)) {
@@ -1382,6 +1459,34 @@ function Invoke-SteamRepair([string]$SteamPath) {
         Write-Ok 'Restored config.vdf'
     }
 
+    # Remove OptiHub steam.cfg bootstrap inhibit (restore stock update-on-launch behavior)
+    $steamCfg = Join-Path $SteamPath 'steam.cfg'
+    $steamCfgBak = $steamCfg + '.optihub-bak'
+    if (Test-Path -LiteralPath $steamCfgBak) {
+        Copy-Item $steamCfgBak $steamCfg -Force
+        Remove-Item $steamCfgBak -Force -ErrorAction SilentlyContinue
+        $restored++
+        Write-Ok 'Restored steam.cfg'
+    } elseif (Test-Path -LiteralPath $steamCfg) {
+        try {
+            $txt = [IO.File]::ReadAllText($steamCfg)
+            if ($txt -match '(?i)BootStrapperInhibitAll') {
+                Remove-Item -LiteralPath $steamCfg -Force -ErrorAction Stop
+                $restored++
+                Write-Ok 'Removed OptiHub steam.cfg bootstrap inhibit'
+            }
+        } catch { }
+    }
+
+    $loginBak = Join-Path $SteamPath 'config\loginusers.vdf.optihub-bak'
+    $login = Join-Path $SteamPath 'config\loginusers.vdf'
+    if (Test-Path $loginBak) {
+        Copy-Item $loginBak $login -Force
+        Remove-Item $loginBak -Force -ErrorAction SilentlyContinue
+        $restored++
+        Write-Ok 'Restored loginusers.vdf'
+    }
+
     Get-ChildItem -LiteralPath (Join-Path $SteamPath 'userdata') -Directory -ErrorAction SilentlyContinue | ForEach-Object {
         $lb = Join-Path $_.FullName 'config\localconfig.vdf.optihub-bak'
         $lf = Join-Path $_.FullName 'config\localconfig.vdf'
@@ -1617,6 +1722,10 @@ try {
     $helper = Install-WebHelperTrimHelper $steam
     Write-HubProgress 68 'Writing quiet CEF launcher...'
     $launch = Install-LeanSteamLauncher $steam $helper
+
+    Write-HubProgress 74 'Fast login / skip bootstrap update pause...'
+    [void](Set-SteamBootstrapFastStart $steam)
+    [void](Set-SteamFastLoginHints $steam)
 
     Write-HubProgress 78 'Download speed / config.vdf...'
     $cfgOk = Set-SteamLibraryConfigHints $steam

@@ -755,6 +755,8 @@ function Apply-DiscordProfile([string]$DestPath) {
     $merged['asyncVideoInputDeviceInit'] = $false
     $merged['debugLogging'] = $false
     $merged['OPEN_ON_STARTUP'] = $false
+    # Skip host update ping on launch (reduces hitch); Discord still updates via its own updater later.
+    $merged['SKIP_HOST_UPDATE'] = $true
     if ($merged.Keys -contains 'BACKGROUND_COLOR') { $merged.Remove('BACKGROUND_COLOR') }
 
     # Never force host-update skip until modules are healthy - SKIP_HOST_UPDATE=true

@@ -1,5 +1,5 @@
 {
-  "SKIP_HOST_UPDATE": false,
+  "SKIP_HOST_UPDATE": true,
   "OPEN_ON_STARTUP": false,
   "MINIMIZE_TO_TRAY": true,
   "START_MINIMIZED": false,
