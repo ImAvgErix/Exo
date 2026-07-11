@@ -146,19 +146,24 @@ public sealed partial class MainWindow : Window
     {
         _mode = mode;
         var home = mode == ShellMode.Home;
+        var optimizer = mode is ShellMode.Discord or ShellMode.Steam or ShellMode.Nvidia;
+
         BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
-        // Always show a mark: OptiHub logo on home/settings, product logos on optimizers.
-        ContextLogoHost.Visibility = Visibility.Visible;
-        // Settings only on home — optimizer pages keep chrome clean
+        // Home: only settings gear. Optimizers: back + product logo + short title. No "OptiHub" wordmark.
+        ContextLogoHost.Visibility = optimizer ? Visibility.Visible : Visibility.Collapsed;
         SettingsButton.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
+
         AppTitleText.Text = mode switch
         {
             ShellMode.Discord => "Discord",
             ShellMode.Steam => "Steam",
             ShellMode.Nvidia => "NVIDIA",
             ShellMode.Settings => "Settings",
-            _ => "OptiHub"
+            _ => string.Empty
         };
+        AppTitleText.Visibility = string.IsNullOrEmpty(AppTitleText.Text)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
 
         if (mode == ShellMode.Discord)
             TrySetContextLogo("Assets/Logos/discord.png");
@@ -167,7 +172,7 @@ public sealed partial class MainWindow : Window
         else if (mode == ShellMode.Nvidia)
             TrySetContextLogo("Assets/Logos/nvidia.png");
         else
-            TrySetContextLogo("Assets/Logos/optihub.png");
+            ContextLogo.Source = null;
     }
 
     private void TrySetWindowIcon()

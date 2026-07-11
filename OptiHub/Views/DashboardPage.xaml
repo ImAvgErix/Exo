@@ -59,7 +59,6 @@
                                     Margin="10"
                                     Click="CardButton_Click"
                                     Tag="{x:Bind Definition.Id}"
-                                    ToolTipService.ToolTip="{x:Bind Definition.Title}"
                                     AutomationProperties.Name="{x:Bind Definition.Title}"
                                     IsEnabled="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                     Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
@@ -70,12 +69,14 @@
                                     <StackPanel HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
                                                 Spacing="12">
-                                        <Border Style="{StaticResource OptiLogoWell}"
-                                                Width="72"
+                                        <!-- Transparent well so product logos aren't double-boxed on black -->
+                                        <Border Width="72"
                                                 Height="72"
-                                                CornerRadius="20">
-                                            <Image Width="44"
-                                                   Height="44"
+                                                CornerRadius="20"
+                                                Background="Transparent"
+                                                HorizontalAlignment="Center">
+                                            <Image Width="48"
+                                                   Height="48"
                                                    Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"
