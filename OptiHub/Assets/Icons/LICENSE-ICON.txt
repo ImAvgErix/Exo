@@ -1,7 +1,7 @@
-OptiHub app icon is derived from the Lucide "gauge" icon.
-Source: https://lucide.dev/icons/gauge
+OptiHub app icon is derived from the Lucide "cpu" icon.
+Source: https://lucide.dev/icons/cpu
 Package: lucide-static (ISC License)
 https://github.com/lucide-icons/lucide/blob/main/LICENSE
 
-ISC License allows free commercial use. This derivative is rendered
-as a black-tile Windows icon for OptiHub Start Menu / taskbar use.
+ISC License allows free commercial use. Rendered as a black-tile
+Windows icon for OptiHub Start Menu / taskbar.

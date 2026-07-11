@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.4
+
+- **Brand icon**: Lucide `cpu` (ISC) instead of gauge — avoids Speedtest-like speedometer look; multi-size Start Menu ICO
 ## 1.8.3
 
 - **Brand icon**: real **Lucide** `gauge` icon (ISC license, free commercial use) on pure black Start Menu tile
