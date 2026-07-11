@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.6
+
+- **Settings**: center the Updates status well (check-result text + icon)
+
 ## 1.7.5
 
 - **Settings gear top-left** in host chrome (1.7.4 had it top-right on XAML fallback)

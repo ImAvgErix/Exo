@@ -205,25 +205,29 @@
                                     HorizontalAlignment="Stretch"
                                     MinHeight="48"
                                     IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                            <!-- Same result well as Discord/Steam/NVIDIA pages -->
+                            <!-- Update status well — content centered like the rest of Settings -->
                             <Border Style="{StaticResource OptiCard}"
-                                    Padding="14,12"
-                                    MinHeight="52"
+                                    Padding="16,14"
+                                    MinHeight="56"
                                     Background="{ThemeResource OptiAccentSoftBrush}">
-                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="10"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center">
                                     <FontIcon Glyph="&#xE895;"
                                               FontSize="15"
                                               Foreground="{ThemeResource OptiMutedTextBrush}"
-                                              VerticalAlignment="Top"
-                                              Margin="0,1,0,0" />
+                                              VerticalAlignment="Center" />
                                     <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
                                                Style="{StaticResource OptiBody}"
                                                FontSize="12.5"
                                                Foreground="{ThemeResource OptiSecondaryTextBrush}"
                                                TextWrapping="WrapWholeWords"
+                                               TextAlignment="Center"
                                                MaxLines="4"
                                                TextTrimming="CharacterEllipsis"
                                                VerticalAlignment="Center"
+                                               MaxWidth="280"
                                                AutomationProperties.LiveSetting="Polite" />
                                 </StackPanel>
                             </Border>
