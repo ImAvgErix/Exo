@@ -148,7 +148,7 @@
                             Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
                             Click="Run_Click"
                             AutomationProperties.Name="Apply aggressive Steam optimization"
-                            AutomationProperties.HelpText="Closes Steam and applies aggressive client, webhelper, cache, launcher, and shortcut changes after confirmation."
+                            AutomationProperties.HelpText="Closes Steam and applies aggressive client, webhelper, cache, launcher, and shortcut changes after confirmation. Administrator approval may be required."
                             HorizontalAlignment="Stretch"
                             MinHeight="48"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />

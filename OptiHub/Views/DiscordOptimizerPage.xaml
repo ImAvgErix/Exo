@@ -148,7 +148,7 @@
                             Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
                             Click="Run_Click"
                             AutomationProperties.Name="Apply aggressive Discord optimization"
-                            AutomationProperties.HelpText="Closes Discord and applies client debloat, memory and priority tuning, and startup and notification suppression after confirmation."
+                            AutomationProperties.HelpText="Closes Discord and applies client debloat, memory and priority tuning, and startup and notification suppression after confirmation. Administrator approval is required for the apply step."
                             HorizontalAlignment="Stretch"
                             MinHeight="48"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />

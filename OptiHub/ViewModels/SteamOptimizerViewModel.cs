@@ -80,7 +80,8 @@ public partial class SteamOptimizerViewModel : ObservableObject
             "• Deep disposable client-cache cleanup and aggressive overlay/library hints\n" +
             "• Quieter Windows startup\n\n" +
             "This trades background convenience and some client visual features for lower RAM use and latency. Active downloads, game installs, and game shader pre-caches are preserved. Game executables are never modified.\n\n" +
-            "Start Menu / taskbar Steam entries are retargeted. No desktop shortcuts are created. Use Repair Steam to undo OptiHub changes.";
+            "Start Menu / taskbar Steam entries are retargeted. No desktop shortcuts are created. Use Repair Steam to undo OptiHub changes.\n\n" +
+            "Administrator approval is required so OptiHub can update the Steam install folder and all-users Start Menu shortcuts.";
 
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync($"Confirm aggressive Steam optimizer ({action})", warning)
@@ -104,10 +105,11 @@ public partial class SteamOptimizerViewModel : ObservableObject
                     ProgressStatus = p.Status;
             });
 
+            // Elevate for Program Files Steam folder writes + all-users Start Menu shortcuts.
             var result = await _services.PowerShell.RunAsync(
                 _services.Scripts.SteamOptimizerScript,
                 arguments: new[] { "-NonInteractive" },
-                elevate: false,
+                elevate: true,
                 progress: progress,
                 cancellationToken: _runCts.Token,
                 workingDirectory: _services.Scripts.GetSteamRoot());
@@ -153,7 +155,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync(
                 "Repair Steam settings?",
-                "Restores OptiHub backups of Steam config files (if any) and clears the optimizer marker. Game installs are never deleted.")
+                "Restores OptiHub backups of Steam config files (if any) and clears the optimizer marker. Game installs are never deleted. Administrator approval may be required.")
             : true;
         if (!ok) return;
 
@@ -175,7 +177,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
             var result = await _services.PowerShell.RunAsync(
                 _services.Scripts.SteamRepairScript,
                 arguments: new[] { "-NonInteractive" },
-                elevate: false,
+                elevate: true,
                 progress: progress,
                 cancellationToken: _runCts.Token,
                 workingDirectory: _services.Scripts.GetSteamRoot());

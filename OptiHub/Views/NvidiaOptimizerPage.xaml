@@ -159,7 +159,7 @@
                             Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
                             Click="Run_Click"
                             AutomationProperties.Name="Apply NVIDIA profile"
-                            AutomationProperties.HelpText="Apply the selected NVIDIA profile, driver tweaks, and display preferences."
+                            AutomationProperties.HelpText="Apply the selected NVIDIA profile, driver tweaks, and display preferences. Administrator approval is required for the apply step."
                             HorizontalAlignment="Stretch"
                             MinHeight="48"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />

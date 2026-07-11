@@ -45,9 +45,8 @@ try {
     & $Optimizer @runArgs 2>&1 | ForEach-Object {
         $line = "$_"
         if ([string]::IsNullOrWhiteSpace($line)) { return }
-        # Steam runs through redirected (non-elevated) PowerShell, which reads
-        # stdout rather than polling OPTIHUB_LOG. Forward progress markers so
-        # the WinUI progress bar receives every optimizer stage.
+        # Elevated OptiHub runs poll OPTIHUB_LOG; non-elevated reads stdout.
+        # Always emit progress on both channels so the UI bar keeps updating.
         Write-Output $line
     }
     $code = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
