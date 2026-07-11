@@ -150,12 +150,42 @@ internal static class Program
                 }
                 catch { }
 
+                // Ensure WebView2 Runtime is present (required for the SPA shell).
+                try
+                {
+                    EnsureWebView2Runtime(root, logPath);
+                }
+                catch (Exception wvEx)
+                {
+                    Log("WebView2 prerequisite warning: " + wvEx.Message);
+                }
+
                 // Start Menu only — never create Desktop shortcuts (user policy).
                 try
                 {
-                    CreateStartMenuShortcut(targetExe, installDir);
+                    // Prefer standalone .ico so Start Menu does not stick to a cached old EXE icon.
+                    string iconPath = Path.Combine(installDir, "Assets", "OptiHub.ico");
+                    if (!File.Exists(iconPath))
+                        iconPath = Path.Combine(installDir, "OptiHub.ico");
+                    if (File.Exists(iconPath))
+                    {
+                        try
+                        {
+                            // Also place next to the EXE for easy shell resolution.
+                            File.Copy(iconPath, Path.Combine(installDir, "OptiHub.ico"), true);
+                            iconPath = Path.Combine(installDir, "OptiHub.ico");
+                        }
+                        catch { }
+                    }
+                    else
+                    {
+                        iconPath = targetExe + ",0";
+                    }
+
+                    CreateStartMenuShortcut(targetExe, installDir, iconPath);
                     RemoveDesktopShortcuts();
-                    Log("Start Menu shortcut updated (no Desktop shortcuts).");
+                    NotifyShellShortcutsChanged();
+                    Log("Start Menu shortcut updated (icon=" + iconPath + ").");
                 }
                 catch (Exception scEx)
                 {
@@ -538,13 +568,13 @@ internal static class Program
         }
     }
 
-    private static void CreateStartMenuShortcut(string targetExe, string workingDir)
+    private static void CreateStartMenuShortcut(string targetExe, string workingDir, string iconLocation)
     {
         string startMenu = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
             "Programs",
             "OptiHub.lnk");
-        WriteShortcut(startMenu, targetExe, workingDir);
+        WriteShortcut(startMenu, targetExe, workingDir, iconLocation);
     }
 
     private static void RemoveDesktopShortcuts()
@@ -591,11 +621,14 @@ internal static class Program
         }
     }
 
-    private static void WriteShortcut(string lnkPath, string targetExe, string workingDir)
+    private static void WriteShortcut(string lnkPath, string targetExe, string workingDir, string iconLocation)
     {
         string parent = Path.GetDirectoryName(lnkPath);
         if (!string.IsNullOrEmpty(parent))
             Directory.CreateDirectory(parent);
+
+        // Replace existing .lnk so Explorer does not keep a stale icon cache entry.
+        try { if (File.Exists(lnkPath)) File.Delete(lnkPath); } catch { }
 
         // Late-bound WScript.Shell — no extra assembly refs needed for csc.
         Type shellType = Type.GetTypeFromProgID("WScript.Shell");
@@ -613,9 +646,144 @@ internal static class Program
         Type scType = shortcut.GetType();
         scType.InvokeMember("TargetPath", BindingFlags.SetProperty, null, shortcut, new object[] { targetExe });
         scType.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, shortcut, new object[] { workingDir });
-        scType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, new object[] { "OptiHub" });
-        scType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, shortcut, new object[] { targetExe + ",0" });
+        scType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, new object[] { "OptiHub — max performance hub" });
+        // Prefer explicit .ico path (not EXE,0) so the new brand mark shows immediately.
+        string icon = string.IsNullOrEmpty(iconLocation) ? (targetExe + ",0") : iconLocation;
+        if (icon.EndsWith(".ico", StringComparison.OrdinalIgnoreCase) && !icon.Contains(","))
+            icon = icon + ",0";
+        scType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, shortcut, new object[] { icon });
         scType.InvokeMember("Save", BindingFlags.InvokeMethod, null, shortcut, null);
+    }
+
+    [DllImport("shell32.dll")]
+    private static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+
+    private static void NotifyShellShortcutsChanged()
+    {
+        try
+        {
+            // SHCNE_ASSOCCHANGED — force Explorer to refresh icons / Start Menu.
+            const int SHCNE_ASSOCCHANGED = 0x08000000;
+            const uint SHCNF_IDLIST = 0x0000;
+            SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, IntPtr.Zero, IntPtr.Zero);
+        }
+        catch { }
+    }
+
+    private static bool IsWebView2RuntimeInstalled()
+    {
+        try
+        {
+            string[] keys =
+            {
+                @"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+                @"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+            };
+            foreach (string k in keys)
+            {
+                using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(k))
+                {
+                    if (key == null) continue;
+                    object pv = key.GetValue("pv");
+                    if (pv != null && !string.IsNullOrWhiteSpace(pv.ToString()) && pv.ToString() != "0.0.0.0")
+                        return true;
+                }
+            }
+        }
+        catch { }
+
+        try
+        {
+            string root = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                "Microsoft", "EdgeWebView", "Application");
+            if (Directory.Exists(root))
+            {
+                foreach (string dir in Directory.GetDirectories(root))
+                {
+                    if (File.Exists(Path.Combine(dir, "msedgewebview2.exe")))
+                        return true;
+                }
+            }
+        }
+        catch { }
+
+        return false;
+    }
+
+    private static void EnsureWebView2Runtime(string root, string logPath)
+    {
+        if (IsWebView2RuntimeInstalled())
+        {
+            Log("WebView2 Runtime already installed.");
+            return;
+        }
+
+        Log("WebView2 Runtime missing — downloading Evergreen bootstrapper...");
+        string prereqDir = Path.Combine(root, "prereqs");
+        Directory.CreateDirectory(prereqDir);
+        string setupPath = Path.Combine(prereqDir, "MicrosoftEdgeWebview2Setup.exe");
+
+        // Official Evergreen bootstrapper (small; pulls the full runtime).
+        string url = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
+        try
+        {
+            // .NET Framework WebClient — available to csc /nologo without extra refs.
+            using (var wc = new System.Net.WebClient())
+            {
+                wc.Headers["User-Agent"] = "OptiHub-Installer/1.0";
+                wc.DownloadFile(url, setupPath);
+            }
+        }
+        catch (Exception dlEx)
+        {
+            Log("WebView2 download failed: " + dlEx.Message);
+            Log("Install manually: https://go.microsoft.com/fwlink/p/?LinkId=2124703");
+            return;
+        }
+
+        if (!File.Exists(setupPath) || new FileInfo(setupPath).Length < 10000)
+        {
+            Log("WebView2 bootstrapper looks invalid; skipping silent install.");
+            return;
+        }
+
+        Log("Installing WebView2 Runtime (silent)...");
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = setupPath,
+                Arguments = "/silent /install",
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+            using (Process p = Process.Start(psi))
+            {
+                if (p != null)
+                {
+                    // Cap wait — bootstrapper usually finishes quickly when online.
+                    if (!p.WaitForExit(10 * 60 * 1000))
+                    {
+                        try { p.Kill(); } catch { }
+                        Log("WebView2 installer timed out after 10 minutes.");
+                    }
+                    else
+                    {
+                        Log("WebView2 installer exit code: " + p.ExitCode);
+                    }
+                }
+            }
+        }
+        catch (Exception runEx)
+        {
+            Log("WebView2 install failed: " + runEx.Message);
+        }
+
+        if (IsWebView2RuntimeInstalled())
+            Log("WebView2 Runtime is ready.");
+        else
+            Log("WebView2 still not detected — OptiHub will use classic UI fallback until Runtime is installed.");
     }
 
     private static void CleanupStaleInstallArtifacts(string root, string keepInstallDir)

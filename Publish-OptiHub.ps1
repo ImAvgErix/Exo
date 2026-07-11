@@ -100,6 +100,8 @@ using System.Reflection;
             "/out:`"$outCopy`""
             "/win32icon:`"$IconPath`""
             "/resource:`"$payloadCopy`",payload.zip"
+            '/r:System.dll'
+            '/r:System.Core.dll'
             '/r:System.IO.Compression.dll'
             '/r:System.IO.Compression.FileSystem.dll'
             "`"$srcCopy`""

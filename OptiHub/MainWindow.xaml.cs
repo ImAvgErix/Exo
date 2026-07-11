@@ -3,23 +3,29 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.Web.WebView2.Core;
 using OptiHub.Helpers;
 using OptiHub.Services;
+using OptiHub.Views;
 using Windows.Graphics;
 using WinRT.Interop;
 
 namespace OptiHub;
 
 /// <summary>
-/// Minimal WinUI 3 host. Product UI is WebView2 (Assets/Web).
+/// WinUI host: prefers WebView2 SPA; falls back to XAML pages if Runtime fails.
 /// </summary>
 public sealed partial class MainWindow : Window
 {
+    private enum ShellMode { Home, Discord, Steam, Nvidia, Settings }
+
     private readonly CancellationTokenSource _lifetimeCts = new();
     private readonly SemaphoreSlim _initGate = new(1, 1);
     private WebUiBridge? _bridge;
     private bool _webReady;
+    private bool _useXamlFallback;
+    private ShellMode _mode = ShellMode.Home;
 
     public MainWindow()
     {
@@ -42,12 +48,12 @@ public sealed partial class MainWindow : Window
                 ApplyFixedWindowChrome();
         };
 
-        WebView.Loaded += async (_, _) => await InitWebViewAsync();
+        WebView.Loaded += async (_, _) => await TryInitWebViewAsync();
         RootGrid.Loaded += async (_, _) =>
         {
             UpdateCaptionInset();
             ApplyFixedWindowChrome();
-            await InitWebViewAsync();
+            await TryInitWebViewAsync();
         };
         RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
@@ -57,10 +63,7 @@ public sealed partial class MainWindow : Window
             _lifetimeCts.Cancel();
             App.Services.Settings.Flush();
             App.MainAppWindow = null;
-            try
-            {
-                NativeWindowHelper.RestoreWindowProcedure(WindowNative.GetWindowHandle(this));
-            }
+            try { NativeWindowHelper.RestoreWindowProcedure(WindowNative.GetWindowHandle(this)); }
             catch { /* best-effort */ }
         };
 
@@ -68,79 +71,119 @@ public sealed partial class MainWindow : Window
         _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
     }
 
-    private async Task InitWebViewAsync()
+    private async Task TryInitWebViewAsync()
     {
-        if (_webReady) return;
-        if (!await _initGate.WaitAsync(0)) return; // another init in flight
+        if (_webReady || _useXamlFallback) return;
+        if (!await _initGate.WaitAsync(0)) return;
 
         try
         {
-            if (_webReady) return;
+            if (_webReady || _useXamlFallback) return;
             SetHostStatus("Starting WebView2…");
 
-            // WebView2 needs a real HWND — wait until it is in the live tree.
-            for (var i = 0; i < 80 && (WebView.XamlRoot is null || !WebView.IsLoaded); i++)
+            for (var i = 0; i < 60 && (WebView.XamlRoot is null || !WebView.IsLoaded); i++)
                 await Task.Delay(50);
-
-            if (WebView.XamlRoot is null)
-                throw new InvalidOperationException("WebView is not in the visual tree yet (XamlRoot null).");
 
             var userData = Path.Combine(PathHelper.AppDataDir, "WebView2");
             Directory.CreateDirectory(userData);
 
-            // Capture init result via the WinUI event (more reliable than reading CoreWebView2 immediately).
+            var browserFolder = FindWebView2BrowserFolder();
+            LogWeb("Browser folder: " + (browserFolder ?? "(auto)"));
+            LogWeb("User data: " + userData);
+
+            // Env vars help the native loader when Create* APIs are picky.
+            if (!string.IsNullOrWhiteSpace(browserFolder))
+                Environment.SetEnvironmentVariable("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", browserFolder);
+            Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", userData);
+
             var initTcs = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
             void OnInitialized(WebView2 sender, CoreWebView2InitializedEventArgs args)
             {
-                try
-                {
-                    initTcs.TrySetResult(args.Exception);
-                }
-                catch (Exception ex)
-                {
-                    initTcs.TrySetException(ex);
-                }
+                initTcs.TrySetResult(args.Exception);
             }
 
             WebView.CoreWebView2Initialized += OnInitialized;
+            Exception? lastError = null;
+
             try
             {
-                // WinAppSDK 2.2: CreateWithOptionsAsync(browserFolder, userDataFolder, options)
-                // Explicit user-data folder under %LocalAppData% is required for reliable init.
-                CoreWebView2Environment? env = null;
-                try
+                // Attempt matrix: explicit browser path → auto browser → default Ensure.
+                var attempts = new List<Func<Task>>
                 {
-                    env = await CoreWebView2Environment.CreateWithOptionsAsync(
-                        null,
-                        userData,
-                        null);
-                }
-                catch (Exception envEx)
-                {
-                    LogWeb("CreateWithOptionsAsync failed: " + envEx);
-                    // Fallback: default environment
-                    try { env = await CoreWebView2Environment.CreateAsync(); }
-                    catch (Exception envEx2)
+                    async () =>
                     {
-                        throw new InvalidOperationException(
-                            "Could not create WebView2 environment. " +
-                            "Install/repair the Evergreen WebView2 Runtime.\n\n" + envEx2.Message,
-                            envEx2);
+                        if (browserFolder is null)
+                            throw new InvalidOperationException("No Edge WebView runtime folder found.");
+                        var env = await CoreWebView2Environment.CreateWithOptionsAsync(
+                            browserFolder, userData, null);
+                        await WebView.EnsureCoreWebView2Async(env);
+                    },
+                    async () =>
+                    {
+                        var env = await CoreWebView2Environment.CreateWithOptionsAsync(
+                            string.Empty, userData, null);
+                        await WebView.EnsureCoreWebView2Async(env);
+                    },
+                    async () =>
+                    {
+                        var env = await CoreWebView2Environment.CreateAsync();
+                        await WebView.EnsureCoreWebView2Async(env);
+                    },
+                    async () => { await WebView.EnsureCoreWebView2Async(); }
+                };
+
+                var ok = false;
+                foreach (var attempt in attempts)
+                {
+                    try
+                    {
+                        // Reset TCS between attempts if needed
+                        if (initTcs.Task.IsCompleted)
+                            initTcs = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                        await attempt();
+                        var done = await Task.WhenAny(initTcs.Task, Task.Delay(12000));
+                        if (done == initTcs.Task)
+                        {
+                            var ex = await initTcs.Task;
+                            if (ex is not null)
+                            {
+                                lastError = ex;
+                                LogWeb("Init event exception: " + ex);
+                                continue;
+                            }
+                        }
+
+                        if (WebView.CoreWebView2 is not null)
+                        {
+                            ok = true;
+                            break;
+                        }
+
+                        // Poll briefly
+                        for (var i = 0; i < 20 && WebView.CoreWebView2 is null; i++)
+                            await Task.Delay(50);
+
+                        if (WebView.CoreWebView2 is not null)
+                        {
+                            ok = true;
+                            break;
+                        }
+
+                        lastError = new InvalidOperationException("CoreWebView2 still null after Ensure.");
+                        LogWeb(lastError.Message);
+                    }
+                    catch (Exception ex)
+                    {
+                        lastError = ex;
+                        LogWeb("Attempt failed: " + ex);
                     }
                 }
 
-                if (env is not null)
-                    await WebView.EnsureCoreWebView2Async(env);
-                else
-                    await WebView.EnsureCoreWebView2Async();
-
-                // Wait for the initialized event (or short timeout, then re-check property).
-                var finished = await Task.WhenAny(initTcs.Task, Task.Delay(15000));
-                if (finished == initTcs.Task)
+                if (!ok || WebView.CoreWebView2 is null)
                 {
-                    var initEx = await initTcs.Task;
-                    if (initEx is not null)
-                        throw new InvalidOperationException("WebView2 initialization failed: " + initEx.Message, initEx);
+                    throw lastError ?? new InvalidOperationException(
+                        "WebView2 could not start (CoreWebView2 null).");
                 }
             }
             finally
@@ -148,38 +191,16 @@ public sealed partial class MainWindow : Window
                 WebView.CoreWebView2Initialized -= OnInitialized;
             }
 
-            // Give the control a beat to publish CoreWebView2 after the event.
-            CoreWebView2? core = null;
-            for (var i = 0; i < 40; i++)
-            {
-                core = WebView.CoreWebView2;
-                if (core is not null) break;
-                await Task.Delay(50);
-            }
-
-            if (core is null)
-            {
-                throw new InvalidOperationException(
-                    "WebView2 Runtime did not attach (CoreWebView2 stayed null).\n\n" +
-                    "Fix:\n" +
-                    "1) Install/repair Evergreen WebView2 Runtime (x64)\n" +
-                    "   https://go.microsoft.com/fwlink/p/?LinkId=2124703\n" +
-                    "2) Reboot once after install\n" +
-                    "3) Delete %LocalAppData%\\OptiHub\\WebView2 and reopen OptiHub\n\n" +
-                    "Runtime looks for Edge WebView under Program Files (x86)\\Microsoft\\EdgeWebView.");
-            }
-
+            var core = WebView.CoreWebView2!;
             core.Settings.AreDefaultContextMenusEnabled = false;
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.IsZoomControlEnabled = false;
-
             WebView.DefaultBackgroundColor = Windows.UI.Color.FromArgb(255, 0, 0, 0);
 
             var webRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Assets", "Web"));
             if (!Directory.Exists(webRoot))
                 throw new DirectoryNotFoundException("Web UI assets missing: " + webRoot);
-
             var indexPath = Path.Combine(webRoot, "index.html");
             if (!File.Exists(indexPath))
                 throw new FileNotFoundException("index.html missing", indexPath);
@@ -187,14 +208,9 @@ public sealed partial class MainWindow : Window
             try
             {
                 core.SetVirtualHostNameToFolderMapping(
-                    "app.optihub.local",
-                    webRoot,
-                    CoreWebView2HostResourceAccessKind.Allow);
+                    "app.optihub.local", webRoot, CoreWebView2HostResourceAccessKind.Allow);
             }
-            catch (Exception mapEx)
-            {
-                LogWeb("Virtual host map failed: " + mapEx);
-            }
+            catch (Exception mapEx) { LogWeb("map: " + mapEx.Message); }
 
             _bridge = new WebUiBridge(
                 App.Services,
@@ -202,8 +218,7 @@ public sealed partial class MainWindow : Window
                 this,
                 async json =>
                 {
-                    try { WebView.CoreWebView2?.PostWebMessageAsJson(json); }
-                    catch { /* ignore */ }
+                    try { WebView.CoreWebView2?.PostWebMessageAsJson(json); } catch { }
                     await Task.CompletedTask;
                 });
 
@@ -211,61 +226,52 @@ public sealed partial class MainWindow : Window
             {
                 try
                 {
-                    var raw = args.TryGetWebMessageAsString();
-                    if (string.IsNullOrWhiteSpace(raw))
-                        raw = args.WebMessageAsJson;
+                    var raw = args.TryGetWebMessageAsString() ?? args.WebMessageAsJson;
                     if (string.IsNullOrWhiteSpace(raw)) return;
-
                     if (raw.Length >= 2 && raw[0] == '"' && raw[^1] == '"')
                     {
                         try { raw = System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? raw; }
-                        catch { /* keep */ }
+                        catch { }
                     }
-
                     if (_bridge is not null)
                         await _bridge.HandleMessageAsync(raw);
                 }
-                catch (Exception ex)
-                {
-                    LogWeb("bridge: " + ex);
-                }
+                catch (Exception ex) { LogWeb("bridge: " + ex.Message); }
             };
 
             core.NavigationCompleted += async (_, args) =>
             {
                 if (!args.IsSuccess)
                 {
-                    SetHostStatus("Retrying UI load…");
                     try { await LoadWebUiDocumentAsync(core, webRoot, indexPath); }
-                    catch (Exception ex) { SetHostStatus("Load failed: " + ex.Message); }
+                    catch (Exception ex) { LogWeb("nav retry: " + ex.Message); }
                     return;
                 }
-
                 SetHostStatus(string.Empty);
                 try
                 {
                     if (_bridge is not null)
                         await _bridge.PushThemeAsync(App.Services.Settings.Current.Theme);
                 }
-                catch { /* best-effort */ }
-            };
-
-            core.ProcessFailed += (_, args) =>
-            {
-                SetHostStatus("WebView process failed: " + args.ProcessFailedKind);
-                _webReady = false;
+                catch { }
             };
 
             SetHostStatus("Loading UI…");
             await LoadWebUiDocumentAsync(core, webRoot, indexPath);
+
+            WebView.Visibility = Visibility.Visible;
+            ContentFrame.Visibility = Visibility.Collapsed;
+            SettingsButton.Visibility = Visibility.Collapsed; // SPA has its own
+            BackButton.Visibility = Visibility.Collapsed;
             _webReady = true;
             SetHostStatus(string.Empty);
+            LogWeb("WebView2 ready");
         }
         catch (Exception ex)
         {
-            LogWeb(ex.ToString());
-            SetHostStatus("WebView2 failed");
-            await ShowFatalWebViewErrorAsync(ex);
+            LogWeb("FATAL: " + ex);
+            SetHostStatus("Using classic UI");
+            EnableXamlFallback(ex.Message);
         }
         finally
         {
@@ -273,21 +279,82 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private static async Task LoadWebUiDocumentAsync(
-        CoreWebView2 core,
-        string webRoot,
-        string indexPath)
+    private void EnableXamlFallback(string reason)
+    {
+        _useXamlFallback = true;
+        try
+        {
+            WebView.Visibility = Visibility.Collapsed;
+            ContentFrame.Visibility = Visibility.Visible;
+            SettingsButton.Visibility = Visibility.Visible;
+            LogWeb("XAML fallback enabled: " + reason);
+            NavigateHome(suppressTransition: true);
+            SetHostStatus(string.Empty);
+        }
+        catch (Exception ex)
+        {
+            LogWeb("Fallback failed: " + ex);
+            SetHostStatus("UI failed — see logs");
+        }
+    }
+
+    private static string? FindWebView2BrowserFolder()
+    {
+        // Prefer registry Evergreen client location, then Program Files scan.
+        try
+        {
+            foreach (var keyPath in new[]
+                     {
+                         @"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+                         @"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+                     })
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(keyPath);
+                var loc = key?.GetValue("location") as string;
+                var pv = key?.GetValue("pv") as string;
+                if (!string.IsNullOrWhiteSpace(loc) && !string.IsNullOrWhiteSpace(pv))
+                {
+                    var dir = Path.Combine(loc, pv);
+                    if (File.Exists(Path.Combine(dir, "msedgewebview2.exe")))
+                        return dir;
+                }
+            }
+        }
+        catch { /* ignore */ }
+
+        foreach (var root in new[]
+                 {
+                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                         "Microsoft", "EdgeWebView", "Application"),
+                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                         "Microsoft", "EdgeWebView", "Application")
+                 })
+        {
+            if (!Directory.Exists(root)) continue;
+            try
+            {
+                foreach (var dir in Directory.GetDirectories(root).OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase))
+                {
+                    if (File.Exists(Path.Combine(dir, "msedgewebview2.exe")))
+                        return dir;
+                }
+            }
+            catch { /* ignore */ }
+        }
+
+        return null;
+    }
+
+    private static async Task LoadWebUiDocumentAsync(CoreWebView2 core, string webRoot, string indexPath)
     {
         var html = await File.ReadAllTextAsync(indexPath);
         var cssPath = Path.Combine(webRoot, "app.css");
         var jsPath = Path.Combine(webRoot, "app.js");
         var css = File.Exists(cssPath) ? await File.ReadAllTextAsync(cssPath) : "";
         var js = File.Exists(jsPath) ? await File.ReadAllTextAsync(jsPath) : "";
-
         var rootUri = new Uri(webRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar);
         var logosUri = new Uri(rootUri, "logos/").AbsoluteUri;
 
-        // Inline CSS/JS — NavigateToString + external file:// scripts often block.
         html = html
             .Replace(
                 "<link rel=\"stylesheet\" href=\"app.css\" />",
@@ -300,44 +367,69 @@ public sealed partial class MainWindow : Window
 
         try { core.Navigate("https://app.optihub.local/index.html"); }
         catch { /* optional */ }
-
-        await Task.Delay(30);
+        await Task.Delay(20);
         core.NavigateToString(html);
     }
 
-    private async Task ShowFatalWebViewErrorAsync(Exception ex)
+    // --- XAML fallback navigation (original pages) ---
+
+    public void NavigateHome(bool suppressTransition = false)
     {
-        var msg =
-            "WebView2 failed to start.\n\n" +
-            ex.Message +
-            "\n\n1) Install Evergreen WebView2 Runtime (x64):\n" +
-            "   https://go.microsoft.com/fwlink/p/?LinkId=2124703\n" +
-            "2) Delete folder: %LocalAppData%\\OptiHub\\WebView2\n" +
-            "3) Reopen OptiHub\n\n" +
-            "Log: %LocalAppData%\\OptiHub\\logs\\webview-init.log";
+        if (!_useXamlFallback && _webReady) return;
+        Navigate(ShellMode.Home, typeof(DashboardPage),
+            suppressTransition
+                ? new SuppressNavigationTransitionInfo()
+                : new ContinuumNavigationTransitionInfo());
+    }
 
-        await DispatcherQueue.EnqueueAsync(() =>
+    public void NavigateToDiscord()
+    {
+        if (!_useXamlFallback && _webReady) return;
+        Navigate(ShellMode.Discord, typeof(DiscordOptimizerPage), new DrillInNavigationTransitionInfo());
+    }
+
+    public void NavigateToSteam()
+    {
+        if (!_useXamlFallback && _webReady) return;
+        Navigate(ShellMode.Steam, typeof(SteamOptimizerPage), new DrillInNavigationTransitionInfo());
+    }
+
+    public void NavigateToNvidia()
+    {
+        if (!_useXamlFallback && _webReady) return;
+        Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), new DrillInNavigationTransitionInfo());
+    }
+
+    private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
+    {
+        _mode = mode;
+        ContentFrame.Visibility = Visibility.Visible;
+        if (ContentFrame.Navigate(pageType, null, transition))
+            ApplyChrome(mode);
+    }
+
+    private void ApplyChrome(ShellMode mode)
+    {
+        if (!_useXamlFallback) return;
+        var home = mode == ShellMode.Home;
+        BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
+        SettingsButton.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
+        AppTitleText.Text = mode switch
         {
-            try
-            {
-                if (RootGrid.Children.Contains(WebView))
-                    RootGrid.Children.Remove(WebView);
-            }
-            catch { /* ignore */ }
+            ShellMode.Discord => "Discord",
+            ShellMode.Steam => "Steam",
+            ShellMode.Nvidia => "NVIDIA",
+            ShellMode.Settings => "Settings",
+            _ => string.Empty
+        };
+    }
 
-            RootGrid.Children.Add(new ScrollViewer
-            {
-                Margin = new Thickness(28, 48, 28, 28),
-                Content = new TextBlock
-                {
-                    Text = msg,
-                    TextWrapping = TextWrapping.WrapWholeWords,
-                    Foreground = new SolidColorBrush(Colors.White),
-                    FontSize = 14,
-                    IsTextSelectionEnabled = true
-                }
-            });
-        });
+    private void BackButton_Click(object sender, RoutedEventArgs e) => NavigateHome();
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_useXamlFallback && _webReady) return;
+        Navigate(ShellMode.Settings, typeof(SettingsPage), new DrillInNavigationTransitionInfo());
     }
 
     private void SetHostStatus(string text)
@@ -349,13 +441,12 @@ public sealed partial class MainWindow : Window
                 DispatcherQueue.TryEnqueue(() => SetHostStatus(text));
                 return;
             }
-            if (HostStatus is null) return;
             HostStatus.Text = text ?? string.Empty;
             HostStatus.Visibility = string.IsNullOrWhiteSpace(text)
                 ? Visibility.Collapsed
                 : Visibility.Visible;
         }
-        catch { /* ignore */ }
+        catch { }
     }
 
     private static void LogWeb(string text)
@@ -366,7 +457,7 @@ public sealed partial class MainWindow : Window
                 Path.Combine(PathHelper.LogsDir, "webview-init.log"),
                 $"[{DateTime.UtcNow:O}] {text}\n");
         }
-        catch { /* ignore */ }
+        catch { }
     }
 
     private void ApplyFixedWindowChrome()
@@ -379,13 +470,11 @@ public sealed partial class MainWindow : Window
             if (presenter.State == OverlappedPresenterState.Maximized)
                 presenter.Restore();
         }
-
         try
         {
-            var hwnd = WindowNative.GetWindowHandle(this);
-            NativeWindowHelper.DisableMaximizeViaSystemMenu(hwnd);
+            NativeWindowHelper.DisableMaximizeViaSystemMenu(WindowNative.GetWindowHandle(this));
         }
-        catch { /* best-effort */ }
+        catch { }
     }
 
     private void UpdateCaptionInset()
@@ -396,10 +485,7 @@ public sealed partial class MainWindow : Window
             if (right < 100) right = 138;
             CaptionSpacer.Width = new GridLength(right);
         }
-        catch
-        {
-            CaptionSpacer.Width = new GridLength(138);
-        }
+        catch { CaptionSpacer.Width = new GridLength(138); }
     }
 
     private void ApplyShellChrome()
@@ -410,13 +496,6 @@ public sealed partial class MainWindow : Window
             : ColorHelper.FromArgb(255, 243, 237, 227);
         RootGrid.Background = new SolidColorBrush(bg);
         TitleBarHost.Background = new SolidColorBrush(bg);
-        try
-        {
-            WebView.DefaultBackgroundColor = dark
-                ? Windows.UI.Color.FromArgb(255, 0, 0, 0)
-                : Windows.UI.Color.FromArgb(255, 243, 237, 227);
-        }
-        catch { /* not ready */ }
         App.Services.Theme.Apply();
     }
 
@@ -430,11 +509,11 @@ public sealed partial class MainWindow : Window
             var display = DisplayArea.GetFromWindowId(id, DisplayAreaFallback.Nearest);
             if (display is null) return;
             var work = display.WorkArea;
-            var x = work.X + (work.Width - appWindow.Size.Width) / 2;
-            var y = work.Y + (work.Height - appWindow.Size.Height) / 2;
-            appWindow.Move(new PointInt32(x, y));
+            appWindow.Move(new PointInt32(
+                work.X + (work.Width - appWindow.Size.Width) / 2,
+                work.Y + (work.Height - appWindow.Size.Height) / 2));
         }
-        catch { /* best-effort */ }
+        catch { }
     }
 
     private void TrySetWindowIcon()
@@ -442,16 +521,10 @@ public sealed partial class MainWindow : Window
         try
         {
             var path = Path.Combine(AppContext.BaseDirectory, "Assets", "OptiHub.ico");
-            if (File.Exists(path))
-                AppWindow.SetIcon(path);
+            if (File.Exists(path)) AppWindow.SetIcon(path);
         }
-        catch { /* best-effort */ }
+        catch { }
     }
-
-    public void NavigateHome(bool suppressTransition = false) { }
-    public void NavigateToDiscord() { }
-    public void NavigateToSteam() { }
-    public void NavigateToNvidia() { }
 
     private async Task MaybeAutoUpdateAsync(CancellationToken ct)
     {
@@ -461,13 +534,10 @@ public sealed partial class MainWindow : Window
             await Task.Delay(2000, ct);
             var appCheck = await App.Services.Updater.CheckAppUpdateAsync(ct: ct);
             if (!appCheck.UpdateAvailable || RootGrid.XamlRoot is null) return;
-
             var dialog = new ContentDialog
             {
                 Title = "OptiHub update available",
-                Content =
-                    $"Version {appCheck.RemoteVersion} is available.\n" +
-                    $"You have {appCheck.LocalVersion}.\n\nInstall now?",
+                Content = $"Version {appCheck.RemoteVersion} is available (you have {appCheck.LocalVersion}). Install now?",
                 PrimaryButtonText = "Install",
                 CloseButtonText = "Later",
                 DefaultButton = ContentDialogButton.Primary,
@@ -482,30 +552,6 @@ public sealed partial class MainWindow : Window
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-        catch { /* ignore */ }
-    }
-}
-
-internal static class DispatcherQueueExtensions
-{
-    public static Task EnqueueAsync(this Microsoft.UI.Dispatching.DispatcherQueue queue, Action action)
-    {
-        var tcs = new TaskCompletionSource();
-        if (!queue.TryEnqueue(() =>
-            {
-                try
-                {
-                    action();
-                    tcs.TrySetResult();
-                }
-                catch (Exception ex)
-                {
-                    tcs.TrySetException(ex);
-                }
-            }))
-        {
-            tcs.TrySetException(new InvalidOperationException("DispatcherQueue unavailable"));
-        }
-        return tcs.Task;
+        catch { }
     }
 }
