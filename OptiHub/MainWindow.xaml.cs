@@ -493,7 +493,7 @@ public sealed partial class MainWindow : Window
         var dark = RootGrid.ActualTheme != ElementTheme.Light;
         var bg = dark
             ? ColorHelper.FromArgb(255, 0, 0, 0)
-            : ColorHelper.FromArgb(255, 243, 237, 227);
+            : ColorHelper.FromArgb(255, 240, 233, 220);
         RootGrid.Background = new SolidColorBrush(bg);
         TitleBarHost.Background = new SolidColorBrush(bg);
         App.Services.Theme.Apply();

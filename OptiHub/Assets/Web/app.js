@@ -1,4 +1,4 @@
-/* OptiHub WebView SPA — host bridge via chrome.webview */
+/* OptiHub WebView SPA */
 (() => {
   const state = {
     theme: "dark",
@@ -9,6 +9,7 @@
     route: "home",
     kit: null,
     busy: false,
+    navigating: false,
   };
 
   const view = document.getElementById("view");
@@ -21,6 +22,7 @@
 
   let reqId = 0;
   const pending = new Map();
+  let toastTimer;
 
   function post(method, params = {}) {
     return new Promise((resolve, reject) => {
@@ -30,7 +32,9 @@
       if (window.chrome?.webview) {
         window.chrome.webview.postMessage(msg);
       } else {
+        pending.delete(id);
         reject(new Error("WebView host bridge unavailable"));
+        return;
       }
       setTimeout(() => {
         if (pending.has(id)) {
@@ -48,16 +52,8 @@
         try { data = JSON.parse(data); } catch { return; }
       }
       if (!data) return;
-
-      if (data.type === "progress") {
-        onProgress(data);
-        return;
-      }
-      if (data.type === "theme") {
-        applyTheme(data.theme);
-        return;
-      }
-
+      if (data.type === "progress") { onProgress(data); return; }
+      if (data.type === "theme") { applyTheme(data.theme); return; }
       if (data.id && pending.has(data.id)) {
         const p = pending.get(data.id);
         pending.delete(data.id);
@@ -76,9 +72,10 @@
     toastEl.textContent = msg;
     toastEl.classList.remove("hidden");
     requestAnimationFrame(() => toastEl.classList.add("show"));
-    setTimeout(() => {
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
       toastEl.classList.remove("show");
-      setTimeout(() => toastEl.classList.add("hidden"), 300);
+      setTimeout(() => toastEl.classList.add("hidden"), 320);
     }, 2800);
   }
 
@@ -89,22 +86,23 @@
       modal.classList.remove("hidden");
       const ok = document.getElementById("modalOk");
       const cancel = document.getElementById("modalCancel");
+      const backdrop = document.getElementById("modalBackdrop");
       const done = (v) => {
         modal.classList.add("hidden");
-        ok.onclick = null;
-        cancel.onclick = null;
+        ok.onclick = cancel.onclick = backdrop.onclick = null;
         resolve(v);
       };
       ok.onclick = () => done(true);
       cancel.onclick = () => done(false);
+      backdrop.onclick = () => done(false);
     });
   }
 
   function setChrome(route) {
     const home = route === "home";
-    const settings = route === "settings";
-    btnBack.classList.toggle("hidden", home);
+    // Settings always top-left on home; back on subpages (settings top-left hidden when not home)
     btnSettings.classList.toggle("hidden", !home);
+    btnBack.classList.toggle("hidden", home);
 
     const map = {
       discord: { title: "Discord", logo: "logos/discord.png" },
@@ -116,7 +114,11 @@
     const m = map[route] || map.home;
     ctxTitle.textContent = m.title;
     if (m.logo) {
-      ctxLogo.src = m.logo;
+      let src = m.logo;
+      if (window.__OPTIHUB_LOGOS__) {
+        src = window.__OPTIHUB_LOGOS__ + m.logo.replace(/^logos\//, "");
+      }
+      ctxLogo.src = src;
       ctxLogo.classList.remove("hidden");
     } else {
       ctxLogo.classList.add("hidden");
@@ -124,49 +126,65 @@
     }
   }
 
-  function navigate(route, opts = {}) {
+  async function navigate(route, opts = {}) {
+    if (state.navigating) return;
+    state.navigating = true;
+    const prev = view.querySelector(".page");
+    if (prev) {
+      prev.classList.add("exit");
+      await wait(180);
+    }
     state.route = route;
     setChrome(route);
-    if (route === "home") return renderHome();
-    if (route === "settings") return renderSettings();
-    if (route === "discord" || route === "steam" || route === "nvidia")
-      return renderOptimizer(route, opts);
+    try {
+      if (route === "home") await renderHome();
+      else if (route === "settings") await renderSettings();
+      else if (route === "discord" || route === "steam" || route === "nvidia")
+        await renderOptimizer(route, opts);
+    } finally {
+      state.navigating = false;
+      view.focus({ preventScroll: true });
+    }
+  }
+
+  function wait(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+  function logoUrl(rel) {
+    if (!rel) return "";
+    if (/^https?:|^file:|^data:/i.test(rel)) return rel;
+    if (window.__OPTIHUB_LOGOS__) {
+      return window.__OPTIHUB_LOGOS__ + String(rel).replace(/^logos\//, "");
+    }
+    return rel;
   }
 
   async function renderHome() {
-    view.innerHTML = `<div class="page"><div class="loading">Loading…</div></div>`;
+    view.innerHTML = `<div class="page"><div class="loading">Loading optimizers…</div></div>`;
     let cards = [];
     try {
       const boot = await post("getBootstrap");
-      applyTheme(boot.theme);
-      state.appVersion = boot.appVersion;
-      state.kitVersion = boot.kitVersion;
-      state.autoUpdate = !!boot.autoUpdate;
-      state.pwsh = boot.pwsh;
+      hydrateBoot(boot);
       cards = boot.cards || [];
     } catch (e) {
       view.innerHTML = `<div class="page"><div class="panel result bad">${esc(e.message)}</div></div>`;
       return;
     }
 
-    const logoBase = window.__OPTIHUB_LOGOS__ || "";
     const html = cards.map((c) => {
       const soon = c.comingSoon;
-      let logo = c.logo || "";
-      if (logoBase && logo && !/^https?:|^file:|^data:/i.test(logo)) {
-        logo = logoBase + logo.replace(/^logos\//, "");
-      }
       return `<button type="button" class="card-btn" data-id="${esc(c.id)}" ${soon ? "disabled" : ""}>
-        <img src="${esc(logo)}" alt="" draggable="false" />
-        <span>${esc(c.title)}</span>
-        ${soon ? `<span class="soon">Coming soon</span>` : ""}
+        <div class="logo-wrap"><img src="${esc(logoUrl(c.logo))}" alt="" draggable="false" /></div>
+        <span class="label">${esc(c.title)}</span>
+        ${soon ? `<span class="soon">Soon</span>` : ""}
       </button>`;
     }).join("");
 
     view.innerHTML = `
       <div class="page">
         <div class="hero">
-          <h1>Maximum performance. No compromise.</h1>
+          <h1>Maximum performance.<br/>No compromise.</h1>
           <p>Pick a target. Live status is verified when you open it.</p>
         </div>
         <div class="cards">${html}</div>
@@ -180,83 +198,114 @@
     });
   }
 
+  function hydrateBoot(boot) {
+    applyTheme(boot.theme);
+    state.appVersion = boot.appVersion;
+    state.kitVersion = boot.kitVersion;
+    state.autoUpdate = !!boot.autoUpdate;
+    state.pwsh = boot.pwsh;
+  }
+
   async function renderSettings() {
-    view.innerHTML = `<div class="page settings-page"><div class="loading">Loading…</div></div>`;
+    view.innerHTML = `<div class="page"><div class="loading">Loading settings…</div></div>`;
     try {
       const boot = await post("getBootstrap");
-      applyTheme(boot.theme);
-      state.appVersion = boot.appVersion;
-      state.kitVersion = boot.kitVersion;
-      state.autoUpdate = !!boot.autoUpdate;
-      state.pwsh = boot.pwsh;
+      hydrateBoot(boot);
     } catch (e) {
       view.innerHTML = `<div class="page"><div class="panel result bad">${esc(e.message)}</div></div>`;
       return;
     }
 
     const dark = state.theme === "dark";
+    const kits = String(state.kitVersion || "").split("·").map((s) => s.trim()).filter(Boolean);
+
     view.innerHTML = `
-      <div class="page settings-page">
-        <h2>Settings</h2>
-        <p class="sub">Theme, updates, and support — everything in one place.</p>
+      <div class="page">
+        <div class="settings-head">
+          <h1>Settings</h1>
+          <p>Theme, updates, and support — same language as the rest of OptiHub.</p>
+        </div>
+
         <div class="grid-2">
-          <div class="panel">
-            <div class="section-label">APPEARANCE</div>
-            <p style="color:var(--muted);font-size:12px">AMOLED black or warm cream for readability.</p>
-            <div class="theme-row">
-              <label><input type="radio" name="theme" value="dark" ${dark ? "checked" : ""}/> Dark</label>
-              <label><input type="radio" name="theme" value="light" ${!dark ? "checked" : ""}/> Light</label>
+          <div class="panel stack">
+            <div class="section-label">Appearance</div>
+            <p class="section-hint">AMOLED black or warm cream. Switches instantly.</p>
+            <div class="theme-pills">
+              <button type="button" class="theme-pill ${dark ? "on" : ""}" data-theme="dark">
+                <span class="swatch dark"></span> Dark
+              </button>
+              <button type="button" class="theme-pill ${!dark ? "on" : ""}" data-theme="light">
+                <span class="swatch light"></span> Light
+              </button>
             </div>
           </div>
-          <div class="panel">
-            <div class="section-label">SUPPORT</div>
-            <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Logs for Discord, Steam, and NVIDIA applies.</p>
-            <button type="button" class="btn quiet" id="btnLogs">Open logs folder</button>
-            <p style="margin-top:12px;font-size:11px;color:var(--muted)">PowerShell: ${esc(state.pwsh || "not found")}</p>
+
+          <div class="panel stack">
+            <div class="section-label">Support</div>
+            <p class="section-hint">Logs for Discord, Steam, and NVIDIA applies.</p>
+            <button type="button" class="btn quiet block" id="btnLogs" style="margin-top:auto">Open logs folder</button>
+            <div class="pwsh-line">${esc(state.pwsh || "PowerShell 7 not detected")}</div>
           </div>
         </div>
-        <div class="panel" style="margin-top:16px">
-          <div class="section-label">UPDATES</div>
-          <div class="version-hero" style="margin:10px 0 14px">
+
+        <div class="panel wide">
+          <div class="section-label">Updates</div>
+          <p class="section-hint" style="margin-bottom:8px">One release ships the app and matching optimizers.</p>
+          <div class="version-block">
             <div>
-              <div style="font-size:11px;color:var(--muted);letter-spacing:.06em">INSTALLED</div>
+              <div class="section-label" style="margin:0">Installed</div>
               <div class="num">${esc(state.appVersion)}</div>
             </div>
-            <div class="kits">
-              <div>Ships with this build</div>
-              <div style="font-weight:600;margin-top:4px">${esc(state.kitVersion)}</div>
-              <div style="margin-top:4px;opacity:.75">Discord · Steam · NVIDIA</div>
+            <div class="meta">
+              <div><strong>Ships with this build</strong></div>
+              <div class="kit-chips">
+                ${kits.map((k) => `<span class="chip">${esc(k)}</span>`).join("") || `<span class="chip">${esc(state.kitVersion)}</span>`}
+              </div>
+              <div style="margin-top:8px;color:var(--muted);font-size:12px">Discord · Steam · NVIDIA</div>
             </div>
           </div>
-          <div class="toggle">
+          <div class="toggle-row">
             <span>Check for updates on launch</span>
-            <input type="checkbox" id="autoUp" ${state.autoUpdate ? "checked" : ""} />
+            <label class="switch">
+              <input type="checkbox" id="autoUp" ${state.autoUpdate ? "checked" : ""} />
+              <span class="track"><span class="thumb"></span></span>
+            </label>
           </div>
-          <button type="button" class="btn primary" id="btnUpdate">Check for updates</button>
-          <div class="status-well" id="updateStatus">Ready.</div>
+          <button type="button" class="btn primary block" id="btnUpdate">Check for updates</button>
+          <div class="status-well" id="updateStatus">You're set. Check anytime for a newer OptiHub.</div>
         </div>
       </div>`;
 
-    view.querySelectorAll('input[name="theme"]').forEach((r) => {
-      r.addEventListener("change", async () => {
-        const t = r.value === "light" ? "Light" : "Dark";
+    view.querySelectorAll(".theme-pill").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const t = el.getAttribute("data-theme") === "light" ? "Light" : "Dark";
         applyTheme(t);
+        view.querySelectorAll(".theme-pill").forEach((p) => {
+          p.classList.toggle("on", p.getAttribute("data-theme") === (t === "Light" ? "light" : "dark"));
+        });
         try { await post("setTheme", { theme: t }); } catch (e) { toast(e.message); }
       });
     });
+
     document.getElementById("btnLogs").onclick = async () => {
-      try { await post("openLogs"); } catch (e) { toast(e.message); }
+      try { await post("openLogs"); toast("Opened logs folder"); }
+      catch (e) { toast(e.message); }
     };
+
     document.getElementById("autoUp").onchange = async (e) => {
-      try { await post("setAutoUpdate", { enabled: e.target.checked }); } catch (err) { toast(err.message); }
+      try { await post("setAutoUpdate", { enabled: e.target.checked }); }
+      catch (err) { toast(err.message); }
     };
+
     document.getElementById("btnUpdate").onclick = async () => {
       const status = document.getElementById("updateStatus");
       const btn = document.getElementById("btnUpdate");
       btn.disabled = true;
-      status.textContent = "Checking…";
+      status.classList.add("busy");
+      status.textContent = "Checking GitHub for a newer OptiHub…";
       try {
         const r = await post("checkUpdates");
+        status.classList.remove("busy");
         status.textContent = r.message || "Done.";
         if (r.updateAvailable) {
           const ok = await confirmModal(
@@ -264,14 +313,17 @@
             `Version ${r.remoteVersion} is available (you have ${r.localVersion}).\n\nThis release includes matching optimizers. OptiHub will close, install, and reopen.`
           );
           if (ok) {
+            status.classList.add("busy");
             status.textContent = "Installing…";
             const inst = await post("installUpdate");
+            status.classList.remove("busy");
             status.textContent = inst.message || "Install started.";
           } else {
             status.textContent = `v${r.remoteVersion} available — install skipped.`;
           }
         }
       } catch (e) {
+        status.classList.remove("busy");
         status.textContent = e.message;
       } finally {
         btn.disabled = false;
@@ -285,12 +337,14 @@
     view.innerHTML = `
       <div class="page" id="optPage">
         <div class="opt-header">
-          <h2>${titles[kit]}</h2>
-          <p id="optStatus">Checking status…</p>
+          <h1>${titles[kit]}</h1>
+          <div class="status-line">
+            <span class="pill" id="statusPill"><span class="dot"></span><span id="statusPillText">Checking…</span></span>
+          </div>
+          <p class="opt-detail" id="optDetail">Live detection running.</p>
         </div>
         <div class="panel">
-          <div class="section-label">STATUS</div>
-          <p id="optDetail" style="color:var(--text2);font-size:13px;line-height:1.45">Live detection running.</p>
+          <div class="section-label">Checklist</div>
           <div class="features" id="features"></div>
           ${kit === "nvidia" ? `<label class="gsync-row"><input type="checkbox" id="gsync" /> Use G-SYNC profile pack</label>` : ""}
           <div class="progress-wrap hidden" id="progWrap">
@@ -300,7 +354,7 @@
           <div class="actions">
             <button type="button" class="btn primary" id="btnRun">Apply</button>
             <button type="button" class="btn quiet" id="btnRefresh">Refresh</button>
-            <button type="button" class="btn quiet" id="btnRepair">Repair</button>
+            <button type="button" class="btn ghost" id="btnRepair">Repair</button>
           </div>
           <div id="optResult"></div>
         </div>
@@ -313,21 +367,25 @@
   }
 
   async function loadDetect(kit) {
-    const status = document.getElementById("optStatus");
+    const pillText = document.getElementById("statusPillText");
+    const pill = document.getElementById("statusPill");
     const detail = document.getElementById("optDetail");
     const feats = document.getElementById("features");
     const btnRun = document.getElementById("btnRun");
-    if (!status) return;
-    status.textContent = "Checking status…";
+    if (!pillText) return;
+    pillText.textContent = "Checking…";
+    pill.className = "pill";
     feats.innerHTML = "";
     try {
       const r = await post("detect", { kit });
-      status.textContent = r.statusText || (r.isApplied ? "Already optimized" : "Ready");
+      const applied = !!r.isApplied;
+      pillText.textContent = r.statusText || (applied ? "Optimized" : "Ready");
+      pill.className = "pill " + (applied ? "ok" : "warn");
       detail.textContent = r.detail || "";
-      btnRun.textContent = r.isApplied ? "Reapply" : "Apply";
+      btnRun.textContent = applied ? "Reapply" : "Apply";
       const list = r.features || [];
       feats.innerHTML = list.map((f, i) => `
-        <div class="feature ${f.active ? "on" : ""}" style="animation-delay:${i * 40}ms">
+        <div class="feature ${f.active ? "on" : ""}" style="animation-delay:${i * 35}ms">
           <div class="dot"></div>
           <div class="meta">
             <div class="t">${esc(f.title)}</div>
@@ -339,7 +397,8 @@
         if (g) g.checked = !!r.gsync;
       }
     } catch (e) {
-      status.textContent = "Status check failed";
+      pillText.textContent = "Check failed";
+      pill.className = "pill warn";
       detail.textContent = e.message;
     }
   }
@@ -351,15 +410,19 @@
     const st = document.getElementById("progStatus");
     if (!wrap) return;
     wrap.classList.remove("hidden");
-    if (bar) bar.style.width = Math.max(0, Math.min(100, data.percent || 0)) + "%";
+    if (bar) {
+      const next = Math.max(0, Math.min(100, data.percent || 0));
+      const cur = parseFloat(bar.style.width) || 0;
+      bar.style.width = Math.max(cur, next) + "%";
+    }
     if (st) st.textContent = data.status || "";
   }
 
   async function runApply(kit) {
     if (state.busy) return;
     const warnings = {
-      discord: "Aggressive Discord pass: closes Discord, applies Equicord/OpenASAR, kernel RAM reclaim, debloat, and quiet Windows integration. Admin required. Use Repair to restore stock client.",
-      steam: "Aggressive Steam pass: CEF quiet launcher, webhelper trim, Windows quiet, complete client debloat. Admin required. Use Repair to restore shortcuts and stock launch.",
+      discord: "Aggressive Discord pass: closes Discord, applies Equicord/OpenASAR, kernel RAM reclaim, debloat, and quiet Windows integration. Admin required.\n\nUse Repair to restore a stock client.",
+      steam: "Aggressive Steam pass: CEF quiet launcher, webhelper trim, Windows quiet, complete client debloat. Admin required.\n\nUse Repair to restore shortcuts and stock launch.",
       nvidia: "NVIDIA pass: series-aware driver check, Base + per-game profiles, display prefs, privacy debloat. Admin required.",
     };
     const ok = await confirmModal(`Confirm ${kit} optimizer`, warnings[kit] || "Continue?");
@@ -388,6 +451,7 @@
       if (result) {
         result.innerHTML = `<div class="result ${r.success ? "ok" : "bad"}">${esc(r.message || (r.success ? "Done." : "Failed."))}</div>`;
       }
+      if (r.success) toast("Apply finished");
       await loadDetect(kit);
     } catch (e) {
       if (result) result.innerHTML = `<div class="result bad">${esc(e.message)}</div>`;
@@ -427,12 +491,19 @@
   btnBack.addEventListener("click", () => navigate("home"));
   btnSettings.addEventListener("click", () => navigate("settings"));
 
-  // Boot: always paint HTML first so a failed bridge never looks blank.
-  view.innerHTML = `<div class="page"><div class="hero"><h1>OptiHub</h1><p>Connecting to host…</p></div></div>`;
+  // Keyboard: Esc back home when not busy
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && state.route !== "home" && !state.busy && !modal.classList.contains("hidden") === false) {
+      // if modal open, ignore — handled separately
+    }
+    if (e.key === "Escape" && !modal.classList.contains("hidden")) return;
+    if (e.key === "Escape" && state.route !== "home" && !state.busy) navigate("home");
+  });
+
+  // Boot
   Promise.resolve()
     .then(() => navigate("home"))
     .catch((e) => {
-      view.innerHTML = `<div class="page"><div class="panel result bad">${esc(e && e.message ? e.message : e)}</div>
-        <p style="margin-top:12px;color:var(--muted);font-size:12px">If this persists, reinstall WebView2 Runtime and OptiHub 1.7.1+.</p></div>`;
+      view.innerHTML = `<div class="page"><div class="panel result bad">${esc(e && e.message ? e.message : e)}</div></div>`;
     });
 })();
