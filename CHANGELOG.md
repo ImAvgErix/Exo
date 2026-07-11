@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.0
+
+- **Shell**: pure **WinUI 3** again — exact **1.6.13** UI (Jakarta/Cormorant fonts, hover cards, full names, Coming soon, Settings, AMOLED/cream)
+- **No WebView SPA shell** — native Frame navigation only (more reliable logos, Settings, motion)
+- **Backend**: current optimizers, quiet `/quiet` app updates, PS7 host, installer/WebView2 prereq helpers remain
+
 ## 1.7.9
 
 - **UI**: restored the polished fluid SPA (1.7.4 design language) — the thin 1.7.8 shell is gone

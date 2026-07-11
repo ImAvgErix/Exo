@@ -14,8 +14,8 @@ public sealed class ThemeService
 
     // AMOLED pure black (dark) / warm cream beige (light)
     public static readonly Color CozyBlack = Color.FromArgb(255, 0, 0, 0);
-    public static readonly Color SoftStone = Color.FromArgb(255, 240, 233, 220); // #F0E9DC
-    public static readonly Color DarkAccent = Color.FromArgb(255, 44, 36, 28);   // #2C241C
+    public static readonly Color SoftStone = Color.FromArgb(255, 243, 237, 227); // #F3EDE3
+    public static readonly Color DarkAccent = Color.FromArgb(255, 61, 52, 41);   // #3D3429
 
     public ThemeService(SettingsService settings)
     {

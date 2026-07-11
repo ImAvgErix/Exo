@@ -7,76 +7,76 @@
 
     <Grid x:Name="RootGrid" Background="{ThemeResource OptiPageBackgroundBrush}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="48" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Real window chrome: Settings ALWAYS top-left -->
+        <!-- Drag region + chrome; right column reserved for caption buttons -->
         <Grid x:Name="TitleBarHost"
               Grid.Row="0"
-              Background="{ThemeResource OptiPageBackgroundBrush}">
+              Height="40"
+              Background="Transparent">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition x:Name="CaptionSpacer" Width="138" />
             </Grid.ColumnDefinitions>
 
-            <!-- Settings gear is always the leftmost control (top-left of the window). -->
             <StackPanel Orientation="Horizontal"
-                        Spacing="2"
+                        Spacing="8"
                         VerticalAlignment="Center"
-                        HorizontalAlignment="Left"
-                        Margin="8,0,0,0">
-                <Button x:Name="SettingsButton"
-                        Style="{StaticResource OptiIconButton}"
-                        Width="40" Height="36"
-                        Click="SettingsButton_Click"
-                        ToolTipService.ToolTip="Settings"
-                        AutomationProperties.Name="Settings">
-                    <FontIcon Glyph="&#xE713;" FontSize="16" />
-                </Button>
+                        Margin="12,0,0,0"
+                        Height="40">
                 <Button x:Name="BackButton"
                         Style="{StaticResource OptiIconButton}"
-                        Width="36" Height="36"
+                        ToolTipService.ToolTip="{x:Null}"
+                        AutomationProperties.Name="Back to dashboard"
                         Click="BackButton_Click"
                         Visibility="Collapsed"
-                        ToolTipService.ToolTip="Back"
-                        AutomationProperties.Name="Back">
-                    <FontIcon Glyph="&#xE72B;" FontSize="14" />
+                        Width="32" Height="32"
+                        VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE72B;" FontSize="13" />
                 </Button>
-                <Image x:Name="ContextLogo"
-                       Width="20" Height="20"
-                       Margin="6,0,4,0"
-                       Visibility="Collapsed"
-                       Stretch="Uniform" />
+
+                <!-- Product mark only on optimizer pages (no OptiHub wordmark / logo on home). -->
+                <Border x:Name="ContextLogoHost"
+                        Width="28" Height="28"
+                        CornerRadius="8"
+                        Background="Transparent"
+                        Visibility="Collapsed"
+                        VerticalAlignment="Center">
+                    <Image x:Name="ContextLogo"
+                           Width="20" Height="20"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Stretch="Uniform"
+                           AutomationProperties.AccessibilityView="Raw" />
+                </Border>
+
                 <TextBlock x:Name="AppTitleText"
+                           Text=""
                            VerticalAlignment="Center"
                            FontFamily="{StaticResource OptiUiFontSemiBold}"
                            FontSize="15"
                            FontWeight="SemiBold"
+                           CharacterSpacing="-8"
                            Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                           Text="" />
-                <TextBlock x:Name="HostStatus"
-                           VerticalAlignment="Center"
-                           Margin="10,0,0,0"
-                           FontSize="12"
-                           Foreground="{ThemeResource OptiMutedTextBrush}"
-                           Text=""
-                           Visibility="Collapsed" />
+                           Margin="0,0,2,0" />
+
+                <Button x:Name="SettingsButton"
+                        Style="{StaticResource OptiIconButton}"
+                        ToolTipService.ToolTip="{x:Null}"
+                        AutomationProperties.Name="Settings"
+                        Click="SettingsButton_Click"
+                        Width="32" Height="32"
+                        VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE713;" FontSize="14" />
+                </Button>
             </StackPanel>
         </Grid>
 
-        <!-- WebView must stay Visible (not Collapsed) or it never gets an HWND -->
-        <WebView2 x:Name="WebView"
-                  Grid.Row="1"
-                  HorizontalAlignment="Stretch"
-                  VerticalAlignment="Stretch"
-                  Opacity="0"
-                  IsHitTestVisible="False" />
-
         <Frame x:Name="ContentFrame"
                Grid.Row="1"
-               Visibility="Collapsed"
+               Padding="0"
                IsNavigationStackEnabled="False" />
     </Grid>
 </Window>
