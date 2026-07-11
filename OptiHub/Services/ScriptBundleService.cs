@@ -317,24 +317,62 @@ public sealed class ScriptBundleService
         _discordSyncDone = true;
     }
 
-    public void ReplaceDiscordScriptsFrom(string sourceDir)
+    public void ReplaceDiscordScriptsFrom(string sourceDir) =>
+        ReplaceKitScriptsFrom(
+            sourceDir,
+            kitName: "Discord",
+            requiredFiles: ["Disc-Optimizer.ps1", "OptiHub-Discord-Run.ps1"],
+            resetCache: ResetDiscordCache);
+
+    public void ReplaceSteamScriptsFrom(string sourceDir) =>
+        ReplaceKitScriptsFrom(
+            sourceDir,
+            kitName: "Steam",
+            requiredFiles: ["Steam-Optimizer.ps1", "OptiHub-Steam-Run.ps1", "OptiHub-Steam-Detect.ps1"],
+            resetCache: () => _steamSyncDone = false);
+
+    public void ReplaceNvidiaScriptsFrom(string sourceDir) =>
+        ReplaceKitScriptsFrom(
+            sourceDir,
+            kitName: "Nvidia",
+            requiredFiles: ["Nvidia-Optimizer.ps1", "OptiHub-Nvidia-Run.ps1", "OptiHub-Nvidia-Detect.ps1"],
+            resetCache: () => _nvidiaSyncDone = false);
+
+    public string GetWorkingKitVersion(string kitName)
+    {
+        lock (_syncLock)
+        {
+            var versionFile = Path.Combine(PathHelper.WorkingScriptsDir, kitName, "VERSION");
+            if (File.Exists(versionFile))
+                return File.ReadAllText(versionFile).Trim();
+            var bundled = Path.Combine(PathHelper.ScriptsRoot, kitName, "VERSION");
+            return File.Exists(bundled) ? File.ReadAllText(bundled).Trim() : "0";
+        }
+    }
+
+    private void ReplaceKitScriptsFrom(
+        string sourceDir,
+        string kitName,
+        string[] requiredFiles,
+        Action resetCache)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceDir);
+        ArgumentException.ThrowIfNullOrWhiteSpace(kitName);
 
         lock (_syncLock)
         {
-            var working = Path.Combine(PathHelper.WorkingScriptsDir, "Discord");
-            var staging = Path.Combine(PathHelper.WorkingScriptsDir, $"Discord.update-{Guid.NewGuid():N}");
-            var backup = Path.Combine(PathHelper.WorkingScriptsDir, $"Discord.backup-{Guid.NewGuid():N}");
+            var working = Path.Combine(PathHelper.WorkingScriptsDir, kitName);
+            var staging = Path.Combine(PathHelper.WorkingScriptsDir, $"{kitName}.update-{Guid.NewGuid():N}");
+            var backup = Path.Combine(PathHelper.WorkingScriptsDir, $"{kitName}.backup-{Guid.NewGuid():N}");
             var movedCurrent = false;
 
             try
             {
                 CopyDirectory(sourceDir, staging);
-                if (!File.Exists(Path.Combine(staging, "Disc-Optimizer.ps1")) ||
-                    !File.Exists(Path.Combine(staging, "OptiHub-Discord-Run.ps1")))
+                foreach (var required in requiredFiles)
                 {
-                    throw new InvalidDataException("Updated Discord script bundle is incomplete.");
+                    if (!File.Exists(Path.Combine(staging, required)))
+                        throw new InvalidDataException($"Updated {kitName} script bundle is incomplete (missing {required}).");
                 }
 
                 if (Directory.Exists(working))
@@ -344,7 +382,7 @@ public sealed class ScriptBundleService
                 }
 
                 Directory.Move(staging, working);
-                ResetDiscordCache();
+                resetCache();
             }
             catch
             {

@@ -36,7 +36,16 @@ public sealed class GitHubUpdateService
         return c;
     }
 
-    public async Task<ScriptUpdateResult> CheckAndUpdateDiscordScriptsAsync(
+    /// <summary>
+    /// Back-compat entry point — updates Discord, Steam, and NVIDIA kits from GitHub.
+    /// </summary>
+    public Task<ScriptUpdateResult> CheckAndUpdateDiscordScriptsAsync(
+        bool force = false,
+        IProgress<string>? status = null,
+        CancellationToken ct = default) =>
+        CheckAndUpdateAllScriptsAsync(force, status, ct);
+
+    public async Task<ScriptUpdateResult> CheckAndUpdateAllScriptsAsync(
         bool force = false,
         IProgress<string>? status = null,
         CancellationToken ct = default)
@@ -44,7 +53,7 @@ public sealed class GitHubUpdateService
         await _scriptUpdateGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            return await CheckAndUpdateDiscordScriptsCoreAsync(force, status, ct).ConfigureAwait(false);
+            return await CheckAndUpdateAllScriptsCoreAsync(force, status, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -52,7 +61,7 @@ public sealed class GitHubUpdateService
         }
     }
 
-    private async Task<ScriptUpdateResult> CheckAndUpdateDiscordScriptsCoreAsync(
+    private async Task<ScriptUpdateResult> CheckAndUpdateAllScriptsCoreAsync(
         bool force,
         IProgress<string>? status,
         CancellationToken ct)
@@ -60,19 +69,29 @@ public sealed class GitHubUpdateService
         var settings = _settings.Current;
         var repo = settings.DiscordScriptsRepo;
         var branch = settings.DiscordScriptsBranch;
-        var localVersion = _scripts.GetWorkingVersion();
+        var localDiscord = _scripts.GetWorkingKitVersion("Discord");
+        var localSteam = _scripts.GetWorkingKitVersion("Steam");
+        var localNvidia = _scripts.GetWorkingKitVersion("Nvidia");
+        var localSummary = $"D{localDiscord}/S{localSteam}/N{localNvidia}";
 
-        status?.Report("Checking remote Discord kit VERSION...");
+        status?.Report("Checking remote script kit versions...");
 
-        string remoteVersion;
+        string remoteDiscord;
+        string remoteSteam;
+        string remoteNvidia;
         try
         {
-            remoteVersion = await TryGetRemoteTextAsync(
+            remoteDiscord = (await TryGetRemoteTextAsync(
                 $"https://raw.githubusercontent.com/{repo}/{branch}/OptiHub/Scripts/Discord/VERSION", ct)
                 ?? await TryGetRemoteTextAsync(
                     $"https://raw.githubusercontent.com/{repo}/{branch}/VERSION", ct)
-                ?? throw new InvalidOperationException("Remote VERSION not found.");
-            remoteVersion = remoteVersion.Trim();
+                ?? throw new InvalidOperationException("Remote Discord VERSION not found.")).Trim();
+            remoteSteam = (await TryGetRemoteTextAsync(
+                $"https://raw.githubusercontent.com/{repo}/{branch}/OptiHub/Scripts/Steam/VERSION", ct)
+                ?? remoteDiscord).Trim();
+            remoteNvidia = (await TryGetRemoteTextAsync(
+                $"https://raw.githubusercontent.com/{repo}/{branch}/OptiHub/Scripts/Nvidia/VERSION", ct)
+                ?? remoteDiscord).Trim();
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -84,25 +103,30 @@ public sealed class GitHubUpdateService
             {
                 Updated = false,
                 AlreadyLatest = false,
-                LocalVersion = localVersion,
+                LocalVersion = localSummary,
                 RemoteVersion = "?",
                 Message = $"Could not reach GitHub: {ex.Message}"
             };
         }
 
-        if (!force && VersionsEqualOrLocalNewer(localVersion, remoteVersion))
+        var remoteSummary = $"D{remoteDiscord}/S{remoteSteam}/N{remoteNvidia}";
+        var needDiscord = force || !VersionsEqualOrLocalNewer(localDiscord, remoteDiscord);
+        var needSteam = force || !VersionsEqualOrLocalNewer(localSteam, remoteSteam);
+        var needNvidia = force || !VersionsEqualOrLocalNewer(localNvidia, remoteNvidia);
+
+        if (!needDiscord && !needSteam && !needNvidia)
         {
             return new ScriptUpdateResult
             {
                 Updated = false,
                 AlreadyLatest = true,
-                LocalVersion = localVersion,
-                RemoteVersion = remoteVersion,
-                Message = $"Scripts are up to date (v{localVersion})."
+                LocalVersion = localSummary,
+                RemoteVersion = remoteSummary,
+                Message = $"Scripts are up to date (Discord {localDiscord}, Steam {localSteam}, NVIDIA {localNvidia})."
             };
         }
 
-        status?.Report($"Downloading Discord kit {remoteVersion}...");
+        status?.Report("Downloading latest optimizer scripts from GitHub...");
 
         var work = Path.Combine(PathHelper.AppDataDir, "updates", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
@@ -121,32 +145,69 @@ public sealed class GitHubUpdateService
             var extract = Path.Combine(work, "extract");
             ZipFile.ExtractToDirectory(zipPath, extract, overwriteFiles: true);
 
-            var discordScriptsRoot = FindDiscordScriptsRoot(extract);
-            if (discordScriptsRoot is null)
+            var updated = new List<string>();
+            var skipped = new List<string>();
+
+            if (needDiscord)
             {
-                return new ScriptUpdateResult
-                {
-                    Updated = false,
-                    LocalVersion = localVersion,
-                    RemoteVersion = remoteVersion,
-                    Message = "Downloaded archive did not contain Discord optimizer scripts."
-                };
+                var discordRoot = FindScriptsKitRoot(extract, "Discord", "Disc-Optimizer.ps1", "OptiHub-Discord-Run.ps1");
+                if (discordRoot is null)
+                    throw new InvalidOperationException("Downloaded archive did not contain Discord optimizer scripts.");
+                EnsureVersionFile(discordRoot, remoteDiscord);
+                status?.Report($"Installing Discord scripts v{remoteDiscord}...");
+                _scripts.ReplaceDiscordScriptsFrom(discordRoot);
+                _settings.Update(s => s.DiscordKitVersion = remoteDiscord);
+                updated.Add($"Discord {remoteDiscord}");
+            }
+            else
+            {
+                skipped.Add($"Discord {localDiscord}");
             }
 
-            var verFile = Path.Combine(discordScriptsRoot, "VERSION");
-            if (!File.Exists(verFile))
-                await File.WriteAllTextAsync(verFile, remoteVersion, ct);
+            if (needSteam)
+            {
+                var steamRoot = FindScriptsKitRoot(extract, "Steam", "Steam-Optimizer.ps1", "OptiHub-Steam-Run.ps1");
+                if (steamRoot is null)
+                    throw new InvalidOperationException("Downloaded archive did not contain Steam optimizer scripts.");
+                EnsureVersionFile(steamRoot, remoteSteam);
+                status?.Report($"Installing Steam scripts v{remoteSteam}...");
+                _scripts.ReplaceSteamScriptsFrom(steamRoot);
+                updated.Add($"Steam {remoteSteam}");
+            }
+            else
+            {
+                skipped.Add($"Steam {localSteam}");
+            }
 
-            status?.Report("Installing updated scripts...");
-            _scripts.ReplaceDiscordScriptsFrom(discordScriptsRoot);
-            _settings.Update(s => s.DiscordKitVersion = remoteVersion);
+            if (needNvidia)
+            {
+                var nvidiaRoot = FindScriptsKitRoot(extract, "Nvidia", "Nvidia-Optimizer.ps1", "OptiHub-Nvidia-Run.ps1");
+                if (nvidiaRoot is null)
+                    throw new InvalidOperationException("Downloaded archive did not contain NVIDIA optimizer scripts.");
+                EnsureVersionFile(nvidiaRoot, remoteNvidia);
+                status?.Report($"Installing NVIDIA scripts v{remoteNvidia}...");
+                _scripts.ReplaceNvidiaScriptsFrom(nvidiaRoot);
+                updated.Add($"NVIDIA {remoteNvidia}");
+            }
+            else
+            {
+                skipped.Add($"NVIDIA {localNvidia}");
+            }
+
+            var newLocal = $"D{_scripts.GetWorkingKitVersion("Discord")}/S{_scripts.GetWorkingKitVersion("Steam")}/N{_scripts.GetWorkingKitVersion("Nvidia")}";
+            var msg = updated.Count > 0
+                ? $"Updated: {string.Join(", ", updated)}."
+                : "No script kits needed an update.";
+            if (skipped.Count > 0)
+                msg += $" Already current: {string.Join(", ", skipped)}.";
 
             return new ScriptUpdateResult
             {
-                Updated = true,
-                LocalVersion = remoteVersion,
-                RemoteVersion = remoteVersion,
-                Message = $"Updated Discord scripts to v{remoteVersion}."
+                Updated = updated.Count > 0,
+                AlreadyLatest = updated.Count == 0,
+                LocalVersion = newLocal,
+                RemoteVersion = remoteSummary,
+                Message = msg
             };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -158,8 +219,8 @@ public sealed class GitHubUpdateService
             return new ScriptUpdateResult
             {
                 Updated = false,
-                LocalVersion = localVersion,
-                RemoteVersion = remoteVersion,
+                LocalVersion = localSummary,
+                RemoteVersion = remoteSummary,
                 Message = $"Update failed: {ex.Message}"
             };
         }
@@ -167,6 +228,13 @@ public sealed class GitHubUpdateService
         {
             try { Directory.Delete(work, recursive: true); } catch { }
         }
+    }
+
+    private static void EnsureVersionFile(string kitRoot, string version)
+    {
+        var verFile = Path.Combine(kitRoot, "VERSION");
+        if (!File.Exists(verFile))
+            File.WriteAllText(verFile, version);
     }
 
     public async Task<AppUpdateResult> CheckAppUpdateAsync(
@@ -509,21 +577,27 @@ public sealed class GitHubUpdateService
         try { File.Delete(path); } catch { /* best-effort cleanup */ }
     }
 
-    private static string? FindDiscordScriptsRoot(string extractRoot)
+    private static string? FindDiscordScriptsRoot(string extractRoot) =>
+        FindScriptsKitRoot(extractRoot, "Discord", "Disc-Optimizer.ps1", "OptiHub-Discord-Run.ps1")
+        ?? Directory.GetDirectories(extractRoot, "Disc Optimizer", SearchOption.AllDirectories)
+            .FirstOrDefault(d => File.Exists(Path.Combine(d, "Disc-Optimizer.ps1")));
+
+    private static string? FindScriptsKitRoot(
+        string extractRoot,
+        string kitFolderName,
+        string primaryMarker,
+        string secondaryMarker)
     {
-        var modern = Directory.GetDirectories(extractRoot, "Discord", SearchOption.AllDirectories)
+        var modern = Directory.GetDirectories(extractRoot, kitFolderName, SearchOption.AllDirectories)
             .FirstOrDefault(d =>
-                File.Exists(Path.Combine(d, "Disc-Optimizer.ps1")) &&
+                File.Exists(Path.Combine(d, primaryMarker)) &&
+                File.Exists(Path.Combine(d, secondaryMarker)) &&
                 d.Contains($"{Path.DirectorySeparatorChar}Scripts{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase));
         if (modern is not null) return modern;
 
-        var withWrappers = Directory.GetFiles(extractRoot, "Disc-Optimizer.ps1", SearchOption.AllDirectories)
+        return Directory.GetFiles(extractRoot, primaryMarker, SearchOption.AllDirectories)
             .Select(Path.GetDirectoryName)
-            .FirstOrDefault(d => d is not null && File.Exists(Path.Combine(d, "OptiHub-Discord-Run.ps1")));
-        if (withWrappers is not null) return withWrappers;
-
-        return Directory.GetDirectories(extractRoot, "Disc Optimizer", SearchOption.AllDirectories)
-            .FirstOrDefault(d => File.Exists(Path.Combine(d, "Disc-Optimizer.ps1")));
+            .FirstOrDefault(d => d is not null && File.Exists(Path.Combine(d!, secondaryMarker)));
     }
 
     private static bool VersionsEqualOrLocalNewer(string local, string remote)

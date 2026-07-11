@@ -154,13 +154,18 @@ public partial class SettingsViewModel : ObservableObject
     {
         if (IsUpdating) return;
         IsUpdating = true;
-        UpdateStatus = "Checking Discord kit updates...";
+        UpdateStatus = "Checking Discord / Steam / NVIDIA script updates...";
         try
         {
             var progress = new Progress<string>(m => UpdateStatus = m);
-            var result = await _services.Updater.CheckAndUpdateDiscordScriptsAsync(force: false, status: progress);
+            // force:true so a stuck equal/older VERSION still re-pulls kits from GitHub main
+            // when the user explicitly clicks Update Scripts.
+            var result = await _services.Updater.CheckAndUpdateAllScriptsAsync(force: true, status: progress);
             UpdateStatus = result.Message;
-            KitVersion = _services.Scripts.GetWorkingVersion();
+            KitVersion =
+                $"D{_services.Scripts.GetWorkingKitVersion("Discord")} / " +
+                $"S{_services.Scripts.GetWorkingKitVersion("Steam")} / " +
+                $"N{_services.Scripts.GetWorkingKitVersion("Nvidia")}";
         }
         catch (Exception ex)
         {
