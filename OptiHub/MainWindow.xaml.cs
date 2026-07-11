@@ -250,15 +250,29 @@ public sealed partial class MainWindow : Window
                 catch (Exception ex) { LogWeb("bridge: " + ex.Message); }
             };
 
+            // Inject host flags + logo map before every document load.
+            var logoDataJson = BuildLogoDataJson(webRoot);
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(
+                "window.__OPTIHUB_HOST_CHROME__=true;" +
+                "window.__OPTIHUB_LOGOS__='https://app.optihub.local/logos/';" +
+                "window.__OPTIHUB_LOGO_DATA__=" + logoDataJson + ";");
+
             core.NavigationCompleted += async (_, args) =>
             {
                 if (!args.IsSuccess)
                 {
-                    try { await LoadWebUiDocumentAsync(core, webRoot, indexPath); }
-                    catch (Exception ex) { LogWeb("nav: " + ex.Message); }
+                    LogWeb("nav failed status=" + args.WebErrorStatus);
                     return;
                 }
                 SetHostStatus(string.Empty);
+                try
+                {
+                    await core.ExecuteScriptAsync(
+                        "document.documentElement.classList.add('host-chrome');" +
+                        "var s=document.getElementById('btnSettings'); if(s) s.style.display='none';" +
+                        "var c=document.getElementById('chrome'); if(c) c.style.display='none';");
+                }
+                catch { }
                 try
                 {
                     if (_bridge is not null)
@@ -267,19 +281,13 @@ public sealed partial class MainWindow : Window
                 catch { }
             };
 
+            // Prefer virtual host so logos/css resolve as real https://app.optihub.local assets.
+            // NavigateToString + file:// logos is blocked by WebView2 security → blank logos.
             await LoadWebUiDocumentAsync(core, webRoot, indexPath);
 
             ContentFrame.Visibility = Visibility.Collapsed;
             WebView.Opacity = 1;
             WebView.IsHitTestVisible = true;
-            try
-            {
-                await core.ExecuteScriptAsync(
-                    "document.documentElement.classList.add('host-chrome');" +
-                    "var s=document.getElementById('btnSettings'); if(s) s.style.display='none';" +
-                    "var c=document.getElementById('chrome'); if(c) c.style.display='none';");
-            }
-            catch { }
 
             _webReady = true;
             _useXamlFallback = false;
@@ -316,25 +324,68 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) { LogWeb("fallback fail: " + ex.Message); }
     }
 
+    private static string BuildLogoDataJson(string webRoot)
+    {
+        try
+        {
+            var dir = Path.Combine(webRoot, "logos");
+            if (!Directory.Exists(dir)) return "{}";
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in Directory.GetFiles(dir, "*.png"))
+            {
+                var name = Path.GetFileName(file);
+                var bytes = File.ReadAllBytes(file);
+                map[name] = "data:image/png;base64," + Convert.ToBase64String(bytes);
+            }
+            return System.Text.Json.JsonSerializer.Serialize(map);
+        }
+        catch
+        {
+            return "{}";
+        }
+    }
+
     private static async Task LoadWebUiDocumentAsync(CoreWebView2 core, string webRoot, string indexPath)
     {
+        // Primary path: virtual host — relative assets (logos/*.png, app.css) work.
+        var navTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnNav(object? s, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (e.IsSuccess) navTcs.TrySetResult(true);
+            else navTcs.TrySetResult(false);
+        }
+        core.NavigationCompleted += OnNav;
+        try
+        {
+            core.Navigate("https://app.optihub.local/index.html");
+            var finished = await Task.WhenAny(navTcs.Task, Task.Delay(8000));
+            if (finished == navTcs.Task && await navTcs.Task)
+            {
+                LogWeb("nav virtual host ok");
+                return;
+            }
+            LogWeb("nav virtual host incomplete — using inlined document");
+        }
+        finally
+        {
+            core.NavigationCompleted -= OnNav;
+        }
+
+        // Fallback: inline HTML/CSS/JS + base64 logos (file:// is blocked from NavigateToString).
         var html = await File.ReadAllTextAsync(indexPath);
         var css = await File.ReadAllTextAsync(Path.Combine(webRoot, "app.css"));
         var js = await File.ReadAllTextAsync(Path.Combine(webRoot, "app.js"));
-        var logosUri = new Uri(
-            new Uri(webRoot.TrimEnd('\\', '/') + Path.DirectorySeparatorChar),
-            "logos/").AbsoluteUri;
+        var logoData = BuildLogoDataJson(webRoot);
 
-        // Host owns window chrome — hide in-page chrome.
-        css += "\n.chrome{display:none!important;}\n.view{padding-top:20px;}\n";
+        css += "\n.chrome{display:none!important;}\nhtml.host-chrome .view{padding-top:18px;}\n";
 
         html = html
             .Replace("<link rel=\"stylesheet\" href=\"app.css\" />", "<style>\n" + css + "\n</style>")
             .Replace(
                 "<script src=\"app.js\"></script>",
-                "<script>window.__OPTIHUB_LOGOS__=" +
-                System.Text.Json.JsonSerializer.Serialize(logosUri) +
-                ";window.__OPTIHUB_HOST_CHROME__=true;\n" + js + "\n</script>");
+                "<script>window.__OPTIHUB_HOST_CHROME__=true;" +
+                "window.__OPTIHUB_LOGOS__='https://app.optihub.local/logos/';" +
+                "window.__OPTIHUB_LOGO_DATA__=" + logoData + ";\n" + js + "\n</script>");
 
         core.NavigateToString(html);
     }

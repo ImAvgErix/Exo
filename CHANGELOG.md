@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.9
+
+- **UI**: restored the polished fluid SPA (1.7.4 design language) — the thin 1.7.8 shell is gone
+- **Logos**: fixed blank icons — virtual host navigation + embedded base64 logo map (NavigateToString blocked file:// images)
+- Larger logo wells; dark wells in light mode so product marks stay visible
 ## 1.7.8
 
 - **UI overhaul**: minimal Raycast/Linear-style SPA — tight 8px rhythm, hairline cards, no page scroll
