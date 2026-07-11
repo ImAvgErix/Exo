@@ -24,7 +24,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.7.1'
+$Script:NvidiaOptVersion = '1.7.2'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -1585,52 +1585,136 @@ function Test-NvidiaPerformanceDebloat {
     }
 }
 
+function Test-OptiHubNvidiaDisplayLive {
+    # Same helper as detect: OptiHub.NvDisplay.exe --status
+    $exe = $null
+    foreach ($candidate in @(
+        (Join-Path $Root 'tools\OptiHub.NvDisplay.exe'),
+        (Join-Path $env:LOCALAPPDATA 'OptiHub\scripts\Nvidia\tools\OptiHub.NvDisplay.exe'),
+        (Join-Path $env:LOCALAPPDATA 'OptiHub\app\Scripts\Nvidia\tools\OptiHub.NvDisplay.exe')
+    )) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate)) { $exe = $candidate; break }
+    }
+    if (-not $exe) {
+        return [pscustomobject]@{
+            Available = $false; Ok = $false; ScalingOk = $false; RefreshOk = $false
+            ColorOk = $false; RegistryOk = $false; Detail = 'helper unavailable'
+        }
+    }
+
+    $process = $null
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $exe
+        $psi.Arguments = '--status'
+        $psi.WorkingDirectory = Split-Path -Parent $exe
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $process = [Diagnostics.Process]::Start($psi)
+        if (-not $process) { throw 'display helper did not start' }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(15000)) {
+            try { $process.Kill() } catch { }
+            throw 'display status timed out'
+        }
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        $jsonLine = @($stdout -split "`r?`n") | Where-Object { $_ -like 'OPTIHUB_NVDISPLAY_JSON:*' } | Select-Object -Last 1
+        if (-not $jsonLine) { throw "display helper returned no status JSON: $stderr" }
+        $status = $jsonLine.Substring('OPTIHUB_NVDISPLAY_JSON:'.Length) | ConvertFrom-Json
+        $checks = $status.checks
+        $scalingOk = [bool]($checks -and $checks.scalingOk)
+        $refreshOk = [bool]($checks -and $checks.refreshOk)
+        $colorOk = [bool]($checks -and $checks.colorOk)
+        $registryOk = [bool]($checks -and $checks.registryOk)
+        $detail = if ($status.skipped) { [string]$status.skipped } elseif ($checks) {
+            "color=$colorOk, refresh=$refreshOk, scaling=$scalingOk, registry=$registryOk"
+        } else { "exit=$($process.ExitCode)" }
+        return [pscustomobject]@{
+            Available  = $true
+            Ok         = [bool]$status.ok
+            ScalingOk  = $scalingOk
+            RefreshOk  = $refreshOk
+            ColorOk    = $colorOk
+            RegistryOk = $registryOk
+            Detail     = $detail
+        }
+    } catch {
+        return [pscustomobject]@{
+            Available = $true; Ok = $false; ScalingOk = $false; RefreshOk = $false
+            ColorOk = $false; RegistryOk = $false; Detail = $_.Exception.Message
+        }
+    } finally {
+        if ($process) { try { $process.Dispose() } catch { } }
+    }
+}
+
 function Set-NvidiaDisplayPreferences {
     # Sticky display path
     # - NVTweak stamp all monitors (GPU / NoScale / Override / Full)
     # - NVAPI: keep current resolution + max supported Hz + Full RGB
     # - No Control Panel mouse/keyboard automation
-    # - Logon scheduled task re-stamps registry
+    # - Skip re-apply when live status already has correct scaling + res/Hz
     Write-Step 'Display prefs: NVAPI + registry (no Control Panel automation)...'
     $applied = New-Object System.Collections.Generic.List[string]
     $success = $false
+    $skipped = $false
 
-    Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-
-    $dispScript = Join-Path $Root 'OptiHub-Display-Apply.ps1'
-    if (-not (Test-Path -LiteralPath $dispScript)) {
-        Write-Warn "Missing $dispScript"
-        [void]$applied.Add('Display apply script missing')
+    # If scaling + resolution/refresh are already correct, do not re-touch displays
+    # (avoids container restart / mode flicker on every NVIDIA re-Apply).
+    $live = Test-OptiHubNvidiaDisplayLive
+    if ([bool]$live.Available -and [bool]$live.ScalingOk -and [bool]$live.RefreshOk) {
+        $success = $true
+        $skipped = $true
+        Write-Ok "Display already correct - skipping re-apply ($($live.Detail))"
+        [void]$applied.Add("Skipped display re-apply (scaling + res/Hz already correct: $($live.Detail))")
     } else {
-        Write-HubProgress 90 'Display: all monitors (res/Hz + GPU/Override)...'
-        $prev = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            & $dispScript 2>&1 | ForEach-Object {
-                $s = "$_"
-                if ($s) {
-                    Write-Host $s
-                    if ($env:OPTIHUB_LOG) {
-                        try { Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $s -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
+        if ([bool]$live.Available) {
+            Write-Ok "Display needs apply ($($live.Detail))"
+        } else {
+            Write-Warn "Display live status unavailable ($($live.Detail)); applying full path"
+        }
+
+        Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+        $dispScript = Join-Path $Root 'OptiHub-Display-Apply.ps1'
+        if (-not (Test-Path -LiteralPath $dispScript)) {
+            Write-Warn "Missing $dispScript"
+            [void]$applied.Add('Display apply script missing')
+        } else {
+            Write-HubProgress 90 'Display: all monitors (res/Hz + GPU/Override)...'
+            $prev = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                & $dispScript 2>&1 | ForEach-Object {
+                    $s = "$_"
+                    if ($s) {
+                        Write-Host $s
+                        if ($env:OPTIHUB_LOG) {
+                            try { Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $s -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
+                        }
                     }
                 }
+                $code = 0
+                if ($null -ne $LASTEXITCODE) { $code = [int]$LASTEXITCODE }
+                if ($code -eq 0) {
+                    $success = $true
+                    [void]$applied.Add('Active NVIDIA displays: current resolution at max Hz + Full RGB + GPU/NoScale/Override')
+                    Write-Ok 'Display settings applied (sticky path)'
+                } else {
+                    [void]$applied.Add("Display apply exit $code")
+                    Write-Warn "Display apply exit $code"
+                }
+            } catch {
+                Write-Warn "Display apply failed: $($_.Exception.Message)"
+                [void]$applied.Add("Display apply error: $($_.Exception.Message)")
+            } finally {
+                $ErrorActionPreference = $prev
+                Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
             }
-            $code = 0
-            if ($null -ne $LASTEXITCODE) { $code = [int]$LASTEXITCODE }
-            if ($code -eq 0) {
-                $success = $true
-                [void]$applied.Add('Active NVIDIA displays: current resolution at max Hz + Full RGB + GPU/NoScale/Override')
-                Write-Ok 'Display settings applied (sticky path)'
-            } else {
-                [void]$applied.Add("Display apply exit $code")
-                Write-Warn "Display apply exit $code"
-            }
-        } catch {
-            Write-Warn "Display apply failed: $($_.Exception.Message)"
-            [void]$applied.Add("Display apply error: $($_.Exception.Message)")
-        } finally {
-            $ErrorActionPreference = $prev
-            Get-Process -Name 'nvcplui' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
         }
     }
 
@@ -1644,9 +1728,11 @@ function Set-NvidiaDisplayPreferences {
         performScalingOn    = 'GPU'
         scalingMode         = 'No scaling'
         overrideGameScaling = $true
-        appliedVia          = 'OptiHub-Display-Apply + OptiHub.NvDisplay'
-        flow                = 'NVTweak -> soft container refresh -> NVAPI modes/color/path -> final registry stamp'
-        note                = 'No Control Panel mouse or keyboard automation is used.'
+        appliedVia          = $(if ($skipped) { 'skipped-already-correct (live status)' } else { 'OptiHub-Display-Apply + OptiHub.NvDisplay' })
+        flow                = 'live status check -> (skip or NVTweak -> soft container refresh -> NVAPI modes/color/path)'
+        note                = 'No Control Panel mouse or keyboard automation is used. Re-apply is skipped when scaling + res/Hz already match.'
+        skippedReapply      = [bool]$skipped
+        liveDetail          = [string]$live.Detail
         success             = $success
     }
     [IO.File]::WriteAllText($pref, ($obj | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
@@ -1655,6 +1741,7 @@ function Set-NvidiaDisplayPreferences {
     foreach ($a in $applied) { Write-Ok $a }
     return @{
         Success = [bool]$success
+        Skipped = [bool]$skipped
         Details = [string[]]@($applied.ToArray())
     }
 }
