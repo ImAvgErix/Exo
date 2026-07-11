@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="OptiHub.Views.DiscordOptimizerPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -6,12 +6,11 @@
     xmlns:vm="using:OptiHub.ViewModels"
     Background="Transparent">
 
-    <Grid Padding="28,12,28,18">
+    <Grid Padding="28,16,28,22">
         <Border Style="{StaticResource OptiCard}"
-                Padding="24,20"
-                Width="720"
-                MaxWidth="720"
-                HorizontalAlignment="Center"
+                Padding="28,24"
+                MaxWidth="1000"
+                HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch">
             <Grid>
                 <Grid.RowDefinitions>
@@ -21,83 +20,93 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
+                <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,18">
                     <TextBlock Text="STATUS" Style="{StaticResource OptiSectionTitle}" Margin="0" />
                     <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
                                FontFamily="{StaticResource OptiUiFontSemiBold}"
-                               FontSize="24"
+                               FontSize="26"
                                FontWeight="SemiBold"
                                CharacterSpacing="-20"
                                Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                TextWrapping="Wrap" />
                     <TextBlock Text="{x:Bind ViewModel.DetailText, Mode=OneWay}"
                                Style="{StaticResource OptiBody}"
-                               FontSize="13"
-                               LineHeight="19" />
+                               FontSize="13.5"
+                               LineHeight="20" />
                 </StackPanel>
 
-                <Grid Grid.Row="1" Margin="0,0,0,14">
+                <Grid Grid.Row="1" Margin="0,0,0,16">
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   Visibility="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                   AutomationProperties.Name="Discord optimization status">
                         <ItemsControl ItemsSource="{x:Bind ViewModel.Features, Mode=OneWay}"
-                                      VerticalAlignment="Top">
+                                      HorizontalAlignment="Stretch">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <StackPanel Spacing="7" />
+                                    <ItemsWrapGrid Orientation="Horizontal"
+                                                   MaximumRowsOrColumns="2"
+                                                   HorizontalAlignment="Stretch" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:FeatureRowViewModel">
-                                    <Grid ColumnSpacing="10" Opacity="{x:Bind Opacity}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Width="28" Height="28"
-                                                CornerRadius="8"
-                                                Background="{ThemeResource OptiAccentSoftBrush}"
-                                                BorderBrush="{ThemeResource OptiCardStrokeBrush}"
-                                                BorderThickness="1"
-                                                VerticalAlignment="Center">
-                                            <FontIcon Glyph="{x:Bind Glyph}"
-                                                      FontSize="13"
-                                                      Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                      HorizontalAlignment="Center"
-                                                      VerticalAlignment="Center" />
-                                        </Border>
-                                        <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{x:Bind Title}"
-                                                       FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                                       FontSize="13.5"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       MaxLines="1" />
-                                            <TextBlock Text="{x:Bind Detail}"
-                                                       FontFamily="{StaticResource OptiUiFont}"
-                                                       FontSize="12"
-                                                       LineHeight="16"
-                                                       Foreground="{ThemeResource OptiMutedTextBrush}"
-                                                       TextWrapping="NoWrap"
-                                                       MaxLines="1"
-                                                       TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                    </Grid>
+                                    <Border Style="{StaticResource OptiCard}"
+                                            Width="440"
+                                            MinWidth="320"
+                                            Margin="0,0,14,12"
+                                            Padding="14,12"
+                                            Opacity="{x:Bind Opacity}"
+                                            Background="{ThemeResource OptiAccentSoftBrush}">
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="32" Height="32"
+                                                    CornerRadius="9"
+                                                    Background="{ThemeResource OptiCardFillBrush}"
+                                                    BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                                                    BorderThickness="1"
+                                                    VerticalAlignment="Center">
+                                                <FontIcon Glyph="{x:Bind Glyph}"
+                                                          FontSize="14"
+                                                          Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                                <TextBlock Text="{x:Bind Title}"
+                                                           FontFamily="{StaticResource OptiUiFontSemiBold}"
+                                                           FontSize="14"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           MaxLines="1" />
+                                                <TextBlock Text="{x:Bind Detail}"
+                                                           FontFamily="{StaticResource OptiUiFont}"
+                                                           FontSize="12"
+                                                           LineHeight="16"
+                                                           Foreground="{ThemeResource OptiMutedTextBrush}"
+                                                           TextWrapping="NoWrap"
+                                                           MaxLines="1"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
 
-                    <StackPanel Spacing="10"
+                    <StackPanel Spacing="12"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
                                 Visibility="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                 AutomationProperties.Name="Checking Discord optimizer status">
                         <ProgressRing IsActive="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay}"
-                                      Width="28"
-                                      Height="28" />
+                                      Width="32"
+                                      Height="32" />
                         <TextBlock Text="Checking Discord optimizer status..."
                                    Style="{StaticResource OptiCaption}"
                                    TextAlignment="Center" />
@@ -106,11 +115,11 @@
 
                 <StackPanel Grid.Row="2" Spacing="6"
                             Visibility="{x:Bind ViewModel.IsProgressVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                            Margin="0,0,0,12">
+                            Margin="0,0,0,14">
                     <ProgressBar Minimum="0" Maximum="100"
                                  Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
-                                 Height="7"
-                                 CornerRadius="3"
+                                 Height="8"
+                                 CornerRadius="4"
                                  AutomationProperties.Name="Discord optimization progress"
                                  Foreground="{ThemeResource OptiAccentBrush}" />
                     <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}"
@@ -119,9 +128,9 @@
                                HorizontalAlignment="Center" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="3" Spacing="10">
+                <StackPanel Grid.Row="3" Spacing="12">
                     <Border Style="{StaticResource OptiCard}"
-                            Padding="12,10"
+                            Padding="14,12"
                             Visibility="{x:Bind ViewModel.HasLastResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                             Background="{ThemeResource OptiAccentSoftBrush}">
                         <StackPanel Orientation="Horizontal" Spacing="10">
@@ -131,7 +140,7 @@
                                       VerticalAlignment="Top" />
                             <TextBlock Text="{x:Bind ViewModel.LastResult, Mode=OneWay}"
                                        Style="{StaticResource OptiBody}"
-                                       FontSize="12"
+                                       FontSize="12.5"
                                        TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
@@ -141,21 +150,27 @@
                             AutomationProperties.Name="Apply aggressive Discord optimization"
                             AutomationProperties.HelpText="Closes Discord and applies client debloat, memory and priority tuning, and startup and notification suppression after confirmation."
                             HorizontalAlignment="Stretch"
+                            MinHeight="48"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    <StackPanel Orientation="Horizontal"
-                                HorizontalAlignment="Center"
-                                Spacing="10">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
                         <Button Style="{StaticResource OptiQuietButton}"
                                 Content="Repair Discord"
                                 Click="Repair_Click"
                                 AutomationProperties.Name="Repair Discord optimizer changes"
+                                HorizontalAlignment="Stretch"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                        <Button Style="{StaticResource OptiQuietButton}"
+                        <Button Grid.Column="1"
+                                Style="{StaticResource OptiQuietButton}"
                                 Content="Refresh status"
                                 Click="Refresh_Click"
                                 AutomationProperties.Name="Refresh Discord optimizer status"
+                                HorizontalAlignment="Stretch"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    </StackPanel>
+                    </Grid>
                 </StackPanel>
             </Grid>
         </Border>

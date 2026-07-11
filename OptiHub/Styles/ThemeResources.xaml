@@ -10,7 +10,7 @@
     <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
     <CornerRadius x:Key="OptiCardRadius">18</CornerRadius>
-    <x:Double x:Key="OptiPageMaxWidth">920</x:Double>
+    <x:Double x:Key="OptiPageMaxWidth">1000</x:Double>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
