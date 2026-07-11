@@ -20,6 +20,8 @@ internal static class Program
     private const string ResourceName = "payload.zip";
     private const string MutexName = "Local\\OptiHubInstallerSingleton";
     private static readonly int SelfPid = Process.GetCurrentProcess().Id;
+    private static bool _silent;
+    private static string _logPath = "";
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
@@ -31,8 +33,30 @@ internal static class Program
     private static extern bool FreeConsole();
 
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
+        bool silent = false;
+        if (args != null)
+        {
+            foreach (string a in args)
+            {
+                if (string.IsNullOrWhiteSpace(a)) continue;
+                string t = a.Trim().ToLowerInvariant();
+                if (t == "/silent" || t == "/quiet" || t == "--silent" || t == "-s" || t == "/s")
+                    silent = true;
+            }
+        }
+        // Also honor env for in-app updates.
+        try
+        {
+            string envSilent = Environment.GetEnvironmentVariable("OPTIHUB_SILENT_INSTALL");
+            if (!string.IsNullOrEmpty(envSilent) &&
+                (envSilent == "1" || envSilent.Equals("true", StringComparison.OrdinalIgnoreCase)))
+                silent = true;
+        }
+        catch { }
+        _silent = silent;
+
         bool consoleOpen = false;
         bool mutexOwned = false;
         Mutex mutex = null;
@@ -52,29 +76,40 @@ internal static class Program
             }
             if (!mutexOwned)
             {
-                MessageBoxW(IntPtr.Zero,
-                    "Another OptiHub installer is already running.\n\nWait for it to finish, then open OptiHub from the Start menu.",
-                    "OptiHub", 0x40);
+                // Quiet updates must not pop UI; the running app already shows status.
+                if (!silent)
+                {
+                    MessageBoxW(IntPtr.Zero,
+                        "Another OptiHub installer is already running.\n\nWait for it to finish, then open OptiHub from the Start menu.",
+                        "OptiHub", 0x40);
+                }
                 return 2;
             }
 
-            consoleOpen = AllocConsole();
-            Console.Title = "OptiHub Installer";
-            Log("OptiHub installer starting...");
-            Log("PID " + SelfPid);
+            // Never allocate a console for quiet/in-app updates — matches normal app update UX.
+            if (!silent)
+            {
+                consoleOpen = AllocConsole();
+                try { Console.Title = "OptiHub Installer"; } catch { }
+            }
 
             string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             string root = Path.Combine(local, AppFolderName);
             string installDir = Path.Combine(root, InstallSubdir);
             string targetExe = Path.Combine(installDir, ExeName);
             string logPath = Path.Combine(root, "install.log");
+            _logPath = logPath;
 
             try
             {
                 Directory.CreateDirectory(root);
-                File.AppendAllText(logPath, DateTime.Now.ToString("o") + " start pid=" + SelfPid + Environment.NewLine);
+                File.AppendAllText(logPath, DateTime.Now.ToString("o") + " start pid=" + SelfPid +
+                    (silent ? " quiet" : "") + Environment.NewLine);
             }
             catch { }
+
+            Log("OptiHub installer starting..." + (silent ? " (quiet)" : ""));
+            Log("PID " + SelfPid);
 
             Log("Closing any running OptiHub app (not this installer)...");
             StopOtherOptiHub();
@@ -164,22 +199,40 @@ internal static class Program
                 try
                 {
                     // Prefer standalone .ico so Start Menu does not stick to a cached old EXE icon.
-                    string iconPath = Path.Combine(installDir, "Assets", "OptiHub.ico");
-                    if (!File.Exists(iconPath))
-                        iconPath = Path.Combine(installDir, "OptiHub.ico");
-                    if (File.Exists(iconPath))
+                    // Version the filename so Explorer cannot keep showing a stale cached mark.
+                    string iconSrc = Path.Combine(installDir, "Assets", "OptiHub.ico");
+                    if (!File.Exists(iconSrc))
+                        iconSrc = Path.Combine(installDir, "OptiHub.ico");
+
+                    string iconPath = targetExe + ",0";
+                    if (File.Exists(iconSrc))
                     {
                         try
                         {
-                            // Also place next to the EXE for easy shell resolution.
-                            File.Copy(iconPath, Path.Combine(installDir, "OptiHub.ico"), true);
-                            iconPath = Path.Combine(installDir, "OptiHub.ico");
+                            string verTag = string.IsNullOrWhiteSpace(installedVersion)
+                                ? "app"
+                                : NormalizeVersion(installedVersion).Replace(".", "-");
+                            string versioned = Path.Combine(installDir, "OptiHub-" + verTag + ".ico");
+                            File.Copy(iconSrc, versioned, true);
+                            File.Copy(iconSrc, Path.Combine(installDir, "OptiHub.ico"), true);
+                            iconPath = versioned;
+                            // Drop older versioned icons so we do not pile up files.
+                            try
+                            {
+                                foreach (string oldIco in Directory.GetFiles(installDir, "OptiHub-*.ico"))
+                                {
+                                    if (!string.Equals(oldIco, versioned, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        try { File.Delete(oldIco); } catch { }
+                                    }
+                                }
+                            }
+                            catch { }
                         }
-                        catch { }
-                    }
-                    else
-                    {
-                        iconPath = targetExe + ",0";
+                        catch
+                        {
+                            iconPath = iconSrc;
+                        }
                     }
 
                     CreateStartMenuShortcut(targetExe, installDir, iconPath);
@@ -270,13 +323,17 @@ internal static class Program
             catch { }
 
             Log("FAILED: " + detail);
-            MessageBoxW(
-                IntPtr.Zero,
-                "OptiHub install failed:\n\n" + detail +
-                "\n\nLog: %LocalAppData%\\OptiHub\\install.log\n" +
-                "Download again from:\nhttps://github.com/BarcusEric/OptiHub/releases/latest",
-                "OptiHub",
-                0x10);
+            // In-app quiet updates must not flash MessageBox; status lives in install.log.
+            if (!_silent)
+            {
+                MessageBoxW(
+                    IntPtr.Zero,
+                    "OptiHub install failed:\n\n" + detail +
+                    "\n\nLog: %LocalAppData%\\OptiHub\\install.log\n" +
+                    "Download again from:\nhttps://github.com/BarcusEric/OptiHub/releases/latest",
+                    "OptiHub",
+                    0x10);
+            }
             if (consoleOpen)
                 Thread.Sleep(4000);
             return 1;
@@ -300,7 +357,19 @@ internal static class Program
 
     private static void Log(string msg)
     {
-        try { Console.WriteLine("  " + msg); }
+        if (!_silent)
+        {
+            try { Console.WriteLine("  " + msg); }
+            catch { }
+        }
+        try
+        {
+            if (!string.IsNullOrEmpty(_logPath))
+            {
+                File.AppendAllText(_logPath,
+                    DateTime.Now.ToString("o") + " " + msg + Environment.NewLine);
+            }
+        }
         catch { }
     }
 

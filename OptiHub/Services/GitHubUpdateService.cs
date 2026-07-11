@@ -480,15 +480,48 @@ public sealed class GitHubUpdateService
                 };
             }
 
-            status?.Report($"Starting installer for OptiHub v{check.RemoteVersion}...");
-            // SFX installs ONLY to %LocalAppData%\OptiHub\app, writes Start Menu + Desktop
-            // shortcuts, verifies FileVersion, then relaunches. We exit so files unlock.
-            using var started = Process.Start(new ProcessStartInfo
+            status?.Report($"Applying OptiHub v{check.RemoteVersion} quietly…");
+            // Quiet in-app update: winexe SFX + /quiet + env — no console, no MessageBox.
+            // Installer stages under %LocalAppData%\OptiHub\app, refreshes Start Menu, relaunches.
+            Environment.SetEnvironmentVariable("OPTIHUB_SILENT_INSTALL", "1");
+            Process? started = null;
+            try
             {
-                FileName = setupPath,
-                UseShellExecute = true,
-                WorkingDirectory = work
-            });
+                started = Process.Start(new ProcessStartInfo
+                {
+                    FileName = setupPath,
+                    Arguments = "/quiet",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    WorkingDirectory = work,
+                    // Child inherits OPTIHUB_SILENT_INSTALL from this process environment.
+                    ErrorDialog = false
+                });
+            }
+            catch
+            {
+                started = null;
+            }
+            if (started is null)
+            {
+                try
+                {
+                    started = Process.Start(new ProcessStartInfo
+                    {
+                        FileName = setupPath,
+                        Arguments = "/quiet",
+                        UseShellExecute = true,
+                        WindowStyle = ProcessWindowStyle.Hidden,
+                        WorkingDirectory = work,
+                        ErrorDialog = false
+                    });
+                }
+                catch
+                {
+                    started = null;
+                }
+            }
             if (started is null)
             {
                 return new AppUpdateResult
@@ -496,7 +529,7 @@ public sealed class GitHubUpdateService
                     UpdateAvailable = true,
                     LocalVersion = check.LocalVersion,
                     RemoteVersion = check.RemoteVersion,
-                    Message = "Could not start the installer. Run %LocalAppData%\\OptiHub\\updates\\OptiHub-Setup.exe, or reinstall from GitHub Releases."
+                    Message = "Could not start the updater. Download OptiHub.exe from GitHub Releases and run it."
                 };
             }
 
@@ -509,7 +542,7 @@ public sealed class GitHubUpdateService
                 DownloadSize = check.DownloadSize,
                 Sha256 = check.Sha256,
                 ShouldExit = true,
-                Message = $"Installing OptiHub v{check.RemoteVersion} to %LocalAppData%\\OptiHub\\app. Closing now..."
+                Message = $"Applying v{check.RemoteVersion}… OptiHub will restart."
             };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

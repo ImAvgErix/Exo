@@ -941,3 +941,7 @@ button { cursor: pointer; border: none; background: none; }
   padding: 48px 16px;
   animation: fadeSlide 0.3s ease both;
 }
+
+/* Host WinUI chrome owns top bar */
+html.host-chrome .chrome { display: none !important; }
+html.host-chrome .view { padding-top: 18px; }

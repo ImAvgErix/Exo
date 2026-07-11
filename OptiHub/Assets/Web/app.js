@@ -491,16 +491,23 @@
   btnBack.addEventListener("click", () => navigate("home"));
   btnSettings.addEventListener("click", () => navigate("settings"));
 
-  // Keyboard: Esc back home when not busy
+  // Host chrome owns Settings/Back — hide in-page chrome when present.
+  if (window.__OPTIHUB_HOST_CHROME__) {
+    const chrome = document.getElementById("chrome");
+    if (chrome) chrome.style.display = "none";
+    document.documentElement.classList.add("host-chrome");
+  }
+
+  // Called from WinUI host title bar.
+  window.__optihubNavigate = (route) => {
+    try { navigate(String(route || "home")); } catch (e) { console.error(e); }
+  };
+
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && state.route !== "home" && !state.busy && !modal.classList.contains("hidden") === false) {
-      // if modal open, ignore — handled separately
-    }
     if (e.key === "Escape" && !modal.classList.contains("hidden")) return;
     if (e.key === "Escape" && state.route !== "home" && !state.busy) navigate("home");
   });
 
-  // Boot
   Promise.resolve()
     .then(() => navigate("home"))
     .catch((e) => {

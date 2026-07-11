@@ -22,7 +22,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _autoUpdateScripts;
     [ObservableProperty] private string _appVersion = "-";
     [ObservableProperty] private string _kitVersion = "-";
-    [ObservableProperty] private string _updateStatus = string.Empty;
+    [ObservableProperty] private string _updateStatus = "You're set. Check anytime for a newer OptiHub.";
     [ObservableProperty] private bool _isUpdating;
 
     public string AboutFooter { get; private set; } = "OptiHub";
@@ -118,22 +118,24 @@ public partial class SettingsViewModel : ObservableObject
                 if (ConfirmAsync is not null)
                 {
                     installNow = await ConfirmAsync(
-                        "Install OptiHub update?",
-                        $"Version {app.RemoteVersion} is available (you have {app.LocalVersion}).\n\n" +
-                        "This release includes the matching Discord / Steam / NVIDIA optimizers.\n" +
-                        "OptiHub will close, install in place, and reopen.");
+                        "Update available",
+                        $"OptiHub {app.RemoteVersion} is ready (you have {app.LocalVersion}).\n\n" +
+                        "Install now? The app updates quietly and restarts — no extra installer window.");
                 }
 
                 if (installNow)
                 {
-                    UpdateStatus = app.Message + " Installing...";
+                    UpdateStatus = "Downloading update quietly…";
                     var install = await _services.Updater.InstallAppUpdateAsync(app, status: progress);
-                    UpdateStatus = install.Message;
+                    UpdateStatus = string.IsNullOrWhiteSpace(install.Message)
+                        ? "Applying update… OptiHub will restart."
+                        : install.Message;
                     AppVersion = GetAppVersionText();
                     RefreshKitVersionText();
                     if (install.ShouldExit)
                     {
-                        await Task.Delay(900);
+                        UpdateStatus = "Applying update… OptiHub will restart.";
+                        await Task.Delay(700);
                         Microsoft.UI.Xaml.Application.Current?.Exit();
                         return;
                     }

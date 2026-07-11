@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.5
+
+- **Settings gear top-left** in host chrome (1.7.4 had it top-right on XAML fallback)
+- **Quiet in-app updates**: `/quiet` SFX, no console window, no installer MessageBox
+- **Start Menu icon**: versioned `.ico` path + shell notify so the brand mark refreshes
+- **Updates card**: status well matches Discord/Steam/NVIDIA result panels
+- **WebView2 init**: keep host HWND path; XAML fallback remains if runtime fails
+
 ## 1.5.7
 
 - **Discord**: lean Equicord profile (minimalism/privacy/QoL) with tuned plugin options; `eagerPatches` forced **off** (blanks Discord 1.0.9245)
