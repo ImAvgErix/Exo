@@ -635,7 +635,9 @@ public sealed class OptimizerStateService
                 downloadMarkerOk = IsTrue(root, "configVerified") && IsTrue(root, "downloadOptimized");
                 clientMarkerOk = IsTrue(root, "clientTweaksVerified") &&
                                  IsTrue(root, "snappyUi") && IsTrue(root, "overlayTweaks");
-                markerOk = string.Equals(markerVersion, "1.6.0", StringComparison.Ordinal) &&
+                var versionOk = string.Equals(markerVersion, "1.7.0", StringComparison.Ordinal) ||
+                                string.Equals(markerVersion, "1.6.0", StringComparison.Ordinal);
+                markerOk = versionOk &&
                            string.Equals(applyStatus, "applied", StringComparison.Ordinal) &&
                            IsTrue(root, "applied") &&
                            root.TryGetProperty("quick", out var quickValue) &&

@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.6.0'
+$Script:SteamOptVersion = '1.7.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Default Steam launch flags (formerly "aggressive" - this is the only tier).
@@ -1227,9 +1227,10 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
 function Install-WebHelperTrimHelper([string]$SteamPath) {
     # Maximum-performance helper: one instance, high client priority while idle,
     # an in-game CPU yield, and a 5-second working-set trim with no suspension.
+    # Also re-enforces StartupMode=0 periodically so Steam cannot re-arm autostart.
     $helper = Join-Path $SteamPath 'OptiHub-SteamWebHelperTrim.ps1'
     $body = @'
-# OptiHub - aggressive 5s steamwebhelper trim + in-game priority yield.
+# OptiHub - aggressive 5s steamwebhelper trim + in-game priority yield + quiet re-enforce.
 # No process suspension (suspension can break Steam IPC and overlay behavior).
 $ErrorActionPreference = 'SilentlyContinue'
 $created = $false
@@ -1288,6 +1289,31 @@ function Set-SteamClientPriority([bool]$InGame) {
   }
 }
 
+function Reinstate-SteamQuiet {
+  # Lightweight: keep Steam from re-arming Windows autostart while the client runs.
+  try {
+    $steamKey = 'HKCU:\Software\Valve\Steam'
+    if (-not (Test-Path $steamKey)) { New-Item -Path $steamKey -Force | Out-Null }
+    New-ItemProperty -Path $steamKey -Name 'StartupMode' -PropertyType DWord -Value 0 -Force | Out-Null
+  } catch {}
+  foreach ($key in @(
+    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
+    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run',
+    'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run'
+  )) {
+    if (-not (Test-Path $key)) { continue }
+    try {
+      $item = Get-Item -Path $key -ErrorAction Stop
+      foreach ($name in @($item.GetValueNames())) {
+        $val = [string]$item.GetValue($name)
+        if ($val -match '(?i)steam\.exe' -or $name -match '(?i)^steam') {
+          Remove-ItemProperty -Path $key -Name $name -Force -ErrorAction SilentlyContinue
+        }
+      }
+    } catch {}
+  }
+}
+
 try {
   # The helper is started immediately before steam.exe; wait for the client so
   # a scheduling race does not make the helper exit before Steam appears.
@@ -1296,10 +1322,15 @@ try {
     Start-Sleep -Milliseconds 250
   }
 
+  Reinstate-SteamQuiet
+  $ticks = 0
   while (Get-Process steam -ErrorAction SilentlyContinue) {
     $inGame = Test-SteamGameRunning
     Set-SteamClientPriority -InGame:$inGame
     Trim-WebHelpers
+    $ticks++
+    # Every ~2 minutes while Steam is open, re-assert no autostart.
+    if (($ticks % 24) -eq 0) { Reinstate-SteamQuiet }
     Start-Sleep -Seconds 5
   }
 } finally {
@@ -1308,7 +1339,7 @@ try {
 }
 '@
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
-    Write-Ok 'WebHelper helper installed (single instance; aggressive 5s trim; in-game priority yield)'
+    Write-Ok 'WebHelper helper installed (5s trim + priority + quiet re-enforce)'
     return $helper
 }
 

@@ -24,7 +24,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.5.3'
+$Script:NvidiaOptVersion = '1.6.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -1256,6 +1256,8 @@ function Disable-NvidiaTelemetry {
         '*NvNode*',
         '*NvBackend*',
         '*NVIDIA*App*',
+        '*NVIDIA*SelfUpdate*',
+        'NVIDIA App SelfUpdate*',
         '*FrameView*',
         'NvDriverUpdateCheckDaily*',
         'NVIDIA GeForce Experience SelfUpdate*'
@@ -1265,6 +1267,7 @@ function Disable-NvidiaTelemetry {
         $tn = $_.TaskName
         $tp = $_.TaskPath
         $full = "$tp$tn"
+        if ($tn -match '(?i)^OptiHub') { return }
         $hit = $false
         foreach ($pat in $taskPatterns) {
             if ($tn -like $pat -or $full -like $pat) { $hit = $true; break }
@@ -1279,6 +1282,9 @@ function Disable-NvidiaTelemetry {
         } catch { }
     }
     if ($disabled -eq 0) { Write-Ok 'No telemetry tasks matched (already clean or names differ)' }
+
+    # No logon persist task — scheduled tasks are background overhead. Quiet is
+    # re-applied only when the user runs OptiHub NVIDIA Apply (or Repair).
 
     # Privacy-oriented NV keys (best-effort; missing keys are fine)
     $paths = @(
@@ -1322,10 +1328,12 @@ function Test-NvidiaPerformanceDebloat {
         [void]$issues.Add("Background clients still running: $($background.ProcessName -join ', ')")
     }
 
-    $taskPatterns = @('*NvTm*', '*NVIDIA*Telemetry*', '*NvProfile*', '*NvNode*', '*NvBackend*', '*NVIDIA*App*', '*FrameView*', 'NvDriverUpdateCheckDaily*', 'NVIDIA GeForce Experience SelfUpdate*')
-    Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.State -ne 'Disabled' } | ForEach-Object {
+    $taskPatterns = @('*NvTm*', '*NVIDIA*Telemetry*', '*NvProfile*', '*NvNode*', '*NvBackend*', '*NVIDIA*App*', '*NVIDIA*SelfUpdate*', 'NVIDIA App SelfUpdate*', '*FrameView*', 'NvDriverUpdateCheckDaily*', 'NVIDIA GeForce Experience SelfUpdate*')
+    Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
+        [bool]$_.Settings.Enabled -or $_.State -ne 'Disabled'
+    } | ForEach-Object {
         $full = "$($_.TaskPath)$($_.TaskName)"
-        if ($_.TaskName -match '(?i)Display|LocalSystem') { return }
+        if ($_.TaskName -match '(?i)Display|LocalSystem|^OptiHub') { return }
         foreach ($pattern in $taskPatterns) {
             if ($_.TaskName -like $pattern -or $full -like $pattern) {
                 [void]$issues.Add("Scheduled task enabled: $full")

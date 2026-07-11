@@ -130,10 +130,12 @@ function Test-NvidiaPerformanceDebloat {
         [void]$issues.Add("Background clients running: $($background.ProcessName -join ', ')")
     }
 
-    $patterns = @('*NvTm*', '*NVIDIA*Telemetry*', '*NvProfile*', '*NvNode*', '*NvBackend*', '*NVIDIA*App*', '*FrameView*', 'NvDriverUpdateCheckDaily*', 'NVIDIA GeForce Experience SelfUpdate*')
-    Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.State -ne 'Disabled' } | ForEach-Object {
+    $patterns = @('*NvTm*', '*NVIDIA*Telemetry*', '*NvProfile*', '*NvNode*', '*NvBackend*', '*NVIDIA*App*', '*NVIDIA*SelfUpdate*', 'NVIDIA App SelfUpdate*', '*FrameView*', 'NvDriverUpdateCheckDaily*', 'NVIDIA GeForce Experience SelfUpdate*')
+    Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
+        [bool]$_.Settings.Enabled -or $_.State -ne 'Disabled'
+    } | ForEach-Object {
         $full = "$($_.TaskPath)$($_.TaskName)"
-        if ($_.TaskName -match '(?i)Display|LocalSystem') { return }
+        if ($_.TaskName -match '(?i)Display|LocalSystem|^OptiHub') { return }
         foreach ($pattern in $patterns) {
             if ($_.TaskName -like $pattern -or $full -like $pattern) {
                 [void]$issues.Add("Task enabled: $full")
@@ -405,7 +407,7 @@ elseif ($needsRetweak) { 'Version is newest; Apply will apply OptiHub MSI/privac
 elseif (-not $profileOk) { $(if ($applyInProgress) { 'The previous Apply was interrupted before a verified profile marker was saved. Apply again.' } else { 'The profile file, pack version, hash, or imported driver version is not verified. Apply again.' }) }
 elseif (-not $displayOk) { 'The 3D profile is verified, but live NVAPI display verification is incomplete. Restore the helper or Apply again.' }
 elseif (-not $backgroundOk) { 'NVIDIA background services, tasks, auto-start entries, or overlay preferences are active. Apply again.' }
-elseif ($isApplied) { 'Driver current with tweaks and 3D profile applied. Reapply after major driver upgrades.' }
+elseif ($isApplied) { 'Driver current with tweaks, 3D profile, and display prefs applied. Reapply after major driver upgrades or if NVIDIA App re-enables SelfUpdate.' }
 else { 'Choose the G-SYNC pack only for a compatible display, then Apply.' }
 
 [ordered]@{

@@ -166,7 +166,7 @@ foreach ($marker in @(
     Assert-ContainsText $steamOptimizer $marker 'Steam durable state/fail-closed contract'
 }
 foreach ($marker in @(
-    "[string]`$state.version -eq '1.6.0'",
+    '1.7.0',
     "[string]`$state.applyStatus -eq 'applied'",
     'Test-SteamStartupQuiet',
     'Test-SteamDownloadConfig',
@@ -174,10 +174,12 @@ foreach ($marker in @(
     'Complete client debloat',
     'Windows quiet shell',
     'Test-SteamCompleteClientDebloat',
-    'Test-SteamWindowsQuiet'
+    'Test-SteamWindowsQuiet',
+    'Reinstate-SteamQuiet'
 )) {
     Assert-ContainsText $steamDetect $marker 'Steam live applied-state contract'
 }
+Assert-ContainsText $steamOptimizer 'Reinstate-SteamQuiet' 'Steam durable quiet helper'
 $steamInvalidation = $steamOptimizer.IndexOf("applyStatus     = 'applying'", [StringComparison]::Ordinal)
 $steamMutation = $steamOptimizer.IndexOf('$startupResult = Disable-SteamWindowsStartup', [StringComparison]::Ordinal)
 if ($steamInvalidation -lt 0 -or $steamMutation -lt 0 -or $steamInvalidation -gt $steamMutation) {

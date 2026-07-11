@@ -130,32 +130,25 @@ function Invoke-SoftDriverRefresh {
     }
 }
 
-function Register-PersistTask {
-    # Re-stamp registry at logon so prefs survive reboots / driver resets
-    $taskName = 'OptiHub-NvidiaDisplayPersist'
-    $script = Join-Path $Root 'OptiHub-Display-Apply.ps1'
-    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    # -Light prevents service restarts, UI work, and recursive task registration at logon.
-    $arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script`" -Light"
-    try {
-        # Run as current user at logon
-        $user = "$env:USERDOMAIN\$env:USERNAME"
-        schtasks /Create /TN $taskName /TR "`"$ps`" $arg" /SC ONLOGON /RL HIGHEST /F /RU $user 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            Write-DLog "Persist task registered: $taskName (re-apply at logon)"
-        } else {
-            Write-DLog "Persist task register skipped/failed (exit $LASTEXITCODE)"
-        }
-    } catch {
-        Write-DLog "Persist task error: $($_.Exception.Message)"
+function Unregister-LegacyPersistTask {
+    # Logon tasks are background overhead — OptiHub no longer registers any.
+    # Remove leftovers from older builds.
+    foreach ($taskName in @('OptiHub-NvidiaDisplayPersist', 'OptiHub-NvidiaBackgroundPersist')) {
+        try {
+            schtasks /Delete /TN $taskName /F 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Write-DLog "Removed legacy task: $taskName"
+            }
+        } catch { }
     }
 }
 
 # ---- main ----
-Write-DLog '=== Display apply (sticky path) ==='
+Write-DLog '=== Display apply (no logon task) ==='
 $light = [bool]$Light -or ($env:OPTIHUB_DISPLAY_LIGHT -eq '1')
 if (-not $light) {
     Get-Process nvcplui -EA 0 | Stop-Process -Force -EA 0
+    Unregister-LegacyPersistTask
 }
 
 # 1) Registry
@@ -168,9 +161,10 @@ if (-not $light) {
 }
 
 # 2) Final NVAPI modes/color/path apply, then registry stamp.
+# Sticky without a scheduled task: registry + NVAPI persist until a driver reset;
+# re-run NVIDIA Apply in OptiHub if prefs drift.
 $nvApiOk = Invoke-NvApiHelper
 Set-AllNvtweakDevices
-if (-not $light) { Register-PersistTask }
 
 # Verify any driver-created registry keys. NVAPI success remains required.
 $registryOk = $true

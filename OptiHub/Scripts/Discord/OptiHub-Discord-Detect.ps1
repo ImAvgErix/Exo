@@ -252,20 +252,26 @@ if (-not (Test-Path $discordRoot)) {
                 [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')
         } catch { }
         $markerOk = [bool]($state -and
-            [string]$state.version -eq '1.3.0' -and
+            ([string]$state.version -eq '1.3.0' -or [string]$state.version -eq '1.3.1') -and
             [string]$state.applyStatus -eq 'applied' -and
             $state.applied -eq $true -and
             $state.fullApply -eq $true -and
             $state.windowsVerified -eq $true -and
             $state.debloatVerified -eq $true -and
             $stateAppOk)
-        Add-Feature 'Verified optimizer record' 'A completed 1.3.0 full apply is recorded for this exact Discord build.' $markerOk
+        Add-Feature 'Verified optimizer record' 'A completed full apply is recorded for this exact Discord build.' $markerOk
 
         $isApplied = [bool]($markerOk -and $equicordOk -and $openAsarOk -and $kernelOk -and
             $debloatOk -and $windowsQuietOk -and $amoledOk -and $runtimeOk -and $launchOk)
         if ($isApplied) {
             $statusText = 'Already optimized'
             $detail = 'No-compromise pack active: aggressive trim, Above Normal priority, full debloat, OpenASAR, and Equicord.'
+        } elseif ($state -and $state.applied -eq $true -and -not $stateAppOk) {
+            $statusText = 'Discord updated — reapply'
+            $detail = 'Discord installed a new build. Run again to restore OpenAsar, kernel, debloat, and Windows quiet. Daily Start Menu launch auto-heals OpenAsar/kernel when missing.'
+        } elseif (-not $openAsarOk -or -not $kernelOk -or -not $equicordOk) {
+            $statusText = 'Mods need restore'
+            $detail = 'OpenAsar, Equicord, or the DiscOpt kernel is missing (often after a Discord update). Run to restore, or open Discord from Start Menu for auto-heal.'
         } else {
             $statusText = 'Ready to optimize'
             $detail = 'Some pieces are missing. Run to finish setup and unlock the savings below.'

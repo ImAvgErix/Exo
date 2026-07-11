@@ -327,7 +327,7 @@ if (-not $steamOk) {
 
     $runtimeOk = Test-SteamRuntimeIntegrity $steam
     $markerOk = [bool]($state -and
-        [string]$state.version -eq '1.6.0' -and
+        ([string]$state.version -eq '1.6.0' -or [string]$state.version -eq '1.7.0') -and
         [string]$state.applyStatus -eq 'applied' -and
         $state.applied -eq $true -and
         $state.quick -eq $false -and
@@ -337,14 +337,26 @@ if (-not $steamOk) {
         $state.cacheCleanupCompleted -eq $true -and
         $state.shaderInventoryVerified -eq $true -and
         $state.installedShaderCachesPreserved -eq $true)
-    Add-Feature 'Verified apply' 'Full 1.6.0 apply recorded and runtime intact.' ($markerOk -and $runtimeOk)
+    # Prefer the durable 1.7.0 helper (quiet re-enforce) when present.
+    if ($markerOk -and [string]$state.version -eq '1.6.0' -and $helper -and (Test-Path -LiteralPath $helper)) {
+        try {
+            $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
+            if ($helperText -notmatch 'Reinstate-SteamQuiet') { $markerOk = $false }
+        } catch { $markerOk = $false }
+    }
+    Add-Feature 'Verified apply' 'Full apply recorded with durable quiet + runtime intact.' ($markerOk -and $runtimeOk)
 
     $isApplied = $steamOk -and $markerOk -and $cefOk -and $trimOk -and $debloatOk -and
         $runtimeOk -and $dlOk -and $snapOk -and $windowsQuietOk -and $launchOk
 
-    $statusText = if ($isApplied) { 'Already optimized' } else { 'Ready to optimize' }
+    $statusText = if ($isApplied) { 'Already optimized' }
+    elseif (-not $cefOk -or -not $trimOk -or -not $launchOk) { 'Launcher needs restore' }
+    elseif (-not $windowsQuietOk) { 'Windows quiet incomplete' }
+    else { 'Ready to optimize' }
     $detail = if ($isApplied) {
-        'Quiet CEF, debloat, Windows quiet, and 5s RAM trim are active.'
+        'Quiet CEF, debloat, Windows quiet, 5s RAM trim, and autostart re-enforce are active.'
+    } elseif (-not $cefOk -or -not $trimOk) {
+        'Steam launcher or trim helper is missing. Run to restore the OptiHub launch path.'
     } else {
         'Some pieces are missing. Run to finish the checklist below.'
     }

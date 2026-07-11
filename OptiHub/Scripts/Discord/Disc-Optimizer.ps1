@@ -45,7 +45,7 @@ if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.3.0'
+$Script:DiscOptVersion = '1.3.1'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -447,7 +447,36 @@ try {
 Initialize-Network
 
 if ($Launch) {
+    # Daily path: if Discord updated and stripped OpenAsar/kernel/Equicord, restore
+    # them silently before starting. No full debloat here (fast, non-experimental).
     $app = Assert-DiscordInstall
+    try {
+        $resources = Join-Path $app.FullName 'resources'
+        $openAsarOk = Test-OpenAsarInstalled $resources
+        $kernelOk = (Test-Path (Join-Path $app.FullName 'version.dll')) -and
+            (Test-Path (Join-Path $app.FullName 'config.ini')) -and
+            (Test-Path (Join-Path $app.FullName 'ffmpeg_real.dll')) -and
+            (Test-Path (Join-Path $app.FullName 'ffmpeg.dll')) -and
+            ((Get-Item (Join-Path $app.FullName 'ffmpeg.dll') -ErrorAction SilentlyContinue).Length -lt 500000)
+        $equicordOk = Test-EquicordReady $app.FullName
+        if (-not $openAsarOk -or -not $kernelOk -or -not $equicordOk) {
+            Write-Host '[*] Discord client changed - restoring OptiHub mods (OpenAsar / Equicord / kernel)...'
+            Stop-Discord
+            if (-not $openAsarOk -or -not $equicordOk) {
+                try { Install-Equicord $app.FullName } catch {
+                    try { Install-OpenAsar $app.FullName } catch { }
+                    try { Apply-EquicordProfile -AppDir $app.FullName } catch { }
+                }
+            }
+            if (-not $kernelOk) {
+                try { Install-DiscOptKernel $app.FullName } catch { }
+            }
+            try { Restore-StartMenu } catch { }
+            Write-Host '[+] OptiHub mods restored; starting Discord'
+        }
+    } catch {
+        # Never block launch if heal fails
+    }
     Start-Discord $app.FullName
     exit 0
 }
