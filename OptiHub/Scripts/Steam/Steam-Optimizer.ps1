@@ -868,13 +868,23 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
         }
     }
 
-    # Cleanup any leftover OptiHub desktop shortcuts we may have created earlier
-    $desktop = [Environment]::GetFolderPath('Desktop')
-    foreach ($name in @('Steam (OptiHub Lean).lnk', 'Steam (OptiHub Aggressive).lnk', 'Steam (OptiHub).lnk')) {
-        $p = Join-Path $desktop $name
-        if (Test-Path -LiteralPath $p) {
-            Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue
-            Write-Ok "Removed desktop shortcut: $name"
+    # Never leave Steam / OptiHub icons on the Desktop (user or public).
+    foreach ($desktop in @(
+        [Environment]::GetFolderPath('Desktop'),
+        [Environment]::GetFolderPath('CommonDesktopDirectory')
+    )) {
+        if (-not $desktop -or -not (Test-Path -LiteralPath $desktop)) { continue }
+        foreach ($name in @(
+            'Steam.lnk', 'Steam (OptiHub Lean).lnk', 'Steam (OptiHub Aggressive).lnk', 'Steam (OptiHub).lnk'
+        )) {
+            $p = Join-Path $desktop $name
+            if (Test-Path -LiteralPath $p) {
+                Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue
+                Write-Ok "Removed desktop shortcut: $name"
+            }
+        }
+        Get-ChildItem -LiteralPath $desktop -Filter 'Steam*.lnk' -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue; Write-Ok "Removed desktop: $($_.Name)" } catch { }
         }
     }
 

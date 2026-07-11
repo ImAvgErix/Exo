@@ -84,7 +84,8 @@ function Build-FullEquicordSettings {
     $enabledThemes = @($EnabledTheme)
     if ($overrides.enabledThemes) { $enabledThemes = @($overrides.enabledThemes) }
 
-    $eager = $true
+    # Default false: eagerPatches=true blanks Discord 1.0.9245 + current Equicord
+    $eager = $false
     if ($overrides.Keys -contains 'eagerPatches') { $eager = [bool]$overrides.eagerPatches }
 
     $settings = [ordered]@{

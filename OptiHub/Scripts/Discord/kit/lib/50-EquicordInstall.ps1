@@ -151,9 +151,9 @@ function Initialize-EquicordSettingsBase([string]$DestPath) {
 function Apply-EquicordProfile {
     param([string]$AppDir = '')
 
-    # UNIVERSAL: same profile on every machine. Stock Discord / fresh Equicord /
-    # existing users all get the full manifest + OptiHub overrides written to disk.
-    Write-Step 'Applying universal Equicord profile (all plugins for any PC)...'
+    # Prefer preserving a working lean Equicord profile. Full rebuilds only when
+    # settings are missing/corrupt. eagerPatches=true blanks Discord 1.0.9245.
+    Write-Step 'Applying Equicord profile (lean overrides; preserve healthy settings)...'
     Write-HubProgress 62 'Applying Equicord profile...'
     Write-HubProgress 64 'Writing plugin settings...'
 
@@ -166,14 +166,29 @@ function Apply-EquicordProfile {
     # Refresh manifests when allowed so new Equicord plugins still get registered.
     Sync-PluginManifests
 
-    # Full rebuild - do not trust an existing partial settings.json from a stock install.
-    $settings = Build-FullEquicordSettings
+    $settings = $null
+    if (Test-Path $destPath) {
+        try {
+            $existing = ConvertTo-HashtableDeep (Get-Content $destPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+            $bytes = (Get-Item $destPath).Length
+            $pluginCount = if ($existing.plugins) { @($existing.plugins.Keys).Count } else { 0 }
+            if ($bytes -gt 200 -and $pluginCount -gt 0) {
+                $settings = $existing
+                Write-Ok "Preserving existing Equicord settings ($pluginCount plugins, $([math]::Round($bytes/1KB,1)) KB)"
+            }
+        } catch {
+            Write-Warn "Could not read existing Equicord settings - rebuilding"
+        }
+    }
+    if (-not $settings) {
+        $settings = Build-FullEquicordSettings
+    }
 
     # Hard safety locks (always, every machine).
     $settings.autoUpdateNotification = $false
-    $settings.eagerPatches = $true
+    $settings.eagerPatches = $false
     $settings.enableOnlineThemes = $false
-    $settings.useQuickCss = $false
+    $settings.useQuickCss = $true
     $settings.enableReactDevtools = $false
     $settings.mainWindowFrameless = $false
     $settings.frameless = $false

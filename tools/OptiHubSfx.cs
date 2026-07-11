@@ -150,11 +150,12 @@ internal static class Program
                 }
                 catch { }
 
-                // Shortcuts always point at the live install, not this SFX / not repo publish folders.
+                // Start Menu only — never create Desktop shortcuts (user policy).
                 try
                 {
-                    CreateShortcuts(targetExe, installDir);
-                    Log("Shortcuts updated (Start Menu + Desktop).");
+                    CreateStartMenuShortcut(targetExe, installDir);
+                    RemoveDesktopShortcuts();
+                    Log("Start Menu shortcut updated (no Desktop shortcuts).");
                 }
                 catch (Exception scEx)
                 {
@@ -511,18 +512,57 @@ internal static class Program
         }
     }
 
-    private static void CreateShortcuts(string targetExe, string workingDir)
+    private static void CreateStartMenuShortcut(string targetExe, string workingDir)
     {
         string startMenu = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
             "Programs",
             "OptiHub.lnk");
-        string desktop = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-            "OptiHub.lnk");
-
         WriteShortcut(startMenu, targetExe, workingDir);
-        WriteShortcut(desktop, targetExe, workingDir);
+    }
+
+    private static void RemoveDesktopShortcuts()
+    {
+        // Never leave OptiHub (or installer leftovers) on the Desktop.
+        string[] desks = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory)
+        };
+        string[] names = new[]
+        {
+            "OptiHub.lnk",
+            "OptiHub (1).lnk",
+            "NVIDIA App.lnk",
+            "NVIDIA Control Panel.lnk",
+            "GeForce Experience.lnk",
+            "Discord (OptiHub).lnk",
+            "Steam (OptiHub).lnk",
+            "Steam (OptiHub Lean).lnk",
+            "Steam (OptiHub Aggressive).lnk"
+        };
+        foreach (string desk in desks)
+        {
+            if (string.IsNullOrEmpty(desk) || !Directory.Exists(desk)) continue;
+            foreach (string name in names)
+            {
+                try
+                {
+                    string path = Path.Combine(desk, name);
+                    if (File.Exists(path)) File.Delete(path);
+                }
+                catch { }
+            }
+            // Also drop any *.lnk whose name starts with OptiHub
+            try
+            {
+                foreach (string path in Directory.GetFiles(desk, "OptiHub*.lnk"))
+                {
+                    try { File.Delete(path); } catch { }
+                }
+            }
+            catch { }
+        }
     }
 
     private static void WriteShortcut(string lnkPath, string targetExe, string workingDir)

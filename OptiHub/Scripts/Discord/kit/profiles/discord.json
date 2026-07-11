@@ -5,34 +5,29 @@
   "START_MINIMIZED": false,
   "IS_MAXIMIZED": true,
   "IS_MINIMIZED": false,
-  "enableHardwareAcceleration": true,
   "debugLogging": false,
   "offloadAdmControls": true,
   "useLegacyAudioDevice": false,
   "asyncVideoInputDeviceInit": false,
   "audioSubsystem": "standard",
-  "BACKGROUND_COLOR": "#000000",
   "DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR": true,
   "DESKTOP_TTI_DNSTCP_WARMUP": false,
   "DESKTOP_TTI_EARLY_UPDATE_CHECK": false,
   "DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS": 3000,
   "openasar": {
-    "cmdPreset": "perf",
-    "disableMediaKeys": true,
+    "disableMediaKeys": false,
     "noTrack": true,
     "noTyping": true,
     "quickstart": false,
     "setup": true,
     "domOptimizer": false,
     "themeSync": false,
-    "autoupdate": false,
-    "css": "body { --background-primary: #000000; --background-secondary: #000000; }"
+    "autoupdate": false
   },
   "chromiumSwitches": {
     "disable-breakpad": 1,
     "disable-crash-reporter": 1,
     "disable-domain-reliability": 1,
-    "disable-logging": 1,
-    "disable-features": "WebBluetooth,BluetoothAdapterWinrt,BluetoothScanning,MediaRouter,OptimizationHints,AutofillServerCommunication,CalculateNativeWinOcclusion,InterestFeedContentSuggestions,CertificateTransparencyComponentUpdater"
+    "disable-logging": 1
   }
 }

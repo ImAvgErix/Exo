@@ -412,12 +412,17 @@ $EnabledTheme = 'amoled-cord.theme.css'
 $ForceDisabledPlugins = @(
     # StreamerModeOn forces Discord Streamer Mode while live even if the user turned it off.
     'StreamerModeOn',
+    # Lean minimalism: cut convenience / UI chrome plugins (overhead for little gain)
+    'ImageZoom', 'ViewIcons', 'CopyUserURLs', 'ReadAllNotificationsButton',
+    'FixImagesQuality', 'CallTimer', 'RoleColorEverywhere', 'ShowTimeouts',
+    'FixCodeblockGap', 'FixFileExtensions', 'BetterGifPicker', 'MessageClickActions',
+    'GameActivityToggle',
     'BlockKrisp', 'AltKrispSwitch', 'RelationshipNotifier',
     'Dearrow', 'ImplicitRelationships', 'OpenInApp', 'SplitLargeMessages', 'EquicordToolbox',
     'IdleAutoRestart', 'FixSpotifyEmbeds', 'ReplaceGoogleSearch', 'SupportHelper',
     'BetterUploadButton', 'FixYoutubeEmbeds',
     'ConcatenatedComponentExtractor', 'CancelFriendRequest',
-    'StartupTimings', 'NewPluginsManager', 'WebContextMenus', 'WebKeybinds', 'WebScreenShareFixes',
+    'StartupTimings', 'NewPluginsManager', 'WebKeybinds', 'WebScreenShareFixes',
     'MessageNotifier', 'KeywordNotify', 'ReplyPingControl', 'BypassStatus', 'PingNotifications',
     'NotificationTitle', 'ToastNotifications', 'VoiceJoinMessages', 'VcNarrator', 'VcNarratorCustom',
     'XSOverlay', 'VoiceChannelLog', 'VoiceStats', 'Streaks', 'FriendshipRanks',
