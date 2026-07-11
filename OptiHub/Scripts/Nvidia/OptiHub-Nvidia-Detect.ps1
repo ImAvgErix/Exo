@@ -368,10 +368,15 @@ if ($state -and $applied) {
     if ($state.PSObject.Properties.Name -contains 'gameProfiles' -and $state.gameProfiles) {
         $names = @($state.gameProfiles | ForEach-Object { "$_" })
     }
+    $deltas = $false
+    if ($state.PSObject.Properties.Name -contains 'gameProfileDeltas') {
+        $deltas = [bool]$state.gameProfileDeltas
+    }
     $gameOk = [bool]$state.gameProfilesApplied -and $count -ge 10
     if ($gameOk) {
         $sample = ($names | Select-Object -First 6) -join ', '
-        $gameDetail = "Imported $count game profiles from your series pack ($sample...)."
+        $deltaNote = if ($deltas) { ' + competitive/hybrid deltas' } else { ' (reapply for tier deltas)' }
+        $gameDetail = "Imported $count game profiles from your series pack$deltaNote ($sample...)."
     } elseif ($count -gt 0) {
         $gameDetail = "Only $count game profiles recorded - reapply for the full catalog."
     }

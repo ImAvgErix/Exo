@@ -24,7 +24,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.7.0'
+$Script:NvidiaOptVersion = '1.7.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -114,23 +114,146 @@ function Get-ProfileFile([string]$SeriesId, [bool]$UseGsync) {
 function Get-OptiHubGameProfileCatalog {
     # Application profiles clone the active series Base pack (all 10 packs work:
     # we generate from whichever XX Series / G-SYNC NIP was selected at apply).
+    # Tier:
+    #   comp   - pure competitive: sticky latency stack + disable Frame Gen override when present
+    #   hybrid - still sticky latency (no driver FPS cap / prf=1) but leave FG as the series pack
     @(
-        @{ Name = 'Valorant';            Exes = @('VALORANT-Win64-Shipping.exe') },
-        @{ Name = 'Counter-Strike 2';    Exes = @('cs2.exe') },
-        @{ Name = 'Marvel Rivals';       Exes = @('Marvel-Win64-Shipping.exe', 'MarvelRivals-Win64-Shipping.exe') },
-        @{ Name = 'Rainbow Six Siege';   Exes = @('RainbowSix.exe', 'RainbowSix_Vulkan.exe', 'RainbowSixGame.exe') },
-        @{ Name = 'Fortnite';            Exes = @('FortniteClient-Win64-Shipping.exe') },
-        @{ Name = 'Apex Legends';        Exes = @('r5apex.exe', 'r5apex_dx12.exe') },
-        @{ Name = 'League of Legends';   Exes = @('League of Legends.exe') },
-        @{ Name = 'Overwatch 2';         Exes = @('Overwatch.exe') },
-        @{ Name = 'Rocket League';       Exes = @('RocketLeague.exe') },
-        @{ Name = 'Call of Duty';        Exes = @('cod.exe', 'cod24.exe', 'cod23.exe', 'cod22.exe') },
-        @{ Name = 'Destiny 2';           Exes = @('destiny2.exe') },
-        @{ Name = 'PUBG';                Exes = @('TslGame.exe') },
-        @{ Name = 'Escape from Tarkov';  Exes = @('EscapeFromTarkov.exe', 'EscapeFromTarkov_BE.exe') },
-        @{ Name = 'The Finals';          Exes = @('Discovery.exe') },
-        @{ Name = 'Delta Force';         Exes = @('DeltaForceClient-Win64-Shipping.exe') }
+        @{ Name = 'Valorant';            Tier = 'comp';   Exes = @('VALORANT-Win64-Shipping.exe') },
+        @{ Name = 'Counter-Strike 2';    Tier = 'comp';   Exes = @('cs2.exe') },
+        @{ Name = 'Marvel Rivals';       Tier = 'comp';   Exes = @('Marvel-Win64-Shipping.exe', 'MarvelRivals-Win64-Shipping.exe') },
+        @{ Name = 'Rainbow Six Siege';   Tier = 'comp';   Exes = @('RainbowSix.exe', 'RainbowSix_Vulkan.exe', 'RainbowSixGame.exe') },
+        @{ Name = 'Fortnite';            Tier = 'comp';   Exes = @('FortniteClient-Win64-Shipping.exe') },
+        @{ Name = 'Apex Legends';        Tier = 'comp';   Exes = @('r5apex.exe', 'r5apex_dx12.exe') },
+        @{ Name = 'League of Legends';   Tier = 'comp';   Exes = @('League of Legends.exe') },
+        @{ Name = 'Overwatch 2';         Tier = 'comp';   Exes = @('Overwatch.exe') },
+        @{ Name = 'Rocket League';       Tier = 'comp';   Exes = @('RocketLeague.exe') },
+        @{ Name = 'Call of Duty';        Tier = 'comp';   Exes = @('cod.exe', 'cod24.exe', 'cod23.exe', 'cod22.exe') },
+        @{ Name = 'Destiny 2';           Tier = 'hybrid'; Exes = @('destiny2.exe') },
+        @{ Name = 'PUBG';                Tier = 'comp';   Exes = @('TslGame.exe') },
+        @{ Name = 'Escape from Tarkov';  Tier = 'comp';   Exes = @('EscapeFromTarkov.exe', 'EscapeFromTarkov_BE.exe') },
+        @{ Name = 'The Finals';          Tier = 'comp';   Exes = @('Discovery.exe') },
+        @{ Name = 'Delta Force';         Tier = 'comp';   Exes = @('DeltaForceClient-Win64-Shipping.exe') }
     )
+}
+
+function Get-OptiHubNipSettingMap {
+    param([System.Xml.XmlNode]$ProfileNode)
+    $map = @{}
+    foreach ($s in @($ProfileNode.SelectNodes('Settings/ProfileSetting'))) {
+        $id = [string]$s.SettingID
+        if ($id) { $map[$id] = [string]$s.SettingValue }
+    }
+    return $map
+}
+
+function Set-OptiHubNipSettingValue {
+    param(
+        [Parameter(Mandatory)][System.Xml.XmlNode]$ProfileNode,
+        [Parameter(Mandatory)][string]$SettingId,
+        [Parameter(Mandatory)][string]$Value
+    )
+    $node = $ProfileNode.SelectSingleNode("Settings/ProfileSetting[SettingID='$SettingId']")
+    if (-not $node) { return $false }
+    $valNode = $node.SelectSingleNode('SettingValue')
+    if (-not $valNode) { return $false }
+    if ([string]$valNode.InnerText -eq $Value) { return $false }
+    $valNode.InnerText = $Value
+    return $true
+}
+
+function Apply-OptiHubGameProfileDeltas {
+    param(
+        [Parameter(Mandatory)][System.Xml.XmlNode]$ProfileNode,
+        [Parameter(Mandatory)][hashtable]$BaseMap,
+        [Parameter(Mandatory)][string]$Tier
+    )
+    # Detect pack policy from the cloned Base (works for all 10 series packs).
+    $isGsyncPack = ($BaseMap['294973784'] -eq '1') -or ($BaseMap['277041152'] -eq '0' -and $BaseMap['390467'] -eq '0')
+    $changed = 0
+    $notes = [System.Collections.Generic.List[string]]::new()
+
+    # --- Sticky latency / clarity stack (every title) ---
+    # Re-assert so an app-level NVIDIA/App profile cannot leave softer defaults.
+    $common = @{
+        '8102046'   = '1'          # Maximum Pre-Rendered Frames = 1
+        '546199011' = '1'          # Maximum frames allowed = 1
+        '277041154' = '0'          # Frame Rate Limiter V3 off
+        '553505273' = '0'          # Triple buffering off
+        '274197361' = '1'          # Prefer maximum performance
+        '549528094' = '1'          # Threaded optimization on
+        '6600001'   = '1'          # Highest available refresh
+        '276089202' = '0'          # FXAA off
+        '10011052'  = '0'          # MFAA off
+        '6714153'   = '0'          # Ambient occlusion off
+        '276158834' = '0'          # Ansel off
+        '271965065' = '0'          # Predefined Ansel off
+        '275315612' = '0'          # FXAA indicator off
+        '543959236' = '0'          # Enable overlay off
+    }
+    foreach ($id in $common.Keys) {
+        if (-not $BaseMap.ContainsKey($id)) { continue }
+        if (Set-OptiHubNipSettingValue -ProfileNode $ProfileNode -SettingId $id -Value $common[$id]) {
+            $changed++
+        }
+    }
+
+    # Re-pin pack-specific sync / latency policy (do not invent G-SYNC on max-FPS packs).
+    if ($isGsyncPack) {
+        $gsyncPins = @{
+            '390467'    = '0'   # ULL CPL off (avoids fighting VRR)
+            '277041152' = '0'   # ULL enabled off
+            '294973784' = '1'   # GSYNC global mode on
+            '278196727' = '1'   # GSYNC application state on
+            '279476687' = '1'   # GSYNC application mode on
+            '11041279'  = '0'   # OS VRR override off (driver/G-SYNC path)
+        }
+        if ($BaseMap.ContainsKey('11041231') -and $BaseMap['11041231']) {
+            $gsyncPins['11041231'] = $BaseMap['11041231'] # keep pack VSync (G-SYNC friendly)
+        }
+        foreach ($id in $gsyncPins.Keys) {
+            if (-not $BaseMap.ContainsKey($id)) { continue }
+            if (Set-OptiHubNipSettingValue -ProfileNode $ProfileNode -SettingId $id -Value $gsyncPins[$id]) {
+                $changed++
+            }
+        }
+        [void]$notes.Add('gsync-pins')
+    } else {
+        $fpsPins = @{
+            '390467'    = '2'          # ULL CPL = Ultra
+            '277041152' = '1'          # ULL enabled
+            '294973784' = '0'          # GSYNC global off
+            '278196727' = '0'          # GSYNC app state off
+            '11041279'  = '1'          # OS VRR override on (helps non-G-SYNC path)
+            '11041231'  = '138504007'  # VSync force off (OptiHub max-FPS packs)
+        }
+        foreach ($id in $fpsPins.Keys) {
+            if (-not $BaseMap.ContainsKey($id)) { continue }
+            if (Set-OptiHubNipSettingValue -ProfileNode $ProfileNode -SettingId $id -Value $fpsPins[$id]) {
+                $changed++
+            }
+        }
+        [void]$notes.Add('maxfps-pins')
+    }
+
+    # Competitive titles: disable DLSS Frame Gen override when the series pack has it (40/50).
+    # FG trades latency for smoothness — wrong default for Val/CS2/R6/etc.
+    if ($Tier -eq 'comp') {
+        if ($BaseMap.ContainsKey('283385347')) {
+            if (Set-OptiHubNipSettingValue -ProfileNode $ProfileNode -SettingId '283385347' -Value '0') {
+                $changed++
+            }
+            [void]$notes.Add('fg-off')
+        }
+        [void]$notes.Add('comp')
+    } else {
+        [void]$notes.Add('hybrid')
+    }
+
+    return @{
+        Changed = $changed
+        Notes   = @($notes)
+        Gsync   = [bool]$isGsyncPack
+    }
 }
 
 function New-OptiHubCombinedProfileNip {
@@ -151,7 +274,9 @@ function New-OptiHubCombinedProfileNip {
         throw 'Base NIP must start with a Base Profile entry'
     }
 
+    $baseMap = Get-OptiHubNipSettingMap -ProfileNode $base
     $games = @(Get-OptiHubGameProfileCatalog)
+    $deltaSummary = @()
     foreach ($game in $games) {
         $clone = $base.CloneNode($true)
         $nameNode = $clone.SelectSingleNode('ProfileName')
@@ -170,6 +295,11 @@ function New-OptiHubCombinedProfileNip {
             $s.InnerText = [string]$exe
             [void]$execNode.AppendChild($s)
         }
+
+        $tier = if ($game.Tier) { [string]$game.Tier } else { 'comp' }
+        $delta = Apply-OptiHubGameProfileDeltas -ProfileNode $clone -BaseMap $baseMap -Tier $tier
+        $deltaSummary += [string]("$($game.Name)[$tier/$($delta.Notes -join '+')]")
+
         [void]$array.AppendChild($clone)
     }
 
@@ -190,9 +320,11 @@ function New-OptiHubCombinedProfileNip {
     }
 
     return @{
-        Path      = $OutPath
-        GameCount = $games.Count
-        Games     = @($games | ForEach-Object { [string]$_.Name })
+        Path          = $OutPath
+        GameCount     = $games.Count
+        Games         = @($games | ForEach-Object { [string]$_.Name })
+        DeltaSummary  = $deltaSummary
+        GameDeltas    = $true
     }
 }
 
@@ -1698,7 +1830,12 @@ try {
         $combinedPath = Join-Path $env:TEMP ("optihub-combined-$([guid]::NewGuid().ToString('n')).nip")
         $built = New-OptiHubCombinedProfileNip -BaseNipPath $nip -OutPath $combinedPath
         $gameProfiles = @($built.Games)
-        Write-Ok ("Per-game profiles prepared: {0} titles from {1}" -f $built.GameCount, (Split-Path $nip -Leaf))
+        Write-Ok ("Per-game profiles prepared: {0} titles from {1} (with tier deltas)" -f $built.GameCount, (Split-Path $nip -Leaf))
+        if ($built.DeltaSummary -and @($built.DeltaSummary).Count -gt 0) {
+            $compCount = @($built.DeltaSummary | Where-Object { $_ -match '\[comp' }).Count
+            $hybridCount = @($built.DeltaSummary | Where-Object { $_ -match '\[hybrid' }).Count
+            Write-Ok ("Game deltas: {0} competitive, {1} hybrid (sticky latency; FG off on comp when pack supports it)" -f $compCount, $hybridCount)
+        }
 
         Write-HubProgress 40 'Profile Inspector (3D settings)...'
         Write-HubProgress 48 'Importing Base + per-game profiles (silent)...'
@@ -1808,6 +1945,7 @@ try {
         gameProfilesApplied = [bool]$gameProfilesApplied
         gameProfiles        = @($gameProfiles)
         gameProfileCount    = @($gameProfiles).Count
+        gameProfileDeltas   = $true
     }
 
     if (-not [bool]$dispResult.Success) {

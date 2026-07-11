@@ -8,6 +8,13 @@ profiles** (Valorant, CS2, Marvel Rivals, R6, Fortnite, Apex, and more) so all
 10 base packs (max FPS + G-SYNC × series) feed the same game catalog without
 shipping 10×N separate NIP files.
 
+Each game then gets **tier deltas** on top of that clone:
+
+| Tier | Titles | Extra vs Base clone |
+|------|--------|---------------------|
+| **comp** | Val, CS2, Rivals, R6, Fortnite, Apex, LoL, OW2, RL, CoD, PUBG, Tarkov, Finals, Delta Force | Sticky latency stack (PRF=1, no driver FPS cap, no triple buffer, FXAA/AO/Ansel off) + re-pin max-FPS or G-SYNC pack policy + **Frame Gen override off** when the series pack has DLSS-FG |
+| **hybrid** | Destiny 2 | Same sticky latency / pack pins; **leaves Frame Gen** as the series pack (more PvE-friendly) |
+
 These packs intentionally favor FPS and latency over idle power, background
 features, and driver-default image-quality choices. OptiHub validates the
 performance-critical settings and records the exact profile SHA-256 before
