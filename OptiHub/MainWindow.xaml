@@ -36,7 +36,9 @@
                         VerticalAlignment="Center"
                         AllowFocusOnInteraction="True"
                         UseSystemFocusVisuals="False">
-                    <FontIcon Glyph="&#xE72B;" FontSize="13" />
+                    <FontIcon Glyph="&#xE72B;"
+                              FontSize="13"
+                              Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                 </Button>
 
                 <!-- Product mark only on optimizer pages (no OptiHub wordmark / logo on home). -->
@@ -70,7 +72,9 @@
                         VerticalAlignment="Center"
                         AllowFocusOnInteraction="True"
                         UseSystemFocusVisuals="False">
-                    <FontIcon Glyph="&#xE713;" FontSize="14" />
+                    <FontIcon Glyph="&#xE713;"
+                              FontSize="14"
+                              Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                 </Button>
             </StackPanel>
         </Grid>

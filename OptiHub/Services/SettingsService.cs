@@ -93,7 +93,7 @@ public sealed class SettingsService
 
         if (string.IsNullOrWhiteSpace(settings.DiscordKitVersion))
         {
-            settings.DiscordKitVersion = "1.3.16";
+            settings.DiscordKitVersion = "1.3.17";
             changed = true;
         }
 

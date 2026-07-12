@@ -12,10 +12,10 @@ public sealed class ThemeService
     private readonly SettingsService _settings;
     private Window? _window;
 
-    // AMOLED pure black (dark) / warm cream beige (light)
+    // AMOLED pure black (dark) / clean neutral light
     public static readonly Color CozyBlack = Color.FromArgb(255, 0, 0, 0);
-    public static readonly Color SoftStone = Color.FromArgb(255, 239, 230, 216); // #EFE6D8
-    public static readonly Color DarkAccent = Color.FromArgb(255, 10, 9, 8);     // #0A0908 true black ink
+    public static readonly Color SoftStone = Color.FromArgb(255, 240, 240, 242); // #F0F0F2
+    public static readonly Color DarkAccent = Color.FromArgb(255, 17, 17, 17);   // #111111
 
     public ThemeService(SettingsService settings)
     {
@@ -82,14 +82,13 @@ public sealed class ThemeService
 
             if (light)
             {
-                // Cream title-bar chrome
                 titleBar.ForegroundColor = DarkAccent;
-                titleBar.InactiveForegroundColor = Color.FromArgb(255, 107, 95, 80);
+                titleBar.InactiveForegroundColor = Color.FromArgb(255, 113, 113, 122);
                 titleBar.ButtonForegroundColor = DarkAccent;
-                titleBar.ButtonInactiveForegroundColor = Color.FromArgb(255, 107, 95, 80);
-                titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 232, 222, 208);
+                titleBar.ButtonInactiveForegroundColor = Color.FromArgb(255, 113, 113, 122);
+                titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 228, 228, 231);
                 titleBar.ButtonHoverForegroundColor = DarkAccent;
-                titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 218, 206, 190);
+                titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 212, 212, 216);
                 titleBar.ButtonPressedForegroundColor = DarkAccent;
             }
             else

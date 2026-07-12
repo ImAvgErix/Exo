@@ -9,7 +9,7 @@
     <FontFamily x:Key="OptiUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
     <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
-    <CornerRadius x:Key="OptiCardRadius">18</CornerRadius>
+    <CornerRadius x:Key="OptiCardRadius">16</CornerRadius>
     <x:Double x:Key="OptiPageMaxWidth">1000</x:Double>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
@@ -66,8 +66,8 @@
     </Style>
 
     <!--
-      Nested-fill chrome (outer stroke color + inner fill) — no BorderBrush on a curve.
-      WinUI anti-aliases stroke borders into pixelated arcs; solid nested fills stay clean.
+      Borderless card: elevation via page vs card fill only.
+      No stroke, no nested ring — WinUI rounded borders always AA into jaggies.
     -->
     <Style x:Key="OptiCard" TargetType="ContentControl">
         <Setter Property="Padding" Value="18,16" />
@@ -79,21 +79,15 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ContentControl">
-                    <Border x:Name="Outer"
-                            Background="{ThemeResource OptiCardStrokeBrush}"
+                    <Border Background="{TemplateBinding Background}"
                             CornerRadius="{StaticResource OptiCardRadius}"
+                            Padding="{TemplateBinding Padding}"
                             UseLayoutRounding="True">
-                        <Border Background="{TemplateBinding Background}"
-                                CornerRadius="17"
-                                Margin="1"
-                                Padding="{TemplateBinding Padding}"
-                                UseLayoutRounding="True">
-                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                              Content="{TemplateBinding Content}"
-                                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                                              ContentTransitions="{TemplateBinding ContentTransitions}" />
-                        </Border>
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          ContentTransitions="{TemplateBinding ContentTransitions}" />
                     </Border>
                 </ControlTemplate>
             </Setter.Value>
@@ -102,8 +96,8 @@
 
     <!-- Theme picker tiles (Settings → Appearance) -->
     <Style x:Key="OptiThemePickOuter" TargetType="Border">
-        <Setter Property="CornerRadius" Value="16" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
@@ -314,8 +308,8 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="MinHeight" Value="42" />
         <Setter Property="Background" Value="{ThemeResource OptiQuietButtonFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
         <Setter Property="UseLayoutRounding" Value="True" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />

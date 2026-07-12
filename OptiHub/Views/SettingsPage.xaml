@@ -79,18 +79,16 @@
                                     AutomationProperties.Name="Use dark theme"
                                     AutomationProperties.FullDescription="Dark theme">
                                 <Grid>
+                                    <Border Style="{StaticResource OptiThemePickOuter}" />
                                     <Border Style="{StaticResource OptiThemePickOuter}"
-                                            BorderBrush="{ThemeResource OptiCardStrokeBrush}" />
-                                    <Border Style="{StaticResource OptiThemePickOuter}"
-                                            BorderBrush="{ThemeResource OptiAccentBrush}"
-                                            BorderThickness="2"
+                                            Background="{ThemeResource OptiAccentBrush}"
+                                            Opacity="0.12"
                                             Visibility="{x:Bind ViewModel.IsDarkMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     <StackPanel Spacing="10" Padding="10,12">
                                         <Border Height="72"
                                                 CornerRadius="12"
-                                                Background="#0A0C10"
-                                                BorderBrush="#2A3140"
-                                                BorderThickness="1"
+                                                Background="#0A0A0A"
+                                                BorderThickness="0"
                                                 Padding="10">
                                             <Grid>
                                                 <StackPanel Orientation="Horizontal"
@@ -142,18 +140,16 @@
                                     AutomationProperties.Name="Use light theme"
                                     AutomationProperties.FullDescription="Light theme">
                                 <Grid>
+                                    <Border Style="{StaticResource OptiThemePickOuter}" />
                                     <Border Style="{StaticResource OptiThemePickOuter}"
-                                            BorderBrush="{ThemeResource OptiCardStrokeBrush}" />
-                                    <Border Style="{StaticResource OptiThemePickOuter}"
-                                            BorderBrush="{ThemeResource OptiAccentBrush}"
-                                            BorderThickness="2"
+                                            Background="{ThemeResource OptiAccentBrush}"
+                                            Opacity="0.12"
                                             Visibility="{x:Bind ViewModel.IsLightMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     <StackPanel Spacing="10" Padding="10,12">
                                         <Border Height="72"
                                                 CornerRadius="12"
-                                                Background="#F4F6FA"
-                                                BorderBrush="#D0D7E2"
-                                                BorderThickness="1"
+                                                Background="#FFFFFF"
+                                                BorderThickness="0"
                                                 Padding="10">
                                             <Grid>
                                                 <StackPanel Orientation="Horizontal"
