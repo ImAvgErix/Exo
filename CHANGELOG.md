@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.4
+
+- **NVIDIA Panel page**: full-card UI (same OptiHub styles) — Applied checkmarks + Apply; live probe of display/video/clients/tray; Clear tray icons
+- **Tray**: remove ALL NVIDIA overflow icons (including NVDisplay.Container registration) + ProgramData App leftovers
+- **Back** from panel returns to NVIDIA optimizer card
 ## 1.9.3
 
 - **NVIDIA Panel**: **Apply** (not Fix); checkmark when **Applied**; fixed policy primary highest Hz / secondary 60 Hz (no dropdowns)
@@ -242,6 +247,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

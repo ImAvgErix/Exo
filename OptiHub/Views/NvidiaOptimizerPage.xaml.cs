@@ -1,7 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
-using OptiHub.Models;
 using OptiHub.ViewModels;
 
 namespace OptiHub.Views;
@@ -34,17 +33,10 @@ public sealed partial class NvidiaOptimizerPage : Page
     private void Refresh_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RefreshCommand.Execute(null);
 
-    private async void Panel_Click(object sender, RoutedEventArgs e)
+    private void Panel_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new NvidiaPanelSettingsDialog(App.Services.NvidiaPanel)
-        {
-            XamlRoot = XamlRoot
-        };
-        await dialog.ShowAsync();
-
-        // Always refresh status after panel (Fix may have changed driver state)
-        if (dialog.RequestedApply)
-            await ViewModel.RefreshCommand.ExecuteAsync(null);
+        if (App.MainAppWindow is MainWindow main)
+            main.NavigateToNvidiaPanel();
     }
 
     private async Task<bool> ConfirmAsync(string title, string message)

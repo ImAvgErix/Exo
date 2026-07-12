@@ -10,6 +10,8 @@ public sealed class NvidiaPolicyProbeItem
     public required string Title { get; init; }
     public required bool IsApplied { get; init; }
     public required string Detail { get; init; }
+    /// <summary>False = needs full Apply profile on NVIDIA card (e.g. 3D pack import).</summary>
+    public bool CanApplyFromPanel { get; init; } = true;
 }
 
 public sealed class NvidiaPanelSettingsService
@@ -57,50 +59,46 @@ public sealed class NvidiaPanelSettingsService
         var dir = Path.GetDirectoryName(SettingsPath);
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
+        // Always enforce fixed refresh policy
+        settings.PrimaryRefresh = "max";
+        settings.SecondaryRefresh = "60";
         File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
     }
 
-    /// <summary>
-    /// Probe live driver/registry for each OptiHub NVIDIA policy row.
-    /// </summary>
     public async Task<IReadOnlyList<NvidiaPolicyProbeItem>> ProbePolicyAsync(CancellationToken ct = default)
     {
         var items = new List<NvidiaPolicyProbeItem>();
-
-        // Live NVAPI display helper
         var nv = await ReadNvDisplayStatusAsync(ct).ConfigureAwait(false);
-        var colorOk = nv.ColorOk;
-        var refreshOk = nv.RefreshOk;
-        var scalingOk = nv.ScalingOk;
-        var registryOk = nv.RegistryOk;
-        var detailBase = nv.Detail;
 
         items.Add(new NvidiaPolicyProbeItem
         {
             Id = "full-rgb",
             Title = "Full RGB / Full dynamic range",
-            IsApplied = colorOk,
-            Detail = colorOk ? "Driver reports Full RGB" : "Apply sets Full RGB via NVAPI"
+            IsApplied = nv.ColorOk,
+            Detail = nv.ColorOk ? "Driver reports Full RGB" : "Driver not on Full RGB",
+            CanApplyFromPanel = true
         });
 
         items.Add(new NvidiaPolicyProbeItem
         {
             Id = "gpu-scale",
             Title = "GPU no-scaling + override games",
-            IsApplied = scalingOk && registryOk,
-            Detail = scalingOk && registryOk
+            IsApplied = nv.ScalingOk && nv.RegistryOk,
+            Detail = nv.ScalingOk && nv.RegistryOk
                 ? "GPU no-scaling and override active"
-                : "Apply sets GPU no-scaling and override"
+                : "Scaling policy not on OptiHub defaults",
+            CanApplyFromPanel = true
         });
 
         items.Add(new NvidiaPolicyProbeItem
         {
             Id = "refresh",
             Title = "Primary highest Hz · secondary 60 Hz",
-            IsApplied = refreshOk,
-            Detail = refreshOk
+            IsApplied = nv.RefreshOk,
+            Detail = nv.RefreshOk
                 ? "Primary highest available, secondary 60 Hz"
-                : "Apply sets primary highest (gaming), secondary 60 Hz"
+                : "Refresh not on OptiHub policy",
+            CanApplyFromPanel = true
         });
 
         var videoOk = ProbeVideoNvidia();
@@ -109,9 +107,28 @@ public sealed class NvidiaPanelSettingsService
             Id = "video",
             Title = "Video color + image (NVIDIA settings)",
             IsApplied = videoOk,
-            Detail = videoOk
-                ? "Video sources use NVIDIA settings"
-                : "Apply forces NVIDIA video color and image settings"
+            Detail = videoOk ? "Video sources use NVIDIA settings" : "Video still on player defaults",
+            CanApplyFromPanel = true
+        });
+
+        var overlayOff = ProbeOverlayOff();
+        items.Add(new NvidiaPolicyProbeItem
+        {
+            Id = "overlay",
+            Title = "Overlay / ShadowPlay off",
+            IsApplied = overlayOff,
+            Detail = overlayOff ? "Overlay paths inactive" : "Overlay may still be enabled",
+            CanApplyFromPanel = true
+        });
+
+        var countersOk = ProbeDeveloperCounters();
+        items.Add(new NvidiaPolicyProbeItem
+        {
+            Id = "counters",
+            Title = "GPU performance counters (all users)",
+            IsApplied = countersOk,
+            Detail = countersOk ? "RmProfilingAdminOnly=0 / tools visible" : "Counters restricted or not set",
+            CanApplyFromPanel = true
         });
 
         var appGone = !ProbeNvidiaAppPresent();
@@ -124,8 +141,22 @@ public sealed class NvidiaPanelSettingsService
             Detail = appGone && cplGone
                 ? "Clients removed — OptiHub is the panel"
                 : appGone
-                    ? "App gone, Control Panel still present — use Apply profile to strip CPL"
-                    : "Still installed — use Apply profile on the NVIDIA card to strip App + CPL"
+                    ? "App gone; Control Panel still present"
+                    : "NVIDIA client files still on disk",
+            // Display apply clears tray; full strip of App/CPL needs elevated optimizer
+            CanApplyFromPanel = true
+        });
+
+        var trayClean = ProbeTrayClean();
+        items.Add(new NvidiaPolicyProbeItem
+        {
+            Id = "tray",
+            Title = "No NVIDIA icon in taskbar overflow",
+            IsApplied = trayClean,
+            Detail = trayClean
+                ? "No NVIDIA NotifyIconSettings entries"
+                : "NVIDIA still listed in overflow — Apply or Clear tray icons",
+            CanApplyFromPanel = true
         });
 
         var profileOk = Probe3dProfileApplied();
@@ -136,13 +167,9 @@ public sealed class NvidiaPanelSettingsService
             IsApplied = profileOk,
             Detail = profileOk
                 ? "Base + game profiles applied"
-                : "Use Apply profile on the NVIDIA card (full pass imports 3D packs)"
+                : "Needs full Apply profile on the NVIDIA card",
+            CanApplyFromPanel = false
         });
-
-        if (!string.IsNullOrWhiteSpace(detailBase))
-        {
-            // Append helper detail into refresh row only for debugging density
-        }
 
         return items;
     }
@@ -165,13 +192,47 @@ public sealed class NvidiaPanelSettingsService
             cancellationToken: ct,
             workingDirectory: _scripts.GetNvidiaRoot()).ConfigureAwait(false);
 
+        // Always clear tray after display apply (service soft-refresh re-registers icons)
+        await ClearTrayIconsAsync(ct).ConfigureAwait(false);
+
         if (result.Success)
-            return (true, "OptiHub NVIDIA policy applied to the driver.");
+            return (true, "OptiHub NVIDIA panel policy applied to the driver. Rows should show Applied with a check when live status matches.");
 
         var err = result.ErrorMessage ?? result.Summary ?? "Display apply failed.";
-        if (err.Length > 400)
-            err = err[..400] + "…";
+        if (err.Length > 450)
+            err = err[..450] + "…";
         return (false, err);
+    }
+
+    public async Task<(bool Success, string Message)> ClearTrayIconsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            // Prefer elevated script for thorough wipe; also do user-level wipe inline
+            ClearTrayIconsLocal();
+
+            var script = Path.Combine(_scripts.GetNvidiaRoot(), "OptiHub-Nvidia-TrayClear.ps1");
+            if (File.Exists(script))
+            {
+                var result = await _powerShell.RunAsync(
+                    script,
+                    elevate: true,
+                    cancellationToken: ct,
+                    workingDirectory: _scripts.GetNvidiaRoot()).ConfigureAwait(false);
+                if (result.Success)
+                    return (true, "NVIDIA tray icons cleared. Open the overflow once if Windows still caches a name.");
+                // Local clear may still have helped
+            }
+
+            var clean = ProbeTrayClean();
+            return clean
+                ? (true, "NVIDIA tray icon entries removed.")
+                : (false, "Some NVIDIA tray entries remain (often NVDisplay.Container). Cleared what we could.");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
     }
 
     public async Task<string> GetLiveStatusSummaryAsync(CancellationToken ct = default)
@@ -180,6 +241,47 @@ public sealed class NvidiaPanelSettingsService
         return nv.Ok
             ? $"Driver policy OK — {nv.Detail}"
             : $"Driver policy incomplete — {nv.Detail}";
+    }
+
+    private static void ClearTrayIconsLocal()
+    {
+        try
+        {
+            using var root = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Control Panel\NotifyIconSettings", writable: true);
+            if (root is null) return;
+            foreach (var name in root.GetSubKeyNames().ToArray())
+            {
+                try
+                {
+                    using var key = root.OpenSubKey(name);
+                    var exe = key?.GetValue("ExecutablePath") as string ?? "";
+                    if (exe.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
+                        exe.Contains("nvcontainer", StringComparison.OrdinalIgnoreCase) ||
+                        exe.Contains("NVDisplay", StringComparison.OrdinalIgnoreCase) ||
+                        exe.Contains("GeForce", StringComparison.OrdinalIgnoreCase) ||
+                        exe.Contains("ShadowPlay", StringComparison.OrdinalIgnoreCase))
+                    {
+                        root.DeleteSubKeyTree(name, throwOnMissingSubKey: false);
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
+
+        // Leftover App ProgramData
+        try
+        {
+            var pd = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                @"NVIDIA Corporation\NVIDIA App");
+            if (Directory.Exists(pd))
+            {
+                try { Directory.Delete(pd, recursive: true); } catch { }
+            }
+        }
+        catch { }
     }
 
     private async Task<(bool Ok, bool ColorOk, bool RefreshOk, bool ScalingOk, bool RegistryOk, string Detail)> ReadNvDisplayStatusAsync(
@@ -202,6 +304,12 @@ public sealed class NvidiaPanelSettingsService
                 RedirectStandardError = true,
                 CreateNoWindow = true
             };
+            // Ensure refresh policy env for status verification
+            psi.Environment["OPTIHUB_PRIMARY_REFRESH"] = "max";
+            psi.Environment["OPTIHUB_SECONDARY_REFRESH"] = "60";
+            psi.Environment["OPTIHUB_FULL_RGB"] = "1";
+            psi.Environment["OPTIHUB_GPU_NOSCALE"] = "1";
+
             using var proc = Process.Start(psi);
             if (proc is null)
                 return (false, false, false, false, false, "helper failed to start");
@@ -258,6 +366,34 @@ public sealed class NvidiaPanelSettingsService
         return false;
     }
 
+    private static bool ProbeOverlayOff()
+    {
+        try
+        {
+            // Soft check: common overlay enable keys off or missing
+            using var sp = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\NVIDIA Corporation\Global\ShadowPlay\NVSPCAPS");
+            if (sp is null) return true;
+            var v = sp.GetValue("OverlayState");
+            if (v is int i) return i == 0;
+        }
+        catch { }
+        return true;
+    }
+
+    private static bool ProbeDeveloperCounters()
+    {
+        try
+        {
+            using var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Services\nvlddmkm\Parameters\Global\NVTweak");
+            if (k is null) return false;
+            var prof = k.GetValue("RmProfilingAdminOnly");
+            return prof is int p && p == 0;
+        }
+        catch { return false; }
+    }
+
     private static bool ProbeNvidiaAppPresent()
     {
         var paths = new[]
@@ -274,8 +410,6 @@ public sealed class NvidiaPanelSettingsService
     {
         try
         {
-            // Appx package name
-            // Lightweight: known install paths + WindowsApps folder pattern
             var paths = new[]
             {
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
@@ -288,13 +422,32 @@ public sealed class NvidiaPanelSettingsService
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 @"Packages");
             if (Directory.Exists(local))
-            {
-                return Directory.EnumerateDirectories(local, "NVIDIACorp.NVIDIAControlPanel*")
-                    .Any();
-            }
+                return Directory.EnumerateDirectories(local, "NVIDIACorp.NVIDIAControlPanel*").Any();
         }
         catch { }
         return false;
+    }
+
+    private static bool ProbeTrayClean()
+    {
+        try
+        {
+            using var root = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Control Panel\NotifyIconSettings");
+            if (root is null) return true;
+            foreach (var name in root.GetSubKeyNames())
+            {
+                using var key = root.OpenSubKey(name);
+                var exe = key?.GetValue("ExecutablePath") as string ?? "";
+                if (exe.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
+                    exe.Contains("nvcontainer", StringComparison.OrdinalIgnoreCase) ||
+                    exe.Contains("NVDisplay", StringComparison.OrdinalIgnoreCase) ||
+                    exe.Contains("GeForce", StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+        }
+        catch { }
+        return true;
     }
 
     private static bool Probe3dProfileApplied()
@@ -311,9 +464,6 @@ public sealed class NvidiaPanelSettingsService
             var games = root.TryGetProperty("gameProfilesApplied", out var g) && g.GetBoolean();
             return profile && games;
         }
-        catch
-        {
-            return false;
-        }
+        catch { return false; }
     }
 }

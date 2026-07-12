@@ -293,17 +293,16 @@ function Clear-NvidiaAppTrayAndContainer {
         $exe = $null
         try { $exe = [string](Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).ExecutablePath } catch { }
         if ([string]::IsNullOrWhiteSpace($exe)) { return }
-        # Keep DriverStore Display.NvContainer (display driver); strip App nvcontainer paths
-        if ($exe -match '(?i)DriverStore\\.*Display\.NvContainer|NVDisplay\.Container') { return }
-        if ($exe -match '(?i)NVIDIA Corporation\\NvContainer\\nvcontainer|NVIDIA Corporation\\NVIDIA App|NVIDIA Overlay|GeForce Experience|ShadowPlay|nvsphelper|NVIDIA App\.exe') {
+        # Strip ALL NVIDIA overflow icons (App + NVDisplay.Container registration)
+        if ($exe -match '(?i)NVIDIA|nvcontainer|NVDisplay|GeForce|ShadowPlay|nvsphelper|nvapp') {
             try {
                 Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
                 $removed++
-                Write-DLog "Removed tray ghost: $exe"
+                Write-DLog "Removed tray icon: $exe"
             } catch { }
         }
     }
-    if ($removed -gt 0) { Write-DLog "Cleared $removed NVIDIA App tray ghost(s)" }
+    if ($removed -gt 0) { Write-DLog "Cleared $removed NVIDIA tray icon(s)" }
 }
 
 function Invoke-NvApiHelper {

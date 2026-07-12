@@ -19,6 +19,7 @@ public sealed partial class MainWindow : Window
         Discord,
         Steam,
         Nvidia,
+        NvidiaPanel,
         Settings
     }
 
@@ -189,7 +190,7 @@ public sealed partial class MainWindow : Window
     {
         _mode = mode;
         var home = mode == ShellMode.Home;
-        var optimizer = mode is ShellMode.Discord or ShellMode.Steam or ShellMode.Nvidia;
+        var optimizer = mode is ShellMode.Discord or ShellMode.Steam or ShellMode.Nvidia or ShellMode.NvidiaPanel;
 
         BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
         // Home: only settings gear. Optimizers: back + product logo + short title. No "OptiHub" wordmark.
@@ -201,6 +202,7 @@ public sealed partial class MainWindow : Window
             ShellMode.Discord => "Discord",
             ShellMode.Steam => "Steam",
             ShellMode.Nvidia => "NVIDIA",
+            ShellMode.NvidiaPanel => "NVIDIA Panel",
             ShellMode.Settings => "Settings",
             _ => string.Empty
         };
@@ -212,7 +214,7 @@ public sealed partial class MainWindow : Window
             TrySetContextLogo("Assets/Logos/discord.png");
         else if (mode == ShellMode.Steam)
             TrySetContextLogo("Assets/Logos/steam.png");
-        else if (mode == ShellMode.Nvidia)
+        else if (mode is ShellMode.Nvidia or ShellMode.NvidiaPanel)
             TrySetContextLogo("Assets/Logos/nvidia.png");
         else
             ContextLogo.Source = null;
@@ -277,6 +279,11 @@ public sealed partial class MainWindow : Window
         Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), Slide());
     }
 
+    public void NavigateToNvidiaPanel()
+    {
+        Navigate(ShellMode.NvidiaPanel, typeof(NvidiaPanelPage), Slide());
+    }
+
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {
         if (_mode == mode && ContentFrame.CurrentSourcePageType == pageType)
@@ -292,7 +299,14 @@ public sealed partial class MainWindow : Window
         Navigate(ShellMode.Settings, typeof(SettingsPage), Slide());
     }
 
-    private void BackButton_Click(object sender, RoutedEventArgs e) => NavigateHome();
+    private void BackButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Panel is nested under NVIDIA optimizer — back returns there, not home.
+        if (_mode == ShellMode.NvidiaPanel)
+            NavigateToNvidia();
+        else
+            NavigateHome();
+    }
 
     private async Task MaybeAutoUpdateAsync(CancellationToken ct)
     {

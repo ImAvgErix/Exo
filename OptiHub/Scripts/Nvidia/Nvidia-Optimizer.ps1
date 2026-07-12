@@ -722,14 +722,13 @@ function Remove-NvidiaAppDesktopShortcuts {
 }
 
 function Clear-NvidiaTrayGhostIcons {
-    # Windows 11 keeps dead tray entries under NotifyIconSettings even after uninstall.
-    # Ghost "NVIDIA App" in the overflow list is almost always nvcontainer.exe from
-    # Program Files\NVIDIA Corporation\NvContainer (App stack), not the display driver.
-    Write-Step 'Clearing NVIDIA App tray / overflow ghost icons...'
+    # Windows 11 keeps dead tray entries under NotifyIconSettings after uninstall.
+    # User wants zero NVIDIA icons in overflow — clear App AND display-container tray keys.
+    # (Display service keeps running; only the overflow registration is removed.)
+    Write-Step 'Clearing ALL NVIDIA tray / overflow icons...'
     $removed = 0
     $roots = [System.Collections.Generic.List[string]]::new()
     [void]$roots.Add('HKCU:\Control Panel\NotifyIconSettings')
-    # When elevated as admin, also try loaded user hives under HKEY_USERS
     try {
         Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue | Where-Object {
             $_.PSChildName -match '^S-1-5-21-\d+-\d+-\d+-\d+$'
@@ -738,27 +737,24 @@ function Clear-NvidiaTrayGhostIcons {
         }
     } catch { }
 
-    $appTrayPattern = '(?i)NVIDIA Corporation\\NvContainer\\nvcontainer|NVIDIA Corporation\\NVIDIA App|NVIDIA Corporation\\NVIDIA Overlay|NVIDIA Corporation\\GeForce|GeForce Experience|ShadowPlay|nvsphelper|NVIDIA App\.exe|NVIDIA Overlay\.exe|NvBackend'
+    $nvidiaTrayPattern = '(?i)NVIDIA|nvcontainer|NVDisplay|GeForce|ShadowPlay|nvsphelper|nvapp|NvBackend'
     foreach ($root in ($roots | Select-Object -Unique)) {
         if (-not (Test-Path -LiteralPath $root)) { continue }
         Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue | ForEach-Object {
             $exe = $null
             try { $exe = [string](Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).ExecutablePath } catch { }
             if ([string]::IsNullOrWhiteSpace($exe)) { return }
-            # Keep DriverStore Display.NvContainer (real display driver tray/helper)
-            if ($exe -match '(?i)DriverStore\\.*Display\.NvContainer|NVDisplay\.Container') { return }
-            if ($exe -notmatch $appTrayPattern) { return }
+            if ($exe -notmatch $nvidiaTrayPattern) { return }
             try {
                 Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
                 $removed++
-                Write-Ok "Removed tray ghost: $exe"
+                Write-Ok "Removed tray icon: $exe"
             } catch {
-                Write-Warn "Tray ghost remove failed ($($_.PSChildName)): $($_.Exception.Message)"
+                Write-Warn "Tray remove failed ($($_.PSChildName)): $($_.Exception.Message)"
             }
         }
     }
 
-    # Disable App container service so it cannot re-register tray icons
     try {
         $svc = Get-Service -Name 'NvContainerLocalSystem' -ErrorAction SilentlyContinue
         if ($svc) {
@@ -766,14 +762,22 @@ function Clear-NvidiaTrayGhostIcons {
                 Stop-Service -Name 'NvContainerLocalSystem' -Force -ErrorAction SilentlyContinue
             }
             Set-Service -Name 'NvContainerLocalSystem' -StartupType Disabled -ErrorAction SilentlyContinue
-            Write-Ok 'NvContainerLocalSystem disabled (App stack; display uses NVDisplay.Container)'
+            Write-Ok 'NvContainerLocalSystem disabled (App stack)'
         }
     } catch { }
 
+    # ProgramData App leftovers re-seed tray names
+    $pd = Join-Path $env:ProgramData 'NVIDIA Corporation\NVIDIA App'
+    if (Test-Path -LiteralPath $pd) {
+        if (Remove-OptiHubTreeForce -Path $pd) {
+            Write-Ok "Removed leftover $pd"
+        }
+    }
+
     if ($removed -eq 0) {
-        Write-Ok 'No NVIDIA App tray ghosts found in NotifyIconSettings'
+        Write-Ok 'No NVIDIA tray icons found in NotifyIconSettings'
     } else {
-        Write-Ok "Cleared $removed NVIDIA App tray ghost icon(s)"
+        Write-Ok "Cleared $removed NVIDIA tray icon(s)"
     }
     return $removed
 }
