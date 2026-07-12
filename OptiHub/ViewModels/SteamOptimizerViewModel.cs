@@ -73,18 +73,11 @@ public partial class SteamOptimizerViewModel : ObservableObject
 
         var action = IsApplied ? "reapply" : "run";
         var warning =
-            "This is an AGGRESSIVE, no-compromise performance pass. It will close Steam and apply:\n\n" +
-            "• Default CEF quiet launcher (disable-gpu, nofriendsui, nointro, etc.)\n" +
-            "• steamwebhelper working-set reclamation every 5 seconds - no process suspend\n" +
-            "• High Steam priority while idle; Below Normal while gaming so the game wins CPU\n" +
-            "• Deep disposable client-cache cleanup and aggressive overlay/library hints\n" +
-            "• Quieter Windows startup\n\n" +
-            "This trades background convenience and some client visual features for lower RAM use and latency. Active downloads, game installs, and game shader pre-caches are preserved. Game executables are never modified.\n\n" +
-            "Start Menu / taskbar Steam entries are retargeted. No desktop shortcuts are created. Use Repair Steam to undo OptiHub changes.\n\n" +
-            "Administrator approval is required so OptiHub can update the Steam install folder and all-users Start Menu shortcuts.";
+            "Closes Steam. Launcher, webhelper, cache, priority, shortcuts.\n\n" +
+            "Needs Administrator. Use Repair Steam to undo.";
 
         var ok = ConfirmAsync is not null
-            ? await ConfirmAsync($"Confirm aggressive Steam optimizer ({action})", warning)
+            ? await ConfirmAsync($"Apply Steam ({action})", warning)
             : true;
         if (!ok) return;
 
@@ -118,7 +111,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
             {
                 ProgressPercent = 100;
                 ProgressStatus = "Completed successfully";
-                SetResult("Done. Open Steam when ready.", success: true);
+                SetResult("Done.", success: true);
             }
             else
             {
@@ -131,7 +124,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             ProgressStatus = "Cancelled";
-            SetResult("Steam optimization was cancelled.", success: false);
+            SetResult("Cancelled.", success: false);
         }
         catch (Exception ex)
         {
@@ -154,8 +147,8 @@ public partial class SteamOptimizerViewModel : ObservableObject
 
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync(
-                "Repair Steam settings?",
-                "Restores OptiHub backups of Steam config files (if any) and clears the optimizer marker. Game installs are never deleted. Administrator approval may be required.")
+                "Repair Steam?",
+                "Restores OptiHub backups and clears status. Games stay.")
             : true;
         if (!ok) return;
 

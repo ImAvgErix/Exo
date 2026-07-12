@@ -46,13 +46,6 @@
                                Style="{StaticResource OptiBody}"
                                FontSize="13.5"
                                LineHeight="20" />
-                    <TextBlock Text="OptiHub owns NVIDIA driver settings. Open the NVIDIA Panel card for Applied / Not applied + Apply. Full Apply profile does driver, 3D packs, and strips App/Control Panel."
-                               Style="{StaticResource OptiCaption}"
-                               FontSize="12"
-                               LineHeight="17"
-                               TextWrapping="Wrap"
-                               Foreground="{ThemeResource OptiMutedTextBrush}"
-                               Margin="0,8,0,0" />
                     <Grid ColumnSpacing="12" Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -63,9 +56,9 @@
                                       OnContent="Adaptive sync"
                                       OffContent="Max FPS / latency"
                                       IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                                      ToolTipService.ToolTip="Enable only for a G-SYNC or G-SYNC Compatible display."
+                                      ToolTipService.ToolTip="G-SYNC / Adaptive Sync only"
                                       AutomationProperties.Name="G-SYNC profile"
-                                      AutomationProperties.HelpText="Turn on only for a G-SYNC or G-SYNC Compatible display; otherwise use the max FPS and latency profile." />
+                                      AutomationProperties.HelpText="G-SYNC profile" />
                         <Button Grid.Column="1"
                                 Style="{StaticResource OptiQuietButton}"
                                 Content="NVIDIA Panel"
@@ -74,7 +67,7 @@
                                 MinWidth="140"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                 AutomationProperties.Name="Open OptiHub NVIDIA Panel"
-                                AutomationProperties.HelpText="Open the full OptiHub NVIDIA Panel card — Control Panel replacement with live Applied status." />
+                                AutomationProperties.HelpText="Open NVIDIA Panel" />
                     </Grid>
                 </StackPanel>
 
@@ -180,7 +173,7 @@
                             Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
                             Click="Run_Click"
                             AutomationProperties.Name="Apply NVIDIA profile"
-                            AutomationProperties.HelpText="Apply the selected NVIDIA profile, driver tweaks, and display preferences. Administrator approval is required for the apply step."
+                            AutomationProperties.HelpText="Apply NVIDIA pack"
                             HorizontalAlignment="Stretch"
                             MinHeight="48"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
@@ -193,7 +186,7 @@
                                 Content="Reset status"
                                 Click="Repair_Click"
                                 AutomationProperties.Name="Reset NVIDIA optimizer status"
-                                AutomationProperties.HelpText="Clear only OptiHub's saved NVIDIA status; installed settings remain unchanged."
+                                AutomationProperties.HelpText="Reset OptiHub status"
                                 HorizontalAlignment="Stretch"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                         <Button Grid.Column="1"

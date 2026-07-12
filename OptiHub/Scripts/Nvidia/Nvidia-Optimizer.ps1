@@ -3360,20 +3360,22 @@ function Test-OptiHubNvidiaDisplayLive {
 }
 
 function Set-NvidiaDisplayPreferences {
-    # Sticky display path - always re-apply (do not skip):
-    # container soft-refresh can wipe CPL registry while NVAPI status still looks OK.
-    # - NVTweak: override scaling, desktop Use NVIDIA + Full, video color+image NVIDIA, Gestalt=2
+    # Display path via OptiHub-Display-Apply (skips when live NVAPI status already matches).
+    # - NVTweak: override scaling, Full RGB, video NVIDIA, Gestalt=2
     # - NVAPI: primary max Hz; secondary 60 Hz; Full RGB; GPU no-scaling
-    Write-Step 'Display prefs: NVAPI + full Control Panel registry stamp...'
+    Write-Step 'Display prefs...'
     $applied = New-Object System.Collections.Generic.List[string]
     $success = $false
     $skipped = $false
 
     $live = Test-OptiHubNvidiaDisplayLive
-    if ([bool]$live.Available) {
-        Write-Ok "Live display status before apply: $($live.Detail)"
+    if ([bool]$live.Available -and [bool]$live.Ok) {
+        Write-Ok "Display already matches ($($live.Detail)) — Display-Apply will skip re-touch"
+        $skipped = $true
+    } elseif ([bool]$live.Available) {
+        Write-Ok "Display needs apply: $($live.Detail)"
     } else {
-        Write-Warn "Display live status unavailable ($($live.Detail)); applying full path"
+        Write-Warn "Display live status unavailable ($($live.Detail))"
     }
 
     Get-Process -Name 'nvcplui', 'nvcpl' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -3425,9 +3427,7 @@ function Set-NvidiaDisplayPreferences {
         performScalingOn    = 'GPU'
         scalingMode         = 'No scaling'
         overrideGameScaling = $true
-        appliedVia          = $(if ($skipped) { 'skipped-already-correct (live status)' } else { 'OptiHub-Display-Apply + OptiHub.NvDisplay' })
-        flow                = 'live status check -> (skip or NVTweak -> soft container refresh -> NVAPI modes/color/path)'
-        note                = 'No Control Panel mouse or keyboard automation is used. Re-apply is skipped when scaling + res/Hz already match.'
+        appliedVia          = $(if ($skipped) { 'skipped-already-correct' } else { 'OptiHub-Display-Apply + OptiHub.NvDisplay' })
         skippedReapply      = [bool]$skipped
         liveDetail          = [string]$live.Detail
         success             = $success

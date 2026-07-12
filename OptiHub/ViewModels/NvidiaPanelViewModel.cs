@@ -21,7 +21,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
     public ObservableCollection<NvidiaPolicyRowViewModel> Rows { get; } = new();
 
     [ObservableProperty] private string _headerStatus = "Checking...";
-    [ObservableProperty] private string _headerDetail = "Live driver policies for display, video, and clients.";
+    [ObservableProperty] private string _headerDetail = string.Empty;
     [ObservableProperty] private bool _isLoading = true;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private double _progressPercent;
@@ -57,13 +57,11 @@ public partial class NvidiaPanelViewModel : ObservableObject
             var missing = Rows.Count(r => !r.IsApplied);
             var fixable = Rows.Count(r => !r.IsApplied && r.CanApplyFromPanel);
             HeaderStatus = missing == 0 ? "All applied" : $"{missing} not applied";
-            HeaderDetail = missing == 0
-                ? "Driver matches OptiHub NVIDIA policy. Primary highest Hz, secondary 60 Hz, Full RGB, GPU scale."
-                : fixable > 0
-                    ? $"{fixable} can be applied from this panel. Some items need full Apply profile on the NVIDIA card."
-                    : "Remaining items need full Apply profile on the NVIDIA card (3D packs / deep client wipe).";
+            HeaderDetail = string.Empty;
             CanApplyAll = fixable > 0;
             ApplyAllLabel = fixable > 0 ? "Apply all" : "All applied";
+            if (missing == 0)
+                HasMessage = false;
         }
         catch (Exception ex)
         {
@@ -117,9 +115,18 @@ public partial class NvidiaPanelViewModel : ObservableObject
 
     private async Task RunApplyAsync()
     {
+        // Never re-run when every panel-applicable row is already applied.
+        if (!IsLoading && Rows.Count > 0 &&
+            Rows.Where(r => r.CanApplyFromPanel).All(r => r.IsApplied))
+        {
+            CanApplyAll = false;
+            ApplyAllLabel = "All applied";
+            return;
+        }
+
         IsBusy = true;
         ProgressPercent = 8;
-        ProgressStatus = "Applying OptiHub NVIDIA policy...";
+        ProgressStatus = "Applying...";
         try
         {
             var settings = NvidiaPanelSettings.CreateDefaults();
@@ -144,7 +151,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
             var (ok, message) = await _services.NvidiaPanel.ApplyDisplayPolicyAsync(settings, progress);
             ProgressPercent = 100;
             ProgressStatus = ok ? "Done" : "Failed";
-            SetMessage(message, ok);
+            SetMessage(ok ? "Applied." : message, ok);
             await RefreshAsync();
         }
         catch (Exception ex)

@@ -28,15 +28,6 @@
                                CharacterSpacing="-20"
                                Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                TextWrapping="Wrap" />
-                    <TextBlock Text="{x:Bind ViewModel.HeaderDetail, Mode=OneWay}"
-                               Style="{StaticResource OptiBody}"
-                               FontSize="13.5"
-                               LineHeight="20" />
-                    <TextBlock Text="Full replacement for NVIDIA Control Panel / App for OptiHub policies. Green check = driver matches. Apply writes to the driver (NVAPI + registry). Primary = highest Hz, secondary = 60 Hz."
-                               Style="{StaticResource OptiCaption}"
-                               FontSize="12"
-                               LineHeight="17"
-                               Margin="0,4,0,0" />
                 </StackPanel>
 
                 <ScrollViewer Grid.Row="1"
@@ -175,7 +166,7 @@
                                 Click="ClearTray_Click"
                                 HorizontalAlignment="Stretch"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                                ToolTipService.ToolTip="Remove leftover NVIDIA icons from the taskbar overflow (including dead App entries)." />
+                                ToolTipService.ToolTip="Clear NVIDIA tray icons" />
                     </Grid>
                 </StackPanel>
             </Grid>

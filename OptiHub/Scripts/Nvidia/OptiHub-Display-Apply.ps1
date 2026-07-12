@@ -373,24 +373,63 @@ function Unregister-LegacyPersistTask {
     }
 }
 
+function Test-OptiHubDisplayAlreadyOk {
+    # Live NVAPI probe against current panel JSON; true = nothing to do.
+    $exe = Get-NvDisplayExe
+    if (-not $exe) { return $false }
+    try {
+        $psi = [Diagnostics.ProcessStartInfo]::new()
+        $psi.FileName = $exe
+        $psi.ArgumentList.Add('--status')
+        $psi.WorkingDirectory = Split-Path $exe -Parent
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $psi.Environment['OPTIHUB_PRIMARY_REFRESH'] = [string]$Script:PanelSettings.primaryRefresh
+        $psi.Environment['OPTIHUB_SECONDARY_REFRESH'] = [string]$Script:PanelSettings.secondaryRefresh
+        $psi.Environment['OPTIHUB_FULL_RGB'] = $(if ([bool]$Script:PanelSettings.fullRgb) { '1' } else { '0' })
+        $psi.Environment['OPTIHUB_GPU_NOSCALE'] = $(if ([bool]$Script:PanelSettings.gpuNoScaling) { '1' } else { '0' })
+        $psi.Environment['OPTIHUB_SCALING_OVERRIDE'] = $(if ([bool]$Script:PanelSettings.scalingOverride) { '1' } else { '0' })
+        $p = [Diagnostics.Process]::Start($psi)
+        if (-not $p) { return $false }
+        $out = $p.StandardOutput.ReadToEnd()
+        $null = $p.StandardError.ReadToEnd()
+        if (-not $p.WaitForExit(20000)) { try { $p.Kill() } catch {}; return $false }
+        $line = ($out -split "`r?`n") | Where-Object { $_ -like 'OPTIHUB_NVDISPLAY_JSON:*' } | Select-Object -Last 1
+        if (-not $line) { return $false }
+        $j = ($line.Substring('OPTIHUB_NVDISPLAY_JSON:'.Length)) | ConvertFrom-Json
+        return [bool]$j.ok
+    } catch {
+        return $false
+    }
+}
+
 # ---- main ----
-Write-DLog '=== Display apply (OptiHub panel / no NVIDIA CPL required) ==='
-Write-DLog ("Panel settings: primary={0} secondary={1} fullRgb={2} gpuNoScale={3} override={4}" -f `
+Write-DLog '=== Display apply (OptiHub panel) ==='
+Write-DLog ("Panel: primary={0} secondary={1} fullRgb={2} gpuNoScale={3} override={4}" -f `
     $Script:PanelSettings.primaryRefresh, $Script:PanelSettings.secondaryRefresh,
     $Script:PanelSettings.fullRgb, $Script:PanelSettings.gpuNoScaling, $Script:PanelSettings.scalingOverride)
-$light = [bool]$Light -or ($env:OPTIHUB_DISPLAY_LIGHT -eq '1')
-if (-not $light) {
-    Get-Process nvcplui, nvcpl -EA 0 | Stop-Process -Force -EA 0
-    Unregister-LegacyPersistTask
-}
-# Pass panel policy to NVAPI helper via env
+
 $env:OPTIHUB_PRIMARY_REFRESH = [string]$Script:PanelSettings.primaryRefresh
 $env:OPTIHUB_SECONDARY_REFRESH = [string]$Script:PanelSettings.secondaryRefresh
 $env:OPTIHUB_FULL_RGB = $(if ([bool]$Script:PanelSettings.fullRgb) { '1' } else { '0' })
 $env:OPTIHUB_GPU_NOSCALE = $(if ([bool]$Script:PanelSettings.gpuNoScaling) { '1' } else { '0' })
 $env:OPTIHUB_SCALING_OVERRIDE = $(if ([bool]$Script:PanelSettings.scalingOverride) { '1' } else { '0' })
 
-# 1) Registry first
+# Do not re-touch driver/registry when live status already matches policy.
+if (Test-OptiHubDisplayAlreadyOk) {
+    Write-DLog 'SKIP: already matches panel policy'
+    Write-DLog 'SUCCESS'
+    exit 0
+}
+
+$light = [bool]$Light -or ($env:OPTIHUB_DISPLAY_LIGHT -eq '1')
+if (-not $light) {
+    Get-Process nvcplui, nvcpl -EA 0 | Stop-Process -Force -EA 0
+    Unregister-LegacyPersistTask
+}
+
 Set-AllNvtweakDevices
 Clear-NvidiaAppTrayAndContainer
 
@@ -400,28 +439,25 @@ if (-not $light) {
     Clear-NvidiaAppTrayAndContainer
 }
 
-# 2) NVAPI modes/color/path (respects OPTIHUB_* env), then re-stamp registry
 $nvApiOk = Invoke-NvApiHelper
 Set-AllNvtweakDevices
 Clear-NvidiaAppTrayAndContainer
 Set-NvtweakRootPrefs
-# Best-effort Store hive (optional; must not fail the apply)
 try { [void](Set-NvidiaStoreCplVirtualHive) } catch { Write-DLog "Store hive stamp skipped: $($_.Exception.Message)" }
 Get-Process nvcplui, nvcpl -EA 0 | Stop-Process -Force -EA 0
 
-# Verify registry matches *requested panel settings* (off is a valid policy)
 $wantOverride = if ([bool]$Script:PanelSettings.scalingOverride) { 1 } else { 0 }
-$wantGpu = if ([bool]$Script:PanelSettings.gpuNoScaling) { 0 } else { 1 }  # PerformScalingOn 0=GPU
+$wantGpu = if ([bool]$Script:PanelSettings.gpuNoScaling) { 0 } else { 1 }
 $wantScaleMode = if ([bool]$Script:PanelSettings.gpuNoScaling) { 2 } else { 1 }
 $wantUseNvidiaColor = if ([bool]$Script:PanelSettings.fullRgb) { 1 } else { 0 }
-$wantFull = if ([bool]$Script:PanelSettings.fullRgb) { 0 } else { 1 }  # DynamicRange 0=Full
+$wantFull = if ([bool]$Script:PanelSettings.fullRgb) { 0 } else { 1 }
 $wantVidColor = if ([bool]$Script:PanelSettings.videoNvidiaColor) { 1 } else { 0 }
 $wantVidImage = if ([bool]$Script:PanelSettings.videoNvidiaImage) { 1 } else { 0 }
 
 $registryOk = $true
 $deviceKeys = @(Get-ChildItem 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak\Devices' -EA 0)
 if ($deviceKeys.Count -eq 0) {
-    Write-DLog 'VERIFY: no HKCU device keys (NVAPI-only path — OK if NVAPI succeeded)'
+    Write-DLog 'VERIFY: no HKCU device keys (OK if NVAPI succeeded)'
 }
 $deviceKeys | ForEach-Object {
     $d = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
@@ -434,20 +470,17 @@ $deviceKeys | ForEach-Object {
     $okVideo = ($null -ne $v -and [int]$v.VideoColorSettingsSource -eq $wantVidColor -and
                 [int]$v.VideoImageSettingsSource -eq $wantVidImage)
     if (-not ($okScale -and $okColor -and $okVideo)) {
-        Write-DLog ("VERIFY FAIL {0} scale={1} color={2} video={3} (want override={4} fullRgb={5} vidC={6} vidI={7})" -f `
-            $_.PSChildName, $okScale, $okColor, $okVideo, $wantOverride, $Script:PanelSettings.fullRgb, $wantVidColor, $wantVidImage)
+        Write-DLog ("VERIFY FAIL {0} scale={1} color={2} video={3}" -f $_.PSChildName, $okScale, $okColor, $okVideo)
         $registryOk = $false
     } else {
-        Write-DLog "VERIFY OK $($_.PSChildName) matches panel settings"
+        Write-DLog "VERIFY OK $($_.PSChildName)"
     }
 }
-# Gestalt is best-effort for DRS UI; do not fail panel apply if missing
 try {
     $g = [int](Get-ItemProperty 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak' -Name Gestalt -EA Stop).Gestalt
-    Write-DLog "Gestalt=$g (informational)"
-} catch { Write-DLog 'Gestalt not set (informational)' }
+    Write-DLog "Gestalt=$g"
+} catch { }
 
-# NVAPI is required when we asked for modes/color/scale; if all toggles off, registry stamp is enough
 $needNvApi = [bool]$Script:PanelSettings.fullRgb -or [bool]$Script:PanelSettings.gpuNoScaling -or
              ([string]$Script:PanelSettings.primaryRefresh -ne 'keep') -or
              ([string]$Script:PanelSettings.secondaryRefresh -ne 'keep')
@@ -455,9 +488,7 @@ $ok = [bool]$registryOk -and ((-not $needNvApi) -or [bool]$nvApiOk)
 
 if ($ok) {
     Write-DLog 'SUCCESS'
-    Write-DLog ("OptiHub panel applied (fullRgb={0} gpuNoScale={1} override={2})" -f `
-        $Script:PanelSettings.fullRgb, $Script:PanelSettings.gpuNoScaling, $Script:PanelSettings.scalingOverride)
     exit 0
 }
-Write-DLog ("FAIL verify nvApiOk={0} registryOk={1}" -f $nvApiOk, $registryOk)
+Write-DLog ("FAIL nvApiOk={0} registryOk={1}" -f $nvApiOk, $registryOk)
 exit 1

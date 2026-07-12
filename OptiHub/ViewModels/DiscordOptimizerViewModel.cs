@@ -100,17 +100,11 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
         var action = IsApplied ? "reapply" : "run";
         var warning =
-            "This is an AGGRESSIVE, no-compromise performance pass. It will close Discord and apply:\n\n" +
-            "• Equicord + OpenASAR privacy/startup tuning\n" +
-            "• DiscOpt kernel RAM reclamation every 5 seconds, Above Normal priority, and raw-input/thread tuning\n" +
-            "• Deep cache cleaning and full allowlisted debloat\n" +
-            "• Removal of clips/hook modules, game SDK files, and non-English locale packs\n" +
-            "• Disabled Windows startup, scheduled tasks, toasts, and tray promotion\n\n" +
-            "This trades background convenience, multilingual UI assets, notifications, and optional Discord features for latency, RAM, and startup performance. Your login/session and updater integrity data are preserved. Administrator approval is required.\n\n" +
-            "Use Repair Discord to return to a clean stock client.";
+            "Closes Discord. Debloat, cache clean, kernel RAM, startup off.\n\n" +
+            "Needs Administrator. Use Repair Discord to undo.";
 
         var ok = ConfirmAsync is not null
-            ? await ConfirmAsync($"Confirm aggressive Discord optimizer ({action})", warning)
+            ? await ConfirmAsync($"Apply Discord ({action})", warning)
             : true;
         if (!ok) return;
 
@@ -197,7 +191,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync(
                 "Repair Discord?",
-                "This restores a clean, stock Discord install while keeping your login. Optimizations will be removed. Administrator approval may be required.")
+                "Stock Discord, login kept. Optimizations removed. Admin may be required.")
             : true;
         if (!ok) return;
 

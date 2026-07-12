@@ -30,7 +30,7 @@
                            FontSize="34"
                            LineHeight="42"
                            HorizontalAlignment="Center" />
-                <TextBlock Text="Pick a target. Live status is verified when you open it."
+                <TextBlock Text="Pick a target."
                            Style="{StaticResource OptiTaglineSupport}"
                            FontSize="14"
                            HorizontalAlignment="Center" />

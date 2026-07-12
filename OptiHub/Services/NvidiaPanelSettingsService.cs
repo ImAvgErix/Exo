@@ -73,31 +73,27 @@ public sealed class NvidiaPanelSettingsService
         items.Add(new NvidiaPolicyProbeItem
         {
             Id = "full-rgb",
-            Title = "Full RGB / Full dynamic range",
+            Title = "Full RGB",
             IsApplied = nv.ColorOk,
-            Detail = nv.ColorOk ? "Driver reports Full RGB" : "Driver not on Full RGB",
+            Detail = string.Empty,
             CanApplyFromPanel = true
         });
 
         items.Add(new NvidiaPolicyProbeItem
         {
             Id = "gpu-scale",
-            Title = "GPU no-scaling + override games",
+            Title = "GPU no-scaling + override",
             IsApplied = nv.ScalingOk && nv.RegistryOk,
-            Detail = nv.ScalingOk && nv.RegistryOk
-                ? "GPU no-scaling and override active"
-                : "Scaling policy not on OptiHub defaults",
+            Detail = string.Empty,
             CanApplyFromPanel = true
         });
 
         items.Add(new NvidiaPolicyProbeItem
         {
             Id = "refresh",
-            Title = "Primary highest Hz · secondary 60 Hz",
+            Title = "Primary max Hz · secondary 60 Hz",
             IsApplied = nv.RefreshOk,
-            Detail = nv.RefreshOk
-                ? "Primary highest available, secondary 60 Hz"
-                : "Refresh not on OptiHub policy",
+            Detail = string.Empty,
             CanApplyFromPanel = true
         });
 
@@ -105,9 +101,9 @@ public sealed class NvidiaPanelSettingsService
         items.Add(new NvidiaPolicyProbeItem
         {
             Id = "video",
-            Title = "Video color + image (NVIDIA settings)",
+            Title = "Video color + image (NVIDIA)",
             IsApplied = videoOk,
-            Detail = videoOk ? "Video sources use NVIDIA settings" : "Video still on player defaults",
+            Detail = string.Empty,
             CanApplyFromPanel = true
         });
 
@@ -117,7 +113,7 @@ public sealed class NvidiaPanelSettingsService
             Id = "overlay",
             Title = "Overlay / ShadowPlay off",
             IsApplied = overlayOff,
-            Detail = overlayOff ? "Overlay paths inactive" : "Overlay may still be enabled",
+            Detail = string.Empty,
             CanApplyFromPanel = true
         });
 
@@ -125,9 +121,9 @@ public sealed class NvidiaPanelSettingsService
         items.Add(new NvidiaPolicyProbeItem
         {
             Id = "counters",
-            Title = "GPU performance counters (all users)",
+            Title = "GPU performance counters",
             IsApplied = countersOk,
-            Detail = countersOk ? "RmProfilingAdminOnly=0 / tools visible" : "Counters restricted or not set",
+            Detail = string.Empty,
             CanApplyFromPanel = true
         });
 
@@ -138,12 +134,7 @@ public sealed class NvidiaPanelSettingsService
             Id = "clients",
             Title = "No NVIDIA App / Control Panel",
             IsApplied = appGone && cplGone,
-            Detail = appGone && cplGone
-                ? "Clients removed — OptiHub is the panel"
-                : appGone
-                    ? "App gone; Control Panel still present"
-                    : "NVIDIA client files still on disk",
-            // Display apply clears tray; full strip of App/CPL needs elevated optimizer
+            Detail = string.Empty,
             CanApplyFromPanel = true
         });
 
@@ -151,11 +142,9 @@ public sealed class NvidiaPanelSettingsService
         items.Add(new NvidiaPolicyProbeItem
         {
             Id = "tray",
-            Title = "No NVIDIA icon in taskbar overflow",
+            Title = "No NVIDIA tray icon",
             IsApplied = trayClean,
-            Detail = trayClean
-                ? "No NVIDIA NotifyIconSettings entries"
-                : "NVIDIA still listed in overflow — Apply or Clear tray icons",
+            Detail = string.Empty,
             CanApplyFromPanel = true
         });
 
@@ -163,11 +152,9 @@ public sealed class NvidiaPanelSettingsService
         items.Add(new NvidiaPolicyProbeItem
         {
             Id = "3d-profile",
-            Title = "3D performance profiles (DRS)",
+            Title = "3D profiles",
             IsApplied = profileOk,
-            Detail = profileOk
-                ? "Base + game profiles applied"
-                : "Needs full Apply profile on the NVIDIA card",
+            Detail = string.Empty,
             CanApplyFromPanel = false
         });
 
@@ -196,7 +183,7 @@ public sealed class NvidiaPanelSettingsService
         await ClearTrayIconsAsync(ct).ConfigureAwait(false);
 
         if (result.Success)
-            return (true, "OptiHub NVIDIA panel policy applied to the driver. Rows should show Applied with a check when live status matches.");
+            return (true, "Applied.");
 
         var err = result.ErrorMessage ?? result.Summary ?? "Display apply failed.";
         if (err.Length > 450)

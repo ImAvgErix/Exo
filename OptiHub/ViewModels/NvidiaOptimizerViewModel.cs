@@ -53,7 +53,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusText = "Status unavailable";
-            DetailText = "OptiHub could not read the NVIDIA driver state. You can retry without applying changes.";
+            DetailText = "Could not read driver state.";
             SetResult($"Status refresh failed: {ex.Message}", success: false);
         }
         finally
@@ -69,24 +69,13 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         if (IsBusy) return;
 
         var action = IsApplied ? "reapply" : "apply";
-        var gsyncLine = UseGsync
-            ? "• G-SYNC pack: adaptive sync stays on; Ultra Low Latency is off to avoid conflicts."
-            : "• Max FPS / latency pack: Ultra Low Latency Ultra; G-SYNC and V-Sync forced off.";
+        var pack = UseGsync ? "G-SYNC pack" : "Max FPS / latency pack";
         var warning =
-            "This is an aggressive maximum-performance pass. It prioritizes FPS and input latency over power savings, NVIDIA background features, and recording tools.\n\n" +
-            "OptiHub will:\n" +
-            "1) Update the Game Ready display driver only when needed (Display.Driver only — no App, no Virtual/HD Audio), then NVCleanstall-class tweaks: MSI High, telemetry/Ansel off, HDCP off.\n" +
-            "2) Import the matching 3D Base Profile plus per-game profiles (Profile Inspector silent import).\n" +
-            "3) Remove NVIDIA App + Control Panel + audio leftovers. OptiHub NVIDIA Panel is the only settings UI.\n" +
-            "4) Turn off overlay paths, Windows toasts for NVIDIA, and telemetry/SelfUpdate services.\n" +
-            "5) Apply OptiHub panel policy via NVAPI: Full RGB, GPU no-scaling + override, primary/secondary refresh (defaults: max / 60 Hz). 3D packs force DRS profiles.\n\n" +
-            gsyncLine + "\n\n" +
-            "Open NVIDIA panel on this card anytime to tweak display/video policy without NVIDIA's apps.\n\n" +
-            "Tradeoffs: higher idle power/heat, no NVIDIA overlay/recording, no NVIDIA HDMI/DP or Virtual Audio, brief display flicker. A driver update may require a restart.\n\n" +
-            "Administrator approval is required.";
+            $"Driver (if needed) · 3D profiles · strip App/CPL · {pack} · display policy.\n\n" +
+            "Needs Administrator. May flicker displays; restart if prompted.";
 
         var ok = ConfirmAsync is not null
-            ? await ConfirmAsync($"Confirm NVIDIA Optimizer ({action})", warning)
+            ? await ConfirmAsync($"Apply NVIDIA ({action})", warning)
             : true;
         if (!ok) return;
 
@@ -126,26 +115,20 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                 if (output.Contains("RESTART_REQUIRED", StringComparison.OrdinalIgnoreCase))
                 {
                     ProgressStatus = "Restart required";
-                    SetResult(
-                        "The display driver installed successfully. Restart Windows, then Apply once more to finish the 3D profile and display settings.",
-                        success: true);
+                    SetResult("Driver installed. Restart Windows, then Apply again.", success: true);
                 }
                 else if (output.Contains("Clean Driver failed", StringComparison.OrdinalIgnoreCase) ||
                     output.Contains("Clean driver failed", StringComparison.OrdinalIgnoreCase))
                 {
                     ProgressStatus = "Clean driver failed";
-                    SetResult(
-                        "OptiHub Clean Driver did not finish. Check the log, free disk space, close games, and Apply again as Administrator.",
-                        success: false);
+                    SetResult("Clean driver failed. Check log, free space, close games, Apply as Admin.", success: false);
                 }
                 else if (output.Contains("clean driver -> 3D", StringComparison.OrdinalIgnoreCase) ||
                          output.Contains("Completed successfully", StringComparison.OrdinalIgnoreCase) ||
                          output.Contains("one pass", StringComparison.OrdinalIgnoreCase))
                 {
                     ProgressStatus = "Completed successfully";
-                    SetResult(
-                        "Done in one pass: clean driver (if needed), 3D profile, fresh debloated NVIDIA App, and verified NVAPI display settings. No reboot required unless Windows prompts.",
-                        success: true);
+                    SetResult("Done.", success: true);
                 }
                 else
                 {
@@ -163,7 +146,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            SetResult("NVIDIA optimization was cancelled. Changes completed before cancellation were kept.", success: false);
+            SetResult("Cancelled.", success: false);
             ProgressStatus = "Cancelled";
         }
         catch (Exception ex)
@@ -188,7 +171,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync(
                 "Reset OptiHub NVIDIA status?",
-                "Only clears OptiHub's record that this pack was applied (status checks reset). Does not uninstall the driver, remove 3D profiles, or remove the NVIDIA App.")
+                "Clears OptiHub status only. Driver and profiles stay.")
             : true;
         if (!ok) return;
 
@@ -216,7 +199,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                 workingDirectory: _services.Scripts.GetNvidiaRoot());
 
             SetResult(
-                result.Success ? "OptiHub status reset. Apply again to re-run the full NVIDIA pack." : (result.ErrorMessage ?? result.Summary),
+                result.Success ? "Status reset." : (result.ErrorMessage ?? result.Summary),
                 success: result.Success);
 
             await RefreshAfterRunAsync();

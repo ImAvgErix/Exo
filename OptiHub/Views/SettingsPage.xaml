@@ -33,7 +33,7 @@
                            CharacterSpacing="-20"
                            HorizontalAlignment="Center"
                            Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                <TextBlock Text="Appearance, about, updates, and support."
+                <TextBlock Text="Theme, logs, version, updates."
                            Style="{StaticResource OptiCaption}"
                            FontSize="13"
                            HorizontalAlignment="Center"
@@ -69,7 +69,7 @@
                         </Grid.RowDefinitions>
                         <StackPanel Spacing="4">
                             <TextBlock Text="APPEARANCE" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                            <TextBlock Text="Match the shell to your desktop."
+                            <TextBlock Text="Theme"
                                        Style="{StaticResource OptiCaption}"
                                        FontSize="12"
                                        Opacity="0.85" />
@@ -92,7 +92,7 @@
                                    Style="{StaticResource OptiCaption}"
                                    FontSize="11.5"
                                    Opacity="0.75"
-                                   Text="Applies instantly across OptiHub."
+                                   Text="Applies instantly."
                                    Margin="0,8,0,0" />
                     </Grid>
                 </Border>
@@ -107,7 +107,7 @@
                         </Grid.RowDefinitions>
                         <StackPanel Spacing="4">
                             <TextBlock Text="SUPPORT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                            <TextBlock Text="Logs for Discord, Steam, and NVIDIA applies."
+                            <TextBlock Text="Apply logs"
                                        Style="{StaticResource OptiCaption}"
                                        FontSize="12"
                                        Opacity="0.85"
@@ -140,7 +140,7 @@
                         </Grid.RowDefinitions>
                         <StackPanel Spacing="4">
                             <TextBlock Text="ABOUT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                            <TextBlock Text="Installed OptiHub build."
+                            <TextBlock Text="Build"
                                        Style="{StaticResource OptiCaption}"
                                        FontSize="12"
                                        Opacity="0.85" />
@@ -160,7 +160,7 @@
                                    Style="{StaticResource OptiCaption}"
                                    FontSize="11.5"
                                    Opacity="0.75"
-                                   Text="One hub for Discord, Steam, and NVIDIA."
+                                   Text="Discord · Steam · NVIDIA"
                                    Margin="0,8,0,0" />
                     </Grid>
                 </Border>
@@ -175,7 +175,7 @@
                         </Grid.RowDefinitions>
                         <StackPanel Spacing="4">
                             <TextBlock Text="UPDATES" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                            <TextBlock Text="Check GitHub for a newer app release."
+                            <TextBlock Text="GitHub releases"
                                        Style="{StaticResource OptiCaption}"
                                        FontSize="12"
                                        Opacity="0.85"
