@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.20
+
+- **NVIDIA 1.8.8**: treat App setup exit **-436207616 / 0xE6000000** as system-not-supported (Brian GTX 1080 log) so Apply fails fast and falls back to Control Panel + NVAPI instead of retrying for minutes
 ## 1.8.19
 
 - **All 3 optimizers**: Windows toast notifications off for Discord / Steam / NVIDIA (App + Control Panel keys); also set ShowInActionCenter=0

@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.8.7'
+$Script:NvidiaOptVersion = '1.8.8'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -759,14 +759,17 @@ function Get-NvidiaAppOfficialInstallerUrl {
 
 function Test-NvidiaAppSetupUnsupportedExit {
     param([int]$Code)
-    # NVIDIA NVI2: 0x1A000000 (436207616) = "This graphics driver / system configuration is not supported"
-    # Friend PCs hit this and OptiHub used to sit on "setup exit" forever.
+    # Brian's GTX 1080 log (kit 1.8.4): exit -436207616
+    #   signed int of 0xE6000000 = system configuration not supported by NVIDIA App installer
+    # Also seen / reported as +436207616 / 0x1A000000 depending on Process.ExitCode cast.
+    # Must catch BOTH signed and unsigned forms or we retry for minutes and abort Apply.
     try {
         $u = [uint32]([int64]$Code -band 0xFFFFFFFF)
-        if ($u -eq [uint32]0x1A000000) { return $true }
-        if ($Code -eq 436207616 -or $Code -eq -16777216) { return $true }
-        # High-byte family 0x1A...... used for package/system reject
-        if ( ($u -band [uint32]0xFF000000) -eq [uint32]0x1A000000 ) { return $true }
+        if ($u -eq [uint32]0x1A000000 -or $u -eq [uint32]0xE6000000) { return $true }
+        if ($Code -eq 436207616 -or $Code -eq -436207616) { return $true }
+        $hi = [int](($u -shr 24) -band 0xFF)
+        # NVIDIA package/system reject families seen in the wild
+        if ($hi -eq 0x1A -or $hi -eq 0xE6) { return $true }
     } catch { }
     return $false
 }
@@ -881,8 +884,9 @@ function Install-NvidiaAppFromOfficialInstaller {
                 Write-Ok "NVIDIA App setup exit: $code (0x$hex)"
                 if (Test-NvidiaAppSetupUnsupportedExit -Code $code) {
                     $Script:NvidiaAppInstallUnsupported = $true
-                    Write-Warn 'NVIDIA App installer rejected this PC: system configuration not supported (exit 0x1A000000 / 436207616).'
-                    Write-Warn 'This is an NVIDIA installer limit (GPU/OS/driver combo), not OptiHub hanging. Skipping App; continuing with profiles + NVAPI.'
+                    $hex = '{0:X8}' -f [uint32]([int64]$code -band 0xFFFFFFFF)
+                    Write-Warn "NVIDIA App installer rejected this PC: system configuration not supported (exit $code / 0x$hex)."
+                    Write-Warn 'This is an NVIDIA installer limit (common on some GTX 10-series PCs), not OptiHub hanging. Skipping App; Control Panel + NVAPI next.'
                     return $false
                 }
                 # Other non-zero: do not sit around - short probe then next flags
