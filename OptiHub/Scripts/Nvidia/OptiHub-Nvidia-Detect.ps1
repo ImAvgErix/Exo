@@ -456,8 +456,23 @@ foreach ($cplPath in @(
 }
 $controlPanelOnly = [bool]($state -and $state.PSObject.Properties.Name -contains 'controlPanelOnly' -and [bool]$state.controlPanelOnly)
 $cplOk = $cplInstalled -or [bool]($state -and $state.nvidiaControlPanel) -or $controlPanelOnly
-# Success = Control Panel path (App gone preferred). App present is a soft warning, not failure.
-$clientOk = $cplOk -or [bool]($state -and $state.displayMethod -eq 'nvapi' -and $state.displayPrefs)
+# Success = Control Panel path (App gone preferred). App present is a soft warning, not hard failure for display.
+$clientOk = ($cplOk -and -not $appInstalled) -or
+            ($controlPanelOnly -and -not $appInstalled) -or
+            [bool]($state -and $state.displayMethod -eq 'nvapi' -and $state.displayPrefs -and -not $appInstalled)
+# Prefer live CPL install for applied state when possible
+if ($cplInstalled -and -not $appInstalled) { $clientOk = $true }
+
+$advanced3dOk = $false
+try {
+    $gestalt = (Get-ItemProperty -LiteralPath 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak' -Name 'Gestalt' -ErrorAction Stop).Gestalt
+    $advanced3dOk = ([int]$gestalt -eq 2)
+} catch {
+    if ($state -and $state.PSObject.Properties.Name -contains 'advanced3dImageSettings') {
+        $advanced3dOk = [bool]$state.advanced3dImageSettings
+    }
+}
+
 $features.Add(@{
     title  = 'Control Panel (no NVIDIA App)'
     detail = $(if ($cplInstalled -and -not $appInstalled) {
@@ -472,12 +487,22 @@ $features.Add(@{
     active = $clientOk -and -not $appInstalled
 })
 
+$features.Add(@{
+    title  = 'Advanced 3D image settings'
+    detail = $(if ($advanced3dOk) {
+        'Control Panel uses advanced 3D image settings (Manage 3D / imported profiles active).'
+    } else {
+        'Not set to advanced 3D image settings yet. Apply enables it so Base Profile takes effect.'
+    })
+    active = $advanced3dOk
+})
+
 $backgroundOk = [bool]$debloat.Ok -and [bool]$overlay.Ok
 $backgroundIssues = @($debloat.Issues) + @($overlay.Issues)
 $features.Add(@{
     title  = 'Privacy / telemetry / overlay off'
     detail = $(if ($backgroundOk) {
-        'Overlay preferences, capture, telemetry, updater, background helpers, and auto-start paths are inactive (App stays launchable).'
+        'Overlay preferences, capture, telemetry, updater, background helpers, and auto-start paths are inactive.'
     } else {
         "Performance background gap: $($backgroundIssues -join '; ')"
     })
@@ -485,7 +510,7 @@ $features.Add(@{
 })
 
 $isApplied = $gpuOk -and (-not $pendingAfterDriver) -and (-not $applyInProgress) -and
-             $applied -and $gameOk -and $displayOk -and $backgroundOk -and $appOk -and (-not $needsDriverAction)
+             $applied -and $gameOk -and $displayOk -and $backgroundOk -and $clientOk -and $advanced3dOk -and (-not $needsDriverAction)
 
 $driverChanged = $false
 if ($state -and $currentNv -and $state.profileDriverVersion -and
@@ -503,7 +528,8 @@ elseif ($driverChanged -or (-not $profileOk -and $state -and $state.profileAppli
 elseif (-not $profileOk) { '3D profile incomplete' }
 elseif (-not $gameOk) { 'Game profiles incomplete' }
 elseif (-not $displayOk) { 'Display setup incomplete' }
-elseif (-not $appOk) { 'NVIDIA App missing' }
+elseif (-not $clientOk) { 'Control Panel missing' }
+elseif (-not $advanced3dOk) { 'Advanced 3D settings off' }
 elseif (-not $backgroundOk) { 'Background re-armed - reapply' }
 elseif ($isApplied) { 'Already optimized' }
 else { 'Ready to optimize' }
@@ -518,9 +544,10 @@ elseif ($driverChanged) { "Driver is now $currentNv but OptiHub last verified $(
 elseif (-not $profileOk) { $(if ($applyInProgress) { 'The previous Apply was interrupted before a verified profile marker was saved. Apply again.' } else { 'The profile file, pack version, hash, or imported driver version is not verified. Apply again.' }) }
 elseif (-not $gameOk) { 'Base profile is present but the per-game catalog was not fully recorded. Apply again.' }
 elseif (-not $displayOk) { 'The 3D profile is verified, but live NVAPI display verification is incomplete. Restore the helper or Apply again.' }
-elseif (-not $appOk) { 'Fresh NVIDIA App is missing. Apply wipes old App/Control Panel clients and reinstalls a debloated App, then applies display prefs via NVAPI.' }
-elseif (-not $backgroundOk) { "NVIDIA App re-enabled background noise ($($backgroundIssues -join '; ')). Apply again to re-disable (no logon task)." }
-elseif ($isApplied) { 'Driver current with tweaks, fresh debloated App, Base + per-game profiles, and NVAPI display prefs applied. Reapply after major driver upgrades or if App re-enables SelfUpdate.' }
+elseif (-not $clientOk) { 'Classic Control Panel is missing or NVIDIA App is still installed. Apply removes App/GFE, installs Control Panel only, then NVAPI display prefs.' }
+elseif (-not $advanced3dOk) { 'Control Panel is not set to Use the advanced 3D image settings. Apply enables it so Manage 3D / .nip profiles take effect.' }
+elseif (-not $backgroundOk) { "NVIDIA background noise re-enabled ($($backgroundIssues -join '; ')). Apply again to re-disable." }
+elseif ($isApplied) { 'Driver current with tweaks, classic Control Panel only, advanced 3D settings, Base + per-game profiles, and NVAPI display prefs applied. Reapply after major driver upgrades.' }
 else { 'Choose the G-SYNC pack only for a compatible display, then Apply.' }
 
 [ordered]@{

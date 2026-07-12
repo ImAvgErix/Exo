@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.25
+
+- **NVIDIA 1.9.1**: enable Control Panel **Use the advanced 3D image settings** (`NVTweak` Gestalt=2) so Manage 3D / imported profiles take effect
+- **NVIDIA detect**: fix undefined `$appOk` (status wrongly stuck on App); Control Panel-only client checks + advanced 3D feature row
 ## 1.8.24
 
 - **NVIDIA 1.9.0**: **Control Panel only** - always remove NVIDIA App/GFE, install classic Control Panel, accept CPL EULA, NVAPI for scaling/Hz (no App download/install path)

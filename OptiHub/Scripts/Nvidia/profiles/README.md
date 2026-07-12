@@ -74,8 +74,9 @@ metadata or packages. Install the official NVIDIA notebook driver manually.
 ## Client stack + display (not in .nip)
 
 On Apply, OptiHub **removes NVIDIA App + GFE** and ensures **classic Control Panel
-only** (minimal UI). Control Panel EULA is accepted via registry. No NVIDIA App
-install path.
+only** (minimal UI). Control Panel EULA is accepted via registry, and **Use the
+advanced 3D image settings** is enabled (`NVTweak` `Gestalt=2`) so Manage 3D /
+imported `.nip` profiles take effect. No NVIDIA App install path.
 
 Desktop **color / scaling / max Hz** always apply through **NVAPI** (not mouse
 automation) - the same driver path Control Panel reads. Live status requires the

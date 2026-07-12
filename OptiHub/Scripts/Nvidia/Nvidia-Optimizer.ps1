@@ -2,7 +2,8 @@
 # - Newest series-correct Game Ready / security driver when needed (Display.Driver only)
 # - Series + G-SYNC Base Profile via Profile Inspector (-silentImport)
 # - REMOVE NVIDIA App + GFE; ensure classic NVIDIA Control Panel only (minimal UI)
-# - Accept CPL EULA; overlay/telemetry/Windows toasts off
+# - Accept CPL EULA; set "Use the advanced 3D image settings" (NVTweak Gestalt=2)
+# - Overlay/telemetry/Windows toasts off
 # - Display (Full RGB / max Hz / GPU no-scaling) through NVAPI (no mouse automation)
 #
 #   Nvidia-Optimizer.ps1
@@ -26,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.9.0'
+$Script:NvidiaOptVersion = '1.9.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -979,6 +980,41 @@ function Accept-NvidiaControlPanelEula {
         Set-OptiHubRegDword -Path $p -Name 'AgreeToEula' -Value 1
         Set-OptiHubRegDword -Path $p -Name 'ShowEula' -Value 0
         Set-OptiHubRegDword -Path $p -Name 'ShowSedoanEula' -Value 0
+    }
+}
+
+function Enable-NvidiaAdvanced3dImageSettings {
+    # Control Panel: 3D Settings -> Adjust image settings with preview
+    # -> "Use the advanced 3D image settings" so Manage 3D Settings / .nip apply.
+    # NVTweak Gestalt: 2 = advanced 3D image settings (not "let app decide").
+    Write-Step 'Control Panel: Use the advanced 3D image settings...'
+    $paths = @(
+        'HKCU:\Software\NVIDIA Corporation\Global\NVTweak',
+        'HKLM:\SOFTWARE\NVIDIA Corporation\Global\NVTweak',
+        'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm\Global\NVTweak'
+    )
+    foreach ($p in $paths) {
+        Set-OptiHubRegDword -Path $p -Name 'Gestalt' -Value 2
+    }
+    $ok = $false
+    try {
+        $g = (Get-ItemProperty -LiteralPath 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak' -Name 'Gestalt' -ErrorAction Stop).Gestalt
+        $ok = ([int]$g -eq 2)
+    } catch { $ok = $false }
+    if ($ok) {
+        Write-Ok 'Advanced 3D image settings enabled (Gestalt=2)'
+    } else {
+        Write-Warn 'Could not verify advanced 3D image settings registry (Gestalt); Manage 3D settings may still apply via DRS'
+    }
+    return $ok
+}
+
+function Test-NvidiaAdvanced3dImageSettings {
+    try {
+        $g = (Get-ItemProperty -LiteralPath 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak' -Name 'Gestalt' -ErrorAction Stop).Gestalt
+        return ([int]$g -eq 2)
+    } catch {
+        return $false
     }
 }
 
@@ -3118,13 +3154,14 @@ try {
     }
 
     # --- 3) Client stack: Control Panel ONLY ---
-    # Remove NVIDIA App/GFE, install classic Control Panel, accept EULA, then NVAPI display.
+    # Remove NVIDIA App/GFE, install classic Control Panel, accept EULA, advanced 3D, then NVAPI display.
     # App install path removed - CPL is minimal and enough for OptiHub.
     $appInstalled = $false
     $cplOk = Test-NvidiaControlPanelInstalled
     $clientWipe = $null
     $displayClient = @{ Client = 'control-panel'; ControlPanel = $false }
     $Script:NvidiaAppInstallUnsupported = $false
+    $advanced3dOk = $false
 
     if ($InstallApp) {
         Write-Warn '-InstallApp is ignored: OptiHub uses classic Control Panel only (no NVIDIA App).'
@@ -3173,8 +3210,9 @@ try {
         ControlPanel = [bool]$cplOk
     }
 
-    Write-HubProgress 78 'Control Panel EULA + overlay off + Windows toasts...'
+    Write-HubProgress 78 'Control Panel EULA + advanced 3D + overlay/toasts...'
     Accept-NvidiaControlPanelEula
+    $advanced3dOk = Enable-NvidiaAdvanced3dImageSettings
     Disable-NvidiaOverlay
     Set-NvidiaWindowsNotificationsOff
 
@@ -3183,7 +3221,9 @@ try {
     Disable-NvidiaOverlay
     Set-NvidiaWindowsNotificationsOff
     Accept-NvidiaControlPanelEula
+    [void](Enable-NvidiaAdvanced3dImageSettings)
     Disable-NvidiaTelemetry
+    $advanced3dOk = Test-NvidiaAdvanced3dImageSettings
 
     $overlayResult = Test-NvidiaOverlayDisabled
     foreach ($issue in $overlayResult.Issues) { Write-Warn "Overlay verification: $issue" }
@@ -3259,6 +3299,7 @@ try {
         nvidiaAppBeta       = $false
         nvidiaAppConfigured = $false
         controlPanelOnly    = $true
+        advanced3dImageSettings = [bool]$advanced3dOk
         displayClient       = $(if ($cplOk) { 'control-panel' } else { 'nvapi-only' })
         displayPrefs        = [bool]$dispResult.Success
         displayMethod       = 'nvapi'
@@ -3292,17 +3333,20 @@ try {
     Write-Ok 'NVIDIA Optimizer finished'
     if (-not $SkipApp) {
         if ($cplOk) {
-            Write-Ok 'Client stack: removed App/GFE -> classic Control Panel + EULA -> overlay/toasts off -> NVAPI display.'
+            Write-Ok 'Client stack: removed App/GFE -> classic Control Panel + EULA + advanced 3D -> overlay/toasts off -> NVAPI display.'
         } else {
             Write-Ok 'Client stack: removed App/GFE -> NVAPI display (Control Panel UI install skipped/failed).'
         }
     }
+    if ($advanced3dOk) {
+        Write-Ok 'Control Panel: Use the advanced 3D image settings is ON (Manage 3D / .nip profiles active).'
+    }
     Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling + max verified Hz). Control Panel is the minimal UI.'
     if ($driverInfo.Method -eq 'optihub-clean') {
-        Write-Ok 'Clean install completed in one pass (driver + 3D + fresh App + NVAPI display). No forced reboot.'
+        Write-Ok 'Clean install completed in one pass (driver + 3D + Control Panel + NVAPI display). No forced reboot.'
     }
     Write-HubProgress 100 'Completed successfully'
-    Write-Output ("DONE - NVIDIA {0}{1} (driver -> base+{2} games -> fresh App + NVAPI display)" -f `
+    Write-Output ("DONE - NVIDIA {0}{1} (driver -> base+{2} games -> Control Panel + NVAPI display)" -f `
         $seriesId, $(if ($useGsync) { ' G-SYNC' } else { ' max FPS / latency' }), @($gameProfiles).Count)
     exit 0
 } catch {
