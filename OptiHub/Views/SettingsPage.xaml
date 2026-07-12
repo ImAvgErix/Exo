@@ -33,7 +33,7 @@
                            CharacterSpacing="-20"
                            HorizontalAlignment="Center"
                            Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                <TextBlock Text="Theme, updates, and support — everything in one place."
+                <TextBlock Text="Appearance, about, updates, and support."
                            Style="{StaticResource OptiCaption}"
                            FontSize="13"
                            HorizontalAlignment="Center"
@@ -130,36 +130,62 @@
                     </Grid>
                 </Border>
 
-                <!-- Updates (full width bottom) -->
-                <Border Grid.Row="1"
-                        Grid.Column="0"
-                        Grid.ColumnSpan="2"
-                        Style="{StaticResource OptiCard}"
-                        Padding="26,22">
-                    <Grid ColumnSpacing="28">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="1.1*" />
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Spacing="6" VerticalAlignment="Center">
-                            <TextBlock Text="UPDATES" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                            <TextBlock Text="App version"
+                <!-- About (version) — matches other cards -->
+                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource OptiCard}" Padding="22,20">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="ABOUT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                            <TextBlock Text="Installed OptiHub build."
                                        Style="{StaticResource OptiCaption}"
-                                       FontSize="11"
-                                       CharacterSpacing="40" />
+                                       FontSize="12"
+                                       Opacity="0.85" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1"
+                                    VerticalAlignment="Center"
+                                    Spacing="2"
+                                    Margin="0,12,0,0">
                             <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
                                        FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                       FontSize="36"
+                                       FontSize="32"
                                        FontWeight="SemiBold"
                                        Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                        CharacterSpacing="-30" />
                         </StackPanel>
+                        <TextBlock Grid.Row="2"
+                                   Style="{StaticResource OptiCaption}"
+                                   FontSize="11.5"
+                                   Opacity="0.75"
+                                   Text="One hub for Discord, Steam, and NVIDIA."
+                                   Margin="0,8,0,0" />
+                    </Grid>
+                </Border>
 
-                        <StackPanel Grid.Column="1"
+                <!-- Updates — same card size as Appearance / Support -->
+                <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource OptiCard}" Padding="22,20">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="UPDATES" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                            <TextBlock Text="Check GitHub for a newer app release."
+                                       Style="{StaticResource OptiCaption}"
+                                       FontSize="12"
+                                       Opacity="0.85"
+                                       TextWrapping="WrapWholeWords" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1"
+                                    VerticalAlignment="Center"
                                     Spacing="12"
-                                    VerticalAlignment="Center">
-                            <ToggleSwitch Header="Check for updates on launch"
+                                    Margin="0,12,0,0">
+                            <ToggleSwitch Header="Check on launch"
                                           AutomationProperties.Name="Check for OptiHub app updates automatically"
                                           IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
                                           OnContent="On"
@@ -170,19 +196,20 @@
                                     AutomationProperties.Name="Check for OptiHub app updates"
                                     Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
                                     HorizontalAlignment="Stretch"
-                                    MinHeight="48"
+                                    MinHeight="44"
                                     IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                            <!-- Only show status after a check (no empty gray well) -->
-                            <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
-                                       Style="{StaticResource OptiCaption}"
-                                       FontSize="12.5"
-                                       Foreground="{ThemeResource OptiSecondaryTextBrush}"
-                                       TextWrapping="WrapWholeWords"
-                                       MaxLines="3"
-                                       TextTrimming="CharacterEllipsis"
-                                       Visibility="{x:Bind ViewModel.HasUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       AutomationProperties.LiveSetting="Polite" />
                         </StackPanel>
+                        <TextBlock Grid.Row="2"
+                                   Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
+                                   Style="{StaticResource OptiCaption}"
+                                   FontSize="11.5"
+                                   Foreground="{ThemeResource OptiSecondaryTextBrush}"
+                                   TextWrapping="WrapWholeWords"
+                                   MaxLines="2"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="0,10,0,0"
+                                   Visibility="{x:Bind ViewModel.HasUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                   AutomationProperties.LiveSetting="Polite" />
                     </Grid>
                 </Border>
             </Grid>

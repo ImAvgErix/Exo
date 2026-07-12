@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.10
+
+- **Settings**: balanced 2×2 cards — About (version) + Updates match Appearance / Support (no wide bottom strip)
 ## 1.8.9
 
 - **Chrome**: stop auto-focusing Settings on launch (no gear highlight when the app opens)
