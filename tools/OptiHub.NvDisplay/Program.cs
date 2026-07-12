@@ -893,47 +893,80 @@ static class Program
             Console.WriteLine("[NVTweak] Gestalt/developer set failed: " + ex.Message);
         }
 
-        // Ensure device keys exist for every connected display (CPL reads these).
-        var devicesRoot = @"Software\NVIDIA Corporation\Global\NVTweak\Devices";
-        using (var root = Registry.CurrentUser.CreateSubKey(devicesRoot))
+        // Stamp every device key under HKCU + HKLM (CPL reads both; multi-mon uses several IDs)
+        void StampDevices(RegistryKey hive, string devicesRelative)
         {
+            using var root = hive.CreateSubKey(devicesRelative);
             if (root == null) return;
             var subnames = root.GetSubKeyNames();
             if (subnames.Length == 0)
-                Console.WriteLine("[NVTweak] No driver-created device keys; NVAPI remains authoritative");
+                Console.WriteLine($"[NVTweak] {hive.Name}\\{devicesRelative}: no device keys yet");
 
-            // Update every existing device key (covers multi-mon)
-            foreach (var name in root.GetSubKeyNames())
+            foreach (var name in subnames)
             {
                 using var dev = root.OpenSubKey(name, writable: true);
                 if (dev == null) continue;
 
-                // GPU + No scaling + Override games
+                // Desktop size/position: GPU + No scaling + Override ON (all aliases CPL may read)
                 dev.SetValue("PerformScalingOn", RegGpu, RegistryValueKind.DWord);
+                dev.SetValue("ScalingDevice", RegGpu, RegistryValueKind.DWord);
                 dev.SetValue("ScalingOverride", 1, RegistryValueKind.DWord);
                 dev.SetValue("AppControlledScaling", 0, RegistryValueKind.DWord);
                 dev.SetValue("Scaling", RegNoScaling, RegistryValueKind.DWord);
                 dev.SetValue("ScalingMode", RegNoScaling, RegistryValueKind.DWord);
+                dev.SetValue("FlatPanelScaling", RegNoScaling, RegistryValueKind.DWord);
+                dev.SetValue("OverlayScaling", RegNoScaling, RegistryValueKind.DWord);
+                dev.SetValue("PreferredScalingMode", RegNoScaling, RegistryValueKind.DWord);
+                dev.SetValue("GpuScaling", 1, RegistryValueKind.DWord);
+                dev.SetValue("DisplayScaling", 0, RegistryValueKind.DWord);
+                dev.SetValue("OverrideScalingMode", 1, RegistryValueKind.DWord);
+                dev.SetValue("bOverrideScaling", 1, RegistryValueKind.DWord);
+                dev.SetValue("ScalingModeOverride", 1, RegistryValueKind.DWord);
+                dev.SetValue("PreferGpuScaling", 1, RegistryValueKind.DWord);
+                dev.SetValue("ForceGpuScaling", 1, RegistryValueKind.DWord);
+                dev.SetValue("isOverrideScalingEnabled", 1, RegistryValueKind.DWord);
+                dev.SetValue("scalingMethod", 3, RegistryValueKind.DWord);
 
                 using (var color = dev.CreateSubKey("Color"))
                 {
                     if (color != null)
                     {
-                        color.SetValue("NvCplUseColorSettings", 1, RegistryValueKind.DWord); // NVIDIA color
+                        color.SetValue("NvCplUseColorSettings", 1, RegistryValueKind.DWord); // Use NVIDIA settings
                         color.SetValue("ColorFormat", 0, RegistryValueKind.DWord); // RGB
                         color.SetValue("NvCplColorFormat", 0, RegistryValueKind.DWord);
                         color.SetValue("NvCplDigitalColorFormat", 0, RegistryValueKind.DWord);
                         color.SetValue("DynamicRange", RegFullRange, RegistryValueKind.DWord); // Full
                         color.SetValue("NvCplDynamicRange", RegFullRange, RegistryValueKind.DWord);
-                        // NVAPI selected a depth valid for the active mode. Do not
-                        // overwrite it with a hard-coded cache value here.
                     }
                 }
 
-                Console.WriteLine($"[NVTweak] {name}: GPU + NoScaling + OverrideON + Full RGB");
+                // Video color + image: Use NVIDIA settings on every monitor
+                using (var video = dev.CreateSubKey("Video"))
+                {
+                    if (video != null)
+                    {
+                        video.SetValue("VideoColorSettingsSource", 1, RegistryValueKind.DWord);
+                        video.SetValue("VideoImageSettingsSource", 1, RegistryValueKind.DWord);
+                        video.SetValue("VideoColorSettings", 1, RegistryValueKind.DWord);
+                        video.SetValue("VideoImageSettings", 1, RegistryValueKind.DWord);
+                        video.SetValue("UseNVIDIAColorSettings", 1, RegistryValueKind.DWord);
+                        video.SetValue("UseNVIDIAImageSettings", 1, RegistryValueKind.DWord);
+                        video.SetValue("ColorSetting", 1, RegistryValueKind.DWord);
+                        video.SetValue("EdgeEnhanceSetting", 1, RegistryValueKind.DWord);
+                        video.SetValue("NoiseReductionSetting", 1, RegistryValueKind.DWord);
+                        video.SetValue("EdgeEnhanceSource", 1, RegistryValueKind.DWord);
+                        video.SetValue("NoiseReductionSource", 1, RegistryValueKind.DWord);
+                        video.SetValue("DynamicRange", RegFullRange, RegistryValueKind.DWord);
+                        video.SetValue("ColorRange", RegFullRange, RegistryValueKind.DWord);
+                    }
+                }
+
+                Console.WriteLine($"[NVTweak] {name}: OverrideON + Full RGB + Video NVIDIA");
             }
         }
 
+        StampDevices(Registry.CurrentUser, @"Software\NVIDIA Corporation\Global\NVTweak\Devices");
+        StampDevices(Registry.LocalMachine, @"SOFTWARE\NVIDIA Corporation\Global\NVTweak\Devices");
     }
 
     static void PrintPathScaling(string label)

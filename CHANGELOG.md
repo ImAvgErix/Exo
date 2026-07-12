@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.31
+
+- **NVIDIA 1.9.7**: hard-stamp **every** monitor NVTweak key - scaling **override ON**, desktop **Use NVIDIA + Full** range, video **color+image NVIDIA** (both monitors); re-assert **Gestalt=2** after container refresh; re-disable App container + clear tray ghosts after soft refresh (was re-arming hidden icons)
 ## 1.8.30
 
 - **NVIDIA 1.9.6**: always enable Control Panel **Developer Settings** (`NvDevToolsVisible=1`) + **GPU performance counters for all users** (`RmProfilingAdminOnly=0`)
