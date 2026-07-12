@@ -46,7 +46,7 @@
                                Style="{StaticResource OptiBody}"
                                FontSize="13.5"
                                LineHeight="20" />
-                    <TextBlock Text="OptiHub replaces NVIDIA App + Control Panel for the settings we care about. Open the panel to tweak display/video policy, then Apply profile for the full driver pass."
+                    <TextBlock Text="OptiHub is the NVIDIA control panel. Open the panel to see Applied / Not applied and Fix each policy. Full Apply profile still does driver + 3D packs + client strip."
                                Style="{StaticResource OptiCaption}"
                                FontSize="12"
                                LineHeight="17"
@@ -74,7 +74,7 @@
                                 MinWidth="140"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                 AutomationProperties.Name="Open OptiHub NVIDIA panel"
-                                AutomationProperties.HelpText="Open OptiHub display and video settings that apply at the driver without NVIDIA Control Panel." />
+                                AutomationProperties.HelpText="See which driver policies are applied and Fix any that are not." />
                     </Grid>
                 </StackPanel>
 

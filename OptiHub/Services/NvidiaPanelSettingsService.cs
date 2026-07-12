@@ -4,6 +4,14 @@ using OptiHub.Models;
 
 namespace OptiHub.Services;
 
+public sealed class NvidiaPolicyProbeItem
+{
+    public required string Id { get; init; }
+    public required string Title { get; init; }
+    public required bool IsApplied { get; init; }
+    public required string Detail { get; init; }
+}
+
 public sealed class NvidiaPanelSettingsService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -53,8 +61,93 @@ public sealed class NvidiaPanelSettingsService
     }
 
     /// <summary>
-    /// Apply display/color/scaling/video policy only (elevated), using saved settings.
+    /// Probe live driver/registry for each OptiHub NVIDIA policy row.
     /// </summary>
+    public async Task<IReadOnlyList<NvidiaPolicyProbeItem>> ProbePolicyAsync(CancellationToken ct = default)
+    {
+        var items = new List<NvidiaPolicyProbeItem>();
+
+        // Live NVAPI display helper
+        var nv = await ReadNvDisplayStatusAsync(ct).ConfigureAwait(false);
+        var colorOk = nv.ColorOk;
+        var refreshOk = nv.RefreshOk;
+        var scalingOk = nv.ScalingOk;
+        var registryOk = nv.RegistryOk;
+        var detailBase = nv.Detail;
+
+        items.Add(new NvidiaPolicyProbeItem
+        {
+            Id = "full-rgb",
+            Title = "Full RGB / Full dynamic range",
+            IsApplied = colorOk,
+            Detail = colorOk ? "Driver reports Full RGB (User policy)" : "Driver not on Full RGB — Fix applies NVAPI color"
+        });
+
+        items.Add(new NvidiaPolicyProbeItem
+        {
+            Id = "gpu-scale",
+            Title = "GPU no-scaling + override games",
+            IsApplied = scalingOk && registryOk,
+            Detail = scalingOk && registryOk
+                ? "GPU scan-out / no-scaling active"
+                : "Scaling policy missing — Fix stamps override + GPU no-scaling"
+        });
+
+        items.Add(new NvidiaPolicyProbeItem
+        {
+            Id = "refresh",
+            Title = "Primary max Hz · secondary 60 Hz",
+            IsApplied = refreshOk,
+            Detail = refreshOk
+                ? "Refresh policy matches OptiHub (primary max / secondary 60)"
+                : "Refresh not on OptiHub policy — Fix sets primary max, secondary 60 Hz"
+        });
+
+        // Registry video + Gestalt
+        var videoOk = ProbeVideoNvidia();
+        items.Add(new NvidiaPolicyProbeItem
+        {
+            Id = "video",
+            Title = "Video color + image (NVIDIA settings)",
+            IsApplied = videoOk,
+            Detail = videoOk
+                ? "NVTweak video sources set to NVIDIA on device keys"
+                : "Video still on player defaults — Fix forces NVIDIA video color/image"
+        });
+
+        var appGone = !ProbeNvidiaAppPresent();
+        var cplGone = !ProbeNvidiaControlPanelPresent();
+        items.Add(new NvidiaPolicyProbeItem
+        {
+            Id = "clients",
+            Title = "No NVIDIA App / Control Panel",
+            IsApplied = appGone && cplGone,
+            Detail = appGone && cplGone
+                ? "Clients removed — OptiHub is the panel"
+                : appGone
+                    ? "App gone, Control Panel still present — Fix strips CPL"
+                    : "NVIDIA client still installed — Fix strips App + CPL (use full Apply for full wipe)"
+        });
+
+        var profileOk = Probe3dProfileApplied();
+        items.Add(new NvidiaPolicyProbeItem
+        {
+            Id = "3d-profile",
+            Title = "3D performance profiles (DRS)",
+            IsApplied = profileOk,
+            Detail = profileOk
+                ? "Base + game profiles recorded as applied"
+                : "3D pack not verified — use Apply profile on the NVIDIA card (not only Fix)"
+        });
+
+        if (!string.IsNullOrWhiteSpace(detailBase))
+        {
+            // Append helper detail into refresh row only for debugging density
+        }
+
+        return items;
+    }
+
     public async Task<(bool Success, string Message)> ApplyDisplayPolicyAsync(
         NvidiaPanelSettings settings,
         IProgress<ScriptRunProgress>? progress = null,
@@ -74,25 +167,31 @@ public sealed class NvidiaPanelSettingsService
             workingDirectory: _scripts.GetNvidiaRoot()).ConfigureAwait(false);
 
         if (result.Success)
-            return (true, "OptiHub NVIDIA panel settings applied to the driver (NVAPI + registry).\n\n" + settings.Summary);
+            return (true, "OptiHub NVIDIA policy applied to the driver.");
 
-        // Surface a short, useful reason (not a wall of log)
         var err = result.ErrorMessage ?? result.Summary ?? "Display apply failed.";
         if (err.Length > 400)
             err = err[..400] + "…";
-        return (false,
-            "Could not apply panel settings.\n\n" + err +
-            "\n\nTip: fully close NVIDIA Control Panel if it is open, then try again.\n" + settings.Summary);
+        return (false, err);
     }
 
     public async Task<string> GetLiveStatusSummaryAsync(CancellationToken ct = default)
+    {
+        var nv = await ReadNvDisplayStatusAsync(ct).ConfigureAwait(false);
+        return nv.Ok
+            ? $"Driver policy OK — {nv.Detail}"
+            : $"Driver policy incomplete — {nv.Detail}";
+    }
+
+    private async Task<(bool Ok, bool ColorOk, bool RefreshOk, bool ScalingOk, bool RegistryOk, string Detail)> ReadNvDisplayStatusAsync(
+        CancellationToken ct)
     {
         try
         {
             var root = _scripts.GetNvidiaRoot();
             var exe = Path.Combine(root, "tools", "OptiHub.NvDisplay.exe");
             if (!File.Exists(exe))
-                return "Live status helper missing.";
+                return (false, false, false, false, false, "helper missing");
 
             var psi = new ProcessStartInfo
             {
@@ -105,22 +204,117 @@ public sealed class NvidiaPanelSettingsService
                 CreateNoWindow = true
             };
             using var proc = Process.Start(psi);
-            if (proc is null) return "Could not start display helper.";
+            if (proc is null)
+                return (false, false, false, false, false, "helper failed to start");
+
             var stdout = await proc.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
             await proc.WaitForExitAsync(ct).ConfigureAwait(false);
             var line = stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .LastOrDefault(l => l.StartsWith("OPTIHUB_NVDISPLAY_JSON:", StringComparison.Ordinal));
-            if (line is null) return "No live status JSON.";
+            if (line is null)
+                return (false, false, false, false, false, "no status JSON");
+
             var json = line["OPTIHUB_NVDISPLAY_JSON:".Length..];
             using var doc = JsonDocument.Parse(json);
-            var rootEl = doc.RootElement;
-            var ok = rootEl.TryGetProperty("ok", out var okEl) && okEl.GetBoolean();
-            var checks = rootEl.TryGetProperty("checks", out var c) ? c.ToString() : "";
-            return ok ? $"Driver policy OK — {checks}" : $"Driver policy incomplete — {checks}";
+            var el = doc.RootElement;
+            var ok = el.TryGetProperty("ok", out var okEl) && okEl.GetBoolean();
+            var colorOk = false;
+            var refreshOk = false;
+            var scalingOk = false;
+            var registryOk = false;
+            if (el.TryGetProperty("checks", out var checks))
+            {
+                colorOk = checks.TryGetProperty("colorOk", out var c) && c.GetBoolean();
+                refreshOk = checks.TryGetProperty("refreshOk", out var r) && r.GetBoolean();
+                scalingOk = checks.TryGetProperty("scalingOk", out var s) && s.GetBoolean();
+                registryOk = checks.TryGetProperty("registryOk", out var g) && g.GetBoolean();
+            }
+            var detail = $"color={colorOk}, refresh={refreshOk}, scaling={scalingOk}, registry={registryOk}";
+            return (ok, colorOk, refreshOk, scalingOk, registryOk, detail);
         }
         catch (Exception ex)
         {
-            return $"Live status error: {ex.Message}";
+            return (false, false, false, false, false, ex.Message);
+        }
+    }
+
+    private static bool ProbeVideoNvidia()
+    {
+        try
+        {
+            using var devices = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\NVIDIA Corporation\Global\NVTweak\Devices");
+            if (devices is null) return false;
+            foreach (var name in devices.GetSubKeyNames())
+            {
+                using var video = devices.OpenSubKey(name + @"\Video");
+                if (video is null) continue;
+                var c = video.GetValue("VideoColorSettingsSource");
+                var i = video.GetValue("VideoImageSettingsSource");
+                if (c is int ci && i is int ii && ci == 1 && ii == 1)
+                    return true;
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    private static bool ProbeNvidiaAppPresent()
+    {
+        var paths = new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                @"NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                @"NVIDIA Corporation\NVIDIA App\NVIDIA App.exe")
+        };
+        return paths.Any(File.Exists);
+    }
+
+    private static bool ProbeNvidiaControlPanelPresent()
+    {
+        try
+        {
+            // Appx package name
+            // Lightweight: known install paths + WindowsApps folder pattern
+            var paths = new[]
+            {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    @"NVIDIA Corporation\Control Panel Client\nvcplui.exe"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    @"NVIDIA Corporation\NVIDIA Control Panel\nvcplui.exe")
+            };
+            if (paths.Any(File.Exists)) return true;
+            var local = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                @"Packages");
+            if (Directory.Exists(local))
+            {
+                return Directory.EnumerateDirectories(local, "NVIDIACorp.NVIDIAControlPanel*")
+                    .Any();
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    private static bool Probe3dProfileApplied()
+    {
+        try
+        {
+            var statePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "OptiHub", "nvidia-optimizer.json");
+            if (!File.Exists(statePath)) return false;
+            using var doc = JsonDocument.Parse(File.ReadAllText(statePath));
+            var root = doc.RootElement;
+            var profile = root.TryGetProperty("profileApplied", out var p) && p.GetBoolean();
+            var games = root.TryGetProperty("gameProfilesApplied", out var g) && g.GetBoolean();
+            return profile && games;
+        }
+        catch
+        {
+            return false;
         }
     }
 }

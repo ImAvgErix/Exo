@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using OptiHub.Models;
 using OptiHub.ViewModels;
 
 namespace OptiHub.Views;
@@ -39,44 +40,11 @@ public sealed partial class NvidiaOptimizerPage : Page
         {
             XamlRoot = XamlRoot
         };
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary)
-            return;
+        await dialog.ShowAsync();
 
-        var settings = dialog.CaptureSettings();
-        ViewModel.IsBusy = true;
-        ViewModel.IsProgressVisible = true;
-        ViewModel.ProgressPercent = 10;
-        ViewModel.ProgressStatus = "Applying OptiHub NVIDIA panel...";
-        try
-        {
-            var progress = new Progress<Models.ScriptRunProgress>(p =>
-            {
-                if (p.Percent >= ViewModel.ProgressPercent)
-                    ViewModel.ProgressPercent = p.Percent;
-                if (!string.IsNullOrWhiteSpace(p.Status))
-                    ViewModel.ProgressStatus = p.Status;
-            });
-            var (ok, message) = await App.Services.NvidiaPanel.ApplyDisplayPolicyAsync(settings, progress);
-            ViewModel.ProgressPercent = 100;
-            ViewModel.ProgressStatus = ok ? "Panel applied" : "Panel apply failed";
-            // Reflect via refresh
+        // Always refresh status after panel (Fix may have changed driver state)
+        if (dialog.RequestedApply)
             await ViewModel.RefreshCommand.ExecuteAsync(null);
-            // Show result through status detail if refresh didn't clear busy
-            var tip = new ContentDialog
-            {
-                Title = ok ? "NVIDIA panel applied" : "Apply failed",
-                Content = new TextBlock { Text = message + "\n\n" + settings.Summary, TextWrapping = TextWrapping.Wrap, MaxWidth = 420 },
-                CloseButtonText = "OK",
-                XamlRoot = XamlRoot
-            };
-            await tip.ShowAsync();
-        }
-        finally
-        {
-            ViewModel.IsBusy = false;
-            ViewModel.IsProgressVisible = false;
-        }
     }
 
     private async Task<bool> ConfirmAsync(string title, string message)

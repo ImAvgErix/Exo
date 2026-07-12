@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.9.2
+
+- **NVIDIA Panel**: no more toggles — **Applied / Not applied** rows with **Fix** (same card style as the rest of OptiHub); **Fix all** applies OptiHub driver policy
 ## 1.9.1
 
 - **NVIDIA Panel**: fix false **Apply failed** when turning settings **off** — verify against your panel prefs (not hard-coded ON); NVAPI skips Full RGB/GPU scale when disabled; Store hive stamp is best-effort
