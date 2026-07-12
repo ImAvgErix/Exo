@@ -77,9 +77,9 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             "OptiHub will:\n" +
             "1) Update the Game Ready display driver only when needed (series-correct package), then enable MSI High and disable Ansel/telemetry services.\n" +
             "2) Import the matching 3D Base Profile plus per-game profiles (Profile Inspector silent import).\n" +
-            "3) Wipe NVIDIA App / Control Panel / GFE clients, then install a fresh NVIDIA App from the official NVIDIA download (fast; winget is last-resort only). No desktop shortcut.\n" +
-            "4) Auto-accept EULA, skip onboarding (OOTB), enable beta channel, force overlay + notifications off, and debloat App + system telemetry/SelfUpdate while keeping the App launchable and HDMI/DisplayPort audio intact.\n" +
-            "5) Apply Full RGB, max verified refresh, and GPU no-scaling through NVAPI (same driver settings the App shows — no fragile UI clicking).\n\n" +
+            "3) Wipe NVIDIA App / GFE only (classic Control Panel is kept). Try official NVIDIA App install; if App fails/unsupported, install Control Panel fallback.\n" +
+            "4) Set App prefs via registry when App is present (no fake open/close window). Debloat telemetry/SelfUpdate; keep HDMI/DisplayPort audio.\n" +
+            "5) Apply Full RGB, max verified refresh, and GPU no-scaling through NVAPI (works with App, Control Panel, or driver-only).\n\n" +
             gsyncLine + "\n\n" +
             "Tradeoffs: higher idle power/heat, no NVIDIA overlay or background recording, brief display flicker, and a short App reinstall. A driver update may require a restart.\n\n" +
             "Reset OptiHub status only clears OptiHub's record; it does not undo driver/profile/display changes. Undo through NVIDIA settings or a driver reinstall. Administrator approval is required.";
@@ -295,7 +295,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        // Full live detect only — no fast heuristic flash of "Already optimized".
+        // Full live detect only - no fast heuristic flash of "Already optimized".
         if (IsBusy) return;
         await RefreshAsync();
     }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.18
+
+- **NVIDIA 1.8.6**: remove broken minimized App open/close first-run (did nothing on CEF UI)
+- **NVIDIA**: stop wiping classic Control Panel; if App fails, always ensure CPL + run NVAPI display (scaling/Hz)
+- **NVIDIA**: soft-pass overlay/debloat checks when App is absent so Apply still completes
 ## 1.8.17
 
 - **NVIDIA 1.8.5**: detect NVIDIA App installer reject exit **0x1A000000 / 436207616** ("system configuration not supported") and **fail fast** - no more pause on setup exit

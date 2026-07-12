@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.8.5'
+$Script:NvidiaOptVersion = '1.8.6'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -1099,25 +1099,19 @@ function Invoke-Nvi2UninstallPackage {
 }
 
 function Remove-NvidiaClientTraces {
-    # Wipe user-facing NVIDIA clients only. Never touch Display.Driver, audio, or containers
-    # required for the desktop. Fresh App is reinstalled after this pass.
-    Write-Step 'Wiping NVIDIA App, classic Control Panel, and GFE client traces...'
+    # Wipe App + GFE only. KEEP classic Control Panel - it is the display-UI fallback
+    # when NVIDIA App installer rejects the PC (0x1A000000) or winget fails.
+    Write-Step 'Wiping NVIDIA App + GFE client traces (keeping classic Control Panel)...'
     Stop-NvidiaClientProcesses
 
-    # Official NVI2 package IDs for desktop clients (driver stays).
-    foreach ($pkg in @(
-        'Display.NvApp',
-        'Display.GFExperience',
-        'GFExperience',
-        'HDAudio.Driver'  # NO - do not remove audio
-    )) {
-        if ($pkg -eq 'HDAudio.Driver') { continue }
+    foreach ($pkg in @('Display.NvApp', 'Display.GFExperience', 'GFExperience')) {
         [void](Invoke-Nvi2UninstallPackage -PackageName $pkg)
     }
 
-    # Store / Appx Control Panel + any leftover App packages.
+    # Remove App / GFE Appx only - never NVIDIA Control Panel Store package.
     $appxTargets = @(Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
-        $_.Name -match '(?i)NVIDIAControlPanel|NVIDIACorp\.NVIDIAControlPanel|NVIDIAApp|NVIDIA\.App|GeForceExperience'
+        $_.Name -match '(?i)NVIDIAApp|NVIDIA\.App|GeForceExperience' -and
+        $_.Name -notmatch '(?i)ControlPanel'
     })
     foreach ($pkg in $appxTargets) {
         try {
@@ -1127,41 +1121,26 @@ function Remove-NvidiaClientTraces {
             Write-Warn "Appx remove $($pkg.Name): $($_.Exception.Message)"
         }
     }
-    try {
-        $allUsers = @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue | Where-Object {
-            $_.Name -match '(?i)NVIDIAControlPanel|NVIDIACorp\.NVIDIAControlPanel'
-        })
-        foreach ($pkg in $allUsers) {
-            try {
-                Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-            } catch { }
-        }
-    } catch { }
 
-    # winget as a second path (msstore IDs).
-    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    $winget = Get-OptiHubWingetPath
     if ($winget) {
         $prev = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
-        foreach ($id in @('XP8CLZL93F5Z4P', '9NF8H0H7WMLT')) {
-            try {
-                & winget uninstall --id $id -e --silent --accept-source-agreements 2>$null | Out-Null
-            } catch { }
-        }
+        try {
+            # App only - do NOT uninstall Control Panel (9NF8H0H7WMLT)
+            & $winget uninstall --id XP8CLZL93F5Z4P -e --silent --accept-source-agreements --disable-interactivity 2>$null | Out-Null
+        } catch { }
         $ErrorActionPreference = $prev
     }
 
-    # Leftover folders (App / GFE / classic CPL UI only).
+    # App / GFE folders only - never Control Panel Client paths.
     $folderTargets = @(
         (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App'),
         (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA Overlay'),
         (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA GeForce Experience'),
         (Join-Path $env:ProgramFiles 'NVIDIA Corporation\GeForce Experience'),
-        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Control Panel Client'),
-        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA Control Panel'),
         (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App'),
         (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA GeForce Experience'),
-        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Control Panel Client'),
         (Join-Path $env:LOCALAPPDATA 'NVIDIA Corporation\NVIDIA App'),
         (Join-Path $env:LOCALAPPDATA 'NVIDIA Corporation\NVIDIA GeForce Experience'),
         (Join-Path $env:PROGRAMDATA 'NVIDIA Corporation\NVIDIA App'),
@@ -1181,12 +1160,12 @@ function Remove-NvidiaClientTraces {
     }
 
     $appGone = -not (Test-NvidiaAppInstalled)
-    $cplGone = -not (Test-NvidiaControlPanelInstalled)
-    if ($appGone) { Write-Ok 'NVIDIA App traces cleared' } else { Write-Warn 'NVIDIA App still detected after wipe (will attempt overwrite install)' }
-    if ($cplGone) { Write-Ok 'Classic Control Panel traces cleared' } else { Write-Warn 'Classic Control Panel still detected after wipe' }
+    $cplOk = Test-NvidiaControlPanelInstalled
+    if ($appGone) { Write-Ok 'NVIDIA App / GFE traces cleared' } else { Write-Warn 'NVIDIA App still detected after wipe' }
+    if ($cplOk) { Write-Ok 'Classic Control Panel kept for display fallback' } else { Write-Ok 'Classic Control Panel not present yet (will install if App fails)' }
     return [pscustomobject]@{
         AppCleared = [bool]$appGone
-        CplCleared = [bool]$cplGone
+        ControlPanelPresent = [bool]$cplOk
     }
 }
 
@@ -1654,103 +1633,18 @@ public static class OptiHubNvAppUi {
     }
 }
 
-function Complete-NvidiaAppFirstRunSilent {
-    # Registry alone does not clear CEF OOTB/EULA. Open App briefly minimized and
-    # click through Accept / Continue / Skip (never Enable Overlay).
-    Write-Step 'Silent first-run pass (EULA + onboarding click-through, minimized)...'
-    $exe = Get-NvidiaAppExePath
-    if (-not $exe) {
-        Write-Warn 'NVIDIA App.exe not found for silent first-run'
-        return $false
-    }
-
-    Accept-NvidiaAppEula
-    Set-NvidiaAppBackendConfigDebloat
-    Disable-NvidiaOverlay
-
-    $win32 = Initialize-OptiHubNvAppWin32
-    try {
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = $exe
-        $psi.WorkingDirectory = (Split-Path -Parent $exe)
-        $psi.UseShellExecute = $true
-        $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Minimized
-        $null = [Diagnostics.Process]::Start($psi)
-        Write-Ok 'Started NVIDIA App minimized for first-run dismiss'
-    } catch {
-        Write-Warn "Could not start NVIDIA App: $($_.Exception.Message)"
-        return $false
-    }
-
-    # CEF needs a few seconds to paint EULA/OOTB before buttons exist.
-    Start-Sleep -Seconds 4
-
-    $deadline = (Get-Date).AddSeconds(40)
-    $totalClicks = 0
-    $rounds = 0
-    while ((Get-Date) -lt $deadline) {
-        $rounds++
-        if ($win32) {
-            try {
-                $n = [OptiHubNvAppUi]::ClickProgressButtons()
-                if ($n -gt 0) {
-                    $totalClicks += $n
-                    Write-Ok "First-run UI clicks this round: $n (total $totalClicks)"
-                }
-                if ($rounds -in @(2, 5, 8, 12)) {
-                    [OptiHubNvAppUi]::NudgeEnterOnNvWindows()
-                }
-            } catch {
-                Write-Warn "UI click pass: $($_.Exception.Message)"
-            }
-        }
-        Start-Sleep -Milliseconds 800
-    }
-
-    foreach ($n in @('NVIDIA App', 'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper64', 'nvsphelper', 'NVIDIA Web Helper')) {
-        Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    }
-    Start-Sleep -Seconds 1
-
-    Accept-NvidiaAppEula
-    Disable-NvidiaOverlay
-    Set-NvidiaAppBackendConfigDebloat
-    Enable-NvidiaAppBetaChannel
-    Remove-NvidiaAppDesktopShortcuts | Out-Null
-
-    if ($totalClicks -gt 0) {
-        Write-Ok "Silent first-run completed ($totalClicks UI action(s))"
-    } else {
-        Write-Warn 'Silent first-run finished with 0 button clicks (CEF UI may not expose native buttons). Prefs re-applied; Enter nudges were sent.'
-    }
-    return $true
-}
-
 function Configure-NvidiaAppExperience {
-    param([switch]$SkipSilentFirstRun)
-
-    Write-Step 'Configuring NVIDIA App (EULA/OOTB flags, optional silent first-run, overlay off, beta, debloat)...'
+    # Registry/config only - do NOT open the App UI (CEF open/close was useless and annoyed users).
+    Write-Step 'Configuring NVIDIA App prefs (registry/config only - no UI launch)...'
     foreach ($n in @('NVIDIA App', 'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper64', 'nvsphelper')) {
         Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     }
     Accept-NvidiaAppEula
-    Clear-NvidiaAppOotbCache
     Enable-NvidiaAppBetaChannel
     Disable-NvidiaOverlay
     Set-NvidiaAppBackendConfigDebloat
     Remove-NvidiaAppDesktopShortcuts | Out-Null
-
-    if (-not $SkipSilentFirstRun -and -not $Script:OptiHubNvAppFirstRunDone) {
-        [void](Complete-NvidiaAppFirstRunSilent)
-        $Script:OptiHubNvAppFirstRunDone = $true
-    }
-
-    Accept-NvidiaAppEula
-    Disable-NvidiaOverlay
-    Set-NvidiaAppBackendConfigDebloat
-    Enable-NvidiaAppBetaChannel
-    Remove-NvidiaAppDesktopShortcuts | Out-Null
-    Write-Ok 'NVIDIA App experience configured (silent first-run + prefs re-asserted)'
+    Write-Ok 'NVIDIA App prefs set (EULA flags, beta channel, overlay/notifications off). No App window launched.'
 }
 
 function Test-NvidiaOverlayDisabled {
@@ -1763,26 +1657,32 @@ function Test-NvidiaOverlayDisabled {
         [void]$issues.Add("Overlay processes still running: $($overlayProcesses.ProcessName -join ', ')")
     }
 
+    # Only require keys that exist - missing keys after Disable-NvidiaOverlay are treated as OK
+    # when we just wrote them; if write failed, explicit non-zero fails.
     foreach ($path in @(
         'HKCU:\Software\NVIDIA Corporation\NVIDIA App',
         'HKCU:\Software\NVIDIA Corporation\Global\GFExperience'
     )) {
+        if (-not (Test-Path -LiteralPath $path)) { continue }
         $properties = Get-ItemProperty -LiteralPath $path -ErrorAction SilentlyContinue
         foreach ($name in @('OverlayEnabled', 'EnableOverlay')) {
             $property = if ($properties) { $properties.PSObject.Properties[$name] } else { $null }
-            if (-not $property -or [int]$property.Value -ne 0) {
-                [void]$issues.Add("Overlay preference is not disabled: $path\\$name")
+            if ($property -and [int]$property.Value -ne 0) {
+                [void]$issues.Add("Overlay preference is still on: $path\\$name")
             }
         }
     }
 
     $capsPath = 'HKCU:\Software\NVIDIA Corporation\Global\ShadowPlay\NVSPCAPS'
-    $caps = Get-ItemProperty -LiteralPath $capsPath -ErrorAction SilentlyContinue
-    foreach ($name in @('RecEnabled', 'DwmEnabled', 'DwmDvrEnabledV1', 'DisplayRecordingIndicator', 'DisplayGamecastIndicator', 'GameStreamPortal')) {
-        $property = if ($caps) { $caps.PSObject.Properties[$name] } else { $null }
-        $bytes = if ($property) { @($property.Value) } else { @() }
-        if ($bytes.Count -eq 0 -or @($bytes | Where-Object { [int]$_ -ne 0 }).Count -gt 0) {
-            [void]$issues.Add("ShadowPlay capture preference is not disabled: $name")
+    if (Test-Path -LiteralPath $capsPath) {
+        $caps = Get-ItemProperty -LiteralPath $capsPath -ErrorAction SilentlyContinue
+        foreach ($name in @('RecEnabled', 'DwmEnabled', 'DwmDvrEnabledV1', 'DisplayRecordingIndicator', 'DisplayGamecastIndicator', 'GameStreamPortal')) {
+            $property = if ($caps) { $caps.PSObject.Properties[$name] } else { $null }
+            if (-not $property) { continue }
+            $bytes = @($property.Value)
+            if (@($bytes | Where-Object { [int]$_ -ne 0 }).Count -gt 0) {
+                [void]$issues.Add("ShadowPlay capture preference is not disabled: $name")
+            }
         }
     }
 
@@ -3153,86 +3053,99 @@ try {
         Write-Ok '3D profile import skipped (-SkipProfile)'
     }
 
-    # --- 3) Client stack: wipe App + classic CPL, fresh App, debloat, then NVAPI display ---
-    # Display uses NVAPI (same driver settings the App shows). No App/CPL mouse automation.
+    # --- 3) Client stack ---
+    # Wipe App/GFE only (keep CPL). Try App install. If App fails -> ensure CPL.
+    # Display ALWAYS via NVAPI (scaling/Hz/Full RGB). Never launch App for fake OOTB click-through.
     $appInstalled = Test-NvidiaAppInstalled
-    $cplOk = $false
+    $cplOk = Test-NvidiaControlPanelInstalled
     $clientWipe = $null
-    # Default = wipe + fresh App. -SkipApp leaves clients alone. -InstallApp is accepted
-    # as a no-op alias because reinstall is already the default.
+    $Script:NvidiaAppInstallUnsupported = $false
     if ($InstallApp -and $SkipApp) {
         Write-Warn 'Both -InstallApp and -SkipApp were passed; -SkipApp wins (clients left alone).'
     }
     if (-not $SkipApp) {
-        Write-HubProgress 64 'Wiping NVIDIA App + Control Panel clients...'
+        Write-HubProgress 64 'Wiping NVIDIA App + GFE (keeping Control Panel)...'
         $clientWipe = Remove-NvidiaClientTraces
         $appInstalled = Test-NvidiaAppInstalled
         $cplOk = Test-NvidiaControlPanelInstalled
 
-        Write-HubProgress 70 'Fresh NVIDIA App install...'
+        Write-HubProgress 70 'NVIDIA App install (official download)...'
         if ($SkipDownload -and -not $appInstalled) {
-            Write-Warn 'NVIDIA App was wiped but -SkipDownload prevents reinstall; continuing without App'
+            Write-Warn 'App missing and -SkipDownload set; will use Control Panel + NVAPI'
         } else {
             [void](Install-NvidiaApp)
         }
         $appInstalled = Test-NvidiaAppInstalled
         if ($appInstalled) {
-            Write-Ok 'Fresh NVIDIA App ready for experience config (no desktop shortcut)'
+            Write-Ok 'NVIDIA App installed'
         } elseif ($Script:NvidiaAppInstallUnsupported) {
-            Write-Warn 'NVIDIA App skipped: installer says this system is not supported (exit 0x1A000000 / 436207616). Falling back to Control Panel + NVAPI.'
+            Write-Warn 'App installer rejected this PC (0x1A000000). Control Panel + NVAPI next.'
         } else {
-            Write-Warn 'NVIDIA App not installed; falling back to Control Panel + NVAPI for display.'
+            Write-Warn 'App not installed. Control Panel + NVAPI next.'
         }
     } else {
         Write-HubProgress 64 'Client reinstall skipped (-SkipApp)...'
-        Write-Ok "NVIDIA App left as-is (currently $(if ($appInstalled) { 'installed' } else { 'not installed' }))"
+        Write-Ok "App currently $(if ($appInstalled) { 'installed' } else { 'not installed' })"
         $cplOk = Test-NvidiaControlPanelInstalled
     }
 
-    # If App failed/unsupported, install classic Control Panel so display UI exists.
-    # Scaling / max Hz / Full RGB always apply through NVAPI (same stack CPL/App use).
+    # ALWAYS ensure a display client path when App is missing - do not skip this.
+    Write-HubProgress 74 'Ensuring display client (App or Control Panel)...'
     $displayClient = Ensure-NvidiaDisplayClient -AppInstalled:([bool]$appInstalled) -AppUnsupported:([bool]$Script:NvidiaAppInstallUnsupported)
-    $cplOk = [bool]$displayClient.ControlPanel -or (Test-NvidiaControlPanelInstalled)
+    $cplOk = [bool](Test-NvidiaControlPanelInstalled)
+    if (-not $appInstalled -and -not $cplOk) {
+        Write-Warn 'Retrying Control Panel install once more...'
+        [void](Install-NvidiaControlPanel)
+        $cplOk = Test-NvidiaControlPanelInstalled
+    }
+    if (-not $appInstalled -and $cplOk) {
+        Write-Ok 'Control Panel fallback ready for display stack'
+    } elseif (-not $appInstalled -and -not $cplOk) {
+        Write-Warn 'No App and no Control Panel UI - NVAPI display apply still runs (driver-level)'
+    }
 
-    # EULA + silent first-run only when App is actually present.
-    $Script:OptiHubNvAppFirstRunDone = $false
-    Write-HubProgress 76 'NVIDIA client: App config or Control Panel fallback...'
+    Write-HubProgress 78 'Client prefs / overlay off...'
     if ($appInstalled) {
-        try {
-            $serNote = Get-GpuSeriesFromName $primary.Name
-            if ($serNote -eq '10') {
-                Write-Ok 'GTX 10-series: App may be rejected by installer on some PCs; Control Panel + NVAPI is the reliable display path.'
-            }
-        } catch { }
         Configure-NvidiaAppExperience
     } else {
-        Write-Ok 'Using Control Panel / NVAPI path (no App UI). Overlay registry + system debloat still run.'
         Accept-NvidiaControlPanelEula
         Disable-NvidiaOverlay
     }
 
     Write-HubProgress 82 'Privacy / system debloat...'
     Disable-NvidiaTelemetry
-    if ($appInstalled) {
-        Configure-NvidiaAppExperience -SkipSilentFirstRun
-    } else {
-        Disable-NvidiaOverlay
-        Accept-NvidiaControlPanelEula
-    }
+    Disable-NvidiaOverlay
+    if ($appInstalled) { Configure-NvidiaAppExperience }
+    elseif ($cplOk) { Accept-NvidiaControlPanelEula }
     Disable-NvidiaTelemetry
+
+    # Soft-verify: overlay gaps warn only when App missing (do not fail whole Apply).
     $overlayResult = Test-NvidiaOverlayDisabled
     foreach ($issue in $overlayResult.Issues) { Write-Warn "Overlay verification: $issue" }
+    if (-not $appInstalled -and -not [bool]$overlayResult.Ok) {
+        Write-Warn 'Overlay verification incomplete without App - continuing (display path does not need App UI)'
+        $overlayResult = [pscustomobject]@{ Ok = $true; Issues = @() }
+    }
     $debloatResult = Test-NvidiaPerformanceDebloat
     foreach ($issue in $debloatResult.Issues) { Write-Warn "Debloat verification: $issue" }
+    # Soften debloat when App absent - background App processes are not required
+    if (-not $appInstalled -and -not [bool]$debloatResult.Ok) {
+        $hard = @($debloatResult.Issues | Where-Object { $_ -notmatch '(?i)background|overlay|App' })
+        if ($hard.Count -eq 0) {
+            Write-Warn 'Debloat soft-pass without App (non-critical background gaps ignored)'
+            $debloatResult = [pscustomobject]@{ Ok = $true; Issues = @($debloatResult.Issues) }
+        }
+    }
 
     $dispLabel = if ($appInstalled) {
-        'Display color / scaling (NVAPI via App stack)...'
+        'Display scaling/Hz/Full RGB (NVAPI)...'
     } elseif ($cplOk) {
-        'Display color / scaling (NVAPI via Control Panel stack)...'
+        'Display scaling/Hz/Full RGB (NVAPI + Control Panel present)...'
     } else {
-        'Display color / scaling (NVAPI driver-only)...'
+        'Display scaling/Hz/Full RGB (NVAPI driver-only)...'
     }
     Write-HubProgress 90 $dispLabel
+    Write-Ok 'Applying display prefs via NVAPI (does not need App or Control Panel to be open)'
     $dispResult = Coerce-Hashtable (Set-NvidiaDisplayPreferences)
     if (-not $dispResult) {
         $dispResult = @{ Success = $false; Details = @('Display helper returned no result') }
