@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.15
+
+- **NVIDIA 1.8.3**: App install is official nvidia.com CDN first (fast); winget last-resort with 30s kill (no more 5 min hangs)
+- **NVIDIA**: fix EULA/OOTB - set NVAPP_FIRST_LAUNCH=0, OOTBStatus=2, clear CEF onboarding cache so accept/overlay onboarding do not reappear; stronger overlay/ShadowPlay off
 ## 1.8.14
 
 - **NVIDIA 1.8.2**: after fresh App install - auto-accept EULA, enable beta OTA channel, disable overlay + notifications, App backend debloat + system telemetry pass; no desktop shortcut
