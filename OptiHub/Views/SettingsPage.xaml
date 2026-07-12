@@ -26,7 +26,6 @@
                 <StackPanel.RenderTransform>
                     <CompositeTransform x:Name="HeaderTransform" TranslateY="10" />
                 </StackPanel.RenderTransform>
-                <TextBlock Text="SETTINGS" Style="{StaticResource OptiSectionTitle}" HorizontalAlignment="Center" Margin="0" />
                 <TextBlock Text="Settings"
                            FontFamily="{StaticResource OptiUiFontSemiBold}"
                            FontSize="26"

@@ -30,33 +30,31 @@
                                TextWrapping="Wrap" />
                 </StackPanel>
 
-                <ScrollViewer Grid.Row="1"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              Margin="0,0,0,16">
-                    <StackPanel>
-                        <ProgressRing Width="28" Height="28"
-                                      IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
-                                      Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                      HorizontalAlignment="Center"
-                                      Margin="0,24" />
+                <Grid Grid.Row="1" Margin="0,0,0,16">
+                    <ProgressRing Width="28" Height="28"
+                                  IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
+                                  Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
 
-                        <ItemsControl ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}"
-                                      Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <ItemsWrapGrid Orientation="Horizontal"
-                                                   MaximumRowsOrColumns="2"
-                                                   HorizontalAlignment="Stretch" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}">
+                            <ItemsRepeater.Layout>
+                                <UniformGridLayout MaximumRowsOrColumns="2"
+                                                   Orientation="Horizontal"
+                                                   MinItemWidth="240"
+                                                   MinColumnSpacing="12"
+                                                   MinRowSpacing="12"
+                                                   ItemsStretch="Fill" />
+                            </ItemsRepeater.Layout>
+                            <ItemsRepeater.ItemTemplate>
                                 <DataTemplate x:DataType="vm:NvidiaPolicyRowViewModel">
                                     <Border Style="{StaticResource OptiCard}"
-                                            Width="440"
-                                            MinWidth="300"
-                                            Margin="0,0,14,12"
                                             Padding="14,12"
+                                            MinHeight="64"
+                                            HorizontalAlignment="Stretch"
                                             Opacity="{x:Bind Opacity}"
                                             Background="{ThemeResource OptiAccentSoftBrush}">
                                         <Grid ColumnSpacing="12">
@@ -104,10 +102,10 @@
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </ScrollViewer>
+                            </ItemsRepeater.ItemTemplate>
+                        </ItemsRepeater>
+                    </ScrollViewer>
+                </Grid>
 
                 <StackPanel Grid.Row="2" Spacing="12">
                     <Border Style="{StaticResource OptiCard}"
@@ -162,7 +160,7 @@
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                         <Button Grid.Column="1"
                                 Style="{StaticResource OptiQuietButton}"
-                                Content="Clear tray icons"
+                                Content="Clear tray"
                                 Click="ClearTray_Click"
                                 HorizontalAlignment="Stretch"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"

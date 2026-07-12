@@ -21,53 +21,40 @@
 
                 <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,16">
                     <TextBlock Text="DISCORD" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
-                                   FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                   FontSize="26"
-                                   FontWeight="SemiBold"
-                                   CharacterSpacing="-20"
-                                   Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                   TextWrapping="Wrap" />
-                        <ProgressRing Grid.Column="1"
-                                      Width="22" Height="22"
-                                      IsActive="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay}"
-                                      Visibility="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                      VerticalAlignment="Center" />
-                    </Grid>
+                    <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                               FontFamily="{StaticResource OptiUiFontSemiBold}"
+                               FontSize="26"
+                               FontWeight="SemiBold"
+                               CharacterSpacing="-20"
+                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                               TextWrapping="Wrap" />
                 </StackPanel>
 
-                <ScrollViewer Grid.Row="1"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              Margin="0,0,0,16">
-                    <StackPanel>
-                        <ProgressRing Width="28" Height="28"
-                                      IsActive="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay}"
-                                      Visibility="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                      HorizontalAlignment="Center"
-                                      Margin="0,24" />
+                <Grid Grid.Row="1" Margin="0,0,0,16">
+                    <ProgressRing Width="28" Height="28"
+                                  IsActive="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay}"
+                                  Visibility="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
 
-                        <ItemsControl ItemsSource="{x:Bind ViewModel.Features, Mode=OneWay}"
-                                      Visibility="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <ItemsWrapGrid Orientation="Horizontal"
-                                                   MaximumRowsOrColumns="2"
-                                                   HorizontalAlignment="Stretch" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Visibility="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.Features, Mode=OneWay}">
+                            <ItemsRepeater.Layout>
+                                <UniformGridLayout MaximumRowsOrColumns="2"
+                                                   Orientation="Horizontal"
+                                                   MinItemWidth="240"
+                                                   MinColumnSpacing="12"
+                                                   MinRowSpacing="12"
+                                                   ItemsStretch="Fill" />
+                            </ItemsRepeater.Layout>
+                            <ItemsRepeater.ItemTemplate>
                                 <DataTemplate x:DataType="vm:FeatureRowViewModel">
                                     <Border Style="{StaticResource OptiCard}"
-                                            Width="440"
-                                            MinWidth="300"
-                                            Margin="0,0,14,12"
                                             Padding="14,12"
+                                            MinHeight="64"
+                                            HorizontalAlignment="Stretch"
                                             Opacity="{x:Bind Opacity}"
                                             Background="{ThemeResource OptiAccentSoftBrush}">
                                         <Grid ColumnSpacing="12">
@@ -103,10 +90,10 @@
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </ScrollViewer>
+                            </ItemsRepeater.ItemTemplate>
+                        </ItemsRepeater>
+                    </ScrollViewer>
+                </Grid>
 
                 <StackPanel Grid.Row="2" Spacing="12">
                     <Border Style="{StaticResource OptiCard}"

@@ -30,7 +30,7 @@
                            FontSize="34"
                            LineHeight="42"
                            HorizontalAlignment="Center" />
-                <TextBlock Text="Pick a target"
+                <TextBlock Text="Maximum performance. No compromise."
                            Style="{StaticResource OptiTaglineSupport}"
                            FontSize="14"
                            HorizontalAlignment="Center" />
