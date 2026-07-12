@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.8.0'
+$Script:NvidiaOptVersion = '1.8.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -630,13 +630,192 @@ function Test-NvidiaAppInstalled {
         (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe'),
         (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\NVIDIA App.exe'),
         (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA Overlay\NVIDIA App.exe'),
-        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe')
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App\NVIDIA App.exe')
     )
     foreach ($p in $paths) { if (Test-Path -LiteralPath $p) { return $true } }
+    # Broader scan: Store / winget / OEM layouts sometimes land under NVIDIA Corporation\NVIDIA App\*
+    foreach ($root in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App')
+    )) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        $hit = Get-ChildItem -LiteralPath $root -Recurse -Filter 'NVIDIA App.exe' -File -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($hit) { return $true }
+    }
     $app = Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
         $_.Name -match '(?i)NVIDIAApp|NVIDIA\.App|GeForceExperience'
     }
     return [bool]$app
+}
+
+function Get-OptiHubWingetPath {
+    # Elevated OptiHub often cannot resolve the per-user WindowsApps winget stub.
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    $cmd = Get-Command winget -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd -and $cmd.Source) { [void]$candidates.Add([string]$cmd.Source) }
+    foreach ($p in @(
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'),
+        (Join-Path $env:ProgramFiles 'WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\WindowsApps\winget.exe'),
+        (Join-Path $env:SystemRoot 'System32\winget.exe')
+    )) {
+        if ($p -match '\*') {
+            Get-Item -Path $p -ErrorAction SilentlyContinue | ForEach-Object { [void]$candidates.Add($_.FullName) }
+        } elseif ($p) {
+            [void]$candidates.Add($p)
+        }
+    }
+    $apps = Join-Path $env:ProgramFiles 'WindowsApps'
+    if (Test-Path -LiteralPath $apps) {
+        Get-ChildItem -LiteralPath $apps -Directory -Filter 'Microsoft.DesktopAppInstaller_*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object {
+                $w = Join-Path $_.FullName 'winget.exe'
+                if (Test-Path -LiteralPath $w) { [void]$candidates.Add($w) }
+            }
+    }
+    foreach ($p in ($candidates | Select-Object -Unique)) {
+        if ($p -and (Test-Path -LiteralPath $p)) { return $p }
+    }
+    return $null
+}
+
+function Remove-NvidiaAppDesktopShortcuts {
+    # OptiHub never wants NVIDIA App / GFE desktop clutter after a fresh install.
+    $desktops = @(
+        [Environment]::GetFolderPath('Desktop'),
+        [Environment]::GetFolderPath('CommonDesktopDirectory')
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique
+    $patterns = @(
+        '*NVIDIA App*.lnk',
+        '*NVIDIA GeForce Experience*.lnk',
+        '*GeForce Experience*.lnk',
+        '*NVIDIA Overlay*.lnk'
+    )
+    $removed = 0
+    foreach ($desk in $desktops) {
+        foreach ($pat in $patterns) {
+            Get-ChildItem -LiteralPath $desk -Filter $pat -File -ErrorAction SilentlyContinue | ForEach-Object {
+                try {
+                    Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
+                    $removed++
+                    Write-Ok "Removed desktop shortcut: $($_.Name)"
+                } catch {
+                    Write-Warn "Could not remove desktop shortcut $($_.Name): $($_.Exception.Message)"
+                }
+            }
+        }
+    }
+    if ($removed -eq 0) {
+        Write-Ok 'No NVIDIA App desktop shortcuts to remove'
+    }
+    return $removed
+}
+
+function Wait-NvidiaAppInstalled {
+    param([int]$Seconds = 90)
+    $deadline = (Get-Date).AddSeconds([Math]::Max(5, $Seconds))
+    while ((Get-Date) -lt $deadline) {
+        if (Test-NvidiaAppInstalled) { return $true }
+        Start-Sleep -Milliseconds 800
+    }
+    return (Test-NvidiaAppInstalled)
+}
+
+function Get-NvidiaAppOfficialInstallerUrl {
+    # Prefer the current download link from the official product page; fall back to known CDN builds.
+    $headers = @{ 'User-Agent' = 'OptiHub-Nvidia/1.8' }
+    try {
+        $html = (Invoke-WebRequest -Uri 'https://www.nvidia.com/en-us/software/nvidia-app/' -UseBasicParsing -Headers $headers -TimeoutSec 25).Content
+        $m = [regex]::Match([string]$html, 'https://[^"''\s]+/nvapp/client/[^"''\s]+/NVIDIA_app_v[\d\.]+\.exe', 'IgnoreCase')
+        if ($m.Success) { return $m.Value }
+        $m2 = [regex]::Match([string]$html, 'https://[^"''\s]+NVIDIA_app_v[\d\.]+\.exe', 'IgnoreCase')
+        if ($m2.Success) { return $m2.Value }
+    } catch {
+        Write-Warn "NVIDIA App product page lookup: $($_.Exception.Message)"
+    }
+    foreach ($u in @(
+        'https://us.download.nvidia.com/nvapp/client/11.0.8.299/NVIDIA_app_v11.0.8.299.exe',
+        'https://international.download.nvidia.com/nvapp/client/11.0.8.299/NVIDIA_app_v11.0.8.299.exe'
+    )) {
+        try {
+            $head = Invoke-WebRequest -Uri $u -Method Head -UseBasicParsing -Headers $headers -TimeoutSec 15
+            if ($head.StatusCode -ge 200 -and $head.StatusCode -lt 400) { return $u }
+        } catch { }
+    }
+    return $null
+}
+
+function Install-NvidiaAppFromOfficialInstaller {
+    Write-Step 'Downloading official NVIDIA App installer (fallback when winget/Store fails)...'
+    $url = Get-NvidiaAppOfficialInstallerUrl
+    if (-not $url) {
+        Write-Warn 'Could not resolve an official NVIDIA App installer URL'
+        return $false
+    }
+    Write-Ok "Installer URL: $url"
+    $cacheDir = Join-Path $StateDir 'downloads'
+    if (-not (Test-Path -LiteralPath $cacheDir)) {
+        New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+    }
+    $fileName = [IO.Path]::GetFileName(([uri]$url).AbsolutePath)
+    if ([string]::IsNullOrWhiteSpace($fileName)) { $fileName = 'NVIDIA_app_setup.exe' }
+    $dest = Join-Path $cacheDir $fileName
+    try {
+        $needDownload = $true
+        if (Test-Path -LiteralPath $dest) {
+            $len = (Get-Item -LiteralPath $dest).Length
+            if ($len -gt 50MB) {
+                Write-Ok "Using cached installer ($([math]::Round($len/1MB,1)) MB)"
+                $needDownload = $false
+            }
+        }
+        if ($needDownload) {
+            Write-HubProgress 72 'Downloading NVIDIA App installer...'
+            $partial = "$dest.partial"
+            Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+            Invoke-WebRequest -Uri $url -OutFile $partial -UseBasicParsing -Headers @{ 'User-Agent' = 'OptiHub-Nvidia/1.8' } -TimeoutSec 600
+            $len = (Get-Item -LiteralPath $partial).Length
+            if ($len -lt 50MB) {
+                Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+                throw "Installer download too small ($len bytes)"
+            }
+            Move-Item -LiteralPath $partial -Destination $dest -Force
+            Write-Ok "Downloaded NVIDIA App installer ($([math]::Round($len/1MB,1)) MB)"
+        }
+    } catch {
+        Write-Warn "Official installer download failed: $($_.Exception.Message)"
+        return $false
+    }
+
+    # NVIDIA App setup accepts the same silent family as driver packages.
+    # Do not leave a desktop icon - we strip shortcuts after install either way.
+    $argVariants = @(
+        @('-silent', '-noreboot', '-noeula', '-nofinish', '-passive'),
+        @('-s', '-noreboot', '-noeula', '-nofinish'),
+        @('/S'),
+        @('-silent')
+    )
+    foreach ($args in $argVariants) {
+        Write-Ok ("Running NVIDIA App setup: " + ($args -join ' '))
+        Write-HubProgress 74 'Installing NVIDIA App (official installer)...'
+        try {
+            $p = Start-Process -FilePath $dest -ArgumentList $args -Wait -PassThru -WindowStyle Hidden
+            $code = if ($p) { [int]$p.ExitCode } else { -1 }
+            Write-Ok "NVIDIA App setup exit: $code"
+        } catch {
+            Write-Warn "Setup launch failed: $($_.Exception.Message)"
+            continue
+        }
+        if (Wait-NvidiaAppInstalled -Seconds 60) {
+            Remove-NvidiaAppDesktopShortcuts | Out-Null
+            Write-Ok 'NVIDIA App installed via official installer'
+            return $true
+        }
+    }
+    return $false
 }
 
 function Test-NvidiaControlPanelInstalled {
@@ -877,41 +1056,84 @@ function Test-NvidiaOverlayDisabled {
 
 function Install-NvidiaApp {
     # Fresh App after wipe. Display prefs still use NVAPI (App reflects driver settings).
+    # Order: detect already present -> winget/Store (multi-path) -> official NVIDIA CDN installer.
     Write-Step 'Installing fresh NVIDIA App (debloat runs next; display prefs use NVAPI)...'
     if (Test-NvidiaAppInstalled) {
-        Write-Ok 'NVIDIA App already present after install attempt path'
+        Write-Ok 'NVIDIA App already present'
+        Remove-NvidiaAppDesktopShortcuts | Out-Null
         return $true
     }
-    $winget = Get-Command winget -ErrorAction SilentlyContinue
-    if (-not $winget) {
-        Write-Warn 'winget not available - cannot install NVIDIA App from Microsoft Store'
-        return $false
+
+    $winget = Get-OptiHubWingetPath
+    $lastWingetCode = $null
+    $lastWingetOut = ''
+    if ($winget) {
+        Write-Ok "winget: $winget"
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            # Ensure Store source is usable on machines that never opened winget before.
+            & $winget source update --disable-interactivity 2>&1 | Out-Null
+            & $winget source reset --force --disable-interactivity 2>&1 | Out-Null
+        } catch { }
+        $attempts = @(
+            @{ Label = 'msstore id'; Args = @('install', '--id', 'XP8CLZL93F5Z4P', '-e', '--source', 'msstore', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity', '--silent') },
+            @{ Label = 'any source id'; Args = @('install', '--id', 'XP8CLZL93F5Z4P', '-e', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity', '--silent') },
+            @{ Label = 'name match'; Args = @('install', '--name', 'NVIDIA App', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity', '--silent') },
+            @{ Label = 'msstore force'; Args = @('install', '--id', 'XP8CLZL93F5Z4P', '-e', '--source', 'msstore', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity', '--silent', '--force') }
+        )
+        foreach ($a in $attempts) {
+            if (Test-NvidiaAppInstalled) { break }
+            Write-Ok ("winget [$($a.Label)]: " + ($a.Args -join ' '))
+            Write-HubProgress 71 "NVIDIA App via winget ($($a.Label))..."
+            try {
+                $out = & $winget @($a.Args) 2>&1 | Out-String
+                $lastWingetOut = $out
+                $lastWingetCode = $LASTEXITCODE
+            } catch {
+                $lastWingetOut = $_.Exception.Message
+                $lastWingetCode = -1
+            }
+            # Common success-ish codes: 0 ok, -1978335189 already installed, -1978335135 no newer version
+            if ($lastWingetCode -in @(0, -1978335189, -1978335135) -or (Wait-NvidiaAppInstalled -Seconds 25)) {
+                if (Test-NvidiaAppInstalled) { break }
+            }
+            Write-Warn "winget [$($a.Label)] exit $lastWingetCode"
+            Start-Sleep -Seconds 2
+        }
+        $ErrorActionPreference = $prev
+        if (Wait-NvidiaAppInstalled -Seconds 20) {
+            Remove-NvidiaAppDesktopShortcuts | Out-Null
+            Write-Ok 'Fresh NVIDIA App installed via winget'
+            return $true
+        }
+        Write-Warn "winget path did not leave NVIDIA App installed (last exit $lastWingetCode)"
+        if ($lastWingetOut) {
+            $snippet = ($lastWingetOut -replace '\s+', ' ').Trim()
+            if ($snippet.Length -gt 240) { $snippet = $snippet.Substring(0, 240) + '...' }
+            Write-Warn "winget output: $snippet"
+        }
+    } else {
+        Write-Warn 'winget not found (elevated PATH / App Installer missing) - trying official NVIDIA installer'
     }
-    $prev = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    $attempts = @(
-        @{ Args = @('install', '--id', 'XP8CLZL93F5Z4P', '-e', '--source', 'msstore', '--accept-package-agreements', '--accept-source-agreements', '--silent') },
-        @{ Args = @('install', '--id', 'XP8CLZL93F5Z4P', '-e', '--accept-package-agreements', '--accept-source-agreements', '--silent') }
-    )
-    $code = -1
-    foreach ($a in $attempts) {
-        Write-Ok ("winget " + ($a.Args -join ' '))
-        & winget @($a.Args) 2>&1 | Out-Null
-        $code = $LASTEXITCODE
-        if ($code -eq 0 -or (Test-NvidiaAppInstalled)) { break }
-        Start-Sleep -Seconds 2
+
+    if (-not $SkipDownload) {
+        if (Install-NvidiaAppFromOfficialInstaller) {
+            Remove-NvidiaAppDesktopShortcuts | Out-Null
+            return $true
+        }
+    } else {
+        Write-Warn '-SkipDownload set; cannot fall back to official NVIDIA App download'
     }
-    $ErrorActionPreference = $prev
-    # Give the Store package a moment to register paths.
-    for ($i = 0; $i -lt 8; $i++) {
-        if (Test-NvidiaAppInstalled) { break }
-        Start-Sleep -Milliseconds 750
-    }
-    if (Test-NvidiaAppInstalled) {
-        Write-Ok 'Fresh NVIDIA App installed'
+
+    # Final detect after any delayed Store registration.
+    if (Wait-NvidiaAppInstalled -Seconds 15) {
+        Remove-NvidiaAppDesktopShortcuts | Out-Null
+        Write-Ok 'NVIDIA App became present after install attempts'
         return $true
     }
-    Write-Warn "NVIDIA App install failed (winget exit $code)"
+
+    Write-Warn 'NVIDIA App install failed (winget/Store and official installer). Friend PCs often need Microsoft Store signed-in or a direct NVIDIA download; OptiHub tried both.'
     return $false
 }
 
@@ -2224,13 +2446,15 @@ try {
             throw 'NVIDIA App was wiped but -SkipDownload prevents reinstall. Re-run without -SkipDownload.'
         }
         if (-not (Install-NvidiaApp)) {
-            throw 'Fresh NVIDIA App install failed after client wipe. Check winget / Microsoft Store, then Apply again.'
+            throw 'Fresh NVIDIA App install failed after client wipe. OptiHub tried winget/Microsoft Store and the official NVIDIA download. Sign into Microsoft Store or free disk space, then Apply again.'
         }
         $appInstalled = Test-NvidiaAppInstalled
         if (-not $appInstalled) {
             throw 'NVIDIA App is not present after install. Refusing to mark the client stack complete.'
         }
-        Write-Ok 'Fresh NVIDIA App ready for debloat'
+        # Always strip desktop icons even if a prior install path left them.
+        Remove-NvidiaAppDesktopShortcuts | Out-Null
+        Write-Ok 'Fresh NVIDIA App ready for debloat (no desktop shortcut)'
     } else {
         Write-HubProgress 64 'Client reinstall skipped (-SkipApp)...'
         Write-Ok "NVIDIA App left as-is (currently $(if ($appInstalled) { 'installed' } else { 'not installed' }))"

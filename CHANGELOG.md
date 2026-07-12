@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.13
+
+- **NVIDIA 1.8.1**: robust App install - elevated winget discovery, multi-flag Store attempts, official NVIDIA CDN fallback when winget fails
+- **NVIDIA**: strip NVIDIA App / GFE desktop shortcuts after install (no desktop icon)
 ## 1.8.12
 
 - **Updates**: longer download timeout (30 min), live download progress, clearer GitHub/rate-limit errors
