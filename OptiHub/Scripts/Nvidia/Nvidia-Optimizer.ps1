@@ -757,6 +757,18 @@ function Get-NvidiaAppOfficialInstallerUrl {
     return $cdn[0]
 }
 
+function Format-ExitCodeHex {
+    param($Code)
+    # Safe hex for logging - NEVER throw on negative ExitCode (Brian: -436207616).
+    try {
+        $c = [int]$Code
+        $u = [BitConverter]::ToUInt32([BitConverter]::GetBytes($c), 0)
+        return ('{0:X8}' -f $u)
+    } catch {
+        return '00000000'
+    }
+}
+
 function Test-NvidiaAppSetupUnsupportedExit {
     param($Code)
     # Brian GTX 1080 log: exit -436207616 (signed form of 0xE6000000).
@@ -770,9 +782,9 @@ function Test-NvidiaAppSetupUnsupportedExit {
 
     try {
         $u = [BitConverter]::ToUInt32([BitConverter]::GetBytes($c), 0)
+        # 0x1A000000 = 436207616, 0xE6000000 = 3858759680
         if ($u -eq [uint32]436207616 -or $u -eq [uint32]3858759680) { return $true }
-        if ($u -eq 436207616 -or $u -eq 3858759680) { return $true } # 0x1A000000 / 0xE6000000 decimal
-        $hi = [int](($u -shr 24) -band [uint32]255)
+        $hi = [int](($u -shr 24) -band 255)
         if ($hi -eq 0x1A -or $hi -eq 0xE6) { return $true }
     } catch { }
     return $false

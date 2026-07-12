@@ -237,8 +237,10 @@ internal static class Program
 
                     CreateStartMenuShortcut(targetExe, installDir, iconPath);
                     RemoveDesktopShortcuts();
-                    NotifyShellShortcutsChanged();
-                    Log("Start Menu shortcut updated (icon=" + iconPath + ").");
+                    // Always clear icon caches on install/update so Start Menu shows the new brand mark
+                    // (friends often keep a stale OptiHub icon from an older release).
+                    ClearWindowsIconCacheAndRefreshShell(iconPath, targetExe);
+                    Log("Start Menu shortcut updated + icon cache cleared (icon=" + iconPath + ").");
                 }
                 catch (Exception scEx)
                 {
@@ -727,16 +729,111 @@ internal static class Program
     [DllImport("shell32.dll")]
     private static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
 
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern void SHChangeNotify(int wEventId, uint uFlags, string dwItem1, string dwItem2);
+
     private static void NotifyShellShortcutsChanged()
     {
         try
         {
-            // SHCNE_ASSOCCHANGED — force Explorer to refresh icons / Start Menu.
+            // SHCNE_ASSOCCHANGED - force Explorer to refresh icons / Start Menu.
             const int SHCNE_ASSOCCHANGED = 0x08000000;
             const uint SHCNF_IDLIST = 0x0000;
             SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, IntPtr.Zero, IntPtr.Zero);
         }
         catch { }
+    }
+
+    /// <summary>
+    /// Delete Explorer icon/thumbnail cache DBs and ping the shell so Start Menu picks up the new .ico.
+    /// Safe best-effort: locked cache files are skipped; SHChangeNotify still runs.
+    /// </summary>
+    private static void ClearWindowsIconCacheAndRefreshShell(string iconPath, string targetExe)
+    {
+        try
+        {
+            string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            TryDeleteFile(Path.Combine(local, "IconCache.db"));
+
+            string explorerCache = Path.Combine(local, "Microsoft", "Windows", "Explorer");
+            if (Directory.Exists(explorerCache))
+            {
+                try
+                {
+                    foreach (string f in Directory.GetFiles(explorerCache, "iconcache*.db"))
+                        TryDeleteFile(f);
+                    foreach (string f in Directory.GetFiles(explorerCache, "IconCache*.db"))
+                        TryDeleteFile(f);
+                    // thumbcache can also pin old Start Menu tiles
+                    foreach (string f in Directory.GetFiles(explorerCache, "thumbcache_*.db"))
+                        TryDeleteFile(f);
+                }
+                catch { }
+            }
+
+            // Per-user hidden IconCache folder (Win10/11)
+            try
+            {
+                string hidden = Path.Combine(local, "Microsoft", "Windows", "Explorer");
+                // also clear any IconCacheToDelete leftovers
+                string toDelete = Path.Combine(local, "Microsoft", "Windows", "Explorer", "IconCacheToDelete");
+                if (Directory.Exists(toDelete))
+                {
+                    try { Directory.Delete(toDelete, true); } catch { }
+                }
+            }
+            catch { }
+
+            Log("Windows icon cache clear attempted.");
+        }
+        catch (Exception ex)
+        {
+            Log("Icon cache clear warning: " + ex.Message);
+        }
+
+        // Broadcast refresh + notify specific icon / exe paths.
+        NotifyShellShortcutsChanged();
+        try
+        {
+            const int SHCNE_UPDATEITEM = 0x00002000;
+            const int SHCNE_CREATE = 0x00000002;
+            const int SHCNE_ASSOCCHANGED = 0x08000000;
+            const uint SHCNF_PATHW = 0x0005;
+            const uint SHCNF_FLUSH = 0x1000;
+            const uint SHCNF_FLUSHNOWAIT = 0x2000;
+
+            if (!string.IsNullOrEmpty(iconPath) && File.Exists(iconPath.Split(',')[0]))
+            {
+                string icoOnly = iconPath.Split(',')[0];
+                SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSHNOWAIT, icoOnly, null);
+            }
+            if (!string.IsNullOrEmpty(targetExe) && File.Exists(targetExe))
+            {
+                SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSHNOWAIT, targetExe, null);
+            }
+
+            string programs = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+            string lnk = Path.Combine(programs, "OptiHub.lnk");
+            if (File.Exists(lnk))
+            {
+                SHChangeNotify(SHCNE_CREATE, SHCNF_PATHW | SHCNF_FLUSHNOWAIT, lnk, null);
+                SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSHNOWAIT, lnk, null);
+            }
+
+            SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_FLUSH, IntPtr.Zero, IntPtr.Zero);
+        }
+        catch { }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            File.SetAttributes(path, FileAttributes.Normal);
+            File.Delete(path);
+        }
+        catch { /* locked by Explorer - next login will rebuild */ }
     }
 
     /// <summary>
