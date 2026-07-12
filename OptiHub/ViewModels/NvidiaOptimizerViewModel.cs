@@ -77,9 +77,9 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             "OptiHub will:\n" +
             "1) Update the Game Ready display driver only when needed (series-correct package), then enable MSI High and disable Ansel/telemetry services.\n" +
             "2) Import the matching 3D Base Profile plus per-game profiles (Profile Inspector silent import).\n" +
-            "3) Wipe NVIDIA App, classic Control Panel, and GeForce Experience client traces, then install a fresh NVIDIA App.\n" +
-            "4) Debloat that App (overlay, SelfUpdate, telemetry, auto-start) while keeping the App launchable and HDMI/DisplayPort audio intact.\n" +
-            "5) Apply Full RGB, max verified refresh, and GPU no-scaling through NVAPI (the same driver settings the App shows — no fragile App/Control Panel clicking).\n\n" +
+            "3) Wipe NVIDIA App / Control Panel / GFE clients, then install a fresh NVIDIA App (no desktop shortcut).\n" +
+            "4) Auto-accept App EULA, enable the App beta channel, turn off overlay + notifications, and debloat App + system telemetry/SelfUpdate while keeping the App launchable and HDMI/DisplayPort audio intact.\n" +
+            "5) Apply Full RGB, max verified refresh, and GPU no-scaling through NVAPI (same driver settings the App shows — no fragile UI clicking).\n\n" +
             gsyncLine + "\n\n" +
             "Tradeoffs: higher idle power/heat, no NVIDIA overlay or background recording, brief display flicker, and a short App reinstall. A driver update may require a restart.\n\n" +
             "Reset OptiHub status only clears OptiHub's record; it does not undo driver/profile/display changes. Undo through NVIDIA settings or a driver reinstall. Administrator approval is required.";

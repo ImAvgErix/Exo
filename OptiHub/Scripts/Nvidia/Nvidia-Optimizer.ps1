@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.8.1'
+$Script:NvidiaOptVersion = '1.8.2'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -965,6 +965,215 @@ function Remove-NvidiaClientTraces {
     }
 }
 
+function Set-OptiHubRegDword {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][int]$Value
+    )
+    if (-not (Test-Path -LiteralPath $Path)) {
+        try { New-Item -Path $Path -Force | Out-Null } catch { return }
+    }
+    try {
+        Set-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -Type DWord -Force -ErrorAction Stop
+    } catch {
+        try {
+            New-ItemProperty -LiteralPath $Path -Name $Name -PropertyType DWord -Value $Value -Force -ErrorAction SilentlyContinue | Out-Null
+        } catch { }
+    }
+}
+
+function Accept-NvidiaAppEula {
+    # Silent install uses -noeula; still stamp ProgramData so first App launch does not block on accept.
+    Write-Step 'Accepting NVIDIA App EULA / first-run consent (no UI)...'
+    $pdApp = Join-Path $env:ProgramData 'NVIDIA Corporation\NVIDIA App'
+    if (-not (Test-Path -LiteralPath $pdApp)) {
+        try { New-Item -ItemType Directory -Path $pdApp -Force | Out-Null } catch { }
+    }
+    $accepted = Join-Path $pdApp 'AcceptedEULA.txt'
+    $licenseCandidates = @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\license.txt'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\EULA\license.txt'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App\license.txt')
+    )
+    $src = $licenseCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+    try {
+        if ($src) {
+            Copy-Item -LiteralPath $src -Destination $accepted -Force
+            Write-Ok "EULA accepted stamp from: $src"
+        } elseif (-not (Test-Path -LiteralPath $accepted)) {
+            @(
+                'NVIDIA App License Agreement',
+                'Accepted by OptiHub silent install path.',
+                ("AcceptedUtc={0}" -f (Get-Date).ToUniversalTime().ToString('o')),
+                'Version 7'
+            ) -join [Environment]::NewLine | Set-Content -LiteralPath $accepted -Encoding UTF8
+            Write-Ok 'EULA accepted stamp written (fallback text)'
+        } else {
+            Write-Ok 'EULA accept file already present'
+        }
+    } catch {
+        Write-Warn "EULA stamp: $($_.Exception.Message)"
+    }
+
+    # Privacy: required-only (matches NVIDIA App privacy center minimum).
+    foreach ($acct in @(
+        (Join-Path $pdApp 'NvAccount.json'),
+        (Join-Path $env:LOCALAPPDATA 'NVIDIA Corporation\NVIDIA App\NvAccount\Account.json')
+    )) {
+        try {
+            $dir = Split-Path -Parent $acct
+            if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+            '{"privacySettings":"RequiredOnly"}' | Set-Content -LiteralPath $acct -Encoding UTF8
+        } catch { }
+    }
+    $diag = Join-Path $pdApp 'NvDriverDiagnostics\state.json'
+    try {
+        $dDir = Split-Path -Parent $diag
+        if (-not (Test-Path -LiteralPath $dDir)) { New-Item -ItemType Directory -Path $dDir -Force | Out-Null }
+        '{"consentRequestIsComplete":true}' | Set-Content -LiteralPath $diag -Encoding UTF8
+    } catch { }
+
+    foreach ($p in @(
+        'HKCU:\Software\NVIDIA Corporation\NVIDIA App',
+        'HKLM:\SOFTWARE\NVIDIA Corporation\NVIDIA App',
+        'HKCU:\Software\NVIDIA Corporation\Global\NvApp'
+    )) {
+        Set-OptiHubRegDword -Path $p -Name 'EULAAccepted' -Value 1
+        Set-OptiHubRegDword -Path $p -Name 'LicenseAccepted' -Value 1
+        Set-OptiHubRegDword -Path $p -Name 'AcceptedEULA' -Value 1
+        Set-OptiHubRegDword -Path $p -Name 'ShowEULA' -Value 0
+        Set-OptiHubRegDword -Path $p -Name 'OOBECompleted' -Value 1
+        Set-OptiHubRegDword -Path $p -Name 'FirstRunCompleted' -Value 1
+        Set-OptiHubRegDword -Path $p -Name 'SkipWelcome' -Value 1
+    }
+    Write-Ok 'NVIDIA App EULA / OOBE consent flags set'
+}
+
+function Enable-NvidiaAppBetaChannel {
+    # NVIDIA App Settings -> About -> "Beta" OTA channel (nvappOTAChannel=beta).
+    Write-Step 'Enabling NVIDIA App beta update channel...'
+    $regDir = Join-Path $env:ProgramData 'NVIDIA Corporation\NVIDIA App\UpdateFramework\registry'
+    try {
+        if (-not (Test-Path -LiteralPath $regDir)) {
+            New-Item -ItemType Directory -Path $regDir -Force | Out-Null
+        }
+        $regFile = Join-Path $regDir 'nvapp.json'
+        $boot = (Get-Date).ToString('ddd MMM dd HH:mm:ss yyyy', [Globalization.CultureInfo]::InvariantCulture) + "`n"
+        $existing = $null
+        if (Test-Path -LiteralPath $regFile) {
+            try { $existing = Get-Content -LiteralPath $regFile -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $existing = $null }
+        }
+        if ($existing -is [System.Array] -and $existing.Count -gt 0 -and $existing[0].registry) {
+            $existing[0].componentName = 'nvapp'
+            if (-not $existing[0].registry.firstBootTime) {
+                $existing[0].registry | Add-Member -NotePropertyName firstBootTime -NotePropertyValue $boot -Force
+            }
+            $existing[0].registry | Add-Member -NotePropertyName nvappOTAChannel -NotePropertyValue 'beta' -Force
+            ($existing | ConvertTo-Json -Depth 6 -Compress) | Set-Content -LiteralPath $regFile -Encoding UTF8
+        } else {
+            $payload = @(
+                [ordered]@{
+                    componentName = 'nvapp'
+                    registry = [ordered]@{
+                        firstBootTime    = $boot
+                        nvappOTAChannel  = 'beta'
+                    }
+                }
+            )
+            # ConvertTo-Json of array of ordered hashtables
+            $json = '[{"componentName":"nvapp","registry":{"firstBootTime":"' +
+                ($boot -replace '"', '\"' -replace "`n", '\n') +
+                '","nvappOTAChannel":"beta"}}]'
+            Set-Content -LiteralPath $regFile -Value $json -Encoding UTF8
+        }
+        Write-Ok 'nvappOTAChannel=beta written'
+    } catch {
+        Write-Warn "Beta channel write failed: $($_.Exception.Message)"
+    }
+
+    foreach ($p in @(
+        'HKCU:\Software\NVIDIA Corporation\NVIDIA App',
+        'HKLM:\SOFTWARE\NVIDIA Corporation\NVIDIA App',
+        'HKCU:\Software\NVIDIA Corporation\Global\NvApp'
+    )) {
+        try {
+            if (-not (Test-Path -LiteralPath $p)) { New-Item -Path $p -Force | Out-Null }
+            Set-ItemProperty -LiteralPath $p -Name 'nvappOTAChannel' -Value 'beta' -Type String -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -LiteralPath $p -Name 'OTAChannel' -Value 'beta' -Type String -Force -ErrorAction SilentlyContinue
+            Set-OptiHubRegDword -Path $p -Name 'EnableBeta' -Value 1
+            Set-OptiHubRegDword -Path $p -Name 'JoinBeta' -Value 1
+            Set-OptiHubRegDword -Path $p -Name 'BetaOptIn' -Value 1
+        } catch { }
+    }
+    Write-Ok 'NVIDIA App beta channel enabled'
+}
+
+function Set-NvidiaAppBackendConfigDebloat {
+    # Merge lean settings into ProgramData + per-user NvBackend config.xml when present.
+    $targets = @(
+        (Join-Path $env:ProgramData 'NVIDIA Corporation\NVIDIA App\NvBackend\config.xml'),
+        (Join-Path $env:LOCALAPPDATA 'NVIDIA Corporation\NVIDIA App\NvBackend\config.xml')
+    )
+    $want = [ordered]@{
+        ShowRewardsNotification        = '0'
+        EnableAutomaticApplyOPS        = '0'
+        EnableUpdateTypeOPS            = '0'
+        BatteryBoostIsSupported        = '0'
+        SendTelemetryForGFESupportedApps = '0'
+        EnableTelemetry                = '0'
+        EnableHighlights               = '0'
+        EnableOverlay                  = '0'
+        EnableNotifications            = '0'
+        EnableInstantReplay            = '0'
+        EnableFreestyle                = '0'
+        EnablePhotoMode                = '0'
+        EnableGameFilters              = '0'
+        EnableAnsel                    = '0'
+        EnableDiscover                 = '0'
+        EnableRewards                  = '0'
+        ShareEnabled                   = '0'
+    }
+    foreach ($path in $targets) {
+        try {
+            $dir = Split-Path -Parent $path
+            if (-not (Test-Path -LiteralPath $dir)) {
+                New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            }
+            $xml = $null
+            if (Test-Path -LiteralPath $path) {
+                try {
+                    [xml]$xml = Get-Content -LiteralPath $path -Raw -Encoding UTF8
+                } catch { $xml = $null }
+            }
+            if (-not $xml) {
+                $xml = New-Object System.Xml.XmlDocument
+                $xml.AppendChild($xml.CreateXmlDeclaration('1.0', 'utf-8', $null)) | Out-Null
+                $root = $xml.CreateElement('BackendConfiguration')
+                $root.SetAttribute('version', '1.0')
+                [void]$xml.AppendChild($root)
+            }
+            $rootNode = $xml.DocumentElement
+            if (-not $rootNode) { continue }
+            foreach ($key in $want.Keys) {
+                $node = $rootNode.SelectSingleNode("Setting[@name='$key']")
+                if ($node) {
+                    $node.SetAttribute('value', [string]$want[$key])
+                } else {
+                    $el = $xml.CreateElement('Setting')
+                    $el.SetAttribute('name', $key)
+                    $el.SetAttribute('value', [string]$want[$key])
+                    [void]$rootNode.AppendChild($el)
+                }
+            }
+            $xml.Save($path)
+            Write-Ok "NvBackend config debloat: $path"
+        } catch {
+            Write-Warn "NvBackend config $path : $($_.Exception.Message)"
+        }
+    }
+}
+
 function Disable-NvidiaOverlay {
     Write-Step 'Stopping NVIDIA App/GFE background clients and disabling the overlay...'
     foreach ($n in @('NVIDIA App', 'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper64', 'nvsphelper', 'NVIDIA Web Helper', 'GFExperience')) {
@@ -980,7 +1189,10 @@ function Disable-NvidiaOverlay {
         try { New-Item -Path $sp -Force | Out-Null } catch { }
     }
     if (Test-Path $sp) {
-        foreach ($name in @('RecEnabled', 'DwmEnabled', 'DwmDvrEnabledV1', 'DisplayRecordingIndicator', 'DisplayGamecastIndicator', 'GameStreamPortal')) {
+        foreach ($name in @(
+            'RecEnabled', 'DwmEnabled', 'DwmDvrEnabledV1', 'DisplayRecordingIndicator',
+            'DisplayGamecastIndicator', 'GameStreamPortal', 'OverlayEnabled', 'ShowOverlay'
+        )) {
             try {
                 New-ItemProperty -LiteralPath $sp -Name $name -PropertyType Binary -Value ([byte[]](0, 0, 0, 0)) -Force -ErrorAction SilentlyContinue | Out-Null
             } catch { }
@@ -988,14 +1200,30 @@ function Disable-NvidiaOverlay {
         Write-Ok 'ShadowPlay/overlay caps set off (registry)'
     }
 
-    # App-side overlay preference hints
+    # App-side overlay + notification + capture toggles (HKCU + HKLM mirror)
+    $offDwords = @(
+        'OverlayEnabled', 'EnableOverlay', 'ShowOverlay', 'InGameOverlay',
+        'EnableNotifications', 'NotificationsEnabled', 'ShowNotifications',
+        'NotifyNewDisplayUpdates', 'NotifyDriverUpdates', 'NotifyRewards',
+        'NotifyHighlights', 'ToastNotifications', 'EnableToasts',
+        'EnableInstantReplay', 'InstantReplay', 'EnableHighlights', 'EnableAnsel',
+        'EnableFreestyle', 'EnablePhotoMode', 'EnableGameFilters', 'EnableGameStream',
+        'ShareEnabled', 'EnableRewards', 'EnableDiscover', 'EnableTelemetry',
+        'RunAtStartup', 'AutoStart', 'StartOnLogin', 'AllowAutoDownload', 'AutoDownload',
+        'SilentInstalls'
+    )
     foreach ($p in @(
         'HKCU:\Software\NVIDIA Corporation\NVIDIA App',
-        'HKCU:\Software\NVIDIA Corporation\Global\GFExperience'
+        'HKLM:\SOFTWARE\NVIDIA Corporation\NVIDIA App',
+        'HKCU:\Software\NVIDIA Corporation\Global\GFExperience',
+        'HKCU:\Software\NVIDIA Corporation\Global\NvApp'
     )) {
-        if (-not (Test-Path $p)) { try { New-Item -Path $p -Force | Out-Null } catch { continue } }
-        Set-ItemProperty -Path $p -Name 'OverlayEnabled' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $p -Name 'EnableOverlay' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path -LiteralPath $p)) {
+            try { New-Item -Path $p -Force | Out-Null } catch { continue }
+        }
+        foreach ($name in $offDwords) {
+            Set-OptiHubRegDword -Path $p -Name $name -Value 0
+        }
     }
 
     # Remove known per-user auto-start entries while preserving installed App/GFE files.
@@ -1012,7 +1240,18 @@ function Disable-NvidiaOverlay {
         }
     }
 
-    Write-Ok 'NVIDIA App/GFE background clients and overlay disabled; installed files and NVIDIA audio preserved'
+    Write-Ok 'NVIDIA App/GFE overlay + notifications disabled; installed files and NVIDIA audio preserved'
+}
+
+function Configure-NvidiaAppExperience {
+    # Full post-install App pass: agree -> beta -> overlay/notifications off -> backend debloat.
+    Write-Step 'Configuring NVIDIA App (EULA, beta, overlay off, notifications off, app debloat)...'
+    Accept-NvidiaAppEula
+    Enable-NvidiaAppBetaChannel
+    Disable-NvidiaOverlay
+    Set-NvidiaAppBackendConfigDebloat
+    Remove-NvidiaAppDesktopShortcuts | Out-Null
+    Write-Ok 'NVIDIA App experience configured for OptiHub (launchable, debloated, beta channel)'
 }
 
 function Test-NvidiaOverlayDisabled {
@@ -2452,22 +2691,30 @@ try {
         if (-not $appInstalled) {
             throw 'NVIDIA App is not present after install. Refusing to mark the client stack complete.'
         }
-        # Always strip desktop icons even if a prior install path left them.
-        Remove-NvidiaAppDesktopShortcuts | Out-Null
-        Write-Ok 'Fresh NVIDIA App ready for debloat (no desktop shortcut)'
+        Write-Ok 'Fresh NVIDIA App ready for experience config (no desktop shortcut)'
     } else {
         Write-HubProgress 64 'Client reinstall skipped (-SkipApp)...'
         Write-Ok "NVIDIA App left as-is (currently $(if ($appInstalled) { 'installed' } else { 'not installed' }))"
         $cplOk = Test-NvidiaControlPanelInstalled
     }
 
-    Write-HubProgress 76 'Disabling NVIDIA Overlay...'
-    Disable-NvidiaOverlay
+    # EULA accept + beta channel + overlay/notifications off + App backend debloat.
+    Write-HubProgress 76 'NVIDIA App: EULA, beta, overlay/notifications off...'
+    if ($appInstalled -or -not $SkipApp) {
+        Configure-NvidiaAppExperience
+    } else {
+        Write-Ok 'NVIDIA App not installed; skipping App experience config'
+        Disable-NvidiaOverlay
+    }
 
-    Write-HubProgress 82 'Privacy / debloat (fresh App)...'
+    Write-HubProgress 82 'Privacy / system debloat...'
     Disable-NvidiaTelemetry
-    # Second pass after App install - SelfUpdate tasks often reappear on first launch path.
-    Disable-NvidiaOverlay
+    # Second pass - SelfUpdate / overlay tasks often reappear after first config.
+    if ($appInstalled -or -not $SkipApp) {
+        Configure-NvidiaAppExperience
+    } else {
+        Disable-NvidiaOverlay
+    }
     Disable-NvidiaTelemetry
     $overlayResult = Test-NvidiaOverlayDisabled
     foreach ($issue in $overlayResult.Issues) { Write-Warn "Overlay verification: $issue" }
@@ -2524,6 +2771,8 @@ try {
         nvidiaControlPanel  = [bool]$cplOk
         clientWipe          = $clientWipe
         clientReinstall     = (-not [bool]$SkipApp)
+        nvidiaAppBeta       = $true
+        nvidiaAppConfigured = $true
         displayPrefs        = [bool]$dispResult.Success
         displayMethod       = 'nvapi'
         displayDetails      = $dispResult.Details
@@ -2555,7 +2804,7 @@ try {
 
     Write-Ok 'NVIDIA Optimizer finished'
     if (-not $SkipApp) {
-        Write-Ok 'Client stack: wiped App/CPL traces -> fresh NVIDIA App -> debloat applied.'
+        Write-Ok 'Client stack: wipe -> fresh App -> EULA accept -> beta on -> overlay/notifications off -> app+system debloat.'
     }
     Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling + max verified Hz) - same settings the App reflects.'
     if ($driverInfo.Method -eq 'optihub-clean') {
