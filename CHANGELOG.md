@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.19
+
+- **All 3 optimizers**: Windows toast notifications off for Discord / Steam / NVIDIA (App + Control Panel keys); also set ShowInActionCenter=0
+- **NVIDIA 1.8.7 / Steam 1.7.7 / Discord 1.3.7** kit stamps
 ## 1.8.18
 
 - **NVIDIA 1.8.6**: remove broken minimized App open/close first-run (did nothing on CEF UI)

@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.7.6'
+$Script:SteamOptVersion = '1.7.7'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 Preview only (never Windows PowerShell 5.1 / never stable 7) ---
@@ -403,6 +403,7 @@ function Disable-SteamScheduledTasks {
 
 function Set-SteamWindowsNotificationsOff {
     # Quiet Windows: disable Steam toast banners (in-client Steam alerts still work).
+    Write-Step 'Disabling Windows notifications for Steam...'
     $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
     if (-not (Test-Path $base)) { New-Item -Path $base -Force | Out-Null }
 
@@ -411,6 +412,7 @@ function Set-SteamWindowsNotificationsOff {
         $path = Join-Path $base $Id
         if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
         Set-ItemProperty -Path $path -Name 'Enabled' -Value 0 -Type DWord -Force
+        Set-ItemProperty -Path $path -Name 'ShowInActionCenter' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
     }
 
     foreach ($id in @(
@@ -418,17 +420,22 @@ function Set-SteamWindowsNotificationsOff {
         'Valve.Steam',
         'Valve.Steam.Client',
         'com.valvesoftware.Steam',
-        'steam.exe'
+        'steam.exe',
+        'SteamClient'
     )) {
         & $setOff $id
     }
 
+    $n = 0
     Get-ChildItem $base -ErrorAction SilentlyContinue |
         Where-Object { $_.PSChildName -match '(?i)steam' -and $_.PSChildName -notmatch '(?i)steam(vr|link|os|deck)' } |
         ForEach-Object {
             Set-ItemProperty -Path $_.PSPath -Name 'Enabled' -Value 0 -Type DWord -Force
+            Set-ItemProperty -Path $_.PSPath -Name 'ShowInActionCenter' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+            $n++
             Write-Ok "Windows toasts off: $($_.PSChildName)"
         }
+    if ($n -eq 0) { Write-Ok 'Windows Steam toast keys seeded' }
 }
 
 function Set-SteamTrayIconHidden([string]$SteamPath) {

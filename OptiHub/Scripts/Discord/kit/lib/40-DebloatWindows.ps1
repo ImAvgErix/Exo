@@ -501,6 +501,7 @@ function Disable-DiscordScheduledTasks {
 
 function Set-DiscordWindowsNotificationsOff {
     # Quiet Windows: disable Discord toast banners (in-app Discord alerts still work).
+    Write-Host '[*] Disabling Windows notifications for Discord...'
     $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
     if (-not (Test-Path $base)) { New-Item -Path $base -Force | Out-Null }
 
@@ -509,13 +510,27 @@ function Set-DiscordWindowsNotificationsOff {
         $path = Join-Path $base $Id
         if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
         Set-ItemProperty -Path $path -Name 'Enabled' -Value 0 -Type DWord -Force
+        Set-ItemProperty -Path $path -Name 'ShowInActionCenter' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
     }
 
     # Known stable package IDs only - no broad name match across other apps.
-    foreach ($id in @('Discord', 'Discord.Desktop', 'DiscordInc.Discord', 'com.squirrel.Discord.Discord')) {
+    foreach ($id in @(
+        'Discord',
+        'Discord.Desktop',
+        'DiscordInc.Discord',
+        'com.squirrel.Discord.Discord',
+        'com.discordapp.Discord'
+    )) {
         & $setOff $id
         Write-Ok "Windows toasts off: $id"
     }
+
+    Get-ChildItem $base -ErrorAction SilentlyContinue |
+        Where-Object { $_.PSChildName -match '(?i)discord' } |
+        ForEach-Object {
+            Set-ItemProperty -Path $_.PSPath -Name 'Enabled' -Value 0 -Type DWord -Force
+            Set-ItemProperty -Path $_.PSPath -Name 'ShowInActionCenter' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        }
 }
 
 # Back-compat alias name used by older call sites

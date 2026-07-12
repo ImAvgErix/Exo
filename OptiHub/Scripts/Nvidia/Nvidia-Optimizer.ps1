@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.8.6'
+$Script:NvidiaOptVersion = '1.8.7'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -1417,6 +1417,50 @@ function Set-NvidiaAppBackendConfigDebloat {
     }
 }
 
+function Set-NvidiaWindowsNotificationsOff {
+    # Quiet Windows: disable NVIDIA App / Control Panel / GFE toast banners.
+    Write-Step 'Disabling Windows notifications for NVIDIA clients...'
+    $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    if (-not (Test-Path -LiteralPath $base)) {
+        New-Item -Path $base -Force | Out-Null
+    }
+
+    $setOff = {
+        param([string]$Id)
+        $path = Join-Path $base $Id
+        if (-not (Test-Path -LiteralPath $path)) { New-Item -Path $path -Force | Out-Null }
+        Set-ItemProperty -Path $path -Name 'Enabled' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $path -Name 'ShowInActionCenter' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+    }
+
+    $ids = @(
+        'NVIDIA App',
+        'com.nvidia.nvapp',
+        'NVIDIACorp.NVIDIAControlPanel_56jybvy8sckqj!NVIDIACorp.NVIDIAControlPanel',
+        'NVIDIACorp.NVIDIAControlPanel_56jybvy8sckqj',
+        'NVIDIA GeForce Experience',
+        'NVIDIA Share',
+        'NVIDIA Overlay',
+        'NVIDIA Container',
+        'NvContainer'
+    )
+    foreach ($id in $ids) { & $setOff $id }
+
+    # Any existing notification keys that look NVIDIA-related
+    $n = 0
+    Get-ChildItem $base -ErrorAction SilentlyContinue | ForEach-Object {
+        $name = $_.PSChildName
+        if ($name -match '(?i)nvidia|geforce|nvapp|nvcontainer|shadowplay') {
+            Set-ItemProperty -Path $_.PSPath -Name 'Enabled' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $_.PSPath -Name 'ShowInActionCenter' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+            $n++
+            Write-Ok "Windows toasts off: $name"
+        }
+    }
+    if ($n -eq 0) { Write-Ok 'Windows NVIDIA toast keys seeded (will stick after first App/CPL toast)' }
+    else { Write-Ok "Windows NVIDIA toasts disabled ($n keys)" }
+}
+
 function Disable-NvidiaOverlay {
     Write-Step 'Stopping NVIDIA App/GFE background clients and disabling the overlay...'
     foreach ($n in @('NVIDIA App', 'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper64', 'nvsphelper', 'NVIDIA Web Helper', 'GFExperience')) {
@@ -1643,8 +1687,9 @@ function Configure-NvidiaAppExperience {
     Enable-NvidiaAppBetaChannel
     Disable-NvidiaOverlay
     Set-NvidiaAppBackendConfigDebloat
+    Set-NvidiaWindowsNotificationsOff
     Remove-NvidiaAppDesktopShortcuts | Out-Null
-    Write-Ok 'NVIDIA App prefs set (EULA flags, beta channel, overlay/notifications off). No App window launched.'
+    Write-Ok 'NVIDIA App prefs set (EULA flags, beta channel, overlay/Windows toasts off). No App window launched.'
 }
 
 function Test-NvidiaOverlayDisabled {
@@ -3104,19 +3149,21 @@ try {
         Write-Warn 'No App and no Control Panel UI - NVAPI display apply still runs (driver-level)'
     }
 
-    Write-HubProgress 78 'Client prefs / overlay off...'
+    Write-HubProgress 78 'Client prefs / overlay + Windows toasts off...'
     if ($appInstalled) {
         Configure-NvidiaAppExperience
     } else {
         Accept-NvidiaControlPanelEula
         Disable-NvidiaOverlay
+        Set-NvidiaWindowsNotificationsOff
     }
 
     Write-HubProgress 82 'Privacy / system debloat...'
     Disable-NvidiaTelemetry
     Disable-NvidiaOverlay
+    Set-NvidiaWindowsNotificationsOff
     if ($appInstalled) { Configure-NvidiaAppExperience }
-    elseif ($cplOk) { Accept-NvidiaControlPanelEula }
+    elseif ($cplOk) { Accept-NvidiaControlPanelEula; Set-NvidiaWindowsNotificationsOff }
     Disable-NvidiaTelemetry
 
     # Soft-verify: overlay gaps warn only when App missing (do not fail whole Apply).
