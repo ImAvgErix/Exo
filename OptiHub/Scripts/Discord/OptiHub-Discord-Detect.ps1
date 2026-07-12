@@ -259,9 +259,8 @@ if (-not (Test-Path $discordRoot)) {
             $stateAppOk = [IO.Path]::GetFullPath([string]$state.appDir).TrimEnd('\') -ieq
                 [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')
         } catch { }
+        # Trust apply flags for this Discord build path — do not pin exact kit version strings.
         $markerOk = [bool]($state -and
-            ([string]$state.version -eq '1.3.0' -or [string]$state.version -eq '1.3.1' -or
-             [string]$state.version -eq '1.3.2' -or [string]$state.version -eq '1.3.3') -and
             [string]$state.applyStatus -eq 'applied' -and
             $state.applied -eq $true -and
             $state.fullApply -eq $true -and

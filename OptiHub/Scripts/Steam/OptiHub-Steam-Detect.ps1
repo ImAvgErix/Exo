@@ -336,9 +336,8 @@ if (-not $steamOk) {
     Add-Feature 'Start Menu launch path' 'Shortcuts use OptiHub launcher; no desktop icons.' $launchOk
 
     $runtimeOk = Test-SteamRuntimeIntegrity $steam
+    # Trust apply flags — do NOT pin exact kit version strings (1.7.3+ was falsely "incomplete").
     $markerOk = [bool]($state -and
-        ([string]$state.version -eq '1.6.0' -or [string]$state.version -eq '1.7.0' -or
-         [string]$state.version -eq '1.7.1' -or [string]$state.version -eq '1.7.2') -and
         [string]$state.applyStatus -eq 'applied' -and
         $state.applied -eq $true -and
         $state.quick -eq $false -and
@@ -348,12 +347,16 @@ if (-not $steamOk) {
         $state.cacheCleanupCompleted -eq $true -and
         $state.shaderInventoryVerified -eq $true -and
         $state.installedShaderCachesPreserved -eq $true)
-    # Prefer the durable 1.7.0 helper (quiet re-enforce) when present.
-    if ($markerOk -and [string]$state.version -eq '1.6.0' -and $helper -and (Test-Path -LiteralPath $helper)) {
+    # Durable quiet re-enforce helper must exist after modern applies.
+    if ($markerOk -and $helper -and (Test-Path -LiteralPath $helper)) {
         try {
             $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
-            if ($helperText -notmatch 'Reinstate-SteamQuiet') { $markerOk = $false }
+            if ($helperText -notmatch 'Reinstate-SteamQuiet' -and $helperText -notmatch 'OptiHub\.SteamWebHelper') {
+                $markerOk = $false
+            }
         } catch { $markerOk = $false }
+    } elseif ($markerOk -and -not (Test-Path -LiteralPath $helper)) {
+        $markerOk = $false
     }
     Add-Feature 'Verified apply' 'Full apply recorded with durable quiet + runtime intact.' ($markerOk -and $runtimeOk)
 

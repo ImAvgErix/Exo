@@ -214,8 +214,9 @@ public sealed class OptimizerStateService
                 var markerAppDir = state.TryGetProperty("appDir", out var appDirValue)
                     ? appDirValue.GetString()
                     : null;
-                markerOk = string.Equals(stateVersion, "1.3.0", StringComparison.Ordinal) &&
-                           string.Equals(applyStatus, "applied", StringComparison.Ordinal) &&
+                // Accept any modern kit stamp; require full applied flags for this Discord build path.
+                _ = stateVersion;
+                markerOk = string.Equals(applyStatus, "applied", StringComparison.Ordinal) &&
                            IsTrue(state, "applied") && IsTrue(state, "fullApply") &&
                            IsTrue(state, "windowsVerified") && IsTrue(state, "debloatVerified") &&
                            PathsEqual(markerAppDir, appDir);
@@ -635,10 +636,9 @@ public sealed class OptimizerStateService
                 downloadMarkerOk = IsTrue(root, "configVerified") && IsTrue(root, "downloadOptimized");
                 clientMarkerOk = IsTrue(root, "clientTweaksVerified") &&
                                  IsTrue(root, "snappyUi") && IsTrue(root, "overlayTweaks");
-                var versionOk = string.Equals(markerVersion, "1.7.0", StringComparison.Ordinal) ||
-                                string.Equals(markerVersion, "1.6.0", StringComparison.Ordinal);
-                markerOk = versionOk &&
-                           string.Equals(applyStatus, "applied", StringComparison.Ordinal) &&
+                // Do not pin exact kit version — 1.7.3+ was falsely marked incomplete.
+                _ = markerVersion;
+                markerOk = string.Equals(applyStatus, "applied", StringComparison.Ordinal) &&
                            IsTrue(root, "applied") &&
                            root.TryGetProperty("quick", out var quickValue) &&
                            quickValue.ValueKind == JsonValueKind.False &&

@@ -662,6 +662,213 @@ public sealed class PowerShellRunnerService
         catch { return null; }
     }
 
+    /// <summary>
+    /// Ensures PowerShell 7 Preview (preferred) is available; also installs Windows Terminal Preview when missing.
+    /// Uses winget non-interactively. Safe to call at startup.
+    /// </summary>
+    public static async Task<(bool Ok, string Message)> EnsurePowerShellRuntimeAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var existing = ResolvePowerShell();
+            _ = await EnsureWindowsTerminalPreviewAsync(cancellationToken).ConfigureAwait(false);
+            return (true, "PowerShell ready: " + existing);
+        }
+        catch (InvalidOperationException)
+        {
+            // Install below.
+        }
+
+        var winget = FindWinget();
+        if (winget is null)
+        {
+            return (false,
+                "PowerShell 7 Preview is required. Install it from the Microsoft Store or winget " +
+                "(Microsoft.PowerShell.Preview), then restart OptiHub.");
+        }
+
+        // Prefer Preview package first.
+        var psInstall = await RunWingetAsync(
+            winget,
+            new[]
+            {
+                "install", "--id", "Microsoft.PowerShell.Preview", "-e",
+                "--accept-package-agreements", "--accept-source-agreements",
+                "--disable-interactivity", "--silent"
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        if (!psInstall.Ok)
+        {
+            // Fall back to stable PowerShell 7 if Preview fails.
+            psInstall = await RunWingetAsync(
+                winget,
+                new[]
+                {
+                    "install", "--id", "Microsoft.PowerShell", "-e",
+                    "--accept-package-agreements", "--accept-source-agreements",
+                    "--disable-interactivity", "--silent"
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        _ = await EnsureWindowsTerminalPreviewAsync(cancellationToken).ConfigureAwait(false);
+
+        _cachedPowerShellPath = null;
+        try
+        {
+            var path = ResolvePowerShell();
+            return (true, "Installed PowerShell runtime: " + path +
+                          (psInstall.Ok ? "" : " (winget reported a non-zero exit; host was still found)"));
+        }
+        catch
+        {
+            return (false,
+                "Could not install PowerShell 7. Install Microsoft.PowerShell.Preview from winget/Store, then restart OptiHub. " +
+                psInstall.Detail);
+        }
+    }
+
+    private static async Task<(bool Ok, string Detail)> EnsureWindowsTerminalPreviewAsync(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (IsWindowsTerminalPreviewPresent())
+                return (true, "Windows Terminal Preview present");
+        }
+        catch { }
+
+        var winget = FindWinget();
+        if (winget is null)
+            return (false, "winget unavailable for Terminal Preview");
+
+        return await RunWingetAsync(
+            winget,
+            new[]
+            {
+                "install", "--id", "Microsoft.WindowsTerminal.Preview", "-e",
+                "--accept-package-agreements", "--accept-source-agreements",
+                "--disable-interactivity", "--silent"
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static bool IsWindowsTerminalPreviewPresent()
+    {
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        foreach (var path in new[]
+                 {
+                     Path.Combine(local, "Microsoft", "WindowsApps", "wt-preview.exe"),
+                     Path.Combine(local, "Microsoft", "WindowsApps", "WindowsTerminalPreview.exe"),
+                 })
+        {
+            if (File.Exists(path)) return true;
+        }
+
+        var winApps = Path.Combine(programFiles, "WindowsApps");
+        if (!Directory.Exists(winApps)) return false;
+        try
+        {
+            return Directory.GetDirectories(winApps, "Microsoft.WindowsTerminalPreview_*")
+                .Any(d => File.Exists(Path.Combine(d, "WindowsTerminal.exe")));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string? FindWinget()
+    {
+        foreach (var path in new[]
+                 {
+                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                         "Microsoft", "WindowsApps", "winget.exe"),
+                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                         "WindowsApps", "Microsoft.DesktopAppInstaller_*", "winget.exe"),
+                 })
+        {
+            if (path.Contains('*'))
+            {
+                try
+                {
+                    var dir = Path.GetDirectoryName(path)!;
+                    var root = Path.GetDirectoryName(dir)!;
+                    var pattern = Path.GetFileName(dir);
+                    if (Directory.Exists(root))
+                    {
+                        foreach (var d in Directory.GetDirectories(root, pattern)
+                                     .OrderByDescending(x => x, StringComparer.OrdinalIgnoreCase))
+                        {
+                            var exe = Path.Combine(d, "winget.exe");
+                            if (File.Exists(exe)) return exe;
+                        }
+                    }
+                }
+                catch { }
+                continue;
+            }
+
+            if (File.Exists(path)) return path;
+        }
+
+        try
+        {
+            var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+            foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var full = Path.Combine(dir.Trim('"'), "winget.exe");
+                if (File.Exists(full)) return full;
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
+    private static async Task<(bool Ok, string Detail)> RunWingetAsync(
+        string winget,
+        string[] args,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = winget,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            foreach (var a in args)
+                psi.ArgumentList.Add(a);
+
+            using var p = Process.Start(psi);
+            if (p is null) return (false, "winget failed to start");
+            var stdout = await p.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            var stderr = await p.StandardError.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            await p.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            // 0 = success, -1978335189 often already installed
+            var ok = p.ExitCode is 0 or -1978335189 or -1978335212;
+            return (ok, $"exit={p.ExitCode} {TrimWinget(stdout)} {TrimWinget(stderr)}".Trim());
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    private static string TrimWinget(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        var t = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return t.Length > 180 ? t[..180] + "…" : t;
+    }
+
     private static bool LooksLikePowerShell7(string path)
     {
         // Never use Windows PowerShell 5.1 host.
@@ -678,7 +885,7 @@ public sealed class PowerShellRunnerService
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         var winApps = Path.Combine(programFiles, "WindowsApps");
 
-        // Prefer PowerShell 7 Preview (user runs preview), then stable 7.x.
+        // Prefer PowerShell 7 Preview (user preference), then stable 7.x.
         yield return Path.Combine(programFiles, "PowerShell", "7-preview", "pwsh.exe");
         yield return Path.Combine(local, "Microsoft", "WindowsApps", "pwsh-preview.exe");
         yield return Path.Combine(local, "Microsoft", "WindowsApps", "Microsoft.PowerShellPreview_8wekyb3d8bbwe", "pwsh.exe");
@@ -688,7 +895,7 @@ public sealed class PowerShellRunnerService
             string[] previewMatches = Array.Empty<string>();
             try
             {
-                previewMatches = Directory.GetDirectories(winApps, "Microsoft.PowerShellPreview_*_x64__*")
+                previewMatches = Directory.GetDirectories(winApps, "Microsoft.PowerShellPreview_*")
                     .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase)
                     .ToArray();
             }
@@ -706,7 +913,7 @@ public sealed class PowerShellRunnerService
             string[] stableMatches = Array.Empty<string>();
             try
             {
-                stableMatches = Directory.GetDirectories(winApps, "Microsoft.PowerShell_*_x64__*")
+                stableMatches = Directory.GetDirectories(winApps, "Microsoft.PowerShell_*")
                     .Where(d => !d.Contains("Preview", StringComparison.OrdinalIgnoreCase))
                     .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase)
                     .ToArray();

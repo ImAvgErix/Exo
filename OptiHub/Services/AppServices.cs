@@ -26,8 +26,15 @@ public sealed class AppServices
         try { Scripts.EnsureKitsMatchThisApp(); }
         catch { /* first-run stamp is best-effort; Get*Root retries */ }
 
-        _ = Task.Run(() =>
+        _ = Task.Run(async () =>
         {
+            try
+            {
+                // Prefer PowerShell 7 Preview + Windows Terminal Preview; install via winget if missing.
+                await PowerShellRunnerService.EnsurePowerShellRuntimeAsync().ConfigureAwait(false);
+            }
+            catch { /* install is best-effort; RunAsync still surfaces clear errors */ }
+
             try
             {
                 Scripts.GetDiscordRoot();

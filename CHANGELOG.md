@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.6
+
+- **Steam**: fix Verified apply false-negative when kit version > 1.7.2 (all checklist items mark correctly after success)
+- **Discord / Steam**: stop pinning exact kit version strings for apply markers; trust full-apply flags
+- **PowerShell**: prefer Preview; expand WindowsApps discovery; auto-install Microsoft.PowerShell.Preview + Windows Terminal Preview via winget when missing
+- **Steam kit** 1.7.5; Discord DiscOpt version stamp aligned to 1.3.5
 ## 1.8.5
 
 - **Brand icon**: Microsoft Fluent **Developer Board** filled (MIT) — solid Windows-native mark, not thin Lucide outlines / not a speedometer

@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.7.3'
+$Script:SteamOptVersion = '1.7.5'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Default Steam launch flags (formerly "aggressive" - this is the only tier).
@@ -1121,19 +1121,37 @@ function Optimize-SteamDownloadFolder([string]$SteamPath) {
 }
 
 function Get-OptiHubPwsh {
-    # PowerShell 7+ only (prefer preview). Never Windows PowerShell 5.1.
-    $candidates = @(
+    # PowerShell 7+ only (prefer Preview). Never Windows PowerShell 5.1.
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in @(
         (Join-Path $env:ProgramFiles 'PowerShell\7-preview\pwsh.exe'),
         (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh-preview.exe'),
         (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'),
         (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh.exe')
-    )
-    foreach ($p in $candidates) {
-        if ($p -and (Test-Path -LiteralPath $p)) { return $p }
+    )) {
+        if ($p) { [void]$candidates.Add($p) }
     }
+    $cmdPreview = Get-Command pwsh-preview -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmdPreview -and $cmdPreview.Source) { [void]$candidates.Add([string]$cmdPreview.Source) }
     $cmd = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($cmd -and $cmd.Source -and ($cmd.Source -notmatch 'WindowsPowerShell')) { return $cmd.Source }
-    throw 'PowerShell 7 (pwsh) is required for OptiHub Steam helpers. Install PowerShell 7 or 7 Preview.'
+    if ($cmd -and $cmd.Source) { [void]$candidates.Add([string]$cmd.Source) }
+
+    $appsRoot = Join-Path $env:ProgramFiles 'WindowsApps'
+    if (Test-Path -LiteralPath $appsRoot) {
+        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShellPreview*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { [void]$candidates.Add((Join-Path $_.FullName 'pwsh.exe')) }
+        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShell_*' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notmatch 'Preview' } |
+            Sort-Object Name -Descending |
+            ForEach-Object { [void]$candidates.Add((Join-Path $_.FullName 'pwsh.exe')) }
+    }
+
+    foreach ($p in ($candidates | Select-Object -Unique)) {
+        if (-not $p -or $p -match 'WindowsPowerShell') { continue }
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    throw 'PowerShell 7 (pwsh) is required for OptiHub Steam helpers. Install PowerShell 7 Preview (preferred) or PowerShell 7.'
 }
 
 function Write-SteamLaunchCmd([string]$CmdPath, [string]$SteamPath, [string]$HelperPath, [string[]]$CefArgs, [string]$Label) {
