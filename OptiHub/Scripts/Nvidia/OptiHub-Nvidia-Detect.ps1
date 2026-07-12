@@ -449,14 +449,20 @@ if (-not $appInstalled) {
     }
     $appInstalled = [bool]$appxApp
 }
-$clientReinstallExpected = -not [bool]($state -and $state.PSObject.Properties.Name -contains 'clientReinstall' -and -not [bool]$state.clientReinstall)
-$appOk = if ($clientReinstallExpected) { $appInstalled } else { $true }
+$appUnsupported = [bool]($state -and $state.PSObject.Properties.Name -contains 'nvidiaAppUnsupported' -and [bool]$state.nvidiaAppUnsupported)
+$appOptional = [bool]($state -and $state.PSObject.Properties.Name -contains 'nvidiaAppOptional' -and [bool]$state.nvidiaAppOptional)
+# App is preferred; optional when NVIDIA installer rejected the PC (0x1A000000) or install failed.
+$appOk = $appInstalled -or $appUnsupported -or $appOptional
 $features.Add(@{
     title  = 'NVIDIA App (fresh + debloated)'
     detail = $(if ($appInstalled) {
-        'NVIDIA App is installed. Apply wipes old App/CPL clients, reinstalls App, then debloats background noise.'
+        'NVIDIA App is installed and was debloated on Apply (overlay/notifications off when possible).'
+    } elseif ($appUnsupported) {
+        'NVIDIA App installer rejected this PC (system not supported). OptiHub still applies driver/profile/NVAPI without the App.'
+    } elseif ($appOptional) {
+        'NVIDIA App not installed after Apply; remaining optimizers still apply.'
     } else {
-        'NVIDIA App not installed. Apply wipes client traces and installs a fresh App (requires winget / Store).'
+        'NVIDIA App not installed. Apply downloads the official App installer (skips if system unsupported).'
     })
     active = $appOk
 })

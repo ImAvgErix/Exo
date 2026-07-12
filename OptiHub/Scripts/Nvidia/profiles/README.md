@@ -74,12 +74,13 @@ metadata or packages. Install the official NVIDIA notebook driver manually.
 ## Client stack + display (not in .nip)
 
 On Apply, OptiHub **wipes** NVIDIA App / classic Control Panel / GFE client traces,
-**reinstalls a fresh NVIDIA App**, then **debloats** overlay / SelfUpdate / telemetry
-while keeping the App launchable and display audio intact.
+then tries a **fresh NVIDIA App** (official download). If the App installer rejects
+the PC (`0x1A000000` / system not supported), OptiHub **installs classic Control
+Panel** instead and continues.
 
-Desktop **color / scaling / max Hz** are applied through **NVAPI** (not App or Control
-Panel mouse automation). Those are the same driver settings the App reflects when
-opened. Live status requires the bundled NVAPI helper and complete enumeration of
-every active NVIDIA-connected display; unavailable or partial checks fail closed.
+Desktop **color / scaling / max Hz** always apply through **NVAPI** (not App/CPL
+mouse automation) - the same driver path both UIs read. Live status requires the
+bundled NVAPI helper and complete enumeration of every active NVIDIA-connected
+display; unavailable or partial checks fail closed.
 
 Profile pack version: see `PROFILE_VERSION`.

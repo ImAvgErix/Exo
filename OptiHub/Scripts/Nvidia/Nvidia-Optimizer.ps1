@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.8.4'
+$Script:NvidiaOptVersion = '1.8.5'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -757,8 +757,24 @@ function Get-NvidiaAppOfficialInstallerUrl {
     return $cdn[0]
 }
 
+function Test-NvidiaAppSetupUnsupportedExit {
+    param([int]$Code)
+    # NVIDIA NVI2: 0x1A000000 (436207616) = "This graphics driver / system configuration is not supported"
+    # Friend PCs hit this and OptiHub used to sit on "setup exit" forever.
+    try {
+        $u = [uint32]([int64]$Code -band 0xFFFFFFFF)
+        if ($u -eq [uint32]0x1A000000) { return $true }
+        if ($Code -eq 436207616 -or $Code -eq -16777216) { return $true }
+        # High-byte family 0x1A...... used for package/system reject
+        if ( ($u -band [uint32]0xFF000000) -eq [uint32]0x1A000000 ) { return $true }
+    } catch { }
+    return $false
+}
+
 function Install-NvidiaAppFromOfficialInstaller {
     # Primary path: direct NVIDIA CDN download (fast, works elevated, no Store/winget).
+    # Returns: $true installed | $false failed (sets $Script:NvidiaAppInstallUnsupported when OS/GPU rejected).
+    $Script:NvidiaAppInstallUnsupported = $false
     Write-Step 'Downloading official NVIDIA App installer from NVIDIA (primary path)...'
     $url = Get-NvidiaAppOfficialInstallerUrl
     if (-not $url) {
@@ -861,13 +877,24 @@ function Install-NvidiaAppFromOfficialInstaller {
             }
             if ($p.HasExited) {
                 $code = [int]$p.ExitCode
-                Write-Ok "NVIDIA App setup exit: $code"
+                $hex = '{0:X8}' -f [uint32]([int64]$code -band 0xFFFFFFFF)
+                Write-Ok "NVIDIA App setup exit: $code (0x$hex)"
+                if (Test-NvidiaAppSetupUnsupportedExit -Code $code) {
+                    $Script:NvidiaAppInstallUnsupported = $true
+                    Write-Warn 'NVIDIA App installer rejected this PC: system configuration not supported (exit 0x1A000000 / 436207616).'
+                    Write-Warn 'This is an NVIDIA installer limit (GPU/OS/driver combo), not OptiHub hanging. Skipping App; continuing with profiles + NVAPI.'
+                    return $false
+                }
+                # Other non-zero: do not sit around - short probe then next flags
+                if ($code -ne 0) {
+                    Write-Warn "NVIDIA App setup failed with exit $code - not waiting"
+                }
                 break
             }
             $left = [int]($deadline - (Get-Date)).TotalSeconds
             if ($left -ne $lastTick -and ($left % 15 -eq 0)) {
                 $lastTick = $left
-                Write-Ok "Waiting for NVIDIA App install... ${left}s left (not stuck on exit code)"
+                Write-Ok "Waiting for NVIDIA App install... ${left}s left"
                 Write-HubProgress 74 "Installing NVIDIA App... ${left}s"
             }
             Start-Sleep -Seconds 2
@@ -877,10 +904,9 @@ function Install-NvidiaAppFromOfficialInstaller {
             Write-Warn 'NVIDIA App setup still running after 3 min - stopping stuck installer'
             try {
                 Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-                # Kill common child extractors left behind by NVI2
                 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
                     Where-Object {
-                        $_.Name -match '(?i)^setup\.exe$|^InstallPackage\.exe$|^NVDisplay' -or
+                        $_.Name -match '(?i)^setup\.exe$|^InstallPackage\.exe$' -or
                         ($_.CommandLine -and $_.CommandLine -match '(?i)NVAPP|NVIDIA_app|NVI2')
                     } |
                     ForEach-Object {
@@ -888,15 +914,21 @@ function Install-NvidiaAppFromOfficialInstaller {
                     }
             } catch { }
         } elseif ($p.HasExited) {
-            Write-Ok "NVIDIA App setup finished with exit $([int]$p.ExitCode)"
+            $code = [int]$p.ExitCode
+            if (Test-NvidiaAppSetupUnsupportedExit -Code $code) {
+                $Script:NvidiaAppInstallUnsupported = $true
+                return $false
+            }
         }
 
-        if (Wait-NvidiaAppInstalled -Seconds 25) {
+        # Quick check only - do not burn 25s after a failed exit
+        if (Test-NvidiaAppInstalled -or (Wait-NvidiaAppInstalled -Seconds 8)) {
             Remove-NvidiaAppDesktopShortcuts | Out-Null
             Write-Ok 'NVIDIA App installed via official NVIDIA download'
             return $true
         }
-        Write-Warn 'Setup finished but NVIDIA App not detected yet - trying next silent flag set'
+        if ($Script:NvidiaAppInstallUnsupported) { return $false }
+        Write-Warn 'Setup finished but NVIDIA App not detected - trying next silent flag set'
     }
     return $false
 }
@@ -914,6 +946,116 @@ function Test-NvidiaControlPanelInstalled {
         if (Test-Path -LiteralPath $p) { return $true }
     }
     return $false
+}
+
+function Accept-NvidiaControlPanelEula {
+    # Classic Control Panel first-run license (separate from NVIDIA App).
+    foreach ($p in @(
+        'HKCU:\Software\NVIDIA Corporation\NVControlPanel2\Client',
+        'HKLM:\SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client',
+        'HKLM:\SOFTWARE\NVIDIA Corporation\NVControlPanel2\Client'
+    )) {
+        Set-OptiHubRegDword -Path $p -Name 'EulaAccepted' -Value 1
+        Set-OptiHubRegDword -Path $p -Name 'UserAgreedToEula' -Value 1
+        Set-OptiHubRegDword -Path $p -Name 'AgreeToEula' -Value 1
+        Set-OptiHubRegDword -Path $p -Name 'ShowEula' -Value 0
+        Set-OptiHubRegDword -Path $p -Name 'ShowSedoanEula' -Value 0
+    }
+}
+
+function Install-NvidiaControlPanel {
+    # Fallback when NVIDIA App cannot install (0x1A000000 / unsupported system).
+    # Display scaling/Hz still apply via NVAPI (same driver stack Control Panel uses).
+    Write-Step 'Installing classic NVIDIA Control Panel (App fallback for display stack)...'
+    if (Test-NvidiaControlPanelInstalled) {
+        Accept-NvidiaControlPanelEula
+        Write-Ok 'NVIDIA Control Panel already present'
+        return $true
+    }
+
+    $winget = Get-OptiHubWingetPath
+    if ($winget) {
+        Write-Ok "winget Control Panel install (45s max): $winget"
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = $winget
+            # Official Store package for classic NVIDIA Control Panel
+            $psi.Arguments = 'install --id 9NF8H0H7WMLT -e --source msstore --accept-package-agreements --accept-source-agreements --disable-interactivity --silent'
+            $psi.UseShellExecute = $false
+            $psi.CreateNoWindow = $true
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $proc = [Diagnostics.Process]::Start($psi)
+            if ($proc -and -not $proc.WaitForExit(45000)) {
+                try { $proc.Kill($true) } catch { try { $proc.Kill() } catch { } }
+                Write-Warn 'winget Control Panel install timed out after 45s'
+            } elseif ($proc) {
+                Write-Ok "winget Control Panel exit $($proc.ExitCode)"
+            }
+            # Second try without forcing msstore source
+            if (-not (Test-NvidiaControlPanelInstalled)) {
+                $psi2 = New-Object System.Diagnostics.ProcessStartInfo
+                $psi2.FileName = $winget
+                $psi2.Arguments = 'install --id 9NF8H0H7WMLT -e --accept-package-agreements --accept-source-agreements --disable-interactivity --silent'
+                $psi2.UseShellExecute = $false
+                $psi2.CreateNoWindow = $true
+                $p2 = [Diagnostics.Process]::Start($psi2)
+                if ($p2 -and -not $p2.WaitForExit(45000)) {
+                    try { $p2.Kill($true) } catch { try { $p2.Kill() } catch { } }
+                }
+            }
+        } catch {
+            Write-Warn "Control Panel winget failed: $($_.Exception.Message)"
+        } finally {
+            $ErrorActionPreference = $prev
+        }
+    } else {
+        Write-Warn 'winget not available for Control Panel install'
+    }
+
+    # Brief wait for Store package registration
+    for ($i = 0; $i -lt 10; $i++) {
+        if (Test-NvidiaControlPanelInstalled) { break }
+        Start-Sleep -Milliseconds 600
+    }
+
+    if (Test-NvidiaControlPanelInstalled) {
+        Accept-NvidiaControlPanelEula
+        Write-Ok 'Classic NVIDIA Control Panel installed (display scaling/Hz still applied via NVAPI)'
+        return $true
+    }
+
+    Write-Warn 'Could not install classic Control Panel. NVAPI display apply will still run without it.'
+    return $false
+}
+
+function Ensure-NvidiaDisplayClient {
+    # Prefer NVIDIA App; if App is missing/unsupported, install classic Control Panel
+    # so the machine still has a display UI. Scaling/Hz always go through NVAPI.
+    param(
+        [bool]$AppInstalled,
+        [bool]$AppUnsupported
+    )
+    if ($AppInstalled) {
+        Write-Ok 'Display client: NVIDIA App present (NVAPI applies scaling/Hz)'
+        return @{ Client = 'app'; ControlPanel = (Test-NvidiaControlPanelInstalled) }
+    }
+
+    Write-Warn 'NVIDIA App unavailable - falling back to classic Control Panel + NVAPI display path'
+    Write-HubProgress 75 'Control Panel fallback (display client)...'
+    $cpl = Install-NvidiaControlPanel
+    if ($cpl) {
+        Write-Ok 'Display client: classic Control Panel (NVAPI applies scaling/Hz/Full RGB)'
+    } else {
+        Write-Warn 'Display client: NVAPI-only (no App, no Control Panel UI) - scaling/Hz still apply via driver'
+    }
+    return @{
+        Client         = $(if ($cpl) { 'control-panel' } else { 'nvapi-only' })
+        ControlPanel   = [bool]$cpl
+        AppUnsupported = [bool]$AppUnsupported
+    }
 }
 
 function Stop-NvidiaClientProcesses {
@@ -1652,7 +1794,8 @@ function Test-NvidiaOverlayDisabled {
 
 function Install-NvidiaApp {
     # Fresh App after wipe. Primary = official nvidia.com CDN (fast/reliable elevated).
-    # winget/Store is LAST RESORT only, hard-capped so friend PCs never sit 5+ minutes.
+    # winget is LAST RESORT only (30s). Unsupported system (0x1A000000) fails fast - no hang.
+    $Script:NvidiaAppInstallUnsupported = $false
     Write-Step 'Installing fresh NVIDIA App (official download first; winget last-resort only)...'
     if (Test-NvidiaAppInstalled) {
         Write-Ok 'NVIDIA App already present'
@@ -1665,6 +1808,10 @@ function Install-NvidiaApp {
             Remove-NvidiaAppDesktopShortcuts | Out-Null
             return $true
         }
+        if ($Script:NvidiaAppInstallUnsupported) {
+            Write-Warn 'Skipping winget - NVIDIA installer already reported system not supported'
+            return $false
+        }
         Write-Warn 'Official NVIDIA download/install failed - trying brief winget last-resort...'
     } else {
         Write-Warn '-SkipDownload set; cannot use official NVIDIA App download'
@@ -1672,7 +1819,7 @@ function Install-NvidiaApp {
 
     # Last resort: single short winget attempt (no source reset - that was the 5 min hang).
     $winget = Get-OptiHubWingetPath
-    if ($winget -and -not $SkipDownload) {
+    if ($winget -and -not $SkipDownload -and -not $Script:NvidiaAppInstallUnsupported) {
         Write-Ok "winget last-resort (30s max): $winget"
         Write-HubProgress 73 'NVIDIA App via winget (last resort, 30s)...'
         $prev = $ErrorActionPreference
@@ -1697,20 +1844,24 @@ function Install-NvidiaApp {
         } finally {
             $ErrorActionPreference = $prev
         }
-        if (Wait-NvidiaAppInstalled -Seconds 20) {
+        if (Wait-NvidiaAppInstalled -Seconds 12) {
             Remove-NvidiaAppDesktopShortcuts | Out-Null
             Write-Ok 'NVIDIA App installed via winget last-resort'
             return $true
         }
     }
 
-    if (Wait-NvidiaAppInstalled -Seconds 10) {
+    if (Test-NvidiaAppInstalled) {
         Remove-NvidiaAppDesktopShortcuts | Out-Null
         Write-Ok 'NVIDIA App became present after install attempts'
         return $true
     }
 
-    Write-Warn 'NVIDIA App install failed. Official NVIDIA download is required (winget/Store is unreliable under elevation).'
+    if ($Script:NvidiaAppInstallUnsupported) {
+        Write-Warn 'NVIDIA App cannot install on this system (NVIDIA: system configuration not supported). OptiHub will finish without the App.'
+    } else {
+        Write-Warn 'NVIDIA App install failed. Continuing without App when possible.'
+    }
     return $false
 }
 
@@ -3020,47 +3171,53 @@ try {
 
         Write-HubProgress 70 'Fresh NVIDIA App install...'
         if ($SkipDownload -and -not $appInstalled) {
-            throw 'NVIDIA App was wiped but -SkipDownload prevents reinstall. Re-run without -SkipDownload.'
-        }
-        if (-not (Install-NvidiaApp)) {
-            throw 'Fresh NVIDIA App install failed after client wipe. OptiHub downloads the official NVIDIA App installer first (winget is last-resort only). Check internet / free disk space, then Apply again.'
+            Write-Warn 'NVIDIA App was wiped but -SkipDownload prevents reinstall; continuing without App'
+        } else {
+            [void](Install-NvidiaApp)
         }
         $appInstalled = Test-NvidiaAppInstalled
-        if (-not $appInstalled) {
-            throw 'NVIDIA App is not present after install. Refusing to mark the client stack complete.'
+        if ($appInstalled) {
+            Write-Ok 'Fresh NVIDIA App ready for experience config (no desktop shortcut)'
+        } elseif ($Script:NvidiaAppInstallUnsupported) {
+            Write-Warn 'NVIDIA App skipped: installer says this system is not supported (exit 0x1A000000 / 436207616). Falling back to Control Panel + NVAPI.'
+        } else {
+            Write-Warn 'NVIDIA App not installed; falling back to Control Panel + NVAPI for display.'
         }
-        Write-Ok 'Fresh NVIDIA App ready for experience config (no desktop shortcut)'
     } else {
         Write-HubProgress 64 'Client reinstall skipped (-SkipApp)...'
         Write-Ok "NVIDIA App left as-is (currently $(if ($appInstalled) { 'installed' } else { 'not installed' }))"
         $cplOk = Test-NvidiaControlPanelInstalled
     }
 
-    # EULA accept + silent first-run dismiss + beta + overlay/notifications off + App debloat.
-    # Silent first-run runs ONCE (opening App twice was slow and re-triggered OOTB).
+    # If App failed/unsupported, install classic Control Panel so display UI exists.
+    # Scaling / max Hz / Full RGB always apply through NVAPI (same stack CPL/App use).
+    $displayClient = Ensure-NvidiaDisplayClient -AppInstalled:([bool]$appInstalled) -AppUnsupported:([bool]$Script:NvidiaAppInstallUnsupported)
+    $cplOk = [bool]$displayClient.ControlPanel -or (Test-NvidiaControlPanelInstalled)
+
+    # EULA + silent first-run only when App is actually present.
     $Script:OptiHubNvAppFirstRunDone = $false
-    Write-HubProgress 76 'NVIDIA App: EULA + silent first-run + overlay off...'
-    if ($appInstalled -or -not $SkipApp) {
-        # Note series for logs: NVIDIA App supports GTX 10-series; drivers use security branch only.
+    Write-HubProgress 76 'NVIDIA client: App config or Control Panel fallback...'
+    if ($appInstalled) {
         try {
             $serNote = Get-GpuSeriesFromName $primary.Name
             if ($serNote -eq '10') {
-                Write-Ok 'GTX 10-series: NVIDIA App is supported; Game Ready is security-branch (~582.x), not modern 610.x'
+                Write-Ok 'GTX 10-series: App may be rejected by installer on some PCs; Control Panel + NVAPI is the reliable display path.'
             }
         } catch { }
         Configure-NvidiaAppExperience
     } else {
-        Write-Ok 'NVIDIA App not installed; skipping App experience config'
+        Write-Ok 'Using Control Panel / NVAPI path (no App UI). Overlay registry + system debloat still run.'
+        Accept-NvidiaControlPanelEula
         Disable-NvidiaOverlay
     }
 
     Write-HubProgress 82 'Privacy / system debloat...'
     Disable-NvidiaTelemetry
-    # Second pass without opening App again - re-assert flags only (SelfUpdate often reappears).
-    if ($appInstalled -or -not $SkipApp) {
+    if ($appInstalled) {
         Configure-NvidiaAppExperience -SkipSilentFirstRun
     } else {
         Disable-NvidiaOverlay
+        Accept-NvidiaControlPanelEula
     }
     Disable-NvidiaTelemetry
     $overlayResult = Test-NvidiaOverlayDisabled
@@ -3068,7 +3225,14 @@ try {
     $debloatResult = Test-NvidiaPerformanceDebloat
     foreach ($issue in $debloatResult.Issues) { Write-Warn "Debloat verification: $issue" }
 
-    Write-HubProgress 90 'Display color / scaling (NVAPI - same stack App reflects)...'
+    $dispLabel = if ($appInstalled) {
+        'Display color / scaling (NVAPI via App stack)...'
+    } elseif ($cplOk) {
+        'Display color / scaling (NVAPI via Control Panel stack)...'
+    } else {
+        'Display color / scaling (NVAPI driver-only)...'
+    }
+    Write-HubProgress 90 $dispLabel
     $dispResult = Coerce-Hashtable (Set-NvidiaDisplayPreferences)
     if (-not $dispResult) {
         $dispResult = @{ Success = $false; Details = @('Display helper returned no result') }
@@ -3118,8 +3282,11 @@ try {
         nvidiaControlPanel  = [bool]$cplOk
         clientWipe          = $clientWipe
         clientReinstall     = (-not [bool]$SkipApp)
-        nvidiaAppBeta       = $true
-        nvidiaAppConfigured = $true
+        nvidiaAppOptional   = (-not $appInstalled)
+        nvidiaAppUnsupported = [bool]$Script:NvidiaAppInstallUnsupported
+        nvidiaAppBeta       = [bool]$appInstalled
+        nvidiaAppConfigured = [bool]$appInstalled
+        displayClient       = $(if ($displayClient -and $displayClient.Client) { [string]$displayClient.Client } else { 'nvapi' })
         displayPrefs        = [bool]$dispResult.Success
         displayMethod       = 'nvapi'
         displayDetails      = $dispResult.Details
@@ -3136,8 +3303,9 @@ try {
         gameProfileDeltas   = $true
     }
 
-    if (-not $SkipApp -and -not $appInstalled) {
-        throw 'Fresh NVIDIA App is required after the client wipe, but it is not installed.'
+    # App is preferred but not required when NVIDIA installer rejects the system (0x1A000000).
+    if (-not $appInstalled) {
+        Write-Warn 'Completed without NVIDIA App (install failed or system not supported by NVIDIA App installer).'
     }
     if (-not [bool]$dispResult.Success) {
         throw 'The 3D profile was applied, but NVIDIA display preferences could not be verified. Check the log and Apply again.'
@@ -3151,9 +3319,15 @@ try {
 
     Write-Ok 'NVIDIA Optimizer finished'
     if (-not $SkipApp) {
-        Write-Ok 'Client stack: wipe -> fresh App -> EULA accept -> beta on -> overlay/notifications off -> app+system debloat.'
+        if ($appInstalled) {
+            Write-Ok 'Client stack: wipe -> fresh App -> EULA/silent first-run -> beta -> overlay off -> debloat.'
+        } elseif ($cplOk) {
+            Write-Ok 'Client stack: wipe -> App unavailable -> classic Control Panel -> NVAPI display + debloat.'
+        } else {
+            Write-Ok 'Client stack: wipe -> no App/CPL UI -> NVAPI display + debloat.'
+        }
     }
-    Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling + max verified Hz) - same settings the App reflects.'
+    Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling + max verified Hz). Works with App or classic Control Panel.'
     if ($driverInfo.Method -eq 'optihub-clean') {
         Write-Ok 'Clean install completed in one pass (driver + 3D + fresh App + NVAPI display). No forced reboot.'
     }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.17
+
+- **NVIDIA 1.8.5**: detect NVIDIA App installer reject exit **0x1A000000 / 436207616** ("system configuration not supported") and **fail fast** - no more pause on setup exit
+- **NVIDIA**: if App cannot install, install **classic Control Panel** fallback and still apply scaling/Hz/Full RGB via **NVAPI**; App optional when unsupported
 ## 1.8.16
 
 - **NVIDIA 1.8.4**: silent minimized first-run of NVIDIA App to click through EULA/onboarding (never Enable Overlay), then re-assert overlay off / beta / debloat
