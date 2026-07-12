@@ -83,7 +83,7 @@
                                             BorderBrush="{ThemeResource OptiCardStrokeBrush}" />
                                     <Border Style="{StaticResource OptiThemePickOuter}"
                                             BorderBrush="{ThemeResource OptiAccentBrush}"
-                                            BorderThickness="2.5"
+                                            BorderThickness="2"
                                             Visibility="{x:Bind ViewModel.IsDarkMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     <StackPanel Spacing="10" Padding="10,12">
                                         <Border Height="72"
@@ -146,7 +146,7 @@
                                             BorderBrush="{ThemeResource OptiCardStrokeBrush}" />
                                     <Border Style="{StaticResource OptiThemePickOuter}"
                                             BorderBrush="{ThemeResource OptiAccentBrush}"
-                                            BorderThickness="2.5"
+                                            BorderThickness="2"
                                             Visibility="{x:Bind ViewModel.IsLightMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     <StackPanel Spacing="10" Padding="10,12">
                                         <Border Height="72"

@@ -64,8 +64,8 @@
                                             </Grid.ColumnDefinitions>
                                             <Border Width="32" Height="32"
                                                     CornerRadius="9"
-                                                    Background="{ThemeResource OptiCardFillBrush}"
-                                                    BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                                                    Background="{ThemeResource OptiIconWellFillBrush}"
+                                                    BorderBrush="{ThemeResource OptiIconWellStrokeBrush}"
                                                     BorderThickness="1"
                                                     VerticalAlignment="Center">
                                                 <FontIcon Glyph="{x:Bind Glyph}"

@@ -70,16 +70,19 @@
         <Setter Property="Padding" Value="18,16" />
         <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
+        <!-- Integer thickness + layout rounding keeps rounded edges crisp (no alpha/1.5px jaggies) -->
         <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
     <!-- Theme picker tiles (Settings → Appearance) -->
     <Style x:Key="OptiThemePickOuter" TargetType="Border">
         <Setter Property="CornerRadius" Value="16" />
-        <Setter Property="BorderThickness" Value="1.5" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
     <Style x:Key="OptiThemePickButton" TargetType="Button">
@@ -292,8 +295,9 @@
         <Setter Property="MinHeight" Value="42" />
         <Setter Property="Background" Value="{ThemeResource OptiQuietButtonFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1.5" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
+        <Setter Property="UseLayoutRounding" Value="True" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
