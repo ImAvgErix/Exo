@@ -1,9 +1,10 @@
 # OptiHub NVIDIA Optimizer
-# - Newest series-correct Game Ready / security driver when needed (Display.Driver only)
+# - Newest series-correct Game Ready / security driver when needed (Display.Driver ONLY)
+# - Strip NVIDIA App/GFE + Virtual/HD Audio - keep Display.Driver + classic Control Panel only
+# - NVCleanstall-class expert tweaks: MSI High, telemetry off, Ansel off, HDCP off
 # - Series + G-SYNC Base Profile via Profile Inspector (-silentImport)
-# - REMOVE NVIDIA App + GFE; ensure classic NVIDIA Control Panel only (minimal UI)
 # - Accept CPL EULA; set "Use the advanced 3D image settings" (NVTweak Gestalt=2)
-# - Overlay/telemetry/Windows toasts off
+# - Overlay/Windows toasts off
 # - Display (Full RGB / max Hz / GPU no-scaling) through NVAPI (no mouse automation)
 #
 #   Nvidia-Optimizer.ps1
@@ -27,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.9.2'
+$Script:NvidiaOptVersion = '1.9.3'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -1185,17 +1186,22 @@ function Get-Nvi2InstalledPackageNames {
     return @($names | Select-Object -Unique | Sort-Object)
 }
 
+function Test-Nvi2ProtectedPackageName([string]$Name) {
+    # Only keep what OptiHub wants: Display.Driver (+ NVI2 installer plumbing + containers).
+    # Control Panel is a Store package, not NVI2. Everything else is fair game to strip.
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $true }
+    return ($Name -match '^(?i)Display\.Driver$|InstallerCore|^installer$|Display\.NVWMI|NvContainer(\.|$)')
+}
+
 function Test-Nvi2AppPackageName([string]$Name) {
     if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
-    # NEVER touch driver / audio / core installer / containers needed by display driver
-    if ($Name -match '^(?i)Display\.Driver|VirtualAudio|HDAudio|InstallerCore|^installer$|Display\.NVWMI|PhysX') {
-        return $false
-    }
-    if ($Name -match '^(?i)NvContainer(\.|$)') {
-        # Shared with driver services - leave alone
-        return $false
-    }
+    if (Test-Nvi2ProtectedPackageName $Name) { return $false }
     return ($Name -match '(?i)^Display\.NvApp|^NvApp|ShadowPlay|FrameView|NvTelemetry|NvPlugin|NvDLISR|GFExperience|GeForceExperience|Display\.GFExperience')
+}
+
+function Test-Nvi2AudioPackageName([string]$Name) {
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
+    return ($Name -match '(?i)VirtualAudio|HDAudio|Display\.Audio|^Audio\.|HD\.Audio')
 }
 
 function Invoke-Nvi2UninstallPackage {
@@ -1340,9 +1346,95 @@ function Remove-NvidiaAppArpLeftovers {
     }
 }
 
+function Remove-NvidiaAudioComponents {
+    # User policy: Display.Driver + classic Control Panel ONLY. No Virtual Audio / HD Audio.
+    Write-Step 'Removing NVIDIA Virtual Audio / HD Audio (not needed)...'
+    $pkgs = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in @('VirtualAudio.Driver', 'HDAudio.Driver', 'Display.Audio', 'HDAudio')) {
+        if (-not $pkgs.Contains($p)) { [void]$pkgs.Add($p) }
+    }
+    foreach ($p in @(Get-Nvi2InstalledPackageNames | Where-Object { Test-Nvi2AudioPackageName $_ })) {
+        if (-not $pkgs.Contains($p)) { [void]$pkgs.Add($p) }
+    }
+    foreach ($pkg in $pkgs) {
+        [void](Invoke-Nvi2UninstallPackage -PackageName $pkg -TimeoutSec 75)
+    }
+
+    # Disable leftover PnP audio endpoints so they cannot reappear as default devices
+    try {
+        Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {
+            $_.FriendlyName -match '(?i)NVIDIA.*(High Definition Audio|Virtual Audio)|NVIDIA Virtual Audio'
+        } | ForEach-Object {
+            try {
+                Write-Ok "Disabling audio device: $($_.FriendlyName)"
+                Disable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+            } catch { }
+            try {
+                Remove-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+            } catch { }
+        }
+    } catch { }
+
+    # Installer2 leftover folders + common install roots
+    foreach ($i2 in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Installer2'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Installer2')
+    )) {
+        if (-not (Test-Path -LiteralPath $i2)) { continue }
+        Get-ChildItem -LiteralPath $i2 -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $base = if ($_.Name -match '^(?<pkg>.+)\.\{[0-9A-Fa-f\-]{36}\}$') { $Matches['pkg'] } else { $_.Name }
+            if (Test-Nvi2AudioPackageName $base) {
+                if (Remove-OptiHubTreeForce -Path $_.FullName) {
+                    Write-Ok "Removed audio package folder: $($_.Name)"
+                }
+            }
+        }
+    }
+    foreach ($dir in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Virtual Audio'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\HD Audio'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Virtual Audio')
+    )) {
+        if (Test-Path -LiteralPath $dir) { [void](Remove-OptiHubTreeForce -Path $dir) }
+    }
+
+    # ARP leftovers
+    foreach ($rp in @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+    )) {
+        if (-not (Test-Path -LiteralPath $rp)) { continue }
+        Get-ChildItem -LiteralPath $rp -ErrorAction SilentlyContinue | ForEach-Object {
+            $leaf = $_.PSChildName
+            $pkg = $null
+            if ($leaf -match '^[\{]?[0-9A-Fa-f\-]{36}[\}]?_(?<pkg>.+)$') { $pkg = $Matches['pkg'] }
+            $disp = $null
+            try { $disp = [string](Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).DisplayName } catch { }
+            $isAudio = ($pkg -and (Test-Nvi2AudioPackageName $pkg)) -or
+                       ($disp -match '(?i)NVIDIA Virtual Audio|NVIDIA HD Audio|NVIDIA High Definition Audio')
+            if (-not $isAudio) { return }
+            try {
+                Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
+                Write-Ok "Removed audio ARP: $leaf"
+            } catch { }
+        }
+    }
+
+    $stillPkg = @(Get-Nvi2InstalledPackageNames | Where-Object { Test-Nvi2AudioPackageName $_ })
+    $stillDev = @(Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {
+        $_.Status -eq 'OK' -and $_.FriendlyName -match '(?i)NVIDIA.*(High Definition Audio|Virtual Audio)|NVIDIA Virtual Audio'
+    })
+    if ($stillPkg.Count -eq 0 -and $stillDev.Count -eq 0) {
+        Write-Ok 'NVIDIA audio components cleared (driver + Control Panel only)'
+        return $true
+    }
+    Write-Warn ("NVIDIA audio still present: packages=[{0}] devices=[{1}]" -f ($stillPkg -join ','), (($stillDev | ForEach-Object FriendlyName) -join ','))
+    return $false
+}
+
 function Remove-NvidiaClientTraces {
-    # Wipe App + GFE only via NVI2 silent uninstall (no winget - too slow / flaky).
-    # KEEP classic Control Panel Store package + display driver + Virtual Audio.
+    # Wipe App + GFE via NVI2 silent uninstall (no winget - too slow / flaky).
+    # KEEP classic Control Panel Store package + Display.Driver only (no audio, no App).
     Write-Step 'Wiping NVIDIA App + GFE (silent NVI2, no prompts, no winget)...'
     Stop-NvidiaClientProcesses
 
@@ -1454,8 +1546,9 @@ function Remove-NvidiaClientTraces {
 
     Remove-NvidiaAppArpLeftovers
     Remove-NvidiaAppDesktopShortcuts | Out-Null
+    $audioCleared = Remove-NvidiaAudioComponents
 
-    # Restart container service if we stopped it (driver/App residual helpers)
+    # Restart container service if we stopped it (driver residual helpers)
     try {
         $s = Get-Service -Name 'NvContainerLocalSystem' -ErrorAction SilentlyContinue
         if ($s -and $s.Status -ne 'Running') {
@@ -1469,6 +1562,7 @@ function Remove-NvidiaClientTraces {
     if ($cplOk) { Write-Ok 'Classic Control Panel kept' } else { Write-Ok 'Classic Control Panel not present yet (will install next)' }
     return [pscustomobject]@{
         AppCleared = [bool]$appGone
+        AudioCleared = [bool]$audioCleared
         ControlPanelPresent = [bool]$cplOk
         PackagesTried = @($toRemove)
     }
@@ -1833,7 +1927,7 @@ function Disable-NvidiaOverlay {
         }
     }
 
-    Write-Ok 'NVIDIA App/GFE overlay + notifications disabled; installed files and NVIDIA audio preserved'
+    Write-Ok 'NVIDIA App/GFE overlay + notifications disabled; Display.Driver + Control Panel only (audio stripped)'
 }
 
 function Get-NvidiaAppExePath {
@@ -2440,9 +2534,10 @@ function Install-OptiHubCleanDriver {
     # OptiHub Clean Driver (NVCleanstall-class, OUR rules - better for silent):
     #  1) Official Game Ready once (cached)
     #  2) Extract (folders stay on disk so setup.exe resolves; we do NOT install bloat)
-    #  3) Silent CLEAN install of Display.Driver ONLY - existing NVIDIA audio is left untouched
-    #  4) Post-install expert tweaks (MSI High, telemetry off, Ansel off)
-    #  5) Continue pipeline (no forced reboot)
+    #  3) Silent CLEAN install of Display.Driver ONLY (no App, no Virtual/HD Audio, no PhysX)
+    #  4) Strip any leftover audio components from prior full installs
+    #  5) Post-install expert tweaks (MSI High, telemetry off, Ansel off, HDCP off)
+    #  6) Continue pipeline (no forced reboot) - classic Control Panel is separate Store UI
     Write-Step "OptiHub Clean Driver install ($Version) - Display.Driver component only"
     Write-HubProgress 20 "OptiHub Clean Driver $Version..."
 
@@ -2459,7 +2554,7 @@ function Install-OptiHubCleanDriver {
     $exitCode = -1
     if ($setup -and (Test-Path -LiteralPath $setup)) {
         $setupDir = Split-Path -Parent $setup
-        # Install only Display.Driver. Do not stop/disable any existing NVIDIA audio device.
+        # Component filter: Display.Driver only. Audio/App/PhysX stay out of the install set.
         # NVIDIA documents `setup.exe -s -n Display.Driver`; try clean mode first,
         # then the documented component-only form if that build rejects -clean.
         $argVariants = @(
@@ -2483,6 +2578,8 @@ function Install-OptiHubCleanDriver {
     $okCodes = @(0, 1)
     if ($okCodes -contains $exitCode) {
         Start-Sleep -Seconds 2
+        # Clean install can leave prior Virtual Audio; strip every time after driver setup
+        [void](Remove-NvidiaAudioComponents)
         $installedVersion = Convert-WindowsDriverToNvidia (Get-WindowsDriverVersionString)
         if ($exitCode -eq 0 -and $installedVersion -and
             (Compare-NvidiaVersion $installedVersion $Version) -lt 0) {
@@ -2517,17 +2614,21 @@ function Install-OptiHubCleanDriver {
     }
 }
 function Apply-OptiHubDriverInstallTweaks {
-    # Post-install expert set (NVCleanstall-equivalent where possible, only tweaks that matter):
-    #  KEEP: MSI High, disable telemetry, disable Ansel/NvCamera,
-    #        quiet auto-download / telemetry consent RIDs
-    #  SKIP: NVIDIA audio changes, unsigned-driver accept (install-time only),
-    #        EAC-compatible strip method (install-time INF only - not safe on stock silent setup),
-    #        Disable HDCP (unsigned/risky; skip), fake OptiHub-only tags that drivers ignore
-    Write-Step 'Applying OptiHub driver expert tweaks (MSI High, telemetry off, Ansel off)...'
+    # NVCleanstall expert checklist (OptiHub silent equivalent):
+    #  [x] Disable installer telemetry / advertising
+    #  [x] Clean install Display.Driver only (done in Install-OptiHubCleanDriver)
+    #  [x] Disable Ansel / NvCamera (service + profile)
+    #  [x] Disable driver telemetry
+    #  [x] MSI High (Message Signaled Interrupts + High priority)
+    #  [x] Disable HDCP (RMHdcpKeyglobZero on display GPU nodes)
+    #  [x] No Virtual/HD Audio (stripped separately - not "sleep timer", full remove)
+    #  SKIP: EAC INF strip / accept-unsigned (install-time only, unsafe on stock setup.exe)
+    Write-Step 'Applying OptiHub driver expert tweaks (MSI High, telemetry off, Ansel off, HDCP off)...'
 
     # --- MSI High (real interrupt mode tweak) ---
     $msiCount = 0
     $msiCandidates = 0
+    $hdcpCount = 0
     try {
         $pci = 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI'
         if (Test-Path $pci) {
@@ -2536,7 +2637,7 @@ function Apply-OptiHubDriverInstallTweaks {
             } | ForEach-Object {
                 Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue | ForEach-Object {
                     $dev = $_.PSPath
-                    # Only the display-class GPU node. Do not alter NVIDIA audio/USB devices.
+                    # Only the display-class GPU node.
                     $device = Get-ItemProperty -LiteralPath $dev -ErrorAction SilentlyContinue
                     if ($device.Class -ne 'Display' -and
                         $device.ClassGUID -ne '{4d36e968-e325-11ce-bfc1-08002be10318}') {
@@ -2570,6 +2671,32 @@ function Apply-OptiHubDriverInstallTweaks {
         Write-Warn "MSI High verified on $msiCount of $msiCandidates NVIDIA display device(s)"
     }
 
+    # --- Disable HDCP (NVCleanstall expert tweak) on display driver class nodes ---
+    try {
+        $classRoot = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+        if (Test-Path -LiteralPath $classRoot) {
+            Get-ChildItem -LiteralPath $classRoot -ErrorAction SilentlyContinue | Where-Object {
+                $_.PSChildName -match '^\d{4}$'
+            } | ForEach-Object {
+                $driverDesc = $null
+                try { $driverDesc = [string](Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).DriverDesc } catch { }
+                $provider = $null
+                try { $provider = [string](Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).ProviderName } catch { }
+                if ($driverDesc -notmatch '(?i)NVIDIA|GeForce|RTX|GTX' -and $provider -notmatch '(?i)NVIDIA') { return }
+                try {
+                    New-ItemProperty -LiteralPath $_.PSPath -Name 'RMHdcpKeyglobZero' -Value 1 -PropertyType DWord -Force -ErrorAction Stop | Out-Null
+                    $hdcpCount++
+                } catch {
+                    Write-Warn "HDCP disable failed on $($_.PSChildName): $($_.Exception.Message)"
+                }
+            }
+        }
+        if ($hdcpCount -gt 0) { Write-Ok "HDCP disabled (RMHdcpKeyglobZero=1) on $hdcpCount display driver node(s)" }
+        else { Write-Warn 'No NVIDIA display class nodes found for HDCP disable' }
+    } catch {
+        Write-Warn "HDCP tweak: $($_.Exception.Message)"
+    }
+
     # --- Telemetry / advertising consent (installer telemetry analogue) ---
     try {
         foreach ($p in @(
@@ -2596,7 +2723,8 @@ function Apply-OptiHubDriverInstallTweaks {
     } catch { }
 
     Disable-NvidiaTelemetry
-    Write-Ok 'Expert tweaks done (MSI High, telemetry off, Ansel off; NVIDIA audio preserved)'
+    [void](Remove-NvidiaAudioComponents)
+    Write-Ok 'Expert tweaks done (MSI High, telemetry off, Ansel off, HDCP off; audio stripped)'
 }
 
 function Test-OptiHubDriverInstallTweaks {
@@ -3455,6 +3583,10 @@ try {
         $cplOk = Test-NvidiaControlPanelInstalled
         Write-Ok "App=$(if ($appInstalled) { 'present' } else { 'absent' }) CPL=$(if ($cplOk) { 'present' } else { 'absent' })"
     }
+
+    # Always enforce driver+CPL-only policy (even if -SkipApp skipped App wipe)
+    Write-HubProgress 70 'Stripping NVIDIA Virtual/HD Audio...'
+    [void](Remove-NvidiaAudioComponents)
 
     $displayClient = @{
         Client       = $(if ($cplOk) { 'control-panel' } else { 'nvapi-only' })

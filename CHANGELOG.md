@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.27
+
+- **NVIDIA 1.9.3**: stack is **Display.Driver + Control Panel only** - strip **Virtual Audio / HD Audio**; NVCleanstall-class expert tweaks restored (MSI High, telemetry/Ansel off, **HDCP off**); no App/audio preserve messaging
 ## 1.8.26
 
 - **NVIDIA 1.9.2**: hard silent **NVIDIA App uninstall** via NVI2 - **64-bit System32 RunDll32** + `-silent -noreboot` (SysWOW64 was returning invalid args and leaving App installed); no winget; all Display.NvApp/ShadowPlay/FrameView/Telemetry packages; force-delete folders/ARP/pending; 3 wipe passes

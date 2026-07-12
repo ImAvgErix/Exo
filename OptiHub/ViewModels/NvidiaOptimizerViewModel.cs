@@ -75,13 +75,13 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         var warning =
             "This is an aggressive maximum-performance pass. It prioritizes FPS and input latency over power savings, NVIDIA background features, and recording tools.\n\n" +
             "OptiHub will:\n" +
-            "1) Update the Game Ready display driver only when needed (series-correct package), then enable MSI High and disable Ansel/telemetry services.\n" +
+            "1) Update the Game Ready display driver only when needed (Display.Driver only — no App, no Virtual/HD Audio), then NVCleanstall-class tweaks: MSI High, telemetry/Ansel off, HDCP off.\n" +
             "2) Import the matching 3D Base Profile plus per-game profiles (Profile Inspector silent import).\n" +
-            "3) Remove NVIDIA App / GFE and ensure classic NVIDIA Control Panel only (minimal UI). Accept Control Panel EULA and set Use the advanced 3D image settings.\n" +
-            "4) Turn off overlay paths, Windows toasts for NVIDIA, and telemetry/SelfUpdate services; keep HDMI/DisplayPort audio.\n" +
+            "3) Remove NVIDIA App / GFE / audio leftovers and ensure classic NVIDIA Control Panel only. Accept Control Panel EULA and set Use the advanced 3D image settings.\n" +
+            "4) Turn off overlay paths, Windows toasts for NVIDIA, and telemetry/SelfUpdate services.\n" +
             "5) Apply Full RGB, max verified refresh, and GPU no-scaling through NVAPI (Control Panel is the UI; settings go to the driver).\n\n" +
             gsyncLine + "\n\n" +
-            "Tradeoffs: higher idle power/heat, no NVIDIA overlay or background recording, and a brief display flicker. A driver update may require a restart.\n\n" +
+            "Tradeoffs: higher idle power/heat, no NVIDIA overlay/recording, no NVIDIA HDMI/DP or Virtual Audio devices, brief display flicker. A driver update may require a restart.\n\n" +
             "Reset OptiHub status only clears OptiHub's record; it does not undo driver/profile/display changes. Undo through NVIDIA settings or a driver reinstall. Administrator approval is required.";
 
         var ok = ConfirmAsync is not null

@@ -69,7 +69,7 @@ Canary, PTB, Store, and unrelated tasks are never matched by name.
 - Applies supported RGB/full-range, color-depth, refresh-rate, scaling, and optional G-SYNC preferences through NVIDIA APIs instead of UI automation.
 - Applies verified driver/MSI performance tweaks and disables overlay, telemetry, updater, FrameView, and NVIDIA App/GFE auto-start/background paths.
 - Verifies downloaded tools and driver packages before use.
-- Keeps NVIDIA App/GeForce Experience files and HDMI/DisplayPort audio intact while suppressing their performance-costing background behavior.
+- NVIDIA stack is minimal: Display.Driver + classic Control Panel only (no App/GFE, no Virtual/HD Audio), with NVCleanstall-class MSI High / telemetry / Ansel / HDCP tweaks.
 - Reports partial or restart-required results instead of marking an incomplete run as successful.
 - Does not provide automatic rollback. **Reset status** clears only OptiHub's saved state; restore NVIDIA settings manually or reinstall the driver.
 
