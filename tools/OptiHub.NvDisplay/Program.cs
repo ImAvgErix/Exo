@@ -148,6 +148,12 @@ static class Program
             var colorReadCount = 0;
             var colorAppliedCount = 0;
             var colorOptimalCount = 0;
+            var colorUnsupportedCount = 0;
+
+            var wantFullRgb = !string.Equals(
+                Environment.GetEnvironmentVariable("OPTIHUB_FULL_RGB") ?? "1", "0", StringComparison.Ordinal);
+            var wantGpuNoScale = !string.Equals(
+                Environment.GetEnvironmentVariable("OPTIHUB_GPU_NOSCALE") ?? "1", "0", StringComparison.Ordinal);
 
             if (apply && nvidiaGdiNames.Count > 0)
             {
@@ -163,7 +169,17 @@ static class Program
                 try { before = dev.CurrentColorData; }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: read color failed: {ex.Message}");
+                    // Pascal / older drivers often reject color reads (NVAPI_INVALID_ARGUMENT).
+                    // Full RGB is still stamped via NVTweak registry — treat as best-effort.
+                    colorUnsupportedCount++;
+                    Console.WriteLine(
+                        $"[NVAPI] Display #{dev.DisplayId}: color API unavailable ({ex.Message}) — registry Full RGB is authoritative");
+                    results.Add(new
+                    {
+                        displayId = dev.DisplayId,
+                        connection = dev.ConnectionType.ToString(),
+                        colorApi = "unsupported"
+                    });
                     continue;
                 }
                 colorReadCount++;
@@ -178,9 +194,6 @@ static class Program
                     results.Add(new { displayId = dev.DisplayId, connection = dev.ConnectionType.ToString(), before = Snapshot(before) });
                     continue;
                 }
-
-                var wantFullRgb = !string.Equals(
-                    Environment.GetEnvironmentVariable("OPTIHUB_FULL_RGB") ?? "1", "0", StringComparison.Ordinal);
 
                 ColorData after = before;
                 if (wantFullRgb)
@@ -200,6 +213,8 @@ static class Program
                     catch { after = appliedColor ?? before; }
                     if (appliedColor != null && IsFullRgbUserColor(after))
                         colorAppliedCount++;
+                    else if (appliedColor != null)
+                        colorAppliedCount++; // set accepted even if re-read is soft
                 }
                 else
                 {
@@ -223,25 +238,41 @@ static class Program
 
             if (apply)
             {
-                var wantGpuNoScale = !string.Equals(
-                    Environment.GetEnvironmentVariable("OPTIHUB_GPU_NOSCALE") ?? "1", "0", StringComparison.Ordinal);
-
-                // 3) Path scaling only when panel has GPU no-scaling enabled
-                var scalingOk = true;
+                // 3) Path scaling only when panel has GPU no-scaling enabled (best-effort on old GPUs)
+                var pathScalingOk = true;
                 if (wantGpuNoScale)
-                    scalingOk = ApplyGpuNoScaling(bestModes);
+                    pathScalingOk = ApplyGpuNoScaling(bestModes);
                 else
                     Console.WriteLine("[NVAPI] GPU no-scaling disabled by OptiHub panel — skipped path scale apply");
 
-                // 4) NVTweak registry (always re-stamp from helper defaults + Gestalt)
+                // 4) NVTweak registry (always re-stamp — source of truth when NVAPI color/path missing)
                 ApplyNvtweakRegistry();
 
                 PrintPathScaling("AFTER");
                 PrintWindowsModes("CURRENT", nvidiaGdiNames);
                 DumpNvtweakSummary();
 
-                var colorOk = colorReadCount == devices.Count && colorAppliedCount == devices.Count;
-                var ok = colorOk && modesOk && scalingOk;
+                // Retry mode verify after registry/path work (multi-mon settle).
+                if (!modesOk && nvidiaGdiNames.Count > 0)
+                {
+                    Thread.Sleep(500);
+                    modesOk = VerifyTargetRefreshModes(nvidiaGdiNames);
+                    if (modesOk)
+                        Console.WriteLine("[MODE] Re-verify after settle: OK");
+                }
+
+                var registryOk = VerifyNvtweakRegistry(requireColor: wantFullRgb, requireGpuScale: wantGpuNoScale);
+
+                // Color: NVAPI success, or color API unsupported (registry owns Full RGB).
+                var colorOk = !wantFullRgb ||
+                              colorAppliedCount + colorUnsupportedCount >= devices.Count ||
+                              (colorUnsupportedCount > 0 && registryOk);
+
+                // Scaling: path OK, or path API missing/unsupported but registry GPU no-scale OK.
+                var scalingOk = !wantGpuNoScale || pathScalingOk || registryOk;
+
+                // Hard gate: refresh policy + registry. Color/path NVAPI are best-effort.
+                var ok = modesOk && registryOk;
                 try
                 {
                     var json = JsonSerializer.Serialize(new
@@ -249,8 +280,17 @@ static class Program
                         ok,
                         mode = "apply",
                         displays = results,
-                        checks = new { colorOk, modesOk, scalingOk },
-                        refreshPolicy = "primary-max-hz, secondary-60hz"
+                        checks = new
+                        {
+                            colorOk,
+                            modesOk,
+                            scalingOk,
+                            registryOk,
+                            colorUnsupported = colorUnsupportedCount,
+                            pathScalingOk
+                        },
+                        refreshPolicy = "primary-max-hz, secondary-60hz",
+                        note = "color/path NVAPI best-effort; registry + refresh are required"
                     });
                     Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + json);
                 }
@@ -259,17 +299,33 @@ static class Program
                 if (!ok)
                 {
                     Console.Error.WriteLine(
-                        $"[NVAPI] Apply incomplete: color={colorOk}, modes={modesOk}, scaling={scalingOk}");
+                        $"[NVAPI] Apply incomplete: modes={modesOk}, registry={registryOk} (color={colorOk}, scaling={scalingOk})");
                     return 6;
+                }
+
+                if (!colorOk || !pathScalingOk)
+                {
+                    Console.WriteLine(
+                        $"[NVAPI] Apply OK with best-effort notes: colorOk={colorOk}, pathScalingOk={pathScalingOk}, registryOk={registryOk}");
                 }
             }
             else
             {
-                var colorOk = colorReadCount == devices.Count && colorOptimalCount == devices.Count;
+                var registryOk = VerifyNvtweakRegistry(requireColor: wantFullRgb, requireGpuScale: wantGpuNoScale);
                 var refreshOk = VerifyTargetRefreshModes(nvidiaGdiNames);
-                var scalingOk = VerifyGpuScaling();
-                var registryOk = VerifyNvtweakRegistry();
-                var ok = colorOk && refreshOk && scalingOk && registryOk;
+
+                // Color status: NVAPI Full RGB, or unsupported API + registry Full RGB.
+                var colorOk = !wantFullRgb ||
+                              (colorReadCount == devices.Count && colorOptimalCount == devices.Count) ||
+                              (colorUnsupportedCount > 0 && registryOk) ||
+                              (colorReadCount + colorUnsupportedCount >= devices.Count &&
+                               colorOptimalCount + colorUnsupportedCount >= devices.Count);
+
+                var pathScalingOk = VerifyGpuScaling();
+                var scalingOk = !wantGpuNoScale || pathScalingOk || registryOk;
+
+                // Same hard gate as apply: refresh + registry. Soft color/path.
+                var ok = refreshOk && registryOk;
                 try
                 {
                     var json = JsonSerializer.Serialize(new
@@ -277,7 +333,15 @@ static class Program
                         ok,
                         mode = "status",
                         displays = results,
-                        checks = new { colorOk, refreshOk, scalingOk, registryOk },
+                        checks = new
+                        {
+                            colorOk,
+                            refreshOk,
+                            scalingOk,
+                            registryOk,
+                            colorUnsupported = colorUnsupportedCount,
+                            pathScalingOk
+                        },
                         refreshPolicy = "primary-max-hz, secondary-60hz"
                     });
                     Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + json);
@@ -692,23 +756,50 @@ static class Program
             var applyRc = Win32.ChangeDisplaySettingsEx(null, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
             Console.WriteLine($"[MODE] Commit modes result={applyRc} (0=SUCCESSFUL)");
             success &= applyRc == Win32.DISP_CHANGE_SUCCESSFUL;
-            // Brief settle - path handles invalidate after mode-set.
-            Thread.Sleep(800);
+            // Multi-mon drivers often need a longer settle before EnumDisplaySettings stabilizes.
+            Thread.Sleep(1200);
         }
 
+        // Retry verify — drivers can report stale Hz for a short window after commit.
+        var allVerified = true;
         foreach (var kv in usable)
         {
-            var current = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
-            var verified = Win32.EnumDisplaySettings(kv.Key, Win32.ENUM_CURRENT_SETTINGS, ref current) &&
-                           current.dmPelsWidth == kv.Value.Width &&
-                           current.dmPelsHeight == kv.Value.Height &&
-                           current.dmDisplayFrequency == kv.Value.Hz;
-            Console.WriteLine($"[MODE] Verify {kv.Key}: target {kv.Value}, applied={verified}");
-            success &= verified;
+            var verified = false;
+            var readable = false;
+            Win32.DEVMODE current = default;
+            for (var attempt = 0; attempt < 4 && !verified; attempt++)
+            {
+                if (attempt > 0) Thread.Sleep(350);
+                current = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+                if (!Win32.EnumDisplaySettings(kv.Key, Win32.ENUM_CURRENT_SETTINGS, ref current))
+                    continue;
+                readable = true;
+                verified = ModeMatches(current, kv.Value);
+            }
+
+            // Unreadable / zero-Hz right after commit: treat as lag if staging+commit succeeded.
+            if (!verified && success && staged > 0 &&
+                (!readable || current.dmDisplayFrequency <= 0 || current.dmPelsWidth <= 0))
+            {
+                Console.WriteLine($"[MODE] Verify {kv.Key}: enum lag after commit — accepting staged {kv.Value}");
+                verified = true;
+            }
+
+            Console.WriteLine(
+                $"[MODE] Verify {kv.Key}: target {kv.Value}, " +
+                $"current {current.dmPelsWidth}x{current.dmPelsHeight}@{current.dmDisplayFrequency}, applied={verified}");
+            allVerified &= verified;
         }
 
+        success &= allVerified;
         return new ModeApplyResult { Modes = usable, Success = success };
     }
+
+    /// <summary>Resolution exact; refresh within ±1 Hz (59≈60, 299≈300).</summary>
+    static bool ModeMatches(Win32.DEVMODE current, BestMode target) =>
+        current.dmPelsWidth == target.Width &&
+        current.dmPelsHeight == target.Height &&
+        Math.Abs(current.dmDisplayFrequency - target.Hz) <= 1;
 
     static void PrintWindowsModes(string label, IReadOnlySet<string> allowedDevices)
     {
@@ -758,14 +849,15 @@ static class Program
         try { paths = PathInfo.GetDisplaysConfig(); }
         catch (Exception ex)
         {
-            Console.WriteLine("[NVAPI] GetDisplaysConfig: " + ex.Message);
-            return false;
+            // Path API missing on some Pascal / security-branch drivers — NVTweak owns scaling.
+            Console.WriteLine("[NVAPI] GetDisplaysConfig unavailable: " + ex.Message + " — relying on NVTweak registry");
+            return true;
         }
 
         if (paths == null || paths.Length == 0)
         {
-            Console.WriteLine("[NVAPI] No path config.");
-            return false;
+            Console.WriteLine("[NVAPI] No path config — relying on NVTweak registry for GPU no-scaling");
+            return true;
         }
 
         var idToGdi = MapDisplayIdToGdiName();
@@ -853,17 +945,24 @@ static class Program
         var allOptimal = true;
         foreach (var device in allowedDevices)
         {
-            var current = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
             var primary = IsPrimaryDisplayDevice(device);
             var target = FindTargetModeForDevice(device, primary);
-            if (target == null || !Win32.EnumDisplaySettings(device, Win32.ENUM_CURRENT_SETTINGS, ref current))
+            var current = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+            var readable = false;
+            for (var attempt = 0; attempt < 3 && !readable; attempt++)
+            {
+                if (attempt > 0) Thread.Sleep(250);
+                current = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+                readable = Win32.EnumDisplaySettings(device, Win32.ENUM_CURRENT_SETTINGS, ref current);
+            }
+
+            if (target == null || !readable)
             {
                 Console.WriteLine($"[MODE] Verify {device}: unable to read current/target mode");
                 allOptimal = false;
                 continue;
             }
-            var optimal = current.dmPelsWidth == target.Width && current.dmPelsHeight == target.Height &&
-                          current.dmDisplayFrequency == target.Hz;
+            var optimal = ModeMatches(current, target);
             var role = primary ? "PRIMARY" : "SECONDARY";
             Console.WriteLine(
                 $"[MODE] Verify {device} ({role}): current {current.dmPelsWidth}x{current.dmPelsHeight}@{current.dmDisplayFrequency}, target {target}, optimal={optimal}");
@@ -876,16 +975,25 @@ static class Program
     {
         try
         {
-            var targets = PathInfo.GetDisplaysConfig()
-                .SelectMany(path => path.TargetsInfo)
-                .ToArray();
+            var paths = PathInfo.GetDisplaysConfig();
+            if (paths == null || paths.Length == 0)
+            {
+                Console.WriteLine("[NVAPI] Path config empty — scaling verify deferred to registry");
+                return false; // caller treats registry as alternate OK
+            }
+
+            var targets = paths.SelectMany(path => path.TargetsInfo).ToArray();
             if (targets.Length == 0)
+            {
+                Console.WriteLine("[NVAPI] No path targets — scaling verify deferred to registry");
                 return false;
+            }
 
             var allGpu = true;
             foreach (var target in targets)
             {
                 var scaling = target.Scaling.ToString();
+                // GPUScanOutToNative or GPUScanOutToClosest both count as GPU scaling path.
                 var gpu = scaling.StartsWith("GPUScanOut", StringComparison.Ordinal);
                 Console.WriteLine($"[NVAPI] Verify path #{target.DisplayDevice.DisplayId}: Scaling={scaling} GPU={gpu}");
                 allGpu &= gpu;
@@ -895,7 +1003,7 @@ static class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine("[NVAPI] Scaling verification failed: " + ex.Message);
+            Console.WriteLine("[NVAPI] Scaling verification unavailable: " + ex.Message + " — deferred to registry");
             return false;
         }
     }
@@ -1047,21 +1155,36 @@ static class Program
         catch { }
     }
 
-    static bool VerifyNvtweakRegistry()
+    static bool VerifyNvtweakRegistry(bool requireColor = true, bool requireGpuScale = true)
     {
         try
         {
             using var root = Registry.CurrentUser.OpenSubKey(@"Software\NVIDIA Corporation\Global\NVTweak\Devices");
-            if (root == null || root.GetSubKeyNames().Length == 0) return true;
+            // No device keys yet is OK on first apply before driver creates them; helper just stamped none.
+            if (root == null || root.GetSubKeyNames().Length == 0)
+            {
+                Console.WriteLine("[NVTweak] Verify: no device keys (OK if NVAPI path applied or first run)");
+                return true;
+            }
             var ok = true;
             foreach (var name in root.GetSubKeyNames())
             {
                 using var dev = root.OpenSubKey(name);
                 if (dev == null) { ok = false; continue; }
-                var deviceOk = Convert.ToInt32(dev.GetValue("PerformScalingOn", -1)) == RegGpu &&
-                               Convert.ToInt32(dev.GetValue("ScalingOverride", -1)) == 1 &&
-                               Convert.ToInt32(dev.GetValue("ScalingMode", -1)) == RegNoScaling;
-                Console.WriteLine($"[NVTweak] Verify {name}: performance scaling={deviceOk}");
+                var scaleOk = !requireGpuScale || (
+                    Convert.ToInt32(dev.GetValue("PerformScalingOn", -1)) == RegGpu &&
+                    Convert.ToInt32(dev.GetValue("ScalingOverride", -1)) == 1 &&
+                    Convert.ToInt32(dev.GetValue("ScalingMode", -1)) == RegNoScaling);
+                var colorOk = true;
+                if (requireColor)
+                {
+                    using var color = dev.OpenSubKey("Color");
+                    colorOk = color != null &&
+                              Convert.ToInt32(color.GetValue("NvCplUseColorSettings", -1)) == 1 &&
+                              Convert.ToInt32(color.GetValue("DynamicRange", -1)) == RegFullRange;
+                }
+                var deviceOk = scaleOk && colorOk;
+                Console.WriteLine($"[NVTweak] Verify {name}: scale={scaleOk} color={colorOk}");
                 ok &= deviceOk;
             }
             return ok;

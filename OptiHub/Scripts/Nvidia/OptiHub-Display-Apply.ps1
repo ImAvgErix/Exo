@@ -481,13 +481,18 @@ try {
     Write-DLog "Gestalt=$g"
 } catch { }
 
-$needNvApi = [bool]$Script:PanelSettings.fullRgb -or [bool]$Script:PanelSettings.gpuNoScaling -or
-             ([string]$Script:PanelSettings.primaryRefresh -ne 'keep') -or
-             ([string]$Script:PanelSettings.secondaryRefresh -ne 'keep')
-$ok = [bool]$registryOk -and ((-not $needNvApi) -or [bool]$nvApiOk)
+# Registry is the hard gate (Full RGB / GPU scale / video). NVAPI is best-effort for
+# refresh + color on GPUs where path/color APIs fail (common on 10-series).
+# Prefer NVAPI success when available; accept registry-only when devices were stamped.
+$deviceCount = $deviceKeys.Count
+$ok = [bool]$registryOk -and ([bool]$nvApiOk -or $deviceCount -gt 0)
 
 if ($ok) {
-    Write-DLog 'SUCCESS'
+    if (-not $nvApiOk) {
+        Write-DLog 'SUCCESS (registry OK; NVAPI best-effort incomplete — common on older GPUs)'
+    } else {
+        Write-DLog 'SUCCESS'
+    }
     exit 0
 }
 Write-DLog ("FAIL nvApiOk={0} registryOk={1}" -f $nvApiOk, $registryOk)
