@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.8.9'
+$Script:NvidiaOptVersion = '1.8.10'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -883,19 +883,19 @@ function Install-NvidiaAppFromOfficialInstaller {
                 }
             }
             if ($p.HasExited) {
-                $code = [int]$p.ExitCode
-                $hex = '{0:X8}' -f [uint32]([int64]$code -band 0xFFFFFFFF)
+                $code = 0
+                try { $code = [int]$p.ExitCode } catch { $code = -1 }
+                $hex = Format-ExitCodeHex $code
                 Write-Ok "NVIDIA App setup exit: $code (0x$hex)"
                 if (Test-NvidiaAppSetupUnsupportedExit -Code $code) {
                     $Script:NvidiaAppInstallUnsupported = $true
-                    $hex = '{0:X8}' -f [uint32]([int64]$code -band 0xFFFFFFFF)
                     Write-Warn "NVIDIA App installer rejected this PC: system configuration not supported (exit $code / 0x$hex)."
-                    Write-Warn 'This is an NVIDIA installer limit (common on some GTX 10-series PCs), not OptiHub hanging. Skipping App; Control Panel + NVAPI next.'
+                    Write-Warn 'NVIDIA installer limit (common on GTX 10-series). Skipping App; Control Panel + NVAPI next.'
                     return $false
                 }
                 # Other non-zero: do not sit around - short probe then next flags
                 if ($code -ne 0) {
-                    Write-Warn "NVIDIA App setup failed with exit $code - not waiting"
+                    Write-Warn "NVIDIA App setup failed with exit $code (0x$hex) - not waiting"
                 }
                 break
             }

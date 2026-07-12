@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.22
+
+- **NVIDIA 1.8.10**: Brian log 1.8.9 still **Failed** - after App exit -436207616, logging used `[uint32]` hex format which **threw** and aborted Apply before Control Panel/NVAPI; use safe Format-ExitCodeHex
 ## 1.8.21
 
 - **NVIDIA 1.8.9**: fix unsupported-exit detector - PS `[uint32]` cast threw on **-436207616**, so 1.8.20 still missed Brian's code; use BitConverter + exact signed match
