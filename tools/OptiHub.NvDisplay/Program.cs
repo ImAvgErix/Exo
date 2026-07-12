@@ -2,12 +2,15 @@
 // No Control Panel mouse automation for color/scaling.
 //
 // Applies per active display:
-//   - Current resolution + highest supported refresh rate (Windows EnumDisplaySettings)
+//   - Current resolution kept
+//   - PRIMARY monitor: highest supported refresh (gaming)
+//   - SECONDARY monitors: 60 Hz (performance / less GPU load for desktop clone)
 //   - Color policy User (NVIDIA color settings)
 //   - RGB + Full (VESA) + current supported color depth (10/8 bpc fallback)
 //   - HDMI info-frame RGB quantization Full (fixes "Limited" on HDMI)
 //   - GPU no-scaling path where the driver allows it
 //   - NVTweak: PerformScalingOn=GPU, ScalingOverride=ON, No-scaling mode
+//   - NVTweak Gestalt=2 (Use the advanced 3D image settings)
 //
 // Usage: OptiHub.NvDisplay.exe [--apply|--status]
 
@@ -60,8 +63,8 @@ static class Program
         if (normalizedArgs.Any(a => a is "--help" or "-h" or "/?"))
         {
             Console.WriteLine("OptiHub.NvDisplay — NVAPI + NVTweak display performance settings");
-            Console.WriteLine("  --apply   Apply Full RGB, maximum refresh, GPU no-scaling, and override ON (default)");
-            Console.WriteLine("  --status  Verify Full RGB, max refresh, and GPU no-scaling without changing settings");
+            Console.WriteLine("  --apply   Apply Full RGB, primary max-Hz / secondary 60Hz, GPU no-scaling (default)");
+            Console.WriteLine("  --status  Verify Full RGB, refresh policy, and GPU no-scaling without changing settings");
             return 0;
         }
 
@@ -148,9 +151,8 @@ static class Program
 
             if (apply && nvidiaGdiNames.Count > 0)
             {
-                // Keep each NVIDIA-connected display's current resolution and select
-                // the highest refresh advertised for that same resolution.
-                var modeResult = ApplyBestNativeModes(nvidiaGdiNames);
+                // Keep current resolution. Primary -> max Hz; secondary -> 60 Hz.
+                var modeResult = ApplyTargetRefreshModes(nvidiaGdiNames);
                 bestModes = modeResult.Modes;
                 modesOk = modeResult.Success;
             }
@@ -209,10 +211,10 @@ static class Program
 
             if (apply)
             {
-                // 3) Path scaling + push current-resolution / max-Hz mode into NVAPI where possible
+                // 3) Path scaling + push current-resolution / target-Hz mode into NVAPI where possible
                 var scalingOk = ApplyGpuNoScaling(bestModes);
 
-                // 4) NVTweak registry — GPU + No scaling + Override ON + Full
+                // 4) NVTweak registry — GPU + No scaling + Override ON + Full + advanced 3D
                 ApplyNvtweakRegistry();
 
                 PrintPathScaling("AFTER");
@@ -228,7 +230,8 @@ static class Program
                         ok,
                         mode = "apply",
                         displays = results,
-                        checks = new { colorOk, modesOk, scalingOk }
+                        checks = new { colorOk, modesOk, scalingOk },
+                        refreshPolicy = "primary-max-hz, secondary-60hz"
                     });
                     Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + json);
                 }
@@ -244,7 +247,7 @@ static class Program
             else
             {
                 var colorOk = colorReadCount == devices.Count && colorOptimalCount == devices.Count;
-                var refreshOk = VerifyBestRefreshModes(nvidiaGdiNames);
+                var refreshOk = VerifyTargetRefreshModes(nvidiaGdiNames);
                 var scalingOk = VerifyGpuScaling();
                 var registryOk = VerifyNvtweakRegistry();
                 var ok = colorOk && refreshOk && scalingOk && registryOk;
@@ -255,7 +258,8 @@ static class Program
                         ok,
                         mode = "status",
                         displays = results,
-                        checks = new { colorOk, refreshOk, scalingOk, registryOk }
+                        checks = new { colorOk, refreshOk, scalingOk, registryOk },
+                        refreshPolicy = "primary-max-hz, secondary-60hz"
                     });
                     Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + json);
                 }
@@ -480,7 +484,19 @@ static class Program
         public bool Success { get; init; }
     }
 
-    static Dictionary<string, BestMode> EnumerateBestModes(IReadOnlySet<string>? allowedDevices)
+    static bool IsPrimaryDisplayDevice(string device)
+    {
+        for (uint i = 0; ; i++)
+        {
+            var dd = new Win32.DISPLAY_DEVICE { cb = Marshal.SizeOf<Win32.DISPLAY_DEVICE>() };
+            if (!Win32.EnumDisplayDevices(null, i, ref dd, 0)) break;
+            if (!string.Equals(dd.DeviceName, device, StringComparison.OrdinalIgnoreCase)) continue;
+            return (dd.StateFlags & Win32.DISPLAY_DEVICE_PRIMARY_DEVICE) != 0;
+        }
+        return false;
+    }
+
+    static Dictionary<string, BestMode> EnumerateTargetModes(IReadOnlySet<string>? allowedDevices)
     {
         var map = new Dictionary<string, BestMode>(StringComparer.OrdinalIgnoreCase);
         // Enumerate \\.\DISPLAYn devices via EnumDisplayDevices
@@ -491,18 +507,21 @@ static class Program
             if ((dd.StateFlags & Win32.DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) == 0) continue;
             var device = dd.DeviceName; // \\.\DISPLAY1
             if (allowedDevices != null && !allowedDevices.Contains(device)) continue;
-            var best = FindBestModeForDevice(device);
-            if (best != null)
+            var primary = (dd.StateFlags & Win32.DISPLAY_DEVICE_PRIMARY_DEVICE) != 0;
+            var target = FindTargetModeForDevice(device, primary);
+            if (target != null)
             {
-                map[device] = best;
-                Console.WriteLine($"[MODE] {device}: current-resolution max-Hz candidate {best}");
+                map[device] = target;
+                var role = primary ? "PRIMARY max-Hz" : "SECONDARY 60Hz";
+                Console.WriteLine($"[MODE] {device}: {role} candidate {target}");
             }
         }
         return map;
     }
 
-    static BestMode? FindBestModeForDevice(string device)
+    static BestMode? FindTargetModeForDevice(string device, bool? isPrimary = null)
     {
+        var primary = isPrimary ?? IsPrimaryDisplayDevice(device);
         var current = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
         if (!Win32.EnumDisplaySettings(device, Win32.ENUM_CURRENT_SETTINGS, ref current))
             return null;
@@ -524,7 +543,7 @@ static class Program
         }
         if (modes.Count == 0)
         {
-            Console.WriteLine($"[MODE] {device}: Windows returned no modes; maximum refresh cannot be verified");
+            Console.WriteLine($"[MODE] {device}: Windows returned no modes; refresh target cannot be chosen");
             return null;
         }
 
@@ -535,23 +554,47 @@ static class Program
             .ToList();
         if (sameResolution.Count == 0)
         {
-            Console.WriteLine($"[MODE] {device}: current resolution is not in the mode list; maximum refresh cannot be verified");
+            Console.WriteLine($"[MODE] {device}: current resolution is not in the mode list; refresh target cannot be chosen");
             return null;
         }
 
-        return sameResolution.OrderByDescending(m => m.Hz).ThenByDescending(m => m.Bpp).First();
+        if (primary)
+        {
+            // Gaming / main monitor: highest refresh at current resolution
+            return sameResolution.OrderByDescending(m => m.Hz).ThenByDescending(m => m.Bpp).First();
+        }
+
+        // Secondary: lock to 60 Hz for desktop performance (less GPU compositor load).
+        // Prefer exact 60, then 59-61 (59.94), then highest <= 60, else lowest available.
+        var exact60 = sameResolution.Where(m => m.Hz == 60).OrderByDescending(m => m.Bpp).FirstOrDefault();
+        if (exact60 != null) return exact60;
+
+        var near60 = sameResolution
+            .Where(m => m.Hz >= 59 && m.Hz <= 61)
+            .OrderBy(m => Math.Abs(m.Hz - 60))
+            .ThenByDescending(m => m.Bpp)
+            .FirstOrDefault();
+        if (near60 != null) return near60;
+
+        var atOrBelow60 = sameResolution.Where(m => m.Hz <= 60).OrderByDescending(m => m.Hz).ThenByDescending(m => m.Bpp).FirstOrDefault();
+        if (atOrBelow60 != null) return atOrBelow60;
+
+        return sameResolution.OrderBy(m => m.Hz).ThenByDescending(m => m.Bpp).First();
     }
 
-    static ModeApplyResult ApplyBestNativeModes(IReadOnlySet<string> allowedDevices)
+    // Back-compat name used by older call sites
+    static BestMode? FindBestModeForDevice(string device) => FindTargetModeForDevice(device);
+
+    static ModeApplyResult ApplyTargetRefreshModes(IReadOnlySet<string> allowedDevices)
     {
         if (allowedDevices.Count == 0)
             return new ModeApplyResult { Success = true };
 
-        Console.WriteLine("[MODE] Keeping current resolution and applying its highest refresh on NVIDIA displays...");
-        var best = EnumerateBestModes(allowedDevices);
-        if (best.Count != allowedDevices.Count)
+        Console.WriteLine("[MODE] Primary = max Hz; secondary = 60 Hz (current resolution kept)...");
+        var targets = EnumerateTargetModes(allowedDevices);
+        if (targets.Count != allowedDevices.Count)
         {
-            Console.WriteLine($"[MODE] Complete mode coverage required: {best.Count}/{allowedDevices.Count} displays enumerated");
+            Console.WriteLine($"[MODE] Complete mode coverage required: {targets.Count}/{allowedDevices.Count} displays enumerated");
             return new ModeApplyResult { Success = false };
         }
 
@@ -559,10 +602,11 @@ static class Program
         var success = true;
         var staged = 0;
         // Stage each display with CDS_NORESET|CDS_UPDATEREGISTRY, then one global apply.
-        foreach (var kv in best)
+        foreach (var kv in targets)
         {
             var device = kv.Key;
             var mode = kv.Value;
+            var role = IsPrimaryDisplayDevice(device) ? "PRIMARY" : "SECONDARY";
             var dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
             if (!Win32.EnumDisplaySettings(device, Win32.ENUM_CURRENT_SETTINGS, ref dm))
             {
@@ -574,7 +618,7 @@ static class Program
             var cur = $"{dm.dmPelsWidth}x{dm.dmPelsHeight}@{dm.dmDisplayFrequency}";
             if (dm.dmPelsWidth == mode.Width && dm.dmPelsHeight == mode.Height && dm.dmDisplayFrequency == mode.Hz)
             {
-                Console.WriteLine($"[MODE] {device}: already {mode}");
+                Console.WriteLine($"[MODE] {device} ({role}): already {mode}");
                 usable[device] = mode;
                 continue;
             }
@@ -588,14 +632,14 @@ static class Program
             var testRc = Win32.ChangeDisplaySettingsEx(device, ref dm, IntPtr.Zero, Win32.CDS_TEST, IntPtr.Zero);
             if (testRc != Win32.DISP_CHANGE_SUCCESSFUL)
             {
-                Console.WriteLine($"[MODE] {device}: rejected {mode} during validation (cds={testRc}); unchanged");
+                Console.WriteLine($"[MODE] {device} ({role}): rejected {mode} during validation (cds={testRc}); unchanged");
                 success = false;
                 continue;
             }
 
             var flags = Win32.CDS_UPDATEREGISTRY | Win32.CDS_NORESET;
             var rc = Win32.ChangeDisplaySettingsEx(device, ref dm, IntPtr.Zero, flags, IntPtr.Zero);
-            Console.WriteLine($"[MODE] {device}: stage {cur} -> {mode} (cds={rc})");
+            Console.WriteLine($"[MODE] {device} ({role}): stage {cur} -> {mode} (cds={rc})");
             if (rc == Win32.DISP_CHANGE_SUCCESSFUL)
             {
                 usable[device] = mode;
@@ -634,14 +678,15 @@ static class Program
     {
         try
         {
-            var best = EnumerateBestModes(allowedDevices);
-            foreach (var kv in best)
+            var targets = EnumerateTargetModes(allowedDevices);
+            foreach (var kv in targets)
             {
                 var dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
                 if (Win32.EnumDisplaySettings(kv.Key, Win32.ENUM_CURRENT_SETTINGS, ref dm))
                 {
+                    var role = IsPrimaryDisplayDevice(kv.Key) ? "PRIMARY" : "SECONDARY";
                     Console.WriteLine(
-                        $"[MODE] {label} {kv.Key}: current {dm.dmPelsWidth}x{dm.dmPelsHeight}@{dm.dmDisplayFrequency} | target {kv.Value}");
+                        $"[MODE] {label} {kv.Key} ({role}): current {dm.dmPelsWidth}x{dm.dmPelsHeight}@{dm.dmDisplayFrequency} | target {kv.Value}");
                 }
             }
         }
@@ -766,23 +811,26 @@ static class Program
         }
     }
 
-    static bool VerifyBestRefreshModes(IReadOnlySet<string> allowedDevices)
+    static bool VerifyTargetRefreshModes(IReadOnlySet<string> allowedDevices)
     {
         if (allowedDevices.Count == 0) return false;
         var allOptimal = true;
         foreach (var device in allowedDevices)
         {
             var current = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
-            var best = FindBestModeForDevice(device);
-            if (best == null || !Win32.EnumDisplaySettings(device, Win32.ENUM_CURRENT_SETTINGS, ref current))
+            var primary = IsPrimaryDisplayDevice(device);
+            var target = FindTargetModeForDevice(device, primary);
+            if (target == null || !Win32.EnumDisplaySettings(device, Win32.ENUM_CURRENT_SETTINGS, ref current))
             {
-                Console.WriteLine($"[MODE] Verify {device}: unable to read current/best mode");
+                Console.WriteLine($"[MODE] Verify {device}: unable to read current/target mode");
                 allOptimal = false;
                 continue;
             }
-            var optimal = current.dmPelsWidth == best.Width && current.dmPelsHeight == best.Height &&
-                          current.dmDisplayFrequency == best.Hz;
-            Console.WriteLine($"[MODE] Verify {device}: current {current.dmPelsWidth}x{current.dmPelsHeight}@{current.dmDisplayFrequency}, best {best}, optimal={optimal}");
+            var optimal = current.dmPelsWidth == target.Width && current.dmPelsHeight == target.Height &&
+                          current.dmDisplayFrequency == target.Hz;
+            var role = primary ? "PRIMARY" : "SECONDARY";
+            Console.WriteLine(
+                $"[MODE] Verify {device} ({role}): current {current.dmPelsWidth}x{current.dmPelsHeight}@{current.dmDisplayFrequency}, target {target}, optimal={optimal}");
             allOptimal &= optimal;
         }
         return allOptimal;
@@ -818,6 +866,23 @@ static class Program
 
     static void ApplyNvtweakRegistry()
     {
+        // Gestalt=2 => Control Panel "Use the advanced 3D image settings"
+        // (not "Let application decide" / not "Use my preference" Balanced slider)
+        try
+        {
+            using (var hkcu = Registry.CurrentUser.CreateSubKey(@"Software\NVIDIA Corporation\Global\NVTweak"))
+                hkcu?.SetValue("Gestalt", 2, RegistryValueKind.DWord);
+            using (var hklm = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\NVIDIA Corporation\Global\NVTweak"))
+                hklm?.SetValue("Gestalt", 2, RegistryValueKind.DWord);
+            using (var drv = Registry.LocalMachine.CreateSubKey(@"SYSTEM\CurrentControlSet\Services\nvlddmkm\Global\NVTweak"))
+                drv?.SetValue("Gestalt", 2, RegistryValueKind.DWord);
+            Console.WriteLine("[NVTweak] Gestalt=2 (Use the advanced 3D image settings)");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("[NVTweak] Gestalt set failed: " + ex.Message);
+        }
+
         // Ensure device keys exist for every connected display (CPL reads these).
         var devicesRoot = @"Software\NVIDIA Corporation\Global\NVTweak\Devices";
         using (var root = Registry.CurrentUser.CreateSubKey(devicesRoot))
@@ -949,6 +1014,7 @@ static class Program
         public const uint CDS_NORESET = 0x10000000;
         public const int DISP_CHANGE_SUCCESSFUL = 0;
         public const uint DISPLAY_DEVICE_ATTACHED_TO_DESKTOP = 0x00000001;
+        public const uint DISPLAY_DEVICE_PRIMARY_DEVICE = 0x00000004;
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
         public struct DEVMODE

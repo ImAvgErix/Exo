@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.29
+
+- **NVIDIA 1.9.5**: **secondary monitors force 60 Hz** (primary keeps max Hz); re-assert **Use the advanced 3D image settings** (`Gestalt=2`, not Balanced) after display apply + close CPL so UI reloads
 ## 1.8.28
 
 - **NVIDIA 1.9.4**: clear **taskbar overflow ghost icons** for uninstalled NVIDIA App (`NotifyIconSettings` nvcontainer.exe); disable App `NvContainerLocalSystem` (do not restart it); keep display `NVDisplay.Container` only

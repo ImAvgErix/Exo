@@ -78,9 +78,9 @@ removes NVIDIA App/GFE and **Virtual/HD Audio**, accepts CPL EULA, enables
 **Use the advanced 3D image settings** (`NVTweak` `Gestalt=2`), and applies
 NVCleanstall-class expert tweaks (MSI High, telemetry/Ansel off, HDCP off).
 
-Desktop **color / scaling / max Hz** always apply through **NVAPI** (not mouse
-automation) - the same driver path Control Panel reads. Live status requires the
-bundled NVAPI helper and complete enumeration of every active NVIDIA-connected
-display; unavailable or partial checks fail closed.
+Desktop **color / scaling / refresh** always apply through **NVAPI** (not mouse
+automation): **primary = max Hz**, **secondary = 60 Hz**, Full RGB, GPU no-scaling.
+Live status requires the bundled NVAPI helper and complete enumeration of every
+active NVIDIA-connected display; unavailable or partial checks fail closed.
 
 Profile pack version: see `PROFILE_VERSION`.

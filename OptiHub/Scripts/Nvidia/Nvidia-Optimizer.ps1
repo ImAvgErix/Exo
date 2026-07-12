@@ -5,7 +5,7 @@
 # - Series + G-SYNC Base Profile via Profile Inspector (-silentImport)
 # - Accept CPL EULA; set "Use the advanced 3D image settings" (NVTweak Gestalt=2)
 # - Overlay/Windows toasts off
-# - Display (Full RGB / max Hz / GPU no-scaling) through NVAPI (no mouse automation)
+# - Display (Full RGB / primary max Hz / secondary 60 Hz / GPU no-scaling) through NVAPI
 #
 #   Nvidia-Optimizer.ps1
 #   Nvidia-Optimizer.ps1 -Gsync
@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.9.4'
+$Script:NvidiaOptVersion = '1.9.5'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -1050,15 +1050,36 @@ function Accept-NvidiaControlPanelEula {
 function Enable-NvidiaAdvanced3dImageSettings {
     # Control Panel: 3D Settings -> Adjust image settings with preview
     # -> "Use the advanced 3D image settings" so Manage 3D Settings / .nip apply.
-    # NVTweak Gestalt: 2 = advanced 3D image settings (not "let app decide").
-    Write-Step 'Control Panel: Use the advanced 3D image settings...'
-    $paths = @(
+    # NVTweak Gestalt: 0 = let app decide, 1 = Use my preference (Performance/Balanced/Quality),
+    #                  2 = Use the advanced 3D image settings
+    Write-Step 'Control Panel: Use the advanced 3D image settings (not Balanced)...'
+    # Close CPL so next open re-reads registry (stale UI shows Balanced after old Gestalt)
+    Get-Process -Name 'nvcplui','nvcpl' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+    $paths = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in @(
         'HKCU:\Software\NVIDIA Corporation\Global\NVTweak',
         'HKLM:\SOFTWARE\NVIDIA Corporation\Global\NVTweak',
         'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm\Global\NVTweak'
-    )
-    foreach ($p in $paths) {
+    )) { [void]$paths.Add($p) }
+    try {
+        Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue | Where-Object {
+            $_.PSChildName -match '^S-1-5-21-\d+-\d+-\d+-\d+$'
+        } | ForEach-Object {
+            [void]$paths.Add(("Registry::HKEY_USERS\{0}\Software\NVIDIA Corporation\Global\NVTweak" -f $_.PSChildName))
+        }
+    } catch { }
+
+    foreach ($p in ($paths | Select-Object -Unique)) {
         Set-OptiHubRegDword -Path $p -Name 'Gestalt' -Value 2
+        # Clear leftover preference-slider residue some drivers leave when Balanced was selected
+        try {
+            if (Test-Path -LiteralPath $p) {
+                Remove-ItemProperty -LiteralPath $p -Name 'Quality' -ErrorAction SilentlyContinue
+                Remove-ItemProperty -LiteralPath $p -Name 'ImageSettings' -ErrorAction SilentlyContinue
+                Remove-ItemProperty -LiteralPath $p -Name 'PreferredQuality' -ErrorAction SilentlyContinue
+            }
+        } catch { }
     }
     $ok = $false
     try {
@@ -1066,7 +1087,7 @@ function Enable-NvidiaAdvanced3dImageSettings {
         $ok = ([int]$g -eq 2)
     } catch { $ok = $false }
     if ($ok) {
-        Write-Ok 'Advanced 3D image settings enabled (Gestalt=2)'
+        Write-Ok 'Advanced 3D image settings enabled (Gestalt=2, not Balanced preference slider)'
     } else {
         Write-Warn 'Could not verify advanced 3D image settings registry (Gestalt); Manage 3D settings may still apply via DRS'
     }
@@ -3296,11 +3317,11 @@ function Test-OptiHubNvidiaDisplayLive {
 
 function Set-NvidiaDisplayPreferences {
     # Sticky display path
-    # - NVTweak stamp all monitors (GPU / NoScale / Override / Full)
-    # - NVAPI: keep current resolution + max supported Hz + Full RGB
+    # - NVTweak stamp all monitors (GPU / NoScale / Override / Full) + Gestalt=2
+    # - NVAPI: keep current resolution; PRIMARY max Hz; SECONDARY 60 Hz; Full RGB
     # - No Control Panel mouse/keyboard automation
     # - Skip re-apply when live status already has correct scaling + res/Hz
-    Write-Step 'Display prefs: NVAPI + registry (no Control Panel automation)...'
+    Write-Step 'Display prefs: NVAPI + registry (primary max Hz, secondary 60 Hz)...'
     $applied = New-Object System.Collections.Generic.List[string]
     $success = $false
     $skipped = $false
@@ -3344,8 +3365,8 @@ function Set-NvidiaDisplayPreferences {
                 if ($null -ne $LASTEXITCODE) { $code = [int]$LASTEXITCODE }
                 if ($code -eq 0) {
                     $success = $true
-                    [void]$applied.Add('Active NVIDIA displays: current resolution at max Hz + Full RGB + GPU/NoScale/Override')
-                    Write-Ok 'Display settings applied (sticky path)'
+                    [void]$applied.Add('Active NVIDIA displays: primary max Hz / secondary 60 Hz + Full RGB + GPU/NoScale/Override')
+                    Write-Ok 'Display settings applied (primary max Hz, secondary 60 Hz)'
                 } else {
                     [void]$applied.Add("Display apply exit $code")
                     Write-Warn "Display apply exit $code"
@@ -3366,7 +3387,7 @@ function Set-NvidiaDisplayPreferences {
         outputColorFormat   = 'RGB'
         outputDynamicRange  = 'Full'
         outputColorDepth    = 'highest supported per display'
-        resolutionRefresh   = 'current resolution + highest supported Hz per monitor'
+        resolutionRefresh   = 'current resolution; primary max Hz; secondary 60 Hz'
         performScalingOn    = 'GPU'
         scalingMode         = 'No scaling'
         overrideGameScaling = $true
@@ -3681,11 +3702,13 @@ try {
     }
 
     Write-HubProgress 90 'Display scaling/Hz/Full RGB (NVAPI + Control Panel)...'
-    Write-Ok 'Applying display prefs via NVAPI (Control Panel is the UI; settings go to the driver)'
+    Write-Ok 'Applying display prefs via NVAPI (primary max Hz, secondary 60 Hz)'
     $dispResult = Coerce-Hashtable (Set-NvidiaDisplayPreferences)
     if (-not $dispResult) {
         $dispResult = @{ Success = $false; Details = @('Display helper returned no result') }
     }
+    # Re-assert advanced 3D AFTER display helper (NVTweak writes + CPL cache)
+    $advanced3dOk = Enable-NvidiaAdvanced3dImageSettings
     $appInstalled = Test-NvidiaAppInstalled  # expect false
 
     Write-HubProgress 94 'Saving status...'
@@ -3779,7 +3802,7 @@ try {
     if ($advanced3dOk) {
         Write-Ok 'Control Panel: Use the advanced 3D image settings is ON (Manage 3D / .nip profiles active).'
     }
-    Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling + max verified Hz). Control Panel is the minimal UI.'
+    Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling; primary max Hz; secondary 60 Hz). Control Panel is the minimal UI.'
     if ($driverInfo.Method -eq 'optihub-clean') {
         Write-Ok 'Clean install completed in one pass (driver + 3D + Control Panel + NVAPI display). No forced reboot.'
     }
