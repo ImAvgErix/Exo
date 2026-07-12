@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.8.3'
+$Script:NvidiaOptVersion = '1.8.4'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -1366,10 +1366,228 @@ function Disable-NvidiaOverlay {
     Write-Ok 'NVIDIA App/GFE overlay + notifications disabled; installed files and NVIDIA audio preserved'
 }
 
+function Get-NvidiaAppExePath {
+    foreach ($p in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\NVIDIA App.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe')
+    )) {
+        if ($p -and (Test-Path -LiteralPath $p)) { return $p }
+    }
+    $root = Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App'
+    if (Test-Path -LiteralPath $root) {
+        $hit = Get-ChildItem -LiteralPath $root -Recurse -Filter 'NVIDIA App.exe' -File -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($hit) { return $hit.FullName }
+    }
+    return $null
+}
+
+function Initialize-OptiHubNvAppWin32 {
+    if ($Script:OptiHubNvAppWin32Ready) { return $true }
+    try {
+        $code = @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class OptiHubNvAppUi {
+    public const int BM_CLICK = 0x00F5;
+    public const int SW_MINIMIZE = 6;
+    public const int SW_RESTORE = 9;
+
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+    [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
+
+    static string GetText(IntPtr h) {
+        var sb = new StringBuilder(512);
+        GetWindowText(h, sb, sb.Capacity);
+        return sb.ToString();
+    }
+    static string GetCls(IntPtr h) {
+        var sb = new StringBuilder(256);
+        GetClassName(h, sb, sb.Capacity);
+        return sb.ToString();
+    }
+
+    public static List<IntPtr> FindNvAppWindows() {
+        var list = new List<IntPtr>();
+        EnumWindows((h, l) => {
+            if (!IsWindowVisible(h)) return true;
+            var title = GetText(h);
+            if (string.IsNullOrWhiteSpace(title)) return true;
+            if (title.IndexOf("NVIDIA", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                title.IndexOf("GeForce", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                title.IndexOf("License", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                title.IndexOf("Agreement", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                title.IndexOf("Welcome", StringComparison.OrdinalIgnoreCase) >= 0) {
+                list.Add(h);
+            }
+            return true;
+        }, IntPtr.Zero);
+        return list;
+    }
+
+    static bool IsGoodButton(string name) {
+        if (string.IsNullOrEmpty(name)) return false;
+        name = name.Trim().ToLowerInvariant();
+        // Never click enable-overlay style buttons
+        if (name.Contains("enable overlay") || name.Contains("turn on overlay")) return false;
+        if (name.Contains("enable") && name.Contains("overlay")) return false;
+        string[] want = {
+            "accept", "agree", "i agree", "continue", "next", "get started",
+            "skip", "no thanks", "not now", "finish", "done", "close",
+            "later", "ok", "decline", "disable", "no"
+        };
+        foreach (var w in want) {
+            if (name == w || name.Contains(w)) return true;
+        }
+        return false;
+    }
+
+    public static int ClickProgressButtons() {
+        int clicks = 0;
+        foreach (var top in FindNvAppWindows()) {
+            try { ShowWindow(top, SW_MINIMIZE); } catch { }
+            var kids = new List<IntPtr>();
+            EnumChildWindows(top, (ch, l) => { kids.Add(ch); return true; }, IntPtr.Zero);
+            foreach (var ch in kids) {
+                try {
+                    if (!IsWindowVisible(ch)) continue;
+                    var cls = GetCls(ch);
+                    var name = GetText(ch);
+                    // CEF apps often use Chrome_RenderWidgetHostHWND - limited native buttons.
+                    // Still click classic Button classes when present (installer-style dialogs).
+                    bool looksButton = cls.IndexOf("Button", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                       cls.IndexOf("Btn", StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (!looksButton && string.IsNullOrWhiteSpace(name)) continue;
+                    if (!IsGoodButton(name) && !looksButton) continue;
+                    if (!IsGoodButton(name) && looksButton && string.IsNullOrWhiteSpace(name)) continue;
+                    if (!IsGoodButton(name)) continue;
+                    SendMessage(ch, BM_CLICK, IntPtr.Zero, IntPtr.Zero);
+                    clicks++;
+                    System.Threading.Thread.Sleep(350);
+                } catch { }
+            }
+        }
+        return clicks;
+    }
+
+    public static void NudgeEnterOnNvWindows() {
+        foreach (var h in FindNvAppWindows()) {
+            try {
+                ShowWindow(h, SW_RESTORE);
+                SetForegroundWindow(h);
+                // WM_KEYDOWN/UP Enter = 0x0D
+                SendMessage(h, 0x0100, new IntPtr(0x0D), IntPtr.Zero);
+                SendMessage(h, 0x0101, new IntPtr(0x0D), IntPtr.Zero);
+                System.Threading.Thread.Sleep(200);
+                ShowWindow(h, SW_MINIMIZE);
+            } catch { }
+        }
+    }
+}
+'@
+        Add-Type -TypeDefinition $code -ErrorAction Stop
+        $Script:OptiHubNvAppWin32Ready = $true
+        return $true
+    } catch {
+        # Type may already exist from a prior run in this process
+        if ($_.Exception.Message -match 'already exists|already defined') {
+            $Script:OptiHubNvAppWin32Ready = $true
+            return $true
+        }
+        Write-Warn "Win32 UI helper unavailable: $($_.Exception.Message)"
+        $Script:OptiHubNvAppWin32Ready = $false
+        return $false
+    }
+}
+
+function Complete-NvidiaAppFirstRunSilent {
+    # Registry alone does not clear CEF OOTB/EULA. Open App briefly minimized and
+    # click through Accept / Continue / Skip (never Enable Overlay).
+    Write-Step 'Silent first-run pass (EULA + onboarding click-through, minimized)...'
+    $exe = Get-NvidiaAppExePath
+    if (-not $exe) {
+        Write-Warn 'NVIDIA App.exe not found for silent first-run'
+        return $false
+    }
+
+    Accept-NvidiaAppEula
+    Set-NvidiaAppBackendConfigDebloat
+    Disable-NvidiaOverlay
+
+    $win32 = Initialize-OptiHubNvAppWin32
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $exe
+        $psi.WorkingDirectory = (Split-Path -Parent $exe)
+        $psi.UseShellExecute = $true
+        $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Minimized
+        $null = [Diagnostics.Process]::Start($psi)
+        Write-Ok 'Started NVIDIA App minimized for first-run dismiss'
+    } catch {
+        Write-Warn "Could not start NVIDIA App: $($_.Exception.Message)"
+        return $false
+    }
+
+    # CEF needs a few seconds to paint EULA/OOTB before buttons exist.
+    Start-Sleep -Seconds 4
+
+    $deadline = (Get-Date).AddSeconds(40)
+    $totalClicks = 0
+    $rounds = 0
+    while ((Get-Date) -lt $deadline) {
+        $rounds++
+        if ($win32) {
+            try {
+                $n = [OptiHubNvAppUi]::ClickProgressButtons()
+                if ($n -gt 0) {
+                    $totalClicks += $n
+                    Write-Ok "First-run UI clicks this round: $n (total $totalClicks)"
+                }
+                if ($rounds -in @(2, 5, 8, 12)) {
+                    [OptiHubNvAppUi]::NudgeEnterOnNvWindows()
+                }
+            } catch {
+                Write-Warn "UI click pass: $($_.Exception.Message)"
+            }
+        }
+        Start-Sleep -Milliseconds 800
+    }
+
+    foreach ($n in @('NVIDIA App', 'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper64', 'nvsphelper', 'NVIDIA Web Helper')) {
+        Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Seconds 1
+
+    Accept-NvidiaAppEula
+    Disable-NvidiaOverlay
+    Set-NvidiaAppBackendConfigDebloat
+    Enable-NvidiaAppBetaChannel
+    Remove-NvidiaAppDesktopShortcuts | Out-Null
+
+    if ($totalClicks -gt 0) {
+        Write-Ok "Silent first-run completed ($totalClicks UI action(s))"
+    } else {
+        Write-Warn 'Silent first-run finished with 0 button clicks (CEF UI may not expose native buttons). Prefs re-applied; Enter nudges were sent.'
+    }
+    return $true
+}
+
 function Configure-NvidiaAppExperience {
-    # Full post-install App pass: agree -> clear OOTB cache -> beta -> overlay/notifications off -> backend debloat.
-    Write-Step 'Configuring NVIDIA App (EULA, skip OOTB, beta, overlay/notifications off, app debloat)...'
-    # Kill App so registry/config writes stick (App rewrites OOTB mid-flight otherwise).
+    param([switch]$SkipSilentFirstRun)
+
+    Write-Step 'Configuring NVIDIA App (EULA/OOTB flags, optional silent first-run, overlay off, beta, debloat)...'
     foreach ($n in @('NVIDIA App', 'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper64', 'nvsphelper')) {
         Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     }
@@ -1378,11 +1596,19 @@ function Configure-NvidiaAppExperience {
     Enable-NvidiaAppBetaChannel
     Disable-NvidiaOverlay
     Set-NvidiaAppBackendConfigDebloat
-    # Re-assert first-launch + OOTB complete after config merges (install may rewrite HKLM).
-    Accept-NvidiaAppEula
-    Set-NvidiaAppBackendConfigDebloat
     Remove-NvidiaAppDesktopShortcuts | Out-Null
-    Write-Ok 'NVIDIA App experience configured (EULA accepted, OOTB skipped, overlay/notifications off, beta on)'
+
+    if (-not $SkipSilentFirstRun -and -not $Script:OptiHubNvAppFirstRunDone) {
+        [void](Complete-NvidiaAppFirstRunSilent)
+        $Script:OptiHubNvAppFirstRunDone = $true
+    }
+
+    Accept-NvidiaAppEula
+    Disable-NvidiaOverlay
+    Set-NvidiaAppBackendConfigDebloat
+    Enable-NvidiaAppBetaChannel
+    Remove-NvidiaAppDesktopShortcuts | Out-Null
+    Write-Ok 'NVIDIA App experience configured (silent first-run + prefs re-asserted)'
 }
 
 function Test-NvidiaOverlayDisabled {
@@ -2810,9 +3036,18 @@ try {
         $cplOk = Test-NvidiaControlPanelInstalled
     }
 
-    # EULA accept + beta channel + overlay/notifications off + App backend debloat.
-    Write-HubProgress 76 'NVIDIA App: EULA, beta, overlay/notifications off...'
+    # EULA accept + silent first-run dismiss + beta + overlay/notifications off + App debloat.
+    # Silent first-run runs ONCE (opening App twice was slow and re-triggered OOTB).
+    $Script:OptiHubNvAppFirstRunDone = $false
+    Write-HubProgress 76 'NVIDIA App: EULA + silent first-run + overlay off...'
     if ($appInstalled -or -not $SkipApp) {
+        # Note series for logs: NVIDIA App supports GTX 10-series; drivers use security branch only.
+        try {
+            $serNote = Get-GpuSeriesFromName $primary.Name
+            if ($serNote -eq '10') {
+                Write-Ok 'GTX 10-series: NVIDIA App is supported; Game Ready is security-branch (~582.x), not modern 610.x'
+            }
+        } catch { }
         Configure-NvidiaAppExperience
     } else {
         Write-Ok 'NVIDIA App not installed; skipping App experience config'
@@ -2821,9 +3056,9 @@ try {
 
     Write-HubProgress 82 'Privacy / system debloat...'
     Disable-NvidiaTelemetry
-    # Second pass - SelfUpdate / overlay tasks often reappear after first config.
+    # Second pass without opening App again - re-assert flags only (SelfUpdate often reappears).
     if ($appInstalled -or -not $SkipApp) {
-        Configure-NvidiaAppExperience
+        Configure-NvidiaAppExperience -SkipSilentFirstRun
     } else {
         Disable-NvidiaOverlay
     }

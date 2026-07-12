@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.16
+
+- **NVIDIA 1.8.4**: silent minimized first-run of NVIDIA App to click through EULA/onboarding (never Enable Overlay), then re-assert overlay off / beta / debloat
+- **NVIDIA**: GTX 10-series note - App is supported; drivers stay on security branch (~582.x)
 ## 1.8.15
 
 - **NVIDIA 1.8.3**: App install is official nvidia.com CDN first (fast); winget last-resort with 30s kill (no more 5 min hangs)
