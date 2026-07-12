@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.9.3'
+$Script:NvidiaOptVersion = '1.9.4'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -717,6 +717,63 @@ function Remove-NvidiaAppDesktopShortcuts {
     }
     if ($removed -eq 0) {
         Write-Ok 'No NVIDIA App desktop shortcuts to remove'
+    }
+    return $removed
+}
+
+function Clear-NvidiaTrayGhostIcons {
+    # Windows 11 keeps dead tray entries under NotifyIconSettings even after uninstall.
+    # Ghost "NVIDIA App" in the overflow list is almost always nvcontainer.exe from
+    # Program Files\NVIDIA Corporation\NvContainer (App stack), not the display driver.
+    Write-Step 'Clearing NVIDIA App tray / overflow ghost icons...'
+    $removed = 0
+    $roots = [System.Collections.Generic.List[string]]::new()
+    [void]$roots.Add('HKCU:\Control Panel\NotifyIconSettings')
+    # When elevated as admin, also try loaded user hives under HKEY_USERS
+    try {
+        Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue | Where-Object {
+            $_.PSChildName -match '^S-1-5-21-\d+-\d+-\d+-\d+$'
+        } | ForEach-Object {
+            [void]$roots.Add(("Registry::HKEY_USERS\{0}\Control Panel\NotifyIconSettings" -f $_.PSChildName))
+        }
+    } catch { }
+
+    $appTrayPattern = '(?i)NVIDIA Corporation\\NvContainer\\nvcontainer|NVIDIA Corporation\\NVIDIA App|NVIDIA Corporation\\NVIDIA Overlay|NVIDIA Corporation\\GeForce|GeForce Experience|ShadowPlay|nvsphelper|NVIDIA App\.exe|NVIDIA Overlay\.exe|NvBackend'
+    foreach ($root in ($roots | Select-Object -Unique)) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue | ForEach-Object {
+            $exe = $null
+            try { $exe = [string](Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).ExecutablePath } catch { }
+            if ([string]::IsNullOrWhiteSpace($exe)) { return }
+            # Keep DriverStore Display.NvContainer (real display driver tray/helper)
+            if ($exe -match '(?i)DriverStore\\.*Display\.NvContainer|NVDisplay\.Container') { return }
+            if ($exe -notmatch $appTrayPattern) { return }
+            try {
+                Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
+                $removed++
+                Write-Ok "Removed tray ghost: $exe"
+            } catch {
+                Write-Warn "Tray ghost remove failed ($($_.PSChildName)): $($_.Exception.Message)"
+            }
+        }
+    }
+
+    # Disable App container service so it cannot re-register tray icons
+    try {
+        $svc = Get-Service -Name 'NvContainerLocalSystem' -ErrorAction SilentlyContinue
+        if ($svc) {
+            if ($svc.Status -ne 'Stopped') {
+                Stop-Service -Name 'NvContainerLocalSystem' -Force -ErrorAction SilentlyContinue
+            }
+            Set-Service -Name 'NvContainerLocalSystem' -StartupType Disabled -ErrorAction SilentlyContinue
+            Write-Ok 'NvContainerLocalSystem disabled (App stack; display uses NVDisplay.Container)'
+        }
+    } catch { }
+
+    if ($removed -eq 0) {
+        Write-Ok 'No NVIDIA App tray ghosts found in NotifyIconSettings'
+    } else {
+        Write-Ok "Cleared $removed NVIDIA App tray ghost icon(s)"
     }
     return $removed
 }
@@ -1547,14 +1604,10 @@ function Remove-NvidiaClientTraces {
     Remove-NvidiaAppArpLeftovers
     Remove-NvidiaAppDesktopShortcuts | Out-Null
     $audioCleared = Remove-NvidiaAudioComponents
+    $trayCleared = Clear-NvidiaTrayGhostIcons
 
-    # Restart container service if we stopped it (driver residual helpers)
-    try {
-        $s = Get-Service -Name 'NvContainerLocalSystem' -ErrorAction SilentlyContinue
-        if ($s -and $s.Status -ne 'Running') {
-            Start-Service -Name 'NvContainerLocalSystem' -ErrorAction SilentlyContinue
-        }
-    } catch { }
+    # Do NOT restart NvContainerLocalSystem - that is App-stack and re-registers tray icons.
+    # Display driver uses NVDisplay.ContainerLocalSystem (left alone).
 
     $appGone = -not (Test-NvidiaAppInstalled)
     $cplOk = Test-NvidiaControlPanelInstalled
@@ -1563,6 +1616,7 @@ function Remove-NvidiaClientTraces {
     return [pscustomobject]@{
         AppCleared = [bool]$appGone
         AudioCleared = [bool]$audioCleared
+        TrayGhostsCleared = [int]$trayCleared
         ControlPanelPresent = [bool]$cplOk
         PackagesTried = @($toRemove)
     }
@@ -3585,8 +3639,9 @@ try {
     }
 
     # Always enforce driver+CPL-only policy (even if -SkipApp skipped App wipe)
-    Write-HubProgress 70 'Stripping NVIDIA Virtual/HD Audio...'
+    Write-HubProgress 70 'Stripping NVIDIA audio + tray ghosts...'
     [void](Remove-NvidiaAudioComponents)
+    [void](Clear-NvidiaTrayGhostIcons)
 
     $displayClient = @{
         Client       = $(if ($cplOk) { 'control-panel' } else { 'nvapi-only' })

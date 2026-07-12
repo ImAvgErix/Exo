@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.28
+
+- **NVIDIA 1.9.4**: clear **taskbar overflow ghost icons** for uninstalled NVIDIA App (`NotifyIconSettings` nvcontainer.exe); disable App `NvContainerLocalSystem` (do not restart it); keep display `NVDisplay.Container` only
 ## 1.8.27
 
 - **NVIDIA 1.9.3**: stack is **Display.Driver + Control Panel only** - strip **Virtual Audio / HD Audio**; NVCleanstall-class expert tweaks restored (MSI High, telemetry/Ansel off, **HDCP off**); no App/audio preserve messaging
