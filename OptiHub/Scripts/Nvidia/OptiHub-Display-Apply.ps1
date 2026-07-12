@@ -82,10 +82,10 @@ function Invoke-NvApiHelper {
         return $false
     }
     Write-DLog "NVAPI: $exe"
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    # PS7 Preview / .NET Core: ArgumentList + async stream reads.
+    $psi = [System.Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = $exe
-    # ProcessStartInfo.ArgumentList is unavailable in Windows PowerShell 5.1/.NET Framework.
-    $psi.Arguments = '--apply'
+    $psi.ArgumentList.Add('--apply')
     $psi.WorkingDirectory = (Split-Path -Parent $exe)
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
@@ -93,12 +93,12 @@ function Invoke-NvApiHelper {
     $psi.CreateNoWindow = $true
     $proc = $null
     try {
-        $proc = [Diagnostics.Process]::Start($psi)
+        $proc = [System.Diagnostics.Process]::Start($psi)
         if (-not $proc) { throw 'Process did not start' }
         $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
         $stderrTask = $proc.StandardError.ReadToEndAsync()
         if (-not $proc.WaitForExit(180000)) {
-            try { $proc.Kill() } catch { }
+            try { $proc.Kill($true) } catch { try { $proc.Kill() } catch { } }
             Write-DLog 'NVAPI timeout'
             return $false
         }
@@ -131,7 +131,7 @@ function Invoke-SoftDriverRefresh {
 }
 
 function Unregister-LegacyPersistTask {
-    # Logon tasks are background overhead — OptiHub no longer registers any.
+    # Logon tasks are background overhead - OptiHub no longer registers any.
     # Remove leftovers from older builds.
     foreach ($taskName in @('OptiHub-NvidiaDisplayPersist', 'OptiHub-NvidiaBackgroundPersist')) {
         try {

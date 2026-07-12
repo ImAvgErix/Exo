@@ -1,4 +1,4 @@
-# OptiHub — Display scaling / Override via NVAPI + NVTweak + NvCpl registry contract
+# OptiHub - Display scaling / Override via NVAPI + NVTweak + NvCpl registry contract
 # No mouse. No Control Panel UI automation.
 # New path: clear HDTV TVFormat (PC mode), GPUScanOutToNative, stamp Override for every
 # device key including App-shown IDs (e.g. 100002487), then re-read live path.
@@ -59,7 +59,7 @@ function Stamp-ScalingOverrideAll {
             Set-ItemProperty -LiteralPath $p -Name 'PreferGpuScaling' -Value 1 -Type DWord -Force
             Set-ItemProperty -LiteralPath $p -Name 'ForceGpuScaling' -Value 1 -Type DWord -Force
             # NOTE: Windows registry value names are case-insensitive.
-            # Do NOT write App JSON names like "scalingMode"=1 (Gpu) — that overwrites
+            # Do NOT write App JSON names like "scalingMode"=1 (Gpu) - that overwrites
             # classic "ScalingMode"=2 (No scaling) and breaks verification.
             Set-ItemProperty -LiteralPath $p -Name 'isOverrideScalingEnabled' -Value 1 -Type DWord -Force
             $n++

@@ -215,12 +215,12 @@ if (-not (Test-Path $discordRoot)) {
         if (Test-Path -LiteralPath $settingsPath) {
             try {
                 $sj = Get-Content $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
-                # Legacy OptiHub stamp (no longer forced — pure #000 can blank the client)
+                # Legacy OptiHub stamp (no longer forced - pure #000 can blank the client)
                 if ($sj.BACKGROUND_COLOR -eq '#000000') { $amoledOk = $true }
                 if ($sj.OPEN_ON_STARTUP -eq $false) { $startupOk = $true }
             } catch {}
         }
-        # Preferred: Equicord AMOLED theme (amoled-cord) enabled — real dark UI without forced CSS
+        # Preferred: Equicord AMOLED theme (amoled-cord) enabled - real dark UI without forced CSS
         $eqRoot = Join-Path $appData 'Equicord'
         $eqThemeFile = Join-Path $eqRoot 'themes\amoled-cord.theme.css'
         $eqSettings = Join-Path $eqRoot 'settings\settings.json'
@@ -237,7 +237,7 @@ if (-not (Test-Path $discordRoot)) {
         }
         Add-Feature 'True black AMOLED theme' 'Equicord amoled-cord theme (not forced OpenAsar CSS).' $amoledOk
 
-        # Toasts OFF, tray hidden, no autostart/tasks — matches Apply-WindowsTweaks
+        # Toasts OFF, tray hidden, no autostart/tasks - matches Apply-WindowsTweaks
         $notificationsOk = Test-DiscordToastsOff
         $windowsQuietOk = $startupOk -and $notificationsOk -and
             (Test-StableDiscordWindowsQuiet $discordRoot)
@@ -259,7 +259,7 @@ if (-not (Test-Path $discordRoot)) {
             $stateAppOk = [IO.Path]::GetFullPath([string]$state.appDir).TrimEnd('\') -ieq
                 [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')
         } catch { }
-        # Trust apply flags for this Discord build path — do not pin exact kit version strings.
+        # Trust apply flags for this Discord build path - do not pin exact kit version strings.
         $markerOk = [bool]($state -and
             [string]$state.applyStatus -eq 'applied' -and
             $state.applied -eq $true -and
@@ -275,7 +275,7 @@ if (-not (Test-Path $discordRoot)) {
             $statusText = 'Already optimized'
             $detail = 'No-compromise pack active: aggressive trim, Above Normal priority, full debloat, OpenASAR, and Equicord.'
         } elseif ($state -and $state.applied -eq $true -and -not $stateAppOk) {
-            $statusText = 'Discord updated — reapply'
+            $statusText = 'Discord updated - reapply'
             $detail = 'Discord installed a new build. Run again to restore OpenAsar, kernel, debloat, and Windows quiet. Daily Start Menu launch auto-heals OpenAsar/kernel when missing.'
         } elseif (-not $openAsarOk -or -not $kernelOk -or -not $equicordOk) {
             $statusText = 'Mods need restore'

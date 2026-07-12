@@ -174,7 +174,7 @@ function Test-SteamClientTweaks([string]$SteamPath) {
             if (Test-VdfExpectations $raw $expectations $true) {
                 $observedAnywhere = $true
             } elseif ($expectations | Where-Object { $raw -match ('"' + [regex]::Escape([string]$_.K) + '"') }) {
-                # Key exists but value is wrong — fail closed.
+                # Key exists but value is wrong - fail closed.
                 $anyExpectationKeyPresent = $true
                 return $false
             }
@@ -336,7 +336,7 @@ if (-not $steamOk) {
     Add-Feature 'Start Menu launch path' 'Shortcuts use OptiHub launcher; no desktop icons.' $launchOk
 
     $runtimeOk = Test-SteamRuntimeIntegrity $steam
-    # Trust apply flags — do NOT pin exact kit version strings (1.7.3+ was falsely "incomplete").
+    # Trust apply flags - do NOT pin exact kit version strings (1.7.3+ was falsely "incomplete").
     $markerOk = [bool]($state -and
         [string]$state.applyStatus -eq 'applied' -and
         $state.applied -eq $true -and

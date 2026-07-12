@@ -8,13 +8,14 @@
 function Write-Banner {
     $psLabel = "PowerShell $($PSVersionTable.PSVersion)"
     if ($PSVersionTable.PSEdition) { $psLabel += " ($($PSVersionTable.PSEdition))" }
+    $pre = ''
+    try { $pre = [string]$PSVersionTable.PSVersion.PreReleaseLabel } catch { }
+    if ($pre) { $psLabel += " [$pre]" }
+    elseif ($env:DISCOPT_PS7_PREVIEW -eq '1') { $psLabel += ' [Preview]' }
     Write-Host ''
     Write-Host "  Disc Optimizer v$Script:DiscOptVersion" -ForegroundColor Magenta
     Write-Host '  AMOLED | privacy | perf | cache trim | raw input' -ForegroundColor DarkGray
-    Write-Host "  $psLabel" -ForegroundColor Cyan
-    if ($env:DISCOPT_PS7 -eq '1') {
-        Write-Host '  (upgraded from Windows PowerShell 5.1)' -ForegroundColor DarkGray
-    }
+    Write-Host "  $psLabel  -  requires PowerShell 7 Preview" -ForegroundColor Cyan
     if ($env:DISCOPT_ELEVATED -eq '1') {
         Write-Host '  (running as Administrator)' -ForegroundColor DarkGray
     }

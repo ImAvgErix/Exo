@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.11
+
+- **NVIDIA 1.8.0**: wipe App + classic Control Panel + GFE → fresh NVIDIA App → debloat → NVAPI display (series-correct drivers)
+- **All optimizers**: PowerShell **7 Preview only** (no stable 7 / no 5.1); Discord no longer downloads stable portable pwsh
+- **Steam 1.7.6 / Discord 1.3.6**: Preview host assert + launch helpers pin Preview; progress mirrored to host log
 ## 1.8.10
 
 - **Settings**: balanced 2×2 cards — About (version) + Updates match Appearance / Support (no wide bottom strip)

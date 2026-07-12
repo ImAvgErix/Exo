@@ -488,10 +488,8 @@ function Disable-DiscordWindowsAutostart {
 
 function Disable-DiscordScheduledTasks {
     try {
-        # Discord only - matching plain 'Squirrel' would disable other apps'
-        # updaters (Slack, GitHub Desktop, Teams classic all use Squirrel).
-        $tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue |
-            Where-Object { $_.TaskName -match 'Discord' -or $_.TaskPath -match 'Discord' })
+        # Path/exe scoped via Get-StableDiscordTasks - never match bare "Squirrel" or name-only "Discord".
+        $tasks = @(Get-StableDiscordTasks)
         foreach ($task in $tasks) {
             Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue | Out-Null
             Write-Ok "Disabled scheduled task: $($task.TaskPath)$($task.TaskName)"
@@ -513,16 +511,11 @@ function Set-DiscordWindowsNotificationsOff {
         Set-ItemProperty -Path $path -Name 'Enabled' -Value 0 -Type DWord -Force
     }
 
+    # Known stable package IDs only - no broad name match across other apps.
     foreach ($id in @('Discord', 'Discord.Desktop', 'DiscordInc.Discord', 'com.squirrel.Discord.Discord')) {
         & $setOff $id
+        Write-Ok "Windows toasts off: $id"
     }
-
-    Get-ChildItem $base -ErrorAction SilentlyContinue |
-        Where-Object { $_.PSChildName -match 'Discord' } |
-        ForEach-Object {
-            Set-ItemProperty -Path $_.PSPath -Name 'Enabled' -Value 0 -Type DWord -Force
-            Write-Ok "Windows toasts off: $($_.PSChildName)"
-        }
 }
 
 # Back-compat alias name used by older call sites
@@ -663,14 +656,14 @@ function Unlock-DiscordSettings([string]$DestPath = '') {
 }
 
 function Get-DiscOptPowerShellExe {
-    # PowerShell 7+ only (prefer Preview) — never fall back to Windows PowerShell 5.1.
+    # PowerShell 7 Preview only - never Windows PowerShell 5.1, never stable 7.
     $found = Get-DiscOptPwsh7
     if ($found -and $found.Exe) { return $found.Exe }
     $preview = Get-Command pwsh-preview -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($preview -and $preview.Source -and ($preview.Source -notmatch 'WindowsPowerShell')) { return $preview.Source }
-    $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($pwsh -and $pwsh.Source -and ($pwsh.Source -notmatch 'WindowsPowerShell')) { return $pwsh.Source }
-    throw 'PowerShell 7 Preview is required. Install Microsoft.PowerShell.Preview (and Windows Terminal Preview).'
+    if ($preview -and $preview.Source -and ($preview.Source -match '(?i)preview|PowerShellPreview')) {
+        return $preview.Source
+    }
+    throw 'PowerShell 7 Preview is required. Install Microsoft.PowerShell.Preview and Windows Terminal Preview.'
 }
 
 function Apply-DiscordProfile([string]$DestPath) {
@@ -695,7 +688,7 @@ function Apply-DiscordProfile([string]$DestPath) {
         if ($merged.ContainsKey($drop)) { $merged.Remove($drop) }
     }
 
-    # Kit keys we may stamp — do NOT force hardware acceleration or BACKGROUND_COLOR.
+    # Kit keys we may stamp - do NOT force hardware acceleration or BACKGROUND_COLOR.
     # Equicord themes handle dark/AMOLED; OpenAsar must not inject CSS that paints pure black.
     $allowed = @(
         'SKIP_HOST_UPDATE', 'OPEN_ON_STARTUP', 'MINIMIZE_TO_TRAY', 'START_MINIMIZED',
@@ -735,7 +728,7 @@ function Apply-DiscordProfile([string]$DestPath) {
         $merged.openasar = @{}
     }
     $merged.openasar.setup = $true
-    # No cmdPreset=perf (blank client risk). No OpenAsar CSS — Equicord themes handle dark mode.
+    # No cmdPreset=perf (blank client risk). No OpenAsar CSS - Equicord themes handle dark mode.
     if ($merged.openasar.Keys -contains 'cmdPreset') { $merged.openasar.Remove('cmdPreset') }
     if ($merged.openasar.Keys -contains 'css') { $merged.openasar.Remove('css') }
     # OpenAsar quickstart skips slow host waits so Discord paints sooner.
@@ -747,7 +740,7 @@ function Apply-DiscordProfile([string]$DestPath) {
     $merged.openasar.noTyping = $true
     $merged.openasar.disableMediaKeys = $false
 
-    # Stable boot flags (do not force BACKGROUND_COLOR — Equicord AMOLED theme owns look)
+    # Stable boot flags (do not force BACKGROUND_COLOR - Equicord AMOLED theme owns look)
     $merged['DESKTOP_TTI_EARLY_UPDATE_CHECK'] = $false
     # Warm DNS/TCP early so first UI is ready sooner after launch.
     $merged['DESKTOP_TTI_DNSTCP_WARMUP'] = $true

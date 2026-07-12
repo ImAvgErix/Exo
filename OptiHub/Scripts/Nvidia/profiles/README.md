@@ -71,13 +71,15 @@ automatic clean-driver stage is intentionally blocked until OptiHub has an
 official notebook-specific lookup. It never substitutes desktop driver
 metadata or packages. Install the official NVIDIA notebook driver manually.
 
-## Display (not in .nip)
+## Client stack + display (not in .nip)
 
-Desktop **color / scaling** are applied through **NVAPI** (not mouse/keyboard automation):
-current resolution at its highest supported refresh rate, supported color depth,
-Full RGB, GPU scaling + No scaling + Override.
-Live status requires the bundled NVAPI helper and complete enumeration/mapping
-of every active NVIDIA-connected display; unavailable or partial checks fail
-closed. Overlay preferences are verified separately from service/task debloat.
+On Apply, OptiHub **wipes** NVIDIA App / classic Control Panel / GFE client traces,
+**reinstalls a fresh NVIDIA App**, then **debloats** overlay / SelfUpdate / telemetry
+while keeping the App launchable and display audio intact.
+
+Desktop **color / scaling / max Hz** are applied through **NVAPI** (not App or Control
+Panel mouse automation). Those are the same driver settings the App reflects when
+opened. Live status requires the bundled NVAPI helper and complete enumeration of
+every active NVIDIA-connected display; unavailable or partial checks fail closed.
 
 Profile pack version: see `PROFILE_VERSION`.

@@ -155,8 +155,9 @@ function Test-NvidiaPerformanceDebloat {
         [void]$issues.Add('NVIDIA network container starts automatically or is running')
     }
 
+    # Fresh App is intentional and may be opened on demand. Only flag overlay/helpers/GFE noise.
     $background = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.ProcessName -match '(?i)^NVIDIA (App|Overlay|Share|Web Helper)$|^GFExperience$|^nvsphelper(64)?$'
+        $_.ProcessName -match '(?i)^NVIDIA (Overlay|Share|Web Helper)$|^GFExperience$|^nvsphelper(64)?$'
     })
     if ($background.Count -gt 0) {
         [void]$issues.Add("Background clients running: $($background.ProcessName -join ', ')")
@@ -325,7 +326,7 @@ $driverNote = if ($isNotebookGpu) {
 } elseif ($needsUpdate) {
     $curLabel = if ($currentNv) { $currentNv } else { 'unknown' }
     $branchHint = if ($driverBranch -eq '10') { ' (10-series security branch)' } else { '' }
-    "Update available for this GPU series$branchHint: $curLabel -> $latestNv. Apply runs OptiHub Clean Driver."
+    "Update available for this GPU series${branchHint}: $curLabel -> $latestNv. Apply runs OptiHub Clean Driver."
 } elseif ($needsRetweak) {
     $gap = if ($tweaks.Issues.Count -gt 0) { ($tweaks.Issues -join '; ') } else { 'stock-style install signals' }
     "On newest Game Ready ($currentNv) but without OptiHub tweaks ($gap). Apply fixes MSI/privacy in-place."
@@ -433,12 +434,39 @@ $features.Add(@{
     active = $displayOk
 })
 
+# Fresh NVIDIA App (default Apply path wipes + reinstalls; -SkipApp may leave none).
+$appInstalled = $false
+foreach ($appPath in @(
+    (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe'),
+    (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\NVIDIA App.exe'),
+    (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA Overlay\NVIDIA App.exe')
+)) {
+    if (Test-Path -LiteralPath $appPath) { $appInstalled = $true; break }
+}
+if (-not $appInstalled) {
+    $appxApp = Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match '(?i)NVIDIAApp|NVIDIA\.App'
+    }
+    $appInstalled = [bool]$appxApp
+}
+$clientReinstallExpected = -not [bool]($state -and $state.PSObject.Properties.Name -contains 'clientReinstall' -and -not [bool]$state.clientReinstall)
+$appOk = if ($clientReinstallExpected) { $appInstalled } else { $true }
+$features.Add(@{
+    title  = 'NVIDIA App (fresh + debloated)'
+    detail = $(if ($appInstalled) {
+        'NVIDIA App is installed. Apply wipes old App/CPL clients, reinstalls App, then debloats background noise.'
+    } else {
+        'NVIDIA App not installed. Apply wipes client traces and installs a fresh App (requires winget / Store).'
+    })
+    active = $appOk
+})
+
 $backgroundOk = [bool]$debloat.Ok -and [bool]$overlay.Ok
 $backgroundIssues = @($debloat.Issues) + @($overlay.Issues)
 $features.Add(@{
     title  = 'Privacy / telemetry / overlay off'
     detail = $(if ($backgroundOk) {
-        'Overlay preferences, capture, telemetry, updater, background clients, and auto-start paths are inactive.'
+        'Overlay preferences, capture, telemetry, updater, background helpers, and auto-start paths are inactive (App stays launchable).'
     } else {
         "Performance background gap: $($backgroundIssues -join '; ')"
     })
@@ -446,7 +474,7 @@ $features.Add(@{
 })
 
 $isApplied = $gpuOk -and (-not $pendingAfterDriver) -and (-not $applyInProgress) -and
-             $applied -and $gameOk -and $displayOk -and $backgroundOk -and (-not $needsDriverAction)
+             $applied -and $gameOk -and $displayOk -and $backgroundOk -and $appOk -and (-not $needsDriverAction)
 
 $driverChanged = $false
 if ($state -and $currentNv -and $state.profileDriverVersion -and
@@ -460,11 +488,12 @@ elseif ($isNotebookGpu) { 'Notebook driver requires manual action' }
 elseif (-not $currentNv) { 'Driver status unavailable' }
 elseif ($needsUpdate) { 'Driver update available' }
 elseif ($needsRetweak) { 'Driver tweaks available' }
-elseif ($driverChanged -or (-not $profileOk -and $state -and $state.profileApplied)) { 'Driver changed — reapply' }
+elseif ($driverChanged -or (-not $profileOk -and $state -and $state.profileApplied)) { 'Driver changed - reapply' }
 elseif (-not $profileOk) { '3D profile incomplete' }
 elseif (-not $gameOk) { 'Game profiles incomplete' }
 elseif (-not $displayOk) { 'Display setup incomplete' }
-elseif (-not $backgroundOk) { 'Background re-armed — reapply' }
+elseif (-not $appOk) { 'NVIDIA App missing' }
+elseif (-not $backgroundOk) { 'Background re-armed - reapply' }
 elseif ($isApplied) { 'Already optimized' }
 else { 'Ready to optimize' }
 
@@ -478,8 +507,9 @@ elseif ($driverChanged) { "Driver is now $currentNv but OptiHub last verified $(
 elseif (-not $profileOk) { $(if ($applyInProgress) { 'The previous Apply was interrupted before a verified profile marker was saved. Apply again.' } else { 'The profile file, pack version, hash, or imported driver version is not verified. Apply again.' }) }
 elseif (-not $gameOk) { 'Base profile is present but the per-game catalog was not fully recorded. Apply again.' }
 elseif (-not $displayOk) { 'The 3D profile is verified, but live NVAPI display verification is incomplete. Restore the helper or Apply again.' }
+elseif (-not $appOk) { 'Fresh NVIDIA App is missing. Apply wipes old App/Control Panel clients and reinstalls a debloated App, then applies display prefs via NVAPI.' }
 elseif (-not $backgroundOk) { "NVIDIA App re-enabled background noise ($($backgroundIssues -join '; ')). Apply again to re-disable (no logon task)." }
-elseif ($isApplied) { 'Driver current with tweaks, Base + per-game profiles, and display prefs applied. Reapply after major driver upgrades or if NVIDIA App re-enables SelfUpdate.' }
+elseif ($isApplied) { 'Driver current with tweaks, fresh debloated App, Base + per-game profiles, and NVAPI display prefs applied. Reapply after major driver upgrades or if App re-enables SelfUpdate.' }
 else { 'Choose the G-SYNC pack only for a compatible display, then Apply.' }
 
 [ordered]@{

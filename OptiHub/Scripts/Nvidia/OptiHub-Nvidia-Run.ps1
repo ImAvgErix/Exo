@@ -8,6 +8,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Hosted by OptiHub via PowerShell 7 Preview (+ Terminal Preview on the machine).
+if ($PSVersionTable.PSEdition -ne 'Core' -or [int]$PSVersionTable.PSVersion.Major -lt 7) {
+    throw 'OptiHub-Nvidia-Run requires PowerShell 7 Preview. Install Microsoft.PowerShell.Preview.'
+}
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Optimizer = Join-Path $Root 'Nvidia-Optimizer.ps1'
 if (-not (Test-Path $Optimizer)) { throw "Missing Nvidia-Optimizer.ps1 in $Root" }

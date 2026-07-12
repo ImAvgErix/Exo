@@ -15,8 +15,59 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.7.5'
+$Script:SteamOptVersion = '1.7.6'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# --- PowerShell 7 Preview only (never Windows PowerShell 5.1 / never stable 7) ---
+function Test-OptiHubIsPwshPreviewHost {
+    if ($PSVersionTable.PSEdition -ne 'Core') { return $false }
+    if ([int]$PSVersionTable.PSVersion.Major -lt 7) { return $false }
+    $hostPath = ''
+    try { $hostPath = [string](Get-Process -Id $PID -ErrorAction Stop).Path } catch { }
+    if ($hostPath -match 'WindowsPowerShell') { return $false }
+    if ($hostPath -match '(?i)7-preview|PowerShellPreview|pwsh-preview') { return $true }
+    $pre = ''
+    try { $pre = [string]$PSVersionTable.PSVersion.PreReleaseLabel } catch { }
+    if (-not [string]::IsNullOrWhiteSpace($pre)) { return $true }
+    if ([string]$PSVersionTable.GitCommitId -match '(?i)preview') { return $true }
+    if ($hostPath -match '(?i)PowerShell[\\/]7[\\/]' -and $hostPath -notmatch '(?i)preview') { return $false }
+    return $false
+}
+function Get-OptiHubPwsh {
+    # PowerShell 7 Preview only. Never Windows PowerShell 5.1 / never stable 7.
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in @(
+        (Join-Path $env:ProgramFiles 'PowerShell\7-preview\pwsh.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh-preview.exe')
+    )) {
+        if ($p) { [void]$candidates.Add($p) }
+    }
+    $cmdPreview = Get-Command pwsh-preview -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmdPreview -and $cmdPreview.Source) { [void]$candidates.Add([string]$cmdPreview.Source) }
+
+    $appsRoot = Join-Path $env:ProgramFiles 'WindowsApps'
+    if (Test-Path -LiteralPath $appsRoot) {
+        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShellPreview*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { [void]$candidates.Add((Join-Path $_.FullName 'pwsh.exe')) }
+    }
+
+    foreach ($p in ($candidates | Select-Object -Unique)) {
+        if (-not $p -or $p -match 'WindowsPowerShell') { continue }
+        if ($p -match 'PowerShell\\7\\' -and $p -notmatch '(?i)preview') { continue }
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    throw 'PowerShell 7 Preview is required for OptiHub Steam helpers. Install Microsoft.PowerShell.Preview and Windows Terminal Preview.'
+}
+function Assert-OptiHubPwshPreview {
+    if (Test-OptiHubIsPwshPreviewHost) { return }
+    $hint = $null
+    try { $hint = Get-OptiHubPwsh } catch { }
+    $msg = 'Steam Optimizer requires PowerShell 7 Preview (not Windows PowerShell 5.1, not stable PowerShell 7). Install Microsoft.PowerShell.Preview and Windows Terminal Preview, then re-run from OptiHub.'
+    if ($hint) { $msg += " Found Preview at: $hint" }
+    throw $msg
+}
+Assert-OptiHubPwshPreview
 
 # Default Steam launch flags (formerly "aggressive" - this is the only tier).
 # Tuned for faster cold start + lower CEF cost. Avoid sandbox/single-process
@@ -38,9 +89,11 @@ $Script:DefaultCefArgs = @(
 function Write-HubProgress([int]$Percent, [string]$Status) {
     $p = [Math]::Max(0, [Math]::Min(100, $Percent))
     $line = "OPTIHUB_PROGRESS:$p|$Status"
+    # Host + OPTIHUB_LOG (do not Write-Output-only; elevated host polls the log).
+    Write-Host $line
     Write-Output $line
     if ($env:OPTIHUB_LOG) {
-        try { Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
+        try { Add-Content -LiteralPath $env:OPTIHUB_LOG -Value $line -Encoding utf8 -ErrorAction SilentlyContinue } catch { }
     }
 }
 function Write-SteamLog([string]$Prefix, [string]$Msg) {
@@ -960,7 +1013,7 @@ function Set-SteamLocalConfigTweaks {
 
     if (-not $anyPatched) {
         # Modern Steam builds often omit the old localconfig web-GPU keys entirely.
-        # CEF launch flags + download config still deliver the performance win — do not
+        # CEF launch flags + download config still deliver the performance win - do not
         # fail the whole apply when there is nothing to patch and nothing conflicting.
         Write-Ok 'localconfig.vdf: no matching keys - CEF launch flags + download config still apply'
     }
@@ -1120,33 +1173,6 @@ function Optimize-SteamDownloadFolder([string]$SteamPath) {
     return $n
 }
 
-function Get-OptiHubPwsh {
-    # PowerShell 7 Preview only. Never Windows PowerShell 5.1 / never stable 7.
-    $candidates = [System.Collections.Generic.List[string]]::new()
-    foreach ($p in @(
-        (Join-Path $env:ProgramFiles 'PowerShell\7-preview\pwsh.exe'),
-        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh-preview.exe')
-    )) {
-        if ($p) { [void]$candidates.Add($p) }
-    }
-    $cmdPreview = Get-Command pwsh-preview -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($cmdPreview -and $cmdPreview.Source) { [void]$candidates.Add([string]$cmdPreview.Source) }
-
-    $appsRoot = Join-Path $env:ProgramFiles 'WindowsApps'
-    if (Test-Path -LiteralPath $appsRoot) {
-        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShellPreview*' -ErrorAction SilentlyContinue |
-            Sort-Object Name -Descending |
-            ForEach-Object { [void]$candidates.Add((Join-Path $_.FullName 'pwsh.exe')) }
-    }
-
-    foreach ($p in ($candidates | Select-Object -Unique)) {
-        if (-not $p -or $p -match 'WindowsPowerShell') { continue }
-        if ($p -match 'PowerShell\\7\\' -and $p -notmatch 'preview|Preview') { continue }
-        if (Test-Path -LiteralPath $p) { return $p }
-    }
-    throw 'PowerShell 7 Preview is required for OptiHub Steam helpers. Install Microsoft.PowerShell.Preview.'
-}
-
 function Write-SteamLaunchCmd([string]$CmdPath, [string]$SteamPath, [string]$HelperPath, [string[]]$CefArgs, [string]$Label) {
     $exe = Join-Path $SteamPath 'steam.exe'
     $args = ($CefArgs -join ' ')
@@ -1158,9 +1184,10 @@ function Write-SteamLaunchCmd([string]$CmdPath, [string]$SteamPath, [string]$Hel
     $cmdPs = $ps.Replace('%', '%%')
     # Start Steam first (HIGH) so the UI appears ASAP; kick the trim helper right
     # after without waiting for it. Helper self-limits with a mutex.
+    # Always host helpers with PowerShell 7 Preview (pwsh-preview path from Get-OptiHubPwsh).
     $cmd = @(
         '@echo off'
-        ("rem OptiHub {0} - fast quiet CEF + aggressive webhelper trim (pwsh 7+)" -f $Label)
+        ("rem OptiHub {0} - fast quiet CEF + aggressive webhelper trim (PowerShell 7 Preview)" -f $Label)
         ('start "" /HIGH /D "{0}" "{1}" {2} %*' -f $cmdSteamPath, $cmdExe, $args)
         ('start "" /MIN "{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $cmdPs, $cmdHelper)
     ) -join "`r`n"

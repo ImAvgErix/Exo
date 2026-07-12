@@ -75,12 +75,13 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         var warning =
             "This is an aggressive maximum-performance pass. It prioritizes FPS and input latency over power savings, NVIDIA background features, and recording tools.\n\n" +
             "OptiHub will:\n" +
-            "1) Update the Game Ready display driver only when needed, then enable MSI High priority and disable Ansel/telemetry services.\n" +
-            "2) Import the matching 3D Base Profile (maximum-performance power mode, high-performance filtering, max refresh, shader cache, and latency settings).\n" +
-            "3) Keep each NVIDIA-connected display's current resolution, select its highest verified refresh rate, and apply Full RGB plus GPU no-scaling.\n" +
-            "4) Stop NVIDIA App/GFE background clients and disable overlay, FrameView, updater, telemetry, and auto-start paths while preserving installed files and HDMI/DisplayPort audio.\n\n" +
+            "1) Update the Game Ready display driver only when needed (series-correct package), then enable MSI High and disable Ansel/telemetry services.\n" +
+            "2) Import the matching 3D Base Profile plus per-game profiles (Profile Inspector silent import).\n" +
+            "3) Wipe NVIDIA App, classic Control Panel, and GeForce Experience client traces, then install a fresh NVIDIA App.\n" +
+            "4) Debloat that App (overlay, SelfUpdate, telemetry, auto-start) while keeping the App launchable and HDMI/DisplayPort audio intact.\n" +
+            "5) Apply Full RGB, max verified refresh, and GPU no-scaling through NVAPI (the same driver settings the App shows — no fragile App/Control Panel clicking).\n\n" +
             gsyncLine + "\n\n" +
-            "Tradeoffs: higher idle power/heat, no NVIDIA overlay or background recording, and a brief display flicker. A driver update may require a restart.\n\n" +
+            "Tradeoffs: higher idle power/heat, no NVIDIA overlay or background recording, brief display flicker, and a short App reinstall. A driver update may require a restart.\n\n" +
             "Reset OptiHub status only clears OptiHub's record; it does not undo driver/profile/display changes. Undo through NVIDIA settings or a driver reinstall. Administrator approval is required.";
 
         var ok = ConfirmAsync is not null
@@ -142,7 +143,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                 {
                     ProgressStatus = "Completed successfully";
                     SetResult(
-                        "Done in one pass: clean driver (if needed), 3D profile, privacy preferences, and verified NVAPI display settings. No reboot required unless Windows prompts.",
+                        "Done in one pass: clean driver (if needed), 3D profile, fresh debloated NVIDIA App, and verified NVAPI display settings. No reboot required unless Windows prompts.",
                         success: true);
                 }
                 else
@@ -186,7 +187,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync(
                 "Reset OptiHub NVIDIA status?",
-                "Only clears OptiHub's record that this pack was applied (status checks reset). Does not uninstall the driver, remove 3D profiles, or remove NVIDIA App.")
+                "Only clears OptiHub's record that this pack was applied (status checks reset). Does not uninstall the driver, remove 3D profiles, or remove the NVIDIA App.")
             : true;
         if (!ok) return;
 

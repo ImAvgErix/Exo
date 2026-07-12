@@ -6,6 +6,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Hosted by OptiHub via PowerShell 7 Preview (+ Terminal Preview on the machine).
+if ($PSVersionTable.PSEdition -ne 'Core' -or [int]$PSVersionTable.PSVersion.Major -lt 7) {
+    throw 'OptiHub-Steam-Run requires PowerShell 7 Preview. Install Microsoft.PowerShell.Preview.'
+}
 $env:OPTIHUB = '1'
 $env:DISCOPT_NONINTERACTIVE = '1'
 

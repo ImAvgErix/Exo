@@ -1,4 +1,4 @@
-# Disc Optimizer - right-click -> Run with PowerShell (uses stable PS 7 + elevates)
+# Disc Optimizer - PowerShell 7 Preview only (+ Windows Terminal Preview via OptiHub host).
 # First run installs + optimizes Discord. After that, use the Start menu Discord shortcut.
 #
 #   Disc-Optimizer.ps1           first-time / full setup (log in when prompted)
@@ -45,7 +45,7 @@ if ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.3.5'
+$Script:DiscOptVersion = '1.3.6'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -53,7 +53,6 @@ if (-not (Test-Path $KitDir)) { $KitDir = $Root }
 $ToolsDir = Join-Path $KitDir 'tools'
 $DownloadDir = Join-Path $KitDir 'downloads'
 $BootstrapLogDir = Join-Path $KitDir 'logs'
-$Script:DiscOptPwshReleaseApi = 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest'
 
 function Test-DiscOptIsWindows {
     return [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
@@ -134,20 +133,33 @@ function Write-DiscOptBootstrapFailure($ErrorRecord) {
     } catch {}
 }
 
-function Test-DiscOptPwshVersionMeetsMinimum([string]$VersionText) {
-    if (-not $VersionText) { return $false }
-    if ($VersionText -match '^(\d+)\.') {
-        $major = [int]$Matches[1]
-        return $major -ge 7
-    }
+function Test-DiscOptIsPwshPreviewPath([string]$Exe) {
+    if ([string]::IsNullOrWhiteSpace($Exe)) { return $false }
+    if ($Exe -match 'WindowsPowerShell') { return $false }
+    if ($Exe -match '(?i)7-preview|PowerShellPreview|pwsh-preview') { return $true }
+    if ($Exe -match '(?i)PowerShell[\\/]7[\\/]' -and $Exe -notmatch '(?i)preview') { return $false }
+    return $false
+}
+
+function Test-DiscOptIsPwshPreviewHost {
+    if ($PSVersionTable.PSEdition -ne 'Core') { return $false }
+    if ([int]$PSVersionTable.PSVersion.Major -lt 7) { return $false }
+    $hostPath = ''
+    try { $hostPath = [string](Get-Process -Id $PID -ErrorAction Stop).Path } catch { }
+    if (Test-DiscOptIsPwshPreviewPath $hostPath) { return $true }
+    $pre = ''
+    try { $pre = [string]$PSVersionTable.PSVersion.PreReleaseLabel } catch { }
+    if (-not [string]::IsNullOrWhiteSpace($pre)) { return $true }
+    if ([string]$PSVersionTable.GitCommitId -match '(?i)preview') { return $true }
     return $false
 }
 
 function Get-DiscOptPwshVersion([string]$Exe) {
-    if (-not (Test-Path $Exe)) { return $null }
+    if (-not (Test-Path -LiteralPath $Exe)) { return $null }
+    if (-not (Test-DiscOptIsPwshPreviewPath $Exe)) { return $null }
     try {
         $raw = & $Exe -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>$null
-        if ($raw -and (Test-DiscOptPwshVersionMeetsMinimum $raw)) { return "$raw".Trim() }
+        if ($raw -and ("$raw" -match '^(\d+)\.') -and [int]$Matches[1] -ge 7) { return "$raw".Trim() }
     } catch {}
     return $null
 }
@@ -160,136 +172,58 @@ function Get-DiscOptPwsh7 {
         (Get-DiscOptEnvPath 'ProgramFiles' 'PowerShell\7-preview\pwsh.exe'),
         (Get-DiscOptEnvPath 'LOCALAPPDATA' 'Microsoft\WindowsApps\pwsh-preview.exe')
     )) {
-        if ($path) { $candidates.Add($path) }
+        if ($path) { [void]$candidates.Add($path) }
     }
 
     $cmdPreview = Get-Command pwsh-preview -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($cmdPreview) { $candidates.Add($cmdPreview.Source) }
+    if ($cmdPreview -and $cmdPreview.Source) { [void]$candidates.Add([string]$cmdPreview.Source) }
 
     $appsRoot = Get-DiscOptEnvPath 'ProgramFiles' 'WindowsApps'
-    if ($appsRoot -and (Test-Path $appsRoot)) {
-        Get-ChildItem $appsRoot -Directory -Filter 'Microsoft.PowerShellPreview*' -ErrorAction SilentlyContinue |
+    if ($appsRoot -and (Test-Path -LiteralPath $appsRoot)) {
+        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShellPreview*' -ErrorAction SilentlyContinue |
             Sort-Object Name -Descending |
             ForEach-Object {
                 $exe = Join-Path $_.FullName 'pwsh.exe'
-                if (Test-Path $exe) { $candidates.Add($exe) }
+                if (Test-Path -LiteralPath $exe) { [void]$candidates.Add($exe) }
             }
     }
 
     foreach ($exe in ($candidates | Select-Object -Unique)) {
-        if ($exe -match 'WindowsPowerShell') { continue }
-        if ($exe -match 'PowerShell\\7\\' -and $exe -notmatch 'preview|Preview') { continue }
+        if (-not (Test-DiscOptIsPwshPreviewPath $exe)) { continue }
         $ver = Get-DiscOptPwshVersion $exe
         if ($ver) {
             return @{ Exe = $exe; Version = $ver }
         }
-    }
-    return $null
-}
-
-function Get-DiscOptLatestPwshAsset {
-    $headers = @{ 'User-Agent' = 'OptiHub-Discord/1.2' }
-    $release = Invoke-RestMethod -Uri $Script:DiscOptPwshReleaseApi -Headers $headers -TimeoutSec 45
-    $asset = $release.assets |
-        Where-Object { $_.name -match '^PowerShell-\d+\.\d+\.\d+-win-x64\.zip$' } |
-        Select-Object -First 1
-    $hashes = $release.assets | Where-Object { $_.name -eq 'hashes.sha256' } | Select-Object -First 1
-    if (-not $asset -or -not $hashes) {
-        throw 'Latest stable PowerShell release is missing its x64 ZIP or checksum manifest'
-    }
-    return @{
-        Name      = [string]$asset.name
-        Url       = [string]$asset.browser_download_url
-        HashesUrl = [string]$hashes.browser_download_url
-        Version   = ([string]$release.tag_name).TrimStart('v')
-    }
-}
-
-function Install-DiscOptPwsh7Portable {
-    if (-not (Test-Path $ToolsDir)) { New-Item -ItemType Directory -Path $ToolsDir -Force | Out-Null }
-    if (-not (Test-Path $DownloadDir)) { New-Item -ItemType Directory -Path $DownloadDir -Force | Out-Null }
-
-    $destDir = Join-Path $ToolsDir 'pwsh'
-    $pwshExe = Join-Path $destDir 'pwsh.exe'
-    $cachedVer = Get-DiscOptPwshVersion $pwshExe
-    if ($cachedVer) {
-        return @{ Exe = $pwshExe; Version = $cachedVer }
-    }
-
-    $asset = Get-DiscOptLatestPwshAsset
-    $zipPath = Join-Path $DownloadDir $asset.Name
-    $hashPath = Join-Path $DownloadDir 'powershell-hashes.sha256'
-    $ua = @{ 'User-Agent' = 'OptiHub-Discord/1.2' }
-    if (-not (Test-Path -LiteralPath $zipPath) -or (Get-Item -LiteralPath $zipPath).Length -lt 50000000) {
-        Write-Host "[*] Downloading portable PowerShell $($asset.Version)..." -ForegroundColor Cyan
-        $partial = "$zipPath.partial"
-        Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
-        Invoke-WebRequest -Uri $asset.Url -OutFile $partial -UseBasicParsing -Headers $ua -TimeoutSec 180
-        if ((Get-Item -LiteralPath $partial).Length -lt 50000000) {
-            Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
-            throw 'Portable PowerShell download is incomplete'
+        if (Test-Path -LiteralPath $exe) {
+            return @{ Exe = $exe; Version = 'preview' }
         }
-        Move-Item -LiteralPath $partial -Destination $zipPath -Force
-    }
-
-    Invoke-WebRequest -Uri $asset.HashesUrl -OutFile $hashPath -UseBasicParsing -Headers $ua -TimeoutSec 45
-    $hashLine = Get-Content -LiteralPath $hashPath -ErrorAction Stop |
-        Where-Object { $_ -match ('(?i)\*?' + [regex]::Escape($asset.Name) + '$') } |
-        Select-Object -First 1
-    $expectedHash = if ($hashLine -match '^([0-9a-fA-F]{64})\s+') { $Matches[1] } else { $null }
-    $actualHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
-    Remove-Item -LiteralPath $hashPath -Force -ErrorAction SilentlyContinue
-    if (-not $expectedHash -or $actualHash -ine $expectedHash) {
-        Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
-        throw 'Portable PowerShell checksum verification failed'
-    }
-
-    $tempDir = Join-Path $DownloadDir 'pwsh-extract'
-    if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue }
-    Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
-    $sourceExe = Get-ChildItem $tempDir -Recurse -Filter 'pwsh.exe' -File -ErrorAction SilentlyContinue |
-        Sort-Object { $_.FullName.Length } |
-        Select-Object -First 1
-    if (-not $sourceExe) {
-        throw 'Portable PowerShell ZIP did not contain pwsh.exe'
-    }
-    $sourceDir = Split-Path -Parent $sourceExe.FullName
-
-    if (Test-Path $destDir) { Remove-Item $destDir -Recurse -Force -ErrorAction SilentlyContinue }
-    New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-    Copy-Item -Path (Join-Path $sourceDir '*') -Destination $destDir -Recurse -Force
-    Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-
-    $ver = Get-DiscOptPwshVersion $pwshExe
-    if ($ver) {
-        return @{ Exe = $pwshExe; Version = $ver }
     }
     return $null
 }
 
 function Install-DiscOptPwsh7 {
-    if (Test-DiscOptIsElevated) {
-        $winget = Get-Command winget -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($winget) {
-            Write-Host '[*] Installing stable PowerShell 7 via winget...' -ForegroundColor Cyan
-            $proc = Start-Process -FilePath $winget.Source -ArgumentList @(
-                'install', '-e', '-id', 'Microsoft.PowerShell',
-                '-accept-package-agreements', '-accept-source-agreements', '-silent'
-            ) -PassThru -WindowStyle Hidden
-            if (-not $proc.WaitForExit(600000)) {
-                try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch { }
-                Write-Host '[!] winget PowerShell install timed out - trying portable download' -ForegroundColor Yellow
-            } elseif ($proc.ExitCode -ne 0) {
-                Write-Host '[!] winget install returned non-zero - trying portable download' -ForegroundColor Yellow
-            } else {
-                Start-Sleep -Seconds 3
-                $found = Get-DiscOptPwsh7
-                if ($found) { return $found }
-            }
-        }
+    # Preview only via winget/Store. No stable portable zip (OptiHub requires Preview + Terminal Preview).
+    $winget = Get-Command winget -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $winget) {
+        throw 'winget is required to install PowerShell 7 Preview. Install Microsoft.PowerShell.Preview and Windows Terminal Preview, then retry.'
     }
-
-    return Install-DiscOptPwsh7Portable
+    Write-Host '[*] Installing PowerShell 7 Preview via winget (Microsoft.PowerShell.Preview)...' -ForegroundColor Cyan
+    $proc = Start-Process -FilePath $winget.Source -ArgumentList @(
+        'install', '-e', '-id', 'Microsoft.PowerShell.Preview',
+        '--accept-package-agreements', '--accept-source-agreements', '--silent'
+    ) -PassThru -WindowStyle Hidden
+    if (-not $proc.WaitForExit(600000)) {
+        try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch { }
+        throw 'winget PowerShell Preview install timed out'
+    }
+    if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne $null) {
+        #  -1978335189 already installed etc. still re-probe
+        Write-Host "[!] winget exit $($proc.ExitCode) - probing for Preview install..." -ForegroundColor Yellow
+    }
+    Start-Sleep -Seconds 2
+    $found = Get-DiscOptPwsh7
+    if ($found) { return $found }
+    throw 'PowerShell 7 Preview install finished but pwsh-preview was not found. Install Microsoft.PowerShell.Preview and Windows Terminal Preview, then retry.'
 }
 
 function Get-DiscOptBoundScriptArgs {
@@ -309,16 +243,15 @@ function Initialize-DiscOptRuntime {
         throw 'Disc Optimizer must be run on 64-bit Windows with Discord Desktop installed.'
     }
 
-    if ($PSVersionTable.PSVersion.Major -lt 7) { $env:DISCOPT_PS7 = '1' }
-
-    $isCore7 = ($PSVersionTable.PSEdition -eq 'Core') -and (Test-DiscOptPwshVersionMeetsMinimum $PSVersionTable.PSVersion.ToString())
     $isAdmin = Test-DiscOptIsElevated
     $needElevate = (-not $Launch) -and (-not $isAdmin)
+    # OptiHub already elevates + hosts PowerShell 7 Preview silently.
+    $hostedByOptiHub = ($env:OPTIHUB -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1')
 
-    # Fast path for normal launches and already-elevated OptiHub runs. Avoid
-    # spawning another pwsh merely to query the version we are already using.
-    if ($isCore7 -and -not $needElevate) {
+    # Fast path: already on Preview and elevated (or OptiHub-hosted apply).
+    if ((Test-DiscOptIsPwshPreviewHost) -and (-not $needElevate -or $hostedByOptiHub)) {
         $env:DISCOPT_RUNTIME_READY = '1'
+        $env:DISCOPT_PS7_PREVIEW = '1'
         if ($isAdmin) { $env:DISCOPT_ELEVATED = '1' }
         return
     }
@@ -326,21 +259,27 @@ function Initialize-DiscOptRuntime {
     $pwshInfo = Get-DiscOptPwsh7
     if (-not $pwshInfo) {
         Write-Host ''
-        Write-Host '  Disc Optimizer - PowerShell 7 setup' -ForegroundColor Magenta
-        Write-Host '[*] PowerShell 7 not found - installing the current stable release...' -ForegroundColor Cyan
-        $pwshInfo = Install-DiscOptPwsh7
-        if (-not $pwshInfo) {
-            Write-Host '[-] Could not install PowerShell 7. Check internet and try again.' -ForegroundColor Red
+        Write-Host '  Disc Optimizer - PowerShell 7 Preview setup' -ForegroundColor Magenta
+        Write-Host '[*] PowerShell 7 Preview not found - installing Microsoft.PowerShell.Preview...' -ForegroundColor Cyan
+        try {
+            $pwshInfo = Install-DiscOptPwsh7
+        } catch {
+            Write-Host "[-] $($_.Exception.Message)" -ForegroundColor Red
             Wait-DiscOptClosePrompt
             exit 1
         }
-        Write-Host "[+] Installed PowerShell $($pwshInfo.Version)" -ForegroundColor Green
+        if (-not $pwshInfo) {
+            Write-Host '[-] Could not install PowerShell 7 Preview. Check internet / winget and try again.' -ForegroundColor Red
+            Wait-DiscOptClosePrompt
+            exit 1
+        }
+        Write-Host "[+] PowerShell 7 Preview ready ($($pwshInfo.Version))" -ForegroundColor Green
     }
 
     $extraArgs = Get-DiscOptBoundScriptArgs
     $baseArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass')
 
-    if ($needElevate) {
+    if ($needElevate -and -not $hostedByOptiHub) {
         Write-Host '[*] Requesting Administrator (needed for Discord optimization)...' -ForegroundColor Cyan
         $allArgs = $baseArgs + @('-File', $Script:SelfPath) + $extraArgs
         Start-Process -FilePath $pwshInfo.Exe -Verb RunAs -ArgumentList (Join-DiscOptProcessArguments $allArgs) -WorkingDirectory $Root | Out-Null
@@ -353,10 +292,17 @@ function Initialize-DiscOptRuntime {
         exit 0
     }
 
-    $allArgs = $baseArgs + @('-File', $Script:SelfPath) + $extraArgs
-    & $pwshInfo.Exe @allArgs
-    if ($null -eq $LASTEXITCODE) { exit 1 }
-    exit $LASTEXITCODE
+    # Re-enter under Preview when the current host is not Preview.
+    if (-not (Test-DiscOptIsPwshPreviewHost)) {
+        $allArgs = $baseArgs + @('-File', $Script:SelfPath) + $extraArgs
+        & $pwshInfo.Exe @allArgs
+        if ($null -eq $LASTEXITCODE) { exit 1 }
+        exit $LASTEXITCODE
+    }
+
+    $env:DISCOPT_RUNTIME_READY = '1'
+    $env:DISCOPT_PS7_PREVIEW = '1'
+    if ($isAdmin) { $env:DISCOPT_ELEVATED = '1' }
 }
 
 if (-not $env:DISCOPT_RUNTIME_READY) {
@@ -413,7 +359,7 @@ $EnabledTheme = 'amoled-cord.theme.css'
 $ForceDisabledPlugins = @(
     # StreamerModeOn forces Discord Streamer Mode while live even if the user turned it off.
     'StreamerModeOn',
-    # Keep member-list role section headers (Admin, Mods, etc.) — NoRoleHeaders strips them.
+    # Keep member-list role section headers (Admin, Mods, etc.) - NoRoleHeaders strips them.
     'NoRoleHeaders',
     # Lean minimalism: cut convenience / UI chrome plugins (overhead for little gain)
     'ImageZoom', 'ViewIcons', 'CopyUserURLs', 'ReadAllNotificationsButton',

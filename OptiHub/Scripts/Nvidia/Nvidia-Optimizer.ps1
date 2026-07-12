@@ -1,13 +1,16 @@
 # OptiHub NVIDIA Optimizer
-# - Apply series + G-SYNC OptiHub Base Profile via Profile Inspector
-# - Display settings through NVAPI (no Control Panel UI automation)
-# - Privacy/debloat + Overlay off
+# - Newest series-correct Game Ready / security driver when needed (Display.Driver only)
+# - Series + G-SYNC Base Profile via Profile Inspector (-silentImport)
+# - Wipe NVIDIA App + classic Control Panel + GFE leftovers, then fresh App install
+# - Debloat App background (overlay/SelfUpdate/telemetry) while keeping App launchable
+# - Display (Full RGB / max Hz / GPU no-scaling) through NVAPI - same driver settings
+#   the App reflects (no fragile App/CPL UI mouse automation)
 #
 #   Nvidia-Optimizer.ps1
 #   Nvidia-Optimizer.ps1 -Gsync
 #   Nvidia-Optimizer.ps1 -Repair
 #   Nvidia-Optimizer.ps1 -Series 40 -Gsync
-#   Nvidia-Optimizer.ps1 -InstallApp   # optional; App not used for display prefs
+#   Nvidia-Optimizer.ps1 -SkipApp   # leave existing App/CPL alone (advanced)
 
 param(
     [switch]$Gsync,
@@ -16,15 +19,15 @@ param(
     [switch]$Repair,
     [switch]$NonInteractive,
     [switch]$SkipDownload,
-    [switch]$SkipApp,          # leave NVIDIA App as-is; kept for command-line compatibility
-    [switch]$InstallApp,       # opt-in only - NVIDIA App is not used for display prefs
+    [switch]$SkipApp,          # skip wipe + fresh App reinstall (leave clients as-is)
+    [switch]$InstallApp,       # deprecated alias: App reinstall is the default path now
     [switch]$SkipProfile,
     [switch]$SkipDriver,
     [switch]$ForceDriver
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.7.3'
+$Script:NvidiaOptVersion = '1.8.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -33,6 +36,53 @@ $StatePath = Join-Path $StateDir 'nvidia-optimizer.json'
 $NpiDir = Join-Path $StateDir 'tools\nvidiaProfileInspector'
 $DriverCacheDir = Join-Path $StateDir 'drivers'
 $NpiExeName = 'nvidiaProfileInspector.exe'
+
+# --- PowerShell 7 Preview only (never Windows PowerShell 5.1 / never stable 7) ---
+function Test-OptiHubIsPwshPreviewHost {
+    if ($PSVersionTable.PSEdition -ne 'Core') { return $false }
+    if ([int]$PSVersionTable.PSVersion.Major -lt 7) { return $false }
+    $hostPath = ''
+    try { $hostPath = [string](Get-Process -Id $PID -ErrorAction Stop).Path } catch { }
+    if ($hostPath -match 'WindowsPowerShell') { return $false }
+    if ($hostPath -match '(?i)7-preview|PowerShellPreview|pwsh-preview') { return $true }
+    $pre = ''
+    try { $pre = [string]$PSVersionTable.PSVersion.PreReleaseLabel } catch { }
+    if (-not [string]::IsNullOrWhiteSpace($pre)) { return $true }
+    if ([string]$PSVersionTable.GitCommitId -match '(?i)preview') { return $true }
+    if ($hostPath -match '(?i)PowerShell[\\/]7[\\/]' -and $hostPath -notmatch '(?i)preview') { return $false }
+    return $false
+}
+function Get-OptiHubPwshPreview {
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in @(
+        (Join-Path $env:ProgramFiles 'PowerShell\7-preview\pwsh.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh-preview.exe')
+    )) {
+        if ($p) { [void]$candidates.Add($p) }
+    }
+    $cmd = Get-Command pwsh-preview -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd -and $cmd.Source) { [void]$candidates.Add([string]$cmd.Source) }
+    $appsRoot = Join-Path $env:ProgramFiles 'WindowsApps'
+    if (Test-Path -LiteralPath $appsRoot) {
+        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShellPreview*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { [void]$candidates.Add((Join-Path $_.FullName 'pwsh.exe')) }
+    }
+    foreach ($p in ($candidates | Select-Object -Unique)) {
+        if (-not $p -or $p -match 'WindowsPowerShell') { continue }
+        if ($p -match 'PowerShell\\7\\' -and $p -notmatch '(?i)preview') { continue }
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    return $null
+}
+function Assert-OptiHubPwshPreview {
+    if (Test-OptiHubIsPwshPreviewHost) { return }
+    $hint = Get-OptiHubPwshPreview
+    $msg = 'NVIDIA Optimizer requires PowerShell 7 Preview (not Windows PowerShell 5.1, not stable PowerShell 7). Install Microsoft.PowerShell.Preview and Windows Terminal Preview, then re-run from OptiHub.'
+    if ($hint) { $msg += " Found Preview at: $hint" }
+    throw $msg
+}
+Assert-OptiHubPwshPreview
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
     $p = [Math]::Max(0, [Math]::Min(100, $Percent))
@@ -246,7 +296,7 @@ function Apply-OptiHubGameProfileDeltas {
     }
 
     # Competitive titles: disable DLSS Frame Gen override when the series pack has it (40/50).
-    # FG trades latency for smoothness — wrong default for Val/CS2/R6/etc.
+    # FG trades latency for smoothness - wrong default for Val/CS2/R6/etc.
     if ($Tier -eq 'comp') {
         if ($BaseMap.ContainsKey('283385347')) {
             if (Set-OptiHubNipSettingValue -ProfileNode $ProfileNode -SettingId '283385347' -Value '0') {
@@ -578,17 +628,20 @@ function Import-OptiHubNipProfile {
 function Test-NvidiaAppInstalled {
     $paths = @(
         (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\NVIDIA App.exe'),
         (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA Overlay\NVIDIA App.exe'),
         (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe')
     )
-    foreach ($p in $paths) { if (Test-Path $p) { return $true } }
-    $app = Get-AppxPackage -Name '*NVIDIA*' -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)NVIDIAApp|GeForceExperience' }
+    foreach ($p in $paths) { if (Test-Path -LiteralPath $p) { return $true } }
+    $app = Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match '(?i)NVIDIAApp|NVIDIA\.App|GeForceExperience'
+    }
     return [bool]$app
 }
 
 function Test-NvidiaControlPanelInstalled {
     $appx = Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
-        $_.Name -match '(?i)^NVIDIACorp\.NVIDIAControlPanel$'
+        $_.Name -match '(?i)NVIDIAControlPanel|NVIDIACorp\.NVIDIAControlPanel'
     }
     if ($appx) { return $true }
     foreach ($p in @(
@@ -601,14 +654,136 @@ function Test-NvidiaControlPanelInstalled {
     return $false
 }
 
-function Ensure-NvidiaControlPanel {
-    Write-Step 'Checking optional NVIDIA Control Panel...'
-    if (Test-NvidiaControlPanelInstalled) {
-        Write-Ok 'NVIDIA Control Panel already present'
-        return $true
+function Stop-NvidiaClientProcesses {
+    foreach ($n in @(
+        'NVIDIA App', 'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper64', 'nvsphelper',
+        'NVIDIA Web Helper', 'GFExperience', 'nvcplui', 'NVIDIA Control Panel',
+        'NvBackend', 'oawrapper', 'nvidia-installer'
+    )) {
+        Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     }
-    Write-Ok 'NVIDIA Control Panel not installed; skipped because NVAPI applies display settings directly'
-    return $false
+    foreach ($im in @(
+        'NVIDIA App.exe', 'NVIDIA Overlay.exe', 'NVIDIA Share.exe', 'NVIDIA Web Helper.exe',
+        'nvsphelper64.exe', 'GFExperience.exe', 'nvcplui.exe', 'NvBackend.exe'
+    )) {
+        try { & taskkill.exe /F /IM $im /T 2>$null | Out-Null } catch { }
+    }
+}
+
+function Invoke-Nvi2UninstallPackage {
+    param([Parameter(Mandatory)][string]$PackageName)
+    $nvi2 = Join-Path ${env:ProgramFiles} 'NVIDIA Corporation\Installer2\InstallerCore\NVI2.DLL'
+    if (-not (Test-Path -LiteralPath $nvi2)) {
+        $nvi2 = Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Installer2\InstallerCore\NVI2.DLL'
+    }
+    if (-not (Test-Path -LiteralPath $nvi2)) { return $false }
+    $rundll = Join-Path $env:SystemRoot 'SysWOW64\RunDll32.EXE'
+    if (-not (Test-Path -LiteralPath $rundll)) {
+        $rundll = Join-Path $env:SystemRoot 'System32\RunDll32.EXE'
+    }
+    try {
+        Write-Ok "NVI2 uninstall: $PackageName"
+        # RunDll32 expects: "NVI2.DLL",UninstallPackage PackageName [-silent]
+        $arg = "`"$nvi2`",UninstallPackage $PackageName -silent"
+        $p = Start-Process -FilePath $rundll -ArgumentList $arg -Wait -PassThru -WindowStyle Hidden -ErrorAction SilentlyContinue
+        if ($p) { Write-Ok "NVI2 $PackageName exit $($p.ExitCode)" }
+        return $true
+    } catch {
+        Write-Warn "NVI2 uninstall $PackageName : $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Remove-NvidiaClientTraces {
+    # Wipe user-facing NVIDIA clients only. Never touch Display.Driver, audio, or containers
+    # required for the desktop. Fresh App is reinstalled after this pass.
+    Write-Step 'Wiping NVIDIA App, classic Control Panel, and GFE client traces...'
+    Stop-NvidiaClientProcesses
+
+    # Official NVI2 package IDs for desktop clients (driver stays).
+    foreach ($pkg in @(
+        'Display.NvApp',
+        'Display.GFExperience',
+        'GFExperience',
+        'HDAudio.Driver'  # NO - do not remove audio
+    )) {
+        if ($pkg -eq 'HDAudio.Driver') { continue }
+        [void](Invoke-Nvi2UninstallPackage -PackageName $pkg)
+    }
+
+    # Store / Appx Control Panel + any leftover App packages.
+    $appxTargets = @(Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match '(?i)NVIDIAControlPanel|NVIDIACorp\.NVIDIAControlPanel|NVIDIAApp|NVIDIA\.App|GeForceExperience'
+    })
+    foreach ($pkg in $appxTargets) {
+        try {
+            Write-Ok "Removing Appx package: $($pkg.Name)"
+            Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction Stop
+        } catch {
+            Write-Warn "Appx remove $($pkg.Name): $($_.Exception.Message)"
+        }
+    }
+    try {
+        $allUsers = @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -match '(?i)NVIDIAControlPanel|NVIDIACorp\.NVIDIAControlPanel'
+        })
+        foreach ($pkg in $allUsers) {
+            try {
+                Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue
+            } catch { }
+        }
+    } catch { }
+
+    # winget as a second path (msstore IDs).
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        foreach ($id in @('XP8CLZL93F5Z4P', '9NF8H0H7WMLT')) {
+            try {
+                & winget uninstall --id $id -e --silent --accept-source-agreements 2>$null | Out-Null
+            } catch { }
+        }
+        $ErrorActionPreference = $prev
+    }
+
+    # Leftover folders (App / GFE / classic CPL UI only).
+    $folderTargets = @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA Overlay'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA GeForce Experience'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\GeForce Experience'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Control Panel Client'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA Control Panel'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA App'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\NVIDIA GeForce Experience'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Control Panel Client'),
+        (Join-Path $env:LOCALAPPDATA 'NVIDIA Corporation\NVIDIA App'),
+        (Join-Path $env:LOCALAPPDATA 'NVIDIA Corporation\NVIDIA GeForce Experience'),
+        (Join-Path $env:PROGRAMDATA 'NVIDIA Corporation\NVIDIA App'),
+        (Join-Path $env:PROGRAMDATA 'NVIDIA Corporation\GeForce Experience')
+    )
+    Stop-NvidiaClientProcesses
+    Start-Sleep -Milliseconds 400
+    foreach ($dir in $folderTargets) {
+        if (Test-Path -LiteralPath $dir) {
+            try {
+                Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction Stop
+                Write-Ok "Removed client folder: $dir"
+            } catch {
+                Write-Warn "Could not fully remove $dir : $($_.Exception.Message)"
+            }
+        }
+    }
+
+    $appGone = -not (Test-NvidiaAppInstalled)
+    $cplGone = -not (Test-NvidiaControlPanelInstalled)
+    if ($appGone) { Write-Ok 'NVIDIA App traces cleared' } else { Write-Warn 'NVIDIA App still detected after wipe (will attempt overwrite install)' }
+    if ($cplGone) { Write-Ok 'Classic Control Panel traces cleared' } else { Write-Warn 'Classic Control Panel still detected after wipe' }
+    return [pscustomobject]@{
+        AppCleared = [bool]$appGone
+        CplCleared = [bool]$cplGone
+    }
 }
 
 function Disable-NvidiaOverlay {
@@ -701,24 +876,42 @@ function Test-NvidiaOverlayDisabled {
 }
 
 function Install-NvidiaApp {
-    # Optional - display settings use NVAPI, not the App.
-    Write-Step 'Installing NVIDIA App (optional; display prefs use NVAPI)...'
+    # Fresh App after wipe. Display prefs still use NVAPI (App reflects driver settings).
+    Write-Step 'Installing fresh NVIDIA App (debloat runs next; display prefs use NVAPI)...'
+    if (Test-NvidiaAppInstalled) {
+        Write-Ok 'NVIDIA App already present after install attempt path'
+        return $true
+    }
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if (-not $winget) {
-        Write-Warn 'winget not available'
+        Write-Warn 'winget not available - cannot install NVIDIA App from Microsoft Store'
         return $false
     }
     $prev = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    & winget install --id XP8CLZL93F5Z4P -e --source msstore --accept-package-agreements --accept-source-agreements --silent 2>&1 | Out-Null
-    $code = $LASTEXITCODE
+    $attempts = @(
+        @{ Args = @('install', '--id', 'XP8CLZL93F5Z4P', '-e', '--source', 'msstore', '--accept-package-agreements', '--accept-source-agreements', '--silent') },
+        @{ Args = @('install', '--id', 'XP8CLZL93F5Z4P', '-e', '--accept-package-agreements', '--accept-source-agreements', '--silent') }
+    )
+    $code = -1
+    foreach ($a in $attempts) {
+        Write-Ok ("winget " + ($a.Args -join ' '))
+        & winget @($a.Args) 2>&1 | Out-Null
+        $code = $LASTEXITCODE
+        if ($code -eq 0 -or (Test-NvidiaAppInstalled)) { break }
+        Start-Sleep -Seconds 2
+    }
     $ErrorActionPreference = $prev
-    if ($code -eq 0 -or (Test-NvidiaAppInstalled)) {
-        Write-Ok 'NVIDIA App present'
-        [void](Disable-NvidiaOverlay)
+    # Give the Store package a moment to register paths.
+    for ($i = 0; $i -lt 8; $i++) {
+        if (Test-NvidiaAppInstalled) { break }
+        Start-Sleep -Milliseconds 750
+    }
+    if (Test-NvidiaAppInstalled) {
+        Write-Ok 'Fresh NVIDIA App installed'
         return $true
     }
-    Write-Warn "NVIDIA App winget exit $code"
+    Write-Warn "NVIDIA App install failed (winget exit $code)"
     return $false
 }
 
@@ -1323,7 +1516,7 @@ function Start-DriverUpdateIfNeeded {
         $latestVer = $latest.Version
         $dl = $latest.DownloadUrl
         $branchNote = if ($SeriesId -eq '10') {
-            ' (10-series / Pascal security branch — not the modern 20-50 Game Ready line)'
+            ' (10-series / Pascal security branch - not the modern 20-50 Game Ready line)'
         } else { '' }
         Write-Ok "Newest package for this GPU series: $latestVer$branchNote ($($latest.ReleaseDate)) size $($latest.Size)"
         if ($latest.Name) { Write-Ok "Package: $($latest.Name)" }
@@ -1574,7 +1767,7 @@ function Disable-NvidiaTelemetry {
     if ($disabled -eq 0) { Write-Ok 'No telemetry tasks matched (already clean or names differ)' }
     else { Write-Ok "Telemetry/SelfUpdate tasks disabled ($disabled disable action(s))" }
 
-    # No logon persist task — scheduled tasks are background overhead. Quiet is
+    # No logon persist task - scheduled tasks are background overhead. Quiet is
     # re-applied only when the user runs OptiHub NVIDIA Apply (or Repair).
 
     # Privacy-oriented NV keys (best-effort; missing keys are fine)
@@ -1612,8 +1805,10 @@ function Test-NvidiaPerformanceDebloat {
         [void]$issues.Add('NVIDIA network container still starts automatically or is running')
     }
 
+    # Fresh App is expected and may be opened on demand. Only flag background noise
+    # (overlay / Share / helpers / legacy GFE) - not the main NVIDIA App process.
     $background = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.ProcessName -match '(?i)^NVIDIA (App|Overlay|Share|Web Helper)$|^GFExperience$|^nvsphelper(64)?$'
+        $_.ProcessName -match '(?i)^NVIDIA (Overlay|Share|Web Helper)$|^GFExperience$|^nvsphelper(64)?$'
     })
     if ($background.Count -gt 0) {
         [void]$issues.Add("Background clients still running: $($background.ProcessName -join ', ')")
@@ -1837,8 +2032,7 @@ try {
         exit 0
     }
 
-    # Force an array in Windows PowerShell 5.1; a single PSCustomObject does
-    # not expose the synthetic .Count property that PowerShell 7 provides.
+    # Always wrap in @() so .Count is reliable for 0/1/N GPUs under PS7.
     $gpus = @(Get-NvidiaGpus)
     if ($gpus.Count -eq 0) {
         throw 'No NVIDIA GPU detected. Install Game Ready / Studio drivers first.'
@@ -1893,7 +2087,7 @@ try {
     # Pipeline order (correct stack):
     #  1) Driver first (everything else sits on it)
     #  2) 3D Base Profile next (driver-level FPS/latency)
-    #  3) Then client stack: stop background clients, debloat, and apply display settings
+    #  3) Client stack: wipe App/CPL -> fresh App -> debloat -> NVAPI display
 
     # --- 1) Newest driver (OptiHub Clean Driver = clean install; continue when no restart is needed) ---
     $driverInfo = @{ Ran = $false; NeedsUpdate = $false; TweaksOk = $true; Method = 'none' }
@@ -2009,36 +2203,54 @@ try {
         Write-Ok '3D profile import skipped (-SkipProfile)'
     }
 
-    # --- 3) Client stack: preserve the user's NVIDIA App choice, ensure CPL, disable overlay ---
-    # Display preferences use NVAPI and driver-created storage, never UI automation.
-    Write-HubProgress 64 'Checking optional NVIDIA Control Panel...'
-    $cplOk = Ensure-NvidiaControlPanel
-
+    # --- 3) Client stack: wipe App + classic CPL, fresh App, debloat, then NVAPI display ---
+    # Display uses NVAPI (same driver settings the App shows). No App/CPL mouse automation.
     $appInstalled = Test-NvidiaAppInstalled
-    $wantApp = [bool]$InstallApp -and -not [bool]$SkipApp
-    if ($wantApp) {
-        Write-HubProgress 70 'NVIDIA App (opt-in only)...'
+    $cplOk = $false
+    $clientWipe = $null
+    # Default = wipe + fresh App. -SkipApp leaves clients alone. -InstallApp is accepted
+    # as a no-op alias because reinstall is already the default.
+    if ($InstallApp -and $SkipApp) {
+        Write-Warn 'Both -InstallApp and -SkipApp were passed; -SkipApp wins (clients left alone).'
+    }
+    if (-not $SkipApp) {
+        Write-HubProgress 64 'Wiping NVIDIA App + Control Panel clients...'
+        $clientWipe = Remove-NvidiaClientTraces
+        $appInstalled = Test-NvidiaAppInstalled
+        $cplOk = Test-NvidiaControlPanelInstalled
+
+        Write-HubProgress 70 'Fresh NVIDIA App install...'
         if ($SkipDownload -and -not $appInstalled) {
-            Write-Warn 'NVIDIA App not installed and -SkipDownload set'
-        } else {
-            [void](Install-NvidiaApp)
-            $appInstalled = Test-NvidiaAppInstalled
+            throw 'NVIDIA App was wiped but -SkipDownload prevents reinstall. Re-run without -SkipDownload.'
         }
+        if (-not (Install-NvidiaApp)) {
+            throw 'Fresh NVIDIA App install failed after client wipe. Check winget / Microsoft Store, then Apply again.'
+        }
+        $appInstalled = Test-NvidiaAppInstalled
+        if (-not $appInstalled) {
+            throw 'NVIDIA App is not present after install. Refusing to mark the client stack complete.'
+        }
+        Write-Ok 'Fresh NVIDIA App ready for debloat'
     } else {
-        Write-Ok "NVIDIA App left unchanged (currently $(if ($appInstalled) { 'installed' } else { 'not installed' }))"
+        Write-HubProgress 64 'Client reinstall skipped (-SkipApp)...'
+        Write-Ok "NVIDIA App left as-is (currently $(if ($appInstalled) { 'installed' } else { 'not installed' }))"
+        $cplOk = Test-NvidiaControlPanelInstalled
     }
 
     Write-HubProgress 76 'Disabling NVIDIA Overlay...'
     Disable-NvidiaOverlay
 
-    Write-HubProgress 82 'Privacy / debloat...'
+    Write-HubProgress 82 'Privacy / debloat (fresh App)...'
+    Disable-NvidiaTelemetry
+    # Second pass after App install - SelfUpdate tasks often reappear on first launch path.
+    Disable-NvidiaOverlay
     Disable-NvidiaTelemetry
     $overlayResult = Test-NvidiaOverlayDisabled
     foreach ($issue in $overlayResult.Issues) { Write-Warn "Overlay verification: $issue" }
     $debloatResult = Test-NvidiaPerformanceDebloat
     foreach ($issue in $debloatResult.Issues) { Write-Warn "Debloat verification: $issue" }
 
-    Write-HubProgress 90 'Display color / scaling (NVAPI)...'
+    Write-HubProgress 90 'Display color / scaling (NVAPI - same stack App reflects)...'
     $dispResult = Coerce-Hashtable (Set-NvidiaDisplayPreferences)
     if (-not $dispResult) {
         $dispResult = @{ Success = $false; Details = @('Display helper returned no result') }
@@ -2086,6 +2298,8 @@ try {
         npiPath             = $npi
         nvidiaApp           = $appInstalled
         nvidiaControlPanel  = [bool]$cplOk
+        clientWipe          = $clientWipe
+        clientReinstall     = (-not [bool]$SkipApp)
         displayPrefs        = [bool]$dispResult.Success
         displayMethod       = 'nvapi'
         displayDetails      = $dispResult.Details
@@ -2102,6 +2316,9 @@ try {
         gameProfileDeltas   = $true
     }
 
+    if (-not $SkipApp -and -not $appInstalled) {
+        throw 'Fresh NVIDIA App is required after the client wipe, but it is not installed.'
+    }
     if (-not [bool]$dispResult.Success) {
         throw 'The 3D profile was applied, but NVIDIA display preferences could not be verified. Check the log and Apply again.'
     }
@@ -2113,13 +2330,15 @@ try {
     }
 
     Write-Ok 'NVIDIA Optimizer finished'
-    Write-Ok 'In Control Panel: Display > Adjust desktop size and position = GPU + No scaling + Override (both monitors).'
-    Write-Ok 'Display > Change resolution: Output color to NVIDIA settings / Full RGB when listed.'
+    if (-not $SkipApp) {
+        Write-Ok 'Client stack: wiped App/CPL traces -> fresh NVIDIA App -> debloat applied.'
+    }
+    Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling + max verified Hz) - same settings the App reflects.'
     if ($driverInfo.Method -eq 'optihub-clean') {
-        Write-Ok 'Clean install completed in one pass (driver + 3D + NVAPI display). No forced reboot.'
+        Write-Ok 'Clean install completed in one pass (driver + 3D + fresh App + NVAPI display). No forced reboot.'
     }
     Write-HubProgress 100 'Completed successfully'
-    Write-Output ("DONE - NVIDIA {0}{1} (driver -> base+{2} games -> NVAPI display)" -f `
+    Write-Output ("DONE - NVIDIA {0}{1} (driver -> base+{2} games -> fresh App + NVAPI display)" -f `
         $seriesId, $(if ($useGsync) { ' G-SYNC' } else { ' max FPS / latency' }), @($gameProfiles).Count)
     exit 0
 } catch {

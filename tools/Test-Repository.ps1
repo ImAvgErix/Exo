@@ -166,7 +166,6 @@ foreach ($marker in @(
     Assert-ContainsText $steamOptimizer $marker 'Steam durable state/fail-closed contract'
 }
 foreach ($marker in @(
-    '1.7.0',
     "[string]`$state.applyStatus -eq 'applied'",
     'Test-SteamStartupQuiet',
     'Test-SteamDownloadConfig',
@@ -175,7 +174,8 @@ foreach ($marker in @(
     'Windows quiet shell',
     'Test-SteamCompleteClientDebloat',
     'Test-SteamWindowsQuiet',
-    'Reinstate-SteamQuiet'
+    'Reinstate-SteamQuiet',
+    'do NOT pin exact kit version'
 )) {
     Assert-ContainsText $steamDetect $marker 'Steam live applied-state contract'
 }
@@ -228,11 +228,11 @@ foreach ($marker in @(
     Assert-ContainsText $discordWindows $marker 'Discord scoped recovery contract'
 }
 foreach ($marker in @(
-    "[string]`$state.version -eq '1.3.0'",
     "[string]`$state.applyStatus -eq 'applied'",
     'Test-StableDiscordWindowsQuiet',
     '$markerOk -and $equicordOk',
-    '$launchOk'
+    '$launchOk',
+    'do not pin exact kit version'
 )) {
     Assert-ContainsText $discordDetect $marker 'Discord live applied-state contract'
 }
