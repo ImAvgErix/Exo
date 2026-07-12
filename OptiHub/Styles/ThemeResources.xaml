@@ -79,14 +79,17 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ContentControl">
+                    <!-- 2px solid ring: outer opaque stroke fill, inner white/dark fill -->
                     <Border Background="{ThemeResource OptiCardStrokeBrush}"
                             CornerRadius="{StaticResource OptiCardRadius}"
-                            UseLayoutRounding="True">
+                            UseLayoutRounding="True"
+                            Opacity="1">
                         <Border Background="{TemplateBinding Background}"
-                                CornerRadius="15"
-                                Margin="1"
+                                CornerRadius="14"
+                                Margin="2"
                                 Padding="{TemplateBinding Padding}"
-                                UseLayoutRounding="True">
+                                UseLayoutRounding="True"
+                                Opacity="1">
                             <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                               Content="{TemplateBinding Content}"
