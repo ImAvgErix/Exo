@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.5
+
+- **Brand icon**: Microsoft Fluent **Developer Board** filled (MIT) — solid Windows-native mark, not thin Lucide outlines / not a speedometer
 ## 1.8.4
 
 - **Brand icon**: Lucide `cpu` (ISC) instead of gauge — avoids Speedtest-like speedometer look; multi-size Start Menu ICO
