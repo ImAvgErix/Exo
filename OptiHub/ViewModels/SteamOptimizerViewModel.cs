@@ -51,12 +51,12 @@ public partial class SteamOptimizerViewModel : ObservableObject
             var state = await _services.OptimizerState.DetectSteamAsync();
             ApplyState(state);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            StatusText = "Status check failed";
-            DetailText = "Steam was not changed. Try Refresh status again.";
+            StatusText = "Unavailable";
+            DetailText = string.Empty;
             Features.Clear();
-            SetResult($"Could not check Steam: {ex.Message}", success: false);
+            SetResult("Status failed.", success: false);
         }
         finally
         {
@@ -84,7 +84,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;
-        ProgressStatus = "Preparing...";
+        ProgressStatus = "Applying...";
         SetResult(string.Empty, success: true);
         _runCts = new CancellationTokenSource();
 
@@ -98,7 +98,6 @@ public partial class SteamOptimizerViewModel : ObservableObject
                     ProgressStatus = p.Status;
             });
 
-            // Elevate for Program Files Steam folder writes + all-users Start Menu shortcuts.
             var result = await _services.PowerShell.RunAsync(
                 _services.Scripts.SteamOptimizerScript,
                 arguments: new[] { "-NonInteractive" },
@@ -110,13 +109,15 @@ public partial class SteamOptimizerViewModel : ObservableObject
             if (result.Success)
             {
                 ProgressPercent = 100;
-                ProgressStatus = "Completed successfully";
+                ProgressStatus = "Done";
                 SetResult("Done.", success: true);
             }
             else
             {
                 ProgressStatus = result.ExitCode == -2 ? "Cancelled" : "Failed";
-                SetResult(result.ErrorMessage ?? result.Summary, success: false);
+                var err = result.ErrorMessage ?? result.Summary ?? "Failed.";
+                if (err.Length > 200) err = err[..200] + "…";
+                SetResult(err, success: false);
             }
 
             await RefreshAfterRunAsync();
@@ -215,19 +216,19 @@ public partial class SteamOptimizerViewModel : ObservableObject
     {
         IsApplied = state.IsApplied;
         StatusText = state.StatusText;
-        DetailText = state.Detail;
+        DetailText = string.Empty;
         Features.Clear();
         foreach (var feature in state.Features)
         {
             Features.Add(new FeatureRowViewModel
             {
                 Title = feature.Title,
-                Detail = feature.Detail,
+                Detail = feature.IsActive ? "Applied" : "Not applied",
                 Glyph = feature.IsActive ? "\uE73E" : "\uE711",
-                Opacity = feature.IsActive ? 1.0 : 0.55
+                Opacity = feature.IsActive ? 1.0 : 0.85
             });
         }
-        RunButtonLabel = state.IsApplied ? "Reapply" : "Run";
+        RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
         if (!IsStatusLoading)
             IsFeatureListVisible = Features.Count > 0;
     }

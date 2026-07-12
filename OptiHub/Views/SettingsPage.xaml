@@ -26,18 +26,14 @@
                 <StackPanel.RenderTransform>
                     <CompositeTransform x:Name="HeaderTransform" TranslateY="10" />
                 </StackPanel.RenderTransform>
+                <TextBlock Text="SETTINGS" Style="{StaticResource OptiSectionTitle}" HorizontalAlignment="Center" Margin="0" />
                 <TextBlock Text="Settings"
                            FontFamily="{StaticResource OptiUiFontSemiBold}"
-                           FontSize="28"
+                           FontSize="26"
                            FontWeight="SemiBold"
                            CharacterSpacing="-20"
                            HorizontalAlignment="Center"
                            Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                <TextBlock Text="Theme, logs, version, updates."
-                           Style="{StaticResource OptiCaption}"
-                           FontSize="13"
-                           HorizontalAlignment="Center"
-                           Opacity="0.9" />
             </StackPanel>
 
             <!-- Body: 2×2 balanced cards -->
@@ -69,10 +65,6 @@
                         </Grid.RowDefinitions>
                         <StackPanel Spacing="4">
                             <TextBlock Text="APPEARANCE" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                            <TextBlock Text="Theme"
-                                       Style="{StaticResource OptiCaption}"
-                                       FontSize="12"
-                                       Opacity="0.85" />
                         </StackPanel>
                         <StackPanel Grid.Row="1"
                                     Orientation="Horizontal"
@@ -88,12 +80,6 @@
                                          AutomationProperties.Name="Use light theme"
                                          IsChecked="{x:Bind ViewModel.IsLightMode, Mode=TwoWay}" />
                         </StackPanel>
-                        <TextBlock Grid.Row="2"
-                                   Style="{StaticResource OptiCaption}"
-                                   FontSize="11.5"
-                                   Opacity="0.75"
-                                   Text="Applies instantly."
-                                   Margin="0,8,0,0" />
                     </Grid>
                 </Border>
 
@@ -107,11 +93,6 @@
                         </Grid.RowDefinitions>
                         <StackPanel Spacing="4">
                             <TextBlock Text="SUPPORT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                            <TextBlock Text="Apply logs"
-                                       Style="{StaticResource OptiCaption}"
-                                       FontSize="12"
-                                       Opacity="0.85"
-                                       TextWrapping="WrapWholeWords" />
                         </StackPanel>
                         <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="10" Margin="0,16,0,0">
                             <Button Style="{StaticResource OptiQuietButton}"
@@ -140,10 +121,6 @@
                         </Grid.RowDefinitions>
                         <StackPanel Spacing="4">
                             <TextBlock Text="ABOUT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                            <TextBlock Text="Build"
-                                       Style="{StaticResource OptiCaption}"
-                                       FontSize="12"
-                                       Opacity="0.85" />
                         </StackPanel>
                         <StackPanel Grid.Row="1"
                                     VerticalAlignment="Center"
@@ -156,12 +133,6 @@
                                        Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                        CharacterSpacing="-30" />
                         </StackPanel>
-                        <TextBlock Grid.Row="2"
-                                   Style="{StaticResource OptiCaption}"
-                                   FontSize="11.5"
-                                   Opacity="0.75"
-                                   Text="Discord · Steam · NVIDIA"
-                                   Margin="0,8,0,0" />
                     </Grid>
                 </Border>
 
@@ -175,11 +146,6 @@
                         </Grid.RowDefinitions>
                         <StackPanel Spacing="4">
                             <TextBlock Text="UPDATES" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                            <TextBlock Text="GitHub releases"
-                                       Style="{StaticResource OptiCaption}"
-                                       FontSize="12"
-                                       Opacity="0.85"
-                                       TextWrapping="WrapWholeWords" />
                         </StackPanel>
                         <StackPanel Grid.Row="1"
                                     VerticalAlignment="Center"

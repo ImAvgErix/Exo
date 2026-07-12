@@ -19,7 +19,7 @@ public partial class DashboardViewModel : ObservableObject
                 Definition = new OptimizerDefinition
                 {
                     Id = "discord",
-                    Title = "Discord Optimizer",
+                    Title = "Discord",
                     LogoPath = "Assets/Logos/discord.png",
                     Status = OptimizerStatus.Available
                 }
@@ -29,7 +29,7 @@ public partial class DashboardViewModel : ObservableObject
                 Definition = new OptimizerDefinition
                 {
                     Id = "steam",
-                    Title = "Steam Optimizer",
+                    Title = "Steam",
                     LogoPath = "Assets/Logos/steam.png",
                     Status = OptimizerStatus.Available
                 }
@@ -39,7 +39,7 @@ public partial class DashboardViewModel : ObservableObject
                 Definition = new OptimizerDefinition
                 {
                     Id = "nvidia",
-                    Title = "NVIDIA Optimizer",
+                    Title = "NVIDIA",
                     LogoPath = "Assets/Logos/nvidia.png",
                     Status = OptimizerStatus.Available
                 }
@@ -49,7 +49,7 @@ public partial class DashboardViewModel : ObservableObject
                 Definition = new OptimizerDefinition
                 {
                     Id = "brave",
-                    Title = "Brave Optimizer",
+                    Title = "Brave",
                     LogoPath = "Assets/Logos/brave.png",
                     Status = OptimizerStatus.ComingSoon
                 }
@@ -59,7 +59,7 @@ public partial class DashboardViewModel : ObservableObject
                 Definition = new OptimizerDefinition
                 {
                     Id = "riot",
-                    Title = "Riot Games Optimizer",
+                    Title = "Riot",
                     LogoPath = "Assets/Logos/riot.png",
                     Status = OptimizerStatus.ComingSoon
                 }
@@ -69,7 +69,7 @@ public partial class DashboardViewModel : ObservableObject
                 Definition = new OptimizerDefinition
                 {
                     Id = "epic",
-                    Title = "Epic Launcher Optimizer",
+                    Title = "Epic",
                     LogoPath = "Assets/Logos/epic.png",
                     Status = OptimizerStatus.ComingSoon
                 }

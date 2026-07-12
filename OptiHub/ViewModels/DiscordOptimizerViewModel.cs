@@ -78,12 +78,12 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             var state = await _services.OptimizerState.DetectDiscordAsync();
             ApplyState(state);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            StatusText = "Status check failed";
-            DetailText = "Discord was not changed. Try Refresh status again.";
+            StatusText = "Unavailable";
+            DetailText = string.Empty;
             Features.Clear();
-            SetResult($"Could not check Discord: {ex.Message}", success: false);
+            SetResult("Status failed.", success: false);
         }
         finally
         {
@@ -261,19 +261,19 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     {
         IsApplied = state.IsApplied;
         StatusText = state.StatusText;
-        DetailText = state.Detail;
+        DetailText = string.Empty;
         Features.Clear();
         foreach (var feature in state.Features)
         {
             Features.Add(new FeatureRowViewModel
             {
                 Title = feature.Title,
-                Detail = feature.Detail,
+                Detail = feature.IsActive ? "Applied" : "Not applied",
                 Glyph = feature.IsActive ? "\uE73E" : "\uE711",
-                Opacity = feature.IsActive ? 1.0 : 0.55
+                Opacity = feature.IsActive ? 1.0 : 0.85
             });
         }
-        RunButtonLabel = state.IsApplied ? "Reapply" : "Run";
+        RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
         if (!IsStatusLoading)
             IsFeatureListVisible = Features.Count > 0;
     }

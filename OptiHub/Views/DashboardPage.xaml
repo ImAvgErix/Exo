@@ -25,12 +25,12 @@
                 <StackPanel.RenderTransform>
                     <CompositeTransform x:Name="HeroTransform" TranslateY="12" />
                 </StackPanel.RenderTransform>
-                <TextBlock Text="Maximum performance. No compromise."
+                <TextBlock Text="OptiHub"
                            Style="{StaticResource OptiTagline}"
                            FontSize="34"
                            LineHeight="42"
                            HorizontalAlignment="Center" />
-                <TextBlock Text="Pick a target."
+                <TextBlock Text="Pick a target"
                            Style="{StaticResource OptiTaglineSupport}"
                            FontSize="14"
                            HorizontalAlignment="Center" />

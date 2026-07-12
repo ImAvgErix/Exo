@@ -50,11 +50,11 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             var state = await _services.OptimizerState.DetectNvidiaAsync();
             ApplyState(state);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            StatusText = "Status unavailable";
-            DetailText = "Could not read driver state.";
-            SetResult($"Status refresh failed: {ex.Message}", success: false);
+            StatusText = "Unavailable";
+            DetailText = string.Empty;
+            SetResult("Status failed.", success: false);
         }
         finally
         {
@@ -82,7 +82,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;
-        ProgressStatus = "Preparing...";
+        ProgressStatus = "Applying...";
         SetResult(string.Empty, success: true);
         _runCts = new CancellationTokenSource();
 
@@ -236,7 +236,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         IsStatusLoading = false;
         IsApplied = state.IsApplied;
         StatusText = state.StatusText;
-        DetailText = state.Detail;
+        DetailText = string.Empty;
         if (state.Extra is { Count: > 0 } && state.Extra.TryGetValue("gsync", out var g) &&
             bool.TryParse(g, out var gsyncApplied) && IsApplied)
             UseGsync = gsyncApplied;
@@ -247,12 +247,12 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             Features.Add(new FeatureRowViewModel
             {
                 Title = feature.Title,
-                Detail = feature.Detail,
+                Detail = feature.IsActive ? "Applied" : "Not applied",
                 Glyph = feature.IsActive ? "\uE73E" : "\uE711",
-                Opacity = feature.IsActive ? 1.0 : 0.55
+                Opacity = feature.IsActive ? 1.0 : 0.85
             });
         }
-        RunButtonLabel = state.IsApplied ? "Reapply profile" : "Apply profile";
+        RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
     }
 
     private void SetResult(string message, bool success)

@@ -111,11 +111,12 @@ public sealed class OptimizerStateService
         return features;
     }
 
+    /// <summary>Panel-style row: short title + Applied / Not applied.</summary>
     private static OptimizerFeatureInfo MakeFeature(string title, string detail, bool active) =>
         new()
         {
             Title = title,
-            Detail = detail,
+            Detail = active ? "Applied" : "Not applied",
             IsActive = active,
             Glyph = active ? "\uE73E" : "\uE711"
         };
@@ -126,17 +127,17 @@ public sealed class OptimizerStateService
         var active = !(lower.Contains("not ") || lower.Contains("missing") || lower.Contains("not found") || lower.Contains("not detected"));
 
         if (lower.Contains("equicord"))
-            return MakeFeature("Client mods & privacy", "Equicord loads privacy plugins and strips noisy telemetry.", active);
+            return MakeFeature("Equicord", "", active);
         if (lower.Contains("openasar"))
-            return MakeFeature("Faster Discord startup", "OpenASAR replaces the heavy launcher path so Discord opens quicker.", active);
+            return MakeFeature("OpenASAR", "", active);
         if (lower.Contains("kernel") || lower.Contains("ffmpeg") || lower.Contains("discopt"))
-            return MakeFeature("Aggressive RAM + latency kernel", "DiscOpt reclaims memory every 5s, uses Above Normal process priority, and enables thread/raw-input tuning.", active);
+            return MakeFeature("RAM / latency kernel", "", active);
         if (lower.Contains("debloat") || lower.Contains("game sdk") || lower.Contains("locale"))
-            return MakeFeature("Complete client debloat", "Old builds, optional hook/clips modules, game SDK files, extra locales, and disposable caches are removed.", active);
+            return MakeFeature("Client debloat", "", active);
         if (lower.Contains("amoled"))
-            return MakeFeature("True black AMOLED theme", "Pure black UI saves OLED power and cuts eye strain at night.", active);
+            return MakeFeature("AMOLED theme", "", active);
         if (lower.Contains("startup") || lower.Contains("toast") || lower.Contains("tray"))
-            return MakeFeature("Windows background suppression", "Startup, scheduled background noise, Windows toasts, and tray promotion are disabled.", active);
+            return MakeFeature("Windows quiet", "", active);
 
         return MakeFeature(text, string.Empty, active);
     }
@@ -154,11 +155,11 @@ public sealed class OptimizerStateService
             return new OptimizerStateInfo
             {
                 IsApplied = false,
-                StatusText = "Discord not installed",
-                Detail = "Install Discord stable first, or let the optimizer install it for you.",
+                StatusText = "Not installed",
+                Detail = string.Empty,
                 Features = new[]
                 {
-                    MakeFeature("Discord install", "Stable Discord is required before optimizations can apply.", false)
+                    MakeFeature("Discord install", "", false)
                 }
             };
         }
@@ -180,11 +181,11 @@ public sealed class OptimizerStateService
             return new OptimizerStateInfo
             {
                 IsApplied = false,
-                StatusText = "Discord incomplete",
-                Detail = "No active Discord build folder was found.",
+                StatusText = "Incomplete",
+                Detail = string.Empty,
                 Features = new[]
                 {
-                    MakeFeature("Discord build", "No app-* folder under LocalAppData\\Discord.", false)
+                    MakeFeature("Discord build", "", false)
                 }
             };
         }
@@ -235,18 +236,12 @@ public sealed class OptimizerStateService
                          new FileInfo(equicordAsar).Length > 1_000_000 &&
                          loaderText.Contains("equicord.asar", StringComparison.OrdinalIgnoreCase) &&
                          loaderText.Contains("require", StringComparison.OrdinalIgnoreCase);
-        features.Add(MakeFeature(
-            "Client mods & privacy",
-            "Equicord loads privacy plugins and strips noisy telemetry.",
-            equicordOk));
+        features.Add(MakeFeature("Equicord", "", equicordOk));
 
         var innerAsar = Path.Combine(resources, "_app.asar");
         var openAsarLength = File.Exists(innerAsar) ? new FileInfo(innerAsar).Length : 0L;
         var openAsarOk = openAsarLength is > 10_000 and < 500_000;
-        features.Add(MakeFeature(
-            "Faster Discord startup",
-            "OpenASAR replaces the heavy launcher path so Discord opens quicker.",
-            openAsarOk));
+        features.Add(MakeFeature("OpenASAR", "", openAsarOk));
 
         var kernelOk = false;
         if (File.Exists(versionDll) && File.Exists(ffmpeg) &&
@@ -267,10 +262,7 @@ public sealed class OptimizerStateService
             }
             catch { /* ignore */ }
         }
-        features.Add(MakeFeature(
-            "Aggressive RAM + latency kernel",
-            "DiscOpt reclaims memory every 5s, uses Above Normal process priority, and enables thread/raw-input tuning.",
-            kernelOk));
+        features.Add(MakeFeature("RAM / latency kernel", "", kernelOk));
 
         var oldAppsPresent = true;
         try
@@ -307,19 +299,13 @@ public sealed class OptimizerStateService
         catch { extraLocalesPresent = true; }
         var debloatOk = !oldAppsPresent && !optionalModulesPresent &&
                         !gameSdkPresent && !extraLocalesPresent;
-        features.Add(MakeFeature(
-            "Complete client debloat",
-            "Old builds, optional hook/clips modules, game SDK files, extra locales, and disposable caches are removed.",
-            debloatOk));
+        features.Add(MakeFeature("Client debloat", "", debloatOk));
 
         var runtimeOk = new[]
         {
             "discord_desktop_core-1", "discord_utils-1", "discord_voice-1", "discord_media-1"
         }.All(name => Directory.Exists(Path.Combine(modulesPath, name)));
-        features.Add(MakeFeature(
-            "Discord runtime integrity",
-            "Required desktop, utility, voice, and media modules remain installed.",
-            runtimeOk));
+        features.Add(MakeFeature("Runtime modules", "", runtimeOk));
 
         var amoledOk = false;
         var startupOk = false;
@@ -339,10 +325,7 @@ public sealed class OptimizerStateService
             catch { /* ignore */ }
         }
 
-        features.Add(MakeFeature(
-            "True black AMOLED theme",
-            "Pure black UI saves OLED power and cuts eye strain at night.",
-            amoledOk));
+        features.Add(MakeFeature("AMOLED theme", "", amoledOk));
 
         var notificationIds = new[]
         {
@@ -375,10 +358,7 @@ public sealed class OptimizerStateService
                              IsStableDiscordRunQuiet(discordRoot) &&
                              AreStableDiscordScheduledTasksDisabled(discordRoot) &&
                              AreStableDiscordTrayEntriesHidden(discordRoot);
-        features.Add(MakeFeature(
-            "Windows background suppression",
-            "Startup, scheduled background noise, Windows toasts, and tray promotion are disabled.",
-            windowsQuietOk));
+        features.Add(MakeFeature("Windows quiet", "", windowsQuietOk));
 
         var launchOk = false;
         var shortcutPath = Path.Combine(
@@ -398,25 +378,16 @@ public sealed class OptimizerStateService
             }
             catch { /* ignore */ }
         }
-        features.Add(MakeFeature(
-            "Start Menu / apps launch path",
-            "Start Menu and taskbar Discord shortcuts use the OptiHub -Launch path (OpenASAR + kernel). No desktop icons created.",
-            launchOk));
-
-        features.Add(MakeFeature(
-            "Verified optimizer record",
-            "A completed 1.3.0 full apply is recorded for this exact Discord build.",
-            markerOk));
+        features.Add(MakeFeature("Launch path", "", launchOk));
+        features.Add(MakeFeature("Apply record", "", markerOk));
 
         var applied = markerOk && equicordOk && openAsarOk && kernelOk && debloatOk &&
                       windowsQuietOk && amoledOk && runtimeOk && launchOk;
         return new OptimizerStateInfo
         {
             IsApplied = applied,
-            StatusText = applied ? "Already optimized" : "Ready to optimize",
-            Detail = applied
-                ? "No-compromise pack active: aggressive trim, Above Normal priority, full debloat, OpenASAR, and Equicord."
-                : "Some pieces are missing. Run to finish setup and unlock the savings below.",
+            StatusText = applied ? "All applied" : "Not applied",
+            Detail = string.Empty,
             Features = features
         };
     }
@@ -658,23 +629,20 @@ public sealed class OptimizerStateService
             return new OptimizerStateInfo
             {
                 IsApplied = false,
-                StatusText = "Steam not installed",
-                Detail = "Install Steam, open it once, then return to OptiHub.",
+                StatusText = "Not installed",
+                Detail = string.Empty,
                 Features = new[]
                 {
-                    MakeFeature("Steam install", "steam.exe was not found in the usual locations.", false)
+                    MakeFeature("Steam install", "", false)
                 }
             };
         }
 
-        features.Add(MakeFeature("Steam install", steam, true));
+        features.Add(MakeFeature("Steam install", "", true));
 
         var startupOk = IsSteamStartupQuiet();
 
-        features.Add(MakeFeature(
-            "Quieter Windows startup",
-            "Steam is not forced to launch when Windows starts.",
-            startupOk));
+        features.Add(MakeFeature("Startup quiet", "", startupOk));
         var launcherPath = Path.Combine(steam, "Steam-OptiHub.cmd");
         var cefLauncherOk = false;
         if (File.Exists(launcherPath))
@@ -689,21 +657,11 @@ public sealed class OptimizerStateService
             catch { /* ignore */ }
         }
         var downloadOptimized = downloadMarkerOk && IsSteamDownloadConfigOptimized(steam);
-        features.Add(MakeFeature(
-            "Quiet CEF launcher (default)",
-            "Start Menu / taskbar Steam uses Steam-OptiHub.cmd (disable-gpu, nofriendsui, nointro, etc.). No desktop icons.",
-            cefLauncherOk));
+        features.Add(MakeFeature("CEF launcher", "", cefLauncherOk));
 
         var clientTweaksApplied = clientMarkerOk && AreSteamClientTweaksOptimized(steam);
-        features.Add(MakeFeature(
-            "Download tuning + deep client cache clean",
-            "Throttle is cleared and disposable/orphaned caches are purged. Active downloads and installed-game shader caches stay intact.",
-            downloadOptimized));
-
-        features.Add(MakeFeature(
-            "Overlay / library client tweaks",
-            "GPU web views off, quieter overlay noise, no downloads while playing when keys exist.",
-            clientTweaksApplied));
+        features.Add(MakeFeature("Cache / download", "", downloadOptimized));
+        features.Add(MakeFeature("Client tweaks", "", clientTweaksApplied));
 
         var helperPath = Path.Combine(steam, "OptiHub-SteamWebHelperTrim.ps1");
         var aggressiveTrimOk = false;
@@ -720,20 +678,15 @@ public sealed class OptimizerStateService
             }
             catch { /* ignore */ }
         }
-        features.Add(MakeFeature(
-            "Aggressive 5s RAM trim + priority control",
-            "Reclaims steamwebhelper working sets every 5s, runs the client High when idle, then yields CPU while gaming. No suspend.",
-            aggressiveTrimOk));
+        features.Add(MakeFeature("WebHelper trim", "", aggressiveTrimOk));
 
         var applied = markerOk && startupOk && cefLauncherOk && aggressiveTrimOk &&
                       downloadOptimized && clientTweaksApplied;
         return new OptimizerStateInfo
         {
             IsApplied = applied,
-            StatusText = applied ? "Already optimized" : "Ready to optimize",
-            Detail = applied
-                ? "Performance pack active. Open Steam from Start Menu or taskbar (no desktop shortcuts)."
-                : "Run for the quiet CEF launcher, aggressive RAM reclamation, priority control, and deep client cleanup.",
+            StatusText = applied ? "All applied" : "Not applied",
+            Detail = string.Empty,
             Features = features
         };
     }
@@ -1067,40 +1020,11 @@ public sealed class OptimizerStateService
                                gpuName,
                                @"(?i)\bMX\d+\b|\b\d{3,4}M\b"));
 
-        features.Add(MakeFeature(
-            "NVIDIA stack",
-            gpuName ?? (gpuOk ? "NVIDIA software present" : "No NVIDIA GPU/driver found yet."),
-            gpuOk));
-        features.Add(MakeFeature(
-            "Driver (newest + install tweaks)",
-            driverTweaksApplied
-                ? $"OptiHub recorded verified driver/MSI tweaks for {driverTweaksVersion}. Refresh for a live check."
-                : restartPending
-                    ? "Restart Windows, then Apply again to verify the driver tweaks."
-                    : "The marker does not contain a verified driver-tweak version.",
-            driverTweaksApplied));
-        features.Add(MakeFeature(
-            "3D Base Profile",
-            profileApplied
-                ? $"OptiHub recorded the verified {profileFile} import ({profileVersion}, SHA-256 and driver {profileDriverVersion} checked)."
-                : restartPending
-                    ? "Restart Windows, then Apply again to import the profile."
-                    : applyInProgress
-                        ? "The previous Apply was interrupted before a verified profile marker was saved."
-                        : "The profile file, pack version, SHA-256, and imported driver version are not all verified.",
-            profileApplied));
-        features.Add(MakeFeature(
-            "Privacy / telemetry / overlay off",
-            debloatApplied
-                ? "OptiHub recorded overlay, telemetry, updater, FrameView, and auto-start debloat. Refresh for a live check."
-                : "The background debloat and overlay-off markers are incomplete.",
-            debloatApplied));
-        features.Add(MakeFeature(
-            "Display color / scaling prefs",
-            displayApplied
-                ? "OptiHub recorded a successful NVAPI apply. Refresh for live Full RGB, refresh-rate, and scaling verification."
-                : "A verified NVAPI display apply is not recorded.",
-            displayApplied));
+        features.Add(MakeFeature("GPU", "", gpuOk));
+        features.Add(MakeFeature("Driver / MSI", "", driverTweaksApplied));
+        features.Add(MakeFeature("3D profiles", "", profileApplied));
+        features.Add(MakeFeature("Debloat", "", debloatApplied));
+        features.Add(MakeFeature("Display prefs", "", displayApplied));
 
         var extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (!string.IsNullOrEmpty(series))
@@ -1129,23 +1053,9 @@ public sealed class OptimizerStateService
                         : !debloatApplied
                             ? "Background debloat incomplete"
                             : applied
-                                ? "Already optimized"
-                                : "Ready to optimize";
-        var detail = !gpuOk
-            ? "Needs an NVIDIA GPU and current drivers."
-            : restartPending
-            ? "Restart Windows, then Apply once more to finish the 3D profile and display preferences."
-            : notebookGpu
-                ? "OptiHub blocks desktop driver metadata on Laptop/Notebook GPUs. Install the official NVIDIA notebook driver manually."
-            : !driverTweaksApplied
-                ? "The saved state does not prove the driver/MSI tweaks. Apply or Refresh for live verification."
-                : !profileApplied
-                    ? "The saved profile marker is missing its file, pack version, or SHA-256 proof. Apply again."
-                    : !displayApplied
-                        ? "The profile is present, but a verified NVAPI display apply is not recorded. Apply once to finish."
-                        : !debloatApplied
-                            ? "The overlay/background debloat state is incomplete. Apply again for the no-compromise state."
-                            : "All phases are recorded. Refresh for live driver, service, profile, and NVAPI verification.";
+                                ? "All applied"
+                                : "Not applied";
+        var detail = string.Empty;
 
         return new OptimizerStateInfo
         {
@@ -1177,11 +1087,11 @@ public sealed class OptimizerStateService
                 return new OptimizerStateInfo
                 {
                     IsApplied = false,
-                    StatusText = "State unavailable",
-                    Detail = $"OptiHub could not inspect {optimizerName} right now. You can still open the optimizer and retry.",
+                    StatusText = "Unavailable",
+                    Detail = string.Empty,
                     Features = new[]
                     {
-                        MakeFeature($"{optimizerName} status", "Detection failed; no changes were made.", false)
+                        MakeFeature($"{optimizerName} status", "", false)
                     }
                 };
             }

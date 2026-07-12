@@ -17,11 +17,10 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,18">
-                    <TextBlock Text="STATUS" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,16">
+                    <TextBlock Text="NVIDIA" Style="{StaticResource OptiSectionTitle}" Margin="0" />
                     <Grid ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -35,39 +34,31 @@
                                    Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                    TextWrapping="Wrap" />
                         <ProgressRing Grid.Column="1"
-                                      Width="22"
-                                      Height="22"
+                                      Width="22" Height="22"
                                       IsActive="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay}"
                                       Visibility="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                      AutomationProperties.Name="Checking NVIDIA status"
                                       VerticalAlignment="Center" />
                     </Grid>
-                    <TextBlock Text="{x:Bind ViewModel.DetailText, Mode=OneWay}"
-                               Style="{StaticResource OptiBody}"
-                               FontSize="13.5"
-                               LineHeight="20" />
-                    <Grid ColumnSpacing="12" Margin="0,12,0,0">
+                    <Grid ColumnSpacing="12" Margin="0,10,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <ToggleSwitch Header="G-SYNC profile"
+                        <ToggleSwitch Header="G-SYNC"
                                       IsOn="{x:Bind ViewModel.UseGsync, Mode=TwoWay}"
-                                      OnContent="Adaptive sync"
-                                      OffContent="Max FPS / latency"
+                                      OnContent="On"
+                                      OffContent="Off"
                                       IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                       ToolTipService.ToolTip="G-SYNC / Adaptive Sync only"
-                                      AutomationProperties.Name="G-SYNC profile"
-                                      AutomationProperties.HelpText="G-SYNC profile" />
+                                      AutomationProperties.Name="G-SYNC" />
                         <Button Grid.Column="1"
                                 Style="{StaticResource OptiQuietButton}"
-                                Content="NVIDIA Panel"
+                                Content="Panel"
                                 Click="Panel_Click"
                                 VerticalAlignment="Bottom"
-                                MinWidth="140"
+                                MinWidth="100"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                                AutomationProperties.Name="Open OptiHub NVIDIA Panel"
-                                AutomationProperties.HelpText="Open NVIDIA Panel" />
+                                AutomationProperties.Name="Open NVIDIA Panel" />
                     </Grid>
                 </StackPanel>
 
@@ -88,7 +79,7 @@
                             <DataTemplate x:DataType="vm:FeatureRowViewModel">
                                 <Border Style="{StaticResource OptiCard}"
                                         Width="440"
-                                        MinWidth="320"
+                                        MinWidth="300"
                                         Margin="0,0,14,12"
                                         Padding="14,12"
                                         Opacity="{x:Bind Opacity}"
@@ -116,16 +107,12 @@
                                                        FontSize="14"
                                                        FontWeight="SemiBold"
                                                        Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       MaxLines="1" />
+                                                       TextWrapping="Wrap" />
                                             <TextBlock Text="{x:Bind Detail}"
                                                        FontFamily="{StaticResource OptiUiFont}"
                                                        FontSize="12"
                                                        LineHeight="16"
-                                                       Foreground="{ThemeResource OptiMutedTextBrush}"
-                                                       TextWrapping="NoWrap"
-                                                       MaxLines="1"
-                                                       TextTrimming="CharacterEllipsis" />
+                                                       Foreground="{ThemeResource OptiMutedTextBrush}" />
                                         </StackPanel>
                                     </Grid>
                                 </Border>
@@ -134,21 +121,7 @@
                     </ItemsControl>
                 </ScrollViewer>
 
-                <StackPanel Grid.Row="2" Spacing="6"
-                            Visibility="{x:Bind ViewModel.IsProgressVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                            Margin="0,0,0,14">
-                    <ProgressBar Minimum="0" Maximum="100"
-                                 Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
-                                 Height="8"
-                                 CornerRadius="4"
-                                 Foreground="{ThemeResource OptiAccentBrush}" />
-                    <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}"
-                               Style="{StaticResource OptiCaption}"
-                               TextAlignment="Center"
-                               HorizontalAlignment="Center" />
-                </StackPanel>
-
-                <StackPanel Grid.Row="3" Spacing="12">
+                <StackPanel Grid.Row="2" Spacing="12">
                     <Border Style="{StaticResource OptiCard}"
                             Padding="14,12"
                             Visibility="{x:Bind ViewModel.HasLastResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
@@ -169,31 +142,40 @@
                                        TextWrapping="Wrap" />
                         </Grid>
                     </Border>
+
+                    <StackPanel Spacing="6"
+                                Visibility="{x:Bind ViewModel.IsProgressVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <ProgressBar Minimum="0" Maximum="100"
+                                     Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
+                                     Height="8"
+                                     CornerRadius="4"
+                                     Foreground="{ThemeResource OptiAccentBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}"
+                                   Style="{StaticResource OptiCaption}"
+                                   TextAlignment="Center" />
+                    </StackPanel>
+
                     <Button Style="{StaticResource OptiPrimaryButton}"
                             Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
                             Click="Run_Click"
-                            AutomationProperties.Name="Apply NVIDIA profile"
-                            AutomationProperties.HelpText="Apply NVIDIA pack"
                             HorizontalAlignment="Stretch"
                             MinHeight="48"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                            AutomationProperties.Name="Apply NVIDIA" />
                     <Grid ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Button Style="{StaticResource OptiQuietButton}"
-                                Content="Reset status"
+                                Content="Reset"
                                 Click="Repair_Click"
-                                AutomationProperties.Name="Reset NVIDIA optimizer status"
-                                AutomationProperties.HelpText="Reset OptiHub status"
                                 HorizontalAlignment="Stretch"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                         <Button Grid.Column="1"
                                 Style="{StaticResource OptiQuietButton}"
-                                Content="Refresh status"
+                                Content="Refresh"
                                 Click="Refresh_Click"
-                                AutomationProperties.Name="Refresh NVIDIA status"
                                 HorizontalAlignment="Stretch"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                     </Grid>
