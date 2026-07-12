@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.26
+
+- **NVIDIA 1.9.2**: hard silent **NVIDIA App uninstall** via NVI2 - **64-bit System32 RunDll32** + `-silent -noreboot` (SysWOW64 was returning invalid args and leaving App installed); no winget; all Display.NvApp/ShadowPlay/FrameView/Telemetry packages; force-delete folders/ARP/pending; 3 wipe passes
 ## 1.8.25
 
 - **NVIDIA 1.9.1**: enable Control Panel **Use the advanced 3D image settings** (`NVTweak` Gestalt=2) so Manage 3D / imported profiles take effect

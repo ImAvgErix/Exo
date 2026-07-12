@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.9.1'
+$Script:NvidiaOptVersion = '1.9.2'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -647,7 +647,13 @@ function Test-NvidiaAppInstalled {
     $app = Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
         $_.Name -match '(?i)NVIDIAApp|NVIDIA\.App|GeForceExperience'
     }
-    return [bool]$app
+    if ($app) { return $true }
+    # NVI2 still has Display.NvApp (or children) registered even if CEF was deleted
+    try {
+        $nvi = @(Get-Nvi2InstalledPackageNames | Where-Object { $_ -match '(?i)^Display\.NvApp$|^Display\.NvApp\.' })
+        if ($nvi.Count -gt 0) { return $true }
+    } catch { }
+    return $false
 }
 
 function Get-OptiHubWingetPath {
@@ -1037,29 +1043,18 @@ function Install-NvidiaControlPanel {
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName = $winget
             # Official Store package for classic NVIDIA Control Panel
+            # CPL only when missing - short timeout (winget is slow; skip if already installed)
             $psi.Arguments = 'install --id 9NF8H0H7WMLT -e --source msstore --accept-package-agreements --accept-source-agreements --disable-interactivity --silent'
             $psi.UseShellExecute = $false
             $psi.CreateNoWindow = $true
             $psi.RedirectStandardOutput = $true
             $psi.RedirectStandardError = $true
             $proc = [Diagnostics.Process]::Start($psi)
-            if ($proc -and -not $proc.WaitForExit(45000)) {
+            if ($proc -and -not $proc.WaitForExit(35000)) {
                 try { $proc.Kill($true) } catch { try { $proc.Kill() } catch { } }
-                Write-Warn 'winget Control Panel install timed out after 45s'
+                Write-Warn 'winget Control Panel install timed out after 35s'
             } elseif ($proc) {
                 Write-Ok "winget Control Panel exit $($proc.ExitCode)"
-            }
-            # Second try without forcing msstore source
-            if (-not (Test-NvidiaControlPanelInstalled)) {
-                $psi2 = New-Object System.Diagnostics.ProcessStartInfo
-                $psi2.FileName = $winget
-                $psi2.Arguments = 'install --id 9NF8H0H7WMLT -e --accept-package-agreements --accept-source-agreements --disable-interactivity --silent'
-                $psi2.UseShellExecute = $false
-                $psi2.CreateNoWindow = $true
-                $p2 = [Diagnostics.Process]::Start($psi2)
-                if ($p2 -and -not $p2.WaitForExit(45000)) {
-                    try { $p2.Kill($true) } catch { try { $p2.Kill() } catch { } }
-                }
             }
         } catch {
             Write-Warn "Control Panel winget failed: $($_.Exception.Message)"
@@ -1114,53 +1109,282 @@ function Ensure-NvidiaDisplayClient {
 }
 
 function Stop-NvidiaClientProcesses {
+    # Kill App/GFE/Overlay UI and helpers. Do NOT stop NVDisplay.ContainerLocalSystem
+    # (display driver). Temporarily stop NvContainerLocalSystem so files unlock.
+    foreach ($svc in @('NvTelemetryContainer', 'NvContainerLocalSystem')) {
+        try {
+            $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
+            if ($s -and $s.Status -ne 'Stopped') {
+                Write-Ok "Stopping service $svc (App unlock)..."
+                Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+            }
+        } catch { }
+    }
     foreach ($n in @(
         'NVIDIA App', 'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper64', 'nvsphelper',
-        'NVIDIA Web Helper', 'GFExperience', 'nvcplui', 'NVIDIA Control Panel',
-        'NvBackend', 'oawrapper', 'nvidia-installer'
+        'NVIDIA Web Helper', 'GFExperience', 'NVIDIA Control Panel',
+        'NvBackend', 'oawrapper', 'nvidia-installer', 'DarkModeCheck',
+        'NVIDIA App Permission', 'NvOAWrapperCache', 'OAWrapper', 'nvcontainer'
     )) {
         Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     }
     foreach ($im in @(
         'NVIDIA App.exe', 'NVIDIA Overlay.exe', 'NVIDIA Share.exe', 'NVIDIA Web Helper.exe',
-        'nvsphelper64.exe', 'GFExperience.exe', 'nvcplui.exe', 'NvBackend.exe'
+        'nvsphelper64.exe', 'GFExperience.exe', 'NvBackend.exe', 'DarkModeCheck.exe',
+        'NVIDIA App Permission.exe', 'NvOAWrapperCache.exe', 'OAWrapper.exe',
+        'nvcontainer.exe', 'NVDisplay.Container.exe'
     )) {
+        # Never kill the display driver container image if listed wrong - NVDisplay is separate
+        if ($im -eq 'NVDisplay.Container.exe') { continue }
         try { & taskkill.exe /F /IM $im /T 2>$null | Out-Null } catch { }
     }
+    # User-session nvcontainer only (display LS container service stays)
+    try {
+        Get-CimInstance Win32_Process -Filter "Name = 'nvcontainer.exe'" -ErrorAction SilentlyContinue | ForEach-Object {
+            try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch { }
+        }
+    } catch { }
+}
+
+function Get-Nvi2DllPath {
+    foreach ($p in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Installer2\InstallerCore\NVI2.DLL'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Installer2\InstallerCore\NVI2.DLL')
+    )) {
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    return $null
+}
+
+function Get-Nvi2InstalledPackageNames {
+    $names = [System.Collections.Generic.List[string]]::new()
+    foreach ($root in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Installer2'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Installer2')
+    )) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $n = $_.Name
+            if ($n -match '^(?<pkg>.+)\.\{[0-9A-Fa-f\-]{36}\}$') {
+                [void]$names.Add($Matches['pkg'])
+            }
+        }
+    }
+    # ARP child names: {GUID}_Display.NvApp.MessageBus
+    foreach ($rp in @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+    )) {
+        if (-not (Test-Path -LiteralPath $rp)) { continue }
+        Get-ChildItem -LiteralPath $rp -ErrorAction SilentlyContinue | ForEach-Object {
+            if ($_.PSChildName -match '^[\{]?[0-9A-Fa-f\-]{36}[\}]?_(?<pkg>.+)$') {
+                [void]$names.Add($Matches['pkg'])
+            }
+        }
+    }
+    return @($names | Select-Object -Unique | Sort-Object)
+}
+
+function Test-Nvi2AppPackageName([string]$Name) {
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
+    # NEVER touch driver / audio / core installer / containers needed by display driver
+    if ($Name -match '^(?i)Display\.Driver|VirtualAudio|HDAudio|InstallerCore|^installer$|Display\.NVWMI|PhysX') {
+        return $false
+    }
+    if ($Name -match '^(?i)NvContainer(\.|$)') {
+        # Shared with driver services - leave alone
+        return $false
+    }
+    return ($Name -match '(?i)^Display\.NvApp|^NvApp|ShadowPlay|FrameView|NvTelemetry|NvPlugin|NvDLISR|GFExperience|GeForceExperience|Display\.GFExperience')
 }
 
 function Invoke-Nvi2UninstallPackage {
-    param([Parameter(Mandatory)][string]$PackageName)
-    $nvi2 = Join-Path ${env:ProgramFiles} 'NVIDIA Corporation\Installer2\InstallerCore\NVI2.DLL'
-    if (-not (Test-Path -LiteralPath $nvi2)) {
-        $nvi2 = Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Installer2\InstallerCore\NVI2.DLL'
-    }
-    if (-not (Test-Path -LiteralPath $nvi2)) { return $false }
-    $rundll = Join-Path $env:SystemRoot 'SysWOW64\RunDll32.EXE'
-    if (-not (Test-Path -LiteralPath $rundll)) {
-        $rundll = Join-Path $env:SystemRoot 'System32\RunDll32.EXE'
-    }
-    try {
-        Write-Ok "NVI2 uninstall: $PackageName"
-        # RunDll32 expects: "NVI2.DLL",UninstallPackage PackageName [-silent]
-        $arg = "`"$nvi2`",UninstallPackage $PackageName -silent"
-        $p = Start-Process -FilePath $rundll -ArgumentList $arg -Wait -PassThru -WindowStyle Hidden -ErrorAction SilentlyContinue
-        if ($p) { Write-Ok "NVI2 $PackageName exit $($p.ExitCode)" }
-        return $true
-    } catch {
-        Write-Warn "NVI2 uninstall $PackageName : $($_.Exception.Message)"
+    param(
+        [Parameter(Mandatory)][string]$PackageName,
+        [int]$TimeoutSec = 90
+    )
+    $nvi2 = Get-Nvi2DllPath
+    if (-not $nvi2) {
+        Write-Warn "NVI2.DLL missing - cannot uninstall package $PackageName via installer"
         return $false
+    }
+    # CRITICAL: use 64-bit System32 RunDll32 first. SysWOW64 returns 0x80070057
+    # (E_INVALIDARG) for NVI2 UninstallPackage and never removes the App.
+    $rundllCandidates = @(
+        (Join-Path $env:SystemRoot 'System32\RunDll32.EXE'),
+        (Join-Path $env:SystemRoot 'SysWOW64\RunDll32.EXE')
+    ) | Where-Object { Test-Path -LiteralPath $_ }
+
+    # Flags that skip NVI2UI confirmation / reboot prompts
+    $flagSets = @(
+        '-silent -noreboot',
+        '-silent',
+        '-silent -noreboot -passive'
+    )
+
+    foreach ($rundll in $rundllCandidates) {
+        foreach ($flags in $flagSets) {
+            try {
+                Write-Ok "NVI2 silent uninstall: $PackageName ($([IO.Path]::GetFileName($rundll)) $flags)"
+                # Exact contract: rundll32 "NVI2.DLL",UninstallPackage PackageName -silent -noreboot
+                $arg = "`"$nvi2`",UninstallPackage $PackageName $flags"
+                $psi = New-Object System.Diagnostics.ProcessStartInfo
+                $psi.FileName = $rundll
+                $psi.Arguments = $arg
+                $psi.UseShellExecute = $false
+                $psi.CreateNoWindow = $true
+                $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+                # Do not redirect stdin/stdout - can break NVI2 on some builds
+                $proc = [Diagnostics.Process]::Start($psi)
+                if (-not $proc) { continue }
+                $ok = $proc.WaitForExit([Math]::Max(5, $TimeoutSec) * 1000)
+                if (-not $ok) {
+                    try { $proc.Kill($true) } catch { try { $proc.Kill() } catch { } }
+                    Write-Warn "NVI2 $PackageName timed out after ${TimeoutSec}s"
+                    continue
+                }
+                Write-Ok "NVI2 $PackageName exit $($proc.ExitCode)"
+                # Exit 0 from System32 = success; also accept package folder gone
+                $still = @(Get-Nvi2InstalledPackageNames | Where-Object { $_ -eq $PackageName })
+                if ($proc.ExitCode -eq 0) { return $true }
+                if ($still.Count -eq 0) { return $true }
+                # SysWOW64 invalid-arg path - try next rundll
+                if ($proc.ExitCode -eq -2147024809 -or $proc.ExitCode -eq 0x80070057) { break }
+            } catch {
+                Write-Warn "NVI2 uninstall $PackageName : $($_.Exception.Message)"
+            }
+        }
+    }
+
+    # Fallback: cmd.exe with System32 RunDll32 (batch-style quoting)
+    try {
+        $rundll = Join-Path $env:SystemRoot 'System32\RunDll32.EXE'
+        if (Test-Path -LiteralPath $rundll) {
+            $line = "`"$rundll`" `"$nvi2`",UninstallPackage $PackageName -silent -noreboot"
+            Write-Ok "NVI2 cmd fallback: $PackageName"
+            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $line) -Wait -PassThru -WindowStyle Hidden -ErrorAction SilentlyContinue
+            if ($p) { Write-Ok "NVI2 cmd $PackageName exit $($p.ExitCode)" }
+            if ($p -and $p.ExitCode -eq 0) { return $true }
+            $still = @(Get-Nvi2InstalledPackageNames | Where-Object { $_ -eq $PackageName })
+            if ($still.Count -eq 0) { return $true }
+        }
+    } catch { }
+
+    return $false
+}
+
+function Remove-OptiHubTreeForce {
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $true }
+    try {
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+        return $true
+    } catch { }
+    # takeown + icacls then retry (locked App trees after partial uninstall)
+    try {
+        $null = & takeown.exe /F $Path /R /D Y 2>$null
+        $null = & icacls.exe $Path /grant Administrators:F /T /C /Q 2>$null
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+        return $true
+    } catch { }
+    # robocopy mirror empty is reliable for stubborn trees
+    try {
+        $empty = Join-Path $env:TEMP ("optihub-empty-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $empty -Force | Out-Null
+        $null = & robocopy.exe $empty $Path /MIR /R:0 /W:0 /NFL /NDL /NJH /NJS /nc /ns /np 2>$null
+        try { Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue } catch { }
+        try { Remove-Item -LiteralPath $empty -Recurse -Force -ErrorAction SilentlyContinue } catch { }
+        return -not (Test-Path -LiteralPath $Path)
+    } catch {
+        return -not (Test-Path -LiteralPath $Path)
+    }
+}
+
+function Remove-NvidiaAppArpLeftovers {
+    foreach ($rp in @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+    )) {
+        if (-not (Test-Path -LiteralPath $rp)) { continue }
+        Get-ChildItem -LiteralPath $rp -ErrorAction SilentlyContinue | ForEach-Object {
+            $leaf = $_.PSChildName
+            $pkg = $null
+            if ($leaf -match '^[\{]?[0-9A-Fa-f\-]{36}[\}]?_(?<pkg>.+)$') { $pkg = $Matches['pkg'] }
+            $disp = $null
+            try { $disp = [string](Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).DisplayName } catch { }
+            $isApp = $false
+            if ($pkg -and (Test-Nvi2AppPackageName $pkg)) { $isApp = $true }
+            if ($disp -match '(?i)NVIDIA App|GeForce Experience|ShadowPlay|FrameView|NvApp|NVIDIA Backend|NVIDIA MessageBus|NVIDIA Telemetry|NvDLISR|Watchdog Plugin') {
+                if ($disp -notmatch '(?i)Control Panel|Graphics Driver|Virtual Audio|Display Driver') { $isApp = $true }
+            }
+            if (-not $isApp) { return } # continue next ARP entry
+            try {
+                Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
+                Write-Ok "Removed ARP leftover: $leaf"
+            } catch {
+                Write-Warn "ARP remove $leaf : $($_.Exception.Message)"
+            }
+        }
+    }
+    # Clear stuck NVI2 pending uninstall/install for App packages (blocks silent re-runs)
+    $pendingRoot = 'HKLM:\SOFTWARE\NVIDIA Corporation\Installer2\Pending'
+    if (Test-Path -LiteralPath $pendingRoot) {
+        Get-ChildItem -LiteralPath $pendingRoot -ErrorAction SilentlyContinue | ForEach-Object {
+            if (Test-Nvi2AppPackageName $_.PSChildName) {
+                try {
+                    Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
+                    Write-Ok "Cleared NVI2 pending: $($_.PSChildName)"
+                } catch { }
+            }
+        }
     }
 }
 
 function Remove-NvidiaClientTraces {
-    # Wipe App + GFE only. KEEP classic Control Panel - it is the display-UI fallback
-    # when NVIDIA App installer rejects the PC (0x1A000000) or winget fails.
-    Write-Step 'Wiping NVIDIA App + GFE client traces (keeping classic Control Panel)...'
+    # Wipe App + GFE only via NVI2 silent uninstall (no winget - too slow / flaky).
+    # KEEP classic Control Panel Store package + display driver + Virtual Audio.
+    Write-Step 'Wiping NVIDIA App + GFE (silent NVI2, no prompts, no winget)...'
     Stop-NvidiaClientProcesses
 
-    foreach ($pkg in @('Display.NvApp', 'Display.GFExperience', 'GFExperience')) {
-        [void](Invoke-Nvi2UninstallPackage -PackageName $pkg)
+    $preferredOrder = @(
+        'Display.NvApp.MessageBus',
+        'Display.NvApp.NvBackend',
+        'Display.NvApp.NvCPL',
+        'ShadowPlay',
+        'FrameViewSdk',
+        'NvPlugin.Watchdog',
+        'NvTelemetry',
+        'NvDLISR',
+        'Display.NvApp',
+        'Display.GFExperience',
+        'GFExperience'
+    )
+    $discovered = @(Get-Nvi2InstalledPackageNames | Where-Object { Test-Nvi2AppPackageName $_ })
+    $toRemove = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in $preferredOrder) {
+        if ($discovered -contains $p -or $true) {
+            # Always try preferred names (NVI2 no-ops if missing)
+            if (-not $toRemove.Contains($p)) { [void]$toRemove.Add($p) }
+        }
+    }
+    foreach ($p in $discovered) {
+        if (-not $toRemove.Contains($p)) { [void]$toRemove.Add($p) }
+    }
+
+    Write-Ok ("NVI2 App packages to remove: " + ($toRemove -join ', '))
+    foreach ($pkg in $toRemove) {
+        Stop-NvidiaClientProcesses
+        [void](Invoke-Nvi2UninstallPackage -PackageName $pkg -TimeoutSec 75)
+    }
+
+    # Second pass for anything still registered
+    $left = @(Get-Nvi2InstalledPackageNames | Where-Object { Test-Nvi2AppPackageName $_ })
+    if ($left.Count -gt 0) {
+        Write-Warn ("Retry NVI2 for remaining: " + ($left -join ', '))
+        Stop-NvidiaClientProcesses
+        foreach ($pkg in $left) {
+            [void](Invoke-Nvi2UninstallPackage -PackageName $pkg -TimeoutSec 90)
+        }
     }
 
     # Remove App / GFE Appx only - never NVIDIA Control Panel Store package.
@@ -1175,18 +1399,17 @@ function Remove-NvidiaClientTraces {
         } catch {
             Write-Warn "Appx remove $($pkg.Name): $($_.Exception.Message)"
         }
+        try {
+            # Elevated: also strip for all users when possible
+            Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -eq $pkg.Name -and $_.Name -notmatch '(?i)ControlPanel' } |
+                ForEach-Object {
+                    try { Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue } catch { }
+                }
+        } catch { }
     }
 
-    $winget = Get-OptiHubWingetPath
-    if ($winget) {
-        $prev = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            # App only - do NOT uninstall Control Panel (9NF8H0H7WMLT)
-            & $winget uninstall --id XP8CLZL93F5Z4P -e --silent --accept-source-agreements --disable-interactivity 2>$null | Out-Null
-        } catch { }
-        $ErrorActionPreference = $prev
-    }
+    # No winget uninstall - it is slow, often interactive, and does not drive NVI2 well.
 
     # App / GFE folders only - never Control Panel Client paths.
     $folderTargets = @(
@@ -1199,28 +1422,55 @@ function Remove-NvidiaClientTraces {
         (Join-Path $env:LOCALAPPDATA 'NVIDIA Corporation\NVIDIA App'),
         (Join-Path $env:LOCALAPPDATA 'NVIDIA Corporation\NVIDIA GeForce Experience'),
         (Join-Path $env:PROGRAMDATA 'NVIDIA Corporation\NVIDIA App'),
-        (Join-Path $env:PROGRAMDATA 'NVIDIA Corporation\GeForce Experience')
+        (Join-Path $env:PROGRAMDATA 'NVIDIA Corporation\GeForce Experience'),
+        # Official App payload cache used by NVI2 (Pending PackageConfig paths)
+        'C:\NVIDIA\NVAPP2',
+        'C:\NVIDIA\Display.NvApp',
+        (Join-Path $env:ProgramData 'NVIDIA\NVAPP2')
     )
+    # Leftover Installer2 component folders for App packages
+    foreach ($i2 in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Installer2'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Installer2')
+    )) {
+        if (-not (Test-Path -LiteralPath $i2)) { continue }
+        Get-ChildItem -LiteralPath $i2 -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $base = if ($_.Name -match '^(?<pkg>.+)\.\{[0-9A-Fa-f\-]{36}\}$') { $Matches['pkg'] } else { $_.Name }
+            if (Test-Nvi2AppPackageName $base) { $folderTargets += $_.FullName }
+        }
+    }
+
     Stop-NvidiaClientProcesses
-    Start-Sleep -Milliseconds 400
-    foreach ($dir in $folderTargets) {
+    Start-Sleep -Milliseconds 500
+    foreach ($dir in ($folderTargets | Select-Object -Unique)) {
         if (Test-Path -LiteralPath $dir) {
-            try {
-                Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction Stop
+            if (Remove-OptiHubTreeForce -Path $dir) {
                 Write-Ok "Removed client folder: $dir"
-            } catch {
-                Write-Warn "Could not fully remove $dir : $($_.Exception.Message)"
+            } else {
+                Write-Warn "Could not fully remove $dir"
             }
         }
     }
 
+    Remove-NvidiaAppArpLeftovers
+    Remove-NvidiaAppDesktopShortcuts | Out-Null
+
+    # Restart container service if we stopped it (driver/App residual helpers)
+    try {
+        $s = Get-Service -Name 'NvContainerLocalSystem' -ErrorAction SilentlyContinue
+        if ($s -and $s.Status -ne 'Running') {
+            Start-Service -Name 'NvContainerLocalSystem' -ErrorAction SilentlyContinue
+        }
+    } catch { }
+
     $appGone = -not (Test-NvidiaAppInstalled)
     $cplOk = Test-NvidiaControlPanelInstalled
     if ($appGone) { Write-Ok 'NVIDIA App / GFE traces cleared' } else { Write-Warn 'NVIDIA App still detected after wipe' }
-    if ($cplOk) { Write-Ok 'Classic Control Panel kept for display fallback' } else { Write-Ok 'Classic Control Panel not present yet (will install if App fails)' }
+    if ($cplOk) { Write-Ok 'Classic Control Panel kept' } else { Write-Ok 'Classic Control Panel not present yet (will install next)' }
     return [pscustomobject]@{
         AppCleared = [bool]$appGone
         ControlPanelPresent = [bool]$cplOk
+        PackagesTried = @($toRemove)
     }
 }
 
@@ -3168,16 +3418,17 @@ try {
     }
 
     if (-not $SkipApp) {
-        Write-HubProgress 64 'Removing NVIDIA App + GFE...'
-        $clientWipe = Remove-NvidiaClientTraces
-        # Force App gone again if anything remained
-        if (Test-NvidiaAppInstalled) {
-            Write-Warn 'NVIDIA App still present after wipe - retrying uninstall'
-            [void](Remove-NvidiaClientTraces)
+        Write-HubProgress 64 'Removing NVIDIA App + GFE (silent NVI2)...'
+        $clientWipe = $null
+        for ($wipeTry = 1; $wipeTry -le 3; $wipeTry++) {
+            $clientWipe = Remove-NvidiaClientTraces
+            if (-not (Test-NvidiaAppInstalled)) { break }
+            Write-Warn "NVIDIA App still present after wipe pass $wipeTry - retrying silent uninstall"
+            Start-Sleep -Milliseconds 800
         }
         $appInstalled = Test-NvidiaAppInstalled
         if ($appInstalled) {
-            Write-Warn 'Could not fully remove NVIDIA App; continuing with Control Panel path'
+            Write-Warn 'Could not fully remove NVIDIA App after 3 silent passes; continuing with Control Panel path'
         } else {
             Write-Ok 'NVIDIA App removed (Control Panel only path)'
         }
