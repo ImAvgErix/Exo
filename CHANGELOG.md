@@ -1,8 +1,11 @@
 # Changelog
 
+## 1.9.3
+
+- **NVIDIA Panel**: **Apply** (not Fix); checkmark when **Applied**; fixed policy primary highest Hz / secondary 60 Hz (no dropdowns)
 ## 1.9.2
 
-- **NVIDIA Panel**: no more toggles — **Applied / Not applied** rows with **Fix** (same card style as the rest of OptiHub); **Fix all** applies OptiHub driver policy
+- **NVIDIA Panel**: **Applied** (checkmark) / **Not applied** rows with **Apply** (not Fix); **Apply all** sets OptiHub policy — primary highest Hz, secondary 60 Hz (no refresh dropdowns/toggles)
 ## 1.9.1
 
 - **NVIDIA Panel**: fix false **Apply failed** when turning settings **off** — verify against your panel prefs (not hard-coded ON); NVAPI skips Full RGB/GPU scale when disabled; Store hive stamp is best-effort
@@ -239,6 +242,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

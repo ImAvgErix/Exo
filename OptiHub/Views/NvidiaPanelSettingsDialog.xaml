@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:OptiHub.ViewModels"
     Title="OptiHub NVIDIA Panel"
-    PrimaryButtonText="Fix all"
+    PrimaryButtonText="Apply all"
     CloseButtonText="Close"
     DefaultButton="Primary"
     Style="{StaticResource DefaultContentDialogStyle}">
@@ -13,7 +13,7 @@
     <ScrollViewer MaxHeight="540" VerticalScrollBarVisibility="Auto" Padding="0,4,8,0">
         <StackPanel Spacing="10" MinWidth="440" MaxWidth="500">
             <TextBlock Style="{StaticResource OptiCaption}"
-                       Text="Driver-level settings OptiHub owns. Green = applied. Not applied means the driver is not on OptiHub policy — press Fix."
+                       Text="Driver policies OptiHub owns. Applied shows a check when the driver matches. Primary uses highest refresh; secondary is 60 Hz."
                        TextWrapping="Wrap" />
 
             <ProgressRing x:Name="LoadingRing"
@@ -63,13 +63,13 @@
                                 </StackPanel>
                                 <Button Grid.Column="2"
                                         Style="{StaticResource OptiQuietButton}"
-                                        Content="Fix"
-                                        MinWidth="72"
+                                        Content="Apply"
+                                        MinWidth="80"
                                         VerticalAlignment="Center"
                                         Visibility="{x:Bind NeedsFix, Mode=OneWay}"
                                         Tag="{x:Bind Id}"
-                                        Click="FixRow_Click"
-                                        AutomationProperties.Name="Fix this NVIDIA policy" />
+                                        Click="ApplyRow_Click"
+                                        AutomationProperties.Name="Apply this NVIDIA policy" />
                             </Grid>
                         </Border>
                     </DataTemplate>

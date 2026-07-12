@@ -80,7 +80,7 @@ public sealed class NvidiaPanelSettingsService
             Id = "full-rgb",
             Title = "Full RGB / Full dynamic range",
             IsApplied = colorOk,
-            Detail = colorOk ? "Driver reports Full RGB (User policy)" : "Driver not on Full RGB — Fix applies NVAPI color"
+            Detail = colorOk ? "Driver reports Full RGB" : "Apply sets Full RGB via NVAPI"
         });
 
         items.Add(new NvidiaPolicyProbeItem
@@ -89,21 +89,20 @@ public sealed class NvidiaPanelSettingsService
             Title = "GPU no-scaling + override games",
             IsApplied = scalingOk && registryOk,
             Detail = scalingOk && registryOk
-                ? "GPU scan-out / no-scaling active"
-                : "Scaling policy missing — Fix stamps override + GPU no-scaling"
+                ? "GPU no-scaling and override active"
+                : "Apply sets GPU no-scaling and override"
         });
 
         items.Add(new NvidiaPolicyProbeItem
         {
             Id = "refresh",
-            Title = "Primary max Hz · secondary 60 Hz",
+            Title = "Primary highest Hz · secondary 60 Hz",
             IsApplied = refreshOk,
             Detail = refreshOk
-                ? "Refresh policy matches OptiHub (primary max / secondary 60)"
-                : "Refresh not on OptiHub policy — Fix sets primary max, secondary 60 Hz"
+                ? "Primary highest available, secondary 60 Hz"
+                : "Apply sets primary highest (gaming), secondary 60 Hz"
         });
 
-        // Registry video + Gestalt
         var videoOk = ProbeVideoNvidia();
         items.Add(new NvidiaPolicyProbeItem
         {
@@ -111,8 +110,8 @@ public sealed class NvidiaPanelSettingsService
             Title = "Video color + image (NVIDIA settings)",
             IsApplied = videoOk,
             Detail = videoOk
-                ? "NVTweak video sources set to NVIDIA on device keys"
-                : "Video still on player defaults — Fix forces NVIDIA video color/image"
+                ? "Video sources use NVIDIA settings"
+                : "Apply forces NVIDIA video color and image settings"
         });
 
         var appGone = !ProbeNvidiaAppPresent();
@@ -125,8 +124,8 @@ public sealed class NvidiaPanelSettingsService
             Detail = appGone && cplGone
                 ? "Clients removed — OptiHub is the panel"
                 : appGone
-                    ? "App gone, Control Panel still present — Fix strips CPL"
-                    : "NVIDIA client still installed — Fix strips App + CPL (use full Apply for full wipe)"
+                    ? "App gone, Control Panel still present — use Apply profile to strip CPL"
+                    : "Still installed — use Apply profile on the NVIDIA card to strip App + CPL"
         });
 
         var profileOk = Probe3dProfileApplied();
@@ -136,8 +135,8 @@ public sealed class NvidiaPanelSettingsService
             Title = "3D performance profiles (DRS)",
             IsApplied = profileOk,
             Detail = profileOk
-                ? "Base + game profiles recorded as applied"
-                : "3D pack not verified — use Apply profile on the NVIDIA card (not only Fix)"
+                ? "Base + game profiles applied"
+                : "Use Apply profile on the NVIDIA card (full pass imports 3D packs)"
         });
 
         if (!string.IsNullOrWhiteSpace(detailBase))

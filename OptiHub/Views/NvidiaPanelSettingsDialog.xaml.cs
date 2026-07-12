@@ -19,10 +19,10 @@ public sealed partial class NvidiaPanelSettingsDialog : ContentDialog
         InitializeComponent();
         PolicyList.ItemsSource = _rows;
         Loaded += OnLoaded;
-        PrimaryButtonClick += OnFixAllClick;
+        PrimaryButtonClick += OnApplyAllClick;
     }
 
-    /// <summary>True if the user asked to apply (Fix all or any Fix).</summary>
+    /// <summary>True if the user successfully applied policy.</summary>
     public bool RequestedApply { get; private set; }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -54,16 +54,16 @@ public sealed partial class NvidiaPanelSettingsDialog : ContentDialog
 
             var missing = _rows.Count(r => !r.IsApplied);
             FooterText.Text = missing == 0
-                ? "All OptiHub NVIDIA policies are applied on the driver."
-                : $"{missing} item(s) not applied. Fix applies OptiHub policy at the driver (NVAPI).";
+                ? "All OptiHub NVIDIA policies are applied."
+                : $"{missing} not applied. Apply sets OptiHub policy on the driver (primary max Hz, secondary 60 Hz).";
             IsPrimaryButtonEnabled = missing > 0;
-            PrimaryButtonText = missing > 0 ? "Fix all" : "Done";
+            PrimaryButtonText = missing > 0 ? "Apply all" : "Done";
         }
         catch (Exception ex)
         {
             FooterText.Text = $"Could not check driver state: {ex.Message}";
             IsPrimaryButtonEnabled = true;
-            PrimaryButtonText = "Fix all";
+            PrimaryButtonText = "Apply all";
         }
         finally
         {
@@ -73,19 +73,17 @@ public sealed partial class NvidiaPanelSettingsDialog : ContentDialog
         }
     }
 
-    private async void FixRow_Click(object sender, RoutedEventArgs e)
+    private async void ApplyRow_Click(object sender, RoutedEventArgs e)
     {
         if (_busy) return;
-        if (sender is not Button { Tag: string id }) return;
-        await RunFixAsync(id);
+        await RunApplyAsync();
     }
 
-    private async void OnFixAllClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    private async void OnApplyAllClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
         if (PrimaryButtonText == "Done")
             return;
 
-        // Defer close until apply finishes
         var deferral = args.GetDeferral();
         try
         {
@@ -95,9 +93,9 @@ public sealed partial class NvidiaPanelSettingsDialog : ContentDialog
                 return;
             }
 
-            var ok = await RunFixAsync(null);
+            var ok = await RunApplyAsync();
             if (!ok)
-                args.Cancel = true; // keep dialog open on failure
+                args.Cancel = true;
             else
                 RequestedApply = true;
         }
@@ -107,18 +105,19 @@ public sealed partial class NvidiaPanelSettingsDialog : ContentDialog
         }
     }
 
-    private async Task<bool> RunFixAsync(string? singleId)
+    private async Task<bool> RunApplyAsync()
     {
         _busy = true;
         IsPrimaryButtonEnabled = false;
-        FooterText.Text = singleId is null
-            ? "Applying all OptiHub NVIDIA policies to the driver..."
-            : "Applying fix...";
+        FooterText.Text = "Applying OptiHub NVIDIA policy to the driver...";
 
         try
         {
-            // Always apply the OptiHub-correct defaults (not user toggles)
+            // Fixed OptiHub policy — no user toggles/dropdowns
             var settings = NvidiaPanelSettings.CreateDefaults();
+            // Explicit refresh policy: primary max (gaming), secondary 60
+            settings.PrimaryRefresh = "max";
+            settings.SecondaryRefresh = "60";
             _panel.Save(settings);
 
             var progress = new Progress<ScriptRunProgress>(p =>
@@ -131,19 +130,15 @@ public sealed partial class NvidiaPanelSettingsDialog : ContentDialog
             RequestedApply = ok;
             await RefreshRowsAsync();
 
-            FooterText.Text = ok
-                ? message
-                : message;
-
-            IsPrimaryButtonEnabled = _rows.Any(r => !r.IsApplied);
-            if (!_rows.Any(r => !r.IsApplied))
-                PrimaryButtonText = "Done";
-
+            FooterText.Text = message;
+            var stillMissing = _rows.Any(r => !r.IsApplied);
+            IsPrimaryButtonEnabled = stillMissing;
+            PrimaryButtonText = stillMissing ? "Apply all" : "Done";
             return ok;
         }
         catch (Exception ex)
         {
-            FooterText.Text = $"Fix failed: {ex.Message}";
+            FooterText.Text = $"Apply failed: {ex.Message}";
             IsPrimaryButtonEnabled = true;
             return false;
         }

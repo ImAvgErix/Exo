@@ -28,7 +28,10 @@ public partial class NvidiaPolicyRowViewModel : ObservableObject
     public void SetResult(bool applied, string detail)
     {
         IsApplied = applied;
-        Status = applied ? $"Applied — {detail}" : $"Not applied — {detail}";
+        // Short status label: Applied (check) or Not applied
+        Status = applied
+            ? (string.IsNullOrWhiteSpace(detail) ? "Applied" : $"Applied — {detail}")
+            : (string.IsNullOrWhiteSpace(detail) ? "Not applied" : $"Not applied — {detail}");
         Glyph = applied ? "\uE73E" : "\uE711";
         Opacity = applied ? 1.0 : 0.85;
         OnPropertyChanged(nameof(NeedsFix));
