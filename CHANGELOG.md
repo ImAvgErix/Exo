@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.21
+
+- **NVIDIA 1.8.9**: fix unsupported-exit detector - PS `[uint32]` cast threw on **-436207616**, so 1.8.20 still missed Brian's code; use BitConverter + exact signed match
 ## 1.8.20
 
 - **NVIDIA 1.8.8**: treat App setup exit **-436207616 / 0xE6000000** as system-not-supported (Brian GTX 1080 log) so Apply fails fast and falls back to Control Panel + NVAPI instead of retrying for minutes

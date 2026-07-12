@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.8.8'
+$Script:NvidiaOptVersion = '1.8.9'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -758,17 +758,21 @@ function Get-NvidiaAppOfficialInstallerUrl {
 }
 
 function Test-NvidiaAppSetupUnsupportedExit {
-    param([int]$Code)
-    # Brian's GTX 1080 log (kit 1.8.4): exit -436207616
-    #   signed int of 0xE6000000 = system configuration not supported by NVIDIA App installer
-    # Also seen / reported as +436207616 / 0x1A000000 depending on Process.ExitCode cast.
-    # Must catch BOTH signed and unsigned forms or we retry for minutes and abort Apply.
+    param($Code)
+    # Brian GTX 1080 log: exit -436207616 (signed form of 0xE6000000).
+    # Process.ExitCode may surface as signed or unsigned. Do NOT cast negative ints
+    # with [uint32] directly (throws in PS and was making the detector always false).
+    $c = 0
+    try { $c = [int]$Code } catch { return $false }
+
+    # Exact values from Brian's log + positive twin
+    if ($c -eq -436207616 -or $c -eq 436207616) { return $true }
+
     try {
-        $u = [uint32]([int64]$Code -band 0xFFFFFFFF)
-        if ($u -eq [uint32]0x1A000000 -or $u -eq [uint32]0xE6000000) { return $true }
-        if ($Code -eq 436207616 -or $Code -eq -436207616) { return $true }
-        $hi = [int](($u -shr 24) -band 0xFF)
-        # NVIDIA package/system reject families seen in the wild
+        $u = [BitConverter]::ToUInt32([BitConverter]::GetBytes($c), 0)
+        if ($u -eq [uint32]436207616 -or $u -eq [uint32]3858759680) { return $true }
+        if ($u -eq 436207616 -or $u -eq 3858759680) { return $true } # 0x1A000000 / 0xE6000000 decimal
+        $hi = [int](($u -shr 24) -band [uint32]255)
         if ($hi -eq 0x1A -or $hi -eq 0xE6) { return $true }
     } catch { }
     return $false
