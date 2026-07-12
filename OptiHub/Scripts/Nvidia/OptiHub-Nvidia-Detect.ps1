@@ -458,10 +458,12 @@ foreach ($cplPath in @(
 }
 $controlPanelOnly = [bool]($state -and $state.PSObject.Properties.Name -contains 'controlPanelOnly' -and [bool]$state.controlPanelOnly)
 $cplOk = $cplInstalled -or [bool]($state -and $state.nvidiaControlPanel) -or $controlPanelOnly
-$clientOk = (-not $appInstalled) -and (
-    $cplOk -or [bool]($state -and $state.displayMethod -eq 'nvapi' -and $state.displayPrefs) -or $controlPanelOnly
-)
+# Success = App gone (and preferably CPL gone). Display via OptiHub/NVAPI.
+$clientOk = -not $appInstalled
 if (-not $appInstalled -and $displayOk) { $clientOk = $true }
+if ($state -and $state.PSObject.Properties.Name -contains 'optihubPanel' -and [bool]$state.optihubPanel -and -not $appInstalled) {
+    $clientOk = $true
+}
 
 # 3D "advanced" = driver DRS profiles applied (Profile Inspector), NOT the CPL radio button.
 # Store CPL virtual hive often shows "Let the 3D application decide" even when DRS is forced.
@@ -481,15 +483,15 @@ $features.Add(@{
 })
 
 $features.Add(@{
-    title  = 'No NVIDIA App (minimal client)'
-    detail = $(if (-not $appInstalled -and $cplInstalled) {
-        'NVIDIA App removed. Control Panel package may remain as optional UI only — OptiHub applies real settings via NVAPI.'
-    } elseif (-not $appInstalled) {
-        'NVIDIA App absent. Display/3D settings still apply without Control Panel UI.'
+    title  = 'Driver only (no App / CPL)'
+    detail = $(if (-not $appInstalled -and -not $cplInstalled) {
+        'NVIDIA App and Control Panel removed. Use OptiHub NVIDIA Panel for display/video policy.'
+    } elseif (-not $appInstalled -and $cplInstalled) {
+        'App gone but Control Panel still installed. Re-Apply to strip CPL; OptiHub panel is the UI.'
     } else {
-        'NVIDIA App still installed. Re-Apply to strip App and keep driver + optional Control Panel only.'
+        'NVIDIA App still installed. Re-Apply to strip App + Control Panel.'
     })
-    active = -not $appInstalled
+    active = (-not $appInstalled) -and (-not $cplInstalled)
 })
 
 $backgroundOk = [bool]$debloat.Ok -and [bool]$overlay.Ok

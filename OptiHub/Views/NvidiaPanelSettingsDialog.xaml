@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="OptiHub.Views.NvidiaPanelSettingsDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="OptiHub NVIDIA Panel"
+    PrimaryButtonText="Apply to driver"
+    CloseButtonText="Close"
+    DefaultButton="Primary"
+    Style="{StaticResource DefaultContentDialogStyle}">
+
+    <ScrollViewer MaxHeight="520" VerticalScrollBarVisibility="Auto" Padding="0,4,8,0">
+        <StackPanel Spacing="14" MinWidth="420" MaxWidth="480">
+            <TextBlock Style="{StaticResource OptiCaption}"
+                       Text="This is OptiHub's control panel. Settings apply at the driver (NVAPI + DRS). You do not need NVIDIA App or Control Panel installed."
+                       TextWrapping="Wrap" />
+
+            <TextBlock Text="DISPLAY" Style="{StaticResource OptiSectionTitle}" Margin="0,4,0,0" />
+
+            <TextBlock Text="Primary monitor refresh" Style="{StaticResource OptiCaption}" />
+            <ComboBox x:Name="PrimaryRefreshBox"
+                      HorizontalAlignment="Stretch"
+                      SelectedIndex="0">
+                <ComboBoxItem Content="Highest available (gaming)" Tag="max" />
+                <ComboBoxItem Content="60 Hz" Tag="60" />
+                <ComboBoxItem Content="Keep current" Tag="keep" />
+            </ComboBox>
+
+            <TextBlock Text="Secondary monitor refresh" Style="{StaticResource OptiCaption}" />
+            <ComboBox x:Name="SecondaryRefreshBox"
+                      HorizontalAlignment="Stretch"
+                      SelectedIndex="0">
+                <ComboBoxItem Content="60 Hz (performance)" Tag="60" />
+                <ComboBoxItem Content="Highest available" Tag="max" />
+                <ComboBoxItem Content="Keep current" Tag="keep" />
+            </ComboBox>
+
+            <ToggleSwitch x:Name="FullRgbToggle"
+                          Header="Full RGB / Full dynamic range"
+                          OnContent="On"
+                          OffContent="Off" />
+            <ToggleSwitch x:Name="GpuNoScalingToggle"
+                          Header="GPU scaling — No scaling"
+                          OnContent="On"
+                          OffContent="Off" />
+            <ToggleSwitch x:Name="ScalingOverrideToggle"
+                          Header="Override the scaling mode set by games"
+                          OnContent="On"
+                          OffContent="Off" />
+
+            <TextBlock Text="VIDEO" Style="{StaticResource OptiSectionTitle}" Margin="0,8,0,0" />
+            <ToggleSwitch x:Name="VideoColorToggle"
+                          Header="Video color — Use NVIDIA settings"
+                          OnContent="On"
+                          OffContent="Off" />
+            <ToggleSwitch x:Name="VideoImageToggle"
+                          Header="Video image — Use NVIDIA settings"
+                          OnContent="On"
+                          OffContent="Off" />
+
+            <TextBlock Text="3D / SYSTEM" Style="{StaticResource OptiSectionTitle}" Margin="0,8,0,0" />
+            <ToggleSwitch x:Name="Force3dToggle"
+                          Header="Force OptiHub 3D profiles (driver DRS)"
+                          OnContent="Always on"
+                          OffContent="Always on"
+                          IsEnabled="False" />
+            <ToggleSwitch x:Name="DevCountersToggle"
+                          Header="GPU performance counters (all users)"
+                          OnContent="On"
+                          OffContent="Off" />
+            <ToggleSwitch x:Name="StripClientsToggle"
+                          Header="Remove NVIDIA App + Control Panel (driver only)"
+                          OnContent="Strip clients"
+                          OffContent="Leave clients" />
+
+            <Border Style="{StaticResource OptiCard}" Padding="12,10" Background="{ThemeResource OptiAccentSoftBrush}">
+                <TextBlock x:Name="LiveStatusText"
+                           Style="{StaticResource OptiCaption}"
+                           Text="Live driver status loads when you open this panel."
+                           TextWrapping="Wrap" />
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

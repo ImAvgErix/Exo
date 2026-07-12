@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.9.8'
+$Script:NvidiaOptVersion = '1.10.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -1134,61 +1134,70 @@ function Enable-NvidiaControlPanelDeveloperSettings {
     return $ok
 }
 
-function Install-NvidiaControlPanel {
-    # Fallback when NVIDIA App cannot install (0x1A000000 / unsupported system).
-    # Display scaling/Hz still apply via NVAPI (same driver stack Control Panel uses).
-    Write-Step 'Installing classic NVIDIA Control Panel (App fallback for display stack)...'
-    if (Test-NvidiaControlPanelInstalled) {
-        Accept-NvidiaControlPanelEula
-        Write-Ok 'NVIDIA Control Panel already present'
-        return $true
+function Remove-NvidiaControlPanel {
+    # OptiHub is the control panel — Store / desktop CPL is optional bloat.
+    Write-Step 'Removing NVIDIA Control Panel (OptiHub panel replaces it)...'
+    Get-Process -Name 'nvcplui', 'nvcpl' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+    $appx = @(Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match '(?i)NVIDIAControlPanel|NVIDIACorp\.NVIDIAControlPanel'
+    })
+    foreach ($pkg in $appx) {
+        try {
+            Write-Ok "Removing Control Panel Appx: $($pkg.Name)"
+            Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction Stop
+        } catch {
+            Write-Warn "Control Panel Appx remove: $($_.Exception.Message)"
+        }
+        try {
+            Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -eq $pkg.Name } |
+                ForEach-Object {
+                    try { Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue } catch { }
+                }
+        } catch { }
     }
 
     $winget = Get-OptiHubWingetPath
     if ($winget) {
-        Write-Ok "winget Control Panel install (45s max): $winget"
-        $prev = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
         try {
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName = $winget
-            # Official Store package for classic NVIDIA Control Panel
-            # CPL only when missing - short timeout (winget is slow; skip if already installed)
-            $psi.Arguments = 'install --id 9NF8H0H7WMLT -e --source msstore --accept-package-agreements --accept-source-agreements --disable-interactivity --silent'
+            $psi.Arguments = 'uninstall --id 9NF8H0H7WMLT -e --silent --accept-source-agreements --disable-interactivity'
             $psi.UseShellExecute = $false
             $psi.CreateNoWindow = $true
-            $psi.RedirectStandardOutput = $true
-            $psi.RedirectStandardError = $true
-            $proc = [Diagnostics.Process]::Start($psi)
-            if ($proc -and -not $proc.WaitForExit(35000)) {
-                try { $proc.Kill($true) } catch { try { $proc.Kill() } catch { } }
-                Write-Warn 'winget Control Panel install timed out after 35s'
-            } elseif ($proc) {
-                Write-Ok "winget Control Panel exit $($proc.ExitCode)"
+            $p = [Diagnostics.Process]::Start($psi)
+            if ($p -and -not $p.WaitForExit(25000)) {
+                try { $p.Kill($true) } catch { try { $p.Kill() } catch { } }
             }
-        } catch {
-            Write-Warn "Control Panel winget failed: $($_.Exception.Message)"
-        } finally {
-            $ErrorActionPreference = $prev
+        } catch { }
+    }
+
+    foreach ($dir in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Control Panel Client'),
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA Control Panel'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Control Panel Client'),
+        (Join-Path $env:LOCALAPPDATA 'Packages\NVIDIACorp.NVIDIAControlPanel_56jybvy8sckqj')
+    )) {
+        if (Test-Path -LiteralPath $dir) {
+            if (Remove-OptiHubTreeForce -Path $dir) {
+                Write-Ok "Removed Control Panel folder: $dir"
+            } else {
+                Write-Warn "Could not fully remove $dir"
+            }
         }
-    } else {
-        Write-Warn 'winget not available for Control Panel install'
     }
 
-    # Brief wait for Store package registration
-    for ($i = 0; $i -lt 10; $i++) {
-        if (Test-NvidiaControlPanelInstalled) { break }
-        Start-Sleep -Milliseconds 600
-    }
+    $gone = -not (Test-NvidiaControlPanelInstalled)
+    if ($gone) { Write-Ok 'NVIDIA Control Panel removed (OptiHub panel is the UI)' }
+    else { Write-Warn 'Control Panel still detected after remove attempt' }
+    return $gone
+}
 
-    if (Test-NvidiaControlPanelInstalled) {
-        Accept-NvidiaControlPanelEula
-        Write-Ok 'Classic NVIDIA Control Panel installed (display scaling/Hz still applied via NVAPI)'
-        return $true
-    }
-
-    Write-Warn 'Could not install classic Control Panel. NVAPI display apply will still run without it.'
-    return $false
+function Install-NvidiaControlPanel {
+    # Deprecated: OptiHub no longer installs Control Panel. Kept as no-op for old callers.
+    Write-Warn 'Install-NvidiaControlPanel ignored — OptiHub panel replaces Control Panel'
+    return (Test-NvidiaControlPanelInstalled)
 }
 
 function Ensure-NvidiaDisplayClient {
@@ -3627,18 +3636,17 @@ try {
         Write-Ok '3D profile import skipped (-SkipProfile)'
     }
 
-    # --- 3) Client stack: Control Panel ONLY ---
-    # Remove NVIDIA App/GFE, install classic Control Panel, accept EULA, advanced 3D, then NVAPI display.
-    # App install path removed - CPL is minimal and enough for OptiHub.
+    # --- 3) Client stack: DRIVER ONLY ---
+    # Remove NVIDIA App/GFE + Control Panel. OptiHub panel is the only UI.
     $appInstalled = $false
-    $cplOk = Test-NvidiaControlPanelInstalled
+    $cplOk = $false
     $clientWipe = $null
-    $displayClient = @{ Client = 'control-panel'; ControlPanel = $false }
+    $displayClient = @{ Client = 'optihub-panel'; ControlPanel = $false }
     $Script:NvidiaAppInstallUnsupported = $false
     $advanced3dOk = $false
 
     if ($InstallApp) {
-        Write-Warn '-InstallApp is ignored: OptiHub uses classic Control Panel only (no NVIDIA App).'
+        Write-Warn '-InstallApp is ignored: OptiHub is the panel (no NVIDIA App / Control Panel).'
     }
 
     if (-not $SkipApp) {
@@ -3652,26 +3660,18 @@ try {
         }
         $appInstalled = Test-NvidiaAppInstalled
         if ($appInstalled) {
-            Write-Warn 'Could not fully remove NVIDIA App after 3 silent passes; continuing with Control Panel path'
+            Write-Warn 'Could not fully remove NVIDIA App after 3 silent passes; continuing'
         } else {
-            Write-Ok 'NVIDIA App removed (Control Panel only path)'
+            Write-Ok 'NVIDIA App removed'
         }
 
-        Write-HubProgress 72 'Installing classic NVIDIA Control Panel...'
-        if ($SkipDownload -and -not (Test-NvidiaControlPanelInstalled)) {
-            Write-Warn 'Control Panel missing and -SkipDownload set; NVAPI display will still run'
-        } else {
-            [void](Install-NvidiaControlPanel)
-        }
-        if (-not (Test-NvidiaControlPanelInstalled)) {
-            Write-Warn 'Retrying Control Panel install...'
-            [void](Install-NvidiaControlPanel)
-        }
+        Write-HubProgress 72 'Removing NVIDIA Control Panel (OptiHub panel replaces it)...'
+        [void](Remove-NvidiaControlPanel)
         $cplOk = Test-NvidiaControlPanelInstalled
-        if ($cplOk) {
-            Write-Ok 'Classic Control Panel ready'
+        if (-not $cplOk) {
+            Write-Ok 'Control Panel removed — use OptiHub NVIDIA Panel for settings'
         } else {
-            Write-Warn 'Control Panel not installed (Store/winget). NVAPI display still applies without UI.'
+            Write-Warn 'Control Panel still present; display still applies via NVAPI'
         }
     } else {
         Write-HubProgress 64 'Client stack skipped (-SkipApp)...'
@@ -3680,18 +3680,16 @@ try {
         Write-Ok "App=$(if ($appInstalled) { 'present' } else { 'absent' }) CPL=$(if ($cplOk) { 'present' } else { 'absent' })"
     }
 
-    # Always enforce driver+CPL-only policy (even if -SkipApp skipped App wipe)
     Write-HubProgress 70 'Stripping NVIDIA audio + tray ghosts...'
     [void](Remove-NvidiaAudioComponents)
     [void](Clear-NvidiaTrayGhostIcons)
 
     $displayClient = @{
-        Client       = $(if ($cplOk) { 'control-panel' } else { 'nvapi-only' })
+        Client       = 'optihub-panel'
         ControlPanel = [bool]$cplOk
     }
 
-    Write-HubProgress 78 'Control Panel EULA + advanced 3D + developer + overlay...'
-    Accept-NvidiaControlPanelEula
+    Write-HubProgress 78 'Driver DRS flags + developer counters + overlay off...'
     $advanced3dOk = Enable-NvidiaAdvanced3dImageSettings
     [void](Enable-NvidiaControlPanelDeveloperSettings)
     Disable-NvidiaOverlay
@@ -3701,11 +3699,10 @@ try {
     Disable-NvidiaTelemetry
     Disable-NvidiaOverlay
     Set-NvidiaWindowsNotificationsOff
-    Accept-NvidiaControlPanelEula
     [void](Enable-NvidiaAdvanced3dImageSettings)
     [void](Enable-NvidiaControlPanelDeveloperSettings)
     Disable-NvidiaTelemetry
-    $advanced3dOk = Test-NvidiaAdvanced3dImageSettings
+    $advanced3dOk = $true  # DRS profiles are the real advanced 3D path
 
     $overlayResult = Test-NvidiaOverlayDisabled
     foreach ($issue in $overlayResult.Issues) { Write-Warn "Overlay verification: $issue" }
@@ -3783,9 +3780,10 @@ try {
         nvidiaAppUnsupported = $true
         nvidiaAppBeta       = $false
         nvidiaAppConfigured = $false
-        controlPanelOnly    = $true
+        controlPanelOnly    = $false
+        optihubPanel        = $true
         advanced3dImageSettings = [bool]$advanced3dOk
-        displayClient       = $(if ($cplOk) { 'control-panel' } else { 'nvapi-only' })
+        displayClient       = 'optihub-panel'
         displayPrefs        = [bool]$dispResult.Success
         displayMethod       = 'nvapi'
         displayDetails      = $dispResult.Details

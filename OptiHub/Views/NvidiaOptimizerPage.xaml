@@ -46,22 +46,36 @@
                                Style="{StaticResource OptiBody}"
                                FontSize="13.5"
                                LineHeight="20" />
-                    <TextBlock Text="OptiHub is the control panel. Apply forces settings at the driver (NVAPI + DRS). Do not trust NVIDIA Control Panel radios — the Store app keeps a virtual registry and often shows the wrong options even when the driver is correct. Use the green checks below."
+                    <TextBlock Text="OptiHub replaces NVIDIA App + Control Panel for the settings we care about. Open the panel to tweak display/video policy, then Apply profile for the full driver pass."
                                Style="{StaticResource OptiCaption}"
                                FontSize="12"
                                LineHeight="17"
                                TextWrapping="Wrap"
                                Foreground="{ThemeResource OptiMutedTextBrush}"
                                Margin="0,8,0,0" />
-                    <ToggleSwitch Header="G-SYNC profile"
-                                  IsOn="{x:Bind ViewModel.UseGsync, Mode=TwoWay}"
-                                  OnContent="Adaptive sync"
-                                  OffContent="Max FPS / latency"
-                                  IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                                  ToolTipService.ToolTip="Enable only for a G-SYNC or G-SYNC Compatible display."
-                                  AutomationProperties.Name="G-SYNC profile"
-                                  AutomationProperties.HelpText="Turn on only for a G-SYNC or G-SYNC Compatible display; otherwise use the max FPS and latency profile."
-                                  Margin="0,10,0,0" />
+                    <Grid ColumnSpacing="12" Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ToggleSwitch Header="G-SYNC profile"
+                                      IsOn="{x:Bind ViewModel.UseGsync, Mode=TwoWay}"
+                                      OnContent="Adaptive sync"
+                                      OffContent="Max FPS / latency"
+                                      IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                                      ToolTipService.ToolTip="Enable only for a G-SYNC or G-SYNC Compatible display."
+                                      AutomationProperties.Name="G-SYNC profile"
+                                      AutomationProperties.HelpText="Turn on only for a G-SYNC or G-SYNC Compatible display; otherwise use the max FPS and latency profile." />
+                        <Button Grid.Column="1"
+                                Style="{StaticResource OptiQuietButton}"
+                                Content="NVIDIA panel"
+                                Click="Panel_Click"
+                                VerticalAlignment="Bottom"
+                                MinWidth="140"
+                                IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                                AutomationProperties.Name="Open OptiHub NVIDIA panel"
+                                AutomationProperties.HelpText="Open OptiHub display and video settings that apply at the driver without NVIDIA Control Panel." />
+                    </Grid>
                 </StackPanel>
 
                 <ScrollViewer Grid.Row="1"

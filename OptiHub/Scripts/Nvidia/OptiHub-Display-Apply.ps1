@@ -15,6 +15,34 @@ function Write-DLog([string]$Msg) {
 }
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$PanelSettingsPath = Join-Path $env:LOCALAPPDATA 'OptiHub\nvidia-panel-settings.json'
+
+function Get-OptiHubNvidiaPanelSettings {
+    $defaults = [pscustomobject]@{
+        primaryRefresh          = 'max'
+        secondaryRefresh        = '60'
+        fullRgb                 = $true
+        gpuNoScaling            = $true
+        scalingOverride         = $true
+        videoNvidiaColor        = $true
+        videoNvidiaImage        = $true
+        developerCounters       = $true
+        force3dProfiles         = $true
+        stripAppAndControlPanel = $true
+    }
+    if (-not (Test-Path -LiteralPath $PanelSettingsPath)) { return $defaults }
+    try {
+        $j = Get-Content -LiteralPath $PanelSettingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($p in $defaults.PSObject.Properties.Name) {
+            if ($j.PSObject.Properties.Name -contains $p) {
+                $defaults.$p = $j.$p
+            }
+        }
+    } catch { }
+    return $defaults
+}
+
+$Script:PanelSettings = Get-OptiHubNvidiaPanelSettings
 
 function Get-NvDisplayExe {
     foreach ($c in @(
@@ -125,64 +153,72 @@ function Set-OneNvtweakDevice([string]$devPath) {
         try { New-Item -Path $devPath -Force | Out-Null } catch { return }
     }
 
-    # --- Adjust desktop size and position: GPU + No scaling + Override the scaling mode ---
+    $ps = $Script:PanelSettings
+    $override = if ([bool]$ps.scalingOverride) { 1 } else { 0 }
+    $gpuScale = if ([bool]$ps.gpuNoScaling) { 1 } else { 0 }
+    $noScale = if ([bool]$ps.gpuNoScaling) { 2 } else { 1 }
+    $fullRgb = if ([bool]$ps.fullRgb) { 0 } else { 1 }
+    $useNvidiaColor = if ([bool]$ps.fullRgb) { 1 } else { 0 }
+    $vidColor = if ([bool]$ps.videoNvidiaColor) { 1 } else { 0 }
+    $vidImage = if ([bool]$ps.videoNvidiaImage) { 1 } else { 0 }
+
+    # --- Desktop size/position ---
     $scaleMap = @{
-        PerformScalingOn          = 0  # GPU
-        ScalingDevice             = 0  # GPU
-        ScalingOverride           = 1
-        AppControlledScaling      = 0
-        ScalingMode               = 2  # No scaling
-        Scaling                   = 2
-        FlatPanelScaling          = 2
-        OverlayScaling            = 2
-        PreferredScalingMode      = 2
-        GpuScaling                = 1
-        DisplayScaling            = 0
-        OverrideScalingMode       = 1
-        bOverrideScaling          = 1
-        ScalingModeOverride       = 1
-        PreferGpuScaling          = 1
-        ForceGpuScaling           = 1
-        isOverrideScalingEnabled  = 1
+        PerformScalingOn          = $(if ($gpuScale) { 0 } else { 1 })
+        ScalingDevice             = $(if ($gpuScale) { 0 } else { 1 })
+        ScalingOverride           = $override
+        AppControlledScaling      = $(if ($override) { 0 } else { 1 })
+        ScalingMode               = $noScale
+        Scaling                   = $noScale
+        FlatPanelScaling          = $noScale
+        OverlayScaling            = $noScale
+        PreferredScalingMode      = $noScale
+        GpuScaling                = $gpuScale
+        DisplayScaling            = $(if ($gpuScale) { 0 } else { 1 })
+        OverrideScalingMode       = $override
+        bOverrideScaling          = $override
+        ScalingModeOverride       = $override
+        PreferGpuScaling          = $gpuScale
+        ForceGpuScaling           = $gpuScale
+        isOverrideScalingEnabled  = $override
         scalingMethod             = 3
     }
     foreach ($kv in $scaleMap.GetEnumerator()) {
         Set-ItemProperty -LiteralPath $devPath -Name $kv.Key -Value ([int]$kv.Value) -Type DWord -Force -ErrorAction SilentlyContinue
     }
 
-    # --- Adjust desktop color settings: Use NVIDIA settings + Full dynamic range + RGB ---
+    # --- Desktop color ---
     $colorPath = Join-Path $devPath 'Color'
     if (-not (Test-Path -LiteralPath $colorPath)) { New-Item -Path $colorPath -Force | Out-Null }
     $colorMap = @{
-        NvCplUseColorSettings   = 1  # Use NVIDIA settings
-        ColorFormat             = 0  # RGB
+        NvCplUseColorSettings   = $useNvidiaColor
+        ColorFormat             = 0
         NvCplColorFormat        = 0
         NvCplDigitalColorFormat = 0
-        DynamicRange            = 0  # Full (VESA)
-        NvCplDynamicRange       = 0
+        DynamicRange            = $fullRgb
+        NvCplDynamicRange       = $fullRgb
     }
     foreach ($kv in $colorMap.GetEnumerator()) {
         Set-ItemProperty -LiteralPath $colorPath -Name $kv.Key -Value ([int]$kv.Value) -Type DWord -Force -ErrorAction SilentlyContinue
     }
-    # Do not hard-code color depth; NVAPI picks a depth valid for the active mode.
 
-    # --- Adjust video color / image settings: Use NVIDIA settings on EVERY monitor ---
+    # --- Video color / image ---
     $videoPath = Join-Path $devPath 'Video'
     if (-not (Test-Path -LiteralPath $videoPath)) { New-Item -Path $videoPath -Force | Out-Null }
     $videoMap = @{
-        VideoColorSettingsSource  = 1  # NVIDIA
-        VideoImageSettingsSource  = 1  # NVIDIA
-        VideoColorSettings        = 1
-        VideoImageSettings        = 1
-        UseNVIDIAColorSettings    = 1
-        UseNVIDIAImageSettings    = 1
-        ColorSetting              = 1
-        EdgeEnhanceSetting        = 1
-        NoiseReductionSetting     = 1
-        EdgeEnhanceSource         = 1
-        NoiseReductionSource      = 1
-        DynamicRange              = 0  # Full
-        ColorRange                = 0  # Full
+        VideoColorSettingsSource  = $vidColor
+        VideoImageSettingsSource  = $vidImage
+        VideoColorSettings        = $vidColor
+        VideoImageSettings        = $vidImage
+        UseNVIDIAColorSettings    = $vidColor
+        UseNVIDIAImageSettings    = $vidImage
+        ColorSetting              = $vidColor
+        EdgeEnhanceSetting        = $vidImage
+        NoiseReductionSetting     = $vidImage
+        EdgeEnhanceSource         = $vidImage
+        NoiseReductionSource      = $vidImage
+        DynamicRange              = $fullRgb
+        ColorRange                = $fullRgb
     }
     foreach ($kv in $videoMap.GetEnumerator()) {
         Set-ItemProperty -LiteralPath $videoPath -Name $kv.Key -Value ([int]$kv.Value) -Type DWord -Force -ErrorAction SilentlyContinue
@@ -339,12 +375,19 @@ function Unregister-LegacyPersistTask {
 }
 
 # ---- main ----
-Write-DLog '=== Display apply (no logon task) ==='
+Write-DLog '=== Display apply (OptiHub panel / no NVIDIA CPL required) ==='
+Write-DLog ("Panel settings: primary={0} secondary={1} fullRgb={2} gpuNoScale={3} override={4}" -f `
+    $Script:PanelSettings.primaryRefresh, $Script:PanelSettings.secondaryRefresh,
+    $Script:PanelSettings.fullRgb, $Script:PanelSettings.gpuNoScaling, $Script:PanelSettings.scalingOverride)
 $light = [bool]$Light -or ($env:OPTIHUB_DISPLAY_LIGHT -eq '1')
 if (-not $light) {
     Get-Process nvcplui, nvcpl -EA 0 | Stop-Process -Force -EA 0
     Unregister-LegacyPersistTask
 }
+# Pass refresh policy to NVAPI helper via env (primary/secondary mode)
+$env:OPTIHUB_PRIMARY_REFRESH = [string]$Script:PanelSettings.primaryRefresh
+$env:OPTIHUB_SECONDARY_REFRESH = [string]$Script:PanelSettings.secondaryRefresh
+$env:OPTIHUB_FULL_RGB = $(if ([bool]$Script:PanelSettings.fullRgb) { '1' } else { '0' })
 
 # 1) Registry first (advanced 3D + scaling/color/video on every device key)
 Set-AllNvtweakDevices

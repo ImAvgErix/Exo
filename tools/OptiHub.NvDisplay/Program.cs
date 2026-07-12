@@ -558,28 +558,45 @@ static class Program
             return null;
         }
 
-        if (primary)
+        // Policy from OptiHub panel: OPTIHUB_PRIMARY_REFRESH / OPTIHUB_SECONDARY_REFRESH
+        // Values: max | 60 | keep  (defaults: primary=max, secondary=60)
+        var policyRaw = primary
+            ? (Environment.GetEnvironmentVariable("OPTIHUB_PRIMARY_REFRESH") ?? "max")
+            : (Environment.GetEnvironmentVariable("OPTIHUB_SECONDARY_REFRESH") ?? "60");
+        var policy = policyRaw.Trim().ToLowerInvariant();
+
+        BestMode PickMax() =>
+            sameResolution.OrderByDescending(m => m.Hz).ThenByDescending(m => m.Bpp).First();
+
+        BestMode PickKeep() => new BestMode
         {
-            // Gaming / main monitor: highest refresh at current resolution
-            return sameResolution.OrderByDescending(m => m.Hz).ThenByDescending(m => m.Bpp).First();
+            Width = current.dmPelsWidth,
+            Height = current.dmPelsHeight,
+            Hz = current.dmDisplayFrequency,
+            Bpp = current.dmBitsPerPel > 0 ? current.dmBitsPerPel : 32
+        };
+
+        BestMode Pick60()
+        {
+            var exact60 = sameResolution.Where(m => m.Hz == 60).OrderByDescending(m => m.Bpp).FirstOrDefault();
+            if (exact60 != null) return exact60;
+            var near60 = sameResolution
+                .Where(m => m.Hz >= 59 && m.Hz <= 61)
+                .OrderBy(m => Math.Abs(m.Hz - 60))
+                .ThenByDescending(m => m.Bpp)
+                .FirstOrDefault();
+            if (near60 != null) return near60;
+            var under = sameResolution.Where(m => m.Hz <= 60).OrderByDescending(m => m.Hz).ThenByDescending(m => m.Bpp).FirstOrDefault();
+            return under ?? sameResolution.OrderBy(m => m.Hz).ThenByDescending(m => m.Bpp).First();
         }
 
-        // Secondary: lock to 60 Hz for desktop performance (less GPU compositor load).
-        // Prefer exact 60, then 59-61 (59.94), then highest <= 60, else lowest available.
-        var exact60 = sameResolution.Where(m => m.Hz == 60).OrderByDescending(m => m.Bpp).FirstOrDefault();
-        if (exact60 != null) return exact60;
-
-        var near60 = sameResolution
-            .Where(m => m.Hz >= 59 && m.Hz <= 61)
-            .OrderBy(m => Math.Abs(m.Hz - 60))
-            .ThenByDescending(m => m.Bpp)
-            .FirstOrDefault();
-        if (near60 != null) return near60;
-
-        var atOrBelow60 = sameResolution.Where(m => m.Hz <= 60).OrderByDescending(m => m.Hz).ThenByDescending(m => m.Bpp).FirstOrDefault();
-        if (atOrBelow60 != null) return atOrBelow60;
-
-        return sameResolution.OrderBy(m => m.Hz).ThenByDescending(m => m.Bpp).First();
+        return policy switch
+        {
+            "keep" or "current" => PickKeep(),
+            "60" or "60hz" => Pick60(),
+            "max" or "highest" => PickMax(),
+            _ => primary ? PickMax() : Pick60()
+        };
     }
 
     // Back-compat name used by older call sites

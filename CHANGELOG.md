@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.0
+
+- **NVIDIA Panel UI**: new **NVIDIA panel** dialog on the NVIDIA card — display refresh (primary/secondary), Full RGB, GPU no-scaling + override, video NVIDIA color/image, developer counters, strip clients
+- **NVIDIA 1.10.0**: **driver only** — removes **App + Control Panel**; OptiHub panel is the only settings UI; panel prefs saved to `%LocalAppData%\OptiHub\nvidia-panel-settings.json` and applied via NVAPI
 ## 1.8.32
 
 - **NVIDIA 1.9.8**: **OptiHub is the control panel** - green checks use live NVAPI/DRS (not Store CPL UI). Also stamp Store CPL **virtual hive** (`Packages\...\Helium\User.dat`) so CPL may match; CPL alone was never reading real HKCU

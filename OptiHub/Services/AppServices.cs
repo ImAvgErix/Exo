@@ -9,6 +9,7 @@ public sealed class AppServices
     public ScriptBundleService Scripts { get; }
     public OptimizerStateService OptimizerState { get; }
     public GitHubUpdateService Updater { get; }
+    public NvidiaPanelSettingsService NvidiaPanel { get; }
 
     public AppServices()
     {
@@ -16,6 +17,7 @@ public sealed class AppServices
         Scripts = new ScriptBundleService(Settings);
         OptimizerState = new OptimizerStateService(PowerShell, Scripts);
         Updater = new GitHubUpdateService(Settings, Scripts);
+        NvidiaPanel = new NvidiaPanelSettingsService(Scripts, PowerShell);
     }
 
     public void Initialize()
