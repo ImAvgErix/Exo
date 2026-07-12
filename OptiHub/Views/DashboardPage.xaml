@@ -88,7 +88,7 @@
                                         <TextBlock Text="Coming soon"
                                                    FontFamily="{StaticResource OptiUiFont}"
                                                    FontSize="12"
-                                                   Foreground="{ThemeResource OptiMutedTextBrush}"
+                                                   Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                                    TextAlignment="Center"
                                                    Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     </StackPanel>

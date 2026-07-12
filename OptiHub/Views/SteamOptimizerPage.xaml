@@ -85,7 +85,7 @@
                                                            FontFamily="{StaticResource OptiUiFont}"
                                                            FontSize="12"
                                                            LineHeight="16"
-                                                           Foreground="{ThemeResource OptiMutedTextBrush}" />
+                                                           Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                                             </StackPanel>
                                         </Grid>
                                     </ContentControl>
