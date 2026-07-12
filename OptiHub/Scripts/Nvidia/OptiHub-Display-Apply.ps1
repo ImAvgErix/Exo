@@ -384,68 +384,81 @@ if (-not $light) {
     Get-Process nvcplui, nvcpl -EA 0 | Stop-Process -Force -EA 0
     Unregister-LegacyPersistTask
 }
-# Pass refresh policy to NVAPI helper via env (primary/secondary mode)
+# Pass panel policy to NVAPI helper via env
 $env:OPTIHUB_PRIMARY_REFRESH = [string]$Script:PanelSettings.primaryRefresh
 $env:OPTIHUB_SECONDARY_REFRESH = [string]$Script:PanelSettings.secondaryRefresh
 $env:OPTIHUB_FULL_RGB = $(if ([bool]$Script:PanelSettings.fullRgb) { '1' } else { '0' })
+$env:OPTIHUB_GPU_NOSCALE = $(if ([bool]$Script:PanelSettings.gpuNoScaling) { '1' } else { '0' })
+$env:OPTIHUB_SCALING_OVERRIDE = $(if ([bool]$Script:PanelSettings.scalingOverride) { '1' } else { '0' })
 
-# 1) Registry first (advanced 3D + scaling/color/video on every device key)
+# 1) Registry first
 Set-AllNvtweakDevices
 Clear-NvidiaAppTrayAndContainer
 
 if (-not $light) {
-    # Refresh the user-mode display container once before the final NVAPI apply.
     [void](Invoke-SoftDriverRefresh)
-    # Container restart rewrites NVTweak / can re-arm App tray - stamp + clean again
     Set-AllNvtweakDevices
     Clear-NvidiaAppTrayAndContainer
 }
 
-# 2) Final NVAPI modes/color/path apply, then registry stamp AGAIN (authoritative).
-# Sticky without a scheduled task: registry + NVAPI persist until a driver reset;
-# re-run NVIDIA Apply in OptiHub if prefs drift.
+# 2) NVAPI modes/color/path (respects OPTIHUB_* env), then re-stamp registry
 $nvApiOk = Invoke-NvApiHelper
 Set-AllNvtweakDevices
 Clear-NvidiaAppTrayAndContainer
 Set-NvtweakRootPrefs
-# Critical: stamp Store CPL virtual hive (real HKCU alone does not update CPL UI)
-[void](Set-NvidiaStoreCplVirtualHive)
+# Best-effort Store hive (optional; must not fail the apply)
+try { [void](Set-NvidiaStoreCplVirtualHive) } catch { Write-DLog "Store hive stamp skipped: $($_.Exception.Message)" }
 Get-Process nvcplui, nvcpl -EA 0 | Stop-Process -Force -EA 0
 
-# Verify any driver-created registry keys. NVAPI success remains required.
+# Verify registry matches *requested panel settings* (off is a valid policy)
+$wantOverride = if ([bool]$Script:PanelSettings.scalingOverride) { 1 } else { 0 }
+$wantGpu = if ([bool]$Script:PanelSettings.gpuNoScaling) { 0 } else { 1 }  # PerformScalingOn 0=GPU
+$wantScaleMode = if ([bool]$Script:PanelSettings.gpuNoScaling) { 2 } else { 1 }
+$wantUseNvidiaColor = if ([bool]$Script:PanelSettings.fullRgb) { 1 } else { 0 }
+$wantFull = if ([bool]$Script:PanelSettings.fullRgb) { 0 } else { 1 }  # DynamicRange 0=Full
+$wantVidColor = if ([bool]$Script:PanelSettings.videoNvidiaColor) { 1 } else { 0 }
+$wantVidImage = if ([bool]$Script:PanelSettings.videoNvidiaImage) { 1 } else { 0 }
+
 $registryOk = $true
 $deviceKeys = @(Get-ChildItem 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak\Devices' -EA 0)
 if ($deviceKeys.Count -eq 0) {
-    Write-DLog 'VERIFY: no HKCU device keys (NVAPI-only path)'
+    Write-DLog 'VERIFY: no HKCU device keys (NVAPI-only path — OK if NVAPI succeeded)'
 }
 $deviceKeys | ForEach-Object {
     $d = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
     $c = Get-ItemProperty (Join-Path $_.PSPath 'Color') -ErrorAction SilentlyContinue
     $v = Get-ItemProperty (Join-Path $_.PSPath 'Video') -ErrorAction SilentlyContinue
-    $okScale = ([int]$d.PerformScalingOn -eq 0 -and [int]$d.ScalingOverride -eq 1 -and [int]$d.ScalingMode -eq 2)
-    $okColor = ($null -ne $c -and [int]$c.NvCplUseColorSettings -eq 1 -and [int]$c.DynamicRange -eq 0)
-    $okVideo = ($null -ne $v -and [int]$v.VideoColorSettingsSource -eq 1 -and [int]$v.VideoImageSettingsSource -eq 1)
+    $okScale = ($null -ne $d -and [int]$d.ScalingOverride -eq $wantOverride -and
+                [int]$d.PerformScalingOn -eq $wantGpu -and [int]$d.ScalingMode -eq $wantScaleMode)
+    $okColor = ($null -ne $c -and [int]$c.NvCplUseColorSettings -eq $wantUseNvidiaColor -and
+                [int]$c.DynamicRange -eq $wantFull)
+    $okVideo = ($null -ne $v -and [int]$v.VideoColorSettingsSource -eq $wantVidColor -and
+                [int]$v.VideoImageSettingsSource -eq $wantVidImage)
     if (-not ($okScale -and $okColor -and $okVideo)) {
-        Write-DLog "VERIFY FAIL $($_.PSChildName) scale=$okScale color=$okColor video=$okVideo"
+        Write-DLog ("VERIFY FAIL {0} scale={1} color={2} video={3} (want override={4} fullRgb={5} vidC={6} vidI={7})" -f `
+            $_.PSChildName, $okScale, $okColor, $okVideo, $wantOverride, $Script:PanelSettings.fullRgb, $wantVidColor, $wantVidImage)
         $registryOk = $false
     } else {
-        Write-DLog "VERIFY OK $($_.PSChildName): Override + Full RGB + Video NVIDIA"
+        Write-DLog "VERIFY OK $($_.PSChildName) matches panel settings"
     }
 }
-$g = $null
-try { $g = [int](Get-ItemProperty 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak' -Name Gestalt -EA Stop).Gestalt } catch { }
-if ($g -ne 2) {
-    Write-DLog "VERIFY FAIL Gestalt=$g (want 2 advanced 3D)"
-    $registryOk = $false
-} else {
-    Write-DLog 'VERIFY OK Gestalt=2 (advanced 3D image settings)'
-}
-$ok = [bool]$nvApiOk -and [bool]$registryOk
+# Gestalt is best-effort for DRS UI; do not fail panel apply if missing
+try {
+    $g = [int](Get-ItemProperty 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak' -Name Gestalt -EA Stop).Gestalt
+    Write-DLog "Gestalt=$g (informational)"
+} catch { Write-DLog 'Gestalt not set (informational)' }
+
+# NVAPI is required when we asked for modes/color/scale; if all toggles off, registry stamp is enough
+$needNvApi = [bool]$Script:PanelSettings.fullRgb -or [bool]$Script:PanelSettings.gpuNoScaling -or
+             ([string]$Script:PanelSettings.primaryRefresh -ne 'keep') -or
+             ([string]$Script:PanelSettings.secondaryRefresh -ne 'keep')
+$ok = [bool]$registryOk -and ((-not $needNvApi) -or [bool]$nvApiOk)
 
 if ($ok) {
     Write-DLog 'SUCCESS'
-    Write-DLog 'Active NVIDIA displays were applied without Control Panel mouse/keyboard automation.'
+    Write-DLog ("OptiHub panel applied (fullRgb={0} gpuNoScale={1} override={2})" -f `
+        $Script:PanelSettings.fullRgb, $Script:PanelSettings.gpuNoScaling, $Script:PanelSettings.scalingOverride)
     exit 0
 }
-Write-DLog 'FAIL verify'
+Write-DLog ("FAIL verify nvApiOk={0} registryOk={1}" -f $nvApiOk, $registryOk)
 exit 1

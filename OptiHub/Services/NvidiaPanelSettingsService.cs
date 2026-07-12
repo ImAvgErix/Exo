@@ -74,8 +74,15 @@ public sealed class NvidiaPanelSettingsService
             workingDirectory: _scripts.GetNvidiaRoot()).ConfigureAwait(false);
 
         if (result.Success)
-            return (true, "OptiHub NVIDIA panel settings applied to the driver (NVAPI).");
-        return (false, result.ErrorMessage ?? result.Summary ?? "Display apply failed.");
+            return (true, "OptiHub NVIDIA panel settings applied to the driver (NVAPI + registry).\n\n" + settings.Summary);
+
+        // Surface a short, useful reason (not a wall of log)
+        var err = result.ErrorMessage ?? result.Summary ?? "Display apply failed.";
+        if (err.Length > 400)
+            err = err[..400] + "…";
+        return (false,
+            "Could not apply panel settings.\n\n" + err +
+            "\n\nTip: fully close NVIDIA Control Panel if it is open, then try again.\n" + settings.Summary);
     }
 
     public async Task<string> GetLiveStatusSummaryAsync(CancellationToken ct = default)

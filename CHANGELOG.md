@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.1
+
+- **NVIDIA Panel**: fix false **Apply failed** when turning settings **off** — verify against your panel prefs (not hard-coded ON); NVAPI skips Full RGB/GPU scale when disabled; Store hive stamp is best-effort
+
 ## 1.9.0
 
 - **NVIDIA Panel UI**: new **NVIDIA panel** dialog on the NVIDIA card — display refresh (primary/secondary), Full RGB, GPU no-scaling + override, video NVIDIA color/image, developer counters, strip clients
@@ -232,5 +236,6 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 

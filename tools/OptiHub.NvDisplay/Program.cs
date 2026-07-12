@@ -179,22 +179,34 @@ static class Program
                     continue;
                 }
 
-                // 1) Color: User policy + RGB + Full + best BPC
-                var chosenDepth = PickBestDepth(dev, before.ColorDepth);
-                var appliedColor = ApplyColorWithFallbacks(dev, chosenDepth);
+                var wantFullRgb = !string.Equals(
+                    Environment.GetEnvironmentVariable("OPTIHUB_FULL_RGB") ?? "1", "0", StringComparison.Ordinal);
 
-                // 2) HDMI: force Full range in info-frame (fixes Limited look on TVs/monitors)
-                if (dev.ConnectionType == MonitorConnectionType.HDMI ||
-                    dev.ConnectionType.ToString().Contains("HDMI", StringComparison.OrdinalIgnoreCase))
+                ColorData after = before;
+                if (wantFullRgb)
                 {
-                    ApplyHdmiFullRange(dev);
-                }
+                    // 1) Color: User policy + RGB + Full + best BPC
+                    var chosenDepth = PickBestDepth(dev, before.ColorDepth);
+                    var appliedColor = ApplyColorWithFallbacks(dev, chosenDepth);
 
-                ColorData after;
-                try { after = dev.CurrentColorData; }
-                catch { after = appliedColor ?? before; }
-                if (appliedColor != null && IsFullRgbUserColor(after))
+                    // 2) HDMI: force Full range in info-frame
+                    if (dev.ConnectionType == MonitorConnectionType.HDMI ||
+                        dev.ConnectionType.ToString().Contains("HDMI", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ApplyHdmiFullRange(dev);
+                    }
+
+                    try { after = dev.CurrentColorData; }
+                    catch { after = appliedColor ?? before; }
+                    if (appliedColor != null && IsFullRgbUserColor(after))
+                        colorAppliedCount++;
+                }
+                else
+                {
+                    // Panel asked for Full RGB off — leave current color alone
                     colorAppliedCount++;
+                    Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: Full RGB disabled by OptiHub panel — skipped color apply");
+                }
 
                 Console.WriteLine(
                     $"[NVAPI] Display #{dev.DisplayId} AFTER: " +
@@ -211,10 +223,17 @@ static class Program
 
             if (apply)
             {
-                // 3) Path scaling + push current-resolution / target-Hz mode into NVAPI where possible
-                var scalingOk = ApplyGpuNoScaling(bestModes);
+                var wantGpuNoScale = !string.Equals(
+                    Environment.GetEnvironmentVariable("OPTIHUB_GPU_NOSCALE") ?? "1", "0", StringComparison.Ordinal);
 
-                // 4) NVTweak registry — GPU + No scaling + Override ON + Full + advanced 3D
+                // 3) Path scaling only when panel has GPU no-scaling enabled
+                var scalingOk = true;
+                if (wantGpuNoScale)
+                    scalingOk = ApplyGpuNoScaling(bestModes);
+                else
+                    Console.WriteLine("[NVAPI] GPU no-scaling disabled by OptiHub panel — skipped path scale apply");
+
+                // 4) NVTweak registry (always re-stamp from helper defaults + Gestalt)
                 ApplyNvtweakRegistry();
 
                 PrintPathScaling("AFTER");
