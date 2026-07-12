@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.24
+
+- **NVIDIA 1.9.0**: **Control Panel only** - always remove NVIDIA App/GFE, install classic Control Panel, accept CPL EULA, NVAPI for scaling/Hz (no App download/install path)
 ## 1.8.23
 
 - **Installer**: on every install/update, clear Windows icon/thumbnail caches + SHChangeNotify so Start Menu shows the new OptiHub icon (not a stale older mark)

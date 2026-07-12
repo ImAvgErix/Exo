@@ -434,7 +434,7 @@ $features.Add(@{
     active = $displayOk
 })
 
-# Fresh NVIDIA App (default Apply path wipes + reinstalls; -SkipApp may leave none).
+# Control Panel only path: App should be absent; classic CPL present.
 $appInstalled = $false
 foreach ($appPath in @(
     (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe'),
@@ -443,28 +443,33 @@ foreach ($appPath in @(
 )) {
     if (Test-Path -LiteralPath $appPath) { $appInstalled = $true; break }
 }
-if (-not $appInstalled) {
-    $appxApp = Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
-        $_.Name -match '(?i)NVIDIAApp|NVIDIA\.App'
-    }
-    $appInstalled = [bool]$appxApp
+$cplInstalled = $false
+$cplAppx = Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
+    $_.Name -match '(?i)NVIDIAControlPanel|NVIDIACorp\.NVIDIAControlPanel'
 }
-$appUnsupported = [bool]($state -and $state.PSObject.Properties.Name -contains 'nvidiaAppUnsupported' -and [bool]$state.nvidiaAppUnsupported)
-$appOptional = [bool]($state -and $state.PSObject.Properties.Name -contains 'nvidiaAppOptional' -and [bool]$state.nvidiaAppOptional)
-# App is preferred; optional when NVIDIA installer rejected the PC (0x1A000000) or install failed.
-$appOk = $appInstalled -or $appUnsupported -or $appOptional
+if ($cplAppx) { $cplInstalled = $true }
+foreach ($cplPath in @(
+    (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Control Panel Client\nvcplui.exe'),
+    (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA Control Panel\nvcplui.exe')
+)) {
+    if (Test-Path -LiteralPath $cplPath) { $cplInstalled = $true; break }
+}
+$controlPanelOnly = [bool]($state -and $state.PSObject.Properties.Name -contains 'controlPanelOnly' -and [bool]$state.controlPanelOnly)
+$cplOk = $cplInstalled -or [bool]($state -and $state.nvidiaControlPanel) -or $controlPanelOnly
+# Success = Control Panel path (App gone preferred). App present is a soft warning, not failure.
+$clientOk = $cplOk -or [bool]($state -and $state.displayMethod -eq 'nvapi' -and $state.displayPrefs)
 $features.Add(@{
-    title  = 'NVIDIA App (fresh + debloated)'
-    detail = $(if ($appInstalled) {
-        'NVIDIA App is installed and was debloated on Apply (overlay/notifications off when possible).'
-    } elseif ($appUnsupported) {
-        'NVIDIA App installer rejected this PC (system not supported). OptiHub still applies driver/profile/NVAPI without the App.'
-    } elseif ($appOptional) {
-        'NVIDIA App not installed after Apply; remaining optimizers still apply.'
+    title  = 'Control Panel (no NVIDIA App)'
+    detail = $(if ($cplInstalled -and -not $appInstalled) {
+        'Classic Control Panel present; NVIDIA App removed. Display uses NVAPI.'
+    } elseif ($cplInstalled -and $appInstalled) {
+        'Control Panel present, but NVIDIA App is still installed. Re-Apply to remove App.'
+    } elseif (-not $cplInstalled -and -not $appInstalled) {
+        'No Control Panel UI yet. Apply installs classic Control Panel and applies display via NVAPI.'
     } else {
-        'NVIDIA App not installed. Apply downloads the official App installer (skips if system unsupported).'
+        'NVIDIA App still present without Control Panel. Apply switches to Control Panel only.'
     })
-    active = $appOk
+    active = $clientOk -and -not $appInstalled
 })
 
 $backgroundOk = [bool]$debloat.Ok -and [bool]$overlay.Ok
