@@ -670,7 +670,7 @@ function Get-DiscOptPowerShellExe {
     if ($preview -and $preview.Source -and ($preview.Source -notmatch 'WindowsPowerShell')) { return $preview.Source }
     $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($pwsh -and $pwsh.Source -and ($pwsh.Source -notmatch 'WindowsPowerShell')) { return $pwsh.Source }
-    throw 'PowerShell 7 (pwsh) is required. Install PowerShell 7 Preview (preferred) or PowerShell 7.'
+    throw 'PowerShell 7 Preview is required. Install Microsoft.PowerShell.Preview (and Windows Terminal Preview).'
 }
 
 function Apply-DiscordProfile([string]$DestPath) {

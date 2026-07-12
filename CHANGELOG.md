@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.7
+
+- **Require PowerShell 7 Preview only** (no stable 7 / no 5.1)
+- **Require Windows Terminal Preview** — install both via winget on startup if missing
+- **Apply/repair** run inside Terminal Preview hosting PowerShell Preview (visible); detect stays headless Preview
 ## 1.8.6
 
 - **Steam**: fix Verified apply false-negative when kit version > 1.7.2 (all checklist items mark correctly after success)
