@@ -144,14 +144,24 @@ public partial class SettingsViewModel : ObservableObject
                 }
                 else
                 {
-                    UpdateStatus = $"v{app.RemoteVersion} available — install skipped.";
+                    UpdateStatus = $"v{app.RemoteVersion} available - install skipped.";
                 }
             }
             else
             {
-                UpdateStatus = string.IsNullOrWhiteSpace(app.Message)
-                    ? $"You're on the latest OptiHub ({AppVersion})."
-                    : app.Message.Trim().TrimEnd('.') + ".";
+                // Be explicit about local vs GitHub latest so "not working" is not silent.
+                if (app.AlreadyLatest)
+                {
+                    UpdateStatus = string.IsNullOrWhiteSpace(app.Message)
+                        ? $"You're on the latest OptiHub (v{AppVersion})."
+                        : app.Message.Trim().TrimEnd('.') + ".";
+                }
+                else
+                {
+                    UpdateStatus = string.IsNullOrWhiteSpace(app.Message)
+                        ? $"Update check finished (local v{AppVersion})."
+                        : app.Message.Trim().TrimEnd('.') + ".";
+                }
             }
         }
         catch (Exception ex)

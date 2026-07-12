@@ -29,10 +29,12 @@ public sealed class GitHubUpdateService
             AutomaticDecompression = DecompressionMethods.All,
             PooledConnectionLifetime = TimeSpan.FromMinutes(15)
         };
-        var c = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(3) };
+        // App installer is ~100-150 MB; a 3-minute ceiling made Check/Install look broken on average links.
+        var c = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(30) };
         var version = typeof(GitHubUpdateService).Assembly.GetName().Version;
         var productVersion = version is null ? "1.0.0" : $"{version.Major}.{version.Minor}.{version.Build}";
         c.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("OptiHub", productVersion));
+        c.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         return c;
     }
 
@@ -252,11 +254,17 @@ public sealed class GitHubUpdateService
             using var resp = await Http.SendAsync(req, ct);
             if (!resp.IsSuccessStatusCode)
             {
+                var code = (int)resp.StatusCode;
+                var hint = code is 403 or 429
+                    ? " GitHub rate limit — wait a few minutes and try again."
+                    : code == 404
+                        ? " No public releases found for this repo."
+                        : string.Empty;
                 return new AppUpdateResult
                 {
                     LocalVersion = localText,
                     RemoteVersion = "?",
-                    Message = $"Could not check releases ({(int)resp.StatusCode})."
+                    Message = $"Could not check releases (HTTP {code}).{hint}"
                 };
             }
 
@@ -372,16 +380,9 @@ public sealed class GitHubUpdateService
         var url = check.DownloadUrl;
         if (string.IsNullOrWhiteSpace(url))
             url = "https://github.com/BarcusEric/OptiHub/releases/latest/download/OptiHub.exe";
-        if (string.IsNullOrWhiteSpace(check.Sha256))
-        {
-            return new AppUpdateResult
-            {
-                UpdateAvailable = true,
-                LocalVersion = check.LocalVersion,
-                RemoteVersion = check.RemoteVersion,
-                Message = "The GitHub release did not provide SHA-256 integrity metadata. Nothing was downloaded."
-            };
-        }
+
+        // Prefer GitHub asset digest when present; size + PE version still gate install.
+        var requireSha = !string.IsNullOrWhiteSpace(check.Sha256);
 
         // Download OptiHub.exe (SFX installer) and run it. In-place replace cannot
         // overwrite a locked running OptiHub.exe, so the installer stage-swaps under
@@ -393,7 +394,7 @@ public sealed class GitHubUpdateService
             var work = Path.Combine(PathHelper.AppDataDir, "updates");
             Directory.CreateDirectory(work);
 
-            // Single fixed path — never pile up OptiHub-update-1.2.x.exe that can be
+            // Single fixed path - never pile up OptiHub-update-1.2.x.exe that can be
             // re-run later and downgrade a good install.
             foreach (var old in Directory.GetFiles(work, "OptiHub*.exe"))
             {
@@ -405,7 +406,20 @@ public sealed class GitHubUpdateService
             using (var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)
                        .ConfigureAwait(false))
             {
-                response.EnsureSuccessStatusCode();
+                if (!response.IsSuccessStatusCode)
+                {
+                    return new AppUpdateResult
+                    {
+                        UpdateAvailable = true,
+                        LocalVersion = check.LocalVersion,
+                        RemoteVersion = check.RemoteVersion,
+                        Message = $"Download failed (HTTP {(int)response.StatusCode}). Try again, or install from GitHub Releases."
+                    };
+                }
+
+                var total = response.Content.Headers.ContentLength
+                            ?? check.DownloadSize
+                            ?? -1;
                 await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                 await using var fs = new FileStream(
                     setupPath,
@@ -414,7 +428,32 @@ public sealed class GitHubUpdateService
                     FileShare.None,
                     bufferSize: 128 * 1024,
                     useAsync: true);
-                await stream.CopyToAsync(fs, 128 * 1024, ct).ConfigureAwait(false);
+
+                var buffer = new byte[128 * 1024];
+                long written = 0;
+                var lastReport = -1;
+                int read;
+                while ((read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct).ConfigureAwait(false)) > 0)
+                {
+                    await fs.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                    written += read;
+                    if (total > 0)
+                    {
+                        var pct = (int)Math.Min(99, (written * 100) / total);
+                        if (pct != lastReport && (pct % 5 == 0 || pct >= 99))
+                        {
+                            lastReport = pct;
+                            var mb = written / (1024.0 * 1024.0);
+                            var totalMb = total / (1024.0 * 1024.0);
+                            status?.Report($"Downloading OptiHub v{check.RemoteVersion}... {pct}% ({mb:0.0}/{totalMb:0.0} MB)");
+                        }
+                    }
+                    else if (written > 0 && written / (5 * 1024 * 1024) != lastReport)
+                    {
+                        lastReport = (int)(written / (5 * 1024 * 1024));
+                        status?.Report($"Downloading OptiHub v{check.RemoteVersion}... {written / (1024.0 * 1024.0):0.0} MB");
+                    }
+                }
             }
 
             var downloadedSize = File.Exists(setupPath) ? new FileInfo(setupPath).Length : 0;
@@ -426,7 +465,7 @@ public sealed class GitHubUpdateService
                     UpdateAvailable = true,
                     LocalVersion = check.LocalVersion,
                     RemoteVersion = check.RemoteVersion,
-                    Message = "Downloaded update looks invalid. Try again, or reinstall from GitHub Releases."
+                    Message = "Downloaded update looks invalid (too small). Try again, or reinstall from GitHub Releases."
                 };
             }
 
@@ -442,9 +481,9 @@ public sealed class GitHubUpdateService
                 };
             }
 
-            if (!string.IsNullOrWhiteSpace(check.Sha256))
+            if (requireSha)
             {
-                status?.Report("Verifying update integrity...");
+                status?.Report("Verifying update integrity (SHA-256)...");
                 var actualSha256 = await ComputeFileSha256Async(setupPath, ct).ConfigureAwait(false);
                 if (!string.Equals(actualSha256, check.Sha256, StringComparison.OrdinalIgnoreCase))
                 {
@@ -458,30 +497,38 @@ public sealed class GitHubUpdateService
                     };
                 }
             }
+            else
+            {
+                status?.Report("Release has no digest; verifying installer version stamp...");
+            }
 
-            string? downloadedVersion;
+            string? downloadedVersion = null;
             try
             {
-                downloadedVersion = FileVersionInfo.GetVersionInfo(setupPath).FileVersion;
+                var info = FileVersionInfo.GetVersionInfo(setupPath);
+                // Prefer ProductVersion (3-part Informational), then FileVersion (often 4-part).
+                downloadedVersion = FirstNonEmpty(info.ProductVersion, info.FileVersion);
             }
             catch
             {
                 downloadedVersion = null;
             }
+
             if (!VersionsRepresentSameRelease(downloadedVersion, check.RemoteVersion))
             {
+                // If SHA already matched, still refuse mismatched PE stamps (wrong/corrupt asset).
                 TryDelete(setupPath);
                 return new AppUpdateResult
                 {
                     UpdateAvailable = true,
                     LocalVersion = check.LocalVersion,
                     RemoteVersion = check.RemoteVersion,
-                    Message = "Downloaded installer version did not match the GitHub release. Nothing was launched."
+                    Message = $"Downloaded installer version ({downloadedVersion ?? "unknown"}) did not match release v{check.RemoteVersion}. Nothing was launched."
                 };
             }
 
-            status?.Report($"Applying OptiHub v{check.RemoteVersion} quietly…");
-            // Quiet in-app update: winexe SFX + /quiet + env — no console, no MessageBox.
+            status?.Report($"Applying OptiHub v{check.RemoteVersion} quietly...");
+            // Quiet in-app update: winexe SFX + /quiet + env - no console, no MessageBox.
             // Installer stages under %LocalAppData%\OptiHub\app, refreshes Start Menu, relaunches.
             Environment.SetEnvironmentVariable("OPTIHUB_SILENT_INSTALL", "1");
             Process? started = null;
@@ -542,7 +589,7 @@ public sealed class GitHubUpdateService
                 DownloadSize = check.DownloadSize,
                 Sha256 = check.Sha256,
                 ShouldExit = true,
-                Message = $"Applying v{check.RemoteVersion}… OptiHub will restart."
+                Message = $"Applying v{check.RemoteVersion}... OptiHub will restart."
             };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -670,9 +717,20 @@ public sealed class GitHubUpdateService
                left.Build == right.Build;
     }
 
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        foreach (var v in values)
+        {
+            if (!string.IsNullOrWhiteSpace(v))
+                return v;
+        }
+        return null;
+    }
+
     private static string Normalize(string v)
     {
         var normalized = v.Trim().TrimStart('v', 'V');
+        // ProductVersion may be "1.8.10+gitsha" or "1.8.10-preview".
         var suffix = normalized.IndexOfAny(['-', '+']);
         return suffix >= 0 ? normalized[..suffix] : normalized;
     }
