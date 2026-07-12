@@ -62,22 +62,16 @@
                                     AutomationProperties.Name="{x:Bind Definition.Title}"
                                     IsEnabled="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                     Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
-                                <Border Style="{StaticResource OptiCard}"
+                                <ContentControl Style="{StaticResource OptiCard}"
                                         Width="300"
                                         Height="188"
                                         Padding="18,16">
                                     <StackPanel HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
                                                 Spacing="12">
-                                        <!-- Transparent well so product logos aren't double-boxed on black -->
-                                        <Border Width="72"
-                                                Height="72"
-                                                CornerRadius="20"
-                                                Background="Transparent"
-                                                HorizontalAlignment="Center">
-                                            <Image Width="48"
-                                                   Height="48"
-                                                   Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
+                                        <!-- Dark logo plate so white marks (Steam/Epic) work in light mode -->
+                                        <Border Style="{StaticResource OptiLogoWell}">
+                                            <Image Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"
                                                    Stretch="Uniform"
@@ -98,7 +92,7 @@
                                                    TextAlignment="Center"
                                                    Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     </StackPanel>
-                                </Border>
+                                </ContentControl>
                             </Button>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

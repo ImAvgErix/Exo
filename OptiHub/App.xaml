@@ -46,8 +46,9 @@
                     <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#141414" />
                     <SolidColorBrush x:Key="OptiIconWellFillBrush" Color="#141414" />
                     <SolidColorBrush x:Key="OptiIconWellStrokeBrush" Color="#2A2A2A" />
-                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#141414" />
-                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#3A3A3A" />
+                    <!-- Dark plate for product logos (Steam/Epic are white assets) -->
+                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#121212" />
+                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#121212" />
                     <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#0A0A0A" />
                     <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#FAFAF9" />
                     <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#D6D3D1" />
@@ -95,8 +96,9 @@
                     <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#EDE4D6" />
                     <SolidColorBrush x:Key="OptiIconWellFillBrush" Color="#E8DFD1" />
                     <SolidColorBrush x:Key="OptiIconWellStrokeBrush" Color="#C4B5A0" />
-                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#1A1510" />
-                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#0A0908" />
+                    <!-- Same dark logo plate in light mode so white marks stay legible -->
+                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#121212" />
+                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#121212" />
                     <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#FFFCFA" />
                     <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#0A0908" />
                     <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#2A231C" />
@@ -119,8 +121,8 @@
                     <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#141414" />
                     <SolidColorBrush x:Key="OptiIconWellFillBrush" Color="#141414" />
                     <SolidColorBrush x:Key="OptiIconWellStrokeBrush" Color="#2A2A2A" />
-                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#141414" />
-                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#3A3A3A" />
+                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#121212" />
+                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#121212" />
                     <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#0A0A0A" />
                     <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#FAFAF9" />
                     <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#D6D3D1" />

@@ -65,14 +65,39 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <Style x:Key="OptiCard" TargetType="Border">
-        <Setter Property="CornerRadius" Value="{StaticResource OptiCardRadius}" />
+    <!--
+      Nested-fill chrome (outer stroke color + inner fill) — no BorderBrush on a curve.
+      WinUI anti-aliases stroke borders into pixelated arcs; solid nested fills stay clean.
+    -->
+    <Style x:Key="OptiCard" TargetType="ContentControl">
         <Setter Property="Padding" Value="18,16" />
         <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <!-- Integer thickness + layout rounding keeps rounded edges crisp (no alpha/1.5px jaggies) -->
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="IsTabStop" Value="False" />
         <Setter Property="UseLayoutRounding" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContentControl">
+                    <Border x:Name="Outer"
+                            Background="{ThemeResource OptiCardStrokeBrush}"
+                            CornerRadius="{StaticResource OptiCardRadius}"
+                            UseLayoutRounding="True">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="17"
+                                Margin="1"
+                                Padding="{TemplateBinding Padding}"
+                                UseLayoutRounding="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              ContentTransitions="{TemplateBinding ContentTransitions}" />
+                        </Border>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- Theme picker tiles (Settings → Appearance) -->
@@ -120,22 +145,16 @@
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
-                                                         Storyboard.TargetProperty="ScaleX"
-                                                         To="1.03" Duration="0:0:0.12" />
-                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
-                                                         Storyboard.TargetProperty="ScaleY"
-                                                         To="1.03" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="Content"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.92" Duration="0:0:0.12" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
-                                                         Storyboard.TargetProperty="ScaleX"
-                                                         To="0.97" Duration="0:0:0.08" />
-                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
-                                                         Storyboard.TargetProperty="ScaleY"
-                                                         To="0.97" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="Content"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.85" Duration="0:0:0.08" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled" />
@@ -163,23 +182,24 @@
         <Setter Property="Foreground" Value="{ThemeResource OptiWarningBrush}" />
     </Style>
 
-    <!-- App logos sit in a well: dark fill + hard outline in light mode so white marks stay visible -->
+    <!-- Always-dark plate so white/light product marks (Steam, Epic, …) stay visible in light mode -->
     <Style x:Key="OptiLogoWell" TargetType="Border">
-        <Setter Property="Width" Value="64" />
-        <Setter Property="Height" Value="64" />
-        <Setter Property="CornerRadius" Value="18" />
+        <Setter Property="Width" Value="72" />
+        <Setter Property="Height" Value="72" />
+        <Setter Property="CornerRadius" Value="20" />
         <Setter Property="Background" Value="{ThemeResource OptiLogoWellFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiLogoWellStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1.5" />
+        <Setter Property="BorderThickness" Value="0" />
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="UseLayoutRounding" Value="True" />
+        <Setter Property="Padding" Value="12" />
     </Style>
 
     <Style x:Key="OptiLogoWellSmall" TargetType="Border" BasedOn="{StaticResource OptiLogoWell}">
         <Setter Property="Width" Value="28" />
         <Setter Property="Height" Value="28" />
         <Setter Property="CornerRadius" Value="8" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="4" />
     </Style>
 
     <!--
@@ -405,49 +425,28 @@
                           Background="Transparent"
                           RenderTransformOrigin="0.5,0.5"
                           CornerRadius="{TemplateBinding CornerRadius}">
+                        <!-- Lift only — scale blur makes card edges look pixelated -->
                         <Grid.RenderTransform>
-                            <CompositeTransform x:Name="RootScale" ScaleX="1" ScaleY="1" TranslateY="0" />
+                            <CompositeTransform x:Name="RootLift" TranslateY="0" />
                         </Grid.RenderTransform>
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.4">
-                                            <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.4" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.4">
-                                            <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.4" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="TranslateY"
-                                                         To="0" Duration="0:0:0.3">
+                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="TranslateY"
+                                                         To="0" Duration="0:0:0.22">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.15" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1.035" Duration="0:0:0.24">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1.035" Duration="0:0:0.24">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="TranslateY"
-                                                         To="-4" Duration="0:0:0.24">
+                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="TranslateY"
+                                                         To="-3" Duration="0:0:0.18">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
@@ -456,20 +455,10 @@
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="0.96" Duration="0:0:0.08">
-                                            <DoubleAnimation.EasingFunction>
-                                                <QuadraticEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="0.96" Duration="0:0:0.08">
-                                            <DoubleAnimation.EasingFunction>
-                                                <QuadraticEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="TranslateY"
+                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="TranslateY"
                                                          To="1" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                                         To="0.92" Duration="0:0:0.08" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">

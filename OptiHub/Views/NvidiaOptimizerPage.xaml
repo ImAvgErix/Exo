@@ -7,7 +7,7 @@
     Background="Transparent">
 
     <Grid Padding="28,16,28,22">
-        <Border Style="{StaticResource OptiCard}"
+        <ContentControl Style="{StaticResource OptiCard}"
                 Padding="28,24"
                 MaxWidth="1000"
                 HorizontalAlignment="Stretch"
@@ -72,7 +72,7 @@
                             </ItemsRepeater.Layout>
                             <ItemsRepeater.ItemTemplate>
                                 <DataTemplate x:DataType="vm:FeatureRowViewModel">
-                                    <Border Style="{StaticResource OptiCard}"
+                                    <ContentControl Style="{StaticResource OptiCard}"
                                             Padding="14,12"
                                             MinHeight="64"
                                             HorizontalAlignment="Stretch"
@@ -109,7 +109,7 @@
                                                            Foreground="{ThemeResource OptiMutedTextBrush}" />
                                             </StackPanel>
                                         </Grid>
-                                    </Border>
+                                    </ContentControl>
                                 </DataTemplate>
                             </ItemsRepeater.ItemTemplate>
                         </ItemsRepeater>
@@ -117,7 +117,7 @@
                 </Grid>
 
                 <StackPanel Grid.Row="2" Spacing="12">
-                    <Border Style="{StaticResource OptiCard}"
+                    <ContentControl Style="{StaticResource OptiCard}"
                             Padding="14,12"
                             Visibility="{x:Bind ViewModel.HasLastResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                             Background="{ThemeResource OptiAccentSoftBrush}">
@@ -136,7 +136,7 @@
                                        FontSize="12.5"
                                        TextWrapping="Wrap" />
                         </Grid>
-                    </Border>
+                    </ContentControl>
 
                     <StackPanel Spacing="6"
                                 Visibility="{x:Bind ViewModel.IsProgressVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -176,6 +176,6 @@
                     </Grid>
                 </StackPanel>
             </Grid>
-        </Border>
+        </ContentControl>
     </Grid>
 </Page>

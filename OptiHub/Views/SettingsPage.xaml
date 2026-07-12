@@ -55,7 +55,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- Appearance — theme picker cards -->
-                <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource OptiCard}" Padding="22,20">
+                <ContentControl Grid.Row="0" Grid.Column="0" Style="{StaticResource OptiCard}" Padding="22,20">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -199,10 +199,10 @@
                             </Button>
                         </Grid>
                     </Grid>
-                </Border>
+                </ContentControl>
 
                 <!-- Support -->
-                <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource OptiCard}" Padding="22,20">
+                <ContentControl Grid.Row="0" Grid.Column="1" Style="{StaticResource OptiCard}" Padding="22,20">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -227,10 +227,10 @@
                                          NavigateUri="https://github.com/BarcusEric/OptiHub/issues"
                                          AutomationProperties.Name="Open OptiHub issues on GitHub" />
                     </Grid>
-                </Border>
+                </ContentControl>
 
                 <!-- About (version + disclaimer) -->
-                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource OptiCard}" Padding="22,16">
+                <ContentControl Grid.Row="1" Grid.Column="0" Style="{StaticResource OptiCard}" Padding="22,16">
                     <Grid RowSpacing="8">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -262,10 +262,10 @@
                                        Text="Disclaimer: OptiHub is free, unofficial software. It is not affiliated with, endorsed by, or supported by Discord, Valve/Steam, NVIDIA, Microsoft, or any other third party.&#x0a;&#x0a;Applies aggressive changes to drivers, GPU settings, registry, services, and game/chat clients. You may need Administrator rights. Use at your own risk. Back up important data and create a system restore point first.&#x0a;&#x0a;No warranty — express or implied. The author is not liable for broken installs, lost data, banned accounts, hardware issues, or any other damage. By using OptiHub you accept full responsibility for the outcome." />
                         </ScrollViewer>
                     </Grid>
-                </Border>
+                </ContentControl>
 
                 <!-- Updates — same card size as Appearance / Support -->
-                <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource OptiCard}" Padding="22,20">
+                <ContentControl Grid.Row="1" Grid.Column="1" Style="{StaticResource OptiCard}" Padding="22,20">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -305,7 +305,7 @@
                                    Visibility="{x:Bind ViewModel.HasUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                    AutomationProperties.LiveSetting="Polite" />
                     </Grid>
-                </Border>
+                </ContentControl>
             </Grid>
         </Grid>
     </Grid>
