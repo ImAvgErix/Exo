@@ -867,20 +867,30 @@ static class Program
     static void ApplyNvtweakRegistry()
     {
         // Gestalt=2 => Control Panel "Use the advanced 3D image settings"
-        // (not "Let application decide" / not "Use my preference" Balanced slider)
+        // NvDevToolsVisible=1 => Desktop > Enable Developer Settings
+        // RmProfilingAdminOnly=0 => GPU performance counters allowed for all users
         try
         {
+            void StampNvtweak(RegistryKey? key)
+            {
+                if (key == null) return;
+                key.SetValue("Gestalt", 2, RegistryValueKind.DWord);
+                key.SetValue("NvDevToolsVisible", 1, RegistryValueKind.DWord);
+                key.SetValue("RmProfilingAdminOnly", 0, RegistryValueKind.DWord);
+            }
             using (var hkcu = Registry.CurrentUser.CreateSubKey(@"Software\NVIDIA Corporation\Global\NVTweak"))
-                hkcu?.SetValue("Gestalt", 2, RegistryValueKind.DWord);
+                StampNvtweak(hkcu);
             using (var hklm = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\NVIDIA Corporation\Global\NVTweak"))
-                hklm?.SetValue("Gestalt", 2, RegistryValueKind.DWord);
+                StampNvtweak(hklm);
             using (var drv = Registry.LocalMachine.CreateSubKey(@"SYSTEM\CurrentControlSet\Services\nvlddmkm\Global\NVTweak"))
-                drv?.SetValue("Gestalt", 2, RegistryValueKind.DWord);
-            Console.WriteLine("[NVTweak] Gestalt=2 (Use the advanced 3D image settings)");
+                StampNvtweak(drv);
+            using (var param = Registry.LocalMachine.CreateSubKey(@"SYSTEM\CurrentControlSet\Services\nvlddmkm\Parameters\Global\NVTweak"))
+                StampNvtweak(param);
+            Console.WriteLine("[NVTweak] Gestalt=2 + Developer Settings ON + performance counters allowed");
         }
         catch (Exception ex)
         {
-            Console.WriteLine("[NVTweak] Gestalt set failed: " + ex.Message);
+            Console.WriteLine("[NVTweak] Gestalt/developer set failed: " + ex.Message);
         }
 
         // Ensure device keys exist for every connected display (CPL reads these).

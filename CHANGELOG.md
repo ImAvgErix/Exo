@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.30
+
+- **NVIDIA 1.9.6**: always enable Control Panel **Developer Settings** (`NvDevToolsVisible=1`) + **GPU performance counters for all users** (`RmProfilingAdminOnly=0`)
 ## 1.8.29
 
 - **NVIDIA 1.9.5**: **secondary monitors force 60 Hz** (primary keeps max Hz); re-assert **Use the advanced 3D image settings** (`Gestalt=2`, not Balanced) after display apply + close CPL so UI reloads

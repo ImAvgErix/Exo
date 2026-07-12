@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.9.5'
+$Script:NvidiaOptVersion = '1.9.6'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -1101,6 +1101,37 @@ function Test-NvidiaAdvanced3dImageSettings {
     } catch {
         return $false
     }
+}
+
+function Enable-NvidiaControlPanelDeveloperSettings {
+    # Desktop -> Enable Developer Settings + Manage GPU Performance Counters
+    # (allow access to all users). Useful for tooling / Nsight / counters.
+    Write-Step 'Control Panel: Enable Developer Settings + GPU performance counters...'
+    $paths = @(
+        'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm\Parameters\Global\NVTweak',
+        'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm\Global\NVTweak',
+        'HKLM:\SOFTWARE\NVIDIA Corporation\Global\NVTweak',
+        'HKCU:\Software\NVIDIA Corporation\Global\NVTweak'
+    )
+    foreach ($p in $paths) {
+        # 1 = show Developer category in Control Panel (Desktop menu)
+        Set-OptiHubRegDword -Path $p -Name 'NvDevToolsVisible' -Value 1
+        # 0 = allow GPU performance counters to ALL users (not admin-only)
+        Set-OptiHubRegDword -Path $p -Name 'RmProfilingAdminOnly' -Value 0
+    }
+    $ok = $false
+    try {
+        $root = 'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm\Parameters\Global\NVTweak'
+        $vis = [int](Get-ItemProperty -LiteralPath $root -Name 'NvDevToolsVisible' -ErrorAction Stop).NvDevToolsVisible
+        $prof = [int](Get-ItemProperty -LiteralPath $root -Name 'RmProfilingAdminOnly' -ErrorAction Stop).RmProfilingAdminOnly
+        $ok = ($vis -eq 1 -and $prof -eq 0)
+    } catch { $ok = $false }
+    if ($ok) {
+        Write-Ok 'Developer Settings ON + GPU performance counters allowed for all users'
+    } else {
+        Write-Warn 'Could not fully verify Developer Settings / performance counter registry'
+    }
+    return $ok
 }
 
 function Install-NvidiaControlPanel {
@@ -3669,9 +3700,10 @@ try {
         ControlPanel = [bool]$cplOk
     }
 
-    Write-HubProgress 78 'Control Panel EULA + advanced 3D + overlay/toasts...'
+    Write-HubProgress 78 'Control Panel EULA + advanced 3D + developer + overlay...'
     Accept-NvidiaControlPanelEula
     $advanced3dOk = Enable-NvidiaAdvanced3dImageSettings
+    [void](Enable-NvidiaControlPanelDeveloperSettings)
     Disable-NvidiaOverlay
     Set-NvidiaWindowsNotificationsOff
 
@@ -3681,6 +3713,7 @@ try {
     Set-NvidiaWindowsNotificationsOff
     Accept-NvidiaControlPanelEula
     [void](Enable-NvidiaAdvanced3dImageSettings)
+    [void](Enable-NvidiaControlPanelDeveloperSettings)
     Disable-NvidiaTelemetry
     $advanced3dOk = Test-NvidiaAdvanced3dImageSettings
 
@@ -3707,8 +3740,9 @@ try {
     if (-not $dispResult) {
         $dispResult = @{ Success = $false; Details = @('Display helper returned no result') }
     }
-    # Re-assert advanced 3D AFTER display helper (NVTweak writes + CPL cache)
+    # Re-assert advanced 3D + developer AFTER display helper (NVTweak writes + CPL cache)
     $advanced3dOk = Enable-NvidiaAdvanced3dImageSettings
+    [void](Enable-NvidiaControlPanelDeveloperSettings)
     $appInstalled = Test-NvidiaAppInstalled  # expect false
 
     Write-HubProgress 94 'Saving status...'
