@@ -43,13 +43,13 @@ public sealed class PowerShellRunnerService
             await _runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                // Apply/repair (progress UI or elevation): always open Windows Terminal Preview
-                // running PowerShell 7 Preview so the user sees a real Preview host.
-                // Detect (no progress): headless PowerShell 7 Preview only — still requires Terminal Preview installed.
-                if (elevate || progress is not null)
+                // Always silent: PowerShell 7 Preview only, no visible Terminal window.
+                // Windows Terminal Preview is still required on the machine (checked at startup)
+                // but scripts never flash UI to the user.
+                if (elevate)
                 {
-                    return await RunViaTerminalPreviewAsync(
-                            scriptPath, opts, workDir, progress, elevate, cancellationToken)
+                    return await RunElevatedSilentAsync(
+                            scriptPath, opts, workDir, progress, cancellationToken)
                         .ConfigureAwait(false);
                 }
 
@@ -444,16 +444,245 @@ public sealed class PowerShellRunnerService
         };
     }
 
-    private static async Task<ScriptRunResult> RunElevatedAsync(
+    /// <summary>
+    /// Elevated apply/repair via PowerShell 7 Preview — hidden, no Terminal window.
+    /// Progress still polled from OPTIHUB_LOG + exit file.
+    /// </summary>
+    private static async Task<ScriptRunResult> RunElevatedSilentAsync(
         string scriptPath,
         List<string> opts,
         string workDir,
         IProgress<ScriptRunProgress>? progress,
         CancellationToken cancellationToken)
     {
-        return await RunViaTerminalPreviewAsync(
-            scriptPath, opts, workDir, progress, elevate: true, cancellationToken)
-            .ConfigureAwait(false);
+        Directory.CreateDirectory(PathHelper.LogsDir);
+        var stamp = Guid.NewGuid().ToString("N");
+        var logPath = Path.Combine(PathHelper.LogsDir, $"run-{stamp}.log");
+        var exitPath = Path.Combine(PathHelper.LogsDir, $"exit-{stamp}.txt");
+        var wrapper = Path.Combine(PathHelper.LogsDir, $"wrap-{stamp}.ps1");
+        var vbsPath = Path.Combine(PathHelper.LogsDir, $"elevate-{stamp}.vbs");
+        var cancelPath = Path.Combine(PathHelper.LogsDir, $"cancel-{stamp}.txt");
+        var outTmp = logPath + ".out";
+        var errTmp = logPath + ".err";
+
+        var pwsh = ResolvePowerShell();
+        var scriptEsc = scriptPath.Replace("'", "''");
+        var logEsc = logPath.Replace("'", "''");
+        var exitEsc = exitPath.Replace("'", "''");
+        var workEsc = workDir.Replace("'", "''");
+        var cancelEsc = cancelPath.Replace("'", "''");
+        var outEsc = outTmp.Replace("'", "''");
+        var errEsc = errTmp.Replace("'", "''");
+        var pwshEsc = pwsh.Replace("'", "''");
+
+        var wrapperBody = string.Join(Environment.NewLine, new[]
+        {
+            "$ErrorActionPreference = 'Continue'",
+            "$env:OPTIHUB = '1'",
+            "$env:DISCOPT_NONINTERACTIVE = '1'",
+            "$env:OPTIHUB_SKIP_BOOT_FLASH = '1'",
+            "$env:DISCOPT_SKIP_MANIFEST = '1'",
+            "$env:OPTIHUB_LOG = '" + logEsc + "'",
+            "Set-Location -LiteralPath '" + workEsc + "'",
+            "$log = '" + logEsc + "'",
+            "$exitFile = '" + exitEsc + "'",
+            "$cancelFile = '" + cancelEsc + "'",
+            "$script = '" + scriptEsc + "'",
+            "$pwsh = '" + pwshEsc + "'",
+            "$outPath = '" + outEsc + "'",
+            "$errPath = '" + errEsc + "'",
+            "function Write-LogLine([string]$line) {",
+            "  if ([string]::IsNullOrWhiteSpace($line)) { return }",
+            "  try { Add-Content -LiteralPath $log -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }",
+            "}",
+            "function Sync-Stream([string]$path, [ref]$pos) {",
+            "  if (-not (Test-Path -LiteralPath $path)) { return }",
+            "  try {",
+            "    $fs = [IO.File]::Open($path, 'Open', 'Read', 'ReadWrite')",
+            "    try {",
+            "      if ($fs.Length -le $pos.Value) { return }",
+            "      [void]$fs.Seek($pos.Value, 'Begin')",
+            "      $sr = New-Object IO.StreamReader($fs, [Text.Encoding]::UTF8)",
+            "      while ($null -ne ($line = $sr.ReadLine())) { Write-LogLine $line }",
+            "      $pos.Value = $fs.Position",
+            "    } finally { $fs.Dispose() }",
+            "  } catch { }",
+            "}",
+            "'' | Set-Content -LiteralPath $log -Encoding UTF8",
+            "Write-LogLine 'OPTIHUB_PROGRESS:5|Elevated PowerShell 7 Preview (silent)'",
+            "$code = 1",
+            "if (Test-Path -LiteralPath $cancelFile) {",
+            "  Write-LogLine 'OPTIHUB_PROGRESS:0|Cancelled'",
+            "  Set-Content -LiteralPath $exitFile -Value -2 -Encoding ascii",
+            "  exit -2",
+            "}",
+            "try {",
+            "  $argText = '-NoProfile -ExecutionPolicy Bypass -File \"' + $script + '\"'",
+            "  foreach ($item in @($args)) { $argText += ' \"' + ([string]$item) + '\"' }",
+            "  Write-LogLine 'OPTIHUB_PROGRESS:8|Starting optimizer...'",
+            "  $p = Start-Process -FilePath $pwsh -ArgumentList $argText -WorkingDirectory '" + workEsc + "' -PassThru -WindowStyle Hidden -RedirectStandardOutput $outPath -RedirectStandardError $errPath",
+            "  if ($null -eq $p) { throw 'Failed to start optimizer process' }",
+            "  $outPos = 0L; $errPos = 0L",
+            "  $wasCancelled = $false",
+            "  while (-not $p.HasExited) {",
+            "    if (Test-Path -LiteralPath $cancelFile) {",
+            "      Write-LogLine 'OPTIHUB_PROGRESS:0|Cancelling...'",
+            "      try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { }",
+            "      try { $p.WaitForExit(5000) } catch { }",
+            "      $wasCancelled = $true",
+            "      break",
+            "    }",
+            "    Sync-Stream $outPath ([ref]$outPos)",
+            "    Sync-Stream $errPath ([ref]$errPos)",
+            "    Start-Sleep -Milliseconds 120",
+            "  }",
+            "  Sync-Stream $outPath ([ref]$outPos)",
+            "  Sync-Stream $errPath ([ref]$errPos)",
+            "  if ($wasCancelled) { $code = -2 } else { $code = [int]$p.ExitCode }",
+            "} catch {",
+            "  Write-LogLine ('[-] Elevated child failed: ' + $_.Exception.Message)",
+            "  try {",
+            "    & $pwsh -NoProfile -ExecutionPolicy Bypass -File $script @args 2>&1 | ForEach-Object { Write-LogLine (\"$_\") }",
+            "    $code = 0",
+            "    if ($null -ne $LASTEXITCODE) { $code = [int]$LASTEXITCODE }",
+            "  } catch {",
+            "    Write-LogLine ('[-] ' + $_.Exception.Message)",
+            "    $code = 1",
+            "  }",
+            "}",
+            "if ($code -eq 0) { Write-LogLine 'OPTIHUB_PROGRESS:100|Completed successfully' }",
+            "elseif ($code -eq -2) { Write-LogLine 'OPTIHUB_PROGRESS:0|Cancelled' }",
+            "else { Write-LogLine 'OPTIHUB_PROGRESS:100|Finished with errors' }",
+            "Set-Content -LiteralPath $exitFile -Value $code -Encoding ascii",
+            "exit $code"
+        });
+        await File.WriteAllTextAsync(wrapper, wrapperBody, cancellationToken).ConfigureAwait(false);
+
+        var argBuilder = new StringBuilder();
+        argBuilder.Append("-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ");
+        argBuilder.Append('"').Append(wrapper).Append('"');
+        foreach (var o in opts)
+        {
+            argBuilder.Append(' ');
+            argBuilder.Append(QuoteArg(o));
+        }
+
+        var psEsc = pwsh.Replace("\"", "\"\"");
+        var argsEsc = argBuilder.ToString().Replace("\"", "\"\"");
+        var vbsBody =
+            "Set shell = CreateObject(\"Shell.Application\")\r\n" +
+            "shell.ShellExecute \"" + psEsc + "\", \"" + argsEsc + "\", \"\", \"runas\", 0\r\n";
+        await File.WriteAllTextAsync(vbsPath, vbsBody, cancellationToken).ConfigureAwait(false);
+
+        using var cancellationRegistration = cancellationToken.Register(() =>
+        {
+            SignalElevatedCancellation(cancelPath, wrapper, vbsPath, cancelPath, exitPath, outTmp, errTmp);
+        });
+        cancellationToken.ThrowIfCancellationRequested();
+
+        progress?.Report(new ScriptRunProgress
+        {
+            Percent = 4,
+            Status = "Waiting for Administrator approval..."
+        });
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "wscript.exe"),
+            Arguments = "//B //Nologo \"" + vbsPath + "\"",
+            WorkingDirectory = workDir,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden
+        };
+        using var launcher = Process.Start(psi);
+        if (launcher is null)
+        {
+            return new ScriptRunResult
+            {
+                Success = false,
+                ExitCode = -1,
+                ErrorMessage = "Failed to start elevated PowerShell 7 Preview.",
+                Summary = "Launch failed"
+            };
+        }
+        await launcher.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+        var lastPercent = 5.0;
+        var lastStatus = "Waiting for Administrator approval...";
+        var lastLength = 0;
+        var startedUtc = DateTime.UtcNow;
+        var sawLog = false;
+        var timeout = TimeSpan.FromMinutes(25);
+
+        while (!File.Exists(exitPath))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (File.Exists(logPath))
+            {
+                if (!sawLog)
+                {
+                    sawLog = true;
+                    lastStatus = "Optimizer running...";
+                    progress?.Report(new ScriptRunProgress { Percent = 8, Status = lastStatus });
+                }
+                PollLog(logPath, ref lastLength, ref lastPercent, ref lastStatus, progress);
+            }
+            else if (DateTime.UtcNow - startedUtc > TimeSpan.FromSeconds(30) && !sawLog)
+            {
+                progress?.Report(new ScriptRunProgress { Percent = 0, Status = "Elevation cancelled" });
+                CleanupTemp(wrapper, vbsPath, cancelPath, logPath, exitPath, outTmp, errTmp);
+                return new ScriptRunResult
+                {
+                    Success = false,
+                    ExitCode = -1,
+                    Summary = "Elevation cancelled",
+                    ErrorMessage = "Administrator approval was cancelled or the elevated session never started."
+                };
+            }
+
+            if (DateTime.UtcNow - startedUtc > timeout)
+            {
+                var timedOutOutput = File.Exists(logPath)
+                    ? await File.ReadAllTextAsync(logPath, cancellationToken).ConfigureAwait(false)
+                    : string.Empty;
+                SignalElevatedCancellation(cancelPath, wrapper, vbsPath, cancelPath, exitPath, outTmp, errTmp);
+                return new ScriptRunResult
+                {
+                    Success = false,
+                    ExitCode = -1,
+                    FullOutput = timedOutOutput,
+                    Summary = "Timed out",
+                    ErrorMessage = "Optimizer timed out.",
+                    LogPath = logPath
+                };
+            }
+
+            await Task.Delay(150, cancellationToken).ConfigureAwait(false);
+        }
+
+        PollLog(logPath, ref lastLength, ref lastPercent, ref lastStatus, progress);
+        var exitText = (await File.ReadAllTextAsync(exitPath, cancellationToken).ConfigureAwait(false)).Trim();
+        _ = int.TryParse(exitText, out var exitCode);
+        var full = File.Exists(logPath)
+            ? await File.ReadAllTextAsync(logPath, cancellationToken).ConfigureAwait(false)
+            : string.Empty;
+        var ok = exitCode == 0;
+        progress?.Report(new ScriptRunProgress
+        {
+            Percent = ok ? 100 : lastPercent,
+            Status = ok ? "Completed successfully" : exitCode == -2 ? "Cancelled" : "Finished with errors"
+        });
+        CleanupTemp(wrapper, vbsPath, cancelPath, exitPath, outTmp, errTmp);
+        return new ScriptRunResult
+        {
+            Success = ok,
+            ExitCode = exitCode,
+            FullOutput = full,
+            Summary = ok ? "Completed successfully" : exitCode == -2 ? "Cancelled" : $"Exited with code {exitCode}",
+            ErrorMessage = ok ? null : ExtractError(full, logPath),
+            LogPath = logPath
+        };
     }
 
 

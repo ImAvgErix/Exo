@@ -25,9 +25,13 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _updateStatus = string.Empty;
     [ObservableProperty] private bool _isUpdating;
 
-    public string AboutFooter { get; private set; } = "OptiHub";
+    /// <summary>True when there is status text to show (hides empty gray well).</summary>
+    public bool HasUpdateStatus => !string.IsNullOrWhiteSpace(UpdateStatus);
 
     public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
+
+    partial void OnUpdateStatusChanged(string value) =>
+        OnPropertyChanged(nameof(HasUpdateStatus));
 
     [RelayCommand]
     private void OpenLogsFolder()
@@ -187,7 +191,7 @@ public partial class SettingsViewModel : ObservableObject
 
         RefreshKitVersionText();
         AppVersion = GetAppVersionText();
-        AboutFooter = "OptiHub " + AppVersion;
+        UpdateStatus = string.Empty;
     }
 
     private void RefreshKitVersionText()

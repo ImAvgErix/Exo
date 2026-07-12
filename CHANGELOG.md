@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.8
+
+- **Scripts run silently** — PowerShell 7 Preview still required (+ Terminal Preview on the system), but apply/repair no longer open a visible window
+- **Settings Updates card**: app version only; no kit list, no double version footer, no empty gray status well until you check
 ## 1.8.7
 
 - **Require PowerShell 7 Preview only** (no stable 7 / no 5.1)
