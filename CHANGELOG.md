@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.9
+
+- **Chrome**: stop auto-focusing Settings on launch (no gear highlight when the app opens)
 ## 1.8.8
 
 - **Scripts run silently** — PowerShell 7 Preview still required (+ Terminal Preview on the system), but apply/repair no longer open a visible window

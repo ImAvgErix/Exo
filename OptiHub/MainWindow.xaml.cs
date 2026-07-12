@@ -50,9 +50,12 @@ public sealed partial class MainWindow : Window
         {
             UpdateCaptionInset();
             ApplyFixedWindowChrome();
+            ClearChromeFocus();
         };
         RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
+        // First activate often puts keyboard focus on the only title-bar button (Settings).
+        Activated += OnWindowActivatedClearFocus;
         Closed += (_, _) =>
         {
             _lifetimeCts.Cancel();
@@ -73,7 +76,46 @@ public sealed partial class MainWindow : Window
         UpdateCaptionInset();
 
         NavigateHome(suppressTransition: true);
+        ClearChromeFocus();
         _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
+    }
+
+    private bool _clearedInitialFocus;
+
+    private void OnWindowActivatedClearFocus(object sender, WindowActivatedEventArgs args)
+    {
+        if (_clearedInitialFocus) return;
+        if (args.WindowActivationState == WindowActivationState.Deactivated) return;
+        _clearedInitialFocus = true;
+        Activated -= OnWindowActivatedClearFocus;
+        // Defer so we win after WinUI's default "first focusable" pass.
+        DispatcherQueue.TryEnqueue(() => ClearChromeFocus());
+    }
+
+    /// <summary>
+    /// Title-bar Settings is often the first focusable control when Back is collapsed —
+    /// clear that highlight so the gear doesn't look selected on launch.
+    /// </summary>
+    private void ClearChromeFocus()
+    {
+        try
+        {
+            // Prefer content, not chrome buttons.
+            ContentFrame.IsTabStop = true;
+            if (ContentFrame.Content is UIElement page)
+            {
+                page.IsTabStop = true;
+                _ = page.Focus(FocusState.Programmatic);
+            }
+            else
+            {
+                _ = ContentFrame.Focus(FocusState.Programmatic);
+            }
+        }
+        catch
+        {
+            // Focus is best-effort on early load.
+        }
     }
 
     private void ApplyFixedWindowChrome()
