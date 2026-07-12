@@ -842,40 +842,39 @@ public sealed class PowerShellRunnerService
             LooksLikePowerShellPreview(_cachedPowerShellPath))
             return _cachedPowerShellPath;
 
+        string? stableHint = null;
         foreach (var path in EnumeratePowerShellPreviewCandidates())
         {
             try
             {
-                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path) && LooksLikePowerShellPreview(path))
+                if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                    continue;
+                if (LooksLikePowerShellPreview(path))
                 {
                     _cachedPowerShellPath = path;
                     return path;
                 }
+
+                // Remember stable 7 for a clearer error (common mix-up).
+                if (stableHint is null && LooksLikePowerShellStable(path))
+                    stableHint = path;
             }
             catch { /* continue */ }
         }
 
-        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-        foreach (var name in new[] { "pwsh-preview.exe", "pwsh.exe" })
+        if (stableHint is not null)
         {
-            foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-            {
-                try
-                {
-                    var full = Path.Combine(dir.Trim('"'), name);
-                    if (File.Exists(full) && LooksLikePowerShellPreview(full))
-                    {
-                        _cachedPowerShellPath = full;
-                        return full;
-                    }
-                }
-                catch { /* continue */ }
-            }
+            throw new InvalidOperationException(
+                "Found stable PowerShell 7, but OptiHub needs PowerShell 7 Preview.\n" +
+                $"Stable: {stableHint}\n" +
+                "Install Preview: winget install Microsoft.PowerShell.Preview\n" +
+                "Then restart OptiHub (and sign out if the Store just finished installing).");
         }
 
         throw new InvalidOperationException(
-            "PowerShell 7 Preview is required (stable PowerShell 7 is not used). " +
-            "Install Microsoft.PowerShell.Preview from winget/Store, then restart OptiHub.");
+            "PowerShell 7 Preview not found.\n" +
+            "Install: winget install Microsoft.PowerShell.Preview\n" +
+            "Or Microsoft Store → “PowerShell Preview”. Then restart OptiHub.");
     }
 
     /// <summary>Windows Terminal Preview host used to run optimizer scripts.</summary>
@@ -898,7 +897,9 @@ public sealed class PowerShellRunnerService
         }
 
         throw new InvalidOperationException(
-            "Windows Terminal Preview is required. Install Microsoft.WindowsTerminal.Preview from winget/Store, then restart OptiHub.");
+            "Windows Terminal Preview not found.\n" +
+            "Install: winget install Microsoft.WindowsTerminal.Preview\n" +
+            "Then restart OptiHub.");
     }
 
     public static string? TryGetPowerShellPath()
@@ -993,7 +994,14 @@ public sealed class PowerShellRunnerService
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         var winApps = Path.Combine(programFiles, "WindowsApps");
 
-        // Prefer real package binary over stub aliases when possible.
+        // AppX path first — avoids access-denied when listing WindowsApps.
+        var appx = TryFindAppxInstallPath("Microsoft.WindowsTerminalPreview");
+        if (appx is not null)
+        {
+            yield return Path.Combine(appx, "WindowsTerminal.exe");
+            yield return Path.Combine(appx, "wt.exe");
+        }
+
         if (Directory.Exists(winApps))
         {
             string[] dirs = Array.Empty<string>();
@@ -1015,8 +1023,6 @@ public sealed class PowerShellRunnerService
 
         yield return Path.Combine(local, "Microsoft", "WindowsApps", "wt-preview.exe");
         yield return Path.Combine(local, "Microsoft", "WindowsApps", "WindowsTerminalPreview.exe");
-
-        // Some Preview installs still register as wt.exe while only Preview is installed.
         yield return Path.Combine(local, "Microsoft", "WindowsApps", "wt.exe");
     }
 
@@ -1108,34 +1114,63 @@ public sealed class PowerShellRunnerService
         return t.Length > 180 ? t[..180] + "…" : t;
     }
 
-    private static bool LooksLikePowerShellPreview(string path)
+    private static bool LooksLikePowerShellStable(string path)
     {
-        // Never use Windows PowerShell 5.1 or non-preview stable installs.
         if (path.Contains("WindowsPowerShell", StringComparison.OrdinalIgnoreCase))
             return false;
-        if (path.Contains("PowerShell\\7\\", StringComparison.OrdinalIgnoreCase) &&
-            !path.Contains("preview", StringComparison.OrdinalIgnoreCase) &&
-            !path.Contains("Preview", StringComparison.OrdinalIgnoreCase))
+        var name = Path.GetFileName(path);
+        if (!name.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (path.Contains("7-preview", StringComparison.OrdinalIgnoreCase) ||
+            path.Contains("PowerShellPreview", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (path.Contains("PowerShell\\7\\", StringComparison.OrdinalIgnoreCase) ||
+            path.Contains("PowerShell/7/", StringComparison.OrdinalIgnoreCase))
+            return true;
+        try
+        {
+            var vi = FileVersionInfo.GetVersionInfo(path);
+            var blob = $"{vi.ProductName} {vi.FileDescription} {vi.ProductVersion} {vi.FileVersion}";
+            if (blob.Contains("preview", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (blob.Contains("PowerShell", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        catch { }
+        return false;
+    }
+
+    private static bool LooksLikePowerShellPreview(string path)
+    {
+        if (path.Contains("WindowsPowerShell", StringComparison.OrdinalIgnoreCase))
             return false;
 
         var name = Path.GetFileName(path);
         if (name.Equals("pwsh-preview.exe", StringComparison.OrdinalIgnoreCase))
             return true;
+        if (!name.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase))
+            return false;
 
-        // Store package: ...\Microsoft.PowerShellPreview_...\pwsh.exe
-        if (name.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase) &&
-            path.Contains("PowerShellPreview", StringComparison.OrdinalIgnoreCase))
+        if (path.Contains("7-preview", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (path.Contains("PowerShellPreview", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        if (name.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase) &&
-            path.Contains("7-preview", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        // WindowsApps stub "pwsh.exe" / "pwsh-preview.exe" — accept when Preview package is present.
-        if (name.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase) &&
-            path.Contains("WindowsApps", StringComparison.OrdinalIgnoreCase))
+        try
         {
-            if (File.Exists(Path.Combine(Path.GetDirectoryName(path) ?? "", "pwsh-preview.exe")))
+            var vi = FileVersionInfo.GetVersionInfo(path);
+            var blob = $"{vi.ProductName} {vi.FileDescription} {vi.ProductVersion} {vi.FileVersion} {vi.InternalName}";
+            if (blob.Contains("preview", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        catch { }
+
+        if (path.Contains("WindowsApps", StringComparison.OrdinalIgnoreCase))
+        {
+            var dir = Path.GetDirectoryName(path) ?? "";
+            if (File.Exists(Path.Combine(dir, "pwsh-preview.exe")))
+                return true;
+            if (TryFindAppxInstallPath("Microsoft.PowerShellPreview") is not null)
                 return true;
             try
             {
@@ -1148,18 +1183,66 @@ public sealed class PowerShellRunnerService
             catch { }
         }
 
+        if (path.Contains("PowerShell\\7\\", StringComparison.OrdinalIgnoreCase) ||
+            path.Contains("PowerShell/7/", StringComparison.OrdinalIgnoreCase))
+            return false;
+
         return false;
+    }
+
+    /// <summary>
+    /// Store/AppX install path without listing Program Files\WindowsApps (often access-denied).
+    /// </summary>
+    private static string? TryFindAppxInstallPath(string packageNamePrefix)
+    {
+        try
+        {
+            var pm = new Windows.Management.Deployment.PackageManager();
+            foreach (var pkg in pm.FindPackagesForUser(string.Empty))
+            {
+                try
+                {
+                    var name = pkg.Id?.Name;
+                    if (string.IsNullOrEmpty(name)) continue;
+                    if (!name.StartsWith(packageNamePrefix, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var loc = pkg.InstalledLocation?.Path;
+                    if (!string.IsNullOrWhiteSpace(loc) && Directory.Exists(loc))
+                        return loc;
+                }
+                catch { }
+            }
+        }
+        catch { }
+
+        return null;
     }
 
     private static IEnumerable<string> EnumeratePowerShellPreviewCandidates()
     {
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-        var winApps = Path.Combine(programFiles, "WindowsApps");
+        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        var programW6432 = Environment.GetEnvironmentVariable("ProgramW6432");
 
-        yield return Path.Combine(programFiles, "PowerShell", "7-preview", "pwsh.exe");
+        var appx = TryFindAppxInstallPath("Microsoft.PowerShellPreview");
+        if (appx is not null)
+        {
+            yield return Path.Combine(appx, "pwsh.exe");
+            yield return Path.Combine(appx, "pwsh-preview.exe");
+        }
+
+        foreach (var root in new[] { programFiles, programW6432, programFilesX86 })
+        {
+            if (string.IsNullOrWhiteSpace(root)) continue;
+            yield return Path.Combine(root, "PowerShell", "7-preview", "pwsh.exe");
+            yield return Path.Combine(root, "PowerShell", "7-preview", "pwsh-preview.exe");
+        }
+
         yield return Path.Combine(local, "Microsoft", "WindowsApps", "pwsh-preview.exe");
+        yield return Path.Combine(local, "Microsoft", "WindowsApps", "pwsh.exe");
 
+        var winApps = Path.Combine(programFiles, "WindowsApps");
         if (Directory.Exists(winApps))
         {
             string[] previewMatches = Array.Empty<string>();
@@ -1170,10 +1253,22 @@ public sealed class PowerShellRunnerService
                     .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase)
                     .ToArray();
             }
-            catch { /* access denied is common */ }
+            catch { }
 
             foreach (var dir in previewMatches)
                 yield return Path.Combine(dir, "pwsh.exe");
+        }
+
+        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        foreach (var name in new[] { "pwsh-preview.exe", "pwsh.exe" })
+        {
+            foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string full;
+                try { full = Path.Combine(dir.Trim().Trim('"'), name); }
+                catch { continue; }
+                yield return full;
+            }
         }
     }
 
