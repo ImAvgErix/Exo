@@ -73,6 +73,77 @@
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 
+    <!-- Theme picker tiles (Settings → Appearance) -->
+    <Style x:Key="OptiThemePickOuter" TargetType="Border">
+        <Setter Property="CornerRadius" Value="16" />
+        <Setter Property="BorderThickness" Value="1.5" />
+        <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style x:Key="OptiThemePickButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid x:Name="Root" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                        <Grid.RenderTransform>
+                            <CompositeTransform x:Name="ScaleTransform" />
+                        </Grid.RenderTransform>
+                        <ContentPresenter x:Name="Content"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}" />
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
+                                                         Storyboard.TargetProperty="ScaleX"
+                                                         To="1" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
+                                                         Storyboard.TargetProperty="ScaleY"
+                                                         To="1" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="PointerOver">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
+                                                         Storyboard.TargetProperty="ScaleX"
+                                                         To="1.03" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
+                                                         Storyboard.TargetProperty="ScaleY"
+                                                         To="1.03" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
+                                                         Storyboard.TargetProperty="ScaleX"
+                                                         To="0.97" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
+                                                         Storyboard.TargetProperty="ScaleY"
+                                                         To="0.97" Duration="0:0:0.08" />
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Disabled" />
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="OptiRiskCard" TargetType="Border">
         <Setter Property="CornerRadius" Value="12" />
         <Setter Property="Padding" Value="12,10" />

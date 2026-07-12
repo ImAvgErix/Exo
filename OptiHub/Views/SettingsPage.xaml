@@ -54,31 +54,150 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <!-- Appearance -->
+                <!-- Appearance — theme picker cards -->
                 <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource OptiCard}" Padding="22,20">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="APPEARANCE" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="1"
-                                    Orientation="Horizontal"
-                                    Spacing="20"
-                                    VerticalAlignment="Center"
-                                    Margin="0,16,0,0">
-                            <RadioButton Content="Dark"
-                                         GroupName="ThemeChoice"
-                                         AutomationProperties.Name="Use dark theme"
-                                         IsChecked="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}" />
-                            <RadioButton Content="Light"
-                                         GroupName="ThemeChoice"
-                                         AutomationProperties.Name="Use light theme"
-                                         IsChecked="{x:Bind ViewModel.IsLightMode, Mode=TwoWay}" />
-                        </StackPanel>
+                        <TextBlock Text="APPEARANCE" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+
+                        <Grid Grid.Row="1"
+                              ColumnSpacing="12"
+                              VerticalAlignment="Center"
+                              Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Dark -->
+                            <Button Grid.Column="0"
+                                    Style="{StaticResource OptiThemePickButton}"
+                                    Click="ThemeDark_Click"
+                                    AutomationProperties.Name="Use dark theme"
+                                    AutomationProperties.FullDescription="Dark theme">
+                                <Grid>
+                                    <Border Style="{StaticResource OptiThemePickOuter}"
+                                            BorderBrush="{ThemeResource OptiCardStrokeBrush}" />
+                                    <Border Style="{StaticResource OptiThemePickOuter}"
+                                            BorderBrush="{ThemeResource OptiAccentBrush}"
+                                            BorderThickness="2.5"
+                                            Visibility="{x:Bind ViewModel.IsDarkMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <StackPanel Spacing="10" Padding="10,12">
+                                        <Border Height="72"
+                                                CornerRadius="12"
+                                                Background="#0A0C10"
+                                                BorderBrush="#2A3140"
+                                                BorderThickness="1"
+                                                Padding="10">
+                                            <Grid>
+                                                <StackPanel Orientation="Horizontal"
+                                                            Spacing="6"
+                                                            VerticalAlignment="Top"
+                                                            HorizontalAlignment="Left">
+                                                    <Ellipse Width="10" Height="10" Fill="#22C55E" />
+                                                    <Ellipse Width="10" Height="10" Fill="#3B82F6" />
+                                                    <Ellipse Width="10" Height="10" Fill="#A78BFA" />
+                                                </StackPanel>
+                                                <FontIcon Glyph="&#xE708;"
+                                                          FontSize="22"
+                                                          Foreground="#E8ECF4"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center" />
+                                                <Border Width="36" Height="8"
+                                                        CornerRadius="4"
+                                                        Background="#22C55E"
+                                                        HorizontalAlignment="Right"
+                                                        VerticalAlignment="Bottom"
+                                                        Opacity="0.9" />
+                                            </Grid>
+                                        </Border>
+                                        <StackPanel Spacing="2" HorizontalAlignment="Center">
+                                            <TextBlock Text="Dark"
+                                                       FontFamily="{StaticResource OptiUiFontSemiBold}"
+                                                       FontSize="14"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                                                       HorizontalAlignment="Center" />
+                                            <TextBlock Text="Night mode"
+                                                       FontSize="11"
+                                                       Foreground="{ThemeResource OptiMutedTextBrush}"
+                                                       HorizontalAlignment="Center" />
+                                        </StackPanel>
+                                        <FontIcon Glyph="&#xE73E;"
+                                                  FontSize="14"
+                                                  Foreground="{ThemeResource OptiAccentBrush}"
+                                                  HorizontalAlignment="Center"
+                                                  Visibility="{x:Bind ViewModel.IsDarkMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Button>
+
+                            <!-- Light -->
+                            <Button Grid.Column="1"
+                                    Style="{StaticResource OptiThemePickButton}"
+                                    Click="ThemeLight_Click"
+                                    AutomationProperties.Name="Use light theme"
+                                    AutomationProperties.FullDescription="Light theme">
+                                <Grid>
+                                    <Border Style="{StaticResource OptiThemePickOuter}"
+                                            BorderBrush="{ThemeResource OptiCardStrokeBrush}" />
+                                    <Border Style="{StaticResource OptiThemePickOuter}"
+                                            BorderBrush="{ThemeResource OptiAccentBrush}"
+                                            BorderThickness="2.5"
+                                            Visibility="{x:Bind ViewModel.IsLightMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <StackPanel Spacing="10" Padding="10,12">
+                                        <Border Height="72"
+                                                CornerRadius="12"
+                                                Background="#F4F6FA"
+                                                BorderBrush="#D0D7E2"
+                                                BorderThickness="1"
+                                                Padding="10">
+                                            <Grid>
+                                                <StackPanel Orientation="Horizontal"
+                                                            Spacing="6"
+                                                            VerticalAlignment="Top"
+                                                            HorizontalAlignment="Left">
+                                                    <Ellipse Width="10" Height="10" Fill="#16A34A" />
+                                                    <Ellipse Width="10" Height="10" Fill="#2563EB" />
+                                                    <Ellipse Width="10" Height="10" Fill="#7C3AED" />
+                                                </StackPanel>
+                                                <FontIcon Glyph="&#xE706;"
+                                                          FontSize="22"
+                                                          Foreground="#1A1F2A"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center" />
+                                                <Border Width="36" Height="8"
+                                                        CornerRadius="4"
+                                                        Background="#16A34A"
+                                                        HorizontalAlignment="Right"
+                                                        VerticalAlignment="Bottom"
+                                                        Opacity="0.9" />
+                                            </Grid>
+                                        </Border>
+                                        <StackPanel Spacing="2" HorizontalAlignment="Center">
+                                            <TextBlock Text="Light"
+                                                       FontFamily="{StaticResource OptiUiFontSemiBold}"
+                                                       FontSize="14"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                                                       HorizontalAlignment="Center" />
+                                            <TextBlock Text="Day mode"
+                                                       FontSize="11"
+                                                       Foreground="{ThemeResource OptiMutedTextBrush}"
+                                                       HorizontalAlignment="Center" />
+                                        </StackPanel>
+                                        <FontIcon Glyph="&#xE73E;"
+                                                  FontSize="14"
+                                                  Foreground="{ThemeResource OptiAccentBrush}"
+                                                  HorizontalAlignment="Center"
+                                                  Visibility="{x:Bind ViewModel.IsLightMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Button>
+                        </Grid>
                     </Grid>
                 </Border>
 

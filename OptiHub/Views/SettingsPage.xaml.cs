@@ -22,6 +22,16 @@ public sealed partial class SettingsPage : Page
 
     private void Page_Loaded(object sender, RoutedEventArgs e) => PlayEntrance();
 
+    private void ThemeDark_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.IsDarkMode = true;
+    }
+
+    private void ThemeLight_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.IsLightMode = true;
+    }
+
     private void PlayEntrance()
     {
         if (_entrancePlayed) return;
