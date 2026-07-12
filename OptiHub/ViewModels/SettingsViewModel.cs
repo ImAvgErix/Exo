@@ -55,6 +55,24 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    private void ReportIssue()
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "https://github.com/BarcusEric/OptiHub/issues",
+                UseShellExecute = true
+            });
+            UpdateStatus = "Opened GitHub issues.";
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus = "Could not open GitHub: " + ex.Message;
+        }
+    }
+
     partial void OnIsDarkModeChanged(bool value)
     {
         if (_suppressThemeSync) return;

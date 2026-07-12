@@ -203,25 +203,23 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="SUPPORT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="10" Margin="0,16,0,0">
+                        <TextBlock Text="SUPPORT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                        <StackPanel Grid.Row="1"
+                                    VerticalAlignment="Center"
+                                    Spacing="10"
+                                    Margin="0,16,0,0">
                             <Button Style="{StaticResource OptiQuietButton}"
                                     Content="Open logs folder"
                                     AutomationProperties.Name="Open OptiHub logs folder"
                                     HorizontalAlignment="Stretch"
                                     Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
+                            <Button Style="{StaticResource OptiQuietButton}"
+                                    Content="Report issue on GitHub"
+                                    AutomationProperties.Name="Report an issue on GitHub"
+                                    HorizontalAlignment="Stretch"
+                                    Command="{x:Bind ViewModel.ReportIssueCommand}" />
                         </StackPanel>
-                        <HyperlinkButton Grid.Row="2"
-                                         Content="Report an issue on GitHub"
-                                         FontSize="12"
-                                         Padding="0"
-                                         Margin="0,10,0,0"
-                                         NavigateUri="https://github.com/BarcusEric/OptiHub/issues"
-                                         AutomationProperties.Name="Open OptiHub issues on GitHub" />
                     </Grid>
                 </ContentControl>
 
