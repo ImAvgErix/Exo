@@ -46,6 +46,13 @@
                                Style="{StaticResource OptiBody}"
                                FontSize="13.5"
                                LineHeight="20" />
+                    <TextBlock Text="OptiHub is the control panel. Apply forces settings at the driver (NVAPI + DRS). Do not trust NVIDIA Control Panel radios — the Store app keeps a virtual registry and often shows the wrong options even when the driver is correct. Use the green checks below."
+                               Style="{StaticResource OptiCaption}"
+                               FontSize="12"
+                               LineHeight="17"
+                               TextWrapping="Wrap"
+                               Foreground="{ThemeResource OptiMutedTextBrush}"
+                               Margin="0,8,0,0" />
                     <ToggleSwitch Header="G-SYNC profile"
                                   IsOn="{x:Bind ViewModel.UseGsync, Mode=TwoWay}"
                                   OnContent="Adaptive sync"

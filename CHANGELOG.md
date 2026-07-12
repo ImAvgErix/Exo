@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.32
+
+- **NVIDIA 1.9.8**: **OptiHub is the control panel** - green checks use live NVAPI/DRS (not Store CPL UI). Also stamp Store CPL **virtual hive** (`Packages\...\Helium\User.dat`) so CPL may match; CPL alone was never reading real HKCU
 ## 1.8.31
 
 - **NVIDIA 1.9.7**: hard-stamp **every** monitor NVTweak key - scaling **override ON**, desktop **Use NVIDIA + Full** range, video **color+image NVIDIA** (both monitors); re-assert **Gestalt=2** after container refresh; re-disable App container + clear tray ghosts after soft refresh (was re-arming hidden icons)

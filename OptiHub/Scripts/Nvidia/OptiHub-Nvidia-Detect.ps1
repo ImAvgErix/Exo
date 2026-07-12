@@ -419,22 +419,24 @@ $features.Add(@{
     active = $gameOk
 })
 
-# 4+) Display then privacy stack (same order as status priority)
+# 4+) OptiHub is the control panel - verify LIVE via NVAPI/DRS, not NVIDIA CPL UI.
+# Store NVIDIA Control Panel uses a virtualized registry hive and often shows stale/wrong radios.
 $displayMarkerOk = [bool]($state -and $state.displayPrefs -and [string]$state.displayMethod -eq 'nvapi')
 $displayLive = Test-NvidiaDisplayLive
 $displayOk = $displayMarkerOk -and [bool]$displayLive.Available -and [bool]$displayLive.Ok -and
              (-not $pendingAfterDriver) -and (-not $applyInProgress)
+
 $features.Add(@{
-    title  = 'Display color / scaling prefs'
+    title  = 'OptiHub display policy (driver)'
     detail = $(if ($displayLive.Available) {
-        "Live NVAPI verification: $($displayLive.Detail)"
+        "Live NVAPI: $($displayLive.Detail) | primary=max Hz, secondary=60 Hz, Full RGB, GPU no-scaling"
     } else {
         'Live NVAPI helper unavailable; display state cannot be verified.'
     })
     active = $displayOk
 })
 
-# Control Panel only path: App should be absent; classic CPL present.
+# Control Panel only path: App should be absent; classic CPL present (optional UI only).
 $appInstalled = $false
 foreach ($appPath in @(
     (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVIDIA App\CEF\NVIDIA App.exe'),
@@ -456,45 +458,38 @@ foreach ($cplPath in @(
 }
 $controlPanelOnly = [bool]($state -and $state.PSObject.Properties.Name -contains 'controlPanelOnly' -and [bool]$state.controlPanelOnly)
 $cplOk = $cplInstalled -or [bool]($state -and $state.nvidiaControlPanel) -or $controlPanelOnly
-# Success = Control Panel path (App gone preferred). App present is a soft warning, not hard failure for display.
-$clientOk = ($cplOk -and -not $appInstalled) -or
-            ($controlPanelOnly -and -not $appInstalled) -or
-            [bool]($state -and $state.displayMethod -eq 'nvapi' -and $state.displayPrefs -and -not $appInstalled)
-# Prefer live CPL install for applied state when possible
-if ($cplInstalled -and -not $appInstalled) { $clientOk = $true }
+$clientOk = (-not $appInstalled) -and (
+    $cplOk -or [bool]($state -and $state.displayMethod -eq 'nvapi' -and $state.displayPrefs) -or $controlPanelOnly
+)
+if (-not $appInstalled -and $displayOk) { $clientOk = $true }
 
-$advanced3dOk = $false
-try {
-    $gestalt = (Get-ItemProperty -LiteralPath 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak' -Name 'Gestalt' -ErrorAction Stop).Gestalt
-    $advanced3dOk = ([int]$gestalt -eq 2)
-} catch {
-    if ($state -and $state.PSObject.Properties.Name -contains 'advanced3dImageSettings') {
-        $advanced3dOk = [bool]$state.advanced3dImageSettings
-    }
+# 3D "advanced" = driver DRS profiles applied (Profile Inspector), NOT the CPL radio button.
+# Store CPL virtual hive often shows "Let the 3D application decide" even when DRS is forced.
+$advanced3dOk = [bool]$profileOk -and [bool]$gameOk
+if ($state -and $state.PSObject.Properties.Name -contains 'profileApplied' -and [bool]$state.profileApplied -and $profileOk) {
+    $advanced3dOk = $true
 }
 
 $features.Add(@{
-    title  = 'Control Panel (no NVIDIA App)'
-    detail = $(if ($cplInstalled -and -not $appInstalled) {
-        'Classic Control Panel present; NVIDIA App removed. Display uses NVAPI.'
-    } elseif ($cplInstalled -and $appInstalled) {
-        'Control Panel present, but NVIDIA App is still installed. Re-Apply to remove App.'
-    } elseif (-not $cplInstalled -and -not $appInstalled) {
-        'No Control Panel UI yet. Apply installs classic Control Panel and applies display via NVAPI.'
+    title  = 'OptiHub 3D profile (driver DRS)'
+    detail = $(if ($advanced3dOk) {
+        'Base + per-game profiles forced at driver level via Profile Inspector. Trust this over NVIDIA Control Panel radios.'
     } else {
-        'NVIDIA App still present without Control Panel. Apply switches to Control Panel only.'
+        '3D profiles not fully verified. Apply to import Base + per-game packs.'
     })
-    active = $clientOk -and -not $appInstalled
+    active = $advanced3dOk
 })
 
 $features.Add(@{
-    title  = 'Advanced 3D image settings'
-    detail = $(if ($advanced3dOk) {
-        'Control Panel uses advanced 3D image settings (Manage 3D / imported profiles active).'
+    title  = 'No NVIDIA App (minimal client)'
+    detail = $(if (-not $appInstalled -and $cplInstalled) {
+        'NVIDIA App removed. Control Panel package may remain as optional UI only — OptiHub applies real settings via NVAPI.'
+    } elseif (-not $appInstalled) {
+        'NVIDIA App absent. Display/3D settings still apply without Control Panel UI.'
     } else {
-        'Not set to advanced 3D image settings yet. Apply enables it so Base Profile takes effect.'
+        'NVIDIA App still installed. Re-Apply to strip App and keep driver + optional Control Panel only.'
     })
-    active = $advanced3dOk
+    active = -not $appInstalled
 })
 
 $backgroundOk = [bool]$debloat.Ok -and [bool]$overlay.Ok
@@ -527,9 +522,9 @@ elseif ($needsRetweak) { 'Driver tweaks available' }
 elseif ($driverChanged -or (-not $profileOk -and $state -and $state.profileApplied)) { 'Driver changed - reapply' }
 elseif (-not $profileOk) { '3D profile incomplete' }
 elseif (-not $gameOk) { 'Game profiles incomplete' }
-elseif (-not $displayOk) { 'Display setup incomplete' }
-elseif (-not $clientOk) { 'Control Panel missing' }
-elseif (-not $advanced3dOk) { 'Advanced 3D settings off' }
+elseif (-not $displayOk) { 'Display policy incomplete' }
+elseif (-not $clientOk) { 'NVIDIA App still present' }
+elseif (-not $advanced3dOk) { '3D profile incomplete' }
 elseif (-not $backgroundOk) { 'Background re-armed - reapply' }
 elseif ($isApplied) { 'Already optimized' }
 else { 'Ready to optimize' }
@@ -543,12 +538,12 @@ elseif ($needsRetweak) { 'Version is newest; Apply will apply OptiHub MSI/privac
 elseif ($driverChanged) { "Driver is now $currentNv but OptiHub last verified $($state.profileDriverVersion). Apply again for base + per-game profiles and display prefs." }
 elseif (-not $profileOk) { $(if ($applyInProgress) { 'The previous Apply was interrupted before a verified profile marker was saved. Apply again.' } else { 'The profile file, pack version, hash, or imported driver version is not verified. Apply again.' }) }
 elseif (-not $gameOk) { 'Base profile is present but the per-game catalog was not fully recorded. Apply again.' }
-elseif (-not $displayOk) { 'The 3D profile is verified, but live NVAPI display verification is incomplete. Restore the helper or Apply again.' }
-elseif (-not $clientOk) { 'Classic Control Panel is missing or NVIDIA App is still installed. Apply removes App/GFE, installs Control Panel only, then NVAPI display prefs.' }
-elseif (-not $advanced3dOk) { 'Control Panel is not set to Use the advanced 3D image settings. Apply enables it so Manage 3D / .nip profiles take effect.' }
+elseif (-not $displayOk) { 'Live NVAPI display policy incomplete (Full RGB / scaling / primary max Hz / secondary 60 Hz). Apply again.' }
+elseif (-not $clientOk) { 'NVIDIA App is still installed. Apply strips App/GFE; settings are applied by OptiHub via NVAPI, not the Control Panel UI.' }
+elseif (-not $advanced3dOk) { '3D Base + game profiles not fully verified. Apply imports them at driver level (ignore Control Panel radio buttons).' }
 elseif (-not $backgroundOk) { "NVIDIA background noise re-enabled ($($backgroundIssues -join '; ')). Apply again to re-disable." }
-elseif ($isApplied) { 'Driver current with tweaks, classic Control Panel only, advanced 3D settings, Base + per-game profiles, and NVAPI display prefs applied. Reapply after major driver upgrades.' }
-else { 'Choose the G-SYNC pack only for a compatible display, then Apply.' }
+elseif ($isApplied) { 'OptiHub policy active: series driver tweaks, DRS 3D profiles, NVAPI display (primary max Hz / secondary 60 Hz / Full RGB / GPU scale), App removed. Green checks here are the source of truth — NVIDIA Control Panel UI is optional and often stale.' }
+else { 'Choose the G-SYNC pack only for a compatible display, then Apply. OptiHub is the control panel.' }
 
 [ordered]@{
     isApplied          = $isApplied

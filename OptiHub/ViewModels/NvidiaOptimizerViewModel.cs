@@ -79,10 +79,11 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             "2) Import the matching 3D Base Profile plus per-game profiles (Profile Inspector silent import).\n" +
             "3) Remove NVIDIA App / GFE / audio leftovers and ensure classic NVIDIA Control Panel only. Accept Control Panel EULA and set Use the advanced 3D image settings.\n" +
             "4) Turn off overlay paths, Windows toasts for NVIDIA, and telemetry/SelfUpdate services.\n" +
-            "5) Apply Full RGB + GPU no-scaling via NVAPI: primary monitor max Hz, secondary monitors 60 Hz. Force Control Panel Use the advanced 3D image settings (not Balanced), Enable Developer Settings, and allow GPU performance counters for all users.\n\n" +
+            "5) OptiHub display policy via NVAPI (not Control Panel clicks): Full RGB, GPU no-scaling + override, primary max Hz, secondary 60 Hz. 3D packs force settings at the driver (DRS). Developer counters enabled.\n\n" +
             gsyncLine + "\n\n" +
+            "Important: OptiHub is the control panel. NVIDIA Control Panel's Store UI often shows stale/wrong radios even when the driver is correct — trust OptiHub's green checks and live NVAPI status.\n\n" +
             "Tradeoffs: higher idle power/heat, no NVIDIA overlay/recording, no NVIDIA HDMI/DP or Virtual Audio devices, brief display flicker. A driver update may require a restart.\n\n" +
-            "Reset OptiHub status only clears OptiHub's record; it does not undo driver/profile/display changes. Undo through NVIDIA settings or a driver reinstall. Administrator approval is required.";
+            "Reset OptiHub status only clears OptiHub's record; it does not undo driver/profile/display changes. Administrator approval is required.";
 
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync($"Confirm NVIDIA Optimizer ({action})", warning)

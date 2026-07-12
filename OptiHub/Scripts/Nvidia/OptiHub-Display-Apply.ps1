@@ -46,6 +46,80 @@ function Set-NvtweakRootPrefs {
     Write-DLog 'Root NVTweak: Gestalt=2 (advanced 3D) + Developer ON + counters allowed'
 }
 
+function Set-NvidiaStoreCplVirtualHive {
+    # Microsoft Store NVIDIA Control Panel does NOT read real HKCU for many prefs.
+    # It uses a virtualized hive: Packages\...\SystemAppData\Helium\User.dat
+    # Writing only to real HKCU is why CPL UI looked unchanged.
+    Get-Process -Name 'nvcplui', 'nvcpl' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 400
+
+    $pkg = Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match '(?i)NVIDIAControlPanel|NVIDIACorp\.NVIDIAControlPanel'
+    } | Select-Object -First 1
+    if (-not $pkg) {
+        Write-DLog 'Store Control Panel package not installed - skip virtual hive stamp'
+        return $false
+    }
+    $hive = Join-Path $env:LOCALAPPDATA ("Packages\{0}\SystemAppData\Helium\User.dat" -f $pkg.PackageFamilyName)
+    if (-not (Test-Path -LiteralPath $hive)) {
+        Write-DLog "Store CPL virtual hive missing: $hive"
+        return $false
+    }
+
+    $mount = 'HKU\OptiHubNvCpl'
+    try { & reg.exe unload $mount 2>$null | Out-Null } catch { }
+    $loadOut = & reg.exe load $mount $hive 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-DLog "Could not load Store CPL hive (close Control Panel fully): $loadOut"
+        return $false
+    }
+
+    try {
+        $virtRoot = "Registry::HKEY_USERS\OptiHubNvCpl\Software\NVIDIA Corporation\Global\NVTweak"
+        if (-not (Test-Path -LiteralPath $virtRoot)) {
+            New-Item -Path $virtRoot -Force | Out-Null
+        }
+        # Classic advanced-3D = 2. Store builds often OR 0x100 (initialized).
+        # Observed wrong UI with 259 (0x103). Force 2 and 0x102 (258).
+        Set-ItemProperty -LiteralPath $virtRoot -Name 'Gestalt' -Value 2 -Type DWord -Force
+        Set-ItemProperty -LiteralPath $virtRoot -Name 'SedonaHasRun' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -LiteralPath $virtRoot -Name 'NvDevToolsVisible' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -LiteralPath $virtRoot -Name 'RmProfilingAdminOnly' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+
+        # Copy live device stamps from real HKCU into virtual hive so CPL pages can read them
+        $realDev = 'HKCU:\Software\NVIDIA Corporation\Global\NVTweak\Devices'
+        $virtDev = Join-Path $virtRoot 'Devices'
+        if (-not (Test-Path -LiteralPath $virtDev)) { New-Item -Path $virtDev -Force | Out-Null }
+        if (Test-Path -LiteralPath $realDev) {
+            Get-ChildItem -LiteralPath $realDev -ErrorAction SilentlyContinue | ForEach-Object {
+                $name = $_.PSChildName
+                $src = $_.PSPath
+                $dst = Join-Path $virtDev $name
+                if (-not (Test-Path -LiteralPath $dst)) { New-Item -Path $dst -Force | Out-Null }
+                Set-OneNvtweakDevice -devPath $dst
+                # Prefer values already proven on real hive when present
+                try {
+                    $srcProps = Get-ItemProperty -LiteralPath $src -ErrorAction SilentlyContinue
+                    foreach ($pn in @('ScalingOverride','PerformScalingOn','ScalingMode','Scaling')) {
+                        if ($null -ne $srcProps.$pn) {
+                            Set-ItemProperty -LiteralPath $dst -Name $pn -Value ([int]$srcProps.$pn) -Type DWord -Force -ErrorAction SilentlyContinue
+                        }
+                    }
+                } catch { }
+            }
+        }
+
+        $g = [int](Get-ItemProperty -LiteralPath $virtRoot -Name 'Gestalt' -ErrorAction SilentlyContinue).Gestalt
+        Write-DLog "Store CPL virtual hive stamped (Gestalt=$g, devices mirrored)"
+        return ($g -eq 2)
+    } catch {
+        Write-DLog "Store CPL virtual hive stamp failed: $($_.Exception.Message)"
+        return $false
+    } finally {
+        try { & reg.exe unload $mount 2>&1 | Out-Null } catch { }
+    }
+}
+
 function Set-OneNvtweakDevice([string]$devPath) {
     if (-not (Test-Path -LiteralPath $devPath)) {
         try { New-Item -Path $devPath -Force | Out-Null } catch { return }
@@ -291,6 +365,8 @@ $nvApiOk = Invoke-NvApiHelper
 Set-AllNvtweakDevices
 Clear-NvidiaAppTrayAndContainer
 Set-NvtweakRootPrefs
+# Critical: stamp Store CPL virtual hive (real HKCU alone does not update CPL UI)
+[void](Set-NvidiaStoreCplVirtualHive)
 Get-Process nvcplui, nvcpl -EA 0 | Stop-Process -Force -EA 0
 
 # Verify any driver-created registry keys. NVAPI success remains required.
