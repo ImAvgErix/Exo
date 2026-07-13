@@ -94,9 +94,9 @@ if (File.Exists(theme))
 if (File.Exists(settings))
 {
     var s = File.ReadAllText(settings);
-    Expect("settings appearance", s.Contains("Appearance", StringComparison.Ordinal));
-    Expect("settings updates", s.Contains("Updates", StringComparison.Ordinal));
-    Expect("settings about", s.Contains("About", StringComparison.Ordinal));
+    Expect("settings appearance", s.Contains("APPEARANCE", StringComparison.Ordinal));
+    Expect("settings updates", s.Contains("UPDATES", StringComparison.Ordinal));
+    Expect("settings about", s.Contains("ABOUT", StringComparison.Ordinal));
     Expect("settings opti card", s.Contains("OptiCard", StringComparison.Ordinal));
     Expect("settings single card", s.Contains("OptiCard", StringComparison.Ordinal)
         && s.Contains("OptiSectionTitle", StringComparison.Ordinal)
