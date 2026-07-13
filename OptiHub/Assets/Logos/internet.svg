@@ -1,13 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none">
-  <!-- Modern Wi‑Fi arcs + center node (white on transparent for dark hub cards) -->
-  <g fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Outer arc -->
-    <path d="M52 118c28-38 72-58 116-58s88 20 116 58"/>
-    <!-- Mid arc -->
-    <path d="M78 148c20-26 50-40 78-40s58 14 78 40"/>
-    <!-- Inner arc -->
-    <path d="M108 178c12-16 28-24 44-24s32 8 44 24"/>
-  </g>
-  <!-- Dot -->
-  <circle cx="128" cy="210" r="14" fill="#FFFFFF"/>
+  <!-- Minimal Wi‑Fi: two arcs + dot -->
+  <path d="M56 128a90 90 0 0 1 144 0" stroke="#FFF" stroke-width="14" stroke-linecap="round" fill="none"/>
+  <path d="M84 156a56 56 0 0 1 88 0" stroke="#FFF" stroke-width="14" stroke-linecap="round" fill="none"/>
+  <circle cx="128" cy="200" r="12" fill="#FFF"/>
 </svg>

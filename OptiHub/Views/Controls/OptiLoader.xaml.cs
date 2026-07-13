@@ -32,16 +32,33 @@ public sealed partial class OptiLoader : UserControl
         InitializeComponent();
         Loaded += (_, _) =>
         {
+            // Parent often goes Collapsed→Visible with IsActive already true (Settings update card).
             EnsureStoryboard();
-            if (IsActive) Start();
+            if (IsActive) Start(force: true);
         };
         Unloaded += (_, _) => Stop();
+        // When a collapsed parent shows us again, restart if still active.
+        RegisterPropertyChangedCallback(VisibilityProperty, (_, _) =>
+        {
+            if (Visibility == Visibility.Visible && IsActive)
+                Start(force: true);
+            else if (Visibility != Visibility.Visible)
+                Stop();
+        });
     }
 
     private static void OnIsActiveChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is not OptiLoader loader) return;
-        if (e.NewValue is true) loader.Start();
+        if (e.NewValue is true)
+        {
+            // Defer one tick so first layout after Collapsed→Visible has real size.
+            loader.DispatcherQueue?.TryEnqueue(() =>
+            {
+                if (loader.IsActive) loader.Start(force: true);
+            });
+            loader.Start(force: true);
+        }
         else loader.Stop();
     }
 
@@ -208,12 +225,17 @@ public sealed partial class OptiLoader : UserControl
         board.Children.Add(spin);
     }
 
-    private void Start()
+    private void Start(bool force = false)
     {
-        if (_running) return;
+        if (_running && !force) return;
         if (!IsLoaded) return;
         EnsureStoryboard();
-        Visibility = Visibility.Visible;
+        // Don't force our own Visibility — parents (update card) own show/hide.
+        try
+        {
+            if (_running) _orbit?.Stop();
+        }
+        catch { }
         _orbit?.Begin();
         _running = true;
     }

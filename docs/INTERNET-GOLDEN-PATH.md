@@ -1,9 +1,9 @@
-**Status: FROZEN as of v1.9.34** — do not change Internet apply/detect behavior without a proven OS/driver regression.
+**Status: LIVE** — expanded through v1.9.84+ for full Ethernet Properties bindings + deep NIC/Wi‑Fi advanced knobs. Prefer real driver props over folklore.
 
-# Internet optimizer — golden path (freeze target)
+# Internet optimizer — peak path
 
-**Version:** 1.9.34+  
-**Goal:** lowest latency / best gaming path. Change only if Windows/driver behavior breaks.
+**Version:** 1.9.84+  
+**Goal:** lowest latency / best gaming **and** complete Ethernet + Wi‑Fi coverage (bindings, advanced props, host stack).
 
 ## Detection (local facts only)
 
@@ -49,14 +49,19 @@
 | LSO v2 | **Off** | **On** |
 | Interrupt moderation | **Off** | Adaptive/Medium |
 | Flow Control | **Off** | Rx & Tx |
-| RSS + queues | On (if supported) | On |
+| RSS + queues + profile | On (if supported) | On |
+| DMA coalescing / Adaptive IFS | Off | Off |
+| Jumbo Packet | Disabled / 1514 | same |
+| Priority & VLAN | Packet Priority on when exposed | same |
+| Speed & Duplex | Auto Negotiation | same |
 | EEE / green / selective suspend | Off | Off |
 | IdleRestriction (Intel) | **On** (block low-power idle) | Off |
 | ARP/NS offload / Wake | Off | Off |
 | Ring buffers | Max if exposed | Max |
 | PnP power-off device | Disabled (24) | Disabled |
 | Interface metric | **1** primary usable; others 5+ | same |
-| Restart after apply | **User prompt only** | User prompt only |
+| Adapter bindings (Properties UI) | QoS+IPv4+IPv6 on; Client/File share/LLDP/LLTD off | same |
+| Restart after apply | When Ethernet present | same |
 
 ## Wi‑Fi NIC
 
@@ -66,8 +71,14 @@
 | Interrupt moderation | Off | Adaptive |
 | Flow Control | Off | On |
 | RSS | **Skip** (often unsupported) | Skip |
-| Power-save / MIMO PS / uAPSD / packet coalescing / ULP | **Off** (fuzzy names) | Off |
-| Preferred Band | Prefer **6 GHz** if client supports, else **Prefer 5 GHz** (fuzzy vendor strings; live re-probe) | same |
+| Power-save / MIMO PS / uAPSD / coalescing / ULP / WoWLAN | **Off** | Off |
+| Bluetooth collab / fat channel intolerant | Off | Off |
+| Transmit power | Highest | Highest |
+| Channel width | Auto / best | Auto / best |
+| Wireless mode | Latest (be/ax/ac…) | same |
+| MU-MIMO / OFDMA / Beamforming | On when exposed | On |
+| Throughput Booster | Off | On when exposed |
+| Preferred Band | Prefer **6 GHz** if client supports, else **Prefer 5 GHz** | same |
 | Roaming aggressiveness | Medium when exposed | Medium |
 | Force band-only | **Never** | Never |
 | Restart | **Never** | Never |
@@ -99,6 +110,6 @@
 - `NetworkApplyScriptBuilder` — elevated script (same knobs)
 - `tools/NetworkPeak.Smoke` — gates band/media/script audit
 
-## Freeze rule
+## Change rule
 
-After v1.9.34 ships with this path: **no Internet behavior changes** unless a real OS/driver regression is proven.
+Prefer expanding **documented / driver-exposed** knobs for Ethernet + Wi‑Fi. Still reject XP folklore, forced public DNS, forced MTU/jumbo for gaming, and forced band-only.

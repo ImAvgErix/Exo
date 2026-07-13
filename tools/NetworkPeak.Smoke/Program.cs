@@ -166,6 +166,11 @@ Expect("binding lldp off", latScript.Contains("ms_lldp", StringComparison.Ordina
 var repairScript = NetworkApplyScriptBuilder.BuildRepair();
 Expect("repair script restores client", repairScript.Contains("ms_msclient", StringComparison.OrdinalIgnoreCase));
 Expect("repair script automatic metric", repairScript.Contains("AutomaticMetric Enabled", StringComparison.OrdinalIgnoreCase));
+Expect("eth DMA coalescing off", latScript.Contains("DMACoalescing", StringComparison.OrdinalIgnoreCase)
+    || latScript.Contains("DMA Coalescing", StringComparison.OrdinalIgnoreCase));
+Expect("wifi transmit power", latScript.Contains("Transmit Power", StringComparison.OrdinalIgnoreCase));
+Expect("wifi MU-MIMO", latScript.Contains("MU-MIMO", StringComparison.OrdinalIgnoreCase));
+Expect("NetBIOS disable", latScript.Contains("NetbiosOptions", StringComparison.OrdinalIgnoreCase));
 Expect("no wifi Restart-NetAdapter force",
     !System.Text.RegularExpressions.Regex.IsMatch(latScript, @"Restart-NetAdapter.*Wi-?Fi",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase));

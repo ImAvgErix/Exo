@@ -275,24 +275,83 @@ try {
         sb.AppendLine("    Set-Adv $n '*RSS' 1");
         sb.AppendLine("    try { Set-NetAdapterRss -Name $n -Enabled $true -EA SilentlyContinue } catch {}");
         sb.AppendLine("    try { $q = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*NumRssQueues' -EA SilentlyContinue; if ($q -and $q.ValidRegistryValues) { $max = ($q.ValidRegistryValues | Measure-Object -Maximum).Maximum; if ($max -gt 0) { Set-Adv $n '*NumRssQueues' ([int]$max) } } } catch {}");
+        // Ethernet-only deep driver knobs (Intel I225/I226, Realtek, Killer…)
+        sb.AppendLine("    # DMA coalescing / adaptive IFS — latency killers when on");
+        sb.AppendLine("    foreach ($kw in @('*DMACoalescing','DMACoalescing')) { Set-Adv $n $kw 0 }");
+        sb.AppendLine("    try { Set-AdvDisplay $n 'DMA Coalescing' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("    try { Set-AdvDisplay $n 'Adaptive Inter-Frame Spacing' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("    try { Set-AdvDisplay $n 'Gigabit Lite' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("    try { Set-AdvDisplay $n 'Gigabit Master Slave Mode' 'Auto Detect' | Out-Null } catch {}");
+        sb.AppendLine("    try { Set-AdvDisplay $n 'Speed & Duplex' 'Auto Negotiation' | Out-Null } catch {}");
+        sb.AppendLine("    try { Set-AdvDisplay $n 'Wait for Link' 'Auto Detect' | Out-Null } catch {}");
+        sb.AppendLine("    try { Set-AdvDisplay $n 'Log Link State Event' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("    # Jumbo: keep standard Ethernet (gaming); only force 1514/Disabled if exposed");
+        sb.AppendLine("    try {");
+        sb.AppendLine("      $jp = Find-AdvPropByName $n @('Jumbo Packet','Jumbo Frames','Jumbo Frame')");
+        sb.AppendLine("      if ($jp) {");
+        sb.AppendLine("        foreach ($v in @('Disabled','Off','1514','1500')) {");
+        sb.AppendLine("          if (@($jp.ValidDisplayValues).Count -eq 0 -or @($jp.ValidDisplayValues) -contains $v) {");
+        sb.AppendLine("            try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $jp.DisplayName -DisplayValue $v -NoRestart -EA SilentlyContinue; Log \"[Eth] Jumbo => $v\"; break } catch {}");
+        sb.AppendLine("          }");
+        sb.AppendLine("        }");
+        sb.AppendLine("      }");
+        sb.AppendLine("    } catch {}");
+        sb.AppendLine("    # Priority & VLAN: keep packet priority when available (QoS tags)");
+        sb.AppendLine("    try {");
+        sb.AppendLine("      $pv = Find-AdvPropByName $n @('Packet Priority & VLAN','Priority & VLAN','Priority and VLAN')");
+        sb.AppendLine("      if ($pv) {");
+        sb.AppendLine("        foreach ($v in @('Packet Priority Enabled','Priority Enabled','Enabled')) {");
+        sb.AppendLine("          if (@($pv.ValidDisplayValues) -contains $v) {");
+        sb.AppendLine("            try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $pv.DisplayName -DisplayValue $v -NoRestart -EA SilentlyContinue; Log \"[Eth] $($pv.DisplayName) => $v\"; break } catch {}");
+        sb.AppendLine("          }");
+        sb.AppendLine("        }");
+        sb.AppendLine("      }");
+        sb.AppendLine("    } catch {}");
+        sb.AppendLine("    # RSS profile / base processor — best-effort");
+        sb.AppendLine("    try { Set-NetAdapterRss -Name $n -Profile NUMAStatic -EA SilentlyContinue } catch {}");
+        sb.AppendLine("    try { Set-NetAdapterRss -Name $n -Profile ClosestProcessor -EA SilentlyContinue } catch {}");
         sb.AppendLine("  }");
         sb.AppendLine("  foreach ($kw in @('*ReceiveBuffers','*TransmitBuffers','ReceiveBuffers','TransmitBuffers')) {");
         sb.AppendLine("    try { $prop = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword $kw -EA SilentlyContinue; if ($prop -and $prop.ValidRegistryValues -and @($prop.ValidRegistryValues).Count -gt 0) { $max = ($prop.ValidRegistryValues | Measure-Object -Maximum).Maximum; if ($max -gt 0) { Set-Adv $n $kw ([int]$max) } } } catch {}");
         sb.AppendLine("  }");
-        // Wi-Fi: power-save + fuzzy Preferred Band (vendor strings vary wildly)
+        // Wi-Fi: full gaming radio path
         sb.AppendLine("  if ($isWifi) {");
-        sb.AppendLine("    foreach ($hint in @('MIMO Power Save','uAPSD','Power Saving','Power Save Mode','Power Save','Packet Coalescing','Ultra Low Power','Ultra Low Power Mode','Idle Power Save','Wireless Mode Power')) {");
-        sb.AppendLine("      $pp = Find-AdvPropByName $n @($hint)");
-        sb.AppendLine("      if (-not $pp) { continue }");
-        sb.AppendLine("      foreach ($off in @('Disabled','Off','Disable','No','Maximum Performance','0')) {");
+        sb.AppendLine("    function Set-WifiOff($adapterName, [string[]]$hints) {");
+        sb.AppendLine("      $pp = Find-AdvPropByName $adapterName $hints");
+        sb.AppendLine("      if (-not $pp) { return }");
+        sb.AppendLine("      foreach ($off in @('Disabled','Off','Disable','No','Maximum Performance','Highest','0')) {");
         sb.AppendLine("        if (@($pp.ValidDisplayValues).Count -eq 0 -or @($pp.ValidDisplayValues) -contains $off) {");
-        sb.AppendLine("          try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $pp.DisplayName -DisplayValue $off -NoRestart -EA SilentlyContinue; Log \"[Wi-Fi] $($pp.DisplayName) => $off\"; break } catch {}");
+        sb.AppendLine("          try { Set-NetAdapterAdvancedProperty -Name $adapterName -DisplayName $pp.DisplayName -DisplayValue $off -NoRestart -EA SilentlyContinue; Log \"[Wi-Fi] $($pp.DisplayName) => $off\"; return } catch {}");
         sb.AppendLine("        }");
         sb.AppendLine("      }");
         sb.AppendLine("    }");
-        sb.AppendLine("    # also kill any remaining power-ish props by registry keyword");
+        sb.AppendLine("    function Set-WifiBest($adapterName, [string[]]$hints, [string[]]$prefer) {");
+        sb.AppendLine("      $pp = Find-AdvPropByName $adapterName $hints");
+        sb.AppendLine("      if (-not $pp) { return }");
+        sb.AppendLine("      $vals = @($pp.ValidDisplayValues)");
+        sb.AppendLine("      foreach ($want in $prefer) {");
+        sb.AppendLine("        $hit = $vals | Where-Object { $_ -match ('(?i)' + [regex]::Escape($want)) } | Select-Object -First 1");
+        sb.AppendLine("        if (-not $hit -and ($vals.Count -eq 0)) { $hit = $want }");
+        sb.AppendLine("        if ($hit) {");
+        sb.AppendLine("          try { Set-NetAdapterAdvancedProperty -Name $adapterName -DisplayName $pp.DisplayName -DisplayValue $hit -NoRestart -EA SilentlyContinue; Log \"[Wi-Fi] $($pp.DisplayName) => $hit\"; return } catch {}");
+        sb.AppendLine("        }");
+        sb.AppendLine("      }");
+        sb.AppendLine("    }");
+        // Power / coalescing / BT coexistence — always off for gaming
+        sb.AppendLine("    foreach ($hint in @(");
+        sb.AppendLine("      'MIMO Power Save','uAPSD support','uAPSD','Power Saving Mode','Power Saving','Power Save Mode','Power Save',");
+        sb.AppendLine("      'Packet Coalescing','Ultra Low Power Mode','Ultra Low Power','Idle Power Save','Wireless Mode Power',");
+        sb.AppendLine("      'System Idle Power Saver','Modern Standby WoWLAN','Wake on Magic Packet','Wake on Pattern Match',");
+        sb.AppendLine("      'WoWLAN','Wake on WLAN','ARP offload for WoWLAN','NS offload for WoWLAN',");
+        sb.AppendLine("      'Bluetooth Collaboration','Bluetooth AMP','Bluetooth Cooperation','Fat Channel Intolerant',");
+        sb.AppendLine("      'Mixed Mode Protection','Throughput Booster','Network Address' )) {");
+        sb.AppendLine("      # Throughput Booster: on for download preset only");
+        sb.AppendLine("      if ($hint -match '(?i)Throughput Booster') { continue }");
+        sb.AppendLine("      if ($hint -match '(?i)Network Address') { continue }");
+        sb.AppendLine("      Set-WifiOff $n @($hint)");
+        sb.AppendLine("    }");
         sb.AppendLine("    foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $n -EA SilentlyContinue)) {");
-        sb.AppendLine("      if ($p.RegistryKeyword -match '(?i)power.?save|uapsd|mimo.?power|packet.?coalesc|ulp|IdlePower') {");
+        sb.AppendLine("      if ($p.RegistryKeyword -match '(?i)power.?save|uapsd|mimo.?power|packet.?coalesc|ulp|IdlePower|WoW|WakeOn|Bluetooth') {");
         sb.AppendLine("        foreach ($off in @('Disabled','Off','0','Maximum Performance')) {");
         sb.AppendLine("          if (@($p.ValidDisplayValues).Count -eq 0 -or @($p.ValidDisplayValues) -contains $off) {");
         sb.AppendLine("            try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $p.DisplayName -DisplayValue $off -NoRestart -EA SilentlyContinue; break } catch {}");
@@ -300,7 +359,28 @@ try {
         sb.AppendLine("        }");
         sb.AppendLine("      }");
         sb.AppendLine("    }");
-        sb.AppendLine("    # live 6 GHz from this adapter's own valid values");
+        // Transmit power highest
+        sb.AppendLine("    Set-WifiBest $n @('Transmit Power','Tx Power','Transmission Power','Output Power') @('Highest','Maximum','100','5','Level 5')");
+        // Channel width: best / auto / 160 / 80
+        sb.AppendLine("    Set-WifiBest $n @('Channel Width','Channel Width for 5GHz','Channel Width for 5 GHz','802.11n Channel Width for band 2','802.11n Channel Width for band 1') @('Auto','160','80','40','Best')");
+        sb.AppendLine("    Set-WifiBest $n @('Channel Width for 2.4GHz','Channel Width for 2.4 GHz') @('Auto','20')");
+        // 802.11 mode — prefer latest
+        sb.AppendLine("    Set-WifiBest $n @('Wireless Mode','802.11a/b/g Wireless Mode','802.11 Mode','Wi-Fi Mode') @('802.11be','802.11ax','802.11ac','6','5','Auto','Default')");
+        // MU-MIMO / OFDMA / Beamform — on when present
+        sb.AppendLine("    Set-WifiBest $n @('MU-MIMO','Multi-User MIMO') @('Enabled','On','Enable')");
+        sb.AppendLine("    Set-WifiBest $n @('OFDMA','Orthogonal Frequency Division Multiple Access') @('Enabled','On','Enable','Auto')");
+        sb.AppendLine("    Set-WifiBest $n @('Beamforming','Explicit Beamforming','Implicit Beamforming','Transmit Beamforming') @('Enabled','On','Enable')");
+        sb.AppendLine("    Set-WifiBest $n @('BSS Color','BSS Coloring') @('Enabled','On','Enable','Auto')");
+        // Throughput booster only for highest-download preset
+        if (!latency)
+        {
+            sb.AppendLine("    Set-WifiBest $n @('Throughput Booster') @('Enabled','On','Enable')");
+        }
+        else
+        {
+            sb.AppendLine("    Set-WifiOff $n @('Throughput Booster')");
+        }
+        // Preferred band + roam
         sb.AppendLine("    $adapterWants6 = $wantBand6Live");
         sb.AppendLine("    foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $n -EA SilentlyContinue)) {");
         sb.AppendLine("      $blob = \"$($p.DisplayName) $(($p.ValidDisplayValues) -join ' ')\"");
@@ -322,6 +402,7 @@ try {
         sb.AppendLine("      if (-not $rv) { $rv = @($roam.ValidDisplayValues) | Where-Object { $_ -match '(?i)3|mid' } | Select-Object -First 1 }");
         sb.AppendLine("      if ($rv) { try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $roam.DisplayName -DisplayValue $rv -NoRestart -EA SilentlyContinue; Log \"[Wi-Fi] roam => $rv\" } catch {} }");
         sb.AppendLine("    }");
+        // Prefer 5/6 GHz via netsh wlan profiles is too invasive; band prop is enough
         sb.AppendLine("  }");
         sb.AppendLine("  try {");
         sb.AppendLine("    $class = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}'");
@@ -376,6 +457,19 @@ try { netsh interface teredo set state disabled | Out-Null } catch {}
 try { netsh interface isatap set state disabled | Out-Null } catch {}
 try { netsh interface 6to4 set state disabled | Out-Null } catch {}
 Log '[tunnel] teredo/isatap/6to4 disabled'
+# Network Discovery / NetBIOS chatter — leave Client binding off; disable NetBIOS over TCP/IP on IPv4
+try {
+  Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces' -EA SilentlyContinue | ForEach-Object {
+    Set-Dword $_.PSPath 'NetbiosOptions' 2
+  }
+  Log '[NetBIOS] NetbiosOptions=2 (disabled over TCP/IP)'
+} catch { Log '[NetBIOS] skipped' }
+# NCSI active probes off reduces background chatter (connectivity still works via passive)
+try {
+  New-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Force | Out-Null
+  Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' 'NoActiveProbe' 1
+  Log '[NCSI] NoActiveProbe=1'
+} catch {}
 Set-AdapterBindings
 """);
 
@@ -531,6 +625,14 @@ foreach ($pr in @('Internet','InternetCustom')) {
 }
 # Delivery Optimization — clear OptiHub force-off
 try { Remove-Prop 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode' } catch {}
+# NCSI active probe policy
+try { Remove-Prop 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' 'NoActiveProbe' } catch {}
+# NetBIOS over TCP/IP — default (system / DHCP)
+try {
+  Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces' -EA SilentlyContinue | ForEach-Object {
+    Remove-Prop $_.PSPath 'NetbiosOptions'
+  }
+} catch {}
 # Tunnels — default (system managed)
 try { netsh interface teredo set state default | Out-Null } catch {}
 try { netsh interface isatap set state default | Out-Null } catch {}

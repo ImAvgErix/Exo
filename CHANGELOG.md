@@ -1,3 +1,9 @@
+## 1.9.84
+
+- **Internet deep pass (Ethernet + Wi‑Fi)**: DMA coalescing/IFS off, jumbo standard, priority VLAN, RSS profile; Wi‑Fi TX power, channel width, mode, MU‑MIMO/OFDMA/beamform, WoWLAN/BT collab off; NetBIOS off; NCSI active probe off
+- **Update card OptiLoader**: stays mounted (opacity) + restart-on-visible so animation actually runs
+- **Internet logo**: more minimal 2-arc Wi‑Fi mark
+
 ## 1.9.83
 
 - **Internet Repair** button (like Discord/Steam) — restores stock-like bindings, metric auto, TCP defaults, re-enables Wi‑Fi

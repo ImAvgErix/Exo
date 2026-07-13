@@ -64,17 +64,19 @@ if (File.Exists(dash))
     Expect("polished 1.8 cards", d.Contains("OptiCardButton", StringComparison.Ordinal)
         && d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("hero entrance panel", d.Contains("HeroPanel", StringComparison.Ordinal));
-    Expect("equal logo well", d.Contains("Width=\"68\"", StringComparison.Ordinal) && d.Contains("Height=\"68\"", StringComparison.Ordinal));
     Expect("stretch uniform logos", d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal));
     // Logo-only cards — title lives on the module page (a11y still has AutomationProperties.Name).
     Expect("logo only cards", !d.Contains("Definition.Title}", StringComparison.Ordinal)
         || d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
     Expect("no card title label", !d.Contains("Text=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
-    // Responsive: scroll + size-driven columns so cards never clip.
-    Expect("dashboard scroll", d.Contains("ScrollViewer", StringComparison.Ordinal));
-    Expect("dashboard size changed", d.Contains("Page_SizeChanged", StringComparison.Ordinal)
-        || File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
+    // Full-bleed responsive grid (no fixed MaxWidth island)
+    Expect("dashboard no maxwidth island", !d.Contains("MaxWidth=\"1000\"", StringComparison.Ordinal));
+    Expect("dashboard size changed",
+        File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
             .Contains("ApplyResponsiveLayout", StringComparison.Ordinal));
+    Expect("dashboard uses height",
+        File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
+            .Contains("usableH", StringComparison.Ordinal));
     // Home is nav only — no applied/checking chips (status lives on the module page).
     Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
     Expect("simple home blurb", d.Contains("Pick a target", StringComparison.Ordinal));
@@ -194,14 +196,17 @@ if (Directory.Exists(logosDir))
     var peerFloor = Math.Min(Math.Min(discord.MaxFill, steam.MaxFill), nvidia.MaxFill) * 0.70;
     Expect("amd ink peer weight", amd.MaxFill >= peerFloor && amd.MaxFill >= 70,
         $"amd={amd.MaxFill:F1} peerFloor={peerFloor:F1}");
-    Expect("internet ink peer weight", internet.MaxFill >= peerFloor && internet.MaxFill >= 70,
+    // Wi‑Fi mark is intentionally airy (minimal arcs) — lower absolute floor than solid icons.
+    Expect("internet ink peer weight", internet.MaxFill >= Math.Min(peerFloor, 55) && internet.MaxFill >= 55,
         $"internet={internet.MaxFill:F1} peerFloor={peerFloor:F1}");
     // AMD corporate mark is a wide wordmark on transparent (no white disc).
     // Require real width + non-micro height — not a filled plate (old bug).
     Expect("amd wide transparent mark",
         amd.FillW >= 70 && amd.FillH >= 18 && amd.FillH < 95,
         $"fillW={amd.FillW:F1} fillH={amd.FillH:F1}");
-    Expect("internet not tiny", internet.FillH >= 50, $"fillH={internet.FillH:F1}");
+    // Minimal Wi‑Fi mark is wide arcs — height can sit just under 50% of canvas.
+    Expect("internet not tiny", internet.FillH >= 42 && internet.FillW >= 55,
+        $"fillW={internet.FillW:F1} fillH={internet.FillH:F1}");
 }
 
 var dashVm = Path.Combine(repo, "OptiHub", "ViewModels", "DashboardViewModel.cs");

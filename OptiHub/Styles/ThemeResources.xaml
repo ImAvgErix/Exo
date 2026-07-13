@@ -19,6 +19,7 @@
     <helpers:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
     <helpers:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
     <helpers:BoolToOpacityConverter x:Key="BoolToOpacityConverter" />
+    <helpers:BoolToShowOpacityConverter x:Key="BoolToShowOpacityConverter" />
     <helpers:AssetPathToImageSourceConverter x:Key="AssetPathToImageSourceConverter" />
 
     <Style x:Key="OptiTagline" TargetType="TextBlock">

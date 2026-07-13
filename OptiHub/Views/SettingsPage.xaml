@@ -197,10 +197,13 @@
                                     HorizontalAlignment="Stretch"
                                     MinHeight="44"
                                     IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                            <!-- Inline progress while checking (install uses modal OptiLoader dialog) -->
+                            <!-- Keep loader mounted (Opacity) so storyboard can run — Collapsed kills animation. -->
                             <StackPanel Spacing="8"
-                                        Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <controls:OptiLoader IsActive="{x:Bind ViewModel.IsUpdating, Mode=OneWay}"
+                                        Opacity="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToShowOpacityConverter}}"
+                                        IsHitTestVisible="{x:Bind ViewModel.IsUpdating, Mode=OneWay}">
+                                <controls:OptiLoader x:Name="UpdateLoader"
+                                                     Width="40" Height="40"
+                                                     IsActive="{x:Bind ViewModel.IsUpdating, Mode=OneWay}"
                                                      HorizontalAlignment="Center" />
                                 <ProgressBar Minimum="0"
                                              Maximum="100"
@@ -208,7 +211,8 @@
                                              IsIndeterminate="{x:Bind ViewModel.IsUpdateProgressIndeterminate, Mode=OneWay}"
                                              Height="4"
                                              CornerRadius="2"
-                                             Foreground="{ThemeResource OptiAccentBrush}" />
+                                             Foreground="{ThemeResource OptiAccentBrush}"
+                                             Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </StackPanel>
                         </StackPanel>
                         <TextBlock Grid.Row="2"
