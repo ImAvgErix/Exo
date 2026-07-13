@@ -244,6 +244,9 @@
 
 
 
+
+## 1.9.71
+- Settings Support: Report issue first, Open logs second
 ## 1.9.70
 - NVIDIA reliability: laptops no longer stuck Not applied; Optimus display N/A; soft GDI map + multi-GPU enum; clearer Display errors
 - Detect/status align across desktop, laptop, and hybrid configs
