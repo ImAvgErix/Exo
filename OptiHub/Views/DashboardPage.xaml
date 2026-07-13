@@ -19,17 +19,19 @@
 
             <StackPanel x:Name="HeroPanel"
                         Spacing="0"
-                        Margin="0,0,0,10"
+                        Margin="0,0,0,18"
                         HorizontalAlignment="Center"
                         Opacity="0"
                         RenderTransformOrigin="0.5,0.5">
                 <StackPanel.RenderTransform>
                     <CompositeTransform x:Name="HeroTransform" TranslateY="12" />
                 </StackPanel.RenderTransform>
+                <!-- Hero tagline must read larger than the product cards below -->
                 <TextBlock Text="Maximum performance. No compromise."
                            Style="{StaticResource OptiTagline}"
-                           FontSize="26"
-                           LineHeight="32"
+                           FontSize="44"
+                           LineHeight="52"
+                           CharacterSpacing="-20"
                            TextWrapping="WrapWholeWords"
                            TextAlignment="Center"
                            HorizontalAlignment="Center" />
