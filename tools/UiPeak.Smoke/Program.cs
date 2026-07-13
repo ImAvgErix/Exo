@@ -42,6 +42,8 @@ if (File.Exists(dash))
     var d = File.ReadAllText(dash);
     Expect("v17 hero line", d.Contains("Maximum performance", StringComparison.Ordinal));
     Expect("product card grid", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
+    Expect("polished 1.8 cards", d.Contains("Width=\"300\"", StringComparison.Ordinal) && d.Contains("Height=\"188\"", StringComparison.Ordinal));
+    Expect("hero entrance panel", d.Contains("HeroPanel", StringComparison.Ordinal));
 }
 if (File.Exists(settings))
 {

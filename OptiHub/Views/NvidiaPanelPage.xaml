@@ -47,10 +47,10 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:NvidiaDisplayColorRowViewModel">
-                                        <ContentControl Style="{StaticResource OptiCard}"
-                                                        Padding="18,16"
-                                                        Margin="0,0,0,10"
-                                                        HorizontalAlignment="Stretch">
+                                        <Border Style="{StaticResource OptiCard}"
+                                                Padding="18,16"
+                                                Margin="0,0,0,10"
+                                                HorizontalAlignment="Stretch">
                                             <StackPanel Spacing="12">
                                                 <Grid ColumnSpacing="12">
                                                     <Grid.ColumnDefinitions>
@@ -129,7 +129,7 @@
                                                     </StackPanel>
                                                 </Grid>
                                             </StackPanel>
-                                        </ContentControl>
+                                        </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
