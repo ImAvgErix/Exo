@@ -1,3 +1,9 @@
+## 1.9.83
+
+- **Internet Repair** button (like Discord/Steam) — restores stock-like bindings, metric auto, TCP defaults, re-enables Wi‑Fi
+- **Ethernet Properties checkboxes**: Apply sets full binding set (QoS+IPv4+IPv6 on; Client/File share/LLDP/LLTD/Multiplexor off) + detect row
+- **Internet logo**: modern Wi‑Fi arcs (white on transparent)
+
 ## 1.9.82
 
 - **Internet**: open detect shows Ethernet vs Wi‑Fi path; single **Apply** → latency/download choice only (no second confirm); Ethernet metric re-stamp after restart fixed; QoS/LLTD/DO/tunnels applied

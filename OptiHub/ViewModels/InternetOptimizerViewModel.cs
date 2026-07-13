@@ -27,6 +27,9 @@ public partial class InternetOptimizerViewModel : ObservableObject
     /// <summary>Only choice prompt: Lowest latency vs Highest download.</summary>
     public event Func<Task<NetworkPreset?>>? RequestPresetChoice;
 
+    /// <summary>Repair confirm (title, message) — same pattern as Discord/Steam.</summary>
+    public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
+
     [ObservableProperty] private string _headerStatus = "Checking...";
     [ObservableProperty] private bool _isLoading = true;
     [ObservableProperty] private bool _isBusy;
@@ -146,6 +149,40 @@ public partial class InternetOptimizerViewModel : ObservableObject
     }
 
     public Task InitializeAsync() => RefreshAsync();
+
+    /// <summary>Undo OptiHub network stack → stock-like defaults (bindings, metric auto, etc.).</summary>
+    [RelayCommand]
+    private async Task RepairAsync()
+    {
+        if (IsBusy) return;
+
+        var ok = ConfirmAsync is not null
+            ? await ConfirmAsync(
+                "Repair Internet?",
+                "Restores stock-like network settings: adapter bindings (Client/File share/LLDP back on), automatic metric, default TCP/auto-tune, re-enables Wi‑Fi if OptiHub disabled it.\n\nNeeds Administrator.")
+            : true;
+        if (!ok) return;
+
+        IsBusy = true;
+        HasMessage = false;
+        ProgressStatus = "Repairing...";
+        try
+        {
+            var progress = new Progress<string>(s => ProgressStatus = s);
+            var (success, msg) = await _services.Network.RepairAsync(progress);
+            SetMessage(msg, success);
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, success: false);
+        }
+        finally
+        {
+            IsBusy = false;
+            ProgressStatus = string.Empty;
+        }
+    }
 
     private static string BuildStatus(NetworkSnapshot snap)
     {

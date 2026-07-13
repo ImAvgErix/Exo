@@ -70,6 +70,60 @@ public sealed class NetworkOptimizerService
         return true;
     }
 
+    public void ClearSavedPreset()
+    {
+        try
+        {
+            if (File.Exists(StatePath)) File.Delete(StatePath);
+        }
+        catch { }
+    }
+
+    /// <summary>Undo OptiHub network apply (elevated). Restores stock-ish bindings + host stack.</summary>
+    public async Task<(bool Ok, string Message)> RepairAsync(
+        IProgress<string>? progress = null,
+        CancellationToken ct = default)
+    {
+        progress?.Report("Preparing repair (stock network stack)...");
+        var script = NetworkApplyScriptBuilder.BuildRepair();
+        var path = Path.Combine(Path.GetTempPath(), $"optihub-net-repair-{Guid.NewGuid():N}.ps1");
+        await File.WriteAllTextAsync(path, script, ct).ConfigureAwait(false);
+        try
+        {
+            progress?.Report("Repairing network stack (elevated)...");
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{path}\"",
+                UseShellExecute = true,
+                Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+            using var p = Process.Start(psi);
+            if (p is null) return (false, "Could not start elevated PowerShell.");
+            await p.WaitForExitAsync(ct).ConfigureAwait(false);
+            if (p.ExitCode != 0)
+                return (false, $"Repair exit {p.ExitCode}. Try again as Administrator.");
+
+            progress?.Report("Clearing OptiHub network preset...");
+            ClearSavedPreset();
+            await Task.Delay(800, ct).ConfigureAwait(false);
+            return (true, "Network stack repaired to stock-like defaults. Ethernet Properties bindings restored; Wi‑Fi re-enabled if OptiHub disabled it.");
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return (false, "Administrator approval cancelled.");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
     public async Task<NetworkSnapshot> ProbeAsync(CancellationToken ct = default)
     {
         var features = new List<NetworkFeatureRow>();
@@ -250,6 +304,21 @@ public sealed class NetworkOptimizerService
         {
             mediaProfile = await DetectMediaProfileAsync(ct).ConfigureAwait(false);
             features.Add(Row("Path policy", mediaProfile.PolicyLine, true));
+            // Adapter Properties checkboxes (Ethernet Properties → Networking)
+            if (mediaProfile.EthernetAvailable || mediaProfile.WifiAvailable)
+            {
+                var presetApplied = LoadSavedPreset() is NetworkPreset.LowestLatency
+                    or NetworkPreset.HighestThroughput;
+                var bindStatus = mediaProfile.AdapterBindingsOk
+                    ? "Peak (QoS+IP on · Client/LLDP off)"
+                    : mediaProfile.AdapterBindingsHint is ("—" or "")
+                        ? "Needs apply"
+                        : mediaProfile.AdapterBindingsHint;
+                // Stock Windows bindings are fine until user applies a preset.
+                features.Add(Row("Adapter bindings", bindStatus,
+                    mediaProfile.AdapterBindingsOk || !presetApplied));
+            }
+
             if (mediaProfile.EthernetInUse)
             {
                 // Applied path sets primary Ethernet to 1 (secondaries 5+).
@@ -347,6 +416,8 @@ public sealed class NetworkOptimizerService
         var nicHints = "—";
         var nicPeakOk = true;
         int fcR = -1, imR = -1, idleR = -1, ssR = -1;
+        var bindOk = true;
+        var bindHint = "—";
         var activeForPeak = LoadSavedPreset();
 
         try
@@ -466,7 +537,27 @@ if ($primary) {
              elseif ([string]$idle.DisplayValue -match '(?i)^Disabled') { 0 } else { -1 }
   }
 }
-Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;AX=$ax;BE=$be;HINT=$hint;RADIOS=$radios;CURBAND=$curBand;EMETRIC=$eMetric;FC=$fcR;IM=$imR;IDLE=$idleR;SS=$ssR"
+# Ethernet Properties checkbox bindings (ComponentIDs)
+# Peak: pacer+tcpip+tcpip6 ON; client/server/lldp/lltd/implat OFF
+$bindOk = 1
+$bindHint = '-'
+$bindProbe = if ($bestEth) { $bestEth } else { @($eth | Select-Object -First 1) }
+if ($bindProbe) {
+  $wantOn = @('ms_pacer','ms_tcpip','ms_tcpip6')
+  $wantOff = @('ms_msclient','ms_server','ms_implat','ms_lldp','ms_lltdio','ms_rspndr')
+  $gaps = @()
+  $all = @(Get-NetAdapterBinding -Name $bindProbe.Name -EA SilentlyContinue)
+  foreach ($id in $wantOn) {
+    $row = $all | Where-Object { $_.ComponentID -eq $id } | Select-Object -First 1
+    if ($row -and -not $row.Enabled) { $gaps += "$id off" }
+  }
+  foreach ($id in $wantOff) {
+    $row = $all | Where-Object { $_.ComponentID -eq $id } | Select-Object -First 1
+    if ($row -and $row.Enabled) { $gaps += "$id on" }
+  }
+  if ($gaps.Count -gt 0) { $bindOk = 0; $bindHint = ($gaps -join ', ') } else { $bindHint = 'peak bindings' }
+}
+Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;AX=$ax;BE=$be;HINT=$hint;RADIOS=$radios;CURBAND=$curBand;EMETRIC=$eMetric;FC=$fcR;IM=$imR;IDLE=$idleR;SS=$ssR;BINDOK=$bindOk;BINDHINT=$bindHint"
 """, ct).ConfigureAwait(false);
             try
             {
@@ -497,6 +588,12 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                         case "IM" when int.TryParse(v, out var imv): imR = imv; break;
                         case "IDLE" when int.TryParse(v, out var id): idleR = id; break;
                         case "SS" when int.TryParse(v, out var ss): ssR = ss; break;
+                        case "BINDOK":
+                            bindOk = v is "1" or "True" or "true";
+                            break;
+                        case "BINDHINT" when v is not ("-" or ""):
+                            bindHint = v.Replace(',', '·');
+                            break;
                     }
                 }
 
@@ -578,6 +675,8 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             EthernetMetric = ethMetric,
             NicPeakHints = nicHints,
             NicPeakOk = nicPeakOk,
+            AdapterBindingsOk = bindOk,
+            AdapterBindingsHint = bindHint,
             PolicyLine = path.PolicyLine
         };
     }

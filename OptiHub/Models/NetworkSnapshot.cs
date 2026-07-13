@@ -33,6 +33,12 @@ public sealed class NetworkMediaProfile
     /// <summary>Live NIC peak status (flow control, selective suspend, etc.).</summary>
     public string NicPeakHints { get; init; } = "—";
     public bool NicPeakOk { get; init; } = true;
+    /// <summary>
+    /// Ethernet Properties → Networking checkboxes match OptiHub peak
+    /// (QoS+IPv4+IPv6 on; Client/File share/LLDP/LLTD off).
+    /// </summary>
+    public bool AdapterBindingsOk { get; init; } = true;
+    public string AdapterBindingsHint { get; init; } = "—";
     public string PolicyLine { get; init; } = string.Empty;
 }
 

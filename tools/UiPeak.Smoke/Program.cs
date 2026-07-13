@@ -151,6 +151,7 @@ foreach (var page in new[]
     {
         Expect("internet single Apply", x.Contains("Content=\"Apply\"", StringComparison.Ordinal)
             && !x.Contains("Lowest latency", StringComparison.Ordinal));
+        Expect("internet Repair button", x.Contains("Content=\"Repair\"", StringComparison.Ordinal));
         var ics = Path.Combine(repo, "OptiHub", "Views", "InternetOptimizerPage.xaml.cs");
         if (File.Exists(ics))
         {
@@ -158,6 +159,8 @@ foreach (var page in new[]
             Expect("internet preset prompt only",
                 ic.Contains("RequestPresetChoice", StringComparison.Ordinal)
                 && !ic.Contains("RequestApplyConfirm", StringComparison.Ordinal));
+            Expect("internet repair wired", ic.Contains("RepairCommand", StringComparison.Ordinal)
+                || ic.Contains("Repair_Click", StringComparison.Ordinal));
         }
     }
 }

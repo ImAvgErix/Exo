@@ -161,6 +161,11 @@ Expect("eth metric restamp after restart", latScript.Contains("Re-stamping", Str
 Expect("LLTD bindings off", latScript.Contains("ms_lltdio", StringComparison.OrdinalIgnoreCase));
 Expect("QoS pacer on", latScript.Contains("ms_pacer", StringComparison.OrdinalIgnoreCase));
 Expect("DO download mode 0", latScript.Contains("DODownloadMode", StringComparison.Ordinal));
+Expect("binding client off", latScript.Contains("ms_msclient", StringComparison.OrdinalIgnoreCase));
+Expect("binding lldp off", latScript.Contains("ms_lldp", StringComparison.OrdinalIgnoreCase));
+var repairScript = NetworkApplyScriptBuilder.BuildRepair();
+Expect("repair script restores client", repairScript.Contains("ms_msclient", StringComparison.OrdinalIgnoreCase));
+Expect("repair script automatic metric", repairScript.Contains("AutomaticMetric Enabled", StringComparison.OrdinalIgnoreCase));
 Expect("no wifi Restart-NetAdapter force",
     !System.Text.RegularExpressions.Regex.IsMatch(latScript, @"Restart-NetAdapter.*Wi-?Fi",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase));

@@ -332,21 +332,34 @@ try {
         sb.AppendLine("  } catch {}");
         sb.AppendLine("}");
 
-        // --- Adapter bindings (best-practice gaming stack) ---
-        // Keep QoS Packet Scheduler (ms_pacer) so NonBestEffortLimit policy applies.
-        // Disable LLTD Mapper/Responder — background discovery chatter, not needed for gaming.
-        // Do NOT disable IPv6 / Client for Microsoft Networks (breaks legitimate stack).
+        // --- Adapter bindings = the checkboxes in Ethernet Properties → Networking ---
+        // Target (gaming lean, matches common "best" host stack):
+        //   ON:  QoS Packet Scheduler, IPv4, IPv6
+        //   OFF: Client for Microsoft Networks, File and Printer Sharing,
+        //        Multiplexor, LLDP, LLTD Mapper, LLTD Responder
         sb.AppendLine("""
 function Set-AdapterBindings {
   $ads = @(Get-NetAdapter -Physical -EA SilentlyContinue)
+  # ComponentIDs from Get-NetAdapterBinding (same list as the Properties UI checkboxes)
+  $enable = @('ms_pacer','ms_tcpip','ms_tcpip6')
+  $disable = @('ms_msclient','ms_server','ms_implat','ms_lldp','ms_lltdio','ms_rspndr')
   foreach ($a in $ads) {
     $n = $a.Name
-    # Ensure QoS Packet Scheduler stays on
-    try { Enable-NetAdapterBinding -Name $n -ComponentID ms_pacer -EA SilentlyContinue } catch {}
-    # Link-Layer Topology Discovery — off for leaner host
-    try { Disable-NetAdapterBinding -Name $n -ComponentID ms_lltdio -EA SilentlyContinue } catch {}
-    try { Disable-NetAdapterBinding -Name $n -ComponentID ms_rspndr -EA SilentlyContinue } catch {}
-    Log "[bind] $n QoS=on LLTD=off"
+    foreach ($id in $enable) {
+      try { Enable-NetAdapterBinding -Name $n -ComponentID $id -EA SilentlyContinue } catch {}
+    }
+    foreach ($id in $disable) {
+      try { Disable-NetAdapterBinding -Name $n -ComponentID $id -EA SilentlyContinue } catch {}
+    }
+    $bits = @()
+    try {
+      $b = Get-NetAdapterBinding -Name $n -EA SilentlyContinue
+      foreach ($row in $b) {
+        $on = if ($row.Enabled) { 'on' } else { 'off' }
+        $bits += "$($row.ComponentID)=$on"
+      }
+    } catch {}
+    Log ("[bind] $n " + ($bits -join ' '))
   }
 }
 # Delivery Optimization — stop peer upload stealing bandwidth on gaming PCs
@@ -461,6 +474,106 @@ function Set-EthMetrics {
         sb.AppendLine("}");
         sb.AppendLine("Log '[OptiHub-NET] DONE preset=" + preset + "'");
         sb.AppendLine("exit 0");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Undo OptiHub network apply → Windows-typical defaults.
+    /// Restores Ethernet Properties checkboxes to stock-ish state.
+    /// </summary>
+    public static string BuildRepair()
+    {
+        var sb = new StringBuilder(8_000);
+        sb.AppendLine("$ErrorActionPreference = 'Continue'");
+        sb.AppendLine("$ProgressPreference = 'SilentlyContinue'");
+        sb.AppendLine("$log = Join-Path $env:TEMP 'optihub-net-repair-last.log'");
+        sb.AppendLine("function Log([string]$m) { $ts = Get-Date -Format o; Add-Content -Path $log -Value \"$ts $m\" -EA SilentlyContinue; Write-Host $m }");
+        sb.AppendLine("'' | Set-Content -Path $log -EA SilentlyContinue");
+        sb.AppendLine("Log '[OptiHub-NET-REPAIR] Restoring stock-ish network stack'");
+        sb.AppendLine("""
+function Set-Dword([string]$Path, [string]$Name, [int]$Value) {
+  if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force | Out-Null }
+  Remove-ItemProperty -LiteralPath $Path -Name $Name -Force -EA SilentlyContinue
+  New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
+}
+function Remove-Prop([string]$Path, [string]$Name) {
+  if (Test-Path -LiteralPath $Path) { Remove-ItemProperty -LiteralPath $Path -Name $Name -Force -EA SilentlyContinue }
+}
+# Host stack → Windows defaults
+$tcp = 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters'
+Set-Dword $tcp 'DisableTaskOffload' 0
+Remove-Prop $tcp 'GlobalMaxTcpWindowSize'
+Remove-Prop $tcp 'TcpWindowSize'
+$mm = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
+# Default SystemResponsiveness is 20
+Set-Dword $mm 'SystemResponsiveness' 20
+# Default NetworkThrottlingIndex is 10
+Set-Dword $mm 'NetworkThrottlingIndex' 10
+# Remove QoS reserve policy so OS default applies again
+Remove-Prop 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit'
+try { Remove-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' -Recurse -Force -EA SilentlyContinue } catch {}
+# Clear Nagle / ACK gaming keys
+Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces' -EA SilentlyContinue | ForEach-Object {
+  $p = $_.PSPath
+  Remove-Prop $p 'TcpAckFrequency'
+  Remove-Prop $p 'TCPNoDelay'
+  Remove-Prop $p 'TcpDelAckTicks'
+}
+# TCP global defaults
+netsh int tcp set global autotuninglevel=normal | Out-Null
+netsh int tcp set global rsc=enabled | Out-Null
+netsh int tcp set global rss=enabled | Out-Null
+try { netsh int tcp set heuristics enabled | Out-Null } catch {}
+try { netsh int tcp set supplemental template=internet congestionprovider=cubic | Out-Null } catch {}
+foreach ($pr in @('Internet','InternetCustom')) {
+  try { Set-NetTCPSetting -SettingName $pr -AutoTuningLevelLocal Normal -EA SilentlyContinue } catch {}
+  try { Set-NetTCPSetting -SettingName $pr -ScalingHeuristics Enabled -EA SilentlyContinue } catch {}
+}
+# Delivery Optimization — clear OptiHub force-off
+try { Remove-Prop 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode' } catch {}
+# Tunnels — default (system managed)
+try { netsh interface teredo set state default | Out-Null } catch {}
+try { netsh interface isatap set state default | Out-Null } catch {}
+try { netsh interface 6to4 set state default | Out-Null } catch {}
+Log '[repair] host stack + tunnels restored'
+
+# Ethernet Properties checkboxes → stock Windows-like (most ON except Multiplexor)
+$enable = @('ms_msclient','ms_server','ms_pacer','ms_tcpip','ms_tcpip6','ms_lldp','ms_lltdio','ms_rspndr')
+$disable = @('ms_implat')
+$ads = @(Get-NetAdapter -Physical -EA SilentlyContinue)
+foreach ($a in $ads) {
+  $n = $a.Name
+  foreach ($id in $enable) {
+    try { Enable-NetAdapterBinding -Name $n -ComponentID $id -EA SilentlyContinue } catch {}
+  }
+  foreach ($id in $disable) {
+    try { Disable-NetAdapterBinding -Name $n -ComponentID $id -EA SilentlyContinue } catch {}
+  }
+  # LSO / RSC default-ish (on for modern NICs)
+  try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*LsoV2IPv4' -RegistryValue 1 -NoRestart -EA SilentlyContinue } catch {}
+  try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*LsoV2IPv6' -RegistryValue 1 -NoRestart -EA SilentlyContinue } catch {}
+  try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*RscIPv4' -RegistryValue 1 -NoRestart -EA SilentlyContinue } catch {}
+  # Automatic metric (OS default)
+  foreach ($af in @('IPv4','IPv6')) {
+    try {
+      Set-NetIPInterface -InterfaceIndex $a.ifIndex -AddressFamily $af -AutomaticMetric Enabled -EA SilentlyContinue
+    } catch {}
+  }
+  Log "[repair] bindings+metric auto $n"
+}
+# Re-enable Wi-Fi adapters OptiHub may have disabled
+foreach ($w in @($ads | Where-Object { [string]$_.PhysicalMediaType -match '802\.11|Wireless' -or [string]$_.Name -match '(?i)Wi-?Fi|Wireless' })) {
+  try {
+    if ($w.Status -eq 'Disabled') {
+      Enable-NetAdapter -Name $w.Name -Confirm:$false -EA SilentlyContinue
+      Log "[repair] Wi-Fi re-enabled: $($w.Name)"
+    }
+  } catch {}
+}
+try { Clear-DnsClientCache -EA SilentlyContinue } catch {}
+Log '[OptiHub-NET-REPAIR] DONE'
+exit 0
+""");
         return sb.ToString();
     }
 }
