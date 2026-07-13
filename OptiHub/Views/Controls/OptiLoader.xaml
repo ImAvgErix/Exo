@@ -14,8 +14,7 @@
           Width="52"
           Height="40"
           HorizontalAlignment="Center"
-          VerticalAlignment="Center"
-          ClipToBounds="True">
+          VerticalAlignment="Center">
 
         <!-- Soft plate -->
         <Border Width="48"
@@ -32,14 +31,12 @@
                 Width="10"
                 Height="28"
                 CornerRadius="5"
+                Background="{ThemeResource OptiAccentBrush}"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Center"
                 Margin="6,0,0,0"
                 Opacity="0.14"
                 IsHitTestVisible="False">
-            <Border.Background>
-                <SolidColorBrush Color="{ThemeResource SystemAccentColor}" />
-            </Border.Background>
             <Border.RenderTransform>
                 <TranslateTransform x:Name="ScanX" X="0" />
             </Border.RenderTransform>
