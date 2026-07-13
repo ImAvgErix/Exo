@@ -1,3 +1,7 @@
+## 1.9.29
+
+- **Ethernet preferred 100%** when linked with a real IPv4: lower interface metric + disable Wi‑Fi (gaming lowest-latency path)
+- Cable with no IP still leaves Wi‑Fi alone
 ## 1.9.28
 
 - **Wi‑Fi disable only when Ethernet is in use**: default IPv4 route + real IPv4 (not just adapter Status=Up / cable with no route)

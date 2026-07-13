@@ -290,24 +290,13 @@ $eth = @($phys | Where-Object { -not (IsWifi $_) })
 $wifi = @($phys | Where-Object { IsWifi $_ })
 $eUp = @($eth | Where-Object Status -eq 'Up').Count -gt 0
 $wUp = @($wifi | Where-Object Status -eq 'Up').Count -gt 0
-# "In use" = default IPv4 route goes out an Ethernet ifIndex (not merely Status=Up)
+# "In use" for gaming = Ethernet is linked AND has a real IPv4 (usable).
+# Prefer Ethernet 100% when that is true — do not wait for default-route ownership.
 $eInUse = $false
-$defRoutes = @(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -EA SilentlyContinue | Sort-Object RouteMetric, InterfaceMetric)
-foreach ($r in $defRoutes) {
-  $a = $phys | Where-Object { $_.ifIndex -eq $r.InterfaceIndex } | Select-Object -First 1
-  if (-not $a) { continue }
-  if (-not (IsWifi $a) -and $a.Status -eq 'Up') { $eInUse = $true; break }
-  if (IsWifi $a) { break } # default route is Wi-Fi — Ethernet not in use for internet
-}
-# Also require a unicast IPv4 on that Ethernet if we claimed in-use
-if ($eInUse) {
-  $okIp = $false
-  foreach ($e in @($eth | Where-Object Status -eq 'Up')) {
-    $ip = Get-NetIPAddress -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue |
-      Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.PrefixOrigin -ne 'WellKnown' }
-    if (@($ip).Count -gt 0) { $okIp = $true; break }
-  }
-  if (-not $okIp) { $eInUse = $false }
+foreach ($e in @($eth | Where-Object Status -eq 'Up')) {
+  $ip = @(Get-NetIPAddress -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue |
+    Where-Object { $_.IPAddress -notlike '169.254.*' })
+  if ($ip.Count -gt 0) { $eInUse = $true; break }
 }
 $band6 = $false; $band5 = $false
 foreach ($w in $wifi) {
@@ -376,7 +365,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             }
         }
 
-        // Managed fallback for "in use": default gateway on Ethernet NIC
+        // Managed fallback: Ethernet Up + real IPv4 = prefer Ethernet for gaming
         if (!ethInUse && ethUp)
         {
             try
@@ -385,13 +374,10 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                 {
                     if (n.NetworkInterfaceType != NetworkInterfaceType.Ethernet) continue;
                     if (n.OperationalStatus != OperationalStatus.Up) continue;
-                    var gw = n.GetIPProperties().GatewayAddresses
-                        .Any(g => g.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
-                                  && !g.Address.Equals(System.Net.IPAddress.Any));
                     var hasIp = n.GetIPProperties().UnicastAddresses.Any(u =>
                         u.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
                         && !u.Address.ToString().StartsWith("169.254.", StringComparison.Ordinal));
-                    if (gw && hasIp) { ethInUse = true; break; }
+                    if (hasIp) { ethInUse = true; break; }
                 }
             }
             catch { }
@@ -401,14 +387,14 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         string policy;
         if (ethInUse)
             policy = wifiAvail
-                ? "Ethernet in use (default route) → disable Wi‑Fi"
-                : "Ethernet in use → Ethernet only";
+                ? "Ethernet ready → prefer Ethernet, disable Wi‑Fi (lowest latency)"
+                : "Ethernet ready → Ethernet only";
         else if (ethUp && !ethInUse)
-            policy = "Ethernet linked but not default route → leave Wi‑Fi alone";
+            policy = "Ethernet linked (no IP yet) → leave Wi‑Fi until Ethernet has an address";
         else if (wifiUp)
-            policy = $"Wi‑Fi in use → prefer {bandTarget}";
+            policy = $"Wi‑Fi only → prefer {bandTarget}";
         else if (ethAvail)
-            policy = "Ethernet present (not carrying traffic) → no Wi‑Fi disable";
+            policy = "Ethernet present (unplugged/down) → use when linked";
         else if (wifiAvail)
             policy = $"Wi‑Fi only → prefer {bandTarget}";
         else
@@ -500,7 +486,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             var snap = await ProbeAsync(ct).ConfigureAwait(false);
             var matched = MatchesPreset(snap, preset);
             var policy = media.EthernetInUse
-                ? "Ethernet is the active path (Wi‑Fi disabled if it was on)."
+                ? "Ethernet preferred (Wi‑Fi disabled when Ethernet has a real IP)."
                 : media.WifiUp
                     ? $"Wi‑Fi path; prefer {media.PreferredBandTarget}."
                     : media.PolicyLine;
@@ -722,22 +708,20 @@ Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit
         sb.AppendLine("  } catch {}");
         sb.AppendLine("}");
 
-        // Disable Wi-Fi ONLY when Ethernet is actually carrying the default route (in use),
-        // not merely "Status=Up" (cable plugged with no DHCP / wrong metric).
+        // Prefer Ethernet 100% when linked with a real IPv4 (gaming lowest-latency path).
+        // Not "cable only / no IP" — that is not usable Ethernet yet.
         sb.AppendLine("if (" + preferEth + " -eq 1) {");
-        sb.AppendLine("  $ethCandidates = @($adapters | Where-Object { -not (Test-IsWifiAdapter $_) -and $_.Status -eq 'Up' })");
-        sb.AppendLine("  $ethInUse = $false");
-        sb.AppendLine("  $routes = @(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -EA SilentlyContinue | Sort-Object RouteMetric, InterfaceMetric)");
-        sb.AppendLine("  foreach ($r in $routes) {");
-        sb.AppendLine("    $a = $adapters | Where-Object { $_.ifIndex -eq $r.InterfaceIndex } | Select-Object -First 1");
-        sb.AppendLine("    if (-not $a) { continue }");
-        sb.AppendLine("    if (-not (Test-IsWifiAdapter $a)) {");
-        sb.AppendLine("      $ip = @(Get-NetIPAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -EA SilentlyContinue | Where-Object { $_.IPAddress -notlike '169.254.*' })");
-        sb.AppendLine("      if ($ip.Count -gt 0) { $ethInUse = $true; break }");
-        sb.AppendLine("    } else { break }");
+        sb.AppendLine("  $ethReady = @()");
+        sb.AppendLine("  foreach ($e in @($adapters | Where-Object { -not (Test-IsWifiAdapter $_) -and $_.Status -eq 'Up' })) {");
+        sb.AppendLine("    $ip = @(Get-NetIPAddress -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue | Where-Object { $_.IPAddress -notlike '169.254.*' })");
+        sb.AppendLine("    if ($ip.Count -gt 0) { $ethReady += $e }");
         sb.AppendLine("  }");
-        sb.AppendLine("  if ($ethInUse) {");
-        sb.AppendLine("    Write-Host '[OptiHub-NET] Ethernet is default route — disabling Wi-Fi'");
+        sb.AppendLine("  if ($ethReady.Count -gt 0) {");
+        sb.AppendLine("    Write-Host '[OptiHub-NET] Ethernet ready — preferring Ethernet (lowest latency)'");
+        sb.AppendLine("    foreach ($e in $ethReady) {");
+        sb.AppendLine("      try { Set-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -InterfaceMetric 1 -EA SilentlyContinue } catch {}");
+        sb.AppendLine("      try { Set-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily IPv6 -InterfaceMetric 1 -EA SilentlyContinue } catch {}");
+        sb.AppendLine("    }");
         sb.AppendLine("    foreach ($w in @($adapters | Where-Object { Test-IsWifiAdapter $_ })) {");
         sb.AppendLine("      try {");
         sb.AppendLine("        if ($w.Status -ne 'Disabled') {");
@@ -747,7 +731,7 @@ Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit
         sb.AppendLine("      } catch { Write-Host \"[NIC] could not disable $($w.Name)\" }");
         sb.AppendLine("    }");
         sb.AppendLine("  } else {");
-        sb.AppendLine("    Write-Host '[OptiHub-NET] Ethernet not in use (no default route) — leaving Wi-Fi alone'");
+        sb.AppendLine("    Write-Host '[OptiHub-NET] No usable Ethernet (up+IPv4) — keeping Wi-Fi'");
         sb.AppendLine("  }");
         sb.AppendLine("}");
 

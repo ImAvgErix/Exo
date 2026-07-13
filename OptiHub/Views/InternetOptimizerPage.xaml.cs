@@ -43,17 +43,17 @@ public sealed partial class InternetOptimizerPage : Page
         if (media.EthernetInUse && media.WifiAvailable)
         {
             lines.Add("");
-            lines.Add("Ethernet is the active internet path (default route). Wi‑Fi will be disabled so gaming stays on Ethernet.");
+            lines.Add("Usable Ethernet detected (linked + IP). Wi‑Fi will be disabled — Ethernet is preferred for lowest latency.");
         }
         else if (media.EthernetUp && !media.EthernetInUse)
         {
             lines.Add("");
-            lines.Add("Ethernet is linked but not carrying your default route — Wi‑Fi will NOT be disabled.");
+            lines.Add("Ethernet is linked but has no usable IPv4 yet — Wi‑Fi stays on until Ethernet gets an address.");
         }
         else if (media.WifiUp)
         {
             lines.Add("");
-            lines.Add($"Wi‑Fi is the active path. Preferred band target: {media.PreferredBandTarget} (from your radio/driver).");
+            lines.Add($"Wi‑Fi only. Preferred band: {media.PreferredBandTarget} (from your radio/driver).");
             if (media.ConnectedRadioHint is not "—")
                 lines.Add($"  Connected radio hint: {media.ConnectedRadioHint}");
         }
