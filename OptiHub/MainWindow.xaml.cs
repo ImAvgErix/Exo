@@ -32,8 +32,8 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         App.MainAppWindow = this;
 
-        // Fixed window, roomy enough for home cards and optimizer feature lists.
-        AppWindow.Resize(new SizeInt32(1080, 860));
+        // Fixed window — room for collapsible rail + home stats grid.
+        AppWindow.Resize(new SizeInt32(1140, 900));
         ApplyFixedWindowChrome();
         TryCenterOnScreen();
         TrySetWindowIcon();

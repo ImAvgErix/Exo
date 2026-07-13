@@ -1,3 +1,8 @@
+## 1.9.19
+
+- **Home dashboard**: default landing with live PC/CPU/GPU/RAM/network/latency/optimizer stats + quick open
+- **Collapsible sidebar**: Home · Apps · Internet · GPU (icon rail, remembered)
+- **UI polish**: tighter cards, captions, icon nav, larger shell; official red AMD logo
 ## 1.9.18
 
 - **Windows hub shell**: left sidebar **Apps | Internet | GPU** with section-filtered cards
