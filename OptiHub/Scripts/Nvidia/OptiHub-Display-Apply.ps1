@@ -276,7 +276,8 @@ function Set-AllNvtweakDevices {
 }
 
 function Clear-NvidiaAppTrayAndContainer {
-    # Soft container refresh can re-arm App tray ghosts / App container service.
+    # Soft refresh restarts NVDisplay.Container → re-registers tray.
+    # Hide display-container (IsPromoted=0); delete App/GFE ghosts only.
     try {
         $svc = Get-Service -Name 'NvContainerLocalSystem' -ErrorAction SilentlyContinue
         if ($svc) {
@@ -286,23 +287,42 @@ function Clear-NvidiaAppTrayAndContainer {
         }
     } catch { }
 
+    $trayScript = Join-Path $PSScriptRoot 'OptiHub-Nvidia-TrayClear.ps1'
+    if (Test-Path -LiteralPath $trayScript) {
+        try {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $trayScript -NoTask -SettlePasses 3 2>&1 |
+                ForEach-Object { Write-DLog "$_" }
+            Write-DLog 'Tray clear script finished'
+            return
+        } catch {
+            Write-DLog "Tray script failed: $($_.Exception.Message) — inline fallback"
+        }
+    }
+
     $notify = 'HKCU:\Control Panel\NotifyIconSettings'
     if (-not (Test-Path -LiteralPath $notify)) { return }
     $removed = 0
+    $hidden = 0
     Get-ChildItem -LiteralPath $notify -ErrorAction SilentlyContinue | ForEach-Object {
         $exe = $null
         try { $exe = [string](Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).ExecutablePath } catch { }
         if ([string]::IsNullOrWhiteSpace($exe)) { return }
-        # Strip ALL NVIDIA overflow icons (App + NVDisplay.Container registration)
-        if ($exe -match '(?i)NVIDIA|nvcontainer|NVDisplay|GeForce|ShadowPlay|nvsphelper|nvapp') {
+        if ($exe -notmatch '(?i)NVIDIA|nvcontainer|NVDisplay|GeForce|ShadowPlay|nvsphelper|nvapp') { return }
+        if ($exe -match '(?i)NVDisplay\.Container|Display\.NvContainer|nv_dispi\.inf') {
             try {
-                Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
-                $removed++
-                Write-DLog "Removed tray icon: $exe"
+                Set-ItemProperty -LiteralPath $_.PSPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0
+                $hidden++
             } catch { }
+            return
+        }
+        try {
+            Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
+            $removed++
+        } catch {
+            try { Set-ItemProperty -LiteralPath $_.PSPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0; $hidden++ } catch { }
         }
     }
-    if ($removed -gt 0) { Write-DLog "Cleared $removed NVIDIA tray icon(s)" }
+    Write-DLog "Tray inline: removed=$removed hidden=$hidden"
 }
 
 function Invoke-NvApiHelper {

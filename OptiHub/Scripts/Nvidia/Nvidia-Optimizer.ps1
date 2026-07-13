@@ -722,35 +722,47 @@ function Remove-NvidiaAppDesktopShortcuts {
 }
 
 function Clear-NvidiaTrayGhostIcons {
-    # Windows 11 keeps dead tray entries under NotifyIconSettings after uninstall.
-    # User wants zero NVIDIA icons in overflow — clear App AND display-container tray keys.
-    # (Display service keeps running; only the overflow registration is removed.)
-    Write-Step 'Clearing ALL NVIDIA tray / overflow icons...'
-    $removed = 0
-    $roots = [System.Collections.Generic.List[string]]::new()
-    [void]$roots.Add('HKCU:\Control Panel\NotifyIconSettings')
-    try {
-        Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue | Where-Object {
-            $_.PSChildName -match '^S-1-5-21-\d+-\d+-\d+-\d+$'
-        } | ForEach-Object {
-            [void]$roots.Add(("Registry::HKEY_USERS\{0}\Control Panel\NotifyIconSettings" -f $_.PSChildName))
+    # NVDisplay.Container re-registers on soft-refresh/logon. Deleting its key makes it
+    # come back promoted — hide IsPromoted=0 instead. Delete App/GFE ghosts only.
+    Write-Step 'Clearing / hiding NVIDIA tray icons (display hide + App delete)...'
+    $trayScript = Join-Path $PSScriptRoot 'OptiHub-Nvidia-TrayClear.ps1'
+    if (Test-Path -LiteralPath $trayScript) {
+        try {
+            $p = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+                '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$trayScript`"",
+                '-SettlePasses', '3'
+            ) -Wait -PassThru -WindowStyle Hidden
+            Write-Ok "Tray clear script exit $($p.ExitCode)"
+            return 1
+        } catch {
+            Write-Warn "Tray script launch failed: $($_.Exception.Message)"
         }
-    } catch { }
+    }
 
+    $removed = 0
+    $hidden = 0
+    $roots = @('HKCU:\Control Panel\NotifyIconSettings')
     $nvidiaTrayPattern = '(?i)NVIDIA|nvcontainer|NVDisplay|GeForce|ShadowPlay|nvsphelper|nvapp|NvBackend'
-    foreach ($root in ($roots | Select-Object -Unique)) {
+    foreach ($root in $roots) {
         if (-not (Test-Path -LiteralPath $root)) { continue }
         Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue | ForEach-Object {
             $exe = $null
             try { $exe = [string](Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).ExecutablePath } catch { }
             if ([string]::IsNullOrWhiteSpace($exe)) { return }
             if ($exe -notmatch $nvidiaTrayPattern) { return }
+            if ($exe -match '(?i)NVDisplay\.Container|Display\.NvContainer|nv_dispi\.inf') {
+                try {
+                    Set-ItemProperty -LiteralPath $_.PSPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0
+                    $hidden++
+                } catch { }
+                return
+            }
             try {
                 Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
                 $removed++
                 Write-Ok "Removed tray icon: $exe"
             } catch {
-                Write-Warn "Tray remove failed ($($_.PSChildName)): $($_.Exception.Message)"
+                try { Set-ItemProperty -LiteralPath $_.PSPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0; $hidden++ } catch { }
             }
         }
     }
@@ -766,7 +778,6 @@ function Clear-NvidiaTrayGhostIcons {
         }
     } catch { }
 
-    # ProgramData App leftovers re-seed tray names
     $pd = Join-Path $env:ProgramData 'NVIDIA Corporation\NVIDIA App'
     if (Test-Path -LiteralPath $pd) {
         if (Remove-OptiHubTreeForce -Path $pd) {
@@ -774,12 +785,8 @@ function Clear-NvidiaTrayGhostIcons {
         }
     }
 
-    if ($removed -eq 0) {
-        Write-Ok 'No NVIDIA tray icons found in NotifyIconSettings'
-    } else {
-        Write-Ok "Cleared $removed NVIDIA tray icon(s)"
-    }
-    return $removed
+    Write-Ok "Tray: removed=$removed hidden(display)=$hidden"
+    return ($removed + $hidden)
 }
 
 function Wait-NvidiaAppInstalled {

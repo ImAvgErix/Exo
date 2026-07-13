@@ -1,3 +1,7 @@
+## 1.9.23
+
+- **NVIDIA tray**: stop resurrection — hide NVDisplay container (IsPromoted=0) instead of deleting; wipe App ghosts; logon re-hide task; multi-pass after soft refresh
+- **Gaming stack**: Discord kernel trim tighter; Internet latency SystemResponsiveness=0; tray clear on apply paths
 ## 1.9.22
 
 - **Feature tiles**: only optimizer features (no path/DNS/adapter/provider/ping cards); same idea on Discord/Steam/NVIDIA rows

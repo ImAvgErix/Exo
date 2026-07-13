@@ -335,14 +335,18 @@ public sealed class NetworkOptimizerService
     {
         var latency = preset == NetworkPreset.LowestLatency;
         var throughput = preset == NetworkPreset.HighestThroughput;
+        // Gaming latency: normal auto-tune (not disabled — disabled kills throughput on modern stacks)
         var autotune = latency ? "normal" : "experimental";
         var autoTuningPs = latency ? "Normal" : "Experimental";
         var rsc = latency ? "disabled" : "enabled";
         var lso = latency ? "0" : "1";
         var im = latency ? "0" : "1";
         var packetCoal = latency ? "0" : "1";
+        // Slightly higher initial window even for latency — helps first paint without bulk penalty
         var initialCwnd = latency ? "10" : "16";
         var largeCache = throughput ? "1" : "0";
+        // Gaming multimedia: kill network throttle hard
+        var systemResponsiveness = latency ? "0" : "10";
         var ackBlock = latency
             ? """
   Set-Dword $p 'TcpAckFrequency' 1
@@ -457,11 +461,11 @@ Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters' 'EnableLMHO
 Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters' 'NodeType' 2
 """);
 
-        // Multimedia + QoS
+        // Multimedia + QoS (SystemResponsiveness 0 = prioritize games for latency preset)
+        sb.AppendLine("$mm = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'");
+        sb.AppendLine("Set-Dword $mm 'NetworkThrottlingIndex' ([int]0xFFFFFFFF)");
+        sb.AppendLine("Set-Dword $mm 'SystemResponsiveness' " + systemResponsiveness);
         sb.AppendLine("""
-$mm = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
-Set-Dword $mm 'NetworkThrottlingIndex' ([int]0xFFFFFFFF)
-Set-Dword $mm 'SystemResponsiveness' 10
 $mmGames = Join-Path $mm 'Tasks\Games'
 if (-not (Test-Path $mmGames)) { New-Item $mmGames -Force | Out-Null }
 Set-Dword $mmGames 'GPU Priority' 8

@@ -241,23 +241,35 @@ public sealed class NvidiaPanelSettingsService
             {
                 try
                 {
-                    using var key = root.OpenSubKey(name);
+                    using var key = root.OpenSubKey(name, writable: true);
                     var exe = key?.GetValue("ExecutablePath") as string ?? "";
-                    if (exe.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
+                    var isNvidia =
+                        exe.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
                         exe.Contains("nvcontainer", StringComparison.OrdinalIgnoreCase) ||
                         exe.Contains("NVDisplay", StringComparison.OrdinalIgnoreCase) ||
                         exe.Contains("GeForce", StringComparison.OrdinalIgnoreCase) ||
-                        exe.Contains("ShadowPlay", StringComparison.OrdinalIgnoreCase))
+                        exe.Contains("ShadowPlay", StringComparison.OrdinalIgnoreCase) ||
+                        exe.Contains("nv_dispi", StringComparison.OrdinalIgnoreCase);
+                    if (!isNvidia) continue;
+
+                    // Display container re-registers if deleted — hide instead.
+                    var isDisplay =
+                        exe.Contains("NVDisplay", StringComparison.OrdinalIgnoreCase) ||
+                        exe.Contains("Display.NvContainer", StringComparison.OrdinalIgnoreCase) ||
+                        exe.Contains("nv_dispi", StringComparison.OrdinalIgnoreCase);
+                    if (isDisplay)
                     {
-                        root.DeleteSubKeyTree(name, throwOnMissingSubKey: false);
+                        key?.SetValue("IsPromoted", 0, Microsoft.Win32.RegistryValueKind.DWord);
+                        continue;
                     }
+
+                    root.DeleteSubKeyTree(name, throwOnMissingSubKey: false);
                 }
                 catch { }
             }
         }
         catch { }
 
-        // Leftover App ProgramData
         try
         {
             var pd = Path.Combine(
@@ -426,11 +438,29 @@ public sealed class NvidiaPanelSettingsService
             {
                 using var key = root.OpenSubKey(name);
                 var exe = key?.GetValue("ExecutablePath") as string ?? "";
-                if (exe.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
+                var isNvidia =
+                    exe.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
                     exe.Contains("nvcontainer", StringComparison.OrdinalIgnoreCase) ||
                     exe.Contains("NVDisplay", StringComparison.OrdinalIgnoreCase) ||
-                    exe.Contains("GeForce", StringComparison.OrdinalIgnoreCase))
+                    exe.Contains("GeForce", StringComparison.OrdinalIgnoreCase) ||
+                    exe.Contains("nv_dispi", StringComparison.OrdinalIgnoreCase);
+                if (!isNvidia) continue;
+
+                // Display container left with IsPromoted=0 is considered clean (must not delete).
+                var isDisplay =
+                    exe.Contains("NVDisplay", StringComparison.OrdinalIgnoreCase) ||
+                    exe.Contains("Display.NvContainer", StringComparison.OrdinalIgnoreCase) ||
+                    exe.Contains("nv_dispi", StringComparison.OrdinalIgnoreCase);
+                if (isDisplay)
+                {
+                    var promoted = key?.GetValue("IsPromoted");
+                    if (promoted is int i && i == 0) continue;
+                    // Missing IsPromoted often still shows — treat as dirty
                     return false;
+                }
+
+                // Any App/GFE/overlay entry is dirty
+                return false;
             }
         }
         catch { }
