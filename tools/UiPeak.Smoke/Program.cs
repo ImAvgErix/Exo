@@ -55,6 +55,8 @@ if (File.Exists(mainCs))
     var cs = File.ReadAllText(mainCs);
     Expect("SetTitleBar drag strip", cs.Contains("SetTitleBar(TitleBarDragRegion)", StringComparison.Ordinal));
     Expect("not SetTitleBar whole host", !cs.Contains("SetTitleBar(TitleBarHost)", StringComparison.Ordinal));
+    Expect("fixed shell no maximize", cs.Contains("IsMaximizable = false", StringComparison.Ordinal));
+    Expect("fixed shell no resize", cs.Contains("IsResizable = false", StringComparison.Ordinal));
 }
 if (File.Exists(dash))
 {
@@ -69,14 +71,12 @@ if (File.Exists(dash))
     Expect("logo only cards", !d.Contains("Definition.Title}", StringComparison.Ordinal)
         || d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
     Expect("no card title label", !d.Contains("Text=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
-    // Full-bleed responsive grid (no fixed MaxWidth island)
-    Expect("dashboard no maxwidth island", !d.Contains("MaxWidth=\"1000\"", StringComparison.Ordinal));
-    Expect("dashboard size changed",
-        File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
+    // Fixed shell: static card sizes, no responsive layout code
+    Expect("dashboard fixed cards", d.Contains("Width=\"240\"", StringComparison.Ordinal)
+        && d.Contains("Height=\"148\"", StringComparison.Ordinal));
+    Expect("dashboard no responsive layout",
+        !File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
             .Contains("ApplyResponsiveLayout", StringComparison.Ordinal));
-    Expect("dashboard uses height",
-        File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
-            .Contains("usableH", StringComparison.Ordinal));
     // Home is nav only — no applied/checking chips (status lives on the module page).
     Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
     Expect("simple home blurb", d.Contains("Pick a target", StringComparison.Ordinal));

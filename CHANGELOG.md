@@ -1,3 +1,9 @@
+## 1.9.86
+
+- **Fixed window** 1180×760 — no maximize, no free resize (UI designed for this frame)
+- **Home**: static 3-col cards (240×148), deleted responsive layout code
+- **Internet**: white **Low latency** | **Highest download** side by side (no prompt)
+
 ## 1.9.85
 
 - **Internet**: two white buttons — **Low latency** | **Highest download** (no slow popup); refreshes tweak rows + header in place after apply

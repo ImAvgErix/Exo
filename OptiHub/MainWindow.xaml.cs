@@ -32,9 +32,9 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         App.MainAppWindow = this;
 
-        // Default open size only — user may freely resize and maximize.
-        AppWindow.Resize(new SizeInt32(1280, 820));
-        ApplyResizableWindowChrome();
+        // Fixed shell — no maximize / no edge-resize (UI is designed for this frame).
+        AppWindow.Resize(new SizeInt32(1180, 760));
+        ApplyFixedWindowChrome();
         TryCenterOnScreen();
         TrySetWindowIcon();
 
@@ -46,14 +46,14 @@ public sealed partial class MainWindow : Window
         AppWindow.Changed += (_, args) =>
         {
             UpdateCaptionInset();
-            // Never re-lock size after user resize/maximize.
+            // Re-apply fixed chrome if the system swaps presenters.
             if (args.DidPresenterChange)
-                ApplyResizableWindowChrome();
+                ApplyFixedWindowChrome();
         };
         RootGrid.Loaded += (_, _) =>
         {
             UpdateCaptionInset();
-            ApplyResizableWindowChrome();
+            ApplyFixedWindowChrome();
             ClearChromeFocus();
         };
         RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
@@ -103,18 +103,28 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    /// <summary>User-resizable shell: maximize + edge drag allowed. Sensible minimum only.</summary>
-    private void ApplyResizableWindowChrome()
+    /// <summary>Fixed shell: minimize only — no maximize, no free resize.</summary>
+    private void ApplyFixedWindowChrome()
     {
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.IsMaximizable = true;
-            presenter.IsResizable = true;
+            presenter.IsMaximizable = false;
+            presenter.IsResizable = false;
             presenter.IsMinimizable = true;
-            // Soft floor so chrome never collapses; not a fixed frame.
-            presenter.PreferredMinimumWidth = 900;
-            presenter.PreferredMinimumHeight = 560;
+            // Pin preferred size so the OS doesn't grow the frame.
+            presenter.PreferredMinimumWidth = 1180;
+            presenter.PreferredMinimumHeight = 760;
+            presenter.PreferredMaximumWidth = 1180;
+            presenter.PreferredMaximumHeight = 760;
         }
+
+        try
+        {
+            // Re-assert size if something tried to change it.
+            if (AppWindow.Size.Width != 1180 || AppWindow.Size.Height != 760)
+                AppWindow.Resize(new SizeInt32(1180, 760));
+        }
+        catch { }
     }
 
     private void UpdateCaptionInset()

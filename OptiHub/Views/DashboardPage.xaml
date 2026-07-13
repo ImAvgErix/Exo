@@ -5,67 +5,56 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:viewModels="using:OptiHub.ViewModels"
     Background="Transparent"
-    SizeChanged="Page_SizeChanged">
+    Loaded="Page_Loaded">
 
-    <!-- Full-bleed layout: cards scale to window; scroll only when content is taller than viewport -->
-    <Grid x:Name="PageRoot"
-          Padding="36,20,36,24"
-          Loaded="PageRoot_Loaded">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+    <!-- Fixed window shell — static 3-col product grid, no resize math -->
+    <Grid x:Name="PageRoot" Padding="40,24,40,28">
+        <Grid MaxWidth="1040"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-        <StackPanel x:Name="HeroPanel"
-                    Spacing="6"
-                    Margin="0,0,0,16"
-                    HorizontalAlignment="Center"
-                    Opacity="0"
-                    RenderTransformOrigin="0.5,0.5">
-            <StackPanel.RenderTransform>
-                <CompositeTransform x:Name="HeroTransform" TranslateY="12" />
-            </StackPanel.RenderTransform>
-            <TextBlock x:Name="HeroTitle"
-                       Text="Maximum performance. No compromise."
-                       Style="{StaticResource OptiTagline}"
-                       FontSize="34"
-                       LineHeight="42"
-                       TextWrapping="WrapWholeWords"
-                       TextAlignment="Center"
-                       HorizontalAlignment="Center" />
-            <TextBlock Text="Pick a target to open it."
-                       Style="{StaticResource OptiTaglineSupport}"
-                       FontSize="14"
-                       HorizontalAlignment="Center" />
-        </StackPanel>
+            <StackPanel x:Name="HeroPanel"
+                        Spacing="6"
+                        Margin="0,0,0,22"
+                        HorizontalAlignment="Center"
+                        Opacity="0"
+                        RenderTransformOrigin="0.5,0.5">
+                <StackPanel.RenderTransform>
+                    <CompositeTransform x:Name="HeroTransform" TranslateY="12" />
+                </StackPanel.RenderTransform>
+                <TextBlock Text="Maximum performance. No compromise."
+                           Style="{StaticResource OptiTagline}"
+                           FontSize="30"
+                           LineHeight="38"
+                           TextWrapping="WrapWholeWords"
+                           TextAlignment="Center"
+                           HorizontalAlignment="Center" />
+                <TextBlock Text="Pick a target to open it."
+                           Style="{StaticResource OptiTaglineSupport}"
+                           FontSize="13"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
 
-        <ScrollViewer x:Name="PageScroll"
-                      Grid.Row="1"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled"
-                      ZoomMode="Disabled"
-                      HorizontalAlignment="Stretch"
-                      VerticalAlignment="Stretch">
             <ItemsControl x:Name="CardList"
-                          HorizontalAlignment="Stretch"
-                          VerticalAlignment="Top"
+                          Grid.Row="1"
+                          HorizontalAlignment="Center"
                           ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <!-- MaximumRowsOrColumns = columns when Orientation=Horizontal -->
-                        <ItemsWrapGrid x:Name="CardWrap"
-                                       Orientation="Horizontal"
-                                       MaximumRowsOrColumns="4"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Top" />
+                        <ItemsWrapGrid Orientation="Horizontal"
+                                       MaximumRowsOrColumns="3"
+                                       HorizontalAlignment="Center" />
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
-                        <Button x:Name="CardBtn"
-                                Style="{StaticResource OptiCardButton}"
-                                Width="280"
-                                Height="168"
+                        <Button Style="{StaticResource OptiCardButton}"
+                                Width="240"
+                                Height="148"
                                 Margin="8"
                                 Click="CardButton_Click"
                                 Tag="{x:Bind Definition.Id}"
@@ -77,9 +66,8 @@
                                     VerticalAlignment="Stretch"
                                     Padding="12">
                                 <Grid>
-                                    <Image x:Name="CardLogo"
-                                           Width="72"
-                                           Height="72"
+                                    <Image Width="56"
+                                           Height="56"
                                            Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
@@ -87,7 +75,7 @@
                                            AutomationProperties.AccessibilityView="Raw" />
                                     <TextBlock Text="Coming soon"
                                                FontFamily="{StaticResource OptiUiFont}"
-                                               FontSize="12"
+                                               FontSize="11"
                                                Foreground="{ThemeResource OptiMutedTextBrush}"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Bottom"
@@ -99,6 +87,6 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-        </ScrollViewer>
+        </Grid>
     </Grid>
 </Page>
