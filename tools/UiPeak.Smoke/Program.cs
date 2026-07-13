@@ -119,8 +119,18 @@ foreach (var page in new[]
     var x = File.ReadAllText(p);
     Expect(page + " CTA", x.Contains("OptiPrimaryButton", StringComparison.Ordinal) || x.Contains("OptiQuietButton", StringComparison.Ordinal));
     Expect(page + " page padding", x.Contains("OptiPagePadding", StringComparison.Ordinal));
+    Expect(page + " unique loader", x.Contains("OptiLoader", StringComparison.Ordinal) && !x.Contains("<ProgressRing", StringComparison.Ordinal));
     if (page.Contains("NvidiaPanel", StringComparison.Ordinal))
         Expect(page + " apply label", x.Contains("ApplyLabel", StringComparison.Ordinal) && x.Contains("ChangeHint", StringComparison.Ordinal));
+}
+
+var loaderCs = Path.Combine(repo, "OptiHub", "Views", "Controls", "OptiLoader.xaml.cs");
+Expect("OptiLoader control", File.Exists(loaderCs));
+if (File.Exists(loaderCs))
+{
+    var lc = File.ReadAllText(loaderCs);
+    Expect("OptiLoader IsActive", lc.Contains("IsActiveProperty", StringComparison.Ordinal));
+    Expect("OptiLoader spin storyboard", lc.Contains("OrbitRotate", StringComparison.Ordinal));
 }
 
 // Logo visual weight: measure real shipped PNG alpha ink.

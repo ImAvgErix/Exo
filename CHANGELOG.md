@@ -245,6 +245,9 @@
 
 
 
+
+## 1.9.72
+- Unique OptiLoader (orbiting triad + pulse) replaces stock ProgressRing on all module pages
 ## 1.9.71
 - Settings Support: Report issue first, Open logs second
 ## 1.9.70
