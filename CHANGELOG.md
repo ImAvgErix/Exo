@@ -1,3 +1,7 @@
+## 1.9.78
+
+- **Logo optical balance**: normalize all hub marks to a shared size — Steam solid disc scaled down (was dominating), AMD/NVIDIA brought up, equal padding on transparent canvas
+
 ## 1.9.77
 
 - **Home cards logo-only** — title removed (shown on the module page after open); larger mark
