@@ -120,11 +120,11 @@ public sealed class AssetPathToImageSourceConverter : IValueConverter
 
             return ImageCache.GetOrAdd(full, static path =>
             {
-                // Decode above display size for sharp logos on high-DPI (cards ~60px wells).
+                // Decode above display size for sharp icons on high-DPI (home cards ~96px).
                 var image = new BitmapImage
                 {
                     DecodePixelType = DecodePixelType.Logical,
-                    DecodePixelWidth = 160
+                    DecodePixelWidth = 256
                 };
                 image.UriSource = new Uri(path, UriKind.Absolute);
                 return image;

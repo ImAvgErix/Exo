@@ -1,17 +1,20 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Animation;
 
 namespace OptiHub.Views.Controls;
 
 /// <summary>
 /// OptiHub orbit-bead loader — accent bead orbits a soft track with ghost trail
-/// and a breathing core. Bind <see cref="IsActive"/> like a ProgressRing.
+/// and a breathing core. Uses a DispatcherTimer so motion keeps running even when
+/// a parent briefly sits at Opacity 0 (WinUI freezes Storyboards in that case).
 /// </summary>
 public sealed partial class OptiLoader : UserControl
 {
-    private Storyboard? _orbit;
+    private DispatcherTimer? _timer;
+    private double _angle;
+    private double _breathPhase;
+    private double _haloPhase;
     private bool _running;
 
     public static readonly DependencyProperty IsActiveProperty =
@@ -32,18 +35,22 @@ public sealed partial class OptiLoader : UserControl
         InitializeComponent();
         Loaded += (_, _) =>
         {
-            // Parent often goes Collapsed→Visible with IsActive already true (Settings update card).
-            EnsureStoryboard();
             if (IsActive) Start(force: true);
         };
         Unloaded += (_, _) => Stop();
-        // When a collapsed parent shows us again, restart if still active.
         RegisterPropertyChangedCallback(VisibilityProperty, (_, _) =>
         {
             if (Visibility == Visibility.Visible && IsActive)
                 Start(force: true);
             else if (Visibility != Visibility.Visible)
                 Stop();
+        });
+        // Opacity 0 parents used to freeze Storyboards; timer still needs a kick
+        // when we become fully opaque again.
+        RegisterPropertyChangedCallback(OpacityProperty, (_, _) =>
+        {
+            if (Opacity > 0.05 && IsActive && IsLoaded)
+                Start(force: false);
         });
     }
 
@@ -52,198 +59,50 @@ public sealed partial class OptiLoader : UserControl
         if (d is not OptiLoader loader) return;
         if (e.NewValue is true)
         {
-            // Defer one tick so first layout after Collapsed→Visible has real size.
             loader.DispatcherQueue?.TryEnqueue(() =>
             {
                 if (loader.IsActive) loader.Start(force: true);
             });
             loader.Start(force: true);
         }
-        else loader.Stop();
-    }
-
-    private void EnsureStoryboard()
-    {
-        if (_orbit is not null) return;
-
-        _orbit = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
-
-        // Lead bead: full 360° in ~1.05s (linear = constant orbital speed)
-        AddSpin(_orbit, OrbitRotate, durationMs: 1050, from: 0, to: 360);
-
-        // Trail + ghost lag behind (same period, start already offset via BeginTime + angle base)
-        // Use slightly longer period so they drift relative to the lead bead
-        AddSpin(_orbit, TrailRotate, durationMs: 1050, from: -42, to: 318);
-        AddSpin(_orbit, GhostRotate, durationMs: 1050, from: -78, to: 282);
-
-        // Core breath (X + Y)
-        AddBreathScale(_orbit, CoreScale, "ScaleX");
-        AddBreathScale(_orbit, CoreScale, "ScaleY");
-        AddBreathOpacity(_orbit, Core);
-
-        // Halo soft expand + fade
-        AddHaloScale(_orbit, HaloScale, "ScaleX");
-        AddHaloScale(_orbit, HaloScale, "ScaleY");
-        AddHaloOpacity(_orbit, Halo);
-    }
-
-    private static void AddBreathScale(Storyboard board, ScaleTransform target, string prop)
-    {
-        var anim = new DoubleAnimationUsingKeyFrames
+        else
         {
-            RepeatBehavior = RepeatBehavior.Forever,
-            EnableDependentAnimation = true
-        };
-        anim.KeyFrames.Add(new EasingDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero),
-            Value = 0.72,
-            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-        });
-        anim.KeyFrames.Add(new EasingDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(520)),
-            Value = 1.12,
-            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-        });
-        anim.KeyFrames.Add(new EasingDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1040)),
-            Value = 0.72,
-            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-        });
-        Storyboard.SetTarget(anim, target);
-        Storyboard.SetTargetProperty(anim, prop);
-        board.Children.Add(anim);
-    }
-
-    private static void AddBreathOpacity(Storyboard board, UIElement target)
-    {
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            RepeatBehavior = RepeatBehavior.Forever,
-            EnableDependentAnimation = true
-        };
-        anim.KeyFrames.Add(new EasingDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero),
-            Value = 0.55,
-            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-        });
-        anim.KeyFrames.Add(new EasingDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(520)),
-            Value = 1.0,
-            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-        });
-        anim.KeyFrames.Add(new EasingDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1040)),
-            Value = 0.55,
-            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-        });
-        Storyboard.SetTarget(anim, target);
-        Storyboard.SetTargetProperty(anim, "Opacity");
-        board.Children.Add(anim);
-    }
-
-    private static void AddHaloScale(Storyboard board, ScaleTransform target, string prop)
-    {
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            RepeatBehavior = RepeatBehavior.Forever,
-            EnableDependentAnimation = true
-        };
-        anim.KeyFrames.Add(new EasingDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero),
-            Value = 0.92,
-            EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut }
-        });
-        anim.KeyFrames.Add(new EasingDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(900)),
-            Value = 1.18,
-            EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut }
-        });
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(901)),
-            Value = 0.92
-        });
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1200)),
-            Value = 0.92
-        });
-        Storyboard.SetTarget(anim, target);
-        Storyboard.SetTargetProperty(anim, prop);
-        board.Children.Add(anim);
-    }
-
-    private static void AddHaloOpacity(Storyboard board, UIElement target)
-    {
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            RepeatBehavior = RepeatBehavior.Forever,
-            EnableDependentAnimation = true
-        };
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero),
-            Value = 0.14
-        });
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(900)),
-            Value = 0
-        });
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1200)),
-            Value = 0
-        });
-        Storyboard.SetTarget(anim, target);
-        Storyboard.SetTargetProperty(anim, "Opacity");
-        board.Children.Add(anim);
-    }
-
-    private static void AddSpin(Storyboard board, RotateTransform target, int durationMs, double from, double to)
-    {
-        var spin = new DoubleAnimation
-        {
-            From = from,
-            To = to,
-            Duration = new Duration(TimeSpan.FromMilliseconds(durationMs)),
-            RepeatBehavior = RepeatBehavior.Forever,
-            EnableDependentAnimation = true,
-            // Linear — orbital motion should not ease (avoids “sticky” bead look)
-            EasingFunction = null
-        };
-        Storyboard.SetTarget(spin, target);
-        Storyboard.SetTargetProperty(spin, "Angle");
-        board.Children.Add(spin);
+            loader.Stop();
+        }
     }
 
     private void Start(bool force = false)
     {
         if (_running && !force) return;
         if (!IsLoaded) return;
-        EnsureStoryboard();
-        // Don't force our own Visibility — parents (update card) own show/hide.
-        try
+
+        if (_timer is null)
         {
-            if (_running) _orbit?.Stop();
+            _timer = new DispatcherTimer
+            {
+                // ~60fps — smooth orbit without Storyboard composition issues
+                Interval = TimeSpan.FromMilliseconds(16)
+            };
+            _timer.Tick += OnTick;
         }
-        catch { }
-        _orbit?.Begin();
+
+        if (force || !_running)
+        {
+            _angle = 0;
+            _breathPhase = 0;
+            _haloPhase = 0;
+            ApplyFrame();
+        }
+
+        if (!_timer.IsEnabled)
+            _timer.Start();
         _running = true;
     }
 
     private void Stop()
     {
-        if (!_running && _orbit is null) return;
-        try { _orbit?.Stop(); } catch { }
+        try { _timer?.Stop(); } catch { }
+        _running = false;
         try
         {
             if (OrbitRotate is not null) OrbitRotate.Angle = 0;
@@ -255,6 +114,55 @@ public sealed partial class OptiLoader : UserControl
             if (Core is not null) Core.Opacity = 0.9;
         }
         catch { }
-        _running = false;
+    }
+
+    private void OnTick(object? sender, object e)
+    {
+        if (!IsActive || !IsLoaded)
+        {
+            Stop();
+            return;
+        }
+
+        // Full orbit ~1.05s at 60fps → ~5.7° per tick
+        _angle = (_angle + 5.7) % 360;
+        // Breath ~1.04s period
+        _breathPhase = (_breathPhase + 0.096) % (Math.PI * 2);
+        // Halo pulse ~1.2s
+        _haloPhase = (_haloPhase + 0.083) % (Math.PI * 2);
+
+        ApplyFrame();
+    }
+
+    private void ApplyFrame()
+    {
+        try
+        {
+            if (OrbitRotate is not null) OrbitRotate.Angle = _angle;
+            if (TrailRotate is not null) TrailRotate.Angle = _angle - 42;
+            if (GhostRotate is not null) GhostRotate.Angle = _angle - 78;
+
+            // 0.72 ↔ 1.12 breath
+            var breath = 0.92 + 0.20 * Math.Sin(_breathPhase);
+            if (CoreScale is not null)
+            {
+                CoreScale.ScaleX = breath;
+                CoreScale.ScaleY = breath;
+            }
+            if (Core is not null)
+                Core.Opacity = 0.55 + 0.45 * (0.5 + 0.5 * Math.Sin(_breathPhase));
+
+            // Soft halo expand + fade
+            var haloT = 0.5 + 0.5 * Math.Sin(_haloPhase);
+            if (HaloScale is not null)
+            {
+                var hs = 0.92 + 0.26 * haloT;
+                HaloScale.ScaleX = hs;
+                HaloScale.ScaleY = hs;
+            }
+            if (Halo is not null)
+                Halo.Opacity = 0.14 * (1.0 - haloT);
+        }
+        catch { }
     }
 }

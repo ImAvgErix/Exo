@@ -172,11 +172,12 @@ if (File.Exists(loaderCs))
 {
     var lc = File.ReadAllText(loaderCs);
     Expect("OptiLoader IsActive", lc.Contains("IsActiveProperty", StringComparison.Ordinal));
-    // Orbit-bead loader (not ProgressRing / triad / signal bars)
+    // Orbit-bead loader driven by DispatcherTimer (Storyboards freeze under Opacity 0 parents)
     Expect("OptiLoader orbit bead",
         lc.Contains("OrbitRotate", StringComparison.Ordinal) &&
         lc.Contains("TrailRotate", StringComparison.Ordinal) &&
         lc.Contains("CoreScale", StringComparison.Ordinal) &&
+        lc.Contains("DispatcherTimer", StringComparison.Ordinal) &&
         !lc.Contains("Bar0Scale", StringComparison.Ordinal));
 }
 

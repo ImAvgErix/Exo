@@ -1,3 +1,8 @@
+## 1.9.88
+
+- **Internet icon**: modern Fluent full Wi‑Fi (3 bars + dot) — complete, not cut off
+- **Windows icon**: official Windows 11 four-pane mark
+- **Update loader**: DispatcherTimer orbit (animates on Settings Updates card)
 ## 1.9.87
 
 - **Home cards**: larger tiles (340×190, 96px logos) — fills fixed 1180×760 frame
