@@ -1,3 +1,9 @@
+## 1.9.54
+
+- **Verified with real window screenshots** (home + Discord)
+- Full-width feature rows (no half-empty card / dead zone)
+- Home 2-col module grid; no nested floating card shells
+- Compact footer only when needed (no reserved empty status blocks)
 ## 1.9.53
 
 - **Stable UI**: no page transitions, no hover lift, no entrance fades
@@ -448,6 +454,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

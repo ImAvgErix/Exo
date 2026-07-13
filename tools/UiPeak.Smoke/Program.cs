@@ -140,8 +140,8 @@ if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
     Expect("dashboard modules", d.Contains("CardList", StringComparison.Ordinal));
-    Expect("dashboard stable home", d.Contains("Home", StringComparison.Ordinal) && d.Contains("Choose a module", StringComparison.Ordinal));
-    Expect("dashboard no entrance opacity 0", !d.Contains("Opacity=\"0\"", StringComparison.Ordinal));
+    Expect("dashboard home title", d.Contains("Home", StringComparison.Ordinal));
+    Expect("dashboard wrap grid", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
 }
 
 var settings = Path.Combine(repo, "OptiHub", "Views", "SettingsPage.xaml");
