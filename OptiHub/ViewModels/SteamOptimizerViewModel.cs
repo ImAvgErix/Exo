@@ -71,16 +71,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
 
-        var action = IsApplied ? "reapply" : "run";
-        var warning =
-            "Closes Steam. Launcher, webhelper, cache, priority, shortcuts.\n\n" +
-            "Needs Administrator. Use Repair Steam to undo.";
-
-        var ok = ConfirmAsync is not null
-            ? await ConfirmAsync($"Apply Steam ({action})", warning)
-            : true;
-        if (!ok) return;
-
+        // No confirm on Apply — just run (Repair still confirms).
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;

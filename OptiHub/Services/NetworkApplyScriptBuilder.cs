@@ -332,49 +332,107 @@ try {
         sb.AppendLine("  } catch {}");
         sb.AppendLine("}");
 
-        // Prefer Ethernet 100% when linked with a real IPv4 (gaming lowest-latency path).
-        // Metric must stick: disable AutomaticMetric first, then set InterfaceMetric.
-        // Restart-NetAdapter often re-enables automatic metric — re-stamp after restart.
-        sb.AppendLine("function Set-EthMetrics {");
-        sb.AppendLine("  $ethReady = @()");
+        // --- Adapter bindings (best-practice gaming stack) ---
+        // Keep QoS Packet Scheduler (ms_pacer) so NonBestEffortLimit policy applies.
+        // Disable LLTD Mapper/Responder — background discovery chatter, not needed for gaming.
+        // Do NOT disable IPv6 / Client for Microsoft Networks (breaks legitimate stack).
+        sb.AppendLine("""
+function Set-AdapterBindings {
+  $ads = @(Get-NetAdapter -Physical -EA SilentlyContinue)
+  foreach ($a in $ads) {
+    $n = $a.Name
+    # Ensure QoS Packet Scheduler stays on
+    try { Enable-NetAdapterBinding -Name $n -ComponentID ms_pacer -EA SilentlyContinue } catch {}
+    # Link-Layer Topology Discovery — off for leaner host
+    try { Disable-NetAdapterBinding -Name $n -ComponentID ms_lltdio -EA SilentlyContinue } catch {}
+    try { Disable-NetAdapterBinding -Name $n -ComponentID ms_rspndr -EA SilentlyContinue } catch {}
+    Log "[bind] $n QoS=on LLTD=off"
+  }
+}
+# Delivery Optimization — stop peer upload stealing bandwidth on gaming PCs
+try {
+  New-Item 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' -Force | Out-Null
+  Set-Dword 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode' 0
+  Log '[DO] DownloadMode=0 (no peer sharing)'
+} catch { Log '[DO] skipped' }
+# Ensure QoS / Packet Scheduler service can run
+try { Set-Service -Name Psched -StartupType Automatic -EA SilentlyContinue } catch {}
+try { Start-Service -Name Psched -EA SilentlyContinue } catch {}
+# Disable Teredo / ISATAP tunnels (not used for gaming; can add background noise)
+try { netsh interface teredo set state disabled | Out-Null } catch {}
+try { netsh interface isatap set state disabled | Out-Null } catch {}
+try { netsh interface 6to4 set state disabled | Out-Null } catch {}
+Log '[tunnel] teredo/isatap/6to4 disabled'
+Set-AdapterBindings
+""");
+
+        // Prefer Ethernet 100% when linked. Metric must stick after Restart-NetAdapter:
+        // re-stamp used to run before DHCP returned → "No usable Ethernet" → metric stayed ~20 auto.
+        // Set metric on ANY Up Ethernet (IP not required); prefer adapters that already have IPv4.
+        sb.AppendLine("""
+function Set-EthMetrics {
+  $ads = @(Get-NetAdapter -Physical -EA SilentlyContinue)
+  $ethUp = @($ads | Where-Object { -not (Test-IsWifiAdapter $_) -and $_.Status -eq 'Up' })
+  if ($ethUp.Count -eq 0) {
+    Log '[OptiHub-NET] No Up Ethernet adapters for metric'
+    return $false
+  }
+  # Rank: real IPv4 first, then link speed
+  $ranked = foreach ($e in $ethUp) {
+    $hasIp = @(Get-NetIPAddress -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue |
+      Where-Object { $_.IPAddress -notlike '169.254.*' }).Count -gt 0
+    $spd = 0L
+    try { $spd = [int64]$e.ReceiveLinkSpeed } catch { $spd = 0 }
+    [pscustomobject]@{ A=$e; HasIp=$hasIp; Spd=$spd }
+  }
+  $ordered = @($ranked | Sort-Object @{Expression='HasIp';Descending=$true}, @{Expression='Spd';Descending=$true} | ForEach-Object { $_.A })
+  $i = 0
+  $okAny = $false
+  foreach ($e in $ordered) {
+    if ($i -eq 0) { $metric = 1 } else { $metric = 5 + $i }
+    foreach ($af in @('IPv4','IPv6')) {
+      try {
+        Set-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily $af -AutomaticMetric Disabled -EA SilentlyContinue
+        Set-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily $af -InterfaceMetric $metric -EA SilentlyContinue
+      } catch {}
+    }
+    # netsh belt-and-suspenders (some drivers ignore Set-NetIPInterface until link settles)
+    try { netsh interface ipv4 set interface interface=$($e.ifIndex) metric=$metric | Out-Null } catch {}
+    try { netsh interface ipv6 set interface interface=$($e.ifIndex) metric=$metric | Out-Null } catch {}
+    $live = $null; $auto = $null
+    try {
+      $mi = Get-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue
+      if ($mi) { $live = [int]$mi.InterfaceMetric; $auto = [string]$mi.AutomaticMetric }
+    } catch {}
+    Log "[NIC] Ethernet metric $($e.Name) => want $metric live=$live auto=$auto"
+    if ($live -eq $metric) { $okAny = $true }
+    $i++
+  }
+  return $okAny
+}
+""");
+        sb.AppendLine("$ethReadyOk = Set-EthMetrics");
+        sb.AppendLine("if (" + preferEth + " -eq 1) {");
+        sb.AppendLine("  # Prefer eth when any eth is Up with IP; still raise Wi-Fi metric if eth only linked");
         sb.AppendLine("  $ads = @(Get-NetAdapter -Physical -EA SilentlyContinue)");
+        sb.AppendLine("  $ethHasIp = $false");
         sb.AppendLine("  foreach ($e in @($ads | Where-Object { -not (Test-IsWifiAdapter $_) -and $_.Status -eq 'Up' })) {");
         sb.AppendLine("    $ip = @(Get-NetIPAddress -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue | Where-Object { $_.IPAddress -notlike '169.254.*' })");
-        sb.AppendLine("    if ($ip.Count -gt 0) { $ethReady += $e }");
+        sb.AppendLine("    if ($ip.Count -gt 0) { $ethHasIp = $true; break }");
         sb.AppendLine("  }");
-        sb.AppendLine("  if ($ethReady.Count -eq 0) {");
-        sb.AppendLine("    Log '[OptiHub-NET] No usable Ethernet (up+IPv4) - keeping Wi-Fi'");
-        sb.AppendLine("    return $false");
-        sb.AppendLine("  }");
-        sb.AppendLine("  $ordered = @($ethReady | Sort-Object { try { [int64]$_.ReceiveLinkSpeed } catch { 0 } } -Descending)");
-        sb.AppendLine("  $i = 0");
-        sb.AppendLine("  foreach ($e in $ordered) {");
-        sb.AppendLine("    if ($i -eq 0) { $metric = 1 } else { $metric = 5 + $i }");
-        sb.AppendLine("    foreach ($af in @('IPv4','IPv6')) {");
+        sb.AppendLine("  if ($ethHasIp) {");
+        sb.AppendLine("    Log '[OptiHub-NET] Ethernet ready - preferring Ethernet (lowest latency)'");
+        sb.AppendLine("    foreach ($w in @($ads | Where-Object { Test-IsWifiAdapter $_ })) {");
         sb.AppendLine("      try {");
-        sb.AppendLine("        Set-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily $af -AutomaticMetric Disabled -EA SilentlyContinue");
-        sb.AppendLine("        Set-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily $af -InterfaceMetric $metric -EA SilentlyContinue");
-        sb.AppendLine("      } catch {}");
+        sb.AppendLine("        if ($w.Status -ne 'Disabled') {");
+        sb.AppendLine("          try { Set-NetIPInterface -InterfaceIndex $w.ifIndex -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric 75 -EA SilentlyContinue } catch {}");
+        sb.AppendLine("          Disable-NetAdapter -Name $w.Name -Confirm:$false -EA SilentlyContinue");
+        sb.AppendLine("          Log \"[NIC] Wi-Fi disabled: $($w.Name)\"");
+        sb.AppendLine("        }");
+        sb.AppendLine("      } catch { Log \"[NIC] could not disable $($w.Name)\" }");
         sb.AppendLine("    }");
-        sb.AppendLine("    $live = $null");
-        sb.AppendLine("    try { $live = (Get-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue).InterfaceMetric } catch {}");
-        sb.AppendLine("    Log \"[NIC] Ethernet metric $($e.Name) => want $metric live=$live autoOff\"");
-        sb.AppendLine("    $i++");
-        sb.AppendLine("  }");
-        sb.AppendLine("  return $true");
-        sb.AppendLine("}");
-        sb.AppendLine("$ethReadyOk = Set-EthMetrics");
-        sb.AppendLine("if ($ethReadyOk -and (" + preferEth + " -eq 1)) {");
-        sb.AppendLine("  Log '[OptiHub-NET] Ethernet ready - preferring Ethernet (lowest latency)'");
-        sb.AppendLine("  $adapters = @(Get-NetAdapter -Physical -EA SilentlyContinue)");
-        sb.AppendLine("  foreach ($w in @($adapters | Where-Object { Test-IsWifiAdapter $_ })) {");
-        sb.AppendLine("    try {");
-        sb.AppendLine("      if ($w.Status -ne 'Disabled') {");
-        sb.AppendLine("        try { Set-NetIPInterface -InterfaceIndex $w.ifIndex -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric 75 -EA SilentlyContinue } catch {}");
-        sb.AppendLine("        Disable-NetAdapter -Name $w.Name -Confirm:$false -EA SilentlyContinue");
-        sb.AppendLine("        Log \"[NIC] Wi-Fi disabled: $($w.Name)\"");
-        sb.AppendLine("      }");
-        sb.AppendLine("    } catch { Log \"[NIC] could not disable $($w.Name)\" }");
+        sb.AppendLine("  } else {");
+        sb.AppendLine("    Log '[OptiHub-NET] Ethernet Up but no IPv4 yet - not disabling Wi-Fi'");
         sb.AppendLine("  }");
         sb.AppendLine("}");
 
@@ -386,12 +444,20 @@ try {
         sb.AppendLine("  foreach ($a in @($adapters | Where-Object { $_.Status -eq 'Up' -and -not (Test-IsWifiAdapter $_) })) {");
         sb.AppendLine("    try { Restart-NetAdapter -Name $a.Name -Confirm:$false -EA SilentlyContinue; Log \"[NIC] restarted (Ethernet) $($a.Name)\" } catch {}");
         sb.AppendLine("  }");
-        sb.AppendLine("  Start-Sleep -Seconds 3");
-        // Re-stamp metrics — adapter restart reverts AutomaticMetric on many drivers
-        sb.AppendLine("  Log '[NIC] Re-stamping Ethernet metrics after restart...'");
-        sb.AppendLine("  [void](Set-EthMetrics)");
+        // Wait for link + re-stamp metrics repeatedly (DHCP lag was wiping metric=1)
+        sb.AppendLine("  Log '[NIC] Waiting for Ethernet after restart, then re-stamping metrics...'");
+        sb.AppendLine("  $metricOk = $false");
+        sb.AppendLine("  for ($t = 0; $t -lt 20; $t++) {");
+        sb.AppendLine("    Start-Sleep -Seconds 1");
+        sb.AppendLine("    $metricOk = [bool](Set-EthMetrics)");
+        sb.AppendLine("    if ($metricOk) { Log \"[NIC] Metric verified after $($t+1)s\"; break }");
+        sb.AppendLine("  }");
+        sb.AppendLine("  if (-not $metricOk) { Log '[NIC] WARN metric not verified after restart wait — last Set-EthMetrics attempt done' }");
         sb.AppendLine("} else {");
         sb.AppendLine("  Log '[OptiHub-NET] Ethernet restart skipped (user declined)'");
+        sb.AppendLine("  # Still re-stamp once more so AutomaticMetric cannot race");
+        sb.AppendLine("  Start-Sleep -Milliseconds 400");
+        sb.AppendLine("  [void](Set-EthMetrics)");
         sb.AppendLine("}");
         sb.AppendLine("Log '[OptiHub-NET] DONE preset=" + preset + "'");
         sb.AppendLine("exit 0");

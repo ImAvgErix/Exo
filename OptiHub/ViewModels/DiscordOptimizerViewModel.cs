@@ -98,16 +98,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
 
-        var action = IsApplied ? "reapply" : "run";
-        var warning =
-            "Closes Discord. Debloat, cache clean, kernel RAM, startup off.\n\n" +
-            "Needs Administrator. Use Repair Discord to undo.";
-
-        var ok = ConfirmAsync is not null
-            ? await ConfirmAsync($"Apply Discord ({action})", warning)
-            : true;
-        if (!ok) return;
-
+        // No confirm on Apply — just run (Repair still confirms).
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;

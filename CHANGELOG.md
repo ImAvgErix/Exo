@@ -1,3 +1,8 @@
+## 1.9.82
+
+- **Internet**: open detect shows Ethernet vs Wi‑Fi path; single **Apply** → latency/download choice only (no second confirm); Ethernet metric re-stamp after restart fixed; QoS/LLTD/DO/tunnels applied
+- **Apply on Discord / Steam / NVIDIA**: no confirm dialog — runs immediately (Repair still confirms)
+
 ## 1.9.81
 
 - **In-app update UI**: branded confirm + install dialog with OptiLoader (card loader) and download progress bar; Settings shows the same loader/bar while checking; launch auto-update uses the same chrome

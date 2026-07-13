@@ -156,6 +156,11 @@ Expect("scripts force responsiveness 10",
     latScript.Contains("SystemResponsiveness' 10", StringComparison.Ordinal));
 Expect("live band re-probe present", latScript.Contains("wantBand6Live", StringComparison.Ordinal));
 Expect("disable wifi when eth ready", latScript.Contains("Disable-NetAdapter", StringComparison.Ordinal));
+Expect("eth metric restamp after restart", latScript.Contains("Re-stamping", StringComparison.OrdinalIgnoreCase)
+    || latScript.Contains("Set-EthMetrics", StringComparison.Ordinal));
+Expect("LLTD bindings off", latScript.Contains("ms_lltdio", StringComparison.OrdinalIgnoreCase));
+Expect("QoS pacer on", latScript.Contains("ms_pacer", StringComparison.OrdinalIgnoreCase));
+Expect("DO download mode 0", latScript.Contains("DODownloadMode", StringComparison.Ordinal));
 Expect("no wifi Restart-NetAdapter force",
     !System.Text.RegularExpressions.Regex.IsMatch(latScript, @"Restart-NetAdapter.*Wi-?Fi",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase));

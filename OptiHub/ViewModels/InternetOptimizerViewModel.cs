@@ -24,8 +24,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
     public ObservableCollection<FeatureRowViewModel> Rows { get; } = new();
 
-    /// <summary>Raised when UI should confirm apply options (Ethernet-first + restart).</summary>
-    public event Func<NetworkSnapshot, NetworkPreset, Task<NetworkApplyOptions?>>? RequestApplyConfirm;
+    /// <summary>Only choice prompt: Lowest latency vs Highest download.</summary>
+    public event Func<Task<NetworkPreset?>>? RequestPresetChoice;
 
     [ObservableProperty] private string _headerStatus = "Checking...";
     [ObservableProperty] private bool _isLoading = true;
@@ -59,8 +59,11 @@ public partial class InternetOptimizerViewModel : ObservableObject
                 });
             }
 
+            // Opening detect: always surface Ethernet vs Wi‑Fi path.
             if (!string.IsNullOrWhiteSpace(snap.Detail) && !snap.ProbeOk)
                 SetMessage(snap.Detail, success: false);
+            else
+                SetMessage(BuildPathHint(snap), success: true);
         }
         catch (Exception ex)
         {
@@ -73,46 +76,61 @@ public partial class InternetOptimizerViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Single Apply — only prompts for latency vs download, then runs with smart defaults
+    /// (Ethernet-first + restart when Ethernet is present). No second confirm box.
+    /// </summary>
     [RelayCommand]
-    private async Task ApplyLatencyAsync() => await ApplyAsync(NetworkPreset.LowestLatency);
-
-    [RelayCommand]
-    private async Task ApplyThroughputAsync() => await ApplyAsync(NetworkPreset.HighestThroughput);
-
-    private async Task ApplyAsync(NetworkPreset preset)
+    private async Task ApplyAsync()
     {
         if (IsBusy) return;
+
+        // Fresh detect so path (Ethernet vs Wi‑Fi) is current before apply.
+        ProgressStatus = "Detecting path...";
+        NetworkSnapshot snap;
+        try
+        {
+            snap = await _services.Network.ProbeAsync();
+            _lastSnap = snap;
+            HeaderStatus = BuildStatus(snap);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, success: false);
+            ProgressStatus = string.Empty;
+            return;
+        }
+
+        NetworkPreset? preset = NetworkPreset.LowestLatency;
+        if (RequestPresetChoice is not null)
+        {
+            preset = await RequestPresetChoice.Invoke();
+            if (preset is null)
+            {
+                SetMessage("Apply cancelled.", success: false);
+                ProgressStatus = string.Empty;
+                return;
+            }
+        }
+
         IsBusy = true;
-        ProgressStatus = "Detecting...";
         HasMessage = false;
         try
         {
-            var snap = _lastSnap ?? await _services.Network.ProbeAsync();
-            _lastSnap = snap;
-
-            NetworkApplyOptions options;
-            if (RequestApplyConfirm is not null)
+            // Smart defaults from detect — no extra confirm.
+            var options = new NetworkApplyOptions
             {
-                var chosen = await RequestApplyConfirm.Invoke(snap, preset);
-                if (chosen is null)
-                {
-                    SetMessage("Apply cancelled.", success: false);
-                    return;
-                }
-                options = chosen;
-            }
-            else
-            {
-                options = new NetworkApplyOptions
-                {
-                    PreferEthernetDisableWifi = true,
-                    RestartEthernet = snap.Media.EthernetUp || snap.Media.EthernetAvailable
-                };
-            }
+                PreferEthernetDisableWifi = true,
+                RestartEthernet = snap.Media.EthernetUp || snap.Media.EthernetAvailable
+            };
 
-            ProgressStatus = "Applying...";
+            ProgressStatus = snap.Media.EthernetInUse
+                ? "Applying Ethernet stack..."
+                : snap.Media.WifiUp
+                    ? "Applying Wi‑Fi stack..."
+                    : "Applying...";
             var progress = new Progress<string>(s => ProgressStatus = s);
-            var (ok, msg) = await _services.Network.ApplyPresetAsync(preset, options, progress);
+            var (ok, msg) = await _services.Network.ApplyPresetAsync(preset.Value, options, progress);
             SetMessage(msg, ok);
             await RefreshAsync();
         }
@@ -134,7 +152,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
         if (!snap.ProbeOk) return "Probe incomplete";
 
         var media = snap.Media.EthernetInUse
-            ? "Ethernet preferred"
+            ? "Ethernet path"
             : snap.Media.EthernetUp
                 ? "Ethernet (no IP yet)"
                 : snap.Media.WifiUp
@@ -153,6 +171,23 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
         var allOk = snap.Features.Count > 0 && snap.Features.All(f => f.IsOk);
         return allOk ? $"{preset} · {media}" : $"{preset} · check rows";
+    }
+
+    /// <summary>Plain-language path summary after open detect.</summary>
+    private static string BuildPathHint(NetworkSnapshot snap)
+    {
+        var m = snap.Media;
+        if (m.EthernetInUse)
+            return m.WifiAvailable
+                ? "Detected Ethernet (usable). Apply will prefer Ethernet and can disable Wi‑Fi."
+                : "Detected Ethernet. Apply will tune the wired stack.";
+        if (m.EthernetUp && !m.EthernetInUse)
+            return "Ethernet is linked but has no IPv4 yet — Wi‑Fi stays available until Ethernet gets an address.";
+        if (m.WifiUp)
+            return $"Detected Wi‑Fi only. Apply will tune Wi‑Fi (prefer {m.PreferredBandTarget}).";
+        if (m.EthernetAvailable || m.WifiAvailable)
+            return "Adapters found but none fully up — connect, then Refresh.";
+        return "No active Ethernet or Wi‑Fi adapter detected.";
     }
 
     private void SetMessage(string text, bool success)

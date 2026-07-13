@@ -70,18 +70,12 @@
                 <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}"
                            TextAlignment="Center"
                            Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <Grid ColumnSpacing="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource OptiPrimaryButton}" Content="Lowest latency" Click="Latency_Click"
-                            HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Highest download" Click="Throughput_Click"
-                            HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                </Grid>
+                <Button Style="{StaticResource OptiPrimaryButton}"
+                        Content="Apply"
+                        Click="Apply_Click"
+                        HorizontalAlignment="Stretch"
+                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                        AutomationProperties.Name="Apply internet stack" />
                 <Button Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click" HorizontalAlignment="Stretch"
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
             </StackPanel>

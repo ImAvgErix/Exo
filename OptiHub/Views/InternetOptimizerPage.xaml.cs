@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using OptiHub.Models;
 using OptiHub.ViewModels;
@@ -15,100 +16,77 @@ public sealed partial class InternetOptimizerPage : Page
         ViewModel = new InternetOptimizerViewModel(App.Services);
         InitializeComponent();
         DataContext = ViewModel;
-        ViewModel.RequestApplyConfirm += OnRequestApplyConfirmAsync;
+        // Only prompt that remains: latency vs download. No second confirm.
+        ViewModel.RequestPresetChoice += OnRequestPresetChoiceAsync;
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        // Detect Ethernet vs Wi‑Fi path as soon as the page opens.
         await ViewModel.InitializeAsync();
     }
 
-    private async Task<NetworkApplyOptions?> OnRequestApplyConfirmAsync(
-        NetworkSnapshot snap, NetworkPreset preset)
+    /// <summary>Only choice: lowest latency vs highest download — then apply runs immediately.</summary>
+    private async Task<NetworkPreset?> OnRequestPresetChoiceAsync()
     {
-        var media = snap.Media;
-        var presetLabel = preset == NetworkPreset.LowestLatency
-            ? "Lowest latency"
-            : "Highest download";
+        var path = ViewModel.HeaderStatus;
+        var body = new StackPanel { Spacing = 10, MaxWidth = 400 };
+        body.Children.Add(new TextBlock
+        {
+            Text = "Which path do you want?",
+            FontSize = 15,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap
+        });
+        body.Children.Add(new TextBlock
+        {
+            Text =
+                "Lowest latency — gaming / competitive (Nagle off, RSC/LSO off, tight NIC).\n\n" +
+                "Highest download — bulk transfers (auto-tune experimental, LSO/RSC on).\n\n" +
+                $"Detected: {path}",
+            FontSize = 13,
+            TextWrapping = TextWrapping.Wrap,
+            Opacity = 0.9,
+            LineHeight = 20
+        });
 
-        var lines = new List<string>
-        {
-            $"Preset: {presetLabel}",
-            "",
-            "Smart path detection:",
-            $"  {media.PolicyLine}"
-        };
-
-        if (media.EthernetInUse && media.WifiAvailable)
-        {
-            lines.Add("");
-            lines.Add("Usable Ethernet detected (linked + IP). Wi‑Fi will be disabled — Ethernet is preferred for lowest latency.");
-        }
-        else if (media.EthernetUp && !media.EthernetInUse)
-        {
-            lines.Add("");
-            lines.Add("Ethernet is linked but has no usable IPv4 yet — Wi‑Fi stays on until Ethernet gets an address.");
-        }
-        else if (media.WifiUp)
-        {
-            lines.Add("");
-            lines.Add($"Wi‑Fi only. Preferred band: {media.PreferredBandTarget} (from your radio/driver).");
-            if (media.ConnectedRadioHint is not "—")
-                lines.Add($"  Connected radio hint: {media.ConnectedRadioHint}");
-        }
-
-        lines.Add("");
-        if (media.EthernetUp || media.EthernetAvailable)
-        {
-            lines.Add("Some Ethernet driver properties need an adapter restart to fully apply.");
-            lines.Add("Restart Ethernet adapters after apply?");
-        }
-        else
-        {
-            lines.Add("No Ethernet restart needed (Wi‑Fi is not force-restarted).");
-            lines.Add("Continue with apply?");
-        }
-
-        var hasEth = media.EthernetUp || media.EthernetAvailable;
         var dialog = new ContentDialog
         {
             Title = "Apply network stack",
-            Content = new ScrollViewer
-            {
-                Content = new TextBlock
-                {
-                    Text = string.Join(Environment.NewLine, lines),
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 13
-                },
-                MaxHeight = 320
-            },
-            PrimaryButtonText = hasEth ? "Apply + restart Ethernet" : "Apply",
+            Content = body,
+            PrimaryButtonText = "Lowest latency",
+            SecondaryButtonText = "Highest download",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = XamlRoot
+            XamlRoot = XamlRoot,
+            CornerRadius = new CornerRadius(16)
         };
-        if (hasEth)
-            dialog.SecondaryButtonText = "Apply without restart";
+        try
+        {
+            if (Application.Current.Resources.TryGetValue("OptiCardFillBrush", out var bg) && bg is Brush b)
+                dialog.Background = b;
+            if (Application.Current.Resources.TryGetValue("OptiPrimaryButton", out var ps) && ps is Style primary)
+                dialog.PrimaryButtonStyle = primary;
+            if (Application.Current.Resources.TryGetValue("OptiQuietButton", out var qs) && qs is Style quiet)
+            {
+                dialog.SecondaryButtonStyle = quiet;
+                dialog.CloseButtonStyle = quiet;
+            }
+        }
+        catch { }
 
         var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.None)
-            return null;
-
-        return new NetworkApplyOptions
+        return result switch
         {
-            PreferEthernetDisableWifi = true,
-            // Only restart when user picked primary and Ethernet exists
-            RestartEthernet = result == ContentDialogResult.Primary && hasEth
+            ContentDialogResult.Primary => NetworkPreset.LowestLatency,
+            ContentDialogResult.Secondary => NetworkPreset.HighestThroughput,
+            _ => null
         };
     }
 
-    private void Latency_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.ApplyLatencyCommand.Execute(null);
-
-    private void Throughput_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.ApplyThroughputCommand.Execute(null);
+    private void Apply_Click(object sender, RoutedEventArgs e) =>
+        ViewModel.ApplyCommand.Execute(null);
 
     private void Refresh_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RefreshCommand.Execute(null);

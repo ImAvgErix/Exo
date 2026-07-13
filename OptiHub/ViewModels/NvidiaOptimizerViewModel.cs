@@ -68,17 +68,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
 
-        var action = IsApplied ? "reapply" : "apply";
-        var pack = UseGsync ? "G-SYNC pack" : "Max FPS / latency pack";
-        var warning =
-            $"Driver (if needed) · 3D profiles · strip App/CPL · {pack} · display policy.\n\n" +
-            "Needs Administrator. May flicker displays; restart if prompted.";
-
-        var ok = ConfirmAsync is not null
-            ? await ConfirmAsync($"Apply NVIDIA ({action})", warning)
-            : true;
-        if (!ok) return;
-
+        // No confirm on Apply — just run (Repair still confirms).
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;

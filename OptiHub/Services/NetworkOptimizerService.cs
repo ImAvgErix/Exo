@@ -252,11 +252,13 @@ public sealed class NetworkOptimizerService
             features.Add(Row("Path policy", mediaProfile.PolicyLine, true));
             if (mediaProfile.EthernetInUse)
             {
-                // Applied path sets primary Ethernet to 1 (secondaries 5+). Windows automatic
-                // default is often ~20–25 — that is a real gap until apply re-stamps after restart.
+                // Applied path sets primary Ethernet to 1 (secondaries 5+).
+                // AutomaticMetric Enabled with ~20–25 means apply did not stick (common after restart race).
                 var metricOk = mediaProfile.EthernetMetric is null or <= 5;
                 var metricStatus = mediaProfile.EthernetMetric is int m
-                    ? (metricOk ? m.ToString() : $"{m} (want ≤5 · re-apply)")
+                    ? (metricOk
+                        ? m.ToString()
+                        : $"{m} (want 1 · re-apply)")
                     : "—";
                 features.Add(Row("Ethernet metric", metricStatus, metricOk));
                 if (mediaProfile.WifiAvailable)

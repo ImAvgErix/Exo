@@ -147,6 +147,19 @@ foreach (var page in new[]
     Expect(page + " unique loader", x.Contains("OptiLoader", StringComparison.Ordinal) && !x.Contains("<ProgressRing", StringComparison.Ordinal));
     if (page.Contains("NvidiaPanel", StringComparison.Ordinal))
         Expect(page + " apply label", x.Contains("ApplyLabel", StringComparison.Ordinal) && x.Contains("ChangeHint", StringComparison.Ordinal));
+    if (page.StartsWith("Internet", StringComparison.Ordinal))
+    {
+        Expect("internet single Apply", x.Contains("Content=\"Apply\"", StringComparison.Ordinal)
+            && !x.Contains("Lowest latency", StringComparison.Ordinal));
+        var ics = Path.Combine(repo, "OptiHub", "Views", "InternetOptimizerPage.xaml.cs");
+        if (File.Exists(ics))
+        {
+            var ic = File.ReadAllText(ics);
+            Expect("internet preset prompt only",
+                ic.Contains("RequestPresetChoice", StringComparison.Ordinal)
+                && !ic.Contains("RequestApplyConfirm", StringComparison.Ordinal));
+        }
+    }
 }
 
 var loaderCs = Path.Combine(repo, "OptiHub", "Views", "Controls", "OptiLoader.xaml.cs");
