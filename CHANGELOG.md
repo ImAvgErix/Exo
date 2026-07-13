@@ -1,3 +1,7 @@
+## 1.9.41
+
+- **NVIDIA Panel**: post-apply refresh no longer skipped while IsBusy (`RefreshCoreAsync(force: true)`)
+- Launch/UI smoke asserts force-refresh path after apply
 ## 1.9.40
 
 - **Resizable shell**: maximize + edge resize; removed fixed chrome re-lock and maximize block
@@ -370,6 +374,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

@@ -146,6 +146,21 @@ if (File.Exists(panelXaml))
 var panelLogic = Path.Combine(repo, "OptiHub", "Services", "NvidiaPanelLogic.cs");
 Expect("NvidiaPanelLogic exists", File.Exists(panelLogic));
 
+// Post-apply refresh must not be a no-op while IsBusy (RefreshCoreAsync force:true)
+var panelVm = Path.Combine(repo, "OptiHub", "ViewModels", "NvidiaPanelViewModel.cs");
+if (File.Exists(panelVm))
+{
+    var pvm = File.ReadAllText(panelVm);
+    Expect("panel has RefreshCoreAsync", pvm.Contains("RefreshCoreAsync", StringComparison.Ordinal));
+    Expect("panel force refresh after apply", pvm.Contains("RefreshCoreAsync(force: true)", StringComparison.Ordinal));
+    // Guard on user refresh only — must not early-return without force path
+    Expect("busy guard allows force",
+        pvm.Contains("if (IsBusy && !force)", StringComparison.Ordinal) ||
+        pvm.Contains("if (IsBusy && !force) return", StringComparison.Ordinal));
+    Expect("no bare IsBusy return alone as only refresh path",
+        !System.Text.RegularExpressions.Regex.IsMatch(pvm, @"public async Task RefreshAsync\(\)\s*\{\s*if \(IsBusy\) return;"));
+}
+
 Log($"=== SUMMARY failed={failed} ===");
 Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
 File.WriteAllLines(logPath, lines);

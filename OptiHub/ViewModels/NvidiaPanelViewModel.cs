@@ -35,10 +35,16 @@ public partial class NvidiaPanelViewModel : ObservableObject
     [ObservableProperty] private string _applyAllLabel = "Apply peak defaults";
     [ObservableProperty] private bool _canApplyAll;
 
+    /// <summary>User-initiated refresh — blocked while an apply is in flight.</summary>
     [RelayCommand]
-    public async Task RefreshAsync()
+    public Task RefreshAsync() => RefreshCoreAsync(force: false);
+
+    /// <summary>
+    /// Reload live display/policy snapshot. When force=true (post-apply), runs even if IsBusy.
+    /// </summary>
+    private async Task RefreshCoreAsync(bool force)
     {
-        if (IsBusy) return;
+        if (IsBusy && !force) return;
         IsLoading = true;
         try
         {
@@ -74,7 +80,6 @@ public partial class NvidiaPanelViewModel : ObservableObject
             }
 
             var missing = Rows.Count(r => !r.IsApplied);
-            var fixable = Rows.Count(r => !r.IsApplied && r.CanApplyFromPanel);
             HeaderStatus = HasDisplays
                 ? $"{Displays.Count} display{(Displays.Count == 1 ? "" : "s")}"
                 : (missing == 0 ? "Policy OK" : $"{missing} policy gaps");
@@ -149,7 +154,8 @@ public partial class NvidiaPanelViewModel : ObservableObject
 
             ProgressPercent = 100;
             SetMessage(string.Join(" ", messages.Where(m => !string.IsNullOrWhiteSpace(m))), allOk);
-            await RefreshAsync();
+            // Must force: IsBusy is still true until finally.
+            await RefreshCoreAsync(force: true);
         }
         catch (Exception ex)
         {
@@ -164,7 +170,6 @@ public partial class NvidiaPanelViewModel : ObservableObject
         }
     }
 
-    // Compat for old Set depth button if present
     [RelayCommand]
     public Task ApplyColorDepthAsync(NvidiaDisplayColorRowViewModel? row) =>
         ApplyDisplaySettingsAsync(row);
@@ -194,7 +199,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
         {
             var (ok, msg) = await _services.NvidiaPanel.ClearTrayIconsAsync();
             SetMessage(msg, ok);
-            await RefreshAsync();
+            await RefreshCoreAsync(force: true);
         }
         finally
         {
@@ -236,7 +241,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
             SetMessage(ok
                 ? "Peak defaults applied (Full RGB, max primary Hz, GPU no-scaling)."
                 : message, ok);
-            await RefreshAsync();
+            await RefreshCoreAsync(force: true);
         }
         catch (Exception ex)
         {
