@@ -63,8 +63,12 @@ if (File.Exists(dash))
     Expect("product card grid", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("polished 1.8 cards", d.Contains("Width=\"300\"", StringComparison.Ordinal) && d.Contains("Height=\"188\"", StringComparison.Ordinal));
     Expect("hero entrance panel", d.Contains("HeroPanel", StringComparison.Ordinal));
-    Expect("equal logo well", d.Contains("Width=\"56\"", StringComparison.Ordinal) && d.Contains("Height=\"56\"", StringComparison.Ordinal));
+    Expect("equal logo well", d.Contains("Width=\"72\"", StringComparison.Ordinal) && d.Contains("Height=\"72\"", StringComparison.Ordinal));
     Expect("stretch uniform logos", d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal));
+    // Logo-only cards — title lives on the module page (a11y still has AutomationProperties.Name).
+    Expect("logo only cards", !d.Contains("Definition.Title}", StringComparison.Ordinal)
+        || d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
+    Expect("no card title label", !d.Contains("Text=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
     // Home is nav only — no applied/checking chips (status lives on the module page).
     Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
     Expect("simple home blurb", d.Contains("Pick a target", StringComparison.Ordinal));
@@ -83,11 +87,14 @@ if (File.Exists(settings))
     Expect("settings updates", s.Contains("UPDATES", StringComparison.Ordinal));
     Expect("settings about", s.Contains("ABOUT", StringComparison.Ordinal));
     Expect("settings opti card", s.Contains("OptiCard", StringComparison.Ordinal));
+    Expect("report issue white button", s.Contains("OptiWhiteButton", StringComparison.Ordinal)
+        && s.Contains("Report issue", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
 {
     var t = File.ReadAllText(theme);
     Expect("theme OptiPrimaryButton", t.Contains("OptiPrimaryButton", StringComparison.Ordinal));
+    Expect("theme OptiWhiteButton", t.Contains("OptiWhiteButton", StringComparison.Ordinal));
     Expect("theme OptiCardButton", t.Contains("OptiCardButton", StringComparison.Ordinal));
     Expect("theme OptiFeatureTile", t.Contains("OptiFeatureTile", StringComparison.Ordinal));
     Expect("theme OptiIconWell", t.Contains("OptiIconWell", StringComparison.Ordinal));

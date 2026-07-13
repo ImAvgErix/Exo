@@ -1,3 +1,8 @@
+## 1.9.77
+
+- **Home cards logo-only** — title removed (shown on the module page after open); larger mark
+- **Report issue** button solid white
+
 ## 1.9.76
 
 - **AMD logo transparent**: drop the solid white disc — white corporate mark on clear alpha so it blends like Steam/Discord/NVIDIA
