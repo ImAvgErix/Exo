@@ -107,6 +107,10 @@ public sealed class NetworkOptimizerService
                 detail = "No active network adapter.";
             }
 
+            var activePreset = LoadSavedPreset();
+            var latency = activePreset == NetworkPreset.LowestLatency;
+            var throughput = activePreset == NetworkPreset.HighestThroughput;
+
             try
             {
                 using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters");
@@ -132,6 +136,43 @@ public sealed class NetworkOptimizerService
                     ct).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(lsoOut))
                     lso = lsoOut.Contains("Enabled", StringComparison.OrdinalIgnoreCase);
+            }
+            catch { }
+
+            // Gaming Nagle/ACK keys (per-interface) — expected ON for latency, OFF for throughput
+            bool? nagleOff = null;
+            try
+            {
+                using var ifRoot = Registry.LocalMachine.OpenSubKey(
+                    @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces");
+                if (ifRoot is not null)
+                {
+                    foreach (var name in ifRoot.GetSubKeyNames())
+                    {
+                        using var ik = ifRoot.OpenSubKey(name);
+                        if (ik is null) continue;
+                        var ack = ik.GetValue("TcpAckFrequency");
+                        var nd = ik.GetValue("TCPNoDelay");
+                        if (ack is int a || nd is int)
+                        {
+                            nagleOff = (ack is int aa && aa == 1) || (nd is int nn && nn == 1);
+                            if (nagleOff == true) break;
+                        }
+                    }
+                    nagleOff ??= false;
+                }
+            }
+            catch { }
+
+            bool? throttleOff = null;
+            try
+            {
+                using var mm = Registry.LocalMachine.OpenSubKey(
+                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile");
+                var idx = mm?.GetValue("NetworkThrottlingIndex");
+                // 0xFFFFFFFF = throttling disabled (our target)
+                throttleOff = idx is int ti && unchecked((uint)ti) == 0xFFFFFFFFu
+                              || idx is long tl && unchecked((ulong)tl) == 0xFFFFFFFFul;
             }
             catch { }
 
@@ -163,20 +204,39 @@ public sealed class NetworkOptimizerService
                 catch { }
             }
 
-            features.Add(Row("Connection", $"{connType} · {linkSpeed}", up is not null));
-            features.Add(Row("Adapter", adapterDesc, up is not null));
-            features.Add(Row("Provider / area", $"{provider} · {area}", provider is not "—"));
-            features.Add(Row("Public IP", publicIp, publicIp is not "—"));
-            features.Add(Row("Local IP", ipv4, ipv4 is not "—"));
-            features.Add(Row("Task offload", taskOffloadDisabled == true ? "OS-disabled (bad)" : "Enabled", taskOffloadDisabled != true));
-            features.Add(Row("LSO v2", lso == true ? "Enabled" : lso == false ? "Disabled" : "—", lso != false));
-            features.Add(Row("RSC", rsc == true ? "Enabled" : rsc == false ? "Disabled" : "—", true));
-            features.Add(Row("Auto-tuning", autoTuning, !autoTuning.Equals("disabled", StringComparison.OrdinalIgnoreCase)));
+            // Compact feature list — IsOk is preset-aware so latency “LSO off” is a pass, not a fail
+            var lsoOk = lso is null || (latency ? lso == false : lso == true);
+            var rscOk = rsc is null || (latency ? rsc == false : rsc == true);
+            var autoOk = !autoTuning.Equals("disabled", StringComparison.OrdinalIgnoreCase)
+                         && (latency
+                             ? autoTuning.Equals("normal", StringComparison.OrdinalIgnoreCase)
+                             : !autoTuning.Equals("disabled", StringComparison.OrdinalIgnoreCase));
+            var nagleOk = !latency || nagleOff != false; // latency wants nagle off; throughput doesn't care
+            if (throughput) nagleOk = nagleOff != true;  // throughput wants default (no gaming ACK keys)
+
+            features.Add(Row("Link", $"{connType} · {linkSpeed}", up is not null));
+            features.Add(Row("Adapter", Truncate(adapterDesc, 42), up is not null));
+            features.Add(Row("Task offload", taskOffloadDisabled == true ? "Disabled (bad)" : "On", taskOffloadDisabled != true));
+            // Latency intentionally turns LSO/RSC off — that is a pass, not a fail
+            features.Add(Row("LSO v2",
+                lso == true ? "On" : lso == false ? (latency ? "Off · latency" : "Off") : "—",
+                lsoOk));
+            features.Add(Row("RSC",
+                rsc == true ? "On" : rsc == false ? (latency ? "Off · latency" : "Off") : "—",
+                rscOk));
+            features.Add(Row("Auto-tuning", autoTuning, autoOk));
             features.Add(Row("Congestion", congestion, true));
-            features.Add(Row("Gateway ping", gwPing is int g ? $"{g} ms" : "—", gwPing is null or < 25));
-            features.Add(Row("Internet ping", netPing is int n ? $"{n} ms" : "—", netPing is null or < 80));
-            features.Add(Row("MTU", mtu, true));
-            features.Add(Row("DNS", dns, dns is not "—"));
+            features.Add(Row("Nagle / ACK",
+                nagleOff == true ? "Gaming keys on" : nagleOff == false ? "Default" : "—",
+                nagleOk));
+            features.Add(Row("Net throttle",
+                throttleOff == true ? "Off (best)" : throttleOff == false ? "On" : "—",
+                throttleOff != false));
+            features.Add(Row("Latency",
+                $"GW {FmtMs(gwPing)} · Net {FmtMs(netPing)}",
+                (gwPing is null or < 40) && (netPing is null or < 100)));
+            features.Add(Row("Path", Truncate($"{provider} · {area}", 48), provider is not "—"));
+            features.Add(Row("DNS / MTU", $"{Truncate(dns, 28)} · {mtu}", dns is not "—"));
         }
         catch (Exception ex)
         {
@@ -211,6 +271,27 @@ public sealed class NetworkOptimizerService
         };
     }
 
+    /// <summary>True when live settings match the saved preset (no false “fail” for intentional offs).</summary>
+    public bool MatchesPreset(NetworkSnapshot snap, NetworkPreset preset)
+    {
+        if (!snap.ProbeOk) return false;
+        if (snap.TaskOffloadDisabled == true) return false;
+        var latency = preset == NetworkPreset.LowestLatency;
+        if (latency)
+        {
+            if (snap.LsoEnabled == true) return false;
+            if (snap.RscEnabled == true) return false;
+            if (snap.AutoTuning.Equals("disabled", StringComparison.OrdinalIgnoreCase)) return false;
+        }
+        else if (preset == NetworkPreset.HighestThroughput)
+        {
+            if (snap.LsoEnabled == false) return false;
+            if (snap.RscEnabled == false) return false;
+            if (snap.AutoTuning.Equals("disabled", StringComparison.OrdinalIgnoreCase)) return false;
+        }
+        return true;
+    }
+
     public async Task<(bool Ok, string Message)> ApplyPresetAsync(
         NetworkPreset preset,
         IProgress<string>? progress = null,
@@ -241,15 +322,29 @@ public sealed class NetworkOptimizerService
             using var p = Process.Start(psi);
             if (p is null) return (false, "Could not start elevated PowerShell.");
             await p.WaitForExitAsync(ct).ConfigureAwait(false);
+            if (p.ExitCode != 0)
+                return (false, $"Apply exit {p.ExitCode}. Try again as Administrator.");
+
+            progress?.Report("Verifying settings...");
+            // Let NIC restart settle before probe
+            await Task.Delay(1500, ct).ConfigureAwait(false);
             SavePreset(preset);
-            return p.ExitCode == 0
-                ? (true, preset switch
+            var snap = await ProbeAsync(ct).ConfigureAwait(false);
+            var matched = MatchesPreset(snap, preset);
+            if (matched)
+            {
+                return (true, preset switch
                 {
-                    NetworkPreset.LowestLatency => "Lowest latency stack applied. Reboot recommended for power/PnP.",
-                    NetworkPreset.HighestThroughput => "Highest download stack applied. Reboot recommended for power/PnP.",
-                    _ => "Balanced stack applied. Reboot recommended for power/PnP."
-                })
-                : (false, $"Apply exit {p.ExitCode}. Try again as Administrator.");
+                    NetworkPreset.LowestLatency => "Lowest latency applied and verified. Reboot helps power/PnP settle.",
+                    NetworkPreset.HighestThroughput => "Highest download applied and verified. Reboot helps power/PnP settle.",
+                    _ => "Stack applied and verified."
+                });
+            }
+
+            // Still saved — partial apply is better than nothing; surface what looks off
+            var fails = snap.Features.Where(f => !f.IsOk).Select(f => f.Title).Take(4).ToList();
+            var hint = fails.Count > 0 ? string.Join(", ", fails) : "some NIC properties";
+            return (true, $"Applied, but verify incomplete ({hint}). Reboot, then Refresh.");
         }
         catch (System.ComponentModel.Win32Exception)
         {
@@ -591,12 +686,20 @@ try {
         return sb.ToString();
     }
 
-    private static NetworkFeatureRow Row(string title, string status, bool ok) => new()
+    private static NetworkFeatureRow Row(string title, string status, bool ok, string? note = null) => new()
     {
         Title = title,
-        Status = status,
+        Status = string.IsNullOrWhiteSpace(note) ? status : $"{status} · {note}",
         IsOk = ok
     };
+
+    private static string Truncate(string s, int max)
+    {
+        if (string.IsNullOrWhiteSpace(s) || s.Length <= max) return s;
+        return s[..(max - 1)].TrimEnd() + "…";
+    }
+
+    private static string FmtMs(int? ms) => ms is int v ? $"{v} ms" : "—";
 
     private static string? Match(string text, string pattern)
     {

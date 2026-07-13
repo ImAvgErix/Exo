@@ -1,3 +1,8 @@
+## 1.9.21
+
+- **Logos**: solid-fill AMD (red plate) + Internet globe matching other hub marks
+- **Internet UI**: shortened like Discord/Steam (title + status + feature grid + actions)
+- **Probe fix**: latency preset treats LSO/RSC off as pass; Nagle/throttle rows; post-apply verify
 ## 1.9.20
 
 - **Back to classic hub**: centered OptiHub + card grid (no sidebar / home stats)

@@ -21,10 +21,6 @@ public partial class InternetOptimizerViewModel : ObservableObject
     public ObservableCollection<FeatureRowViewModel> Rows { get; } = new();
 
     [ObservableProperty] private string _headerStatus = "Checking...";
-    [ObservableProperty] private string _adapterLine = string.Empty;
-    [ObservableProperty] private string _providerLine = string.Empty;
-    [ObservableProperty] private string _pathLine = string.Empty;
-    [ObservableProperty] private string _latencyLine = string.Empty;
     [ObservableProperty] private bool _isLoading = true;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _progressStatus = string.Empty;
@@ -32,7 +28,6 @@ public partial class InternetOptimizerViewModel : ObservableObject
     [ObservableProperty] private bool _hasMessage;
     [ObservableProperty] private string _messageGlyph = "\uE73E";
     [ObservableProperty] private Brush _messageBrush;
-    [ObservableProperty] private string _activePresetLabel = "None";
 
     [RelayCommand]
     public async Task RefreshAsync()
@@ -42,19 +37,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
         try
         {
             var snap = await _services.Network.ProbeAsync();
-            HeaderStatus = snap.ProbeOk ? "Ready" : "Probe incomplete";
-            AdapterLine = $"{snap.ConnectionType} · {snap.AdapterDescription} · {snap.LinkSpeed}";
-            ProviderLine = string.IsNullOrWhiteSpace(snap.Provider) || snap.Provider == "—"
-                ? $"IP {snap.PublicIp}"
-                : $"{snap.Provider} · {snap.PublicIp}";
-            PathLine = $"{snap.Area} · GW {snap.Gateway} · DNS {snap.DnsServers}";
-            LatencyLine = $"Gateway {Fmt(snap.GatewayPingMs)} · Internet {Fmt(snap.InternetPingMs)} · MTU {snap.Mtu}";
-            ActivePresetLabel = snap.ActivePreset switch
-            {
-                NetworkPreset.LowestLatency => "Lowest latency",
-                NetworkPreset.HighestThroughput => "Highest download",
-                _ => "Balanced / default"
-            };
+            HeaderStatus = BuildStatus(snap);
 
             Rows.Clear();
             foreach (var f in snap.Features)
@@ -114,7 +97,23 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
     public Task InitializeAsync() => RefreshAsync();
 
-    private static string Fmt(int? ms) => ms is int v ? $"{v} ms" : "—";
+    private static string BuildStatus(NetworkSnapshot snap)
+    {
+        if (!snap.ProbeOk) return "Probe incomplete";
+
+        var preset = snap.ActivePreset switch
+        {
+            NetworkPreset.LowestLatency => "Lowest latency",
+            NetworkPreset.HighestThroughput => "Highest download",
+            _ => "Not optimized"
+        };
+
+        var allOk = snap.Features.Count > 0 && snap.Features.All(f => f.IsOk);
+        if (snap.ActivePreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput)
+            return allOk ? $"{preset} · applied" : $"{preset} · check rows";
+
+        return $"{snap.ConnectionType} · {snap.LinkSpeed}";
+    }
 
     private void SetMessage(string text, bool success)
     {

@@ -28,31 +28,6 @@
                                CharacterSpacing="-20"
                                Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                TextWrapping="Wrap" />
-                    <TextBlock Text="{x:Bind ViewModel.AdapterLine, Mode=OneWay}"
-                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                               FontSize="13"
-                               TextWrapping="Wrap" />
-                    <TextBlock Text="{x:Bind ViewModel.ProviderLine, Mode=OneWay}"
-                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                               FontSize="13"
-                               TextWrapping="Wrap" />
-                    <TextBlock Text="{x:Bind ViewModel.PathLine, Mode=OneWay}"
-                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                               FontSize="12"
-                               TextWrapping="Wrap"
-                               Opacity="0.9" />
-                    <TextBlock Text="{x:Bind ViewModel.LatencyLine, Mode=OneWay}"
-                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                               FontSize="12"
-                               TextWrapping="Wrap"
-                               Opacity="0.9" />
-                    <TextBlock FontSize="12"
-                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                               Margin="0,4,0,0">
-                        <Run Text="Active preset: " />
-                        <Run Text="{x:Bind ViewModel.ActivePresetLabel, Mode=OneWay}"
-                             FontWeight="SemiBold" />
-                    </TextBlock>
                 </StackPanel>
 
                 <Grid Grid.Row="1" Margin="0,0,0,16">
@@ -106,7 +81,9 @@
                                                            Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                                            TextWrapping="Wrap" />
                                                 <TextBlock Text="{x:Bind Detail}"
+                                                           FontFamily="{StaticResource OptiUiFont}"
                                                            FontSize="12"
+                                                           LineHeight="16"
                                                            Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                                            TextWrapping="Wrap" />
                                             </StackPanel>
@@ -156,7 +133,7 @@
                                 HorizontalAlignment="Stretch"
                                 MinHeight="48"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                                ToolTipService.ToolTip="Gaming-first: aggressive ACK, IM off, less coalescing. May lower bulk download speed." />
+                                ToolTipService.ToolTip="Gaming: ACK/Nagle off, IM off, LSO/RSC off. Best ping; bulk downloads may be slower." />
                         <Button Grid.Column="1"
                                 Style="{StaticResource OptiPrimaryButton}"
                                 Content="Highest download"
@@ -164,19 +141,13 @@
                                 HorizontalAlignment="Stretch"
                                 MinHeight="48"
                                 IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                                ToolTipService.ToolTip="Throughput-first: LSO/RSC on, auto-tuning experimental, gaming ACK hacks cleared." />
+                                ToolTipService.ToolTip="Throughput: LSO/RSC on, experimental auto-tune, gaming ACK keys cleared." />
                     </Grid>
                     <Button Style="{StaticResource OptiQuietButton}"
                             Content="Refresh"
                             Click="Refresh_Click"
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    <TextBlock Text="Full TCP Optimizer–class stack + NIC/power/QoS/DNS/AFD. Needs Administrator. Latency and download trade off — pick one. Reboot recommended after apply."
-                               FontSize="11"
-                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                               Opacity="0.75"
-                               TextWrapping="Wrap"
-                               TextAlignment="Center" />
                 </StackPanel>
             </Grid>
         </ContentControl>
