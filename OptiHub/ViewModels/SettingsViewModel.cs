@@ -20,6 +20,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _isDarkMode = true;
     [ObservableProperty] private bool _isLightMode;
     [ObservableProperty] private bool _autoUpdateScripts;
+
+    /// <summary>Button label: press to switch to the other theme.</summary>
+    public string ThemeToggleLabel => IsDarkMode ? "Light mode" : "Dark mode";
     [ObservableProperty] private string _appVersion = "-";
     [ObservableProperty] private string _kitVersion = "-";
     [ObservableProperty] private string _updateStatus = string.Empty;
@@ -120,6 +123,7 @@ public partial class SettingsViewModel : ObservableObject
             _suppressThemeSync = false;
             _services.Theme.SetTheme(AppSettings.LightTheme);
         }
+        OnPropertyChanged(nameof(ThemeToggleLabel));
     }
 
     partial void OnIsLightModeChanged(bool value)
@@ -139,6 +143,14 @@ public partial class SettingsViewModel : ObservableObject
             _suppressThemeSync = false;
             _services.Theme.SetTheme(AppSettings.DarkTheme);
         }
+        OnPropertyChanged(nameof(ThemeToggleLabel));
+    }
+
+    [RelayCommand]
+    private void ToggleTheme()
+    {
+        // Flip: dark → light, light → dark
+        IsDarkMode = !IsDarkMode;
     }
 
     partial void OnAutoUpdateScriptsChanged(bool value)

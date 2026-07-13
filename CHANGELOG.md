@@ -1,3 +1,6 @@
+## 1.9.102
+
+- **Settings theme**: single dark button “Dark mode” / “Light mode” — press to flip UI (no slider)
 ## 1.9.101
 
 - **Settings**: premium layout fix — title/switch/close no longer collide; Light · slider · Dark centered

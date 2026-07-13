@@ -38,43 +38,18 @@
 
             <StackPanel x:Name="RowsHost" Grid.Row="1" Spacing="0">
 
-                <!-- Appearance row -->
-                <StackPanel x:Name="RowAppearance" Spacing="10" Margin="0,0,0,0">
+                <!-- Theme: one full-width button that flips light ↔ dark -->
+                <StackPanel x:Name="RowAppearance" Spacing="10">
                     <TextBlock Text="Appearance"
                                FontFamily="{StaticResource OptiUiFontSemiBold}"
                                FontSize="13"
                                FontWeight="SemiBold"
                                Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Light"
-                                   FontFamily="{StaticResource OptiUiFont}"
-                                   FontSize="13"
-                                   HorizontalAlignment="Right"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,10,0"
-                                   Foreground="{ThemeResource OptiMutedTextBrush}" />
-                        <ToggleSwitch x:Name="ThemeSwitch"
-                                      Grid.Column="1"
-                                      Style="{StaticResource OptiCompactSwitch}"
-                                      AutomationProperties.Name="Dark mode"
-                                      IsOn="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}"
-                                      OnContent=""
-                                      OffContent=""
-                                      VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="2"
-                                   Text="Dark"
-                                   FontFamily="{StaticResource OptiUiFont}"
-                                   FontSize="13"
-                                   VerticalAlignment="Center"
-                                   Margin="10,0,0,0"
-                                   Foreground="{ThemeResource OptiMutedTextBrush}" />
-                    </Grid>
+                    <Button Style="{StaticResource OptiThemeToggleButton}"
+                            Content="{x:Bind ViewModel.ThemeToggleLabel, Mode=OneWay}"
+                            AutomationProperties.Name="Toggle dark or light mode"
+                            Command="{x:Bind ViewModel.ToggleThemeCommand}"
+                            HorizontalAlignment="Stretch" />
                 </StackPanel>
 
                 <Rectangle x:Name="Div1" Height="1" Margin="0,16" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.75" />

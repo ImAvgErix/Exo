@@ -99,10 +99,9 @@ if (File.Exists(settings))
     Expect("settings app version", s.Contains("App version", StringComparison.Ordinal)
         && s.Contains("AppVersion", StringComparison.Ordinal)
         && !s.Contains("KitVersion", StringComparison.Ordinal));
-    Expect("settings theme slider", s.Contains("IsDarkMode", StringComparison.Ordinal)
-        && s.Contains("ToggleSwitch", StringComparison.Ordinal)
-        && s.Contains("Text=\"Dark\"", StringComparison.Ordinal)
-        && s.Contains("Text=\"Light\"", StringComparison.Ordinal));
+    Expect("settings theme button", s.Contains("ToggleThemeCommand", StringComparison.Ordinal)
+        && s.Contains("ThemeToggleLabel", StringComparison.Ordinal)
+        && s.Contains("OptiThemeToggleButton", StringComparison.Ordinal));
     Expect("settings opti card", s.Contains("OptiCardFillBrush", StringComparison.Ordinal)
         || s.Contains("OptiCardRadius", StringComparison.Ordinal));
     Expect("settings single card", s.Contains("Appearance", StringComparison.Ordinal)
