@@ -117,6 +117,10 @@ public static class OptiUpdateDialog
         {
             try
             {
+                // Force composition restart once the dialog surface is live.
+                loader.IsActive = false;
+                loader.IsActive = true;
+
                 var progress = new Progress<AppUpdateProgress>(p =>
                 {
                     statusTb.Text = string.IsNullOrWhiteSpace(p.Status) ? statusTb.Text : p.Status;

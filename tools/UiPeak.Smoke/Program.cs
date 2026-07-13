@@ -172,12 +172,11 @@ if (File.Exists(loaderCs))
 {
     var lc = File.ReadAllText(loaderCs);
     Expect("OptiLoader IsActive", lc.Contains("IsActiveProperty", StringComparison.Ordinal));
-    // Orbit-bead loader driven by DispatcherTimer (Storyboards freeze under Opacity 0 parents)
+    // Composition-driven orbit (works in ContentDialog + Visibility-toggled Settings host)
     Expect("OptiLoader orbit bead",
-        lc.Contains("OrbitRotate", StringComparison.Ordinal) &&
-        lc.Contains("TrailRotate", StringComparison.Ordinal) &&
-        lc.Contains("CoreScale", StringComparison.Ordinal) &&
-        lc.Contains("DispatcherTimer", StringComparison.Ordinal) &&
+        lc.Contains("RotationAngleInDegrees", StringComparison.Ordinal) &&
+        lc.Contains("ElementCompositionPreview", StringComparison.Ordinal) &&
+        lc.Contains("Orbit", StringComparison.Ordinal) &&
         !lc.Contains("Bar0Scale", StringComparison.Ordinal));
 }
 

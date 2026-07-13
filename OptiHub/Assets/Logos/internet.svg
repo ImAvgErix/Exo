@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 100 100" fill="none">
-  <!-- Minimal Apple/SF-style Wi‑Fi: 3 even arcs + center dot -->
-  <g stroke="#FFF" stroke-width="7.2" stroke-linecap="round" fill="none" transform="translate(50 58)">
-    <path d="M-18 -6 A 22 22 0 0 1 18 -6"/>
-    <path d="M-32.5 -12 A 40.5 40.5 0 0 1 32.5 -12"/>
-    <path d="M-47 -18 A 59 59 0 0 1 47 -18"/>
+  <!-- Minimal SF-style Wi‑Fi: equal air between arcs and the center dot -->
+  <g transform="translate(50 55)" stroke="#FFF" stroke-width="7" stroke-linecap="round" fill="none">
+    <path d="M-14 0 A 14 14 0 0 1 14 0"/>
+    <path d="M-27 0 A 27 27 0 0 1 27 0"/>
+    <path d="M-40 0 A 40 40 0 0 1 40 0"/>
   </g>
-  <circle cx="50" cy="68" r="5.2" fill="#FFF"/>
+  <circle cx="50" cy="55" r="4.6" fill="#FFF"/>
 </svg>

@@ -197,12 +197,10 @@
                                     HorizontalAlignment="Stretch"
                                     MinHeight="44"
                                     IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                            <!-- Loader stays mounted (Opacity, not Collapsed). OptiLoader uses a timer so
-                                 motion still runs after the host goes from 0 → 1 opacity. -->
+                            <!-- Visible only while updating. OptiLoader restarts composition on Loaded. -->
                             <StackPanel x:Name="UpdateLoaderHost"
                                         Spacing="8"
-                                        MinHeight="52"
-                                        Opacity="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToShowOpacityConverter}}"
+                                        Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                         IsHitTestVisible="{x:Bind ViewModel.IsUpdating, Mode=OneWay}">
                                 <controls:OptiLoader x:Name="UpdateLoader"
                                                      Width="40" Height="40"
@@ -214,8 +212,7 @@
                                              IsIndeterminate="{x:Bind ViewModel.IsUpdateProgressIndeterminate, Mode=OneWay}"
                                              Height="4"
                                              CornerRadius="2"
-                                             Foreground="{ThemeResource OptiAccentBrush}"
-                                             Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                             Foreground="{ThemeResource OptiAccentBrush}" />
                             </StackPanel>
                         </StackPanel>
                         <TextBlock Grid.Row="2"

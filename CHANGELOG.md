@@ -1,3 +1,7 @@
+## 1.9.91
+
+- **Update loader**: Windows Composition orbit (actually moves in Settings + install dialog)
+- **Internet icon**: tighter SF-style Wi‑Fi — equal air between arcs and the center dot
 ## 1.9.90
 
 - **Internet icon**: clean Apple/SF-style minimal Wi‑Fi (3 even arcs + dot)

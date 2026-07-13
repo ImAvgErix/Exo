@@ -1,21 +1,27 @@
+using System.Numerics;
+using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 
 namespace OptiHub.Views.Controls;
 
 /// <summary>
-/// OptiHub orbit-bead loader — accent bead orbits a soft track with ghost trail
-/// and a breathing core. Uses a DispatcherTimer so motion keeps running even when
-/// a parent briefly sits at Opacity 0 (WinUI freezes Storyboards in that case).
+/// OptiHub orbit-bead loader. Uses the Windows Composition API for rotation so
+/// the animation keeps running inside ContentDialog / Opacity-toggled hosts
+/// (DispatcherTimer + RotateTransform and XAML Storyboards both go stale there).
 /// </summary>
 public sealed partial class OptiLoader : UserControl
 {
-    private DispatcherTimer? _timer;
-    private double _angle;
-    private double _breathPhase;
-    private double _haloPhase;
     private bool _running;
+    private ScalarKeyFrameAnimation? _spinAnim;
+    private ScalarKeyFrameAnimation? _trailAnim;
+    private ScalarKeyFrameAnimation? _ghostAnim;
+    private ScalarKeyFrameAnimation? _breathAnim;
+    private ScalarKeyFrameAnimation? _haloAnim;
+    private ScalarKeyFrameAnimation? _haloOpacityAnim;
+    private ScalarKeyFrameAnimation? _coreOpacityAnim;
 
     public static readonly DependencyProperty IsActiveProperty =
         DependencyProperty.Register(
@@ -38,6 +44,11 @@ public sealed partial class OptiLoader : UserControl
             if (IsActive) Start(force: true);
         };
         Unloaded += (_, _) => Stop();
+        SizeChanged += (_, _) =>
+        {
+            // Center points depend on laid-out size.
+            if (IsActive && IsLoaded) Start(force: true);
+        };
         RegisterPropertyChangedCallback(VisibilityProperty, (_, _) =>
         {
             if (Visibility == Visibility.Visible && IsActive)
@@ -45,11 +56,9 @@ public sealed partial class OptiLoader : UserControl
             else if (Visibility != Visibility.Visible)
                 Stop();
         });
-        // Opacity 0 parents used to freeze Storyboards; timer still needs a kick
-        // when we become fully opaque again.
         RegisterPropertyChangedCallback(OpacityProperty, (_, _) =>
         {
-            if (Opacity > 0.05 && IsActive && IsLoaded)
+            if (Opacity > 0.01 && IsActive && IsLoaded)
                 Start(force: false);
         });
     }
@@ -59,7 +68,8 @@ public sealed partial class OptiLoader : UserControl
         if (d is not OptiLoader loader) return;
         if (e.NewValue is true)
         {
-            loader.DispatcherQueue?.TryEnqueue(() =>
+            // Defer so first layout (dialog / opacity host) has real size + visuals.
+            loader.DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
             {
                 if (loader.IsActive) loader.Start(force: true);
             });
@@ -73,35 +83,24 @@ public sealed partial class OptiLoader : UserControl
 
     private void Start(bool force = false)
     {
-        if (_running && !force) return;
         if (!IsLoaded) return;
+        if (_running && !force) return;
 
-        if (_timer is null)
+        try
         {
-            _timer = new DispatcherTimer
-            {
-                // ~60fps — smooth orbit without Storyboard composition issues
-                Interval = TimeSpan.FromMilliseconds(16)
-            };
-            _timer.Tick += OnTick;
+            StopComposition();
+            BeginComposition();
+            _running = true;
         }
-
-        if (force || !_running)
+        catch
         {
-            _angle = 0;
-            _breathPhase = 0;
-            _haloPhase = 0;
-            ApplyFrame();
+            _running = false;
         }
-
-        if (!_timer.IsEnabled)
-            _timer.Start();
-        _running = true;
     }
 
     private void Stop()
     {
-        try { _timer?.Stop(); } catch { }
+        StopComposition();
         _running = false;
         try
         {
@@ -116,53 +115,148 @@ public sealed partial class OptiLoader : UserControl
         catch { }
     }
 
-    private void OnTick(object? sender, object e)
+    private void BeginComposition()
     {
-        if (!IsActive || !IsLoaded)
+        // Prefer composition visuals on the orbit hosts — independent of XAML storyboard clocks.
+        var orbitVis = ElementCompositionPreview.GetElementVisual(Orbit);
+        var trailVis = ElementCompositionPreview.GetElementVisual(TrailOrbit);
+        var ghostVis = ElementCompositionPreview.GetElementVisual(GhostOrbit);
+        var coreVis = ElementCompositionPreview.GetElementVisual(Core);
+        var haloVis = ElementCompositionPreview.GetElementVisual(Halo);
+        var compositor = orbitVis.Compositor;
+
+        // Pivot at element center (orbit grids are 32×32).
+        static void Center(Visual v, FrameworkElement el)
         {
-            Stop();
-            return;
+            var w = (float)(el.ActualWidth > 0 ? el.ActualWidth : el.Width);
+            var h = (float)(el.ActualHeight > 0 ? el.ActualHeight : el.Height);
+            if (w <= 0) w = 32;
+            if (h <= 0) h = 32;
+            v.CenterPoint = new Vector3(w / 2f, h / 2f, 0);
         }
 
-        // Full orbit ~1.05s at 60fps → ~5.7° per tick
-        _angle = (_angle + 5.7) % 360;
-        // Breath ~1.04s period
-        _breathPhase = (_breathPhase + 0.096) % (Math.PI * 2);
-        // Halo pulse ~1.2s
-        _haloPhase = (_haloPhase + 0.083) % (Math.PI * 2);
+        Center(orbitVis, Orbit);
+        Center(trailVis, TrailOrbit);
+        Center(ghostVis, GhostOrbit);
+        Center(coreVis, Core);
+        Center(haloVis, Halo);
 
-        ApplyFrame();
+        // Clear leftover XAML RotateTransforms so composition owns the spin.
+        if (OrbitRotate is not null) OrbitRotate.Angle = 0;
+        if (TrailRotate is not null) TrailRotate.Angle = 0;
+        if (GhostRotate is not null) GhostRotate.Angle = 0;
+
+        _spinAnim = compositor.CreateScalarKeyFrameAnimation();
+        _spinAnim.InsertKeyFrame(0f, 0f);
+        _spinAnim.InsertKeyFrame(1f, 360f);
+        _spinAnim.Duration = TimeSpan.FromMilliseconds(1000);
+        _spinAnim.IterationBehavior = AnimationIterationBehavior.Forever;
+        _spinAnim.Direction = AnimationDirection.Normal;
+
+        _trailAnim = compositor.CreateScalarKeyFrameAnimation();
+        _trailAnim.InsertKeyFrame(0f, -42f);
+        _trailAnim.InsertKeyFrame(1f, 318f);
+        _trailAnim.Duration = TimeSpan.FromMilliseconds(1000);
+        _trailAnim.IterationBehavior = AnimationIterationBehavior.Forever;
+
+        _ghostAnim = compositor.CreateScalarKeyFrameAnimation();
+        _ghostAnim.InsertKeyFrame(0f, -78f);
+        _ghostAnim.InsertKeyFrame(1f, 282f);
+        _ghostAnim.Duration = TimeSpan.FromMilliseconds(1000);
+        _ghostAnim.IterationBehavior = AnimationIterationBehavior.Forever;
+
+        // Core breath via scale
+        _breathAnim = compositor.CreateScalarKeyFrameAnimation();
+        _breathAnim.InsertKeyFrame(0f, 0.78f);
+        _breathAnim.InsertKeyFrame(0.5f, 1.12f);
+        _breathAnim.InsertKeyFrame(1f, 0.78f);
+        _breathAnim.Duration = TimeSpan.FromMilliseconds(1040);
+        _breathAnim.IterationBehavior = AnimationIterationBehavior.Forever;
+
+        _coreOpacityAnim = compositor.CreateScalarKeyFrameAnimation();
+        _coreOpacityAnim.InsertKeyFrame(0f, 0.55f);
+        _coreOpacityAnim.InsertKeyFrame(0.5f, 1f);
+        _coreOpacityAnim.InsertKeyFrame(1f, 0.55f);
+        _coreOpacityAnim.Duration = TimeSpan.FromMilliseconds(1040);
+        _coreOpacityAnim.IterationBehavior = AnimationIterationBehavior.Forever;
+
+        _haloAnim = compositor.CreateScalarKeyFrameAnimation();
+        _haloAnim.InsertKeyFrame(0f, 0.92f);
+        _haloAnim.InsertKeyFrame(0.75f, 1.18f);
+        _haloAnim.InsertKeyFrame(1f, 0.92f);
+        _haloAnim.Duration = TimeSpan.FromMilliseconds(1200);
+        _haloAnim.IterationBehavior = AnimationIterationBehavior.Forever;
+
+        _haloOpacityAnim = compositor.CreateScalarKeyFrameAnimation();
+        _haloOpacityAnim.InsertKeyFrame(0f, 0.14f);
+        _haloOpacityAnim.InsertKeyFrame(0.75f, 0f);
+        _haloOpacityAnim.InsertKeyFrame(1f, 0.14f);
+        _haloOpacityAnim.Duration = TimeSpan.FromMilliseconds(1200);
+        _haloOpacityAnim.IterationBehavior = AnimationIterationBehavior.Forever;
+
+        orbitVis.StartAnimation("RotationAngleInDegrees", _spinAnim);
+        trailVis.StartAnimation("RotationAngleInDegrees", _trailAnim);
+        ghostVis.StartAnimation("RotationAngleInDegrees", _ghostAnim);
+
+        // ScaleX/ScaleY both from same breath
+        coreVis.StartAnimation("Scale.X", _breathAnim);
+        coreVis.StartAnimation("Scale.Y", _breathAnim);
+        coreVis.StartAnimation("Opacity", _coreOpacityAnim);
+
+        haloVis.StartAnimation("Scale.X", _haloAnim);
+        haloVis.StartAnimation("Scale.Y", _haloAnim);
+        haloVis.StartAnimation("Opacity", _haloOpacityAnim);
     }
 
-    private void ApplyFrame()
+    private void StopComposition()
     {
         try
         {
-            if (OrbitRotate is not null) OrbitRotate.Angle = _angle;
-            if (TrailRotate is not null) TrailRotate.Angle = _angle - 42;
-            if (GhostRotate is not null) GhostRotate.Angle = _angle - 78;
-
-            // 0.72 ↔ 1.12 breath
-            var breath = 0.92 + 0.20 * Math.Sin(_breathPhase);
-            if (CoreScale is not null)
+            if (Orbit is not null)
             {
-                CoreScale.ScaleX = breath;
-                CoreScale.ScaleY = breath;
+                var v = ElementCompositionPreview.GetElementVisual(Orbit);
+                v.StopAnimation("RotationAngleInDegrees");
+                v.RotationAngleInDegrees = 0;
+            }
+            if (TrailOrbit is not null)
+            {
+                var v = ElementCompositionPreview.GetElementVisual(TrailOrbit);
+                v.StopAnimation("RotationAngleInDegrees");
+                v.RotationAngleInDegrees = -42;
+            }
+            if (GhostOrbit is not null)
+            {
+                var v = ElementCompositionPreview.GetElementVisual(GhostOrbit);
+                v.StopAnimation("RotationAngleInDegrees");
+                v.RotationAngleInDegrees = -78;
             }
             if (Core is not null)
-                Core.Opacity = 0.55 + 0.45 * (0.5 + 0.5 * Math.Sin(_breathPhase));
-
-            // Soft halo expand + fade
-            var haloT = 0.5 + 0.5 * Math.Sin(_haloPhase);
-            if (HaloScale is not null)
             {
-                var hs = 0.92 + 0.26 * haloT;
-                HaloScale.ScaleX = hs;
-                HaloScale.ScaleY = hs;
+                var v = ElementCompositionPreview.GetElementVisual(Core);
+                v.StopAnimation("Scale.X");
+                v.StopAnimation("Scale.Y");
+                v.StopAnimation("Opacity");
+                v.Scale = Vector3.One;
+                v.Opacity = 0.9f;
             }
             if (Halo is not null)
-                Halo.Opacity = 0.14 * (1.0 - haloT);
+            {
+                var v = ElementCompositionPreview.GetElementVisual(Halo);
+                v.StopAnimation("Scale.X");
+                v.StopAnimation("Scale.Y");
+                v.StopAnimation("Opacity");
+                v.Scale = Vector3.One;
+                v.Opacity = 0.08f;
+            }
         }
         catch { }
+
+        _spinAnim = null;
+        _trailAnim = null;
+        _ghostAnim = null;
+        _breathAnim = null;
+        _haloAnim = null;
+        _haloOpacityAnim = null;
+        _coreOpacityAnim = null;
     }
 }
