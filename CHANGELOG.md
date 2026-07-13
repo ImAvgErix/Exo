@@ -1,3 +1,9 @@
+## 1.9.52
+
+- **Soul pass** on professional Fluent base (not a redesign from zero)
+- Ink-indigo surfaces + soft signal accent; Cormorant hero type
+- Home brand mark + tagline; 2-col module cards with accent rail + hover lift
+- Softer radius, livelier buttons — still NavigationView + Mica bones
 ## 1.9.51
 
 - **STUDIO from-scratch UI** — professional Windows 11 Fluent only
@@ -436,6 +442,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

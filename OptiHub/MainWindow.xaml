@@ -32,6 +32,16 @@
                     <FontIcon Glyph="&#xE72B;" FontSize="12"
                               Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                 </Button>
+                <Border Width="22" Height="22"
+                        CornerRadius="6"
+                        Background="{ThemeResource OptiAccentBrush}"
+                        VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE945;"
+                              FontSize="11"
+                              Foreground="{ThemeResource OptiOnAccentBrush}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                </Border>
                 <TextBlock Text="OptiHub"
                            FontFamily="{StaticResource OptiUiFontSemiBold}"
                            FontSize="14"

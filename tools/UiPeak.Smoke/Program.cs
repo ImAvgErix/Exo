@@ -64,8 +64,8 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("theme has OptiMutedTextBrush", a.Contains("OptiMutedTextBrush", StringComparison.Ordinal));
     Expect("theme has OptiDividerBrush", a.Contains("OptiDividerBrush", StringComparison.Ordinal));
-    Expect("studio blue accent", a.Contains("#4C8DFF", StringComparison.Ordinal) || a.Contains("#005FB8", StringComparison.Ordinal));
-    Expect("solid card surface", a.Contains("#2C2C2C", StringComparison.Ordinal));
+    Expect("soul indigo accent", a.Contains("#7C9CFF", StringComparison.Ordinal) || a.Contains("#005FB8", StringComparison.Ordinal));
+    Expect("ink card surface", a.Contains("#1C1F2A", StringComparison.Ordinal) || a.Contains("#FFFFFF", StringComparison.Ordinal));
     Expect("not orange forge accent", !a.Contains("#F59E0B", StringComparison.Ordinal));
     Expect("not glass cyan accent", !a.Contains("#64D2FF", StringComparison.Ordinal));
 }
@@ -138,8 +138,8 @@ var dash = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml");
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    Expect("dashboard module list", d.Contains("ItemsStackPanel", StringComparison.Ordinal) || d.Contains("CardList", StringComparison.Ordinal));
-    Expect("dashboard Home title", d.Contains("Home", StringComparison.Ordinal));
+    Expect("dashboard modules", d.Contains("CardList", StringComparison.Ordinal));
+    Expect("dashboard brand hero", d.Contains("OptiHub", StringComparison.Ordinal) && d.Contains("One hub", StringComparison.Ordinal));
 }
 
 var settings = Path.Combine(repo, "OptiHub", "Views", "SettingsPage.xaml");

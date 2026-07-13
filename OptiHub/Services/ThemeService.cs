@@ -15,7 +15,7 @@ public sealed class ThemeService
     // Transparent so Mica/system backdrop shows; light fallback is soft gray
     public static readonly Color CozyBlack = Color.FromArgb(0, 0, 0, 0);
     public static readonly Color SoftStone = Color.FromArgb(0, 0, 0, 0);
-    public static readonly Color DarkAccent = Color.FromArgb(255, 76, 141, 255);
+    public static readonly Color DarkAccent = Color.FromArgb(255, 124, 156, 255);
 
     public ThemeService(SettingsService settings)
     {
