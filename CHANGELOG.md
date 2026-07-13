@@ -1,3 +1,8 @@
+## 1.9.75
+
+- **Ethernet metric actually sticks**: disable AutomaticMetric + set metric 1, then **re-stamp after adapter restart** (restart was putting Windows back to ~20–25 auto metric → red X)
+- **Bit depth is not cosmetic**: NVAPI set verifies driver readback; fail with plain reason if panel stays 8-bit; UI re-syncs pickers to live depth after Apply; offer one-step upgrade (8→10) when driver claims support
+
 ## 1.9.74
 
 - **Internet detect after apply**: no more false “not checked” rows — unknown autotune skips (like LSO/RSC), MMCSS/QoS parse any DWORD type, Wi‑Fi-while-Ethernet only fails when Ethernet-first was chosen, longer settle + one re-probe

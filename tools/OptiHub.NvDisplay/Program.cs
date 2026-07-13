@@ -197,12 +197,14 @@ static class Program
                     Console.Error.WriteLine("Invalid --set-depth. Use BPC8, BPC10, BPC12, 8, 10, or 12.");
                     return 64;
                 }
-                var setOk = ApplyColorDepth(devices, depth, onlyId);
+                var setOk = ApplyColorDepth(devices, depth, onlyId, out var verifiedDepth, out var depthErr);
                 Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + JsonSerializer.Serialize(new
                 {
                     ok = setOk,
                     mode = "set-depth",
                     depth = depth.ToString(),
+                    verified = verifiedDepth,
+                    error = setOk ? null : depthErr,
                     displayId = onlyId
                 }));
                 return setOk ? 0 : 6;
@@ -730,34 +732,59 @@ static class Program
     }
 
     /// <summary>
-    /// Depths the panel is proven to run: current working depth and lower.
-    /// Never list 12-bit solely because IsColorDataSupported claimed it.
+    /// Depths to offer in the panel: current + lower + at most one higher tier when
+    /// IsColorDataSupported claims it (so 8→10 is tryable). Apply still verifies readback —
+    /// never list 12 solely from a lying support probe when current is 8.
     /// </summary>
     static List<string> ListHonestSupportedDepths(DisplayDevice dev, string? currentDepthName)
     {
         var curRank = DepthNameRank(currentDepthName);
+        if (curRank == 0) curRank = 8;
         var list = new List<string>();
+        // Allow current, lower, and one step up (e.g. 8→10, 10→12) if driver claims support.
+        var maxOffer = curRank >= 12 ? 12 : curRank + 2; // BPC steps are 6/8/10/12 (+2 rank)
+        if (maxOffer > 12) maxOffer = 12;
+        // Cap upgrade probe: from 8 only try 10 (not 12); from 10 try 12.
+        if (curRank <= 8) maxOffer = 10;
+        else if (curRank <= 10) maxOffer = 12;
+
         foreach (var d in new[] { ColorDataDepth.BPC12, ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6 })
         {
             var rank = DepthEnumRank(d);
-            // Only offer equal/lower than live depth (curRank 0 = unknown → allow 8 only).
-            if (curRank > 0 && rank > curRank) continue;
-            if (curRank == 0 && rank > 8) continue;
-            try
+            if (rank > maxOffer) continue;
+            // Always include current and lower; higher only if support probe says yes.
+            if (rank > curRank)
             {
-                var probe = new ColorData(
-                    ColorDataFormat.RGB, ColorDataColorimetry.Auto, ColorDataDynamicRange.VESA,
-                    d, ColorDataSelectionPolicy.User, ColorDataDesktopDepth.Default);
-                if (dev.IsColorDataSupported(probe))
-                    list.Add(d.ToString());
+                try
+                {
+                    var probe = new ColorData(
+                        ColorDataFormat.RGB, ColorDataColorimetry.Auto, ColorDataDynamicRange.VESA,
+                        d, ColorDataSelectionPolicy.User, ColorDataDesktopDepth.Default);
+                    if (!dev.IsColorDataSupported(probe)) continue;
+                }
+                catch { continue; }
             }
-            catch { }
+            else
+            {
+                try
+                {
+                    var probe = new ColorData(
+                        ColorDataFormat.RGB, ColorDataColorimetry.Auto, ColorDataDynamicRange.VESA,
+                        d, ColorDataSelectionPolicy.User, ColorDataDesktopDepth.Default);
+                    // Prefer supported; still list current even if probe fails.
+                    if (!dev.IsColorDataSupported(probe) && rank != curRank) continue;
+                }
+                catch
+                {
+                    if (rank != curRank) continue;
+                }
+            }
+            list.Add(d.ToString());
         }
         if (list.Count == 0 && !string.IsNullOrWhiteSpace(currentDepthName))
             list.Add(currentDepthName!);
         if (list.Count == 0)
             list.Add("BPC8");
-        // Always include proven current first-class.
         if (!string.IsNullOrWhiteSpace(currentDepthName) &&
             !list.Any(x => string.Equals(x, currentDepthName, StringComparison.OrdinalIgnoreCase)))
             list.Insert(0, currentDepthName!);
@@ -1036,31 +1063,41 @@ static class Program
         return ok;
     }
 
-    static bool ApplyColorDepth(List<DisplayDevice> devices, ColorDataDepth depth, uint? onlyDisplayId)
+    static bool ApplyColorDepth(
+        List<DisplayDevice> devices,
+        ColorDataDepth depth,
+        uint? onlyDisplayId,
+        out string? verifiedDepth,
+        out string? error)
     {
         var any = false;
         var ok = true;
+        verifiedDepth = null;
+        error = null;
         foreach (var dev in devices)
         {
             if (onlyDisplayId is not null && dev.DisplayId != onlyDisplayId.Value)
                 continue;
             any = true;
             // Manual panel path: exact depth only (no silent 10→8 fallback).
-            var applied = ApplyExactColorDepth(dev, depth);
+            var applied = ApplyExactColorDepth(dev, depth, out var liveDepth, out var why);
             if (applied is null)
             {
                 ok = false;
-                Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: set-depth {depth} failed");
+                error = why ?? $"set-depth {depth} failed";
+                Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: {error}");
             }
             else
             {
-                Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: set-depth {depth} OK");
+                verifiedDepth = liveDepth?.ToString() ?? depth.ToString();
+                Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: set-depth {depth} verified={verifiedDepth}");
                 try { ApplyHdmiFullRange(dev); } catch { }
             }
         }
         if (!any)
         {
             Console.Error.WriteLine("[NVAPI] No matching display for --display-id");
+            error = "No matching display for --display-id";
             return false;
         }
         // Stamp registry Full RGB so CPL-ish prefs stay aligned
@@ -1068,9 +1105,18 @@ static class Program
         return ok;
     }
 
-    /// <summary>Set RGB Full + User policy at exactly the requested bit depth (panel override).</summary>
-    static ColorData? ApplyExactColorDepth(DisplayDevice dev, ColorDataDepth depth)
+    /// <summary>Set RGB Full + User policy at exactly the requested bit depth; require readback match when available.</summary>
+    static ColorData? ApplyExactColorDepth(
+        DisplayDevice dev,
+        ColorDataDepth depth,
+        out ColorDataDepth? liveDepth,
+        out string? failReason)
     {
+        liveDepth = null;
+        failReason = null;
+        // Brief settle so readback is not racing the last mode set.
+        try { System.Threading.Thread.Sleep(120); } catch { }
+
         foreach (var range in new[] { ColorDataDynamicRange.VESA, ColorDataDynamicRange.Auto })
         {
             var candidate = new ColorData(
@@ -1083,28 +1129,47 @@ static class Program
             try
             {
                 dev.SetColorData(candidate);
-                // Verify readback when the driver exposes current color.
+                try { System.Threading.Thread.Sleep(200); } catch { }
+
+                // Require readback when the driver exposes current color — otherwise UI lies.
                 try
                 {
                     var cur = dev.CurrentColorData;
+                    liveDepth = cur.ColorDepth;
                     if (cur.ColorDepth is not null && cur.ColorDepth != depth)
                     {
+                        failReason =
+                            $"Driver kept {cur.ColorDepth} (wanted {depth}). " +
+                            "Panel/cable/refresh often force 8-bit at high Hz — try lower Hz or a DP 1.4+ cable.";
                         Console.WriteLine(
                             $"[NVAPI] Display #{dev.DisplayId}: set {depth} but readback={cur.ColorDepth}");
                         continue;
                     }
+                    if (cur.ColorDepth is null)
+                    {
+                        // No readback: still accept SetColorData success, but flag soft
+                        Console.WriteLine(
+                            $"[NVAPI] Display #{dev.DisplayId}: set {depth} (no readback from driver)");
+                    }
                 }
-                catch { /* some paths omit readback */ }
+                catch
+                {
+                    Console.WriteLine(
+                        $"[NVAPI] Display #{dev.DisplayId}: set {depth} (readback unavailable)");
+                }
 
                 Console.WriteLine(
                     $"[NVAPI] Display #{dev.DisplayId} SET exact color: format=RGB range={range} depth={depth} policy=User");
+                failReason = null;
                 return candidate;
             }
             catch (Exception ex)
             {
+                failReason = ex.Message;
                 Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: exact {depth}/{range} failed: {ex.Message}");
             }
         }
+        failReason ??= $"Could not set {depth}";
         return null;
     }
 

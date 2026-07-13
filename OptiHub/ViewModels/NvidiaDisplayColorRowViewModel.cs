@@ -85,17 +85,48 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
         }
     }
 
-    /// <summary>Update summary from driver without rebuilding combo lists (keeps selection stable).</summary>
-    public void SoftUpdateSummary(NvidiaDisplayInfo info)
+    /// <summary>
+    /// Update summary from driver without rebuilding combo lists.
+    /// When <paramref name="commitSelections"/> is true (after Apply), sync pickers to live
+    /// driver values so a failed bit-depth does not leave a cosmetic "selected" state.
+    /// </summary>
+    public void SoftUpdateSummary(NvidiaDisplayInfo info, bool commitSelections = false)
     {
+        var depth = string.IsNullOrWhiteSpace(info.CurrentDepth)
+            ? "—"
+            : NvidiaPanelLogic.NormalizeDepthLabel(info.CurrentDepth);
+        var range = string.IsNullOrWhiteSpace(info.CurrentRange)
+            ? "Full RGB"
+            : NvidiaPanelLogic.NormalizeColorRangeLabel(info.CurrentRange);
+        var scaling = string.IsNullOrWhiteSpace(info.Scaling)
+            ? "GPU no-scaling"
+            : NvidiaPanelLogic.NormalizeScalingLabel(info.Scaling);
+
         CurrentSummary = string.IsNullOrWhiteSpace(info.CurrentMode)
-            ? $"{info.CurrentDepth} · {info.CurrentRange} · {info.Scaling}"
-            : $"{info.CurrentMode} · {info.CurrentDepth} · {info.CurrentRange} · {info.Scaling}";
+            ? $"{depth} · {range} · {scaling}"
+            : $"{info.CurrentMode} · {depth} · {range} · {scaling}";
         LoadedResolution = $"{info.CurrentWidth}x{info.CurrentHeight}";
         LoadedHz = info.CurrentHz;
-        LoadedDepth = info.CurrentDepth;
-        LoadedColorRange = info.CurrentRange;
-        LoadedScaling = info.Scaling;
+        LoadedDepth = depth;
+        LoadedColorRange = range;
+        LoadedScaling = scaling;
+
+        if (commitSelections)
+        {
+            _suppress = true;
+            try
+            {
+                SelectedResolution = MatchOption(ResolutionOptions, LoadedResolution)
+                                     ?? SelectedResolution;
+                RebuildRefreshOptions(selectHz: LoadedHz, force: false);
+                SelectedDepth = MatchOption(DepthOptions, LoadedDepth) ?? SelectedDepth;
+                SelectedColorRange = MatchOption(ColorRangeOptions, LoadedColorRange)
+                                     ?? SelectedColorRange;
+                SelectedScaling = MatchOption(ScalingOptions, LoadedScaling) ?? SelectedScaling;
+            }
+            finally { _suppress = false; }
+        }
+
         UpdateCanApply();
     }
 

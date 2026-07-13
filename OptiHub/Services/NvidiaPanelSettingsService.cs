@@ -392,7 +392,17 @@ public sealed class NvidiaPanelSettingsService
             var (ok, root, stderr) = await RunNvDisplayJsonAsync(args, ct).ConfigureAwait(false);
             if (ok && root is not null &&
                 root.Value.TryGetProperty("ok", out var okEl) && okEl.GetBoolean())
+            {
+                // Bit-depth: prefer verified readback so the UI does not lie.
+                if (root.Value.TryGetProperty("verified", out var ver) &&
+                    ver.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(ver.GetString()))
+                {
+                    var live = NvidiaPanelLogic.NormalizeDepthLabel(ver.GetString());
+                    return (true, $"Color depth → {live} (driver verified).");
+                }
                 return (true, successLabel + " applied.");
+            }
 
             // Surface real helper errors (unsupported mode, no map, NVAPI down).
             var detail = "";
@@ -404,13 +414,16 @@ public sealed class NvidiaPanelSettingsService
                     detail = d.GetString() ?? "";
                 else if (root.Value.TryGetProperty("skipped", out var sk) && sk.ValueKind == JsonValueKind.String)
                     detail = sk.GetString() ?? "";
+                else if (root.Value.TryGetProperty("verified", out var stuck) &&
+                         stuck.ValueKind == JsonValueKind.String)
+                    detail = $"panel stayed {NvidiaPanelLogic.NormalizeDepthLabel(stuck.GetString())}";
             }
             if (string.IsNullOrWhiteSpace(detail) && !string.IsNullOrWhiteSpace(stderr))
                 detail = stderr.Trim();
             if (string.IsNullOrWhiteSpace(detail))
                 detail = "mode may be unsupported on this display or GPU.";
-            if (detail.Length > 220)
-                detail = detail[..220] + "…";
+            if (detail.Length > 280)
+                detail = detail[..280] + "…";
             return (false, $"Could not apply ({successLabel}): {detail}");
         }
         catch (Exception ex)

@@ -252,10 +252,13 @@ public sealed class NetworkOptimizerService
             features.Add(Row("Path policy", mediaProfile.PolicyLine, true));
             if (mediaProfile.EthernetInUse)
             {
+                // Applied path sets primary Ethernet to 1 (secondaries 5+). Windows automatic
+                // default is often ~20–25 — that is a real gap until apply re-stamps after restart.
                 var metricOk = mediaProfile.EthernetMetric is null or <= 5;
-                features.Add(Row("Ethernet metric",
-                    mediaProfile.EthernetMetric is int m ? m.ToString() : "—",
-                    metricOk));
+                var metricStatus = mediaProfile.EthernetMetric is int m
+                    ? (metricOk ? m.ToString() : $"{m} (want ≤5 · re-apply)")
+                    : "—";
+                features.Add(Row("Ethernet metric", metricStatus, metricOk));
                 if (mediaProfile.WifiAvailable)
                 {
                     // Only hard-fail when last apply chose Ethernet-first. If user kept Wi‑Fi, show info OK.
@@ -382,12 +385,23 @@ foreach ($e in @($eth | Where-Object Status -eq 'Up')) {
     Where-Object { $_.IPAddress -notlike '169.254.*' })
   if ($ip.Count -gt 0) {
     $eInUse = $true
-    if (-not $bestEth -or $e.LinkSpeed -gt $bestEth.LinkSpeed) { $bestEth = $e }
+    # Prefer ReceiveLinkSpeed (bps int) — LinkSpeed is a display string and sorts wrong
+    $spd = 0L
+    try { $spd = [int64]$e.ReceiveLinkSpeed } catch { $spd = 0 }
+    $bestSpd = 0L
+    if ($bestEth) { try { $bestSpd = [int64]$bestEth.ReceiveLinkSpeed } catch { $bestSpd = 0 } }
+    if (-not $bestEth -or $spd -gt $bestSpd) { $bestEth = $e }
   }
 }
 if ($bestEth) {
   $mi = Get-NetIPInterface -InterfaceIndex $bestEth.ifIndex -AddressFamily IPv4 -EA SilentlyContinue
-  if ($mi) { $eMetric = [int]$mi.InterfaceMetric }
+  if ($mi) {
+    $eMetric = [int]$mi.InterfaceMetric
+    # When AutomaticMetric is still on, Windows shows speed-based defaults (~20–25) — not our apply
+    if ($mi.AutomaticMetric -eq 'Enabled' -and $eMetric -gt 5) {
+      # Keep real live metric for UI; feature row will fail until apply sticks
+    }
+  }
 }
 $band6 = $false; $band5 = $false; $ax = $false; $be = $false
 $curBand = '-'

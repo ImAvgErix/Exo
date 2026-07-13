@@ -34,7 +34,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
     [RelayCommand]
     public Task RefreshAsync() => RefreshCoreAsync(force: false, soft: false);
 
-    private async Task RefreshCoreAsync(bool force, bool soft)
+    private async Task RefreshCoreAsync(bool force, bool soft, bool commitSelections = false)
     {
         if (IsBusy && !force) return;
         // Soft refresh never shows full-page loading (avoids combos vanishing).
@@ -49,7 +49,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
                 foreach (var info in infos)
                 {
                     var row = Displays.FirstOrDefault(d => d.DisplayId == info.DisplayId);
-                    row?.SoftUpdateSummary(info);
+                    row?.SoftUpdateSummary(info, commitSelections);
                 }
             }
             else
@@ -186,7 +186,9 @@ public partial class NvidiaPanelViewModel : ObservableObject
 
         try
         {
-            await RefreshCoreAsync(force: true, soft: true);
+            // After apply, commit pickers to live driver state so bit-depth cannot look "applied"
+            // when the panel stayed on 8-bit.
+            await RefreshCoreAsync(force: true, soft: true, commitSelections: true);
         }
         catch
         {
