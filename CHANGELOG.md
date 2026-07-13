@@ -1,3 +1,9 @@
+## 1.9.18
+
+- **Windows hub shell**: left sidebar **Apps | Internet | GPU** with section-filtered cards
+- **Internet optimizer**: full SG TCP Optimizer–class stack + NIC/power/QoS/DNS/AFD/Wi‑Fi; auto-detect adapter/provider/area/latency; **Lowest latency** / **Highest download** presets (admin)
+- **GPU**: **AMD** coming-soon card + logo
+- Internet card navigates to dedicated optimizer page
 # Changelog
 
 ## 1.9.4

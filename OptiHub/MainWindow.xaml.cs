@@ -18,6 +18,7 @@ public sealed partial class MainWindow : Window
         Home,
         Discord,
         Steam,
+        Internet,
         Nvidia,
         NvidiaPanel,
         Settings
@@ -190,7 +191,8 @@ public sealed partial class MainWindow : Window
     {
         _mode = mode;
         var home = mode == ShellMode.Home;
-        var optimizer = mode is ShellMode.Discord or ShellMode.Steam or ShellMode.Nvidia or ShellMode.NvidiaPanel;
+        var optimizer = mode is ShellMode.Discord or ShellMode.Steam or ShellMode.Internet
+            or ShellMode.Nvidia or ShellMode.NvidiaPanel;
 
         BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
         // Home: only settings gear. Optimizers: back + product logo + short title. No "OptiHub" wordmark.
@@ -201,6 +203,7 @@ public sealed partial class MainWindow : Window
         {
             ShellMode.Discord => "Discord",
             ShellMode.Steam => "Steam",
+            ShellMode.Internet => "Internet",
             ShellMode.Nvidia => "NVIDIA",
             ShellMode.NvidiaPanel => "NVIDIA Panel",
             ShellMode.Settings => "Settings",
@@ -214,6 +217,8 @@ public sealed partial class MainWindow : Window
             TrySetContextLogo("Assets/Logos/discord.png");
         else if (mode == ShellMode.Steam)
             TrySetContextLogo("Assets/Logos/steam.png");
+        else if (mode == ShellMode.Internet)
+            TrySetContextLogo("Assets/Logos/optihub.png");
         else if (mode is ShellMode.Nvidia or ShellMode.NvidiaPanel)
             TrySetContextLogo("Assets/Logos/nvidia.png");
         else
@@ -272,6 +277,11 @@ public sealed partial class MainWindow : Window
     public void NavigateToSteam()
     {
         Navigate(ShellMode.Steam, typeof(SteamOptimizerPage), Slide());
+    }
+
+    public void NavigateToInternet()
+    {
+        Navigate(ShellMode.Internet, typeof(InternetOptimizerPage), Slide());
     }
 
     public void NavigateToNvidia()

@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using OptiHub.ViewModels;
+using HubSection = OptiHub.Models.HubSection;
 
 namespace OptiHub.Views;
 
@@ -11,6 +12,7 @@ public sealed partial class DashboardPage : Page
 {
     private CancellationTokenSource? _refreshCts;
     private bool _entrancePlayed;
+    private HubSection _section = HubSection.Apps;
 
     public DashboardViewModel ViewModel { get; }
 
@@ -25,6 +27,7 @@ public sealed partial class DashboardPage : Page
             if (App.MainAppWindow is not MainWindow mw) return;
             if (id == "discord") mw.NavigateToDiscord();
             else if (id == "steam") mw.NavigateToSteam();
+            else if (id == "internet") mw.NavigateToInternet();
             else if (id == "nvidia") mw.NavigateToNvidia();
         };
     }
@@ -32,11 +35,19 @@ public sealed partial class DashboardPage : Page
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+
+        if (e.Parameter is HubSection section)
+            _section = section;
+        else if (e.Parameter is string s && Enum.TryParse<HubSection>(s, true, out var parsed))
+            _section = parsed;
+
+        ViewModel.ApplySection(_section);
+        SyncNavChrome();
+
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
         _refreshCts = new CancellationTokenSource();
         await ViewModel.RefreshStatesAsync(_refreshCts.Token);
-        // Cards may bind after first layout — run stagger once content exists.
         DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, PlayStaggerEntrance);
     }
 
@@ -48,11 +59,68 @@ public sealed partial class DashboardPage : Page
         base.OnNavigatedFrom(e);
     }
 
-    private void PageRoot_Loaded(object sender, RoutedEventArgs e) => PlayStaggerEntrance();
+    private void PageRoot_Loaded(object sender, RoutedEventArgs e)
+    {
+        SyncNavChrome();
+        PlayStaggerEntrance();
+    }
 
-    /// <summary>
-    /// Kinetics-style stagger entrance: hero, then cards rise with ~90ms delay each.
-    /// </summary>
+    private void NavApps_Click(object sender, RoutedEventArgs e) => SwitchSection(HubSection.Apps);
+    private void NavInternet_Click(object sender, RoutedEventArgs e) => SwitchSection(HubSection.Internet);
+    private void NavGpu_Click(object sender, RoutedEventArgs e) => SwitchSection(HubSection.Gpu);
+
+    private void SwitchSection(HubSection section)
+    {
+        if (_section == section) return;
+        _section = section;
+        _entrancePlayed = false;
+        ViewModel.ApplySection(section);
+        SyncNavChrome();
+        PlayStaggerEntrance();
+    }
+
+    private void SyncNavChrome()
+    {
+        HighlightNav(NavApps, _section == HubSection.Apps);
+        HighlightNav(NavInternet, _section == HubSection.Internet);
+        HighlightNav(NavGpu, _section == HubSection.Gpu);
+    }
+
+    private void HighlightNav(Button btn, bool active)
+    {
+        if (active)
+        {
+            btn.Background = ThemeBrush("OptiAccentBrush")
+                ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 250, 250, 250));
+            btn.Foreground = ThemeBrush("OptiOnAccentBrush")
+                ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 0, 0));
+            btn.BorderThickness = new Thickness(0);
+        }
+        else
+        {
+            btn.ClearValue(Control.BackgroundProperty);
+            btn.ClearValue(Control.ForegroundProperty);
+            btn.ClearValue(Control.BorderThicknessProperty);
+        }
+    }
+
+    private Brush? ThemeBrush(string key)
+    {
+        try
+        {
+            var theme = ActualTheme == ElementTheme.Light ? "Light" : "Dark";
+            if (Application.Current.Resources.ThemeDictionaries.TryGetValue(theme, out var raw)
+                && raw is ResourceDictionary dict
+                && dict.TryGetValue(key, out var val)
+                && val is Brush brush)
+                return brush;
+            if (Application.Current.Resources.TryGetValue(key, out var fallback) && fallback is Brush b)
+                return b;
+        }
+        catch { }
+        return null;
+    }
+
     private void PlayStaggerEntrance()
     {
         if (_entrancePlayed) return;

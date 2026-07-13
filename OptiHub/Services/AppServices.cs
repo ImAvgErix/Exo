@@ -10,6 +10,7 @@ public sealed class AppServices
     public OptimizerStateService OptimizerState { get; }
     public GitHubUpdateService Updater { get; }
     public NvidiaPanelSettingsService NvidiaPanel { get; }
+    public NetworkOptimizerService Network { get; } = new();
 
     public AppServices()
     {
