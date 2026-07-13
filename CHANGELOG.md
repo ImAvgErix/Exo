@@ -1,3 +1,9 @@
+## 1.9.57
+
+- **Restored pre-redesign UI (v1.9.46 AMOLED)** — top bar + home modules as navigation
+- Removed permanent sidebar (was redundant with home modules)
+- Settings back to original 2×2 card layout (gear in title bar)
+- Keeps later fixes: resizable window, panel apply/refresh, scaling path
 ## 1.9.56
 
 - **Anti-generic PEAK UI** (screenshot-verified): pure AMOLED black + white signal — not purple SaaS
@@ -466,6 +472,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

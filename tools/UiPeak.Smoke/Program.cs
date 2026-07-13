@@ -34,16 +34,16 @@ Expect("MainWindow exists", File.Exists(main));
 if (File.Exists(theme))
 {
     var t = File.ReadAllText(theme);
-    foreach (var key in new[] { "OptiPageTitle", "OptiFeatureTile", "OptiMessageBanner", "OptiPrimaryButton", "OptiPagePadding", "OptiNavButton" })
+    foreach (var key in new[] { "OptiPageTitle", "OptiFeatureTile", "OptiMessageBanner", "OptiPrimaryButton", "OptiPagePadding", "OptiHubRow" })
         Expect("theme has " + key, t.Contains(key, StringComparison.Ordinal));
 }
 
 if (File.Exists(appXaml))
 {
     var a = File.ReadAllText(appXaml);
-    Expect("white signal accent", a.Contains("#F2F2F2", StringComparison.Ordinal));
-    Expect("pure black canvas", a.Contains("OptiPageBackgroundBrush\" Color=\"#000000\"", StringComparison.Ordinal));
-    Expect("not linear purple", !a.Contains("#5E6AD2", StringComparison.Ordinal));
+    Expect("AMOLED black canvas", a.Contains("OptiPageBackgroundBrush\" Color=\"#000000\"", StringComparison.Ordinal));
+    Expect("white accent", a.Contains("OptiAccentBrush\" Color=\"#FFFFFF\"", StringComparison.Ordinal));
+    Expect("not purple saas", !a.Contains("#5E6AD2", StringComparison.Ordinal));
     Expect("not orange forge", !a.Contains("#F59E0B", StringComparison.Ordinal));
 }
 
@@ -75,34 +75,40 @@ foreach (var vm in new[]
 {
     var p = Path.Combine(repo, "OptiHub", "ViewModels", vm);
     if (!File.Exists(p)) continue;
-    var src = File.ReadAllText(p);
-    Expect(vm + " BannerForSuccess", src.Contains("BannerForSuccess", StringComparison.Ordinal));
+    Expect(vm + " BannerForSuccess", File.ReadAllText(p).Contains("BannerForSuccess", StringComparison.Ordinal));
 }
 
 if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
     Expect("ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
-    Expect("custom rail NavHome", m.Contains("NavHome", StringComparison.Ordinal));
-    Expect("no WORKSPACE saas label", !m.Contains("WORKSPACE", StringComparison.Ordinal));
+    Expect("title bar SettingsButton", m.Contains("SettingsButton", StringComparison.Ordinal));
+    Expect("no permanent sidebar rail", !m.Contains("NavHome", StringComparison.Ordinal) && !m.Contains("NavDiscord", StringComparison.Ordinal));
     Expect("no stock NavigationView", !m.Contains("<NavigationView", StringComparison.Ordinal));
-    Expect("italic brand font", m.Contains("OptiDisplayFontItalic", StringComparison.Ordinal));
+    Expect("OPTIHUB brand", m.Contains("OPTIHUB", StringComparison.Ordinal));
 }
 
 if (File.Exists(mainCs))
 {
     var cs = File.ReadAllText(mainCs);
     Expect("resizable", cs.Contains("IsResizable = true", StringComparison.Ordinal));
-    Expect("no-anim navigate", cs.Contains("SuppressNavigationTransitionInfo", StringComparison.Ordinal));
+    Expect("NavigateHome", cs.Contains("NavigateHome", StringComparison.Ordinal));
 }
 
 var dash = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml");
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    Expect("modules lanes", d.Contains("Modules", StringComparison.Ordinal));
-    Expect("not command center", !d.Contains("Command center", StringComparison.Ordinal));
-    Expect("vertical stack not saas grid", d.Contains("ItemsStackPanel", StringComparison.Ordinal));
+    Expect("home module list", d.Contains("CardList", StringComparison.Ordinal));
+    Expect("home OptiHubRow modules", d.Contains("OptiHubRow", StringComparison.Ordinal) || d.Contains("MODULES", StringComparison.Ordinal));
+}
+
+var settings = Path.Combine(repo, "OptiHub", "Views", "SettingsPage.xaml");
+if (File.Exists(settings))
+{
+    var s = File.ReadAllText(settings);
+    Expect("settings 2x2 appearance", s.Contains("APPEARANCE", StringComparison.Ordinal) || s.Contains("Appearance", StringComparison.Ordinal));
+    Expect("settings updates", s.Contains("Updates", StringComparison.OrdinalIgnoreCase) || s.Contains("UPDATES", StringComparison.Ordinal));
 }
 
 var nvProg = Path.Combine(repo, "tools", "OptiHub.NvDisplay", "Program.cs");
@@ -116,8 +122,7 @@ if (File.Exists(nvProg))
 var panelVm = Path.Combine(repo, "OptiHub", "ViewModels", "NvidiaPanelViewModel.cs");
 if (File.Exists(panelVm))
 {
-    var pvm = File.ReadAllText(panelVm);
-    Expect("force refresh", pvm.Contains("RefreshCoreAsync(force: true", StringComparison.Ordinal));
+    Expect("force refresh", File.ReadAllText(panelVm).Contains("RefreshCoreAsync(force: true", StringComparison.Ordinal));
 }
 
 Log($"=== SUMMARY failed={failed} ===");

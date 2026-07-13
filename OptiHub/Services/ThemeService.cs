@@ -12,9 +12,10 @@ public sealed class ThemeService
     private readonly SettingsService _settings;
     private Window? _window;
 
+    // AMOLED pure black (dark) / clean neutral light
     public static readonly Color CozyBlack = Color.FromArgb(255, 0, 0, 0);
-    public static readonly Color SoftStone = Color.FromArgb(255, 245, 245, 245);
-    public static readonly Color DarkAccent = Color.FromArgb(255, 242, 242, 242);
+    public static readonly Color SoftStone = Color.FromArgb(255, 240, 240, 242); // #F0F0F2
+    public static readonly Color DarkAccent = Color.FromArgb(255, 17, 17, 17);   // #111111
 
     public ThemeService(SettingsService settings)
     {
@@ -44,11 +45,15 @@ public sealed class ThemeService
             : ElementTheme.Dark;
 
         if (root is Panel panel)
+        {
             panel.Background = new SolidColorBrush(
                 root.ActualTheme == ElementTheme.Light ? SoftStone : CozyBlack);
+        }
         else if (root is Border border)
+        {
             border.Background = new SolidColorBrush(
                 root.ActualTheme == ElementTheme.Light ? SoftStone : CozyBlack);
+        }
 
         TrySetTitleBarColors(root.ActualTheme == ElementTheme.Light);
     }

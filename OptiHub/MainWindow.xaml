@@ -5,144 +5,92 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="OptiHub">
 
-    <!--
-      PEAK shell: pure black, thin labeled rail, white signal.
-      Not Linear-purple SaaS. Not stock Fluent.
-    -->
     <Grid x:Name="RootGrid" Background="{ThemeResource OptiPageBackgroundBrush}">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="188" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-        <Border Grid.Column="0"
-                Background="{ThemeResource OptiSidebarBrush}"
-                BorderBrush="{ThemeResource OptiDividerBrush}"
-                BorderThickness="0,0,1,0">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="48" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <StackPanel Orientation="Horizontal"
-                            Spacing="8"
-                            VerticalAlignment="Center"
-                            Margin="16,0,0,0">
-                    <TextBlock Text="OptiHub"
-                               FontFamily="{StaticResource OptiDisplayFontItalic}"
-                               FontStyle="Italic"
-                               FontSize="18"
-                               FontWeight="SemiBold"
-                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                               VerticalAlignment="Center" />
-                </StackPanel>
-
-                <StackPanel Grid.Row="1"
-                            Spacing="2"
-                            Margin="8,12,8,8">
-                    <Button x:Name="NavHome" Style="{StaticResource OptiNavButton}"
-                            Tag="home" Click="Nav_Click"
-                            AutomationProperties.Name="Home" ToolTipService.ToolTip="Home">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE80F;" FontSize="14" />
-                            <TextBlock Text="Home" FontSize="13" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="NavDiscord" Style="{StaticResource OptiNavButton}"
-                            Tag="discord" Click="Nav_Click"
-                            AutomationProperties.Name="Discord" ToolTipService.ToolTip="Discord">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE8BD;" FontSize="14" />
-                            <TextBlock Text="Discord" FontSize="13" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="NavSteam" Style="{StaticResource OptiNavButton}"
-                            Tag="steam" Click="Nav_Click"
-                            AutomationProperties.Name="Steam" ToolTipService.ToolTip="Steam">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE7FC;" FontSize="14" />
-                            <TextBlock Text="Steam" FontSize="13" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="NavInternet" Style="{StaticResource OptiNavButton}"
-                            Tag="internet" Click="Nav_Click"
-                            AutomationProperties.Name="Internet" ToolTipService.ToolTip="Internet">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE774;" FontSize="14" />
-                            <TextBlock Text="Internet" FontSize="13" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="NavNvidia" Style="{StaticResource OptiNavButton}"
-                            Tag="nvidia" Click="Nav_Click"
-                            AutomationProperties.Name="NVIDIA" ToolTipService.ToolTip="NVIDIA">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE950;" FontSize="14" />
-                            <TextBlock Text="NVIDIA" FontSize="13" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-
-                <Button x:Name="NavSettings"
-                        Grid.Row="2"
-                        Style="{StaticResource OptiNavButton}"
-                        Tag="settings" Click="Nav_Click"
-                        Margin="8,0,8,12"
-                        AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <FontIcon Glyph="&#xE713;" FontSize="14" />
-                        <TextBlock Text="Settings" FontSize="13" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-            </Grid>
-        </Border>
-
-        <Grid Grid.Column="1" Background="{ThemeResource OptiPageBackgroundBrush}">
+        <Grid x:Name="TitleBarHost"
+              Grid.Row="0"
+              Height="48"
+              Background="{ThemeResource OptiChromeBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="CaptionSpacer" Width="138" />
+            </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
-                <RowDefinition Height="40" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="2" />
             </Grid.RowDefinitions>
 
-            <Grid x:Name="TitleBarHost" Grid.Row="0" Background="Transparent">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition x:Name="CaptionSpacer" Width="138" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" Spacing="10"
-                            VerticalAlignment="Center" Margin="20,0,0,0">
-                    <Button x:Name="BackButton"
-                            Style="{StaticResource OptiIconButton}"
-                            Visibility="Collapsed"
-                            Click="BackButton_Click"
-                            AutomationProperties.Name="Back">
-                        <FontIcon Glyph="&#xE72B;" FontSize="12"
-                                  Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                    </Button>
-                    <Border x:Name="ContextLogoHost"
-                            Style="{StaticResource OptiLogoWellSmall}"
-                            Visibility="Collapsed"
-                            Width="18" Height="18">
-                        <Image x:Name="ContextLogo" Stretch="Uniform"
-                               AutomationProperties.AccessibilityView="Raw" />
-                    </Border>
-                    <TextBlock x:Name="AppTitleText" Text=""
-                               FontSize="12"
-                               Foreground="{ThemeResource OptiMutedTextBrush}"
-                               VerticalAlignment="Center" />
-                    <Button x:Name="SettingsButton"
-                            Style="{StaticResource OptiIconButton}"
-                            Visibility="Collapsed"
-                            Width="1" Height="1"
-                            Click="SettingsButton_Click" />
-                </StackPanel>
-            </Grid>
+            <StackPanel Orientation="Horizontal"
+                        Spacing="12"
+                        VerticalAlignment="Center"
+                        Margin="16,0,0,0">
+                <TextBlock Text="OPTIHUB"
+                           VerticalAlignment="Center"
+                           FontFamily="{StaticResource OptiUiFontSemiBold}"
+                           FontSize="13"
+                           FontWeight="Bold"
+                           CharacterSpacing="120"
+                           Foreground="{ThemeResource OptiPrimaryTextBrush}" />
 
-            <Frame x:Name="ContentFrame"
-                   Grid.Row="1"
-                   IsTabStop="True"
-                   IsNavigationStackEnabled="False"
-                   Background="Transparent" />
+                <Border Width="1" Height="16"
+                        Background="{ThemeResource OptiDividerBrush}"
+                        VerticalAlignment="Center" />
+
+                <Button x:Name="BackButton"
+                        Style="{StaticResource OptiIconButton}"
+                        AutomationProperties.Name="Back to dashboard"
+                        Click="BackButton_Click"
+                        Visibility="Collapsed"
+                        Width="34" Height="34"
+                        VerticalAlignment="Center"
+                        AllowFocusOnInteraction="True"
+                        UseSystemFocusVisuals="False">
+                    <FontIcon Glyph="&#xE72B;" FontSize="13"
+                              Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                </Button>
+
+                <Border x:Name="ContextLogoHost"
+                        Style="{StaticResource OptiLogoWellSmall}"
+                        Visibility="Collapsed"
+                        VerticalAlignment="Center">
+                    <Image x:Name="ContextLogo"
+                           Stretch="Uniform"
+                           AutomationProperties.AccessibilityView="Raw" />
+                </Border>
+
+                <TextBlock x:Name="AppTitleText"
+                           Text=""
+                           VerticalAlignment="Center"
+                           FontFamily="{StaticResource OptiUiFontSemiBold}"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+
+                <Button x:Name="SettingsButton"
+                        Style="{StaticResource OptiIconButton}"
+                        AutomationProperties.Name="Settings"
+                        Click="SettingsButton_Click"
+                        Width="34" Height="34"
+                        VerticalAlignment="Center"
+                        AllowFocusOnInteraction="True"
+                        UseSystemFocusVisuals="False">
+                    <FontIcon Glyph="&#xE713;" FontSize="14"
+                              Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                </Button>
+            </StackPanel>
+
+            <Border Grid.Row="1" Grid.ColumnSpan="2"
+                    Background="{ThemeResource OptiRailBrush}" Opacity="0.35" />
         </Grid>
+
+        <Frame x:Name="ContentFrame"
+               Grid.Row="1"
+               IsTabStop="True"
+               IsNavigationStackEnabled="False"
+               Background="{ThemeResource OptiPageBackgroundBrush}" />
     </Grid>
 </Window>
