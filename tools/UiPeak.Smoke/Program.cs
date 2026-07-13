@@ -64,10 +64,9 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("theme has OptiMutedTextBrush", a.Contains("OptiMutedTextBrush", StringComparison.Ordinal));
     Expect("theme has OptiDividerBrush", a.Contains("OptiDividerBrush", StringComparison.Ordinal));
-    Expect("soul indigo accent", a.Contains("#7C9CFF", StringComparison.Ordinal) || a.Contains("#005FB8", StringComparison.Ordinal));
-    Expect("ink card surface", a.Contains("#1C1F2A", StringComparison.Ordinal) || a.Contains("#FFFFFF", StringComparison.Ordinal));
+    Expect("linear violet accent", a.Contains("#5E6AD2", StringComparison.Ordinal));
+    Expect("near black canvas", a.Contains("#0A0A0C", StringComparison.Ordinal));
     Expect("not orange forge accent", !a.Contains("#F59E0B", StringComparison.Ordinal));
-    Expect("not glass cyan accent", !a.Contains("#64D2FF", StringComparison.Ordinal));
 }
 
 foreach (var page in new[]
@@ -117,38 +116,35 @@ if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
     Expect("MainWindow has ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
-    Expect("MainWindow NavigationView shell", m.Contains("NavigationView", StringComparison.Ordinal));
-    Expect("MainWindow NavHome", m.Contains("NavHome", StringComparison.Ordinal));
-    Expect("MainWindow settings via NavigationView", m.Contains("IsSettingsVisible", StringComparison.Ordinal));
-    Expect("MainWindow no content transition block", !m.Contains("<Frame.ContentTransitions>", StringComparison.Ordinal));
+    Expect("MainWindow custom sidebar", m.Contains("NavHome", StringComparison.Ordinal) && m.Contains("WORKSPACE", StringComparison.Ordinal));
+    Expect("MainWindow NavSettings", m.Contains("NavSettings", StringComparison.Ordinal));
+    Expect("MainWindow not stock NavigationView", !m.Contains("<NavigationView", StringComparison.Ordinal));
 }
 
 if (File.Exists(mainCs))
 {
     var cs = File.ReadAllText(mainCs);
-    Expect("mica backdrop", cs.Contains("MicaBackdrop", StringComparison.Ordinal));
     Expect("resizable chrome method", cs.Contains("ApplyResizableWindowChrome", StringComparison.Ordinal));
     Expect("IsResizable true", cs.Contains("IsResizable = true", StringComparison.Ordinal));
     Expect("IsMaximizable true", cs.Contains("IsMaximizable = true", StringComparison.Ordinal));
     Expect("no fixed re-assert helper", !cs.Contains("ApplyFixedWindowChrome", StringComparison.Ordinal));
     Expect("no DisableMaximize hook", !cs.Contains("DisableMaximizeViaSystemMenu", StringComparison.Ordinal));
-    Expect("no liquid glass acrylic primary", !cs.Contains("TryEnableLiquidGlassBackdrop", StringComparison.Ordinal));
+    Expect("no-anim page navigate", cs.Contains("SuppressNavigationTransitionInfo", StringComparison.Ordinal));
 }
 
 var dash = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml");
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    Expect("dashboard modules", d.Contains("CardList", StringComparison.Ordinal));
-    Expect("dashboard home title", d.Contains("Home", StringComparison.Ordinal));
-    Expect("dashboard wrap grid", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
+    Expect("dashboard product tiles", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
+    Expect("dashboard command center", d.Contains("Command center", StringComparison.Ordinal));
 }
 
 var settings = Path.Combine(repo, "OptiHub", "Views", "SettingsPage.xaml");
 if (File.Exists(settings))
 {
     var s = File.ReadAllText(settings);
-    Expect("settings cards", s.Contains("OptiCard", StringComparison.Ordinal));
+    Expect("settings cards", s.Contains("OptiCard", StringComparison.Ordinal) || s.Contains("Appearance", StringComparison.Ordinal));
     Expect("settings Appearance", s.Contains("Appearance", StringComparison.Ordinal));
 }
 

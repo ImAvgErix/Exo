@@ -1,3 +1,9 @@
+## 1.9.55
+
+- **Linear/Raycast-inspired UI** (apps people actually praise) — verified with live screenshots
+- Custom dark sidebar (not stock Windows NavigationView)
+- Near-black canvas + violet accent (#5E6AD2) + elevated product tiles
+- Home: Command center + large logo cards; optimizers: full-width feature rows
 ## 1.9.54
 
 - **Verified with real window screenshots** (home + Discord)
@@ -454,6 +460,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

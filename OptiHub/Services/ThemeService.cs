@@ -12,10 +12,10 @@ public sealed class ThemeService
     private readonly SettingsService _settings;
     private Window? _window;
 
-    // Transparent so Mica/system backdrop shows; light fallback is soft gray
-    public static readonly Color CozyBlack = Color.FromArgb(0, 0, 0, 0);
-    public static readonly Color SoftStone = Color.FromArgb(0, 0, 0, 0);
-    public static readonly Color DarkAccent = Color.FromArgb(255, 124, 156, 255);
+    // Linear-like near-black canvas (intentional product surface, not Mica gray)
+    public static readonly Color CozyBlack = Color.FromArgb(255, 10, 10, 12);
+    public static readonly Color SoftStone = Color.FromArgb(255, 247, 247, 248);
+    public static readonly Color DarkAccent = Color.FromArgb(255, 94, 106, 210);
 
     public ThemeService(SettingsService settings)
     {
@@ -44,11 +44,12 @@ public sealed class ThemeService
             ? ElementTheme.Light
             : ElementTheme.Dark;
 
-        // Keep root transparent for Mica / system backdrop.
         if (root is Panel panel)
-            panel.Background = new SolidColorBrush(Colors.Transparent);
+            panel.Background = new SolidColorBrush(
+                root.ActualTheme == ElementTheme.Light ? SoftStone : CozyBlack);
         else if (root is Border border)
-            border.Background = new SolidColorBrush(Colors.Transparent);
+            border.Background = new SolidColorBrush(
+                root.ActualTheme == ElementTheme.Light ? SoftStone : CozyBlack);
 
         TrySetTitleBarColors(root.ActualTheme == ElementTheme.Light);
     }
