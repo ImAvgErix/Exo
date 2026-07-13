@@ -1,7 +1,5 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using OptiHub.ViewModels;
 
@@ -10,7 +8,6 @@ namespace OptiHub.Views;
 public sealed partial class DashboardPage : Page
 {
     private CancellationTokenSource? _refreshCts;
-    private bool _entrancePlayed;
 
     public DashboardViewModel ViewModel { get; }
 
@@ -37,7 +34,6 @@ public sealed partial class DashboardPage : Page
         _refreshCts?.Dispose();
         _refreshCts = new CancellationTokenSource();
         await ViewModel.RefreshStatesAsync(_refreshCts.Token);
-        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, PlayStaggerEntrance);
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -46,114 +42,6 @@ public sealed partial class DashboardPage : Page
         _refreshCts?.Dispose();
         _refreshCts = null;
         base.OnNavigatedFrom(e);
-    }
-
-    private void PageRoot_Loaded(object sender, RoutedEventArgs e) => PlayStaggerEntrance();
-
-    private void PlayStaggerEntrance()
-    {
-        if (_entrancePlayed) return;
-
-        var storyboard = new Storyboard();
-
-        if (HeroPanel is not null && HeroTransform is not null)
-            AddFadeSlide(storyboard, HeroPanel, HeroTransform, delayMs: 0, fromY: 14);
-
-        var cards = new List<UIElement>();
-        if (CardList is not null)
-            CollectCardButtons(CardList, cards);
-
-        for (var i = 0; i < cards.Count; i++)
-        {
-            var el = cards[i];
-            el.Opacity = 0;
-            if (el.RenderTransform is not CompositeTransform ct)
-            {
-                ct = new CompositeTransform { TranslateY = 18 };
-                el.RenderTransform = ct;
-                el.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
-            }
-            else
-            {
-                ct.TranslateY = 18;
-            }
-
-            AddFadeSlide(storyboard, el, ct, delayMs: 50 + i * 45, fromY: 18);
-        }
-
-        if (storyboard.Children.Count == 0) return;
-        _entrancePlayed = true;
-        storyboard.Begin();
-    }
-
-    private static void AddFadeSlide(Storyboard board, UIElement target, CompositeTransform transform, int delayMs, double fromY)
-    {
-        var delay = TimeSpan.FromMilliseconds(delayMs);
-
-        var fade = new DoubleAnimation
-        {
-            From = 0,
-            To = 1,
-            Duration = TimeSpan.FromMilliseconds(360),
-            BeginTime = delay,
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        Storyboard.SetTarget(fade, target);
-        Storyboard.SetTargetProperty(fade, "Opacity");
-        board.Children.Add(fade);
-
-        transform.TranslateY = fromY;
-        var slide = new DoubleAnimation
-        {
-            From = fromY,
-            To = 0,
-            Duration = TimeSpan.FromMilliseconds(400),
-            BeginTime = delay,
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        Storyboard.SetTarget(slide, transform);
-        Storyboard.SetTargetProperty(slide, "TranslateY");
-        board.Children.Add(slide);
-    }
-
-    private static void AddFadeSlideX(Storyboard board, UIElement target, CompositeTransform transform, int delayMs, double fromX)
-    {
-        var delay = TimeSpan.FromMilliseconds(delayMs);
-        var fade = new DoubleAnimation
-        {
-            From = 0,
-            To = 1,
-            Duration = TimeSpan.FromMilliseconds(380),
-            BeginTime = delay,
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        Storyboard.SetTarget(fade, target);
-        Storyboard.SetTargetProperty(fade, "Opacity");
-        board.Children.Add(fade);
-        transform.TranslateX = fromX;
-        var slide = new DoubleAnimation
-        {
-            From = fromX,
-            To = 0,
-            Duration = TimeSpan.FromMilliseconds(420),
-            BeginTime = delay,
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        Storyboard.SetTarget(slide, transform);
-        Storyboard.SetTargetProperty(slide, "TranslateX");
-        board.Children.Add(slide);
-    }
-
-    private static void CollectCardButtons(DependencyObject root, List<UIElement> into)
-    {
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (var i = 0; i < count; i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            if (child is Button { Tag: string } btn)
-                into.Add(btn);
-            CollectCardButtons(child, into);
-        }
     }
 
     private void CardButton_Click(object sender, RoutedEventArgs e)

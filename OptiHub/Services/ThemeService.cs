@@ -12,10 +12,10 @@ public sealed class ThemeService
     private readonly SettingsService _settings;
     private Window? _window;
 
-    // AMOLED pure black (dark) / clean neutral light
-    public static readonly Color CozyBlack = Color.FromArgb(255, 0, 0, 0);
-    public static readonly Color SoftStone = Color.FromArgb(255, 240, 240, 242); // #F0F0F2
-    public static readonly Color DarkAccent = Color.FromArgb(255, 17, 17, 17);   // #111111
+    // Transparent so Mica/system backdrop shows; light fallback is soft gray
+    public static readonly Color CozyBlack = Color.FromArgb(0, 0, 0, 0);
+    public static readonly Color SoftStone = Color.FromArgb(0, 0, 0, 0);
+    public static readonly Color DarkAccent = Color.FromArgb(255, 76, 141, 255);
 
     public ThemeService(SettingsService settings)
     {
@@ -44,16 +44,11 @@ public sealed class ThemeService
             ? ElementTheme.Light
             : ElementTheme.Dark;
 
+        // Keep root transparent for Mica / system backdrop.
         if (root is Panel panel)
-        {
-            panel.Background = new SolidColorBrush(
-                root.ActualTheme == ElementTheme.Light ? SoftStone : CozyBlack);
-        }
+            panel.Background = new SolidColorBrush(Colors.Transparent);
         else if (root is Border border)
-        {
-            border.Background = new SolidColorBrush(
-                root.ActualTheme == ElementTheme.Light ? SoftStone : CozyBlack);
-        }
+            border.Background = new SolidColorBrush(Colors.Transparent);
 
         TrySetTitleBarColors(root.ActualTheme == ElementTheme.Light);
     }

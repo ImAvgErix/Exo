@@ -5,54 +5,32 @@
       Background="Transparent"
       Loaded="Page_Loaded">
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel x:Name="PageRoot"
-                    MaxWidth="520"
-                    HorizontalAlignment="Center"
-                    Padding="32,28,32,24"
-                    Spacing="24">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  Padding="{StaticResource OptiPagePadding}">
+        <StackPanel MaxWidth="640"
+                    HorizontalAlignment="Left"
+                    Spacing="20">
 
-            <StackPanel x:Name="HeaderPanel"
-                        Spacing="4"
-                        Opacity="0"
-                        RenderTransformOrigin="0.5,0">
-                <StackPanel.RenderTransform>
-                    <CompositeTransform x:Name="HeaderTransform" TranslateY="12" />
-                </StackPanel.RenderTransform>
-                <TextBlock Text="Settings"
-                           FontFamily="{StaticResource OptiUiFontSemiBold}"
-                           FontSize="36"
-                           FontWeight="SemiBold"
-                           CharacterSpacing="-60"
-                           Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-            </StackPanel>
+            <TextBlock x:Name="HeaderPanel"
+                       Text="Settings"
+                       Style="{StaticResource OptiPageTitle}" />
 
-            <StackPanel x:Name="BodyGrid"
-                        Spacing="18"
-                        Opacity="0"
-                        RenderTransformOrigin="0.5,0">
-                <StackPanel.RenderTransform>
-                    <CompositeTransform x:Name="BodyTransform" TranslateY="16" />
-                </StackPanel.RenderTransform>
-
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Appearance" Style="{StaticResource OptiSectionTitle}" />
-                    <Border Style="{StaticResource OptiGlassPanel}" Padding="10">
-                        <Grid ColumnSpacing="8">
+            <StackPanel x:Name="BodyGrid" Spacing="16">
+                <ContentControl Style="{StaticResource OptiCard}" Padding="20">
+                    <StackPanel Spacing="14">
+                        <TextBlock Text="Appearance" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                        <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Button Style="{StaticResource OptiThemePickButton}"
                                     Click="ThemeDark_Click"
-                                    Height="96"
+                                    Height="88"
                                     AutomationProperties.Name="Use dark theme">
-                                <Border Background="{ThemeResource OptiSurfaceBrush}"
-                                        BorderBrush="{ThemeResource OptiGlassStrokeBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="16" Padding="14">
-                                    <StackPanel Spacing="10">
-                                        <Border Height="32" CornerRadius="8" Background="#000000" Opacity="0.55" />
+                                <Border Style="{StaticResource OptiThemePickOuter}" Padding="12">
+                                    <StackPanel Spacing="8">
+                                        <Border Height="28" CornerRadius="4" Background="#1A1A1A" />
                                         <TextBlock Text="Dark" FontWeight="SemiBold"
                                                    Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                                     </StackPanel>
@@ -61,77 +39,63 @@
                             <Button Grid.Column="1"
                                     Style="{StaticResource OptiThemePickButton}"
                                     Click="ThemeLight_Click"
-                                    Height="96"
+                                    Height="88"
                                     AutomationProperties.Name="Use light theme">
-                                <Border Background="{ThemeResource OptiSurfaceBrush}"
-                                        BorderBrush="{ThemeResource OptiGlassStrokeBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="16" Padding="14">
-                                    <StackPanel Spacing="10">
-                                        <Border Height="32" CornerRadius="8" Background="#FFFFFF" Opacity="0.85" />
+                                <Border Style="{StaticResource OptiThemePickOuter}" Padding="12">
+                                    <StackPanel Spacing="8">
+                                        <Border Height="28" CornerRadius="4" Background="#FFFFFF"
+                                                BorderBrush="#E0E0E0" BorderThickness="1" />
                                         <TextBlock Text="Light" FontWeight="SemiBold"
                                                    Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                                     </StackPanel>
                                 </Border>
                             </Button>
                         </Grid>
-                    </Border>
-                </StackPanel>
+                    </StackPanel>
+                </ContentControl>
 
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Updates" Style="{StaticResource OptiSectionTitle}" />
-                    <Border Style="{StaticResource OptiGlassPanel}" Padding="18,16">
-                        <StackPanel Spacing="14">
-                            <ToggleSwitch Header="Check on launch"
-                                          IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
-                                          OnContent="On" OffContent="Off" />
-                            <Button Style="{StaticResource OptiPrimaryButton}"
-                                    Content="Check for updates"
-                                    Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
-                                    HorizontalAlignment="Stretch"
-                                    IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                            <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
-                                       Style="{StaticResource OptiCaption}"
-                                       Visibility="{x:Bind ViewModel.HasUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
+                <ContentControl Style="{StaticResource OptiCard}" Padding="20">
+                    <StackPanel Spacing="14">
+                        <TextBlock Text="Updates" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                        <ToggleSwitch Header="Check for updates on launch"
+                                      IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
+                                      OnContent="On" OffContent="Off" />
+                        <Button Style="{StaticResource OptiPrimaryButton}"
+                                Content="Check for updates"
+                                Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
+                                HorizontalAlignment="Left"
+                                IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                        <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
+                                   Style="{StaticResource OptiCaption}"
+                                   Visibility="{x:Bind ViewModel.HasUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    </StackPanel>
+                </ContentControl>
 
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Support" Style="{StaticResource OptiSectionTitle}" />
-                    <Border Style="{StaticResource OptiGlassPanel}" Padding="8">
-                        <StackPanel>
-                            <Button Style="{StaticResource OptiQuietButton}"
-                                    Content="Open logs folder"
-                                    HorizontalAlignment="Stretch"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
-                            <Border Height="1" Background="{ThemeResource OptiDividerBrush}" Margin="12,0" />
-                            <Button Style="{StaticResource OptiQuietButton}"
-                                    Content="Report issue on GitHub"
-                                    HorizontalAlignment="Stretch"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Command="{x:Bind ViewModel.ReportIssueCommand}" />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
+                <ContentControl Style="{StaticResource OptiCard}" Padding="20">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Support" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                        <Button Style="{StaticResource OptiQuietButton}"
+                                Content="Open logs folder"
+                                HorizontalAlignment="Left"
+                                Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
+                        <Button Style="{StaticResource OptiQuietButton}"
+                                Content="Report issue on GitHub"
+                                HorizontalAlignment="Left"
+                                Command="{x:Bind ViewModel.ReportIssueCommand}" />
+                    </StackPanel>
+                </ContentControl>
 
-                <StackPanel Spacing="8">
-                    <TextBlock Text="About" Style="{StaticResource OptiSectionTitle}" />
-                    <Border Style="{StaticResource OptiGlassPanel}" Padding="18,16">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Version" Style="{StaticResource OptiCaption}" />
-                            <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
-                                       FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                       FontSize="30"
-                                       FontWeight="SemiBold"
-                                       CharacterSpacing="-40"
-                                       Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
+                <ContentControl Style="{StaticResource OptiCard}" Padding="20">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="About" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                        <TextBlock Text="Version" Style="{StaticResource OptiCaption}" />
+                        <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
+                                   FontFamily="{StaticResource OptiUiFontSemiBold}"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                    </StackPanel>
+                </ContentControl>
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

@@ -1,3 +1,10 @@
+## 1.9.51
+
+- **STUDIO from-scratch UI** — professional Windows 11 Fluent only
+- Shell: Mica backdrop + standard NavigationView (left pane + settings)
+- Calm solid surfaces, 8px Fluent corners, single blue accent
+- Home: clean module list rows; optimizers: standard card layout; settings: simple sections
+- Removed glass dock, acrylic orbs, experimental layouts
 ## 1.9.50
 
 - **GLASS redesign** — Liquid Glass + Tesla clean (not flat recolors)
@@ -429,6 +436,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

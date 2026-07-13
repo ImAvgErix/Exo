@@ -28,7 +28,8 @@ public sealed partial class MainWindow : Window
 
     private ShellMode _mode = ShellMode.Home;
     private readonly CancellationTokenSource _lifetimeCts = new();
-    private readonly Dictionary<string, Button> _navMap = new();
+    private bool _suppressNavSync;
+    private bool _clearedInitialFocus;
 
     public MainWindow()
     {
@@ -39,18 +40,11 @@ public sealed partial class MainWindow : Window
         ApplyResizableWindowChrome();
         TryCenterOnScreen();
         TrySetWindowIcon();
-        TryEnableLiquidGlassBackdrop();
+        TryEnableMicaBackdrop();
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBarHost);
         TryTransparentTitleBarButtons();
-
-        _navMap["home"] = NavHome;
-        _navMap["discord"] = NavDiscord;
-        _navMap["steam"] = NavSteam;
-        _navMap["internet"] = NavInternet;
-        _navMap["nvidia"] = NavNvidia;
-        _navMap["settings"] = NavSettings;
 
         AppWindow.Changed += (_, args) =>
         {
@@ -81,8 +75,6 @@ public sealed partial class MainWindow : Window
         ClearChromeFocus();
         _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
     }
-
-    private bool _clearedInitialFocus;
 
     private void OnWindowActivatedClearFocus(object sender, WindowActivatedEventArgs args)
     {
@@ -137,20 +129,20 @@ public sealed partial class MainWindow : Window
 
     private void ApplyShellChrome()
     {
-        // Keep root transparent so Desktop Acrylic / Mica shows through.
         RootGrid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         App.Services.Theme.Apply();
         UpdateCaptionInset();
         SyncNavSelection(ModeToNavKey(_mode));
+        TryTransparentTitleBarButtons();
     }
 
-    private void TryEnableLiquidGlassBackdrop()
+    private void TryEnableMicaBackdrop()
     {
         try
         {
-            if (DesktopAcrylicController.IsSupported())
+            if (MicaController.IsSupported())
             {
-                SystemBackdrop = new DesktopAcrylicBackdrop();
+                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
                 return;
             }
         }
@@ -158,10 +150,8 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            if (MicaController.IsSupported())
-            {
-                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
-            }
+            if (DesktopAcrylicController.IsSupported())
+                SystemBackdrop = new DesktopAcrylicBackdrop();
         }
         catch { }
     }
@@ -170,13 +160,22 @@ public sealed partial class MainWindow : Window
     {
         try
         {
+            var light = RootGrid.ActualTheme == ElementTheme.Light;
             var tb = AppWindow.TitleBar;
             tb.ButtonBackgroundColor = Color.FromArgb(0, 0, 0, 0);
             tb.ButtonInactiveBackgroundColor = Color.FromArgb(0, 0, 0, 0);
-            tb.ButtonHoverBackgroundColor = Color.FromArgb(40, 255, 255, 255);
-            tb.ButtonPressedBackgroundColor = Color.FromArgb(60, 255, 255, 255);
-            tb.ButtonForegroundColor = Color.FromArgb(255, 245, 245, 247);
-            tb.ButtonInactiveForegroundColor = Color.FromArgb(160, 174, 174, 178);
+            tb.ButtonHoverBackgroundColor = light
+                ? Color.FromArgb(24, 0, 0, 0)
+                : Color.FromArgb(24, 255, 255, 255);
+            tb.ButtonPressedBackgroundColor = light
+                ? Color.FromArgb(40, 0, 0, 0)
+                : Color.FromArgb(40, 255, 255, 255);
+            tb.ButtonForegroundColor = light
+                ? Color.FromArgb(255, 26, 26, 26)
+                : Color.FromArgb(255, 243, 243, 243);
+            tb.ButtonInactiveForegroundColor = light
+                ? Color.FromArgb(160, 90, 90, 90)
+                : Color.FromArgb(160, 154, 154, 154);
         }
         catch { }
     }
@@ -198,56 +197,53 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    private void Nav_Click(object sender, RoutedEventArgs e)
+    private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        if (sender is not Button { Tag: string key }) return;
-        switch (key)
+        if (_suppressNavSync) return;
+
+        if (args.IsSettingsSelected)
         {
-            case "home": NavigateHome(); break;
-            case "discord": NavigateToDiscord(); break;
-            case "steam": NavigateToSteam(); break;
-            case "internet": NavigateToInternet(); break;
-            case "nvidia": NavigateToNvidia(); break;
-            case "settings": Navigate(ShellMode.Settings, typeof(SettingsPage), Slide()); break;
+            Navigate(ShellMode.Settings, typeof(SettingsPage), Slide());
+            return;
+        }
+
+        if (args.SelectedItem is NavigationViewItem { Tag: string key })
+        {
+            switch (key)
+            {
+                case "home": NavigateHome(); break;
+                case "discord": NavigateToDiscord(); break;
+                case "steam": NavigateToSteam(); break;
+                case "internet": NavigateToInternet(); break;
+                case "nvidia": NavigateToNvidia(); break;
+            }
         }
     }
 
     private void SyncNavSelection(string activeKey)
     {
-        Brush Soft() => Application.Current.Resources.TryGetValue("OptiAccentSoftBrush", out var s) && s is Brush sb
-            ? sb : new SolidColorBrush(ColorHelper.FromArgb(0x33, 0x64, 0xD2, 0xFF));
-        Brush Acc() => Application.Current.Resources.TryGetValue("OptiAccentBrush", out var a) && a is Brush ab
-            ? ab : new SolidColorBrush(ColorHelper.FromArgb(255, 100, 210, 255));
-        Brush Mut() => Application.Current.Resources.TryGetValue("OptiMutedTextBrush", out var m) && m is Brush mb
-            ? mb : new SolidColorBrush(ColorHelper.FromArgb(255, 174, 174, 178));
-        Brush Pri() => Application.Current.Resources.TryGetValue("OptiPrimaryTextBrush", out var p) && p is Brush pb
-            ? pb : new SolidColorBrush(ColorHelper.FromArgb(255, 245, 245, 247));
-
-        foreach (var kv in _navMap)
+        _suppressNavSync = true;
+        try
         {
-            var on = string.Equals(kv.Key, activeKey, StringComparison.OrdinalIgnoreCase);
-            var btn = kv.Value;
-            btn.Background = on ? Soft() : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            btn.Foreground = on ? Acc() : Mut();
-            btn.BorderThickness = new Thickness(0);
-            PaintNavContent(btn.Content, on ? Acc() : Mut(), on ? Pri() : Mut());
+            if (string.Equals(activeKey, "settings", StringComparison.OrdinalIgnoreCase))
+            {
+                NavView.SelectedItem = NavView.SettingsItem;
+                return;
+            }
+
+            foreach (var obj in NavView.MenuItems)
+            {
+                if (obj is NavigationViewItem item &&
+                    string.Equals(item.Tag as string, activeKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    NavView.SelectedItem = item;
+                    return;
+                }
+            }
         }
-    }
-
-    private static void PaintNavContent(object? content, Brush iconBrush, Brush labelBrush)
-    {
-        switch (content)
+        finally
         {
-            case FontIcon icon:
-                icon.Foreground = iconBrush;
-                break;
-            case TextBlock label:
-                label.Foreground = labelBrush;
-                break;
-            case Panel panel:
-                foreach (var child in panel.Children)
-                    PaintNavContent(child, iconBrush, labelBrush);
-                break;
+            _suppressNavSync = false;
         }
     }
 
@@ -321,7 +317,7 @@ public sealed partial class MainWindow : Window
     private void TrySetContextLogo(string relativePath) =>
         ContextLogo.Source = AssetPathToImageSourceConverter.Resolve(relativePath);
 
-    private static NavigationTransitionInfo Slide() => new DrillInNavigationTransitionInfo();
+    private static NavigationTransitionInfo Slide() => new EntranceNavigationTransitionInfo();
     private static NavigationTransitionInfo SlideBack() => new SuppressNavigationTransitionInfo();
 
     public void NavigateHome(bool suppressTransition = false)
@@ -341,7 +337,10 @@ public sealed partial class MainWindow : Window
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {
         if (_mode == mode && ContentFrame.CurrentSourcePageType == pageType)
+        {
+            SyncNavSelection(ModeToNavKey(mode));
             return;
+        }
 
         if (ContentFrame.Navigate(pageType, null, transition))
             ApplyChrome(mode);
