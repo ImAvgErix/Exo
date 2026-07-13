@@ -1,3 +1,9 @@
+## 1.9.104
+
+- **Settings corner fix**: full composition reset (Offset/Scale/Opacity) on every open/close — sheet no longer sticks in a corner
+- **Theme clarity**: button shows current mode large (“Dark mode” / “Light mode”) + “Tap to switch…” hint; theme-aware high-contrast fill
+- **Home**: tagline stays centered; cards larger (352×200) to match hero weight
+- **Loader**: one orbit language (bead + trail + breath) — no competing sweep/ghost rings
 ## 1.9.103
 
 - **Motion system**: shared OptiMotion (Composition) across home, settings, modules, loader

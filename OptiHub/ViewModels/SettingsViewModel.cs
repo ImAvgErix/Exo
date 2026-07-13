@@ -21,8 +21,15 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _isLightMode;
     [ObservableProperty] private bool _autoUpdateScripts;
 
-    /// <summary>Button label: press to switch to the other theme.</summary>
-    public string ThemeToggleLabel => IsDarkMode ? "Light mode" : "Dark mode";
+    /// <summary>Current theme name shown large (what you are in right now).</summary>
+    public string CurrentThemeLabel => IsDarkMode ? "Dark mode" : "Light mode";
+
+    /// <summary>Secondary line on the theme control (what a tap will do).</summary>
+    public string ThemeSwitchHint => IsDarkMode ? "Tap to switch to light" : "Tap to switch to dark";
+
+    /// <summary>Back-compat for smoke / older binds — always the current mode name.</summary>
+    public string ThemeToggleLabel => CurrentThemeLabel;
+
     [ObservableProperty] private string _appVersion = "-";
     [ObservableProperty] private string _kitVersion = "-";
     [ObservableProperty] private string _updateStatus = string.Empty;
@@ -123,7 +130,7 @@ public partial class SettingsViewModel : ObservableObject
             _suppressThemeSync = false;
             _services.Theme.SetTheme(AppSettings.LightTheme);
         }
-        OnPropertyChanged(nameof(ThemeToggleLabel));
+        NotifyThemeLabels();
     }
 
     partial void OnIsLightModeChanged(bool value)
@@ -143,6 +150,13 @@ public partial class SettingsViewModel : ObservableObject
             _suppressThemeSync = false;
             _services.Theme.SetTheme(AppSettings.DarkTheme);
         }
+        NotifyThemeLabels();
+    }
+
+    private void NotifyThemeLabels()
+    {
+        OnPropertyChanged(nameof(CurrentThemeLabel));
+        OnPropertyChanged(nameof(ThemeSwitchHint));
         OnPropertyChanged(nameof(ThemeToggleLabel));
     }
 

@@ -194,25 +194,11 @@ public sealed partial class OptiLoader : UserControl
         _haloOpacityAnim.Duration = TimeSpan.FromMilliseconds(1200);
         _haloOpacityAnim.IterationBehavior = AnimationIterationBehavior.Forever;
 
+        // One orbit language: primary bead + soft trail (no ghost/sweep race).
         orbitVis.StartAnimation("RotationAngleInDegrees", _spinAnim);
         trailVis.StartAnimation("RotationAngleInDegrees", _trailAnim);
-        ghostVis.StartAnimation("RotationAngleInDegrees", _ghostAnim);
 
-        // Arc sweep (elastic progress feel)
-        if (Sweep is not null)
-        {
-            var sweepVis = ElementCompositionPreview.GetElementVisual(Sweep);
-            Center(sweepVis, Sweep);
-            if (SweepRotate is not null) SweepRotate.Angle = 0;
-            var sweepAnim = compositor.CreateScalarKeyFrameAnimation();
-            sweepAnim.InsertKeyFrame(0f, 0f);
-            sweepAnim.InsertKeyFrame(1f, 360f);
-            sweepAnim.Duration = TimeSpan.FromMilliseconds(900);
-            sweepAnim.IterationBehavior = AnimationIterationBehavior.Forever;
-            sweepVis.StartAnimation("RotationAngleInDegrees", sweepAnim);
-        }
-
-        // ScaleX/ScaleY both from same breath
+        // Soft core + halo breath only (same Kinetics family as page enter springs).
         coreVis.StartAnimation("Scale.X", _breathAnim);
         coreVis.StartAnimation("Scale.Y", _breathAnim);
         coreVis.StartAnimation("Opacity", _coreOpacityAnim);

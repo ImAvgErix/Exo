@@ -287,10 +287,20 @@ public sealed partial class MainWindow : Window
             NavigateHome(suppressTransition: true);
 
         _settingsOpen = true;
+        SettingsButton.Visibility = Visibility.Collapsed;
+
+        // Hard-reset composition leftovers so the sheet never re-opens pinned to a corner.
+        OptiMotion.ResetVisual(SettingsOverlay, show: false);
+        OptiMotion.ResetVisual(SettingsSheetHost, show: false);
+        SettingsSheetHost.ResetRowVisuals();
+
         SettingsOverlay.Visibility = Visibility.Visible;
+        // Layout must complete before CenterPoint/scale, or the spring anchors top-left.
+        SettingsOverlay.UpdateLayout();
+        SettingsSheetHost.UpdateLayout();
+
         OptiMotion.PlayOverlayOpen(SettingsOverlay, SettingsSheetHost);
         SettingsSheetHost.PlayOpenMotion();
-        SettingsButton.Visibility = Visibility.Collapsed;
     }
 
     private void CloseSettingsOverlay(bool immediate = false)
@@ -300,9 +310,12 @@ public sealed partial class MainWindow : Window
 
         void Finish()
         {
+            // Always clear composition Offset/Scale before collapsing — residual
+            // Offset is what made the sheet stick in the corner on next open.
+            OptiMotion.ResetVisual(SettingsOverlay, show: true);
+            OptiMotion.ResetVisual(SettingsSheetHost, show: true);
+            SettingsSheetHost.ResetRowVisuals();
             SettingsOverlay.Visibility = Visibility.Collapsed;
-            SettingsOverlay.Opacity = 1;
-            SettingsSheetHost.Opacity = 1;
             SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -322,7 +335,7 @@ public sealed partial class MainWindow : Window
 
         OptiMotion.PlayOverlayClose(SettingsOverlay, SettingsSheetHost, Once);
         // Safety if composition batch doesn't fire
-        _ = Task.Delay(220).ContinueWith(_ => Once());
+        _ = Task.Delay(240).ContinueWith(_ => Once());
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)

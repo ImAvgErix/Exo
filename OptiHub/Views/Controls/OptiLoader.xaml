@@ -7,8 +7,8 @@
     Height="48">
 
     <!--
-      Premium loader (Kinetics-inspired):
-      soft ring + orbiting bead + elastic core breath.
+      One loader language everywhere: soft track + single orbit bead + soft core breath.
+      No competing sweep/trail rings (those felt like mixed animations).
     -->
     <Grid x:Name="Root"
           Width="48"
@@ -17,10 +17,10 @@
           VerticalAlignment="Center">
 
         <Ellipse x:Name="Halo"
-                 Width="44"
-                 Height="44"
+                 Width="42"
+                 Height="42"
                  Fill="{ThemeResource OptiAccentBrush}"
-                 Opacity="0.1"
+                 Opacity="0.08"
                  HorizontalAlignment="Center"
                  VerticalAlignment="Center"
                  IsHitTestVisible="False"
@@ -30,23 +30,23 @@
             </Ellipse.RenderTransform>
         </Ellipse>
 
-        <Ellipse Width="34"
-                 Height="34"
+        <Ellipse Width="32"
+                 Height="32"
                  Stroke="{ThemeResource OptiCardStrokeBrush}"
                  StrokeThickness="1.5"
-                 Opacity="0.55"
+                 Opacity="0.5"
                  HorizontalAlignment="Center"
                  VerticalAlignment="Center"
                  IsHitTestVisible="False" />
 
-        <!-- Arc sweep (elastic progress feel) -->
+        <!-- Kept for code-compat; collapsed so only one orbit language shows -->
         <Ellipse x:Name="Sweep"
-                 Width="34"
-                 Height="34"
+                 Width="32"
+                 Height="32"
+                 Visibility="Collapsed"
                  Stroke="{ThemeResource OptiAccentBrush}"
-                 StrokeThickness="2.5"
-                 StrokeDashArray="1.2 6"
-                 Opacity="0.95"
+                 StrokeThickness="2"
+                 Opacity="0"
                  HorizontalAlignment="Center"
                  VerticalAlignment="Center"
                  IsHitTestVisible="False"
@@ -57,8 +57,8 @@
         </Ellipse>
 
         <Grid x:Name="Orbit"
-              Width="34"
-              Height="34"
+              Width="32"
+              Height="32"
               HorizontalAlignment="Center"
               VerticalAlignment="Center"
               RenderTransformOrigin="0.5,0.5"
@@ -74,28 +74,30 @@
                      Margin="0,-2,0,0" />
         </Grid>
 
+        <!-- Soft trail bead (same orbit family, lower opacity) -->
         <Grid x:Name="TrailOrbit"
-              Width="34"
-              Height="34"
+              Width="32"
+              Height="32"
               HorizontalAlignment="Center"
               VerticalAlignment="Center"
               RenderTransformOrigin="0.5,0.5"
               IsHitTestVisible="False">
             <Grid.RenderTransform>
-                <RotateTransform x:Name="TrailRotate" Angle="-40" />
+                <RotateTransform x:Name="TrailRotate" Angle="-48" />
             </Grid.RenderTransform>
-            <Ellipse Width="5"
-                     Height="5"
+            <Ellipse Width="4.5"
+                     Height="4.5"
                      Fill="{ThemeResource OptiAccentBrush}"
                      VerticalAlignment="Top"
                      HorizontalAlignment="Center"
                      Margin="0,-1,0,0"
-                     Opacity="0.4" />
+                     Opacity="0.35" />
         </Grid>
 
         <Grid x:Name="GhostOrbit"
-              Width="34"
-              Height="34"
+              Width="32"
+              Height="32"
+              Visibility="Collapsed"
               HorizontalAlignment="Center"
               VerticalAlignment="Center"
               RenderTransformOrigin="0.5,0.5"
@@ -103,19 +105,19 @@
             <Grid.RenderTransform>
                 <RotateTransform x:Name="GhostRotate" Angle="-78" />
             </Grid.RenderTransform>
-            <Ellipse Width="3.5"
-                     Height="3.5"
+            <Ellipse Width="3"
+                     Height="3"
                      Fill="{ThemeResource OptiAccentBrush}"
                      VerticalAlignment="Top"
                      HorizontalAlignment="Center"
-                     Opacity="0.2" />
+                     Opacity="0.18" />
         </Grid>
 
         <Ellipse x:Name="Core"
-                 Width="9"
-                 Height="9"
+                 Width="8"
+                 Height="8"
                  Fill="{ThemeResource OptiAccentBrush}"
-                 Opacity="0.95"
+                 Opacity="0.9"
                  HorizontalAlignment="Center"
                  VerticalAlignment="Center"
                  IsHitTestVisible="False"

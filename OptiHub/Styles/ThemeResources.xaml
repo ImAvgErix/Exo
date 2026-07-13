@@ -279,21 +279,26 @@
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
     </Style>
 
-    <!-- Theme flip: solid dark fill + white label (reads as “Dark mode”) -->
+    <!--
+      Theme flip control: always high-contrast so mode is obvious.
+      Dark shell → near-black fill + white type ("Dark mode").
+      Light shell → cream fill + near-black type ("Light mode").
+      Hover only dims slightly — never wipes the fill.
+    -->
     <Style x:Key="OptiThemeToggleButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontSize" Value="15" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="MinHeight" Value="44" />
-        <Setter Property="Padding" Value="18,12" />
-        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="MinHeight" Value="56" />
+        <Setter Property="Padding" Value="18,14" />
+        <Setter Property="CornerRadius" Value="14" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
-        <Setter Property="Background" Value="#0A0A0A" />
-        <Setter Property="Foreground" Value="#FFFFFF" />
-        <Setter Property="BorderBrush" Value="#40FFFFFF" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Background" Value="{ThemeResource OptiThemeToggleFillBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource OptiThemeToggleTextBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource OptiThemeToggleStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1.5" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
@@ -307,9 +312,11 @@
                         <Grid.RenderTransform>
                             <CompositeTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
                         </Grid.RenderTransform>
-                        <ContentPresenter HorizontalAlignment="Center"
+                        <ContentPresenter x:Name="Content"
+                                          HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
                                           Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
                                           Foreground="{TemplateBinding Foreground}"
                                           FontFamily="{TemplateBinding FontFamily}"
                                           FontSize="{TemplateBinding FontSize}"
@@ -320,30 +327,35 @@
                                 <VisualState x:Name="Normal">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.35">
+                                                         To="1" Duration="0:0:0.32">
                                             <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.3" />
+                                                <BackEase EasingMode="EaseOut" Amplitude="0.28" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.35">
+                                                         To="1" Duration="0:0:0.32">
                                             <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.3" />
+                                                <BackEase EasingMode="EaseOut" Amplitude="0.28" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.12" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <VisualState.Setters>
-                                        <Setter Target="Root.Opacity" Value="0.92" />
+                                        <!-- Keep fill; only soft lift via opacity (never blank the button) -->
+                                        <Setter Target="Root.Opacity" Value="0.94" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="0.96" Duration="0:0:0.08" />
+                                                         To="0.97" Duration="0:0:0.08" />
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="0.96" Duration="0:0:0.08" />
+                                                         To="0.97" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                                         To="0.9" Duration="0:0:0.08" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">

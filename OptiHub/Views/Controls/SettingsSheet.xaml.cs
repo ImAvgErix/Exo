@@ -28,21 +28,30 @@ public sealed partial class SettingsSheet : UserControl
             OptiUpdateDialog.InstallWithProgressAsync(XamlRoot, check, App.Services.Updater);
     }
 
+    private UIElement[] MotionRows() =>
+    [
+        RowAppearance, Div1, RowUpdates, Div2, RowVersion, Div3, RowSupport
+    ];
+
+    /// <summary>Clear leftover composition on every row (re-open safety).</summary>
+    public void ResetRowVisuals()
+    {
+        foreach (var r in MotionRows())
+            OptiMotion.ResetVisual(r, show: true);
+    }
+
     /// <summary>Call when the overlay opens so rows stagger in (shared motion language).</summary>
     public void PlayOpenMotion()
     {
         _staggerPlayed = false;
-        DispatcherQueue.TryEnqueue(() =>
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
         {
             if (_staggerPlayed) return;
             _staggerPlayed = true;
-            var rows = new UIElement[]
-            {
-                RowAppearance, Div1, RowUpdates, Div2, RowVersion, Div3, RowSupport
-            };
+            var rows = MotionRows();
             foreach (var r in rows)
-                OptiMotion.PrimeHidden(r, fromY: 10f, fromScale: 0.98f);
-            OptiMotion.PlayStagger(rows, baseDelayMs: 70, stepMs: 45, fromY: 10f, fromScale: 0.98f);
+                OptiMotion.PrimeHidden(r, fromY: 8f, fromScale: 0.98f);
+            OptiMotion.PlayStagger(rows, baseDelayMs: 60, stepMs: 40, fromY: 8f, fromScale: 0.98f);
         });
     }
 

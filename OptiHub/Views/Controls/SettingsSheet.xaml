@@ -38,7 +38,7 @@
 
             <StackPanel x:Name="RowsHost" Grid.Row="1" Spacing="0">
 
-                <!-- Theme: one full-width button that flips light ↔ dark -->
+                <!-- Theme: big current-mode label + clear "tap to switch" hint -->
                 <StackPanel x:Name="RowAppearance" Spacing="10">
                     <TextBlock Text="Appearance"
                                FontFamily="{StaticResource OptiUiFontSemiBold}"
@@ -46,10 +46,24 @@
                                FontWeight="SemiBold"
                                Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                     <Button Style="{StaticResource OptiThemeToggleButton}"
-                            Content="{x:Bind ViewModel.ThemeToggleLabel, Mode=OneWay}"
-                            AutomationProperties.Name="Toggle dark or light mode"
+                            AutomationProperties.Name="{x:Bind ViewModel.CurrentThemeLabel, Mode=OneWay}"
                             Command="{x:Bind ViewModel.ToggleThemeCommand}"
-                            HorizontalAlignment="Stretch" />
+                            HorizontalAlignment="Stretch">
+                        <StackPanel Spacing="2" HorizontalAlignment="Center">
+                            <TextBlock Text="{x:Bind ViewModel.CurrentThemeLabel, Mode=OneWay}"
+                                       FontFamily="{StaticResource OptiUiFontSemiBold}"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{ThemeResource OptiThemeToggleTextBrush}" />
+                            <TextBlock Text="{x:Bind ViewModel.ThemeSwitchHint, Mode=OneWay}"
+                                       FontFamily="{StaticResource OptiUiFont}"
+                                       FontSize="12"
+                                       Opacity="0.7"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{ThemeResource OptiThemeToggleTextBrush}" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <Rectangle x:Name="Div1" Height="1" Margin="0,16" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.75" />

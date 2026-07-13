@@ -74,9 +74,10 @@ if (File.Exists(dash))
     Expect("logo only cards", !d.Contains("Definition.Title}", StringComparison.Ordinal)
         || d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
     Expect("no card title label", !d.Contains("Text=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
-    // Fixed shell: large static cards, no responsive layout code
-    Expect("dashboard fixed cards", d.Contains("Width=\"340\"", StringComparison.Ordinal)
-        && d.Contains("Height=\"190\"", StringComparison.Ordinal));
+    // Fixed shell: large static cards matching hero weight, no responsive layout code
+    Expect("dashboard fixed cards",
+        (d.Contains("Width=\"352\"", StringComparison.Ordinal) || d.Contains("Width=\"340\"", StringComparison.Ordinal))
+        && (d.Contains("Height=\"200\"", StringComparison.Ordinal) || d.Contains("Height=\"190\"", StringComparison.Ordinal)));
     Expect("dashboard no responsive layout",
         !File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
             .Contains("ApplyResponsiveLayout", StringComparison.Ordinal));
@@ -100,8 +101,11 @@ if (File.Exists(settings))
         && s.Contains("AppVersion", StringComparison.Ordinal)
         && !s.Contains("KitVersion", StringComparison.Ordinal));
     Expect("settings theme button", s.Contains("ToggleThemeCommand", StringComparison.Ordinal)
-        && s.Contains("ThemeToggleLabel", StringComparison.Ordinal)
+        && (s.Contains("CurrentThemeLabel", StringComparison.Ordinal) || s.Contains("ThemeToggleLabel", StringComparison.Ordinal))
+        && s.Contains("ThemeSwitchHint", StringComparison.Ordinal)
         && s.Contains("OptiThemeToggleButton", StringComparison.Ordinal));
+    Expect("settings theme current mode", s.Contains("CurrentThemeLabel", StringComparison.Ordinal)
+        && s.Contains("ThemeSwitchHint", StringComparison.Ordinal));
     Expect("settings opti card", s.Contains("OptiCardFillBrush", StringComparison.Ordinal)
         || s.Contains("OptiCardRadius", StringComparison.Ordinal));
     Expect("settings single card", s.Contains("Appearance", StringComparison.Ordinal)
@@ -199,6 +203,25 @@ if (File.Exists(loaderCs))
         lc.Contains("ElementCompositionPreview", StringComparison.Ordinal) &&
         lc.Contains("Orbit", StringComparison.Ordinal) &&
         !lc.Contains("Bar0Scale", StringComparison.Ordinal));
+}
+
+var motionCs = Path.Combine(repo, "OptiHub", "Helpers", "OptiMotion.cs");
+if (File.Exists(motionCs))
+{
+    var m = File.ReadAllText(motionCs);
+    Expect("OptiMotion ResetVisual", m.Contains("ResetVisual", StringComparison.Ordinal));
+    Expect("OptiMotion overlay open", m.Contains("PlayOverlayOpen", StringComparison.Ordinal));
+    Expect("OptiMotion overlay close resets", m.Contains("PlayOverlayClose", StringComparison.Ordinal)
+        && m.Contains("ResetVisual", StringComparison.Ordinal));
+}
+var mainCsPath = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
+if (File.Exists(mainCsPath))
+{
+    var mc = File.ReadAllText(mainCsPath);
+    Expect("settings open resets composition",
+        mc.Contains("OpenSettingsOverlay", StringComparison.Ordinal)
+        && mc.Contains("ResetVisual", StringComparison.Ordinal)
+        && mc.Contains("UpdateLayout", StringComparison.Ordinal));
 }
 
 // Logo visual weight: measure real shipped PNG alpha ink.

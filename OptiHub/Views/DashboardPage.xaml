@@ -17,28 +17,29 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Start invisible — no flash before entrance motion -->
+            <!-- Hero stays dead-center above the grid; starts invisible for entrance -->
             <StackPanel x:Name="HeroPanel"
                         Spacing="0"
-                        Margin="0,0,0,18"
+                        Margin="0,0,0,20"
                         HorizontalAlignment="Center"
                         Opacity="0"
                         IsHitTestVisible="False"
                         RenderTransformOrigin="0.5,0.5">
                 <StackPanel.RenderTransform>
-                    <CompositeTransform x:Name="HeroTransform" TranslateY="18" />
+                    <CompositeTransform x:Name="HeroTransform" TranslateY="14" />
                 </StackPanel.RenderTransform>
                 <TextBlock Text="Maximum performance. No compromise."
                            Style="{StaticResource OptiTagline}"
-                           FontSize="44"
-                           LineHeight="52"
-                           CharacterSpacing="-20"
+                           FontSize="42"
+                           LineHeight="50"
+                           CharacterSpacing="-18"
                            TextWrapping="WrapWholeWords"
                            TextAlignment="Center"
-                           HorizontalAlignment="Center" />
+                           HorizontalAlignment="Center"
+                           MaxWidth="900" />
             </StackPanel>
 
-            <!-- Card host starts transparent so generated items never flash full opacity -->
+            <!-- Cards sized to match hero visual weight (3-up, same center axis) -->
             <ItemsControl x:Name="CardList"
                           Grid.Row="1"
                           HorizontalAlignment="Center"
@@ -55,9 +56,9 @@
                     <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
                         <!-- Opacity on button is entrance-owned (code). Dim coming-soon on inner chrome only. -->
                         <Button Style="{StaticResource OptiCardButton}"
-                                Width="340"
-                                Height="190"
-                                Margin="8"
+                                Width="352"
+                                Height="200"
+                                Margin="7"
                                 Opacity="0"
                                 Click="CardButton_Click"
                                 Tag="{x:Bind Definition.Id}"
@@ -66,11 +67,11 @@
                             <Border Style="{StaticResource OptiCard}"
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Stretch"
-                                    Padding="14"
+                                    Padding="16"
                                     Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
                                 <Grid>
-                                    <Image Width="96"
-                                           Height="96"
+                                    <Image Width="108"
+                                           Height="108"
                                            Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
