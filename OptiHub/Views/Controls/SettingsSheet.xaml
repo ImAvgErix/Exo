@@ -41,32 +41,36 @@
                 <FontIcon Glyph="&#xE711;" FontSize="12" />
             </Button>
 
-            <!-- Appearance -->
-            <StackPanel Grid.Row="0" Spacing="10" Margin="0,0,40,0">
+            <!-- Appearance: single dark/light slider -->
+            <Grid Grid.Row="0" ColumnSpacing="12" MinHeight="44" Margin="0,0,40,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
                 <TextBlock Text="APPEARANCE"
                            Style="{StaticResource OptiSectionTitle}"
-                           Margin="0" />
-                <Grid ColumnSpacing="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <RadioButton Grid.Column="0"
-                                 Content="Dark"
-                                 GroupName="ThemeChoiceOverlay"
-                                 Style="{StaticResource OptiThemeChoice}"
-                                 HorizontalAlignment="Stretch"
-                                 AutomationProperties.Name="Use dark theme"
-                                 IsChecked="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}" />
-                    <RadioButton Grid.Column="1"
-                                 Content="Light"
-                                 GroupName="ThemeChoiceOverlay"
-                                 Style="{StaticResource OptiThemeChoice}"
-                                 HorizontalAlignment="Stretch"
-                                 AutomationProperties.Name="Use light theme"
-                                 IsChecked="{x:Bind ViewModel.IsLightMode, Mode=TwoWay}" />
-                </Grid>
-            </StackPanel>
+                           Margin="0"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1"
+                           Text="Light"
+                           Style="{StaticResource OptiCaption}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0" />
+                <ToggleSwitch Grid.Column="2"
+                              AutomationProperties.Name="Dark mode"
+                              IsOn="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}"
+                              OnContent=""
+                              OffContent=""
+                              MinWidth="0"
+                              VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3"
+                           Text="Dark"
+                           Style="{StaticResource OptiCaption}"
+                           VerticalAlignment="Center"
+                           Margin="8,0,0,0" />
+            </Grid>
 
             <Rectangle Grid.Row="1"
                        Height="1"
@@ -130,31 +134,25 @@
                        Fill="{ThemeResource OptiCardStrokeBrush}"
                        Opacity="0.85" />
 
-            <!-- About -->
+            <!-- App version only -->
             <Grid Grid.Row="4" ColumnSpacing="12" MinHeight="44">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="ABOUT"
+                <TextBlock Text="APP VERSION"
                            Style="{StaticResource OptiSectionTitle}"
                            Margin="0"
                            VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1"
-                            Spacing="2"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Center">
-                    <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
-                               FontFamily="{StaticResource OptiUiFontSemiBold}"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               CharacterSpacing="-8"
-                               HorizontalAlignment="Right"
-                               Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                    <TextBlock Text="{x:Bind ViewModel.KitVersion, Mode=OneWay}"
-                               Style="{StaticResource OptiCaption}"
-                               HorizontalAlignment="Right" />
-                </StackPanel>
+                <TextBlock Grid.Column="1"
+                           Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
+                           FontFamily="{StaticResource OptiUiFontSemiBold}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           CharacterSpacing="-8"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           Foreground="{ThemeResource OptiPrimaryTextBrush}" />
             </Grid>
 
             <Rectangle Grid.Row="5"

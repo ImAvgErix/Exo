@@ -1,3 +1,6 @@
+## 1.9.100
+
+- **Settings**: Dark/Light is a slider; About is “APP VERSION” with app version only
 ## 1.9.99
 
 - **Settings**: even 18/16 card padding, 14px section rhythm; home-card chrome

@@ -96,22 +96,22 @@ if (File.Exists(settings))
     var s = File.ReadAllText(settings);
     Expect("settings appearance", s.Contains("APPEARANCE", StringComparison.Ordinal));
     Expect("settings updates", s.Contains("UPDATES", StringComparison.Ordinal));
-    Expect("settings about", s.Contains("ABOUT", StringComparison.Ordinal));
-    Expect("settings opti card", s.Contains("OptiCard", StringComparison.Ordinal));
-    Expect("settings single card", s.Contains("OptiCard", StringComparison.Ordinal)
-        && s.Contains("OptiSectionTitle", StringComparison.Ordinal)
+    Expect("settings app version", s.Contains("APP VERSION", StringComparison.Ordinal)
+        && s.Contains("AppVersion", StringComparison.Ordinal)
+        && !s.Contains("KitVersion", StringComparison.Ordinal));
+    Expect("settings theme slider", s.Contains("IsDarkMode", StringComparison.Ordinal)
+        && s.Contains("ToggleSwitch", StringComparison.Ordinal)
+        && s.Contains("Text=\"Dark\"", StringComparison.Ordinal));
+    Expect("settings opti card", s.Contains("OptiCard", StringComparison.Ordinal)
+        || s.Contains("OptiCardRadius", StringComparison.Ordinal)
+        || s.Contains("OptiCardFillBrush", StringComparison.Ordinal));
+    Expect("settings single card", s.Contains("OptiSectionTitle", StringComparison.Ordinal)
         && s.Contains("APPEARANCE", StringComparison.Ordinal));
     Expect("settings no title", !s.Contains("Text=\"Settings\"", StringComparison.Ordinal));
-    Expect("settings page padding token", s.Contains("Padding=\"18,16\"", StringComparison.Ordinal)
-        || s.Contains("Style=\"{StaticResource OptiCard}\"", StringComparison.Ordinal));
-    Expect("settings white selected theme", File.Exists(theme)
-        && File.ReadAllText(theme).Contains("OptiThemeChoice", StringComparison.Ordinal)
-        && File.ReadAllText(theme).Contains("#FFFFFF", StringComparison.Ordinal));
+    Expect("settings page padding token", s.Contains("Padding=\"18,16\"", StringComparison.Ordinal));
     Expect("settings overlay on main", File.Exists(mainXaml) && File.ReadAllText(mainXaml).Contains("SettingsOverlay", StringComparison.Ordinal)
         && File.ReadAllText(mainXaml).Contains("AcrylicBrush", StringComparison.Ordinal));
     Expect("no tooltips in settings", !s.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
-    Expect("settings theme choices", s.Contains("OptiThemeChoice", StringComparison.Ordinal)
-        || s.Contains("OptiThemeRadio", StringComparison.Ordinal));
     Expect("report issue white button", s.Contains("OptiWhiteButton", StringComparison.Ordinal)
         && s.Contains("Report issue", StringComparison.Ordinal));
     Expect("settings update progress only", !s.Contains("OptiLoader", StringComparison.Ordinal)
