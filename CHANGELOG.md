@@ -1,3 +1,9 @@
+## 1.9.39
+
+- **Discord detect fix**: Complete client debloat row always emitted (empty-locale `@()` unwrap / Count throw under StrictMode)
+- Soft-drift recovery only when hard signals clean; never trust state when leftover app-* or payload modules remain
+- Host heuristic payload-aware optional modules + shared `IsClientDebloatApplied` / `Test-DiscOptClientDebloat`
+- DiscordPeak.Smoke fixtures + live detect 5x debloat-row proof
 ## 1.9.38
 
 - **UI Signal theme**: teal/mint accent on cool graphite (dark) and clean teal (light); denser cards, refreshed dashboard hero
@@ -357,6 +363,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

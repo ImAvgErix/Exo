@@ -199,6 +199,7 @@ public sealed class OptimizerStateService
         var configIni = Path.Combine(appDir, "config.ini");
 
         var markerOk = false;
+        var debloatVerifiedSameApp = false;
         var discordStatePath = Path.Combine(PathHelper.AppDataDir, "discord-optimizer.json");
         if (File.Exists(discordStatePath))
         {
@@ -217,10 +218,13 @@ public sealed class OptimizerStateService
                     : null;
                 // Accept any modern kit stamp; require full applied flags for this Discord build path.
                 _ = stateVersion;
+                var pathMatch = PathsEqual(markerAppDir, appDir);
                 markerOk = string.Equals(applyStatus, "applied", StringComparison.Ordinal) &&
                            IsTrue(state, "applied") && IsTrue(state, "fullApply") &&
                            IsTrue(state, "windowsVerified") && IsTrue(state, "debloatVerified") &&
-                           PathsEqual(markerAppDir, appDir);
+                           pathMatch;
+                // Soft-drift recovery for debloat row only needs verified debloat on this build path.
+                debloatVerifiedSameApp = IsTrue(state, "debloatVerified") && pathMatch;
             }
             catch { /* stale or interrupted markers are incomplete */ }
         }
@@ -265,41 +269,51 @@ public sealed class OptimizerStateService
         }
         features.Add(MakeFeature("RAM / latency kernel", "", kernelOk));
 
-        var oldAppsPresent = true;
+        var leftoverAppCount = 0;
         try
         {
-            oldAppsPresent = Directory.EnumerateDirectories(discordRoot, "app-*")
-                .Any(path => !string.Equals(path, appDir, StringComparison.OrdinalIgnoreCase));
+            leftoverAppCount = Directory.EnumerateDirectories(discordRoot, "app-*")
+                .Count(path => !string.Equals(path, appDir, StringComparison.OrdinalIgnoreCase));
         }
-        catch { /* an unreadable install is not considered debloated */ }
+        catch { leftoverAppCount = 1; /* unreadable install is not considered debloated */ }
         var modulesPath = Path.Combine(appDir, "modules");
-        var optionalModulesPresent = new[] { "discord_hook-1", "discord_clips-1" }
-            .Any(name => Directory.Exists(Path.Combine(modulesPath, name)));
-        var gameSdkPresent = false;
+        // Empty recreated hook/clips dirs are not "present" — need payload files.
+        var optionalPayloadCount = new[] { "discord_hook-1", "discord_clips-1" }
+            .Count(name => DiscordPeakLogic.ModuleDirHasPayload(Path.Combine(modulesPath, name)));
+        var gameSdkCount = 0;
         try
         {
-            gameSdkPresent = Directory.Exists(modulesPath) &&
-                             Directory.EnumerateFiles(
-                                 modulesPath,
-                                 "discord_game_sdk_*.dll",
-                                 SearchOption.AllDirectories)
-                                 .Any();
+            if (Directory.Exists(modulesPath))
+            {
+                gameSdkCount = Directory.EnumerateFiles(
+                        modulesPath,
+                        "discord_game_sdk_*.dll",
+                        SearchOption.AllDirectories)
+                    .Count();
+            }
         }
-        catch { gameSdkPresent = true; }
+        catch { gameSdkCount = 1; }
         var localesPath = Path.Combine(appDir, "locales");
-        var extraLocalesPresent = false;
+        var extraLocaleCount = 0;
         try
         {
-            extraLocalesPresent = Directory.Exists(localesPath) &&
-                                  Directory.EnumerateFiles(localesPath, "*.pak")
-                                      .Any(path => !string.Equals(
-                                          Path.GetFileName(path),
-                                          "en-US.pak",
-                                          StringComparison.OrdinalIgnoreCase));
+            if (Directory.Exists(localesPath))
+            {
+                extraLocaleCount = Directory.EnumerateFiles(localesPath, "*.pak")
+                    .Count(path => !string.Equals(
+                        Path.GetFileName(path),
+                        "en-US.pak",
+                        StringComparison.OrdinalIgnoreCase));
+            }
         }
-        catch { extraLocalesPresent = true; }
-        var debloatOk = !oldAppsPresent && !optionalModulesPresent &&
-                        !gameSdkPresent && !extraLocalesPresent;
+        catch { extraLocaleCount = 1; }
+        // Soft-drift recovery only when hard signals clean (aligned with OptiHub-Discord-Detect.ps1).
+        var debloatOk = DiscordPeakLogic.IsClientDebloatApplied(
+            leftoverAppCount,
+            optionalPayloadCount,
+            gameSdkCount,
+            extraLocaleCount,
+            debloatVerifiedSameApp);
         features.Add(MakeFeature("Client debloat", "", debloatOk));
 
         var runtimeOk = new[]

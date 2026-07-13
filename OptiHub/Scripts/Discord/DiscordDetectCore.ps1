@@ -146,3 +146,40 @@ function Test-DiscOptApplyRecord {
         return ($a -ieq $b)
     } catch { return $false }
 }
+
+function Test-DiscOptModuleDirHasPayload {
+    param([AllowNull()][string]$ModuleDir)
+    if ([string]::IsNullOrWhiteSpace($ModuleDir)) { return $false }
+    if (-not (Test-Path -LiteralPath $ModuleDir)) { return $false }
+    try {
+        return (@(Get-ChildItem -LiteralPath $ModuleDir -File -Recurse -ErrorAction SilentlyContinue).Count -gt 0)
+    } catch {
+        return $true
+    }
+}
+
+<#
+.SYNOPSIS
+  Complete client debloat classifier (aligned with DiscordPeakLogic.IsClientDebloatApplied).
+  Hard: leftover app builds + optional modules with payload files.
+  Soft: game SDK + extra locales — recoverable via state only when hard is clean.
+#>
+function Test-DiscOptClientDebloat {
+    param(
+        [int]$LeftoverAppBuildCount = 0,
+        [int]$OptionalModulePayloadCount = 0,
+        [int]$GameSdkFileCount = 0,
+        [int]$ExtraLocaleCount = 0,
+        [bool]$StateDebloatVerifiedSameApp = $false
+    )
+    if ($LeftoverAppBuildCount -lt 0) { $LeftoverAppBuildCount = 0 }
+    if ($OptionalModulePayloadCount -lt 0) { $OptionalModulePayloadCount = 0 }
+    if ($GameSdkFileCount -lt 0) { $GameSdkFileCount = 0 }
+    if ($ExtraLocaleCount -lt 0) { $ExtraLocaleCount = 0 }
+
+    $hardOk = ($LeftoverAppBuildCount -eq 0) -and ($OptionalModulePayloadCount -eq 0)
+    $softOk = ($GameSdkFileCount -eq 0) -and ($ExtraLocaleCount -eq 0)
+    if ($hardOk -and $softOk) { return $true }
+    if ($hardOk -and $StateDebloatVerifiedSameApp) { return $true }
+    return $false
+}

@@ -95,6 +95,47 @@ public static class DiscordPeakLogic
         return Regex.IsMatch(json, @"""OPEN_ON_STARTUP""\s*:\s*false", RegexOptions.IgnoreCase);
     }
 
+    /// <summary>
+    /// Complete client debloat classifier.
+    /// Hard: leftover app-* builds and optional hook/clips modules that still have payload files.
+    /// Soft: game SDK DLLs and extra locale paks (updater may re-add) — recoverable via verified state
+    /// only when hard signals are still clean. Never trust state when hard fails.
+    /// </summary>
+    public static bool IsClientDebloatApplied(
+        int leftoverAppBuildCount,
+        int optionalModulePayloadCount,
+        int gameSdkFileCount,
+        int extraLocaleCount,
+        bool stateDebloatVerifiedSameApp)
+    {
+        if (leftoverAppBuildCount < 0) leftoverAppBuildCount = 0;
+        if (optionalModulePayloadCount < 0) optionalModulePayloadCount = 0;
+        if (gameSdkFileCount < 0) gameSdkFileCount = 0;
+        if (extraLocaleCount < 0) extraLocaleCount = 0;
+
+        var hardOk = leftoverAppBuildCount == 0 && optionalModulePayloadCount == 0;
+        var softOk = gameSdkFileCount == 0 && extraLocaleCount == 0;
+        if (hardOk && softOk) return true;
+        // Soft-drift recovery only — never mask leftover builds / payload modules.
+        if (hardOk && stateDebloatVerifiedSameApp) return true;
+        return false;
+    }
+
+    /// <summary>True when a module directory exists and contains at least one file (empty recreated dirs ≠ present).</summary>
+    public static bool ModuleDirHasPayload(string? moduleDir)
+    {
+        if (string.IsNullOrWhiteSpace(moduleDir) || !Directory.Exists(moduleDir)) return false;
+        try
+        {
+            return Directory.EnumerateFiles(moduleDir, "*", SearchOption.AllDirectories).Any();
+        }
+        catch
+        {
+            // Unreadable with path present: treat as payload to avoid false-clean.
+            return true;
+        }
+    }
+
     /// <summary>Forbidden apply markers (folklore / scheduled task noise).</summary>
     public static readonly string[] ForbiddenApplyPatterns =
     {

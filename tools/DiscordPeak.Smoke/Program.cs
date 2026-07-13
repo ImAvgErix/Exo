@@ -190,6 +190,190 @@ Expect("fully applied fixture kernel active", fullKernel);
 Expect("fully applied fixture quiet active", fullQuiet);
 Expect("fully applied fixture false_fail_count=0", fullKernel && fullQuiet);
 
+// --- Client debloat pure classifiers (shipped DiscordPeakLogic) ---
+Expect("debloat clean all zero active",
+    DiscordPeakLogic.IsClientDebloatApplied(0, 0, 0, 0, false));
+Expect("debloat empty optional payload count 0 active",
+    DiscordPeakLogic.IsClientDebloatApplied(0, 0, 0, 0, false));
+Expect("debloat soft locale drift without state inactive",
+    !DiscordPeakLogic.IsClientDebloatApplied(0, 0, 0, 2, false));
+Expect("debloat soft locale drift with state active",
+    DiscordPeakLogic.IsClientDebloatApplied(0, 0, 0, 2, true));
+Expect("debloat soft sdk drift with state active",
+    DiscordPeakLogic.IsClientDebloatApplied(0, 0, 1, 0, true));
+Expect("debloat hard leftover app never trusts state",
+    !DiscordPeakLogic.IsClientDebloatApplied(1, 0, 0, 0, true));
+Expect("debloat hard optional payload never trusts state",
+    !DiscordPeakLogic.IsClientDebloatApplied(0, 1, 0, 0, true));
+Expect("debloat hard+soft with state still inactive",
+    !DiscordPeakLogic.IsClientDebloatApplied(1, 0, 1, 0, true));
+
+// Empty module dir has no payload
+var emptyMod = Path.Combine(Path.GetTempPath(), "optihub-empty-mod-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(emptyMod);
+try
+{
+    Expect("empty module dir no payload", !DiscordPeakLogic.ModuleDirHasPayload(emptyMod));
+    File.WriteAllText(Path.Combine(emptyMod, "x.dll"), "x");
+    Expect("module dir with file has payload", DiscordPeakLogic.ModuleDirHasPayload(emptyMod));
+}
+finally
+{
+    try { Directory.Delete(emptyMod, true); } catch { }
+}
+Expect("missing module dir no payload", !DiscordPeakLogic.ModuleDirHasPayload(null));
+Expect("missing module path no payload",
+    !DiscordPeakLogic.ModuleDirHasPayload(Path.Combine(Path.GetTempPath(), "no-such-optihub-mod")));
+
+// --- Invoke shipped DiscordDetectCore debloat + fixture tree matching detect collection ---
+if (File.Exists(corePs1))
+{
+    var debloatFixture = Path.Combine(Path.GetTempPath(), "optihub-discord-debloat-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(debloatFixture);
+    try
+    {
+        // Fixture: app tree with empty optional dirs, only en-US.pak, no game SDK, no leftover apps
+        var appDir = Path.Combine(debloatFixture, "app-1.0.9000");
+        var modPath = Path.Combine(appDir, "modules");
+        var localePath = Path.Combine(appDir, "locales");
+        Directory.CreateDirectory(Path.Combine(modPath, "discord_hook-1")); // empty
+        Directory.CreateDirectory(Path.Combine(modPath, "discord_clips-1")); // empty
+        Directory.CreateDirectory(Path.Combine(modPath, "discord_desktop_core-1"));
+        Directory.CreateDirectory(localePath);
+        File.WriteAllText(Path.Combine(localePath, "en-US.pak"), "locale");
+        // Soft-drift file for recovery case
+        var softLocale = Path.Combine(localePath, "fr.pak");
+
+        var psDebloat = $@"
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+. '{corePs1.Replace("'", "''")}'
+$failed = 0
+function E($n,$c) {{ if ($c) {{ 'PASS  ' + $n }} else {{ $script:failed++; 'FAIL  ' + $n }} }}
+
+# Classic empty-array Count must not throw
+$extraLocales = @()
+if (Test-Path -LiteralPath '{localePath.Replace("'", "''")}') {{
+  $extraLocales = @(Get-ChildItem -LiteralPath '{localePath.Replace("'", "''")}' -Filter '*.pak' -ErrorAction SilentlyContinue |
+    Where-Object {{ $_.Name -ne 'en-US.pak' }})
+}}
+$extraCount = @($extraLocales).Count
+@(
+  (E 'ps empty extraLocales Count no throw' ($extraCount -eq 0)),
+  (E 'ps empty optional hook no payload' (-not (Test-DiscOptModuleDirHasPayload -ModuleDir '{Path.Combine(modPath, "discord_hook-1").Replace("'", "''")}'))),
+  (E 'ps empty optional clips no payload' (-not (Test-DiscOptModuleDirHasPayload -ModuleDir '{Path.Combine(modPath, "discord_clips-1").Replace("'", "''")}'))),
+  (E 'ps clean fixture debloat active' (Test-DiscOptClientDebloat -LeftoverAppBuildCount 0 -OptionalModulePayloadCount 0 -GameSdkFileCount 0 -ExtraLocaleCount $extraCount -StateDebloatVerifiedSameApp:$false)),
+  (E 'ps soft drift without state inactive' (-not (Test-DiscOptClientDebloat -LeftoverAppBuildCount 0 -OptionalModulePayloadCount 0 -GameSdkFileCount 0 -ExtraLocaleCount 1 -StateDebloatVerifiedSameApp:$false))),
+  (E 'ps soft drift with state active' (Test-DiscOptClientDebloat -LeftoverAppBuildCount 0 -OptionalModulePayloadCount 0 -GameSdkFileCount 0 -ExtraLocaleCount 1 -StateDebloatVerifiedSameApp:$true)),
+  (E 'ps hard leftover never trusts fullApply/state' (-not (Test-DiscOptClientDebloat -LeftoverAppBuildCount 1 -OptionalModulePayloadCount 0 -GameSdkFileCount 0 -ExtraLocaleCount 0 -StateDebloatVerifiedSameApp:$true))),
+  (E 'ps hard optional payload never trusts state' (-not (Test-DiscOptClientDebloat -LeftoverAppBuildCount 0 -OptionalModulePayloadCount 1 -GameSdkFileCount 0 -ExtraLocaleCount 0 -StateDebloatVerifiedSameApp:$true)))
+) | ForEach-Object {{ $_ }}
+
+# Simulate detect collection path end-to-end on fixture (shipped helpers)
+$oldApps = @()
+$optionalPresent = @()
+foreach ($name in @('discord_hook-1','discord_clips-1')) {{
+  $p = Join-Path '{modPath.Replace("'", "''")}' $name
+  if (Test-DiscOptModuleDirHasPayload -ModuleDir $p) {{ $optionalPresent += $name }}
+}}
+$gameSdk = @()
+$debloatOk = Test-DiscOptClientDebloat `
+  -LeftoverAppBuildCount (@($oldApps).Count) `
+  -OptionalModulePayloadCount (@($optionalPresent).Count) `
+  -GameSdkFileCount (@($gameSdk).Count) `
+  -ExtraLocaleCount (@($extraLocales).Count) `
+  -StateDebloatVerifiedSameApp:$false
+E 'ps detect-path empty dirs + zero locales active' $debloatOk
+
+# Soft drift: extra locale present + verified state → active
+Set-Content -LiteralPath '{softLocale.Replace("'", "''")}' -Value 'x' -Encoding utf8
+$extraLocales2 = @(Get-ChildItem -LiteralPath '{localePath.Replace("'", "''")}' -Filter '*.pak' -ErrorAction SilentlyContinue |
+  Where-Object {{ $_.Name -ne 'en-US.pak' }})
+$debloatSoft = Test-DiscOptClientDebloat `
+  -LeftoverAppBuildCount 0 `
+  -OptionalModulePayloadCount (@($optionalPresent).Count) `
+  -GameSdkFileCount 0 `
+  -ExtraLocaleCount (@($extraLocales2).Count) `
+  -StateDebloatVerifiedSameApp:$true
+E 'ps detect-path soft-drift + state active' $debloatSoft
+'DEBLOAT_CORE_FAILED=' + $failed
+";
+        var debloatScript = Path.Combine(debloatFixture, "run-debloat.ps1");
+        File.WriteAllText(debloatScript, psDebloat);
+        var psi2 = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{debloatScript}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var proc2 = System.Diagnostics.Process.Start(psi2)!;
+        var out2 = proc2.StandardOutput.ReadToEnd();
+        var err2 = proc2.StandardError.ReadToEnd();
+        proc2.WaitForExit(60000);
+        foreach (var line in out2.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (line.StartsWith("PASS", StringComparison.Ordinal) || line.StartsWith("FAIL", StringComparison.Ordinal))
+                Log("DEBLOAT  " + line);
+            if (line.StartsWith("FAIL", StringComparison.Ordinal)) failed++;
+        }
+        if (!string.IsNullOrWhiteSpace(err2))
+            Log("DEBLOAT_STDERR  " + err2.Trim());
+        Expect("DiscordDetectCore debloat exit 0", proc2.ExitCode == 0, "exit=" + proc2.ExitCode + " " + err2);
+        Expect("DiscordDetectCore DEBLOAT_CORE_FAILED=0",
+            out2.Contains("DEBLOAT_CORE_FAILED=0", StringComparison.Ordinal), out2.Trim());
+    }
+    finally
+    {
+        try { Directory.Delete(debloatFixture, true); } catch { }
+    }
+}
+
+// Live detect script: debloat feature row must be present (no Count throw skip)
+var detectPs1 = Path.Combine(repoRoot, "OptiHub", "Scripts", "Discord", "OptiHub-Discord-Detect.ps1");
+Expect("OptiHub-Discord-Detect.ps1 exists", File.Exists(detectPs1), detectPs1);
+if (File.Exists(detectPs1))
+{
+    var liveDir = Path.Combine(Path.GetTempPath(), "optihub-discord-live-detect-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(liveDir);
+    try
+    {
+        var timesWithDebloat = 0;
+        for (var i = 0; i < 5; i++)
+        {
+            var psiLive = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{detectPs1}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var pl = System.Diagnostics.Process.Start(psiLive)!;
+            var liveOut = pl.StandardOutput.ReadToEnd();
+            var liveErr = pl.StandardError.ReadToEnd();
+            pl.WaitForExit(90000);
+            File.WriteAllText(Path.Combine(liveDir, $"detect-{i}.json.txt"), liveOut);
+            if (!string.IsNullOrWhiteSpace(liveErr))
+                File.WriteAllText(Path.Combine(liveDir, $"detect-{i}.err.txt"), liveErr);
+            var hasDebloat = liveOut.Contains("Complete client debloat", StringComparison.OrdinalIgnoreCase);
+            if (hasDebloat) timesWithDebloat++;
+            Log($"LIVE_DETECT[{i}] exit={pl.ExitCode} hasDebloatRow={hasDebloat} len={liveOut.Length}");
+        }
+        Expect("live detect debloat row present 5/5", timesWithDebloat == 5,
+            $"present={timesWithDebloat}/5 (Count throw would skip Add-Feature)");
+    }
+    finally
+    {
+        // keep last logs under temp for SCRATCH copy; delete tree is optional
+        try { /* leave liveDir for implementer copy */ } catch { }
+        Log("LIVE_DETECT_DIR " + liveDir);
+    }
+}
+
 Log($"=== SUMMARY failed={failed} ===");
 Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
 File.WriteAllLines(logPath, lines);
