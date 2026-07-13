@@ -64,10 +64,10 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("theme has OptiMutedTextBrush", a.Contains("OptiMutedTextBrush", StringComparison.Ordinal));
     Expect("theme has OptiDividerBrush", a.Contains("OptiDividerBrush", StringComparison.Ordinal));
-    Expect("LUMEN blue accent", a.Contains("#6EA8FF", StringComparison.Ordinal) || a.Contains("#2563EB", StringComparison.Ordinal));
-    Expect("deep ink canvas", a.Contains("#07080D", StringComparison.Ordinal));
+    Expect("NOVA white signal accent", a.Contains("#F5F5F5", StringComparison.Ordinal));
+    Expect("pure AMOLED black canvas", a.Contains("#000000", StringComparison.Ordinal));
     Expect("not orange forge accent", !a.Contains("#F59E0B", StringComparison.Ordinal));
-    Expect("not pure AMOLED white accent only", !a.Contains("OptiAccentBrush\" Color=\"#FFFFFF\"", StringComparison.Ordinal));
+    Expect("not LUMEN blue accent", !a.Contains("#6EA8FF", StringComparison.Ordinal));
 }
 
 foreach (var page in new[]
@@ -118,17 +118,35 @@ if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
     Expect("MainWindow has ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
-    Expect("MainWindow has OptiHub brand", m.Contains("OptiHub", StringComparison.Ordinal));
-    Expect("MainWindow floating pill chrome", m.Contains("CornerRadius", StringComparison.Ordinal));
+    Expect("MainWindow labeled sidebar", m.Contains("NavHome", StringComparison.Ordinal) && m.Contains("NavDiscord", StringComparison.Ordinal));
+    Expect("MainWindow nav settings", m.Contains("NavSettings", StringComparison.Ordinal));
+    Expect("MainWindow wide sidebar", m.Contains("Width=\"236\"", StringComparison.Ordinal) || m.Contains("Optimizer suite", StringComparison.Ordinal));
+    Expect("MainWindow entrance transitions", m.Contains("EntranceThemeTransition", StringComparison.Ordinal));
+    Expect("MainWindow slide page transitions", m.Contains("SlideNavigationTransitionInfo", StringComparison.Ordinal));
 }
 
 var dash = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml");
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    Expect("dashboard product tile grid", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
-    Expect("dashboard Live badge", d.Contains("Live", StringComparison.Ordinal));
-    Expect("dashboard centered hero", d.Contains("OptiTagline", StringComparison.Ordinal));
+    Expect("dashboard vertical module lanes", d.Contains("ItemsStackPanel", StringComparison.Ordinal));
+    Expect("dashboard modules hero", d.Contains("Modules", StringComparison.Ordinal));
+    Expect("dashboard not bento wrap", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
+}
+
+var settings = Path.Combine(repo, "OptiHub", "Views", "SettingsPage.xaml");
+if (File.Exists(settings))
+{
+    var s = File.ReadAllText(settings);
+    Expect("settings two-pane master detail", s.Contains("PaneAppearance", StringComparison.Ordinal) && s.Contains("CatAppearance", StringComparison.Ordinal));
+    Expect("settings category rail", s.Contains("Category_Click", StringComparison.Ordinal) || s.Contains("CatUpdates", StringComparison.Ordinal));
+}
+
+// Nav style exists
+if (File.Exists(theme))
+{
+    var t = File.ReadAllText(theme);
+    Expect("theme has OptiNavButton", t.Contains("OptiNavButton", StringComparison.Ordinal));
 }
 
 // Borderless black-bar fix must not force GPUScanOutToNative

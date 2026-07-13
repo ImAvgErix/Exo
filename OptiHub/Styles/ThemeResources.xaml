@@ -9,11 +9,11 @@
     <FontFamily x:Key="OptiUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
     <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
-    <!-- LUMEN shell — soft panels, wide canvas, big type -->
-    <CornerRadius x:Key="OptiCardRadius">20</CornerRadius>
-    <CornerRadius x:Key="OptiTileRadius">16</CornerRadius>
-    <x:Double x:Key="OptiPageMaxWidth">1080</x:Double>
-    <Thickness x:Key="OptiPagePadding">36,28,36,32</Thickness>
+    <!-- NOVA — sharper geometry, denser chrome -->
+    <CornerRadius x:Key="OptiCardRadius">14</CornerRadius>
+    <CornerRadius x:Key="OptiTileRadius">12</CornerRadius>
+    <x:Double x:Key="OptiPageMaxWidth">1180</x:Double>
+    <Thickness x:Key="OptiPagePadding">28,16,28,24</Thickness>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
@@ -23,14 +23,12 @@
     <helpers:AssetPathToImageSourceConverter x:Key="AssetPathToImageSourceConverter" />
 
     <Style x:Key="OptiTagline" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiDisplayFontItalic}" />
-        <Setter Property="FontSize" Value="42" />
-        <Setter Property="FontStyle" Value="Italic" />
+        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
+        <Setter Property="FontSize" Value="36" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="-20" />
+        <Setter Property="CharacterSpacing" Value="-40" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
-        <Setter Property="TextAlignment" Value="Center" />
-        <Setter Property="LineHeight" Value="50" />
+        <Setter Property="LineHeight" Value="42" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
@@ -40,25 +38,24 @@
         <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
-        <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
     </Style>
 
     <Style x:Key="OptiSectionTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="11" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="40" />
+        <Setter Property="CharacterSpacing" Value="80" />
         <Setter Property="Margin" Value="0,0,0,10" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiAccentBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
     </Style>
 
     <Style x:Key="OptiPageTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="28" />
+        <Setter Property="FontSize" Value="26" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="CharacterSpacing" Value="-30" />
-        <Setter Property="LineHeight" Value="34" />
+        <Setter Property="LineHeight" Value="32" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
@@ -95,36 +92,40 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <!-- Vertical checklist feature row (cockpit) -->
     <Style x:Key="OptiFeatureTile" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource OptiSurfaceBrush}" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
-        <Setter Property="Padding" Value="16,14" />
-        <Setter Property="MinHeight" Value="72" />
+        <Setter Property="Padding" Value="14,12" />
+        <Setter Property="MinHeight" Value="64" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
     <Style x:Key="OptiMessageBanner" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
-        <Setter Property="Padding" Value="16,14" />
+        <Setter Property="Padding" Value="14,12" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
 
     <Style x:Key="OptiIconWell" TargetType="Border">
-        <Setter Property="Width" Value="40" />
-        <Setter Property="Height" Value="40" />
-        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Width" Value="38" />
+        <Setter Property="Height" Value="38" />
+        <Setter Property="CornerRadius" Value="10" />
         <Setter Property="Background" Value="{ThemeResource OptiIconWellFillBrush}" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderBrush" Value="{ThemeResource OptiIconWellStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <!-- Soft elevated panel (fill contrast only — no hard white rings) -->
+    <!-- Elevated panel shell -->
     <Style x:Key="OptiCard" TargetType="ContentControl">
-        <Setter Property="Padding" Value="24,22" />
+        <Setter Property="Padding" Value="0" />
         <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Stretch" />
@@ -154,14 +155,13 @@
         <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="18" />
+        <Setter Property="CornerRadius" Value="14" />
         <Setter Property="Padding" Value="18,16" />
         <Setter Property="MinHeight" Value="88" />
     </Style>
 
-    <!-- Theme picker tiles (Settings → Appearance) -->
     <Style x:Key="OptiThemePickOuter" TargetType="Border">
-        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="CornerRadius" Value="12" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -196,24 +196,30 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="ScaleTransform"
                                                          Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.12" />
+                                                         To="1" Duration="0:0:0.14" />
                                         <DoubleAnimation Storyboard.TargetName="ScaleTransform"
                                                          Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.12" />
+                                                         To="1" Duration="0:0:0.14" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="Content"
-                                                         Storyboard.TargetProperty="Opacity"
-                                                         To="0.92" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
+                                                         Storyboard.TargetProperty="ScaleX"
+                                                         To="1.02" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
+                                                         Storyboard.TargetProperty="ScaleY"
+                                                         To="1.02" Duration="0:0:0.12" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="Content"
-                                                         Storyboard.TargetProperty="Opacity"
-                                                         To="0.85" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
+                                                         Storyboard.TargetProperty="ScaleX"
+                                                         To="0.97" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
+                                                         Storyboard.TargetProperty="ScaleY"
+                                                         To="0.97" Duration="0:0:0.08" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled" />
@@ -226,7 +232,7 @@
     </Style>
 
     <Style x:Key="OptiRiskCard" TargetType="Border">
-        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="CornerRadius" Value="10" />
         <Setter Property="Padding" Value="12,10" />
         <Setter Property="Background" Value="{ThemeResource OptiWarningSoftBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiWarningBrush}" />
@@ -241,18 +247,17 @@
         <Setter Property="Foreground" Value="{ThemeResource OptiWarningBrush}" />
     </Style>
 
-    <!-- Always-dark plate so white/light product marks (Steam, Epic, …) stay crisp in light mode -->
     <Style x:Key="OptiLogoWell" TargetType="Border">
-        <Setter Property="Width" Value="64" />
-        <Setter Property="Height" Value="64" />
-        <Setter Property="CornerRadius" Value="16" />
+        <Setter Property="Width" Value="56" />
+        <Setter Property="Height" Value="56" />
+        <Setter Property="CornerRadius" Value="14" />
         <Setter Property="Background" Value="{ThemeResource OptiLogoWellFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiLogoWellStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="UseLayoutRounding" Value="True" />
-        <Setter Property="Padding" Value="11" />
+        <Setter Property="Padding" Value="10" />
     </Style>
 
     <Style x:Key="OptiLogoWellSmall" TargetType="Border" BasedOn="{StaticResource OptiLogoWell}">
@@ -263,19 +268,14 @@
         <Setter Property="BorderThickness" Value="0" />
     </Style>
 
-    <!--
-      Motion language (Kinetics / Amicro inspired):
-      - Press: fast ease-out compress (~80ms)
-      - Release / hover settle: springy overshoot via multi-keyframe scale
-      - Respects system reduced-motion when Windows Animation duration is zeroed
-    -->
+    <!-- Sharp primary CTA (not pill) -->
     <Style x:Key="OptiPrimaryButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="Padding" Value="22,14" />
-        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="Padding" Value="20,13" />
+        <Setter Property="CornerRadius" Value="10" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="MinHeight" Value="48" />
+        <Setter Property="MinHeight" Value="46" />
         <Setter Property="Background" Value="{ThemeResource OptiAccentBrush}" />
         <Setter Property="Foreground" Value="{ThemeResource OptiOnAccentBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -298,60 +298,51 @@
                                 <VisualState x:Name="Normal">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.38">
+                                                         To="1" Duration="0:0:0.32">
                                             <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.35" />
+                                                <BackEase EasingMode="EaseOut" Amplitude="0.28" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.38">
+                                                         To="1" Duration="0:0:0.32">
                                             <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.35" />
+                                                <BackEase EasingMode="EaseOut" Amplitude="0.28" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.12" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1.03" Duration="0:0:0.22">
+                                                         To="1.02" Duration="0:0:0.16">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1.03" Duration="0:0:0.22">
+                                                         To="1.02" Duration="0:0:0.16">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="0.96" Duration="0:0:0.15" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <!-- Squish press: fast compress (Kinetics "press / squish button") -->
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="0.94" Duration="0:0:0.07">
-                                            <DoubleAnimation.EasingFunction>
-                                                <QuadraticEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                                         To="0.96" Duration="0:0:0.07" />
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="0.94" Duration="0:0:0.07">
-                                            <DoubleAnimation.EasingFunction>
-                                                <QuadraticEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                                         To="0.96" Duration="0:0:0.07" />
                                         <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="0.9" Duration="0:0:0.07" />
+                                                         To="0.88" Duration="0:0:0.07" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="0.45" Duration="0" />
+                                                         To="0.4" Duration="0" />
                                     </Storyboard>
                                 </VisualState>
                             </VisualStateGroup>
@@ -370,10 +361,10 @@
 
     <Style x:Key="OptiQuietButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontMedium}" />
-        <Setter Property="Padding" Value="18,12" />
-        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="Padding" Value="16,11" />
+        <Setter Property="CornerRadius" Value="10" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="MinHeight" Value="42" />
         <Setter Property="Background" Value="{ThemeResource OptiQuietButtonFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
@@ -399,17 +390,9 @@
                                 <VisualState x:Name="Normal">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.32">
-                                            <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.3" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                                         To="1" Duration="0:0:0.22" />
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.32">
-                                            <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.3" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                                         To="1" Duration="0:0:0.22" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
@@ -418,39 +401,23 @@
                                             <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource OptiAccentSoftBrush}" />
                                         </ObjectAnimationUsingKeyFrames>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1.02" Duration="0:0:0.18">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                                         To="1.015" Duration="0:0:0.14" />
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1.02" Duration="0:0:0.18">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                                         To="1.015" Duration="0:0:0.14" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="0.95" Duration="0:0:0.07">
-                                            <DoubleAnimation.EasingFunction>
-                                                <QuadraticEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                                         To="0.97" Duration="0:0:0.07" />
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="0.95" Duration="0:0:0.07">
-                                            <DoubleAnimation.EasingFunction>
-                                                <QuadraticEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                                         To="0.97" Duration="0:0:0.07" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="0.45" Duration="0" />
+                                                         To="0.4" Duration="0" />
                                     </Storyboard>
                                 </VisualState>
                             </VisualStateGroup>
@@ -467,14 +434,14 @@
         </Setter>
     </Style>
 
-    <!-- Home cards: hover lift + spring press (Kinetics card / Amicro micro-transition feel). -->
+    <!-- Home module lane: full-width horizontal row -->
     <Style x:Key="OptiCardButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="CornerRadius" Value="{StaticResource OptiCardRadius}" />
-        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="VerticalAlignment" Value="Top" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Stretch" />
@@ -486,28 +453,27 @@
                           Background="Transparent"
                           RenderTransformOrigin="0.5,0.5"
                           CornerRadius="{TemplateBinding CornerRadius}">
-                        <!-- Lift only — scale blur makes card edges look pixelated -->
                         <Grid.RenderTransform>
-                            <CompositeTransform x:Name="RootLift" TranslateY="0" />
+                            <CompositeTransform x:Name="RootLift" TranslateX="0" TranslateY="0" />
                         </Grid.RenderTransform>
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="TranslateY"
-                                                         To="0" Duration="0:0:0.22">
+                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="TranslateX"
+                                                         To="0" Duration="0:0:0.2">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="1" Duration="0:0:0.15" />
+                                                         To="1" Duration="0:0:0.12" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="TranslateY"
-                                                         To="-3" Duration="0:0:0.18">
+                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="TranslateX"
+                                                         To="6" Duration="0:0:0.16">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
@@ -516,16 +482,16 @@
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="TranslateY"
-                                                         To="1" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="TranslateX"
+                                                         To="2" Duration="0:0:0.08" />
                                         <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="0.92" Duration="0:0:0.08" />
+                                                         To="0.9" Duration="0:0:0.08" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="0.45" Duration="0" />
+                                                         To="0.4" Duration="0" />
                                     </Storyboard>
                                 </VisualState>
                             </VisualStateGroup>
@@ -538,6 +504,70 @@
                                           VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
                                           Padding="{TemplateBinding Padding}"
                                           CornerRadius="{TemplateBinding CornerRadius}" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Wide labeled sidebar nav row -->
+    <Style x:Key="OptiNavButton" TargetType="Button">
+        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid x:Name="Root"
+                          Background="{TemplateBinding Background}"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
+                          CornerRadius="{TemplateBinding CornerRadius}"
+                          RenderTransformOrigin="0.5,0.5">
+                        <Grid.RenderTransform>
+                            <CompositeTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
+                        </Grid.RenderTransform>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
+                                                         To="1" Duration="0:0:0.14" />
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
+                                                         To="1" Duration="0:0:0.14" />
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="PointerOver">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource OptiLaneHoverBrush}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
+                                                         To="0.98" Duration="0:0:0.06" />
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
+                                                         To="0.98" Duration="0:0:0.06" />
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Disabled" />
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"
+                                          Content="{TemplateBinding Content}"
+                                          Foreground="{TemplateBinding Foreground}" />
                     </Grid>
                 </ControlTemplate>
             </Setter.Value>
@@ -570,17 +600,9 @@
                                 <VisualState x:Name="Normal">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.28">
-                                            <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.35" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                                         To="1" Duration="0:0:0.2" />
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.28">
-                                            <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.35" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                                         To="1" Duration="0:0:0.2" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
@@ -589,28 +611,17 @@
                                             <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource OptiAccentSoftBrush}" />
                                         </ObjectAnimationUsingKeyFrames>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1.08" Duration="0:0:0.18">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                                         To="1.06" Duration="0:0:0.12" />
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1.08" Duration="0:0:0.18">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                                         To="1.06" Duration="0:0:0.12" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource OptiAccentSoftBrush}" />
-                                        </ObjectAnimationUsingKeyFrames>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="0.9" Duration="0:0:0.07" />
+                                                         To="0.92" Duration="0:0:0.07" />
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="0.9" Duration="0:0:0.07" />
+                                                         To="0.92" Duration="0:0:0.07" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">

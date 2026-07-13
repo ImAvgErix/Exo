@@ -1,3 +1,12 @@
+## 1.9.48
+
+- **NOVA full redesign** (layout + chrome + pages — not a recolor):
+  - Wide labeled sidebar (icon + text + selection rail), not icon-only rail
+  - Home: full-width horizontal module lanes with LIVE/SOON pills (not bento wrap grid)
+  - Settings: two-pane master-detail (category rail + detail panes)
+  - Optimizers + Display: cockpit split (sticky action column + vertical feature checklist)
+  - Pure AMOLED black + white signal accents; sharp 10–14px geometry; slide page transitions
+  - Lane hover-shift animation; staggered entrance on home
 ## 1.9.47
 
 - **LUMEN full redesign**: deep ink canvas, soft blue accent, floating pill title chrome

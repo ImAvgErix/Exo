@@ -5,298 +5,212 @@
       Background="Transparent"
       Loaded="Page_Loaded">
 
-    <!-- Centered settings shell: no scroll, balanced fill, clear sections. -->
-    <Grid x:Name="PageRoot" Padding="{StaticResource OptiPagePadding}">
-        <Grid MaxWidth="920"
-              HorizontalAlignment="Stretch"
-              VerticalAlignment="Stretch"
-              RowSpacing="0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
+    <!-- NOVA settings: two-pane master-detail (not stacked cards only) -->
+    <Grid x:Name="PageRoot" Padding="28,12,28,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-            <!-- Header -->
-            <StackPanel x:Name="HeaderPanel"
-                        Spacing="6"
-                        Margin="0,0,0,20"
-                        HorizontalAlignment="Center"
-                        Opacity="0"
-                        RenderTransformOrigin="0.5,0.5">
-                <StackPanel.RenderTransform>
-                    <CompositeTransform x:Name="HeaderTransform" TranslateY="10" />
-                </StackPanel.RenderTransform>
-                <TextBlock Text="Settings"
-                           Style="{StaticResource OptiPageTitle}"
-                           HorizontalAlignment="Center" />
-            </StackPanel>
+        <StackPanel x:Name="HeaderPanel"
+                    Spacing="4"
+                    Margin="0,0,0,18"
+                    Opacity="0"
+                    RenderTransformOrigin="0,0.5">
+            <StackPanel.RenderTransform>
+                <CompositeTransform x:Name="HeaderTransform" TranslateY="12" />
+            </StackPanel.RenderTransform>
+            <TextBlock Text="SYSTEM"
+                       FontFamily="{StaticResource OptiUiFontSemiBold}"
+                       FontSize="11"
+                       FontWeight="SemiBold"
+                       CharacterSpacing="120"
+                       Foreground="{ThemeResource OptiMutedTextBrush}" />
+            <TextBlock Text="Settings"
+                       FontFamily="{StaticResource OptiUiFontSemiBold}"
+                       FontSize="32"
+                       FontWeight="SemiBold"
+                       CharacterSpacing="-30"
+                       Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+        </StackPanel>
 
-            <!-- Body: 2×2 balanced cards -->
-            <Grid x:Name="BodyGrid"
-                  Grid.Row="1"
-                  ColumnSpacing="16"
-                  RowSpacing="16"
-                  Opacity="0"
-                  RenderTransformOrigin="0.5,0.5">
-                <Grid.RenderTransform>
-                    <CompositeTransform x:Name="BodyTransform" TranslateY="14" />
-                </Grid.RenderTransform>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
+        <Grid x:Name="BodyGrid"
+              Grid.Row="1"
+              ColumnSpacing="20"
+              Opacity="0"
+              RenderTransformOrigin="0,0.5">
+            <Grid.RenderTransform>
+                <CompositeTransform x:Name="BodyTransform" TranslateY="18" />
+            </Grid.RenderTransform>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
-                <!-- Appearance — theme picker cards -->
-                <ContentControl Grid.Row="0" Grid.Column="0" Style="{StaticResource OptiCard}" Padding="22,20">
+            <!-- Category rail -->
+            <Border Background="{ThemeResource OptiCardFillBrush}"
+                    BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Padding="8">
+                <StackPanel Spacing="4">
+                    <Button x:Name="CatAppearance"
+                            Style="{StaticResource OptiNavButton}"
+                            Tag="appearance"
+                            Click="Category_Click"
+                            AutomationProperties.Name="Appearance">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE790;" FontSize="14" />
+                            <TextBlock Text="Appearance" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="CatUpdates"
+                            Style="{StaticResource OptiNavButton}"
+                            Tag="updates"
+                            Click="Category_Click"
+                            AutomationProperties.Name="Updates">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE895;" FontSize="14" />
+                            <TextBlock Text="Updates" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="CatSupport"
+                            Style="{StaticResource OptiNavButton}"
+                            Tag="support"
+                            Click="Category_Click"
+                            AutomationProperties.Name="Support">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE897;" FontSize="14" />
+                            <TextBlock Text="Support" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="CatAbout"
+                            Style="{StaticResource OptiNavButton}"
+                            Tag="about"
+                            Click="Category_Click"
+                            AutomationProperties.Name="About">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE946;" FontSize="14" />
+                            <TextBlock Text="About" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <!-- Detail pane -->
+            <Border Grid.Column="1"
+                    Background="{ThemeResource OptiCardFillBrush}"
+                    BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Padding="24,22">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="APPEARANCE" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-
-                        <Grid Grid.Row="1"
-                              ColumnSpacing="12"
-                              VerticalAlignment="Center"
-                              Margin="0,14,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-
-                            <!-- Dark -->
-                            <Button Grid.Column="0"
-                                    Style="{StaticResource OptiThemePickButton}"
-                                    Click="ThemeDark_Click"
-                                    AutomationProperties.Name="Use dark theme"
-                                    AutomationProperties.FullDescription="Dark theme">
-                                <Grid>
-                                    <Border Style="{StaticResource OptiThemePickOuter}" />
-                                    <Border Style="{StaticResource OptiThemePickOuter}"
-                                            Background="{ThemeResource OptiAccentBrush}"
-                                            Opacity="0.12"
-                                            Visibility="{x:Bind ViewModel.IsDarkMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                    <StackPanel Spacing="10" Padding="10,12">
-                                        <Border Height="72"
-                                                CornerRadius="12"
-                                                Background="#0A0A0A"
-                                                BorderThickness="0"
-                                                Padding="10">
-                                            <Grid>
-                                                <StackPanel Orientation="Horizontal"
-                                                            Spacing="6"
-                                                            VerticalAlignment="Top"
-                                                            HorizontalAlignment="Left">
-                                                    <Ellipse Width="10" Height="10" Fill="#22C55E" />
-                                                    <Ellipse Width="10" Height="10" Fill="#3B82F6" />
-                                                    <Ellipse Width="10" Height="10" Fill="#A78BFA" />
-                                                </StackPanel>
-                                                <FontIcon Glyph="&#xE708;"
-                                                          FontSize="22"
-                                                          Foreground="#E8ECF4"
-                                                          HorizontalAlignment="Center"
-                                                          VerticalAlignment="Center" />
-                                                <Border Width="36" Height="8"
-                                                        CornerRadius="4"
-                                                        Background="#22C55E"
-                                                        HorizontalAlignment="Right"
-                                                        VerticalAlignment="Bottom"
-                                                        Opacity="0.9" />
-                                            </Grid>
-                                        </Border>
-                                        <StackPanel Spacing="2" HorizontalAlignment="Center">
-                                            <TextBlock Text="Dark"
-                                                       FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                                       FontSize="14"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                       HorizontalAlignment="Center" />
-                                            <TextBlock Text="Night mode"
+                        <!-- Appearance -->
+                        <StackPanel x:Name="PaneAppearance" Spacing="16">
+                            <TextBlock Text="Appearance" Style="{StaticResource OptiPageTitle}" FontSize="22" />
+                            <TextBlock Text="Choose the app surface. NOVA stays pure black in dark mode."
+                                       Style="{StaticResource OptiCaption}" />
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Style="{StaticResource OptiThemePickButton}"
+                                        Click="ThemeDark_Click"
+                                        Height="128"
+                                        AutomationProperties.Name="Use dark theme">
+                                    <Border Background="{ThemeResource OptiSurfaceBrush}"
+                                            BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="12" Padding="14">
+                                        <StackPanel Spacing="8">
+                                            <Border Height="52" CornerRadius="8" Background="#000000" />
+                                            <TextBlock Text="Dark" FontWeight="SemiBold"
+                                                       Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                                            <TextBlock Text="AMOLED black"
                                                        FontSize="11"
-                                                       Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                       HorizontalAlignment="Center" />
+                                                       Foreground="{ThemeResource OptiMutedTextBrush}" />
                                         </StackPanel>
-                                        <FontIcon Glyph="&#xE73E;"
-                                                  FontSize="14"
-                                                  Foreground="{ThemeResource OptiAccentBrush}"
-                                                  HorizontalAlignment="Center"
-                                                  Visibility="{x:Bind ViewModel.IsDarkMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                    </StackPanel>
-                                </Grid>
-                            </Button>
-
-                            <!-- Light -->
-                            <Button Grid.Column="1"
-                                    Style="{StaticResource OptiThemePickButton}"
-                                    Click="ThemeLight_Click"
-                                    AutomationProperties.Name="Use light theme"
-                                    AutomationProperties.FullDescription="Light theme">
-                                <Grid>
-                                    <Border Style="{StaticResource OptiThemePickOuter}" />
-                                    <Border Style="{StaticResource OptiThemePickOuter}"
-                                            Background="{ThemeResource OptiAccentBrush}"
-                                            Opacity="0.12"
-                                            Visibility="{x:Bind ViewModel.IsLightMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                    <StackPanel Spacing="10" Padding="10,12">
-                                        <Border Height="72"
-                                                CornerRadius="12"
-                                                Background="#FFFFFF"
-                                                BorderThickness="0"
-                                                Padding="10">
-                                            <Grid>
-                                                <StackPanel Orientation="Horizontal"
-                                                            Spacing="6"
-                                                            VerticalAlignment="Top"
-                                                            HorizontalAlignment="Left">
-                                                    <Ellipse Width="10" Height="10" Fill="#16A34A" />
-                                                    <Ellipse Width="10" Height="10" Fill="#2563EB" />
-                                                    <Ellipse Width="10" Height="10" Fill="#7C3AED" />
-                                                </StackPanel>
-                                                <FontIcon Glyph="&#xE706;"
-                                                          FontSize="22"
-                                                          Foreground="#1A1F2A"
-                                                          HorizontalAlignment="Center"
-                                                          VerticalAlignment="Center" />
-                                                <Border Width="36" Height="8"
-                                                        CornerRadius="4"
-                                                        Background="#16A34A"
-                                                        HorizontalAlignment="Right"
-                                                        VerticalAlignment="Bottom"
-                                                        Opacity="0.9" />
-                                            </Grid>
-                                        </Border>
-                                        <StackPanel Spacing="2" HorizontalAlignment="Center">
-                                            <TextBlock Text="Light"
-                                                       FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                                       FontSize="14"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                       HorizontalAlignment="Center" />
-                                            <TextBlock Text="Day mode"
+                                    </Border>
+                                </Button>
+                                <Button Grid.Column="1"
+                                        Style="{StaticResource OptiThemePickButton}"
+                                        Click="ThemeLight_Click"
+                                        Height="128"
+                                        AutomationProperties.Name="Use light theme">
+                                    <Border Background="{ThemeResource OptiSurfaceBrush}"
+                                            BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="12" Padding="14">
+                                        <StackPanel Spacing="8">
+                                            <Border Height="52" CornerRadius="8" Background="#FFFFFF"
+                                                    BorderBrush="#E5E5E5" BorderThickness="1" />
+                                            <TextBlock Text="Light" FontWeight="SemiBold"
+                                                       Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                                            <TextBlock Text="Day surface"
                                                        FontSize="11"
-                                                       Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                       HorizontalAlignment="Center" />
+                                                       Foreground="{ThemeResource OptiMutedTextBrush}" />
                                         </StackPanel>
-                                        <FontIcon Glyph="&#xE73E;"
-                                                  FontSize="14"
-                                                  Foreground="{ThemeResource OptiAccentBrush}"
-                                                  HorizontalAlignment="Center"
-                                                  Visibility="{x:Bind ViewModel.IsLightMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                    </StackPanel>
-                                </Grid>
-                            </Button>
-                        </Grid>
-                    </Grid>
-                </ContentControl>
+                                    </Border>
+                                </Button>
+                            </Grid>
+                        </StackPanel>
 
-                <!-- Support -->
-                <ContentControl Grid.Row="0" Grid.Column="1" Style="{StaticResource OptiCard}" Padding="22,20">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="SUPPORT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                        <StackPanel Grid.Row="1"
-                                    VerticalAlignment="Center"
-                                    Spacing="10"
-                                    Margin="0,16,0,0">
+                        <!-- Updates -->
+                        <StackPanel x:Name="PaneUpdates" Spacing="16" Visibility="Collapsed">
+                            <TextBlock Text="Updates" Style="{StaticResource OptiPageTitle}" FontSize="22" />
+                            <TextBlock Text="Keep scripts and the app current from GitHub releases."
+                                       Style="{StaticResource OptiCaption}" />
+                            <ToggleSwitch Header="Check on launch"
+                                          IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
+                                          OnContent="On" OffContent="Off" />
+                            <Button Style="{StaticResource OptiPrimaryButton}"
+                                    Content="Check for updates"
+                                    Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
+                                    HorizontalAlignment="Left"
+                                    MinWidth="200"
+                                    IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                            <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
+                                       Style="{StaticResource OptiCaption}"
+                                       Visibility="{x:Bind ViewModel.HasUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </StackPanel>
+
+                        <!-- Support -->
+                        <StackPanel x:Name="PaneSupport" Spacing="14" Visibility="Collapsed">
+                            <TextBlock Text="Support" Style="{StaticResource OptiPageTitle}" FontSize="22" />
+                            <TextBlock Text="Logs and issue reports when something fails."
+                                       Style="{StaticResource OptiCaption}" />
                             <Button Style="{StaticResource OptiQuietButton}"
                                     Content="Open logs folder"
-                                    AutomationProperties.Name="Open OptiHub logs folder"
-                                    HorizontalAlignment="Stretch"
+                                    HorizontalAlignment="Left"
+                                    MinWidth="200"
                                     Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
                             <Button Style="{StaticResource OptiQuietButton}"
                                     Content="Report issue on GitHub"
-                                    AutomationProperties.Name="Report an issue on GitHub"
-                                    HorizontalAlignment="Stretch"
+                                    HorizontalAlignment="Left"
+                                    MinWidth="200"
                                     Command="{x:Bind ViewModel.ReportIssueCommand}" />
                         </StackPanel>
-                    </Grid>
-                </ContentControl>
 
-                <!-- About (version + disclaimer) -->
-                <ContentControl Grid.Row="1" Grid.Column="0" Style="{StaticResource OptiCard}" Padding="22,16">
-                    <Grid RowSpacing="8">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="ABOUT" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                        <StackPanel Grid.Row="1" Spacing="2">
-                            <TextBlock Text="App version"
-                                       Style="{StaticResource OptiCaption}"
-                                       FontSize="12"
-                                       Opacity="0.85" />
+                        <!-- About -->
+                        <StackPanel x:Name="PaneAbout" Spacing="12" Visibility="Collapsed">
+                            <TextBlock Text="About" Style="{StaticResource OptiPageTitle}" FontSize="22" />
+                            <TextBlock Text="App version" Style="{StaticResource OptiCaption}" />
                             <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
                                        FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                       FontSize="28"
+                                       FontSize="40"
                                        FontWeight="SemiBold"
-                                       Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                       CharacterSpacing="-20" />
-                        </StackPanel>
-                        <ScrollViewer Grid.Row="2"
-                                      VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Disabled"
-                                      Margin="0,4,0,0">
+                                       CharacterSpacing="-40"
+                                       Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                             <TextBlock Style="{StaticResource OptiCaption}"
-                                       FontSize="11"
-                                       LineHeight="15"
-                                       Opacity="0.9"
                                        TextWrapping="WrapWholeWords"
-                                       Text="Disclaimer: OptiHub is free, unofficial software. It is not affiliated with, endorsed by, or supported by Discord, Valve/Steam, NVIDIA, Microsoft, or any other third party.&#x0a;&#x0a;Applies aggressive changes to drivers, GPU settings, registry, services, and game/chat clients. You may need Administrator rights. Use at your own risk. Back up important data and create a system restore point first.&#x0a;&#x0a;No warranty — express or implied. The author is not liable for broken installs, lost data, banned accounts, hardware issues, or any other damage. By using OptiHub you accept full responsibility for the outcome." />
-                        </ScrollViewer>
-                    </Grid>
-                </ContentControl>
-
-                <!-- Updates — same card size as Appearance / Support -->
-                <ContentControl Grid.Row="1" Grid.Column="1" Style="{StaticResource OptiCard}" Padding="22,20">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="UPDATES" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                                       MaxWidth="480"
+                                       Text="OptiHub is free, unofficial software. Not affiliated with Discord, Valve, NVIDIA, or Microsoft. Aggressive system changes — use at your own risk. No warranty." />
                         </StackPanel>
-                        <StackPanel Grid.Row="1"
-                                    VerticalAlignment="Center"
-                                    Spacing="12"
-                                    Margin="0,12,0,0">
-                            <ToggleSwitch Header="Check on launch"
-                                          AutomationProperties.Name="Check for OptiHub app updates automatically"
-                                          IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
-                                          OnContent="On"
-                                          OffContent="Off"
-                                          HorizontalAlignment="Left" />
-                            <Button Style="{StaticResource OptiPrimaryButton}"
-                                    Content="Check for updates"
-                                    AutomationProperties.Name="Check for OptiHub app updates"
-                                    Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
-                                    HorizontalAlignment="Stretch"
-                                    MinHeight="44"
-                                    IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                        </StackPanel>
-                        <TextBlock Grid.Row="2"
-                                   Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
-                                   Style="{StaticResource OptiCaption}"
-                                   FontSize="11.5"
-                                   Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                   TextWrapping="WrapWholeWords"
-                                   MaxLines="2"
-                                   TextTrimming="CharacterEllipsis"
-                                   Margin="0,10,0,0"
-                                   Visibility="{x:Bind ViewModel.HasUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                   AutomationProperties.LiveSetting="Polite" />
                     </Grid>
-                </ContentControl>
-            </Grid>
+                </ScrollViewer>
+            </Border>
         </Grid>
     </Grid>
 </Page>

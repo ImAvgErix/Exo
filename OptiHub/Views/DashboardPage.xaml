@@ -6,117 +6,133 @@
     xmlns:viewModels="using:OptiHub.ViewModels"
     Background="Transparent">
 
-    <!-- LUMEN hub: centered hero + soft product tiles (not a gray list) -->
-    <Grid x:Name="PageRoot" Padding="40,24,40,36" Loaded="PageRoot_Loaded">
-        <Grid MaxWidth="1100"
-              HorizontalAlignment="Stretch"
-              VerticalAlignment="Stretch"
-              RowSpacing="28">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
+    <!-- NOVA home: full-width module lanes (not bento wrap grid) -->
+    <Grid x:Name="PageRoot" Padding="28,12,28,28" Loaded="PageRoot_Loaded">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-            <StackPanel x:Name="HeroPanel"
-                        Spacing="10"
-                        HorizontalAlignment="Center"
-                        Opacity="0"
-                        RenderTransformOrigin="0.5,0.5">
-                <StackPanel.RenderTransform>
-                    <CompositeTransform x:Name="HeroTransform" TranslateY="12" />
-                </StackPanel.RenderTransform>
-                <Border Width="10" Height="10"
-                        CornerRadius="5"
-                        Background="{ThemeResource OptiAccentBrush}"
-                        HorizontalAlignment="Center" />
-                <TextBlock Text="OptiHub"
-                           Style="{StaticResource OptiTagline}"
-                           HorizontalAlignment="Center" />
-                <TextBlock Text="Peak optimizers for Discord, Steam, Internet &amp; NVIDIA."
-                           Style="{StaticResource OptiTaglineSupport}"
-                           HorizontalAlignment="Center"
-                           MaxWidth="420" />
-            </StackPanel>
+        <StackPanel x:Name="HeroPanel"
+                    Spacing="6"
+                    Margin="0,0,0,20"
+                    Opacity="0"
+                    RenderTransformOrigin="0,0.5">
+            <StackPanel.RenderTransform>
+                <CompositeTransform x:Name="HeroTransform" TranslateY="18" />
+            </StackPanel.RenderTransform>
+            <TextBlock Text="OPTIHUB"
+                       FontFamily="{StaticResource OptiUiFontSemiBold}"
+                       FontSize="11"
+                       FontWeight="SemiBold"
+                       CharacterSpacing="120"
+                       Foreground="{ThemeResource OptiMutedTextBrush}" />
+            <TextBlock Text="Modules"
+                       FontFamily="{StaticResource OptiUiFontSemiBold}"
+                       FontSize="34"
+                       FontWeight="SemiBold"
+                       CharacterSpacing="-40"
+                       Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+            <TextBlock Text="Open a live optimizer from the list. Coming soon modules stay locked."
+                       FontSize="13"
+                       Foreground="{ThemeResource OptiMutedTextBrush}"
+                       MaxWidth="520"
+                       TextWrapping="WrapWholeWords" />
+        </StackPanel>
 
-            <ScrollViewer Grid.Row="1"
-                          VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled">
-                <ItemsControl x:Name="CardList"
-                              HorizontalAlignment="Center"
-                              ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <ItemsWrapGrid Orientation="Horizontal"
-                                           MaximumRowsOrColumns="4"
-                                           HorizontalAlignment="Center" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
-                            <Button Style="{StaticResource OptiCardButton}"
-                                    Width="220"
-                                    Height="200"
-                                    Margin="8"
-                                    Click="CardButton_Click"
-                                    Tag="{x:Bind Definition.Id}"
-                                    AutomationProperties.Name="{x:Bind Definition.Title}"
-                                    IsEnabled="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                                    Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
-                                <Border Background="{ThemeResource OptiCardFillBrush}"
-                                        BorderBrush="{ThemeResource OptiCardStrokeBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="22"
-                                        Width="220"
-                                        Height="200"
-                                        Padding="18">
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="*" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                        </Grid.RowDefinitions>
-                                        <Border Style="{StaticResource OptiLogoWell}"
-                                                Width="72" Height="72"
-                                                CornerRadius="20"
-                                                Padding="12"
-                                                HorizontalAlignment="Center"
-                                                VerticalAlignment="Center">
-                                            <Image Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
-                                                   Stretch="Uniform"
-                                                   AutomationProperties.AccessibilityView="Raw" />
-                                        </Border>
-                                        <TextBlock Grid.Row="1"
-                                                   Text="{x:Bind Definition.Title}"
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="CardList"
+                          ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <ItemsStackPanel Orientation="Vertical" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
+                        <Button Style="{StaticResource OptiCardButton}"
+                                Height="92"
+                                Margin="0,0,0,10"
+                                HorizontalAlignment="Stretch"
+                                Click="CardButton_Click"
+                                Tag="{x:Bind Definition.Id}"
+                                AutomationProperties.Name="{x:Bind Definition.Title}"
+                                IsEnabled="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                                Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
+                            <Border Background="{ThemeResource OptiCardFillBrush}"
+                                    BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="14"
+                                    Padding="16,12">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Style="{StaticResource OptiLogoWell}"
+                                            Width="56" Height="56"
+                                            CornerRadius="14"
+                                            Padding="9">
+                                        <Image Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
+                                               Stretch="Uniform"
+                                               AutomationProperties.AccessibilityView="Raw" />
+                                    </Border>
+
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                        <TextBlock Text="{x:Bind Definition.Title}"
                                                    FontFamily="{StaticResource OptiUiFontSemiBold}"
+                                                   FontSize="17"
                                                    FontWeight="SemiBold"
-                                                   FontSize="16"
-                                                   Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                   TextAlignment="Center"
-                                                   Margin="0,4,0,2" />
-                                        <TextBlock Grid.Row="2"
-                                                   Text="Coming soon"
-                                                   FontSize="12"
+                                                   Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                                        <TextBlock FontSize="12"
                                                    Foreground="{ThemeResource OptiMutedTextBrush}"
-                                                   TextAlignment="Center"
+                                                   Text="Open optimizer"
+                                                   Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                                        <TextBlock FontSize="12"
+                                                   Foreground="{ThemeResource OptiMutedTextBrush}"
+                                                   Text="Not available yet"
                                                    Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                        <Border Grid.Row="2"
-                                                HorizontalAlignment="Center"
-                                                Padding="10,3"
-                                                CornerRadius="999"
-                                                Background="{ThemeResource OptiAccentSoftBrush}"
-                                                Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
-                                            <TextBlock Text="Live"
-                                                       FontSize="11"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{ThemeResource OptiAccentBrush}" />
-                                        </Border>
-                                    </Grid>
-                                </Border>
-                            </Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
-        </Grid>
+                                    </StackPanel>
+
+                                    <Border Grid.Column="2"
+                                            VerticalAlignment="Center"
+                                            Padding="10,4"
+                                            CornerRadius="999"
+                                            Background="{ThemeResource OptiAccentSoftBrush}"
+                                            Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                                        <TextBlock Text="LIVE"
+                                                   FontSize="10"
+                                                   FontWeight="SemiBold"
+                                                   CharacterSpacing="40"
+                                                   Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                                    </Border>
+                                    <Border Grid.Column="2"
+                                            VerticalAlignment="Center"
+                                            Padding="10,4"
+                                            CornerRadius="999"
+                                            Background="{ThemeResource OptiSurfaceBrush}"
+                                            Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <TextBlock Text="SOON"
+                                                   FontSize="10"
+                                                   FontWeight="SemiBold"
+                                                   CharacterSpacing="40"
+                                                   Foreground="{ThemeResource OptiMutedTextBrush}" />
+                                    </Border>
+
+                                    <FontIcon Grid.Column="3"
+                                              Glyph="&#xE76C;"
+                                              FontSize="14"
+                                              VerticalAlignment="Center"
+                                              Foreground="{ThemeResource OptiMutedTextBrush}" />
+                                </Grid>
+                            </Border>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
     </Grid>
 </Page>

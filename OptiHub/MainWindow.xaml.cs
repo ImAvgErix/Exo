@@ -26,14 +26,14 @@ public sealed partial class MainWindow : Window
 
     private ShellMode _mode = ShellMode.Home;
     private readonly CancellationTokenSource _lifetimeCts = new();
+    private readonly Dictionary<string, Button> _navMap = new();
 
     public MainWindow()
     {
         InitializeComponent();
         App.MainAppWindow = this;
 
-        // Default open size only — user may freely resize and maximize.
-        AppWindow.Resize(new SizeInt32(1280, 820));
+        AppWindow.Resize(new SizeInt32(1280, 840));
         ApplyResizableWindowChrome();
         TryCenterOnScreen();
         TrySetWindowIcon();
@@ -41,10 +41,16 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBarHost);
 
+        _navMap["home"] = NavHome;
+        _navMap["discord"] = NavDiscord;
+        _navMap["steam"] = NavSteam;
+        _navMap["internet"] = NavInternet;
+        _navMap["nvidia"] = NavNvidia;
+        _navMap["settings"] = NavSettings;
+
         AppWindow.Changed += (_, args) =>
         {
             UpdateCaptionInset();
-            // Never re-lock size after user resize/maximize.
             if (args.DidPresenterChange)
                 ApplyResizableWindowChrome();
         };
@@ -53,6 +59,7 @@ public sealed partial class MainWindow : Window
             UpdateCaptionInset();
             ApplyResizableWindowChrome();
             ClearChromeFocus();
+            SyncNavSelection("home");
         };
         RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
@@ -66,7 +73,6 @@ public sealed partial class MainWindow : Window
 
         ApplyShellChrome();
         UpdateCaptionInset();
-
         NavigateHome(suppressTransition: true);
         ClearChromeFocus();
         _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
@@ -94,14 +100,11 @@ public sealed partial class MainWindow : Window
                 _ = page.Focus(FocusState.Programmatic);
             }
             else
-            {
                 _ = ContentFrame.Focus(FocusState.Programmatic);
-            }
         }
         catch { }
     }
 
-    /// <summary>User-resizable shell: maximize + edge drag allowed. Sensible minimum only.</summary>
     private void ApplyResizableWindowChrome()
     {
         if (AppWindow.Presenter is OverlappedPresenter presenter)
@@ -109,9 +112,8 @@ public sealed partial class MainWindow : Window
             presenter.IsMaximizable = true;
             presenter.IsResizable = true;
             presenter.IsMinimizable = true;
-            // Soft floor so chrome never collapses; not a fixed frame.
-            presenter.PreferredMinimumWidth = 900;
-            presenter.PreferredMinimumHeight = 560;
+            presenter.PreferredMinimumWidth = 960;
+            presenter.PreferredMinimumHeight = 600;
         }
     }
 
@@ -138,10 +140,11 @@ public sealed partial class MainWindow : Window
         }
         catch
         {
-            RootGrid.Background = new SolidColorBrush(ColorHelper.FromArgb(255, 7, 8, 11));
+            RootGrid.Background = new SolidColorBrush(ColorHelper.FromArgb(255, 7, 8, 13));
         }
         App.Services.Theme.Apply();
         UpdateCaptionInset();
+        SyncNavSelection(ModeToNavKey(_mode));
     }
 
     private void TryCenterOnScreen()
@@ -161,30 +164,91 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
+    private void Nav_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string key }) return;
+        switch (key)
+        {
+            case "home": NavigateHome(); break;
+            case "discord": NavigateToDiscord(); break;
+            case "steam": NavigateToSteam(); break;
+            case "internet": NavigateToInternet(); break;
+            case "nvidia": NavigateToNvidia(); break;
+            case "settings": Navigate(ShellMode.Settings, typeof(SettingsPage), Slide()); break;
+        }
+    }
+
+    private void SyncNavSelection(string activeKey)
+    {
+        Brush Soft() => Application.Current.Resources.TryGetValue("OptiAccentSoftBrush", out var s) && s is Brush sb
+            ? sb : new SolidColorBrush(ColorHelper.FromArgb(255, 26, 26, 26));
+        Brush Acc() => Application.Current.Resources.TryGetValue("OptiAccentBrush", out var a) && a is Brush ab
+            ? ab : new SolidColorBrush(ColorHelper.FromArgb(255, 245, 245, 245));
+        Brush Mut() => Application.Current.Resources.TryGetValue("OptiMutedTextBrush", out var m) && m is Brush mb
+            ? mb : new SolidColorBrush(ColorHelper.FromArgb(255, 115, 115, 115));
+        Brush Pri() => Application.Current.Resources.TryGetValue("OptiPrimaryTextBrush", out var p) && p is Brush pb
+            ? pb : new SolidColorBrush(ColorHelper.FromArgb(255, 250, 250, 250));
+
+        foreach (var kv in _navMap)
+        {
+            var on = string.Equals(kv.Key, activeKey, StringComparison.OrdinalIgnoreCase);
+            var btn = kv.Value;
+            btn.Background = on ? Soft() : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            btn.BorderThickness = on ? new Thickness(3, 0, 0, 0) : new Thickness(0);
+            btn.BorderBrush = on ? Acc() : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            PaintNavContent(btn.Content, on ? Acc() : Mut(), on ? Pri() : Mut());
+        }
+    }
+
+    private static void PaintNavContent(object? content, Brush iconBrush, Brush labelBrush)
+    {
+        switch (content)
+        {
+            case FontIcon icon:
+                icon.Foreground = iconBrush;
+                break;
+            case TextBlock label:
+                label.Foreground = labelBrush;
+                break;
+            case Panel panel:
+                foreach (var child in panel.Children)
+                    PaintNavContent(child, iconBrush, labelBrush);
+                break;
+        }
+    }
+
+    private static string ModeToNavKey(ShellMode mode) => mode switch
+    {
+        ShellMode.Home => "home",
+        ShellMode.Discord => "discord",
+        ShellMode.Steam => "steam",
+        ShellMode.Internet => "internet",
+        ShellMode.Nvidia or ShellMode.NvidiaPanel => "nvidia",
+        ShellMode.Settings => "settings",
+        _ => "home"
+    };
+
     private void ApplyChrome(ShellMode mode)
     {
         _mode = mode;
-        var home = mode == ShellMode.Home;
-        var optimizer = mode is ShellMode.Discord or ShellMode.Steam or ShellMode.Internet
-            or ShellMode.Nvidia or ShellMode.NvidiaPanel;
-
-        BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
-        ContextLogoHost.Visibility = optimizer ? Visibility.Visible : Visibility.Collapsed;
-        SettingsButton.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
+        var panel = mode == ShellMode.NvidiaPanel;
+        BackButton.Visibility = panel ? Visibility.Visible : Visibility.Collapsed;
+        ContextLogoHost.Visibility = mode is ShellMode.Discord or ShellMode.Steam or ShellMode.Internet
+            or ShellMode.Nvidia or ShellMode.NvidiaPanel
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         AppTitleText.Text = mode switch
         {
+            ShellMode.Home => "Home",
             ShellMode.Discord => "Discord",
             ShellMode.Steam => "Steam",
             ShellMode.Internet => "Internet",
             ShellMode.Nvidia => "NVIDIA",
             ShellMode.NvidiaPanel => "Display",
             ShellMode.Settings => "Settings",
-            _ => string.Empty
+            _ => "OptiHub"
         };
-        AppTitleText.Visibility = string.IsNullOrEmpty(AppTitleText.Text)
-            ? Visibility.Collapsed
-            : Visibility.Visible;
 
         if (mode == ShellMode.Discord)
             TrySetContextLogo("Assets/Logos/discord.png");
@@ -196,6 +260,8 @@ public sealed partial class MainWindow : Window
             TrySetContextLogo("Assets/Logos/nvidia.png");
         else
             ContextLogo.Source = null;
+
+        SyncNavSelection(ModeToNavKey(mode));
     }
 
     private void TrySetWindowIcon()
@@ -218,16 +284,13 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    private void TrySetContextLogo(string relativePath)
-    {
+    private void TrySetContextLogo(string relativePath) =>
         ContextLogo.Source = AssetPathToImageSourceConverter.Resolve(relativePath);
-    }
 
     private static NavigationTransitionInfo Slide() =>
-        new DrillInNavigationTransitionInfo();
-
+        new SlideNavigationTransitionInfo { Effect = SlideNavigationTransitionEffect.FromRight };
     private static NavigationTransitionInfo SlideBack() =>
-        new ContinuumNavigationTransitionInfo();
+        new SlideNavigationTransitionInfo { Effect = SlideNavigationTransitionEffect.FromLeft };
 
     public void NavigateHome(bool suppressTransition = false)
     {
@@ -237,20 +300,11 @@ public sealed partial class MainWindow : Window
             suppressTransition ? (NavigationTransitionInfo)new SuppressNavigationTransitionInfo() : SlideBack());
     }
 
-    public void NavigateToDiscord() =>
-        Navigate(ShellMode.Discord, typeof(DiscordOptimizerPage), Slide());
-
-    public void NavigateToSteam() =>
-        Navigate(ShellMode.Steam, typeof(SteamOptimizerPage), Slide());
-
-    public void NavigateToInternet() =>
-        Navigate(ShellMode.Internet, typeof(InternetOptimizerPage), Slide());
-
-    public void NavigateToNvidia() =>
-        Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), Slide());
-
-    public void NavigateToNvidiaPanel() =>
-        Navigate(ShellMode.NvidiaPanel, typeof(NvidiaPanelPage), Slide());
+    public void NavigateToDiscord() => Navigate(ShellMode.Discord, typeof(DiscordOptimizerPage), Slide());
+    public void NavigateToSteam() => Navigate(ShellMode.Steam, typeof(SteamOptimizerPage), Slide());
+    public void NavigateToInternet() => Navigate(ShellMode.Internet, typeof(InternetOptimizerPage), Slide());
+    public void NavigateToNvidia() => Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), Slide());
+    public void NavigateToNvidiaPanel() => Navigate(ShellMode.NvidiaPanel, typeof(NvidiaPanelPage), Slide());
 
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {
@@ -261,11 +315,8 @@ public sealed partial class MainWindow : Window
             ApplyChrome(mode);
     }
 
-    private void SettingsButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_mode == ShellMode.Settings) return;
+    private void SettingsButton_Click(object sender, RoutedEventArgs e) =>
         Navigate(ShellMode.Settings, typeof(SettingsPage), Slide());
-    }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
@@ -280,7 +331,6 @@ public sealed partial class MainWindow : Window
         try
         {
             if (!App.Services.Settings.Current.AutoUpdateScripts) return;
-
             await Task.Delay(1200, ct);
             for (var i = 0; i < 10 && RootGrid.XamlRoot is null; i++)
                 await Task.Delay(200, ct);
@@ -294,8 +344,7 @@ public sealed partial class MainWindow : Window
                     Content =
                         $"Version {appCheck.RemoteVersion} is available.\n" +
                         $"You have {appCheck.LocalVersion}.\n\n" +
-                        "Install now? OptiHub will close, update in place, and reopen.\n" +
-                        "This release includes the matching optimizers.",
+                        "Install now? OptiHub will close, update in place, and reopen.",
                     PrimaryButtonText = "Install",
                     CloseButtonText = "Later",
                     DefaultButton = ContentDialogButton.Primary,
@@ -312,17 +361,15 @@ public sealed partial class MainWindow : Window
                         Application.Current?.Exit();
                         return;
                     }
-
                     if (RootGrid.XamlRoot is not null)
                     {
-                        var err = new ContentDialog
+                        await new ContentDialog
                         {
                             Title = "Update could not finish",
                             Content = install.Message,
                             CloseButtonText = "OK",
                             XamlRoot = RootGrid.XamlRoot
-                        };
-                        await err.ShowAsync();
+                        }.ShowAsync();
                     }
                 }
             }
