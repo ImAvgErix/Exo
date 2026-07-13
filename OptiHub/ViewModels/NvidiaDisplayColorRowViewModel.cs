@@ -44,12 +44,9 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
         DepthOptions.Clear();
         foreach (var d in info.SupportedDepths.Distinct(StringComparer.OrdinalIgnoreCase))
             DepthOptions.Add(d);
+        // Never invent 10/12-bit when helper only reported 8 (panel can't do 12).
         if (DepthOptions.Count == 0)
-        {
             DepthOptions.Add("8-bit");
-            DepthOptions.Add("10-bit");
-            DepthOptions.Add("12-bit");
-        }
 
         ColorRangeOptions.Clear();
         foreach (var o in NvidiaPanelLogic.ColorRangeOptions)

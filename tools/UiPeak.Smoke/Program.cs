@@ -64,8 +64,10 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("theme has OptiMutedTextBrush", a.Contains("OptiMutedTextBrush", StringComparison.Ordinal));
     Expect("theme has OptiDividerBrush", a.Contains("OptiDividerBrush", StringComparison.Ordinal));
-    Expect("FORGE amber accent", a.Contains("#F59E0B", StringComparison.Ordinal) || a.Contains("#D97706", StringComparison.Ordinal));
-    Expect("FORGE rail brush", a.Contains("OptiRailBrush", StringComparison.Ordinal));
+    Expect("AMOLED pure black page", a.Contains("#000000", StringComparison.Ordinal));
+    Expect("white accent", a.Contains("OptiAccentBrush", StringComparison.Ordinal) && a.Contains("#FFFFFF", StringComparison.Ordinal));
+    Expect("rail brush present", a.Contains("OptiRailBrush", StringComparison.Ordinal));
+    Expect("not orange forge accent", !a.Contains("#F59E0B", StringComparison.Ordinal));
     Expect("not leftover Signal teal primary", !a.Contains("#5EEAD4", StringComparison.Ordinal));
 }
 

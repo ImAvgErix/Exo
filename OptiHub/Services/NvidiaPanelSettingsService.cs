@@ -515,7 +515,8 @@ public sealed class NvidiaPanelSettingsService
             psi.Environment["OPTIHUB_PRIMARY_REFRESH"] = "max";
             psi.Environment["OPTIHUB_SECONDARY_REFRESH"] = "60";
             psi.Environment["OPTIHUB_FULL_RGB"] = "1";
-            psi.Environment["OPTIHUB_GPU_NOSCALE"] = "1";
+            // Full-screen GPU scale (not no-scaling) — avoids desktop black bars
+            psi.Environment["OPTIHUB_GPU_NOSCALE"] = "0";
 
             using var proc = Process.Start(psi);
             if (proc is null)

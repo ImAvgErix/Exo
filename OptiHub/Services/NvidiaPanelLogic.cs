@@ -11,8 +11,8 @@ public static class NvidiaPanelLogic
 {
     public static readonly string[] ScalingOptions =
     {
-        "GPU no-scaling",
         "GPU scaling",
+        "GPU no-scaling",
         "Display scaling"
     };
 
@@ -142,7 +142,7 @@ public static class NvidiaPanelLogic
 
     public static string BuildSetScalingArgs(string scalingLabel, uint? displayId)
     {
-        var s = ToScalingCliArg(scalingLabel) ?? "gpu-noscaling";
+        var s = ToScalingCliArg(scalingLabel) ?? "gpu";
         return displayId is null or 0
             ? $"--set-scaling {s}"
             : $"--set-scaling {s} --display-id {displayId.Value}";

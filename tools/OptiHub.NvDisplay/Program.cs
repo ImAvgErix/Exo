@@ -34,6 +34,9 @@ static class Program
     // Scaling / ScalingMode: 2 = No scaling (community + observed NVTweak dumps)
     private const int RegGpu = 0;
     private const int RegDisplay = 1;
+    // NVTweak ScalingMode: 0 = Full-screen, 1 = Aspect ratio, 2 = No scaling (black bars when res ≠ panel)
+    private const int RegFullScreen = 0;
+    private const int RegAspectRatio = 1;
     private const int RegNoScaling = 2;
     private const int RegFullRange = 0; // matches ColorDataDynamicRange.VESA = 0
     private const int RegLimitedRange = 1; // CEA
@@ -288,8 +291,9 @@ static class Program
 
             var wantFullRgb = !string.Equals(
                 Environment.GetEnvironmentVariable("OPTIHUB_FULL_RGB") ?? "1", "0", StringComparison.Ordinal);
-            var wantGpuNoScale = !string.Equals(
-                Environment.GetEnvironmentVariable("OPTIHUB_GPU_NOSCALE") ?? "1", "0", StringComparison.Ordinal);
+            // Default OFF — "no scaling" causes black bars on desktop with games at non-native res.
+            var wantGpuNoScale = string.Equals(
+                Environment.GetEnvironmentVariable("OPTIHUB_GPU_NOSCALE") ?? "0", "1", StringComparison.Ordinal);
 
             if (apply && nvidiaGdiNames.Count > 0)
             {
@@ -651,21 +655,9 @@ static class Program
             }
             catch { }
 
-            var supported = new List<string>();
-            foreach (var d in new[] { ColorDataDepth.BPC12, ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6 })
-            {
-                try
-                {
-                    var probe = new ColorData(
-                        ColorDataFormat.RGB, ColorDataColorimetry.Auto, ColorDataDynamicRange.VESA,
-                        d, ColorDataSelectionPolicy.User, ColorDataDesktopDepth.Default);
-                    if (dev.IsColorDataSupported(probe))
-                        supported.Add(d.ToString());
-                }
-                catch { }
-            }
-            if (supported.Count == 0 && currentDepth is not null)
-                supported.Add(currentDepth);
+            // Honest depth list: NVAPI IsColorDataSupported often advertises 12-bit when the
+            // panel cannot run it. Only offer depths at or below the live working depth.
+            var supported = ListHonestSupportedDepths(dev, currentDepth);
 
             if (colorOnly)
             {
@@ -716,12 +708,67 @@ static class Program
                 currentFormat,
                 supportedDepths = supported,
                 scaling,
-                scalingOptions = new[] { "gpu-noscaling", "gpu", "display" },
+                scalingOptions = new[] { "gpu", "gpu-noscaling", "display" },
                 colorRangeOptions = new[] { "full", "limited" }
             });
         }
         return list;
     }
+
+    /// <summary>
+    /// Depths the panel is proven to run: current working depth and lower.
+    /// Never list 12-bit solely because IsColorDataSupported claimed it.
+    /// </summary>
+    static List<string> ListHonestSupportedDepths(DisplayDevice dev, string? currentDepthName)
+    {
+        var curRank = DepthNameRank(currentDepthName);
+        var list = new List<string>();
+        foreach (var d in new[] { ColorDataDepth.BPC12, ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6 })
+        {
+            var rank = DepthEnumRank(d);
+            // Only offer equal/lower than live depth (curRank 0 = unknown → allow 8 only).
+            if (curRank > 0 && rank > curRank) continue;
+            if (curRank == 0 && rank > 8) continue;
+            try
+            {
+                var probe = new ColorData(
+                    ColorDataFormat.RGB, ColorDataColorimetry.Auto, ColorDataDynamicRange.VESA,
+                    d, ColorDataSelectionPolicy.User, ColorDataDesktopDepth.Default);
+                if (dev.IsColorDataSupported(probe))
+                    list.Add(d.ToString());
+            }
+            catch { }
+        }
+        if (list.Count == 0 && !string.IsNullOrWhiteSpace(currentDepthName))
+            list.Add(currentDepthName!);
+        if (list.Count == 0)
+            list.Add("BPC8");
+        // Always include proven current first-class.
+        if (!string.IsNullOrWhiteSpace(currentDepthName) &&
+            !list.Any(x => string.Equals(x, currentDepthName, StringComparison.OrdinalIgnoreCase)))
+            list.Insert(0, currentDepthName!);
+        return list;
+    }
+
+    static int DepthNameRank(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return 0;
+        var s = name.ToUpperInvariant();
+        if (s.Contains("12")) return 12;
+        if (s.Contains("10")) return 10;
+        if (s.Contains('8')) return 8;
+        if (s.Contains('6')) return 6;
+        return 0;
+    }
+
+    static int DepthEnumRank(ColorDataDepth d) => d switch
+    {
+        ColorDataDepth.BPC12 => 12,
+        ColorDataDepth.BPC10 => 10,
+        ColorDataDepth.BPC8 => 8,
+        ColorDataDepth.BPC6 => 6,
+        _ => 0
+    };
 
     static List<string> EnumerateModesForGdi(string gdi)
     {
@@ -757,7 +804,7 @@ static class Program
         {
             using var devices = Registry.CurrentUser.OpenSubKey(
                 @"Software\NVIDIA Corporation\Global\NVTweak\Devices");
-            if (devices is null) return "gpu-noscaling";
+            if (devices is null) return "gpu";
             foreach (var name in devices.GetSubKeyNames())
             {
                 using var dev = devices.OpenSubKey(name);
@@ -770,7 +817,7 @@ static class Program
             }
         }
         catch { }
-        return "gpu-noscaling";
+        return "gpu";
     }
 
     static bool ApplyUserMode(List<DisplayDevice> devices, int width, int height, int hz, uint? onlyId)
@@ -844,7 +891,8 @@ static class Program
     {
         // Map to registry: PerformScalingOn + ScalingMode
         int performOn = scaleMode == "display" ? RegDisplay : RegGpu;
-        int scalingMode = scaleMode == "gpu-noscaling" ? RegNoScaling : 0; // 0 = aspect/full-screen style GPU scale
+        // gpu = full-screen fill (default, no desktop black bars); gpu-noscaling = centered bars
+        int scalingMode = scaleMode == "gpu-noscaling" ? RegNoScaling : RegFullScreen;
         try
         {
             void StampHive(RegistryKey hive, string devicesRelative)
@@ -1029,11 +1077,15 @@ static class Program
 
     static ColorDataDepth PickBestDepth(DisplayDevice dev, ColorDataDepth? current)
     {
-        // Peak apply: highest supported bit depth first (12 → 10 → 8 → 6).
-        foreach (var depth in new[]
-                 {
-                     ColorDataDepth.BPC12, ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6
-                 })
+        // Prefer the live working depth — do not force 12-bit when the panel only runs 8.
+        // Upgrade path: current → 10 → 8 (12 only if already current).
+        var order = new List<ColorDataDepth>();
+        if (current is not null) order.Add(current.Value);
+        order.AddRange(new[] { ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6 });
+        if (current == ColorDataDepth.BPC12)
+            order.Insert(1, ColorDataDepth.BPC12);
+
+        foreach (var depth in order.Distinct())
         {
             var probe = new ColorData(
                 ColorDataFormat.RGB, ColorDataColorimetry.Auto, ColorDataDynamicRange.VESA,
@@ -1637,16 +1689,17 @@ static class Program
                 using var dev = root.OpenSubKey(name, writable: true);
                 if (dev == null) continue;
 
-                // Desktop size/position: GPU + No scaling + Override ON (all aliases CPL may read)
+                // GPU scaling + Full-screen (NOT "No scaling") — no-scaling causes black bars
+                // on the desktop when a game or mode is below native panel resolution.
                 dev.SetValue("PerformScalingOn", RegGpu, RegistryValueKind.DWord);
                 dev.SetValue("ScalingDevice", RegGpu, RegistryValueKind.DWord);
                 dev.SetValue("ScalingOverride", 1, RegistryValueKind.DWord);
                 dev.SetValue("AppControlledScaling", 0, RegistryValueKind.DWord);
-                dev.SetValue("Scaling", RegNoScaling, RegistryValueKind.DWord);
-                dev.SetValue("ScalingMode", RegNoScaling, RegistryValueKind.DWord);
-                dev.SetValue("FlatPanelScaling", RegNoScaling, RegistryValueKind.DWord);
-                dev.SetValue("OverlayScaling", RegNoScaling, RegistryValueKind.DWord);
-                dev.SetValue("PreferredScalingMode", RegNoScaling, RegistryValueKind.DWord);
+                dev.SetValue("Scaling", RegFullScreen, RegistryValueKind.DWord);
+                dev.SetValue("ScalingMode", RegFullScreen, RegistryValueKind.DWord);
+                dev.SetValue("FlatPanelScaling", RegFullScreen, RegistryValueKind.DWord);
+                dev.SetValue("OverlayScaling", RegFullScreen, RegistryValueKind.DWord);
+                dev.SetValue("PreferredScalingMode", RegFullScreen, RegistryValueKind.DWord);
                 dev.SetValue("GpuScaling", 1, RegistryValueKind.DWord);
                 dev.SetValue("DisplayScaling", 0, RegistryValueKind.DWord);
                 dev.SetValue("OverrideScalingMode", 1, RegistryValueKind.DWord);
@@ -1655,7 +1708,8 @@ static class Program
                 dev.SetValue("PreferGpuScaling", 1, RegistryValueKind.DWord);
                 dev.SetValue("ForceGpuScaling", 1, RegistryValueKind.DWord);
                 dev.SetValue("isOverrideScalingEnabled", 1, RegistryValueKind.DWord);
-                dev.SetValue("scalingMethod", 3, RegistryValueKind.DWord);
+                // 1 ≈ full-screen style (not 3 / no-scaling) in common NVTweak dumps
+                dev.SetValue("scalingMethod", 1, RegistryValueKind.DWord);
 
                 using (var color = dev.CreateSubKey("Color"))
                 {
@@ -1787,10 +1841,15 @@ static class Program
                 using var dev = root.OpenSubKey(name);
                 if (dev == null) { ok = false; continue; }
                 checkedAny = true;
-                var scaleOk = !requireGpuScale || (
-                    Convert.ToInt32(dev.GetValue("PerformScalingOn", -1)) == RegGpu &&
-                    Convert.ToInt32(dev.GetValue("ScalingOverride", -1)) == 1 &&
-                    Convert.ToInt32(dev.GetValue("ScalingMode", -1)) == RegNoScaling);
+                // Peak: GPU + full-screen (0). Optional no-scaling (2) only when explicitly requested.
+                var sm = Convert.ToInt32(dev.GetValue("ScalingMode", -1));
+                var scaleOk = !requireGpuScale
+                    ? (Convert.ToInt32(dev.GetValue("PerformScalingOn", -1)) == RegGpu &&
+                       Convert.ToInt32(dev.GetValue("ScalingOverride", -1)) == 1 &&
+                       (sm == RegFullScreen || sm == RegAspectRatio || sm == RegNoScaling))
+                    : (Convert.ToInt32(dev.GetValue("PerformScalingOn", -1)) == RegGpu &&
+                       Convert.ToInt32(dev.GetValue("ScalingOverride", -1)) == 1 &&
+                       sm == RegNoScaling);
                 var colorOk = true;
                 if (requireColor)
                 {

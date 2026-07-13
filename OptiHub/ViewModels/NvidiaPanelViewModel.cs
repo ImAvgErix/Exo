@@ -220,7 +220,8 @@ public partial class NvidiaPanelViewModel : ObservableObject
             settings.PrimaryRefresh = "max";
             settings.SecondaryRefresh = "60";
             settings.FullRgb = true;
-            settings.GpuNoScaling = true;
+            // Full-screen GPU scaling — not "no scaling" (black bars with games).
+            settings.GpuNoScaling = false;
             settings.ScalingOverride = true;
             settings.VideoNvidiaColor = true;
             settings.VideoNvidiaImage = true;

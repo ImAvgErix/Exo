@@ -1,3 +1,9 @@
+## 1.9.43
+
+- **AMOLED UI**: pure black + white accents (removes orange Forge palette)
+- **Black bars fix**: peak scaling is GPU full-screen, not "no scaling" (no-scaling letterboxes games/desktop)
+- **Color depth honesty**: only list depths at/below the live working depth (no fake 12-bit on 8-bit panels)
+- Peak color pick keeps current depth instead of forcing 12-bit
 ## 1.9.42
 
 - **FORGE UI redesign** (not a token pass): warm stone + amber rail language, sharp 8–10px geometry
@@ -381,6 +387,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 
