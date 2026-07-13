@@ -216,6 +216,23 @@ public sealed class NetworkOptimizerService
             detail = ex.Message;
         }
 
+        var mediaProfile = new NetworkMediaProfile();
+        try
+        {
+            mediaProfile = await DetectMediaProfileAsync(ct).ConfigureAwait(false);
+            features.Add(Row("Path policy", mediaProfile.PolicyLine, true));
+            if (mediaProfile.WifiAvailable)
+            {
+                var bandDetail = mediaProfile.ClientSupports6Ghz
+                    ? "6 GHz capable"
+                    : mediaProfile.ClientSupports5Ghz ? "5 GHz capable" : "Legacy";
+                if (mediaProfile.ConnectedRadioHint is not "—")
+                    bandDetail += $" · {mediaProfile.ConnectedRadioHint}";
+                features.Add(Row("Wi‑Fi capability", bandDetail, true));
+            }
+        }
+        catch { }
+
         return new NetworkSnapshot
         {
             AdapterName = adapterName,
@@ -239,7 +256,132 @@ public sealed class NetworkOptimizerService
             Detail = detail,
             ProbeOk = probeOk,
             ActivePreset = LoadSavedPreset(),
+            Media = mediaProfile,
             Features = features
+        };
+    }
+
+    /// <summary>
+    /// Detect Ethernet/Wi‑Fi availability, client band support (5/6 GHz), and apply policy text.
+    /// Uses OS/driver facts only — not a cloud model.
+    /// </summary>
+    public async Task<NetworkMediaProfile> DetectMediaProfileAsync(CancellationToken ct = default)
+    {
+        var ethAvail = false;
+        var ethUp = false;
+        var wifiAvail = false;
+        var wifiUp = false;
+        var supports6 = false;
+        var supports5 = true; // almost all modern Wi‑Fi
+        var radioHint = "—";
+
+        try
+        {
+            var probePs = Path.Combine(Path.GetTempPath(), $"optihub-media-{Guid.NewGuid():N}.ps1");
+            await File.WriteAllTextAsync(probePs, """
+$ErrorActionPreference = 'SilentlyContinue'
+function IsWifi($a) {
+  $m=[string]$a.MediaType; $d=[string]$a.InterfaceDescription; $n=[string]$a.Name
+  return ($m -match '802\.11|Native 802|Wireless|Wi-?Fi' -or $d -match 'Wi-?Fi|Wireless|802\.11|WLAN' -or $n -match '^Wi-?Fi|Wireless')
+}
+$phys = @(Get-NetAdapter -Physical -EA SilentlyContinue)
+$eth = @($phys | Where-Object { -not (IsWifi $_) })
+$wifi = @($phys | Where-Object { IsWifi $_ })
+$eUp = @($eth | Where-Object Status -eq 'Up').Count -gt 0
+$wUp = @($wifi | Where-Object Status -eq 'Up').Count -gt 0
+$band6 = $false; $band5 = $false
+foreach ($w in $wifi) {
+  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $w.Name -EA SilentlyContinue)) {
+    $blob = "$($p.DisplayName) $($p.DisplayValue) $(($p.ValidDisplayValues) -join ' ')"
+    if ($blob -match '(?i)6\s*GHz|6GHz|Wi-?Fi\s*6E|802\.11be|Prefer 6') { $band6 = $true }
+    if ($blob -match '(?i)5\s*GHz|5GHz|Prefer 5') { $band5 = $true }
+  }
+}
+$drv = (netsh wlan show drivers 2>$null | Out-String)
+if ($drv -match '(?i)6\s*GHz|802\.11be|Wi-?Fi\s*6E') { $band6 = $true }
+if ($drv -match '(?i)5\s*GHz|802\.11ac|802\.11ax|802\.11n') { $band5 = $true }
+$iface = (netsh wlan show interfaces 2>$null | Out-String)
+$hint = '-'
+if ($iface -match '(?i)Radio type\s*:\s*(.+)') { $hint = $Matches[1].Trim() }
+elseif ($iface -match '(?i)Channel\s*:\s*(\d+)') { $hint = 'ch ' + $Matches[1] }
+# Connected 6 GHz channels are typically 1-233 in 6 GHz band; Windows often reports radio type
+if ($hint -match '(?i)6\s*GHz|be|6E') { $band6 = $true }
+Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;HINT=$hint"
+""", ct).ConfigureAwait(false);
+            try
+            {
+                var ps = await RunCaptureAsync("powershell", $"-NoProfile -ExecutionPolicy Bypass -File \"{probePs}\"", ct)
+                    .ConfigureAwait(false);
+                foreach (var part in (ps ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    var kv = part.Split('=', 2);
+                    if (kv.Length != 2) continue;
+                    var k = kv[0].Trim().ToUpperInvariant();
+                    var v = kv[1].Trim();
+                    switch (k)
+                    {
+                        case "ETH": ethAvail = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
+                        case "ETHUP": ethUp = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
+                        case "WIFI": wifiAvail = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
+                        case "WIFIUP": wifiUp = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
+                        case "B6": supports6 = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
+                        case "B5": supports5 = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
+                        case "HINT" when v is not ("-" or ""): radioHint = v; break;
+                    }
+                }
+            }
+            finally
+            {
+                try { File.Delete(probePs); } catch { }
+            }
+        }
+        catch { }
+
+        // Fallback from managed APIs if PS failed
+        if (!ethAvail && !wifiAvail)
+        {
+            foreach (var n in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (n.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+                if (n.NetworkInterfaceType == NetworkInterfaceType.Ethernet)
+                {
+                    ethAvail = true;
+                    if (n.OperationalStatus == OperationalStatus.Up) ethUp = true;
+                }
+                else if (n.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)
+                {
+                    wifiAvail = true;
+                    if (n.OperationalStatus == OperationalStatus.Up) wifiUp = true;
+                }
+            }
+        }
+
+        var bandTarget = supports6 ? "6GHz" : supports5 ? "5GHz" : "Auto";
+        string policy;
+        if (ethUp)
+            policy = wifiAvail
+                ? "Ethernet up → use Ethernet, disable Wi‑Fi"
+                : "Ethernet up → Ethernet only";
+        else if (wifiUp)
+            policy = $"Wi‑Fi only → prefer {bandTarget}";
+        else if (ethAvail)
+            policy = "Ethernet present (down) → prefer when linked";
+        else if (wifiAvail)
+            policy = $"Wi‑Fi only → prefer {bandTarget}";
+        else
+            policy = "No physical adapter detected";
+
+        return new NetworkMediaProfile
+        {
+            EthernetAvailable = ethAvail,
+            EthernetUp = ethUp,
+            WifiAvailable = wifiAvail,
+            WifiUp = wifiUp,
+            ClientSupports6Ghz = supports6,
+            ClientSupports5Ghz = supports5,
+            PreferredBandTarget = bandTarget,
+            ConnectedRadioHint = radioHint,
+            PolicyLine = policy
         };
     }
 
@@ -264,13 +406,24 @@ public sealed class NetworkOptimizerService
         return true;
     }
 
-    public async Task<(bool Ok, string Message)> ApplyPresetAsync(
+    public Task<(bool Ok, string Message)> ApplyPresetAsync(
         NetworkPreset preset,
         IProgress<string>? progress = null,
         CancellationToken ct = default)
+        => ApplyPresetAsync(preset, new NetworkApplyOptions(), progress, ct);
+
+    public async Task<(bool Ok, string Message)> ApplyPresetAsync(
+        NetworkPreset preset,
+        NetworkApplyOptions options,
+        IProgress<string>? progress = null,
+        CancellationToken ct = default)
     {
-        progress?.Report("Preparing full TCP / NIC stack...");
-        var script = BuildFullApplyScript(preset);
+        options ??= new NetworkApplyOptions();
+        progress?.Report("Detecting adapters & radio capabilities...");
+        var media = await DetectMediaProfileAsync(ct).ConfigureAwait(false);
+
+        progress?.Report("Preparing stack (Ethernet-first when available)...");
+        var script = BuildFullApplyScript(preset, options, media);
         var path = Path.Combine(Path.GetTempPath(), $"optihub-net-{Guid.NewGuid():N}.ps1");
         await File.WriteAllTextAsync(path, script, ct).ConfigureAwait(false);
 
@@ -298,25 +451,33 @@ public sealed class NetworkOptimizerService
                 return (false, $"Apply exit {p.ExitCode}. Try again as Administrator.");
 
             progress?.Report("Verifying settings...");
-            // Let NIC restart settle before probe
-            await Task.Delay(1500, ct).ConfigureAwait(false);
+            await Task.Delay(options.RestartEthernet ? 2000 : 800, ct).ConfigureAwait(false);
             SavePreset(preset);
             var snap = await ProbeAsync(ct).ConfigureAwait(false);
             var matched = MatchesPreset(snap, preset);
+            var policy = media.EthernetUp
+                ? "Ethernet preferred (Wi‑Fi disabled if present)."
+                : media.WifiUp
+                    ? $"Wi‑Fi path; prefer {media.PreferredBandTarget}."
+                    : media.PolicyLine;
+
             if (matched)
             {
-                return (true, preset switch
+                var baseMsg = preset switch
                 {
-                    NetworkPreset.LowestLatency => "Lowest latency applied and verified. Reboot helps power/PnP settle.",
-                    NetworkPreset.HighestThroughput => "Highest download applied and verified. Reboot helps power/PnP settle.",
+                    NetworkPreset.LowestLatency => "Lowest latency applied and verified.",
+                    NetworkPreset.HighestThroughput => "Highest download applied and verified.",
                     _ => "Stack applied and verified."
-                });
+                };
+                var restartNote = options.RestartEthernet
+                    ? " Ethernet was restarted."
+                    : " Adapter restart skipped (toggle link or re-apply with restart if a prop looks stale).";
+                return (true, $"{baseMsg} {policy}{restartNote}");
             }
 
-            // Still saved — partial apply is better than nothing; surface what looks off
             var fails = snap.Features.Where(f => !f.IsOk).Select(f => f.Title).Take(4).ToList();
             var hint = fails.Count > 0 ? string.Join(", ", fails) : "some NIC properties";
-            return (true, $"Applied, but verify incomplete ({hint}). Reboot, then Refresh.");
+            return (true, $"Applied ({policy}). Verify incomplete ({hint}). Refresh after a moment.");
         }
         catch (System.ComponentModel.Win32Exception)
         {
@@ -338,7 +499,10 @@ public sealed class NetworkOptimizerService
     /// LargeSystemCache, AFD backlog, DNS priority, WinINET connection limits, TTL, etc.
     /// Sources: MS MMCSS docs, MS NIC performance tuning, netsh/Set-NetTCPSetting.
     /// </summary>
-    private static string BuildFullApplyScript(NetworkPreset preset)
+    private static string BuildFullApplyScript(
+        NetworkPreset preset,
+        NetworkApplyOptions options,
+        NetworkMediaProfile media)
     {
         var latency = preset == NetworkPreset.LowestLatency;
         // MS: autotune normal for typical; experimental for high BDP bulk only
@@ -348,6 +512,11 @@ public sealed class NetworkOptimizerService
         var rsc = latency ? "disabled" : "enabled";
         var lso = latency ? "0" : "1";
         var im = latency ? "0" : "1";
+        var restartEth = options.RestartEthernet ? "1" : "0";
+        var preferEth = options.PreferEthernetDisableWifi ? "1" : "0";
+        // Smart band: 6GHz if client supports, else 5GHz prefer (never force-only)
+        var prefer6 = media.ClientSupports6Ghz ? "1" : "0";
+        var prefer5 = media.ClientSupports5Ghz || !media.ClientSupports6Ghz ? "1" : "0";
         // Nagle keys only for latency (TCP games); throughput clears them
         var ackBlock = latency
             ? """
@@ -361,10 +530,10 @@ public sealed class NetworkOptimizerService
   Remove-Prop $p 'TcpDelAckTicks'
 """;
 
-        var sb = new StringBuilder(12_000);
+        var sb = new StringBuilder(14_000);
         sb.AppendLine("$ErrorActionPreference = 'Continue'");
         sb.AppendLine("$ProgressPreference = 'SilentlyContinue'");
-        sb.AppendLine("Write-Host '[OptiHub-NET] Preset=" + preset + " (audited stack)'");
+        sb.AppendLine("Write-Host '[OptiHub-NET] Preset=" + preset + " ethFirst=" + preferEth + " restartEth=" + restartEth + " band6=" + prefer6 + "'");
         sb.AppendLine("""
 function Set-Dword([string]$Path, [string]$Name, [int]$Value) {
   if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force | Out-Null }
@@ -481,14 +650,23 @@ Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit
         sb.AppendLine("  foreach ($kw in @('*ReceiveBuffers','*TransmitBuffers','ReceiveBuffers','TransmitBuffers')) {");
         sb.AppendLine("    try { $prop = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword $kw -EA SilentlyContinue; if ($prop -and $prop.ValidRegistryValues) { $max = ($prop.ValidRegistryValues | Measure-Object -Maximum).Maximum; if ($max -gt 0) { Set-Adv $n $kw ([int]$max) } } } catch {}");
         sb.AppendLine("  }");
-        // Wi-Fi: power-save + prefer 5 GHz (not 5GHz-only — 2.4-only APs must still work)
+        // Wi-Fi: power-save + smart band (6 GHz prefer if client supports; never force-only)
         sb.AppendLine("  if ($isWifi) {");
         sb.AppendLine("    foreach ($dn in @('MIMO Power Save Mode','MIMO Power Save','uAPSD support','Power Saving Mode')) {");
         sb.AppendLine("      try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $dn -DisplayValue 'Disabled' -NoRestart -EA SilentlyContinue } catch {}");
         sb.AppendLine("      try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $dn -DisplayValue 'Off' -NoRestart -EA SilentlyContinue } catch {}");
         sb.AppendLine("    }");
-        sb.AppendLine("    try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Preferred Band' -DisplayValue 'Prefer 5GHz band' -NoRestart -EA SilentlyContinue } catch {}");
-        sb.AppendLine("    try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Preferred Band' -DisplayValue 'Prefer 5GHz' -NoRestart -EA SilentlyContinue } catch {}");
+        sb.AppendLine("    $bandVals = @()");
+        sb.AppendLine("    try { $bp = Get-NetAdapterAdvancedProperty -Name $n -DisplayName 'Preferred Band' -EA SilentlyContinue; if ($bp) { $bandVals = @($bp.ValidDisplayValues) } } catch {}");
+        if (prefer6 == "1")
+        {
+            sb.AppendLine("    foreach ($bv in @('Prefer 6GHz band','Prefer 6GHz','6GHz band','Prefer 6 GHz band')) {");
+            sb.AppendLine("      if ($bandVals.Count -eq 0 -or $bandVals -contains $bv) { try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Preferred Band' -DisplayValue $bv -NoRestart -EA SilentlyContinue } catch {} }");
+            sb.AppendLine("    }");
+        }
+        sb.AppendLine("    foreach ($bv in @('Prefer 5GHz band','Prefer 5GHz','Prefer 5 GHz band')) {");
+        sb.AppendLine("      if ($bandVals.Count -eq 0 -or $bandVals -contains $bv) { try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Preferred Band' -DisplayValue $bv -NoRestart -EA SilentlyContinue } catch {} }");
+        sb.AppendLine("    }");
         sb.AppendLine("    try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Roaming Aggressiveness' -DisplayValue 'Medium' -NoRestart -EA SilentlyContinue } catch {}");
         sb.AppendLine("  }");
         sb.AppendLine("  try {");
@@ -499,13 +677,34 @@ Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit
         sb.AppendLine("    }");
         sb.AppendLine("  } catch {}");
         sb.AppendLine("}");
-        sb.AppendLine("try { Clear-DnsClientCache -EA SilentlyContinue } catch {}");
-        // Restart Ethernet only — Restart-NetAdapter on Wi-Fi drops the association
-        sb.AppendLine("foreach ($a in @($adapters | Where-Object { $_.Status -eq 'Up' -and -not (Test-IsWifiAdapter $_) })) {");
-        sb.AppendLine("  try { Restart-NetAdapter -Name $a.Name -Confirm:$false -EA SilentlyContinue; Write-Host \"[NIC] restarted (Ethernet) $($a.Name)\" } catch {}");
+
+        // Ethernet-first: if any Ethernet is Up, disable Wi-Fi adapters (user policy for gaming)
+        sb.AppendLine("if (" + preferEth + " -eq 1) {");
+        sb.AppendLine("  $ethUp = @($adapters | Where-Object { -not (Test-IsWifiAdapter $_) -and $_.Status -eq 'Up' })");
+        sb.AppendLine("  if ($ethUp.Count -gt 0) {");
+        sb.AppendLine("    Write-Host '[OptiHub-NET] Ethernet up — disabling Wi-Fi adapters'");
+        sb.AppendLine("    foreach ($w in @($adapters | Where-Object { Test-IsWifiAdapter $_ })) {");
+        sb.AppendLine("      try {");
+        sb.AppendLine("        if ($w.Status -ne 'Disabled') {");
+        sb.AppendLine("          Disable-NetAdapter -Name $w.Name -Confirm:$false -EA SilentlyContinue");
+        sb.AppendLine("          Write-Host \"[NIC] Wi-Fi disabled: $($w.Name)\"");
+        sb.AppendLine("        }");
+        sb.AppendLine("      } catch { Write-Host \"[NIC] could not disable $($w.Name)\" }");
+        sb.AppendLine("    }");
+        sb.AppendLine("  } else { Write-Host '[OptiHub-NET] No Ethernet up — leaving Wi-Fi enabled' }");
         sb.AppendLine("}");
-        sb.AppendLine("Write-Host '[OptiHub-NET] Wi-Fi not restarted (avoids disconnect)'");
-        sb.AppendLine("Start-Sleep -Seconds 2");
+
+        sb.AppendLine("try { Clear-DnsClientCache -EA SilentlyContinue } catch {}");
+
+        // Restart Ethernet only if user confirmed (never auto Wi-Fi restart)
+        sb.AppendLine("if (" + restartEth + " -eq 1) {");
+        sb.AppendLine("  foreach ($a in @($adapters | Where-Object { $_.Status -eq 'Up' -and -not (Test-IsWifiAdapter $_) })) {");
+        sb.AppendLine("    try { Restart-NetAdapter -Name $a.Name -Confirm:$false -EA SilentlyContinue; Write-Host \"[NIC] restarted (Ethernet) $($a.Name)\" } catch {}");
+        sb.AppendLine("  }");
+        sb.AppendLine("  Start-Sleep -Seconds 2");
+        sb.AppendLine("} else {");
+        sb.AppendLine("  Write-Host '[OptiHub-NET] Ethernet restart skipped (user declined)'");
+        sb.AppendLine("}");
         sb.AppendLine("Write-Host '[OptiHub-NET] DONE preset=" + preset + "'");
         sb.AppendLine("exit 0");
         return sb.ToString();

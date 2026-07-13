@@ -45,6 +45,19 @@ Last pass: v1.9.25. Goal: keep only knobs with real OS/driver behavior; drop fol
 | Preferred band | n/a | Prefer 5 GHz (**not** 5 GHz-only — 2.4 APs still work) |
 | Restart adapter after apply | **Yes** (Up Ethernet) | **No** (would drop association) |
 | Dual NIC PCs | Both physical adapters tuned | Both physical adapters tuned |
+| Ethernet linked | **Prefer Ethernet, disable Wi‑Fi** | n/a |
+| Adapter restart | **Only if user confirms in dialog** | Never auto-restart |
+| Band prefer | n/a | Prefer **6 GHz** if client supports, else **5 GHz** (never force-only) |
+
+### “Smart” detection (no cloud AI)
+
+OptiHub uses **local capability detection**, not a generative model:
+
+- **Internet**: Ethernet-up? disable Wi‑Fi; Wi‑Fi radio/driver 5/6 GHz support via adapter properties + `netsh wlan`
+- **NVIDIA**: GPU series / G-SYNC / notebook detect (existing)
+- **Discord / Steam**: install path + live feature verification (existing)
+
+Router firmware is not queried over the WAN; band choice uses **your PC’s radio + connected BSS hints**.
 
 ## NVIDIA
 

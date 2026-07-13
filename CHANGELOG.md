@@ -1,3 +1,9 @@
+## 1.9.27
+
+- **Smart path policy**: if Ethernet is up, prefer Ethernet and **disable Wi‑Fi**; Wi‑Fi-only path uses capability detect
+- **Band smarts**: prefer 6 GHz when the client supports it, else 5 GHz (never force-only)
+- **Restart prompt**: no silent adapter restart — dialog asks Apply + restart Ethernet vs Apply without restart
+- Detection is local (adapter + netsh), not a cloud AI
 ## 1.9.26
 
 - **Internet: Ethernet vs Wi‑Fi branches** — RSS only on Ethernet (MS: many wireless NICs lack RSS); Wi‑Fi power-save/uAPSD off + prefer 5 GHz (not 5-only); never Restart-NetAdapter on Wi‑Fi (avoids drop); still tunes all physical NICs for dual-homed PCs

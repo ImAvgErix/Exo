@@ -11,6 +11,7 @@ namespace OptiHub.ViewModels;
 public partial class InternetOptimizerViewModel : ObservableObject
 {
     private readonly AppServices _services;
+    private NetworkSnapshot? _lastSnap;
 
     public InternetOptimizerViewModel(AppServices services)
     {
@@ -19,6 +20,9 @@ public partial class InternetOptimizerViewModel : ObservableObject
     }
 
     public ObservableCollection<FeatureRowViewModel> Rows { get; } = new();
+
+    /// <summary>Raised when UI should confirm apply options (Ethernet-first + restart).</summary>
+    public event Func<NetworkSnapshot, NetworkPreset, Task<NetworkApplyOptions?>>? RequestApplyConfirm;
 
     [ObservableProperty] private string _headerStatus = "Checking...";
     [ObservableProperty] private bool _isLoading = true;
@@ -37,6 +41,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
         try
         {
             var snap = await _services.Network.ProbeAsync();
+            _lastSnap = snap;
             HeaderStatus = BuildStatus(snap);
 
             Rows.Clear();
@@ -75,12 +80,36 @@ public partial class InternetOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
         IsBusy = true;
-        ProgressStatus = "Applying...";
+        ProgressStatus = "Detecting...";
         HasMessage = false;
         try
         {
+            var snap = _lastSnap ?? await _services.Network.ProbeAsync();
+            _lastSnap = snap;
+
+            NetworkApplyOptions options;
+            if (RequestApplyConfirm is not null)
+            {
+                var chosen = await RequestApplyConfirm.Invoke(snap, preset);
+                if (chosen is null)
+                {
+                    SetMessage("Apply cancelled.", success: false);
+                    return;
+                }
+                options = chosen;
+            }
+            else
+            {
+                options = new NetworkApplyOptions
+                {
+                    PreferEthernetDisableWifi = true,
+                    RestartEthernet = snap.Media.EthernetUp || snap.Media.EthernetAvailable
+                };
+            }
+
+            ProgressStatus = "Applying...";
             var progress = new Progress<string>(s => ProgressStatus = s);
-            var (ok, msg) = await _services.Network.ApplyPresetAsync(preset, progress);
+            var (ok, msg) = await _services.Network.ApplyPresetAsync(preset, options, progress);
             SetMessage(msg, ok);
             await RefreshAsync();
         }
@@ -101,18 +130,24 @@ public partial class InternetOptimizerViewModel : ObservableObject
     {
         if (!snap.ProbeOk) return "Probe incomplete";
 
+        var media = snap.Media.EthernetUp
+            ? "Ethernet"
+            : snap.Media.WifiUp
+                ? $"Wi‑Fi · {snap.Media.PreferredBandTarget}"
+                : snap.ConnectionType;
+
         var preset = snap.ActivePreset switch
         {
             NetworkPreset.LowestLatency => "Lowest latency",
             NetworkPreset.HighestThroughput => "Highest download",
-            _ => "Not optimized"
+            _ => null
         };
 
-        var allOk = snap.Features.Count > 0 && snap.Features.All(f => f.IsOk);
-        if (snap.ActivePreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput)
-            return allOk ? $"{preset} · applied" : $"{preset} · check rows";
+        if (preset is null)
+            return $"{media} · {snap.LinkSpeed}";
 
-        return $"{snap.ConnectionType} · {snap.LinkSpeed}";
+        var allOk = snap.Features.Count > 0 && snap.Features.All(f => f.IsOk);
+        return allOk ? $"{preset} · {media}" : $"{preset} · check rows";
     }
 
     private void SetMessage(string text, bool success)
