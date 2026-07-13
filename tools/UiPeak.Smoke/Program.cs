@@ -25,7 +25,8 @@ var repo = FindRepoRoot();
 var appXaml = Path.Combine(repo, "OptiHub", "App.xaml");
 var main = Path.Combine(repo, "OptiHub", "MainWindow.xaml");
 var dash = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml");
-var settings = Path.Combine(repo, "OptiHub", "Views", "SettingsPage.xaml");
+var settings = Path.Combine(repo, "OptiHub", "Views", "Controls", "SettingsSheet.xaml");
+var mainXaml = Path.Combine(repo, "OptiHub", "MainWindow.xaml");
 var theme = Path.Combine(repo, "OptiHub", "Styles", "ThemeResources.xaml");
 var converters = Path.Combine(repo, "OptiHub", "Helpers", "ValueConverters.cs");
 var logosDir = Path.Combine(repo, "OptiHub", "Assets", "Logos");
@@ -96,8 +97,9 @@ if (File.Exists(settings))
     Expect("settings updates", s.Contains("Updates", StringComparison.Ordinal));
     Expect("settings about", s.Contains("About", StringComparison.Ordinal));
     Expect("settings opti card", s.Contains("OptiCard", StringComparison.Ordinal));
-    Expect("settings single sheet", s.Contains("MaxWidth=\"560\"", StringComparison.Ordinal)
-        || s.Contains("MaxWidth=\"580\"", StringComparison.Ordinal));
+    Expect("settings single sheet", s.Contains("MaxWidth=\"520\"", StringComparison.Ordinal));
+    Expect("settings overlay on main", File.Exists(mainXaml) && File.ReadAllText(mainXaml).Contains("SettingsOverlay", StringComparison.Ordinal)
+        && File.ReadAllText(mainXaml).Contains("AcrylicBrush", StringComparison.Ordinal));
     Expect("settings theme pills", s.Contains("OptiThemeRadio", StringComparison.Ordinal));
     Expect("report issue white button", s.Contains("OptiWhiteButton", StringComparison.Ordinal)
         && s.Contains("Report issue", StringComparison.Ordinal));

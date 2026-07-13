@@ -20,12 +20,12 @@ public sealed partial class MainWindow : Window
         Steam,
         Internet,
         Nvidia,
-        NvidiaPanel,
-        Settings
+        NvidiaPanel
     }
 
     private ShellMode _mode = ShellMode.Home;
     private readonly CancellationTokenSource _lifetimeCts = new();
+    private bool _settingsOpen;
 
     public MainWindow()
     {
@@ -247,6 +247,9 @@ public sealed partial class MainWindow : Window
 
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {
+        if (_settingsOpen)
+            CloseSettingsOverlay();
+
         if (_mode == mode && ContentFrame.CurrentSourcePageType == pageType)
             return;
 
@@ -254,14 +257,93 @@ public sealed partial class MainWindow : Window
             ApplyChrome(mode);
     }
 
-    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    private void SettingsButton_Click(object sender, RoutedEventArgs e) =>
+        OpenSettingsOverlay();
+
+    private void SettingsSheet_CloseRequested(object? sender, EventArgs e) =>
+        CloseSettingsOverlay();
+
+    private void SettingsScrim_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e) =>
+        // Sheet is a sibling above the scrim — this only fires for backdrop hits.
+        CloseSettingsOverlay();
+
+    private void OpenSettingsOverlay()
     {
-        if (_mode == ShellMode.Settings) return;
-        Navigate(ShellMode.Settings, typeof(SettingsPage), Slide());
+        if (_settingsOpen) return;
+        // Always show home under the sheet so the blur has product chrome behind it.
+        if (_mode != ShellMode.Home)
+            NavigateHome(suppressTransition: true);
+
+        _settingsOpen = true;
+        SettingsOverlay.Visibility = Visibility.Visible;
+        SettingsOverlay.Opacity = 0;
+        SettingsSheetHost.Opacity = 0;
+        if (SettingsSheetHost.RenderTransform is not CompositeTransform)
+            SettingsSheetHost.RenderTransform = new CompositeTransform();
+        if (SettingsSheetHost.RenderTransform is CompositeTransform ct)
+            ct.TranslateY = 18;
+
+        var sb = new Storyboard();
+        var fade = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            Duration = TimeSpan.FromMilliseconds(180),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        Storyboard.SetTarget(fade, SettingsOverlay);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+        sb.Children.Add(fade);
+
+        var sheetFade = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            Duration = TimeSpan.FromMilliseconds(220),
+            BeginTime = TimeSpan.FromMilliseconds(40),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        Storyboard.SetTarget(sheetFade, SettingsSheetHost);
+        Storyboard.SetTargetProperty(sheetFade, "Opacity");
+        sb.Children.Add(sheetFade);
+
+        if (SettingsSheetHost.RenderTransform is CompositeTransform sheetTf)
+        {
+            var slide = new DoubleAnimation
+            {
+                From = 18,
+                To = 0,
+                Duration = TimeSpan.FromMilliseconds(240),
+                BeginTime = TimeSpan.FromMilliseconds(40),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(slide, sheetTf);
+            Storyboard.SetTargetProperty(slide, "TranslateY");
+            sb.Children.Add(slide);
+        }
+
+        sb.Begin();
+        SettingsButton.Visibility = Visibility.Collapsed;
+    }
+
+    private void CloseSettingsOverlay()
+    {
+        if (!_settingsOpen) return;
+        _settingsOpen = false;
+        SettingsOverlay.Visibility = Visibility.Collapsed;
+        SettingsOverlay.Opacity = 1;
+        SettingsSheetHost.Opacity = 1;
+        // Gear only on home.
+        SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_settingsOpen)
+        {
+            CloseSettingsOverlay();
+            return;
+        }
         if (_mode == ShellMode.NvidiaPanel)
             NavigateToNvidia();
         else

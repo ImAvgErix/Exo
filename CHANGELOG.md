@@ -1,3 +1,8 @@
+## 1.9.94
+
+- **Settings**: modal overlay on the home page (acrylic blur scrim) instead of a separate page
+- **Theme pills**: Dark no longer vanishes on hover (checked fill paints above hover)
+- Close via ✕, backdrop tap, or Back
 ## 1.9.93
 
 - **Settings**: single centered settings sheet (no sparse 2×2 cards); Dark/Light segment pills
