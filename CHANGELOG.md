@@ -1,3 +1,7 @@
+## 1.9.76
+
+- **AMD logo transparent**: drop the solid white disc — white corporate mark on clear alpha so it blends like Steam/Discord/NVIDIA
+
 ## 1.9.75
 
 - **Ethernet metric actually sticks**: disable AutomaticMetric + set metric 1, then **re-stamp after adapter restart** (restart was putting Windows back to ~20–25 auto metric → red X)

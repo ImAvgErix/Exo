@@ -155,8 +155,11 @@ if (Directory.Exists(logosDir))
         $"amd={amd.MaxFill:F1} peerFloor={peerFloor:F1}");
     Expect("internet ink peer weight", internet.MaxFill >= peerFloor && internet.MaxFill >= 70,
         $"internet={internet.MaxFill:F1} peerFloor={peerFloor:F1}");
-    // Reject the old thin wordmark-only failure mode (~17% tall).
-    Expect("amd not tiny wordmark", amd.FillH >= 50, $"fillH={amd.FillH:F1}");
+    // AMD corporate mark is a wide wordmark on transparent (no white disc).
+    // Require real width + non-micro height — not a filled plate (old bug).
+    Expect("amd wide transparent mark",
+        amd.FillW >= 70 && amd.FillH >= 18 && amd.FillH < 95,
+        $"fillW={amd.FillW:F1} fillH={amd.FillH:F1}");
     Expect("internet not tiny", internet.FillH >= 50, $"fillH={internet.FillH:F1}");
 }
 
