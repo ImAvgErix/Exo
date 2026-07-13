@@ -56,12 +56,12 @@ public sealed class StringToVisibilityConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
-/// <summary>Coming-soon cards render slightly dimmed.</summary>
+/// <summary>Coming-soon cards render slightly dimmed (kept high enough that B&W marks stay readable).</summary>
 public sealed class BoolToOpacityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
-        if (value is true) return 0.55;
+        if (value is true) return 0.72;
         return 1.0;
     }
 

@@ -69,12 +69,13 @@
                                     <StackPanel HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
                                                 Spacing="12">
-                                        <!-- Transparent well so product logos aren't double-boxed on black -->
+                                        <!-- Equal well for every product mark (AMD/Internet match Discord/Steam mass). -->
                                         <Border Width="80"
                                                 Height="80"
                                                 CornerRadius="20"
                                                 Background="Transparent"
-                                                HorizontalAlignment="Center">
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center">
                                             <Image Width="56"
                                                    Height="56"
                                                    Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"

@@ -238,6 +238,9 @@
 
 
 
+
+## 1.9.65
+- UI polish: equal logo wells, B&W AMD + Fluent Globe peer weight, softer coming-soon opacity, stronger UiPeak.Smoke logo ink asserts
 ## 1.9.64
 - AMD black-and-white official mark on white disc (Steam-size); Fluent Globe scaled to match; hub logo well 56px
 ## 1.9.63

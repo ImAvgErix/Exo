@@ -1,3 +1,7 @@
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using OptiHub.Helpers;
 
 var logPath = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "ui-logic-tests.log");
@@ -11,6 +15,8 @@ void Expect(string name, bool cond, string detail = "")
 }
 
 Log("=== UiPeak.Smoke ===");
+
+// Real shipped helper — not a reimplementation.
 var busy = UiStatusPresentation.FromFlags(isBusy: true, hasError: false, hasSuccess: false);
 Expect("busy", busy == UiStatusPresentation.Tone.Busy);
 Expect("success", UiStatusPresentation.FromFlags(false, false, true) == UiStatusPresentation.Tone.Success);
@@ -21,6 +27,8 @@ var main = Path.Combine(repo, "OptiHub", "MainWindow.xaml");
 var dash = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml");
 var settings = Path.Combine(repo, "OptiHub", "Views", "SettingsPage.xaml");
 var theme = Path.Combine(repo, "OptiHub", "Styles", "ThemeResources.xaml");
+var converters = Path.Combine(repo, "OptiHub", "Helpers", "ValueConverters.cs");
+var logosDir = Path.Combine(repo, "OptiHub", "Assets", "Logos");
 
 Expect("files", File.Exists(appXaml) && File.Exists(main) && File.Exists(dash));
 if (File.Exists(appXaml))
@@ -28,11 +36,13 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("amoled black", a.Contains("#000000", StringComparison.Ordinal));
     Expect("stone white accent", a.Contains("#F5F5F4", StringComparison.Ordinal));
+    Expect("cream light page", a.Contains("#F3EDE3", StringComparison.Ordinal));
 }
 if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
-    Expect("settings gear top-left", m.Contains("SettingsButton", StringComparison.Ordinal));
+    Expect("settings gear", m.Contains("SettingsButton", StringComparison.Ordinal));
+    Expect("back chrome", m.Contains("BackButton", StringComparison.Ordinal));
     Expect("no sidebar NavHome", !m.Contains("NavHome", StringComparison.Ordinal));
     Expect("no NavigationView", !m.Contains("<NavigationView", StringComparison.Ordinal));
     Expect("ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
@@ -44,27 +54,74 @@ if (File.Exists(dash))
     Expect("product card grid", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("polished 1.8 cards", d.Contains("Width=\"300\"", StringComparison.Ordinal) && d.Contains("Height=\"188\"", StringComparison.Ordinal));
     Expect("hero entrance panel", d.Contains("HeroPanel", StringComparison.Ordinal));
+    Expect("equal logo well", d.Contains("Width=\"56\"", StringComparison.Ordinal) && d.Contains("Height=\"56\"", StringComparison.Ordinal));
+    Expect("stretch uniform logos", d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal));
 }
 if (File.Exists(settings))
 {
     var s = File.ReadAllText(settings);
     Expect("settings appearance", s.Contains("APPEARANCE", StringComparison.Ordinal));
     Expect("settings updates", s.Contains("UPDATES", StringComparison.Ordinal));
+    Expect("settings about", s.Contains("ABOUT", StringComparison.Ordinal));
+    Expect("settings opti card", s.Contains("OptiCard", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
 {
     var t = File.ReadAllText(theme);
     Expect("theme OptiPrimaryButton", t.Contains("OptiPrimaryButton", StringComparison.Ordinal));
     Expect("theme OptiCardButton", t.Contains("OptiCardButton", StringComparison.Ordinal));
+    Expect("theme OptiFeatureTile", t.Contains("OptiFeatureTile", StringComparison.Ordinal));
+    Expect("theme OptiIconWell", t.Contains("OptiIconWell", StringComparison.Ordinal));
+    Expect("theme OptiPagePadding", t.Contains("OptiPagePadding", StringComparison.Ordinal));
     Expect("display italic", t.Contains("OptiDisplayFontItalic", StringComparison.Ordinal));
 }
 
-foreach (var page in new[] { "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml", "InternetOptimizerPage.xaml", "NvidiaOptimizerPage.xaml", "NvidiaPanelPage.xaml" })
+// Drive shipped converter source: coming-soon opacity must stay readable for B&W marks.
+if (File.Exists(converters))
+{
+    var c = File.ReadAllText(converters);
+    var m = Regex.Match(c, @"class BoolToOpacityConverter[\s\S]*?if \(value is true\) return ([0-9.]+);");
+    Expect("coming-soon opacity defined", m.Success, "BoolToOpacityConverter return not found");
+    if (m.Success && double.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var opacity))
+    {
+        Expect("coming-soon opacity mid", opacity is >= 0.65 and <= 0.85, $"got {opacity}");
+    }
+}
+
+foreach (var page in new[]
+         {
+             "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml", "InternetOptimizerPage.xaml",
+             "NvidiaOptimizerPage.xaml", "NvidiaPanelPage.xaml"
+         })
 {
     var p = Path.Combine(repo, "OptiHub", "Views", page);
     if (!File.Exists(p)) continue;
     var x = File.ReadAllText(p);
-    Expect(page + " CTA", x.Contains("OptiPrimaryButton", StringComparison.Ordinal));
+    Expect(page + " CTA", x.Contains("OptiPrimaryButton", StringComparison.Ordinal) || x.Contains("OptiQuietButton", StringComparison.Ordinal));
+    Expect(page + " page padding", x.Contains("OptiPagePadding", StringComparison.Ordinal));
+}
+
+// Logo visual weight: measure real shipped PNG alpha ink.
+if (Directory.Exists(logosDir))
+{
+    var discord = MeasureInkFill(Path.Combine(logosDir, "discord.png"));
+    var steam = MeasureInkFill(Path.Combine(logosDir, "steam.png"));
+    var nvidia = MeasureInkFill(Path.Combine(logosDir, "nvidia.png"));
+    var amd = MeasureInkFill(Path.Combine(logosDir, "amd.png"));
+    var internet = MeasureInkFill(Path.Combine(logosDir, "internet.png"));
+
+    Log($"ink discord max={discord.MaxFill:F1}% steam={steam.MaxFill:F1}% nvidia={nvidia.MaxFill:F1}% amd={amd.MaxFill:F1}% internet={internet.MaxFill:F1}%");
+
+    // Peer floor from real sibling marks — not a magic absolute expected %.
+    var peerFloor = Math.Min(Math.Min(discord.MaxFill, steam.MaxFill), nvidia.MaxFill) * 0.70;
+    Expect("amd ink peer weight", amd.MaxFill >= peerFloor && amd.MaxFill >= 70,
+        $"amd={amd.MaxFill:F1} peerFloor={peerFloor:F1}");
+    Expect("internet ink peer weight", internet.MaxFill >= peerFloor && internet.MaxFill >= 70,
+        $"internet={internet.MaxFill:F1} peerFloor={peerFloor:F1}");
+    // Reject the old thin wordmark-only failure mode (~17% tall).
+    Expect("amd not tiny wordmark", amd.FillH >= 50, $"fillH={amd.FillH:F1}");
+    Expect("internet not tiny", internet.FillH >= 50, $"fillH={internet.FillH:F1}");
 }
 
 var panelVm = Path.Combine(repo, "OptiHub", "ViewModels", "NvidiaPanelViewModel.cs");
@@ -91,3 +148,49 @@ static string FindRepoRoot()
     }
     return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 }
+
+static InkMetrics MeasureInkFill(string path)
+{
+    if (!File.Exists(path)) return new InkMetrics(0, 0, 0);
+    using var bmp = new Bitmap(path);
+    var minX = bmp.Width;
+    var minY = bmp.Height;
+    var maxX = 0;
+    var maxY = 0;
+    var any = false;
+    var rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
+    var data = bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+    try
+    {
+        var stride = Math.Abs(data.Stride);
+        var bytes = new byte[stride * bmp.Height];
+        Marshal.Copy(data.Scan0, bytes, 0, bytes.Length);
+        for (var y = 0; y < bmp.Height; y++)
+        {
+            var row = y * stride;
+            for (var x = 0; x < bmp.Width; x++)
+            {
+                var a = bytes[row + x * 4 + 3];
+                if (a <= 20) continue;
+                any = true;
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+    finally
+    {
+        bmp.UnlockBits(data);
+    }
+
+    if (!any) return new InkMetrics(0, 0, 0);
+    var w = maxX - minX + 1;
+    var h = maxY - minY + 1;
+    var fillW = 100.0 * w / bmp.Width;
+    var fillH = 100.0 * h / bmp.Height;
+    return new InkMetrics(fillW, fillH, Math.Max(fillW, fillH));
+}
+
+readonly record struct InkMetrics(double FillW, double FillH, double MaxFill);
