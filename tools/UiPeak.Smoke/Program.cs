@@ -94,21 +94,22 @@ if (File.Exists(theme))
 if (File.Exists(settings))
 {
     var s = File.ReadAllText(settings);
-    Expect("settings appearance", s.Contains("APPEARANCE", StringComparison.Ordinal));
-    Expect("settings updates", s.Contains("UPDATES", StringComparison.Ordinal));
-    Expect("settings app version", s.Contains("APP VERSION", StringComparison.Ordinal)
+    Expect("settings appearance", s.Contains("Appearance", StringComparison.Ordinal));
+    Expect("settings updates", s.Contains("Updates", StringComparison.Ordinal));
+    Expect("settings app version", s.Contains("App version", StringComparison.Ordinal)
         && s.Contains("AppVersion", StringComparison.Ordinal)
         && !s.Contains("KitVersion", StringComparison.Ordinal));
     Expect("settings theme slider", s.Contains("IsDarkMode", StringComparison.Ordinal)
         && s.Contains("ToggleSwitch", StringComparison.Ordinal)
-        && s.Contains("Text=\"Dark\"", StringComparison.Ordinal));
-    Expect("settings opti card", s.Contains("OptiCard", StringComparison.Ordinal)
-        || s.Contains("OptiCardRadius", StringComparison.Ordinal)
-        || s.Contains("OptiCardFillBrush", StringComparison.Ordinal));
-    Expect("settings single card", s.Contains("OptiSectionTitle", StringComparison.Ordinal)
-        && s.Contains("APPEARANCE", StringComparison.Ordinal));
+        && s.Contains("Text=\"Dark\"", StringComparison.Ordinal)
+        && s.Contains("Text=\"Light\"", StringComparison.Ordinal));
+    Expect("settings opti card", s.Contains("OptiCardFillBrush", StringComparison.Ordinal)
+        || s.Contains("OptiCardRadius", StringComparison.Ordinal));
+    Expect("settings single card", s.Contains("Appearance", StringComparison.Ordinal)
+        && s.Contains("Support", StringComparison.Ordinal));
     Expect("settings no title", !s.Contains("Text=\"Settings\"", StringComparison.Ordinal));
-    Expect("settings page padding token", s.Contains("Padding=\"18,16\"", StringComparison.Ordinal));
+    Expect("settings page padding token", s.Contains("Padding=\"20,16,20,18\"", StringComparison.Ordinal)
+        || s.Contains("Padding=\"18,16\"", StringComparison.Ordinal));
     Expect("settings overlay on main", File.Exists(mainXaml) && File.ReadAllText(mainXaml).Contains("SettingsOverlay", StringComparison.Ordinal)
         && File.ReadAllText(mainXaml).Contains("AcrylicBrush", StringComparison.Ordinal));
     Expect("no tooltips in settings", !s.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));

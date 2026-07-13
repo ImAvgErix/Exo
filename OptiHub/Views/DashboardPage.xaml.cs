@@ -80,7 +80,7 @@ public sealed partial class DashboardPage : Page
                 ct.TranslateY = 14;
             }
 
-            AddFadeSlide(storyboard, el, ct, delayMs: 45 + i * 50, fromY: 14, fade: false);
+            AddFadeSlide(storyboard, el, ct, delayMs: 40 + i * 55, fromY: 16, fade: true);
         }
 
         if (storyboard.Children.Count == 0) return;
@@ -92,6 +92,9 @@ public sealed partial class DashboardPage : Page
         Storyboard board, UIElement target, CompositeTransform transform, int delayMs, double fromY, bool fade)
     {
         var delay = TimeSpan.FromMilliseconds(delayMs);
+        // Kinetics spring settle (overshoot) + glide opacity
+        var spring = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.32 };
+        var glide = new CubicEase { EasingMode = EasingMode.EaseOut };
 
         if (fade)
         {
@@ -99,9 +102,10 @@ public sealed partial class DashboardPage : Page
             {
                 From = 0,
                 To = 1,
-                Duration = TimeSpan.FromMilliseconds(360),
+                Duration = TimeSpan.FromMilliseconds(420),
                 BeginTime = delay,
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                EasingFunction = glide,
+                EnableDependentAnimation = true
             };
             Storyboard.SetTarget(fadeAnim, target);
             Storyboard.SetTargetProperty(fadeAnim, "Opacity");
@@ -113,9 +117,10 @@ public sealed partial class DashboardPage : Page
         {
             From = fromY,
             To = 0,
-            Duration = TimeSpan.FromMilliseconds(360),
+            Duration = TimeSpan.FromMilliseconds(480),
             BeginTime = delay,
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            EasingFunction = spring,
+            EnableDependentAnimation = true
         };
         Storyboard.SetTarget(slide, transform);
         Storyboard.SetTargetProperty(slide, "TranslateY");

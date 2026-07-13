@@ -276,53 +276,9 @@ public sealed partial class MainWindow : Window
 
         _settingsOpen = true;
         SettingsOverlay.Visibility = Visibility.Visible;
-        SettingsOverlay.Opacity = 0;
-        SettingsSheetHost.Opacity = 0;
-        if (SettingsSheetHost.RenderTransform is not CompositeTransform)
-            SettingsSheetHost.RenderTransform = new CompositeTransform();
-        if (SettingsSheetHost.RenderTransform is CompositeTransform ct)
-            ct.TranslateY = 18;
-
-        var sb = new Storyboard();
-        var fade = new DoubleAnimation
-        {
-            From = 0,
-            To = 1,
-            Duration = TimeSpan.FromMilliseconds(180),
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        Storyboard.SetTarget(fade, SettingsOverlay);
-        Storyboard.SetTargetProperty(fade, "Opacity");
-        sb.Children.Add(fade);
-
-        var sheetFade = new DoubleAnimation
-        {
-            From = 0,
-            To = 1,
-            Duration = TimeSpan.FromMilliseconds(220),
-            BeginTime = TimeSpan.FromMilliseconds(40),
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        Storyboard.SetTarget(sheetFade, SettingsSheetHost);
-        Storyboard.SetTargetProperty(sheetFade, "Opacity");
-        sb.Children.Add(sheetFade);
-
-        if (SettingsSheetHost.RenderTransform is CompositeTransform sheetTf)
-        {
-            var slide = new DoubleAnimation
-            {
-                From = 18,
-                To = 0,
-                Duration = TimeSpan.FromMilliseconds(240),
-                BeginTime = TimeSpan.FromMilliseconds(40),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
-            Storyboard.SetTarget(slide, sheetTf);
-            Storyboard.SetTargetProperty(slide, "TranslateY");
-            sb.Children.Add(slide);
-        }
-
-        sb.Begin();
+        // Kinetics toast-overshoot open: scrim fade + sheet spring scale/rise
+        OptiMotion.PlayOverlayOpen(SettingsOverlay, SettingsSheetHost);
+        SettingsSheetHost.PlayOpenMotion();
         SettingsButton.Visibility = Visibility.Collapsed;
     }
 

@@ -1,3 +1,7 @@
+## 1.9.101
+
+- **Settings**: premium layout fix — title/switch/close no longer collide; Light · slider · Dark centered
+- **Motion**: Kinetics-style spring open + stagger rows (settings); spring home card entrance
 ## 1.9.100
 
 - **Settings**: Dark/Light is a slider; About is “APP VERSION” with app version only

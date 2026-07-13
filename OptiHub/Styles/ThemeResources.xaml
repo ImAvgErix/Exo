@@ -269,6 +269,16 @@
 
     <Style x:Key="OptiThemeRadio" TargetType="RadioButton" BasedOn="{StaticResource OptiThemeChoice}" />
 
+    <!-- Compact toggle — hide On/Off labels, no huge min width -->
+    <Style x:Key="OptiCompactSwitch" TargetType="ToggleSwitch">
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="OnContent" Value="" />
+        <Setter Property="OffContent" Value="" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
+    </Style>
+
     <!--
       Motion language (Kinetics / Amicro inspired):
       - Press: fast ease-out compress (~80ms)
