@@ -12,10 +12,9 @@ public sealed class ThemeService
     private readonly SettingsService _settings;
     private Window? _window;
 
-    // Linear-like near-black canvas (intentional product surface, not Mica gray)
-    public static readonly Color CozyBlack = Color.FromArgb(255, 10, 10, 12);
-    public static readonly Color SoftStone = Color.FromArgb(255, 247, 247, 248);
-    public static readonly Color DarkAccent = Color.FromArgb(255, 94, 106, 210);
+    public static readonly Color CozyBlack = Color.FromArgb(255, 0, 0, 0);
+    public static readonly Color SoftStone = Color.FromArgb(255, 245, 245, 245);
+    public static readonly Color DarkAccent = Color.FromArgb(255, 242, 242, 242);
 
     public ThemeService(SettingsService settings)
     {

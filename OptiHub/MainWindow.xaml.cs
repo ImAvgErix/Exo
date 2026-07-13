@@ -201,21 +201,22 @@ public sealed partial class MainWindow : Window
     private void SyncNavSelection(string activeKey)
     {
         Brush Soft() => Application.Current.Resources.TryGetValue("OptiAccentSoftBrush", out var s) && s is Brush sb
-            ? sb : new SolidColorBrush(ColorHelper.FromArgb(255, 26, 28, 58));
-        Brush Acc() => Application.Current.Resources.TryGetValue("OptiAccentBrush", out var a) && a is Brush ab
-            ? ab : new SolidColorBrush(ColorHelper.FromArgb(255, 94, 106, 210));
+            ? sb : new SolidColorBrush(ColorHelper.FromArgb(255, 20, 20, 20));
+        Brush Acc() => Application.Current.Resources.TryGetValue("OptiPrimaryTextBrush", out var a) && a is Brush ab
+            ? ab : new SolidColorBrush(ColorHelper.FromArgb(255, 250, 250, 250));
         Brush Mut() => Application.Current.Resources.TryGetValue("OptiMutedTextBrush", out var m) && m is Brush mb
-            ? mb : new SolidColorBrush(ColorHelper.FromArgb(255, 138, 143, 152));
-        Brush Pri() => Application.Current.Resources.TryGetValue("OptiPrimaryTextBrush", out var p) && p is Brush pb
-            ? pb : new SolidColorBrush(ColorHelper.FromArgb(255, 237, 237, 239));
+            ? mb : new SolidColorBrush(ColorHelper.FromArgb(255, 115, 115, 115));
 
         foreach (var kv in _navMap)
         {
             var on = string.Equals(kv.Key, activeKey, StringComparison.OrdinalIgnoreCase);
             var btn = kv.Value;
             btn.Background = on ? Soft() : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            // Selected = bright white; idle = muted. No purple SaaS pill.
             btn.Foreground = on ? Acc() : Mut();
-            PaintNavContent(btn.Content, on ? Acc() : Mut(), on ? Pri() : Mut());
+            btn.BorderThickness = on ? new Thickness(2, 0, 0, 0) : new Thickness(0);
+            btn.BorderBrush = on ? Acc() : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            PaintNavContent(btn.Content, on ? Acc() : Mut(), on ? Acc() : Mut());
         }
     }
 

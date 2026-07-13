@@ -1,3 +1,9 @@
+## 1.9.56
+
+- **Anti-generic PEAK UI** (screenshot-verified): pure AMOLED black + white signal — not purple SaaS
+- Dropped WORKSPACE / Command center / Linear violet clone
+- Italic OptiHub brand, dense module lanes, white primary CTA
+- Thin rail selection bar instead of colored pill
 ## 1.9.55
 
 - **Linear/Raycast-inspired UI** (apps people actually praise) — verified with live screenshots
@@ -460,6 +466,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

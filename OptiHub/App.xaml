@@ -12,146 +12,146 @@
 
             <ResourceDictionary.ThemeDictionaries>
                 <!--
-                  LINEAR-inspired product UI (praised apps: Linear, Raycast, Arc).
-                  Near-black canvas, violet signal, elevated cards — not stock Fluent gray.
+                  PEAK — pure black performance tool.
+                  White signal accent (not purple SaaS). Intentionally sparse, high contrast.
                 -->
                 <ResourceDictionary x:Key="Dark">
-                    <Color x:Key="SystemAccentColor">#5E6AD2</Color>
-                    <Color x:Key="SystemAccentColorLight1">#828FFF</Color>
-                    <Color x:Key="SystemAccentColorLight2">#5E6AD2</Color>
-                    <Color x:Key="SystemAccentColorLight3">#4C57B8</Color>
-                    <Color x:Key="SystemAccentColorDark1">#3D4699</Color>
-                    <Color x:Key="SystemAccentColorDark2">#2F377A</Color>
-                    <Color x:Key="SystemAccentColorDark3">#22285C</Color>
-                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#5E6AD2" />
-                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#4C57B8" />
-                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#3D4699" />
-                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#828FFF" />
-                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#A5ADFF" />
-                    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#EDEDEF" />
-                    <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#B4B4BE" />
-                    <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#8A8F98" />
-                    <SolidColorBrush x:Key="TextFillColorDisabledBrush" Color="#5C5C66" />
-                    <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#16161A" />
-                    <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#1C1C22" />
-                    <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#2A2A32" />
-                    <SolidColorBrush x:Key="ControlStrongStrokeColorDefaultBrush" Color="#5E6AD2" />
-                    <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="#1C1C22" />
-                    <SolidColorBrush x:Key="SubtleFillColorTertiaryBrush" Color="#121216" />
-                    <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#0A0A0C" />
-                    <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#16161A" />
-                    <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#2A2A32" />
-                    <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#0A0A0C" />
-                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#16161A" />
-                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#2A2A32" />
-                    <SolidColorBrush x:Key="OptiSurfaceBrush" Color="#121216" />
-                    <SolidColorBrush x:Key="OptiDividerBrush" Color="#22222A" />
-                    <SolidColorBrush x:Key="OptiAccentBrush" Color="#5E6AD2" />
-                    <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#1A1C3A" />
-                    <SolidColorBrush x:Key="OptiIconWellFillBrush" Color="#1C1C22" />
-                    <SolidColorBrush x:Key="OptiIconWellStrokeBrush" Color="#2A2A32" />
-                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#0E0E12" />
-                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#2A2A32" />
-                    <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#1C1C22" />
-                    <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#EDEDEF" />
-                    <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#B4B4BE" />
-                    <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#8A8F98" />
-                    <SolidColorBrush x:Key="OptiSuccessBrush" Color="#4CB782" />
-                    <SolidColorBrush x:Key="OptiSuccessSoftBrush" Color="#0F1F18" />
-                    <SolidColorBrush x:Key="OptiWarningBrush" Color="#F2C94C" />
-                    <SolidColorBrush x:Key="OptiWarningSoftBrush" Color="#241F0C" />
-                    <SolidColorBrush x:Key="OptiErrorBrush" Color="#EB5757" />
-                    <SolidColorBrush x:Key="OptiErrorSoftBrush" Color="#241010" />
-                    <SolidColorBrush x:Key="OptiRailBrush" Color="#5E6AD2" />
-                    <SolidColorBrush x:Key="OptiChromeBrush" Color="#0A0A0C" />
-                    <SolidColorBrush x:Key="OptiSidebarBrush" Color="#0D0D10" />
-                    <SolidColorBrush x:Key="OptiLaneHoverBrush" Color="#1C1C22" />
+                    <Color x:Key="SystemAccentColor">#F2F2F2</Color>
+                    <Color x:Key="SystemAccentColorLight1">#FFFFFF</Color>
+                    <Color x:Key="SystemAccentColorLight2">#F2F2F2</Color>
+                    <Color x:Key="SystemAccentColorLight3">#D4D4D4</Color>
+                    <Color x:Key="SystemAccentColorDark1">#A3A3A3</Color>
+                    <Color x:Key="SystemAccentColorDark2">#737373</Color>
+                    <Color x:Key="SystemAccentColorDark3">#525252</Color>
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#F2F2F2" />
+                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#D4D4D4" />
+                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#A3A3A3" />
+                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#F2F2F2" />
+                    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#A3A3A3" />
+                    <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#737373" />
+                    <SolidColorBrush x:Key="TextFillColorDisabledBrush" Color="#525252" />
+                    <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#121212" />
+                    <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#262626" />
+                    <SolidColorBrush x:Key="ControlStrongStrokeColorDefaultBrush" Color="#F2F2F2" />
+                    <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="#121212" />
+                    <SolidColorBrush x:Key="SubtleFillColorTertiaryBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#1F1F1F" />
+                    <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#1A1A1A" />
+                    <SolidColorBrush x:Key="OptiSurfaceBrush" Color="#0F0F0F" />
+                    <SolidColorBrush x:Key="OptiDividerBrush" Color="#141414" />
+                    <SolidColorBrush x:Key="OptiAccentBrush" Color="#F2F2F2" />
+                    <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#141414" />
+                    <SolidColorBrush x:Key="OptiIconWellFillBrush" Color="#121212" />
+                    <SolidColorBrush x:Key="OptiIconWellStrokeBrush" Color="#1F1F1F" />
+                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#050505" />
+                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#1A1A1A" />
+                    <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#121212" />
+                    <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#D4D4D4" />
+                    <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#737373" />
+                    <SolidColorBrush x:Key="OptiSuccessBrush" Color="#4ADE80" />
+                    <SolidColorBrush x:Key="OptiSuccessSoftBrush" Color="#0A1A10" />
+                    <SolidColorBrush x:Key="OptiWarningBrush" Color="#FBBF24" />
+                    <SolidColorBrush x:Key="OptiWarningSoftBrush" Color="#1A1608" />
+                    <SolidColorBrush x:Key="OptiErrorBrush" Color="#F87171" />
+                    <SolidColorBrush x:Key="OptiErrorSoftBrush" Color="#1A0A0A" />
+                    <SolidColorBrush x:Key="OptiRailBrush" Color="#F2F2F2" />
+                    <SolidColorBrush x:Key="OptiChromeBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="OptiSidebarBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="OptiLaneHoverBrush" Color="#111111" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
-                    <Color x:Key="SystemAccentColor">#5E6AD2</Color>
-                    <Color x:Key="SystemAccentColorLight1">#6B77E0</Color>
-                    <Color x:Key="SystemAccentColorLight2">#5E6AD2</Color>
-                    <Color x:Key="SystemAccentColorLight3">#4C57B8</Color>
-                    <Color x:Key="SystemAccentColorDark1">#3D4699</Color>
-                    <Color x:Key="SystemAccentColorDark2">#2F377A</Color>
-                    <Color x:Key="SystemAccentColorDark3">#22285C</Color>
-                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#5E6AD2" />
-                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#4C57B8" />
-                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#3D4699" />
-                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#5E6AD2" />
-                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#4C57B8" />
-                    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#1A1A1E" />
-                    <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#5C5C66" />
-                    <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#8A8F98" />
-                    <SolidColorBrush x:Key="TextFillColorDisabledBrush" Color="#B0B0B8" />
+                    <Color x:Key="SystemAccentColor">#0A0A0A</Color>
+                    <Color x:Key="SystemAccentColorLight1">#171717</Color>
+                    <Color x:Key="SystemAccentColorLight2">#0A0A0A</Color>
+                    <Color x:Key="SystemAccentColorLight3">#262626</Color>
+                    <Color x:Key="SystemAccentColorDark1">#404040</Color>
+                    <Color x:Key="SystemAccentColorDark2">#525252</Color>
+                    <Color x:Key="SystemAccentColorDark3">#737373</Color>
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#171717" />
+                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#262626" />
+                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#171717" />
+                    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#525252" />
+                    <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#737373" />
+                    <SolidColorBrush x:Key="TextFillColorDisabledBrush" Color="#A3A3A3" />
                     <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#F4F4F6" />
-                    <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#E4E4E8" />
-                    <SolidColorBrush x:Key="ControlStrongStrokeColorDefaultBrush" Color="#5E6AD2" />
-                    <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="#F4F4F6" />
-                    <SolidColorBrush x:Key="SubtleFillColorTertiaryBrush" Color="#EBEBEF" />
-                    <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#F7F7F8" />
+                    <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#F5F5F5" />
+                    <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#E5E5E5" />
+                    <SolidColorBrush x:Key="ControlStrongStrokeColorDefaultBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="#F5F5F5" />
+                    <SolidColorBrush x:Key="SubtleFillColorTertiaryBrush" Color="#E5E5E5" />
+                    <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#FAFAFA" />
                     <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#E4E4E8" />
-                    <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#F7F7F8" />
+                    <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#E5E5E5" />
+                    <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#F5F5F5" />
                     <SolidColorBrush x:Key="OptiCardFillBrush" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#E4E4E8" />
-                    <SolidColorBrush x:Key="OptiSurfaceBrush" Color="#F0F0F3" />
-                    <SolidColorBrush x:Key="OptiDividerBrush" Color="#E4E4E8" />
-                    <SolidColorBrush x:Key="OptiAccentBrush" Color="#5E6AD2" />
-                    <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#EEF0FB" />
-                    <SolidColorBrush x:Key="OptiIconWellFillBrush" Color="#F0F0F3" />
-                    <SolidColorBrush x:Key="OptiIconWellStrokeBrush" Color="#E4E4E8" />
-                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#1A1A1E" />
-                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#1A1A1E" />
-                    <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#F0F0F3" />
-                    <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#1A1A1E" />
-                    <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#5C5C66" />
-                    <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#8A8F98" />
-                    <SolidColorBrush x:Key="OptiSuccessBrush" Color="#0F7B0F" />
-                    <SolidColorBrush x:Key="OptiSuccessSoftBrush" Color="#E8F5E8" />
-                    <SolidColorBrush x:Key="OptiWarningBrush" Color="#9D5D00" />
-                    <SolidColorBrush x:Key="OptiWarningSoftBrush" Color="#FFF4CE" />
-                    <SolidColorBrush x:Key="OptiErrorBrush" Color="#C42B1C" />
-                    <SolidColorBrush x:Key="OptiErrorSoftBrush" Color="#FDE7E9" />
-                    <SolidColorBrush x:Key="OptiRailBrush" Color="#5E6AD2" />
-                    <SolidColorBrush x:Key="OptiChromeBrush" Color="#F7F7F8" />
+                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#E5E5E5" />
+                    <SolidColorBrush x:Key="OptiSurfaceBrush" Color="#F0F0F0" />
+                    <SolidColorBrush x:Key="OptiDividerBrush" Color="#E5E5E5" />
+                    <SolidColorBrush x:Key="OptiAccentBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#E5E5E5" />
+                    <SolidColorBrush x:Key="OptiIconWellFillBrush" Color="#F0F0F0" />
+                    <SolidColorBrush x:Key="OptiIconWellStrokeBrush" Color="#E5E5E5" />
+                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#F0F0F0" />
+                    <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#404040" />
+                    <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#737373" />
+                    <SolidColorBrush x:Key="OptiSuccessBrush" Color="#15803D" />
+                    <SolidColorBrush x:Key="OptiSuccessSoftBrush" Color="#ECFDF3" />
+                    <SolidColorBrush x:Key="OptiWarningBrush" Color="#C2410C" />
+                    <SolidColorBrush x:Key="OptiWarningSoftBrush" Color="#FFF7ED" />
+                    <SolidColorBrush x:Key="OptiErrorBrush" Color="#B91C1C" />
+                    <SolidColorBrush x:Key="OptiErrorSoftBrush" Color="#FEF2F2" />
+                    <SolidColorBrush x:Key="OptiRailBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiChromeBrush" Color="#FAFAFA" />
                     <SolidColorBrush x:Key="OptiSidebarBrush" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="OptiLaneHoverBrush" Color="#F0F0F3" />
+                    <SolidColorBrush x:Key="OptiLaneHoverBrush" Color="#F0F0F0" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Default">
-                    <Color x:Key="SystemAccentColor">#5E6AD2</Color>
-                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#5E6AD2" />
-                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#828FFF" />
-                    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#EDEDEF" />
-                    <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#0A0A0C" />
-                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#16161A" />
-                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#2A2A32" />
-                    <SolidColorBrush x:Key="OptiSurfaceBrush" Color="#121216" />
-                    <SolidColorBrush x:Key="OptiDividerBrush" Color="#22222A" />
-                    <SolidColorBrush x:Key="OptiAccentBrush" Color="#5E6AD2" />
-                    <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#1A1C3A" />
-                    <SolidColorBrush x:Key="OptiIconWellFillBrush" Color="#1C1C22" />
-                    <SolidColorBrush x:Key="OptiIconWellStrokeBrush" Color="#2A2A32" />
-                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#0E0E12" />
-                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#2A2A32" />
-                    <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#1C1C22" />
-                    <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#EDEDEF" />
-                    <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#B4B4BE" />
-                    <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#8A8F98" />
-                    <SolidColorBrush x:Key="OptiSuccessBrush" Color="#4CB782" />
-                    <SolidColorBrush x:Key="OptiSuccessSoftBrush" Color="#0F1F18" />
-                    <SolidColorBrush x:Key="OptiWarningBrush" Color="#F2C94C" />
-                    <SolidColorBrush x:Key="OptiWarningSoftBrush" Color="#241F0C" />
-                    <SolidColorBrush x:Key="OptiErrorBrush" Color="#EB5757" />
-                    <SolidColorBrush x:Key="OptiErrorSoftBrush" Color="#241010" />
-                    <SolidColorBrush x:Key="OptiRailBrush" Color="#5E6AD2" />
-                    <SolidColorBrush x:Key="OptiChromeBrush" Color="#0A0A0C" />
-                    <SolidColorBrush x:Key="OptiSidebarBrush" Color="#0D0D10" />
-                    <SolidColorBrush x:Key="OptiLaneHoverBrush" Color="#1C1C22" />
+                    <Color x:Key="SystemAccentColor">#F2F2F2</Color>
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#F2F2F2" />
+                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#1A1A1A" />
+                    <SolidColorBrush x:Key="OptiSurfaceBrush" Color="#0F0F0F" />
+                    <SolidColorBrush x:Key="OptiDividerBrush" Color="#141414" />
+                    <SolidColorBrush x:Key="OptiAccentBrush" Color="#F2F2F2" />
+                    <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#141414" />
+                    <SolidColorBrush x:Key="OptiIconWellFillBrush" Color="#121212" />
+                    <SolidColorBrush x:Key="OptiIconWellStrokeBrush" Color="#1F1F1F" />
+                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#050505" />
+                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#1A1A1A" />
+                    <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#121212" />
+                    <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#D4D4D4" />
+                    <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#737373" />
+                    <SolidColorBrush x:Key="OptiSuccessBrush" Color="#4ADE80" />
+                    <SolidColorBrush x:Key="OptiSuccessSoftBrush" Color="#0A1A10" />
+                    <SolidColorBrush x:Key="OptiWarningBrush" Color="#FBBF24" />
+                    <SolidColorBrush x:Key="OptiWarningSoftBrush" Color="#1A1608" />
+                    <SolidColorBrush x:Key="OptiErrorBrush" Color="#F87171" />
+                    <SolidColorBrush x:Key="OptiErrorSoftBrush" Color="#1A0A0A" />
+                    <SolidColorBrush x:Key="OptiRailBrush" Color="#F2F2F2" />
+                    <SolidColorBrush x:Key="OptiChromeBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="OptiSidebarBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="OptiLaneHoverBrush" Color="#111111" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>

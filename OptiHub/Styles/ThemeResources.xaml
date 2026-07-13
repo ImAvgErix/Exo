@@ -5,14 +5,15 @@
     xmlns:helpers="using:OptiHub.Helpers">
 
     <FontFamily x:Key="OptiDisplayFontItalic">ms-appx:///Assets/Fonts/CormorantGaramond-Italic.ttf#Cormorant Garamond</FontFamily>
+    <!-- used by italic brand mark -->
     <FontFamily x:Key="OptiUiFont">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
     <FontFamily x:Key="OptiUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
     <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
-    <CornerRadius x:Key="OptiCardRadius">12</CornerRadius>
+    <CornerRadius x:Key="OptiCardRadius">10</CornerRadius>
     <CornerRadius x:Key="OptiTileRadius">10</CornerRadius>
-    <x:Double x:Key="OptiPageMaxWidth">1080</x:Double>
-    <Thickness x:Key="OptiPagePadding">32,24,32,28</Thickness>
+    <x:Double x:Key="OptiPageMaxWidth">760</x:Double>
+    <Thickness x:Key="OptiPagePadding">28,20,28,24</Thickness>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
@@ -377,17 +378,18 @@
         </Setter>
     </Style>
 
-    <!-- Linear-style sidebar row -->
+    <!-- Sidebar row: supports left selection bar via BorderThickness on Button -->
     <Style x:Key="OptiNavButton" TargetType="Button">
-        <Setter Property="MinHeight" Value="36" />
-        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="MinHeight" Value="38" />
+        <Setter Property="Padding" Value="12,8" />
         <Setter Property="CornerRadius" Value="8" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Left" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
@@ -396,6 +398,8 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Root"
                             Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="{TemplateBinding CornerRadius}"
                             Padding="{TemplateBinding Padding}">
                         <VisualStateManager.VisualStateGroups>
