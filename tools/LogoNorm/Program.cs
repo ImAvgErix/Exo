@@ -6,8 +6,8 @@ var logosDir = args[0];
 const int canvas = 256;
 var factors = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
 {
-    // Steam is a solid white disc — keep it smaller so it matches open icons
-    ["steam.png"] = 0.70,
+    // Steam solid disc — match peer diameter (0.70 was tiny on cards; keep ~212px)
+    ["steam.png"] = 1.06,
     ["epic.png"] = 0.84,
     ["amd.png"] = 1.14,
     ["nvidia.png"] = 1.05,

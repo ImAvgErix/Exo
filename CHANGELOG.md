@@ -1,3 +1,7 @@
+## 1.9.80
+
+- **Steam logo size restored** — was over-shrunk (140px); back to ~212px peer diameter (window-screenshot verified)
+
 ## 1.9.79
 
 - **Cards no longer clip**: ScrollViewer + responsive columns/card size by window width
