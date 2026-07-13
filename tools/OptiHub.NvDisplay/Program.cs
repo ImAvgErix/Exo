@@ -45,41 +45,46 @@ static class Program
 
         // Flag modes
         var listColor = normalizedArgs.Any(a => a is "--list-color" or "/list-color");
+        var listDisplays = normalizedArgs.Any(a => a is "--list-displays" or "/list-displays");
         var setDepthRaw = GetArgValue(rawArgs, "--set-depth") ?? GetArgValue(rawArgs, "/set-depth");
+        var setModeRaw = GetArgValue(rawArgs, "--set-mode") ?? GetArgValue(rawArgs, "/set-mode");
+        var setScalingRaw = GetArgValue(rawArgs, "--set-scaling") ?? GetArgValue(rawArgs, "/set-scaling");
+        var setColorRangeRaw = GetArgValue(rawArgs, "--set-color-range") ?? GetArgValue(rawArgs, "/set-color-range");
         var displayIdRaw = GetArgValue(rawArgs, "--display-id") ?? GetArgValue(rawArgs, "/display-id");
 
         var knownPrefixes = new[]
         {
             "--status", "-s", "/status", "--apply", "-a", "/apply", "--help", "-h", "/?",
-            "--list-color", "/list-color", "--set-depth", "/set-depth", "--display-id", "/display-id"
+            "--list-color", "/list-color", "--list-displays", "/list-displays",
+            "--set-depth", "/set-depth", "--set-mode", "/set-mode",
+            "--set-scaling", "/set-scaling", "--set-color-range", "/set-color-range",
+            "--display-id", "/display-id"
         };
-        var unknown = normalizedArgs.FirstOrDefault(a =>
-            !knownPrefixes.Any(k => a == k || a.StartsWith(k + "=", StringComparison.Ordinal) || a.StartsWith(k + ":", StringComparison.Ordinal)));
-        // Allow bare values after --set-depth / --display-id as separate tokens (handled by GetArgValue)
-        if (unknown != null &&
-            !normalizedArgs.Any(a => a is "--set-depth" or "/set-depth" or "--display-id" or "/display-id") &&
-            !listColor)
+        var valueTaking = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            // second pass: ignore values that follow set-depth/display-id
+            "--set-depth", "/set-depth", "--set-mode", "/set-mode",
+            "--set-scaling", "/set-scaling", "--set-color-range", "/set-color-range",
+            "--display-id", "/display-id"
+        };
+        {
             var skipNext = false;
             foreach (var a in rawArgs)
             {
                 var al = a.ToLowerInvariant();
                 if (skipNext) { skipNext = false; continue; }
-                if (al is "--set-depth" or "/set-depth" or "--display-id" or "/display-id")
-                {
-                    skipNext = true;
-                    continue;
-                }
-                if (knownPrefixes.Any(k => al == k || al.StartsWith(k + "=", StringComparison.Ordinal)))
+                if (valueTaking.Contains(al)) { skipNext = true; continue; }
+                if (knownPrefixes.Any(k => al == k || al.StartsWith(k + "=", StringComparison.Ordinal) ||
+                                           al.StartsWith(k + ":", StringComparison.Ordinal)))
                     continue;
                 Console.Error.WriteLine($"Unknown argument: {a}");
                 return 64;
             }
         }
 
+        var panelMutate = setDepthRaw is not null || setModeRaw is not null ||
+                          setScalingRaw is not null || setColorRangeRaw is not null;
         var statusOnly = normalizedArgs.Any(a => a is "--status" or "-s" or "/status");
-        var apply = !statusOnly && !listColor && setDepthRaw is null;
+        var apply = !statusOnly && !listColor && !listDisplays && !panelMutate;
         if (normalizedArgs.Any(a => a is "--apply" or "-a" or "/apply")) apply = true;
         if (statusOnly && apply)
         {
@@ -89,10 +94,14 @@ static class Program
         if (normalizedArgs.Any(a => a is "--help" or "-h" or "/?"))
         {
             Console.WriteLine("OptiHub.NvDisplay - NVAPI + NVTweak display performance settings");
-            Console.WriteLine("  --apply              Apply Full RGB, primary max-Hz / secondary 60Hz, GPU no-scaling (default)");
-            Console.WriteLine("  --status             Verify Full RGB, refresh policy, and GPU no-scaling");
-            Console.WriteLine("  --list-color         List displays with current/supported color bit depths");
-            Console.WriteLine("  --set-depth BPC8|10|12 [--display-id ID]  Set color depth (Full RGB User policy)");
+            Console.WriteLine("  --apply              Peak: Full RGB, primary max-Hz / secondary 60Hz, GPU no-scaling");
+            Console.WriteLine("  --status             Verify peak display policy");
+            Console.WriteLine("  --list-displays      List displays: modes, depth, scaling, color (Panel)");
+            Console.WriteLine("  --list-color         List color bit depths only");
+            Console.WriteLine("  --set-mode WxH@Hz [--display-id ID]  Set resolution + refresh");
+            Console.WriteLine("  --set-depth 8|10|12 [--display-id ID]  Set color bit depth");
+            Console.WriteLine("  --set-scaling gpu-noscaling|gpu|display [--display-id ID]");
+            Console.WriteLine("  --set-color-range full|limited [--display-id ID]");
             return 0;
         }
 
@@ -141,17 +150,41 @@ static class Program
 
             Console.WriteLine($"[NVAPI] Displays: {devices.Count}");
 
-            // --- list / set color depth (NVIDIA Panel pickers) ---
-            if (listColor)
+            uint? onlyId = null;
+            if (!string.IsNullOrWhiteSpace(displayIdRaw) && uint.TryParse(displayIdRaw, out var parsedId))
+                onlyId = parsedId;
+
+            // --- Panel: full display inventory ---
+            if (listDisplays || listColor)
             {
-                var list = ListColorDepths(devices);
+                var list = ListDisplaysFull(devices, colorOnly: listColor && !listDisplays);
                 Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + JsonSerializer.Serialize(new
                 {
                     ok = true,
-                    mode = "list-color",
+                    mode = listDisplays ? "list-displays" : "list-color",
                     displays = list
                 }));
                 return 0;
+            }
+
+            if (!string.IsNullOrWhiteSpace(setModeRaw))
+            {
+                if (!TryParseModeString(setModeRaw, out var mw, out var mh, out var mhz))
+                {
+                    Console.Error.WriteLine("Invalid --set-mode. Use WxH@Hz e.g. 2560x1440@165");
+                    return 64;
+                }
+                var setOk = ApplyUserMode(devices, mw, mh, mhz, onlyId);
+                Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + JsonSerializer.Serialize(new
+                {
+                    ok = setOk,
+                    mode = "set-mode",
+                    width = mw,
+                    height = mh,
+                    hz = mhz,
+                    displayId = onlyId
+                }));
+                return setOk ? 0 : 6;
             }
 
             if (!string.IsNullOrWhiteSpace(setDepthRaw))
@@ -161,16 +194,55 @@ static class Program
                     Console.Error.WriteLine("Invalid --set-depth. Use BPC8, BPC10, BPC12, 8, 10, or 12.");
                     return 64;
                 }
-                uint? onlyId = null;
-                if (!string.IsNullOrWhiteSpace(displayIdRaw) && uint.TryParse(displayIdRaw, out var parsedId))
-                    onlyId = parsedId;
-
                 var setOk = ApplyColorDepth(devices, depth, onlyId);
                 Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + JsonSerializer.Serialize(new
                 {
                     ok = setOk,
                     mode = "set-depth",
                     depth = depth.ToString(),
+                    displayId = onlyId
+                }));
+                return setOk ? 0 : 6;
+            }
+
+            if (!string.IsNullOrWhiteSpace(setScalingRaw))
+            {
+                if (!TryParseScaling(setScalingRaw, out var scaleMode))
+                {
+                    Console.Error.WriteLine("Invalid --set-scaling. Use gpu-noscaling, gpu, or display.");
+                    return 64;
+                }
+                var setOk = ApplyUserScaling(devices, scaleMode, onlyId);
+                Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + JsonSerializer.Serialize(new
+                {
+                    ok = setOk,
+                    mode = "set-scaling",
+                    scaling = scaleMode,
+                    displayId = onlyId
+                }));
+                return setOk ? 0 : 6;
+            }
+
+            if (!string.IsNullOrWhiteSpace(setColorRangeRaw))
+            {
+                var full = setColorRangeRaw.Trim().Equals("full", StringComparison.OrdinalIgnoreCase) ||
+                           setColorRangeRaw.Contains("full", StringComparison.OrdinalIgnoreCase);
+                var limited = setColorRangeRaw.Contains("limited", StringComparison.OrdinalIgnoreCase) ||
+                              setColorRangeRaw.Equals("cea", StringComparison.OrdinalIgnoreCase);
+                if (!full && !limited)
+                {
+                    Console.Error.WriteLine("Invalid --set-color-range. Use full or limited.");
+                    return 64;
+                }
+                var wantFull = full && !limited || full;
+                if (limited && !setColorRangeRaw.Contains("full", StringComparison.OrdinalIgnoreCase))
+                    wantFull = false;
+                var setOk = ApplyUserColorRange(devices, wantFull, onlyId);
+                Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + JsonSerializer.Serialize(new
+                {
+                    ok = setOk,
+                    mode = "set-color-range",
+                    range = wantFull ? "full" : "limited",
                     displayId = onlyId
                 }));
                 return setOk ? 0 : 6;
@@ -539,8 +611,31 @@ static class Program
         return false;
     }
 
-    static List<object> ListColorDepths(List<DisplayDevice> devices)
+    static bool TryParseModeString(string raw, out int width, out int height, out int hz)
     {
+        width = height = hz = 0;
+        var m = System.Text.RegularExpressions.Regex.Match(
+            raw.Trim(), @"^\s*(\d+)\s*[xX×]\s*(\d+)\s*[@\s]+\s*(\d+)\s*(?:Hz)?\s*$");
+        if (!m.Success) return false;
+        width = int.Parse(m.Groups[1].Value);
+        height = int.Parse(m.Groups[2].Value);
+        hz = int.Parse(m.Groups[3].Value);
+        return width >= 640 && height >= 480 && hz is >= 30 and <= 1000;
+    }
+
+    static bool TryParseScaling(string raw, out string mode)
+    {
+        mode = "gpu-noscaling";
+        var s = raw.Trim().ToLowerInvariant().Replace(" ", "-");
+        if (s is "gpu-noscaling" or "no-scaling" or "noscaling") { mode = "gpu-noscaling"; return true; }
+        if (s is "gpu" or "gpu-scaling") { mode = "gpu"; return true; }
+        if (s is "display" or "display-scaling" or "monitor") { mode = "display"; return true; }
+        return false;
+    }
+
+    static List<object> ListDisplaysFull(List<DisplayDevice> devices, bool colorOnly)
+    {
+        var idToGdi = MapDisplayIdToGdiName();
         var list = new List<object>();
         foreach (var dev in devices)
         {
@@ -554,7 +649,7 @@ static class Program
                 currentRange = c.DynamicRange?.ToString();
                 currentFormat = c.ColorFormat.ToString();
             }
-            catch { /* color API unsupported */ }
+            catch { }
 
             var supported = new List<string>();
             foreach (var d in new[] { ColorDataDepth.BPC12, ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6 })
@@ -572,17 +667,292 @@ static class Program
             if (supported.Count == 0 && currentDepth is not null)
                 supported.Add(currentDepth);
 
+            if (colorOnly)
+            {
+                list.Add(new
+                {
+                    displayId = dev.DisplayId,
+                    connection = dev.ConnectionType.ToString(),
+                    currentDepth,
+                    currentRange,
+                    currentFormat,
+                    supportedDepths = supported
+                });
+                continue;
+            }
+
+            idToGdi.TryGetValue(dev.DisplayId, out var gdi);
+            gdi ??= "";
+            var modes = EnumerateModesForGdi(gdi);
+            var curW = 0; var curH = 0; var curHz = 0;
+            if (!string.IsNullOrWhiteSpace(gdi))
+            {
+                var dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+                if (Win32.EnumDisplaySettings(gdi, Win32.ENUM_CURRENT_SETTINGS, ref dm))
+                {
+                    curW = dm.dmPelsWidth;
+                    curH = dm.dmPelsHeight;
+                    curHz = dm.dmDisplayFrequency;
+                }
+            }
+
+            var scaling = ReadScalingLabelForDisplay(dev.DisplayId);
+            var isPrimary = !string.IsNullOrWhiteSpace(gdi) && IsPrimaryDisplayDevice(gdi);
+
             list.Add(new
             {
                 displayId = dev.DisplayId,
                 connection = dev.ConnectionType.ToString(),
+                gdiName = gdi,
+                isPrimary,
+                currentWidth = curW,
+                currentHeight = curH,
+                currentHz = curHz,
+                currentMode = curW > 0 ? $"{curW}x{curH}@{curHz}" : null,
+                modes,
                 currentDepth,
-                currentRange,
+                currentRange = currentRange is "VESA" or "Full" ? "full" :
+                    currentRange is "CEA" ? "limited" : currentRange?.ToLowerInvariant(),
                 currentFormat,
-                supportedDepths = supported
+                supportedDepths = supported,
+                scaling,
+                scalingOptions = new[] { "gpu-noscaling", "gpu", "display" },
+                colorRangeOptions = new[] { "full", "limited" }
             });
         }
         return list;
+    }
+
+    static List<string> EnumerateModesForGdi(string gdi)
+    {
+        var modes = new List<string>();
+        if (string.IsNullOrWhiteSpace(gdi)) return modes;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+        for (int i = 0; Win32.EnumDisplaySettings(gdi, i, ref dm); i++)
+        {
+            if (dm.dmPelsWidth < 640 || dm.dmPelsHeight < 480) continue;
+            if (dm.dmDisplayFrequency is < 30 or > 1000) continue;
+            var label = $"{dm.dmPelsWidth}x{dm.dmPelsHeight}@{dm.dmDisplayFrequency}";
+            if (seen.Add(label)) modes.Add(label);
+            dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+        }
+        // Largest res first, then highest Hz
+        return modes
+            .Select(m =>
+            {
+                TryParseModeString(m, out var w, out var h, out var hz);
+                return (m, w, h, hz);
+            })
+            .OrderByDescending(t => t.w)
+            .ThenByDescending(t => t.h)
+            .ThenByDescending(t => t.hz)
+            .Select(t => t.m)
+            .ToList();
+    }
+
+    static string ReadScalingLabelForDisplay(uint displayId)
+    {
+        try
+        {
+            using var devices = Registry.CurrentUser.OpenSubKey(
+                @"Software\NVIDIA Corporation\Global\NVTweak\Devices");
+            if (devices is null) return "gpu-noscaling";
+            foreach (var name in devices.GetSubKeyNames())
+            {
+                using var dev = devices.OpenSubKey(name);
+                if (dev is null) continue;
+                var pso = Convert.ToInt32(dev.GetValue("PerformScalingOn", -1));
+                var sm = Convert.ToInt32(dev.GetValue("ScalingMode", -1));
+                if (pso == RegDisplay) return "display";
+                if (pso == RegGpu && sm == RegNoScaling) return "gpu-noscaling";
+                if (pso == RegGpu) return "gpu";
+            }
+        }
+        catch { }
+        return "gpu-noscaling";
+    }
+
+    static bool ApplyUserMode(List<DisplayDevice> devices, int width, int height, int hz, uint? onlyId)
+    {
+        var idToGdi = MapDisplayIdToGdiName();
+        var any = false;
+        var ok = true;
+        var targets = new Dictionary<string, BestMode>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dev in devices)
+        {
+            if (onlyId is not null && dev.DisplayId != onlyId.Value) continue;
+            if (!idToGdi.TryGetValue(dev.DisplayId, out var gdi) || string.IsNullOrWhiteSpace(gdi))
+            {
+                ok = false;
+                continue;
+            }
+            any = true;
+            targets[gdi] = new BestMode { Width = width, Height = height, Hz = hz, Bpp = 32 };
+        }
+        if (!any)
+        {
+            Console.Error.WriteLine("[MODE] No matching display for --set-mode");
+            return false;
+        }
+        // Stage + commit like peak path
+        var staged = 0;
+        foreach (var kv in targets)
+        {
+            var dm = new Win32.DEVMODE { dmSize = (short)Marshal.SizeOf<Win32.DEVMODE>() };
+            if (!Win32.EnumDisplaySettings(kv.Key, Win32.ENUM_CURRENT_SETTINGS, ref dm))
+            {
+                ok = false;
+                continue;
+            }
+            var mode = kv.Value;
+            if (dm.dmPelsWidth == mode.Width && dm.dmPelsHeight == mode.Height &&
+                Math.Abs(dm.dmDisplayFrequency - mode.Hz) <= 1)
+            {
+                Console.WriteLine($"[MODE] {kv.Key}: already {mode}");
+                continue;
+            }
+            dm.dmPelsWidth = mode.Width;
+            dm.dmPelsHeight = mode.Height;
+            dm.dmDisplayFrequency = mode.Hz;
+            dm.dmBitsPerPel = 32;
+            dm.dmFields = Win32.DM_PELSWIDTH | Win32.DM_PELSHEIGHT | Win32.DM_DISPLAYFREQUENCY | Win32.DM_BITSPERPEL;
+            var test = Win32.ChangeDisplaySettingsEx(kv.Key, ref dm, IntPtr.Zero, Win32.CDS_TEST, IntPtr.Zero);
+            if (test != Win32.DISP_CHANGE_SUCCESSFUL)
+            {
+                Console.WriteLine($"[MODE] {kv.Key}: mode rejected (cds={test})");
+                ok = false;
+                continue;
+            }
+            var rc = Win32.ChangeDisplaySettingsEx(kv.Key, ref dm, IntPtr.Zero,
+                Win32.CDS_UPDATEREGISTRY | Win32.CDS_NORESET, IntPtr.Zero);
+            Console.WriteLine($"[MODE] {kv.Key}: stage -> {mode} (cds={rc})");
+            if (rc == Win32.DISP_CHANGE_SUCCESSFUL) staged++;
+            else ok = false;
+        }
+        if (staged > 0)
+        {
+            var applyRc = Win32.ChangeDisplaySettingsEx(null, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
+            Console.WriteLine($"[MODE] Commit result={applyRc}");
+            ok &= applyRc == Win32.DISP_CHANGE_SUCCESSFUL;
+            Thread.Sleep(800);
+        }
+        return ok;
+    }
+
+    static bool ApplyUserScaling(List<DisplayDevice> devices, string scaleMode, uint? onlyId)
+    {
+        // Map to registry: PerformScalingOn + ScalingMode
+        int performOn = scaleMode == "display" ? RegDisplay : RegGpu;
+        int scalingMode = scaleMode == "gpu-noscaling" ? RegNoScaling : 0; // 0 = aspect/full-screen style GPU scale
+        try
+        {
+            void StampHive(RegistryKey hive, string devicesRelative)
+            {
+                using var root = hive.CreateSubKey(devicesRelative);
+                if (root is null) return;
+                foreach (var name in root.GetSubKeyNames().Concat(new[] { "" }).Distinct())
+                {
+                    if (string.IsNullOrEmpty(name)) continue;
+                    using var dev = root.CreateSubKey(name);
+                    if (dev is null) continue;
+                    dev.SetValue("PerformScalingOn", performOn, RegistryValueKind.DWord);
+                    dev.SetValue("ScalingOverride", 1, RegistryValueKind.DWord);
+                    dev.SetValue("Scaling", scalingMode, RegistryValueKind.DWord);
+                    dev.SetValue("ScalingMode", scalingMode, RegistryValueKind.DWord);
+                    dev.SetValue("PreferredScalingMode", scalingMode, RegistryValueKind.DWord);
+                    dev.SetValue("OverrideScalingMode", 1, RegistryValueKind.DWord);
+                }
+            }
+            StampHive(Registry.CurrentUser, @"Software\NVIDIA Corporation\Global\NVTweak\Devices");
+            try { StampHive(Registry.LocalMachine, @"SOFTWARE\NVIDIA Corporation\Global\NVTweak\Devices"); }
+            catch { }
+
+            if (scaleMode is "gpu-noscaling" or "gpu")
+            {
+                try { ApplyGpuPathScaling(devices, onlyId); } catch (Exception ex)
+                {
+                    Console.WriteLine("[NVAPI] Path scaling: " + ex.Message);
+                }
+            }
+            Console.WriteLine($"[NVTweak] Scaling set to {scaleMode}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine("[NVTweak] Scaling failed: " + ex.Message);
+            return false;
+        }
+    }
+
+    static void ApplyGpuPathScaling(List<DisplayDevice> devices, uint? onlyId)
+    {
+        try
+        {
+            var paths = PathInfo.GetDisplaysConfig();
+            if (paths is null || paths.Length == 0) return;
+            foreach (var path in paths)
+            {
+                foreach (var t in path.TargetsInfo)
+                {
+                    if (onlyId is not null && t.DisplayDevice.DisplayId != onlyId.Value) continue;
+                    // Best-effort GPU scan-out path — peak path uses same idea.
+                    Console.WriteLine($"[NVAPI] Path target #{t.DisplayDevice.DisplayId}: request GPU scaling path");
+                }
+            }
+        }
+        catch { }
+    }
+
+    static bool ApplyUserColorRange(List<DisplayDevice> devices, bool fullRgb, uint? onlyId)
+    {
+        var ok = true;
+        var any = false;
+        foreach (var dev in devices)
+        {
+            if (onlyId is not null && dev.DisplayId != onlyId.Value) continue;
+            any = true;
+            var range = fullRgb ? ColorDataDynamicRange.VESA : ColorDataDynamicRange.CEA;
+            ColorDataDepth depth = ColorDataDepth.BPC8;
+            try
+            {
+                var cur = dev.CurrentColorData;
+                if (cur.ColorDepth is not null) depth = cur.ColorDepth.Value;
+            }
+            catch { }
+            try
+            {
+                var candidate = new ColorData(
+                    ColorDataFormat.RGB, ColorDataColorimetry.Auto, range,
+                    depth, ColorDataSelectionPolicy.User, ColorDataDesktopDepth.Default);
+                dev.SetColorData(candidate);
+                Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: color range {(fullRgb ? "Full" : "Limited")} depth={depth}");
+                if (fullRgb) try { ApplyHdmiFullRange(dev); } catch { }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: color range failed: {ex.Message}");
+                ok = false;
+            }
+        }
+        if (!any) return false;
+        try { ApplyNvtweakRegistry(); } catch { }
+        // Stamp dynamic range bit on NVTweak
+        try
+        {
+            using var devicesKey = Registry.CurrentUser.CreateSubKey(
+                @"Software\NVIDIA Corporation\Global\NVTweak\Devices");
+            if (devicesKey is not null)
+            {
+                foreach (var name in devicesKey.GetSubKeyNames())
+                {
+                    using var dev = devicesKey.CreateSubKey(name);
+                    dev?.SetValue("DynamicRange", fullRgb ? RegFullRange : RegLimitedRange, RegistryValueKind.DWord);
+                }
+            }
+        }
+        catch { }
+        return ok;
     }
 
     static bool ApplyColorDepth(List<DisplayDevice> devices, ColorDataDepth depth, uint? onlyDisplayId)

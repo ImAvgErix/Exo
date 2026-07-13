@@ -32,7 +32,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
     [ObservableProperty] private bool _hasMessage;
     [ObservableProperty] private string _messageGlyph = "\uE73E";
     [ObservableProperty] private Brush _messageBrush;
-    [ObservableProperty] private string _applyAllLabel = "Apply all";
+    [ObservableProperty] private string _applyAllLabel = "Apply peak defaults";
     [ObservableProperty] private bool _canApplyAll;
 
     [RelayCommand]
@@ -42,30 +42,20 @@ public partial class NvidiaPanelViewModel : ObservableObject
         IsLoading = true;
         try
         {
-            var colorTask = _services.NvidiaPanel.ListColorDepthsAsync();
+            var displayTask = _services.NvidiaPanel.ListDisplaysAsync();
             var policyTask = _services.NvidiaPanel.ProbePolicyAsync();
-            await Task.WhenAll(colorTask, policyTask).ConfigureAwait(true);
+            await Task.WhenAll(displayTask, policyTask).ConfigureAwait(true);
 
             Displays.Clear();
-            foreach (var d in colorTask.Result)
+            foreach (var d in displayTask.Result)
             {
                 var row = new NvidiaDisplayColorRowViewModel
                 {
                     DisplayId = d.DisplayId,
-                    Title = d.Title
+                    Title = d.Title,
+                    IsPrimary = d.IsPrimary
                 };
-                foreach (var opt in d.SupportedDepths.Distinct(StringComparer.OrdinalIgnoreCase))
-                    row.DepthOptions.Add(opt);
-                if (row.DepthOptions.Count == 0)
-                {
-                    row.DepthOptions.Add("8-bit");
-                    row.DepthOptions.Add("10-bit");
-                    row.DepthOptions.Add("12-bit");
-                }
-                row.CurrentDepth = string.IsNullOrWhiteSpace(d.CurrentDepth) ? "—" : d.CurrentDepth;
-                row.SelectedDepth = row.DepthOptions.FirstOrDefault(o =>
-                    string.Equals(o, row.CurrentDepth, StringComparison.OrdinalIgnoreCase))
-                    ?? row.DepthOptions.FirstOrDefault();
+                row.LoadFrom(d);
                 Displays.Add(row);
             }
             HasDisplays = Displays.Count > 0;
@@ -85,12 +75,12 @@ public partial class NvidiaPanelViewModel : ObservableObject
 
             var missing = Rows.Count(r => !r.IsApplied);
             var fixable = Rows.Count(r => !r.IsApplied && r.CanApplyFromPanel);
-            HeaderStatus = missing == 0 ? "All applied" : $"{missing} not applied";
-            HeaderDetail = HasDisplays
-                ? $"{Displays.Count} display(s) — pick color depth below, or Apply all for peak defaults"
-                : string.Empty;
-            CanApplyAll = fixable > 0;
-            ApplyAllLabel = fixable > 0 ? "Apply all peak defaults" : "All applied";
+            HeaderStatus = HasDisplays
+                ? $"{Displays.Count} display{(Displays.Count == 1 ? "" : "s")}"
+                : (missing == 0 ? "Policy OK" : $"{missing} policy gaps");
+            HeaderDetail = "Resolution · refresh · bit depth · Full RGB · scaling — apply per display or peak defaults";
+            CanApplyAll = true;
+            ApplyAllLabel = "Apply peak defaults";
             if (missing == 0)
                 HasMessage = false;
         }
@@ -99,7 +89,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
             HeaderStatus = "Status unavailable";
             HeaderDetail = ex.Message;
             CanApplyAll = true;
-            ApplyAllLabel = "Apply all peak defaults";
+            ApplyAllLabel = "Apply peak defaults";
             SetMessage($"Could not probe driver: {ex.Message}", success: false);
         }
         finally
@@ -109,26 +99,61 @@ public partial class NvidiaPanelViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public async Task ApplyColorDepthAsync(NvidiaDisplayColorRowViewModel? row)
+    public async Task ApplyDisplaySettingsAsync(NvidiaDisplayColorRowViewModel? row)
     {
-        if (row is null || IsBusy || string.IsNullOrWhiteSpace(row.SelectedDepth)) return;
+        if (row is null || IsBusy) return;
         IsBusy = true;
         row.IsApplying = true;
-        ProgressPercent = 30;
-        ProgressStatus = $"Setting {row.SelectedDepth} on {row.Title}...";
+        ProgressPercent = 15;
+        ProgressStatus = $"Applying {row.Title}...";
         try
         {
-            var (ok, msg) = await _services.NvidiaPanel.SetColorDepthAsync(
-                row.SelectedDepth!, row.DisplayId);
-            if (ok)
-                row.MarkApplied(row.SelectedDepth!);
-            SetMessage(msg, ok);
-            // Refresh list to confirm live depth
-            await RefreshDisplaysOnlyAsync();
+            var messages = new List<string>();
+            var allOk = true;
+
+            if (row.TryGetSelectedMode(out var w, out var h, out var hz))
+            {
+                ProgressStatus = $"Setting {w}x{h}@{hz}...";
+                ProgressPercent = 30;
+                var (ok, msg) = await _services.NvidiaPanel.SetModeAsync(w, h, hz, row.DisplayId);
+                messages.Add(msg);
+                allOk &= ok;
+            }
+
+            if (!string.IsNullOrWhiteSpace(row.SelectedDepth))
+            {
+                ProgressStatus = $"Setting {row.SelectedDepth}...";
+                ProgressPercent = 50;
+                var (ok, msg) = await _services.NvidiaPanel.SetColorDepthAsync(row.SelectedDepth!, row.DisplayId);
+                messages.Add(msg);
+                allOk &= ok;
+            }
+
+            if (!string.IsNullOrWhiteSpace(row.SelectedColorRange))
+            {
+                ProgressStatus = $"Setting {row.SelectedColorRange}...";
+                ProgressPercent = 70;
+                var (ok, msg) = await _services.NvidiaPanel.SetColorRangeAsync(row.SelectedColorRange!, row.DisplayId);
+                messages.Add(msg);
+                allOk &= ok;
+            }
+
+            if (!string.IsNullOrWhiteSpace(row.SelectedScaling))
+            {
+                ProgressStatus = $"Setting {row.SelectedScaling}...";
+                ProgressPercent = 85;
+                var (ok, msg) = await _services.NvidiaPanel.SetScalingAsync(row.SelectedScaling!, row.DisplayId);
+                messages.Add(msg);
+                allOk &= ok;
+            }
+
+            ProgressPercent = 100;
+            SetMessage(string.Join(" ", messages.Where(m => !string.IsNullOrWhiteSpace(m))), allOk);
+            await RefreshAsync();
         }
         catch (Exception ex)
         {
-            SetMessage($"Color depth failed: {ex.Message}", success: false);
+            SetMessage($"Apply failed: {ex.Message}", success: false);
         }
         finally
         {
@@ -139,18 +164,23 @@ public partial class NvidiaPanelViewModel : ObservableObject
         }
     }
 
+    // Compat for old Set depth button if present
+    [RelayCommand]
+    public Task ApplyColorDepthAsync(NvidiaDisplayColorRowViewModel? row) =>
+        ApplyDisplaySettingsAsync(row);
+
     [RelayCommand]
     public async Task ApplyAllAsync()
     {
         if (IsBusy) return;
-        await RunApplyAsync();
+        await RunPeakApplyAsync();
     }
 
     [RelayCommand]
     public async Task ApplyRowAsync(string? id)
     {
         if (IsBusy) return;
-        await RunApplyAsync();
+        await RunPeakApplyAsync();
     }
 
     [RelayCommand]
@@ -174,35 +204,8 @@ public partial class NvidiaPanelViewModel : ObservableObject
         }
     }
 
-    private async Task RefreshDisplaysOnlyAsync()
+    private async Task RunPeakApplyAsync()
     {
-        try
-        {
-            var list = await _services.NvidiaPanel.ListColorDepthsAsync();
-            foreach (var d in list)
-            {
-                var row = Displays.FirstOrDefault(x => x.DisplayId == d.DisplayId);
-                if (row is null) continue;
-                var depth = string.IsNullOrWhiteSpace(d.CurrentDepth) ? "—" : d.CurrentDepth;
-                row.CurrentDepth = depth;
-                if (row.DepthOptions.Any(o =>
-                        string.Equals(o, depth, StringComparison.OrdinalIgnoreCase)))
-                    row.SelectedDepth = depth;
-            }
-        }
-        catch { }
-    }
-
-    private async Task RunApplyAsync()
-    {
-        if (!IsLoading && Rows.Count > 0 &&
-            Rows.Where(r => r.CanApplyFromPanel).All(r => r.IsApplied))
-        {
-            CanApplyAll = false;
-            ApplyAllLabel = "All applied";
-            return;
-        }
-
         IsBusy = true;
         ProgressPercent = 8;
         ProgressStatus = "Applying peak display policy...";
@@ -230,7 +233,9 @@ public partial class NvidiaPanelViewModel : ObservableObject
             var (ok, message) = await _services.NvidiaPanel.ApplyDisplayPolicyAsync(settings, progress);
             ProgressPercent = 100;
             ProgressStatus = ok ? "Done" : "Failed";
-            SetMessage(ok ? "Peak defaults applied (Full RGB, max primary Hz, GPU no-scaling)." : message, ok);
+            SetMessage(ok
+                ? "Peak defaults applied (Full RGB, max primary Hz, GPU no-scaling)."
+                : message, ok);
             await RefreshAsync();
         }
         catch (Exception ex)

@@ -128,6 +128,77 @@ Expect("Unregister tray tasks present",
     blob.Contains("Unregister-OptiHubTrayTasks", StringComparison.OrdinalIgnoreCase) ||
     blob.Contains("OptiHub-NvidiaTrayHide", StringComparison.OrdinalIgnoreCase));
 
+// --- Panel pure helpers (shipped NvidiaPanelLogic) ---
+Expect("parse mode 2560x1440@165",
+    NvidiaPanelLogic.TryParseModeLabel("2560x1440@165", out var mw, out var mh, out var mhz) &&
+    mw == 2560 && mh == 1440 && mhz == 165);
+Expect("parse mode with Hz suffix",
+    NvidiaPanelLogic.TryParseModeLabel("1920x1080@144Hz", out _, out _, out var hz2) && hz2 == 144);
+Expect("format mode", NvidiaPanelLogic.FormatModeLabel(1920, 1080, 60) == "1920x1080@60");
+Expect("depth 10-bit -> 10", NvidiaPanelLogic.ToDepthCliArg("10-bit") == "10");
+Expect("depth BPC12 -> 12", NvidiaPanelLogic.ToDepthCliArg("BPC12") == "12");
+Expect("scaling gpu no-scaling", NvidiaPanelLogic.ToScalingCliArg("GPU no-scaling") == "gpu-noscaling");
+Expect("scaling display", NvidiaPanelLogic.ToScalingCliArg("Display scaling") == "display");
+Expect("color full", NvidiaPanelLogic.ToColorRangeCliArg("Full RGB") == "full");
+Expect("color limited", NvidiaPanelLogic.ToColorRangeCliArg("Limited") == "limited");
+Expect("list-displays args", NvidiaPanelLogic.BuildListDisplaysArgs() == "--list-displays");
+Expect("set-mode args with id",
+    NvidiaPanelLogic.BuildSetModeArgs(2560, 1440, 165, 42) == "--set-mode 2560x1440@165 --display-id 42");
+Expect("set-depth args",
+    NvidiaPanelLogic.BuildSetDepthArgs("12-bit", null).Contains("--set-depth 12", StringComparison.Ordinal));
+Expect("set-scaling args",
+    NvidiaPanelLogic.BuildSetScalingArgs("GPU no-scaling", 7) ==
+    "--set-scaling gpu-noscaling --display-id 7");
+Expect("set-color-range args",
+    NvidiaPanelLogic.BuildSetColorRangeArgs("Full RGB", null) == "--set-color-range full");
+var modes = new[] { "2560x1440@165", "2560x1440@144", "1920x1080@60", "1920x1080@144" };
+var res = NvidiaPanelLogic.DistinctResolutions(modes);
+Expect("distinct res largest first", res.Count >= 2 && res[0].StartsWith("2560", StringComparison.Ordinal));
+var rates = NvidiaPanelLogic.RefreshRatesForResolution(modes, "2560x1440");
+Expect("refresh rates for res", rates.Count == 2 && rates[0].Contains("165", StringComparison.Ordinal));
+
+// Live helper when present (not a reimplementation)
+var nvExe = Path.Combine(repo, "OptiHub", "Scripts", "Nvidia", "tools", "OptiHub.NvDisplay.exe");
+if (!File.Exists(nvExe))
+{
+    // publish output path used by release
+    var alt = Path.Combine(repo, "tools", "OptiHub.NvDisplay", "bin", "Release", "net8.0-windows", "win-x64", "OptiHub.NvDisplay.exe");
+    if (File.Exists(alt)) nvExe = alt;
+}
+if (File.Exists(nvExe))
+{
+    var psi = new System.Diagnostics.ProcessStartInfo
+    {
+        FileName = nvExe,
+        Arguments = "--list-displays",
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true
+    };
+    using var p = System.Diagnostics.Process.Start(psi)!;
+    var so = p.StandardOutput.ReadToEnd();
+    p.WaitForExit(45000);
+    Expect("list-displays JSON", so.Contains("OPTIHUB_NVDISPLAY_JSON:", StringComparison.Ordinal), so.Length > 0 ? so[^Math.Min(200, so.Length)..] : "empty");
+    Expect("list-displays modes field", so.Contains("\"modes\"", StringComparison.Ordinal) || so.Contains("modes", StringComparison.Ordinal));
+    Expect("list-displays ok", so.Contains("\"ok\":true", StringComparison.Ordinal) || so.Contains("\"ok\": true", StringComparison.Ordinal));
+}
+else
+{
+    Log("SKIP  live list-displays (helper exe missing — structural args covered)");
+}
+
+// Structural: helper Program exposes set-mode / set-scaling
+var nvProg = Path.Combine(repo, "tools", "OptiHub.NvDisplay", "Program.cs");
+if (File.Exists(nvProg))
+{
+    var src = File.ReadAllText(nvProg);
+    Expect("helper has --list-displays", src.Contains("--list-displays", StringComparison.Ordinal));
+    Expect("helper has --set-mode", src.Contains("--set-mode", StringComparison.Ordinal));
+    Expect("helper has --set-scaling", src.Contains("--set-scaling", StringComparison.Ordinal));
+    Expect("helper has --set-color-range", src.Contains("--set-color-range", StringComparison.Ordinal));
+}
+
 Log($"=== SUMMARY failed={failed} ===");
 Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
 File.WriteAllLines(logPath, lines);

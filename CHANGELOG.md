@@ -1,3 +1,10 @@
+## 1.9.40
+
+- **Resizable shell**: maximize + edge resize; removed fixed chrome re-lock and maximize block
+- **UI**: fluid layouts (wider page max), refreshed dashboard hero, taller title bar
+- **NVIDIA Display panel**: Control Panel–style per-monitor Resolution, Refresh rate, Color depth, NVIDIA color (Full/Limited), Scaling with real NVAPI/Win32 apply
+- OptiHub.NvDisplay: `--list-displays`, `--set-mode`, `--set-scaling`, `--set-color-range`
+- `NvidiaPanelLogic` pure CLI builders + smoke coverage
 ## 1.9.39
 
 - **Discord detect fix**: Complete client debloat row always emitted (empty-locale `@()` unwrap / Count throw under StrictMode)
@@ -363,6 +370,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

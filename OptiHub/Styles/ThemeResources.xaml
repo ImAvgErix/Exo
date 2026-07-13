@@ -9,11 +9,11 @@
     <FontFamily x:Key="OptiUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
     <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
-    <!-- 1.9.38 shell: denser cards, slightly wider canvas -->
+    <!-- Fluid shell: pages stretch with window; soft max keeps readable measure -->
     <CornerRadius x:Key="OptiCardRadius">16</CornerRadius>
     <CornerRadius x:Key="OptiTileRadius">12</CornerRadius>
-    <x:Double x:Key="OptiPageMaxWidth">980</x:Double>
-    <Thickness x:Key="OptiPagePadding">28,18,28,22</Thickness>
+    <x:Double x:Key="OptiPageMaxWidth">1200</x:Double>
+    <Thickness x:Key="OptiPagePadding">28,20,28,24</Thickness>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />

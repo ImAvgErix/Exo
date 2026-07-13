@@ -26,6 +26,27 @@ public sealed class NvidiaDisplayColorInfo
             : $"{Connection} · #{DisplayId}";
 }
 
+/// <summary>Full Control Panel–style display snapshot from OptiHub.NvDisplay --list-displays.</summary>
+public sealed class NvidiaDisplayInfo
+{
+    public required uint DisplayId { get; init; }
+    public required string Connection { get; init; }
+    public string GdiName { get; init; } = "";
+    public bool IsPrimary { get; init; }
+    public int CurrentWidth { get; init; }
+    public int CurrentHeight { get; init; }
+    public int CurrentHz { get; init; }
+    public string CurrentMode { get; init; } = "";
+    public string CurrentDepth { get; init; } = "—";
+    public string CurrentRange { get; init; } = "Full RGB";
+    public string Scaling { get; init; } = "GPU no-scaling";
+    public IReadOnlyList<string> Modes { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> SupportedDepths { get; init; } = Array.Empty<string>();
+    public string Title =>
+        (IsPrimary ? "Primary · " : "") +
+        (string.IsNullOrWhiteSpace(Connection) ? $"Display #{DisplayId}" : $"{Connection} · #{DisplayId}");
+}
+
 public sealed class NvidiaPanelSettingsService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -242,13 +263,27 @@ public sealed class NvidiaPanelSettingsService
             : $"Driver policy incomplete — {nv.Detail}";
     }
 
-    /// <summary>List active NVIDIA displays with current/supported color bit depths (NVAPI).</summary>
+    /// <summary>List active NVIDIA displays with color bit depths (compat).</summary>
     public async Task<IReadOnlyList<NvidiaDisplayColorInfo>> ListColorDepthsAsync(CancellationToken ct = default)
     {
-        var result = new List<NvidiaDisplayColorInfo>();
+        var full = await ListDisplaysAsync(ct).ConfigureAwait(false);
+        return full.Select(d => new NvidiaDisplayColorInfo
+        {
+            DisplayId = d.DisplayId,
+            Connection = d.Connection,
+            CurrentDepth = d.CurrentDepth,
+            SupportedDepths = d.SupportedDepths
+        }).ToList();
+    }
+
+    /// <summary>Full display inventory for Control Panel–style panel (modes, depth, scaling, color).</summary>
+    public async Task<IReadOnlyList<NvidiaDisplayInfo>> ListDisplaysAsync(CancellationToken ct = default)
+    {
+        var result = new List<NvidiaDisplayInfo>();
         try
         {
-            var (ok, root) = await RunNvDisplayJsonAsync("--list-color", ct).ConfigureAwait(false);
+            var (ok, root) = await RunNvDisplayJsonAsync(NvidiaPanelLogic.BuildListDisplaysArgs(), ct)
+                .ConfigureAwait(false);
             if (!ok || root is null) return result;
             if (!root.Value.TryGetProperty("displays", out var displays) ||
                 displays.ValueKind != JsonValueKind.Array)
@@ -258,9 +293,34 @@ public sealed class NvidiaPanelSettingsService
             {
                 var id = d.TryGetProperty("displayId", out var idEl) ? idEl.GetUInt32() : 0u;
                 var connection = d.TryGetProperty("connection", out var c) ? c.GetString() ?? "" : "";
-                var current = d.TryGetProperty("currentDepth", out var cur) && cur.ValueKind != JsonValueKind.Null
-                    ? cur.GetString() ?? ""
-                    : "";
+                var gdi = d.TryGetProperty("gdiName", out var g) ? g.GetString() ?? "" : "";
+                var isPrimary = d.TryGetProperty("isPrimary", out var ip) && ip.GetBoolean();
+                var cw = d.TryGetProperty("currentWidth", out var wEl) ? wEl.GetInt32() : 0;
+                var ch = d.TryGetProperty("currentHeight", out var hEl) ? hEl.GetInt32() : 0;
+                var cz = d.TryGetProperty("currentHz", out var zEl) ? zEl.GetInt32() : 0;
+                var curMode = d.TryGetProperty("currentMode", out var cm) && cm.ValueKind != JsonValueKind.Null
+                    ? cm.GetString() ?? ""
+                    : (cw > 0 ? NvidiaPanelLogic.FormatModeLabel(cw, ch, cz) : "");
+                var depth = d.TryGetProperty("currentDepth", out var cur) && cur.ValueKind != JsonValueKind.Null
+                    ? NvidiaPanelLogic.NormalizeDepthLabel(cur.GetString())
+                    : "—";
+                var range = d.TryGetProperty("currentRange", out var rg) && rg.ValueKind != JsonValueKind.Null
+                    ? NvidiaPanelLogic.NormalizeColorRangeLabel(rg.GetString())
+                    : "Full RGB";
+                var scaling = d.TryGetProperty("scaling", out var sc) && sc.ValueKind != JsonValueKind.Null
+                    ? NvidiaPanelLogic.NormalizeScalingLabel(sc.GetString())
+                    : "GPU no-scaling";
+
+                var modes = new List<string>();
+                if (d.TryGetProperty("modes", out var modesEl) && modesEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var m in modesEl.EnumerateArray())
+                    {
+                        var v = m.GetString();
+                        if (!string.IsNullOrWhiteSpace(v)) modes.Add(v!);
+                    }
+                }
+
                 var supported = new List<string>();
                 if (d.TryGetProperty("supportedDepths", out var sup) && sup.ValueKind == JsonValueKind.Array)
                 {
@@ -268,17 +328,26 @@ public sealed class NvidiaPanelSettingsService
                     {
                         var v = s.GetString();
                         if (!string.IsNullOrWhiteSpace(v))
-                            supported.Add(NormalizeDepthLabel(v!));
+                            supported.Add(NvidiaPanelLogic.NormalizeDepthLabel(v!));
                     }
                 }
                 if (supported.Count == 0)
                     supported.AddRange(new[] { "8-bit", "10-bit", "12-bit" });
 
-                result.Add(new NvidiaDisplayColorInfo
+                result.Add(new NvidiaDisplayInfo
                 {
                     DisplayId = id,
                     Connection = connection,
-                    CurrentDepth = NormalizeDepthLabel(current),
+                    GdiName = gdi,
+                    IsPrimary = isPrimary,
+                    CurrentWidth = cw,
+                    CurrentHeight = ch,
+                    CurrentHz = cz,
+                    CurrentMode = curMode,
+                    CurrentDepth = depth,
+                    CurrentRange = range,
+                    Scaling = scaling,
+                    Modes = modes,
                     SupportedDepths = supported
                 });
             }
@@ -287,65 +356,44 @@ public sealed class NvidiaPanelSettingsService
         return result;
     }
 
-    /// <summary>Set color bit depth on one or all NVIDIA displays via elevated NVAPI helper.</summary>
-    public async Task<(bool Success, string Message)> SetColorDepthAsync(
-        string depthLabel,
-        uint? displayId = null,
-        CancellationToken ct = default)
-    {
-        var depthArg = ToDepthCliArg(depthLabel);
-        if (depthArg is null)
-            return (false, "Invalid color depth. Use 8-bit, 10-bit, or 12-bit.");
+    public Task<(bool Success, string Message)> SetColorDepthAsync(
+        string depthLabel, uint? displayId = null, CancellationToken ct = default) =>
+        RunPanelMutateAsync(
+            NvidiaPanelLogic.BuildSetDepthArgs(depthLabel, displayId),
+            $"Color depth → {NvidiaPanelLogic.NormalizeDepthLabel(depthLabel)}",
+            ct);
 
+    public Task<(bool Success, string Message)> SetModeAsync(
+        int width, int height, int hz, uint? displayId = null, CancellationToken ct = default) =>
+        RunPanelMutateAsync(
+            NvidiaPanelLogic.BuildSetModeArgs(width, height, hz, displayId),
+            $"Mode → {NvidiaPanelLogic.FormatModeLabel(width, height, hz)}",
+            ct);
+
+    public Task<(bool Success, string Message)> SetScalingAsync(
+        string scalingLabel, uint? displayId = null, CancellationToken ct = default) =>
+        RunPanelMutateAsync(
+            NvidiaPanelLogic.BuildSetScalingArgs(scalingLabel, displayId),
+            $"Scaling → {NvidiaPanelLogic.NormalizeScalingLabel(scalingLabel)}",
+            ct);
+
+    public Task<(bool Success, string Message)> SetColorRangeAsync(
+        string rangeLabel, uint? displayId = null, CancellationToken ct = default) =>
+        RunPanelMutateAsync(
+            NvidiaPanelLogic.BuildSetColorRangeArgs(rangeLabel, displayId),
+            $"NVIDIA color → {NvidiaPanelLogic.NormalizeColorRangeLabel(rangeLabel)}",
+            ct);
+
+    private async Task<(bool Success, string Message)> RunPanelMutateAsync(
+        string args, string successLabel, CancellationToken ct)
+    {
         try
         {
-            // Non-elevated first (NVAPI often works in-session).
-            var args = displayId is null or 0
-                ? $"--set-depth {depthArg}"
-                : $"--set-depth {depthArg} --display-id {displayId.Value}";
             var (ok, root) = await RunNvDisplayJsonAsync(args, ct).ConfigureAwait(false);
-            if (!(ok && root is not null &&
-                  root.Value.TryGetProperty("ok", out var okEl) && okEl.GetBoolean()))
-            {
-                // Elevated script path for locked sessions.
-                var script = Path.Combine(_scripts.GetNvidiaRoot(), "OptiHub-ColorDepth-Set.ps1");
-                if (!File.Exists(script))
-                    return (false, "Color depth script missing from OptiHub kit.");
-
-                var psArgs = displayId is null or 0
-                    ? new[] { "-Depth", depthArg }
-                    : new[] { "-Depth", depthArg, "-DisplayId", displayId.Value.ToString() };
-                var result = await _powerShell.RunAsync(
-                    script,
-                    arguments: psArgs,
-                    elevate: true,
-                    cancellationToken: ct,
-                    workingDirectory: _scripts.GetNvidiaRoot()).ConfigureAwait(false);
-                ok = result.Success;
-                // Re-list to verify after elevate
-                if (ok)
-                {
-                    var list = await ListColorDepthsAsync(ct).ConfigureAwait(false);
-                    var want = NormalizeDepthLabel(depthLabel);
-                    if (displayId is null or 0)
-                        ok = list.Count == 0 || list.Any(d =>
-                            string.Equals(d.CurrentDepth, want, StringComparison.OrdinalIgnoreCase));
-                    else
-                        ok = list.Any(d => d.DisplayId == displayId.Value &&
-                            string.Equals(d.CurrentDepth, want, StringComparison.OrdinalIgnoreCase))
-                             || list.Count == 0;
-                }
-            }
-
-            if (ok)
-            {
-                var label = NormalizeDepthLabel(depthLabel);
-                return (true, displayId is null or 0
-                    ? $"Color depth set to {label}."
-                    : $"Color depth set to {label} on display #{displayId}.");
-            }
-
-            return (false, "Could not set color depth. Check that the monitor supports this mode.");
+            if (ok && root is not null &&
+                root.Value.TryGetProperty("ok", out var okEl) && okEl.GetBoolean())
+                return (true, successLabel + " applied.");
+            return (false, $"Could not apply ({successLabel}). Mode may be unsupported on this display.");
         }
         catch (Exception ex)
         {
@@ -388,33 +436,6 @@ public sealed class NvidiaPanelSettingsService
         {
             return (false, null);
         }
-    }
-
-    private static string NormalizeDepthLabel(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return "—";
-        var s = raw.Trim().ToUpperInvariant().Replace(" ", "");
-        if (s is "BPC8" or "8" or "8BPC" or "8-BIT" or "8BIT") return "8-bit";
-        if (s is "BPC10" or "10" or "10BPC" or "10-BIT" or "10BIT") return "10-bit";
-        if (s is "BPC12" or "12" or "12BPC" or "12-BIT" or "12BIT") return "12-bit";
-        if (s is "BPC6" or "6") return "6-bit";
-        if (raw.Contains("8", StringComparison.Ordinal)) return "8-bit";
-        if (raw.Contains("10", StringComparison.Ordinal)) return "10-bit";
-        if (raw.Contains("12", StringComparison.Ordinal)) return "12-bit";
-        return raw;
-    }
-
-    private static string? ToDepthCliArg(string label)
-    {
-        var n = NormalizeDepthLabel(label);
-        return n switch
-        {
-            "8-bit" => "8",
-            "10-bit" => "10",
-            "12-bit" => "12",
-            "6-bit" => "6",
-            _ => null
-        };
     }
 
     private static void ClearTrayIconsLocal()

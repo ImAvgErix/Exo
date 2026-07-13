@@ -15,7 +15,7 @@
         <!-- Drag region + chrome; right column reserved for caption buttons -->
         <Grid x:Name="TitleBarHost"
               Grid.Row="0"
-              Height="44"
+              Height="48"
               Background="Transparent">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />

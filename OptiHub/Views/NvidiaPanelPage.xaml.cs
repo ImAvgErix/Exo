@@ -25,18 +25,10 @@ public sealed partial class NvidiaPanelPage : Page
     private void ApplyAll_Click(object sender, RoutedEventArgs e) =>
         ViewModel.ApplyAllCommand.Execute(null);
 
-    private void ApplyRow_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: string id })
-            ViewModel.ApplyRowCommand.Execute(id);
-        else
-            ViewModel.ApplyAllCommand.Execute(null);
-    }
-
-    private void SetDepth_Click(object sender, RoutedEventArgs e)
+    private void ApplyDisplay_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: NvidiaDisplayColorRowViewModel row })
-            ViewModel.ApplyColorDepthCommand.Execute(row);
+            ViewModel.ApplyDisplaySettingsCommand.Execute(row);
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e) =>

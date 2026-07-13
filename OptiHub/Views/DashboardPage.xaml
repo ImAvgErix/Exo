@@ -6,9 +6,9 @@
     xmlns:viewModels="using:OptiHub.ViewModels"
     Background="Transparent">
 
-    <!-- Signal hub: compact hero + product grid -->
-    <Grid x:Name="PageRoot" Padding="36,24,36,28" Loaded="PageRoot_Loaded">
-        <Grid MaxWidth="1140"
+    <!-- Fluid hub: hero + product grid scales with window -->
+    <Grid x:Name="PageRoot" Padding="40,28,40,32" Loaded="PageRoot_Loaded">
+        <Grid MaxWidth="1400"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
             <Grid.RowDefinitions>
@@ -27,12 +27,12 @@
                 </StackPanel.RenderTransform>
                 <TextBlock Text="OptiHub"
                            Style="{StaticResource OptiTagline}"
-                           FontSize="32"
-                           LineHeight="38"
+                           FontSize="40"
+                           LineHeight="48"
                            HorizontalAlignment="Center" />
-                <TextBlock Text="Peak optimizers. One hub."
+                <TextBlock Text="Peak performance. Resizable. Yours."
                            Style="{StaticResource OptiTaglineSupport}"
-                           FontSize="13.5"
+                           FontSize="14"
                            Foreground="{ThemeResource OptiMutedTextBrush}"
                            HorizontalAlignment="Center" />
             </StackPanel>

@@ -9,5 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\OptiHub\Services\NvidiaPeakLogic.cs" Link="Shipped\NvidiaPeakLogic.cs" />
+    <Compile Include="..\..\OptiHub\Services\NvidiaPanelLogic.cs" Link="Shipped\NvidiaPanelLogic.cs" />
   </ItemGroup>
 </Project>

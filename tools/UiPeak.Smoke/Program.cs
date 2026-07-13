@@ -117,6 +117,35 @@ if (File.Exists(main))
     Expect("MainWindow has divider", m.Contains("OptiDividerBrush", StringComparison.Ordinal));
 }
 
+// Resizable shell: no fixed-size re-lock
+var mainCs = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
+Expect("MainWindow.cs exists", File.Exists(mainCs));
+if (File.Exists(mainCs))
+{
+    var cs = File.ReadAllText(mainCs);
+    Expect("resizable chrome method", cs.Contains("ApplyResizableWindowChrome", StringComparison.Ordinal));
+    Expect("IsResizable true", cs.Contains("IsResizable = true", StringComparison.Ordinal));
+    Expect("IsMaximizable true", cs.Contains("IsMaximizable = true", StringComparison.Ordinal));
+    Expect("no fixed re-assert helper", !cs.Contains("ApplyFixedWindowChrome", StringComparison.Ordinal));
+    Expect("no DisableMaximize hook", !cs.Contains("DisableMaximizeViaSystemMenu", StringComparison.Ordinal));
+}
+
+// NVIDIA Panel Control Panel–style controls
+var panelXaml = Path.Combine(repo, "OptiHub", "Views", "NvidiaPanelPage.xaml");
+if (File.Exists(panelXaml))
+{
+    var px = File.ReadAllText(panelXaml);
+    Expect("panel has Resolution", px.Contains("Resolution", StringComparison.Ordinal));
+    Expect("panel has Refresh rate", px.Contains("Refresh rate", StringComparison.Ordinal));
+    Expect("panel has Color depth", px.Contains("Color depth", StringComparison.Ordinal));
+    Expect("panel has NVIDIA color", px.Contains("NVIDIA color", StringComparison.Ordinal));
+    Expect("panel has Scaling", px.Contains("Scaling", StringComparison.Ordinal));
+    Expect("panel has ComboBox", px.Contains("ComboBox", StringComparison.Ordinal));
+}
+
+var panelLogic = Path.Combine(repo, "OptiHub", "Services", "NvidiaPanelLogic.cs");
+Expect("NvidiaPanelLogic exists", File.Exists(panelLogic));
+
 Log($"=== SUMMARY failed={failed} ===");
 Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
 File.WriteAllLines(logPath, lines);

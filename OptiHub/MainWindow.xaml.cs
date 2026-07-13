@@ -32,9 +32,9 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         App.MainAppWindow = this;
 
-        // 4×2 card grid + hero fits cleanly without crowding.
-        AppWindow.Resize(new SizeInt32(1220, 780));
-        ApplyFixedWindowChrome();
+        // Default open size only — user may freely resize and maximize.
+        AppWindow.Resize(new SizeInt32(1280, 820));
+        ApplyResizableWindowChrome();
         TryCenterOnScreen();
         TrySetWindowIcon();
 
@@ -44,34 +44,24 @@ public sealed partial class MainWindow : Window
         AppWindow.Changed += (_, args) =>
         {
             UpdateCaptionInset();
-            // Re-assert fixed chrome if the system tries to maximize via title-bar double-click
-            if (args.DidPresenterChange || args.DidSizeChange)
-                ApplyFixedWindowChrome();
+            // Never re-lock size after user resize/maximize.
+            if (args.DidPresenterChange)
+                ApplyResizableWindowChrome();
         };
         RootGrid.Loaded += (_, _) =>
         {
             UpdateCaptionInset();
-            ApplyFixedWindowChrome();
+            ApplyResizableWindowChrome();
             ClearChromeFocus();
         };
         RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
-        // First activate often puts keyboard focus on the only title-bar button (Settings).
         Activated += OnWindowActivatedClearFocus;
         Closed += (_, _) =>
         {
             _lifetimeCts.Cancel();
             App.Services.Settings.Flush();
             App.MainAppWindow = null;
-
-            try
-            {
-                NativeWindowHelper.RestoreWindowProcedure(WindowNative.GetWindowHandle(this));
-            }
-            catch
-            {
-                // The native window may already have been released.
-            }
         };
 
         ApplyShellChrome();
@@ -90,19 +80,13 @@ public sealed partial class MainWindow : Window
         if (args.WindowActivationState == WindowActivationState.Deactivated) return;
         _clearedInitialFocus = true;
         Activated -= OnWindowActivatedClearFocus;
-        // Defer so we win after WinUI's default "first focusable" pass.
         DispatcherQueue.TryEnqueue(() => ClearChromeFocus());
     }
 
-    /// <summary>
-    /// Title-bar Settings is often the first focusable control when Back is collapsed —
-    /// clear that highlight so the gear doesn't look selected on launch.
-    /// </summary>
     private void ClearChromeFocus()
     {
         try
         {
-            // Prefer content, not chrome buttons.
             ContentFrame.IsTabStop = true;
             if (ContentFrame.Content is UIElement page)
             {
@@ -114,31 +98,20 @@ public sealed partial class MainWindow : Window
                 _ = ContentFrame.Focus(FocusState.Programmatic);
             }
         }
-        catch
-        {
-            // Focus is best-effort on early load.
-        }
+        catch { }
     }
 
-    private void ApplyFixedWindowChrome()
+    /// <summary>User-resizable shell: maximize + edge drag allowed. Sensible minimum only.</summary>
+    private void ApplyResizableWindowChrome()
     {
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.IsMaximizable = false;
-            presenter.IsResizable = false;
+            presenter.IsMaximizable = true;
+            presenter.IsResizable = true;
             presenter.IsMinimizable = true;
-            if (presenter.State == OverlappedPresenterState.Maximized)
-                presenter.Restore();
-        }
-
-        try
-        {
-            var hwnd = WindowNative.GetWindowHandle(this);
-            NativeWindowHelper.DisableMaximizeViaSystemMenu(hwnd);
-        }
-        catch
-        {
-            // best-effort
+            // Soft floor so chrome never collapses; not a fixed frame.
+            presenter.PreferredMinimumWidth = 900;
+            presenter.PreferredMinimumHeight = 560;
         }
     }
 
@@ -158,11 +131,15 @@ public sealed partial class MainWindow : Window
 
     private void ApplyShellChrome()
     {
-        var dark = RootGrid.ActualTheme != ElementTheme.Light;
-        // Keep shell fill in sync with theme dictionaries (AMOLED black / cream beige).
-        RootGrid.Background = new SolidColorBrush(
-            dark ? ColorHelper.FromArgb(255, 0, 0, 0)
-                 : ColorHelper.FromArgb(255, 243, 237, 227));
+        try
+        {
+            if (Application.Current.Resources.TryGetValue("OptiPageBackgroundBrush", out var b) && b is Brush brush)
+                RootGrid.Background = brush;
+        }
+        catch
+        {
+            RootGrid.Background = new SolidColorBrush(ColorHelper.FromArgb(255, 7, 8, 11));
+        }
         App.Services.Theme.Apply();
         UpdateCaptionInset();
     }
@@ -181,10 +158,7 @@ public sealed partial class MainWindow : Window
             var y = work.Y + (work.Height - appWindow.Size.Height) / 2;
             appWindow.Move(new PointInt32(x, y));
         }
-        catch
-        {
-            // best-effort
-        }
+        catch { }
     }
 
     private void ApplyChrome(ShellMode mode)
@@ -195,7 +169,6 @@ public sealed partial class MainWindow : Window
             or ShellMode.Nvidia or ShellMode.NvidiaPanel;
 
         BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
-        // Home: only settings gear. Optimizers: back + product logo + short title. No "OptiHub" wordmark.
         ContextLogoHost.Visibility = optimizer ? Visibility.Visible : Visibility.Collapsed;
         SettingsButton.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
 
@@ -205,7 +178,7 @@ public sealed partial class MainWindow : Window
             ShellMode.Steam => "Steam",
             ShellMode.Internet => "Internet",
             ShellMode.Nvidia => "NVIDIA",
-            ShellMode.NvidiaPanel => "NVIDIA Panel",
+            ShellMode.NvidiaPanel => "Display",
             ShellMode.Settings => "Settings",
             _ => string.Empty
         };
@@ -229,7 +202,6 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            // Taskbar / alt-tab / title-bar system icon (ApplicationIcon alone is not always enough for WinUI unpackaged).
             var baseDir = AppContext.BaseDirectory;
             foreach (var rel in new[]
                      {
@@ -243,10 +215,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
         }
-        catch
-        {
-            // best-effort
-        }
+        catch { }
     }
 
     private void TrySetContextLogo(string relativePath)
@@ -254,7 +223,6 @@ public sealed partial class MainWindow : Window
         ContextLogo.Source = AssetPathToImageSourceConverter.Resolve(relativePath);
     }
 
-    // Continuum + drill: heavier "weight" than a flat slide (Kinetics / Amicro motion language).
     private static NavigationTransitionInfo Slide() =>
         new DrillInNavigationTransitionInfo();
 
@@ -269,30 +237,20 @@ public sealed partial class MainWindow : Window
             suppressTransition ? (NavigationTransitionInfo)new SuppressNavigationTransitionInfo() : SlideBack());
     }
 
-    public void NavigateToDiscord()
-    {
+    public void NavigateToDiscord() =>
         Navigate(ShellMode.Discord, typeof(DiscordOptimizerPage), Slide());
-    }
 
-    public void NavigateToSteam()
-    {
+    public void NavigateToSteam() =>
         Navigate(ShellMode.Steam, typeof(SteamOptimizerPage), Slide());
-    }
 
-    public void NavigateToInternet()
-    {
+    public void NavigateToInternet() =>
         Navigate(ShellMode.Internet, typeof(InternetOptimizerPage), Slide());
-    }
 
-    public void NavigateToNvidia()
-    {
+    public void NavigateToNvidia() =>
         Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), Slide());
-    }
 
-    public void NavigateToNvidiaPanel()
-    {
+    public void NavigateToNvidiaPanel() =>
         Navigate(ShellMode.NvidiaPanel, typeof(NvidiaPanelPage), Slide());
-    }
 
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {
@@ -311,7 +269,6 @@ public sealed partial class MainWindow : Window
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
-        // Panel is nested under NVIDIA optimizer — back returns there, not home.
         if (_mode == ShellMode.NvidiaPanel)
             NavigateToNvidia();
         else
@@ -322,10 +279,8 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            // App-only: each release ships matching optimizer kits. No separate script pull.
             if (!App.Services.Settings.Current.AutoUpdateScripts) return;
 
-            // Let the window finish loading so ContentDialog has a valid XamlRoot.
             await Task.Delay(1200, ct);
             for (var i = 0; i < 10 && RootGrid.XamlRoot is null; i++)
                 await Task.Delay(200, ct);
@@ -354,7 +309,7 @@ public sealed partial class MainWindow : Window
                     if (install.ShouldExit)
                     {
                         await Task.Delay(900, ct);
-                        Microsoft.UI.Xaml.Application.Current?.Exit();
+                        Application.Current?.Exit();
                         return;
                     }
 
@@ -372,13 +327,7 @@ public sealed partial class MainWindow : Window
                 }
             }
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            // Window is closing.
-        }
-        catch
-        {
-            // ignore network issues on startup
-        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch { }
     }
 }
