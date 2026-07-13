@@ -5,210 +5,118 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="OptiHub">
 
-    <!--
-      NOVA shell: wide labeled sidebar + floating content stage.
-      Full IA redesign — not icon-rail recolor of LUMEN.
-    -->
+    <!-- AURA shell: quiet top bar + open stage. Minimal chrome. -->
     <Grid x:Name="RootGrid" Background="{ThemeResource OptiPageBackgroundBrush}">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="236" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="52" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-        <!-- ===== SIDEBAR ===== -->
-        <Border Grid.Column="0"
-                Background="{ThemeResource OptiSidebarBrush}"
-                BorderBrush="{ThemeResource OptiDividerBrush}"
-                BorderThickness="0,0,1,0">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
+        <!-- Top chrome -->
+        <Grid x:Name="TitleBarHost"
+              Grid.Row="0"
+              Background="Transparent"
+              BorderBrush="{ThemeResource OptiDividerBrush}"
+              BorderThickness="0,0,0,1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition x:Name="CaptionSpacer" Width="138" />
+            </Grid.ColumnDefinitions>
 
-                <!-- Brand block (drag partner — title bar is on stage) -->
-                <StackPanel Margin="20,18,20,12" Spacing="10">
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Border Width="36" Height="36"
-                                CornerRadius="10"
-                                Background="{ThemeResource OptiAccentBrush}">
-                            <FontIcon Glyph="&#xE945;"
-                                      FontSize="15"
-                                      Foreground="{ThemeResource OptiOnAccentBrush}"
-                                      HorizontalAlignment="Center"
-                                      VerticalAlignment="Center" />
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="0">
-                            <TextBlock Text="OptiHub"
-                                       FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                       FontSize="16"
-                                       FontWeight="SemiBold"
-                                       Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                            <TextBlock Text="Optimizer suite"
-                                       FontSize="11"
-                                       Foreground="{ThemeResource OptiMutedTextBrush}" />
-                        </StackPanel>
-                    </Grid>
-                </StackPanel>
+            <StackPanel Orientation="Horizontal"
+                        Spacing="10"
+                        VerticalAlignment="Center"
+                        Margin="20,0,0,0">
+                <Button x:Name="BackButton"
+                        Style="{StaticResource OptiIconButton}"
+                        Visibility="Collapsed"
+                        Click="BackButton_Click"
+                        Width="32" Height="32"
+                        AutomationProperties.Name="Back">
+                    <FontIcon Glyph="&#xE72B;" FontSize="12"
+                              Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                </Button>
+                <TextBlock Text="OptiHub"
+                           FontFamily="{StaticResource OptiUiFontSemiBold}"
+                           FontSize="15"
+                           FontWeight="SemiBold"
+                           Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                           VerticalAlignment="Center" />
+                <Border x:Name="ContextLogoHost"
+                        Style="{StaticResource OptiLogoWellSmall}"
+                        Visibility="Collapsed"
+                        Width="20" Height="20"
+                        Margin="4,0,0,0">
+                    <Image x:Name="ContextLogo" Stretch="Uniform"
+                           AutomationProperties.AccessibilityView="Raw" />
+                </Border>
+                <TextBlock x:Name="AppTitleText"
+                           Text=""
+                           FontSize="13"
+                           Foreground="{ThemeResource OptiMutedTextBrush}"
+                           VerticalAlignment="Center"
+                           Margin="2,0,0,0" />
+            </StackPanel>
 
-                <ScrollViewer Grid.Row="1"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              Padding="12,4,12,8">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="MODULES"
-                                   FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                   FontSize="10"
-                                   FontWeight="SemiBold"
-                                   CharacterSpacing="80"
-                                   Foreground="{ThemeResource OptiMutedTextBrush}"
-                                   Margin="10,8,10,6" />
+            <!-- Center nav pills -->
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="2"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                <Button x:Name="NavHome" Style="{StaticResource OptiNavButton}" Tag="home"
+                        Click="Nav_Click" AutomationProperties.Name="Home" ToolTipService.ToolTip="Home"
+                        Content="Home" />
+                <Button x:Name="NavDiscord" Style="{StaticResource OptiNavButton}" Tag="discord"
+                        Click="Nav_Click" AutomationProperties.Name="Discord" ToolTipService.ToolTip="Discord"
+                        Content="Discord" />
+                <Button x:Name="NavSteam" Style="{StaticResource OptiNavButton}" Tag="steam"
+                        Click="Nav_Click" AutomationProperties.Name="Steam" ToolTipService.ToolTip="Steam"
+                        Content="Steam" />
+                <Button x:Name="NavInternet" Style="{StaticResource OptiNavButton}" Tag="internet"
+                        Click="Nav_Click" AutomationProperties.Name="Internet" ToolTipService.ToolTip="Internet"
+                        Content="Internet" />
+                <Button x:Name="NavNvidia" Style="{StaticResource OptiNavButton}" Tag="nvidia"
+                        Click="Nav_Click" AutomationProperties.Name="NVIDIA" ToolTipService.ToolTip="NVIDIA"
+                        Content="NVIDIA" />
+            </StackPanel>
 
-                        <Button x:Name="NavHome"
-                                Style="{StaticResource OptiNavButton}"
-                                Tag="home"
-                                Click="Nav_Click"
-                                AutomationProperties.Name="Home"
-                                ToolTipService.ToolTip="Home">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <FontIcon Glyph="&#xE80F;" FontSize="15" />
-                                <TextBlock Text="Home" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                        <Button x:Name="NavDiscord"
-                                Style="{StaticResource OptiNavButton}"
-                                Tag="discord"
-                                Click="Nav_Click"
-                                AutomationProperties.Name="Discord"
-                                ToolTipService.ToolTip="Discord">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <FontIcon Glyph="&#xE8BD;" FontSize="15" />
-                                <TextBlock Text="Discord" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                        <Button x:Name="NavSteam"
-                                Style="{StaticResource OptiNavButton}"
-                                Tag="steam"
-                                Click="Nav_Click"
-                                AutomationProperties.Name="Steam"
-                                ToolTipService.ToolTip="Steam">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <FontIcon Glyph="&#xE7FC;" FontSize="15" />
-                                <TextBlock Text="Steam" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                        <Button x:Name="NavInternet"
-                                Style="{StaticResource OptiNavButton}"
-                                Tag="internet"
-                                Click="Nav_Click"
-                                AutomationProperties.Name="Internet"
-                                ToolTipService.ToolTip="Internet">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <FontIcon Glyph="&#xE774;" FontSize="15" />
-                                <TextBlock Text="Internet" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                        <Button x:Name="NavNvidia"
-                                Style="{StaticResource OptiNavButton}"
-                                Tag="nvidia"
-                                Click="Nav_Click"
-                                AutomationProperties.Name="NVIDIA"
-                                ToolTipService.ToolTip="NVIDIA">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <FontIcon Glyph="&#xE950;" FontSize="15" />
-                                <TextBlock Text="NVIDIA" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
-                </ScrollViewer>
-
-                <StackPanel Grid.Row="2" Margin="12,0,12,14" Spacing="4">
-                    <Border Height="1" Background="{ThemeResource OptiDividerBrush}" Margin="8,0,8,8" />
-                    <Button x:Name="NavSettings"
-                            Style="{StaticResource OptiNavButton}"
-                            Tag="settings"
-                            Click="Nav_Click"
-                            AutomationProperties.Name="Settings"
-                            ToolTipService.ToolTip="Settings">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <FontIcon Glyph="&#xE713;" FontSize="15" />
-                            <TextBlock Text="Settings" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- ===== CONTENT STAGE ===== -->
-        <Grid Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="44" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-
-            <Grid x:Name="TitleBarHost"
-                  Grid.Row="0"
-                  Background="Transparent">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition x:Name="CaptionSpacer" Width="138" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal"
-                            Spacing="12"
-                            VerticalAlignment="Center"
-                            Margin="28,0,0,0">
-                    <Button x:Name="BackButton"
-                            Style="{StaticResource OptiIconButton}"
-                            Visibility="Collapsed"
-                            Click="BackButton_Click"
-                            Width="32" Height="32"
-                            AutomationProperties.Name="Back">
-                        <FontIcon Glyph="&#xE72B;" FontSize="12"
-                                  Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                    </Button>
-                    <Border x:Name="ContextLogoHost"
-                            Style="{StaticResource OptiLogoWellSmall}"
-                            Visibility="Collapsed"
-                            Width="22" Height="22">
-                        <Image x:Name="ContextLogo" Stretch="Uniform"
-                               AutomationProperties.AccessibilityView="Raw" />
-                    </Border>
-                    <TextBlock x:Name="AppTitleText"
-                               Text="Home"
-                               FontFamily="{StaticResource OptiUiFontSemiBold}"
-                               FontSize="13"
-                               FontWeight="SemiBold"
-                               Foreground="{ThemeResource OptiMutedTextBrush}"
-                               VerticalAlignment="Center" />
-                    <Button x:Name="SettingsButton"
-                            Style="{StaticResource OptiIconButton}"
-                            Visibility="Collapsed"
-                            Width="1" Height="1"
-                            Click="SettingsButton_Click" />
-                </StackPanel>
-            </Grid>
-
-            <Frame x:Name="ContentFrame"
-                   Grid.Row="1"
-                   IsTabStop="True"
-                   IsNavigationStackEnabled="False"
-                   Background="Transparent">
-                <Frame.ContentTransitions>
-                    <TransitionCollection>
-                        <EntranceThemeTransition FromVerticalOffset="36" IsStaggeringEnabled="True" />
-                        <NavigationThemeTransition>
-                            <NavigationThemeTransition.DefaultNavigationTransitionInfo>
-                                <SlideNavigationTransitionInfo Effect="FromRight" />
-                            </NavigationThemeTransition.DefaultNavigationTransitionInfo>
-                        </NavigationThemeTransition>
-                    </TransitionCollection>
-                </Frame.ContentTransitions>
-            </Frame>
+            <Button x:Name="NavSettings"
+                    Grid.Column="2"
+                    Style="{StaticResource OptiIconButton}"
+                    Tag="settings"
+                    Click="Nav_Click"
+                    Width="34" Height="34"
+                    Margin="0,0,8,0"
+                    AutomationProperties.Name="Settings"
+                    ToolTipService.ToolTip="Settings">
+                <FontIcon Glyph="&#xE713;" FontSize="14"
+                          Foreground="{ThemeResource OptiMutedTextBrush}" />
+            </Button>
+            <Button x:Name="SettingsButton"
+                    Style="{StaticResource OptiIconButton}"
+                    Visibility="Collapsed"
+                    Width="1" Height="1"
+                    Click="SettingsButton_Click" />
         </Grid>
+
+        <Frame x:Name="ContentFrame"
+               Grid.Row="1"
+               IsTabStop="True"
+               IsNavigationStackEnabled="False"
+               Background="Transparent">
+            <Frame.ContentTransitions>
+                <TransitionCollection>
+                    <EntranceThemeTransition FromVerticalOffset="20" IsStaggeringEnabled="True" />
+                    <NavigationThemeTransition>
+                        <NavigationThemeTransition.DefaultNavigationTransitionInfo>
+                            <DrillInNavigationTransitionInfo />
+                        </NavigationThemeTransition.DefaultNavigationTransitionInfo>
+                    </NavigationThemeTransition>
+                </TransitionCollection>
+            </Frame.ContentTransitions>
+        </Frame>
     </Grid>
 </Window>

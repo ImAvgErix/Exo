@@ -1,3 +1,10 @@
+## 1.9.49
+
+- **AURA redesign**: clean Apple/Tesla-calm UI — soft system dark, Apple blue accent, airy spacing
+- Shell: quiet top bar with center pill nav (no heavy sidebar)
+- Home: centered logo grid, title only (no explain walls)
+- Optimizers: minimal centered stage, soft chips, pill CTA
+- Settings: iOS-style grouped sections
 ## 1.9.48
 
 - **NOVA full redesign** (layout + chrome + pages — not a recolor):
@@ -415,6 +422,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

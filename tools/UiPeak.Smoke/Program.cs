@@ -43,7 +43,6 @@ Expect("banner error brush", errBanner.BrushKey == "OptiErrorBrush");
 Expect("feature glyph active", UiStatusPresentation.FeatureGlyph(true) == "\uE73E");
 Expect("feature glyph inactive", UiStatusPresentation.FeatureGlyph(false) == "\uE711");
 
-// Structural: theme + pages reference shared keys
 var repo = FindRepoRoot();
 var theme = Path.Combine(repo, "OptiHub", "Styles", "ThemeResources.xaml");
 var appXaml = Path.Combine(repo, "OptiHub", "App.xaml");
@@ -55,7 +54,7 @@ Expect("MainWindow exists", File.Exists(main));
 if (File.Exists(theme))
 {
     var t = File.ReadAllText(theme);
-    foreach (var key in new[] { "OptiPageTitle", "OptiFeatureTile", "OptiMessageBanner", "OptiFeatureDetail", "OptiPrimaryButton", "OptiPagePadding" })
+    foreach (var key in new[] { "OptiPageTitle", "OptiFeatureTile", "OptiMessageBanner", "OptiFeatureDetail", "OptiPrimaryButton", "OptiPagePadding", "OptiNavButton" })
         Expect("theme has " + key, t.Contains(key, StringComparison.Ordinal));
 }
 
@@ -64,10 +63,10 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("theme has OptiMutedTextBrush", a.Contains("OptiMutedTextBrush", StringComparison.Ordinal));
     Expect("theme has OptiDividerBrush", a.Contains("OptiDividerBrush", StringComparison.Ordinal));
-    Expect("NOVA white signal accent", a.Contains("#F5F5F5", StringComparison.Ordinal));
-    Expect("pure AMOLED black canvas", a.Contains("#000000", StringComparison.Ordinal));
+    Expect("AURA Apple blue accent", a.Contains("#0A84FF", StringComparison.Ordinal) || a.Contains("#0071E3", StringComparison.Ordinal));
+    Expect("soft system dark surface", a.Contains("#1C1C1E", StringComparison.Ordinal));
     Expect("not orange forge accent", !a.Contains("#F59E0B", StringComparison.Ordinal));
-    Expect("not LUMEN blue accent", !a.Contains("#6EA8FF", StringComparison.Ordinal));
+    Expect("not NOVA white signal accent only", !a.Contains("OptiAccentBrush\" Color=\"#F5F5F5\"", StringComparison.Ordinal));
 }
 
 foreach (var page in new[]
@@ -95,7 +94,6 @@ foreach (var page in new[]
     }
 }
 
-// VM wiring: SetMessage/SetResult must call BannerForSuccess (shipped source scan)
 foreach (var vm in new[]
 {
     "InternetOptimizerViewModel.cs",
@@ -118,38 +116,28 @@ if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
     Expect("MainWindow has ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
-    Expect("MainWindow labeled sidebar", m.Contains("NavHome", StringComparison.Ordinal) && m.Contains("NavDiscord", StringComparison.Ordinal));
+    Expect("MainWindow top nav pills", m.Contains("NavHome", StringComparison.Ordinal) && m.Contains("NavDiscord", StringComparison.Ordinal));
     Expect("MainWindow nav settings", m.Contains("NavSettings", StringComparison.Ordinal));
-    Expect("MainWindow wide sidebar", m.Contains("Width=\"236\"", StringComparison.Ordinal) || m.Contains("Optimizer suite", StringComparison.Ordinal));
+    Expect("MainWindow top chrome", m.Contains("TitleBarHost", StringComparison.Ordinal));
     Expect("MainWindow entrance transitions", m.Contains("EntranceThemeTransition", StringComparison.Ordinal));
-    Expect("MainWindow slide page transitions", m.Contains("SlideNavigationTransitionInfo", StringComparison.Ordinal));
 }
 
 var dash = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml");
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    Expect("dashboard vertical module lanes", d.Contains("ItemsStackPanel", StringComparison.Ordinal));
-    Expect("dashboard modules hero", d.Contains("Modules", StringComparison.Ordinal));
-    Expect("dashboard not bento wrap", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
+    Expect("dashboard product grid", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
+    Expect("dashboard quiet hero", d.Contains("Choose a module", StringComparison.Ordinal) || d.Contains("OptiHub", StringComparison.Ordinal));
 }
 
 var settings = Path.Combine(repo, "OptiHub", "Views", "SettingsPage.xaml");
 if (File.Exists(settings))
 {
     var s = File.ReadAllText(settings);
-    Expect("settings two-pane master detail", s.Contains("PaneAppearance", StringComparison.Ordinal) && s.Contains("CatAppearance", StringComparison.Ordinal));
-    Expect("settings category rail", s.Contains("Category_Click", StringComparison.Ordinal) || s.Contains("CatUpdates", StringComparison.Ordinal));
+    Expect("settings grouped column", s.Contains("Appearance", StringComparison.Ordinal) && s.Contains("Updates", StringComparison.Ordinal));
+    Expect("settings not two-pane categories", !s.Contains("CatAppearance", StringComparison.Ordinal));
 }
 
-// Nav style exists
-if (File.Exists(theme))
-{
-    var t = File.ReadAllText(theme);
-    Expect("theme has OptiNavButton", t.Contains("OptiNavButton", StringComparison.Ordinal));
-}
-
-// Borderless black-bar fix must not force GPUScanOutToNative
 var nvProg = Path.Combine(repo, "tools", "OptiHub.NvDisplay", "Program.cs");
 if (File.Exists(nvProg))
 {
@@ -162,7 +150,6 @@ if (File.Exists(nvProg))
             @"Scaling\s*=\s*Scaling\.GPUScanOutToNative"));
 }
 
-// Resizable shell: no fixed-size re-lock
 var mainCs = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
 Expect("MainWindow.cs exists", File.Exists(mainCs));
 if (File.Exists(mainCs))
@@ -175,7 +162,6 @@ if (File.Exists(mainCs))
     Expect("no DisableMaximize hook", !cs.Contains("DisableMaximizeViaSystemMenu", StringComparison.Ordinal));
 }
 
-// NVIDIA Panel Control Panel–style controls
 var panelXaml = Path.Combine(repo, "OptiHub", "Views", "NvidiaPanelPage.xaml");
 if (File.Exists(panelXaml))
 {
@@ -191,7 +177,6 @@ if (File.Exists(panelXaml))
 var panelLogic = Path.Combine(repo, "OptiHub", "Services", "NvidiaPanelLogic.cs");
 Expect("NvidiaPanelLogic exists", File.Exists(panelLogic));
 
-// Post-apply refresh must not be a no-op while IsBusy (RefreshCoreAsync force:true)
 var panelVm = Path.Combine(repo, "OptiHub", "ViewModels", "NvidiaPanelViewModel.cs");
 if (File.Exists(panelVm))
 {
@@ -199,7 +184,6 @@ if (File.Exists(panelVm))
     Expect("panel has RefreshCoreAsync", pvm.Contains("RefreshCoreAsync", StringComparison.Ordinal));
     Expect("panel force refresh after apply",
         pvm.Contains("RefreshCoreAsync(force: true", StringComparison.Ordinal));
-    // Guard on user refresh only — must not early-return without force path
     Expect("busy guard allows force",
         pvm.Contains("if (IsBusy && !force)", StringComparison.Ordinal) ||
         pvm.Contains("if (IsBusy && !force) return", StringComparison.Ordinal));

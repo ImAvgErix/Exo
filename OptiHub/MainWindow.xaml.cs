@@ -181,22 +181,37 @@ public sealed partial class MainWindow : Window
     private void SyncNavSelection(string activeKey)
     {
         Brush Soft() => Application.Current.Resources.TryGetValue("OptiAccentSoftBrush", out var s) && s is Brush sb
-            ? sb : new SolidColorBrush(ColorHelper.FromArgb(255, 26, 26, 26));
+            ? sb : new SolidColorBrush(ColorHelper.FromArgb(255, 10, 30, 58));
         Brush Acc() => Application.Current.Resources.TryGetValue("OptiAccentBrush", out var a) && a is Brush ab
-            ? ab : new SolidColorBrush(ColorHelper.FromArgb(255, 245, 245, 245));
+            ? ab : new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
         Brush Mut() => Application.Current.Resources.TryGetValue("OptiMutedTextBrush", out var m) && m is Brush mb
-            ? mb : new SolidColorBrush(ColorHelper.FromArgb(255, 115, 115, 115));
+            ? mb : new SolidColorBrush(ColorHelper.FromArgb(255, 110, 110, 115));
         Brush Pri() => Application.Current.Resources.TryGetValue("OptiPrimaryTextBrush", out var p) && p is Brush pb
-            ? pb : new SolidColorBrush(ColorHelper.FromArgb(255, 250, 250, 250));
+            ? pb : new SolidColorBrush(ColorHelper.FromArgb(255, 245, 245, 247));
 
         foreach (var kv in _navMap)
         {
             var on = string.Equals(kv.Key, activeKey, StringComparison.OrdinalIgnoreCase);
             var btn = kv.Value;
+            // Settings lives as gear — no filled pill when selected
+            if (string.Equals(kv.Key, "settings", StringComparison.OrdinalIgnoreCase))
+            {
+                btn.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                btn.Foreground = on ? Acc() : Mut();
+                if (btn.Content is FontIcon gear)
+                    gear.Foreground = on ? Acc() : Mut();
+                continue;
+            }
+
             btn.Background = on ? Soft() : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            btn.BorderThickness = on ? new Thickness(3, 0, 0, 0) : new Thickness(0);
-            btn.BorderBrush = on ? Acc() : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            PaintNavContent(btn.Content, on ? Acc() : Mut(), on ? Pri() : Mut());
+            btn.Foreground = on ? Acc() : Mut();
+            btn.BorderThickness = new Thickness(0);
+            if (btn.Content is string)
+            {
+                // string Content uses Foreground on button
+            }
+            else
+                PaintNavContent(btn.Content, on ? Acc() : Mut(), on ? Pri() : Mut());
         }
     }
 
@@ -240,14 +255,14 @@ public sealed partial class MainWindow : Window
 
         AppTitleText.Text = mode switch
         {
-            ShellMode.Home => "Home",
+            ShellMode.Home => "",
             ShellMode.Discord => "Discord",
             ShellMode.Steam => "Steam",
             ShellMode.Internet => "Internet",
             ShellMode.Nvidia => "NVIDIA",
             ShellMode.NvidiaPanel => "Display",
             ShellMode.Settings => "Settings",
-            _ => "OptiHub"
+            _ => ""
         };
 
         if (mode == ShellMode.Discord)
@@ -287,10 +302,8 @@ public sealed partial class MainWindow : Window
     private void TrySetContextLogo(string relativePath) =>
         ContextLogo.Source = AssetPathToImageSourceConverter.Resolve(relativePath);
 
-    private static NavigationTransitionInfo Slide() =>
-        new SlideNavigationTransitionInfo { Effect = SlideNavigationTransitionEffect.FromRight };
-    private static NavigationTransitionInfo SlideBack() =>
-        new SlideNavigationTransitionInfo { Effect = SlideNavigationTransitionEffect.FromLeft };
+    private static NavigationTransitionInfo Slide() => new DrillInNavigationTransitionInfo();
+    private static NavigationTransitionInfo SlideBack() => new SuppressNavigationTransitionInfo();
 
     public void NavigateHome(bool suppressTransition = false)
     {

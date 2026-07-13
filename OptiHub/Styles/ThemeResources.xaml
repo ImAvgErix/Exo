@@ -9,11 +9,11 @@
     <FontFamily x:Key="OptiUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
     <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
-    <!-- NOVA — sharper geometry, denser chrome -->
-    <CornerRadius x:Key="OptiCardRadius">14</CornerRadius>
-    <CornerRadius x:Key="OptiTileRadius">12</CornerRadius>
-    <x:Double x:Key="OptiPageMaxWidth">1180</x:Double>
-    <Thickness x:Key="OptiPagePadding">28,16,28,24</Thickness>
+    <!-- AURA — soft continuous corners, airy spacing -->
+    <CornerRadius x:Key="OptiCardRadius">20</CornerRadius>
+    <CornerRadius x:Key="OptiTileRadius">16</CornerRadius>
+    <x:Double x:Key="OptiPageMaxWidth">720</x:Double>
+    <Thickness x:Key="OptiPagePadding">40,28,40,36</Thickness>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
@@ -24,46 +24,42 @@
 
     <Style x:Key="OptiTagline" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="36" />
+        <Setter Property="FontSize" Value="40" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="-40" />
+        <Setter Property="CharacterSpacing" Value="-60" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
-        <Setter Property="LineHeight" Value="42" />
-        <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
+        <Setter Property="LineHeight" Value="46" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
 
     <Style x:Key="OptiTaglineSupport" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="FontWeight" Value="Medium" />
-        <Setter Property="TextWrapping" Value="WrapWholeWords" />
+        <Setter Property="FontSize" Value="15" />
         <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
+        <Setter Property="TextWrapping" Value="WrapWholeWords" />
     </Style>
 
     <Style x:Key="OptiSectionTitle" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="80" />
-        <Setter Property="Margin" Value="0,0,0,10" />
+        <Setter Property="Margin" Value="0,0,0,12" />
         <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
     </Style>
 
     <Style x:Key="OptiPageTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="26" />
+        <Setter Property="FontSize" Value="28" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="-30" />
-        <Setter Property="LineHeight" Value="32" />
+        <Setter Property="CharacterSpacing" Value="-40" />
+        <Setter Property="LineHeight" Value="34" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
 
     <Style x:Key="OptiBody" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
-        <Setter Property="FontSize" Value="13" />
-        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="Foreground" Value="{ThemeResource OptiSecondaryTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="LineHeight" Value="20" />
@@ -71,14 +67,14 @@
 
     <Style x:Key="OptiCaption" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <Style x:Key="OptiFeatureTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="13.5" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
@@ -87,65 +83,53 @@
     <Style x:Key="OptiFeatureDetail" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
         <Setter Property="FontSize" Value="12" />
-        <Setter Property="LineHeight" Value="16" />
         <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Visibility" Value="Collapsed" />
     </Style>
 
-    <!-- Vertical checklist feature row (cockpit) -->
+    <!-- Soft chip feature -->
     <Style x:Key="OptiFeatureTile" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource OptiSurfaceBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
-        <Setter Property="Padding" Value="14,12" />
-        <Setter Property="MinHeight" Value="64" />
-        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
     <Style x:Key="OptiMessageBanner" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="14" />
         <Setter Property="Padding" Value="14,12" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
 
     <Style x:Key="OptiIconWell" TargetType="Border">
-        <Setter Property="Width" Value="38" />
-        <Setter Property="Height" Value="38" />
-        <Setter Property="CornerRadius" Value="10" />
-        <Setter Property="Background" Value="{ThemeResource OptiIconWellFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiIconWellStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <!-- Elevated panel shell -->
     <Style x:Key="OptiCard" TargetType="ContentControl">
         <Setter Property="Padding" Value="0" />
-        <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
+        <Setter Property="Background" Value="Transparent" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Stretch" />
         <Setter Property="IsTabStop" Value="False" />
-        <Setter Property="UseLayoutRounding" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ContentControl">
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{ThemeResource OptiCardStrokeBrush}"
-                            BorderThickness="1"
-                            CornerRadius="{StaticResource OptiCardRadius}"
-                            Padding="{TemplateBinding Padding}"
-                            UseLayoutRounding="True">
-                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                          Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          ContentTransitions="{TemplateBinding ContentTransitions}" />
-                    </Border>
+                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Padding="{TemplateBinding Padding}" />
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -153,20 +137,18 @@
 
     <Style x:Key="OptiHubRow" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="16" />
         <Setter Property="Padding" Value="18,16" />
-        <Setter Property="MinHeight" Value="88" />
+        <Setter Property="MinHeight" Value="72" />
     </Style>
 
     <Style x:Key="OptiThemePickOuter" TargetType="Border">
-        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="CornerRadius" Value="16" />
         <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
+        <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
-        <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
     <Style x:Key="OptiThemePickButton" TargetType="Button">
@@ -185,41 +167,27 @@
                         <Grid.RenderTransform>
                             <CompositeTransform x:Name="ScaleTransform" />
                         </Grid.RenderTransform>
-                        <ContentPresenter x:Name="Content"
+                        <ContentPresenter Content="{TemplateBinding Content}"
                                           HorizontalAlignment="Stretch"
-                                          VerticalAlignment="Stretch"
-                                          Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}" />
+                                          VerticalAlignment="Stretch" />
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
-                                                         Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.14" />
-                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
-                                                         Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.14" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.18" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.18" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
-                                                         Storyboard.TargetProperty="ScaleX"
-                                                         To="1.02" Duration="0:0:0.12" />
-                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
-                                                         Storyboard.TargetProperty="ScaleY"
-                                                         To="1.02" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform" Storyboard.TargetProperty="ScaleX" To="1.02" Duration="0:0:0.16" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform" Storyboard.TargetProperty="ScaleY" To="1.02" Duration="0:0:0.16" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
-                                                         Storyboard.TargetProperty="ScaleX"
-                                                         To="0.97" Duration="0:0:0.08" />
-                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform"
-                                                         Storyboard.TargetProperty="ScaleY"
-                                                         To="0.97" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform" Storyboard.TargetProperty="ScaleX" To="0.98" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="ScaleTransform" Storyboard.TargetProperty="ScaleY" To="0.98" Duration="0:0:0.08" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled" />
@@ -232,32 +200,29 @@
     </Style>
 
     <Style x:Key="OptiRiskCard" TargetType="Border">
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="12" />
         <Setter Property="Padding" Value="12,10" />
         <Setter Property="Background" Value="{ThemeResource OptiWarningSoftBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiWarningBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderThickness" Value="0" />
     </Style>
 
     <Style x:Key="OptiRiskLabel" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontSize" Value="12" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="100" />
         <Setter Property="Foreground" Value="{ThemeResource OptiWarningBrush}" />
     </Style>
 
     <Style x:Key="OptiLogoWell" TargetType="Border">
-        <Setter Property="Width" Value="56" />
-        <Setter Property="Height" Value="56" />
-        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="Width" Value="72" />
+        <Setter Property="Height" Value="72" />
+        <Setter Property="CornerRadius" Value="20" />
         <Setter Property="Background" Value="{ThemeResource OptiLogoWellFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiLogoWellStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="UseLayoutRounding" Value="True" />
-        <Setter Property="Padding" Value="10" />
+        <Setter Property="Padding" Value="14" />
     </Style>
 
     <Style x:Key="OptiLogoWellSmall" TargetType="Border" BasedOn="{StaticResource OptiLogoWell}">
@@ -268,14 +233,13 @@
         <Setter Property="BorderThickness" Value="0" />
     </Style>
 
-    <!-- Sharp primary CTA (not pill) -->
     <Style x:Key="OptiPrimaryButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="Padding" Value="20,13" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="28,14" />
+        <Setter Property="CornerRadius" Value="999" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="MinHeight" Value="46" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="MinHeight" Value="48" />
         <Setter Property="Background" Value="{ThemeResource OptiAccentBrush}" />
         <Setter Property="Foreground" Value="{ThemeResource OptiOnAccentBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -287,9 +251,7 @@
                     <Grid x:Name="Root"
                           RenderTransformOrigin="0.5,0.5"
                           Background="{TemplateBinding Background}"
-                          CornerRadius="{TemplateBinding CornerRadius}"
-                          BorderBrush="{TemplateBinding BorderBrush}"
-                          BorderThickness="{TemplateBinding BorderThickness}">
+                          CornerRadius="{TemplateBinding CornerRadius}">
                         <Grid.RenderTransform>
                             <CompositeTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
                         </Grid.RenderTransform>
@@ -297,52 +259,35 @@
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.32">
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.28">
                                             <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.28" />
+                                                <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.32">
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.28">
                                             <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.28" />
+                                                <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="1" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.12" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1.02" Duration="0:0:0.16">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1.02" Duration="0:0:0.16">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="1.03" Duration="0:0:0.18" />
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="1.03" Duration="0:0:0.18" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="0.96" Duration="0:0:0.07" />
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="0.96" Duration="0:0:0.07" />
-                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="0.88" Duration="0:0:0.07" />
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="0.97" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="0.97" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity" To="0.9" Duration="0:0:0.08" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="0.4" Duration="0" />
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity" To="0.4" Duration="0" />
                                     </Storyboard>
                                 </VisualState>
                             </VisualStateGroup>
@@ -350,7 +295,6 @@
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                           Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
                                           Padding="{TemplateBinding Padding}"
                                           Foreground="{TemplateBinding Foreground}" />
                     </Grid>
@@ -361,15 +305,13 @@
 
     <Style x:Key="OptiQuietButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontMedium}" />
-        <Setter Property="Padding" Value="16,11" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="22,12" />
+        <Setter Property="CornerRadius" Value="999" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="MinHeight" Value="44" />
         <Setter Property="Background" Value="{ThemeResource OptiQuietButtonFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
-        <Setter Property="UseLayoutRounding" Value="True" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
@@ -379,9 +321,7 @@
                     <Grid x:Name="Root"
                           RenderTransformOrigin="0.5,0.5"
                           Background="{TemplateBinding Background}"
-                          CornerRadius="{TemplateBinding CornerRadius}"
-                          BorderBrush="{TemplateBinding BorderBrush}"
-                          BorderThickness="{TemplateBinding BorderThickness}">
+                          CornerRadius="{TemplateBinding CornerRadius}">
                         <Grid.RenderTransform>
                             <CompositeTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
                         </Grid.RenderTransform>
@@ -389,35 +329,24 @@
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.22" />
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.22" />
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.2" />
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.2" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource OptiAccentSoftBrush}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1.015" Duration="0:0:0.14" />
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1.015" Duration="0:0:0.14" />
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity" To="0.85" Duration="0:0:0.12" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="0.97" Duration="0:0:0.07" />
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="0.97" Duration="0:0:0.07" />
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="0.97" Duration="0:0:0.07" />
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="0.97" Duration="0:0:0.07" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="0.4" Duration="0" />
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity" To="0.4" Duration="0" />
                                     </Storyboard>
                                 </VisualState>
                             </VisualStateGroup>
@@ -425,7 +354,6 @@
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                           Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
                                           Padding="{TemplateBinding Padding}"
                                           Foreground="{TemplateBinding Foreground}" />
                     </Grid>
@@ -434,75 +362,63 @@
         </Setter>
     </Style>
 
-    <!-- Home module lane: full-width horizontal row -->
+    <!-- Home product tile -->
     <Style x:Key="OptiCardButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="CornerRadius" Value="{StaticResource OptiCardRadius}" />
+        <Setter Property="CornerRadius" Value="24" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
-        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Stretch" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Grid x:Name="Root"
-                          Background="Transparent"
-                          RenderTransformOrigin="0.5,0.5"
-                          CornerRadius="{TemplateBinding CornerRadius}">
+                    <Grid x:Name="Root" Background="Transparent" RenderTransformOrigin="0.5,0.5" CornerRadius="{TemplateBinding CornerRadius}">
                         <Grid.RenderTransform>
-                            <CompositeTransform x:Name="RootLift" TranslateX="0" TranslateY="0" />
+                            <CompositeTransform x:Name="RootLift" ScaleX="1" ScaleY="1" />
                         </Grid.RenderTransform>
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="TranslateX"
-                                                         To="0" Duration="0:0:0.2">
+                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.22">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="1" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.22">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.12" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="TranslateX"
-                                                         To="6" Duration="0:0:0.16">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="ScaleX" To="1.04" Duration="0:0:0.2" />
+                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="ScaleY" To="1.04" Duration="0:0:0.2" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="TranslateX"
-                                                         To="2" Duration="0:0:0.08" />
-                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="0.9" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="ScaleX" To="0.97" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="RootLift" Storyboard.TargetProperty="ScaleY" To="0.97" Duration="0:0:0.08" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="0.4" Duration="0" />
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity" To="0.35" Duration="0" />
                                     </Storyboard>
                                 </VisualState>
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
-                        <ContentPresenter Background="Transparent"
-                                          BorderThickness="0"
-                                          Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
-                                          Padding="{TemplateBinding Padding}"
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          HorizontalContentAlignment="Stretch"
+                                          VerticalContentAlignment="Stretch"
                                           CornerRadius="{TemplateBinding CornerRadius}" />
                     </Grid>
                 </ControlTemplate>
@@ -510,17 +426,19 @@
         </Setter>
     </Style>
 
-    <!-- Wide labeled sidebar nav row -->
+    <!-- Top pill nav -->
     <Style x:Key="OptiNavButton" TargetType="Button">
-        <Setter Property="MinHeight" Value="44" />
-        <Setter Property="Padding" Value="14,10" />
-        <Setter Property="CornerRadius" Value="10" />
-        <Setter Property="HorizontalAlignment" Value="Stretch" />
-        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="14,6" />
+        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
         <Setter Property="Template">
@@ -528,23 +446,11 @@
                 <ControlTemplate TargetType="Button">
                     <Grid x:Name="Root"
                           Background="{TemplateBinding Background}"
-                          BorderBrush="{TemplateBinding BorderBrush}"
-                          BorderThickness="{TemplateBinding BorderThickness}"
                           CornerRadius="{TemplateBinding CornerRadius}"
-                          RenderTransformOrigin="0.5,0.5">
-                        <Grid.RenderTransform>
-                            <CompositeTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
-                        </Grid.RenderTransform>
+                          Padding="{TemplateBinding Padding}">
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
-                                <VisualState x:Name="Normal">
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.14" />
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.14" />
-                                    </Storyboard>
-                                </VisualState>
+                                <VisualState x:Name="Normal" />
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
@@ -554,18 +460,14 @@
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="0.98" Duration="0:0:0.06" />
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="0.98" Duration="0:0:0.06" />
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity" To="0.75" Duration="0:0:0.06" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled" />
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
-                        <ContentPresenter HorizontalAlignment="Left"
+                        <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
-                                          Margin="{TemplateBinding Padding}"
                                           Content="{TemplateBinding Content}"
                                           Foreground="{TemplateBinding Foreground}" />
                     </Grid>
@@ -575,53 +477,32 @@
     </Style>
 
     <Style x:Key="OptiIconButton" TargetType="Button">
-        <Setter Property="Width" Value="32" />
-        <Setter Property="Height" Value="32" />
+        <Setter Property="Width" Value="34" />
+        <Setter Property="Height" Value="34" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="CornerRadius" Value="999" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Grid x:Name="Root"
-                          Background="Transparent"
-                          CornerRadius="{TemplateBinding CornerRadius}"
-                          RenderTransformOrigin="0.5,0.5">
-                        <Grid.RenderTransform>
-                            <CompositeTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
-                        </Grid.RenderTransform>
+                    <Grid x:Name="Root" Background="Transparent" CornerRadius="{TemplateBinding CornerRadius}">
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
-                                <VisualState x:Name="Normal">
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.2" />
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.2" />
-                                    </Storyboard>
-                                </VisualState>
+                                <VisualState x:Name="Normal" />
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource OptiAccentSoftBrush}" />
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource OptiLaneHoverBrush}" />
                                         </ObjectAnimationUsingKeyFrames>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1.06" Duration="0:0:0.12" />
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1.06" Duration="0:0:0.12" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="0.92" Duration="0:0:0.07" />
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="0.92" Duration="0:0:0.07" />
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity" To="0.7" Duration="0:0:0.06" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
@@ -633,8 +514,7 @@
                         </VisualStateManager.VisualStateGroups>
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
-                                          Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}" />
+                                          Content="{TemplateBinding Content}" />
                     </Grid>
                 </ControlTemplate>
             </Setter.Value>

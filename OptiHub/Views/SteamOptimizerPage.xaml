@@ -4,96 +4,68 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:vm="using:OptiHub.ViewModels"
       Background="Transparent">
-    <Grid Padding="{StaticResource OptiPagePadding}" ColumnSpacing="16">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-        <Border Background="{ThemeResource OptiCardFillBrush}"
-                BorderBrush="{ThemeResource OptiCardStrokeBrush}"
-                BorderThickness="1" CornerRadius="14" Padding="22,20">
-            <Grid RowSpacing="16">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <StackPanel Spacing="6">
-                    <TextBlock Text="STEAM" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                    <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" Style="{StaticResource OptiPageTitle}" FontSize="22" />
-                </StackPanel>
-                <Border Grid.Row="1" Style="{StaticResource OptiMessageBanner}" VerticalAlignment="Top"
-                        Visibility="{x:Bind ViewModel.HasLastResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Grid ColumnSpacing="10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <FontIcon Glyph="{x:Bind ViewModel.LastResultGlyph, Mode=OneWay}" FontSize="15"
-                                  Foreground="{x:Bind ViewModel.LastResultBrush, Mode=OneWay}" VerticalAlignment="Top" />
-                        <TextBlock Text="{x:Bind ViewModel.LastResult, Mode=OneWay}" Grid.Column="1"
-                                   Style="{StaticResource OptiBody}" TextWrapping="Wrap" />
-                    </Grid>
-                </Border>
-                <StackPanel Grid.Row="2" Spacing="10">
-                    <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.IsProgressVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
-                                     Height="4" CornerRadius="2" Foreground="{ThemeResource OptiAccentBrush}" />
-                        <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}" />
-                    </StackPanel>
-                    <Button Style="{StaticResource OptiPrimaryButton}" Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
-                            Click="Run_Click" HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                            AutomationProperties.Name="Apply Steam" />
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Button Style="{StaticResource OptiQuietButton}" Content="Repair" Click="Repair_Click" HorizontalAlignment="Stretch"
-                                IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                        <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click" HorizontalAlignment="Stretch"
-                                IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    </Grid>
-                </StackPanel>
-            </Grid>
-        </Border>
-        <Border Grid.Column="1" Background="{ThemeResource OptiCardFillBrush}"
-                BorderBrush="{ThemeResource OptiCardStrokeBrush}"
-                BorderThickness="1" CornerRadius="14" Padding="20,18">
-            <Grid>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="{StaticResource OptiPageMaxWidth}"
+                    HorizontalAlignment="Center"
+                    Padding="{StaticResource OptiPagePadding}"
+                    Spacing="28">
+            <StackPanel Spacing="8" HorizontalAlignment="Center">
+                <TextBlock Text="Steam" Style="{StaticResource OptiPageTitle}"
+                           HorizontalAlignment="Center" FontSize="36" CharacterSpacing="-60" />
+                <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" Style="{StaticResource OptiCaption}"
+                           HorizontalAlignment="Center" TextAlignment="Center" />
+            </StackPanel>
+            <Grid MinHeight="120">
                 <ProgressRing Width="28" Height="28" IsActive="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay}"
                               Visibility="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              Visibility="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="WHAT THIS DOES" Style="{StaticResource OptiSectionTitle}" Margin="0,0,0,4" />
-                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.Features, Mode=OneWay}">
-                            <ItemsRepeater.Layout>
-                                <StackLayout Orientation="Vertical" Spacing="8" />
-                            </ItemsRepeater.Layout>
-                            <ItemsRepeater.ItemTemplate>
-                                <DataTemplate x:DataType="vm:FeatureRowViewModel">
-                                    <Border Style="{StaticResource OptiFeatureTile}">
-                                        <Grid ColumnSpacing="12">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <Border Style="{StaticResource OptiIconWell}">
-                                                <FontIcon Glyph="{x:Bind Glyph}" FontSize="15" Foreground="{ThemeResource OptiAccentBrush}"
-                                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                                <TextBlock Text="{x:Bind Title}" Style="{StaticResource OptiFeatureTitle}" />
-                                                <TextBlock Text="{x:Bind Detail}" Style="{StaticResource OptiFeatureDetail}" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsRepeater.ItemTemplate>
-                        </ItemsRepeater>
-                    </StackPanel>
-                </ScrollViewer>
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Features, Mode=OneWay}"
+                               Visibility="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                               HorizontalAlignment="Center">
+                    <ItemsRepeater.Layout>
+                        <UniformGridLayout MaximumRowsOrColumns="3" Orientation="Horizontal"
+                                           MinItemWidth="140" MinColumnSpacing="10" MinRowSpacing="10"
+                                           ItemsStretch="None" ItemsJustification="Center" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FeatureRowViewModel">
+                            <Border Style="{StaticResource OptiFeatureTile}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="{x:Bind Glyph}" FontSize="13"
+                                              Foreground="{ThemeResource OptiAccentBrush}" VerticalAlignment="Center" />
+                                    <TextBlock Text="{x:Bind Title}" Style="{StaticResource OptiFeatureTitle}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
             </Grid>
-        </Border>
-    </Grid>
+            <StackPanel Spacing="12" MaxWidth="360" HorizontalAlignment="Center">
+                <Border Style="{StaticResource OptiMessageBanner}"
+                        Visibility="{x:Bind ViewModel.HasLastResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Text="{x:Bind ViewModel.LastResult, Mode=OneWay}" Style="{StaticResource OptiBody}"
+                               TextWrapping="Wrap" TextAlignment="Center" />
+                </Border>
+                <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.IsProgressVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
+                                 Height="3" CornerRadius="2" Foreground="{ThemeResource OptiAccentBrush}" />
+                    <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+                <Button Style="{StaticResource OptiPrimaryButton}" Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
+                        Click="Run_Click" HorizontalAlignment="Stretch"
+                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                        AutomationProperties.Name="Apply Steam" />
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Style="{StaticResource OptiQuietButton}" Content="Repair" Click="Repair_Click" HorizontalAlignment="Stretch"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                    <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click" HorizontalAlignment="Stretch"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                </Grid>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
 </Page>

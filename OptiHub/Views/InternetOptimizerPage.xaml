@@ -4,88 +4,61 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:vm="using:OptiHub.ViewModels"
       Background="Transparent">
-    <Grid Padding="{StaticResource OptiPagePadding}" ColumnSpacing="16">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-        <Border Background="{ThemeResource OptiCardFillBrush}"
-                BorderBrush="{ThemeResource OptiCardStrokeBrush}"
-                BorderThickness="1" CornerRadius="14" Padding="22,20">
-            <Grid RowSpacing="16">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <StackPanel Spacing="6">
-                    <TextBlock Text="INTERNET" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                    <TextBlock Text="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}" Style="{StaticResource OptiPageTitle}" FontSize="22" />
-                </StackPanel>
-                <Border Grid.Row="1" Style="{StaticResource OptiMessageBanner}" VerticalAlignment="Top"
-                        Visibility="{x:Bind ViewModel.HasMessage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Grid ColumnSpacing="10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <FontIcon Glyph="{x:Bind ViewModel.MessageGlyph, Mode=OneWay}" FontSize="15"
-                                  Foreground="{x:Bind ViewModel.MessageBrush, Mode=OneWay}" VerticalAlignment="Top" />
-                        <TextBlock Text="{x:Bind ViewModel.Message, Mode=OneWay}" Grid.Column="1"
-                                   Style="{StaticResource OptiBody}" TextWrapping="Wrap" />
-                    </Grid>
-                </Border>
-                <StackPanel Grid.Row="2" Spacing="10">
-                    <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}"
-                               Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                    <Button Style="{StaticResource OptiPrimaryButton}" Content="Lowest latency" Click="Latency_Click"
-                            HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    <Button Style="{StaticResource OptiQuietButton}" Content="Highest download" Click="Throughput_Click"
-                            HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    <Button Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click" HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                </StackPanel>
-            </Grid>
-        </Border>
-        <Border Grid.Column="1" Background="{ThemeResource OptiCardFillBrush}"
-                BorderBrush="{ThemeResource OptiCardStrokeBrush}"
-                BorderThickness="1" CornerRadius="14" Padding="20,18">
-            <Grid>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="{StaticResource OptiPageMaxWidth}"
+                    HorizontalAlignment="Center"
+                    Padding="{StaticResource OptiPagePadding}"
+                    Spacing="28">
+            <StackPanel Spacing="8" HorizontalAlignment="Center">
+                <TextBlock Text="Internet" Style="{StaticResource OptiPageTitle}"
+                           HorizontalAlignment="Center" FontSize="36" CharacterSpacing="-60" />
+                <TextBlock Text="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}"
+                           HorizontalAlignment="Center" TextAlignment="Center" />
+            </StackPanel>
+            <Grid MinHeight="120">
                 <ProgressRing Width="28" Height="28" IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
                               Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="NETWORK STATUS" Style="{StaticResource OptiSectionTitle}" Margin="0,0,0,4" />
-                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}">
-                            <ItemsRepeater.Layout>
-                                <StackLayout Orientation="Vertical" Spacing="8" />
-                            </ItemsRepeater.Layout>
-                            <ItemsRepeater.ItemTemplate>
-                                <DataTemplate x:DataType="vm:FeatureRowViewModel">
-                                    <Border Style="{StaticResource OptiFeatureTile}">
-                                        <Grid ColumnSpacing="12">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <Border Style="{StaticResource OptiIconWell}">
-                                                <FontIcon Glyph="{x:Bind Glyph}" FontSize="15" Foreground="{ThemeResource OptiAccentBrush}"
-                                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                                <TextBlock Text="{x:Bind Title}" Style="{StaticResource OptiFeatureTitle}" />
-                                                <TextBlock Text="{x:Bind Detail}" Style="{StaticResource OptiFeatureDetail}" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsRepeater.ItemTemplate>
-                        </ItemsRepeater>
-                    </StackPanel>
-                </ScrollViewer>
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}"
+                               Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"
+                               HorizontalAlignment="Center">
+                    <ItemsRepeater.Layout>
+                        <UniformGridLayout MaximumRowsOrColumns="3" Orientation="Horizontal"
+                                           MinItemWidth="140" MinColumnSpacing="10" MinRowSpacing="10"
+                                           ItemsStretch="None" ItemsJustification="Center" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FeatureRowViewModel">
+                            <Border Style="{StaticResource OptiFeatureTile}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="{x:Bind Glyph}" FontSize="13"
+                                              Foreground="{ThemeResource OptiAccentBrush}" VerticalAlignment="Center" />
+                                    <TextBlock Text="{x:Bind Title}" Style="{StaticResource OptiFeatureTitle}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
             </Grid>
-        </Border>
-    </Grid>
+            <StackPanel Spacing="12" MaxWidth="360" HorizontalAlignment="Center">
+                <Border Style="{StaticResource OptiMessageBanner}"
+                        Visibility="{x:Bind ViewModel.HasMessage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Text="{x:Bind ViewModel.Message, Mode=OneWay}" Style="{StaticResource OptiBody}"
+                               TextWrapping="Wrap" TextAlignment="Center" />
+                </Border>
+                <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}"
+                           HorizontalAlignment="Center"
+                           Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <Button Style="{StaticResource OptiPrimaryButton}" Content="Lowest latency" Click="Latency_Click"
+                        HorizontalAlignment="Stretch"
+                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                <Button Style="{StaticResource OptiQuietButton}" Content="Highest download" Click="Throughput_Click"
+                        HorizontalAlignment="Stretch"
+                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                <Button Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click"
+                        HorizontalAlignment="Stretch"
+                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
 </Page>

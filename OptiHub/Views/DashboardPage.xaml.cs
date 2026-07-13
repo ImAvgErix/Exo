@@ -57,7 +57,7 @@ public sealed partial class DashboardPage : Page
         var storyboard = new Storyboard();
 
         if (HeroPanel is not null && HeroTransform is not null)
-            AddFadeSlide(storyboard, HeroPanel, HeroTransform, delayMs: 0, fromY: 18);
+            AddFadeSlide(storyboard, HeroPanel, HeroTransform, delayMs: 0, fromY: 14);
 
         var cards = new List<UIElement>();
         if (CardList is not null)
@@ -69,16 +69,16 @@ public sealed partial class DashboardPage : Page
             el.Opacity = 0;
             if (el.RenderTransform is not CompositeTransform ct)
             {
-                ct = new CompositeTransform { TranslateX = -20 };
+                ct = new CompositeTransform { TranslateY = 18 };
                 el.RenderTransform = ct;
-                el.RenderTransformOrigin = new Windows.Foundation.Point(0, 0.5);
+                el.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
             }
             else
             {
-                ct.TranslateX = -20;
+                ct.TranslateY = 18;
             }
 
-            AddFadeSlideX(storyboard, el, ct, delayMs: 60 + i * 55, fromX: -20);
+            AddFadeSlide(storyboard, el, ct, delayMs: 50 + i * 45, fromY: 18);
         }
 
         if (storyboard.Children.Count == 0) return;
