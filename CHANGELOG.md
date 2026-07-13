@@ -236,6 +236,9 @@
 
 
 
+
+## 1.9.63
+- AMD + Internet: real official icons only (AMD brand mark, Microsoft Fluent Globe) — same flat style as Discord/NVIDIA
 ## 1.9.62
 - AMD + Internet logos remade to match the hub set: flat Steam-style white circle AMD mark, white outline globe (no glossy tiles)
 ## 1.9.61
