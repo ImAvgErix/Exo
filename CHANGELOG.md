@@ -1,3 +1,7 @@
+## 1.9.96
+
+- **Settings**: one card (not 4 boxes); no Settings title
+- **Theme pills**: selected side is solid white with dark text
 ## 1.9.95
 
 - **No tooltips** anywhere in the app

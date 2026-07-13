@@ -169,14 +169,14 @@
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 
-    <!-- Segmented theme picker — layered fills so PointerOver never wipes Checked. -->
+    <!-- Segmented theme picker: selected side is solid white, label near-black. -->
     <Style x:Key="OptiThemeRadio" TargetType="RadioButton">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
         <Setter Property="FontSize" Value="12.5" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="MinWidth" Value="72" />
-        <Setter Property="MinHeight" Value="32" />
-        <Setter Property="Padding" Value="14,6" />
+        <Setter Property="MinWidth" Value="76" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="16,7" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Foreground" Value="{ThemeResource OptiSecondaryTextBrush}" />
@@ -189,14 +189,14 @@
                           MinWidth="{TemplateBinding MinWidth}"
                           MinHeight="{TemplateBinding MinHeight}"
                           Padding="{TemplateBinding Padding}">
-                        <!-- Hover underlay (unchecked only — checked fill paints on top) -->
+                        <!-- Soft hover (under checked white fill) -->
                         <Border x:Name="HoverFill"
                                 Background="{ThemeResource OptiAccentSoftBrush}"
                                 CornerRadius="8"
                                 Opacity="0" />
-                        <!-- Checked fill above hover so Dark never “vanishes” on pointer-over -->
+                        <!-- Selected: full white pill -->
                         <Border x:Name="CheckedFill"
-                                Background="{ThemeResource OptiAccentBrush}"
+                                Background="#FFFFFF"
                                 CornerRadius="8"
                                 Opacity="0" />
                         <TextBlock x:Name="Label"
@@ -236,7 +236,7 @@
                                 <VisualState x:Name="Checked">
                                     <VisualState.Setters>
                                         <Setter Target="CheckedFill.Opacity" Value="1" />
-                                        <Setter Target="Label.Foreground" Value="{ThemeResource OptiOnAccentBrush}" />
+                                        <Setter Target="Label.Foreground" Value="#0A0A0A" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Unchecked">

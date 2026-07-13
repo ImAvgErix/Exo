@@ -98,9 +98,13 @@ if (File.Exists(settings))
     Expect("settings updates", s.Contains("Updates", StringComparison.Ordinal));
     Expect("settings about", s.Contains("About", StringComparison.Ordinal));
     Expect("settings opti card", s.Contains("OptiCard", StringComparison.Ordinal));
-    Expect("settings home card grid", s.Contains("Height=\"180\"", StringComparison.Ordinal)
-        && s.Contains("OptiCard", StringComparison.Ordinal)
-        && s.Contains("OptiTagline", StringComparison.Ordinal));
+    Expect("settings single card", s.Contains("OptiCard", StringComparison.Ordinal)
+        && !s.Contains("OptiTagline", StringComparison.Ordinal)
+        && s.Contains("Appearance", StringComparison.Ordinal));
+    Expect("settings no title", !s.Contains("Text=\"Settings\"", StringComparison.Ordinal));
+    Expect("settings white selected theme", File.Exists(theme)
+        && File.ReadAllText(theme).Contains("CheckedFill", StringComparison.Ordinal)
+        && File.ReadAllText(theme).Contains("#FFFFFF", StringComparison.Ordinal));
     Expect("settings overlay on main", File.Exists(mainXaml) && File.ReadAllText(mainXaml).Contains("SettingsOverlay", StringComparison.Ordinal)
         && File.ReadAllText(mainXaml).Contains("AcrylicBrush", StringComparison.Ordinal));
     Expect("no tooltips in settings", !s.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));

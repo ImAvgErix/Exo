@@ -119,8 +119,8 @@
             </Border>
 
             <controls:SettingsSheet x:Name="SettingsSheetHost"
-                                    MaxWidth="760"
-                                    Margin="40,36"
+                                    MaxWidth="480"
+                                    Margin="32,40"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
                                     CloseRequested="SettingsSheet_CloseRequested" />

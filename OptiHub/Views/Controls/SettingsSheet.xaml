@@ -5,74 +5,41 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Loaded="UserControl_Loaded">
 
-    <!--
-      Same product language as home: centered hero + OptiCard tiles.
-      Hosted in MainWindow overlay over the blurred dashboard.
-    -->
-    <Grid MaxWidth="720" HorizontalAlignment="Center" VerticalAlignment="Center">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <!-- Hero — same family as home tagline -->
-        <Grid Margin="0,0,0,16">
-            <StackPanel HorizontalAlignment="Center" Spacing="0">
-                <TextBlock Text="Settings"
-                           Style="{StaticResource OptiTagline}"
-                           FontSize="36"
-                           LineHeight="42"
-                           CharacterSpacing="-16"
-                           TextAlignment="Center"
-                           HorizontalAlignment="Center" />
-            </StackPanel>
-            <Button x:Name="CloseButton"
-                    Style="{StaticResource OptiIconButton}"
-                    AutomationProperties.Name="Close settings"
-                    Width="36" Height="36"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Top"
-                    Margin="0,-4,-4,0"
-                    Click="CloseButton_Click">
-                <FontIcon Glyph="&#xE711;" FontSize="12" />
-            </Button>
-        </Grid>
-
-        <!-- 2×2 product cards — same OptiCard chrome as home tiles -->
-        <Grid Grid.Row="1" ColumnSpacing="12" RowSpacing="12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+    <!-- One product card over the blurred home — no title, no 4-box split -->
+    <Border MaxWidth="480"
+            HorizontalAlignment="Stretch"
+            Style="{StaticResource OptiCard}"
+            Padding="0"
+            Background="{ThemeResource OptiCardFillBrush}"
+            BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+            BorderThickness="1"
+            CornerRadius="18">
+        <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="180" />
-                <RowDefinition Height="180" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Appearance -->
-            <Border Grid.Row="0" Grid.Column="0"
-                    Style="{StaticResource OptiCard}"
-                    Padding="18"
-                    HorizontalAlignment="Stretch"
-                    VerticalAlignment="Stretch">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+            <StackPanel Padding="22,18,22,6" Spacing="0">
+
+                <!-- Appearance -->
+                <Grid Padding="0,4,28,16" ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
                     <TextBlock Text="Appearance"
                                FontFamily="{StaticResource OptiUiFontSemiBold}"
-                               FontSize="13"
+                               FontSize="14"
                                FontWeight="SemiBold"
-                               CharacterSpacing="40"
-                               Foreground="{ThemeResource OptiMutedTextBrush}" />
-                    <Border Grid.Row="1"
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                    <Border Grid.Column="1"
                             Background="{ThemeResource OptiPageBackgroundBrush}"
                             BorderBrush="{ThemeResource OptiCardStrokeBrush}"
                             BorderThickness="1"
-                            CornerRadius="12"
-                            Padding="4"
-                            HorizontalAlignment="Center"
+                            CornerRadius="10"
+                            Padding="3"
                             VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="2">
                             <RadioButton Content="Dark"
@@ -88,32 +55,22 @@
                         </StackPanel>
                     </Border>
                 </Grid>
-            </Border>
 
-            <!-- Updates -->
-            <Border Grid.Row="0" Grid.Column="1"
-                    Style="{StaticResource OptiCard}"
-                    Padding="18"
-                    HorizontalAlignment="Stretch"
-                    VerticalAlignment="Stretch">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Grid ColumnSpacing="8">
+                <Rectangle Height="1" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.9" />
+
+                <!-- Updates -->
+                <StackPanel Padding="0,16" Spacing="12">
+                    <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="Updates"
                                    FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                   FontSize="13"
+                                   FontSize="14"
                                    FontWeight="SemiBold"
-                                   CharacterSpacing="40"
                                    VerticalAlignment="Center"
-                                   Foreground="{ThemeResource OptiMutedTextBrush}" />
+                                   Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                         <ToggleSwitch Grid.Column="1"
                                       AutomationProperties.Name="Check for OptiHub app updates automatically"
                                       IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
@@ -123,30 +80,26 @@
                                       VerticalAlignment="Center" />
                     </Grid>
 
-                    <Button Grid.Row="1"
-                            Style="{StaticResource OptiPrimaryButton}"
+                    <Button Style="{StaticResource OptiPrimaryButton}"
                             Content="Check for updates"
                             AutomationProperties.Name="Check for OptiHub app updates"
                             Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
                             HorizontalAlignment="Stretch"
-                            VerticalAlignment="Center"
-                            MinHeight="40"
+                            MinHeight="42"
                             IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
 
-                    <StackPanel Grid.Row="2"
-                                Spacing="6"
-                                Margin="0,8,0,0"
+                    <StackPanel Spacing="6"
                                 Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Grid>
                             <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
                                        Style="{StaticResource OptiCaption}"
-                                       FontSize="11"
+                                       FontSize="12"
                                        TextTrimming="CharacterEllipsis"
                                        MaxLines="1"
-                                       Margin="0,0,40,0" />
+                                       Margin="0,0,48,0" />
                             <TextBlock Text="{x:Bind ViewModel.UpdateProgressLabel, Mode=OneWay}"
                                        FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                       FontSize="12"
+                                       FontSize="13"
                                        FontWeight="SemiBold"
                                        HorizontalAlignment="Right"
                                        Foreground="{ThemeResource OptiPrimaryTextBrush}" />
@@ -155,96 +108,96 @@
                                      Maximum="100"
                                      Value="{x:Bind ViewModel.UpdateProgressPercent, Mode=OneWay}"
                                      IsIndeterminate="{x:Bind ViewModel.IsUpdateProgressIndeterminate, Mode=OneWay}"
-                                     Height="5"
+                                     Height="6"
                                      CornerRadius="3"
                                      Foreground="{ThemeResource OptiAccentBrush}" />
                     </StackPanel>
 
-                    <TextBlock Grid.Row="2"
-                               Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
+                    <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
                                Style="{StaticResource OptiCaption}"
-                               FontSize="11"
-                               Margin="0,8,0,0"
+                               FontSize="12"
                                TextWrapping="WrapWholeWords"
                                MaxLines="2"
                                TextTrimming="CharacterEllipsis"
                                Visibility="{x:Bind ViewModel.ShowIdleUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                AutomationProperties.LiveSetting="Polite" />
-                </Grid>
-            </Border>
+                </StackPanel>
 
-            <!-- About -->
-            <Border Grid.Row="1" Grid.Column="0"
-                    Style="{StaticResource OptiCard}"
-                    Padding="18"
-                    HorizontalAlignment="Stretch"
-                    VerticalAlignment="Stretch">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+                <Rectangle Height="1" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.9" />
+
+                <!-- About -->
+                <Grid Padding="0,16" ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
                     <TextBlock Text="About"
                                FontFamily="{StaticResource OptiUiFontSemiBold}"
-                               FontSize="13"
+                               FontSize="14"
                                FontWeight="SemiBold"
-                               CharacterSpacing="40"
-                               Foreground="{ThemeResource OptiMutedTextBrush}" />
-                    <StackPanel Grid.Row="1"
-                                VerticalAlignment="Center"
-                                HorizontalAlignment="Center"
-                                Spacing="4">
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                    <StackPanel Grid.Column="1"
+                                Spacing="2"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center">
                         <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
                                    FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                   FontSize="36"
+                                   FontSize="18"
                                    FontWeight="SemiBold"
-                                   CharacterSpacing="-28"
-                                   HorizontalAlignment="Center"
+                                   CharacterSpacing="-12"
+                                   HorizontalAlignment="Right"
                                    Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                         <TextBlock Text="{x:Bind ViewModel.KitVersion, Mode=OneWay}"
                                    Style="{StaticResource OptiCaption}"
-                                   FontSize="12"
-                                   HorizontalAlignment="Center"
+                                   FontSize="11"
+                                   HorizontalAlignment="Right"
                                    Opacity="0.85" />
                     </StackPanel>
                 </Grid>
-            </Border>
 
-            <!-- Support -->
-            <Border Grid.Row="1" Grid.Column="1"
-                    Style="{StaticResource OptiCard}"
-                    Padding="18"
-                    HorizontalAlignment="Stretch"
-                    VerticalAlignment="Stretch">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+                <Rectangle Height="1" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.9" />
+
+                <!-- Support -->
+                <StackPanel Padding="0,16,0,6" Spacing="12">
                     <TextBlock Text="Support"
                                FontFamily="{StaticResource OptiUiFontSemiBold}"
-                               FontSize="13"
+                               FontSize="14"
                                FontWeight="SemiBold"
-                               CharacterSpacing="40"
-                               Foreground="{ThemeResource OptiMutedTextBrush}" />
-                    <StackPanel Grid.Row="1"
-                                VerticalAlignment="Center"
-                                Spacing="10">
+                               Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
                         <Button Style="{StaticResource OptiWhiteButton}"
                                 Content="Report issue"
                                 AutomationProperties.Name="Report OptiHub issue on GitHub"
                                 HorizontalAlignment="Stretch"
                                 MinHeight="40"
                                 Command="{x:Bind ViewModel.ReportIssueCommand}" />
-                        <Button Style="{StaticResource OptiQuietButton}"
+                        <Button Grid.Column="1"
+                                Style="{StaticResource OptiQuietButton}"
                                 Content="Open logs"
                                 AutomationProperties.Name="Open OptiHub logs folder"
                                 HorizontalAlignment="Stretch"
                                 MinHeight="40"
                                 Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
-                    </StackPanel>
-                </Grid>
-            </Border>
+                    </Grid>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Close only — no “Settings” title -->
+            <Button x:Name="CloseButton"
+                    Style="{StaticResource OptiIconButton}"
+                    AutomationProperties.Name="Close settings"
+                    Width="36" Height="36"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="0,10,10,0"
+                    Click="CloseButton_Click">
+                <FontIcon Glyph="&#xE711;" FontSize="12" />
+            </Button>
         </Grid>
-    </Grid>
+    </Border>
 </UserControl>
