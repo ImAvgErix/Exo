@@ -1,3 +1,6 @@
+## 1.9.90
+
+- **Internet icon**: clean Apple/SF-style minimal Wi‑Fi (3 even arcs + dot)
 ## 1.9.89
 
 - **Home tagline**: larger hero type (44px) so it sits above the product cards
