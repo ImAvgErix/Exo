@@ -269,8 +269,8 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             {
                 Title = feature.Title,
                 Detail = feature.IsActive ? "Applied" : "Not applied",
-                Glyph = feature.IsActive ? "\uE73E" : "\uE711",
-                Opacity = feature.IsActive ? 1.0 : 0.85
+                Glyph = Helpers.UiStatusPresentation.FeatureGlyph(feature.IsActive),
+                Opacity = Helpers.UiStatusPresentation.FeatureOpacity(feature.IsActive)
             });
         }
         RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
@@ -282,10 +282,11 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     {
         LastResult = message;
         HasLastResult = !string.IsNullOrWhiteSpace(message);
-        LastResultGlyph = success ? "\uE73E" : "\uE783";
-        LastResultBrush = success
-            ? ResolveBrush("OptiSuccessBrush", Color.FromArgb(255, 34, 197, 94))
-            : ResolveBrush("OptiErrorBrush", Color.FromArgb(255, 220, 38, 38));
+        var banner = Helpers.UiStatusPresentation.BannerForSuccess(success);
+        LastResultGlyph = banner.Glyph;
+        LastResultBrush = ResolveBrush(
+            banner.BrushKey,
+            success ? Color.FromArgb(255, 34, 197, 94) : Color.FromArgb(255, 220, 38, 38));
     }
 
     private static Brush ResolveBrush(string key, Color fallback)

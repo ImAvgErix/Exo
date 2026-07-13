@@ -170,10 +170,11 @@ public partial class NvidiaPanelViewModel : ObservableObject
     {
         Message = text;
         HasMessage = !string.IsNullOrWhiteSpace(text);
-        MessageGlyph = success ? "\uE73E" : "\uE783";
-        MessageBrush = success
-            ? ResolveBrush("OptiSuccessBrush", Color.FromArgb(255, 34, 197, 94))
-            : ResolveBrush("OptiErrorBrush", Color.FromArgb(255, 220, 38, 38));
+        var banner = Helpers.UiStatusPresentation.BannerForSuccess(success);
+        MessageGlyph = banner.Glyph;
+        MessageBrush = ResolveBrush(
+            banner.BrushKey,
+            success ? Color.FromArgb(255, 34, 197, 94) : Color.FromArgb(255, 220, 38, 38));
     }
 
     private static Brush ResolveBrush(string key, Color fallback)

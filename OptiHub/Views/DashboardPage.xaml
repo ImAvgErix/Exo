@@ -6,9 +6,9 @@
     xmlns:viewModels="using:OptiHub.ViewModels"
     Background="Transparent">
 
-    <!-- Classic centered hub: hero + card grid. Room for 8 cards in 4×2. -->
-    <Grid x:Name="PageRoot" Padding="36,24,36,28" Loaded="PageRoot_Loaded">
-        <Grid MaxWidth="1180"
+    <!-- Centered hub: quiet hero + scannable product cards -->
+    <Grid x:Name="PageRoot" Padding="40,28,40,32" Loaded="PageRoot_Loaded">
+        <Grid MaxWidth="1120"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
             <Grid.RowDefinitions>
@@ -17,8 +17,8 @@
             </Grid.RowDefinitions>
 
             <StackPanel x:Name="HeroPanel"
-                        Spacing="6"
-                        Margin="0,0,0,20"
+                        Spacing="8"
+                        Margin="0,0,0,28"
                         HorizontalAlignment="Center"
                         Opacity="0"
                         RenderTransformOrigin="0.5,0.5">
@@ -27,12 +27,13 @@
                 </StackPanel.RenderTransform>
                 <TextBlock Text="OptiHub"
                            Style="{StaticResource OptiTagline}"
-                           FontSize="32"
-                           LineHeight="40"
+                           FontSize="34"
+                           LineHeight="42"
                            HorizontalAlignment="Center" />
                 <TextBlock Text="Maximum performance. No compromise."
                            Style="{StaticResource OptiTaglineSupport}"
                            FontSize="14"
+                           Foreground="{ThemeResource OptiMutedTextBrush}"
                            HorizontalAlignment="Center" />
             </StackPanel>
 
@@ -54,8 +55,8 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
                             <Button Style="{StaticResource OptiCardButton}"
-                                    Width="260"
-                                    Height="168"
+                                    Width="248"
+                                    Height="160"
                                     Margin="8"
                                     Click="CardButton_Click"
                                     Tag="{x:Bind Definition.Id}"
@@ -63,17 +64,17 @@
                                     IsEnabled="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                     Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
                                 <ContentControl Style="{StaticResource OptiCard}"
-                                                Width="260"
-                                                Height="168"
-                                                Padding="16,14">
+                                                Width="248"
+                                                Height="160"
+                                                Padding="16,16">
                                     <StackPanel HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
-                                                Spacing="10">
+                                                Spacing="12">
                                         <Border Style="{StaticResource OptiLogoWell}"
-                                                Width="68"
-                                                Height="68"
+                                                Width="64"
+                                                Height="64"
                                                 CornerRadius="18"
-                                                Padding="10">
+                                                Padding="11">
                                             <Image Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"
@@ -87,11 +88,11 @@
                                                    Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                                    TextAlignment="Center"
                                                    TextWrapping="Wrap"
-                                                   MaxWidth="220" />
+                                                   MaxWidth="200" />
                                         <TextBlock Text="Coming soon"
                                                    FontFamily="{StaticResource OptiUiFont}"
                                                    FontSize="12"
-                                                   Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                                                   Foreground="{ThemeResource OptiMutedTextBrush}"
                                                    TextAlignment="Center"
                                                    Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     </StackPanel>

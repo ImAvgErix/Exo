@@ -1,3 +1,8 @@
+## 1.9.37
+
+- **UI peak**: shared design system (page titles, feature tiles, message banners, muted hierarchy); refined dark/light surfaces + divider chrome
+- Dashboard / Internet / Discord / Steam / NVIDIA / Settings re-skinned for clearer CTA hierarchy without clutter
+- `UiStatusPresentation` + `tools/UiPeak.Smoke` for consistent status tone/glyph mapping
 ## 1.9.36
 
 - **NVIDIA peak 1.10.3**: display status ignores orphan NVTweak keys; peak OK = max-Hz refresh + (active registry OR live Full RGB + GPU scale)

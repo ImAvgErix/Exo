@@ -6,7 +6,7 @@
       Loaded="Page_Loaded">
 
     <!-- Centered settings shell: no scroll, balanced fill, clear sections. -->
-    <Grid x:Name="PageRoot" Padding="40,20,40,28">
+    <Grid x:Name="PageRoot" Padding="{StaticResource OptiPagePadding}">
         <Grid MaxWidth="920"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch"
@@ -27,12 +27,8 @@
                     <CompositeTransform x:Name="HeaderTransform" TranslateY="10" />
                 </StackPanel.RenderTransform>
                 <TextBlock Text="Settings"
-                           FontFamily="{StaticResource OptiUiFontSemiBold}"
-                           FontSize="26"
-                           FontWeight="SemiBold"
-                           CharacterSpacing="-20"
-                           HorizontalAlignment="Center"
-                           Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                           Style="{StaticResource OptiPageTitle}"
+                           HorizontalAlignment="Center" />
             </StackPanel>
 
             <!-- Body: 2×2 balanced cards -->

@@ -8,13 +8,14 @@
     <Grid x:Name="RootGrid" Background="{ThemeResource OptiPageBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <!-- Drag region + chrome; right column reserved for caption buttons -->
         <Grid x:Name="TitleBarHost"
               Grid.Row="0"
-              Height="40"
+              Height="44"
               Background="Transparent">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -22,17 +23,17 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Orientation="Horizontal"
-                        Spacing="8"
+                        Spacing="10"
                         VerticalAlignment="Center"
-                        Margin="12,0,0,0"
-                        Height="40">
+                        Margin="14,0,0,0"
+                        Height="44">
                 <Button x:Name="BackButton"
                         Style="{StaticResource OptiIconButton}"
                         ToolTipService.ToolTip="{x:Null}"
                         AutomationProperties.Name="Back to dashboard"
                         Click="BackButton_Click"
                         Visibility="Collapsed"
-                        Width="32" Height="32"
+                        Width="34" Height="34"
                         VerticalAlignment="Center"
                         AllowFocusOnInteraction="True"
                         UseSystemFocusVisuals="False">
@@ -41,7 +42,6 @@
                               Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                 </Button>
 
-                <!-- Product mark only on optimizer pages (no OptiHub wordmark / logo on home). -->
                 <Border x:Name="ContextLogoHost"
                         Style="{StaticResource OptiLogoWellSmall}"
                         Visibility="Collapsed"
@@ -59,7 +59,7 @@
                            FontFamily="{StaticResource OptiUiFontSemiBold}"
                            FontSize="15"
                            FontWeight="SemiBold"
-                           CharacterSpacing="-8"
+                           CharacterSpacing="-10"
                            Foreground="{ThemeResource OptiPrimaryTextBrush}"
                            Margin="0,0,2,0" />
 
@@ -68,7 +68,7 @@
                         ToolTipService.ToolTip="{x:Null}"
                         AutomationProperties.Name="Settings"
                         Click="SettingsButton_Click"
-                        Width="32" Height="32"
+                        Width="34" Height="34"
                         VerticalAlignment="Center"
                         AllowFocusOnInteraction="True"
                         UseSystemFocusVisuals="False">
@@ -79,8 +79,14 @@
             </StackPanel>
         </Grid>
 
+        <Border Grid.Row="1"
+                Height="1"
+                Background="{ThemeResource OptiDividerBrush}"
+                Opacity="0.9"
+                Margin="0" />
+
         <Frame x:Name="ContentFrame"
-               Grid.Row="1"
+               Grid.Row="2"
                Padding="0"
                IsTabStop="True"
                IsNavigationStackEnabled="False" />

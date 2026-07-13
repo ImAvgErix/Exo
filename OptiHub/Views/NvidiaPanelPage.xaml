@@ -6,12 +6,12 @@
     xmlns:vm="using:OptiHub.ViewModels"
     Background="Transparent">
 
-    <Grid Padding="28,16,28,22">
+    <Grid Padding="{StaticResource OptiPagePadding}">
         <ContentControl Style="{StaticResource OptiCard}"
-                Padding="28,24"
-                MaxWidth="1000"
-                HorizontalAlignment="Stretch"
-                VerticalAlignment="Stretch">
+                        Padding="28,26"
+                        MaxWidth="{StaticResource OptiPageMaxWidth}"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -19,18 +19,13 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,16">
+                <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,18">
                     <TextBlock Text="NVIDIA PANEL" Style="{StaticResource OptiSectionTitle}" Margin="0" />
                     <TextBlock Text="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}"
-                               FontFamily="{StaticResource OptiUiFontSemiBold}"
-                               FontSize="26"
-                               FontWeight="SemiBold"
-                               CharacterSpacing="-20"
-                               Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                               TextWrapping="Wrap" />
+                               Style="{StaticResource OptiPageTitle}" />
                 </StackPanel>
 
-                <Grid Grid.Row="1" Margin="0,0,0,16">
+                <Grid Grid.Row="1" Margin="0,0,0,18">
                     <ProgressRing Width="28" Height="28"
                                   IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
                                   Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
@@ -45,30 +40,21 @@
                                 <UniformGridLayout MaximumRowsOrColumns="2"
                                                    Orientation="Horizontal"
                                                    MinItemWidth="240"
-                                                   MinColumnSpacing="12"
-                                                   MinRowSpacing="12"
+                                                   MinColumnSpacing="10"
+                                                   MinRowSpacing="10"
                                                    ItemsStretch="Fill" />
                             </ItemsRepeater.Layout>
                             <ItemsRepeater.ItemTemplate>
                                 <DataTemplate x:DataType="vm:NvidiaPolicyRowViewModel">
-                                    <ContentControl Style="{StaticResource OptiCard}"
-                                            Padding="14,12"
-                                            MinHeight="64"
-                                            HorizontalAlignment="Stretch"
-                                            Opacity="{x:Bind Opacity}"
-                                            Background="{ThemeResource OptiAccentSoftBrush}">
+                                    <Border Style="{StaticResource OptiFeatureTile}"
+                                            Opacity="{x:Bind Opacity}">
                                         <Grid ColumnSpacing="12">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <Border Width="32" Height="32"
-                                                    CornerRadius="9"
-                                                    Background="{ThemeResource OptiIconWellFillBrush}"
-                                                    BorderBrush="{ThemeResource OptiIconWellStrokeBrush}"
-                                                    BorderThickness="1"
-                                                    VerticalAlignment="Center">
+                                            <Border Style="{StaticResource OptiIconWell}">
                                                 <FontIcon Glyph="{x:Bind Glyph}"
                                                           FontSize="14"
                                                           Foreground="{ThemeResource OptiPrimaryTextBrush}"
@@ -76,18 +62,8 @@
                                                           VerticalAlignment="Center" />
                                             </Border>
                                             <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                                <TextBlock Text="{x:Bind Title}"
-                                                           FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                                           FontSize="14"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                           TextWrapping="Wrap" />
-                                                <TextBlock Text="{x:Bind Status}"
-                                                           FontFamily="{StaticResource OptiUiFont}"
-                                                           FontSize="12"
-                                                           LineHeight="16"
-                                                           Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                           TextWrapping="Wrap" />
+                                                <TextBlock Text="{x:Bind Title}" Style="{StaticResource OptiFeatureTitle}" />
+                                                <TextBlock Text="{x:Bind Status}" Style="{StaticResource OptiFeatureDetail}" />
                                             </StackPanel>
                                             <Button Grid.Column="2"
                                                     Style="{StaticResource OptiQuietButton}"
@@ -100,7 +76,7 @@
                                                     IsEnabled="{x:Bind CanApply, Mode=OneWay}"
                                                     AutomationProperties.Name="Apply this policy" />
                                         </Grid>
-                                    </ContentControl>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsRepeater.ItemTemplate>
                         </ItemsRepeater>
@@ -108,10 +84,8 @@
                 </Grid>
 
                 <StackPanel Grid.Row="2" Spacing="12">
-                    <ContentControl Style="{StaticResource OptiCard}"
-                            Padding="14,12"
-                            Visibility="{x:Bind ViewModel.HasMessage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                            Background="{ThemeResource OptiAccentSoftBrush}">
+                    <Border Style="{StaticResource OptiMessageBanner}"
+                            Visibility="{x:Bind ViewModel.HasMessage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -127,14 +101,14 @@
                                        FontSize="12.5"
                                        TextWrapping="Wrap" />
                         </Grid>
-                    </ContentControl>
+                    </Border>
 
                     <StackPanel Spacing="6"
                                 Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                         <ProgressBar Minimum="0" Maximum="100"
                                      Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
-                                     Height="8"
-                                     CornerRadius="4"
+                                     Height="6"
+                                     CornerRadius="3"
                                      Foreground="{ThemeResource OptiAccentBrush}" />
                         <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}"
                                    Style="{StaticResource OptiCaption}"
@@ -145,10 +119,9 @@
                             Content="{x:Bind ViewModel.ApplyAllLabel, Mode=OneWay}"
                             Click="ApplyAll_Click"
                             HorizontalAlignment="Stretch"
-                            MinHeight="48"
                             IsEnabled="{x:Bind ViewModel.CanApplyAll, Mode=OneWay}"
                             AutomationProperties.Name="Apply all NVIDIA panel policies" />
-                    <Grid ColumnSpacing="12">
+                    <Grid ColumnSpacing="10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />

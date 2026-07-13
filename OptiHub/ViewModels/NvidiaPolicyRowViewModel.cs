@@ -24,8 +24,8 @@ public partial class NvidiaPolicyRowViewModel : ObservableObject
 
     partial void OnIsAppliedChanged(bool value)
     {
-        Glyph = value ? "\uE73E" : "\uE711";
-        Opacity = value ? 1.0 : 0.85;
+        Glyph = Helpers.UiStatusPresentation.FeatureGlyph(value);
+        Opacity = Helpers.UiStatusPresentation.FeatureOpacity(value);
         OnPropertyChanged(nameof(NeedsFix));
         OnPropertyChanged(nameof(CanApply));
     }
@@ -34,8 +34,8 @@ public partial class NvidiaPolicyRowViewModel : ObservableObject
     {
         IsApplied = applied;
         Status = applied ? "Applied" : "Not applied";
-        Glyph = applied ? "\uE73E" : "\uE711";
-        Opacity = applied ? 1.0 : 0.85;
+        Glyph = Helpers.UiStatusPresentation.FeatureGlyph(applied);
+        Opacity = Helpers.UiStatusPresentation.FeatureOpacity(applied);
         OnPropertyChanged(nameof(NeedsFix));
         OnPropertyChanged(nameof(CanApply));
     }

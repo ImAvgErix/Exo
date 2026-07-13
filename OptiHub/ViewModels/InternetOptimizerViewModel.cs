@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media;
+using OptiHub.Helpers;
 using OptiHub.Models;
 using OptiHub.Services;
 using Windows.UI;
@@ -16,7 +17,9 @@ public partial class InternetOptimizerViewModel : ObservableObject
     public InternetOptimizerViewModel(AppServices services)
     {
         _services = services;
-        MessageBrush = ResolveBrush("OptiSuccessBrush", Color.FromArgb(255, 34, 197, 94));
+        var banner = UiStatusPresentation.BannerForSuccess(true);
+        MessageGlyph = banner.Glyph;
+        MessageBrush = ResolveBrush(banner.BrushKey, Color.FromArgb(255, 34, 197, 94));
     }
 
     public ObservableCollection<FeatureRowViewModel> Rows { get; } = new();
@@ -51,8 +54,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
                 {
                     Title = f.Title,
                     Detail = f.Status,
-                    Glyph = f.IsOk ? "\uE73E" : "\uE711",
-                    Opacity = f.IsOk ? 1.0 : 0.85
+                    Glyph = UiStatusPresentation.FeatureGlyph(f.IsOk),
+                    Opacity = UiStatusPresentation.FeatureOpacity(f.IsOk)
                 });
             }
 
@@ -156,10 +159,11 @@ public partial class InternetOptimizerViewModel : ObservableObject
     {
         Message = text;
         HasMessage = !string.IsNullOrWhiteSpace(text);
-        MessageGlyph = success ? "\uE73E" : "\uE783";
-        MessageBrush = success
-            ? ResolveBrush("OptiSuccessBrush", Color.FromArgb(255, 34, 197, 94))
-            : ResolveBrush("OptiErrorBrush", Color.FromArgb(255, 220, 38, 38));
+        var banner = UiStatusPresentation.BannerForSuccess(success);
+        MessageGlyph = banner.Glyph;
+        MessageBrush = ResolveBrush(
+            banner.BrushKey,
+            success ? Color.FromArgb(255, 34, 197, 94) : Color.FromArgb(255, 220, 38, 38));
     }
 
     private static Brush ResolveBrush(string key, Color fallback)
