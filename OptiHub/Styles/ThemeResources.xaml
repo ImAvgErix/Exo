@@ -169,29 +169,49 @@
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 
-    <!-- Separate Dark / Light tiles — matches OptiFeatureTile radius/padding; selected = solid white -->
+    <!--
+      Dark / Light tiles. MUST use layered fills:
+      PointerOver + Checked both apply in WinUI — if hover sets Background it wipes
+      the white selected fill and black label “disappears” on dark shell.
+    -->
     <Style x:Key="OptiThemeChoice" TargetType="RadioButton">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
         <Setter Property="FontSize" Value="13.5" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="MinHeight" Value="44" />
         <Setter Property="Padding" Value="14,12" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiSecondaryTextBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
-                    <Border x:Name="Chrome"
-                            Background="{ThemeResource OptiCardFillBrush}"
-                            BorderBrush="{ThemeResource OptiCardStrokeBrush}"
-                            BorderThickness="1"
-                            CornerRadius="{StaticResource OptiTileRadius}"
-                            Padding="{TemplateBinding Padding}"
-                            MinHeight="{TemplateBinding MinHeight}"
-                            HorizontalAlignment="Stretch">
+                    <Grid x:Name="Root"
+                          MinHeight="{TemplateBinding MinHeight}"
+                          HorizontalAlignment="Stretch">
+                        <!-- Base + stroke (always visible) -->
+                        <Border x:Name="Base"
+                                Background="{ThemeResource OptiPageBackgroundBrush}"
+                                BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource OptiTileRadius}" />
+                        <!-- Hover underlay — never paints over selected white -->
+                        <Border x:Name="HoverFill"
+                                Background="{ThemeResource OptiAccentSoftBrush}"
+                                CornerRadius="{StaticResource OptiTileRadius}"
+                                Margin="1"
+                                Opacity="0"
+                                IsHitTestVisible="False" />
+                        <!-- Selected white — ON TOP of hover so it never vanishes -->
+                        <Border x:Name="CheckedFill"
+                                Background="#FFFFFF"
+                                BorderBrush="#FFFFFF"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource OptiTileRadius}"
+                                Opacity="0"
+                                IsHitTestVisible="False" />
                         <TextBlock x:Name="Label"
                                    Text="{TemplateBinding Content}"
                                    FontFamily="{TemplateBinding FontFamily}"
@@ -199,39 +219,49 @@
                                    FontWeight="{TemplateBinding FontWeight}"
                                    Foreground="{TemplateBinding Foreground}"
                                    HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                                   VerticalAlignment="Center"
+                                   Margin="{TemplateBinding Padding}" />
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
-                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="Normal">
+                                    <VisualState.Setters>
+                                        <Setter Target="HoverFill.Opacity" Value="0" />
+                                        <Setter Target="Root.Opacity" Value="1" />
+                                    </VisualState.Setters>
+                                </VisualState>
                                 <VisualState x:Name="PointerOver">
                                     <VisualState.Setters>
-                                        <Setter Target="Chrome.Background" Value="{ThemeResource OptiAccentSoftBrush}" />
+                                        <Setter Target="HoverFill.Opacity" Value="1" />
+                                        <Setter Target="Root.Opacity" Value="1" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <VisualState.Setters>
-                                        <Setter Target="Chrome.Opacity" Value="0.9" />
+                                        <Setter Target="Root.Opacity" Value="0.92" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
                                     <VisualState.Setters>
-                                        <Setter Target="Chrome.Opacity" Value="0.45" />
+                                        <Setter Target="Root.Opacity" Value="0.45" />
                                     </VisualState.Setters>
                                 </VisualState>
                             </VisualStateGroup>
                             <VisualStateGroup x:Name="CheckStates">
                                 <VisualState x:Name="Checked">
                                     <VisualState.Setters>
-                                        <Setter Target="Chrome.Background" Value="#FFFFFF" />
-                                        <Setter Target="Chrome.BorderBrush" Value="#FFFFFF" />
+                                        <Setter Target="CheckedFill.Opacity" Value="1" />
                                         <Setter Target="Label.Foreground" Value="#0A0A0A" />
                                     </VisualState.Setters>
                                 </VisualState>
-                                <VisualState x:Name="Unchecked" />
+                                <VisualState x:Name="Unchecked">
+                                    <VisualState.Setters>
+                                        <Setter Target="CheckedFill.Opacity" Value="0" />
+                                    </VisualState.Setters>
+                                </VisualState>
                                 <VisualState x:Name="Indeterminate" />
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
-                    </Border>
+                    </Grid>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

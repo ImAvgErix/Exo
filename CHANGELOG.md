@@ -1,3 +1,7 @@
+## 1.9.99
+
+- **Settings**: even 18/16 card padding, 14px section rhythm; home-card chrome
+- **Theme pills**: layered fill so selected white Dark never vanishes on hover
 ## 1.9.98
 
 - **Settings**: padding/spacing/type match optimizer pages (OptiSectionTitle, OptiCard 18×16, button heights, tile radius)

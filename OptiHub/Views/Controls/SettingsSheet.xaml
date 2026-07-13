@@ -6,171 +6,185 @@
     Loaded="UserControl_Loaded">
 
     <!--
-      Same tokens as optimizer pages:
-      OptiCard padding 18,16 · OptiSectionTitle · OptiPrimaryButton 42 · spacing 16
+      Match home product cards: OptiCard fill/stroke/radius, 18,16 padding,
+      10 gap between peers, section titles like optimizer pages.
     -->
-    <Border MaxWidth="520"
+    <Border MaxWidth="480"
             HorizontalAlignment="Stretch"
-            Style="{StaticResource OptiCard}"
-            Padding="0">
+            Background="{ThemeResource OptiCardFillBrush}"
+            BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource OptiCardRadius}"
+            Padding="18,16">
         <Grid>
-            <!-- Close (same icon chrome as shell) -->
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Close -->
             <Button x:Name="CloseButton"
+                    Grid.Row="0"
                     Style="{StaticResource OptiIconButton}"
                     AutomationProperties.Name="Close settings"
                     Width="36" Height="36"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Top"
-                    Margin="0,12,12,0"
+                    Margin="0,-4,-4,0"
                     Click="CloseButton_Click">
                 <FontIcon Glyph="&#xE711;" FontSize="12" />
             </Button>
 
-            <StackPanel Spacing="0" Padding="18,16">
+            <!-- Appearance -->
+            <StackPanel Grid.Row="0" Spacing="10" Margin="0,0,40,0">
+                <TextBlock Text="APPEARANCE"
+                           Style="{StaticResource OptiSectionTitle}"
+                           Margin="0" />
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <RadioButton Grid.Column="0"
+                                 Content="Dark"
+                                 GroupName="ThemeChoiceOverlay"
+                                 Style="{StaticResource OptiThemeChoice}"
+                                 HorizontalAlignment="Stretch"
+                                 AutomationProperties.Name="Use dark theme"
+                                 IsChecked="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}" />
+                    <RadioButton Grid.Column="1"
+                                 Content="Light"
+                                 GroupName="ThemeChoiceOverlay"
+                                 Style="{StaticResource OptiThemeChoice}"
+                                 HorizontalAlignment="Stretch"
+                                 AutomationProperties.Name="Use light theme"
+                                 IsChecked="{x:Bind ViewModel.IsLightMode, Mode=TwoWay}" />
+                </Grid>
+            </StackPanel>
 
-                <!-- APPEARANCE -->
-                <StackPanel Spacing="12" Padding="0,0,40,0">
-                    <TextBlock Text="APPEARANCE"
-                               Style="{StaticResource OptiSectionTitle}"
-                               Margin="0" />
-                    <Grid ColumnSpacing="10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <RadioButton Grid.Column="0"
-                                     Content="Dark"
-                                     GroupName="ThemeChoiceOverlay"
-                                     Style="{StaticResource OptiThemeChoice}"
-                                     HorizontalAlignment="Stretch"
-                                     AutomationProperties.Name="Use dark theme"
-                                     IsChecked="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}" />
-                        <RadioButton Grid.Column="1"
-                                     Content="Light"
-                                     GroupName="ThemeChoiceOverlay"
-                                     Style="{StaticResource OptiThemeChoice}"
-                                     HorizontalAlignment="Stretch"
-                                     AutomationProperties.Name="Use light theme"
-                                     IsChecked="{x:Bind ViewModel.IsLightMode, Mode=TwoWay}" />
-                    </Grid>
-                </StackPanel>
+            <Rectangle Grid.Row="1"
+                       Height="1"
+                       Margin="0,14"
+                       Fill="{ThemeResource OptiCardStrokeBrush}"
+                       Opacity="0.85" />
 
-                <Rectangle Height="1"
-                           Margin="0,16"
-                           Fill="{ThemeResource OptiCardStrokeBrush}"
-                           Opacity="0.85" />
-
-                <!-- UPDATES -->
-                <StackPanel Spacing="12">
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="UPDATES"
-                                   Style="{StaticResource OptiSectionTitle}"
-                                   Margin="0"
-                                   VerticalAlignment="Center" />
-                        <ToggleSwitch Grid.Column="1"
-                                      AutomationProperties.Name="Check for OptiHub app updates automatically"
-                                      IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
-                                      OnContent=""
-                                      OffContent=""
-                                      MinWidth="0"
-                                      VerticalAlignment="Center" />
-                    </Grid>
-
-                    <Button Style="{StaticResource OptiPrimaryButton}"
-                            Content="Check for updates"
-                            AutomationProperties.Name="Check for OptiHub app updates"
-                            Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
-                            HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-
-                    <StackPanel Spacing="8"
-                                Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBlock Text="{x:Bind ViewModel.UpdateProgressLabel, Mode=OneWay}"
-                                   FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                   FontSize="13"
-                                   FontWeight="SemiBold"
-                                   HorizontalAlignment="Center"
-                                   Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                        <ProgressBar Minimum="0"
-                                     Maximum="100"
-                                     Value="{x:Bind ViewModel.UpdateProgressPercent, Mode=OneWay}"
-                                     IsIndeterminate="{x:Bind ViewModel.IsUpdateProgressIndeterminate, Mode=OneWay}"
-                                     Height="4"
-                                     CornerRadius="2"
-                                     Foreground="{ThemeResource OptiAccentBrush}" />
-                    </StackPanel>
-
-                    <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
-                               Style="{StaticResource OptiCaption}"
-                               TextWrapping="WrapWholeWords"
-                               MaxLines="2"
-                               TextTrimming="CharacterEllipsis"
-                               Visibility="{x:Bind ViewModel.ShowIdleUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                               AutomationProperties.LiveSetting="Polite" />
-                </StackPanel>
-
-                <Rectangle Height="1"
-                           Margin="0,16"
-                           Fill="{ThemeResource OptiCardStrokeBrush}"
-                           Opacity="0.85" />
-
-                <!-- ABOUT -->
+            <!-- Updates -->
+            <StackPanel Grid.Row="2" Spacing="10">
                 <Grid ColumnSpacing="12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="ABOUT"
+                    <TextBlock Text="UPDATES"
                                Style="{StaticResource OptiSectionTitle}"
                                Margin="0"
                                VerticalAlignment="Center" />
-                    <StackPanel Grid.Column="1"
-                                Spacing="2"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Center">
-                        <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
-                                   Style="{StaticResource OptiPageTitle}"
-                                   FontSize="18"
-                                   LineHeight="22"
-                                   HorizontalAlignment="Right" />
-                        <TextBlock Text="{x:Bind ViewModel.KitVersion, Mode=OneWay}"
-                                   Style="{StaticResource OptiCaption}"
-                                   HorizontalAlignment="Right" />
-                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1"
+                                  AutomationProperties.Name="Check for OptiHub app updates automatically"
+                                  IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
+                                  OnContent=""
+                                  OffContent=""
+                                  MinWidth="0"
+                                  VerticalAlignment="Center" />
                 </Grid>
-
-                <Rectangle Height="1"
-                           Margin="0,16"
-                           Fill="{ThemeResource OptiCardStrokeBrush}"
-                           Opacity="0.85" />
-
-                <!-- SUPPORT -->
-                <StackPanel Spacing="12">
-                    <TextBlock Text="SUPPORT"
-                               Style="{StaticResource OptiSectionTitle}"
-                               Margin="0" />
-                    <Grid ColumnSpacing="10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Button Style="{StaticResource OptiWhiteButton}"
-                                Content="Report issue"
-                                AutomationProperties.Name="Report OptiHub issue on GitHub"
-                                HorizontalAlignment="Stretch"
-                                Command="{x:Bind ViewModel.ReportIssueCommand}" />
-                        <Button Grid.Column="1"
-                                Style="{StaticResource OptiQuietButton}"
-                                Content="Open logs"
-                                AutomationProperties.Name="Open OptiHub logs folder"
-                                HorizontalAlignment="Stretch"
-                                Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
-                    </Grid>
+                <Button Style="{StaticResource OptiPrimaryButton}"
+                        Content="Check for updates"
+                        AutomationProperties.Name="Check for OptiHub app updates"
+                        Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
+                        HorizontalAlignment="Stretch"
+                        IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                <StackPanel Spacing="8"
+                            Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Text="{x:Bind ViewModel.UpdateProgressLabel, Mode=OneWay}"
+                               FontFamily="{StaticResource OptiUiFontSemiBold}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                    <ProgressBar Minimum="0"
+                                 Maximum="100"
+                                 Value="{x:Bind ViewModel.UpdateProgressPercent, Mode=OneWay}"
+                                 IsIndeterminate="{x:Bind ViewModel.IsUpdateProgressIndeterminate, Mode=OneWay}"
+                                 Height="4"
+                                 CornerRadius="2"
+                                 Foreground="{ThemeResource OptiAccentBrush}" />
                 </StackPanel>
+                <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
+                           Style="{StaticResource OptiCaption}"
+                           TextWrapping="WrapWholeWords"
+                           MaxLines="2"
+                           TextTrimming="CharacterEllipsis"
+                           Visibility="{x:Bind ViewModel.ShowIdleUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                           AutomationProperties.LiveSetting="Polite" />
+            </StackPanel>
+
+            <Rectangle Grid.Row="3"
+                       Height="1"
+                       Margin="0,14"
+                       Fill="{ThemeResource OptiCardStrokeBrush}"
+                       Opacity="0.85" />
+
+            <!-- About -->
+            <Grid Grid.Row="4" ColumnSpacing="12" MinHeight="44">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="ABOUT"
+                           Style="{StaticResource OptiSectionTitle}"
+                           Margin="0"
+                           VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1"
+                            Spacing="2"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
+                               FontFamily="{StaticResource OptiUiFontSemiBold}"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               CharacterSpacing="-8"
+                               HorizontalAlignment="Right"
+                               Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                    <TextBlock Text="{x:Bind ViewModel.KitVersion, Mode=OneWay}"
+                               Style="{StaticResource OptiCaption}"
+                               HorizontalAlignment="Right" />
+                </StackPanel>
+            </Grid>
+
+            <Rectangle Grid.Row="5"
+                       Height="1"
+                       Margin="0,14"
+                       Fill="{ThemeResource OptiCardStrokeBrush}"
+                       Opacity="0.85" />
+
+            <!-- Support -->
+            <StackPanel Grid.Row="6" Spacing="10">
+                <TextBlock Text="SUPPORT"
+                           Style="{StaticResource OptiSectionTitle}"
+                           Margin="0" />
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Style="{StaticResource OptiWhiteButton}"
+                            Content="Report issue"
+                            AutomationProperties.Name="Report OptiHub issue on GitHub"
+                            HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.ReportIssueCommand}" />
+                    <Button Grid.Column="1"
+                            Style="{StaticResource OptiQuietButton}"
+                            Content="Open logs"
+                            AutomationProperties.Name="Open OptiHub logs folder"
+                            HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
+                </Grid>
             </StackPanel>
         </Grid>
     </Border>
