@@ -61,14 +61,20 @@ if (File.Exists(dash))
     var d = File.ReadAllText(dash);
     Expect("v17 hero line", d.Contains("Maximum performance", StringComparison.Ordinal));
     Expect("product card grid", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
-    Expect("polished 1.8 cards", d.Contains("Width=\"300\"", StringComparison.Ordinal) && d.Contains("Height=\"188\"", StringComparison.Ordinal));
+    Expect("polished 1.8 cards", d.Contains("OptiCardButton", StringComparison.Ordinal)
+        && d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("hero entrance panel", d.Contains("HeroPanel", StringComparison.Ordinal));
-    Expect("equal logo well", d.Contains("Width=\"72\"", StringComparison.Ordinal) && d.Contains("Height=\"72\"", StringComparison.Ordinal));
+    Expect("equal logo well", d.Contains("Width=\"68\"", StringComparison.Ordinal) && d.Contains("Height=\"68\"", StringComparison.Ordinal));
     Expect("stretch uniform logos", d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal));
     // Logo-only cards — title lives on the module page (a11y still has AutomationProperties.Name).
     Expect("logo only cards", !d.Contains("Definition.Title}", StringComparison.Ordinal)
         || d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
     Expect("no card title label", !d.Contains("Text=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
+    // Responsive: scroll + size-driven columns so cards never clip.
+    Expect("dashboard scroll", d.Contains("ScrollViewer", StringComparison.Ordinal));
+    Expect("dashboard size changed", d.Contains("Page_SizeChanged", StringComparison.Ordinal)
+        || File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
+            .Contains("ApplyResponsiveLayout", StringComparison.Ordinal));
     // Home is nav only — no applied/checking chips (status lives on the module page).
     Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
     Expect("simple home blurb", d.Contains("Pick a target", StringComparison.Ordinal));

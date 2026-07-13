@@ -171,33 +171,23 @@ public sealed partial class MainWindow : Window
             or ShellMode.Nvidia or ShellMode.NvidiaPanel;
 
         BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
-        ContextLogoHost.Visibility = optimizer ? Visibility.Visible : Visibility.Collapsed;
         SettingsButton.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
 
-        AppTitleText.Text = mode switch
-        {
-            ShellMode.Discord => "Discord",
-            ShellMode.Steam => "Steam",
-            ShellMode.Internet => "Internet",
-            ShellMode.Nvidia => "NVIDIA",
-            ShellMode.NvidiaPanel => "Display",
-            ShellMode.Settings => "Settings",
-            _ => string.Empty
-        };
-        AppTitleText.Visibility = string.IsNullOrEmpty(AppTitleText.Text)
-            ? Visibility.Collapsed
-            : Visibility.Visible;
+        // No logo + name in the title bar on optimizer pages — the page already shows
+        // the module title (DISCORD / STEAM / …). Avoids top-left duplicate chrome.
+        ContextLogoHost.Visibility = Visibility.Collapsed;
+        ContextLogo.Source = null;
 
-        if (mode == ShellMode.Discord)
-            TrySetContextLogo("Assets/Logos/discord.png");
-        else if (mode == ShellMode.Steam)
-            TrySetContextLogo("Assets/Logos/steam.png");
-        else if (mode == ShellMode.Internet)
-            TrySetContextLogo("Assets/Logos/internet.png");
-        else if (mode is ShellMode.Nvidia or ShellMode.NvidiaPanel)
-            TrySetContextLogo("Assets/Logos/nvidia.png");
+        if (mode == ShellMode.Settings)
+        {
+            AppTitleText.Text = "Settings";
+            AppTitleText.Visibility = Visibility.Visible;
+        }
         else
-            ContextLogo.Source = null;
+        {
+            AppTitleText.Text = string.Empty;
+            AppTitleText.Visibility = Visibility.Collapsed;
+        }
     }
 
     private void TrySetWindowIcon()

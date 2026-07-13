@@ -1,3 +1,9 @@
+## 1.9.79
+
+- **Cards no longer clip**: ScrollViewer + responsive columns/card size by window width
+- **Title bar**: no logo + module name on optimizer pages (page already shows the name)
+- **Logos rebalanced again** (Steam disc smaller; contact-sheet verified)
+
 ## 1.9.78
 
 - **Logo optical balance**: normalize all hub marks to a shared size — Steam solid disc scaled down (was dominating), AMD/NVIDIA brought up, equal padding on transparent canvas

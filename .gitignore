@@ -44,3 +44,8 @@ OptiHub/Scripts/Discord/kit/tools/pwsh/
 OptiHub/Scripts/Nvidia/tools/
 
 .ui-shots/
+
+OptiHub/Assets/Logos/_contact.png
+OptiHub/Assets/Logos/*.tmp.png
+docs/optihub-live.png
+
