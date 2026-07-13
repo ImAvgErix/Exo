@@ -1,3 +1,7 @@
+## 1.9.93
+
+- **Settings**: single centered settings sheet (no sparse 2×2 cards); Dark/Light segment pills
+- **Chrome**: remove leftover “Settings” title next to Back (page owns the header)
 ## 1.9.92
 
 - **NVIDIA tray**: stop restarting NVDisplay.Container (that re-promoted the icon); restore logon re-hide task (was removed in 1.9.24)

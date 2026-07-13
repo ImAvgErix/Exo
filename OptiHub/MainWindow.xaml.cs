@@ -183,21 +183,11 @@ public sealed partial class MainWindow : Window
         BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
         SettingsButton.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
 
-        // No logo + name in the title bar on optimizer pages — the page already shows
-        // the module title (DISCORD / STEAM / …). Avoids top-left duplicate chrome.
+        // No logo/title next to Back — each page owns its own header (Settings, DISCORD, …).
         ContextLogoHost.Visibility = Visibility.Collapsed;
         ContextLogo.Source = null;
-
-        if (mode == ShellMode.Settings)
-        {
-            AppTitleText.Text = "Settings";
-            AppTitleText.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            AppTitleText.Text = string.Empty;
-            AppTitleText.Visibility = Visibility.Collapsed;
-        }
+        AppTitleText.Text = string.Empty;
+        AppTitleText.Visibility = Visibility.Collapsed;
     }
 
     private void TrySetWindowIcon()

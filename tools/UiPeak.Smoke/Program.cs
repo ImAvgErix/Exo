@@ -57,6 +57,7 @@ if (File.Exists(mainCs))
     Expect("not SetTitleBar whole host", !cs.Contains("SetTitleBar(TitleBarHost)", StringComparison.Ordinal));
     Expect("fixed shell no maximize", cs.Contains("IsMaximizable = false", StringComparison.Ordinal));
     Expect("fixed shell no resize", cs.Contains("IsResizable = false", StringComparison.Ordinal));
+    Expect("no titlebar settings text", !cs.Contains("AppTitleText.Text = \"Settings\"", StringComparison.Ordinal));
 }
 if (File.Exists(dash))
 {
@@ -91,10 +92,13 @@ if (File.Exists(theme))
 if (File.Exists(settings))
 {
     var s = File.ReadAllText(settings);
-    Expect("settings appearance", s.Contains("APPEARANCE", StringComparison.Ordinal));
-    Expect("settings updates", s.Contains("UPDATES", StringComparison.Ordinal));
-    Expect("settings about", s.Contains("ABOUT", StringComparison.Ordinal));
+    Expect("settings appearance", s.Contains("Appearance", StringComparison.Ordinal));
+    Expect("settings updates", s.Contains("Updates", StringComparison.Ordinal));
+    Expect("settings about", s.Contains("About", StringComparison.Ordinal));
     Expect("settings opti card", s.Contains("OptiCard", StringComparison.Ordinal));
+    Expect("settings single sheet", s.Contains("MaxWidth=\"560\"", StringComparison.Ordinal)
+        || s.Contains("MaxWidth=\"580\"", StringComparison.Ordinal));
+    Expect("settings theme pills", s.Contains("OptiThemeRadio", StringComparison.Ordinal));
     Expect("report issue white button", s.Contains("OptiWhiteButton", StringComparison.Ordinal)
         && s.Contains("Report issue", StringComparison.Ordinal));
     Expect("settings update progress only", !s.Contains("OptiLoader", StringComparison.Ordinal)
@@ -122,6 +126,7 @@ if (File.Exists(theme))
     Expect("theme OptiFeatureTile", t.Contains("OptiFeatureTile", StringComparison.Ordinal));
     Expect("theme OptiIconWell", t.Contains("OptiIconWell", StringComparison.Ordinal));
     Expect("theme OptiPagePadding", t.Contains("OptiPagePadding", StringComparison.Ordinal));
+    Expect("theme OptiThemeRadio", t.Contains("OptiThemeRadio", StringComparison.Ordinal));
     Expect("display italic", t.Contains("OptiDisplayFontItalic", StringComparison.Ordinal));
 }
 
