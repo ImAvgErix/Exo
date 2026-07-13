@@ -239,6 +239,9 @@
 
 
 
+
+## 1.9.66
+- Fix title-bar chrome: Settings/Back live outside the drag region so one click works (no double-hit maximize)
 ## 1.9.65
 - UI polish: equal logo wells, B&W AMD + Fluent Globe peer weight, softer coming-soon opacity, stronger UiPeak.Smoke logo ink asserts
 ## 1.9.64

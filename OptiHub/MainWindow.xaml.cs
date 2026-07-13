@@ -39,7 +39,9 @@ public sealed partial class MainWindow : Window
         TrySetWindowIcon();
 
         ExtendsContentIntoTitleBar = true;
-        SetTitleBar(TitleBarHost);
+        // Only the empty middle strip is draggable. Chrome buttons sit outside
+        // so they receive real pointer hits (not non-client drag / maximize).
+        SetTitleBar(TitleBarDragRegion);
 
         AppWindow.Changed += (_, args) =>
         {

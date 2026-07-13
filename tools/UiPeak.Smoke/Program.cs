@@ -43,9 +43,18 @@ if (File.Exists(main))
     var m = File.ReadAllText(main);
     Expect("settings gear", m.Contains("SettingsButton", StringComparison.Ordinal));
     Expect("back chrome", m.Contains("BackButton", StringComparison.Ordinal));
+    Expect("drag region separate", m.Contains("TitleBarDragRegion", StringComparison.Ordinal));
     Expect("no sidebar NavHome", !m.Contains("NavHome", StringComparison.Ordinal));
     Expect("no NavigationView", !m.Contains("<NavigationView", StringComparison.Ordinal));
     Expect("ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
+}
+// SetTitleBar must target the drag strip only — not a parent that owns the gear/back buttons.
+var mainCs = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
+if (File.Exists(mainCs))
+{
+    var cs = File.ReadAllText(mainCs);
+    Expect("SetTitleBar drag strip", cs.Contains("SetTitleBar(TitleBarDragRegion)", StringComparison.Ordinal));
+    Expect("not SetTitleBar whole host", !cs.Contains("SetTitleBar(TitleBarHost)", StringComparison.Ordinal));
 }
 if (File.Exists(dash))
 {
