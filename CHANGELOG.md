@@ -233,6 +233,9 @@
 # Changelog
 
 
+
+## 1.9.60
+- NVIDIA Display panel: only selectable options (res/Hz/depth/color/scaling) — remove policy applied tiles, peak defaults, and tray clear
 ## 1.9.59
 - Restore polished 1.8.32-era UI (hero home, 300×188 cards, 2×2 Settings, Kinetics motion) — last of the pre-redesign shell
 - Keep Internet + NVIDIA Display, resizable window, panel force-refresh, Closest path scaling

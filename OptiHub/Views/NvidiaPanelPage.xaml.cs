@@ -22,9 +22,6 @@ public sealed partial class NvidiaPanelPage : Page
         await ViewModel.RefreshAsync();
     }
 
-    private void ApplyAll_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.ApplyAllCommand.Execute(null);
-
     private void ApplyDisplay_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: NvidiaDisplayColorRowViewModel row })
@@ -33,7 +30,4 @@ public sealed partial class NvidiaPanelPage : Page
 
     private void Refresh_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RefreshCommand.Execute(null);
-
-    private void ClearTray_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.ClearTrayCommand.Execute(null);
 }
