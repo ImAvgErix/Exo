@@ -42,3 +42,5 @@ OptiHub/Scripts/Discord/kit/tools/pwsh/
 
 # Built NVAPI helper (produced by Publish-OptiHub.ps1)
 OptiHub/Scripts/Nvidia/tools/
+
+.ui-shots/
