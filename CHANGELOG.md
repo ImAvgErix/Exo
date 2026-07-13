@@ -1,3 +1,8 @@
+## 1.9.36
+
+- **NVIDIA peak 1.10.3**: display status ignores orphan NVTweak keys; peak OK = max-Hz refresh + (active registry OR live Full RGB + GPU scale)
+- Sticky game profile deltas expanded (pre-render 1, max perf, highest Hz, FG off for competitive); tray feature row (IsPromoted=0 / App ghosts gone)
+- `NvidiaPeakLogic` + `NvidiaDetectCore` + `tools/NvidiaPeak.Smoke`; no logon tray tasks; MSI verify skips when PCI unreadable
 ## 1.9.35
 
 - **Steam peak detect 1.7.8**: `SteamDetectCore.ps1` + `SteamPeakLogic` — CEF launcher + trim helper classifiers; trim accepts 2–15s (not hard-coded 5s only)

@@ -261,7 +261,11 @@ static class Program
                         Console.WriteLine("[MODE] Re-verify after settle: OK");
                 }
 
-                var registryOk = VerifyNvtweakRegistry(requireColor: wantFullRgb, requireGpuScale: wantGpuNoScale);
+                var activeIds = devices.Select(d => d.DisplayId).ToArray();
+                var registryOk = VerifyNvtweakRegistry(
+                    requireColor: wantFullRgb,
+                    requireGpuScale: wantGpuNoScale,
+                    activeDisplayIds: activeIds);
 
                 // Color: NVAPI success, or color API unsupported (registry owns Full RGB).
                 var colorOk = !wantFullRgb ||
@@ -271,8 +275,10 @@ static class Program
                 // Scaling: path OK, or path API missing/unsupported but registry GPU no-scale OK.
                 var scalingOk = !wantGpuNoScale || pathScalingOk || registryOk;
 
-                // Hard gate: refresh policy + registry. Color/path NVAPI are best-effort.
-                var ok = modesOk && registryOk;
+                // Hard gate: refresh policy is required. Registry must pass for *active* display
+                // IDs only — orphan NVTweak keys must not false-fail peak color/scale/Hz.
+                // Live NVAPI Full RGB + path GPU scaling can also authorize when active registry is clean.
+                var ok = modesOk && (registryOk || (colorOk && pathScalingOk));
                 try
                 {
                     var json = JsonSerializer.Serialize(new
@@ -311,7 +317,11 @@ static class Program
             }
             else
             {
-                var registryOk = VerifyNvtweakRegistry(requireColor: wantFullRgb, requireGpuScale: wantGpuNoScale);
+                var activeIds = devices.Select(d => d.DisplayId).ToArray();
+                var registryOk = VerifyNvtweakRegistry(
+                    requireColor: wantFullRgb,
+                    requireGpuScale: wantGpuNoScale,
+                    activeDisplayIds: activeIds);
                 var refreshOk = VerifyTargetRefreshModes(nvidiaGdiNames);
 
                 // Color status: NVAPI Full RGB, or unsupported API + registry Full RGB.
@@ -324,8 +334,8 @@ static class Program
                 var pathScalingOk = VerifyGpuScaling();
                 var scalingOk = !wantGpuNoScale || pathScalingOk || registryOk;
 
-                // Same hard gate as apply: refresh + registry. Soft color/path.
-                var ok = refreshOk && registryOk;
+                // Same hard gate as apply: refresh required; active-display registry OR live NVAPI peak.
+                var ok = refreshOk && (registryOk || (colorOk && pathScalingOk));
                 try
                 {
                     var json = JsonSerializer.Serialize(new
@@ -1155,7 +1165,14 @@ static class Program
         catch { }
     }
 
-    static bool VerifyNvtweakRegistry(bool requireColor = true, bool requireGpuScale = true)
+    /// <summary>
+    /// Verify NVTweak device keys. When activeDisplayIds is provided, only keys that
+    /// belong to those live displays are required (orphan ghost keys must not fail status).
+    /// </summary>
+    static bool VerifyNvtweakRegistry(
+        bool requireColor = true,
+        bool requireGpuScale = true,
+        IReadOnlyCollection<uint>? activeDisplayIds = null)
     {
         try
         {
@@ -1166,11 +1183,34 @@ static class Program
                 Console.WriteLine("[NVTweak] Verify: no device keys (OK if NVAPI path applied or first run)");
                 return true;
             }
+
+            bool MatchesActive(string name)
+            {
+                if (activeDisplayIds is null || activeDisplayIds.Count == 0) return true;
+                foreach (var id in activeDisplayIds)
+                {
+                    var idStr = id.ToString();
+                    // Keys look like "2147881089", "2147881089-0", "2147881089-1"
+                    if (name.Equals(idStr, StringComparison.OrdinalIgnoreCase) ||
+                        name.StartsWith(idStr + "-", StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+                return false;
+            }
+
+            var checkedAny = false;
             var ok = true;
             foreach (var name in root.GetSubKeyNames())
             {
+                if (!MatchesActive(name))
+                {
+                    Console.WriteLine($"[NVTweak] Verify {name}: skip (not active display)");
+                    continue;
+                }
+
                 using var dev = root.OpenSubKey(name);
                 if (dev == null) { ok = false; continue; }
+                checkedAny = true;
                 var scaleOk = !requireGpuScale || (
                     Convert.ToInt32(dev.GetValue("PerformScalingOn", -1)) == RegGpu &&
                     Convert.ToInt32(dev.GetValue("ScalingOverride", -1)) == 1 &&
@@ -1187,6 +1227,14 @@ static class Program
                 Console.WriteLine($"[NVTweak] Verify {name}: scale={scaleOk} color={colorOk}");
                 ok &= deviceOk;
             }
+
+            // Active IDs filtered out every key → rely on NVAPI path (no false-fail on empty match)
+            if (!checkedAny && activeDisplayIds is { Count: > 0 })
+            {
+                Console.WriteLine("[NVTweak] Verify: no keys for active display IDs (OK if NVAPI path owns policy)");
+                return true;
+            }
+
             return ok;
         }
         catch (Exception ex)

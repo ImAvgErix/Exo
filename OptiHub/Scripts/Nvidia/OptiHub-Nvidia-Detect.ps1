@@ -1,6 +1,10 @@
 # OptiHub - detect NVIDIA optimizer status (JSON for WinUI).
 # Feature order matches apply pipeline: GPU -> driver -> 3D profile -> display/privacy.
+# Classifiers: NvidiaDetectCore.ps1 (pure) — keep aligned with NvidiaPeakLogic.cs
 $ErrorActionPreference = 'SilentlyContinue'
+
+$core = Join-Path $PSScriptRoot 'NvidiaDetectCore.ps1'
+if (Test-Path -LiteralPath $core) { . $core }
 
 function Get-NvidiaGpus {
     @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object {
@@ -15,6 +19,9 @@ function Get-NvidiaGpus {
 }
 
 function Get-GpuSeriesFromName([string]$Name) {
+    if (Get-Command Get-OptiHubGpuSeriesFromName -ErrorAction SilentlyContinue) {
+        return Get-OptiHubGpuSeriesFromName -Name $Name
+    }
     if ($Name -match '(?i)\b(?:RTX|GTX)\s*([1-5])0\d{2}\b') { return $Matches[1] + '0' }
     if ($Name -match '(?i)\b([1-5])0\d{2}\b') { return $Matches[1] + '0' }
     # GTX 16 has no RT/DLSS/rBAR; use the non-RTX performance pack.
@@ -110,9 +117,9 @@ function Test-OptiHubDriverInstallTweaks([string]$CurrentNv, $State) {
             }
         }
     } catch { }
-    if ($msiSeen -eq 0) {
-        [void]$issues.Add('NVIDIA display PCI node unavailable for MSI verification')
-    } elseif ($msiGaps -gt 0) {
+    # Only fail MSI when we can see display PCI nodes and they lack High priority.
+    # msiSeen=0 (enum/permissions) is best-effort skip — not a mid-tier false fail.
+    if ($msiSeen -gt 0 -and $msiGaps -gt 0) {
         [void]$issues.Add("MSI High missing on $msiGaps of $msiSeen NVIDIA display device(s)")
     }
 
@@ -126,6 +133,7 @@ function Test-OptiHubDriverInstallTweaks([string]$CurrentNv, $State) {
         Ok         = [bool]($issues.Count -eq 0)
         Remembered = $remembered
         Issues     = @($issues)
+        MsiSeen    = $msiSeen
     }
 }
 
@@ -260,10 +268,28 @@ function Test-NvidiaDisplayLive {
         $jsonLine = @($stdout -split "`r?`n") | Where-Object { $_ -like 'OPTIHUB_NVDISPLAY_JSON:*' } | Select-Object -Last 1
         if (-not $jsonLine) { throw "display helper returned no status JSON: $stderr" }
         $status = $jsonLine.Substring('OPTIHUB_NVDISPLAY_JSON:'.Length) | ConvertFrom-Json
-        $detail = if ($status.skipped) { [string]$status.skipped } elseif ($status.checks) {
-            "color=$($status.checks.colorOk), refresh=$($status.checks.refreshOk), scaling=$($status.checks.scalingOk), registry=$($status.checks.registryOk)"
+        # Peak gate (matches OptiHub.NvDisplay): refresh + (registry active OR live color+scale)
+        # Note: NvidiaDetectCore uses StrictMode — never touch optional props without existence checks.
+        $ok = $false
+        if ($null -ne $status.PSObject.Properties['ok']) { $ok = [bool]$status.ok }
+        $checks = $null
+        if ($null -ne $status.PSObject.Properties['checks']) { $checks = $status.checks }
+        if ($checks -and (Get-Command Test-OptiHubDisplayStatusPeakOk -ErrorAction SilentlyContinue)) {
+            $refreshOk = $false; $registryOk = $false; $colorOk = $false; $pathOk = $false
+            if ($null -ne $checks.PSObject.Properties['refreshOk']) { $refreshOk = [bool]$checks.refreshOk }
+            if ($null -ne $checks.PSObject.Properties['modesOk'] -and [bool]$checks.modesOk) { $refreshOk = $true }
+            if ($null -ne $checks.PSObject.Properties['registryOk']) { $registryOk = [bool]$checks.registryOk }
+            if ($null -ne $checks.PSObject.Properties['colorOk']) { $colorOk = [bool]$checks.colorOk }
+            if ($null -ne $checks.PSObject.Properties['pathScalingOk']) { $pathOk = [bool]$checks.pathScalingOk }
+            if ($null -ne $checks.PSObject.Properties['scalingOk'] -and [bool]$checks.scalingOk) { $pathOk = $true }
+            $ok = Test-OptiHubDisplayStatusPeakOk -RefreshOk $refreshOk -RegistryOk $registryOk -ColorOk $colorOk -PathScalingOk $pathOk
+        }
+        $skipped = $null
+        if ($null -ne $status.PSObject.Properties['skipped']) { $skipped = [string]$status.skipped }
+        $detail = if ($skipped) { $skipped } elseif ($checks) {
+            "color=$colorOk, refresh=$refreshOk, scaling=$pathOk, registry=$registryOk, peakOk=$ok"
         } else { "exit=$($process.ExitCode)" }
-        return [pscustomobject]@{ Available = $true; Ok = [bool]$status.ok; Detail = $detail }
+        return [pscustomobject]@{ Available = $true; Ok = $ok; Detail = $detail }
     } catch {
         return [pscustomobject]@{ Available = $true; Ok = $false; Detail = $_.Exception.Message }
     } finally {
@@ -506,8 +532,54 @@ $features.Add(@{
     active = $backgroundOk
 })
 
+# Tray: hide NVDisplay container (IsPromoted=0); App ghosts should be gone — no logon tasks.
+$trayHideOk = $true
+$trayDetail = 'No NVIDIA tray keys found (or display container demoted).'
+try {
+    $trayRoot = 'HKCU:\Control Panel\NotifyIconSettings'
+    $displayKeys = 0
+    $displayHidden = 0
+    $appGhosts = 0
+    if (Test-Path -LiteralPath $trayRoot) {
+        foreach ($key in @(Get-ChildItem -LiteralPath $trayRoot -ErrorAction SilentlyContinue)) {
+            $item = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction SilentlyContinue
+            $exe = [string]$item.ExecutablePath
+            if (-not $exe) { continue }
+            $isDisplay = if (Get-Command Test-OptiHubDisplayContainerExe -EA SilentlyContinue) {
+                Test-OptiHubDisplayContainerExe $exe
+            } else { $exe -match '(?i)NVDisplay\.Container|Display\.NvContainer' }
+            $isApp = if (Get-Command Test-OptiHubNvidiaAppTrayExe -EA SilentlyContinue) {
+                Test-OptiHubNvidiaAppTrayExe $exe
+            } else { $exe -match '(?i)NVIDIA App|GFExperience|ShadowPlay' }
+            if ($isDisplay) {
+                $displayKeys++
+                $prom = $null
+                try { $prom = [int]$item.IsPromoted } catch { }
+                if ($prom -eq 0) { $displayHidden++ } else { $trayHideOk = $false }
+            } elseif ($isApp) {
+                $appGhosts++
+                $trayHideOk = $false
+            }
+        }
+    }
+    if ($displayKeys -gt 0) {
+        $trayDetail = "Display container tray IsPromoted=0 on $displayHidden/$displayKeys; App ghosts=$appGhosts."
+    } elseif ($appGhosts -gt 0) {
+        $trayDetail = "App/GFE tray ghosts still present ($appGhosts)."
+    }
+} catch {
+    $trayHideOk = $false
+    $trayDetail = 'Tray inspection failed.'
+}
+$features.Add(@{
+    title  = 'Taskbar tray (display hide / App gone)'
+    detail = $trayDetail
+    active = $trayHideOk
+})
+
 $isApplied = $gpuOk -and (-not $pendingAfterDriver) -and (-not $applyInProgress) -and
-             $applied -and $gameOk -and $displayOk -and $backgroundOk -and $clientOk -and $advanced3dOk -and (-not $needsDriverAction)
+             $applied -and $gameOk -and $displayOk -and $backgroundOk -and $clientOk -and $advanced3dOk -and
+             $trayHideOk -and (-not $needsDriverAction)
 
 $driverChanged = $false
 if ($state -and $currentNv -and $state.profileDriverVersion -and
@@ -528,6 +600,7 @@ elseif (-not $displayOk) { 'Display policy incomplete' }
 elseif (-not $clientOk) { 'NVIDIA App still present' }
 elseif (-not $advanced3dOk) { '3D profile incomplete' }
 elseif (-not $backgroundOk) { 'Background re-armed - reapply' }
+elseif (-not $trayHideOk) { 'Tray needs hide pass' }
 elseif ($isApplied) { 'Already optimized' }
 else { 'Ready to optimize' }
 
@@ -544,7 +617,7 @@ elseif (-not $displayOk) { 'Live NVAPI display policy incomplete (Full RGB / sca
 elseif (-not $clientOk) { 'NVIDIA App is still installed. Apply strips App/GFE; settings are applied by OptiHub via NVAPI, not the Control Panel UI.' }
 elseif (-not $advanced3dOk) { '3D Base + game profiles not fully verified. Apply imports them at driver level (ignore Control Panel radio buttons).' }
 elseif (-not $backgroundOk) { "NVIDIA background noise re-enabled ($($backgroundIssues -join '; ')). Apply again to re-disable." }
-elseif ($isApplied) { 'OptiHub policy active: series driver tweaks, DRS 3D profiles, NVAPI display (primary max Hz / secondary 60 Hz / Full RGB / GPU scale), App removed. Green checks here are the source of truth — NVIDIA Control Panel UI is optional and often stale.' }
+elseif ($isApplied) { 'OptiHub policy active: series driver tweaks, DRS 3D profiles, NVAPI display (primary max Hz / secondary 60 Hz / Full RGB / GPU scale), App removed. Green checks here are the source of truth - NVIDIA Control Panel UI is optional and often stale.' }
 else { 'Choose the G-SYNC pack only for a compatible display, then Apply. OptiHub is the control panel.' }
 
 [ordered]@{

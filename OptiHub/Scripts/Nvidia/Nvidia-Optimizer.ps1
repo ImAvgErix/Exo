@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.10.2'
+$Script:NvidiaOptVersion = '1.10.3'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OptiHub'
@@ -235,6 +235,7 @@ function Apply-OptiHubGameProfileDeltas {
 
     # --- Sticky latency / clarity stack (every title) ---
     # Re-assert so an app-level NVIDIA/App profile cannot leave softer defaults.
+    # Peak pack: pre-render 1, max perf, highest Hz, no post-process latency traps.
     $common = @{
         '8102046'   = '1'          # Maximum Pre-Rendered Frames = 1
         '546199011' = '1'          # Maximum frames allowed = 1
@@ -250,6 +251,9 @@ function Apply-OptiHubGameProfileDeltas {
         '271965065' = '0'          # Predefined Ansel off
         '275315612' = '0'          # FXAA indicator off
         '543959236' = '0'          # Enable overlay off
+        '282245910' = '0'          # Antialiasing - Mode = App controlled (no forced AA latency)
+        '283226065' = '1'          # Texture filtering - Quality = High performance (when present)
+        '283385347' = '0'          # DLSS Frame Generation override off by default (re-enabled only hybrid tier)
     }
     foreach ($id in $common.Keys) {
         if (-not $BaseMap.ContainsKey($id)) { continue }
@@ -296,17 +300,18 @@ function Apply-OptiHubGameProfileDeltas {
         [void]$notes.Add('maxfps-pins')
     }
 
-    # Competitive titles: disable DLSS Frame Gen override when the series pack has it (40/50).
-    # FG trades latency for smoothness - wrong default for Val/CS2/R6/etc.
+    # Competitive titles: keep FG off (already in common). Hybrid can restore pack default if present.
     if ($Tier -eq 'comp') {
-        if ($BaseMap.ContainsKey('283385347')) {
-            if (Set-OptiHubNipSettingValue -ProfileNode $ProfileNode -SettingId '283385347' -Value '0') {
-                $changed++
-            }
-            [void]$notes.Add('fg-off')
-        }
+        [void]$notes.Add('fg-off')
         [void]$notes.Add('comp')
     } else {
+        # Hybrid / single-player: allow series-pack FG default if the base defined one
+        if ($BaseMap.ContainsKey('283385347') -and $BaseMap['283385347'] -ne '0') {
+            if (Set-OptiHubNipSettingValue -ProfileNode $ProfileNode -SettingId '283385347' -Value $BaseMap['283385347']) {
+                $changed++
+            }
+            [void]$notes.Add('fg-pack')
+        }
         [void]$notes.Add('hybrid')
     }
 
