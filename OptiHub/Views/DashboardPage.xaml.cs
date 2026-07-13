@@ -57,7 +57,7 @@ public sealed partial class DashboardPage : Page
         var storyboard = new Storyboard();
 
         if (HeroPanel is not null && HeroTransform is not null)
-            AddFadeSlide(storyboard, HeroPanel, HeroTransform, delayMs: 0, fromY: 14);
+            AddFadeSlideX(storyboard, HeroPanel, HeroTransform, delayMs: 0, fromX: -14);
 
         var cards = new List<UIElement>();
         if (CardList is not null)
@@ -94,7 +94,7 @@ public sealed partial class DashboardPage : Page
         {
             From = 0,
             To = 1,
-            Duration = TimeSpan.FromMilliseconds(400),
+            Duration = TimeSpan.FromMilliseconds(360),
             BeginTime = delay,
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
@@ -107,12 +107,40 @@ public sealed partial class DashboardPage : Page
         {
             From = fromY,
             To = 0,
-            Duration = TimeSpan.FromMilliseconds(460),
+            Duration = TimeSpan.FromMilliseconds(400),
             BeginTime = delay,
-            EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.22 }
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
         Storyboard.SetTarget(slide, transform);
         Storyboard.SetTargetProperty(slide, "TranslateY");
+        board.Children.Add(slide);
+    }
+
+    private static void AddFadeSlideX(Storyboard board, UIElement target, CompositeTransform transform, int delayMs, double fromX)
+    {
+        var delay = TimeSpan.FromMilliseconds(delayMs);
+        var fade = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            Duration = TimeSpan.FromMilliseconds(380),
+            BeginTime = delay,
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        Storyboard.SetTarget(fade, target);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+        board.Children.Add(fade);
+        transform.TranslateX = fromX;
+        var slide = new DoubleAnimation
+        {
+            From = fromX,
+            To = 0,
+            Duration = TimeSpan.FromMilliseconds(420),
+            BeginTime = delay,
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        Storyboard.SetTarget(slide, transform);
+        Storyboard.SetTargetProperty(slide, "TranslateX");
         board.Children.Add(slide);
     }
 

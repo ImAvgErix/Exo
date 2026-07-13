@@ -1,3 +1,10 @@
+## 1.9.42
+
+- **FORGE UI redesign** (not a token pass): warm stone + amber rail language, sharp 8–10px geometry
+- Shell: branded chrome bar with amber underline (replaces thin zinc title + divider)
+- Dashboard: asymmetric left brand rail + vertical LIVE module list (no 4-column logo grid)
+- Optimizer pages: open surface header strips + rail-edged feature tiles (no single nested card shell)
+- Cards/buttons/section labels restyled for Forge (accent section titles, bold CTAs)
 ## 1.9.41
 
 - **NVIDIA Panel**: post-apply refresh no longer skipped while IsBusy (`RefreshCoreAsync(force: true)`)
@@ -374,6 +381,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

@@ -14,14 +14,29 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Header -->
-            <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,16">
-                <TextBlock Text="DISPLAY" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                <TextBlock Text="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}"
-                           Style="{StaticResource OptiPageTitle}" />
-                <TextBlock Text="{x:Bind ViewModel.HeaderDetail, Mode=OneWay}"
-                           Style="{StaticResource OptiCaption}" />
-            </StackPanel>
+            <!-- FORGE header strip -->
+            <Border Grid.Row="0"
+                    Background="{ThemeResource OptiSurfaceBrush}"
+                    BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="22,18"
+                    Margin="0,0,0,16">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="4" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Background="{ThemeResource OptiRailBrush}" CornerRadius="2" />
+                    <StackPanel Grid.Column="1" Spacing="4">
+                        <TextBlock Text="DISPLAY" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                        <TextBlock Text="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}"
+                                   Style="{StaticResource OptiPageTitle}" />
+                        <TextBlock Text="{x:Bind ViewModel.HeaderDetail, Mode=OneWay}"
+                                   Style="{StaticResource OptiCaption}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
 
             <Grid Grid.Row="1" Margin="0,0,0,14">
                 <ProgressRing Width="32" Height="32"

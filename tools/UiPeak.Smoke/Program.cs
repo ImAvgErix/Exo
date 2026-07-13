@@ -64,6 +64,9 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("theme has OptiMutedTextBrush", a.Contains("OptiMutedTextBrush", StringComparison.Ordinal));
     Expect("theme has OptiDividerBrush", a.Contains("OptiDividerBrush", StringComparison.Ordinal));
+    Expect("FORGE amber accent", a.Contains("#F59E0B", StringComparison.Ordinal) || a.Contains("#D97706", StringComparison.Ordinal));
+    Expect("FORGE rail brush", a.Contains("OptiRailBrush", StringComparison.Ordinal));
+    Expect("not leftover Signal teal primary", !a.Contains("#5EEAD4", StringComparison.Ordinal));
 }
 
 foreach (var page in new[]
@@ -114,7 +117,18 @@ if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
     Expect("MainWindow has ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
-    Expect("MainWindow has divider", m.Contains("OptiDividerBrush", StringComparison.Ordinal));
+    Expect("MainWindow has OPTIHUB brand", m.Contains("OPTIHUB", StringComparison.Ordinal));
+    Expect("MainWindow has amber underline rail", m.Contains("OptiRailBrush", StringComparison.Ordinal));
+}
+
+var dash = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml");
+if (File.Exists(dash))
+{
+    var d = File.ReadAllText(dash);
+    Expect("dashboard asymmetric rail column", d.Contains("Width=\"300\"", StringComparison.Ordinal) || d.Contains("ColumnDefinition Width=\"300\"", StringComparison.Ordinal));
+    Expect("dashboard module list not wrap grid only", d.Contains("ItemsStackPanel", StringComparison.Ordinal));
+    Expect("dashboard LIVE badge", d.Contains("LIVE", StringComparison.Ordinal));
+    Expect("dashboard not centered card grid only", !d.Contains("MaximumRowsOrColumns=\"4\"", StringComparison.Ordinal));
 }
 
 // Resizable shell: no fixed-size re-lock
