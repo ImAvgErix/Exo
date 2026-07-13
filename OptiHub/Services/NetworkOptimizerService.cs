@@ -345,8 +345,11 @@ public sealed class NetworkOptimizerService
         // Slightly higher initial window even for latency — helps first paint without bulk penalty
         var initialCwnd = latency ? "10" : "16";
         var largeCache = throughput ? "1" : "0";
-        // Gaming multimedia: kill network throttle hard
-        var systemResponsiveness = latency ? "0" : "10";
+        // MMCSS SystemResponsiveness (Microsoft docs):
+        // percent of CPU reserved for low-priority tasks; default 20.
+        // Values below 10 or above 100 clamp to 20. Best valid gaming value is 10.
+        // (0 does NOT mean "pure gaming" — it falls back to default.)
+        var systemResponsiveness = "10";
         var ackBlock = latency
             ? """
   Set-Dword $p 'TcpAckFrequency' 1
@@ -461,7 +464,9 @@ Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters' 'EnableLMHO
 Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters' 'NodeType' 2
 """);
 
-        // Multimedia + QoS (SystemResponsiveness 0 = prioritize games for latency preset)
+        // Multimedia + QoS
+        // NetworkThrottlingIndex ffffffff = disable multimedia network throttle (gaming guides + SG)
+        // SystemResponsiveness 10 = min valid reserve for low-priority work (MS clamps <10 → 20)
         sb.AppendLine("$mm = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'");
         sb.AppendLine("Set-Dword $mm 'NetworkThrottlingIndex' ([int]0xFFFFFFFF)");
         sb.AppendLine("Set-Dword $mm 'SystemResponsiveness' " + systemResponsiveness);

@@ -732,7 +732,7 @@ function Clear-NvidiaTrayGhostIcons {
                 '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$trayScript`"",
                 '-SettlePasses', '3'
             ) -Wait -PassThru -WindowStyle Hidden
-            Write-Ok "Tray clear script exit $($p.ExitCode)"
+            Write-Ok "Tray clear script exit $($p.ExitCode) (no background task)"
             return 1
         } catch {
             Write-Warn "Tray script launch failed: $($_.Exception.Message)"
@@ -3221,8 +3221,12 @@ function Disable-NvidiaTelemetry {
     if ($disabled -eq 0) { Write-Ok 'No telemetry tasks matched (already clean or names differ)' }
     else { Write-Ok "Telemetry/SelfUpdate tasks disabled ($disabled disable action(s))" }
 
-    # No logon persist task - scheduled tasks are background overhead. Quiet is
-    # re-applied only when the user runs OptiHub NVIDIA Apply (or Repair).
+    # No logon/tray scheduled tasks — background noise. Tray is cleaned only on
+    # Apply / Clear tray (hide display icon; App ghosts deleted when strip is clean).
+    foreach ($legacyTask in @('OptiHub-NvidiaTrayHide', 'OptiHub-NvidiaDisplayPersist', 'OptiHub-NvidiaBackgroundPersist')) {
+        try { Unregister-ScheduledTask -TaskName $legacyTask -Confirm:$false -EA 0 } catch { }
+        try { schtasks /Delete /TN $legacyTask /F 2>$null | Out-Null } catch { }
+    }
 
     # Privacy-oriented NV keys (best-effort; missing keys are fine)
     $paths = @(

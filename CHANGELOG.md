@@ -1,3 +1,8 @@
+## 1.9.24
+
+- **No tray scheduled task**: remove logon noise; tray only on Apply/Clear (hide display icon, delete App ghosts)
+- **SystemResponsiveness = 10**: Microsoft clamps values &lt;10 to 20 — 0 was wrong; 10 is the real gaming minimum
+- Unregister any leftover OptiHub-NvidiaTrayHide tasks on apply
 ## 1.9.23
 
 - **NVIDIA tray**: stop resurrection — hide NVDisplay container (IsPromoted=0) instead of deleting; wipe App ghosts; logon re-hide task; multi-pass after soft refresh

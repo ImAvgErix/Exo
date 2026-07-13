@@ -290,7 +290,7 @@ function Clear-NvidiaAppTrayAndContainer {
     $trayScript = Join-Path $PSScriptRoot 'OptiHub-Nvidia-TrayClear.ps1'
     if (Test-Path -LiteralPath $trayScript) {
         try {
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $trayScript -NoTask -SettlePasses 3 2>&1 |
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $trayScript -SettlePasses 3 2>&1 |
                 ForEach-Object { Write-DLog "$_" }
             Write-DLog 'Tray clear script finished'
             return
