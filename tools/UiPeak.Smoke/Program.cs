@@ -144,6 +144,17 @@ if (Directory.Exists(logosDir))
     Expect("internet not tiny", internet.FillH >= 50, $"fillH={internet.FillH:F1}");
 }
 
+var dashVm = Path.Combine(repo, "OptiHub", "ViewModels", "DashboardViewModel.cs");
+if (File.Exists(dashVm))
+{
+    var dvm = File.ReadAllText(dashVm);
+    // Home chips must use full detect (same as module pages), not fastOnly heuristic.
+    Expect("home discord full detect",
+        dvm.Contains("DetectDiscordAsync(ct, fastOnly: false)", StringComparison.Ordinal));
+    Expect("home not fastOnly discord",
+        !dvm.Contains("DetectDiscordAsync(ct, fastOnly: true)", StringComparison.Ordinal));
+}
+
 var panelVm = Path.Combine(repo, "OptiHub", "ViewModels", "NvidiaPanelViewModel.cs");
 if (File.Exists(panelVm))
     Expect("panel force refresh", File.ReadAllText(panelVm).Contains("RefreshCoreAsync(force: true", StringComparison.Ordinal));

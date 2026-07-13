@@ -241,6 +241,9 @@
 
 
 
+
+## 1.9.68
+- Home Discord/Steam/NVIDIA status uses the same full detect as the module pages (fixes false Not applied)
 ## 1.9.67
 - One-click buttons (ClickMode=Press), no nav animation delay
 - Home status chips: Applied / Not applied / Ready / etc. (plain labels)

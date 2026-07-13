@@ -71,14 +71,16 @@ public partial class DashboardViewModel : ObservableObject
         try
         {
             ct.ThrowIfCancellationRequested();
+            // Same detect path as the module pages (not fast-only heuristic).
+            // Fast-only was falsely showing "Not applied" while Discord/Steam pages said applied.
             var label = card.Definition.Id switch
             {
                 "discord" => await DetectOptimizerChipAsync(
-                    () => _services.OptimizerState.DetectDiscordAsync(ct, fastOnly: true), ct),
+                    () => _services.OptimizerState.DetectDiscordAsync(ct, fastOnly: false), ct),
                 "steam" => await DetectOptimizerChipAsync(
-                    () => _services.OptimizerState.DetectSteamAsync(ct, fastOnly: true), ct),
+                    () => _services.OptimizerState.DetectSteamAsync(ct, fastOnly: false), ct),
                 "nvidia" => await DetectOptimizerChipAsync(
-                    () => _services.OptimizerState.DetectNvidiaAsync(ct, fastOnly: true), ct),
+                    () => _services.OptimizerState.DetectNvidiaAsync(ct, fastOnly: false), ct),
                 "internet" => await DetectInternetChipAsync(ct),
                 _ => "Ready"
             };
@@ -126,7 +128,7 @@ public partial class DashboardViewModel : ObservableObject
         return "Ready";
     }
 
-    /// <summary>Map detect output to short, normal labels (no marketing fluff).</summary>
+    /// <summary>Map detect output to short, normal labels (same truth as module pages).</summary>
     internal static string ToChip(OptimizerStateInfo state)
     {
         var text = state.StatusText ?? string.Empty;
@@ -134,14 +136,23 @@ public partial class DashboardViewModel : ObservableObject
             return "Not installed";
         if (text.Contains("Incomplete", StringComparison.OrdinalIgnoreCase))
             return "Incomplete";
+
+        // Prefer IsApplied + "All applied" from detect (module pages use the same).
         if (state.IsApplied ||
             text.Contains("All applied", StringComparison.OrdinalIgnoreCase) ||
-            text.Equals("Applied", StringComparison.OrdinalIgnoreCase))
+            text.Equals("Applied", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("optimized", StringComparison.OrdinalIgnoreCase))
             return "Applied";
+
+        // If every feature row is active, treat as applied (detect script sometimes
+        // sets status text loosely while features are all green).
+        if (state.Features is { Count: > 0 } && state.Features.All(f => f.IsActive))
+            return "Applied";
+
         if (text.Contains("Not applied", StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrWhiteSpace(text))
             return "Not applied";
-        // Keep detect wording short if already short.
+
         return text.Length <= 18 ? text : "Not applied";
     }
 
