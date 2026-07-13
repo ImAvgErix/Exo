@@ -69,9 +69,23 @@ public sealed partial class MainWindow : Window
         ApplyShellChrome();
         UpdateCaptionInset();
 
+        ContentFrame.Navigated += OnContentNavigated;
+
         NavigateHome(suppressTransition: true);
         ClearChromeFocus();
         _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
+    }
+
+    private void OnContentNavigated(object sender, Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        // Cohesive page enter for module pages (home has its own card stagger).
+        if (e.Content is FrameworkElement page && e.Content is not Views.DashboardPage)
+        {
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                try { OptiMotion.PlayPageEnter(page); } catch { }
+            });
+        }
     }
 
     private bool _clearedInitialFocus;
@@ -215,7 +229,7 @@ public sealed partial class MainWindow : Window
         ContextLogo.Source = AssetPathToImageSourceConverter.Resolve(relativePath);
     }
 
-    // Suppress transitions so navigation feels like one click (no double-press wait).
+    // Soft continuum feel without multi-click lag (single Suppress keeps clicks snappy).
     private static NavigationTransitionInfo Slide() =>
         new SuppressNavigationTransitionInfo();
 
@@ -248,7 +262,7 @@ public sealed partial class MainWindow : Window
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {
         if (_settingsOpen)
-            CloseSettingsOverlay();
+            CloseSettingsOverlay(immediate: true);
 
         if (_mode == mode && ContentFrame.CurrentSourcePageType == pageType)
             return;
@@ -264,33 +278,51 @@ public sealed partial class MainWindow : Window
         CloseSettingsOverlay();
 
     private void SettingsScrim_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e) =>
-        // Sheet is a sibling above the scrim — this only fires for backdrop hits.
         CloseSettingsOverlay();
 
     private void OpenSettingsOverlay()
     {
         if (_settingsOpen) return;
-        // Always show home under the sheet so the blur has product chrome behind it.
         if (_mode != ShellMode.Home)
             NavigateHome(suppressTransition: true);
 
         _settingsOpen = true;
         SettingsOverlay.Visibility = Visibility.Visible;
-        // Kinetics toast-overshoot open: scrim fade + sheet spring scale/rise
         OptiMotion.PlayOverlayOpen(SettingsOverlay, SettingsSheetHost);
         SettingsSheetHost.PlayOpenMotion();
         SettingsButton.Visibility = Visibility.Collapsed;
     }
 
-    private void CloseSettingsOverlay()
+    private void CloseSettingsOverlay(bool immediate = false)
     {
         if (!_settingsOpen) return;
         _settingsOpen = false;
-        SettingsOverlay.Visibility = Visibility.Collapsed;
-        SettingsOverlay.Opacity = 1;
-        SettingsSheetHost.Opacity = 1;
-        // Gear only on home.
-        SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
+
+        void Finish()
+        {
+            SettingsOverlay.Visibility = Visibility.Collapsed;
+            SettingsOverlay.Opacity = 1;
+            SettingsSheetHost.Opacity = 1;
+            SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        if (immediate)
+        {
+            Finish();
+            return;
+        }
+
+        var done = false;
+        void Once()
+        {
+            if (done) return;
+            done = true;
+            DispatcherQueue.TryEnqueue(Finish);
+        }
+
+        OptiMotion.PlayOverlayClose(SettingsOverlay, SettingsSheetHost, Once);
+        // Safety if composition batch doesn't fire
+        _ = Task.Delay(220).ContinueWith(_ => Once());
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)

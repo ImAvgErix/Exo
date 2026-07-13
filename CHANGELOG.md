@@ -1,3 +1,10 @@
+## 1.9.103
+
+- **Motion system**: shared OptiMotion (Composition) across home, settings, modules, loader
+- **Home cards**: no flicker — prime invisible then Kinetics stagger rise/scale
+- **Settings**: spring open/close + row stagger
+- **Modules**: soft page enter on navigate
+- **Loader**: orbit + arc sweep + breath (premium loading)
 ## 1.9.102
 
 - **Settings theme**: single dark button “Dark mode” / “Light mode” — press to flip UI (no slider)

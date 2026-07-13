@@ -3,26 +3,24 @@
     x:Class="OptiHub.Views.Controls.OptiLoader"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Width="44"
-    Height="44">
+    Width="48"
+    Height="48">
 
     <!--
-      OptiLoader — "orbit bead" (unique brand loader).
-      Soft track ring + accent bead orbiting with a trailing ghost;
-      core breathes. Not a ProgressRing, triad, or bar meter.
+      Premium loader (Kinetics-inspired):
+      soft ring + orbiting bead + elastic core breath.
     -->
     <Grid x:Name="Root"
-          Width="44"
-          Height="44"
+          Width="48"
+          Height="48"
           HorizontalAlignment="Center"
           VerticalAlignment="Center">
 
-        <!-- Soft outer halo (pulses) -->
         <Ellipse x:Name="Halo"
-                 Width="40"
-                 Height="40"
+                 Width="44"
+                 Height="44"
                  Fill="{ThemeResource OptiAccentBrush}"
-                 Opacity="0.08"
+                 Opacity="0.1"
                  HorizontalAlignment="Center"
                  VerticalAlignment="Center"
                  IsHitTestVisible="False"
@@ -32,9 +30,8 @@
             </Ellipse.RenderTransform>
         </Ellipse>
 
-        <!-- Track ring -->
-        <Ellipse Width="32"
-                 Height="32"
+        <Ellipse Width="34"
+                 Height="34"
                  Stroke="{ThemeResource OptiCardStrokeBrush}"
                  StrokeThickness="1.5"
                  Opacity="0.55"
@@ -42,10 +39,26 @@
                  VerticalAlignment="Center"
                  IsHitTestVisible="False" />
 
-        <!-- Orbit host: bead + ghost sit at top, whole host rotates -->
+        <!-- Arc sweep (elastic progress feel) -->
+        <Ellipse x:Name="Sweep"
+                 Width="34"
+                 Height="34"
+                 Stroke="{ThemeResource OptiAccentBrush}"
+                 StrokeThickness="2.5"
+                 StrokeDashArray="1.2 6"
+                 Opacity="0.95"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"
+                 IsHitTestVisible="False"
+                 RenderTransformOrigin="0.5,0.5">
+            <Ellipse.RenderTransform>
+                <RotateTransform x:Name="SweepRotate" Angle="0" />
+            </Ellipse.RenderTransform>
+        </Ellipse>
+
         <Grid x:Name="Orbit"
-              Width="32"
-              Height="32"
+              Width="34"
+              Height="34"
               HorizontalAlignment="Center"
               VerticalAlignment="Center"
               RenderTransformOrigin="0.5,0.5"
@@ -53,29 +66,23 @@
             <Grid.RenderTransform>
                 <RotateTransform x:Name="OrbitRotate" Angle="0" />
             </Grid.RenderTransform>
-
-            <!-- Lead bead (top of orbit) -->
             <Ellipse Width="7"
                      Height="7"
                      Fill="{ThemeResource OptiAccentBrush}"
                      VerticalAlignment="Top"
                      HorizontalAlignment="Center"
-                     Margin="0,-2,0,0"
-                     Opacity="1" />
-
-            <!-- Ghost trail (offset angularly via second host) -->
+                     Margin="0,-2,0,0" />
         </Grid>
 
-        <!-- Trail orbit (same size, phase-offset rotation) -->
         <Grid x:Name="TrailOrbit"
-              Width="32"
-              Height="32"
+              Width="34"
+              Height="34"
               HorizontalAlignment="Center"
               VerticalAlignment="Center"
               RenderTransformOrigin="0.5,0.5"
               IsHitTestVisible="False">
             <Grid.RenderTransform>
-                <RotateTransform x:Name="TrailRotate" Angle="0" />
+                <RotateTransform x:Name="TrailRotate" Angle="-40" />
             </Grid.RenderTransform>
             <Ellipse Width="5"
                      Height="5"
@@ -86,32 +93,29 @@
                      Opacity="0.4" />
         </Grid>
 
-        <!-- Second softer ghost -->
         <Grid x:Name="GhostOrbit"
-              Width="32"
-              Height="32"
+              Width="34"
+              Height="34"
               HorizontalAlignment="Center"
               VerticalAlignment="Center"
               RenderTransformOrigin="0.5,0.5"
               IsHitTestVisible="False">
             <Grid.RenderTransform>
-                <RotateTransform x:Name="GhostRotate" Angle="0" />
+                <RotateTransform x:Name="GhostRotate" Angle="-78" />
             </Grid.RenderTransform>
             <Ellipse Width="3.5"
                      Height="3.5"
                      Fill="{ThemeResource OptiAccentBrush}"
                      VerticalAlignment="Top"
                      HorizontalAlignment="Center"
-                     Margin="0,0,0,0"
-                     Opacity="0.22" />
+                     Opacity="0.2" />
         </Grid>
 
-        <!-- Breathing core -->
         <Ellipse x:Name="Core"
                  Width="9"
                  Height="9"
                  Fill="{ThemeResource OptiAccentBrush}"
-                 Opacity="0.9"
+                 Opacity="0.95"
                  HorizontalAlignment="Center"
                  VerticalAlignment="Center"
                  IsHitTestVisible="False"

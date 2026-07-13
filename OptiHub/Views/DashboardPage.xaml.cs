@@ -1,19 +1,21 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
+using OptiHub.Helpers;
 using OptiHub.ViewModels;
 
 namespace OptiHub.Views;
 
 /// <summary>
-/// Home grid for the fixed 1180×760 shell — no responsive resize math.
+/// Home grid for the fixed 1180×760 shell.
+/// Entrance: Composition stagger (no first-frame flash).
 /// </summary>
 public sealed partial class DashboardPage : Page
 {
     private CancellationTokenSource? _refreshCts;
     private bool _entrancePlayed;
+    private bool _entranceRunning;
 
     public DashboardViewModel ViewModel { get; }
 
@@ -33,16 +35,19 @@ public sealed partial class DashboardPage : Page
         };
     }
 
-    private void Page_Loaded(object sender, RoutedEventArgs e) => PlayStaggerEntrance();
+    private void Page_Loaded(object sender, RoutedEventArgs e) =>
+        _ = TryPlayEntranceAsync();
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        // Returning home: allow a soft re-entrance only if we left previously
+        // (first load is handled by Loaded + flag).
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
         _refreshCts = new CancellationTokenSource();
         await ViewModel.RefreshStatesAsync(_refreshCts.Token);
-        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, PlayStaggerEntrance);
+        _ = TryPlayEntranceAsync();
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -50,81 +55,56 @@ public sealed partial class DashboardPage : Page
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
         _refreshCts = null;
+        // Next time we land home, play a light re-entrance
+        _entrancePlayed = false;
         base.OnNavigatedFrom(e);
     }
 
-    private void PlayStaggerEntrance()
+    private async Task TryPlayEntranceAsync()
     {
-        if (_entrancePlayed) return;
-
-        var storyboard = new Storyboard();
-
-        if (HeroPanel is not null && HeroTransform is not null)
-            AddFadeSlide(storyboard, HeroPanel, HeroTransform, delayMs: 0, fromY: 12, fade: true);
-
-        var cards = new List<UIElement>();
-        if (CardList is not null)
-            CollectCardButtons(CardList, cards);
-
-        for (var i = 0; i < cards.Count; i++)
+        if (_entrancePlayed || _entranceRunning) return;
+        _entranceRunning = true;
+        try
         {
-            var el = cards[i];
-            if (el.RenderTransform is not CompositeTransform ct)
+            List<UIElement> cards = [];
+            for (var attempt = 0; attempt < 28; attempt++)
             {
-                ct = new CompositeTransform { TranslateY = 14 };
-                el.RenderTransform = ct;
-                el.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
-            }
-            else
-            {
-                ct.TranslateY = 14;
+                cards.Clear();
+                if (CardList is not null)
+                    CollectCardButtons(CardList, cards);
+                if (cards.Count >= ViewModel.Cards.Count && cards.Count > 0)
+                    break;
+                await Task.Delay(16);
             }
 
-            AddFadeSlide(storyboard, el, ct, delayMs: 40 + i * 55, fromY: 16, fade: true);
+            if (_entrancePlayed) return;
+
+            // Prime BEFORE host is fully visible — kills flicker.
+            if (HeroPanel is not null)
+                OptiMotion.PrimeHidden(HeroPanel, fromY: 14f, fromScale: 1f);
+
+            foreach (var el in cards)
+                OptiMotion.PrimeHidden(el, fromY: 18f, fromScale: 0.96f);
+
+            if (CardList is not null)
+                CardList.Opacity = 1;
+
+            // Two frames so composition + layout settle with opacity 0.
+            await Task.Delay(32);
+            if (_entrancePlayed) return;
+            _entrancePlayed = true;
+
+            var sequence = new List<UIElement>();
+            if (HeroPanel is not null)
+                sequence.Add(HeroPanel);
+            sequence.AddRange(cards);
+
+            OptiMotion.PlayStagger(sequence, baseDelayMs: 20, stepMs: 50, fromY: 16f, fromScale: 0.97f);
         }
-
-        if (storyboard.Children.Count == 0) return;
-        _entrancePlayed = true;
-        storyboard.Begin();
-    }
-
-    private static void AddFadeSlide(
-        Storyboard board, UIElement target, CompositeTransform transform, int delayMs, double fromY, bool fade)
-    {
-        var delay = TimeSpan.FromMilliseconds(delayMs);
-        // Kinetics spring settle (overshoot) + glide opacity
-        var spring = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.32 };
-        var glide = new CubicEase { EasingMode = EasingMode.EaseOut };
-
-        if (fade)
+        finally
         {
-            var fadeAnim = new DoubleAnimation
-            {
-                From = 0,
-                To = 1,
-                Duration = TimeSpan.FromMilliseconds(420),
-                BeginTime = delay,
-                EasingFunction = glide,
-                EnableDependentAnimation = true
-            };
-            Storyboard.SetTarget(fadeAnim, target);
-            Storyboard.SetTargetProperty(fadeAnim, "Opacity");
-            board.Children.Add(fadeAnim);
+            _entranceRunning = false;
         }
-
-        transform.TranslateY = fromY;
-        var slide = new DoubleAnimation
-        {
-            From = fromY,
-            To = 0,
-            Duration = TimeSpan.FromMilliseconds(480),
-            BeginTime = delay,
-            EasingFunction = spring,
-            EnableDependentAnimation = true
-        };
-        Storyboard.SetTarget(slide, transform);
-        Storyboard.SetTargetProperty(slide, "TranslateY");
-        board.Children.Add(slide);
     }
 
     private static void CollectCardButtons(DependencyObject root, List<UIElement> into)
