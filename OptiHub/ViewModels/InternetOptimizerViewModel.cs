@@ -130,11 +130,13 @@ public partial class InternetOptimizerViewModel : ObservableObject
     {
         if (!snap.ProbeOk) return "Probe incomplete";
 
-        var media = snap.Media.EthernetUp
-            ? "Ethernet"
-            : snap.Media.WifiUp
-                ? $"Wi‑Fi · {snap.Media.PreferredBandTarget}"
-                : snap.ConnectionType;
+        var media = snap.Media.EthernetInUse
+            ? "Ethernet (in use)"
+            : snap.Media.EthernetUp
+                ? "Ethernet (linked)"
+                : snap.Media.WifiUp
+                    ? $"Wi‑Fi · {snap.Media.PreferredBandTarget}"
+                    : snap.ConnectionType;
 
         var preset = snap.ActivePreset switch
         {

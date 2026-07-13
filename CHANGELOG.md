@@ -1,3 +1,7 @@
+## 1.9.28
+
+- **Wi‑Fi disable only when Ethernet is in use**: default IPv4 route + real IPv4 (not just adapter Status=Up / cable with no route)
+- Linked-but-unused Ethernet leaves Wi‑Fi alone
 ## 1.9.27
 
 - **Smart path policy**: if Ethernet is up, prefer Ethernet and **disable Wi‑Fi**; Wi‑Fi-only path uses capability detect

@@ -40,23 +40,37 @@ public sealed partial class InternetOptimizerPage : Page
             $"  {media.PolicyLine}"
         };
 
-        if (media.EthernetUp && media.WifiAvailable)
+        if (media.EthernetInUse && media.WifiAvailable)
         {
             lines.Add("");
-            lines.Add("Ethernet is linked. Wi‑Fi adapters will be disabled so traffic uses Ethernet (best for gaming).");
+            lines.Add("Ethernet is the active internet path (default route). Wi‑Fi will be disabled so gaming stays on Ethernet.");
         }
-        else if (!media.EthernetUp && media.WifiUp)
+        else if (media.EthernetUp && !media.EthernetInUse)
         {
             lines.Add("");
-            lines.Add($"Wi‑Fi only. Preferred band target: {media.PreferredBandTarget} (based on your adapter, not a cloud model).");
+            lines.Add("Ethernet is linked but not carrying your default route — Wi‑Fi will NOT be disabled.");
+        }
+        else if (media.WifiUp)
+        {
+            lines.Add("");
+            lines.Add($"Wi‑Fi is the active path. Preferred band target: {media.PreferredBandTarget} (from your radio/driver).");
             if (media.ConnectedRadioHint is not "—")
                 lines.Add($"  Connected radio hint: {media.ConnectedRadioHint}");
         }
 
         lines.Add("");
-        lines.Add("Some driver properties need an Ethernet adapter restart to fully apply.");
-        lines.Add("Restart Ethernet adapters after apply?");
+        if (media.EthernetUp || media.EthernetAvailable)
+        {
+            lines.Add("Some Ethernet driver properties need an adapter restart to fully apply.");
+            lines.Add("Restart Ethernet adapters after apply?");
+        }
+        else
+        {
+            lines.Add("No Ethernet restart needed (Wi‑Fi is not force-restarted).");
+            lines.Add("Continue with apply?");
+        }
 
+        var hasEth = media.EthernetUp || media.EthernetAvailable;
         var dialog = new ContentDialog
         {
             Title = "Apply network stack",
@@ -70,12 +84,13 @@ public sealed partial class InternetOptimizerPage : Page
                 },
                 MaxHeight = 320
             },
-            PrimaryButtonText = "Apply + restart Ethernet",
-            SecondaryButtonText = "Apply without restart",
+            PrimaryButtonText = hasEth ? "Apply + restart Ethernet" : "Apply",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot
         };
+        if (hasEth)
+            dialog.SecondaryButtonText = "Apply without restart";
 
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.None)
@@ -84,7 +99,8 @@ public sealed partial class InternetOptimizerPage : Page
         return new NetworkApplyOptions
         {
             PreferEthernetDisableWifi = true,
-            RestartEthernet = result == ContentDialogResult.Primary
+            // Only restart when user picked primary and Ethernet exists
+            RestartEthernet = result == ContentDialogResult.Primary && hasEth
         };
     }
 

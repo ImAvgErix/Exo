@@ -269,6 +269,7 @@ public sealed class NetworkOptimizerService
     {
         var ethAvail = false;
         var ethUp = false;
+        var ethInUse = false;
         var wifiAvail = false;
         var wifiUp = false;
         var supports6 = false;
@@ -289,6 +290,25 @@ $eth = @($phys | Where-Object { -not (IsWifi $_) })
 $wifi = @($phys | Where-Object { IsWifi $_ })
 $eUp = @($eth | Where-Object Status -eq 'Up').Count -gt 0
 $wUp = @($wifi | Where-Object Status -eq 'Up').Count -gt 0
+# "In use" = default IPv4 route goes out an Ethernet ifIndex (not merely Status=Up)
+$eInUse = $false
+$defRoutes = @(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -EA SilentlyContinue | Sort-Object RouteMetric, InterfaceMetric)
+foreach ($r in $defRoutes) {
+  $a = $phys | Where-Object { $_.ifIndex -eq $r.InterfaceIndex } | Select-Object -First 1
+  if (-not $a) { continue }
+  if (-not (IsWifi $a) -and $a.Status -eq 'Up') { $eInUse = $true; break }
+  if (IsWifi $a) { break } # default route is Wi-Fi — Ethernet not in use for internet
+}
+# Also require a unicast IPv4 on that Ethernet if we claimed in-use
+if ($eInUse) {
+  $okIp = $false
+  foreach ($e in @($eth | Where-Object Status -eq 'Up')) {
+    $ip = Get-NetIPAddress -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue |
+      Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.PrefixOrigin -ne 'WellKnown' }
+    if (@($ip).Count -gt 0) { $okIp = $true; break }
+  }
+  if (-not $okIp) { $eInUse = $false }
+}
 $band6 = $false; $band5 = $false
 foreach ($w in $wifi) {
   foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $w.Name -EA SilentlyContinue)) {
@@ -304,9 +324,8 @@ $iface = (netsh wlan show interfaces 2>$null | Out-String)
 $hint = '-'
 if ($iface -match '(?i)Radio type\s*:\s*(.+)') { $hint = $Matches[1].Trim() }
 elseif ($iface -match '(?i)Channel\s*:\s*(\d+)') { $hint = 'ch ' + $Matches[1] }
-# Connected 6 GHz channels are typically 1-233 in 6 GHz band; Windows often reports radio type
 if ($hint -match '(?i)6\s*GHz|be|6E') { $band6 = $true }
-Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;HINT=$hint"
+Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;HINT=$hint"
 """, ct).ConfigureAwait(false);
             try
             {
@@ -322,6 +341,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;WIFI=$($wifi.Count -gt 0);WIFIU
                     {
                         case "ETH": ethAvail = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
                         case "ETHUP": ethUp = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
+                        case "ETHUSE": ethInUse = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
                         case "WIFI": wifiAvail = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
                         case "WIFIUP": wifiUp = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
                         case "B6": supports6 = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
@@ -356,16 +376,39 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;WIFI=$($wifi.Count -gt 0);WIFIU
             }
         }
 
+        // Managed fallback for "in use": default gateway on Ethernet NIC
+        if (!ethInUse && ethUp)
+        {
+            try
+            {
+                foreach (var n in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (n.NetworkInterfaceType != NetworkInterfaceType.Ethernet) continue;
+                    if (n.OperationalStatus != OperationalStatus.Up) continue;
+                    var gw = n.GetIPProperties().GatewayAddresses
+                        .Any(g => g.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                                  && !g.Address.Equals(System.Net.IPAddress.Any));
+                    var hasIp = n.GetIPProperties().UnicastAddresses.Any(u =>
+                        u.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                        && !u.Address.ToString().StartsWith("169.254.", StringComparison.Ordinal));
+                    if (gw && hasIp) { ethInUse = true; break; }
+                }
+            }
+            catch { }
+        }
+
         var bandTarget = supports6 ? "6GHz" : supports5 ? "5GHz" : "Auto";
         string policy;
-        if (ethUp)
+        if (ethInUse)
             policy = wifiAvail
-                ? "Ethernet up → use Ethernet, disable Wi‑Fi"
-                : "Ethernet up → Ethernet only";
+                ? "Ethernet in use (default route) → disable Wi‑Fi"
+                : "Ethernet in use → Ethernet only";
+        else if (ethUp && !ethInUse)
+            policy = "Ethernet linked but not default route → leave Wi‑Fi alone";
         else if (wifiUp)
-            policy = $"Wi‑Fi only → prefer {bandTarget}";
+            policy = $"Wi‑Fi in use → prefer {bandTarget}";
         else if (ethAvail)
-            policy = "Ethernet present (down) → prefer when linked";
+            policy = "Ethernet present (not carrying traffic) → no Wi‑Fi disable";
         else if (wifiAvail)
             policy = $"Wi‑Fi only → prefer {bandTarget}";
         else
@@ -375,6 +418,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;WIFI=$($wifi.Count -gt 0);WIFIU
         {
             EthernetAvailable = ethAvail,
             EthernetUp = ethUp,
+            EthernetInUse = ethInUse,
             WifiAvailable = wifiAvail,
             WifiUp = wifiUp,
             ClientSupports6Ghz = supports6,
@@ -455,8 +499,8 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;WIFI=$($wifi.Count -gt 0);WIFIU
             SavePreset(preset);
             var snap = await ProbeAsync(ct).ConfigureAwait(false);
             var matched = MatchesPreset(snap, preset);
-            var policy = media.EthernetUp
-                ? "Ethernet preferred (Wi‑Fi disabled if present)."
+            var policy = media.EthernetInUse
+                ? "Ethernet is the active path (Wi‑Fi disabled if it was on)."
                 : media.WifiUp
                     ? $"Wi‑Fi path; prefer {media.PreferredBandTarget}."
                     : media.PolicyLine;
@@ -678,11 +722,22 @@ Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit
         sb.AppendLine("  } catch {}");
         sb.AppendLine("}");
 
-        // Ethernet-first: if any Ethernet is Up, disable Wi-Fi adapters (user policy for gaming)
+        // Disable Wi-Fi ONLY when Ethernet is actually carrying the default route (in use),
+        // not merely "Status=Up" (cable plugged with no DHCP / wrong metric).
         sb.AppendLine("if (" + preferEth + " -eq 1) {");
-        sb.AppendLine("  $ethUp = @($adapters | Where-Object { -not (Test-IsWifiAdapter $_) -and $_.Status -eq 'Up' })");
-        sb.AppendLine("  if ($ethUp.Count -gt 0) {");
-        sb.AppendLine("    Write-Host '[OptiHub-NET] Ethernet up — disabling Wi-Fi adapters'");
+        sb.AppendLine("  $ethCandidates = @($adapters | Where-Object { -not (Test-IsWifiAdapter $_) -and $_.Status -eq 'Up' })");
+        sb.AppendLine("  $ethInUse = $false");
+        sb.AppendLine("  $routes = @(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -EA SilentlyContinue | Sort-Object RouteMetric, InterfaceMetric)");
+        sb.AppendLine("  foreach ($r in $routes) {");
+        sb.AppendLine("    $a = $adapters | Where-Object { $_.ifIndex -eq $r.InterfaceIndex } | Select-Object -First 1");
+        sb.AppendLine("    if (-not $a) { continue }");
+        sb.AppendLine("    if (-not (Test-IsWifiAdapter $a)) {");
+        sb.AppendLine("      $ip = @(Get-NetIPAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -EA SilentlyContinue | Where-Object { $_.IPAddress -notlike '169.254.*' })");
+        sb.AppendLine("      if ($ip.Count -gt 0) { $ethInUse = $true; break }");
+        sb.AppendLine("    } else { break }");
+        sb.AppendLine("  }");
+        sb.AppendLine("  if ($ethInUse) {");
+        sb.AppendLine("    Write-Host '[OptiHub-NET] Ethernet is default route — disabling Wi-Fi'");
         sb.AppendLine("    foreach ($w in @($adapters | Where-Object { Test-IsWifiAdapter $_ })) {");
         sb.AppendLine("      try {");
         sb.AppendLine("        if ($w.Status -ne 'Disabled') {");
@@ -691,7 +746,9 @@ Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit
         sb.AppendLine("        }");
         sb.AppendLine("      } catch { Write-Host \"[NIC] could not disable $($w.Name)\" }");
         sb.AppendLine("    }");
-        sb.AppendLine("  } else { Write-Host '[OptiHub-NET] No Ethernet up — leaving Wi-Fi enabled' }");
+        sb.AppendLine("  } else {");
+        sb.AppendLine("    Write-Host '[OptiHub-NET] Ethernet not in use (no default route) — leaving Wi-Fi alone'");
+        sb.AppendLine("  }");
         sb.AppendLine("}");
 
         sb.AppendLine("try { Clear-DnsClientCache -EA SilentlyContinue } catch {}");

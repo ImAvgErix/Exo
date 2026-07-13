@@ -12,6 +12,8 @@ public sealed class NetworkMediaProfile
 {
     public bool EthernetAvailable { get; init; }
     public bool EthernetUp { get; init; }
+    /// <summary>True when the default route (0.0.0.0/0) uses an Ethernet interface — traffic is actually on Ethernet.</summary>
+    public bool EthernetInUse { get; init; }
     public bool WifiAvailable { get; init; }
     public bool WifiUp { get; init; }
     /// <summary>Client radio can do 6 GHz (Wi‑Fi 6E/7) if property/driver says so.</summary>
