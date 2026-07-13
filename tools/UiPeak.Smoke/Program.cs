@@ -168,7 +168,8 @@ if (File.Exists(panelVm))
 {
     var pvm = File.ReadAllText(panelVm);
     Expect("panel has RefreshCoreAsync", pvm.Contains("RefreshCoreAsync", StringComparison.Ordinal));
-    Expect("panel force refresh after apply", pvm.Contains("RefreshCoreAsync(force: true)", StringComparison.Ordinal));
+    Expect("panel force refresh after apply",
+        pvm.Contains("RefreshCoreAsync(force: true", StringComparison.Ordinal));
     // Guard on user refresh only — must not early-return without force path
     Expect("busy guard allows force",
         pvm.Contains("if (IsBusy && !force)", StringComparison.Ordinal) ||

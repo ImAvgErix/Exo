@@ -35,34 +35,45 @@ public partial class NvidiaPanelViewModel : ObservableObject
     [ObservableProperty] private string _applyAllLabel = "Apply peak defaults";
     [ObservableProperty] private bool _canApplyAll;
 
-    /// <summary>User-initiated refresh — blocked while an apply is in flight.</summary>
     [RelayCommand]
-    public Task RefreshAsync() => RefreshCoreAsync(force: false);
+    public Task RefreshAsync() => RefreshCoreAsync(force: false, soft: false);
 
-    /// <summary>
-    /// Reload live display/policy snapshot. When force=true (post-apply), runs even if IsBusy.
-    /// </summary>
-    private async Task RefreshCoreAsync(bool force)
+    private async Task RefreshCoreAsync(bool force, bool soft)
     {
         if (IsBusy && !force) return;
-        IsLoading = true;
+        // Soft refresh never shows full-page loading (avoids combos vanishing).
+        if (!soft)
+            IsLoading = true;
         try
         {
             var displayTask = _services.NvidiaPanel.ListDisplaysAsync();
             var policyTask = _services.NvidiaPanel.ProbePolicyAsync();
             await Task.WhenAll(displayTask, policyTask).ConfigureAwait(true);
 
-            Displays.Clear();
-            foreach (var d in displayTask.Result)
+            var infos = displayTask.Result;
+            if (soft && Displays.Count > 0 &&
+                Displays.Select(d => d.DisplayId).SequenceEqual(infos.Select(i => i.DisplayId)))
             {
-                var row = new NvidiaDisplayColorRowViewModel
+                foreach (var info in infos)
                 {
-                    DisplayId = d.DisplayId,
-                    Title = d.Title,
-                    IsPrimary = d.IsPrimary
-                };
-                row.LoadFrom(d);
-                Displays.Add(row);
+                    var row = Displays.FirstOrDefault(d => d.DisplayId == info.DisplayId);
+                    row?.SoftUpdateSummary(info);
+                }
+            }
+            else
+            {
+                Displays.Clear();
+                foreach (var d in infos)
+                {
+                    var row = new NvidiaDisplayColorRowViewModel
+                    {
+                        DisplayId = d.DisplayId,
+                        Title = d.Title,
+                        IsPrimary = d.IsPrimary
+                    };
+                    row.LoadFrom(d);
+                    Displays.Add(row);
+                }
             }
             HasDisplays = Displays.Count > 0;
 
@@ -83,23 +94,21 @@ public partial class NvidiaPanelViewModel : ObservableObject
             HeaderStatus = HasDisplays
                 ? $"{Displays.Count} display{(Displays.Count == 1 ? "" : "s")}"
                 : (missing == 0 ? "Policy OK" : $"{missing} policy gaps");
-            HeaderDetail = "Resolution · refresh · bit depth · Full RGB · scaling — apply per display or peak defaults";
+            HeaderDetail = "Change a value, then Apply. Peak defaults: GPU + no-scaling + override.";
             CanApplyAll = true;
             ApplyAllLabel = "Apply peak defaults";
-            if (missing == 0)
-                HasMessage = false;
         }
         catch (Exception ex)
         {
             HeaderStatus = "Status unavailable";
             HeaderDetail = ex.Message;
             CanApplyAll = true;
-            ApplyAllLabel = "Apply peak defaults";
             SetMessage($"Could not probe driver: {ex.Message}", success: false);
         }
         finally
         {
-            IsLoading = false;
+            if (!soft)
+                IsLoading = false;
         }
     }
 
@@ -115,9 +124,12 @@ public partial class NvidiaPanelViewModel : ObservableObject
         {
             var messages = new List<string>();
             var allOk = true;
+            var any = false;
 
-            if (row.TryGetSelectedMode(out var w, out var h, out var hz))
+            // Only apply dirty fields — never re-stamp unchanged mode (was resetting desktop).
+            if (row.IsModeDirty() && row.TryGetSelectedMode(out var w, out var h, out var hz))
             {
+                any = true;
                 ProgressStatus = $"Setting {w}x{h}@{hz}...";
                 ProgressPercent = 30;
                 var (ok, msg) = await _services.NvidiaPanel.SetModeAsync(w, h, hz, row.DisplayId);
@@ -125,8 +137,9 @@ public partial class NvidiaPanelViewModel : ObservableObject
                 allOk &= ok;
             }
 
-            if (!string.IsNullOrWhiteSpace(row.SelectedDepth))
+            if (row.IsDepthDirty())
             {
+                any = true;
                 ProgressStatus = $"Setting {row.SelectedDepth}...";
                 ProgressPercent = 50;
                 var (ok, msg) = await _services.NvidiaPanel.SetColorDepthAsync(row.SelectedDepth!, row.DisplayId);
@@ -134,8 +147,9 @@ public partial class NvidiaPanelViewModel : ObservableObject
                 allOk &= ok;
             }
 
-            if (!string.IsNullOrWhiteSpace(row.SelectedColorRange))
+            if (row.IsColorRangeDirty())
             {
+                any = true;
                 ProgressStatus = $"Setting {row.SelectedColorRange}...";
                 ProgressPercent = 70;
                 var (ok, msg) = await _services.NvidiaPanel.SetColorRangeAsync(row.SelectedColorRange!, row.DisplayId);
@@ -143,8 +157,9 @@ public partial class NvidiaPanelViewModel : ObservableObject
                 allOk &= ok;
             }
 
-            if (!string.IsNullOrWhiteSpace(row.SelectedScaling))
+            if (row.IsScalingDirty())
             {
+                any = true;
                 ProgressStatus = $"Setting {row.SelectedScaling}...";
                 ProgressPercent = 85;
                 var (ok, msg) = await _services.NvidiaPanel.SetScalingAsync(row.SelectedScaling!, row.DisplayId);
@@ -153,9 +168,13 @@ public partial class NvidiaPanelViewModel : ObservableObject
             }
 
             ProgressPercent = 100;
-            SetMessage(string.Join(" ", messages.Where(m => !string.IsNullOrWhiteSpace(m))), allOk);
-            // Must force: IsBusy is still true until finally.
-            await RefreshCoreAsync(force: true);
+            if (!any)
+                SetMessage("Nothing changed — pick a different value, then Apply.", success: true);
+            else
+                SetMessage(string.Join(" ", messages.Where(m => !string.IsNullOrWhiteSpace(m))), allOk);
+
+            // Soft reload: keep combo rows alive so UI doesn't "leave".
+            await RefreshCoreAsync(force: true, soft: true);
         }
         catch (Exception ex)
         {
@@ -199,7 +218,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
         {
             var (ok, msg) = await _services.NvidiaPanel.ClearTrayIconsAsync();
             SetMessage(msg, ok);
-            await RefreshCoreAsync(force: true);
+            await RefreshCoreAsync(force: true, soft: true);
         }
         finally
         {
@@ -220,8 +239,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
             settings.PrimaryRefresh = "max";
             settings.SecondaryRefresh = "60";
             settings.FullRgb = true;
-            // Full-screen GPU scaling — not "no scaling" (black bars with games).
-            settings.GpuNoScaling = false;
+            settings.GpuNoScaling = true;
             settings.ScalingOverride = true;
             settings.VideoNvidiaColor = true;
             settings.VideoNvidiaImage = true;
@@ -240,9 +258,10 @@ public partial class NvidiaPanelViewModel : ObservableObject
             ProgressPercent = 100;
             ProgressStatus = ok ? "Done" : "Failed";
             SetMessage(ok
-                ? "Peak defaults applied (Full RGB, max primary Hz, GPU no-scaling)."
+                ? "Peak defaults applied (Full RGB, GPU + no-scaling + override)."
                 : message, ok);
-            await RefreshCoreAsync(force: true);
+            // Full rebuild after peak (modes may change).
+            await RefreshCoreAsync(force: true, soft: false);
         }
         catch (Exception ex)
         {

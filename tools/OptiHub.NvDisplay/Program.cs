@@ -291,9 +291,9 @@ static class Program
 
             var wantFullRgb = !string.Equals(
                 Environment.GetEnvironmentVariable("OPTIHUB_FULL_RGB") ?? "1", "0", StringComparison.Ordinal);
-            // Default OFF — "no scaling" causes black bars on desktop with games at non-native res.
-            var wantGpuNoScale = string.Equals(
-                Environment.GetEnvironmentVariable("OPTIHUB_GPU_NOSCALE") ?? "0", "1", StringComparison.Ordinal);
+            // Default ON — GPU perform + No scaling + Override (user-confirmed no black bars).
+            var wantGpuNoScale = !string.Equals(
+                Environment.GetEnvironmentVariable("OPTIHUB_GPU_NOSCALE") ?? "1", "0", StringComparison.Ordinal);
 
             if (apply && nvidiaGdiNames.Count > 0)
             {
@@ -708,7 +708,7 @@ static class Program
                 currentFormat,
                 supportedDepths = supported,
                 scaling,
-                scalingOptions = new[] { "gpu", "gpu-noscaling", "display" },
+                scalingOptions = new[] { "gpu-noscaling", "gpu", "display" },
                 colorRangeOptions = new[] { "full", "limited" }
             });
         }
@@ -804,7 +804,7 @@ static class Program
         {
             using var devices = Registry.CurrentUser.OpenSubKey(
                 @"Software\NVIDIA Corporation\Global\NVTweak\Devices");
-            if (devices is null) return "gpu";
+            if (devices is null) return "gpu-noscaling";
             foreach (var name in devices.GetSubKeyNames())
             {
                 using var dev = devices.OpenSubKey(name);
@@ -817,7 +817,7 @@ static class Program
             }
         }
         catch { }
-        return "gpu";
+        return "gpu-noscaling";
     }
 
     static bool ApplyUserMode(List<DisplayDevice> devices, int width, int height, int hz, uint? onlyId)
@@ -1689,17 +1689,16 @@ static class Program
                 using var dev = root.OpenSubKey(name, writable: true);
                 if (dev == null) continue;
 
-                // GPU scaling + Full-screen (NOT "No scaling") — no-scaling causes black bars
-                // on the desktop when a game or mode is below native panel resolution.
+                // GPU + No scaling + Override ON (user-confirmed: no black bars on this setup).
                 dev.SetValue("PerformScalingOn", RegGpu, RegistryValueKind.DWord);
                 dev.SetValue("ScalingDevice", RegGpu, RegistryValueKind.DWord);
                 dev.SetValue("ScalingOverride", 1, RegistryValueKind.DWord);
                 dev.SetValue("AppControlledScaling", 0, RegistryValueKind.DWord);
-                dev.SetValue("Scaling", RegFullScreen, RegistryValueKind.DWord);
-                dev.SetValue("ScalingMode", RegFullScreen, RegistryValueKind.DWord);
-                dev.SetValue("FlatPanelScaling", RegFullScreen, RegistryValueKind.DWord);
-                dev.SetValue("OverlayScaling", RegFullScreen, RegistryValueKind.DWord);
-                dev.SetValue("PreferredScalingMode", RegFullScreen, RegistryValueKind.DWord);
+                dev.SetValue("Scaling", RegNoScaling, RegistryValueKind.DWord);
+                dev.SetValue("ScalingMode", RegNoScaling, RegistryValueKind.DWord);
+                dev.SetValue("FlatPanelScaling", RegNoScaling, RegistryValueKind.DWord);
+                dev.SetValue("OverlayScaling", RegNoScaling, RegistryValueKind.DWord);
+                dev.SetValue("PreferredScalingMode", RegNoScaling, RegistryValueKind.DWord);
                 dev.SetValue("GpuScaling", 1, RegistryValueKind.DWord);
                 dev.SetValue("DisplayScaling", 0, RegistryValueKind.DWord);
                 dev.SetValue("OverrideScalingMode", 1, RegistryValueKind.DWord);
@@ -1708,8 +1707,7 @@ static class Program
                 dev.SetValue("PreferGpuScaling", 1, RegistryValueKind.DWord);
                 dev.SetValue("ForceGpuScaling", 1, RegistryValueKind.DWord);
                 dev.SetValue("isOverrideScalingEnabled", 1, RegistryValueKind.DWord);
-                // 1 ≈ full-screen style (not 3 / no-scaling) in common NVTweak dumps
-                dev.SetValue("scalingMethod", 1, RegistryValueKind.DWord);
+                dev.SetValue("scalingMethod", 3, RegistryValueKind.DWord);
 
                 using (var color = dev.CreateSubKey("Color"))
                 {

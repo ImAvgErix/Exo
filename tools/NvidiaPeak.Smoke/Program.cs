@@ -140,9 +140,8 @@ Expect("depth BPC12 -> 12", NvidiaPanelLogic.ToDepthCliArg("BPC12") == "12");
 Expect("scaling gpu no-scaling", NvidiaPanelLogic.ToScalingCliArg("GPU no-scaling") == "gpu-noscaling");
 Expect("scaling gpu default", NvidiaPanelLogic.ToScalingCliArg("GPU scaling") == "gpu");
 Expect("scaling display", NvidiaPanelLogic.ToScalingCliArg("Display scaling") == "display");
-Expect("default set-scaling is gpu not noscaling",
-    NvidiaPanelLogic.BuildSetScalingArgs(null!, null).Contains("gpu", StringComparison.Ordinal) &&
-    !NvidiaPanelLogic.BuildSetScalingArgs(null!, null).Contains("gpu-noscaling", StringComparison.Ordinal));
+Expect("default set-scaling is gpu-noscaling",
+    NvidiaPanelLogic.BuildSetScalingArgs(null!, null).Contains("gpu-noscaling", StringComparison.Ordinal));
 Expect("color full", NvidiaPanelLogic.ToColorRangeCliArg("Full RGB") == "full");
 Expect("color limited", NvidiaPanelLogic.ToColorRangeCliArg("Limited") == "limited");
 Expect("list-displays args", NvidiaPanelLogic.BuildListDisplaysArgs() == "--list-displays");

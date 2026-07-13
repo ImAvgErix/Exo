@@ -53,13 +53,16 @@
                         <StackPanel Spacing="12"
                                     Visibility="{x:Bind ViewModel.HasDisplays, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                             <TextBlock Text="MONITORS" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Displays, Mode=OneWay}">
-                                <ItemsRepeater.Layout>
-                                    <StackLayout Orientation="Vertical" Spacing="12" />
-                                </ItemsRepeater.Layout>
-                                <ItemsRepeater.ItemTemplate>
+                            <!-- ItemsControl (not Repeater) — keeps ComboBox selection stable -->
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.Displays, Mode=OneWay}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ItemsStackPanel Orientation="Vertical" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:NvidiaDisplayColorRowViewModel">
-                                        <ContentControl Style="{StaticResource OptiCard}" Padding="20,18">
+                                        <ContentControl Style="{StaticResource OptiCard}" Padding="20,18" Margin="0,0,0,4">
                                             <StackPanel Spacing="14">
                                                 <Grid ColumnSpacing="12">
                                                     <Grid.ColumnDefinitions>
@@ -99,6 +102,7 @@
                                                         <ComboBox ItemsSource="{x:Bind ResolutionOptions}"
                                                                   SelectedItem="{x:Bind SelectedResolution, Mode=TwoWay}"
                                                                   HorizontalAlignment="Stretch"
+                                                                  MinHeight="36"
                                                                   IsEnabled="{x:Bind IsApplying, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                                                   AutomationProperties.Name="Resolution" />
                                                     </StackPanel>
@@ -107,6 +111,7 @@
                                                         <ComboBox ItemsSource="{x:Bind RefreshOptions}"
                                                                   SelectedItem="{x:Bind SelectedRefresh, Mode=TwoWay}"
                                                                   HorizontalAlignment="Stretch"
+                                                                  MinHeight="36"
                                                                   IsEnabled="{x:Bind IsApplying, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                                                   AutomationProperties.Name="Refresh rate" />
                                                     </StackPanel>
@@ -116,6 +121,7 @@
                                                         <ComboBox ItemsSource="{x:Bind DepthOptions}"
                                                                   SelectedItem="{x:Bind SelectedDepth, Mode=TwoWay}"
                                                                   HorizontalAlignment="Stretch"
+                                                                  MinHeight="36"
                                                                   IsEnabled="{x:Bind IsApplying, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                                                   AutomationProperties.Name="Color depth" />
                                                     </StackPanel>
@@ -124,6 +130,7 @@
                                                         <ComboBox ItemsSource="{x:Bind ColorRangeOptions}"
                                                                   SelectedItem="{x:Bind SelectedColorRange, Mode=TwoWay}"
                                                                   HorizontalAlignment="Stretch"
+                                                                  MinHeight="36"
                                                                   IsEnabled="{x:Bind IsApplying, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                                                   AutomationProperties.Name="NVIDIA color range" />
                                                     </StackPanel>
@@ -133,6 +140,7 @@
                                                         <ComboBox ItemsSource="{x:Bind ScalingOptions}"
                                                                   SelectedItem="{x:Bind SelectedScaling, Mode=TwoWay}"
                                                                   HorizontalAlignment="Stretch"
+                                                                  MinHeight="36"
                                                                   IsEnabled="{x:Bind IsApplying, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                                                   AutomationProperties.Name="Scaling" />
                                                     </StackPanel>
@@ -140,8 +148,8 @@
                                             </StackPanel>
                                         </ContentControl>
                                     </DataTemplate>
-                                </ItemsRepeater.ItemTemplate>
-                            </ItemsRepeater>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
 
                         <!-- Policy checklist -->

@@ -1,3 +1,8 @@
+## 1.9.44
+
+- **Scaling**: restore peak default to GPU + **No scaling** + Override ON (your working config; full-screen was wrong)
+- **Panel UI**: combos no longer blank on select; only Apply dirty fields; soft refresh keeps controls alive
+- Live re-applied `--set-scaling gpu-noscaling` to clear full-screen side effects
 ## 1.9.43
 
 - **AMOLED UI**: pure black + white accents (removes orange Forge palette)
@@ -387,6 +392,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 
