@@ -447,19 +447,22 @@ public sealed class GitHubUpdateService
                         if (pct != lastReport && (pct - lastReport >= 1 || pct >= 85))
                         {
                             lastReport = pct;
-                            var mb = written / (1024.0 * 1024.0);
-                            var totalMb = total / (1024.0 * 1024.0);
                             Report(status, progress,
-                                $"Downloading v{check.RemoteVersion}… {mb:0.0}/{totalMb:0.0} MB",
+                                $"Downloading v{check.RemoteVersion}…",
                                 percent: pct);
                         }
                     }
-                    else if (written > 0 && written / (1024 * 1024) != lastReport)
+                    else if (written > 0)
                     {
-                        lastReport = (int)(written / (1024 * 1024));
-                        Report(status, progress,
-                            $"Downloading v{check.RemoteVersion}… {written / (1024.0 * 1024.0):0.0} MB",
-                            percent: -1);
+                        // Unknown size — pulse progress without MB spam.
+                        var soft = (int)Math.Min(70, 10 + (written / (512 * 1024)));
+                        if (soft != lastReport)
+                        {
+                            lastReport = soft;
+                            Report(status, progress,
+                                $"Downloading v{check.RemoteVersion}…",
+                                percent: soft);
+                        }
                     }
                 }
             }

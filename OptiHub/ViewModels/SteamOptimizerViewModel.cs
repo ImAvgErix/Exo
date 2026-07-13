@@ -56,7 +56,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
             StatusText = "Unavailable";
             DetailText = string.Empty;
             Features.Clear();
-            SetResult("Status failed.", success: false);
+            SetResult(Helpers.OptimizerMessages.StatusFailed, success: false);
         }
         finally
         {
@@ -101,7 +101,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
             {
                 ProgressPercent = 100;
                 ProgressStatus = "Done";
-                SetResult("Done.", success: true);
+                SetResult(Helpers.OptimizerMessages.Done, success: true);
             }
             else
             {
@@ -116,7 +116,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             ProgressStatus = "Cancelled";
-            SetResult("Cancelled.", success: false);
+            SetResult(Helpers.OptimizerMessages.Cancelled, success: false);
         }
         catch (Exception ex)
         {
@@ -168,7 +168,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
                 workingDirectory: _services.Scripts.GetSteamRoot());
 
             SetResult(
-                result.Success ? "Repair finished. Start Steam normally." : (result.ErrorMessage ?? result.Summary),
+                result.Success ? Helpers.OptimizerMessages.RepairFinished : (result.ErrorMessage ?? result.Summary),
                 success: result.Success);
             ProgressStatus = result.Success ? "Repair complete" : (result.ExitCode == -2 ? "Cancelled" : "Repair failed");
             if (result.Success)
@@ -179,7 +179,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             ProgressStatus = "Cancelled";
-            SetResult("Steam repair was cancelled.", success: false);
+            SetResult(Helpers.OptimizerMessages.Cancelled, success: false);
         }
         catch (Exception ex)
         {

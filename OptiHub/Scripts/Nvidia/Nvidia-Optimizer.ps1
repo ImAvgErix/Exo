@@ -3226,9 +3226,9 @@ function Disable-NvidiaTelemetry {
     if ($disabled -eq 0) { Write-Ok 'No telemetry tasks matched (already clean or names differ)' }
     else { Write-Ok "Telemetry/SelfUpdate tasks disabled ($disabled disable action(s))" }
 
-    # No logon/tray scheduled tasks — background noise. Tray is cleaned only on
-    # Apply / Clear tray (hide display icon; App ghosts deleted when strip is clean).
-    foreach ($legacyTask in @('OptiHub-NvidiaTrayHide', 'OptiHub-NvidiaDisplayPersist', 'OptiHub-NvidiaBackgroundPersist')) {
+    # Remove noisy legacy persist tasks only. Keep OptiHub-NvidiaTrayHide —
+    # it re-hides the display-container tray after reboot (HKCU IsPromoted=0).
+    foreach ($legacyTask in @('OptiHub-NvidiaDisplayPersist', 'OptiHub-NvidiaBackgroundPersist')) {
         try { Unregister-ScheduledTask -TaskName $legacyTask -Confirm:$false -EA 0 } catch { }
         try { schtasks /Delete /TN $legacyTask /F 2>$null | Out-Null } catch { }
     }

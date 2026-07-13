@@ -1,17 +1,18 @@
-# OptiHub — NVIDIA tray cleanup (no scheduled tasks / no background noise)
+# OptiHub — NVIDIA tray / overflow killer (gaming quiet)
 #
-# Root cause of "icon comes back":
-#   Soft-refresh restarts NVDisplay.ContainerLocalSystem, which re-registers a tray key.
-#   Deleting that key makes Windows recreate it as promoted → more annoying.
+# Why icons "come back":
+#   NVDisplay.ContainerLocalSystem re-registers a tray key on soft-refresh / logon.
+#   Deleting that key makes Windows recreate it as promoted (worse).
 #
-# Correct approach (no background task):
-#   1) Keep NVIDIA App + CPL fully stripped (main source of App tray icons)
-#   2) Disable App container (NvContainerLocalSystem) — not the display container
-#   3) DELETE App/GFE/Overlay tray keys
-#   4) HIDE display-container tray with IsPromoted=0 (must leave key; delete is wrong)
-#   5) Run this only when user Applies / Clears tray — never as a logon task
+# Strategy (original working approach from v1.9.23):
+#   1) Kill App-stack (NvContainerLocalSystem) permanently disabled
+#   2) DELETE App/GFE/ShadowPlay tray keys
+#   3) HIDE display-container tray (IsPromoted=0) — leave the key
+#   4) Multi-pass settle after container restart
+#   5) Lightweight HKCU logon task re-hides after reboot (no elevation)
 #
 param(
+    [switch]$NoTask,
     [int]$SettlePasses = 2
 )
 $ErrorActionPreference = 'Continue'
@@ -48,6 +49,7 @@ function Test-IsNvidiaTrayExe([string]$Exe) {
 function Invoke-OptiHubNvidiaTrayPass {
     $removed = 0
     $hidden = 0
+    $patternApp = '(?i)NVIDIA App|nvapp|GeForce Experience|ShadowPlay|nvsphelper|NvBackend|NvNode|GFExperience|NVIDIA Share|NVIDIA Overlay'
 
     foreach ($root in (Get-NvidiaNotifyRoots)) {
         if (-not (Test-Path -LiteralPath $root)) { continue }
@@ -59,7 +61,7 @@ function Invoke-OptiHubNvidiaTrayPass {
             if (-not (Test-IsNvidiaTrayExe $exe)) { return }
 
             if (Test-IsDisplayContainerExe $exe) {
-                # Leave key; force not promoted (deleting causes re-create as visible)
+                # Keep key (prevents re-create as promoted) — force overflow-hidden
                 try {
                     New-ItemProperty -LiteralPath $keyPath -Name 'IsPromoted' -Value 0 -PropertyType DWord -Force -EA 0 | Out-Null
                     Set-ItemProperty -LiteralPath $keyPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0
@@ -71,16 +73,20 @@ function Invoke-OptiHubNvidiaTrayPass {
                 return
             }
 
-            # App / GFE / overlay — delete (should not exist if strip was clean)
-            try {
-                Remove-Item -LiteralPath $keyPath -Recurse -Force -EA Stop
-                $removed++
-                Write-TLog "Removed tray key: $exe"
-            } catch {
-                try {
-                    Set-ItemProperty -LiteralPath $keyPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0
-                    $hidden++
-                } catch { }
+            # App / GFE / overlay ghosts — delete
+            if ($exe -match $patternApp -or $exe -match '(?i)\\nvcontainer\.exe' -or -not (Test-IsDisplayContainerExe $exe)) {
+                if (-not (Test-IsDisplayContainerExe $exe)) {
+                    try {
+                        Remove-Item -LiteralPath $keyPath -Recurse -Force -EA Stop
+                        $removed++
+                        Write-TLog "Removed tray key: $exe"
+                    } catch {
+                        try {
+                            Set-ItemProperty -LiteralPath $keyPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0
+                            $hidden++
+                        } catch { }
+                    }
+                }
             }
         }
     }
@@ -156,19 +162,49 @@ function Clear-NvidiaAppLeftovers {
     }
 }
 
-function Unregister-OptiHubTrayTasks {
-    # Never keep background tray tasks — older OptiHub builds registered one.
-    foreach ($taskName in @('OptiHub-NvidiaTrayHide', 'OptiHub-NvidiaDisplayPersist', 'OptiHub-NvidiaBackgroundPersist')) {
+function Register-OptiHubTrayHideTask {
+    # Lightweight: at logon re-hide NVIDIA tray (HKCU). No elevation required for IsPromoted.
+    $taskName = 'OptiHub-NvidiaTrayHide'
+    $scriptPath = $PSCommandPath
+    if ([string]::IsNullOrWhiteSpace($scriptPath) -or -not (Test-Path -LiteralPath $scriptPath)) {
+        $scriptPath = Join-Path $PSScriptRoot 'OptiHub-Nvidia-TrayClear.ps1'
+    }
+    if (-not (Test-Path -LiteralPath $scriptPath)) {
+        Write-TLog 'Skip task: tray script path missing'
+        return
+    }
+
+    $arg = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$scriptPath`" -NoTask -SettlePasses 2"
+    try {
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -EA 0
+    } catch { }
+
+    try {
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg
+        $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+        $settings = New-ScheduledTaskSettingsSet `
+            -AllowStartIfOnBatteries `
+            -DontStopIfGoingOnBatteries `
+            -StartWhenAvailable `
+            -ExecutionTimeLimit (New-TimeSpan -Minutes 3) `
+            -MultipleInstances IgnoreNew
+        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+        Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
+            -Settings $settings -Principal $principal -Force -EA Stop | Out-Null
+        Write-TLog "Registered logon task: $taskName (re-hides tray after reboot)"
+    } catch {
         try {
-            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -EA 0
-        } catch { }
-        try { schtasks /Delete /TN $taskName /F 2>$null | Out-Null } catch { }
+            $cmd = "powershell.exe $arg"
+            schtasks /Create /TN $taskName /TR $cmd /SC ONLOGON /RL LIMITED /F 2>$null | Out-Null
+            Write-TLog "Registered logon task via schtasks: $taskName"
+        } catch {
+            Write-TLog "Could not register tray task: $($_.Exception.Message)"
+        }
     }
 }
 
 # ---- main ----
-Write-TLog 'Clearing / hiding NVIDIA tray (no background task)...'
-Unregister-OptiHubTrayTasks
+Write-TLog 'Clearing / hiding NVIDIA tray icons...'
 Disable-NvidiaAppContainer
 Clear-NvidiaAppLeftovers
 
@@ -179,14 +215,20 @@ for ($i = 1; $i -le $passes; $i++) {
     $r = Invoke-OptiHubNvidiaTrayPass
     $totalRemoved += [int]$r.Removed
     $totalHidden += [int]$r.Hidden
-    if ($i -lt $passes) { Start-Sleep -Milliseconds 700 }
+    if ($i -lt $passes) { Start-Sleep -Milliseconds 800 }
 }
 
-Start-Sleep -Milliseconds 500
+# One more pass after short delay (container late-registers)
+Start-Sleep -Milliseconds 600
 $r2 = Invoke-OptiHubNvidiaTrayPass
 $totalRemoved += [int]$r2.Removed
 $totalHidden += [int]$r2.Hidden
 
 Write-TLog "Done. Removed=$totalRemoved Hidden(display)=$totalHidden"
+
+if (-not $NoTask) {
+    Register-OptiHubTrayHideTask
+}
+
 Write-Output 'OPTIHUB_PROGRESS:100|Tray cleared'
 exit 0

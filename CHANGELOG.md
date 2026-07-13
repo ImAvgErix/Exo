@@ -1,3 +1,9 @@
+## 1.9.92
+
+- **NVIDIA tray**: stop restarting NVDisplay.Container (that re-promoted the icon); restore logon re-hide task (was removed in 1.9.24)
+- **Finish banners**: same **Done.** / **Repair finished.** / **Cancelled.** on every optimizer
+- **Updates UI**: percent + progress bar only (no orbit loader, no MB text) in Settings + install dialog
+- **Settings**: denser cards; consistent tooltips on chrome + actions
 ## 1.9.91
 
 - **Update loader**: Windows Composition orbit (actually moves in Settings + install dialog)

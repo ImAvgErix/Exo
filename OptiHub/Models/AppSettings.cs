@@ -29,7 +29,7 @@ public sealed class AppSettings
     public string? LastDiscordRunUtc { get; set; }
 
     /// <summary>Bundled / last known Discord kit version string.</summary>
-    public string DiscordKitVersion { get; set; } = "1.3.27";
+    public string DiscordKitVersion { get; set; } = "1.3.28";
 
     public AppSettings Clone() => new()
     {

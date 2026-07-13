@@ -96,7 +96,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
 
         if (!row.CanApply)
         {
-            SetMessage("No changes to apply — settings already match.", success: true);
+            SetMessage(Helpers.OptimizerMessages.Done, success: true);
             return;
         }
 
@@ -155,14 +155,14 @@ public partial class NvidiaPanelViewModel : ObservableObject
             ProgressPercent = 100;
             if (!any)
             {
-                SetMessage("No changes to apply — settings already match.", success: true);
+                SetMessage(Helpers.OptimizerMessages.Done, success: true);
             }
             else if (allOk)
             {
                 var what = pending.Count > 0
                     ? string.Join(", ", pending)
                     : "selected settings";
-                SetMessage($"Applied on {row.Title}: {what}.", success: true);
+                SetMessage(Helpers.OptimizerMessages.Done, success: true);
             }
             else
             {

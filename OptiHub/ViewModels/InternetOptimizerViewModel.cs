@@ -120,7 +120,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
                     : "Applying...";
             var progress = new Progress<string>(s => ProgressStatus = s);
             var (ok, msg) = await _services.Network.ApplyPresetAsync(preset, options, progress);
-            SetMessage(msg, ok);
+            // Same finish banner as Discord / Steam / NVIDIA.
+            SetMessage(ok ? Helpers.OptimizerMessages.Done : msg, ok);
 
             // In-place refresh so header shows Lowest latency / Highest download without leaving the page.
             ProgressStatus = "Refreshing...";
@@ -128,7 +129,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
             {
                 var after = await _services.Network.ProbeAsync();
                 ApplySnapshotToUi(after, preserveSuccessMessage: true);
-                SetMessage(msg, ok);
+                SetMessage(ok ? Helpers.OptimizerMessages.Done : msg, ok);
             }
             catch
             {
@@ -167,13 +168,13 @@ public partial class InternetOptimizerViewModel : ObservableObject
         {
             var progress = new Progress<string>(s => ProgressStatus = s);
             var (success, msg) = await _services.Network.RepairAsync(progress);
-            SetMessage(msg, success);
+            SetMessage(success ? Helpers.OptimizerMessages.RepairFinished : msg, success);
             ProgressStatus = "Refreshing...";
             try
             {
                 var after = await _services.Network.ProbeAsync();
                 ApplySnapshotToUi(after, preserveSuccessMessage: true);
-                SetMessage(msg, success);
+                SetMessage(success ? Helpers.OptimizerMessages.RepairFinished : msg, success);
             }
             catch { }
         }

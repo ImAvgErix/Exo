@@ -30,14 +30,38 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>True when there is status text to show (hides empty gray well).</summary>
     public bool HasUpdateStatus => !string.IsNullOrWhiteSpace(UpdateStatus);
 
+    /// <summary>Idle status under the button (hidden while the progress bar is up).</summary>
+    public bool ShowIdleUpdateStatus => HasUpdateStatus && !IsUpdating;
+
+    /// <summary>Compact percent label for the update bar (e.g. 42%).</summary>
+    public string UpdateProgressLabel =>
+        IsUpdateProgressIndeterminate || UpdateProgressPercent <= 0
+            ? "…"
+            : $"{UpdateProgressPercent:0}%";
+
     /// <summary>Branded confirm (localVer, remoteVer) → Install / Later.</summary>
     public Func<string, string, Task<bool>>? ConfirmUpdateAsync { get; set; }
 
     /// <summary>Modal install UI with OptiLoader + progress bar.</summary>
     public Func<AppUpdateResult, Task<AppUpdateResult>>? InstallUpdateAsync { get; set; }
 
-    partial void OnUpdateStatusChanged(string value) =>
+    partial void OnUpdateStatusChanged(string value)
+    {
         OnPropertyChanged(nameof(HasUpdateStatus));
+        OnPropertyChanged(nameof(ShowIdleUpdateStatus));
+    }
+
+    partial void OnIsUpdatingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowIdleUpdateStatus));
+        OnPropertyChanged(nameof(UpdateProgressLabel));
+    }
+
+    partial void OnUpdateProgressPercentChanged(double value) =>
+        OnPropertyChanged(nameof(UpdateProgressLabel));
+
+    partial void OnIsUpdateProgressIndeterminateChanged(bool value) =>
+        OnPropertyChanged(nameof(UpdateProgressLabel));
 
     [RelayCommand]
     private void OpenLogsFolder()

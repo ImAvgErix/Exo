@@ -367,22 +367,15 @@ function Invoke-NvApiHelper {
 }
 
 function Invoke-SoftDriverRefresh {
-    Write-DLog 'Soft refresh: NVDisplay.ContainerLocalSystem'
-    Get-Process nvcplui -EA 0 | Stop-Process -Force -EA 0
-    try {
-        Restart-Service -Name 'NVDisplay.ContainerLocalSystem' -Force -ErrorAction Stop
-        Start-Sleep -Seconds 3
-        Write-DLog 'Container restarted'
-        return $true
-    } catch {
-        Write-DLog "Soft refresh failed: $($_.Exception.Message)"
-        return $false
-    }
+    # NEVER restart NVDisplay.ContainerLocalSystem — that re-registers a promoted tray icon.
+    # Registry + NVAPI already push display policy without a container bounce.
+    Write-DLog 'Soft refresh skipped (no NVDisplay.Container restart — keeps tray hidden)'
+    Get-Process nvcplui, nvcpl -EA 0 | Stop-Process -Force -EA 0
+    return $false
 }
 
 function Unregister-LegacyPersistTask {
-    # Logon tasks are background overhead - OptiHub no longer registers any.
-    # Remove leftovers from older builds.
+    # Remove noisy legacy tasks only. Keep OptiHub-NvidiaTrayHide (re-hides tray at logon).
     foreach ($taskName in @('OptiHub-NvidiaDisplayPersist', 'OptiHub-NvidiaBackgroundPersist')) {
         try {
             schtasks /Delete /TN $taskName /F 2>&1 | Out-Null
@@ -453,10 +446,10 @@ if (-not $light) {
 Set-AllNvtweakDevices
 Clear-NvidiaAppTrayAndContainer
 
+# No NVDisplay.Container restart (that re-promotes the tray icon).
 if (-not $light) {
     [void](Invoke-SoftDriverRefresh)
     Set-AllNvtweakDevices
-    Clear-NvidiaAppTrayAndContainer
 }
 
 $nvApiOk = Invoke-NvApiHelper
@@ -465,6 +458,8 @@ Clear-NvidiaAppTrayAndContainer
 Set-NvtweakRootPrefs
 try { [void](Set-NvidiaStoreCplVirtualHive) } catch { Write-DLog "Store hive stamp skipped: $($_.Exception.Message)" }
 Get-Process nvcplui, nvcpl -EA 0 | Stop-Process -Force -EA 0
+# Final multi-pass hide after NVAPI (container may still late-register on some drivers)
+Clear-NvidiaAppTrayAndContainer
 
 $wantOverride = if ([bool]$Script:PanelSettings.scalingOverride) { 1 } else { 0 }
 $wantGpu = if ([bool]$Script:PanelSettings.gpuNoScaling) { 0 } else { 1 }

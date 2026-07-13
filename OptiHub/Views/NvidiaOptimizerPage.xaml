@@ -30,7 +30,7 @@
                                   IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                   AutomationProperties.Name="G-SYNC" />
                     <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Display panel"
-                            Click="Panel_Click" MinWidth="130" VerticalAlignment="Bottom"
+                            ToolTipService.ToolTip="Open NVIDIA display panel" Click="Panel_Click" MinWidth="130" VerticalAlignment="Bottom"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                             AutomationProperties.Name="Open NVIDIA Panel" />
                 </Grid>
@@ -91,7 +91,7 @@
                     <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}" TextAlignment="Center" />
                 </StackPanel>
                 <Button Style="{StaticResource OptiPrimaryButton}" Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
-                        Click="Run_Click" HorizontalAlignment="Stretch"
+                        ToolTipService.ToolTip="Apply optimizations" Click="Run_Click" HorizontalAlignment="Stretch"
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                         AutomationProperties.Name="Apply NVIDIA" />
                 <Grid ColumnSpacing="10">
@@ -101,7 +101,7 @@
                     </Grid.ColumnDefinitions>
                     <Button Style="{StaticResource OptiQuietButton}" Content="Reset" Click="Repair_Click" HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click" HorizontalAlignment="Stretch"
+                    <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Refresh" ToolTipService.ToolTip="Refresh status" Click="Refresh_Click" HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                 </Grid>
             </StackPanel>

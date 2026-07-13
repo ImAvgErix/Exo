@@ -83,7 +83,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             StatusText = "Unavailable";
             DetailText = string.Empty;
             Features.Clear();
-            SetResult("Status failed.", success: false);
+            SetResult(Helpers.OptimizerMessages.StatusFailed, success: false);
         }
         finally
         {
@@ -135,7 +135,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             {
                 ProgressPercent = 100;
                 ProgressStatus = "Completed successfully";
-                SetResult("Done. Open Discord when ready.", success: true);
+                SetResult(Helpers.OptimizerMessages.Done, success: true);
                 try
                 {
                     _services.Settings.Update(s =>
@@ -158,7 +158,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             ProgressStatus = "Cancelled";
-            SetResult("Discord optimization was cancelled.", success: false);
+            SetResult(Helpers.OptimizerMessages.Cancelled, success: false);
         }
         catch (Exception ex)
         {
@@ -211,7 +211,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
             SetResult(
                 result.Success
-                    ? "Repair finished. Discord should be stock and bootable."
+                    ? Helpers.OptimizerMessages.RepairFinished
                     : (result.ErrorMessage ?? result.Summary),
                 success: result.Success);
             ProgressStatus = result.Success ? "Repair complete" : (result.ExitCode == -2 ? "Cancelled" : "Repair failed");
@@ -223,7 +223,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             ProgressStatus = "Cancelled";
-            SetResult("Discord repair was cancelled.", success: false);
+            SetResult(Helpers.OptimizerMessages.Cancelled, success: false);
         }
         catch (Exception ex)
         {

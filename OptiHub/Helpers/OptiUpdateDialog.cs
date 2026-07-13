@@ -3,12 +3,11 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using OptiHub.Models;
 using OptiHub.Services;
-using OptiHub.Views.Controls;
 
 namespace OptiHub.Helpers;
 
 /// <summary>
-/// In-app update prompts styled like OptiHub (card chrome, OptiLoader, progress bar).
+/// In-app update prompts styled like OptiHub (card chrome + percent progress bar).
 /// Used by Settings "Check for updates" and launch auto-check.
 /// </summary>
 public static class OptiUpdateDialog
@@ -55,8 +54,7 @@ public static class OptiUpdateDialog
     }
 
     /// <summary>
-    /// Modal install UI: orbit loader + progress bar + status (same language as optimizer apply).
-    /// Runs download/apply while the dialog is open; closes when finished.
+    /// Modal install UI: percent label + progress bar only (no orbit loader / no MB sizes).
     /// </summary>
     public static async Task<AppUpdateResult> InstallWithProgressAsync(
         XamlRoot xamlRoot,
@@ -64,11 +62,16 @@ public static class OptiUpdateDialog
         GitHubUpdateService updater,
         CancellationToken ct = default)
     {
-        var loader = new OptiLoader
+        var percentTb = new TextBlock
         {
-            IsActive = true,
+            Text = "0%",
+            FontFamily = (FontFamily)Application.Current.Resources["OptiUiFontSemiBold"],
+            FontSize = 22,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = (Brush)Application.Current.Resources["OptiPrimaryTextBrush"],
+            TextAlignment = TextAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 4, 0, 8)
+            Margin = new Thickness(0, 4, 0, 4)
         };
 
         var statusTb = new TextBlock
@@ -87,20 +90,20 @@ public static class OptiUpdateDialog
             Minimum = 0,
             Maximum = 100,
             Value = 0,
-            Height = 4,
-            CornerRadius = new CornerRadius(2),
+            Height = 6,
+            CornerRadius = new CornerRadius(3),
             Foreground = (Brush)Application.Current.Resources["OptiAccentBrush"],
             Background = (Brush)Application.Current.Resources["OptiCardStrokeBrush"],
-            IsIndeterminate = true,
-            Margin = new Thickness(0, 4, 0, 0)
+            IsIndeterminate = false,
+            Margin = new Thickness(0, 8, 0, 0)
         };
 
         var body = new StackPanel
         {
-            Spacing = 10,
+            Spacing = 8,
             MaxWidth = 360,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            Children = { loader, statusTb, bar }
+            Children = { percentTb, statusTb, bar }
         };
 
         var dialog = CreateShell(
@@ -117,21 +120,16 @@ public static class OptiUpdateDialog
         {
             try
             {
-                // Force composition restart once the dialog surface is live.
-                loader.IsActive = false;
-                loader.IsActive = true;
-
                 var progress = new Progress<AppUpdateProgress>(p =>
                 {
-                    statusTb.Text = string.IsNullOrWhiteSpace(p.Status) ? statusTb.Text : p.Status;
+                    if (!string.IsNullOrWhiteSpace(p.Status))
+                        statusTb.Text = p.Status;
                     if (p.Percent >= 0)
                     {
+                        var pct = Math.Clamp(p.Percent, 0, 100);
                         bar.IsIndeterminate = false;
-                        bar.Value = Math.Clamp(p.Percent, 0, 100);
-                    }
-                    else
-                    {
-                        bar.IsIndeterminate = true;
+                        bar.Value = pct;
+                        percentTb.Text = $"{pct:0}%";
                     }
                 });
 
@@ -143,13 +141,13 @@ public static class OptiUpdateDialog
                     statusTb.Text = installResult.Message;
                     bar.IsIndeterminate = false;
                     bar.Value = 100;
+                    percentTb.Text = "100%";
                     await Task.Delay(700, ct).ConfigureAwait(true);
                 }
                 else
                 {
                     statusTb.Text = installResult.Message;
                     bar.IsIndeterminate = false;
-                    // Leave bar where it is; not a success path.
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -176,7 +174,6 @@ public static class OptiUpdateDialog
             }
             finally
             {
-                loader.IsActive = false;
                 try { dialog.Hide(); } catch { /* already closed */ }
             }
         };
@@ -241,13 +238,11 @@ public static class OptiUpdateDialog
         if (!string.IsNullOrEmpty(closeText))
             dialog.CloseButtonText = closeText;
 
-        // Theme resources — keep in line with Opti cards / pages.
         try
         {
             dialog.Background = (Brush)Application.Current.Resources["OptiCardFillBrush"];
             dialog.BorderBrush = (Brush)Application.Current.Resources["OptiCardStrokeBrush"];
             dialog.Foreground = (Brush)Application.Current.Resources["OptiPrimaryTextBrush"];
-            // Accent primary button when present
             if (Application.Current.Resources.TryGetValue("OptiAccentBrush", out var accent) && accent is Brush ab)
                 dialog.PrimaryButtonStyle = CreateDialogPrimaryStyle(ab);
             if (Application.Current.Resources.TryGetValue("OptiQuietButton", out var quiet) && quiet is Style qs)
@@ -260,7 +255,6 @@ public static class OptiUpdateDialog
 
     private static Style CreateDialogPrimaryStyle(Brush accent)
     {
-        // Prefer shared OptiPrimaryButton when available.
         if (Application.Current.Resources.TryGetValue("OptiPrimaryButton", out var s) && s is Style existing)
             return existing;
 

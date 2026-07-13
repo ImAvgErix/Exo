@@ -54,7 +54,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         {
             StatusText = "Unavailable";
             DetailText = string.Empty;
-            SetResult("Status failed.", success: false);
+            SetResult(Helpers.OptimizerMessages.StatusFailed, success: false);
         }
         finally
         {
@@ -105,25 +105,18 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                 if (output.Contains("RESTART_REQUIRED", StringComparison.OrdinalIgnoreCase))
                 {
                     ProgressStatus = "Restart required";
-                    SetResult("Driver installed. Restart Windows, then Apply again.", success: true);
+                    SetResult(Helpers.OptimizerMessages.RestartRequired, success: true);
                 }
                 else if (output.Contains("Clean Driver failed", StringComparison.OrdinalIgnoreCase) ||
                     output.Contains("Clean driver failed", StringComparison.OrdinalIgnoreCase))
                 {
                     ProgressStatus = "Clean driver failed";
-                    SetResult("Clean driver failed. Check log, free space, close games, Apply as Admin.", success: false);
-                }
-                else if (output.Contains("clean driver -> 3D", StringComparison.OrdinalIgnoreCase) ||
-                         output.Contains("Completed successfully", StringComparison.OrdinalIgnoreCase) ||
-                         output.Contains("one pass", StringComparison.OrdinalIgnoreCase))
-                {
-                    ProgressStatus = "Completed successfully";
-                    SetResult("Done.", success: true);
+                    SetResult(Helpers.OptimizerMessages.CleanDriverFailed, success: false);
                 }
                 else
                 {
                     ProgressStatus = "Completed successfully";
-                    SetResult("Done. Profile imported into the NVIDIA driver.", success: true);
+                    SetResult(Helpers.OptimizerMessages.Done, success: true);
                 }
             }
             else
@@ -136,7 +129,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            SetResult("Cancelled.", success: false);
+            SetResult(Helpers.OptimizerMessages.Cancelled, success: false);
             ProgressStatus = "Cancelled";
         }
         catch (Exception ex)
@@ -189,14 +182,14 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                 workingDirectory: _services.Scripts.GetNvidiaRoot());
 
             SetResult(
-                result.Success ? "Status reset." : (result.ErrorMessage ?? result.Summary),
+                result.Success ? Helpers.OptimizerMessages.RepairFinished : (result.ErrorMessage ?? result.Summary),
                 success: result.Success);
 
             await RefreshAfterRunAsync();
         }
         catch (OperationCanceledException)
         {
-            SetResult("Status reset was cancelled.", success: false);
+            SetResult(Helpers.OptimizerMessages.Cancelled, success: false);
             ProgressStatus = "Cancelled";
         }
         catch (Exception ex)
