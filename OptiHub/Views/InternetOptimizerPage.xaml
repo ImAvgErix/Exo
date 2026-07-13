@@ -76,14 +76,14 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Button Style="{StaticResource OptiWhiteButton}"
-                            Content="Low latency" ToolTipService.ToolTip="Apply lowest-latency stack"
+                            Content="Low latency"
                             Click="Latency_Click"
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                             AutomationProperties.Name="Apply lowest latency network stack" />
                     <Button Grid.Column="1"
                             Style="{StaticResource OptiWhiteButton}"
-                            Content="Highest download" ToolTipService.ToolTip="Apply highest-download stack"
+                            Content="Highest download"
                             Click="Throughput_Click"
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
@@ -94,11 +94,11 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource OptiQuietButton}" Content="Repair" ToolTipService.ToolTip="Repair to stock" Click="Repair_Click"
+                    <Button Style="{StaticResource OptiQuietButton}" Content="Repair" Click="Repair_Click"
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                             AutomationProperties.Name="Repair internet stack" />
-                    <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Refresh" ToolTipService.ToolTip="Refresh status" Click="Refresh_Click"
+                    <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click"
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                 </Grid>

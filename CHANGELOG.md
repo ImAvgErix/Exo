@@ -1,3 +1,7 @@
+## 1.9.95
+
+- **No tooltips** anywhere in the app
+- **Settings overlay**: home-style hero tagline + 2×2 OptiCard tiles (matches dashboard language)
 ## 1.9.94
 
 - **Settings**: modal overlay on the home page (acrylic blur scrim) instead of a separate page

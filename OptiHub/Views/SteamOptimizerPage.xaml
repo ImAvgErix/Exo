@@ -73,8 +73,7 @@
                                  Height="4" CornerRadius="2" Foreground="{ThemeResource OptiAccentBrush}" />
                     <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}" TextAlignment="Center" />
                 </StackPanel>
-                <Button Style="{StaticResource OptiPrimaryButton}" Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
-                        ToolTipService.ToolTip="Apply optimizations" Click="Run_Click" HorizontalAlignment="Stretch"
+                <Button Style="{StaticResource OptiPrimaryButton}" Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}" Click="Run_Click" HorizontalAlignment="Stretch"
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                         AutomationProperties.Name="Apply Steam" />
                 <Grid ColumnSpacing="10">
@@ -82,9 +81,9 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource OptiQuietButton}" Content="Repair" ToolTipService.ToolTip="Repair to stock" Click="Repair_Click" HorizontalAlignment="Stretch"
+                    <Button Style="{StaticResource OptiQuietButton}" Content="Repair" Click="Repair_Click" HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Refresh" ToolTipService.ToolTip="Refresh status" Click="Refresh_Click" HorizontalAlignment="Stretch"
+                    <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click" HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                 </Grid>
             </StackPanel>

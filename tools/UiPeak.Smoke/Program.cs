@@ -48,6 +48,7 @@ if (File.Exists(main))
     Expect("no sidebar NavHome", !m.Contains("NavHome", StringComparison.Ordinal));
     Expect("no NavigationView", !m.Contains("<NavigationView", StringComparison.Ordinal));
     Expect("ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
+    Expect("no tooltips in main", !m.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
 }
 // SetTitleBar must target the drag strip only — not a parent that owns the gear/back buttons.
 var mainCs = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
@@ -97,9 +98,12 @@ if (File.Exists(settings))
     Expect("settings updates", s.Contains("Updates", StringComparison.Ordinal));
     Expect("settings about", s.Contains("About", StringComparison.Ordinal));
     Expect("settings opti card", s.Contains("OptiCard", StringComparison.Ordinal));
-    Expect("settings single sheet", s.Contains("MaxWidth=\"520\"", StringComparison.Ordinal));
+    Expect("settings home card grid", s.Contains("Height=\"180\"", StringComparison.Ordinal)
+        && s.Contains("OptiCard", StringComparison.Ordinal)
+        && s.Contains("OptiTagline", StringComparison.Ordinal));
     Expect("settings overlay on main", File.Exists(mainXaml) && File.ReadAllText(mainXaml).Contains("SettingsOverlay", StringComparison.Ordinal)
         && File.ReadAllText(mainXaml).Contains("AcrylicBrush", StringComparison.Ordinal));
+    Expect("no tooltips in settings", !s.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
     Expect("settings theme pills", s.Contains("OptiThemeRadio", StringComparison.Ordinal));
     Expect("report issue white button", s.Contains("OptiWhiteButton", StringComparison.Ordinal)
         && s.Contains("Report issue", StringComparison.Ordinal));
