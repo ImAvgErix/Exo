@@ -103,7 +103,7 @@ if (File.Exists(settings))
         && s.Contains("Appearance", StringComparison.Ordinal));
     Expect("settings no title", !s.Contains("Text=\"Settings\"", StringComparison.Ordinal));
     Expect("settings white selected theme", File.Exists(theme)
-        && File.ReadAllText(theme).Contains("CheckedFill", StringComparison.Ordinal)
+        && File.ReadAllText(theme).Contains("OptiThemeChoice", StringComparison.Ordinal)
         && File.ReadAllText(theme).Contains("#FFFFFF", StringComparison.Ordinal));
     Expect("settings overlay on main", File.Exists(mainXaml) && File.ReadAllText(mainXaml).Contains("SettingsOverlay", StringComparison.Ordinal)
         && File.ReadAllText(mainXaml).Contains("AcrylicBrush", StringComparison.Ordinal));
