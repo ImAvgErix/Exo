@@ -29,7 +29,7 @@
                            FontSize="34"
                            LineHeight="42"
                            HorizontalAlignment="Center" />
-                <TextBlock Text="Status is checked here. Open a card to change settings."
+                <TextBlock Text="Pick a target to open it."
                            Style="{StaticResource OptiTaglineSupport}"
                            FontSize="14"
                            HorizontalAlignment="Center" />
@@ -67,7 +67,7 @@
                                         Padding="18,16">
                                     <StackPanel HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
-                                                Spacing="10">
+                                                Spacing="12">
                                         <Border Width="80"
                                                 Height="80"
                                                 CornerRadius="20"
@@ -90,14 +90,12 @@
                                                    TextAlignment="Center"
                                                    TextWrapping="Wrap"
                                                    MaxWidth="250" />
-                                        <!-- Status chip: Applied / Not applied / Coming soon / … -->
-                                        <TextBlock Text="{x:Bind StatusLabel, Mode=OneWay}"
+                                        <TextBlock Text="Coming soon"
                                                    FontFamily="{StaticResource OptiUiFont}"
                                                    FontSize="12"
-                                                   FontWeight="SemiBold"
                                                    Foreground="{ThemeResource OptiMutedTextBrush}"
                                                    TextAlignment="Center"
-                                                   Visibility="{x:Bind HasStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                   Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     </StackPanel>
                                 </Border>
                             </Button>

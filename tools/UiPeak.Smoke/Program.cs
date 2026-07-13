@@ -65,8 +65,9 @@ if (File.Exists(dash))
     Expect("hero entrance panel", d.Contains("HeroPanel", StringComparison.Ordinal));
     Expect("equal logo well", d.Contains("Width=\"56\"", StringComparison.Ordinal) && d.Contains("Height=\"56\"", StringComparison.Ordinal));
     Expect("stretch uniform logos", d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal));
-    Expect("status chips", d.Contains("StatusLabel", StringComparison.Ordinal));
-    Expect("plain status copy", d.Contains("Status is checked here", StringComparison.Ordinal));
+    // Home is nav only — no applied/checking chips (status lives on the module page).
+    Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
+    Expect("simple home blurb", d.Contains("Pick a target", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
 {
@@ -148,11 +149,10 @@ var dashVm = Path.Combine(repo, "OptiHub", "ViewModels", "DashboardViewModel.cs"
 if (File.Exists(dashVm))
 {
     var dvm = File.ReadAllText(dashVm);
-    // Home chips must use full detect (same as module pages), not fastOnly heuristic.
-    Expect("home discord full detect",
-        dvm.Contains("DetectDiscordAsync(ct, fastOnly: false)", StringComparison.Ordinal));
-    Expect("home not fastOnly discord",
-        !dvm.Contains("DetectDiscordAsync(ct, fastOnly: true)", StringComparison.Ordinal));
+    // Home must not probe Discord/Steam/NVIDIA — open the module for that.
+    Expect("home no discord probe", !dvm.Contains("DetectDiscordAsync", StringComparison.Ordinal));
+    Expect("home no steam probe", !dvm.Contains("DetectSteamAsync", StringComparison.Ordinal));
+    Expect("home no nvidia probe", !dvm.Contains("DetectNvidiaAsync", StringComparison.Ordinal));
 }
 
 var panelVm = Path.Combine(repo, "OptiHub", "ViewModels", "NvidiaPanelViewModel.cs");

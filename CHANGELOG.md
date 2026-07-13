@@ -242,6 +242,9 @@
 
 
 
+
+## 1.9.69
+- Home cards are nav only — no Checking/Applied status (that runs when you open a module)
 ## 1.9.68
 - Home Discord/Steam/NVIDIA status uses the same full detect as the module pages (fixes false Not applied)
 ## 1.9.67
