@@ -234,6 +234,9 @@
 
 
 
+
+## 1.9.61
+- High-quality AMD + Internet home logos (brand AMD badge, gradient globe) so they match Discord/Steam/NVIDIA weight
 ## 1.9.60
 - NVIDIA Display panel: only selectable options (res/Hz/depth/color/scaling) — remove policy applied tiles, peak defaults, and tray clear
 ## 1.9.59
