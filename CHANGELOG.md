@@ -1,3 +1,10 @@
+## 1.9.58
+
+- **Restored ~v1.7 SPA look** in modern WinUI (not WebView2 rewrite)
+- Gear top-left, no sidebar — home product cards are the only module picker
+- Hero: “Maximum performance. No compromise.” + 3-col logo cards
+- Settings: 1.7-style Appearance / Support / Updates panels
+- AMOLED black + cream light from original SPA palette
 ## 1.9.57
 
 - **Restored pre-redesign UI (v1.9.46 AMOLED)** — top bar + home modules as navigation
@@ -472,6 +479,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

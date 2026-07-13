@@ -9,11 +9,11 @@
     <FontFamily x:Key="OptiUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
     <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
-    <!-- AMOLED shell metrics — shared by hub + optimizer pages -->
-    <CornerRadius x:Key="OptiCardRadius">10</CornerRadius>
-    <CornerRadius x:Key="OptiTileRadius">8</CornerRadius>
+    <!-- v1.7 SPA metrics -->
+    <CornerRadius x:Key="OptiCardRadius">20</CornerRadius>
+    <CornerRadius x:Key="OptiTileRadius">14</CornerRadius>
     <x:Double x:Key="OptiPageMaxWidth">960</x:Double>
-    <Thickness x:Key="OptiPagePadding">28,22,28,24</Thickness>
+    <Thickness x:Key="OptiPagePadding">36,28,36,40</Thickness>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
@@ -23,24 +23,24 @@
     <helpers:AssetPathToImageSourceConverter x:Key="AssetPathToImageSourceConverter" />
 
     <Style x:Key="OptiTagline" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="34" />
-        <Setter Property="FontStyle" Value="Normal" />
-        <Setter Property="FontWeight" Value="Bold" />
-        <Setter Property="CharacterSpacing" Value="40" />
+        <Setter Property="FontFamily" Value="{StaticResource OptiDisplayFontItalic}" />
+        <Setter Property="FontSize" Value="36" />
+        <Setter Property="FontStyle" Value="Italic" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="CharacterSpacing" Value="-20" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
-        <Setter Property="TextAlignment" Value="Left" />
-        <Setter Property="LineHeight" Value="40" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="LineHeight" Value="44" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
 
     <Style x:Key="OptiTaglineSupport" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
-        <Setter Property="FontSize" Value="13.5" />
+        <Setter Property="FontSize" Value="14.5" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
-        <Setter Property="TextAlignment" Value="Left" />
+        <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
     </Style>
 
