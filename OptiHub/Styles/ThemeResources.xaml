@@ -47,19 +47,19 @@
     <Style x:Key="OptiSectionTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
         <Setter Property="FontSize" Value="11" />
-        <Setter Property="FontWeight" Value="Bold" />
-        <Setter Property="CharacterSpacing" Value="160" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="CharacterSpacing" Value="80" />
         <Setter Property="Margin" Value="0,0,0,8" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiAccentBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
     </Style>
 
     <!-- Optimizer page headline (status line) -->
     <Style x:Key="OptiPageTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="26" />
-        <Setter Property="FontWeight" Value="Bold" />
-        <Setter Property="CharacterSpacing" Value="-20" />
-        <Setter Property="LineHeight" Value="32" />
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="CharacterSpacing" Value="-10" />
+        <Setter Property="LineHeight" Value="28" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
@@ -96,40 +96,37 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <!-- Feature rows: stone surface + left forge rail -->
+    <!-- Simple surface tile — no side rails (rails bled/clipped) -->
     <Style x:Key="OptiFeatureTile" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
-        <Setter Property="Padding" Value="0" />
-        <Setter Property="MinHeight" Value="64" />
+        <Setter Property="Padding" Value="14,12" />
+        <Setter Property="MinHeight" Value="60" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
     <Style x:Key="OptiMessageBanner" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiAccentBrush}" />
-        <Setter Property="BorderThickness" Value="1,1,1,1" />
+        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
         <Setter Property="Padding" Value="14,12" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
 
     <Style x:Key="OptiIconWell" TargetType="Border">
-        <Setter Property="Width" Value="36" />
-        <Setter Property="Height" Value="36" />
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
         <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Background" Value="{ThemeResource OptiIconWellFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiIconWellStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderThickness" Value="0" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <!--
-      FORGE card: flat stone fill + 1px edge + amber left rail (not soft double-ring).
-    -->
+    <!-- Flat card — no nested rings, no side rail bleed -->
     <Style x:Key="OptiCard" TargetType="ContentControl">
         <Setter Property="Padding" Value="20,18" />
         <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
@@ -140,41 +137,30 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ContentControl">
-                    <Border Background="{ThemeResource OptiCardStrokeBrush}"
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                            BorderThickness="1"
                             CornerRadius="{StaticResource OptiCardRadius}"
+                            Padding="{TemplateBinding Padding}"
                             UseLayoutRounding="True">
-                        <Grid>
-                            <Border Background="{TemplateBinding Background}"
-                                    CornerRadius="9"
-                                    Margin="1"
-                                    UseLayoutRounding="True" />
-                            <Border Width="3"
-                                    HorizontalAlignment="Left"
-                                    Background="{ThemeResource OptiRailBrush}"
-                                    CornerRadius="9,0,0,9"
-                                    Margin="1,1,0,1" />
-                            <ContentPresenter Margin="4,1,1,1"
-                                              Padding="{TemplateBinding Padding}"
-                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                              Content="{TemplateBinding Content}"
-                                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                                              ContentTransitions="{TemplateBinding ContentTransitions}" />
-                        </Grid>
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          ContentTransitions="{TemplateBinding ContentTransitions}" />
                     </Border>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
 
-    <!-- Hub row button chrome (dashboard list) -->
     <Style x:Key="OptiHubRow" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="10" />
-        <Setter Property="Padding" Value="16,14" />
-        <Setter Property="MinHeight" Value="76" />
+        <Setter Property="Padding" Value="14,12" />
+        <Setter Property="MinHeight" Value="72" />
     </Style>
 
     <!-- Theme picker tiles (Settings → Appearance) -->

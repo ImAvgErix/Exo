@@ -157,12 +157,7 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
 
     private void UpdateCanApply()
     {
-        if (IsApplying)
-        {
-            CanApply = false;
-            return;
-        }
-
+        // Never gate on IsApplying (that left Apply stuck gray after apply).
         var dirty = IsModeDirty() ||
                     !string.Equals(SelectedDepth, LoadedDepth, StringComparison.OrdinalIgnoreCase) ||
                     !string.Equals(SelectedColorRange, LoadedColorRange, StringComparison.OrdinalIgnoreCase) ||

@@ -1,3 +1,7 @@
+## 1.9.46
+
+- **Panel gray-out fix**: combos stay enabled during apply (no IsApplying disable); refresh after busy clears
+- **UI cleanup**: remove bleeding side rails / nested card rings; flat AMOLED cards; shared simple page layout on all optimizers + hub
 ## 1.9.45
 
 - **Borderless black bars fix**: stop forcing path `GPUScanOutToNative`; reset path to `GPUScanOutToClosest` so the panel fills. Registry still GPU + No scaling + Override.
@@ -396,6 +400,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

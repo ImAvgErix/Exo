@@ -117,7 +117,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
     {
         if (row is null || IsBusy) return;
         IsBusy = true;
-        row.IsApplying = true;
+        // Do NOT set row.IsApplying — that grayed every ComboBox via IsEnabled binding.
         ProgressPercent = 15;
         ProgressStatus = $"Applying {row.Title}...";
         try
@@ -173,8 +173,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
             else
                 SetMessage(string.Join(" ", messages.Where(m => !string.IsNullOrWhiteSpace(m))), allOk);
 
-            // Soft reload: keep combo rows alive so UI doesn't "leave".
-            await RefreshCoreAsync(force: true, soft: true);
+            // Soft reload after busy cleared so controls never stay disabled/gray.
         }
         catch (Exception ex)
         {
@@ -182,10 +181,19 @@ public partial class NvidiaPanelViewModel : ObservableObject
         }
         finally
         {
-            row.IsApplying = false;
             IsBusy = false;
             ProgressPercent = 0;
             ProgressStatus = string.Empty;
+            row.IsApplying = false;
+        }
+
+        try
+        {
+            await RefreshCoreAsync(force: true, soft: true);
+        }
+        catch
+        {
+            // refresh best-effort
         }
     }
 
