@@ -237,6 +237,9 @@
 
 
 
+
+## 1.9.64
+- AMD black-and-white official mark on white disc (Steam-size); Fluent Globe scaled to match; hub logo well 56px
 ## 1.9.63
 - AMD + Internet: real official icons only (AMD brand mark, Microsoft Fluent Globe) — same flat style as Discord/NVIDIA
 ## 1.9.62

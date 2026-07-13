@@ -70,13 +70,13 @@
                                                 VerticalAlignment="Center"
                                                 Spacing="12">
                                         <!-- Transparent well so product logos aren't double-boxed on black -->
-                                        <Border Width="72"
-                                                Height="72"
+                                        <Border Width="80"
+                                                Height="80"
                                                 CornerRadius="20"
                                                 Background="Transparent"
                                                 HorizontalAlignment="Center">
-                                            <Image Width="48"
-                                                   Height="48"
+                                            <Image Width="56"
+                                                   Height="56"
                                                    Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"
