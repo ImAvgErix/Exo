@@ -1,3 +1,8 @@
+## 1.9.30
+
+- **Internet golden path (freeze)**: deep detection for Ethernet vs Wi‑Fi via PhysicalMediaType; usable Ethernet = Up + real IPv4 → metric 1 + disable Wi‑Fi
+- Wi‑Fi: detect 5/6 GHz, Wi‑Fi 6/6E/7 from driver + Preferred Band values + netsh; prefer 6 then 5 (never force-only)
+- Connected band/radio/channel hints; eth/wifi apply branches locked in docs/INTERNET-GOLDEN-PATH.md
 ## 1.9.29
 
 - **Ethernet preferred 100%** when linked with a real IPv4: lower interface metric + disable Wi‑Fi (gaming lowest-latency path)

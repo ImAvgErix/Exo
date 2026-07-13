@@ -223,9 +223,11 @@ public sealed class NetworkOptimizerService
             features.Add(Row("Path policy", mediaProfile.PolicyLine, true));
             if (mediaProfile.WifiAvailable)
             {
-                var bandDetail = mediaProfile.ClientSupports6Ghz
-                    ? "6 GHz capable"
-                    : mediaProfile.ClientSupports5Ghz ? "5 GHz capable" : "Legacy";
+                var gen = mediaProfile.ClientSupportsWifi7 ? "Wi‑Fi 7"
+                    : mediaProfile.ClientSupports6Ghz ? "Wi‑Fi 6E/6 GHz"
+                    : mediaProfile.ClientSupportsWifi6 ? "Wi‑Fi 6"
+                    : mediaProfile.ClientSupports5Ghz ? "5 GHz class" : "Legacy";
+                var bandDetail = $"Prefer {mediaProfile.PreferredBandTarget} · {gen}";
                 if (mediaProfile.ConnectedRadioHint is not "—")
                     bandDetail += $" · {mediaProfile.ConnectedRadioHint}";
                 features.Add(Row("Wi‑Fi capability", bandDetail, true));
@@ -262,8 +264,8 @@ public sealed class NetworkOptimizerService
     }
 
     /// <summary>
-    /// Detect Ethernet/Wi‑Fi availability, client band support (5/6 GHz), and apply policy text.
-    /// Uses OS/driver facts only — not a cloud model.
+    /// Deep local detection: PhysicalMediaType, usable Ethernet, Wi‑Fi 5/6/6E/7 radios, connected band.
+    /// See docs/INTERNET-GOLDEN-PATH.md. No cloud model.
     /// </summary>
     public async Task<NetworkMediaProfile> DetectMediaProfileAsync(CancellationToken ct = default)
     {
@@ -273,48 +275,77 @@ public sealed class NetworkOptimizerService
         var wifiAvail = false;
         var wifiUp = false;
         var supports6 = false;
-        var supports5 = true; // almost all modern Wi‑Fi
+        var supports5 = false;
+        var wifi6 = false;
+        var wifi7 = false;
         var radioHint = "—";
+        var driverRadios = "—";
 
         try
         {
             var probePs = Path.Combine(Path.GetTempPath(), $"optihub-media-{Guid.NewGuid():N}.ps1");
+            // Detection matrix:
+            // - PhysicalMediaType: Native 802.11 = Wi-Fi, 802.3 = Ethernet (MS Get-NetAdapter)
+            // - Usable Ethernet: Up + IPv4 not APIPA
+            // - Bands: Preferred Band valid values + netsh wlan show drivers (Radio types)
+            // - Connected: netsh wlan show interfaces (Band / Radio type / Channel) — Win11 often has Band:
             await File.WriteAllTextAsync(probePs, """
 $ErrorActionPreference = 'SilentlyContinue'
 function IsWifi($a) {
-  $m=[string]$a.MediaType; $d=[string]$a.InterfaceDescription; $n=[string]$a.Name
-  return ($m -match '802\.11|Native 802|Wireless|Wi-?Fi' -or $d -match 'Wi-?Fi|Wireless|802\.11|WLAN' -or $n -match '^Wi-?Fi|Wireless')
+  $pm = [string]$a.PhysicalMediaType
+  $m  = [string]$a.MediaType
+  $d  = [string]$a.InterfaceDescription
+  $n  = [string]$a.Name
+  if ($pm -match '(?i)Native 802\.11|802\.11|Wireless') { return $true }
+  if ($pm -match '(?i)^802\.3$') { return $false }
+  if ($m -match '(?i)Native 802|802\.11|Wireless|Wi-?Fi') { return $true }
+  if ($d -match '(?i)Wi-?Fi|Wireless|802\.11|WLAN|MediaTek.*Wi|Intel.*Wi-?Fi|Realtek.*802\.11|Killer.*Wireless|Qualcomm.*Wi|Broadcom.*802') { return $true }
+  if ($n -match '(?i)^Wi-?Fi|Wireless|WLAN') { return $true }
+  return $false
 }
 $phys = @(Get-NetAdapter -Physical -EA SilentlyContinue)
 $eth = @($phys | Where-Object { -not (IsWifi $_) })
 $wifi = @($phys | Where-Object { IsWifi $_ })
 $eUp = @($eth | Where-Object Status -eq 'Up').Count -gt 0
 $wUp = @($wifi | Where-Object Status -eq 'Up').Count -gt 0
-# "In use" for gaming = Ethernet is linked AND has a real IPv4 (usable).
-# Prefer Ethernet 100% when that is true — do not wait for default-route ownership.
 $eInUse = $false
 foreach ($e in @($eth | Where-Object Status -eq 'Up')) {
   $ip = @(Get-NetIPAddress -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue |
     Where-Object { $_.IPAddress -notlike '169.254.*' })
   if ($ip.Count -gt 0) { $eInUse = $true; break }
 }
-$band6 = $false; $band5 = $false
+$band6 = $false; $band5 = $false; $ax = $false; $be = $false
 foreach ($w in $wifi) {
   foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $w.Name -EA SilentlyContinue)) {
     $blob = "$($p.DisplayName) $($p.DisplayValue) $(($p.ValidDisplayValues) -join ' ')"
-    if ($blob -match '(?i)6\s*GHz|6GHz|Wi-?Fi\s*6E|802\.11be|Prefer 6') { $band6 = $true }
+    if ($blob -match '(?i)6\s*GHz|6GHz|Wi-?Fi\s*6E|Prefer 6') { $band6 = $true }
     if ($blob -match '(?i)5\s*GHz|5GHz|Prefer 5') { $band5 = $true }
+    if ($blob -match '(?i)802\.11be|Wi-?Fi\s*7') { $be = $true; $band6 = $true }
+    if ($blob -match '(?i)802\.11ax|Wi-?Fi\s*6') { $ax = $true }
   }
 }
 $drv = (netsh wlan show drivers 2>$null | Out-String)
-if ($drv -match '(?i)6\s*GHz|802\.11be|Wi-?Fi\s*6E') { $band6 = $true }
-if ($drv -match '(?i)5\s*GHz|802\.11ac|802\.11ax|802\.11n') { $band5 = $true }
+$radios = '-'
+if ($drv -match '(?i)Radio types supported\s*:\s*(.+)') { $radios = $Matches[1].Trim() -replace '\s+',' ' }
+if ($drv -match '(?i)802\.11be') { $be = $true; $band6 = $true }
+if ($drv -match '(?i)802\.11ax') { $ax = $true }
+if ($drv -match '(?i)6\s*GHz|Wi-?Fi\s*6E') { $band6 = $true }
+if ($drv -match '(?i)802\.11a|802\.11n|802\.11ac|802\.11ax|5\s*GHz') { $band5 = $true }
+if ($wifi.Count -gt 0 -and -not $band5 -and -not $band6) { $band5 = $true }
 $iface = (netsh wlan show interfaces 2>$null | Out-String)
 $hint = '-'
-if ($iface -match '(?i)Radio type\s*:\s*(.+)') { $hint = $Matches[1].Trim() }
-elseif ($iface -match '(?i)Channel\s*:\s*(\d+)') { $hint = 'ch ' + $Matches[1] }
-if ($hint -match '(?i)6\s*GHz|be|6E') { $band6 = $true }
-Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;HINT=$hint"
+if ($iface -match '(?i)Band\s*:\s*(.+)') { $hint = $Matches[1].Trim() }
+elseif ($iface -match '(?i)Radio type\s*:\s*(.+)') { $hint = $Matches[1].Trim() }
+if ($iface -match '(?i)Channel\s*:\s*(\d+)') {
+  $ch = [int]$Matches[1]
+  if ($hint -eq '-') { $hint = "ch $ch" } else { $hint = "$hint · ch $ch" }
+  # Heuristic only when Band field missing: ch 1-14 ~ 2.4; 36-177 ~ 5 GHz
+}
+if ($hint -match '(?i)6\s*GHz|6GHz') { $band6 = $true }
+if ($hint -match '(?i)5\s*GHz|5GHz') { $band5 = $true }
+if ($hint -match '(?i)802\.11be') { $be = $true }
+if ($hint -match '(?i)802\.11ax') { $ax = $true }
+Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;AX=$ax;BE=$be;HINT=$hint;RADIOS=$radios"
 """, ct).ConfigureAwait(false);
             try
             {
@@ -335,7 +366,10 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                         case "WIFIUP": wifiUp = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
                         case "B6": supports6 = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
                         case "B5": supports5 = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
+                        case "AX": wifi6 = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
+                        case "BE": wifi7 = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
                         case "HINT" when v is not ("-" or ""): radioHint = v; break;
+                        case "RADIOS" when v is not ("-" or ""): driverRadios = v; break;
                     }
                 }
             }
@@ -346,7 +380,6 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         }
         catch { }
 
-        // Fallback from managed APIs if PS failed
         if (!ethAvail && !wifiAvail)
         {
             foreach (var n in NetworkInterface.GetAllNetworkInterfaces())
@@ -361,11 +394,11 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                 {
                     wifiAvail = true;
                     if (n.OperationalStatus == OperationalStatus.Up) wifiUp = true;
+                    supports5 = true;
                 }
             }
         }
 
-        // Managed fallback: Ethernet Up + real IPv4 = prefer Ethernet for gaming
         if (!ethInUse && ethUp)
         {
             try
@@ -383,18 +416,20 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             catch { }
         }
 
+        if (wifiAvail && !supports5 && !supports6) supports5 = true;
+
         var bandTarget = supports6 ? "6GHz" : supports5 ? "5GHz" : "Auto";
         string policy;
         if (ethInUse)
             policy = wifiAvail
-                ? "Ethernet ready → prefer Ethernet, disable Wi‑Fi (lowest latency)"
+                ? "Ethernet ready → prefer Ethernet 100%, disable Wi‑Fi"
                 : "Ethernet ready → Ethernet only";
         else if (ethUp && !ethInUse)
-            policy = "Ethernet linked (no IP yet) → leave Wi‑Fi until Ethernet has an address";
+            policy = "Ethernet linked (no IP yet) → keep Wi‑Fi until Ethernet has address";
         else if (wifiUp)
-            policy = $"Wi‑Fi only → prefer {bandTarget}";
+            policy = $"Wi‑Fi only → prefer {bandTarget}" + (wifi7 ? " (Wi‑Fi 7 client)" : wifi6 ? " (Wi‑Fi 6/6E client)" : "");
         else if (ethAvail)
-            policy = "Ethernet present (unplugged/down) → use when linked";
+            policy = "Ethernet present (down) → prefer when linked + IP";
         else if (wifiAvail)
             policy = $"Wi‑Fi only → prefer {bandTarget}";
         else
@@ -409,8 +444,11 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             WifiUp = wifiUp,
             ClientSupports6Ghz = supports6,
             ClientSupports5Ghz = supports5,
+            ClientSupportsWifi6 = wifi6 || supports6,
+            ClientSupportsWifi7 = wifi7,
             PreferredBandTarget = bandTarget,
             ConnectedRadioHint = radioHint,
+            DriverRadios = driverRadios,
             PolicyLine = policy
         };
     }
@@ -524,10 +562,9 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
     }
 
     /// <summary>
-    /// Documented / still-effective knobs only (Win10/11).
-    /// Removed folklore: MaxUserPort/MaxFreeTcbs/TcpNumConnections, chimney/NetDMA/DCA,
-    /// LargeSystemCache, AFD backlog, DNS priority, WinINET connection limits, TTL, etc.
-    /// Sources: MS MMCSS docs, MS NIC performance tuning, netsh/Set-NetTCPSetting.
+    /// FROZEN golden path (v1.9.30+) — see docs/INTERNET-GOLDEN-PATH.md.
+    /// Documented Win10/11 knobs only. Do not reintroduce folklore without a proven OS break.
+    /// Sources: MS MMCSS, MS NIC tuning, netsh / Set-NetTCPSetting, PhysicalMediaType detection.
     /// </summary>
     private static string BuildFullApplyScript(
         NetworkPreset preset,
@@ -686,18 +723,24 @@ Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit
         sb.AppendLine("      try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $dn -DisplayValue 'Disabled' -NoRestart -EA SilentlyContinue } catch {}");
         sb.AppendLine("      try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $dn -DisplayValue 'Off' -NoRestart -EA SilentlyContinue } catch {}");
         sb.AppendLine("    }");
-        sb.AppendLine("    $bandVals = @()");
-        sb.AppendLine("    try { $bp = Get-NetAdapterAdvancedProperty -Name $n -DisplayName 'Preferred Band' -EA SilentlyContinue; if ($bp) { $bandVals = @($bp.ValidDisplayValues) } } catch {}");
-        if (prefer6 == "1")
-        {
-            sb.AppendLine("    foreach ($bv in @('Prefer 6GHz band','Prefer 6GHz','6GHz band','Prefer 6 GHz band')) {");
-            sb.AppendLine("      if ($bandVals.Count -eq 0 -or $bandVals -contains $bv) { try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Preferred Band' -DisplayValue $bv -NoRestart -EA SilentlyContinue } catch {} }");
-            sb.AppendLine("    }");
-        }
-        sb.AppendLine("    foreach ($bv in @('Prefer 5GHz band','Prefer 5GHz','Prefer 5 GHz band')) {");
-        sb.AppendLine("      if ($bandVals.Count -eq 0 -or $bandVals -contains $bv) { try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Preferred Band' -DisplayValue $bv -NoRestart -EA SilentlyContinue } catch {} }");
+        // Preferred Band: try exact ValidDisplayValues match first (Intel: "Prefer 6GHz band")
+        sb.AppendLine("    $bandProp = $null");
+        sb.AppendLine("    foreach ($dn in @('Preferred Band','Preferable Band','Band Preference','Wireless Mode')) {");
+        sb.AppendLine("      try { $bandProp = Get-NetAdapterAdvancedProperty -Name $n -DisplayName $dn -EA SilentlyContinue; if ($bandProp) { break } } catch {}");
         sb.AppendLine("    }");
-        sb.AppendLine("    try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Roaming Aggressiveness' -DisplayValue 'Medium' -NoRestart -EA SilentlyContinue } catch {}");
+        sb.AppendLine("    $bandVals = @(); if ($bandProp) { $bandVals = @($bandProp.ValidDisplayValues) }");
+        sb.AppendLine("    $want = @()");
+        if (prefer6 == "1")
+            sb.AppendLine("    $want += @('Prefer 6GHz band','Prefer 6GHz','Prefer 6 GHz band','6GHz band','Prefer 6 GHz')");
+        sb.AppendLine("    $want += @('Prefer 5GHz band','Prefer 5GHz','Prefer 5 GHz band','5GHz band','Prefer 5 GHz')");
+        sb.AppendLine("    foreach ($bv in $want) {");
+        sb.AppendLine("      if ($bandProp -and ($bandVals.Count -eq 0 -or $bandVals -contains $bv)) {");
+        sb.AppendLine("        try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $bandProp.DisplayName -DisplayValue $bv -NoRestart -EA SilentlyContinue; break } catch {}");
+        sb.AppendLine("      }");
+        sb.AppendLine("    }");
+        sb.AppendLine("    foreach ($rv in @('Medium','3. Medium','2. Medium','Medium-High')) {");
+        sb.AppendLine("      try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Roaming Aggressiveness' -DisplayValue $rv -NoRestart -EA SilentlyContinue; break } catch {}");
+        sb.AppendLine("    }");
         sb.AppendLine("  }");
         sb.AppendLine("  try {");
         sb.AppendLine("    $class = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}'");

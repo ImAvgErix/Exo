@@ -7,23 +7,25 @@ public enum NetworkPreset
     HighestThroughput
 }
 
-/// <summary>Smart media detection used to pick Ethernet-first / band policy.</summary>
+/// <summary>Local media/capability detection for Ethernet-first + band policy (see docs/INTERNET-GOLDEN-PATH.md).</summary>
 public sealed class NetworkMediaProfile
 {
     public bool EthernetAvailable { get; init; }
     public bool EthernetUp { get; init; }
-    /// <summary>True when the default route (0.0.0.0/0) uses an Ethernet interface — traffic is actually on Ethernet.</summary>
+    /// <summary>Usable Ethernet: Up + real IPv4 (prefer 100% for gaming when true).</summary>
     public bool EthernetInUse { get; init; }
     public bool WifiAvailable { get; init; }
     public bool WifiUp { get; init; }
-    /// <summary>Client radio can do 6 GHz (Wi‑Fi 6E/7) if property/driver says so.</summary>
     public bool ClientSupports6Ghz { get; init; }
     public bool ClientSupports5Ghz { get; init; }
-    /// <summary>Best preferred-band target: 6GHz | 5GHz | Auto</summary>
+    public bool ClientSupportsWifi7 { get; init; }
+    public bool ClientSupportsWifi6 { get; init; }
+    /// <summary>6GHz | 5GHz | Auto</summary>
     public string PreferredBandTarget { get; init; } = "Auto";
-    /// <summary>Connected BSS hint from netsh (radio type / channel) when on Wi‑Fi.</summary>
+    /// <summary>e.g. 802.11be, 802.11ax, Band 6 GHz, ch 36</summary>
     public string ConnectedRadioHint { get; init; } = "—";
-    /// <summary>Human policy line for UI.</summary>
+    /// <summary>Driver radio types summary from netsh wlan show drivers.</summary>
+    public string DriverRadios { get; init; } = "—";
     public string PolicyLine { get; init; } = string.Empty;
 }
 
