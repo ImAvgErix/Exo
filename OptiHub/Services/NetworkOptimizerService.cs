@@ -37,7 +37,7 @@ public sealed class NetworkOptimizerService
         return NetworkPreset.Balanced;
     }
 
-    public void SavePreset(NetworkPreset preset)
+    public void SavePreset(NetworkPreset preset, NetworkApplyOptions? options = null)
     {
         try
         {
@@ -45,10 +45,29 @@ public sealed class NetworkOptimizerService
             File.WriteAllText(StatePath, JsonSerializer.Serialize(new
             {
                 preset = preset.ToString(),
-                appliedUtc = DateTime.UtcNow.ToString("o")
+                appliedUtc = DateTime.UtcNow.ToString("o"),
+                // Used by probe so "Wi‑Fi while Ethernet" only fails when we actually preferred eth-first
+                preferEthernetDisableWifi = options?.PreferEthernetDisableWifi ?? true
             }));
         }
         catch { }
+    }
+
+    /// <summary>Last apply chose Ethernet-first (Wi‑Fi off when Ethernet has IP). Default true.</summary>
+    public bool LoadPreferEthernetDisableWifi()
+    {
+        try
+        {
+            if (!File.Exists(StatePath)) return true;
+            using var doc = JsonDocument.Parse(File.ReadAllText(StatePath));
+            if (doc.RootElement.TryGetProperty("preferEthernetDisableWifi", out var p))
+            {
+                if (p.ValueKind == JsonValueKind.False) return false;
+                if (p.ValueKind == JsonValueKind.True) return true;
+            }
+        }
+        catch { }
+        return true;
     }
 
     public async Task<NetworkSnapshot> ProbeAsync(CancellationToken ct = default)
@@ -165,23 +184,21 @@ public sealed class NetworkOptimizerService
             catch { }
 
             // MMCSS targets: SystemResponsiveness=10, NetworkThrottlingIndex=10 (never 0 / never ffffffff)
+            // Registry DWORD may surface as int/long/uint/string depending on writer — parse flexibly.
             var mmOk = false;
             var thrStatus = "—";
             try
             {
                 using var mm = Registry.LocalMachine.OpenSubKey(
                     @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile");
-                var resp = mm?.GetValue("SystemResponsiveness");
-                var idx = mm?.GetValue("NetworkThrottlingIndex");
-                var respOk = resp is int r && r == 10;
-                // Missing = OS default 10 (OK). Explicit 10 = OK. 0 / ffffffff(-1) / other = not OK.
-                int? thr = idx switch
-                {
-                    int i => i,
-                    long l => unchecked((int)l),
-                    uint u => unchecked((int)u),
-                    _ => null
-                };
+                var resp = ReadRegistryDword(mm?.GetValue("SystemResponsiveness"));
+                var thr = ReadRegistryDword(mm?.GetValue("NetworkThrottlingIndex"));
+                // Missing responsiveness → OS default 20 (not our apply); after apply must be 10.
+                // For Balanced (no apply), treat missing as soft OK. For latency/throughput, need 10.
+                var respOk = resp is null
+                    ? activePreset == NetworkPreset.Balanced
+                    : resp == 10;
+                // Missing throttle = OS default 10 (OK). Explicit 10 = OK. 0 / ffffffff(-1) / other = not OK.
                 var thrOk = thr is null or 10;
                 thrStatus = thr is null ? "default" : thr == 10 ? "10" : thr is -1 ? "ffffffff (bad)" : thr.ToString()!;
                 mmOk = respOk && thrOk;
@@ -240,9 +257,22 @@ public sealed class NetworkOptimizerService
                     mediaProfile.EthernetMetric is int m ? m.ToString() : "—",
                     metricOk));
                 if (mediaProfile.WifiAvailable)
-                    features.Add(Row("Wi‑Fi while Ethernet",
-                        mediaProfile.WifiUp ? "Still up" : "Disabled / down",
-                        !mediaProfile.WifiUp));
+                {
+                    // Only hard-fail when last apply chose Ethernet-first. If user kept Wi‑Fi, show info OK.
+                    var preferEth = LoadPreferEthernetDisableWifi();
+                    if (preferEth)
+                    {
+                        features.Add(Row("Wi‑Fi while Ethernet",
+                            mediaProfile.WifiUp ? "Still up" : "Disabled / down",
+                            !mediaProfile.WifiUp));
+                    }
+                    else
+                    {
+                        features.Add(Row("Wi‑Fi while Ethernet",
+                            mediaProfile.WifiUp ? "Up (kept)" : "Down",
+                            true));
+                    }
+                }
             }
             if (mediaProfile.WifiAvailable)
             {
@@ -596,10 +626,19 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                 return (false, $"Apply exit {p.ExitCode}. Try again as Administrator.");
 
             progress?.Report("Verifying settings...");
-            await Task.Delay(options.RestartEthernet ? 2000 : 800, ct).ConfigureAwait(false);
-            SavePreset(preset);
+            // Give netsh / NIC props time to settle (esp. after adapter restart).
+            await Task.Delay(options.RestartEthernet ? 3500 : 1600, ct).ConfigureAwait(false);
+            SavePreset(preset, options);
             var snap = await ProbeAsync(ct).ConfigureAwait(false);
             var matched = MatchesPreset(snap, preset);
+            // One re-probe if first verify is soft-incomplete (stale netsh / adapter props).
+            if (!matched)
+            {
+                progress?.Report("Re-checking after settle...");
+                await Task.Delay(1400, ct).ConfigureAwait(false);
+                snap = await ProbeAsync(ct).ConfigureAwait(false);
+                matched = MatchesPreset(snap, preset);
+            }
             var policy = media.EthernetInUse
                 ? "Ethernet preferred (Wi‑Fi disabled when Ethernet has a real IP)."
                 : media.WifiUp
@@ -666,12 +705,23 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         try
         {
             using var k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\Psched");
-            var v = k?.GetValue("NonBestEffortLimit");
-            if (v is int i) return i == 0 ? "0%" : $"{i}%";
+            var i = ReadRegistryDword(k?.GetValue("NonBestEffortLimit"));
+            if (i is int n) return n == 0 ? "0%" : $"{n}%";
         }
         catch { }
         return "—";
     }
+
+    /// <summary>Registry DWORD can surface as int/long/uint/string depending on how it was written.</summary>
+    private static int? ReadRegistryDword(object? value) => value switch
+    {
+        int i => i,
+        long l => unchecked((int)l),
+        uint u => unchecked((int)u),
+        string s when int.TryParse(s.Trim(), out var n) => n,
+        byte[] b when b.Length >= 4 => BitConverter.ToInt32(b, 0),
+        _ => null
+    };
 
     private static string? Match(string text, string pattern)
     {

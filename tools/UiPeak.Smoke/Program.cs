@@ -130,7 +130,12 @@ if (File.Exists(loaderCs))
 {
     var lc = File.ReadAllText(loaderCs);
     Expect("OptiLoader IsActive", lc.Contains("IsActiveProperty", StringComparison.Ordinal));
-    Expect("OptiLoader signal bars", lc.Contains("Bar0Scale", StringComparison.Ordinal) && lc.Contains("ScanX", StringComparison.Ordinal));
+    // Orbit-bead loader (not ProgressRing / triad / signal bars)
+    Expect("OptiLoader orbit bead",
+        lc.Contains("OrbitRotate", StringComparison.Ordinal) &&
+        lc.Contains("TrailRotate", StringComparison.Ordinal) &&
+        lc.Contains("CoreScale", StringComparison.Ordinal) &&
+        !lc.Contains("Bar0Scale", StringComparison.Ordinal));
 }
 
 // Logo visual weight: measure real shipped PNG alpha ink.

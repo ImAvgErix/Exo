@@ -114,12 +114,19 @@ public static class NetworkPeakLogic
         return (ok, hints);
     }
 
-    /// <summary>Autotune level must match preset knobs (normal vs experimental).</summary>
+    /// <summary>
+    /// Autotune level must match preset knobs (normal vs experimental).
+    /// Unknown / unread ("—", empty) skips — same as null LSO/RSC — so a probe gap
+    /// never marks the row "not checked" after a successful apply.
+    /// </summary>
     public static bool AutotuneMatches(NetworkPreset preset, string? autoTuning)
     {
-        if (string.IsNullOrWhiteSpace(autoTuning) || autoTuning is "—") return false;
+        if (string.IsNullOrWhiteSpace(autoTuning) || autoTuning is "—") return true;
         var want = KnobsFor(preset).AutotuneNetsh;
-        return autoTuning.Equals(want, StringComparison.OrdinalIgnoreCase);
+        var got = autoTuning.Trim();
+        // netsh may report "normal", "Normal", or rare multi-token; compare first token
+        var token = got.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)[0];
+        return token.Equals(want, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>RSC enabled state matches preset (null unknown = skip).</summary>

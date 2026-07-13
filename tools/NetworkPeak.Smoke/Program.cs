@@ -210,6 +210,10 @@ Expect("LSO off matches latency", NetworkPeakLogic.LsoMatches(NetworkPreset.Lowe
 Expect("LSO on matches throughput", NetworkPeakLogic.LsoMatches(NetworkPreset.HighestThroughput, true));
 Expect("LSO off does not match throughput", !NetworkPeakLogic.LsoMatches(NetworkPreset.HighestThroughput, false));
 Expect("null LSO skips", NetworkPeakLogic.LsoMatches(NetworkPreset.HighestThroughput, null));
+// Unknown autotune must skip (probe gap ≠ fail closed after apply)
+Expect("autotune unknown skips", NetworkPeakLogic.AutotuneMatches(NetworkPreset.LowestLatency, "—"));
+Expect("autotune empty skips", NetworkPeakLogic.AutotuneMatches(NetworkPreset.HighestThroughput, ""));
+Expect("autotune first-token normal", NetworkPeakLogic.AutotuneMatches(NetworkPreset.LowestLatency, "normal  "));
 
 Log($"=== SUMMARY failed={failed} ===");
 Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);

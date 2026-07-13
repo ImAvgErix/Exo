@@ -3709,20 +3709,16 @@ try {
         ControlPanel = [bool]$cplOk
     }
 
-    Write-HubProgress 78 'Driver DRS flags + developer counters + overlay off...'
+    # Single ordered stage — no triple-pass of the same Enable/Disable work.
+    # (Client wipe may still retry up to 3× only when App remains installed.)
+    Write-HubProgress 78 'Privacy / system debloat (telemetry once)...'
+    Disable-NvidiaTelemetry
+
+    Write-HubProgress 80 'Driver DRS flags + developer counters + overlay off...'
     $advanced3dOk = Enable-NvidiaAdvanced3dImageSettings
     [void](Enable-NvidiaControlPanelDeveloperSettings)
     Disable-NvidiaOverlay
     Set-NvidiaWindowsNotificationsOff
-
-    Write-HubProgress 82 'Privacy / system debloat...'
-    Disable-NvidiaTelemetry
-    Disable-NvidiaOverlay
-    Set-NvidiaWindowsNotificationsOff
-    [void](Enable-NvidiaAdvanced3dImageSettings)
-    [void](Enable-NvidiaControlPanelDeveloperSettings)
-    Disable-NvidiaTelemetry
-    $advanced3dOk = $true  # DRS profiles are the real advanced 3D path
 
     $overlayResult = Test-NvidiaOverlayDisabled
     foreach ($issue in $overlayResult.Issues) { Write-Warn "Overlay verification: $issue" }
@@ -3747,7 +3743,8 @@ try {
     if (-not $dispResult) {
         $dispResult = @{ Success = $false; Details = @('Display helper returned no result') }
     }
-    # Re-assert advanced 3D + developer AFTER display helper (NVTweak writes + CPL cache)
+    # One re-assert after display (NVAPI/DRS may touch profiles) — not a full second apply pass
+    Write-HubProgress 92 'Re-assert DRS advanced 3D + developer after display...'
     $advanced3dOk = Enable-NvidiaAdvanced3dImageSettings
     [void](Enable-NvidiaControlPanelDeveloperSettings)
     $appInstalled = Test-NvidiaAppInstalled  # expect false

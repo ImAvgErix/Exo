@@ -1,3 +1,9 @@
+## 1.9.74
+
+- **Internet detect after apply**: no more false “not checked” rows — unknown autotune skips (like LSO/RSC), MMCSS/QoS parse any DWORD type, Wi‑Fi-while-Ethernet only fails when Ethernet-first was chosen, longer settle + one re-probe
+- **NVIDIA Apply**: removed triple-pass of Advanced3D / Overlay / Telemetry / notifications — single ordered stage + one DRS re-assert after display (App wipe still retries only if needed)
+- **OptiLoader**: new “orbit bead” loader (soft track + accent bead + ghost trail + breathing core) — not ProgressRing, triad, or signal bars
+
 ## 1.9.58
 
 - **Restored ~v1.7 SPA look** in modern WinUI (not WebView2 rewrite)
