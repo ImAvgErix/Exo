@@ -1,3 +1,9 @@
+## 1.9.25
+
+- **Evidence audit (all optimizers)**: Internet stack cut to documented knobs only — SystemResponsiveness **10**, NetworkThrottlingIndex **10** (not ffffffff), drop XP/server folklore (MaxUserPort, chimney, LargeSystemCache, AFD backlog, WinINET, etc.)
+- Keep real tradeoffs: autotune, RSS, RSC/LSO by preset, Nagle for latency, NIC power-save off, QoS reserve 0
+- NVIDIA tray: no scheduled tasks; Discord/Steam unchanged (already real client-side work)
+- See docs/TWEAK-AUDIT.md
 ## 1.9.24
 
 - **No tray scheduled task**: remove logon noise; tray only on Apply/Clear (hide display icon, delete App ghosts)
