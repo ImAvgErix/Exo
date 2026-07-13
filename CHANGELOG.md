@@ -1,3 +1,35 @@
+## 1.9.35
+
+- **Steam peak detect 1.7.8**: `SteamDetectCore.ps1` + `SteamPeakLogic` — CEF launcher + trim helper classifiers; trim accepts 2–15s (not hard-coded 5s only)
+- Host heuristic uses same CEF/trim rules; smoke `tools/SteamPeak.Smoke`; no OptiHub-Steam scheduled tasks
+- Ships with Internet peak (NetworkPeakLogic) + Discord peak (DiscordDetectCore) from prior work
+## Discord 1.3.22 / detect peak
+
+- **Discord detect peak**: `DiscordDetectCore.ps1` + `DiscordPeakLogic` — kernel OK for kit TrimIntervalMs=4000 and prior 5000; no exact config.ini hash false-fail
+- Toast quiet policy aligned host/heuristic with detect (≥1 Discord toast key Enabled=0)
+- Smoke: `tools/DiscordPeak.Smoke` drives shipped classifiers + apply audit (no OptiHub-Discord scheduled tasks / folklore)
+## 1.9.34
+
+- **Probe preset-aware**: NIC peak (Flow Control / IM / IdleRestriction) scored per active preset — download intentional ons no longer false-fail
+- **Autotune match**: HighestThroughput requires `experimental` (not any non-disabled); MatchesPreset uses NetworkPeakLogic knobs for LSO/RSC/autotune
+- Smoke + live probe-summary cover both latency and throughput with false_fail_count=0
+## 1.9.33
+
+- **Internet peak freeze**: pure shipped decision core `NetworkPeakLogic` + `NetworkApplyScriptBuilder` (band score, path policy, preset knobs, apply audit)
+- Smoke tests drive real sources (`tools/NetworkPeak.Smoke`): Prefer>Only, eth-usable vs link-no-IP, latency vs throughput script diverge, no folklore
+- Detection/apply Wi-Fi classifier aligned (exclude Bluetooth/Hyper-V/VPN tunnels); live 6 GHz re-probe at apply
+- Docs/golden path frozen at 1.9.33
+## 1.9.32
+
+- **Internet peak pass**: force NetworkThrottlingIndex **10** (overwrite ffffffff), Ethernet metric **1** on usable link, Flow Control off (latency), IdleRestriction **on** (block NIC low-power idle)
+- powercfg: wireless max performance, PCIe ASPM off, USB selective suspend off (AC)
+- Live re-probe of 6 GHz capability at apply time; broader Wi-Fi power-save property kill list
+- Probe/UI: show throttle value, eth metric, NIC peak (flow control / IM / idle restrict), current Preferred Band value
+- Apply log: %TEMP%\optihub-net-last.log
+## 1.9.31
+
+- **Internet Wi-Fi band matching**: fuzzy Preferred Band property + display-value matching for Intel/Realtek/MediaTek/Qualcomm/Killer string variants (Prefer 6GHz band, 5 GHz preferred, Preferable Band, etc.)
+- Prefer-* still beats Only-*; never force band-only; same golden path policy as 1.9.30
 ## 1.9.30
 
 - **Internet golden path (freeze)**: deep detection for Ethernet vs Wi‑Fi via PhysicalMediaType; usable Ethernet = Up + real IPv4 → metric 1 + disable Wi‑Fi

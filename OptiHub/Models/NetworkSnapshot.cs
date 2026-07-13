@@ -26,6 +26,13 @@ public sealed class NetworkMediaProfile
     public string ConnectedRadioHint { get; init; } = "—";
     /// <summary>Driver radio types summary from netsh wlan show drivers.</summary>
     public string DriverRadios { get; init; } = "—";
+    /// <summary>Current Preferred Band DisplayValue when exposed by driver.</summary>
+    public string CurrentBandSetting { get; init; } = "—";
+    /// <summary>IPv4 InterfaceMetric of primary usable Ethernet (lower = preferred).</summary>
+    public int? EthernetMetric { get; init; }
+    /// <summary>Live NIC peak status (flow control, selective suspend, etc.).</summary>
+    public string NicPeakHints { get; init; } = "—";
+    public bool NicPeakOk { get; init; } = true;
     public string PolicyLine { get; init; } = string.Empty;
 }
 

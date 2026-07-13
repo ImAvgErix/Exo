@@ -164,8 +164,9 @@ public sealed class NetworkOptimizerService
             }
             catch { }
 
-            // MMCSS targets: SystemResponsiveness=10, NetworkThrottlingIndex=10 (MS defaults / valid gaming)
+            // MMCSS targets: SystemResponsiveness=10, NetworkThrottlingIndex=10 (never 0 / never ffffffff)
             var mmOk = false;
+            var thrStatus = "—";
             try
             {
                 using var mm = Registry.LocalMachine.OpenSubKey(
@@ -173,8 +174,16 @@ public sealed class NetworkOptimizerService
                 var resp = mm?.GetValue("SystemResponsiveness");
                 var idx = mm?.GetValue("NetworkThrottlingIndex");
                 var respOk = resp is int r && r == 10;
-                // Accept default missing NetworkThrottlingIndex as OK (OS default 10), or explicit 10
-                var thrOk = idx is null || (idx is int ti && ti == 10);
+                // Missing = OS default 10 (OK). Explicit 10 = OK. 0 / ffffffff(-1) / other = not OK.
+                int? thr = idx switch
+                {
+                    int i => i,
+                    long l => unchecked((int)l),
+                    uint u => unchecked((int)u),
+                    _ => null
+                };
+                var thrOk = thr is null or 10;
+                thrStatus = thr is null ? "default" : thr == 10 ? "10" : thr is -1 ? "ffffffff (bad)" : thr.ToString()!;
                 mmOk = respOk && thrOk;
             }
             catch { }
@@ -185,29 +194,32 @@ public sealed class NetworkOptimizerService
             netPing = await PingMsAsync("1.1.1.1", ct).ConfigureAwait(false)
                       ?? await PingMsAsync("8.8.8.8", ct).ConfigureAwait(false);
 
-            // Feature cards = optimizer knobs only (same idea as Discord/Steam/NVIDIA tiles)
-            var lsoOk = lso is null || (latency ? lso == false : lso == true);
-            var rscOk = rsc is null || (latency ? rsc == false : rsc == true);
-            var autoOk = !autoTuning.Equals("disabled", StringComparison.OrdinalIgnoreCase)
-                         && (latency
-                             ? autoTuning.Equals("normal", StringComparison.OrdinalIgnoreCase)
-                             : !autoTuning.Equals("disabled", StringComparison.OrdinalIgnoreCase));
+            // Feature cards = optimizer knobs only (aligned with NetworkPeakLogic.KnobsFor)
+            var lsoOk = NetworkPeakLogic.LsoMatches(activePreset, lso);
+            var rscOk = NetworkPeakLogic.RscMatches(activePreset, rsc);
+            var autoOk = NetworkPeakLogic.AutotuneMatches(activePreset, autoTuning);
             var nagleOk = !latency || nagleOff != false;
             if (throughput) nagleOk = nagleOff != true;
 
             features.Add(Row("Task offload", taskOffloadDisabled == true ? "Off (bad)" : "On", taskOffloadDisabled != true));
             features.Add(Row("LSO v2",
-                lso == true ? "On" : lso == false ? (latency ? "Off · latency" : "Off") : "—",
+                lso == true ? (throughput ? "On · download" : "On")
+                    : lso == false ? (latency ? "Off · latency" : "Off") : "—",
                 lsoOk));
             features.Add(Row("RSC",
-                rsc == true ? "On" : rsc == false ? (latency ? "Off · latency" : "Off") : "—",
+                rsc == true ? (throughput ? "On · download" : "On")
+                    : rsc == false ? (latency ? "Off · latency" : "Off") : "—",
                 rscOk));
-            features.Add(Row("Auto-tuning", autoTuning, autoOk));
+            features.Add(Row("Auto-tuning",
+                autoOk ? autoTuning : $"{autoTuning} (want {NetworkPeakLogic.KnobsFor(activePreset).AutotuneNetsh})",
+                autoOk));
             features.Add(Row("Congestion", congestion, true));
             features.Add(Row("Nagle / ACK",
                 nagleOff == true ? "Off (latency)" : nagleOff == false ? "Default" : "—",
                 nagleOk));
-            features.Add(Row("MMCSS", mmOk ? "Responsiveness 10" : "Not set", mmOk || activePreset == NetworkPreset.Balanced));
+            features.Add(Row("MMCSS",
+                mmOk ? "Responsiveness 10 · throttle 10" : $"Needs apply (throttle {thrStatus})",
+                mmOk || activePreset == NetworkPreset.Balanced));
             features.Add(Row("QoS reserve", ReadQosReserve(), ReadQosReserve() is "0%" or "—"));
         }
         catch (Exception ex)
@@ -221,6 +233,17 @@ public sealed class NetworkOptimizerService
         {
             mediaProfile = await DetectMediaProfileAsync(ct).ConfigureAwait(false);
             features.Add(Row("Path policy", mediaProfile.PolicyLine, true));
+            if (mediaProfile.EthernetInUse)
+            {
+                var metricOk = mediaProfile.EthernetMetric is null or <= 5;
+                features.Add(Row("Ethernet metric",
+                    mediaProfile.EthernetMetric is int m ? m.ToString() : "—",
+                    metricOk));
+                if (mediaProfile.WifiAvailable)
+                    features.Add(Row("Wi‑Fi while Ethernet",
+                        mediaProfile.WifiUp ? "Still up" : "Disabled / down",
+                        !mediaProfile.WifiUp));
+            }
             if (mediaProfile.WifiAvailable)
             {
                 var gen = mediaProfile.ClientSupportsWifi7 ? "Wi‑Fi 7"
@@ -230,8 +253,12 @@ public sealed class NetworkOptimizerService
                 var bandDetail = $"Prefer {mediaProfile.PreferredBandTarget} · {gen}";
                 if (mediaProfile.ConnectedRadioHint is not "—")
                     bandDetail += $" · {mediaProfile.ConnectedRadioHint}";
+                if (mediaProfile.CurrentBandSetting is not ("—" or ""))
+                    bandDetail += $" · set: {mediaProfile.CurrentBandSetting}";
                 features.Add(Row("Wi‑Fi capability", bandDetail, true));
             }
+            if (!string.IsNullOrWhiteSpace(mediaProfile.NicPeakHints) && mediaProfile.NicPeakHints is not "—")
+                features.Add(Row("NIC peak", mediaProfile.NicPeakHints, mediaProfile.NicPeakOk));
         }
         catch { }
 
@@ -280,18 +307,26 @@ public sealed class NetworkOptimizerService
         var wifi7 = false;
         var radioHint = "—";
         var driverRadios = "—";
+        var currentBand = "—";
+        int? ethMetric = null;
+        var nicHints = "—";
+        var nicPeakOk = true;
+        int fcR = -1, imR = -1, idleR = -1, ssR = -1;
+        var activeForPeak = LoadSavedPreset();
 
         try
         {
             var probePs = Path.Combine(Path.GetTempPath(), $"optihub-media-{Guid.NewGuid():N}.ps1");
             // Detection matrix:
             // - PhysicalMediaType: Native 802.11 = Wi-Fi, 802.3 = Ethernet (MS Get-NetAdapter)
-            // - Usable Ethernet: Up + IPv4 not APIPA
+            // - Usable Ethernet: Up + IPv4 not APIPA + InterfaceMetric
             // - Bands: Preferred Band valid values + netsh wlan show drivers (Radio types)
-            // - Connected: netsh wlan show interfaces (Band / Radio type / Channel) — Win11 often has Band:
+            // - Connected: netsh wlan show interfaces (Band / Radio type / Channel)
+            // - NIC peak: Flow Control, SelectiveSuspend, InterruptModeration, IdleRestriction
             await File.WriteAllTextAsync(probePs, """
 $ErrorActionPreference = 'SilentlyContinue'
 function IsWifi($a) {
+  # Mirrors NetworkPeakLogic.IsWifiAdapter
   $pm = [string]$a.PhysicalMediaType
   $m  = [string]$a.MediaType
   $d  = [string]$a.InterfaceDescription
@@ -299,7 +334,8 @@ function IsWifi($a) {
   if ($pm -match '(?i)Native 802\.11|802\.11|Wireless') { return $true }
   if ($pm -match '(?i)^802\.3$') { return $false }
   if ($m -match '(?i)Native 802|802\.11|Wireless|Wi-?Fi') { return $true }
-  if ($d -match '(?i)Wi-?Fi|Wireless|802\.11|WLAN|MediaTek.*Wi|Intel.*Wi-?Fi|Realtek.*802\.11|Killer.*Wireless|Qualcomm.*Wi|Broadcom.*802') { return $true }
+  if ($d -match '(?i)Bluetooth|Virtual|Hyper-V|vEthernet|TAP-|TUN-|WireGuard|OpenVPN|Wintun|Meta\s*Tunnel') { return $false }
+  if ($d -match '(?i)Wi-?Fi|Wireless|802\.11|WLAN|MediaTek.*Wi|Intel.*Wi-?Fi|Realtek.*802\.11|Killer.*Wireless|Qualcomm.*Wi|Broadcom.*802|AX\d{3,4}|BE\d{3,4}|Wi-Fi\s*\d') { return $true }
   if ($n -match '(?i)^Wi-?Fi|Wireless|WLAN') { return $true }
   return $false
 }
@@ -309,19 +345,32 @@ $wifi = @($phys | Where-Object { IsWifi $_ })
 $eUp = @($eth | Where-Object Status -eq 'Up').Count -gt 0
 $wUp = @($wifi | Where-Object Status -eq 'Up').Count -gt 0
 $eInUse = $false
+$eMetric = -1
+$bestEth = $null
 foreach ($e in @($eth | Where-Object Status -eq 'Up')) {
   $ip = @(Get-NetIPAddress -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue |
     Where-Object { $_.IPAddress -notlike '169.254.*' })
-  if ($ip.Count -gt 0) { $eInUse = $true; break }
+  if ($ip.Count -gt 0) {
+    $eInUse = $true
+    if (-not $bestEth -or $e.LinkSpeed -gt $bestEth.LinkSpeed) { $bestEth = $e }
+  }
+}
+if ($bestEth) {
+  $mi = Get-NetIPInterface -InterfaceIndex $bestEth.ifIndex -AddressFamily IPv4 -EA SilentlyContinue
+  if ($mi) { $eMetric = [int]$mi.InterfaceMetric }
 }
 $band6 = $false; $band5 = $false; $ax = $false; $be = $false
+$curBand = '-'
 foreach ($w in $wifi) {
   foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $w.Name -EA SilentlyContinue)) {
     $blob = "$($p.DisplayName) $($p.DisplayValue) $(($p.ValidDisplayValues) -join ' ')"
-    if ($blob -match '(?i)6\s*GHz|6GHz|Wi-?Fi\s*6E|Prefer 6') { $band6 = $true }
-    if ($blob -match '(?i)5\s*GHz|5GHz|Prefer 5') { $band5 = $true }
+    if ($blob -match '(?i)6\s*GHz|6GHz|Wi-?Fi\s*6E|Prefer\s*6|6\s*GHz\s*prefer|band\s*6') { $band6 = $true }
+    if ($blob -match '(?i)5\s*GHz|5GHz|Prefer\s*5|5\s*GHz\s*prefer|5\.2\s*GHz|band\s*5') { $band5 = $true }
     if ($blob -match '(?i)802\.11be|Wi-?Fi\s*7') { $be = $true; $band6 = $true }
     if ($blob -match '(?i)802\.11ax|Wi-?Fi\s*6') { $ax = $true }
+    if ([string]$p.DisplayName -match '(?i)preferred\s*band|preferable\s*band|band\s*pref') {
+      if ($p.DisplayValue) { $curBand = [string]$p.DisplayValue }
+    }
   }
 }
 $drv = (netsh wlan show drivers 2>$null | Out-String)
@@ -339,13 +388,39 @@ elseif ($iface -match '(?i)Radio type\s*:\s*(.+)') { $hint = $Matches[1].Trim() 
 if ($iface -match '(?i)Channel\s*:\s*(\d+)') {
   $ch = [int]$Matches[1]
   if ($hint -eq '-') { $hint = "ch $ch" } else { $hint = "$hint · ch $ch" }
-  # Heuristic only when Band field missing: ch 1-14 ~ 2.4; 36-177 ~ 5 GHz
 }
 if ($hint -match '(?i)6\s*GHz|6GHz') { $band6 = $true }
 if ($hint -match '(?i)5\s*GHz|5GHz') { $band5 = $true }
 if ($hint -match '(?i)802\.11be') { $be = $true }
 if ($hint -match '(?i)802\.11ax') { $ax = $true }
-Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;AX=$ax;BE=$be;HINT=$hint;RADIOS=$radios"
+# Raw NIC peak facts (C# scores preset-aware via NetworkPeakLogic.EvaluateNicPeak)
+# FC/IM/IDLE/SS: 1=on, 0=off, -1=not exposed
+$fcR = -1; $imR = -1; $idleR = -1; $ssR = -1
+$primary = if ($bestEth) { $bestEth } else { @($phys | Where-Object Status -eq 'Up' | Select-Object -First 1) }
+if ($primary) {
+  $fc = Get-NetAdapterAdvancedProperty -Name $primary.Name -RegistryKeyword '*FlowControl' -EA SilentlyContinue
+  if ($fc) {
+    $fcR = if ([string]$fc.DisplayValue -match '(?i)^Disabled') { 0 }
+           elseif ([string]$fc.DisplayValue -match '(?i)Rx|Tx|Enabled') { 1 } else { -1 }
+  }
+  $im = Get-NetAdapterAdvancedProperty -Name $primary.Name -RegistryKeyword '*InterruptModeration' -EA SilentlyContinue
+  if ($im) {
+    $imR = if ([string]$im.DisplayValue -match '(?i)Enabled|On') { 1 }
+           elseif ([string]$im.DisplayValue -match '(?i)Disabled|Off') { 0 } else { -1 }
+  }
+  $ss = Get-NetAdapterAdvancedProperty -Name $primary.Name -RegistryKeyword '*SelectiveSuspend' -EA SilentlyContinue
+  if ($ss) {
+    $ssR = if ([string]$ss.DisplayValue -match '(?i)Enabled|On') { 1 }
+           elseif ([string]$ss.DisplayValue -match '(?i)Disabled|Off') { 0 } else { -1 }
+  }
+  $idle = Get-NetAdapterAdvancedProperty -Name $primary.Name -RegistryKeyword '*IdleRestriction' -EA SilentlyContinue
+  if ($idle) {
+    # Enabled = restriction ON (prevent idle) → idleR=1
+    $idleR = if ([string]$idle.DisplayValue -match '(?i)^Enabled') { 1 }
+             elseif ([string]$idle.DisplayValue -match '(?i)^Disabled') { 0 } else { -1 }
+  }
+}
+Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;AX=$ax;BE=$be;HINT=$hint;RADIOS=$radios;CURBAND=$curBand;EMETRIC=$eMetric;FC=$fcR;IM=$imR;IDLE=$idleR;SS=$ssR"
 """, ct).ConfigureAwait(false);
             try
             {
@@ -370,8 +445,25 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                         case "BE": wifi7 = v.Equals("True", StringComparison.OrdinalIgnoreCase); break;
                         case "HINT" when v is not ("-" or ""): radioHint = v; break;
                         case "RADIOS" when v is not ("-" or ""): driverRadios = v; break;
+                        case "CURBAND" when v is not ("-" or ""): currentBand = v; break;
+                        case "EMETRIC" when int.TryParse(v, out var em) && em >= 0: ethMetric = em; break;
+                        case "FC" when int.TryParse(v, out var fc): fcR = fc; break;
+                        case "IM" when int.TryParse(v, out var imv): imR = imv; break;
+                        case "IDLE" when int.TryParse(v, out var id): idleR = id; break;
+                        case "SS" when int.TryParse(v, out var ss): ssR = ss; break;
                     }
                 }
+
+                static bool? Tri(int r) => r < 0 ? null : r != 0;
+                var peak = NetworkPeakLogic.EvaluateNicPeak(
+                    activeForPeak,
+                    new NetworkPeakLogic.NicPeakFacts(
+                        FlowControlOn: Tri(fcR),
+                        InterruptModerationOn: Tri(imR),
+                        IdleRestrictOn: Tri(idleR),
+                        SelectiveSuspendOn: Tri(ssR)));
+                nicPeakOk = peak.Ok;
+                nicHints = peak.Hints;
             }
             finally
             {
@@ -418,22 +510,9 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
 
         if (wifiAvail && !supports5 && !supports6) supports5 = true;
 
-        var bandTarget = supports6 ? "6GHz" : supports5 ? "5GHz" : "Auto";
-        string policy;
-        if (ethInUse)
-            policy = wifiAvail
-                ? "Ethernet ready → prefer Ethernet 100%, disable Wi‑Fi"
-                : "Ethernet ready → Ethernet only";
-        else if (ethUp && !ethInUse)
-            policy = "Ethernet linked (no IP yet) → keep Wi‑Fi until Ethernet has address";
-        else if (wifiUp)
-            policy = $"Wi‑Fi only → prefer {bandTarget}" + (wifi7 ? " (Wi‑Fi 7 client)" : wifi6 ? " (Wi‑Fi 6/6E client)" : "");
-        else if (ethAvail)
-            policy = "Ethernet present (down) → prefer when linked + IP";
-        else if (wifiAvail)
-            policy = $"Wi‑Fi only → prefer {bandTarget}";
-        else
-            policy = "No physical adapter detected";
+        var path = NetworkPeakLogic.DecidePath(
+            ethAvail, ethUp, ethInUse, wifiAvail, wifiUp,
+            supports6, supports5, wifi6 || supports6, wifi7);
 
         return new NetworkMediaProfile
         {
@@ -446,31 +525,29 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             ClientSupports5Ghz = supports5,
             ClientSupportsWifi6 = wifi6 || supports6,
             ClientSupportsWifi7 = wifi7,
-            PreferredBandTarget = bandTarget,
+            PreferredBandTarget = path.PreferredBandTarget,
             ConnectedRadioHint = radioHint,
             DriverRadios = driverRadios,
-            PolicyLine = policy
+            CurrentBandSetting = currentBand,
+            EthernetMetric = ethMetric,
+            NicPeakHints = nicHints,
+            NicPeakOk = nicPeakOk,
+            PolicyLine = path.PolicyLine
         };
     }
 
-    /// <summary>True when live settings match the saved preset (no false “fail” for intentional offs).</summary>
+    /// <summary>True when live settings match the preset knobs (no false fail for intentional offs).</summary>
     public bool MatchesPreset(NetworkSnapshot snap, NetworkPreset preset)
     {
         if (!snap.ProbeOk) return false;
         if (snap.TaskOffloadDisabled == true) return false;
-        var latency = preset == NetworkPreset.LowestLatency;
-        if (latency)
-        {
-            if (snap.LsoEnabled == true) return false;
-            if (snap.RscEnabled == true) return false;
-            if (snap.AutoTuning.Equals("disabled", StringComparison.OrdinalIgnoreCase)) return false;
-        }
-        else if (preset == NetworkPreset.HighestThroughput)
-        {
-            if (snap.LsoEnabled == false) return false;
-            if (snap.RscEnabled == false) return false;
-            if (snap.AutoTuning.Equals("disabled", StringComparison.OrdinalIgnoreCase)) return false;
-        }
+        if (!NetworkPeakLogic.AutotuneMatches(preset, snap.AutoTuning)) return false;
+        if (!NetworkPeakLogic.LsoMatches(preset, snap.LsoEnabled)) return false;
+        if (!NetworkPeakLogic.RscMatches(preset, snap.RscEnabled)) return false;
+        // NIC peak: when probe computed it for this saved preset, require OK
+        if (snap.ActivePreset == preset && !snap.Media.NicPeakOk &&
+            snap.Media.NicPeakHints is not ("—" or "" or null))
+            return false;
         return true;
     }
 
@@ -491,7 +568,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         var media = await DetectMediaProfileAsync(ct).ConfigureAwait(false);
 
         progress?.Report("Preparing stack (Ethernet-first when available)...");
-        var script = BuildFullApplyScript(preset, options, media);
+        var script = NetworkApplyScriptBuilder.Build(preset, options, media);
         var path = Path.Combine(Path.GetTempPath(), $"optihub-net-{Guid.NewGuid():N}.ps1");
         await File.WriteAllTextAsync(path, script, ct).ConfigureAwait(false);
 
@@ -561,239 +638,14 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         }
     }
 
-    /// <summary>
-    /// FROZEN golden path (v1.9.30+) — see docs/INTERNET-GOLDEN-PATH.md.
-    /// Documented Win10/11 knobs only. Do not reintroduce folklore without a proven OS break.
-    /// Sources: MS MMCSS, MS NIC tuning, netsh / Set-NetTCPSetting, PhysicalMediaType detection.
-    /// </summary>
-    private static string BuildFullApplyScript(
+    /// <summary>Expose apply script generation for audit/smokes (same path as elevated apply).</summary>
+    public static string BuildApplyScript(
         NetworkPreset preset,
         NetworkApplyOptions options,
-        NetworkMediaProfile media)
-    {
-        var latency = preset == NetworkPreset.LowestLatency;
-        // MS: autotune normal for typical; experimental for high BDP bulk only
-        var autotune = latency ? "normal" : "experimental";
-        var autoTuningPs = latency ? "Normal" : "Experimental";
-        // RSC/LSO: real coalescing tradeoffs — off for latency, on for bulk
-        var rsc = latency ? "disabled" : "enabled";
-        var lso = latency ? "0" : "1";
-        var im = latency ? "0" : "1";
-        var restartEth = options.RestartEthernet ? "1" : "0";
-        var preferEth = options.PreferEthernetDisableWifi ? "1" : "0";
-        // Smart band: 6GHz if client supports, else 5GHz prefer (never force-only)
-        var prefer6 = media.ClientSupports6Ghz ? "1" : "0";
-        var prefer5 = media.ClientSupports5Ghz || !media.ClientSupports6Ghz ? "1" : "0";
-        // Nagle keys only for latency (TCP games); throughput clears them
-        var ackBlock = latency
-            ? """
-  Set-Dword $p 'TcpAckFrequency' 1
-  Set-Dword $p 'TCPNoDelay' 1
-  Set-Dword $p 'TcpDelAckTicks' 0
-"""
-            : """
-  Remove-Prop $p 'TcpAckFrequency'
-  Remove-Prop $p 'TCPNoDelay'
-  Remove-Prop $p 'TcpDelAckTicks'
-""";
+        NetworkMediaProfile media) =>
+        NetworkApplyScriptBuilder.Build(preset, options, media);
 
-        var sb = new StringBuilder(14_000);
-        sb.AppendLine("$ErrorActionPreference = 'Continue'");
-        sb.AppendLine("$ProgressPreference = 'SilentlyContinue'");
-        sb.AppendLine("Write-Host '[OptiHub-NET] Preset=" + preset + " ethFirst=" + preferEth + " restartEth=" + restartEth + " band6=" + prefer6 + "'");
-        sb.AppendLine("""
-function Set-Dword([string]$Path, [string]$Name, [int]$Value) {
-  if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force | Out-Null }
-  New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
-  Set-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -Type DWord -Force -EA SilentlyContinue
-}
-function Remove-Prop([string]$Path, [string]$Name) {
-  if (Test-Path -LiteralPath $Path) { Remove-ItemProperty -LiteralPath $Path -Name $Name -Force -EA SilentlyContinue }
-}
-function Set-Adv($Name, $Kw, $Val) {
-  try { Set-NetAdapterAdvancedProperty -Name $Name -RegistryKeyword $Kw -RegistryValue $Val -NoRestart -EA SilentlyContinue } catch {}
-}
-""");
-
-        // --- Registry: only keys that still matter ---
-        // DisableTaskOffload=1 is a real footgun (kills checksum/LSO at stack level)
-        sb.AppendLine("$tcp = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters'");
-        sb.AppendLine("Set-Dword $tcp 'DisableTaskOffload' 0");
-        sb.AppendLine("Set-Dword $tcp 'EnablePMTUDiscovery' 1");
-        // Clear obsolete static RWIN if present (auto-tuning owns window size)
-        sb.AppendLine("Remove-Prop $tcp 'GlobalMaxTcpWindowSize'");
-        sb.AppendLine("Remove-Prop $tcp 'TcpWindowSize'");
-        sb.AppendLine("Remove-Prop $tcp 'EnableTCPChimney'");
-        sb.AppendLine("Remove-Prop $tcp 'EnableTCPA'");
-        sb.AppendLine("Remove-Prop $tcp 'EnableDCA'");
-        sb.AppendLine("Remove-Prop $tcp 'TcpNumConnections'");
-        sb.AppendLine("Remove-Prop $tcp 'LargeSystemCache'");
-
-        // MMCSS — Microsoft docs:
-        // SystemResponsiveness: % for low-priority; default 20; <10 or >100 clamp to 20 → use 10
-        // NetworkThrottlingIndex: default 10. ffffffff can raise DPC latency / audio issues → keep 10
-        sb.AppendLine("$mm = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'");
-        sb.AppendLine("Set-Dword $mm 'SystemResponsiveness' 10");
-        sb.AppendLine("Set-Dword $mm 'NetworkThrottlingIndex' 10");
-        sb.AppendLine("""
-$mmGames = Join-Path $mm 'Tasks\Games'
-if (-not (Test-Path $mmGames)) { New-Item $mmGames -Force | Out-Null }
-Set-Dword $mmGames 'GPU Priority' 8
-Set-Dword $mmGames 'Priority' 6
-try { Set-ItemProperty $mmGames -Name 'Scheduling Category' -Value 'High' -Force -EA SilentlyContinue } catch {}
-try { Set-ItemProperty $mmGames -Name 'SFIO Priority' -Value 'High' -Force -EA SilentlyContinue } catch {}
-# QoS "Limit reservable bandwidth" — GPO NonBestEffortLimit 0 removes the old 20% reserve
-New-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' -Force | Out-Null
-Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit' 0
-""");
-
-        // --- netsh / Set-NetTCPSetting (supported modern path) ---
-        sb.AppendLine("netsh int tcp set global rss=enabled | Out-Null");
-        sb.AppendLine("netsh int tcp set global autotuninglevel=" + autotune + " | Out-Null");
-        sb.AppendLine("netsh int tcp set global rsc=" + rsc + " | Out-Null");
-        sb.AppendLine("try { netsh int tcp set heuristics disabled | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int tcp set supplemental template=internet congestionprovider=cubic | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int tcp set supplemental template=internetcustom congestionprovider=cubic | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int ip set global taskoffload=enabled | Out-Null } catch {}");
-        // Ephemeral ports — modern API (MaxUserPort is legacy)
-        sb.AppendLine("try { netsh int ipv4 set dynamicport tcp start=1025 num=64511 | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int ipv4 set dynamicport udp start=1025 num=64511 | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int ipv6 set dynamicport tcp start=1025 num=64511 | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int ipv6 set dynamicport udp start=1025 num=64511 | Out-Null } catch {}");
-        sb.AppendLine("foreach ($pr in @('Internet','InternetCustom')) {");
-        sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -CongestionProvider CUBIC -EA SilentlyContinue } catch {}");
-        sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -AutoTuningLevelLocal " + autoTuningPs + " -EA SilentlyContinue } catch {}");
-        sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -ScalingHeuristics Disabled -EA SilentlyContinue } catch {}");
-        sb.AppendLine("}");
-
-        // Nagle (per-interface) — only latency preset
-        sb.AppendLine("Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces' -EA SilentlyContinue | ForEach-Object {");
-        sb.AppendLine("  $p = $_.PSPath");
-        sb.AppendLine(ackBlock);
-        sb.AppendLine("}");
-
-        // --- Per-adapter: branch Ethernet vs Wi‑Fi (MS: wireless often has no RSS/LSO) ---
-        // Apply to all physical NICs so dual-homed PCs are ready on either media.
-        sb.AppendLine("function Test-IsWifiAdapter($a) {");
-        sb.AppendLine("  $media = [string]$a.MediaType");
-        sb.AppendLine("  $desc  = [string]$a.InterfaceDescription");
-        sb.AppendLine("  $name  = [string]$a.Name");
-        sb.AppendLine("  if ($media -match '(?i)802\\.11|Native 802|Wireless|Wi-?Fi') { return $true }");
-        sb.AppendLine("  if ($desc  -match '(?i)Wi-?Fi|Wireless|802\\.11|WLAN|MediaTek.*Wi|Intel.*Wi-?Fi|Realtek.*802\\.11|Killer.*Wireless') { return $true }");
-        sb.AppendLine("  if ($name  -match '(?i)^Wi-?Fi|Wireless') { return $true }");
-        sb.AppendLine("  return $false");
-        sb.AppendLine("}");
-        sb.AppendLine("$adapters = @(Get-NetAdapter -Physical -EA SilentlyContinue | Where-Object { $_.Status -eq 'Up' -or $_.Status -eq 'Disconnected' })");
-        sb.AppendLine("if ($adapters.Count -eq 0) { $adapters = @(Get-NetAdapter -Physical -EA SilentlyContinue) }");
-        sb.AppendLine("foreach ($a in $adapters) {");
-        sb.AppendLine("  $n = $a.Name");
-        sb.AppendLine("  $isWifi = Test-IsWifiAdapter $a");
-        sb.AppendLine("  $kind = $(if ($isWifi) { 'Wi-Fi' } else { 'Ethernet' })");
-        sb.AppendLine("  Write-Host \"[NIC] $n ($kind) $($a.InterfaceDescription)\"");
-        sb.AppendLine("  foreach ($kw in @('*IPChecksumOffloadIPv4','*TCPChecksumOffloadIPv4','*TCPChecksumOffloadIPv6','*UDPChecksumOffloadIPv4','*UDPChecksumOffloadIPv6')) { Set-Adv $n $kw 3 }");
-        sb.AppendLine("  Set-Adv $n '*LsoV2IPv4' " + lso);
-        sb.AppendLine("  Set-Adv $n '*LsoV2IPv6' " + lso);
-        sb.AppendLine("  try { if (" + lso + " -eq 1) { Enable-NetAdapterLso -Name $n -NoRestart -EA SilentlyContinue } else { Disable-NetAdapterLso -Name $n -NoRestart -EA SilentlyContinue } } catch {}");
-        sb.AppendLine("  try { if ('" + rsc + "' -eq 'enabled') { Enable-NetAdapterRsc -Name $n -EA SilentlyContinue } else { Disable-NetAdapterRsc -Name $n -EA SilentlyContinue } } catch {}");
-        sb.AppendLine("  Set-Adv $n '*InterruptModeration' " + im);
-        sb.AppendLine("  if (" + im + " -eq 0) {");
-        sb.AppendLine("    try { Set-Adv $n 'ITR' 0 } catch {}");
-        sb.AppendLine("    try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Interrupt Moderation Rate' -DisplayValue 'Off' -NoRestart -EA SilentlyContinue } catch {}");
-        sb.AppendLine("  } else {");
-        sb.AppendLine("    try {");
-        sb.AppendLine("      $vals = @((Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword ITR -EA SilentlyContinue).ValidDisplayValues)");
-        sb.AppendLine("      if ($vals -contains 'Adaptive') { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Interrupt Moderation Rate' -DisplayValue 'Adaptive' -NoRestart -EA SilentlyContinue }");
-        sb.AppendLine("      elseif ($vals -contains 'Medium') { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Interrupt Moderation Rate' -DisplayValue 'Medium' -NoRestart -EA SilentlyContinue }");
-        sb.AppendLine("    } catch {}");
-        sb.AppendLine("  }");
-        sb.AppendLine("  foreach ($kw in @('*EEE','*EnergyEfficientEthernet','*GreenEthernet','*SelectiveSuspend','*IdleRestriction','*ReduceSpeedOnPowerDown')) { Set-Adv $n $kw 0 }");
-        sb.AppendLine("  try { Set-NetAdapterPowerManagement -Name $n -SelectiveSuspend Disabled -NoRestart -EA SilentlyContinue } catch {}");
-        // RSS: Microsoft — many wireless NICs do not support RSS
-        sb.AppendLine("  if (-not $isWifi) {");
-        sb.AppendLine("    Set-Adv $n '*RSS' 1");
-        sb.AppendLine("    try { Set-NetAdapterRss -Name $n -Enabled $true -EA SilentlyContinue } catch {}");
-        sb.AppendLine("    try { $q = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*NumRssQueues' -EA SilentlyContinue; if ($q -and $q.ValidRegistryValues) { $max = ($q.ValidRegistryValues | Measure-Object -Maximum).Maximum; if ($max -gt 0) { Set-Adv $n '*NumRssQueues' ([int]$max) } } } catch {}");
-        sb.AppendLine("  }");
-        sb.AppendLine("  foreach ($kw in @('*ReceiveBuffers','*TransmitBuffers','ReceiveBuffers','TransmitBuffers')) {");
-        sb.AppendLine("    try { $prop = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword $kw -EA SilentlyContinue; if ($prop -and $prop.ValidRegistryValues) { $max = ($prop.ValidRegistryValues | Measure-Object -Maximum).Maximum; if ($max -gt 0) { Set-Adv $n $kw ([int]$max) } } } catch {}");
-        sb.AppendLine("  }");
-        // Wi-Fi: power-save + smart band (6 GHz prefer if client supports; never force-only)
-        sb.AppendLine("  if ($isWifi) {");
-        sb.AppendLine("    foreach ($dn in @('MIMO Power Save Mode','MIMO Power Save','uAPSD support','Power Saving Mode')) {");
-        sb.AppendLine("      try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $dn -DisplayValue 'Disabled' -NoRestart -EA SilentlyContinue } catch {}");
-        sb.AppendLine("      try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $dn -DisplayValue 'Off' -NoRestart -EA SilentlyContinue } catch {}");
-        sb.AppendLine("    }");
-        // Preferred Band: try exact ValidDisplayValues match first (Intel: "Prefer 6GHz band")
-        sb.AppendLine("    $bandProp = $null");
-        sb.AppendLine("    foreach ($dn in @('Preferred Band','Preferable Band','Band Preference','Wireless Mode')) {");
-        sb.AppendLine("      try { $bandProp = Get-NetAdapterAdvancedProperty -Name $n -DisplayName $dn -EA SilentlyContinue; if ($bandProp) { break } } catch {}");
-        sb.AppendLine("    }");
-        sb.AppendLine("    $bandVals = @(); if ($bandProp) { $bandVals = @($bandProp.ValidDisplayValues) }");
-        sb.AppendLine("    $want = @()");
-        if (prefer6 == "1")
-            sb.AppendLine("    $want += @('Prefer 6GHz band','Prefer 6GHz','Prefer 6 GHz band','6GHz band','Prefer 6 GHz')");
-        sb.AppendLine("    $want += @('Prefer 5GHz band','Prefer 5GHz','Prefer 5 GHz band','5GHz band','Prefer 5 GHz')");
-        sb.AppendLine("    foreach ($bv in $want) {");
-        sb.AppendLine("      if ($bandProp -and ($bandVals.Count -eq 0 -or $bandVals -contains $bv)) {");
-        sb.AppendLine("        try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $bandProp.DisplayName -DisplayValue $bv -NoRestart -EA SilentlyContinue; break } catch {}");
-        sb.AppendLine("      }");
-        sb.AppendLine("    }");
-        sb.AppendLine("    foreach ($rv in @('Medium','3. Medium','2. Medium','Medium-High')) {");
-        sb.AppendLine("      try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Roaming Aggressiveness' -DisplayValue $rv -NoRestart -EA SilentlyContinue; break } catch {}");
-        sb.AppendLine("    }");
-        sb.AppendLine("  }");
-        sb.AppendLine("  try {");
-        sb.AppendLine("    $class = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}'");
-        sb.AppendLine("    Get-ChildItem $class -EA SilentlyContinue | ForEach-Object {");
-        sb.AppendLine("      $props = Get-ItemProperty $_.PSPath -EA SilentlyContinue");
-        sb.AppendLine("      if ($props.DriverDesc -eq $a.InterfaceDescription) { Set-ItemProperty $_.PSPath -Name PnPCapabilities -Value 24 -Type DWord -Force -EA SilentlyContinue }");
-        sb.AppendLine("    }");
-        sb.AppendLine("  } catch {}");
-        sb.AppendLine("}");
-
-        // Prefer Ethernet 100% when linked with a real IPv4 (gaming lowest-latency path).
-        // Not "cable only / no IP" — that is not usable Ethernet yet.
-        sb.AppendLine("if (" + preferEth + " -eq 1) {");
-        sb.AppendLine("  $ethReady = @()");
-        sb.AppendLine("  foreach ($e in @($adapters | Where-Object { -not (Test-IsWifiAdapter $_) -and $_.Status -eq 'Up' })) {");
-        sb.AppendLine("    $ip = @(Get-NetIPAddress -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue | Where-Object { $_.IPAddress -notlike '169.254.*' })");
-        sb.AppendLine("    if ($ip.Count -gt 0) { $ethReady += $e }");
-        sb.AppendLine("  }");
-        sb.AppendLine("  if ($ethReady.Count -gt 0) {");
-        sb.AppendLine("    Write-Host '[OptiHub-NET] Ethernet ready — preferring Ethernet (lowest latency)'");
-        sb.AppendLine("    foreach ($e in $ethReady) {");
-        sb.AppendLine("      try { Set-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -InterfaceMetric 1 -EA SilentlyContinue } catch {}");
-        sb.AppendLine("      try { Set-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily IPv6 -InterfaceMetric 1 -EA SilentlyContinue } catch {}");
-        sb.AppendLine("    }");
-        sb.AppendLine("    foreach ($w in @($adapters | Where-Object { Test-IsWifiAdapter $_ })) {");
-        sb.AppendLine("      try {");
-        sb.AppendLine("        if ($w.Status -ne 'Disabled') {");
-        sb.AppendLine("          Disable-NetAdapter -Name $w.Name -Confirm:$false -EA SilentlyContinue");
-        sb.AppendLine("          Write-Host \"[NIC] Wi-Fi disabled: $($w.Name)\"");
-        sb.AppendLine("        }");
-        sb.AppendLine("      } catch { Write-Host \"[NIC] could not disable $($w.Name)\" }");
-        sb.AppendLine("    }");
-        sb.AppendLine("  } else {");
-        sb.AppendLine("    Write-Host '[OptiHub-NET] No usable Ethernet (up+IPv4) — keeping Wi-Fi'");
-        sb.AppendLine("  }");
-        sb.AppendLine("}");
-
-        sb.AppendLine("try { Clear-DnsClientCache -EA SilentlyContinue } catch {}");
-
-        // Restart Ethernet only if user confirmed (never auto Wi-Fi restart)
-        sb.AppendLine("if (" + restartEth + " -eq 1) {");
-        sb.AppendLine("  foreach ($a in @($adapters | Where-Object { $_.Status -eq 'Up' -and -not (Test-IsWifiAdapter $_) })) {");
-        sb.AppendLine("    try { Restart-NetAdapter -Name $a.Name -Confirm:$false -EA SilentlyContinue; Write-Host \"[NIC] restarted (Ethernet) $($a.Name)\" } catch {}");
-        sb.AppendLine("  }");
-        sb.AppendLine("  Start-Sleep -Seconds 2");
-        sb.AppendLine("} else {");
-        sb.AppendLine("  Write-Host '[OptiHub-NET] Ethernet restart skipped (user declined)'");
-        sb.AppendLine("}");
-        sb.AppendLine("Write-Host '[OptiHub-NET] DONE preset=" + preset + "'");
-        sb.AppendLine("exit 0");
-        return sb.ToString();
-    }
-
+    // BuildFullApplyScript removed — see NetworkApplyScriptBuilder
     private static NetworkFeatureRow Row(string title, string status, bool ok, string? note = null) => new()
     {
         Title = title,

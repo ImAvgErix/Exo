@@ -251,14 +251,15 @@ public sealed class OptimizerStateService
             {
                 var config = File.ReadAllText(configIni);
                 var bundledKit = Path.Combine(PathHelper.DiscordScriptsDir, "kit");
-                kernelOk = new FileInfo(ffmpeg).Length < 500_000 &&
-                           new FileInfo(ffmpegReal).Length > 500_000 &&
-                           new FileInfo(versionDll).Length > 50_000 &&
-                           config.Split('\n').Any(line => line.Trim().Equals("TrimIntervalMs=5000", StringComparison.Ordinal)) &&
-                           config.Split('\n').Any(line => line.Trim().Equals("PriorityClass=3", StringComparison.Ordinal)) &&
-                           FilesHaveSameSha256(Path.Combine(bundledKit, "ffmpeg.dll"), ffmpeg) &&
-                           FilesHaveSameSha256(Path.Combine(bundledKit, "version.dll"), versionDll) &&
-                           FilesHaveSameSha256(Path.Combine(bundledKit, "config.ini"), configIni);
+                // Peak config (EnableTrim/PriorityClass/TrimIntervalMs range) + kit proxy/version hashes.
+                // Do not require exact config.ini hash (kit interval may differ from a prior valid apply).
+                kernelOk = DiscordPeakLogic.IsKernelApplied(
+                    new FileInfo(ffmpeg).Length,
+                    new FileInfo(ffmpegReal).Length,
+                    new FileInfo(versionDll).Length,
+                    config,
+                    FilesHaveSameSha256(Path.Combine(bundledKit, "ffmpeg.dll"), ffmpeg),
+                    FilesHaveSameSha256(Path.Combine(bundledKit, "version.dll"), versionDll));
             }
             catch { /* ignore */ }
         }
@@ -334,7 +335,8 @@ public sealed class OptimizerStateService
             "DiscordInc.Discord",
             "com.squirrel.Discord.Discord"
         };
-        var notificationsOk = true;
+        // Align with DiscordPeakLogic / detect: present keys must be 0; missing ids ignored; need ≥1 key.
+        var toastMap = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
         try
         {
             const string notificationsRoot =
@@ -343,17 +345,15 @@ public sealed class OptimizerStateService
             {
                 using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
                     $@"{notificationsRoot}\{id}");
-                if (key?.GetValue("Enabled") is not int enabled || enabled != 0)
-                {
-                    notificationsOk = false;
-                    break;
-                }
+                if (key is null) { toastMap[id] = null; continue; }
+                toastMap[id] = key.GetValue("Enabled") is int enabled ? enabled : null;
             }
         }
         catch
         {
-            notificationsOk = false;
+            toastMap.Clear();
         }
+        var notificationsOk = DiscordPeakLogic.AreToastsOff(toastMap);
         var windowsQuietOk = startupOk && notificationsOk &&
                              IsStableDiscordRunQuiet(discordRoot) &&
                              AreStableDiscordScheduledTasksDisabled(discordRoot) &&
@@ -651,10 +651,7 @@ public sealed class OptimizerStateService
         {
             try
             {
-                var launcher = File.ReadAllText(launcherPath);
-                cefLauncherOk = launcher.Contains("steam.exe", StringComparison.OrdinalIgnoreCase) &&
-                                 launcher.Contains("-cef-disable-gpu", StringComparison.OrdinalIgnoreCase) &&
-                                 launcher.Contains("start \"\" /HIGH", StringComparison.OrdinalIgnoreCase);
+                cefLauncherOk = SteamPeakLogic.IsCefLauncherText(File.ReadAllText(launcherPath));
             }
             catch { /* ignore */ }
         }
@@ -671,12 +668,8 @@ public sealed class OptimizerStateService
         {
             try
             {
-                var helper = File.ReadAllText(helperPath);
-                aggressiveTrimOk = helper.Contains("OptiHub.SteamWebHelper", StringComparison.Ordinal) &&
-                                   helper.Contains("EmptyWorkingSet", StringComparison.Ordinal) &&
-                                   helper.Contains("Start-Sleep -Seconds 5", StringComparison.Ordinal) &&
-                                   helper.Contains("ProcessPriorityClass]::High", StringComparison.Ordinal) &&
-                                   helper.Contains("ProcessPriorityClass]::BelowNormal", StringComparison.Ordinal);
+                // Peak: 2–15s reclaim (not hard-coded Seconds 5 only)
+                aggressiveTrimOk = SteamPeakLogic.IsTrimHelperText(File.ReadAllText(helperPath));
             }
             catch { /* ignore */ }
         }

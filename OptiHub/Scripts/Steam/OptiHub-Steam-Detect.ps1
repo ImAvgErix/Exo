@@ -1,7 +1,12 @@
 # OptiHub - detect Steam optimizer status (JSON for WinUI).
 # Checklist mirrors Discord parity: quiet launch, RAM kernel, complete debloat,
 # Windows suppression, Start Menu path, verified record.
+# Classifiers: SteamDetectCore.ps1 (pure) — keep aligned with SteamPeakLogic.cs
 $ErrorActionPreference = 'SilentlyContinue'
+
+$core = Join-Path $PSScriptRoot 'SteamDetectCore.ps1'
+if (-not (Test-Path -LiteralPath $core)) { throw "Missing SteamDetectCore.ps1 beside detect script" }
+. $core
 
 function Get-SteamInstallPath {
     $candidates = @()
@@ -63,18 +68,18 @@ function Test-SteamStartupQuiet {
 function Test-SteamToastsOff {
     $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
     $ids = @('Steam', 'Valve.Steam', 'Valve.Steam.Client', 'com.valvesoftware.Steam', 'steam.exe')
-    $seen = $false
+    $map = @{}
     foreach ($id in $ids) {
         $path = Join-Path $base $id
-        if (-not (Test-Path -LiteralPath $path)) { continue }
-        $seen = $true
+        if (-not (Test-Path -LiteralPath $path)) { $map[$id] = $null; continue }
         try {
             $entry = Get-ItemProperty -Path $path -ErrorAction Stop
             $prop = $entry.PSObject.Properties['Enabled']
-            if (-not $prop -or [int]$prop.Value -ne 0) { return $false }
-        } catch { return $false }
+            if (-not $prop) { $map[$id] = $null }
+            else { $map[$id] = [int]$prop.Value }
+        } catch { $map[$id] = 1 }
     }
-    return $seen
+    return (Test-SteamToastsOffFromMap -Map $map)
 }
 
 function Test-SteamTrayQuiet([string]$SteamPath) {
@@ -289,35 +294,27 @@ if (-not $steamOk) {
 } else {
     Add-Feature 'Steam install' 'Client found and ready.' $true
 
-    # OpenAsar equivalent: quiet CEF launcher
+    # Quiet CEF launcher (SteamPeakLogic / SteamDetectCore)
     $cefOk = $false
     $launcher = Join-Path $steam 'Steam-OptiHub.cmd'
     if (Test-Path -LiteralPath $launcher) {
         try {
             $launcherText = Get-Content -LiteralPath $launcher -Raw -ErrorAction Stop
-            $cefOk = $launcherText -match '(?i)steam\.exe' -and
-                $launcherText -match '-cef-disable-gpu' -and
-                $launcherText -match '-nofriendsui' -and
-                $launcherText -match '-nointro' -and
-                $launcherText -match '(?i)start\s+""\s+/HIGH'
+            $cefOk = Test-SteamCefLauncherText -Text $launcherText
         } catch { }
     }
     Add-Feature 'Quiet CEF launcher' 'Fast quiet CEF flags + High priority Steam start (Steam launches before the trim helper).' $cefOk
 
-    # DiscOpt kernel equivalent
+    # WebHelper trim + priority (2–15s reclaim interval accepted)
     $trimOk = $false
     $helper = Join-Path $steam 'OptiHub-SteamWebHelperTrim.ps1'
     if (Test-Path -LiteralPath $helper) {
         try {
             $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
-            $trimOk = $helperText -match 'OptiHub\.SteamWebHelper' -and
-                $helperText -match 'EmptyWorkingSet' -and
-                $helperText -match 'Start-Sleep -Seconds 5' -and
-                $helperText -match 'ProcessPriorityClass\]::High' -and
-                $helperText -match 'ProcessPriorityClass\]::BelowNormal'
+            $trimOk = Test-SteamTrimHelperText -Text $helperText
         } catch { }
     }
-    Add-Feature 'RAM trim + priority' '5s webhelper reclaim; yields CPU while gaming.' $trimOk
+    Add-Feature 'RAM trim + priority' 'Webhelper reclaim loop + priority yield while gaming (2-15s interval).' $trimOk
 
     $debloatOk = Test-SteamCompleteClientDebloat $steam
     $dlOk = [bool]($state -and $state.configVerified -and $state.downloadOptimized) -and
@@ -337,21 +334,13 @@ if (-not $steamOk) {
 
     $runtimeOk = Test-SteamRuntimeIntegrity $steam
     # Trust apply flags - do NOT pin exact kit version strings (1.7.3+ was falsely "incomplete").
-    $markerOk = [bool]($state -and
-        [string]$state.applyStatus -eq 'applied' -and
-        $state.applied -eq $true -and
-        $state.quick -eq $false -and
-        $state.fullApply -eq $true -and
-        $state.windowsVerified -eq $true -and
-        $state.debloatVerified -eq $true -and
-        $state.cacheCleanupCompleted -eq $true -and
-        $state.shaderInventoryVerified -eq $true -and
-        $state.installedShaderCachesPreserved -eq $true)
+    $markerOk = Test-SteamApplyRecord -State $state
     # Durable quiet re-enforce helper must exist after modern applies.
     if ($markerOk -and $helper -and (Test-Path -LiteralPath $helper)) {
         try {
             $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
-            if ($helperText -notmatch 'Reinstate-SteamQuiet' -and $helperText -notmatch 'OptiHub\.SteamWebHelper') {
+            if (-not (Test-SteamTrimHelperText -Text $helperText) -and
+                $helperText -notmatch 'Reinstate-SteamQuiet') {
                 $markerOk = $false
             }
         } catch { $markerOk = $false }

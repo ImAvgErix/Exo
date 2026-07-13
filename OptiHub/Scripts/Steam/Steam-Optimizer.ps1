@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.7.7'
+$Script:SteamOptVersion = '1.7.8'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 Preview only (never Windows PowerShell 5.1 / never stable 7) ---

@@ -1,6 +1,6 @@
 # OptiHub tweak audit (evidence-based)
 
-Last pass: v1.9.25. Goal: keep only knobs with real OS/driver behavior; drop folklore.
+Last pass: v1.9.32. Goal: keep only knobs with real OS/driver behavior; drop folklore.
 
 ## Internet
 
@@ -15,12 +15,17 @@ Last pass: v1.9.25. Goal: keep only knobs with real OS/driver behavior; drop fol
 | CUBIC | **Keep** | Current Windows default path |
 | Nagle keys (latency only) | **Keep** | Still applied per interface for TCP |
 | SystemResponsiveness **10** | **Keep** | MS: &lt;10 or &gt;100 **clamp to 20**; 0 is wrong |
-| NetworkThrottlingIndex **10** | **Keep** | OS default; `ffffffff` can raise DPC/audio issues |
+| NetworkThrottlingIndex **10** (force) | **Keep** | OS default; `ffffffff` can raise DPC/audio issues — overwrite always |
 | QoS NonBestEffortLimit 0 | **Keep** | Real GPO (old 20% reserve) |
 | Games MMCSS Priority/GPU | **Keep** | Real when apps register with MMCSS |
+| Flow Control off (latency) | **Keep** | Pause frames stall gaming under congestion |
+| IdleRestriction on (latency, Intel) | **Keep** | Blocks NIC low-power idle on I225/I226-class |
 | NIC EEE / selective suspend off | **Keep** | Real link power renegotiation source |
+| powercfg wireless max / PCIe ASPM off | **Keep** | Documented power plan settings |
+| Interface metric 1 on usable eth | **Keep** | Real route preference |
 | PnPCapabilities 24 | **Keep** | Stops “turn off this device to save power” |
 | Dynamic ports via netsh | **Keep** | Modern replacement for MaxUserPort |
+| Fuzzy Preferred Band match | **Keep** | Vendor display strings vary; prefer never force-only |
 | MaxUserPort / MaxFreeTcbs / TcpNumConnections | **Removed** | XP/server-era; ignored or irrelevant on modern desktop |
 | TCP chimney / NetDMA / DCA registry | **Removed** | Removed from modern Windows |
 | LargeSystemCache | **Removed** | Server-oriented; can hurt desktop |
@@ -76,7 +81,8 @@ Router firmware is not queried over the WAN; band choice uses **your PC’s radi
 | Discord kernel (priority, trim, raw input) | **Keep** — in-process real behavior |
 | Steam CEF lean launcher /HIGH + cache clean | **Keep** — real client overhead reduction |
 | Windows quiet (toasts/tray/autostart) | **Keep** — real startup/notification reduction |
-| Random “FPS registry packs” | **Not used** |
+| Random "FPS registry packs" | **Not used** |
+| Detect false-fails (TrimInterval hardcode) | **Fixed** — peak config range + kit proxy hashes (`DiscordDetectCore` / `DiscordPeakLogic`) |
 
 ## How we decide
 

@@ -1,7 +1,12 @@
 # OptiHub - detect whether Discord Optimizer is already applied.
 # Prints a single JSON object to stdout for the WinUI host.
+# Classifiers: DiscordDetectCore.ps1 (pure) — keep aligned with DiscordPeakLogic.cs
 
 $ErrorActionPreference = 'SilentlyContinue'
+
+$core = Join-Path $PSScriptRoot 'DiscordDetectCore.ps1'
+if (-not (Test-Path -LiteralPath $core)) { throw "Missing DiscordDetectCore.ps1 beside detect script" }
+. $core
 
 $local = [Environment]::GetFolderPath('LocalApplicationData')
 $appData = [Environment]::GetFolderPath('ApplicationData')
@@ -27,15 +32,6 @@ function Add-Feature([string]$Title, [string]$Detail, [bool]$Active) {
     })
 }
 
-function Test-StableDiscordText([string]$Text, [string]$Root) {
-    if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
-    try {
-        $prefix = [IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
-        $expanded = [Environment]::ExpandEnvironmentVariables($Text).Replace('/', '\')
-        return $expanded.IndexOf($prefix, [StringComparison]::OrdinalIgnoreCase) -ge 0
-    } catch { return $false }
-}
-
 function Test-StableDiscordWindowsQuiet([string]$Root) {
     # Policy (matches Apply-WindowsTweaks): no autostart/tasks; tray hidden when entries exist.
     try {
@@ -43,7 +39,7 @@ function Test-StableDiscordWindowsQuiet([string]$Root) {
         if (Test-Path $runKey) {
             $run = Get-Item -Path $runKey -ErrorAction Stop
             foreach ($name in @($run.GetValueNames())) {
-                if (Test-StableDiscordText ([string]$run.GetValue($name)) $Root) { return $false }
+                if (Test-DiscOptStablePathText ([string]$run.GetValue($name)) $Root) { return $false }
             }
         }
 
@@ -51,9 +47,9 @@ function Test-StableDiscordWindowsQuiet([string]$Root) {
             if ($task.TaskName -notmatch '(?i)Discord' -and $task.TaskPath -notmatch '(?i)Discord') { continue }
             $stable = $false
             foreach ($action in @($task.Actions)) {
-                if ((Test-StableDiscordText ([string]$action.Execute) $Root) -or
-                    (Test-StableDiscordText ([string]$action.Arguments) $Root) -or
-                    (Test-StableDiscordText ([string]$action.WorkingDirectory) $Root)) {
+                if ((Test-DiscOptStablePathText ([string]$action.Execute) $Root) -or
+                    (Test-DiscOptStablePathText ([string]$action.Arguments) $Root) -or
+                    (Test-DiscOptStablePathText ([string]$action.WorkingDirectory) $Root)) {
                     $stable = $true
                     break
                 }
@@ -71,7 +67,7 @@ function Test-StableDiscordWindowsQuiet([string]$Root) {
                 if (-not $item) { continue }
                 $exe = [string]$item.GetValue('ExecutablePath')
                 if (-not $exe) { continue }
-                if (-not ((Test-StableDiscordText $exe $Root) -or ($exe -match '(?i)Discord'))) { continue }
+                if (-not ((Test-DiscOptStablePathText $exe $Root) -or ($exe -match '(?i)Discord'))) { continue }
                 if ($item.GetValueNames() -notcontains 'IsPromoted' -or [int]$item.GetValue('IsPromoted') -ne 0) {
                     return $false
                 }
@@ -85,28 +81,28 @@ function Test-DiscordToastsOff {
     # Product policy: Windows toast banners OFF for Discord (quiet OS shell).
     $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
     $ids = @('Discord', 'Discord.Desktop', 'DiscordInc.Discord', 'com.squirrel.Discord.Discord')
-    $seen = $false
+    $map = @{}
     foreach ($id in $ids) {
         $path = Join-Path $base $id
-        if (-not (Test-Path -LiteralPath $path)) { continue }
-        $seen = $true
+        if (-not (Test-Path -LiteralPath $path)) {
+            $map[$id] = $null
+            continue
+        }
         try {
             $entry = Get-ItemProperty -Path $path -ErrorAction Stop
             $prop = $entry.PSObject.Properties['Enabled']
-            if (-not $prop -or [int]$prop.Value -ne 0) { return $false }
-        } catch { return $false }
+            if (-not $prop) { $map[$id] = $null }
+            else { $map[$id] = [int]$prop.Value }
+        } catch { $map[$id] = 1 }
     }
-    # Keys should exist after apply; if none yet, not fully applied.
-    return $seen
+    return (Test-DiscOptToastsOffFromMap -Map $map)
 }
 
-function Test-EquicordLoader([string]$Path) {
-    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+function Test-FileHashMatch([string]$Source, [string]$Destination) {
     try {
-        $bytes = [IO.File]::ReadAllBytes($Path)
-        if ($bytes.Length -lt 64 -or $bytes.Length -ge 4096) { return $false }
-        $text = [Text.Encoding]::UTF8.GetString($bytes)
-        return $text -match '(?i)equicord\.asar' -and $text -match '(?i)require'
+        if (-not (Test-Path -LiteralPath $Source) -or -not (Test-Path -LiteralPath $Destination)) { return $false }
+        return (Get-FileHash -LiteralPath $Source -Algorithm SHA256 -ErrorAction Stop).Hash -ieq
+            (Get-FileHash -LiteralPath $Destination -Algorithm SHA256 -ErrorAction Stop).Hash
     } catch { return $false }
 }
 
@@ -135,23 +131,28 @@ if (-not (Test-Path $discordRoot)) {
         $versionDll = Join-Path $app.FullName 'version.dll'
         $ffmpeg = Join-Path $app.FullName 'ffmpeg.dll'
         $configIni = Join-Path $app.FullName 'config.ini'
+        $kitDir = Join-Path $PSScriptRoot 'kit'
 
-        $equicordOk = (Test-Path -LiteralPath $equicordAsar) -and
-            ((Get-Item -LiteralPath $equicordAsar).Length -gt 1000000) -and
-            (Test-EquicordLoader $appAsar)
+        $equicordOk = $false
+        if ((Test-Path -LiteralPath $equicordAsar) -and ((Get-Item -LiteralPath $equicordAsar).Length -gt 1000000) -and
+            (Test-Path -LiteralPath $appAsar)) {
+            try {
+                $loaderBytes = [IO.File]::ReadAllBytes($appAsar)
+                $equicordOk = Test-DiscOptEquicordLoaderBytes -Bytes $loaderBytes
+            } catch { $equicordOk = $false }
+        }
         Add-Feature 'Client mods & privacy' 'Equicord loads privacy plugins and strips noisy telemetry.' $equicordOk
 
         $openAsarOk = $false
         if (Test-Path -LiteralPath $openAsarTarget) {
-            $sz = (Get-Item -LiteralPath $openAsarTarget).Length
-            if ($sz -gt 10000 -and $sz -lt 500000) { $openAsarOk = $true }
+            $openAsarOk = Test-DiscOptOpenAsarSize -SizeBytes ((Get-Item -LiteralPath $openAsarTarget).Length)
         }
         $quickStartOk = $false
         $settingsPathForQs = Join-Path $appData 'discord\settings.json'
         if (Test-Path -LiteralPath $settingsPathForQs) {
             try {
-                $sjQs = Get-Content $settingsPathForQs -Raw -Encoding UTF8 | ConvertFrom-Json
-                if ($sjQs.openasar -and $sjQs.openasar.quickstart -eq $true) { $quickStartOk = $true }
+                $sjRaw = Get-Content $settingsPathForQs -Raw -Encoding UTF8
+                $quickStartOk = Test-DiscOptQuickStartFromSettingsJson -JsonText $sjRaw
             } catch { }
         }
         Add-Feature 'Faster Discord startup' 'OpenASAR + quickstart and lean Chromium switches so Discord opens quicker.' ($openAsarOk -and $quickStartOk)
@@ -164,25 +165,19 @@ if (-not (Test-Path $discordRoot)) {
             $realSize = (Get-Item -LiteralPath $ffmpegReal).Length
             $verSize = (Get-Item -LiteralPath $versionDll).Length
             $configText = Get-Content -LiteralPath $configIni -Raw -ErrorAction SilentlyContinue
-            $hashesOk = $true
-            foreach ($pair in @(
-                @{ Source = Join-Path $PSScriptRoot 'kit\ffmpeg.dll'; Destination = $ffmpeg },
-                @{ Source = Join-Path $PSScriptRoot 'kit\version.dll'; Destination = $versionDll },
-                @{ Source = Join-Path $PSScriptRoot 'kit\config.ini'; Destination = $configIni }
-            )) {
-                try {
-                    if (-not (Test-Path -LiteralPath $pair.Source) -or
-                        (Get-FileHash -LiteralPath $pair.Source -Algorithm SHA256 -ErrorAction Stop).Hash -ine
-                        (Get-FileHash -LiteralPath $pair.Destination -Algorithm SHA256 -ErrorAction Stop).Hash) {
-                        $hashesOk = $false
-                    }
-                } catch { $hashesOk = $false }
-            }
-            if ($ffSize -lt 500000 -and $realSize -gt 500000 -and $verSize -gt 50000 -and
-                $configText -match '(?m)^TrimIntervalMs=5000\s*$' -and
-                $configText -match '(?m)^PriorityClass=3\s*$' -and $hashesOk) { $kernelOk = $true }
+            $proxyHashOk = Test-FileHashMatch (Join-Path $kitDir 'ffmpeg.dll') $ffmpeg
+            $verHashOk = Test-FileHashMatch (Join-Path $kitDir 'version.dll') $versionDll
+            # config.ini: content peak-valid (4000 or 5000 trim, etc.) — do not require exact kit hash
+            # (kit may ship a newer interval while an applied peak config remains correct)
+            $kernelOk = Test-DiscOptKernelApplied `
+                -FfmpegProxyBytes $ffSize `
+                -FfmpegRealBytes $realSize `
+                -VersionDllBytes $verSize `
+                -ConfigText $configText `
+                -ProxyHashMatchesKit $proxyHashOk `
+                -VersionHashMatchesKit $verHashOk
         }
-        Add-Feature 'Aggressive RAM + latency kernel' 'DiscOpt reclaims memory every 5s, uses Above Normal process priority, and enables thread/raw-input tuning.' $kernelOk
+        Add-Feature 'Aggressive RAM + latency kernel' 'DiscOpt idle RAM trim, Above Normal priority, thread/raw-input tuning (kit binaries + peak config).' $kernelOk
 
         $modPath = Join-Path $app.FullName 'modules'
         $optionalModules = @('discord_hook-1', 'discord_clips-1')
@@ -214,13 +209,12 @@ if (-not (Test-Path $discordRoot)) {
         $settingsPath = Join-Path $appData 'discord\settings.json'
         if (Test-Path -LiteralPath $settingsPath) {
             try {
-                $sj = Get-Content $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
-                # Legacy OptiHub stamp (no longer forced - pure #000 can blank the client)
+                $sjRaw = Get-Content $settingsPath -Raw -Encoding UTF8
+                $startupOk = Test-DiscOptStartupOffFromSettingsJson -JsonText $sjRaw
+                $sj = $sjRaw | ConvertFrom-Json
                 if ($sj.BACKGROUND_COLOR -eq '#000000') { $amoledOk = $true }
-                if ($sj.OPEN_ON_STARTUP -eq $false) { $startupOk = $true }
             } catch {}
         }
-        # Preferred: Equicord AMOLED theme (amoled-cord) enabled - real dark UI without forced CSS
         $eqRoot = Join-Path $appData 'Equicord'
         $eqThemeFile = Join-Path $eqRoot 'themes\amoled-cord.theme.css'
         $eqSettings = Join-Path $eqRoot 'settings\settings.json'
@@ -237,7 +231,6 @@ if (-not (Test-Path $discordRoot)) {
         }
         Add-Feature 'True black AMOLED theme' 'Equicord amoled-cord theme (not forced OpenAsar CSS).' $amoledOk
 
-        # Toasts OFF, tray hidden, no autostart/tasks - matches Apply-WindowsTweaks
         $notificationsOk = Test-DiscordToastsOff
         $windowsQuietOk = $startupOk -and $notificationsOk -and
             (Test-StableDiscordWindowsQuiet $discordRoot)
@@ -254,19 +247,7 @@ if (-not (Test-Path $discordRoot)) {
         } catch {}
         Add-Feature 'Start Menu / apps launch path' 'Start Menu and taskbar Discord shortcuts use the OptiHub -Launch path (OpenASAR + kernel). No desktop icons created.' $launchOk
 
-        $stateAppOk = $false
-        try {
-            $stateAppOk = [IO.Path]::GetFullPath([string]$state.appDir).TrimEnd('\') -ieq
-                [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')
-        } catch { }
-        # Trust apply flags for this Discord build path - do not pin exact kit version strings.
-        $markerOk = [bool]($state -and
-            [string]$state.applyStatus -eq 'applied' -and
-            $state.applied -eq $true -and
-            $state.fullApply -eq $true -and
-            $state.windowsVerified -eq $true -and
-            $state.debloatVerified -eq $true -and
-            $stateAppOk)
+        $markerOk = Test-DiscOptApplyRecord -State $state -CurrentAppDir $app.FullName
         Add-Feature 'Verified optimizer record' 'A completed full apply is recorded for this exact Discord build.' $markerOk
 
         $isApplied = [bool]($markerOk -and $equicordOk -and $openAsarOk -and $kernelOk -and
@@ -274,7 +255,7 @@ if (-not (Test-Path $discordRoot)) {
         if ($isApplied) {
             $statusText = 'Already optimized'
             $detail = 'No-compromise pack active: aggressive trim, Above Normal priority, full debloat, OpenASAR, and Equicord.'
-        } elseif ($state -and $state.applied -eq $true -and -not $stateAppOk) {
+        } elseif ($state -and $state.applied -eq $true -and -not $markerOk) {
             $statusText = 'Discord updated - reapply'
             $detail = 'Discord installed a new build. Run again to restore OpenAsar, kernel, debloat, and Windows quiet. Daily Start Menu launch auto-heals OpenAsar/kernel when missing.'
         } elseif (-not $openAsarOk -or -not $kernelOk -or -not $equicordOk) {
