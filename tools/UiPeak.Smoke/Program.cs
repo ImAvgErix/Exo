@@ -33,6 +33,27 @@ Expect("MotionIntensity clamp high", Math.Abs(ClampMotion(140) - 100) < 0.0001);
 Expect("MotionIntensity clamp low", Math.Abs(ClampMotion(-5) - 0) < 0.0001);
 Expect("MotionIntensity clamp mid", Math.Abs(ClampMotion(42) - 42) < 0.0001);
 
+// Drive shipped SettingsOverlayState — close→re-open race (skeptic gap).
+{
+    var ov = new SettingsOverlayState();
+    Expect("settings state open", ov.TryBeginOpen() && ov.IsOpen);
+    Expect("settings state no double open", !ov.TryBeginOpen());
+    Expect("settings state close", ov.TryBeginClose(out var closeEpoch) && !ov.IsOpen && closeEpoch > 0);
+    // Re-open before Finish: stale Finish must NOT apply.
+    Expect("settings state reopen", ov.TryBeginOpen() && ov.IsOpen);
+    Expect("settings stale close finish blocked", !ov.ShouldApplyCloseFinish(closeEpoch));
+    // Real close of the second open should still Finish.
+    Expect("settings second close", ov.TryBeginClose(out var close2) && !ov.IsOpen);
+    Expect("settings second finish ok", ov.ShouldApplyCloseFinish(close2));
+    // Double finish of same epoch still ok while closed.
+    Expect("settings finish idempotent while closed", ov.ShouldApplyCloseFinish(close2));
+    // After a brand-new open, old epoch is dead.
+    Expect("settings open again", ov.TryBeginOpen());
+    Expect("settings old epoch dead", !ov.ShouldApplyCloseFinish(close2));
+}
+
+// MainWindow must wire the epoch-gated Finish (string contract on shipped CS).
+
 var repo = FindRepoRoot();
 var appXaml = Path.Combine(repo, "OptiHub", "App.xaml");
 var main = Path.Combine(repo, "OptiHub", "MainWindow.xaml");
@@ -265,6 +286,15 @@ if (File.Exists(mainCsPath))
         && mc.Contains("ResetVisual", StringComparison.Ordinal)
         && mc.Contains("UpdateLayout", StringComparison.Ordinal)
         && mc.Contains("SettingsSheetStage", StringComparison.Ordinal));
+    Expect("settings overlay epoch gate",
+        mc.Contains("SettingsOverlayState", StringComparison.Ordinal)
+        && mc.Contains("TryBeginOpen", StringComparison.Ordinal)
+        && mc.Contains("TryBeginClose", StringComparison.Ordinal)
+        && mc.Contains("ShouldApplyCloseFinish", StringComparison.Ordinal));
+    // Must not clear a naked bool before async Finish without a generation gate.
+    Expect("settings no naked _settingsOpen race",
+        !mc.Contains("_settingsOpen = false", StringComparison.Ordinal)
+        && !Regex.IsMatch(mc, @"bool\s+_settingsOpen"));
 }
 
 // Version gate for 2.0.0 release

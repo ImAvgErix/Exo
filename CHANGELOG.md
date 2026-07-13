@@ -1,6 +1,7 @@
 ## 2.0.0
 
 - **Settings never teleports**: sheet host is opacity-only; layout owns center (full-bleed stage). No composition Offset/Scale on the host — re-open stays dead center
+- **Settings close/open race**: epoch-gated Finish so a delayed close cannot collapse the sheet after a fast re-open (overlay no longer stuck unusable)
 - **Home balance**: 48px centered tagline is the hero; cards 300×158 sit under it without overpowering
 - **Live Motion slider**: continuous 0–100 control drives entrance travel (not just toggles)
 - **Premium secondary buttons**: deliberate stroke + soft sheen + stable hover/press (Marcel craft)

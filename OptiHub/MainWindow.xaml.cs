@@ -25,7 +25,7 @@ public sealed partial class MainWindow : Window
 
     private ShellMode _mode = ShellMode.Home;
     private readonly CancellationTokenSource _lifetimeCts = new();
-    private bool _settingsOpen;
+    private readonly SettingsOverlayState _settings = new();
 
     public MainWindow()
     {
@@ -261,7 +261,7 @@ public sealed partial class MainWindow : Window
 
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {
-        if (_settingsOpen)
+        if (_settings.IsOpen)
             CloseSettingsOverlay(immediate: true);
 
         if (_mode == mode && ContentFrame.CurrentSourcePageType == pageType)
@@ -282,11 +282,12 @@ public sealed partial class MainWindow : Window
 
     private void OpenSettingsOverlay()
     {
-        if (_settingsOpen) return;
+        // Epoch bump invalidates any in-flight close Finish so a fast re-open
+        // cannot leave Visibility=Collapsed while state thinks settings is open.
+        if (!_settings.TryBeginOpen()) return;
         if (_mode != ShellMode.Home)
             NavigateHome(suppressTransition: true);
 
-        _settingsOpen = true;
         SettingsButton.Visibility = Visibility.Collapsed;
 
         // Identity transform on host + rows BEFORE show (no corner inheritance).
@@ -307,11 +308,13 @@ public sealed partial class MainWindow : Window
 
     private void CloseSettingsOverlay(bool immediate = false)
     {
-        if (!_settingsOpen) return;
-        _settingsOpen = false;
+        if (!_settings.TryBeginClose(out var closeEpoch)) return;
 
         void Finish()
         {
+            // Stale close after re-open: epoch no longer matches — do nothing.
+            if (!_settings.ShouldApplyCloseFinish(closeEpoch)) return;
+
             OptiMotion.ResetVisual(SettingsOverlay, show: true);
             OptiMotion.ResetVisual(SettingsSheetStage, show: true);
             OptiMotion.ResetVisual(SettingsSheetHost, show: true);
@@ -340,7 +343,7 @@ public sealed partial class MainWindow : Window
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_settingsOpen)
+        if (_settings.IsOpen)
         {
             CloseSettingsOverlay();
             return;
