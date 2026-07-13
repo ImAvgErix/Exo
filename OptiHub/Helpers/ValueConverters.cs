@@ -69,6 +69,29 @@ public sealed class BoolToOpacityConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>
+/// true → 1 opacity, false → 0. Keeps layout space (unlike Collapsed) so status/progress
+/// can update without shifting buttons and lists.
+/// </summary>
+public sealed class BoolToShowOpacityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+        => value is true ? 1.0 : 0.0;
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotSupportedException();
+}
+
+/// <summary>true (coming soon) → "Coming soon", false → "Ready".</summary>
+public sealed class ComingSoonLabelConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+        => value is true ? "Coming soon" : "Ready";
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotSupportedException();
+}
+
 /// <summary>Resolves bundled asset paths (e.g. Assets/Logos/discord.png) to BitmapImage.</summary>
 public sealed class AssetPathToImageSourceConverter : IValueConverter
 {

@@ -120,6 +120,7 @@ if (File.Exists(main))
     Expect("MainWindow NavigationView shell", m.Contains("NavigationView", StringComparison.Ordinal));
     Expect("MainWindow NavHome", m.Contains("NavHome", StringComparison.Ordinal));
     Expect("MainWindow settings via NavigationView", m.Contains("IsSettingsVisible", StringComparison.Ordinal));
+    Expect("MainWindow no content transition block", !m.Contains("<Frame.ContentTransitions>", StringComparison.Ordinal));
 }
 
 if (File.Exists(mainCs))
@@ -139,7 +140,8 @@ if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
     Expect("dashboard modules", d.Contains("CardList", StringComparison.Ordinal));
-    Expect("dashboard brand hero", d.Contains("OptiHub", StringComparison.Ordinal) && d.Contains("One hub", StringComparison.Ordinal));
+    Expect("dashboard stable home", d.Contains("Home", StringComparison.Ordinal) && d.Contains("Choose a module", StringComparison.Ordinal));
+    Expect("dashboard no entrance opacity 0", !d.Contains("Opacity=\"0\"", StringComparison.Ordinal));
 }
 
 var settings = Path.Combine(repo, "OptiHub", "Views", "SettingsPage.xaml");

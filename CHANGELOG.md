@@ -1,3 +1,9 @@
+## 1.9.53
+
+- **Stable UI**: no page transitions, no hover lift, no entrance fades
+- Status/progress use opacity in reserved space — apply/refresh no longer reflows buttons
+- Feature lists stay mounted while loading (ring overlays instead of swap)
+- Unified Fluent list home + consistent 8px cards/controls so pieces match
 ## 1.9.52
 
 - **Soul pass** on professional Fluent base (not a redesign from zero)
@@ -442,6 +448,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

@@ -203,7 +203,7 @@ public sealed partial class MainWindow : Window
 
         if (args.IsSettingsSelected)
         {
-            Navigate(ShellMode.Settings, typeof(SettingsPage), Slide());
+            Navigate(ShellMode.Settings, typeof(SettingsPage), NoAnim());
             return;
         }
 
@@ -317,22 +317,17 @@ public sealed partial class MainWindow : Window
     private void TrySetContextLogo(string relativePath) =>
         ContextLogo.Source = AssetPathToImageSourceConverter.Resolve(relativePath);
 
-    private static NavigationTransitionInfo Slide() => new EntranceNavigationTransitionInfo();
-    private static NavigationTransitionInfo SlideBack() => new SuppressNavigationTransitionInfo();
+    // Instant page swap — no slide/drill that makes the UI feel like it's "moving"
+    private static NavigationTransitionInfo NoAnim() => new SuppressNavigationTransitionInfo();
 
-    public void NavigateHome(bool suppressTransition = false)
-    {
-        Navigate(
-            ShellMode.Home,
-            typeof(DashboardPage),
-            suppressTransition ? (NavigationTransitionInfo)new SuppressNavigationTransitionInfo() : SlideBack());
-    }
+    public void NavigateHome(bool suppressTransition = false) =>
+        Navigate(ShellMode.Home, typeof(DashboardPage), NoAnim());
 
-    public void NavigateToDiscord() => Navigate(ShellMode.Discord, typeof(DiscordOptimizerPage), Slide());
-    public void NavigateToSteam() => Navigate(ShellMode.Steam, typeof(SteamOptimizerPage), Slide());
-    public void NavigateToInternet() => Navigate(ShellMode.Internet, typeof(InternetOptimizerPage), Slide());
-    public void NavigateToNvidia() => Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), Slide());
-    public void NavigateToNvidiaPanel() => Navigate(ShellMode.NvidiaPanel, typeof(NvidiaPanelPage), Slide());
+    public void NavigateToDiscord() => Navigate(ShellMode.Discord, typeof(DiscordOptimizerPage), NoAnim());
+    public void NavigateToSteam() => Navigate(ShellMode.Steam, typeof(SteamOptimizerPage), NoAnim());
+    public void NavigateToInternet() => Navigate(ShellMode.Internet, typeof(InternetOptimizerPage), NoAnim());
+    public void NavigateToNvidia() => Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), NoAnim());
+    public void NavigateToNvidiaPanel() => Navigate(ShellMode.NvidiaPanel, typeof(NvidiaPanelPage), NoAnim());
 
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {
@@ -347,7 +342,7 @@ public sealed partial class MainWindow : Window
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e) =>
-        Navigate(ShellMode.Settings, typeof(SettingsPage), Slide());
+        Navigate(ShellMode.Settings, typeof(SettingsPage), NoAnim());
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
