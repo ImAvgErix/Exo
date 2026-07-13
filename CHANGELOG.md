@@ -1,3 +1,7 @@
+## 1.9.45
+
+- **Borderless black bars fix**: stop forcing path `GPUScanOutToNative`; reset path to `GPUScanOutToClosest` so the panel fills. Registry still GPU + No scaling + Override.
+- **UI consistency**: single-column AMOLED hub (same padding/max width as optimizers); cleaner chrome
 ## 1.9.44
 
 - **Scaling**: restore peak default to GPU + **No scaling** + Override ON (your working config; full-screen was wrong)
@@ -392,6 +396,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

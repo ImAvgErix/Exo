@@ -11,10 +11,9 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- FORGE chrome: solid bar + amber underline, not a thin divider title -->
         <Grid x:Name="TitleBarHost"
               Grid.Row="0"
-              Height="52"
+              Height="48"
               Background="{ThemeResource OptiChromeBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -22,35 +21,27 @@
             </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
-                <RowDefinition Height="3" />
+                <RowDefinition Height="2" />
             </Grid.RowDefinitions>
 
             <StackPanel Orientation="Horizontal"
                         Spacing="12"
                         VerticalAlignment="Center"
                         Margin="16,0,0,0">
-                <!-- Brand mark -->
-                <Border Width="10" Height="10"
-                        CornerRadius="2"
-                        Background="{ThemeResource OptiRailBrush}"
-                        VerticalAlignment="Center" />
                 <TextBlock Text="OPTIHUB"
                            VerticalAlignment="Center"
                            FontFamily="{StaticResource OptiUiFontSemiBold}"
-                           FontSize="12"
+                           FontSize="13"
                            FontWeight="Bold"
-                           CharacterSpacing="180"
-                           Foreground="{ThemeResource OptiAccentBrush}" />
+                           CharacterSpacing="120"
+                           Foreground="{ThemeResource OptiPrimaryTextBrush}" />
 
-                <Border Width="1" Height="18"
+                <Border Width="1" Height="16"
                         Background="{ThemeResource OptiDividerBrush}"
-                        Opacity="0.9"
-                        VerticalAlignment="Center"
-                        Margin="4,0" />
+                        VerticalAlignment="Center" />
 
                 <Button x:Name="BackButton"
                         Style="{StaticResource OptiIconButton}"
-                        ToolTipService.ToolTip="{x:Null}"
                         AutomationProperties.Name="Back to dashboard"
                         Click="BackButton_Click"
                         Visibility="Collapsed"
@@ -58,8 +49,7 @@
                         VerticalAlignment="Center"
                         AllowFocusOnInteraction="True"
                         UseSystemFocusVisuals="False">
-                    <FontIcon Glyph="&#xE72B;"
-                              FontSize="13"
+                    <FontIcon Glyph="&#xE72B;" FontSize="13"
                               Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                 </Button>
 
@@ -68,8 +58,6 @@
                         Visibility="Collapsed"
                         VerticalAlignment="Center">
                     <Image x:Name="ContextLogo"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
                            Stretch="Uniform"
                            AutomationProperties.AccessibilityView="Raw" />
                 </Border>
@@ -84,27 +72,23 @@
 
                 <Button x:Name="SettingsButton"
                         Style="{StaticResource OptiIconButton}"
-                        ToolTipService.ToolTip="{x:Null}"
                         AutomationProperties.Name="Settings"
                         Click="SettingsButton_Click"
                         Width="34" Height="34"
                         VerticalAlignment="Center"
                         AllowFocusOnInteraction="True"
                         UseSystemFocusVisuals="False">
-                    <FontIcon Glyph="&#xE713;"
-                              FontSize="14"
+                    <FontIcon Glyph="&#xE713;" FontSize="14"
                               Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                 </Button>
             </StackPanel>
 
-            <Border Grid.Row="1"
-                    Grid.ColumnSpan="2"
-                    Background="{ThemeResource OptiRailBrush}" />
+            <Border Grid.Row="1" Grid.ColumnSpan="2"
+                    Background="{ThemeResource OptiRailBrush}" Opacity="0.35" />
         </Grid>
 
         <Frame x:Name="ContentFrame"
                Grid.Row="1"
-               Padding="0"
                IsTabStop="True"
                IsNavigationStackEnabled="False"
                Background="{ThemeResource OptiPageBackgroundBrush}" />

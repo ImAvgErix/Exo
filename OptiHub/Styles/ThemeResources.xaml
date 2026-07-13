@@ -9,11 +9,11 @@
     <FontFamily x:Key="OptiUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
     <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
-    <!-- FORGE geometry: sharper radii, denser chrome, asymmetric layouts -->
+    <!-- AMOLED shell metrics — shared by hub + optimizer pages -->
     <CornerRadius x:Key="OptiCardRadius">10</CornerRadius>
     <CornerRadius x:Key="OptiTileRadius">8</CornerRadius>
-    <x:Double x:Key="OptiPageMaxWidth">1120</x:Double>
-    <Thickness x:Key="OptiPagePadding">32,24,32,28</Thickness>
+    <x:Double x:Key="OptiPageMaxWidth">960</x:Double>
+    <Thickness x:Key="OptiPagePadding">28,22,28,24</Thickness>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />

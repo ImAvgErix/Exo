@@ -127,10 +127,23 @@ var dash = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml");
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    Expect("dashboard asymmetric rail column", d.Contains("Width=\"300\"", StringComparison.Ordinal) || d.Contains("ColumnDefinition Width=\"300\"", StringComparison.Ordinal));
-    Expect("dashboard module list not wrap grid only", d.Contains("ItemsStackPanel", StringComparison.Ordinal));
+    Expect("dashboard module list", d.Contains("ItemsStackPanel", StringComparison.Ordinal));
     Expect("dashboard LIVE badge", d.Contains("LIVE", StringComparison.Ordinal));
+    Expect("dashboard uses page padding", d.Contains("OptiPagePadding", StringComparison.Ordinal));
     Expect("dashboard not centered card grid only", !d.Contains("MaximumRowsOrColumns=\"4\"", StringComparison.Ordinal));
+}
+
+// Borderless black-bar fix must not force GPUScanOutToNative
+var nvProg = Path.Combine(repo, "tools", "OptiHub.NvDisplay", "Program.cs");
+if (File.Exists(nvProg))
+{
+    var np = File.ReadAllText(nvProg);
+    Expect("path clear uses Closest not Native for apply",
+        np.Contains("GPUScanOutToClosest", StringComparison.Ordinal) &&
+        np.Contains("ClearNativeUnscaledPath", StringComparison.Ordinal));
+    Expect("no live SetDisplaysConfig to Native in apply path",
+        !System.Text.RegularExpressions.Regex.IsMatch(np,
+            @"Scaling\s*=\s*Scaling\.GPUScanOutToNative"));
 }
 
 // Resizable shell: no fixed-size re-lock

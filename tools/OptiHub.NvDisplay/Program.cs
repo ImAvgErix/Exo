@@ -379,11 +379,19 @@ static class Program
             if (apply)
             {
                 // 3) Path scaling only when panel has GPU no-scaling enabled (best-effort on old GPUs)
+                // Clear any stuck GPUScanOutToNative (borderless black bars), then leave
+                // path on GPUScanOutToClosest. Registry still stamps GPU + No scaling + Override.
                 var pathScalingOk = true;
-                if (wantGpuNoScale)
-                    pathScalingOk = ApplyGpuNoScaling(bestModes);
-                else
-                    Console.WriteLine("[NVAPI] GPU no-scaling disabled by OptiHub panel — skipped path scale apply");
+                try
+                {
+                    // Always clear stuck Native/unscaled path (borderless black bars).
+                    pathScalingOk = ClearNativeUnscaledPath(bestModes);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("[NVAPI] Path clear best-effort: " + ex.Message);
+                    pathScalingOk = true;
+                }
 
                 // 4) NVTweak registry (always re-stamp — source of truth when NVAPI color/path missing)
                 ApplyNvtweakRegistry();
@@ -916,14 +924,8 @@ static class Program
             try { StampHive(Registry.LocalMachine, @"SOFTWARE\NVIDIA Corporation\Global\NVTweak\Devices"); }
             catch { }
 
-            if (scaleMode is "gpu-noscaling" or "gpu")
-            {
-                try { ApplyGpuPathScaling(devices, onlyId); } catch (Exception ex)
-                {
-                    Console.WriteLine("[NVAPI] Path scaling: " + ex.Message);
-                }
-            }
-            Console.WriteLine($"[NVTweak] Scaling set to {scaleMode}");
+            // Never force GPUScanOutToNative path (black bars in borderless). Registry only.
+            Console.WriteLine($"[NVTweak] Scaling set to {scaleMode} (registry; path left alone for borderless)");
             return true;
         }
         catch (Exception ex)
@@ -1481,26 +1483,28 @@ static class Program
         return map;
     }
 
-    static bool ApplyGpuNoScaling(Dictionary<string, BestMode>? bestModes)
+    /// <summary>Unused name kept for call-site compatibility.</summary>
+    static bool ApplyGpuNoScaling(Dictionary<string, BestMode>? bestModes) =>
+        ClearNativeUnscaledPath(bestModes);
+
+    /// <summary>
+    /// Borderless black-bar fix: remove GPUScanOutToNative + preferred-unscaled.
+    /// Use GPUScanOutToClosest so the panel fills; NVTweak still holds No scaling prefs.
+    /// </summary>
+    static bool ClearNativeUnscaledPath(Dictionary<string, BestMode>? bestModes)
     {
         PathInfo[] paths;
         try { paths = PathInfo.GetDisplaysConfig(); }
         catch (Exception ex)
         {
-            // Path API missing on some Pascal / security-branch drivers — NVTweak owns scaling.
-            Console.WriteLine("[NVAPI] GetDisplaysConfig unavailable: " + ex.Message + " — relying on NVTweak registry");
+            Console.WriteLine("[NVAPI] GetDisplaysConfig unavailable: " + ex.Message);
             return true;
         }
-
-        if (paths == null || paths.Length == 0)
-        {
-            Console.WriteLine("[NVAPI] No path config — relying on NVTweak registry for GPU no-scaling");
-            return true;
-        }
+        if (paths == null || paths.Length == 0) return true;
 
         var idToGdi = MapDisplayIdToGdiName();
-
         var rebuilt = new List<PathInfo>();
+        var changed = false;
         foreach (var path in paths)
         {
             var targets = new List<PathTargetInfo>();
@@ -1514,15 +1518,17 @@ static class Program
                 {
                     pathBest = bm;
                     hzMHz = (uint)(bm.Hz * 1000);
-                    Console.WriteLine(
-                        $"[NVAPI] Path target #{t.DisplayDevice.DisplayId} ({gdi}): use mode {bm} ({hzMHz} mHz)");
                 }
 
+                var wasNative = t.Scaling.ToString().Contains("Native", StringComparison.OrdinalIgnoreCase)
+                                || t.IsPreferredUnscaledTarget;
+                if (wasNative) changed = true;
+
+                // Closest = fill panel; NOT Native/unscaled (black bars in borderless).
                 var nt = new PathTargetInfo(t.DisplayDevice)
                 {
-                    // Prefer GPU no-scaling. Some HDMI sinks refuse this and stay GPUScanOutToClosest (still GPU).
-                    Scaling = Scaling.GPUScanOutToNative,
-                    IsPreferredUnscaledTarget = true,
+                    Scaling = Scaling.GPUScanOutToClosest,
+                    IsPreferredUnscaledTarget = false,
                     Rotation = t.Rotation,
                     RefreshRateInMillihertz = hzMHz,
                     TimingOverride = t.TimingOverride,
@@ -1534,7 +1540,7 @@ static class Program
                     DisableVirtualModeSupport = t.DisableVirtualModeSupport
                 };
                 Console.WriteLine(
-                    $"[NVAPI] Path target #{t.DisplayDevice.DisplayId}: {t.Scaling} -> GPUScanOutToNative, refresh={hzMHz}mHz");
+                    $"[NVAPI] Path #{t.DisplayDevice.DisplayId}: {t.Scaling}/unscaled={t.IsPreferredUnscaledTarget} -> GPUScanOutToClosest");
                 targets.Add(nt);
             }
 
@@ -1545,34 +1551,39 @@ static class Program
                 catch { res = path.Resolution; }
             }
 
-            var np = new PathInfo(res, path.ColorFormat, targets.ToArray())
+            rebuilt.Add(new PathInfo(res, path.ColorFormat, targets.ToArray())
             {
                 SourceId = path.SourceId,
                 IsGDIPrimary = path.IsGDIPrimary,
                 Position = path.Position
-            };
-            rebuilt.Add(np);
+            });
+        }
+
+        if (!changed && rebuilt.Count > 0)
+        {
+            // Still push Closest once so a prior Native stick is cleared.
+            changed = true;
         }
 
         try
         {
             PathInfo.SetDisplaysConfig(rebuilt.ToArray(),
                 DisplayConfigFlags.SaveToPersistence | DisplayConfigFlags.ForceModeEnumeration);
-            Console.WriteLine("[NVAPI] SetDisplaysConfig (GPU no-scaling request) OK");
-            return VerifyGpuScaling();
+            Console.WriteLine("[NVAPI] Path reset to GPUScanOutToClosest (borderless fill) OK");
+            return true;
         }
         catch (Exception ex1)
         {
             try
             {
                 PathInfo.SetDisplaysConfig(rebuilt.ToArray(), DisplayConfigFlags.SaveToPersistence);
-                Console.WriteLine("[NVAPI] SetDisplaysConfig SaveToPersistence OK");
-                return VerifyGpuScaling();
+                Console.WriteLine("[NVAPI] Path reset SaveToPersistence OK");
+                return true;
             }
             catch (Exception ex2)
             {
-                Console.WriteLine("[NVAPI] SetDisplaysConfig failed: " + ex1.Message + " / " + ex2.Message);
-                return false;
+                Console.WriteLine("[NVAPI] Path reset failed: " + ex1.Message + " / " + ex2.Message);
+                return true; // registry still applied
             }
         }
     }
