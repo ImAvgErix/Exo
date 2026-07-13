@@ -88,55 +88,49 @@ public sealed partial class DashboardPage : Page
         _lastLayoutW = pageW;
         _lastLayoutH = pageH;
 
-        // Tighter padding on small windows; roomier on large
-        var padX = pageW < 640 ? 16 : pageW < 1000 ? 28 : 40;
-        var padTop = pageH < 700 ? 12 : 20;
-        var padBottom = pageH < 700 ? 16 : 24;
+        // Compact chrome — cards stay moderate size, not full-viewport slabs
+        var padX = pageW < 640 ? 16 : pageW < 1000 ? 24 : 32;
+        var padTop = pageH < 700 ? 10 : 16;
+        var padBottom = pageH < 700 ? 12 : 18;
         if (PageRoot is not null)
             PageRoot.Padding = new Thickness(padX, padTop, padX, padBottom);
 
-        var heroH = HeroPanel?.ActualHeight > 1 ? HeroPanel.ActualHeight + 16 : 100;
+        var heroH = HeroPanel?.ActualHeight > 1 ? HeroPanel.ActualHeight + 12 : 88;
         var usableW = Math.Max(200, pageW - padX * 2);
-        var usableH = Math.Max(180, pageH - padTop - padBottom - heroH);
+        // Soft max width so maximize doesn't make cards enormous
+        var layoutW = Math.Min(usableW, 1120);
+        var usableH = Math.Max(160, pageH - padTop - padBottom - heroH);
 
         var cardCount = Math.Max(1, ViewModel.Cards.Count);
 
-        // Columns: use the width so cards aren't tiny islands on maximize
         int cols;
-        if (usableW >= 1500) cols = 4;
-        else if (usableW >= 960) cols = 3;
-        else if (usableW >= 560) cols = 2;
+        if (layoutW >= 1100) cols = 4;
+        else if (layoutW >= 780) cols = 3;
+        else if (layoutW >= 480) cols = 2;
         else cols = 1;
 
-        // Prefer a balanced grid (e.g. 8 cards → 4×2 on wide, 3×3-ish on medium)
         var rows = (int)Math.Ceiling(cardCount / (double)cols);
-        // If 3 cols leaves a lonely last row of 2 with lots of height free, still fine.
 
-        const double margin = 8; // Button.Margin each side
-        var cardW = Math.Floor((usableW - cols * margin * 2) / cols);
-        cardW = Math.Clamp(cardW, 150, 520);
+        const double margin = 6;
+        var cardW = Math.Floor((layoutW - cols * margin * 2) / cols);
+        // Prefer dense product tiles over huge empty panels
+        cardW = Math.Clamp(cardW, 140, 260);
 
-        // Height: fill the viewport when possible so maximize uses vertical space
         var cardH = Math.Floor((usableH - rows * margin * 2) / rows);
-        var minH = Math.Max(120, cardW * 0.48);
-        var maxH = Math.Min(320, cardW * 0.78);
+        var minH = Math.Max(100, cardW * 0.52);
+        var maxH = Math.Min(168, cardW * 0.68);
         if (cardH < minH)
-        {
-            // Not enough vertical room — keep min aspect and let ScrollViewer work
             cardH = minH;
-        }
         else
-        {
             cardH = Math.Clamp(cardH, minH, maxH);
-        }
 
         if (HeroTitle is not null)
         {
-            HeroTitle.FontSize = usableW < 520 ? 24 : usableW < 900 ? 30 : 34;
-            HeroTitle.LineHeight = HeroTitle.FontSize + 8;
+            HeroTitle.FontSize = layoutW < 520 ? 24 : layoutW < 900 ? 28 : 32;
+            HeroTitle.LineHeight = HeroTitle.FontSize + 6;
         }
 
-        var logoSize = Math.Clamp(Math.Min(cardW, cardH) * 0.38, 40, 96);
+        var logoSize = Math.Clamp(Math.Min(cardW, cardH) * 0.42, 36, 64);
 
         if (CardList is null) return;
 

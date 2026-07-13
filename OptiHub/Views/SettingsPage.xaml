@@ -6,9 +6,9 @@
       Background="Transparent"
       Loaded="Page_Loaded">
 
-    <!-- Centered settings shell: no scroll, balanced fill, clear sections. -->
-    <Grid x:Name="PageRoot" Padding="40,20,40,28">
-        <Grid MaxWidth="920"
+    <!-- Compact settings shell -->
+    <Grid x:Name="PageRoot" Padding="28,14,28,18">
+        <Grid MaxWidth="880"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch"
               RowSpacing="0">
@@ -19,8 +19,8 @@
 
             <!-- Header -->
             <StackPanel x:Name="HeaderPanel"
-                        Spacing="6"
-                        Margin="0,0,0,20"
+                        Spacing="4"
+                        Margin="0,0,0,12"
                         HorizontalAlignment="Center"
                         Opacity="0"
                         RenderTransformOrigin="0.5,0.5">
@@ -29,23 +29,23 @@
                 </StackPanel.RenderTransform>
                 <TextBlock Text="Settings"
                            FontFamily="{StaticResource OptiUiFontSemiBold}"
-                           FontSize="28"
+                           FontSize="24"
                            FontWeight="SemiBold"
-                           CharacterSpacing="-20"
+                           CharacterSpacing="-16"
                            HorizontalAlignment="Center"
                            Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                 <TextBlock Text="Appearance, about, updates, and support."
                            Style="{StaticResource OptiCaption}"
-                           FontSize="13"
+                           FontSize="12"
                            HorizontalAlignment="Center"
-                           Opacity="0.9" />
+                           Opacity="0.85" />
             </StackPanel>
 
             <!-- Body: 2×2 balanced cards -->
             <Grid x:Name="BodyGrid"
                   Grid.Row="1"
-                  ColumnSpacing="16"
-                  RowSpacing="16"
+                  ColumnSpacing="12"
+                  RowSpacing="12"
                   Opacity="0"
                   RenderTransformOrigin="0.5,0.5">
                 <Grid.RenderTransform>

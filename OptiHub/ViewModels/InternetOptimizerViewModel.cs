@@ -24,10 +24,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
     public ObservableCollection<FeatureRowViewModel> Rows { get; } = new();
 
-    /// <summary>Only choice prompt: Lowest latency vs Highest download.</summary>
-    public event Func<Task<NetworkPreset?>>? RequestPresetChoice;
-
-    /// <summary>Repair confirm (title, message) — same pattern as Discord/Steam.</summary>
+    /// <summary>Repair confirm (title, message).</summary>
     public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
 
     [ObservableProperty] private string _headerStatus = "Checking...";
@@ -40,33 +37,20 @@ public partial class InternetOptimizerViewModel : ObservableObject
     [ObservableProperty] private Brush _messageBrush;
 
     [RelayCommand]
-    public async Task RefreshAsync()
+    public Task RefreshAsync() => LoadSnapshotAsync(showFullPageLoading: !IsBusy);
+
+    /// <summary>
+    /// Probe and update header + feature rows.
+    /// Does not early-return on IsBusy so apply/repair can refresh in place.
+    /// </summary>
+    private async Task LoadSnapshotAsync(bool showFullPageLoading)
     {
-        if (IsBusy) return;
-        IsLoading = true;
+        if (showFullPageLoading)
+            IsLoading = true;
         try
         {
             var snap = await _services.Network.ProbeAsync();
-            _lastSnap = snap;
-            HeaderStatus = BuildStatus(snap);
-
-            Rows.Clear();
-            foreach (var f in snap.Features)
-            {
-                Rows.Add(new FeatureRowViewModel
-                {
-                    Title = f.Title,
-                    Detail = f.Status,
-                    Glyph = UiStatusPresentation.FeatureGlyph(f.IsOk),
-                    Opacity = UiStatusPresentation.FeatureOpacity(f.IsOk)
-                });
-            }
-
-            // Opening detect: always surface Ethernet vs Wi‑Fi path.
-            if (!string.IsNullOrWhiteSpace(snap.Detail) && !snap.ProbeOk)
-                SetMessage(snap.Detail, success: false);
-            else
-                SetMessage(BuildPathHint(snap), success: true);
+            ApplySnapshotToUi(snap, preserveSuccessMessage: false);
         }
         catch (Exception ex)
         {
@@ -75,52 +59,54 @@ public partial class InternetOptimizerViewModel : ObservableObject
         }
         finally
         {
-            IsLoading = false;
+            if (showFullPageLoading)
+                IsLoading = false;
         }
     }
 
-    /// <summary>
-    /// Single Apply — only prompts for latency vs download, then runs with smart defaults
-    /// (Ethernet-first + restart when Ethernet is present). No second confirm box.
-    /// </summary>
+    private void ApplySnapshotToUi(NetworkSnapshot snap, bool preserveSuccessMessage)
+    {
+        _lastSnap = snap;
+        HeaderStatus = BuildStatus(snap);
+
+        Rows.Clear();
+        foreach (var f in snap.Features)
+        {
+            Rows.Add(new FeatureRowViewModel
+            {
+                Title = f.Title,
+                Detail = f.Status,
+                Glyph = UiStatusPresentation.FeatureGlyph(f.IsOk),
+                Opacity = UiStatusPresentation.FeatureOpacity(f.IsOk)
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(snap.Detail) && !snap.ProbeOk)
+            SetMessage(snap.Detail, success: false);
+        else if (!preserveSuccessMessage)
+            SetMessage(BuildPathHint(snap), success: true);
+    }
+
     [RelayCommand]
-    private async Task ApplyAsync()
+    private Task ApplyLatencyAsync() => ApplyPresetAsync(NetworkPreset.LowestLatency);
+
+    [RelayCommand]
+    private Task ApplyThroughputAsync() => ApplyPresetAsync(NetworkPreset.HighestThroughput);
+
+    /// <summary>Apply chosen stack immediately, then refresh header + feature rows in place.</summary>
+    private async Task ApplyPresetAsync(NetworkPreset preset)
     {
         if (IsBusy) return;
 
-        // Fresh detect so path (Ethernet vs Wi‑Fi) is current before apply.
-        ProgressStatus = "Detecting path...";
-        NetworkSnapshot snap;
-        try
-        {
-            snap = await _services.Network.ProbeAsync();
-            _lastSnap = snap;
-            HeaderStatus = BuildStatus(snap);
-        }
-        catch (Exception ex)
-        {
-            SetMessage(ex.Message, success: false);
-            ProgressStatus = string.Empty;
-            return;
-        }
-
-        NetworkPreset? preset = NetworkPreset.LowestLatency;
-        if (RequestPresetChoice is not null)
-        {
-            preset = await RequestPresetChoice.Invoke();
-            if (preset is null)
-            {
-                SetMessage("Apply cancelled.", success: false);
-                ProgressStatus = string.Empty;
-                return;
-            }
-        }
-
         IsBusy = true;
         HasMessage = false;
+        ProgressStatus = "Detecting path...";
         try
         {
-            // Smart defaults from detect — no extra confirm.
+            var snap = await _services.Network.ProbeAsync();
+            _lastSnap = snap;
+            HeaderStatus = BuildStatus(snap);
+
             var options = new NetworkApplyOptions
             {
                 PreferEthernetDisableWifi = true,
@@ -133,9 +119,21 @@ public partial class InternetOptimizerViewModel : ObservableObject
                     ? "Applying Wi‑Fi stack..."
                     : "Applying...";
             var progress = new Progress<string>(s => ProgressStatus = s);
-            var (ok, msg) = await _services.Network.ApplyPresetAsync(preset.Value, options, progress);
+            var (ok, msg) = await _services.Network.ApplyPresetAsync(preset, options, progress);
             SetMessage(msg, ok);
-            await RefreshAsync();
+
+            // In-place refresh so header shows Lowest latency / Highest download without leaving the page.
+            ProgressStatus = "Refreshing...";
+            try
+            {
+                var after = await _services.Network.ProbeAsync();
+                ApplySnapshotToUi(after, preserveSuccessMessage: true);
+                SetMessage(msg, ok);
+            }
+            catch
+            {
+                // Keep apply message even if re-probe fails
+            }
         }
         catch (Exception ex)
         {
@@ -148,9 +146,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
         }
     }
 
-    public Task InitializeAsync() => RefreshAsync();
+    public Task InitializeAsync() => LoadSnapshotAsync(showFullPageLoading: true);
 
-    /// <summary>Undo OptiHub network stack → stock-like defaults (bindings, metric auto, etc.).</summary>
     [RelayCommand]
     private async Task RepairAsync()
     {
@@ -159,7 +156,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
         var ok = ConfirmAsync is not null
             ? await ConfirmAsync(
                 "Repair Internet?",
-                "Restores stock-like network settings: adapter bindings (Client/File share/LLDP back on), automatic metric, default TCP/auto-tune, re-enables Wi‑Fi if OptiHub disabled it.\n\nNeeds Administrator.")
+                "Restores stock-like network settings: adapter bindings, automatic metric, default TCP/auto-tune, re-enables Wi‑Fi if OptiHub disabled it.\n\nNeeds Administrator.")
             : true;
         if (!ok) return;
 
@@ -171,7 +168,14 @@ public partial class InternetOptimizerViewModel : ObservableObject
             var progress = new Progress<string>(s => ProgressStatus = s);
             var (success, msg) = await _services.Network.RepairAsync(progress);
             SetMessage(msg, success);
-            await RefreshAsync();
+            ProgressStatus = "Refreshing...";
+            try
+            {
+                var after = await _services.Network.ProbeAsync();
+                ApplySnapshotToUi(after, preserveSuccessMessage: true);
+                SetMessage(msg, success);
+            }
+            catch { }
         }
         catch (Exception ex)
         {
@@ -210,7 +214,6 @@ public partial class InternetOptimizerViewModel : ObservableObject
         return allOk ? $"{preset} · {media}" : $"{preset} · check rows";
     }
 
-    /// <summary>Plain-language path summary after open detect.</summary>
     private static string BuildPathHint(NetworkSnapshot snap)
     {
         var m = snap.Media;

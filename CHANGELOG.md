@@ -1,3 +1,9 @@
+## 1.9.85
+
+- **Internet**: two white buttons — **Low latency** | **Highest download** (no slow popup); refreshes tweak rows + header in place after apply
+- **Home cards**: denser sizing (smaller max tile); settings tighter padding
+- **Wi‑Fi logo**: complete 3-arc + dot mark
+
 ## 1.9.84
 
 - **Internet deep pass (Ethernet + Wi‑Fi)**: DMA coalescing/IFS off, jumbo standard, priority VLAN, RSS profile; Wi‑Fi TX power, channel width, mode, MU‑MIMO/OFDMA/beamform, WoWLAN/BT collab off; NetBIOS off; NCSI active probe off

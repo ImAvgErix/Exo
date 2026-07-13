@@ -70,12 +70,25 @@
                 <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}"
                            TextAlignment="Center"
                            Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <Button Style="{StaticResource OptiPrimaryButton}"
-                        Content="Apply"
-                        Click="Apply_Click"
-                        HorizontalAlignment="Stretch"
-                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                        AutomationProperties.Name="Apply internet stack" />
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Style="{StaticResource OptiWhiteButton}"
+                            Content="Low latency"
+                            Click="Latency_Click"
+                            HorizontalAlignment="Stretch"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                            AutomationProperties.Name="Apply lowest latency network stack" />
+                    <Button Grid.Column="1"
+                            Style="{StaticResource OptiWhiteButton}"
+                            Content="Highest download"
+                            Click="Throughput_Click"
+                            HorizontalAlignment="Stretch"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                            AutomationProperties.Name="Apply highest download network stack" />
+                </Grid>
                 <Grid ColumnSpacing="10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
