@@ -235,6 +235,9 @@
 
 
 
+
+## 1.9.62
+- AMD + Internet logos remade to match the hub set: flat Steam-style white circle AMD mark, white outline globe (no glossy tiles)
 ## 1.9.61
 - High-quality AMD + Internet home logos (brand AMD badge, gradient globe) so they match Discord/Steam/NVIDIA weight
 ## 1.9.60
