@@ -99,9 +99,11 @@ if (File.Exists(settings))
     Expect("settings about", s.Contains("About", StringComparison.Ordinal));
     Expect("settings opti card", s.Contains("OptiCard", StringComparison.Ordinal));
     Expect("settings single card", s.Contains("OptiCard", StringComparison.Ordinal)
-        && !s.Contains("OptiTagline", StringComparison.Ordinal)
-        && s.Contains("Appearance", StringComparison.Ordinal));
+        && s.Contains("OptiSectionTitle", StringComparison.Ordinal)
+        && s.Contains("APPEARANCE", StringComparison.Ordinal));
     Expect("settings no title", !s.Contains("Text=\"Settings\"", StringComparison.Ordinal));
+    Expect("settings page padding token", s.Contains("Padding=\"18,16\"", StringComparison.Ordinal)
+        || s.Contains("Style=\"{StaticResource OptiCard}\"", StringComparison.Ordinal));
     Expect("settings white selected theme", File.Exists(theme)
         && File.ReadAllText(theme).Contains("OptiThemeChoice", StringComparison.Ordinal)
         && File.ReadAllText(theme).Contains("#FFFFFF", StringComparison.Ordinal));

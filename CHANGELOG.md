@@ -1,3 +1,6 @@
+## 1.9.98
+
+- **Settings**: padding/spacing/type match optimizer pages (OptiSectionTitle, OptiCard 18×16, button heights, tile radius)
 ## 1.9.97
 
 - **Internet**: no open banner for Ethernet/Wi-Fi detect — header path only

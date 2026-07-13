@@ -169,13 +169,13 @@
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 
-    <!-- Separate Dark / Light choices — full tiles, selected = solid white + dark text -->
+    <!-- Separate Dark / Light tiles — matches OptiFeatureTile radius/padding; selected = solid white -->
     <Style x:Key="OptiThemeChoice" TargetType="RadioButton">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontSize" Value="13.5" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="MinHeight" Value="48" />
-        <Setter Property="Padding" Value="16,12" />
+        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="Padding" Value="14,12" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -185,10 +185,10 @@
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
                     <Border x:Name="Chrome"
-                            Background="{ThemeResource OptiPageBackgroundBrush}"
+                            Background="{ThemeResource OptiCardFillBrush}"
                             BorderBrush="{ThemeResource OptiCardStrokeBrush}"
                             BorderThickness="1"
-                            CornerRadius="12"
+                            CornerRadius="{StaticResource OptiTileRadius}"
                             Padding="{TemplateBinding Padding}"
                             MinHeight="{TemplateBinding MinHeight}"
                             HorizontalAlignment="Stretch">
@@ -205,7 +205,7 @@
                                 <VisualState x:Name="Normal" />
                                 <VisualState x:Name="PointerOver">
                                     <VisualState.Setters>
-                                        <Setter Target="Chrome.BorderBrush" Value="{ThemeResource OptiPrimaryTextBrush}" />
+                                        <Setter Target="Chrome.Background" Value="{ThemeResource OptiAccentSoftBrush}" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
@@ -237,7 +237,6 @@
         </Setter>
     </Style>
 
-    <!-- Legacy alias kept for any remaining OptiThemeRadio refs -->
     <Style x:Key="OptiThemeRadio" TargetType="RadioButton" BasedOn="{StaticResource OptiThemeChoice}" />
 
     <!--
