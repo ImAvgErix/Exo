@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Windows only.' }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$Repo = 'BarcusEric/OptiHub'
+$Repo = 'UhhErix/OptiHub'
 Write-Host ''
 Write-Host '  OptiHub - downloading OptiHub.exe...' -ForegroundColor Cyan
 Write-Host ''

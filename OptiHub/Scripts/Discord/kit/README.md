@@ -1,6 +1,6 @@
 # Discord Optimizer Kit
 
-Bundled with [OptiHub](https://github.com/BarcusEric/OptiHub). Prefer the app:
+Bundled with [OptiHub](https://github.com/UhhErix/OptiHub). Prefer the app:
 
 This is the no-compromise profile: Equicord/OpenASAR, the DiscOpt 5-second
 memory-trim and latency kernel, Above Normal priority, full disposable-cache
@@ -9,7 +9,7 @@ Windows startup/toast/tray suppression. Login/session and Discord updater
 integrity data are preserved. The in-app confirmation lists every tradeoff.
 
 ```powershell
-irm "https://cdn.jsdelivr.net/gh/BarcusEric/OptiHub@main/Install-OptiHub.ps1" | iex
+irm "https://cdn.jsdelivr.net/gh/UhhErix/OptiHub@main/Install-OptiHub.ps1" | iex
 ```
 
 Repair reinstalls the signed stock Discord client, restores OptiHub-patched
@@ -19,7 +19,7 @@ unrelated tasks are not changed. Recovery remains available until every restore
 step verifies successfully:
 
 ```powershell
-irm "https://cdn.jsdelivr.net/gh/BarcusEric/OptiHub@main/Repair-Discord.ps1" | iex
+irm "https://cdn.jsdelivr.net/gh/UhhErix/OptiHub@main/Repair-Discord.ps1" | iex
 ```
 
 See the root README for full docs.

@@ -74,7 +74,7 @@ public sealed class SettingsService
         if (string.IsNullOrWhiteSpace(repo) ||
             repo.Contains("DiscOpti", StringComparison.OrdinalIgnoreCase))
         {
-            settings.DiscordScriptsRepo = "BarcusEric/OptiHub";
+            settings.DiscordScriptsRepo = "UhhErix/OptiHub";
             changed = true;
         }
 

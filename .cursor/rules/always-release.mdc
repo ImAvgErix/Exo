@@ -8,7 +8,7 @@ alwaysApply: true
 After any user-facing OptiHub change, ship a **real GitHub Release** before finishing.
 
 A git tag alone is NOT a release. The download uses:
-`GET https://api.github.com/repos/BarcusEric/OptiHub/releases/latest`
+`GET https://api.github.com/repos/UhhErix/OptiHub/releases/latest`
 
 ## Required steps
 
@@ -17,12 +17,12 @@ A git tag alone is NOT a release. The download uses:
 3. Run `.\Release-OptiHub.ps1`.
 4. **Verify the Release (not the tag)** with:
    ```powershell
-   (Invoke-RestMethod https://api.github.com/repos/BarcusEric/OptiHub/releases/latest).tag_name
-   (Invoke-RestMethod https://api.github.com/repos/BarcusEric/OptiHub/releases/latest).assets.name
+   (Invoke-RestMethod https://api.github.com/repos/UhhErix/OptiHub/releases/latest).tag_name
+   (Invoke-RestMethod https://api.github.com/repos/UhhErix/OptiHub/releases/latest).assets.name
    ```
    Must equal the new version and include **`OptiHub.exe` only** (no zip required).
 5. Tell the user the release URL and direct exe download:
-   `https://github.com/BarcusEric/OptiHub/releases/latest/download/OptiHub.exe`
+   `https://github.com/UhhErix/OptiHub/releases/latest/download/OptiHub.exe`
 
 ## Do not
 

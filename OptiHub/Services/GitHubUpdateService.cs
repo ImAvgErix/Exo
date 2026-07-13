@@ -249,7 +249,7 @@ public sealed class GitHubUpdateService
 
         try
         {
-            using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/BarcusEric/OptiHub/releases/latest");
+            using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/UhhErix/OptiHub/releases/latest");
             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             using var resp = await Http.SendAsync(req, ct);
             if (!resp.IsSuccessStatusCode)
@@ -322,7 +322,7 @@ public sealed class GitHubUpdateService
             }
 
             // Always fall back to the canonical latest exe URL when assets list is empty/misnamed.
-            downloadUrl ??= "https://github.com/BarcusEric/OptiHub/releases/latest/download/OptiHub.exe";
+            downloadUrl ??= "https://github.com/UhhErix/OptiHub/releases/latest/download/OptiHub.exe";
 
             if (VersionsEqualOrLocalNewer(localText, remote))
             {
@@ -379,7 +379,7 @@ public sealed class GitHubUpdateService
             return check;
         var url = check.DownloadUrl;
         if (string.IsNullOrWhiteSpace(url))
-            url = "https://github.com/BarcusEric/OptiHub/releases/latest/download/OptiHub.exe";
+            url = "https://github.com/UhhErix/OptiHub/releases/latest/download/OptiHub.exe";
 
         // Prefer GitHub asset digest when present; size + PE version still gate install.
         var requireSha = !string.IsNullOrWhiteSpace(check.Sha256);

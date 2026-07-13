@@ -332,7 +332,7 @@ internal static class Program
                     IntPtr.Zero,
                     "OptiHub install failed:\n\n" + detail +
                     "\n\nLog: %LocalAppData%\\OptiHub\\install.log\n" +
-                    "Download again from:\nhttps://github.com/BarcusEric/OptiHub/releases/latest",
+                    "Download again from:\nhttps://github.com/UhhErix/OptiHub/releases/latest",
                     "OptiHub",
                     0x10);
             }

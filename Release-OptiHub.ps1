@@ -5,7 +5,7 @@
 #>
 param(
     [string]$Configuration = 'Release',
-    [string]$Repo = 'BarcusEric/OptiHub',
+    [string]$Repo = 'UhhErix/OptiHub',
     [string]$NotesFile = '',
     [string]$Notes = '',
     [switch]$ReplaceExisting,

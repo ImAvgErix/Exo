@@ -62,7 +62,7 @@ public partial class SettingsViewModel : ObservableObject
         {
             using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "https://github.com/BarcusEric/OptiHub/issues",
+                FileName = "https://github.com/UhhErix/OptiHub/issues",
                 UseShellExecute = true
             });
             UpdateStatus = "Opened GitHub issues.";

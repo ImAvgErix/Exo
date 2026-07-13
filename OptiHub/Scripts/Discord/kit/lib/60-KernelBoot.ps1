@@ -160,7 +160,7 @@ function Confirm-DiscordBootsAfterMods([string]$AppDir) {
     }
 
     Stop-Discord
-    throw 'Discord failed to load even in stock mode. Use Repair Discord in OptiHub, or: irm "https://raw.githubusercontent.com/BarcusEric/OptiHub/main/Repair-Discord.ps1" | iex'
+    throw 'Discord failed to load even in stock mode. Use Repair Discord in OptiHub, or: irm "https://raw.githubusercontent.com/UhhErix/OptiHub/main/Repair-Discord.ps1" | iex'
 }
 
 function Disable-Fso([string]$AppDir) {

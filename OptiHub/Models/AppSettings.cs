@@ -17,7 +17,7 @@ public sealed class AppSettings
     public bool AutoUpdateScripts { get; set; }
 
     /// <summary>GitHub repo for Discord optimizer scripts (owner/name).</summary>
-    public string DiscordScriptsRepo { get; set; } = "BarcusEric/OptiHub";
+    public string DiscordScriptsRepo { get; set; } = "UhhErix/OptiHub";
 
     /// <summary>Branch to pull script updates from.</summary>
     public string DiscordScriptsBranch { get; set; } = "main";
