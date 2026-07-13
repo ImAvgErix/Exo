@@ -5,30 +5,63 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="OptiHub">
 
-    <!-- AURA shell: quiet top bar + open stage. Minimal chrome. -->
-    <Grid x:Name="RootGrid" Background="{ThemeResource OptiPageBackgroundBrush}">
+    <!--
+      GLASS shell: Desktop Acrylic backdrop + liquid glass dock.
+      Root stays transparent so system blur shows through.
+    -->
+    <Grid x:Name="RootGrid" Background="Transparent">
         <Grid.RowDefinitions>
-            <RowDefinition Height="52" />
+            <RowDefinition Height="44" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Top chrome -->
+        <!-- Soft ambient orbs (liquid color under glass) -->
+        <Grid Grid.RowSpan="3" IsHitTestVisible="False">
+            <Ellipse Width="560" Height="560" Opacity="0.38"
+                     HorizontalAlignment="Left" VerticalAlignment="Top"
+                     Margin="-160,-200,0,0">
+                <Ellipse.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Color="#6664D2FF" Offset="0" />
+                        <GradientStop Color="#0064D2FF" Offset="1" />
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
+            <Ellipse Width="500" Height="500" Opacity="0.30"
+                     HorizontalAlignment="Right" VerticalAlignment="Center"
+                     Margin="0,0,-140,0">
+                <Ellipse.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Color="#55BF5AF2" Offset="0" />
+                        <GradientStop Color="#00BF5AF2" Offset="1" />
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
+            <Ellipse Width="460" Height="460" Opacity="0.24"
+                     HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                     Margin="120,0,0,-140">
+                <Ellipse.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Color="#445AC8FA" Offset="0" />
+                        <GradientStop Color="#005AC8FA" Offset="1" />
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
+        </Grid>
+
+        <!-- Drag strip -->
         <Grid x:Name="TitleBarHost"
               Grid.Row="0"
-              Background="Transparent"
-              BorderBrush="{ThemeResource OptiDividerBrush}"
-              BorderThickness="0,0,0,1">
+              Background="Transparent">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition x:Name="CaptionSpacer" Width="138" />
             </Grid.ColumnDefinitions>
-
             <StackPanel Orientation="Horizontal"
                         Spacing="10"
                         VerticalAlignment="Center"
-                        Margin="20,0,0,0">
+                        Margin="22,0,0,0">
                 <Button x:Name="BackButton"
                         Style="{StaticResource OptiIconButton}"
                         Visibility="Collapsed"
@@ -40,15 +73,15 @@
                 </Button>
                 <TextBlock Text="OptiHub"
                            FontFamily="{StaticResource OptiUiFontSemiBold}"
-                           FontSize="15"
+                           FontSize="14"
                            FontWeight="SemiBold"
                            Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                           Opacity="0.9"
                            VerticalAlignment="Center" />
                 <Border x:Name="ContextLogoHost"
                         Style="{StaticResource OptiLogoWellSmall}"
                         Visibility="Collapsed"
-                        Width="20" Height="20"
-                        Margin="4,0,0,0">
+                        Width="18" Height="18">
                     <Image x:Name="ContextLogo" Stretch="Uniform"
                            AutomationProperties.AccessibilityView="Raw" />
                 </Border>
@@ -56,60 +89,24 @@
                            Text=""
                            FontSize="13"
                            Foreground="{ThemeResource OptiMutedTextBrush}"
-                           VerticalAlignment="Center"
-                           Margin="2,0,0,0" />
+                           VerticalAlignment="Center" />
+                <Button x:Name="SettingsButton"
+                        Style="{StaticResource OptiIconButton}"
+                        Visibility="Collapsed"
+                        Width="1" Height="1"
+                        Click="SettingsButton_Click" />
             </StackPanel>
-
-            <!-- Center nav pills -->
-            <StackPanel Grid.Column="1"
-                        Orientation="Horizontal"
-                        Spacing="2"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center">
-                <Button x:Name="NavHome" Style="{StaticResource OptiNavButton}" Tag="home"
-                        Click="Nav_Click" AutomationProperties.Name="Home" ToolTipService.ToolTip="Home"
-                        Content="Home" />
-                <Button x:Name="NavDiscord" Style="{StaticResource OptiNavButton}" Tag="discord"
-                        Click="Nav_Click" AutomationProperties.Name="Discord" ToolTipService.ToolTip="Discord"
-                        Content="Discord" />
-                <Button x:Name="NavSteam" Style="{StaticResource OptiNavButton}" Tag="steam"
-                        Click="Nav_Click" AutomationProperties.Name="Steam" ToolTipService.ToolTip="Steam"
-                        Content="Steam" />
-                <Button x:Name="NavInternet" Style="{StaticResource OptiNavButton}" Tag="internet"
-                        Click="Nav_Click" AutomationProperties.Name="Internet" ToolTipService.ToolTip="Internet"
-                        Content="Internet" />
-                <Button x:Name="NavNvidia" Style="{StaticResource OptiNavButton}" Tag="nvidia"
-                        Click="Nav_Click" AutomationProperties.Name="NVIDIA" ToolTipService.ToolTip="NVIDIA"
-                        Content="NVIDIA" />
-            </StackPanel>
-
-            <Button x:Name="NavSettings"
-                    Grid.Column="2"
-                    Style="{StaticResource OptiIconButton}"
-                    Tag="settings"
-                    Click="Nav_Click"
-                    Width="34" Height="34"
-                    Margin="0,0,8,0"
-                    AutomationProperties.Name="Settings"
-                    ToolTipService.ToolTip="Settings">
-                <FontIcon Glyph="&#xE713;" FontSize="14"
-                          Foreground="{ThemeResource OptiMutedTextBrush}" />
-            </Button>
-            <Button x:Name="SettingsButton"
-                    Style="{StaticResource OptiIconButton}"
-                    Visibility="Collapsed"
-                    Width="1" Height="1"
-                    Click="SettingsButton_Click" />
         </Grid>
 
         <Frame x:Name="ContentFrame"
                Grid.Row="1"
                IsTabStop="True"
                IsNavigationStackEnabled="False"
-               Background="Transparent">
+               Background="Transparent"
+               Margin="0,0,0,8">
             <Frame.ContentTransitions>
                 <TransitionCollection>
-                    <EntranceThemeTransition FromVerticalOffset="20" IsStaggeringEnabled="True" />
+                    <EntranceThemeTransition FromVerticalOffset="24" IsStaggeringEnabled="True" />
                     <NavigationThemeTransition>
                         <NavigationThemeTransition.DefaultNavigationTransitionInfo>
                             <DrillInNavigationTransitionInfo />
@@ -118,5 +115,35 @@
                 </TransitionCollection>
             </Frame.ContentTransitions>
         </Frame>
+
+        <!-- Floating liquid-glass dock -->
+        <Grid Grid.Row="2" Margin="0,0,0,18" HorizontalAlignment="Center">
+            <Border x:Name="DockHost"
+                    Style="{StaticResource OptiGlassDock}"
+                    Padding="8,6">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Button x:Name="NavHome" Style="{StaticResource OptiNavButton}" Tag="home"
+                            Click="Nav_Click" AutomationProperties.Name="Home" ToolTipService.ToolTip="Home"
+                            Content="Home" />
+                    <Button x:Name="NavDiscord" Style="{StaticResource OptiNavButton}" Tag="discord"
+                            Click="Nav_Click" AutomationProperties.Name="Discord" ToolTipService.ToolTip="Discord"
+                            Content="Discord" />
+                    <Button x:Name="NavSteam" Style="{StaticResource OptiNavButton}" Tag="steam"
+                            Click="Nav_Click" AutomationProperties.Name="Steam" ToolTipService.ToolTip="Steam"
+                            Content="Steam" />
+                    <Button x:Name="NavInternet" Style="{StaticResource OptiNavButton}" Tag="internet"
+                            Click="Nav_Click" AutomationProperties.Name="Internet" ToolTipService.ToolTip="Internet"
+                            Content="Internet" />
+                    <Button x:Name="NavNvidia" Style="{StaticResource OptiNavButton}" Tag="nvidia"
+                            Click="Nav_Click" AutomationProperties.Name="NVIDIA" ToolTipService.ToolTip="NVIDIA"
+                            Content="NVIDIA" />
+                    <Border Width="1" Height="18" Background="{ThemeResource OptiDividerBrush}"
+                            Margin="6,0" VerticalAlignment="Center" />
+                    <Button x:Name="NavSettings" Style="{StaticResource OptiNavButton}" Tag="settings"
+                            Click="Nav_Click" AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings"
+                            Content="Settings" />
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

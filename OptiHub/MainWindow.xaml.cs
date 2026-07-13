@@ -1,4 +1,5 @@
 using Microsoft.UI;
+using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -7,6 +8,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 using OptiHub.Helpers;
 using OptiHub.Views;
 using Windows.Graphics;
+using Windows.UI;
 using WinRT.Interop;
 
 namespace OptiHub;
@@ -37,9 +39,11 @@ public sealed partial class MainWindow : Window
         ApplyResizableWindowChrome();
         TryCenterOnScreen();
         TrySetWindowIcon();
+        TryEnableLiquidGlassBackdrop();
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBarHost);
+        TryTransparentTitleBarButtons();
 
         _navMap["home"] = NavHome;
         _navMap["discord"] = NavDiscord;
@@ -133,18 +137,48 @@ public sealed partial class MainWindow : Window
 
     private void ApplyShellChrome()
     {
-        try
-        {
-            if (Application.Current.Resources.TryGetValue("OptiPageBackgroundBrush", out var b) && b is Brush brush)
-                RootGrid.Background = brush;
-        }
-        catch
-        {
-            RootGrid.Background = new SolidColorBrush(ColorHelper.FromArgb(255, 7, 8, 13));
-        }
+        // Keep root transparent so Desktop Acrylic / Mica shows through.
+        RootGrid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         App.Services.Theme.Apply();
         UpdateCaptionInset();
         SyncNavSelection(ModeToNavKey(_mode));
+    }
+
+    private void TryEnableLiquidGlassBackdrop()
+    {
+        try
+        {
+            if (DesktopAcrylicController.IsSupported())
+            {
+                SystemBackdrop = new DesktopAcrylicBackdrop();
+                return;
+            }
+        }
+        catch { }
+
+        try
+        {
+            if (MicaController.IsSupported())
+            {
+                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+            }
+        }
+        catch { }
+    }
+
+    private void TryTransparentTitleBarButtons()
+    {
+        try
+        {
+            var tb = AppWindow.TitleBar;
+            tb.ButtonBackgroundColor = Color.FromArgb(0, 0, 0, 0);
+            tb.ButtonInactiveBackgroundColor = Color.FromArgb(0, 0, 0, 0);
+            tb.ButtonHoverBackgroundColor = Color.FromArgb(40, 255, 255, 255);
+            tb.ButtonPressedBackgroundColor = Color.FromArgb(60, 255, 255, 255);
+            tb.ButtonForegroundColor = Color.FromArgb(255, 245, 245, 247);
+            tb.ButtonInactiveForegroundColor = Color.FromArgb(160, 174, 174, 178);
+        }
+        catch { }
     }
 
     private void TryCenterOnScreen()
@@ -181,11 +215,11 @@ public sealed partial class MainWindow : Window
     private void SyncNavSelection(string activeKey)
     {
         Brush Soft() => Application.Current.Resources.TryGetValue("OptiAccentSoftBrush", out var s) && s is Brush sb
-            ? sb : new SolidColorBrush(ColorHelper.FromArgb(255, 10, 30, 58));
+            ? sb : new SolidColorBrush(ColorHelper.FromArgb(0x33, 0x64, 0xD2, 0xFF));
         Brush Acc() => Application.Current.Resources.TryGetValue("OptiAccentBrush", out var a) && a is Brush ab
-            ? ab : new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
+            ? ab : new SolidColorBrush(ColorHelper.FromArgb(255, 100, 210, 255));
         Brush Mut() => Application.Current.Resources.TryGetValue("OptiMutedTextBrush", out var m) && m is Brush mb
-            ? mb : new SolidColorBrush(ColorHelper.FromArgb(255, 110, 110, 115));
+            ? mb : new SolidColorBrush(ColorHelper.FromArgb(255, 174, 174, 178));
         Brush Pri() => Application.Current.Resources.TryGetValue("OptiPrimaryTextBrush", out var p) && p is Brush pb
             ? pb : new SolidColorBrush(ColorHelper.FromArgb(255, 245, 245, 247));
 
@@ -193,25 +227,10 @@ public sealed partial class MainWindow : Window
         {
             var on = string.Equals(kv.Key, activeKey, StringComparison.OrdinalIgnoreCase);
             var btn = kv.Value;
-            // Settings lives as gear — no filled pill when selected
-            if (string.Equals(kv.Key, "settings", StringComparison.OrdinalIgnoreCase))
-            {
-                btn.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-                btn.Foreground = on ? Acc() : Mut();
-                if (btn.Content is FontIcon gear)
-                    gear.Foreground = on ? Acc() : Mut();
-                continue;
-            }
-
             btn.Background = on ? Soft() : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             btn.Foreground = on ? Acc() : Mut();
             btn.BorderThickness = new Thickness(0);
-            if (btn.Content is string)
-            {
-                // string Content uses Foreground on button
-            }
-            else
-                PaintNavContent(btn.Content, on ? Acc() : Mut(), on ? Pri() : Mut());
+            PaintNavContent(btn.Content, on ? Acc() : Mut(), on ? Pri() : Mut());
         }
     }
 

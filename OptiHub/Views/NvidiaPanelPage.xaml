@@ -8,21 +8,21 @@
         <StackPanel MaxWidth="720"
                     HorizontalAlignment="Center"
                     Padding="{StaticResource OptiPagePadding}"
-                    Spacing="24">
-            <StackPanel Spacing="6" HorizontalAlignment="Center">
+                    Spacing="16">
+            <StackPanel Spacing="4" HorizontalAlignment="Center" Margin="0,0,0,8">
                 <TextBlock Text="Display" Style="{StaticResource OptiPageTitle}"
-                           HorizontalAlignment="Center" FontSize="34" CharacterSpacing="-50" />
+                           HorizontalAlignment="Center" CharacterSpacing="-50" />
                 <TextBlock Text="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}"
                            HorizontalAlignment="Center" TextAlignment="Center" />
                 <TextBlock Text="{x:Bind ViewModel.HeaderDetail, Mode=OneWay}" Style="{StaticResource OptiCaption}"
-                           HorizontalAlignment="Center" TextAlignment="Center" Opacity="0.8" />
+                           HorizontalAlignment="Center" TextAlignment="Center" Opacity="0.85" />
             </StackPanel>
 
             <Grid MinHeight="80">
                 <ProgressRing Width="28" Height="28" IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
                               Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                <StackPanel Spacing="16"
+                <StackPanel Spacing="14"
                             Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                     <StackPanel Spacing="12" Visibility="{x:Bind ViewModel.HasDisplays, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                         <ItemsControl ItemsSource="{x:Bind ViewModel.Displays, Mode=OneWay}">
@@ -33,8 +33,7 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:NvidiaDisplayColorRowViewModel">
-                                    <Border Background="{ThemeResource OptiCardFillBrush}"
-                                            CornerRadius="20" Padding="20,18" Margin="0,0,0,12">
+                                    <Border Style="{StaticResource OptiGlassPanel}" Padding="20,16" Margin="0,0,0,12">
                                         <StackPanel Spacing="14">
                                             <Grid ColumnSpacing="12">
                                                 <Grid.ColumnDefinitions>
@@ -111,31 +110,33 @@
                 </StackPanel>
             </Grid>
 
-            <StackPanel Spacing="12" MaxWidth="400" HorizontalAlignment="Center">
-                <Border Style="{StaticResource OptiMessageBanner}"
-                        Visibility="{x:Bind ViewModel.HasMessage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBlock Text="{x:Bind ViewModel.Message, Mode=OneWay}" Style="{StaticResource OptiBody}"
-                               TextWrapping="Wrap" TextAlignment="Center" />
-                </Border>
-                <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
-                                 Height="3" CornerRadius="2" Foreground="{ThemeResource OptiAccentBrush}" />
-                    <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}"
-                               HorizontalAlignment="Center" />
+            <Border Style="{StaticResource OptiGlassPanel}" Padding="18" MaxWidth="400" HorizontalAlignment="Center">
+                <StackPanel Spacing="12">
+                    <Border Style="{StaticResource OptiMessageBanner}"
+                            Visibility="{x:Bind ViewModel.HasMessage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBlock Text="{x:Bind ViewModel.Message, Mode=OneWay}" Style="{StaticResource OptiBody}"
+                                   TextWrapping="Wrap" TextAlignment="Center" />
+                    </Border>
+                    <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
+                                     Height="3" CornerRadius="2" Foreground="{ThemeResource OptiAccentBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}"
+                                   HorizontalAlignment="Center" />
+                    </StackPanel>
+                    <Button Style="{StaticResource OptiPrimaryButton}" Content="{x:Bind ViewModel.ApplyAllLabel, Mode=OneWay}"
+                            Click="ApplyAll_Click" HorizontalAlignment="Stretch"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click" HorizontalAlignment="Stretch"
+                                IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                        <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Clear tray" Click="ClearTray_Click" HorizontalAlignment="Stretch"
+                                IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                    </Grid>
                 </StackPanel>
-                <Button Style="{StaticResource OptiPrimaryButton}" Content="{x:Bind ViewModel.ApplyAllLabel, Mode=OneWay}"
-                        Click="ApplyAll_Click" HorizontalAlignment="Stretch"
-                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                <Grid ColumnSpacing="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click" HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Clear tray" Click="ClearTray_Click" HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                </Grid>
-            </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </Page>

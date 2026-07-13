@@ -5,13 +5,12 @@
       Background="Transparent"
       Loaded="Page_Loaded">
 
-    <!-- iOS-style grouped settings — single calm column -->
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel x:Name="PageRoot"
-                    MaxWidth="560"
+                    MaxWidth="520"
                     HorizontalAlignment="Center"
-                    Padding="32,36,32,48"
-                    Spacing="28">
+                    Padding="32,28,32,24"
+                    Spacing="24">
 
             <StackPanel x:Name="HeaderPanel"
                         Spacing="4"
@@ -22,36 +21,38 @@
                 </StackPanel.RenderTransform>
                 <TextBlock Text="Settings"
                            FontFamily="{StaticResource OptiUiFontSemiBold}"
-                           FontSize="34"
+                           FontSize="36"
                            FontWeight="SemiBold"
-                           CharacterSpacing="-50"
+                           CharacterSpacing="-60"
                            Foreground="{ThemeResource OptiPrimaryTextBrush}" />
             </StackPanel>
 
             <StackPanel x:Name="BodyGrid"
-                        Spacing="22"
+                        Spacing="18"
                         Opacity="0"
                         RenderTransformOrigin="0.5,0">
                 <StackPanel.RenderTransform>
                     <CompositeTransform x:Name="BodyTransform" TranslateY="16" />
                 </StackPanel.RenderTransform>
 
-                <!-- Appearance -->
-                <StackPanel Spacing="10">
-                    <TextBlock Text="Appearance" Style="{StaticResource OptiSectionTitle}" Margin="4,0,0,0" />
-                    <Border Background="{ThemeResource OptiCardFillBrush}" CornerRadius="16" Padding="6">
-                        <Grid ColumnSpacing="8" Margin="10,10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Appearance" Style="{StaticResource OptiSectionTitle}" />
+                    <Border Style="{StaticResource OptiGlassPanel}" Padding="10">
+                        <Grid ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Button Style="{StaticResource OptiThemePickButton}"
                                     Click="ThemeDark_Click"
-                                    Height="100"
+                                    Height="96"
                                     AutomationProperties.Name="Use dark theme">
-                                <Border Background="{ThemeResource OptiSurfaceBrush}" CornerRadius="12" Padding="14">
+                                <Border Background="{ThemeResource OptiSurfaceBrush}"
+                                        BorderBrush="{ThemeResource OptiGlassStrokeBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="16" Padding="14">
                                     <StackPanel Spacing="10">
-                                        <Border Height="36" CornerRadius="8" Background="#000000" />
+                                        <Border Height="32" CornerRadius="8" Background="#000000" Opacity="0.55" />
                                         <TextBlock Text="Dark" FontWeight="SemiBold"
                                                    Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                                     </StackPanel>
@@ -60,12 +61,14 @@
                             <Button Grid.Column="1"
                                     Style="{StaticResource OptiThemePickButton}"
                                     Click="ThemeLight_Click"
-                                    Height="100"
+                                    Height="96"
                                     AutomationProperties.Name="Use light theme">
-                                <Border Background="{ThemeResource OptiSurfaceBrush}" CornerRadius="12" Padding="14">
+                                <Border Background="{ThemeResource OptiSurfaceBrush}"
+                                        BorderBrush="{ThemeResource OptiGlassStrokeBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="16" Padding="14">
                                     <StackPanel Spacing="10">
-                                        <Border Height="36" CornerRadius="8" Background="#FFFFFF"
-                                                BorderBrush="#E8E8ED" BorderThickness="1" />
+                                        <Border Height="32" CornerRadius="8" Background="#FFFFFF" Opacity="0.85" />
                                         <TextBlock Text="Light" FontWeight="SemiBold"
                                                    Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                                     </StackPanel>
@@ -75,10 +78,9 @@
                     </Border>
                 </StackPanel>
 
-                <!-- Updates -->
-                <StackPanel Spacing="10">
-                    <TextBlock Text="Updates" Style="{StaticResource OptiSectionTitle}" Margin="4,0,0,0" />
-                    <Border Background="{ThemeResource OptiCardFillBrush}" CornerRadius="16" Padding="18,14">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Updates" Style="{StaticResource OptiSectionTitle}" />
+                    <Border Style="{StaticResource OptiGlassPanel}" Padding="18,16">
                         <StackPanel Spacing="14">
                             <ToggleSwitch Header="Check on launch"
                                           IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
@@ -95,37 +97,35 @@
                     </Border>
                 </StackPanel>
 
-                <!-- Support -->
-                <StackPanel Spacing="10">
-                    <TextBlock Text="Support" Style="{StaticResource OptiSectionTitle}" Margin="4,0,0,0" />
-                    <Border Background="{ThemeResource OptiCardFillBrush}" CornerRadius="16" Padding="8">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Support" Style="{StaticResource OptiSectionTitle}" />
+                    <Border Style="{StaticResource OptiGlassPanel}" Padding="8">
                         <StackPanel>
                             <Button Style="{StaticResource OptiQuietButton}"
                                     Content="Open logs folder"
                                     HorizontalAlignment="Stretch"
-                                    CornerRadius="12"
                                     Background="Transparent"
+                                    BorderThickness="0"
                                     Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
                             <Border Height="1" Background="{ThemeResource OptiDividerBrush}" Margin="12,0" />
                             <Button Style="{StaticResource OptiQuietButton}"
                                     Content="Report issue on GitHub"
                                     HorizontalAlignment="Stretch"
-                                    CornerRadius="12"
                                     Background="Transparent"
+                                    BorderThickness="0"
                                     Command="{x:Bind ViewModel.ReportIssueCommand}" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
 
-                <!-- About -->
-                <StackPanel Spacing="10">
-                    <TextBlock Text="About" Style="{StaticResource OptiSectionTitle}" Margin="4,0,0,0" />
-                    <Border Background="{ThemeResource OptiCardFillBrush}" CornerRadius="16" Padding="18,16">
-                        <StackPanel Spacing="6">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="About" Style="{StaticResource OptiSectionTitle}" />
+                    <Border Style="{StaticResource OptiGlassPanel}" Padding="18,16">
+                        <StackPanel Spacing="4">
                             <TextBlock Text="Version" Style="{StaticResource OptiCaption}" />
                             <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
                                        FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                       FontSize="28"
+                                       FontSize="30"
                                        FontWeight="SemiBold"
                                        CharacterSpacing="-40"
                                        Foreground="{ThemeResource OptiPrimaryTextBrush}" />

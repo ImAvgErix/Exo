@@ -1,3 +1,10 @@
+## 1.9.50
+
+- **GLASS redesign** — Liquid Glass + Tesla clean (not flat recolors)
+- Real Desktop Acrylic window blur (Mica fallback)
+- Floating glass dock, translucent panels, specular edges, ambient color orbs
+- Transparent chrome so materials show through; cyan glass accent
+- Home/optimizers/settings on glass surfaces; minimal Tesla-like density
 ## 1.9.49
 
 - **AURA redesign**: clean Apple/Tesla-calm UI — soft system dark, Apple blue accent, airy spacing
@@ -422,6 +429,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

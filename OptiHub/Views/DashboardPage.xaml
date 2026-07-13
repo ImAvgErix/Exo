@@ -6,17 +6,17 @@
     xmlns:viewModels="using:OptiHub.ViewModels"
     Background="Transparent">
 
-    <!-- Airy product grid — logo + name only -->
+    <!-- Tesla-clean home floating on liquid glass acrylic -->
     <Grid x:Name="PageRoot" Loaded="PageRoot_Loaded">
         <ScrollViewer VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
-            <StackPanel MaxWidth="880"
+            <StackPanel MaxWidth="900"
                         HorizontalAlignment="Center"
-                        Padding="40,48,40,56"
-                        Spacing="36">
+                        Padding="40,40,40,28"
+                        Spacing="40">
 
                 <StackPanel x:Name="HeroPanel"
-                            Spacing="8"
+                            Spacing="6"
                             HorizontalAlignment="Center"
                             Opacity="0"
                             RenderTransformOrigin="0.5,0.5">
@@ -25,13 +25,13 @@
                     </StackPanel.RenderTransform>
                     <TextBlock Text="OptiHub"
                                FontFamily="{StaticResource OptiUiFontSemiBold}"
-                               FontSize="44"
+                               FontSize="52"
                                FontWeight="SemiBold"
-                               CharacterSpacing="-80"
+                               CharacterSpacing="-100"
                                HorizontalAlignment="Center"
                                Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                    <TextBlock Text="Choose a module"
-                               FontSize="16"
+                    <TextBlock Text="Performance"
+                               FontSize="17"
                                HorizontalAlignment="Center"
                                Foreground="{ThemeResource OptiMutedTextBrush}" />
                 </StackPanel>
@@ -49,24 +49,27 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
                             <Button Style="{StaticResource OptiCardButton}"
-                                    Width="180"
-                                    Height="180"
+                                    Width="188"
+                                    Height="188"
                                     Margin="10"
                                     Click="CardButton_Click"
                                     Tag="{x:Bind Definition.Id}"
                                     AutomationProperties.Name="{x:Bind Definition.Title}"
                                     IsEnabled="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                                     Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
-                                <Border Background="{ThemeResource OptiCardFillBrush}"
-                                        CornerRadius="24"
+                                <!-- Glass tile -->
+                                <Border Background="{ThemeResource OptiGlassFillBrush}"
+                                        BorderBrush="{ThemeResource OptiGlassStrokeBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="28"
                                         Padding="20">
                                     <StackPanel Spacing="16"
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center">
                                         <Border Style="{StaticResource OptiLogoWell}"
-                                                Width="72" Height="72"
-                                                CornerRadius="20"
-                                                Padding="12"
+                                                Width="76" Height="76"
+                                                CornerRadius="22"
+                                                Padding="13"
                                                 HorizontalAlignment="Center">
                                             <Image Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                                    Stretch="Uniform"

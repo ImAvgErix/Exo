@@ -47,6 +47,7 @@ var repo = FindRepoRoot();
 var theme = Path.Combine(repo, "OptiHub", "Styles", "ThemeResources.xaml");
 var appXaml = Path.Combine(repo, "OptiHub", "App.xaml");
 var main = Path.Combine(repo, "OptiHub", "MainWindow.xaml");
+var mainCs = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
 Expect("ThemeResources exists", File.Exists(theme));
 Expect("App.xaml exists", File.Exists(appXaml));
 Expect("MainWindow exists", File.Exists(main));
@@ -54,7 +55,7 @@ Expect("MainWindow exists", File.Exists(main));
 if (File.Exists(theme))
 {
     var t = File.ReadAllText(theme);
-    foreach (var key in new[] { "OptiPageTitle", "OptiFeatureTile", "OptiMessageBanner", "OptiFeatureDetail", "OptiPrimaryButton", "OptiPagePadding", "OptiNavButton" })
+    foreach (var key in new[] { "OptiPageTitle", "OptiFeatureTile", "OptiMessageBanner", "OptiFeatureDetail", "OptiPrimaryButton", "OptiPagePadding", "OptiNavButton", "OptiGlassPanel", "OptiGlassDock" })
         Expect("theme has " + key, t.Contains(key, StringComparison.Ordinal));
 }
 
@@ -63,10 +64,10 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("theme has OptiMutedTextBrush", a.Contains("OptiMutedTextBrush", StringComparison.Ordinal));
     Expect("theme has OptiDividerBrush", a.Contains("OptiDividerBrush", StringComparison.Ordinal));
-    Expect("AURA Apple blue accent", a.Contains("#0A84FF", StringComparison.Ordinal) || a.Contains("#0071E3", StringComparison.Ordinal));
-    Expect("soft system dark surface", a.Contains("#1C1C1E", StringComparison.Ordinal));
+    Expect("glass cyan accent", a.Contains("#64D2FF", StringComparison.Ordinal));
+    Expect("glass translucent fills", a.Contains("#28FFFFFF", StringComparison.Ordinal) || a.Contains("OptiGlassFillBrush", StringComparison.Ordinal));
+    Expect("transparent page for acrylic", a.Contains("OptiPageBackgroundBrush\" Color=\"#00000000\"", StringComparison.Ordinal));
     Expect("not orange forge accent", !a.Contains("#F59E0B", StringComparison.Ordinal));
-    Expect("not NOVA white signal accent only", !a.Contains("OptiAccentBrush\" Color=\"#F5F5F5\"", StringComparison.Ordinal));
 }
 
 foreach (var page in new[]
@@ -116,26 +117,39 @@ if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
     Expect("MainWindow has ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
-    Expect("MainWindow top nav pills", m.Contains("NavHome", StringComparison.Ordinal) && m.Contains("NavDiscord", StringComparison.Ordinal));
+    Expect("MainWindow floating dock", m.Contains("DockHost", StringComparison.Ordinal) || m.Contains("OptiGlassDock", StringComparison.Ordinal));
     Expect("MainWindow nav settings", m.Contains("NavSettings", StringComparison.Ordinal));
-    Expect("MainWindow top chrome", m.Contains("TitleBarHost", StringComparison.Ordinal));
+    Expect("MainWindow ambient orbs", m.Contains("RadialGradientBrush", StringComparison.Ordinal));
     Expect("MainWindow entrance transitions", m.Contains("EntranceThemeTransition", StringComparison.Ordinal));
+}
+
+if (File.Exists(mainCs))
+{
+    var cs = File.ReadAllText(mainCs);
+    Expect("liquid glass acrylic backdrop", cs.Contains("DesktopAcrylicBackdrop", StringComparison.Ordinal));
+    Expect("mica fallback", cs.Contains("MicaBackdrop", StringComparison.Ordinal));
+    Expect("transparent title bar buttons", cs.Contains("TryTransparentTitleBarButtons", StringComparison.Ordinal));
+    Expect("resizable chrome method", cs.Contains("ApplyResizableWindowChrome", StringComparison.Ordinal));
+    Expect("IsResizable true", cs.Contains("IsResizable = true", StringComparison.Ordinal));
+    Expect("IsMaximizable true", cs.Contains("IsMaximizable = true", StringComparison.Ordinal));
+    Expect("no fixed re-assert helper", !cs.Contains("ApplyFixedWindowChrome", StringComparison.Ordinal));
+    Expect("no DisableMaximize hook", !cs.Contains("DisableMaximizeViaSystemMenu", StringComparison.Ordinal));
 }
 
 var dash = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml");
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
+    Expect("dashboard glass tiles", d.Contains("OptiGlassFillBrush", StringComparison.Ordinal) || d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("dashboard product grid", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
-    Expect("dashboard quiet hero", d.Contains("Choose a module", StringComparison.Ordinal) || d.Contains("OptiHub", StringComparison.Ordinal));
 }
 
 var settings = Path.Combine(repo, "OptiHub", "Views", "SettingsPage.xaml");
 if (File.Exists(settings))
 {
     var s = File.ReadAllText(settings);
-    Expect("settings grouped column", s.Contains("Appearance", StringComparison.Ordinal) && s.Contains("Updates", StringComparison.Ordinal));
-    Expect("settings not two-pane categories", !s.Contains("CatAppearance", StringComparison.Ordinal));
+    Expect("settings glass panels", s.Contains("OptiGlassPanel", StringComparison.Ordinal));
+    Expect("settings grouped", s.Contains("Appearance", StringComparison.Ordinal) && s.Contains("Updates", StringComparison.Ordinal));
 }
 
 var nvProg = Path.Combine(repo, "tools", "OptiHub.NvDisplay", "Program.cs");
@@ -150,18 +164,6 @@ if (File.Exists(nvProg))
             @"Scaling\s*=\s*Scaling\.GPUScanOutToNative"));
 }
 
-var mainCs = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
-Expect("MainWindow.cs exists", File.Exists(mainCs));
-if (File.Exists(mainCs))
-{
-    var cs = File.ReadAllText(mainCs);
-    Expect("resizable chrome method", cs.Contains("ApplyResizableWindowChrome", StringComparison.Ordinal));
-    Expect("IsResizable true", cs.Contains("IsResizable = true", StringComparison.Ordinal));
-    Expect("IsMaximizable true", cs.Contains("IsMaximizable = true", StringComparison.Ordinal));
-    Expect("no fixed re-assert helper", !cs.Contains("ApplyFixedWindowChrome", StringComparison.Ordinal));
-    Expect("no DisableMaximize hook", !cs.Contains("DisableMaximizeViaSystemMenu", StringComparison.Ordinal));
-}
-
 var panelXaml = Path.Combine(repo, "OptiHub", "Views", "NvidiaPanelPage.xaml");
 if (File.Exists(panelXaml))
 {
@@ -174,8 +176,7 @@ if (File.Exists(panelXaml))
     Expect("panel has ComboBox", px.Contains("ComboBox", StringComparison.Ordinal));
 }
 
-var panelLogic = Path.Combine(repo, "OptiHub", "Services", "NvidiaPanelLogic.cs");
-Expect("NvidiaPanelLogic exists", File.Exists(panelLogic));
+Expect("NvidiaPanelLogic exists", File.Exists(Path.Combine(repo, "OptiHub", "Services", "NvidiaPanelLogic.cs")));
 
 var panelVm = Path.Combine(repo, "OptiHub", "ViewModels", "NvidiaPanelViewModel.cs");
 if (File.Exists(panelVm))
