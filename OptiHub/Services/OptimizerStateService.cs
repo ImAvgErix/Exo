@@ -1029,10 +1029,15 @@ public sealed class OptimizerStateService
                                gpuName,
                                @"(?i)\bMX\d+\b|\b\d{3,4}M\b"));
 
-        features.Add(MakeFeature("Driver / MSI", "", driverTweaksApplied && gpuOk));
+        // Notebook: desktop Game Ready auto-download is blocked, but profiles /
+        // debloat / display still apply. Display may be N/A on Optimus (iGPU panels).
+        var displayStageOk = displayApplied || notebookGpu;
+
+        features.Add(MakeFeature("Driver / MSI", "",
+            notebookGpu ? gpuOk : (driverTweaksApplied && gpuOk)));
         features.Add(MakeFeature("3D profiles", "", profileApplied && gpuOk));
         features.Add(MakeFeature("Debloat", "", debloatApplied && gpuOk));
-        features.Add(MakeFeature("Display prefs", "", displayApplied && gpuOk));
+        features.Add(MakeFeature("Display prefs", "", displayStageOk && gpuOk));
 
         var extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (!string.IsNullOrEmpty(series))
@@ -1044,22 +1049,22 @@ public sealed class OptimizerStateService
         if (notebookGpu)
             extra["notebookGpu"] = "true";
 
-        var applied = hasMarker && !restartPending && !applyInProgress && !notebookGpu && driverTweaksApplied &&
-                      profileApplied && displayApplied && debloatApplied;
+        // Notebook no longer forces permanent "not applied".
+        var applied = hasMarker && !restartPending && !applyInProgress &&
+                      (notebookGpu || driverTweaksApplied) &&
+                      profileApplied && displayStageOk && debloatApplied;
         var statusText = !gpuOk
             ? "No NVIDIA GPU"
             : restartPending
             ? "Restart required"
-            : notebookGpu
-                ? "Notebook driver requires manual action"
-            : !driverTweaksApplied
-                ? "Driver tweaks incomplete"
-                : !profileApplied
-                    ? "3D profile incomplete"
-                    : !displayApplied
-                        ? "Display setup incomplete"
-                        : !debloatApplied
-                            ? "Background debloat incomplete"
+            : !profileApplied
+                ? "3D profile incomplete"
+                : !displayStageOk
+                    ? "Display setup incomplete"
+                    : !debloatApplied
+                        ? "Background debloat incomplete"
+                        : !notebookGpu && !driverTweaksApplied
+                            ? "Driver tweaks incomplete"
                             : applied
                                 ? "All applied"
                                 : "Not applied";

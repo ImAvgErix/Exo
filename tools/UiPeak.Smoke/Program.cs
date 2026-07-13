@@ -161,7 +161,36 @@ if (File.Exists(panelVm))
 
 var nv = Path.Combine(repo, "tools", "OptiHub.NvDisplay", "Program.cs");
 if (File.Exists(nv))
-    Expect("path Closest", File.ReadAllText(nv).Contains("GPUScanOutToClosest", StringComparison.Ordinal));
+{
+    var nvt = File.ReadAllText(nv);
+    Expect("path Closest", nvt.Contains("GPUScanOutToClosest", StringComparison.Ordinal));
+    // Multi-GPU: don't abort whole enum when one adapter fails.
+    Expect("nv multi-gpu continue", nvt.Contains("continue;", StringComparison.Ordinal) &&
+                                    nvt.Contains("Multi-GPU", StringComparison.OrdinalIgnoreCase));
+    // Soft mapping: incomplete GDI map no longer hard-fails apply.
+    Expect("nv soft map", nvt.Contains("Partial NVIDIA-to-Windows mapping", StringComparison.Ordinal));
+    Expect("nv gdi fallback", nvt.Contains("EnumerateActiveGdiNames", StringComparison.Ordinal));
+}
+
+var nvDetect = Path.Combine(repo, "OptiHub", "Scripts", "Nvidia", "OptiHub-Nvidia-Detect.ps1");
+if (File.Exists(nvDetect))
+{
+    var det = File.ReadAllText(nvDetect);
+    // Laptops must not permanently force "manual action only" for isApplied.
+    Expect("nv detect no permanent notebook fail",
+        !det.Contains("$needsDriverAction = $needsUpdate -or $needsRetweak -or $isNotebookGpu", StringComparison.Ordinal));
+    Expect("nv optimus display skip ok",
+        det.Contains("no-active-nvidia-displays", StringComparison.Ordinal));
+}
+
+var nvHeuristic = Path.Combine(repo, "OptiHub", "Services", "OptimizerStateService.cs");
+if (File.Exists(nvHeuristic))
+{
+    var h = File.ReadAllText(nvHeuristic);
+    Expect("heuristic notebook not hard fail",
+        !h.Contains("!notebookGpu && driverTweaksApplied", StringComparison.Ordinal) &&
+        h.Contains("notebookGpu || driverTweaksApplied", StringComparison.Ordinal));
+}
 
 Log($"=== SUMMARY failed={failed} ===");
 Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);

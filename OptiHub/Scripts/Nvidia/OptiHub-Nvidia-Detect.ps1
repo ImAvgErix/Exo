@@ -343,10 +343,20 @@ $tweaks = Test-OptiHubDriverInstallTweaks $currentNv $state
 $debloat = Test-NvidiaPerformanceDebloat
 $overlay = Test-NvidiaOverlayDisabled
 $needsRetweak = (-not $needsUpdate) -and [bool]$currentNv -and (-not $tweaks.Ok)
-$needsDriverAction = $needsUpdate -or $needsRetweak -or $isNotebookGpu
+# Notebook: never auto-download desktop GRD — but do NOT treat that as a permanent fail.
+# Profiles, display policy, and debloat still apply on laptops.
+$needsDriverAction = if ($isNotebookGpu) {
+    -not [bool]$currentNv   # only fail driver stage if we cannot see any NVIDIA driver
+} else {
+    $needsUpdate -or $needsRetweak
+}
 
 $driverNote = if ($isNotebookGpu) {
-    'Notebook/Laptop GPU detected. Desktop driver metadata is blocked; install the official NVIDIA notebook driver manually.'
+    if ($currentNv) {
+        "Laptop GPU with driver $currentNv. Desktop auto-update is skipped; use NVIDIA's notebook driver if you need a newer build. Profiles and display still apply via OptiHub."
+    } else {
+        'Laptop GPU detected but no driver version was read. Install the official NVIDIA notebook driver, then Apply.'
+    }
 } elseif (-not $currentNv) {
     'NVIDIA driver version could not be read. Install or repair the display driver, then refresh.'
 } elseif ($needsUpdate) {
@@ -449,12 +459,23 @@ $features.Add(@{
 # Store NVIDIA Control Panel uses a virtualized registry hive and often shows stale/wrong radios.
 $displayMarkerOk = [bool]($state -and $state.displayPrefs -and [string]$state.displayMethod -eq 'nvapi')
 $displayLive = Test-NvidiaDisplayLive
-$displayOk = $displayMarkerOk -and [bool]$displayLive.Available -and [bool]$displayLive.Ok -and
-             (-not $pendingAfterDriver) -and (-not $applyInProgress)
+# Optimus / iGPU-only panels: helper returns ok + skipped=no-active-nvidia-displays.
+$displaySkippedNoPanels = [bool]($displayLive.Available -and (
+    ([string]$displayLive.Detail -match 'no-active-nvidia-displays') -or
+    ([string]$displayLive.Detail -eq 'no-active-nvidia-displays')
+))
+$displayLiveOk = [bool]$displayLive.Available -and ([bool]$displayLive.Ok -or $displaySkippedNoPanels)
+# Live peak policy alone is enough after apply; marker is best-effort.
+$displayOk = (-not $pendingAfterDriver) -and (-not $applyInProgress) -and (
+    $displaySkippedNoPanels -or
+    ($displayLiveOk -and ($displayMarkerOk -or [bool]$displayLive.Ok))
+)
 
 $features.Add(@{
     title  = 'OptiHub display policy (driver)'
-    detail = $(if ($displayLive.Available) {
+    detail = $(if ($displaySkippedNoPanels) {
+        'No active NVIDIA-connected panels (common on Optimus). Display step not required; 3D profiles still apply.'
+    } elseif ($displayLive.Available) {
         "Live NVAPI: $($displayLive.Detail) | primary=max Hz, secondary=60 Hz, Full RGB, GPU no-scaling"
     } else {
         'Live NVAPI helper unavailable; display state cannot be verified.'
@@ -577,9 +598,12 @@ $features.Add(@{
     active = $trayHideOk
 })
 
+# Driver stage for isApplied: notebooks only need a readable driver; desktop needs tweaks/update gate.
+$driverStageOk = if ($isNotebookGpu) { [bool]$currentNv } else { (-not $needsDriverAction) -and [bool]$currentNv }
+
 $isApplied = $gpuOk -and (-not $pendingAfterDriver) -and (-not $applyInProgress) -and
              $applied -and $gameOk -and $displayOk -and $backgroundOk -and $clientOk -and $advanced3dOk -and
-             $trayHideOk -and (-not $needsDriverAction)
+             $trayHideOk -and $driverStageOk
 
 $driverChanged = $false
 if ($state -and $currentNv -and $state.profileDriverVersion -and
@@ -589,10 +613,9 @@ if ($state -and $currentNv -and $state.profileDriverVersion -and
 
 $statusText = if (-not $gpuOk) { 'No NVIDIA GPU' }
 elseif ($pendingAfterDriver) { 'Restart required' }
-elseif ($isNotebookGpu) { 'Notebook driver requires manual action' }
 elseif (-not $currentNv) { 'Driver status unavailable' }
-elseif ($needsUpdate) { 'Driver update available' }
-elseif ($needsRetweak) { 'Driver tweaks available' }
+elseif (-not $isNotebookGpu -and $needsUpdate) { 'Driver update available' }
+elseif (-not $isNotebookGpu -and $needsRetweak) { 'Driver tweaks available' }
 elseif ($driverChanged -or (-not $profileOk -and $state -and $state.profileApplied)) { 'Driver changed - reapply' }
 elseif (-not $profileOk) { '3D profile incomplete' }
 elseif (-not $gameOk) { 'Game profiles incomplete' }
@@ -601,24 +624,24 @@ elseif (-not $clientOk) { 'NVIDIA App still present' }
 elseif (-not $advanced3dOk) { '3D profile incomplete' }
 elseif (-not $backgroundOk) { 'Background re-armed - reapply' }
 elseif (-not $trayHideOk) { 'Tray needs hide pass' }
-elseif ($isApplied) { 'Already optimized' }
-else { 'Ready to optimize' }
+elseif ($isApplied) { 'All applied' }
+else { 'Not applied' }
 
 $detail = if (-not $gpuOk) { 'Needs an NVIDIA GPU and current drivers.' }
-elseif ($pendingAfterDriver) { 'Restart Windows, then Apply once more to import and verify the profile, display, and background stages.' }
-elseif ($isNotebookGpu) { 'OptiHub blocks desktop driver metadata on Laptop/Notebook GPUs. Install the official NVIDIA notebook driver manually.' }
-elseif (-not $currentNv) { 'OptiHub could not read a valid NVIDIA driver version. Repair the driver, then refresh.' }
-elseif ($needsUpdate) { 'Apply runs OptiHub Clean Driver (official display-driver package), then continues with the profile and display preferences.' }
-elseif ($needsRetweak) { 'Version is newest; Apply will apply OptiHub MSI/privacy tweaks in-place (no re-download).' }
-elseif ($driverChanged) { "Driver is now $currentNv but OptiHub last verified $($state.profileDriverVersion). Apply again for base + per-game profiles and display prefs." }
-elseif (-not $profileOk) { $(if ($applyInProgress) { 'The previous Apply was interrupted before a verified profile marker was saved. Apply again.' } else { 'The profile file, pack version, hash, or imported driver version is not verified. Apply again.' }) }
-elseif (-not $gameOk) { 'Base profile is present but the per-game catalog was not fully recorded. Apply again.' }
-elseif (-not $displayOk) { 'Live NVAPI display policy incomplete (Full RGB / scaling / primary max Hz / secondary 60 Hz). Apply again.' }
-elseif (-not $clientOk) { 'NVIDIA App is still installed. Apply strips App/GFE; settings are applied by OptiHub via NVAPI, not the Control Panel UI.' }
-elseif (-not $advanced3dOk) { '3D Base + game profiles not fully verified. Apply imports them at driver level (ignore Control Panel radio buttons).' }
-elseif (-not $backgroundOk) { "NVIDIA background noise re-enabled ($($backgroundIssues -join '; ')). Apply again to re-disable." }
-elseif ($isApplied) { 'OptiHub policy active: series driver tweaks, DRS 3D profiles, NVAPI display (primary max Hz / secondary 60 Hz / Full RGB / GPU scale), App removed. Green checks here are the source of truth - NVIDIA Control Panel UI is optional and often stale.' }
-else { 'Choose the G-SYNC pack only for a compatible display, then Apply. OptiHub is the control panel.' }
+elseif ($pendingAfterDriver) { 'Restart Windows, then Apply once more to finish profile and display setup.' }
+elseif (-not $currentNv) { 'Could not read the NVIDIA driver version. Repair the driver, then refresh.' }
+elseif ($isNotebookGpu -and -not $isApplied) { 'Laptop GPU: desktop auto-update is skipped. Apply still imports 3D profiles and display policy when panels are NVIDIA-connected.' }
+elseif (-not $isNotebookGpu -and $needsUpdate) { 'Apply can install a clean display driver package, then continues with profiles and display prefs.' }
+elseif (-not $isNotebookGpu -and $needsRetweak) { 'Driver version is current; Apply will set MSI/privacy tweaks in place.' }
+elseif ($driverChanged) { "Driver is now $currentNv but last verified $($state.profileDriverVersion). Apply again." }
+elseif (-not $profileOk) { $(if ($applyInProgress) { 'Previous Apply was interrupted. Apply again.' } else { '3D profile not fully verified. Apply again.' }) }
+elseif (-not $gameOk) { 'Base profile is present but per-game catalog is incomplete. Apply again.' }
+elseif (-not $displayOk) { 'Display policy incomplete (resolution/refresh/color/scaling). Apply again or use Display panel.' }
+elseif (-not $clientOk) { 'NVIDIA App is still installed. Apply removes it; OptiHub uses the driver directly.' }
+elseif (-not $advanced3dOk) { '3D profiles not fully verified. Apply imports them at driver level.' }
+elseif (-not $backgroundOk) { "Background settings need another pass ($($backgroundIssues -join '; '))." }
+elseif ($isApplied) { 'Driver policy, 3D profiles, and display settings look good on this machine.' }
+else { 'Apply to set profiles and display policy for this GPU.' }
 
 [ordered]@{
     isApplied          = $isApplied

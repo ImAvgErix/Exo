@@ -243,6 +243,10 @@
 
 
 
+
+## 1.9.70
+- NVIDIA reliability: laptops no longer stuck Not applied; Optimus display N/A; soft GDI map + multi-GPU enum; clearer Display errors
+- Detect/status align across desktop, laptop, and hybrid configs
 ## 1.9.69
 - Home cards are nav only — no Checking/Applied status (that runs when you open a module)
 ## 1.9.68

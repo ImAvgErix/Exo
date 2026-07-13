@@ -282,7 +282,7 @@ public sealed class NvidiaPanelSettingsService
         var result = new List<NvidiaDisplayInfo>();
         try
         {
-            var (ok, root) = await RunNvDisplayJsonAsync(NvidiaPanelLogic.BuildListDisplaysArgs(), ct)
+            var (ok, root, _) = await RunNvDisplayJsonAsync(NvidiaPanelLogic.BuildListDisplaysArgs(), ct)
                 .ConfigureAwait(false);
             if (!ok || root is null) return result;
             if (!root.Value.TryGetProperty("displays", out var displays) ||
@@ -389,11 +389,29 @@ public sealed class NvidiaPanelSettingsService
     {
         try
         {
-            var (ok, root) = await RunNvDisplayJsonAsync(args, ct).ConfigureAwait(false);
+            var (ok, root, stderr) = await RunNvDisplayJsonAsync(args, ct).ConfigureAwait(false);
             if (ok && root is not null &&
                 root.Value.TryGetProperty("ok", out var okEl) && okEl.GetBoolean())
                 return (true, successLabel + " applied.");
-            return (false, $"Could not apply ({successLabel}). Mode may be unsupported on this display.");
+
+            // Surface real helper errors (unsupported mode, no map, NVAPI down).
+            var detail = "";
+            if (root is not null)
+            {
+                if (root.Value.TryGetProperty("error", out var err) && err.ValueKind == JsonValueKind.String)
+                    detail = err.GetString() ?? "";
+                else if (root.Value.TryGetProperty("detail", out var d) && d.ValueKind == JsonValueKind.String)
+                    detail = d.GetString() ?? "";
+                else if (root.Value.TryGetProperty("skipped", out var sk) && sk.ValueKind == JsonValueKind.String)
+                    detail = sk.GetString() ?? "";
+            }
+            if (string.IsNullOrWhiteSpace(detail) && !string.IsNullOrWhiteSpace(stderr))
+                detail = stderr.Trim();
+            if (string.IsNullOrWhiteSpace(detail))
+                detail = "mode may be unsupported on this display or GPU.";
+            if (detail.Length > 220)
+                detail = detail[..220] + "…";
+            return (false, $"Could not apply ({successLabel}): {detail}");
         }
         catch (Exception ex)
         {
@@ -401,7 +419,7 @@ public sealed class NvidiaPanelSettingsService
         }
     }
 
-    private async Task<(bool Ok, JsonElement? Root)> RunNvDisplayJsonAsync(
+    private async Task<(bool Ok, JsonElement? Root, string Stderr)> RunNvDisplayJsonAsync(
         string arguments,
         CancellationToken ct)
     {
@@ -410,7 +428,7 @@ public sealed class NvidiaPanelSettingsService
             var rootDir = _scripts.GetNvidiaRoot();
             var exe = Path.Combine(rootDir, "tools", "OptiHub.NvDisplay.exe");
             if (!File.Exists(exe))
-                return (false, null);
+                return (false, null, "OptiHub.NvDisplay.exe missing from kit.");
 
             var psi = new ProcessStartInfo
             {
@@ -423,18 +441,24 @@ public sealed class NvidiaPanelSettingsService
                 CreateNoWindow = true
             };
             using var proc = Process.Start(psi);
-            if (proc is null) return (false, null);
-            var output = await proc.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
+            if (proc is null) return (false, null, "Could not start display helper.");
+            var outputTask = proc.StandardOutput.ReadToEndAsync(ct);
+            var errorTask = proc.StandardError.ReadToEndAsync(ct);
             await proc.WaitForExitAsync(ct).ConfigureAwait(false);
+            var output = await outputTask.ConfigureAwait(false);
+            var stderr = await errorTask.ConfigureAwait(false);
             var jsonLine = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .LastOrDefault(l => l.StartsWith("OPTIHUB_NVDISPLAY_JSON:", StringComparison.Ordinal));
-            if (jsonLine is null) return (false, null);
+            if (jsonLine is null)
+                return (false, null, string.IsNullOrWhiteSpace(stderr) ? "No status JSON from display helper." : stderr);
             using var parsed = JsonDocument.Parse(jsonLine["OPTIHUB_NVDISPLAY_JSON:".Length..]);
-            return (proc.ExitCode == 0, parsed.RootElement.Clone());
+            // Exit 0 OR ok:true in JSON (e.g. skipped Optimus path).
+            var jsonOk = parsed.RootElement.TryGetProperty("ok", out var okProp) && okProp.GetBoolean();
+            return (proc.ExitCode == 0 || jsonOk, parsed.RootElement.Clone(), stderr ?? "");
         }
-        catch
+        catch (Exception ex)
         {
-            return (false, null);
+            return (false, null, ex.Message);
         }
     }
 
@@ -533,6 +557,13 @@ public sealed class NvidiaPanelSettingsService
             using var doc = JsonDocument.Parse(json);
             var el = doc.RootElement;
             var ok = el.TryGetProperty("ok", out var okEl) && okEl.GetBoolean();
+            // Optimus: no NVIDIA-attached panels — treat as OK (display N/A).
+            if (el.TryGetProperty("skipped", out var skipped) &&
+                skipped.ValueKind == JsonValueKind.String &&
+                (skipped.GetString() ?? "").Contains("no-active-nvidia", StringComparison.OrdinalIgnoreCase))
+            {
+                return (true, true, true, true, true, "no-active-nvidia-displays");
+            }
             var colorOk = false;
             var refreshOk = false;
             var scalingOk = false;
@@ -541,9 +572,16 @@ public sealed class NvidiaPanelSettingsService
             {
                 colorOk = checks.TryGetProperty("colorOk", out var c) && c.GetBoolean();
                 refreshOk = checks.TryGetProperty("refreshOk", out var r) && r.GetBoolean();
+                if (checks.TryGetProperty("modesOk", out var m) && m.GetBoolean())
+                    refreshOk = true;
                 scalingOk = checks.TryGetProperty("scalingOk", out var s) && s.GetBoolean();
+                if (checks.TryGetProperty("pathScalingOk", out var p) && p.GetBoolean())
+                    scalingOk = true;
                 registryOk = checks.TryGetProperty("registryOk", out var g) && g.GetBoolean();
             }
+            // Peak gate: refresh + (registry OR color+scaling)
+            if (el.TryGetProperty("checks", out _))
+                ok = NvidiaPeakLogic.IsDisplayStatusPeakOk(refreshOk, registryOk, colorOk, scalingOk) || ok;
             var detail = $"color={colorOk}, refresh={refreshOk}, scaling={scalingOk}, registry={registryOk}";
             return (ok, colorOk, refreshOk, scalingOk, registryOk, detail);
         }

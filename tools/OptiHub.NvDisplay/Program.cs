@@ -259,27 +259,22 @@ static class Program
                 .ToArray();
             if (missingDisplayIds.Length > 0)
             {
+                // Soft: still apply color + NVTweak. Win32 refresh needs GDI names.
                 var missing = string.Join(", ", missingDisplayIds.Select(id => $"#{id}"));
-                Console.Error.WriteLine($"[MODE] Complete NVIDIA-to-Windows mapping unavailable: {missing}");
-                var mappingJson = JsonSerializer.Serialize(new
-                {
-                    ok = false,
-                    mode = apply ? "apply" : "status",
-                    error = "incomplete-display-mapping",
-                    missingDisplayIds
-                });
-                Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + mappingJson);
-                return 6;
+                Console.WriteLine($"[MODE] Partial NVIDIA-to-Windows mapping; skip refresh for: {missing}");
             }
             var nvidiaGdiNames = devices
+                .Where(d => idToGdi.TryGetValue(d.DisplayId, out var name) && !string.IsNullOrWhiteSpace(name))
                 .Select(d => idToGdi[d.DisplayId])
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (nvidiaGdiNames.Count == 0)
             {
-                Console.Error.WriteLine("[MODE] No usable Windows display names were mapped.");
-                return 6;
+                Console.WriteLine("[MODE] No GDI names mapped — refresh skipped; color + registry still apply.");
             }
-            PrintWindowsModes("AVAILABLE", nvidiaGdiNames);
+            else
+            {
+                PrintWindowsModes("AVAILABLE", nvidiaGdiNames);
+            }
 
             var results = new List<object>();
             Dictionary<string, BestMode>? bestModes = null;
@@ -559,6 +554,9 @@ static class Program
             };
         }
 
+        // Multi-GPU / Optimus: one GPU may throw while another has panels.
+        // Never abort the whole enum when a single adapter fails.
+        var enumErrors = new List<string>();
         foreach (var gpu in gpus)
         {
             DisplayDevice[] connected;
@@ -574,12 +572,8 @@ static class Program
                 }
                 catch (Exception uncachedError)
                 {
-                    return new DisplayEnumerationResult
-                    {
-                        Succeeded = false,
-                        Error = "connected-display enumeration failed: " +
-                                cachedError.Message + " / " + uncachedError.Message
-                    };
+                    enumErrors.Add(cachedError.Message + " / " + uncachedError.Message);
+                    continue;
                 }
             }
 
@@ -592,6 +586,18 @@ static class Program
         }
 
         list = list.GroupBy(d => d.DisplayId).Select(g => g.First()).ToList();
+        // Succeeded=true even with zero devices (Optimus / iGPU-only panels).
+        // Callers treat empty as "display step N/A", not a hard driver failure.
+        if (list.Count == 0 && enumErrors.Count > 0 && enumErrors.Count == gpus.Length)
+        {
+            return new DisplayEnumerationResult
+            {
+                Succeeded = false,
+                Error = "connected-display enumeration failed on all GPUs: " +
+                        string.Join(" | ", enumErrors.Take(3))
+            };
+        }
+
         return new DisplayEnumerationResult { Succeeded = true, Devices = list };
     }
 
@@ -834,20 +840,45 @@ static class Program
         var any = false;
         var ok = true;
         var targets = new Dictionary<string, BestMode>(StringComparer.OrdinalIgnoreCase);
+
+        // Prefer NVIDIA NVAPI→GDI map; if missing (some hybrid/driver builds),
+        // fall back to every active Windows path for the requested display only when
+        // a single device is targeted, or all paths when only one GDI display exists.
         foreach (var dev in devices)
         {
             if (onlyId is not null && dev.DisplayId != onlyId.Value) continue;
             if (!idToGdi.TryGetValue(dev.DisplayId, out var gdi) || string.IsNullOrWhiteSpace(gdi))
-            {
-                ok = false;
                 continue;
-            }
             any = true;
             targets[gdi] = new BestMode { Width = width, Height = height, Hz = hz, Bpp = 32 };
         }
+
         if (!any)
         {
-            Console.Error.WriteLine("[MODE] No matching display for --set-mode");
+            // Fallback: EnumDisplayDevices primary / all active
+            try
+            {
+                var gdiFallback = EnumerateActiveGdiNames();
+                if (gdiFallback.Count == 1 || onlyId is null)
+                {
+                    foreach (var gdi in gdiFallback)
+                    {
+                        any = true;
+                        targets[gdi] = new BestMode { Width = width, Height = height, Hz = hz, Bpp = 32 };
+                    }
+                    if (any)
+                        Console.WriteLine("[MODE] Using Windows GDI fallback for mode change (NVAPI map incomplete).");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("[MODE] GDI fallback failed: " + ex.Message);
+            }
+        }
+
+        if (!any)
+        {
+            Console.Error.WriteLine("[MODE] No matching display for --set-mode (NVAPI map and GDI fallback empty).");
             return false;
         }
         // Stage + commit like peak path
@@ -1481,6 +1512,21 @@ static class Program
         }
         catch { }
         return map;
+    }
+
+    /// <summary>Active Windows display device names (\\.\DISPLAY1 …) for mode fallback.</summary>
+    static List<string> EnumerateActiveGdiNames()
+    {
+        var list = new List<string>();
+        for (uint i = 0; i < 16; i++)
+        {
+            var dd = new Win32.DISPLAY_DEVICE { cb = Marshal.SizeOf<Win32.DISPLAY_DEVICE>() };
+            if (!Win32.EnumDisplayDevices(null, i, ref dd, 0)) break;
+            if ((dd.StateFlags & Win32.DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) == 0) continue;
+            if (string.IsNullOrWhiteSpace(dd.DeviceName)) continue;
+            list.Add(dd.DeviceName);
+        }
+        return list;
     }
 
     /// <summary>Unused name kept for call-site compatibility.</summary>
