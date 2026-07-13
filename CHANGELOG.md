@@ -1,3 +1,11 @@
+## 2.0.0
+
+- **Settings never teleports**: sheet host is opacity-only; layout owns center (full-bleed stage). No composition Offset/Scale on the host — re-open stays dead center
+- **Home balance**: 48px centered tagline is the hero; cards 300×158 sit under it without overpowering
+- **Live Motion slider**: continuous 0–100 control drives entrance travel (not just toggles)
+- **Premium secondary buttons**: deliberate stroke + soft sheen + stable hover/press (Marcel craft)
+- **Theme clarity**: current mode large + “Tap to switch…”; high-contrast theme-aware fill
+- **Motion language**: one Kinetics family; hard identity reset after every open/close and entrance
 ## 1.9.104
 
 - **Settings corner fix**: full composition reset (Offset/Scale/Opacity) on every open/close — sheet no longer sticks in a corner

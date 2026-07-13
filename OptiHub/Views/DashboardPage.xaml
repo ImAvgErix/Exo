@@ -7,9 +7,9 @@
     Background="Transparent"
     Loaded="Page_Loaded">
 
-    <!-- Fixed 1180×760 shell — large static 3-col product grid -->
-    <Grid x:Name="PageRoot" Padding="24,10,24,16">
-        <Grid MaxWidth="1120"
+    <!-- Fixed 1180×760 — hero dominates, cards sit under it without overpowering -->
+    <Grid x:Name="PageRoot" Padding="28,14,28,20">
+        <Grid MaxWidth="1040"
               HorizontalAlignment="Center"
               VerticalAlignment="Center">
             <Grid.RowDefinitions>
@@ -17,29 +17,30 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Hero stays dead-center above the grid; starts invisible for entrance -->
+            <!-- Hero: largest type, dead horizontal center -->
             <StackPanel x:Name="HeroPanel"
                         Spacing="0"
-                        Margin="0,0,0,20"
+                        Margin="0,0,0,28"
                         HorizontalAlignment="Center"
                         Opacity="0"
                         IsHitTestVisible="False"
                         RenderTransformOrigin="0.5,0.5">
                 <StackPanel.RenderTransform>
-                    <CompositeTransform x:Name="HeroTransform" TranslateY="14" />
+                    <CompositeTransform x:Name="HeroTransform" TranslateY="12" />
                 </StackPanel.RenderTransform>
-                <TextBlock Text="Maximum performance. No compromise."
+                <TextBlock x:Name="HeroTagline"
+                           Text="Maximum performance. No compromise."
                            Style="{StaticResource OptiTagline}"
-                           FontSize="42"
-                           LineHeight="50"
-                           CharacterSpacing="-18"
+                           FontSize="48"
+                           LineHeight="56"
+                           CharacterSpacing="-24"
                            TextWrapping="WrapWholeWords"
                            TextAlignment="Center"
                            HorizontalAlignment="Center"
-                           MaxWidth="900" />
+                           MaxWidth="920" />
             </StackPanel>
 
-            <!-- Cards sized to match hero visual weight (3-up, same center axis) -->
+            <!-- Cards: smaller than the hero band so the tagline stays primary -->
             <ItemsControl x:Name="CardList"
                           Grid.Row="1"
                           HorizontalAlignment="Center"
@@ -54,11 +55,10 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
-                        <!-- Opacity on button is entrance-owned (code). Dim coming-soon on inner chrome only. -->
                         <Button Style="{StaticResource OptiCardButton}"
-                                Width="352"
-                                Height="200"
-                                Margin="7"
+                                Width="300"
+                                Height="158"
+                                Margin="6"
                                 Opacity="0"
                                 Click="CardButton_Click"
                                 Tag="{x:Bind Definition.Id}"
@@ -67,11 +67,11 @@
                             <Border Style="{StaticResource OptiCard}"
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Stretch"
-                                    Padding="16"
+                                    Padding="12"
                                     Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
                                 <Grid>
-                                    <Image Width="108"
-                                           Height="108"
+                                    <Image Width="84"
+                                           Height="84"
                                            Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
@@ -79,7 +79,7 @@
                                            AutomationProperties.AccessibilityView="Raw" />
                                     <TextBlock Text="Coming soon"
                                                FontFamily="{StaticResource OptiUiFont}"
-                                               FontSize="12"
+                                               FontSize="11"
                                                Foreground="{ThemeResource OptiMutedTextBrush}"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Bottom"

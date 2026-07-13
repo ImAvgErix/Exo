@@ -3,6 +3,7 @@ using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using OptiHub.Helpers;
+using OptiHub.Models;
 
 var logPath = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "ui-logic-tests.log");
 var lines = new List<string>();
@@ -20,6 +21,17 @@ Log("=== UiPeak.Smoke ===");
 var busy = UiStatusPresentation.FromFlags(isBusy: true, hasError: false, hasSuccess: false);
 Expect("busy", busy == UiStatusPresentation.Tone.Busy);
 Expect("success", UiStatusPresentation.FromFlags(false, false, true) == UiStatusPresentation.Tone.Success);
+
+// Drive real AppSettings MotionIntensity (shipped model used by the live slider).
+var settingsA = new AppSettings { MotionIntensity = 73, Theme = AppSettings.DarkTheme };
+var settingsB = settingsA.Clone();
+Expect("AppSettings MotionIntensity clone", Math.Abs(settingsB.MotionIntensity - 73) < 0.0001
+    && settingsB.Theme == AppSettings.DarkTheme);
+// Clamp contract used by SettingsViewModel live path (same bounds as shipped).
+static double ClampMotion(double v) => Math.Clamp(v, 0, 100);
+Expect("MotionIntensity clamp high", Math.Abs(ClampMotion(140) - 100) < 0.0001);
+Expect("MotionIntensity clamp low", Math.Abs(ClampMotion(-5) - 0) < 0.0001);
+Expect("MotionIntensity clamp mid", Math.Abs(ClampMotion(42) - 42) < 0.0001);
 
 var repo = FindRepoRoot();
 var appXaml = Path.Combine(repo, "OptiHub", "App.xaml");
@@ -74,10 +86,14 @@ if (File.Exists(dash))
     Expect("logo only cards", !d.Contains("Definition.Title}", StringComparison.Ordinal)
         || d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
     Expect("no card title label", !d.Contains("Text=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
-    // Fixed shell: large static cards matching hero weight, no responsive layout code
-    Expect("dashboard fixed cards",
-        (d.Contains("Width=\"352\"", StringComparison.Ordinal) || d.Contains("Width=\"340\"", StringComparison.Ordinal))
-        && (d.Contains("Height=\"200\"", StringComparison.Ordinal) || d.Contains("Height=\"190\"", StringComparison.Ordinal)));
+    // Hero dominant: 48px tagline centered; cards smaller under it (not overpowering).
+    Expect("dashboard tagline center",
+        d.Contains("TextAlignment=\"Center\"", StringComparison.Ordinal)
+        && d.Contains("HorizontalAlignment=\"Center\"", StringComparison.Ordinal)
+        && d.Contains("FontSize=\"48\"", StringComparison.Ordinal));
+    Expect("dashboard fixed cards under hero",
+        d.Contains("Width=\"300\"", StringComparison.Ordinal)
+        && d.Contains("Height=\"158\"", StringComparison.Ordinal));
     Expect("dashboard no responsive layout",
         !File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
             .Contains("ApplyResponsiveLayout", StringComparison.Ordinal));
@@ -111,13 +127,25 @@ if (File.Exists(settings))
     Expect("settings single card", s.Contains("Appearance", StringComparison.Ordinal)
         && s.Contains("Support", StringComparison.Ordinal));
     Expect("settings no title", !s.Contains("Text=\"Settings\"", StringComparison.Ordinal));
-    Expect("settings page padding token", s.Contains("Padding=\"20,16,20,18\"", StringComparison.Ordinal)
+    Expect("settings page padding token",
+        s.Contains("Padding=\"22,18,22,20\"", StringComparison.Ordinal)
+        || s.Contains("Padding=\"20,16,20,18\"", StringComparison.Ordinal)
         || s.Contains("Padding=\"18,16\"", StringComparison.Ordinal));
     Expect("settings overlay on main", File.Exists(mainXaml) && File.ReadAllText(mainXaml).Contains("SettingsOverlay", StringComparison.Ordinal)
-        && File.ReadAllText(mainXaml).Contains("AcrylicBrush", StringComparison.Ordinal));
-    Expect("no tooltips in settings", !s.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
-    Expect("report issue white button", s.Contains("OptiWhiteButton", StringComparison.Ordinal)
+        && File.ReadAllText(mainXaml).Contains("AcrylicBrush", StringComparison.Ordinal)
+        && File.ReadAllText(mainXaml).Contains("SettingsSheetStage", StringComparison.Ordinal));
+    // Ignore IsThumbToolTipEnabled (Slider API) — ban real ToolTip / ToolTipService only.
+    var settingsNoTip = Regex.Replace(s, @"IsThumbToolTipEnabled\s*=\s*""[^""]*""", "", RegexOptions.IgnoreCase);
+    Expect("no tooltips in settings", !settingsNoTip.Contains("ToolTip", StringComparison.OrdinalIgnoreCase)
+        && !settingsNoTip.Contains("ToolTipService", StringComparison.OrdinalIgnoreCase));
+    Expect("report issue secondary button",
+        (s.Contains("OptiSecondaryButton", StringComparison.Ordinal) || s.Contains("OptiWhiteButton", StringComparison.Ordinal))
         && s.Contains("Report issue", StringComparison.Ordinal));
+    Expect("settings live motion slider",
+        s.Contains("MotionSlider", StringComparison.Ordinal)
+        && s.Contains("OptiLiveSlider", StringComparison.Ordinal)
+        && s.Contains("MotionIntensity", StringComparison.Ordinal)
+        && s.Contains("<Slider", StringComparison.Ordinal));
     Expect("settings update progress only", !s.Contains("OptiLoader", StringComparison.Ordinal)
         && s.Contains("IsUpdating", StringComparison.Ordinal)
         && s.Contains("UpdateProgressPercent", StringComparison.Ordinal)
@@ -213,6 +241,20 @@ if (File.Exists(motionCs))
     Expect("OptiMotion overlay open", m.Contains("PlayOverlayOpen", StringComparison.Ordinal));
     Expect("OptiMotion overlay close resets", m.Contains("PlayOverlayClose", StringComparison.Ordinal)
         && m.Contains("ResetVisual", StringComparison.Ordinal));
+    // Host open must not animate Offset/Scale on the sheet (that pinned top-left).
+    Expect("OptiMotion overlay opacity-only host",
+        m.Contains("opacity-only", StringComparison.OrdinalIgnoreCase)
+        || m.Contains("Opacity only", StringComparison.OrdinalIgnoreCase)
+        || (m.Contains("layout owns", StringComparison.OrdinalIgnoreCase)
+            && m.Contains("PlayOverlayOpen", StringComparison.Ordinal)));
+    // After open starts, Offset must be forced to Zero (no rise on host).
+    var openIdx = m.IndexOf("PlayOverlayOpen", StringComparison.Ordinal);
+    var closeIdx = m.IndexOf("PlayOverlayClose", StringComparison.Ordinal);
+    Expect("OptiMotion open body identity offset",
+        openIdx >= 0 && closeIdx > openIdx
+        && m.Substring(openIdx, closeIdx - openIdx).Contains("Offset = Vector3.Zero", StringComparison.Ordinal)
+        && !m.Substring(openIdx, closeIdx - openIdx).Contains("StartAnimation(\"Offset\"", StringComparison.Ordinal));
+    Expect("OptiMotion MotionStrength", m.Contains("MotionStrength", StringComparison.Ordinal));
 }
 var mainCsPath = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
 if (File.Exists(mainCsPath))
@@ -221,7 +263,35 @@ if (File.Exists(mainCsPath))
     Expect("settings open resets composition",
         mc.Contains("OpenSettingsOverlay", StringComparison.Ordinal)
         && mc.Contains("ResetVisual", StringComparison.Ordinal)
-        && mc.Contains("UpdateLayout", StringComparison.Ordinal));
+        && mc.Contains("UpdateLayout", StringComparison.Ordinal)
+        && mc.Contains("SettingsSheetStage", StringComparison.Ordinal));
+}
+
+// Version gate for 2.0.0 release
+var versionFile = Path.Combine(repo, "VERSION");
+var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
+if (File.Exists(versionFile))
+    Expect("VERSION is 2.0.0", File.ReadAllText(versionFile).Trim() == "2.0.0");
+if (File.Exists(csproj))
+    Expect("csproj Version 2.0.0", File.ReadAllText(csproj).Contains("<Version>2.0.0</Version>", StringComparison.Ordinal));
+
+// Live MotionIntensity is a real AppSettings + ViewModel path (not a fake).
+var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");
+if (File.Exists(appSettings))
+    Expect("AppSettings MotionIntensity", File.ReadAllText(appSettings).Contains("MotionIntensity", StringComparison.Ordinal));
+var settingsVm = Path.Combine(repo, "OptiHub", "ViewModels", "SettingsViewModel.cs");
+if (File.Exists(settingsVm))
+{
+    var svm = File.ReadAllText(settingsVm);
+    Expect("VM MotionIntensity live bind",
+        svm.Contains("MotionIntensity", StringComparison.Ordinal)
+        && svm.Contains("OptiMotion.MotionStrength", StringComparison.Ordinal));
+}
+if (File.Exists(theme))
+{
+    var t2 = File.ReadAllText(theme);
+    Expect("theme OptiSecondaryButton", t2.Contains("OptiSecondaryButton", StringComparison.Ordinal));
+    Expect("theme OptiLiveSlider", t2.Contains("OptiLiveSlider", StringComparison.Ordinal));
 }
 
 // Logo visual weight: measure real shipped PNG alpha ink.

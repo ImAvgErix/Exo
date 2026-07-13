@@ -6,25 +6,25 @@
     Loaded="UserControl_Loaded">
 
     <!--
-      Premium sheet: clear vertical stack, section title on its own line,
-      controls never collide with close. Same OptiCard chrome as home tiles.
+      Premium centered sheet. Host is never composition-Offset/Scaled —
+      only row content staggers. Layout alignment keeps this card center-screen.
     -->
     <Border x:Name="SheetRoot"
-            Width="420"
+            Width="400"
             HorizontalAlignment="Center"
+            VerticalAlignment="Center"
             Background="{ThemeResource OptiCardFillBrush}"
             BorderBrush="{ThemeResource OptiCardStrokeBrush}"
             BorderThickness="1"
             CornerRadius="{StaticResource OptiCardRadius}"
-            Padding="20,16,20,18">
+            Padding="22,18,22,20">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Top bar: only close — no title fight -->
-            <Grid Height="32" Margin="0,0,0,8">
+            <Grid Height="32" Margin="0,0,0,10">
                 <Button x:Name="CloseButton"
                         Style="{StaticResource OptiIconButton}"
                         AutomationProperties.Name="Close settings"
@@ -38,7 +38,7 @@
 
             <StackPanel x:Name="RowsHost" Grid.Row="1" Spacing="0">
 
-                <!-- Theme: big current-mode label + clear "tap to switch" hint -->
+                <!-- Theme: current mode large + clear switch hint -->
                 <StackPanel x:Name="RowAppearance" Spacing="10">
                     <TextBlock Text="Appearance"
                                FontFamily="{StaticResource OptiUiFontSemiBold}"
@@ -59,14 +59,50 @@
                             <TextBlock Text="{x:Bind ViewModel.ThemeSwitchHint, Mode=OneWay}"
                                        FontFamily="{StaticResource OptiUiFont}"
                                        FontSize="12"
-                                       Opacity="0.7"
+                                       Opacity="0.72"
                                        HorizontalAlignment="Center"
                                        Foreground="{ThemeResource OptiThemeToggleTextBrush}" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
 
-                <Rectangle x:Name="Div1" Height="1" Margin="0,16" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.75" />
+                <Rectangle x:Name="Div1" Height="1" Margin="0,16" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.7" />
+
+                <!-- Live continuous control (not a binary toggle) -->
+                <StackPanel x:Name="RowMotion" Spacing="10">
+                    <Grid>
+                        <TextBlock Text="Motion"
+                                   FontFamily="{StaticResource OptiUiFontSemiBold}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.MotionIntensityLabel, Mode=OneWay}"
+                                   FontFamily="{StaticResource OptiUiFontSemiBold}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Center"
+                                   Foreground="{ThemeResource OptiSecondaryTextBrush}" />
+                    </Grid>
+                    <Slider x:Name="MotionSlider"
+                            Style="{StaticResource OptiLiveSlider}"
+                            Minimum="0"
+                            Maximum="100"
+                            StepFrequency="1"
+                            SmallChange="1"
+                            LargeChange="10"
+                            TickFrequency="25"
+                            TickPlacement="None"
+                            IsThumbToolTipEnabled="False"
+                            Value="{x:Bind ViewModel.MotionIntensity, Mode=TwoWay}"
+                            AutomationProperties.Name="Motion intensity" />
+                    <TextBlock Text="Entrance travel for home cards and sheets. Live — drag to feel it."
+                               Style="{StaticResource OptiCaption}"
+                               TextWrapping="WrapWholeWords" />
+                </StackPanel>
+
+                <Rectangle x:Name="Div2" Height="1" Margin="0,16" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.7" />
 
                 <!-- Updates -->
                 <StackPanel x:Name="RowUpdates" Spacing="12">
@@ -116,9 +152,8 @@
                                AutomationProperties.LiveSetting="Polite" />
                 </StackPanel>
 
-                <Rectangle x:Name="Div2" Height="1" Margin="0,16" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.75" />
+                <Rectangle x:Name="Div3" Height="1" Margin="0,16" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.7" />
 
-                <!-- App version -->
                 <Grid x:Name="RowVersion" MinHeight="36">
                     <TextBlock Text="App version"
                                FontFamily="{StaticResource OptiUiFontSemiBold}"
@@ -136,9 +171,9 @@
                                Foreground="{ThemeResource OptiPrimaryTextBrush}" />
                 </Grid>
 
-                <Rectangle x:Name="Div3" Height="1" Margin="0,16" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.75" />
+                <Rectangle x:Name="Div4" Height="1" Margin="0,16" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.7" />
 
-                <!-- Support -->
+                <!-- Secondary buttons: deliberate stroke → soft fill hover (Marcel craft) -->
                 <StackPanel x:Name="RowSupport" Spacing="12">
                     <TextBlock Text="Support"
                                FontFamily="{StaticResource OptiUiFontSemiBold}"
@@ -150,7 +185,7 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Button Style="{StaticResource OptiWhiteButton}"
+                        <Button Style="{StaticResource OptiSecondaryButton}"
                                 Content="Report issue"
                                 AutomationProperties.Name="Report OptiHub issue on GitHub"
                                 HorizontalAlignment="Stretch"

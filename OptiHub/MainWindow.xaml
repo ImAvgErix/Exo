@@ -100,30 +100,37 @@
                IsTabStop="True"
                IsNavigationStackEnabled="False" />
 
-        <!-- Settings modal: home stays underneath, scrim blurs/dims it -->
+        <!--
+          Settings modal: full-bleed stage so Center alignment is always against the shell.
+          Sheet host is NEVER composition-Offset/Scaled — layout alone centers it.
+        -->
         <Grid x:Name="SettingsOverlay"
               Grid.RowSpan="2"
               Visibility="Collapsed"
               Canvas.ZIndex="100">
-            <!-- Dim + acrylic blur over the shell -->
             <Border x:Name="SettingsScrim"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Stretch"
                     Tapped="SettingsScrim_Tapped">
                 <Border.Background>
                     <AcrylicBrush TintColor="#000000"
-                                  TintOpacity="0.55"
-                                  TintLuminosityOpacity="0.65"
-                                  FallbackColor="#E6000000" />
+                                  TintOpacity="0.58"
+                                  TintLuminosityOpacity="0.7"
+                                  FallbackColor="#E8000000" />
                 </Border.Background>
             </Border>
 
-            <controls:SettingsSheet x:Name="SettingsSheetHost"
-                                    MaxWidth="520"
-                                    Margin="28,22"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    CloseRequested="SettingsSheet_CloseRequested" />
+            <!-- Stretch stage forces H/V Center on the sheet relative to full window -->
+            <Grid x:Name="SettingsSheetStage"
+                  HorizontalAlignment="Stretch"
+                  VerticalAlignment="Stretch">
+                <controls:SettingsSheet x:Name="SettingsSheetHost"
+                                        MaxWidth="440"
+                                        Margin="32"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        CloseRequested="SettingsSheet_CloseRequested" />
+            </Grid>
         </Grid>
     </Grid>
 </Window>

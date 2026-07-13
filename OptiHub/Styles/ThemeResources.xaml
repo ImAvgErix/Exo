@@ -578,6 +578,128 @@
         </Setter>
     </Style>
 
+    <!--
+      Premium secondary (Marcel craft): soft fill + deliberate stroke in rest,
+      lift on hover without wiping fill, press scale. Gradient-ish via layered soft brush.
+    -->
+    <Style x:Key="OptiSecondaryButton" TargetType="Button">
+        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
+        <Setter Property="Padding" Value="16,11" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="ClickMode" Value="Press" />
+        <Setter Property="Background" Value="{ThemeResource OptiSecondaryButtonFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource OptiSecondaryButtonStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid x:Name="Root"
+                          RenderTransformOrigin="0.5,0.5"
+                          Background="{TemplateBinding Background}"
+                          CornerRadius="{TemplateBinding CornerRadius}"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}">
+                        <Grid.RenderTransform>
+                            <CompositeTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
+                        </Grid.RenderTransform>
+                        <!-- Soft top highlight (secondary-button craft) -->
+                        <Border x:Name="Sheen"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                Margin="1"
+                                IsHitTestVisible="False"
+                                Opacity="0.55"
+                                Background="{ThemeResource OptiSecondaryButtonSheenBrush}" />
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Content="{TemplateBinding Content}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          FontFamily="{TemplateBinding FontFamily}"
+                                          FontSize="{TemplateBinding FontSize}"
+                                          FontWeight="{TemplateBinding FontWeight}"
+                                          Padding="{TemplateBinding Padding}" />
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
+                                                         To="1" Duration="0:0:0.3">
+                                            <DoubleAnimation.EasingFunction>
+                                                <BackEase EasingMode="EaseOut" Amplitude="0.22" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
+                                                         To="1" Duration="0:0:0.3">
+                                            <DoubleAnimation.EasingFunction>
+                                                <BackEase EasingMode="EaseOut" Amplitude="0.22" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Opacity" Value="0.96" />
+                                        <Setter Target="Sheen.Opacity" Value="0.75" />
+                                    </VisualState.Setters>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
+                                                         To="1.015" Duration="0:0:0.16">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
+                                                         To="1.015" Duration="0:0:0.16">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
+                                                         To="0.97" Duration="0:0:0.07" />
+                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
+                                                         To="0.97" Duration="0:0:0.07" />
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                                         To="0.9" Duration="0:0:0.07" />
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Opacity" Value="0.45" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Live continuous slider (premium track + thumb) -->
+    <Style x:Key="OptiLiveSlider" TargetType="Slider">
+        <Setter Property="Foreground" Value="{ThemeResource OptiAccentBrush}" />
+        <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
+        <Setter Property="Minimum" Value="0" />
+        <Setter Property="Maximum" Value="100" />
+        <Setter Property="StepFrequency" Value="1" />
+        <Setter Property="IsThumbToolTipEnabled" Value="False" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+
     <!-- Solid white CTA (e.g. Report issue) — always white fill + dark label in both themes -->
     <Style x:Key="OptiWhiteButton" TargetType="Button" BasedOn="{StaticResource OptiQuietButton}">
         <Setter Property="Background" Value="#FFFFFF" />

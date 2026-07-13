@@ -45,6 +45,10 @@
                     <SolidColorBrush x:Key="OptiThemeToggleFillBrush" Color="#0A0A0A" />
                     <SolidColorBrush x:Key="OptiThemeToggleTextBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="OptiThemeToggleStrokeBrush" Color="#55FFFFFF" />
+                    <!-- Secondary button (Marcel): soft fill + deliberate stroke -->
+                    <SolidColorBrush x:Key="OptiSecondaryButtonFillBrush" Color="#141414" />
+                    <SolidColorBrush x:Key="OptiSecondaryButtonStrokeBrush" Color="#38FFFFFF" />
+                    <SolidColorBrush x:Key="OptiSecondaryButtonSheenBrush" Color="#12FFFFFF" />
                 </ResourceDictionary>
                 <!-- Warm cream / beige light mode for easier long-session reading -->
                 <ResourceDictionary x:Key="Light">
@@ -80,6 +84,9 @@
                     <SolidColorBrush x:Key="OptiThemeToggleFillBrush" Color="#FBF7F0" />
                     <SolidColorBrush x:Key="OptiThemeToggleTextBrush" Color="#1C1712" />
                     <SolidColorBrush x:Key="OptiThemeToggleStrokeBrush" Color="#993D3429" />
+                    <SolidColorBrush x:Key="OptiSecondaryButtonFillBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="OptiSecondaryButtonStrokeBrush" Color="#333D3429" />
+                    <SolidColorBrush x:Key="OptiSecondaryButtonSheenBrush" Color="#F7F7F7" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Default">
                     <Color x:Key="SystemAccentColor">#F5F5F4</Color>
@@ -104,6 +111,9 @@
                     <SolidColorBrush x:Key="OptiThemeToggleFillBrush" Color="#0A0A0A" />
                     <SolidColorBrush x:Key="OptiThemeToggleTextBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="OptiThemeToggleStrokeBrush" Color="#55FFFFFF" />
+                    <SolidColorBrush x:Key="OptiSecondaryButtonFillBrush" Color="#141414" />
+                    <SolidColorBrush x:Key="OptiSecondaryButtonStrokeBrush" Color="#38FFFFFF" />
+                    <SolidColorBrush x:Key="OptiSecondaryButtonSheenBrush" Color="#12FFFFFF" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
