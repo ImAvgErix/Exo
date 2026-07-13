@@ -130,7 +130,7 @@ if (File.Exists(loaderCs))
 {
     var lc = File.ReadAllText(loaderCs);
     Expect("OptiLoader IsActive", lc.Contains("IsActiveProperty", StringComparison.Ordinal));
-    Expect("OptiLoader spin storyboard", lc.Contains("OrbitRotate", StringComparison.Ordinal));
+    Expect("OptiLoader signal bars", lc.Contains("Bar0Scale", StringComparison.Ordinal) && lc.Contains("ScanX", StringComparison.Ordinal));
 }
 
 // Logo visual weight: measure real shipped PNG alpha ink.

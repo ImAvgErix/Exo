@@ -246,6 +246,9 @@
 
 
 
+
+## 1.9.73
+- OptiLoader: signal-meter bars + scan sweep (unique, not a stock spinner)
 ## 1.9.72
 - Unique OptiLoader (orbiting triad + pulse) replaces stock ProgressRing on all module pages
 ## 1.9.71

@@ -5,13 +5,12 @@ using Microsoft.UI.Xaml.Media.Animation;
 namespace OptiHub.Views.Controls;
 
 /// <summary>
-/// OptiHub triad spinner — three accent dots orbiting with a soft core pulse.
-/// Bind <see cref="IsActive"/> like a ProgressRing.
+/// OptiHub signal-meter loader — four phase-shifted bars + a soft scan sweep.
+/// Bind <see cref="IsActive"/> like a ProgressRing (not a stock spinner).
 /// </summary>
 public sealed partial class OptiLoader : UserControl
 {
-    private Storyboard? _spin;
-    private Storyboard? _pulse;
+    private Storyboard? _wave;
     private bool _running;
 
     public static readonly DependencyProperty IsActiveProperty =
@@ -32,11 +31,10 @@ public sealed partial class OptiLoader : UserControl
         InitializeComponent();
         Loaded += (_, _) =>
         {
-            EnsureStoryboards();
+            EnsureStoryboard();
             if (IsActive) Start();
         };
         Unloaded += (_, _) => Stop();
-        ActualThemeChanged += (_, _) => { /* brushes re-resolve via ThemeResource */ };
     }
 
     private static void OnIsActiveChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -46,47 +44,86 @@ public sealed partial class OptiLoader : UserControl
         else loader.Stop();
     }
 
-    private void EnsureStoryboards()
+    private void EnsureStoryboard()
     {
-        if (_spin is not null) return;
+        if (_wave is not null) return;
 
-        // Continuous spin — ~1.1s per turn, linear (steady, not “busy AI spinner”)
-        _spin = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
-        var rotate = new DoubleAnimation
+        _wave = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
+
+        // Each bar: scaleY 1 → 3.4 → 1 (bottom-anchored “signal” bounce)
+        AddBarWave(_wave, Bar0Scale, delayMs: 0);
+        AddBarWave(_wave, Bar1Scale, delayMs: 110);
+        AddBarWave(_wave, Bar2Scale, delayMs: 220);
+        AddBarWave(_wave, Bar3Scale, delayMs: 330);
+
+        // Soft opacity breathe per bar (slightly offset)
+        AddBarOpacity(_wave, Bar0, 0);
+        AddBarOpacity(_wave, Bar1, 110);
+        AddBarOpacity(_wave, Bar2, 220);
+        AddBarOpacity(_wave, Bar3, 330);
+
+        // Scan tick: ease across the plate
+        var scan = new DoubleAnimationUsingKeyFrames
         {
-            From = 0,
-            To = 360,
-            Duration = TimeSpan.FromMilliseconds(1100),
             RepeatBehavior = RepeatBehavior.Forever,
             EnableDependentAnimation = true
         };
-        Storyboard.SetTarget(rotate, OrbitRotate);
-        Storyboard.SetTargetProperty(rotate, "Angle");
-        _spin.Children.Add(rotate);
-
-        // Staggered opacity wave on the three dots (chasing light)
-        _pulse = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
-        AddDotPulse(_pulse, DotA, 0);
-        AddDotPulse(_pulse, DotB, 200);
-        AddDotPulse(_pulse, DotC, 400);
-
-        // Core breath
-        var core = new DoubleAnimation
+        scan.KeyFrames.Add(new DiscreteDoubleKeyFrame
         {
-            From = 0.2,
-            To = 0.75,
-            Duration = TimeSpan.FromMilliseconds(700),
-            AutoReverse = true,
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero),
+            Value = 0
+        });
+        scan.KeyFrames.Add(new EasingDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(900)),
+            Value = 30,
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        });
+        scan.KeyFrames.Add(new DiscreteDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1100)),
+            Value = 0
+        });
+        Storyboard.SetTarget(scan, ScanX);
+        Storyboard.SetTargetProperty(scan, "X");
+        _wave.Children.Add(scan);
+
+        var scanOp = new DoubleAnimationUsingKeyFrames
+        {
             RepeatBehavior = RepeatBehavior.Forever,
-            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
             EnableDependentAnimation = true
         };
-        Storyboard.SetTarget(core, Core);
-        Storyboard.SetTargetProperty(core, "Opacity");
-        _pulse.Children.Add(core);
+        scanOp.KeyFrames.Add(new LinearDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero),
+            Value = 0
+        });
+        scanOp.KeyFrames.Add(new LinearDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(120)),
+            Value = 0.18
+        });
+        scanOp.KeyFrames.Add(new LinearDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(780)),
+            Value = 0.18
+        });
+        scanOp.KeyFrames.Add(new LinearDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(900)),
+            Value = 0
+        });
+        scanOp.KeyFrames.Add(new LinearDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1100)),
+            Value = 0
+        });
+        Storyboard.SetTarget(scanOp, Scan);
+        Storyboard.SetTargetProperty(scanOp, "Opacity");
+        _wave.Children.Add(scanOp);
     }
 
-    private static void AddDotPulse(Storyboard board, UIElement target, int delayMs)
+    private static void AddBarWave(Storyboard board, ScaleTransform scale, int delayMs)
     {
         var anim = new DoubleAnimationUsingKeyFrames
         {
@@ -94,26 +131,63 @@ public sealed partial class OptiLoader : UserControl
             EnableDependentAnimation = true,
             BeginTime = TimeSpan.FromMilliseconds(delayMs)
         };
-        // 0 → 1 → 0.25 over 900ms cycle
+        // Cycle ~720ms: rest → peak → rest
         anim.KeyFrames.Add(new EasingDoubleKeyFrame
         {
             KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero),
-            Value = 0.25,
-            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-        });
-        anim.KeyFrames.Add(new EasingDoubleKeyFrame
-        {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(300)),
             Value = 1.0,
             EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
         });
         anim.KeyFrames.Add(new EasingDoubleKeyFrame
         {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(900)),
-            Value = 0.25,
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(280)),
+            Value = 3.5,
             EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
         });
-        Storyboard.SetTarget(anim, target);
+        anim.KeyFrames.Add(new EasingDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(560)),
+            Value = 1.15,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+        });
+        anim.KeyFrames.Add(new EasingDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(720)),
+            Value = 1.0,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+        });
+        Storyboard.SetTarget(anim, scale);
+        Storyboard.SetTargetProperty(anim, "ScaleY");
+        board.Children.Add(anim);
+    }
+
+    private static void AddBarOpacity(Storyboard board, UIElement bar, int delayMs)
+    {
+        var anim = new DoubleAnimationUsingKeyFrames
+        {
+            RepeatBehavior = RepeatBehavior.Forever,
+            EnableDependentAnimation = true,
+            BeginTime = TimeSpan.FromMilliseconds(delayMs)
+        };
+        anim.KeyFrames.Add(new EasingDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero),
+            Value = 0.4,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+        });
+        anim.KeyFrames.Add(new EasingDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(280)),
+            Value = 1.0,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+        });
+        anim.KeyFrames.Add(new EasingDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(720)),
+            Value = 0.4,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+        });
+        Storyboard.SetTarget(anim, bar);
         Storyboard.SetTargetProperty(anim, "Opacity");
         board.Children.Add(anim);
     }
@@ -121,23 +195,27 @@ public sealed partial class OptiLoader : UserControl
     private void Start()
     {
         if (_running) return;
-        if (!IsLoaded)
-        {
-            // Loaded handler will start once tree is ready
-            return;
-        }
-        EnsureStoryboards();
+        if (!IsLoaded) return;
+        EnsureStoryboard();
         Visibility = Visibility.Visible;
-        _spin?.Begin();
-        _pulse?.Begin();
+        _wave?.Begin();
         _running = true;
     }
 
     private void Stop()
     {
-        if (!_running && _spin is null) return;
-        try { _spin?.Stop(); } catch { }
-        try { _pulse?.Stop(); } catch { }
+        if (!_running && _wave is null) return;
+        try { _wave?.Stop(); } catch { }
+        // Reset transforms so next start is clean
+        try
+        {
+            if (Bar0Scale is not null) Bar0Scale.ScaleY = 1;
+            if (Bar1Scale is not null) Bar1Scale.ScaleY = 1;
+            if (Bar2Scale is not null) Bar2Scale.ScaleY = 1;
+            if (Bar3Scale is not null) Bar3Scale.ScaleY = 1;
+            if (ScanX is not null) ScanX.X = 0;
+        }
+        catch { }
         _running = false;
     }
 }
