@@ -6,7 +6,6 @@
     xmlns:viewModels="using:OptiHub.ViewModels"
     Background="Transparent">
 
-    <!-- Full-frame centered composition: fills the fixed window without looking sparse. -->
     <Grid x:Name="PageRoot" Padding="40,28,40,32" Loaded="PageRoot_Loaded">
         <Grid MaxWidth="1000"
               HorizontalAlignment="Stretch"
@@ -30,7 +29,7 @@
                            FontSize="34"
                            LineHeight="42"
                            HorizontalAlignment="Center" />
-                <TextBlock Text="Pick a target. Live status is verified when you open it."
+                <TextBlock Text="Status is checked here. Open a card to change settings."
                            Style="{StaticResource OptiTaglineSupport}"
                            FontSize="14"
                            HorizontalAlignment="Center" />
@@ -68,8 +67,7 @@
                                         Padding="18,16">
                                     <StackPanel HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
-                                                Spacing="12">
-                                        <!-- Equal well for every product mark (AMD/Internet match Discord/Steam mass). -->
+                                                Spacing="10">
                                         <Border Width="80"
                                                 Height="80"
                                                 CornerRadius="20"
@@ -92,12 +90,14 @@
                                                    TextAlignment="Center"
                                                    TextWrapping="Wrap"
                                                    MaxWidth="250" />
-                                        <TextBlock Text="Coming soon"
+                                        <!-- Status chip: Applied / Not applied / Coming soon / … -->
+                                        <TextBlock Text="{x:Bind StatusLabel, Mode=OneWay}"
                                                    FontFamily="{StaticResource OptiUiFont}"
                                                    FontSize="12"
+                                                   FontWeight="SemiBold"
                                                    Foreground="{ThemeResource OptiMutedTextBrush}"
                                                    TextAlignment="Center"
-                                                   Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                   Visibility="{x:Bind HasStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     </StackPanel>
                                 </Border>
                             </Button>

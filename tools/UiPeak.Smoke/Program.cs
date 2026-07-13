@@ -65,6 +65,15 @@ if (File.Exists(dash))
     Expect("hero entrance panel", d.Contains("HeroPanel", StringComparison.Ordinal));
     Expect("equal logo well", d.Contains("Width=\"56\"", StringComparison.Ordinal) && d.Contains("Height=\"56\"", StringComparison.Ordinal));
     Expect("stretch uniform logos", d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal));
+    Expect("status chips", d.Contains("StatusLabel", StringComparison.Ordinal));
+    Expect("plain status copy", d.Contains("Status is checked here", StringComparison.Ordinal));
+}
+if (File.Exists(theme))
+{
+    var t0 = File.ReadAllText(theme);
+    Expect("click on press", t0.Contains("ClickMode\" Value=\"Press\"", StringComparison.Ordinal)
+        || t0.Contains("ClickMode\" Value=\"Press", StringComparison.Ordinal)
+        || t0.Contains("Value=\"Press\"", StringComparison.Ordinal) && t0.Contains("ClickMode", StringComparison.Ordinal));
 }
 if (File.Exists(settings))
 {
@@ -109,6 +118,8 @@ foreach (var page in new[]
     var x = File.ReadAllText(p);
     Expect(page + " CTA", x.Contains("OptiPrimaryButton", StringComparison.Ordinal) || x.Contains("OptiQuietButton", StringComparison.Ordinal));
     Expect(page + " page padding", x.Contains("OptiPagePadding", StringComparison.Ordinal));
+    if (page.Contains("NvidiaPanel", StringComparison.Ordinal))
+        Expect(page + " apply label", x.Contains("ApplyLabel", StringComparison.Ordinal) && x.Contains("ChangeHint", StringComparison.Ordinal));
 }
 
 // Logo visual weight: measure real shipped PNG alpha ink.

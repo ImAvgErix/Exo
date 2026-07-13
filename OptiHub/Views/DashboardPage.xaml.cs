@@ -52,7 +52,8 @@ public sealed partial class DashboardPage : Page
     private void PageRoot_Loaded(object sender, RoutedEventArgs e) => PlayStaggerEntrance();
 
     /// <summary>
-    /// Kinetics-style stagger entrance: hero, then cards rise with ~90ms delay each.
+    /// Soft entrance: hero fades in; cards only slide (never zero opacity —
+    /// that fought status bindings and made first click feel dead).
     /// </summary>
     private void PlayStaggerEntrance()
     {
@@ -61,7 +62,7 @@ public sealed partial class DashboardPage : Page
         var storyboard = new Storyboard();
 
         if (HeroPanel is not null && HeroTransform is not null)
-            AddFadeSlide(storyboard, HeroPanel, HeroTransform, delayMs: 0, fromY: 14);
+            AddFadeSlide(storyboard, HeroPanel, HeroTransform, delayMs: 0, fromY: 14, fade: true);
 
         var cards = new List<UIElement>();
         if (CardList is not null)
@@ -70,7 +71,6 @@ public sealed partial class DashboardPage : Page
         for (var i = 0; i < cards.Count; i++)
         {
             var el = cards[i];
-            el.Opacity = 0;
             if (el.RenderTransform is not CompositeTransform ct)
             {
                 ct = new CompositeTransform { TranslateY = 16 };
@@ -82,7 +82,8 @@ public sealed partial class DashboardPage : Page
                 ct.TranslateY = 16;
             }
 
-            AddFadeSlide(storyboard, el, ct, delayMs: 80 + i * 90, fromY: 16);
+            // Slide only — keep opacity from IsComingSoon binding / full opacity.
+            AddFadeSlide(storyboard, el, ct, delayMs: 60 + i * 70, fromY: 16, fade: false);
         }
 
         if (storyboard.Children.Count == 0) return;
@@ -90,30 +91,34 @@ public sealed partial class DashboardPage : Page
         storyboard.Begin();
     }
 
-    private static void AddFadeSlide(Storyboard board, UIElement target, CompositeTransform transform, int delayMs, double fromY)
+    private static void AddFadeSlide(
+        Storyboard board, UIElement target, CompositeTransform transform, int delayMs, double fromY, bool fade)
     {
         var delay = TimeSpan.FromMilliseconds(delayMs);
 
-        var fade = new DoubleAnimation
+        if (fade)
         {
-            From = 0,
-            To = 1,
-            Duration = TimeSpan.FromMilliseconds(420),
-            BeginTime = delay,
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        Storyboard.SetTarget(fade, target);
-        Storyboard.SetTargetProperty(fade, "Opacity");
-        board.Children.Add(fade);
+            var fadeAnim = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = TimeSpan.FromMilliseconds(420),
+                BeginTime = delay,
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(fadeAnim, target);
+            Storyboard.SetTargetProperty(fadeAnim, "Opacity");
+            board.Children.Add(fadeAnim);
+        }
 
         transform.TranslateY = fromY;
         var slide = new DoubleAnimation
         {
             From = fromY,
             To = 0,
-            Duration = TimeSpan.FromMilliseconds(480),
+            Duration = TimeSpan.FromMilliseconds(420),
             BeginTime = delay,
-            EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 }
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
         Storyboard.SetTarget(slide, transform);
         Storyboard.SetTargetProperty(slide, "TranslateY");

@@ -27,6 +27,9 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
     [ObservableProperty] private string? _selectedScaling;
     [ObservableProperty] private bool _canApply;
     [ObservableProperty] private bool _isApplying;
+    [ObservableProperty] private string _applyLabel = "Up to date";
+    [ObservableProperty] private string _changeHint = string.Empty;
+    [ObservableProperty] private bool _hasChangeHint;
 
     // Snapshot of values loaded from driver — only Apply diffs.
     public string LoadedResolution { get; private set; } = "";
@@ -158,11 +161,45 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
     private void UpdateCanApply()
     {
         // Never gate on IsApplying (that left Apply stuck gray after apply).
-        var dirty = IsModeDirty() ||
-                    !string.Equals(SelectedDepth, LoadedDepth, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(SelectedColorRange, LoadedColorRange, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(SelectedScaling, LoadedScaling, StringComparison.OrdinalIgnoreCase);
+        var dirty = IsModeDirty() || IsDepthDirty() || IsColorRangeDirty() || IsScalingDirty();
         CanApply = dirty;
+        ApplyLabel = dirty ? "Apply" : "Up to date";
+        ChangeHint = BuildChangeHint();
+        HasChangeHint = !string.IsNullOrWhiteSpace(ChangeHint);
+    }
+
+    /// <summary>Plain list of pending changes for the display card.</summary>
+    public string BuildChangeHint()
+    {
+        var parts = new List<string>();
+        if (IsModeDirty() && TryGetSelectedMode(out var w, out var h, out var hz))
+            parts.Add($"{w}×{h} @ {hz} Hz");
+        else if (IsModeDirty() && !string.IsNullOrWhiteSpace(SelectedResolution))
+            parts.Add($"{SelectedResolution} · {SelectedRefresh}".Trim(' ', '·'));
+
+        if (IsDepthDirty())
+            parts.Add(SelectedDepth!);
+        if (IsColorRangeDirty())
+            parts.Add(SelectedColorRange!);
+        if (IsScalingDirty())
+            parts.Add(SelectedScaling!);
+
+        return parts.Count == 0 ? string.Empty : "Will change: " + string.Join(", ", parts);
+    }
+
+    /// <summary>Labels for fields that will be written (for apply success message).</summary>
+    public IReadOnlyList<string> PendingChangeLabels()
+    {
+        var parts = new List<string>();
+        if (IsModeDirty() && TryGetSelectedMode(out var w, out var h, out var hz))
+            parts.Add($"{w}×{h} @ {hz} Hz");
+        if (IsDepthDirty())
+            parts.Add(SelectedDepth!);
+        if (IsColorRangeDirty())
+            parts.Add(SelectedColorRange!);
+        if (IsScalingDirty())
+            parts.Add(SelectedScaling!);
+        return parts;
     }
 
     public bool IsModeDirty()

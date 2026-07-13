@@ -41,12 +41,108 @@ public partial class DashboardViewModel : ObservableObject
         NavigateToOptimizer?.Invoke(this, id);
     }
 
-    public Task RefreshStatesAsync(CancellationToken ct = default)
+    /// <summary>Fast status chips for available modules (plain labels only).</summary>
+    public async Task RefreshStatesAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+
         foreach (var card in Cards)
-            card.IsLoadingState = false;
-        return Task.CompletedTask;
+        {
+            if (card.IsComingSoon)
+            {
+                card.SetStatus("Coming soon", loading: false);
+                continue;
+            }
+
+            card.SetStatus("Checking…", loading: true);
+        }
+
+        var tasks = Cards
+            .Where(c => !c.IsComingSoon)
+            .Select(c => RefreshOneAsync(c, ct))
+            .ToArray();
+
+        if (tasks.Length > 0)
+            await Task.WhenAll(tasks).ConfigureAwait(true);
+    }
+
+    private async Task RefreshOneAsync(OptimizerCardViewModel card, CancellationToken ct)
+    {
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            var label = card.Definition.Id switch
+            {
+                "discord" => await DetectOptimizerChipAsync(
+                    () => _services.OptimizerState.DetectDiscordAsync(ct, fastOnly: true), ct),
+                "steam" => await DetectOptimizerChipAsync(
+                    () => _services.OptimizerState.DetectSteamAsync(ct, fastOnly: true), ct),
+                "nvidia" => await DetectOptimizerChipAsync(
+                    () => _services.OptimizerState.DetectNvidiaAsync(ct, fastOnly: true), ct),
+                "internet" => await DetectInternetChipAsync(ct),
+                _ => "Ready"
+            };
+            card.SetStatus(label, loading: false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // leaving
+        }
+        catch
+        {
+            card.SetStatus("Unavailable", loading: false);
+        }
+    }
+
+    private static async Task<string> DetectOptimizerChipAsync(
+        Func<Task<OptimizerStateInfo>> detect,
+        CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var state = await detect().ConfigureAwait(false);
+        return ToChip(state);
+    }
+
+    private async Task<string> DetectInternetChipAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var snap = await _services.Network.ProbeAsync(ct).ConfigureAwait(false);
+        if (!snap.ProbeOk)
+            return "Unavailable";
+
+        if (snap.ActivePreset is NetworkPreset.LowestLatency)
+            return snap.Features.Count > 0 && snap.Features.All(f => f.IsOk)
+                ? "Latency set"
+                : "Check settings";
+        if (snap.ActivePreset is NetworkPreset.HighestThroughput)
+            return snap.Features.Count > 0 && snap.Features.All(f => f.IsOk)
+                ? "Download set"
+                : "Check settings";
+
+        if (snap.Media.EthernetInUse || snap.Media.EthernetUp)
+            return "Ready";
+        if (snap.Media.WifiUp)
+            return "Wi‑Fi";
+        return "Ready";
+    }
+
+    /// <summary>Map detect output to short, normal labels (no marketing fluff).</summary>
+    internal static string ToChip(OptimizerStateInfo state)
+    {
+        var text = state.StatusText ?? string.Empty;
+        if (text.Contains("Not installed", StringComparison.OrdinalIgnoreCase))
+            return "Not installed";
+        if (text.Contains("Incomplete", StringComparison.OrdinalIgnoreCase))
+            return "Incomplete";
+        if (state.IsApplied ||
+            text.Contains("All applied", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("Applied", StringComparison.OrdinalIgnoreCase))
+            return "Applied";
+        if (text.Contains("Not applied", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(text))
+            return "Not applied";
+        // Keep detect wording short if already short.
+        return text.Length <= 18 ? text : "Not applied";
     }
 
     private static OptimizerCardViewModel Card(
@@ -69,9 +165,22 @@ public partial class OptimizerCardViewModel : ObservableObject
 
     [ObservableProperty] private bool _isLoadingState;
     [ObservableProperty] private bool _isComingSoon;
+    [ObservableProperty] private string _statusLabel = string.Empty;
+    [ObservableProperty] private bool _hasStatus;
 
     public void InitializePresentation()
     {
         IsComingSoon = Definition.Status == OptimizerStatus.ComingSoon;
+        if (IsComingSoon)
+            SetStatus("Coming soon", loading: false);
+        else
+            SetStatus("Checking…", loading: true);
+    }
+
+    public void SetStatus(string label, bool loading)
+    {
+        IsLoadingState = loading;
+        StatusLabel = label ?? string.Empty;
+        HasStatus = !string.IsNullOrWhiteSpace(StatusLabel);
     }
 }

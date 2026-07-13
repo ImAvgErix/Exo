@@ -181,6 +181,8 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="MinHeight" Value="42" />
+        <Setter Property="ClickMode" Value="Press" />
+        <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="Background" Value="{ThemeResource OptiAccentBrush}" />
         <Setter Property="Foreground" Value="{ThemeResource OptiOnAccentBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -279,6 +281,8 @@
         <Setter Property="CornerRadius" Value="12" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="MinHeight" Value="42" />
+        <Setter Property="ClickMode" Value="Press" />
+        <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="Background" Value="{ThemeResource OptiQuietButtonFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1.5" />
@@ -371,13 +375,15 @@
         </Setter>
     </Style>
 
-    <!-- Home cards: hover lift + spring press (Kinetics card / Amicro micro-transition feel). -->
+    <!-- Home cards: hover lift + spring press. ClickMode=Press so one hit opens. -->
     <Style x:Key="OptiCardButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="CornerRadius" Value="{StaticResource OptiCardRadius}" />
+        <Setter Property="ClickMode" Value="Press" />
+        <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="HorizontalAlignment" Value="Left" />
         <Setter Property="VerticalAlignment" Value="Top" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -484,6 +490,8 @@
         <Setter Property="Height" Value="32" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="ClickMode" Value="Press" />
+        <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Background" Value="Transparent" />

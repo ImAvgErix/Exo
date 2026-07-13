@@ -240,6 +240,11 @@
 
 
 
+
+## 1.9.67
+- One-click buttons (ClickMode=Press), no nav animation delay
+- Home status chips: Applied / Not applied / Ready / etc. (plain labels)
+- Display Apply: dirty hint, Apply vs Up to date, clear applied feedback
 ## 1.9.66
 - Fix title-bar chrome: Settings/Back live outside the drag region so one click works (no double-hit maximize)
 ## 1.9.65

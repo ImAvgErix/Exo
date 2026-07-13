@@ -225,11 +225,12 @@ public sealed partial class MainWindow : Window
         ContextLogo.Source = AssetPathToImageSourceConverter.Resolve(relativePath);
     }
 
+    // Suppress transitions so navigation feels like one click (no double-press wait).
     private static NavigationTransitionInfo Slide() =>
-        new DrillInNavigationTransitionInfo();
+        new SuppressNavigationTransitionInfo();
 
     private static NavigationTransitionInfo SlideBack() =>
-        new ContinuumNavigationTransitionInfo();
+        new SuppressNavigationTransitionInfo();
 
     public void NavigateHome(bool suppressTransition = false)
     {

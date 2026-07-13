@@ -55,14 +55,20 @@
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{x:Bind Title}"
-                                                           Style="{StaticResource OptiFeatureTitle}"
-                                                           FontSize="15"
-                                                           VerticalAlignment="Center" />
+                                                <StackPanel Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="{x:Bind Title}"
+                                                               Style="{StaticResource OptiFeatureTitle}"
+                                                               FontSize="15" />
+                                                    <TextBlock Text="{x:Bind ChangeHint, Mode=OneWay}"
+                                                               Style="{StaticResource OptiCaption}"
+                                                               FontSize="11.5"
+                                                               TextWrapping="WrapWholeWords"
+                                                               Visibility="{x:Bind HasChangeHint, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                </StackPanel>
                                                 <Button Grid.Column="1"
                                                         Style="{StaticResource OptiPrimaryButton}"
-                                                        Content="Apply"
-                                                        MinWidth="96"
+                                                        Content="{x:Bind ApplyLabel, Mode=OneWay}"
+                                                        MinWidth="108"
                                                         MinHeight="40"
                                                         Padding="14,8"
                                                         Click="ApplyDisplay_Click"

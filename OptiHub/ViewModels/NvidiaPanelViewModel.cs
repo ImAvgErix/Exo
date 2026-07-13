@@ -73,7 +73,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
                 ? $"{Displays.Count} display{(Displays.Count == 1 ? "" : "s")}"
                 : "No displays found";
             HeaderDetail = HasDisplays
-                ? "Pick resolution, refresh, depth, color, or scaling — then Apply."
+                ? "Change a value, then Apply. Only what you change is written."
                 : "Connect a display driven by the NVIDIA GPU.";
         }
         catch (Exception ex)
@@ -93,10 +93,18 @@ public partial class NvidiaPanelViewModel : ObservableObject
     public async Task ApplyDisplaySettingsAsync(NvidiaDisplayColorRowViewModel? row)
     {
         if (row is null || IsBusy) return;
+
+        if (!row.CanApply)
+        {
+            SetMessage("No changes to apply — settings already match.", success: true);
+            return;
+        }
+
+        var pending = row.PendingChangeLabels().ToList();
         IsBusy = true;
         // Do NOT set row.IsApplying — that grayed every ComboBox via IsEnabled binding.
         ProgressPercent = 15;
-        ProgressStatus = $"Applying {row.Title}...";
+        ProgressStatus = $"Applying {row.Title}…";
         try
         {
             var messages = new List<string>();
@@ -107,50 +115,62 @@ public partial class NvidiaPanelViewModel : ObservableObject
             if (row.IsModeDirty() && row.TryGetSelectedMode(out var w, out var h, out var hz))
             {
                 any = true;
-                ProgressStatus = $"Setting {w}x{h}@{hz}...";
+                ProgressStatus = $"Setting {w}×{h} @ {hz} Hz…";
                 ProgressPercent = 30;
                 var (ok, msg) = await _services.NvidiaPanel.SetModeAsync(w, h, hz, row.DisplayId);
-                messages.Add(msg);
+                if (!string.IsNullOrWhiteSpace(msg)) messages.Add(msg);
                 allOk &= ok;
             }
 
             if (row.IsDepthDirty())
             {
                 any = true;
-                ProgressStatus = $"Setting {row.SelectedDepth}...";
+                ProgressStatus = $"Setting {row.SelectedDepth}…";
                 ProgressPercent = 50;
                 var (ok, msg) = await _services.NvidiaPanel.SetColorDepthAsync(row.SelectedDepth!, row.DisplayId);
-                messages.Add(msg);
+                if (!string.IsNullOrWhiteSpace(msg)) messages.Add(msg);
                 allOk &= ok;
             }
 
             if (row.IsColorRangeDirty())
             {
                 any = true;
-                ProgressStatus = $"Setting {row.SelectedColorRange}...";
+                ProgressStatus = $"Setting {row.SelectedColorRange}…";
                 ProgressPercent = 70;
                 var (ok, msg) = await _services.NvidiaPanel.SetColorRangeAsync(row.SelectedColorRange!, row.DisplayId);
-                messages.Add(msg);
+                if (!string.IsNullOrWhiteSpace(msg)) messages.Add(msg);
                 allOk &= ok;
             }
 
             if (row.IsScalingDirty())
             {
                 any = true;
-                ProgressStatus = $"Setting {row.SelectedScaling}...";
+                ProgressStatus = $"Setting {row.SelectedScaling}…";
                 ProgressPercent = 85;
                 var (ok, msg) = await _services.NvidiaPanel.SetScalingAsync(row.SelectedScaling!, row.DisplayId);
-                messages.Add(msg);
+                if (!string.IsNullOrWhiteSpace(msg)) messages.Add(msg);
                 allOk &= ok;
             }
 
             ProgressPercent = 100;
             if (!any)
-                SetMessage("Nothing changed — pick a different value, then Apply.", success: true);
+            {
+                SetMessage("No changes to apply — settings already match.", success: true);
+            }
+            else if (allOk)
+            {
+                var what = pending.Count > 0
+                    ? string.Join(", ", pending)
+                    : "selected settings";
+                SetMessage($"Applied on {row.Title}: {what}.", success: true);
+            }
             else
-                SetMessage(string.Join(" ", messages.Where(m => !string.IsNullOrWhiteSpace(m))), allOk);
-
-            // Soft reload after busy cleared so controls never stay disabled/gray.
+            {
+                var detail = string.Join(" ", messages.Where(m => !string.IsNullOrWhiteSpace(m)));
+                SetMessage(string.IsNullOrWhiteSpace(detail)
+                    ? $"Some settings on {row.Title} did not apply."
+                    : $"Some settings on {row.Title} failed. {detail}", success: false);
+            }
         }
         catch (Exception ex)
         {
