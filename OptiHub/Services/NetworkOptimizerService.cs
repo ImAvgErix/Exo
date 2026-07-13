@@ -176,48 +176,23 @@ public sealed class NetworkOptimizerService
             }
             catch { }
 
+            // Light pings only for status (not feature cards)
             if (gateway is not "—" && System.Net.IPAddress.TryParse(gateway, out _))
                 gwPing = await PingMsAsync(gateway, ct).ConfigureAwait(false);
             netPing = await PingMsAsync("1.1.1.1", ct).ConfigureAwait(false)
                       ?? await PingMsAsync("8.8.8.8", ct).ConfigureAwait(false);
 
-            try
-            {
-                using var resp = await Http.GetAsync("https://ipinfo.io/json", ct).ConfigureAwait(false);
-                if (resp.IsSuccessStatusCode)
-                {
-                    await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                    using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
-                    var root = doc.RootElement;
-                    if (root.TryGetProperty("ip", out var ipEl)) publicIp = ipEl.GetString() ?? "—";
-                    if (root.TryGetProperty("org", out var orgEl)) provider = orgEl.GetString() ?? "—";
-                    var city = root.TryGetProperty("city", out var c) ? c.GetString() : null;
-                    var region = root.TryGetProperty("region", out var r) ? r.GetString() : null;
-                    var country = root.TryGetProperty("country", out var co) ? co.GetString() : null;
-                    area = string.Join(", ", new[] { city, region, country }.Where(s => !string.IsNullOrWhiteSpace(s)));
-                    if (string.IsNullOrWhiteSpace(area)) area = "—";
-                }
-            }
-            catch
-            {
-                try { publicIp = (await Http.GetStringAsync("https://api.ipify.org", ct).ConfigureAwait(false)).Trim(); }
-                catch { }
-            }
-
-            // Compact feature list — IsOk is preset-aware so latency “LSO off” is a pass, not a fail
+            // Feature cards = optimizer knobs only (same idea as Discord/Steam/NVIDIA tiles)
             var lsoOk = lso is null || (latency ? lso == false : lso == true);
             var rscOk = rsc is null || (latency ? rsc == false : rsc == true);
             var autoOk = !autoTuning.Equals("disabled", StringComparison.OrdinalIgnoreCase)
                          && (latency
                              ? autoTuning.Equals("normal", StringComparison.OrdinalIgnoreCase)
                              : !autoTuning.Equals("disabled", StringComparison.OrdinalIgnoreCase));
-            var nagleOk = !latency || nagleOff != false; // latency wants nagle off; throughput doesn't care
-            if (throughput) nagleOk = nagleOff != true;  // throughput wants default (no gaming ACK keys)
+            var nagleOk = !latency || nagleOff != false;
+            if (throughput) nagleOk = nagleOff != true;
 
-            features.Add(Row("Link", $"{connType} · {linkSpeed}", up is not null));
-            features.Add(Row("Adapter", Truncate(adapterDesc, 42), up is not null));
-            features.Add(Row("Task offload", taskOffloadDisabled == true ? "Disabled (bad)" : "On", taskOffloadDisabled != true));
-            // Latency intentionally turns LSO/RSC off — that is a pass, not a fail
+            features.Add(Row("Task offload", taskOffloadDisabled == true ? "Off (bad)" : "On", taskOffloadDisabled != true));
             features.Add(Row("LSO v2",
                 lso == true ? "On" : lso == false ? (latency ? "Off · latency" : "Off") : "—",
                 lsoOk));
@@ -230,13 +205,9 @@ public sealed class NetworkOptimizerService
                 nagleOff == true ? "Gaming keys on" : nagleOff == false ? "Default" : "—",
                 nagleOk));
             features.Add(Row("Net throttle",
-                throttleOff == true ? "Off (best)" : throttleOff == false ? "On" : "—",
+                throttleOff == true ? "Off" : throttleOff == false ? "On" : "—",
                 throttleOff != false));
-            features.Add(Row("Latency",
-                $"GW {FmtMs(gwPing)} · Net {FmtMs(netPing)}",
-                (gwPing is null or < 40) && (netPing is null or < 100)));
-            features.Add(Row("Path", Truncate($"{provider} · {area}", 48), provider is not "—"));
-            features.Add(Row("DNS / MTU", $"{Truncate(dns, 28)} · {mtu}", dns is not "—"));
+            features.Add(Row("QoS reserve", ReadQosReserve(), ReadQosReserve() is "0%" or "—"));
         }
         catch (Exception ex)
         {
@@ -700,6 +671,18 @@ try {
     }
 
     private static string FmtMs(int? ms) => ms is int v ? $"{v} ms" : "—";
+
+    private static string ReadQosReserve()
+    {
+        try
+        {
+            using var k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\Psched");
+            var v = k?.GetValue("NonBestEffortLimit");
+            if (v is int i) return i == 0 ? "0%" : $"{i}%";
+        }
+        catch { }
+        return "—";
+    }
 
     private static string? Match(string text, string pattern)
     {

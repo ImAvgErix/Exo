@@ -1,3 +1,6 @@
+## 1.9.22
+
+- **Feature tiles**: only optimizer features (no path/DNS/adapter/provider/ping cards); same idea on Discord/Steam/NVIDIA rows
 ## 1.9.21
 
 - **Logos**: solid-fill AMD (red plate) + Internet globe matching other hub marks

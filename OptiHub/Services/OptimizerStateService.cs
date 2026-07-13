@@ -378,7 +378,7 @@ public sealed class OptimizerStateService
             }
             catch { /* ignore */ }
         }
-        features.Add(MakeFeature("Launch path", "", launchOk));
+        features.Add(MakeFeature("Quiet launch", "", launchOk));
         features.Add(MakeFeature("Apply record", "", markerOk));
 
         var applied = markerOk && equicordOk && openAsarOk && kernelOk && debloatOk &&
@@ -633,12 +633,14 @@ public sealed class OptimizerStateService
                 Detail = string.Empty,
                 Features = new[]
                 {
-                    MakeFeature("Steam install", "", false)
+                    MakeFeature("Startup quiet", "", false),
+                    MakeFeature("CEF launcher", "", false),
+                    MakeFeature("Cache / download", "", false),
+                    MakeFeature("Client tweaks", "", false),
+                    MakeFeature("WebHelper trim", "", false)
                 }
             };
         }
-
-        features.Add(MakeFeature("Steam install", "", true));
 
         var startupOk = IsSteamStartupQuiet();
 
@@ -1020,11 +1022,10 @@ public sealed class OptimizerStateService
                                gpuName,
                                @"(?i)\bMX\d+\b|\b\d{3,4}M\b"));
 
-        features.Add(MakeFeature("GPU", "", gpuOk));
-        features.Add(MakeFeature("Driver / MSI", "", driverTweaksApplied));
-        features.Add(MakeFeature("3D profiles", "", profileApplied));
-        features.Add(MakeFeature("Debloat", "", debloatApplied));
-        features.Add(MakeFeature("Display prefs", "", displayApplied));
+        features.Add(MakeFeature("Driver / MSI", "", driverTweaksApplied && gpuOk));
+        features.Add(MakeFeature("3D profiles", "", profileApplied && gpuOk));
+        features.Add(MakeFeature("Debloat", "", debloatApplied && gpuOk));
+        features.Add(MakeFeature("Display prefs", "", displayApplied && gpuOk));
 
         var extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (!string.IsNullOrEmpty(series))
