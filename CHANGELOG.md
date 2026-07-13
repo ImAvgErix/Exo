@@ -1,3 +1,7 @@
+## 1.9.81
+
+- **In-app update UI**: branded confirm + install dialog with OptiLoader (card loader) and download progress bar; Settings shows the same loader/bar while checking; launch auto-update uses the same chrome
+
 ## 1.9.80
 
 - **Steam logo size restored** — was over-shrunk (140px); back to ~212px peer diameter (window-screenshot verified)

@@ -95,6 +95,18 @@ if (File.Exists(settings))
     Expect("settings opti card", s.Contains("OptiCard", StringComparison.Ordinal));
     Expect("report issue white button", s.Contains("OptiWhiteButton", StringComparison.Ordinal)
         && s.Contains("Report issue", StringComparison.Ordinal));
+    Expect("settings update loader", s.Contains("OptiLoader", StringComparison.Ordinal)
+        && s.Contains("IsUpdating", StringComparison.Ordinal));
+    Expect("settings update progress bar", s.Contains("ProgressBar", StringComparison.Ordinal)
+        && s.Contains("UpdateProgressPercent", StringComparison.Ordinal));
+}
+var updateDlg = Path.Combine(repo, "OptiHub", "Helpers", "OptiUpdateDialog.cs");
+if (File.Exists(updateDlg))
+{
+    var u = File.ReadAllText(updateDlg);
+    Expect("update dialog opti loader", u.Contains("OptiLoader", StringComparison.Ordinal));
+    Expect("update dialog progress", u.Contains("ProgressBar", StringComparison.Ordinal));
+    Expect("update dialog install", u.Contains("InstallWithProgressAsync", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
 {

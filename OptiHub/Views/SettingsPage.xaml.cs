@@ -2,6 +2,8 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
+using OptiHub.Helpers;
+using OptiHub.Models;
 using OptiHub.ViewModels;
 
 namespace OptiHub.Views;
@@ -17,7 +19,10 @@ public sealed partial class SettingsPage : Page
         ViewModel = new SettingsViewModel(App.Services);
         InitializeComponent();
         DataContext = ViewModel;
-        ViewModel.ConfirmAsync = ConfirmAsync;
+        ViewModel.ConfirmUpdateAsync = (local, remote) =>
+            OptiUpdateDialog.ConfirmInstallAsync(XamlRoot, local, remote);
+        ViewModel.InstallUpdateAsync = check =>
+            OptiUpdateDialog.InstallWithProgressAsync(XamlRoot, check, App.Services.Updater);
     }
 
     private void Page_Loaded(object sender, RoutedEventArgs e) => PlayEntrance();
@@ -63,20 +68,5 @@ public sealed partial class SettingsPage : Page
         FadeSlide(HeaderPanel, HeaderTransform, 0, 10);
         FadeSlide(BodyGrid, BodyTransform, 70, 16);
         sb.Begin();
-    }
-
-    private async Task<bool> ConfirmAsync(string title, string message)
-    {
-        var dialog = new ContentDialog
-        {
-            Title = title,
-            Content = message,
-            PrimaryButtonText = "Install",
-            CloseButtonText = "Later",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = XamlRoot
-        };
-        var result = await dialog.ShowAsync();
-        return result == ContentDialogResult.Primary;
     }
 }

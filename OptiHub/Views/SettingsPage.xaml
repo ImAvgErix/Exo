@@ -2,6 +2,7 @@
 <Page x:Class="OptiHub.Views.SettingsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:controls="using:OptiHub.Views.Controls"
       Background="Transparent"
       Loaded="Page_Loaded">
 
@@ -196,6 +197,19 @@
                                     HorizontalAlignment="Stretch"
                                     MinHeight="44"
                                     IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                            <!-- Inline progress while checking (install uses modal OptiLoader dialog) -->
+                            <StackPanel Spacing="8"
+                                        Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <controls:OptiLoader IsActive="{x:Bind ViewModel.IsUpdating, Mode=OneWay}"
+                                                     HorizontalAlignment="Center" />
+                                <ProgressBar Minimum="0"
+                                             Maximum="100"
+                                             Value="{x:Bind ViewModel.UpdateProgressPercent, Mode=OneWay}"
+                                             IsIndeterminate="{x:Bind ViewModel.IsUpdateProgressIndeterminate, Mode=OneWay}"
+                                             Height="4"
+                                             CornerRadius="2"
+                                             Foreground="{ThemeResource OptiAccentBrush}" />
+                            </StackPanel>
                         </StackPanel>
                         <TextBlock Grid.Row="2"
                                    Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"

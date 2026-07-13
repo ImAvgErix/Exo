@@ -241,11 +241,12 @@ public sealed class GitHubUpdateService
 
     public async Task<AppUpdateResult> CheckAppUpdateAsync(
         IProgress<string>? status = null,
+        IProgress<AppUpdateProgress>? progress = null,
         CancellationToken ct = default)
     {
         var local = typeof(GitHubUpdateService).Assembly.GetName().Version;
         var localText = local is null ? "0.0.0" : $"{local.Major}.{local.Minor}.{local.Build}";
-        status?.Report("Checking GitHub releases...");
+        Report(status, progress, "Checking GitHub releases...", percent: -1);
 
         try
         {
@@ -363,15 +364,17 @@ public sealed class GitHubUpdateService
 
     public async Task<AppUpdateResult> InstallLatestAppAsync(
         IProgress<string>? status = null,
+        IProgress<AppUpdateProgress>? progress = null,
         CancellationToken ct = default)
     {
-        var check = await CheckAppUpdateAsync(status, ct).ConfigureAwait(false);
-        return await InstallAppUpdateAsync(check, status, ct).ConfigureAwait(false);
+        var check = await CheckAppUpdateAsync(status, progress, ct).ConfigureAwait(false);
+        return await InstallAppUpdateAsync(check, status, progress, ct).ConfigureAwait(false);
     }
 
     public async Task<AppUpdateResult> InstallAppUpdateAsync(
         AppUpdateResult check,
         IProgress<string>? status = null,
+        IProgress<AppUpdateProgress>? progress = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(check);
@@ -387,7 +390,7 @@ public sealed class GitHubUpdateService
         // Download OptiHub.exe (SFX installer) and run it. In-place replace cannot
         // overwrite a locked running OptiHub.exe, so the installer stage-swaps under
         // %LocalAppData%\OptiHub\app after we exit.
-        status?.Report($"Downloading OptiHub v{check.RemoteVersion}...");
+        Report(status, progress, $"Downloading OptiHub v{check.RemoteVersion}...", percent: 0);
 
         try
         {
@@ -439,19 +442,24 @@ public sealed class GitHubUpdateService
                     written += read;
                     if (total > 0)
                     {
-                        var pct = (int)Math.Min(99, (written * 100) / total);
-                        if (pct != lastReport && (pct % 5 == 0 || pct >= 99))
+                        // Download is 0–85% of the install bar; verify/apply fill the rest.
+                        var pct = (int)Math.Min(85, (written * 85) / total);
+                        if (pct != lastReport && (pct - lastReport >= 1 || pct >= 85))
                         {
                             lastReport = pct;
                             var mb = written / (1024.0 * 1024.0);
                             var totalMb = total / (1024.0 * 1024.0);
-                            status?.Report($"Downloading OptiHub v{check.RemoteVersion}... {pct}% ({mb:0.0}/{totalMb:0.0} MB)");
+                            Report(status, progress,
+                                $"Downloading v{check.RemoteVersion}… {mb:0.0}/{totalMb:0.0} MB",
+                                percent: pct);
                         }
                     }
-                    else if (written > 0 && written / (5 * 1024 * 1024) != lastReport)
+                    else if (written > 0 && written / (1024 * 1024) != lastReport)
                     {
-                        lastReport = (int)(written / (5 * 1024 * 1024));
-                        status?.Report($"Downloading OptiHub v{check.RemoteVersion}... {written / (1024.0 * 1024.0):0.0} MB");
+                        lastReport = (int)(written / (1024 * 1024));
+                        Report(status, progress,
+                            $"Downloading v{check.RemoteVersion}… {written / (1024.0 * 1024.0):0.0} MB",
+                            percent: -1);
                     }
                 }
             }
@@ -483,7 +491,7 @@ public sealed class GitHubUpdateService
 
             if (requireSha)
             {
-                status?.Report("Verifying update integrity (SHA-256)...");
+                Report(status, progress, "Verifying integrity (SHA-256)…", percent: 88);
                 var actualSha256 = await ComputeFileSha256Async(setupPath, ct).ConfigureAwait(false);
                 if (!string.Equals(actualSha256, check.Sha256, StringComparison.OrdinalIgnoreCase))
                 {
@@ -499,7 +507,7 @@ public sealed class GitHubUpdateService
             }
             else
             {
-                status?.Report("Release has no digest; verifying installer version stamp...");
+                Report(status, progress, "Verifying installer version stamp…", percent: 88);
             }
 
             string? downloadedVersion = null;
@@ -527,7 +535,7 @@ public sealed class GitHubUpdateService
                 };
             }
 
-            status?.Report($"Applying OptiHub v{check.RemoteVersion} quietly...");
+            Report(status, progress, $"Applying v{check.RemoteVersion}…", percent: 95);
             // Quiet in-app update: winexe SFX + /quiet + env - no console, no MessageBox.
             // Installer stages under %LocalAppData%\OptiHub\app, refreshes Start Menu, relaunches.
             Environment.SetEnvironmentVariable("OPTIHUB_SILENT_INSTALL", "1");
@@ -580,6 +588,7 @@ public sealed class GitHubUpdateService
                 };
             }
 
+            Report(status, progress, $"Restarting into v{check.RemoteVersion}…", percent: 100);
             return new AppUpdateResult
             {
                 UpdateAvailable = true,
@@ -606,6 +615,16 @@ public sealed class GitHubUpdateService
                 Message = $"App update failed: {ex.Message}"
             };
         }
+    }
+
+    private static void Report(
+        IProgress<string>? status,
+        IProgress<AppUpdateProgress>? progress,
+        string message,
+        double percent)
+    {
+        status?.Report(message);
+        progress?.Report(new AppUpdateProgress { Status = message, Percent = percent });
     }
 
     private static async Task<string?> TryGetRemoteTextAsync(string url, CancellationToken ct)

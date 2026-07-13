@@ -24,11 +24,17 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _kitVersion = "-";
     [ObservableProperty] private string _updateStatus = string.Empty;
     [ObservableProperty] private bool _isUpdating;
+    [ObservableProperty] private double _updateProgressPercent;
+    [ObservableProperty] private bool _isUpdateProgressIndeterminate = true;
 
     /// <summary>True when there is status text to show (hides empty gray well).</summary>
     public bool HasUpdateStatus => !string.IsNullOrWhiteSpace(UpdateStatus);
 
-    public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
+    /// <summary>Branded confirm (localVer, remoteVer) → Install / Later.</summary>
+    public Func<string, string, Task<bool>>? ConfirmUpdateAsync { get; set; }
+
+    /// <summary>Modal install UI with OptiLoader + progress bar.</summary>
+    public Func<AppUpdateResult, Task<AppUpdateResult>>? InstallUpdateAsync { get; set; }
 
     partial void OnUpdateStatusChanged(string value) =>
         OnPropertyChanged(nameof(HasUpdateStatus));
@@ -126,43 +132,64 @@ public partial class SettingsViewModel : ObservableObject
     {
         if (IsUpdating) return;
         IsUpdating = true;
+        IsUpdateProgressIndeterminate = true;
+        UpdateProgressPercent = 0;
         UpdateStatus = "Checking for OptiHub updates...";
         try
         {
-            var progress = new Progress<string>(m => UpdateStatus = m);
-            var app = await _services.Updater.CheckAppUpdateAsync(status: progress);
+            var status = new Progress<string>(m => UpdateStatus = m);
+            var detail = new Progress<AppUpdateProgress>(p =>
+            {
+                UpdateStatus = p.Status;
+                if (p.Percent >= 0)
+                {
+                    IsUpdateProgressIndeterminate = false;
+                    UpdateProgressPercent = p.Percent;
+                }
+                else
+                {
+                    IsUpdateProgressIndeterminate = true;
+                }
+            });
+
+            var app = await _services.Updater.CheckAppUpdateAsync(status: status, progress: detail);
             AppVersion = GetAppVersionText();
             RefreshKitVersionText();
 
             if (app.UpdateAvailable)
             {
                 var installNow = true;
-                if (ConfirmAsync is not null)
-                {
-                    installNow = await ConfirmAsync(
-                        "Install OptiHub update?",
-                        $"Version {app.RemoteVersion} is available (you have {app.LocalVersion}).\n\n" +
-                        "This release includes the matching Discord / Steam / NVIDIA optimizers.\n" +
-                        "OptiHub will close, install in place, and reopen.");
-                }
+                if (ConfirmUpdateAsync is not null)
+                    installNow = await ConfirmUpdateAsync(app.LocalVersion, app.RemoteVersion);
 
                 if (installNow)
                 {
-                    UpdateStatus = app.Message + " Installing...";
-                    var install = await _services.Updater.InstallAppUpdateAsync(app, status: progress);
+                    UpdateStatus = "Installing…";
+                    AppUpdateResult install;
+                    if (InstallUpdateAsync is not null)
+                    {
+                        // Modal: orbit loader + progress bar (same as launch auto-update).
+                        install = await InstallUpdateAsync(app);
+                    }
+                    else
+                    {
+                        install = await _services.Updater.InstallAppUpdateAsync(
+                            app, status: status, progress: detail);
+                    }
+
                     UpdateStatus = install.Message;
                     AppVersion = GetAppVersionText();
                     RefreshKitVersionText();
                     if (install.ShouldExit)
                     {
-                        await Task.Delay(900);
+                        await Task.Delay(400);
                         Microsoft.UI.Xaml.Application.Current?.Exit();
                         return;
                     }
                 }
                 else
                 {
-                    UpdateStatus = $"v{app.RemoteVersion} available - install skipped.";
+                    UpdateStatus = $"v{app.RemoteVersion} available — install skipped.";
                 }
             }
             else
@@ -189,6 +216,8 @@ public partial class SettingsViewModel : ObservableObject
         finally
         {
             IsUpdating = false;
+            IsUpdateProgressIndeterminate = true;
+            UpdateProgressPercent = 0;
         }
     }
 

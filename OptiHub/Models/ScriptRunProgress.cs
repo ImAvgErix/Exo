@@ -55,3 +55,11 @@ public sealed class AppUpdateResult
     public string? Sha256 { get; init; }
     public bool ShouldExit { get; init; }
 }
+
+/// <summary>In-app update download/install progress (status text + optional percent).</summary>
+public sealed class AppUpdateProgress
+{
+    /// <summary>0–100 when known; negative = indeterminate phase.</summary>
+    public double Percent { get; init; } = -1;
+    public string Status { get; init; } = string.Empty;
+}

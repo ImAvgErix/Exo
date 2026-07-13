@@ -278,47 +278,34 @@ public sealed partial class MainWindow : Window
             for (var i = 0; i < 10 && RootGrid.XamlRoot is null; i++)
                 await Task.Delay(200, ct);
 
-            var appCheck = await App.Services.Updater.CheckAppUpdateAsync(ct: ct);
-            if (appCheck.UpdateAvailable && RootGrid.XamlRoot is not null)
-            {
-                var dialog = new ContentDialog
-                {
-                    Title = "OptiHub update available",
-                    Content =
-                        $"Version {appCheck.RemoteVersion} is available.\n" +
-                        $"You have {appCheck.LocalVersion}.\n\n" +
-                        "Install now? OptiHub will close, update in place, and reopen.\n" +
-                        "This release includes the matching optimizers.",
-                    PrimaryButtonText = "Install",
-                    CloseButtonText = "Later",
-                    DefaultButton = ContentDialogButton.Primary,
-                    XamlRoot = RootGrid.XamlRoot
-                };
-                var choice = await dialog.ShowAsync();
-                ct.ThrowIfCancellationRequested();
-                if (choice == ContentDialogResult.Primary)
-                {
-                    var install = await App.Services.Updater.InstallAppUpdateAsync(appCheck, ct: ct);
-                    if (install.ShouldExit)
-                    {
-                        await Task.Delay(900, ct);
-                        Application.Current?.Exit();
-                        return;
-                    }
+            if (RootGrid.XamlRoot is null) return;
 
-                    if (RootGrid.XamlRoot is not null)
-                    {
-                        var err = new ContentDialog
-                        {
-                            Title = "Update could not finish",
-                            Content = install.Message,
-                            CloseButtonText = "OK",
-                            XamlRoot = RootGrid.XamlRoot
-                        };
-                        await err.ShowAsync();
-                    }
-                }
+            var appCheck = await App.Services.Updater.CheckAppUpdateAsync(ct: ct);
+            if (!appCheck.UpdateAvailable) return;
+
+            var installNow = await OptiUpdateDialog.ConfirmInstallAsync(
+                RootGrid.XamlRoot,
+                appCheck.LocalVersion,
+                appCheck.RemoteVersion);
+            ct.ThrowIfCancellationRequested();
+            if (!installNow) return;
+
+            var install = await OptiUpdateDialog.InstallWithProgressAsync(
+                RootGrid.XamlRoot,
+                appCheck,
+                App.Services.Updater,
+                ct);
+            if (install.ShouldExit)
+            {
+                await Task.Delay(400, ct);
+                Application.Current?.Exit();
+                return;
             }
+
+            await OptiUpdateDialog.ShowMessageAsync(
+                RootGrid.XamlRoot,
+                "Update could not finish",
+                install.Message);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch { }
