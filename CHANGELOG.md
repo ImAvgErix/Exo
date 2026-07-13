@@ -1,3 +1,10 @@
+## 1.9.38
+
+- **UI Signal theme**: teal/mint accent on cool graphite (dark) and clean teal (light); denser cards, refreshed dashboard hero
+- **NVIDIA Panel**: live color bit-depth dropdowns per display (`--list-color` / `--set-depth` via OptiHub.NvDisplay); peak Apply still forces best defaults
+- **Discord detect**: Complete client debloat no longer false-fails on empty recreated modules, soft SDK/locale drift, or verified full apply for the same build
+- **README**: project-page style (Winhance-class) with tables, download, layout, smokes
+- Dead-code trim on NvDisplay depth picker; color-depth elevated script path
 ## 1.9.37
 
 - **UI peak**: shared design system (page titles, feature tiles, message banners, muted hierarchy); refined dark/light surfaces + divider chrome

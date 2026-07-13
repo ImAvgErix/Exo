@@ -40,20 +40,46 @@ static class Program
 
     static int Main(string[] args)
     {
-        var normalizedArgs = args.Select(a => a.Trim().ToLowerInvariant()).ToArray();
-        var knownArgs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        var rawArgs = args.Select(a => a.Trim()).ToArray();
+        var normalizedArgs = rawArgs.Select(a => a.ToLowerInvariant()).ToArray();
+
+        // Flag modes
+        var listColor = normalizedArgs.Any(a => a is "--list-color" or "/list-color");
+        var setDepthRaw = GetArgValue(rawArgs, "--set-depth") ?? GetArgValue(rawArgs, "/set-depth");
+        var displayIdRaw = GetArgValue(rawArgs, "--display-id") ?? GetArgValue(rawArgs, "/display-id");
+
+        var knownPrefixes = new[]
         {
-            "--status", "-s", "/status", "--apply", "-a", "/apply", "--help", "-h", "/?"
+            "--status", "-s", "/status", "--apply", "-a", "/apply", "--help", "-h", "/?",
+            "--list-color", "/list-color", "--set-depth", "/set-depth", "--display-id", "/display-id"
         };
-        var unknown = normalizedArgs.FirstOrDefault(a => !knownArgs.Contains(a));
-        if (unknown != null)
+        var unknown = normalizedArgs.FirstOrDefault(a =>
+            !knownPrefixes.Any(k => a == k || a.StartsWith(k + "=", StringComparison.Ordinal) || a.StartsWith(k + ":", StringComparison.Ordinal)));
+        // Allow bare values after --set-depth / --display-id as separate tokens (handled by GetArgValue)
+        if (unknown != null &&
+            !normalizedArgs.Any(a => a is "--set-depth" or "/set-depth" or "--display-id" or "/display-id") &&
+            !listColor)
         {
-            Console.Error.WriteLine($"Unknown argument: {unknown}");
-            return 64;
+            // second pass: ignore values that follow set-depth/display-id
+            var skipNext = false;
+            foreach (var a in rawArgs)
+            {
+                var al = a.ToLowerInvariant();
+                if (skipNext) { skipNext = false; continue; }
+                if (al is "--set-depth" or "/set-depth" or "--display-id" or "/display-id")
+                {
+                    skipNext = true;
+                    continue;
+                }
+                if (knownPrefixes.Any(k => al == k || al.StartsWith(k + "=", StringComparison.Ordinal)))
+                    continue;
+                Console.Error.WriteLine($"Unknown argument: {a}");
+                return 64;
+            }
         }
 
         var statusOnly = normalizedArgs.Any(a => a is "--status" or "-s" or "/status");
-        var apply = !statusOnly;
+        var apply = !statusOnly && !listColor && setDepthRaw is null;
         if (normalizedArgs.Any(a => a is "--apply" or "-a" or "/apply")) apply = true;
         if (statusOnly && apply)
         {
@@ -62,9 +88,11 @@ static class Program
         }
         if (normalizedArgs.Any(a => a is "--help" or "-h" or "/?"))
         {
-            Console.WriteLine("OptiHub.NvDisplay — NVAPI + NVTweak display performance settings");
-            Console.WriteLine("  --apply   Apply Full RGB, primary max-Hz / secondary 60Hz, GPU no-scaling (default)");
-            Console.WriteLine("  --status  Verify Full RGB, refresh policy, and GPU no-scaling without changing settings");
+            Console.WriteLine("OptiHub.NvDisplay - NVAPI + NVTweak display performance settings");
+            Console.WriteLine("  --apply              Apply Full RGB, primary max-Hz / secondary 60Hz, GPU no-scaling (default)");
+            Console.WriteLine("  --status             Verify Full RGB, refresh policy, and GPU no-scaling");
+            Console.WriteLine("  --list-color         List displays with current/supported color bit depths");
+            Console.WriteLine("  --set-depth BPC8|10|12 [--display-id ID]  Set color depth (Full RGB User policy)");
             return 0;
         }
 
@@ -112,6 +140,42 @@ static class Program
             }
 
             Console.WriteLine($"[NVAPI] Displays: {devices.Count}");
+
+            // --- list / set color depth (NVIDIA Panel pickers) ---
+            if (listColor)
+            {
+                var list = ListColorDepths(devices);
+                Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + JsonSerializer.Serialize(new
+                {
+                    ok = true,
+                    mode = "list-color",
+                    displays = list
+                }));
+                return 0;
+            }
+
+            if (!string.IsNullOrWhiteSpace(setDepthRaw))
+            {
+                if (!TryParseDepth(setDepthRaw, out var depth))
+                {
+                    Console.Error.WriteLine("Invalid --set-depth. Use BPC8, BPC10, BPC12, 8, 10, or 12.");
+                    return 64;
+                }
+                uint? onlyId = null;
+                if (!string.IsNullOrWhiteSpace(displayIdRaw) && uint.TryParse(displayIdRaw, out var parsedId))
+                    onlyId = parsedId;
+
+                var setOk = ApplyColorDepth(devices, depth, onlyId);
+                Console.WriteLine("OPTIHUB_NVDISPLAY_JSON:" + JsonSerializer.Serialize(new
+                {
+                    ok = setOk,
+                    mode = "set-depth",
+                    depth = depth.ToString(),
+                    displayId = onlyId
+                }));
+                return setOk ? 0 : 6;
+            }
+
             PrintPathScaling("BEFORE");
             var idToGdi = MapDisplayIdToGdiName();
             var missingDisplayIds = devices
@@ -447,17 +511,159 @@ static class Program
         return new DisplayEnumerationResult { Succeeded = true, Devices = list };
     }
 
+    static string? GetArgValue(string[] args, string key)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            var a = args[i];
+            if (a.Equals(key, StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 < args.Length) return args[i + 1];
+                return null;
+            }
+            if (a.StartsWith(key + "=", StringComparison.OrdinalIgnoreCase) ||
+                a.StartsWith(key + ":", StringComparison.OrdinalIgnoreCase))
+                return a[(key.Length + 1)..];
+        }
+        return null;
+    }
+
+    static bool TryParseDepth(string raw, out ColorDataDepth depth)
+    {
+        depth = ColorDataDepth.BPC8;
+        var s = raw.Trim().ToUpperInvariant().Replace(" ", "");
+        if (s is "8" or "BPC8" or "8BPC" or "8-BIT" or "8BIT") { depth = ColorDataDepth.BPC8; return true; }
+        if (s is "10" or "BPC10" or "10BPC" or "10-BIT" or "10BIT") { depth = ColorDataDepth.BPC10; return true; }
+        if (s is "12" or "BPC12" or "12BPC" or "12-BIT" or "12BIT") { depth = ColorDataDepth.BPC12; return true; }
+        if (s is "6" or "BPC6") { depth = ColorDataDepth.BPC6; return true; }
+        return false;
+    }
+
+    static List<object> ListColorDepths(List<DisplayDevice> devices)
+    {
+        var list = new List<object>();
+        foreach (var dev in devices)
+        {
+            string? currentDepth = null;
+            string? currentRange = null;
+            string? currentFormat = null;
+            try
+            {
+                var c = dev.CurrentColorData;
+                currentDepth = c.ColorDepth?.ToString();
+                currentRange = c.DynamicRange?.ToString();
+                currentFormat = c.ColorFormat.ToString();
+            }
+            catch { /* color API unsupported */ }
+
+            var supported = new List<string>();
+            foreach (var d in new[] { ColorDataDepth.BPC12, ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6 })
+            {
+                try
+                {
+                    var probe = new ColorData(
+                        ColorDataFormat.RGB, ColorDataColorimetry.Auto, ColorDataDynamicRange.VESA,
+                        d, ColorDataSelectionPolicy.User, ColorDataDesktopDepth.Default);
+                    if (dev.IsColorDataSupported(probe))
+                        supported.Add(d.ToString());
+                }
+                catch { }
+            }
+            if (supported.Count == 0 && currentDepth is not null)
+                supported.Add(currentDepth);
+
+            list.Add(new
+            {
+                displayId = dev.DisplayId,
+                connection = dev.ConnectionType.ToString(),
+                currentDepth,
+                currentRange,
+                currentFormat,
+                supportedDepths = supported
+            });
+        }
+        return list;
+    }
+
+    static bool ApplyColorDepth(List<DisplayDevice> devices, ColorDataDepth depth, uint? onlyDisplayId)
+    {
+        var any = false;
+        var ok = true;
+        foreach (var dev in devices)
+        {
+            if (onlyDisplayId is not null && dev.DisplayId != onlyDisplayId.Value)
+                continue;
+            any = true;
+            // Manual panel path: exact depth only (no silent 10→8 fallback).
+            var applied = ApplyExactColorDepth(dev, depth);
+            if (applied is null)
+            {
+                ok = false;
+                Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: set-depth {depth} failed");
+            }
+            else
+            {
+                Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: set-depth {depth} OK");
+                try { ApplyHdmiFullRange(dev); } catch { }
+            }
+        }
+        if (!any)
+        {
+            Console.Error.WriteLine("[NVAPI] No matching display for --display-id");
+            return false;
+        }
+        // Stamp registry Full RGB so CPL-ish prefs stay aligned
+        try { ApplyNvtweakRegistry(); } catch { }
+        return ok;
+    }
+
+    /// <summary>Set RGB Full + User policy at exactly the requested bit depth (panel override).</summary>
+    static ColorData? ApplyExactColorDepth(DisplayDevice dev, ColorDataDepth depth)
+    {
+        foreach (var range in new[] { ColorDataDynamicRange.VESA, ColorDataDynamicRange.Auto })
+        {
+            var candidate = new ColorData(
+                ColorDataFormat.RGB,
+                ColorDataColorimetry.Auto,
+                range,
+                depth,
+                ColorDataSelectionPolicy.User,
+                ColorDataDesktopDepth.Default);
+            try
+            {
+                dev.SetColorData(candidate);
+                // Verify readback when the driver exposes current color.
+                try
+                {
+                    var cur = dev.CurrentColorData;
+                    if (cur.ColorDepth is not null && cur.ColorDepth != depth)
+                    {
+                        Console.WriteLine(
+                            $"[NVAPI] Display #{dev.DisplayId}: set {depth} but readback={cur.ColorDepth}");
+                        continue;
+                    }
+                }
+                catch { /* some paths omit readback */ }
+
+                Console.WriteLine(
+                    $"[NVAPI] Display #{dev.DisplayId} SET exact color: format=RGB range={range} depth={depth} policy=User");
+                return candidate;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: exact {depth}/{range} failed: {ex.Message}");
+            }
+        }
+        return null;
+    }
+
     static ColorDataDepth PickBestDepth(DisplayDevice dev, ColorDataDepth? current)
     {
-        // Preserve the current color depth when the target mode supports it. This
-        // avoids needlessly downgrading a valid 12 bpc HDMI mode. If it is no
-        // longer valid at the selected refresh rate, prefer 10 bpc and then 8 bpc.
-        var candidates = current is null
-            ? new[] { ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6 }
-            : new[] { current.Value, ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6 }
-                .Distinct();
-
-        foreach (var depth in candidates)
+        // Peak apply: highest supported bit depth first (12 → 10 → 8 → 6).
+        foreach (var depth in new[]
+                 {
+                     ColorDataDepth.BPC12, ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6
+                 })
         {
             var probe = new ColorData(
                 ColorDataFormat.RGB, ColorDataColorimetry.Auto, ColorDataDynamicRange.VESA,

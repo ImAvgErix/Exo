@@ -43,6 +43,19 @@ public sealed class InverseBoolToVisibilityConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>Non-empty string → Visible; empty/null → Collapsed.</summary>
+public sealed class StringToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var s = value as string;
+        return string.IsNullOrWhiteSpace(s) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotSupportedException();
+}
+
 /// <summary>Coming-soon cards render slightly dimmed.</summary>
 public sealed class BoolToOpacityConverter : IValueConverter
 {
@@ -84,11 +97,11 @@ public sealed class AssetPathToImageSourceConverter : IValueConverter
 
             return ImageCache.GetOrAdd(full, static path =>
             {
-                // Decode above display size for sharp logos on high-DPI (cards use ~48px).
+                // Decode above display size for sharp logos on high-DPI (cards ~60px wells).
                 var image = new BitmapImage
                 {
                     DecodePixelType = DecodePixelType.Logical,
-                    DecodePixelWidth = 128
+                    DecodePixelWidth = 160
                 };
                 image.UriSource = new Uri(path, UriKind.Absolute);
                 return image;

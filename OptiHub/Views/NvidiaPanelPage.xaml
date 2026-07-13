@@ -19,13 +19,16 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,18">
+                <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,16">
                     <TextBlock Text="NVIDIA PANEL" Style="{StaticResource OptiSectionTitle}" Margin="0" />
                     <TextBlock Text="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}"
                                Style="{StaticResource OptiPageTitle}" />
+                    <TextBlock Text="{x:Bind ViewModel.HeaderDetail, Mode=OneWay}"
+                               Style="{StaticResource OptiCaption}"
+                               Visibility="{x:Bind ViewModel.HeaderDetail, Mode=OneWay, Converter={StaticResource StringToVisibilityConverter}}" />
                 </StackPanel>
 
-                <Grid Grid.Row="1" Margin="0,0,0,18">
+                <Grid Grid.Row="1" Margin="0,0,0,16">
                     <ProgressRing Width="28" Height="28"
                                   IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
                                   Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
@@ -35,51 +38,106 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
-                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}">
-                            <ItemsRepeater.Layout>
-                                <UniformGridLayout MaximumRowsOrColumns="2"
-                                                   Orientation="Horizontal"
-                                                   MinItemWidth="240"
-                                                   MinColumnSpacing="10"
-                                                   MinRowSpacing="10"
-                                                   ItemsStretch="Fill" />
-                            </ItemsRepeater.Layout>
-                            <ItemsRepeater.ItemTemplate>
-                                <DataTemplate x:DataType="vm:NvidiaPolicyRowViewModel">
-                                    <Border Style="{StaticResource OptiFeatureTile}"
-                                            Opacity="{x:Bind Opacity}">
-                                        <Grid ColumnSpacing="12">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <Border Style="{StaticResource OptiIconWell}">
-                                                <FontIcon Glyph="{x:Bind Glyph}"
-                                                          FontSize="14"
-                                                          Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                          HorizontalAlignment="Center"
-                                                          VerticalAlignment="Center" />
+                        <StackPanel Spacing="16">
+                            <!-- Live color depth pickers (like Control Panel / App) -->
+                            <StackPanel Spacing="10"
+                                        Visibility="{x:Bind ViewModel.HasDisplays, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <TextBlock Text="COLOR DEPTH" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                                <TextBlock Text="Pick the bit depth your monitor supports. Peak Optimize still chooses the highest automatically."
+                                           Style="{StaticResource OptiCaption}" />
+                                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Displays, Mode=OneWay}">
+                                    <ItemsRepeater.Layout>
+                                        <StackLayout Orientation="Vertical" Spacing="8" />
+                                    </ItemsRepeater.Layout>
+                                    <ItemsRepeater.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:NvidiaDisplayColorRowViewModel">
+                                            <Border Style="{StaticResource OptiFeatureTile}" Padding="14,12">
+                                                <Grid ColumnSpacing="12">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="140" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{x:Bind Title}" Style="{StaticResource OptiFeatureTitle}" />
+                                                        <TextBlock Style="{StaticResource OptiFeatureDetail}">
+                                                            <Run Text="Current: " />
+                                                            <Run Text="{x:Bind CurrentDepth, Mode=OneWay}" />
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                    <ComboBox Grid.Column="1"
+                                                              ItemsSource="{x:Bind DepthOptions}"
+                                                              SelectedItem="{x:Bind SelectedDepth, Mode=TwoWay}"
+                                                              HorizontalAlignment="Stretch"
+                                                              VerticalAlignment="Center"
+                                                              MinWidth="120"
+                                                              IsEnabled="{x:Bind IsApplying, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                                                              AutomationProperties.Name="Color bit depth" />
+                                                    <Button Grid.Column="2"
+                                                            Style="{StaticResource OptiQuietButton}"
+                                                            Content="Set"
+                                                            MinWidth="72"
+                                                            VerticalAlignment="Center"
+                                                            Click="SetDepth_Click"
+                                                            Tag="{x:Bind}"
+                                                            IsEnabled="{x:Bind CanApply, Mode=OneWay}"
+                                                            AutomationProperties.Name="Apply color depth" />
+                                                </Grid>
                                             </Border>
-                                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                                <TextBlock Text="{x:Bind Title}" Style="{StaticResource OptiFeatureTitle}" />
-                                                <TextBlock Text="{x:Bind Status}" Style="{StaticResource OptiFeatureDetail}" />
-                                            </StackPanel>
-                                            <Button Grid.Column="2"
-                                                    Style="{StaticResource OptiQuietButton}"
-                                                    Content="Apply"
-                                                    MinWidth="80"
-                                                    VerticalAlignment="Center"
-                                                    Visibility="{x:Bind NeedsFix, Mode=OneWay}"
-                                                    Tag="{x:Bind Id}"
-                                                    Click="ApplyRow_Click"
-                                                    IsEnabled="{x:Bind CanApply, Mode=OneWay}"
-                                                    AutomationProperties.Name="Apply this policy" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsRepeater.ItemTemplate>
-                        </ItemsRepeater>
+                                        </DataTemplate>
+                                    </ItemsRepeater.ItemTemplate>
+                                </ItemsRepeater>
+                            </StackPanel>
+
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="POLICY" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}">
+                                    <ItemsRepeater.Layout>
+                                        <UniformGridLayout MaximumRowsOrColumns="2"
+                                                           Orientation="Horizontal"
+                                                           MinItemWidth="240"
+                                                           MinColumnSpacing="10"
+                                                           MinRowSpacing="10"
+                                                           ItemsStretch="Fill" />
+                                    </ItemsRepeater.Layout>
+                                    <ItemsRepeater.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:NvidiaPolicyRowViewModel">
+                                            <Border Style="{StaticResource OptiFeatureTile}"
+                                                    Opacity="{x:Bind Opacity}">
+                                                <Grid ColumnSpacing="12">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Style="{StaticResource OptiIconWell}">
+                                                        <FontIcon Glyph="{x:Bind Glyph}"
+                                                                  FontSize="14"
+                                                                  Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                                                                  HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{x:Bind Title}" Style="{StaticResource OptiFeatureTitle}" />
+                                                        <TextBlock Text="{x:Bind Status}" Style="{StaticResource OptiFeatureDetail}" />
+                                                    </StackPanel>
+                                                    <Button Grid.Column="2"
+                                                            Style="{StaticResource OptiQuietButton}"
+                                                            Content="Apply"
+                                                            MinWidth="80"
+                                                            VerticalAlignment="Center"
+                                                            Visibility="{x:Bind NeedsFix, Mode=OneWay}"
+                                                            Tag="{x:Bind Id}"
+                                                            Click="ApplyRow_Click"
+                                                            IsEnabled="{x:Bind CanApply, Mode=OneWay}"
+                                                            AutomationProperties.Name="Apply this policy" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsRepeater.ItemTemplate>
+                                </ItemsRepeater>
+                            </StackPanel>
+                        </StackPanel>
                     </ScrollViewer>
                 </Grid>
 

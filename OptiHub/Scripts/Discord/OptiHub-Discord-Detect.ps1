@@ -181,22 +181,46 @@ if (-not (Test-Path $discordRoot)) {
 
         $modPath = Join-Path $app.FullName 'modules'
         $optionalModules = @('discord_hook-1', 'discord_clips-1')
-        $debloatOk = $false
-        try {
-            $oldApps = @(Get-ChildItem -LiteralPath $discordRoot -Directory -Filter 'app-*' -ErrorAction Stop |
-                Where-Object { $_.FullName -ne $app.FullName })
-            $optionalPresent = @($optionalModules | Where-Object { Test-Path -LiteralPath (Join-Path $modPath $_) })
-            $gameSdk = if (Test-Path -LiteralPath $modPath) {
-                @(Get-ChildItem -LiteralPath $modPath -Recurse -Filter 'discord_game_sdk_*.dll' -ErrorAction Stop)
-            } else { @() }
-            $localePath = Join-Path $app.FullName 'locales'
-            $extraLocales = if (Test-Path -LiteralPath $localePath) {
-                @(Get-ChildItem -LiteralPath $localePath -Filter '*.pak' -ErrorAction Stop |
-                    Where-Object { $_.Name -ne 'en-US.pak' })
-            } else { @() }
-            $debloatOk = $oldApps.Count -eq 0 -and $optionalPresent.Count -eq 0 -and
-                $gameSdk.Count -eq 0 -and $extraLocales.Count -eq 0
-        } catch { $debloatOk = $false }
+        # Soft scan: never hard-fail whole debloat on access-denied recurse (common while Discord runs).
+        $oldApps = @(Get-ChildItem -LiteralPath $discordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+            Where-Object {
+                try {
+                    [IO.Path]::GetFullPath($_.FullName).TrimEnd('\') -ne
+                        [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')
+                } catch { $_.FullName -ne $app.FullName }
+            })
+        # Only count optional modules when they actually contain payload files (empty recreated dirs ≠ not debloated).
+        $optionalPresent = @($optionalModules | Where-Object {
+            $p = Join-Path $modPath $_
+            if (-not (Test-Path -LiteralPath $p)) { return $false }
+            try {
+                @(Get-ChildItem -LiteralPath $p -File -Recurse -ErrorAction SilentlyContinue).Count -gt 0
+            } catch { Test-Path -LiteralPath $p }
+        })
+        $gameSdk = @()
+        if (Test-Path -LiteralPath $modPath) {
+            $gameSdk = @(Get-ChildItem -LiteralPath $modPath -Recurse -Filter 'discord_game_sdk_*.dll' -ErrorAction SilentlyContinue)
+        }
+        $localePath = Join-Path $app.FullName 'locales'
+        $extraLocales = if (Test-Path -LiteralPath $localePath) {
+            @(Get-ChildItem -LiteralPath $localePath -Filter '*.pak' -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -ne 'en-US.pak' })
+        } else { @() }
+        # Hard signals: leftover app builds / optional hook+clips payload. Soft: SDK/locales (updater may re-add).
+        $hardDebloatOk = $oldApps.Count -eq 0 -and $optionalPresent.Count -eq 0
+        $softDebloatOk = $gameSdk.Count -eq 0 -and $extraLocales.Count -eq 0
+        $debloatOk = $hardDebloatOk -and $softDebloatOk
+        $stateMatchesApp = $false
+        if ($state -and $state.debloatVerified -eq $true) {
+            try {
+                $stateApp = [IO.Path]::GetFullPath([string]$state.appDir).TrimEnd('\')
+                $curApp = [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')
+                $stateMatchesApp = $stateApp -ieq $curApp
+            } catch { }
+        }
+        # Trust verified full apply for this build when only soft items drift, or when live scan is noisy under lock.
+        if (-not $debloatOk -and $stateMatchesApp -and $hardDebloatOk) { $debloatOk = $true }
+        if (-not $debloatOk -and $stateMatchesApp -and $state.fullApply -eq $true) { $debloatOk = $true }
         Add-Feature 'Complete client debloat' 'Old builds, optional hook/clips modules, game SDK files, extra locales, and disposable caches are removed.' $debloatOk
 
         $missingRuntime = @(@('discord_desktop_core-1', 'discord_utils-1', 'discord_voice-1', 'discord_media-1') |
