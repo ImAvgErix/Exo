@@ -81,10 +81,11 @@ public partial class InternetOptimizerViewModel : ObservableObject
             });
         }
 
+        // Path (Ethernet vs Wi‑Fi) lives in the header only — no redundant banner on open.
         if (!string.IsNullOrWhiteSpace(snap.Detail) && !snap.ProbeOk)
             SetMessage(snap.Detail, success: false);
         else if (!preserveSuccessMessage)
-            SetMessage(BuildPathHint(snap), success: true);
+            ClearMessage();
     }
 
     [RelayCommand]
@@ -215,20 +216,10 @@ public partial class InternetOptimizerViewModel : ObservableObject
         return allOk ? $"{preset} · {media}" : $"{preset} · check rows";
     }
 
-    private static string BuildPathHint(NetworkSnapshot snap)
+    private void ClearMessage()
     {
-        var m = snap.Media;
-        if (m.EthernetInUse)
-            return m.WifiAvailable
-                ? "Detected Ethernet (usable). Apply will prefer Ethernet and can disable Wi‑Fi."
-                : "Detected Ethernet. Apply will tune the wired stack.";
-        if (m.EthernetUp && !m.EthernetInUse)
-            return "Ethernet is linked but has no IPv4 yet — Wi‑Fi stays available until Ethernet gets an address.";
-        if (m.WifiUp)
-            return $"Detected Wi‑Fi only. Apply will tune Wi‑Fi (prefer {m.PreferredBandTarget}).";
-        if (m.EthernetAvailable || m.WifiAvailable)
-            return "Adapters found but none fully up — connect, then Refresh.";
-        return "No active Ethernet or Wi‑Fi adapter detected.";
+        Message = string.Empty;
+        HasMessage = false;
     }
 
     private void SetMessage(string text, bool success)

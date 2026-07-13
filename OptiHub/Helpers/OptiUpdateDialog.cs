@@ -18,33 +18,21 @@ public static class OptiUpdateDialog
         string localVersion,
         string remoteVersion)
     {
-        var body = new StackPanel { Spacing = 12, MaxWidth = 380 };
+        var body = new StackPanel { Spacing = 8, MaxWidth = 360 };
         body.Children.Add(new TextBlock
         {
-            Text = $"Version {remoteVersion} is ready.",
-            FontFamily = (FontFamily)Application.Current.Resources["OptiUiFontSemiBold"],
-            FontSize = 15,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = (Brush)Application.Current.Resources["OptiPrimaryTextBrush"],
-            TextWrapping = TextWrapping.Wrap
-        });
-        body.Children.Add(new TextBlock
-        {
-            Text =
-                $"You have v{localVersion}. This release includes matching Discord, Steam, and NVIDIA optimizers.\n\n" +
-                "OptiHub will download, install in place, and reopen.",
+            Text = "You have a new version. Update now.",
             FontFamily = (FontFamily)Application.Current.Resources["OptiUiFont"],
-            FontSize = 13,
-            Foreground = (Brush)Application.Current.Resources["OptiSecondaryTextBrush"],
+            FontSize = 14,
+            Foreground = (Brush)Application.Current.Resources["OptiPrimaryTextBrush"],
             TextWrapping = TextWrapping.Wrap,
-            Opacity = 0.92,
-            LineHeight = 20
+            LineHeight = 22
         });
 
         var dialog = CreateShell(
             title: "Update available",
             content: body,
-            primaryText: "Install",
+            primaryText: "Update now",
             closeText: "Later",
             xamlRoot: xamlRoot);
         dialog.DefaultButton = ContentDialogButton.Primary;
@@ -62,27 +50,17 @@ public static class OptiUpdateDialog
         GitHubUpdateService updater,
         CancellationToken ct = default)
     {
-        var percentTb = new TextBlock
+        // One status line + bar (no duplicate version/status text).
+        var statusTb = new TextBlock
         {
             Text = "0%",
             FontFamily = (FontFamily)Application.Current.Resources["OptiUiFontSemiBold"],
-            FontSize = 22,
+            FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Foreground = (Brush)Application.Current.Resources["OptiPrimaryTextBrush"],
             TextAlignment = TextAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 4, 0, 4)
-        };
-
-        var statusTb = new TextBlock
-        {
-            Text = "Preparing…",
-            FontFamily = (FontFamily)Application.Current.Resources["OptiUiFont"],
-            FontSize = 13,
-            Foreground = (Brush)Application.Current.Resources["OptiSecondaryTextBrush"],
-            TextAlignment = TextAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
-            MaxWidth = 360
+            Margin = new Thickness(0, 4, 0, 8)
         };
 
         var bar = new ProgressBar
@@ -94,20 +72,19 @@ public static class OptiUpdateDialog
             CornerRadius = new CornerRadius(3),
             Foreground = (Brush)Application.Current.Resources["OptiAccentBrush"],
             Background = (Brush)Application.Current.Resources["OptiCardStrokeBrush"],
-            IsIndeterminate = false,
-            Margin = new Thickness(0, 8, 0, 0)
+            IsIndeterminate = false
         };
 
         var body = new StackPanel
         {
-            Spacing = 8,
+            Spacing = 4,
             MaxWidth = 360,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            Children = { percentTb, statusTb, bar }
+            Children = { statusTb, bar }
         };
 
         var dialog = CreateShell(
-            title: $"Installing v{check.RemoteVersion}",
+            title: "Updating",
             content: body,
             primaryText: null,
             closeText: null,

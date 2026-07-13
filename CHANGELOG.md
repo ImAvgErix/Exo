@@ -1,3 +1,6 @@
+## 1.9.97
+
+- **Internet**: no open banner for Ethernet/Wi‑Fi detect — header path only
 ## 1.9.96
 
 - **Settings**: one card (not 4 boxes); no Settings title
