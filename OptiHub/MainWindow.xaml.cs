@@ -32,8 +32,8 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         App.MainAppWindow = this;
 
-        // Fixed window — room for collapsible rail + home stats grid.
-        AppWindow.Resize(new SizeInt32(1140, 900));
+        // 4×2 card grid + hero fits cleanly without crowding.
+        AppWindow.Resize(new SizeInt32(1220, 780));
         ApplyFixedWindowChrome();
         TryCenterOnScreen();
         TrySetWindowIcon();
@@ -218,7 +218,7 @@ public sealed partial class MainWindow : Window
         else if (mode == ShellMode.Steam)
             TrySetContextLogo("Assets/Logos/steam.png");
         else if (mode == ShellMode.Internet)
-            TrySetContextLogo("Assets/Logos/optihub.png");
+            TrySetContextLogo("Assets/Logos/internet.png");
         else if (mode is ShellMode.Nvidia or ShellMode.NvidiaPanel)
             TrySetContextLogo("Assets/Logos/nvidia.png");
         else

@@ -11,7 +11,6 @@ public sealed class AppServices
     public GitHubUpdateService Updater { get; }
     public NvidiaPanelSettingsService NvidiaPanel { get; }
     public NetworkOptimizerService Network { get; } = new();
-    public SystemStatsService Stats { get; } = new();
 
     public AppServices()
     {

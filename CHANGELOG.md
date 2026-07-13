@@ -1,3 +1,8 @@
+## 1.9.20
+
+- **Back to classic hub**: centered OptiHub + card grid (no sidebar / home stats)
+- **Cards**: Internet (live) + AMD (coming soon) alongside Discord, Steam, NVIDIA, Brave, Riot, Epic
+- **Layout**: larger window, 4×2 grid, matching logo wells; Internet globe + official red AMD mark
 ## 1.9.19
 
 - **Home dashboard**: default landing with live PC/CPU/GPU/RAM/network/latency/optimizer stats + quick open

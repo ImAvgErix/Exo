@@ -31,9 +31,6 @@ public sealed class AppSettings
     /// <summary>Bundled / last known Discord kit version string.</summary>
     public string DiscordKitVersion { get; set; } = "1.3.20";
 
-    /// <summary>When true, the home hub sidebar shows icons only.</summary>
-    public bool SidebarCollapsed { get; set; }
-
     public AppSettings Clone() => new()
     {
         Theme = Theme,
@@ -42,7 +39,6 @@ public sealed class AppSettings
         DiscordScriptsBranch = DiscordScriptsBranch,
         CustomScriptsPath = CustomScriptsPath,
         LastDiscordRunUtc = LastDiscordRunUtc,
-        DiscordKitVersion = DiscordKitVersion,
-        SidebarCollapsed = SidebarCollapsed
+        DiscordKitVersion = DiscordKitVersion
     };
 }
