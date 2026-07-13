@@ -64,11 +64,10 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("theme has OptiMutedTextBrush", a.Contains("OptiMutedTextBrush", StringComparison.Ordinal));
     Expect("theme has OptiDividerBrush", a.Contains("OptiDividerBrush", StringComparison.Ordinal));
-    Expect("AMOLED pure black page", a.Contains("#000000", StringComparison.Ordinal));
-    Expect("white accent", a.Contains("OptiAccentBrush", StringComparison.Ordinal) && a.Contains("#FFFFFF", StringComparison.Ordinal));
-    Expect("rail brush present", a.Contains("OptiRailBrush", StringComparison.Ordinal));
+    Expect("LUMEN blue accent", a.Contains("#6EA8FF", StringComparison.Ordinal) || a.Contains("#2563EB", StringComparison.Ordinal));
+    Expect("deep ink canvas", a.Contains("#07080D", StringComparison.Ordinal));
     Expect("not orange forge accent", !a.Contains("#F59E0B", StringComparison.Ordinal));
-    Expect("not leftover Signal teal primary", !a.Contains("#5EEAD4", StringComparison.Ordinal));
+    Expect("not pure AMOLED white accent only", !a.Contains("OptiAccentBrush\" Color=\"#FFFFFF\"", StringComparison.Ordinal));
 }
 
 foreach (var page in new[]
@@ -119,18 +118,17 @@ if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
     Expect("MainWindow has ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
-    Expect("MainWindow has OPTIHUB brand", m.Contains("OPTIHUB", StringComparison.Ordinal));
-    Expect("MainWindow has amber underline rail", m.Contains("OptiRailBrush", StringComparison.Ordinal));
+    Expect("MainWindow has OptiHub brand", m.Contains("OptiHub", StringComparison.Ordinal));
+    Expect("MainWindow floating pill chrome", m.Contains("CornerRadius", StringComparison.Ordinal));
 }
 
 var dash = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml");
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    Expect("dashboard module list", d.Contains("ItemsStackPanel", StringComparison.Ordinal));
-    Expect("dashboard LIVE badge", d.Contains("LIVE", StringComparison.Ordinal));
-    Expect("dashboard uses page padding", d.Contains("OptiPagePadding", StringComparison.Ordinal));
-    Expect("dashboard not centered card grid only", !d.Contains("MaximumRowsOrColumns=\"4\"", StringComparison.Ordinal));
+    Expect("dashboard product tile grid", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
+    Expect("dashboard Live badge", d.Contains("Live", StringComparison.Ordinal));
+    Expect("dashboard centered hero", d.Contains("OptiTagline", StringComparison.Ordinal));
 }
 
 // Borderless black-bar fix must not force GPUScanOutToNative

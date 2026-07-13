@@ -1,3 +1,9 @@
+## 1.9.47
+
+- **LUMEN full redesign**: deep ink canvas, soft blue accent, floating pill title chrome
+- Dashboard: centered italic hero + large product tiles (not gray list)
+- Optimizers + Display: soft elevated panel shell, pill CTAs, soft feature tiles
+- Distinct from prior AMOLED/list and orange FORGE looks
 ## 1.9.46
 
 - **Panel gray-out fix**: combos stay enabled during apply (no IsApplying disable); refresh after busy clears
@@ -400,6 +406,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

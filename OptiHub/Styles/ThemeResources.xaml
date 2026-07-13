@@ -9,11 +9,11 @@
     <FontFamily x:Key="OptiUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
     <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
-    <!-- AMOLED shell metrics — shared by hub + optimizer pages -->
-    <CornerRadius x:Key="OptiCardRadius">10</CornerRadius>
-    <CornerRadius x:Key="OptiTileRadius">8</CornerRadius>
-    <x:Double x:Key="OptiPageMaxWidth">960</x:Double>
-    <Thickness x:Key="OptiPagePadding">28,22,28,24</Thickness>
+    <!-- LUMEN shell — soft panels, wide canvas, big type -->
+    <CornerRadius x:Key="OptiCardRadius">20</CornerRadius>
+    <CornerRadius x:Key="OptiTileRadius">16</CornerRadius>
+    <x:Double x:Key="OptiPageMaxWidth">1080</x:Double>
+    <Thickness x:Key="OptiPagePadding">36,28,36,32</Thickness>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
@@ -23,43 +23,42 @@
     <helpers:AssetPathToImageSourceConverter x:Key="AssetPathToImageSourceConverter" />
 
     <Style x:Key="OptiTagline" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="34" />
-        <Setter Property="FontStyle" Value="Normal" />
-        <Setter Property="FontWeight" Value="Bold" />
-        <Setter Property="CharacterSpacing" Value="40" />
+        <Setter Property="FontFamily" Value="{StaticResource OptiDisplayFontItalic}" />
+        <Setter Property="FontSize" Value="42" />
+        <Setter Property="FontStyle" Value="Italic" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="CharacterSpacing" Value="-20" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
-        <Setter Property="TextAlignment" Value="Left" />
-        <Setter Property="LineHeight" Value="40" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="LineHeight" Value="50" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
 
     <Style x:Key="OptiTaglineSupport" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
-        <Setter Property="FontSize" Value="13.5" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
-        <Setter Property="TextAlignment" Value="Left" />
+        <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
     </Style>
 
     <Style x:Key="OptiSectionTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontSize" Value="12" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="80" />
-        <Setter Property="Margin" Value="0,0,0,8" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
+        <Setter Property="CharacterSpacing" Value="40" />
+        <Setter Property="Margin" Value="0,0,0,10" />
+        <Setter Property="Foreground" Value="{ThemeResource OptiAccentBrush}" />
     </Style>
 
-    <!-- Optimizer page headline (status line) -->
     <Style x:Key="OptiPageTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontSize" Value="28" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="-10" />
-        <Setter Property="LineHeight" Value="28" />
+        <Setter Property="CharacterSpacing" Value="-30" />
+        <Setter Property="LineHeight" Value="34" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
@@ -96,39 +95,36 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <!-- Simple surface tile — no side rails (rails bled/clipped) -->
     <Style x:Key="OptiFeatureTile" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Background" Value="{ThemeResource OptiSurfaceBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
         <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
-        <Setter Property="Padding" Value="14,12" />
-        <Setter Property="MinHeight" Value="60" />
+        <Setter Property="Padding" Value="16,14" />
+        <Setter Property="MinHeight" Value="72" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
     <Style x:Key="OptiMessageBanner" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderThickness" Value="0" />
         <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
-        <Setter Property="Padding" Value="14,12" />
+        <Setter Property="Padding" Value="16,14" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
 
     <Style x:Key="OptiIconWell" TargetType="Border">
-        <Setter Property="Width" Value="32" />
-        <Setter Property="Height" Value="32" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="CornerRadius" Value="12" />
         <Setter Property="Background" Value="{ThemeResource OptiIconWellFillBrush}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <!-- Flat card — no nested rings, no side rail bleed -->
+    <!-- Soft elevated panel (fill contrast only — no hard white rings) -->
     <Style x:Key="OptiCard" TargetType="ContentControl">
-        <Setter Property="Padding" Value="20,18" />
+        <Setter Property="Padding" Value="24,22" />
         <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Stretch" />
@@ -158,9 +154,9 @@
         <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="10" />
-        <Setter Property="Padding" Value="14,12" />
-        <Setter Property="MinHeight" Value="72" />
+        <Setter Property="CornerRadius" Value="18" />
+        <Setter Property="Padding" Value="18,16" />
+        <Setter Property="MinHeight" Value="88" />
     </Style>
 
     <!-- Theme picker tiles (Settings → Appearance) -->
@@ -275,9 +271,9 @@
     -->
     <Style x:Key="OptiPrimaryButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="Padding" Value="20,13" />
-        <Setter Property="CornerRadius" Value="8" />
-        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Padding" Value="22,14" />
+        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="MinHeight" Value="48" />
         <Setter Property="Background" Value="{ThemeResource OptiAccentBrush}" />
@@ -374,8 +370,8 @@
 
     <Style x:Key="OptiQuietButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontMedium}" />
-        <Setter Property="Padding" Value="16,11" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="18,12" />
+        <Setter Property="CornerRadius" Value="999" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="MinHeight" Value="44" />
         <Setter Property="Background" Value="{ThemeResource OptiQuietButtonFillBrush}" />
