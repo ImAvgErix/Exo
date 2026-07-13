@@ -7,9 +7,9 @@
     Background="Transparent"
     Loaded="Page_Loaded">
 
-    <!-- Fixed window shell — static 3-col product grid, no resize math -->
-    <Grid x:Name="PageRoot" Padding="40,24,40,28">
-        <Grid MaxWidth="1040"
+    <!-- Fixed 1180×760 shell — large static 3-col product grid -->
+    <Grid x:Name="PageRoot" Padding="24,10,24,16">
+        <Grid MaxWidth="1120"
               HorizontalAlignment="Center"
               VerticalAlignment="Center">
             <Grid.RowDefinitions>
@@ -18,8 +18,8 @@
             </Grid.RowDefinitions>
 
             <StackPanel x:Name="HeroPanel"
-                        Spacing="6"
-                        Margin="0,0,0,22"
+                        Spacing="0"
+                        Margin="0,0,0,10"
                         HorizontalAlignment="Center"
                         Opacity="0"
                         RenderTransformOrigin="0.5,0.5">
@@ -28,14 +28,10 @@
                 </StackPanel.RenderTransform>
                 <TextBlock Text="Maximum performance. No compromise."
                            Style="{StaticResource OptiTagline}"
-                           FontSize="30"
-                           LineHeight="38"
+                           FontSize="26"
+                           LineHeight="32"
                            TextWrapping="WrapWholeWords"
                            TextAlignment="Center"
-                           HorizontalAlignment="Center" />
-                <TextBlock Text="Pick a target to open it."
-                           Style="{StaticResource OptiTaglineSupport}"
-                           FontSize="13"
                            HorizontalAlignment="Center" />
             </StackPanel>
 
@@ -53,8 +49,8 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
                         <Button Style="{StaticResource OptiCardButton}"
-                                Width="240"
-                                Height="148"
+                                Width="340"
+                                Height="190"
                                 Margin="8"
                                 Click="CardButton_Click"
                                 Tag="{x:Bind Definition.Id}"
@@ -64,10 +60,10 @@
                             <Border Style="{StaticResource OptiCard}"
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Stretch"
-                                    Padding="12">
+                                    Padding="14">
                                 <Grid>
-                                    <Image Width="56"
-                                           Height="56"
+                                    <Image Width="96"
+                                           Height="96"
                                            Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
@@ -75,7 +71,7 @@
                                            AutomationProperties.AccessibilityView="Raw" />
                                     <TextBlock Text="Coming soon"
                                                FontFamily="{StaticResource OptiUiFont}"
-                                               FontSize="11"
+                                               FontSize="12"
                                                Foreground="{ThemeResource OptiMutedTextBrush}"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Bottom"

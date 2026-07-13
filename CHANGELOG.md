@@ -1,3 +1,10 @@
+## 1.9.87
+
+- **Home cards**: larger tiles (340×190, 96px logos) — fills fixed 1180×760 frame
+- Drop “Pick a target…” blurb (tagline only)
+- **Internet logo**: high-quality classic 3-arc Wi‑Fi mark
+- **Windows** coming-soon card with Windows 11 logo
+
 ## 1.9.86
 
 - **Fixed window** 1180×760 — no maximize, no free resize (UI designed for this frame)

@@ -12,7 +12,8 @@ var factors = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
     ["amd.png"] = 1.14,
     ["nvidia.png"] = 1.05,
     ["discord.png"] = 1.00,
-    ["internet.png"] = 0.96,
+    ["internet.png"] = 1.02,
+    ["windows.png"] = 0.96,
     ["brave.png"] = 1.00,
     ["riot.png"] = 1.00,
 };

@@ -18,6 +18,7 @@ public partial class DashboardViewModel : ObservableObject
             Card("steam", "Steam", "Assets/Logos/steam.png", OptimizerStatus.Available),
             Card("internet", "Internet", "Assets/Logos/internet.png", OptimizerStatus.Available),
             Card("nvidia", "NVIDIA", "Assets/Logos/nvidia.png", OptimizerStatus.Available),
+            Card("windows", "Windows", "Assets/Logos/windows.png", OptimizerStatus.ComingSoon),
             Card("amd", "AMD", "Assets/Logos/amd.png", OptimizerStatus.ComingSoon),
             Card("brave", "Brave", "Assets/Logos/brave.png", OptimizerStatus.ComingSoon),
             Card("riot", "Riot", "Assets/Logos/riot.png", OptimizerStatus.ComingSoon),

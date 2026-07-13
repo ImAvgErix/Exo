@@ -71,15 +71,15 @@ if (File.Exists(dash))
     Expect("logo only cards", !d.Contains("Definition.Title}", StringComparison.Ordinal)
         || d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
     Expect("no card title label", !d.Contains("Text=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
-    // Fixed shell: static card sizes, no responsive layout code
-    Expect("dashboard fixed cards", d.Contains("Width=\"240\"", StringComparison.Ordinal)
-        && d.Contains("Height=\"148\"", StringComparison.Ordinal));
+    // Fixed shell: large static cards, no responsive layout code
+    Expect("dashboard fixed cards", d.Contains("Width=\"340\"", StringComparison.Ordinal)
+        && d.Contains("Height=\"190\"", StringComparison.Ordinal));
     Expect("dashboard no responsive layout",
         !File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
             .Contains("ApplyResponsiveLayout", StringComparison.Ordinal));
     // Home is nav only — no applied/checking chips (status lives on the module page).
     Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
-    Expect("simple home blurb", d.Contains("Pick a target", StringComparison.Ordinal));
+    Expect("no pick-a-target blurb", !d.Contains("Pick a target", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
 {
@@ -216,7 +216,13 @@ if (File.Exists(dashVm))
     Expect("home no discord probe", !dvm.Contains("DetectDiscordAsync", StringComparison.Ordinal));
     Expect("home no steam probe", !dvm.Contains("DetectSteamAsync", StringComparison.Ordinal));
     Expect("home no nvidia probe", !dvm.Contains("DetectNvidiaAsync", StringComparison.Ordinal));
+    Expect("windows coming soon card", dvm.Contains("Card(\"windows\"", StringComparison.Ordinal)
+        && dvm.Contains("windows.png", StringComparison.Ordinal));
 }
+if (File.Exists(Path.Combine(logosDir, "windows.png")))
+    Expect("windows logo asset", true);
+else
+    Expect("windows logo asset", false, "missing Assets/Logos/windows.png");
 
 var panelVm = Path.Combine(repo, "OptiHub", "ViewModels", "NvidiaPanelViewModel.cs");
 if (File.Exists(panelVm))

@@ -1,6 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none">
-  <!-- Minimal Wi‑Fi: two arcs + dot -->
-  <path d="M56 128a90 90 0 0 1 144 0" stroke="#FFF" stroke-width="14" stroke-linecap="round" fill="none"/>
-  <path d="M84 156a56 56 0 0 1 88 0" stroke="#FFF" stroke-width="14" stroke-linecap="round" fill="none"/>
-  <circle cx="128" cy="200" r="12" fill="#FFF"/>
+  <!-- Classic 3-arc Wi‑Fi + bottom arc (white on transparent) -->
+  <g transform="translate(128 188)" stroke="#FFF" stroke-width="22" stroke-linecap="round" fill="none">
+    <path d="M-28 -8 A 32 32 0 0 1 28 -8"/>
+    <path d="M-58 -28 A 68 68 0 0 1 58 -28"/>
+    <path d="M-90 -48 A 106 106 0 0 1 90 -48"/>
+    <path d="M-122 -68 A 144 144 0 0 1 122 -68"/>
+  </g>
 </svg>
