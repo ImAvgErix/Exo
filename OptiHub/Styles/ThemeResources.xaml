@@ -169,36 +169,29 @@
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 
-    <!-- Segmented theme picker: selected side is solid white, label near-black. -->
-    <Style x:Key="OptiThemeRadio" TargetType="RadioButton">
+    <!-- Separate Dark / Light choices — full tiles, selected = solid white + dark text -->
+    <Style x:Key="OptiThemeChoice" TargetType="RadioButton">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="MinWidth" Value="76" />
-        <Setter Property="MinHeight" Value="34" />
-        <Setter Property="Padding" Value="16,7" />
+        <Setter Property="MinHeight" Value="48" />
+        <Setter Property="Padding" Value="16,12" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Foreground" Value="{ThemeResource OptiSecondaryTextBrush}" />
-        <Setter Property="Background" Value="Transparent" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
-                    <Grid x:Name="Root"
-                          MinWidth="{TemplateBinding MinWidth}"
-                          MinHeight="{TemplateBinding MinHeight}"
-                          Padding="{TemplateBinding Padding}">
-                        <!-- Soft hover (under checked white fill) -->
-                        <Border x:Name="HoverFill"
-                                Background="{ThemeResource OptiAccentSoftBrush}"
-                                CornerRadius="8"
-                                Opacity="0" />
-                        <!-- Selected: full white pill -->
-                        <Border x:Name="CheckedFill"
-                                Background="#FFFFFF"
-                                CornerRadius="8"
-                                Opacity="0" />
+                    <Border x:Name="Chrome"
+                            Background="{ThemeResource OptiPageBackgroundBrush}"
+                            BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                            BorderThickness="1"
+                            CornerRadius="12"
+                            Padding="{TemplateBinding Padding}"
+                            MinHeight="{TemplateBinding MinHeight}"
+                            HorizontalAlignment="Stretch">
                         <TextBlock x:Name="Label"
                                    Text="{TemplateBinding Content}"
                                    FontFamily="{TemplateBinding FontFamily}"
@@ -209,49 +202,43 @@
                                    VerticalAlignment="Center" />
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
-                                <VisualState x:Name="Normal">
-                                    <VisualState.Setters>
-                                        <Setter Target="HoverFill.Opacity" Value="0" />
-                                        <Setter Target="Root.Opacity" Value="1" />
-                                    </VisualState.Setters>
-                                </VisualState>
+                                <VisualState x:Name="Normal" />
                                 <VisualState x:Name="PointerOver">
                                     <VisualState.Setters>
-                                        <Setter Target="HoverFill.Opacity" Value="1" />
-                                        <Setter Target="Root.Opacity" Value="1" />
+                                        <Setter Target="Chrome.BorderBrush" Value="{ThemeResource OptiPrimaryTextBrush}" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <VisualState.Setters>
-                                        <Setter Target="Root.Opacity" Value="0.92" />
+                                        <Setter Target="Chrome.Opacity" Value="0.9" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
                                     <VisualState.Setters>
-                                        <Setter Target="Root.Opacity" Value="0.45" />
+                                        <Setter Target="Chrome.Opacity" Value="0.45" />
                                     </VisualState.Setters>
                                 </VisualState>
                             </VisualStateGroup>
                             <VisualStateGroup x:Name="CheckStates">
                                 <VisualState x:Name="Checked">
                                     <VisualState.Setters>
-                                        <Setter Target="CheckedFill.Opacity" Value="1" />
+                                        <Setter Target="Chrome.Background" Value="#FFFFFF" />
+                                        <Setter Target="Chrome.BorderBrush" Value="#FFFFFF" />
                                         <Setter Target="Label.Foreground" Value="#0A0A0A" />
                                     </VisualState.Setters>
                                 </VisualState>
-                                <VisualState x:Name="Unchecked">
-                                    <VisualState.Setters>
-                                        <Setter Target="CheckedFill.Opacity" Value="0" />
-                                    </VisualState.Setters>
-                                </VisualState>
+                                <VisualState x:Name="Unchecked" />
                                 <VisualState x:Name="Indeterminate" />
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
-                    </Grid>
+                    </Border>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
+
+    <!-- Legacy alias kept for any remaining OptiThemeRadio refs -->
+    <Style x:Key="OptiThemeRadio" TargetType="RadioButton" BasedOn="{StaticResource OptiThemeChoice}" />
 
     <!--
       Motion language (Kinetics / Amicro inspired):

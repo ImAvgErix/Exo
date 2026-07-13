@@ -108,7 +108,8 @@ if (File.Exists(settings))
     Expect("settings overlay on main", File.Exists(mainXaml) && File.ReadAllText(mainXaml).Contains("SettingsOverlay", StringComparison.Ordinal)
         && File.ReadAllText(mainXaml).Contains("AcrylicBrush", StringComparison.Ordinal));
     Expect("no tooltips in settings", !s.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
-    Expect("settings theme pills", s.Contains("OptiThemeRadio", StringComparison.Ordinal));
+    Expect("settings theme choices", s.Contains("OptiThemeChoice", StringComparison.Ordinal)
+        || s.Contains("OptiThemeRadio", StringComparison.Ordinal));
     Expect("report issue white button", s.Contains("OptiWhiteButton", StringComparison.Ordinal)
         && s.Contains("Report issue", StringComparison.Ordinal));
     Expect("settings update progress only", !s.Contains("OptiLoader", StringComparison.Ordinal)
@@ -124,7 +125,7 @@ if (File.Exists(updateDlg))
     var u = File.ReadAllText(updateDlg);
     Expect("update dialog no loader", !u.Contains("OptiLoader", StringComparison.Ordinal));
     Expect("update dialog progress", u.Contains("ProgressBar", StringComparison.Ordinal)
-        && u.Contains("percentTb", StringComparison.Ordinal));
+        && u.Contains("statusTb", StringComparison.Ordinal));
     Expect("update dialog install", u.Contains("InstallWithProgressAsync", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
@@ -136,7 +137,7 @@ if (File.Exists(theme))
     Expect("theme OptiFeatureTile", t.Contains("OptiFeatureTile", StringComparison.Ordinal));
     Expect("theme OptiIconWell", t.Contains("OptiIconWell", StringComparison.Ordinal));
     Expect("theme OptiPagePadding", t.Contains("OptiPagePadding", StringComparison.Ordinal));
-    Expect("theme OptiThemeRadio", t.Contains("OptiThemeRadio", StringComparison.Ordinal));
+    Expect("theme OptiThemeChoice", t.Contains("OptiThemeChoice", StringComparison.Ordinal));
     Expect("display italic", t.Contains("OptiDisplayFontItalic", StringComparison.Ordinal));
 }
 

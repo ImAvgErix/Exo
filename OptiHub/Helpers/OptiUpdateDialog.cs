@@ -99,14 +99,13 @@ public static class OptiUpdateDialog
             {
                 var progress = new Progress<AppUpdateProgress>(p =>
                 {
-                    if (!string.IsNullOrWhiteSpace(p.Status))
-                        statusTb.Text = p.Status;
+                    // Single line: percent only while the bar moves (no duplicate status).
                     if (p.Percent >= 0)
                     {
                         var pct = Math.Clamp(p.Percent, 0, 100);
                         bar.IsIndeterminate = false;
                         bar.Value = pct;
-                        percentTb.Text = $"{pct:0}%";
+                        statusTb.Text = $"{pct:0}%";
                     }
                 });
 
@@ -115,16 +114,17 @@ public static class OptiUpdateDialog
 
                 if (installResult.ShouldExit)
                 {
-                    statusTb.Text = installResult.Message;
                     bar.IsIndeterminate = false;
                     bar.Value = 100;
-                    percentTb.Text = "100%";
+                    statusTb.Text = "100%";
                     await Task.Delay(700, ct).ConfigureAwait(true);
                 }
                 else
                 {
-                    statusTb.Text = installResult.Message;
                     bar.IsIndeterminate = false;
+                    statusTb.Text = string.IsNullOrWhiteSpace(installResult.Message)
+                        ? statusTb.Text
+                        : installResult.Message;
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
