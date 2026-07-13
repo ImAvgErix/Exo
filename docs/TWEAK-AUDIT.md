@@ -33,6 +33,19 @@ Last pass: v1.9.25. Goal: keep only knobs with real OS/driver behavior; drop fol
 | Force MTU 1500 | **Removed** | Can break PPPoE/VPN; default is fine |
 | Scheduled tray tasks | **Removed** | Background noise |
 
+### Ethernet vs Wi‑Fi (same apply, different branches)
+
+| Behavior | Ethernet | Wi‑Fi |
+|----------|----------|-------|
+| Stack (autotune, Nagle, MMCSS, QoS) | Same | Same |
+| Checksum / LSO / RSC (if exposed) | Set; missing props skipped | Set if exposed; often no-ops |
+| RSS / multi-queue | **On** (supported) | **Skipped** (MS: many wireless NICs lack RSS) |
+| EEE / green ethernet | Off | Off if present |
+| Wi‑Fi power-save / uAPSD / MIMO PS | n/a | **Off** |
+| Preferred band | n/a | Prefer 5 GHz (**not** 5 GHz-only — 2.4 APs still work) |
+| Restart adapter after apply | **Yes** (Up Ethernet) | **No** (would drop association) |
+| Dual NIC PCs | Both physical adapters tuned | Both physical adapters tuned |
+
 ## NVIDIA
 
 | Area | Verdict |

@@ -1,3 +1,6 @@
+## 1.9.26
+
+- **Internet: Ethernet vs Wi‑Fi branches** — RSS only on Ethernet (MS: many wireless NICs lack RSS); Wi‑Fi power-save/uAPSD off + prefer 5 GHz (not 5-only); never Restart-NetAdapter on Wi‑Fi (avoids drop); still tunes all physical NICs for dual-homed PCs
 ## 1.9.25
 
 - **Evidence audit (all optimizers)**: Internet stack cut to documented knobs only — SystemResponsiveness **10**, NetworkThrottlingIndex **10** (not ffffffff), drop XP/server folklore (MaxUserPort, chimney, LargeSystemCache, AFD backlog, WinINET, etc.)

@@ -436,37 +436,61 @@ Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit
         sb.AppendLine(ackBlock);
         sb.AppendLine("}");
 
-        // --- NIC advanced (driver-level, real) ---
+        // --- Per-adapter: branch Ethernet vs Wi‑Fi (MS: wireless often has no RSS/LSO) ---
+        // Apply to all physical NICs so dual-homed PCs are ready on either media.
+        sb.AppendLine("function Test-IsWifiAdapter($a) {");
+        sb.AppendLine("  $media = [string]$a.MediaType");
+        sb.AppendLine("  $desc  = [string]$a.InterfaceDescription");
+        sb.AppendLine("  $name  = [string]$a.Name");
+        sb.AppendLine("  if ($media -match '(?i)802\\.11|Native 802|Wireless|Wi-?Fi') { return $true }");
+        sb.AppendLine("  if ($desc  -match '(?i)Wi-?Fi|Wireless|802\\.11|WLAN|MediaTek.*Wi|Intel.*Wi-?Fi|Realtek.*802\\.11|Killer.*Wireless') { return $true }");
+        sb.AppendLine("  if ($name  -match '(?i)^Wi-?Fi|Wireless') { return $true }");
+        sb.AppendLine("  return $false");
+        sb.AppendLine("}");
         sb.AppendLine("$adapters = @(Get-NetAdapter -Physical -EA SilentlyContinue | Where-Object { $_.Status -eq 'Up' -or $_.Status -eq 'Disconnected' })");
         sb.AppendLine("if ($adapters.Count -eq 0) { $adapters = @(Get-NetAdapter -Physical -EA SilentlyContinue) }");
         sb.AppendLine("foreach ($a in $adapters) {");
         sb.AppendLine("  $n = $a.Name");
-        sb.AppendLine("  Write-Host \"[NIC] $n ($($a.InterfaceDescription))\"");
-        // Checksum offload Rx+Tx when supported
+        sb.AppendLine("  $isWifi = Test-IsWifiAdapter $a");
+        sb.AppendLine("  $kind = $(if ($isWifi) { 'Wi-Fi' } else { 'Ethernet' })");
+        sb.AppendLine("  Write-Host \"[NIC] $n ($kind) $($a.InterfaceDescription)\"");
         sb.AppendLine("  foreach ($kw in @('*IPChecksumOffloadIPv4','*TCPChecksumOffloadIPv4','*TCPChecksumOffloadIPv6','*UDPChecksumOffloadIPv4','*UDPChecksumOffloadIPv6')) { Set-Adv $n $kw 3 }");
         sb.AppendLine("  Set-Adv $n '*LsoV2IPv4' " + lso);
         sb.AppendLine("  Set-Adv $n '*LsoV2IPv6' " + lso);
         sb.AppendLine("  try { if (" + lso + " -eq 1) { Enable-NetAdapterLso -Name $n -NoRestart -EA SilentlyContinue } else { Disable-NetAdapterLso -Name $n -NoRestart -EA SilentlyContinue } } catch {}");
         sb.AppendLine("  try { if ('" + rsc + "' -eq 'enabled') { Enable-NetAdapterRsc -Name $n -EA SilentlyContinue } else { Disable-NetAdapterRsc -Name $n -EA SilentlyContinue } } catch {}");
         sb.AppendLine("  Set-Adv $n '*InterruptModeration' " + im);
-        sb.AppendLine("  if (" + im + " -eq 0) { try { Set-Adv $n 'ITR' 0 } catch {}; try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Interrupt Moderation Rate' -DisplayValue 'Off' -NoRestart -EA SilentlyContinue } catch {} }");
-        // Power-saving that real-world causes link renegotiation / latency spikes
+        sb.AppendLine("  if (" + im + " -eq 0) {");
+        sb.AppendLine("    try { Set-Adv $n 'ITR' 0 } catch {}");
+        sb.AppendLine("    try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Interrupt Moderation Rate' -DisplayValue 'Off' -NoRestart -EA SilentlyContinue } catch {}");
+        sb.AppendLine("  } else {");
+        sb.AppendLine("    try {");
+        sb.AppendLine("      $vals = @((Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword ITR -EA SilentlyContinue).ValidDisplayValues)");
+        sb.AppendLine("      if ($vals -contains 'Adaptive') { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Interrupt Moderation Rate' -DisplayValue 'Adaptive' -NoRestart -EA SilentlyContinue }");
+        sb.AppendLine("      elseif ($vals -contains 'Medium') { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Interrupt Moderation Rate' -DisplayValue 'Medium' -NoRestart -EA SilentlyContinue }");
+        sb.AppendLine("    } catch {}");
+        sb.AppendLine("  }");
         sb.AppendLine("  foreach ($kw in @('*EEE','*EnergyEfficientEthernet','*GreenEthernet','*SelectiveSuspend','*IdleRestriction','*ReduceSpeedOnPowerDown')) { Set-Adv $n $kw 0 }");
         sb.AppendLine("  try { Set-NetAdapterPowerManagement -Name $n -SelectiveSuspend Disabled -NoRestart -EA SilentlyContinue } catch {}");
-        sb.AppendLine("  Set-Adv $n '*RSS' 1");
-        sb.AppendLine("  try { Set-NetAdapterRss -Name $n -Enabled $true -EA SilentlyContinue } catch {}");
+        // RSS: Microsoft — many wireless NICs do not support RSS
+        sb.AppendLine("  if (-not $isWifi) {");
+        sb.AppendLine("    Set-Adv $n '*RSS' 1");
+        sb.AppendLine("    try { Set-NetAdapterRss -Name $n -Enabled $true -EA SilentlyContinue } catch {}");
+        sb.AppendLine("    try { $q = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*NumRssQueues' -EA SilentlyContinue; if ($q -and $q.ValidRegistryValues) { $max = ($q.ValidRegistryValues | Measure-Object -Maximum).Maximum; if ($max -gt 0) { Set-Adv $n '*NumRssQueues' ([int]$max) } } } catch {}");
+        sb.AppendLine("  }");
         sb.AppendLine("  foreach ($kw in @('*ReceiveBuffers','*TransmitBuffers','ReceiveBuffers','TransmitBuffers')) {");
         sb.AppendLine("    try { $prop = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword $kw -EA SilentlyContinue; if ($prop -and $prop.ValidRegistryValues) { $max = ($prop.ValidRegistryValues | Measure-Object -Maximum).Maximum; if ($max -gt 0) { Set-Adv $n $kw ([int]$max) } } } catch {}");
         sb.AppendLine("  }");
-        // Wi-Fi: disable power save (real); prefer 5 GHz when property exists
-        sb.AppendLine("  if ($a.InterfaceDescription -match 'Wi-?Fi|Wireless|802\\.11|WLAN') {");
+        // Wi-Fi: power-save + prefer 5 GHz (not 5GHz-only — 2.4-only APs must still work)
+        sb.AppendLine("  if ($isWifi) {");
         sb.AppendLine("    foreach ($dn in @('MIMO Power Save Mode','MIMO Power Save','uAPSD support','Power Saving Mode')) {");
         sb.AppendLine("      try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $dn -DisplayValue 'Disabled' -NoRestart -EA SilentlyContinue } catch {}");
         sb.AppendLine("      try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $dn -DisplayValue 'Off' -NoRestart -EA SilentlyContinue } catch {}");
         sb.AppendLine("    }");
         sb.AppendLine("    try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Preferred Band' -DisplayValue 'Prefer 5GHz band' -NoRestart -EA SilentlyContinue } catch {}");
+        sb.AppendLine("    try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Preferred Band' -DisplayValue 'Prefer 5GHz' -NoRestart -EA SilentlyContinue } catch {}");
+        sb.AppendLine("    try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Roaming Aggressiveness' -DisplayValue 'Medium' -NoRestart -EA SilentlyContinue } catch {}");
         sb.AppendLine("  }");
-        // Do not turn off device to save power (PnPCapabilities bit)
         sb.AppendLine("  try {");
         sb.AppendLine("    $class = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}'");
         sb.AppendLine("    Get-ChildItem $class -EA SilentlyContinue | ForEach-Object {");
@@ -475,12 +499,12 @@ Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit
         sb.AppendLine("    }");
         sb.AppendLine("  } catch {}");
         sb.AppendLine("}");
-
         sb.AppendLine("try { Clear-DnsClientCache -EA SilentlyContinue } catch {}");
-        // Restart only physical Up adapters so advanced props take effect
-        sb.AppendLine("foreach ($a in @($adapters | Where-Object Status -eq 'Up')) {");
-        sb.AppendLine("  try { Restart-NetAdapter -Name $a.Name -Confirm:$false -EA SilentlyContinue; Write-Host \"[NIC] restarted $($a.Name)\" } catch {}");
+        // Restart Ethernet only — Restart-NetAdapter on Wi-Fi drops the association
+        sb.AppendLine("foreach ($a in @($adapters | Where-Object { $_.Status -eq 'Up' -and -not (Test-IsWifiAdapter $_) })) {");
+        sb.AppendLine("  try { Restart-NetAdapter -Name $a.Name -Confirm:$false -EA SilentlyContinue; Write-Host \"[NIC] restarted (Ethernet) $($a.Name)\" } catch {}");
         sb.AppendLine("}");
+        sb.AppendLine("Write-Host '[OptiHub-NET] Wi-Fi not restarted (avoids disconnect)'");
         sb.AppendLine("Start-Sleep -Seconds 2");
         sb.AppendLine("Write-Host '[OptiHub-NET] DONE preset=" + preset + "'");
         sb.AppendLine("exit 0");
