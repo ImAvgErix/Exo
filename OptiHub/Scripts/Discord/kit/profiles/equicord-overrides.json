@@ -1,0 +1,161 @@
+{
+  "enabledThemes": ["amoled-cord.theme.css"],
+  "useQuickCss": true,
+  "autoUpdate": true,
+  "autoUpdateNotification": false,
+  "eagerPatches": false,
+  "enableOnlineThemes": false,
+  "enableReactDevtools": false,
+  "cloud": {
+    "authenticated": false,
+    "settingsSync": false,
+    "url": "https://cloud.equicord.org/"
+  },
+  "notifications": {
+    "timeout": 3000,
+    "position": "bottom-right",
+    "useNative": "never",
+    "missed": false,
+    "logLimit": 10
+  },
+  "plugins": {
+    "NoTrack": { "enabled": true, "disableAnalytics": true },
+    "CrashHandler": {
+      "enabled": true,
+      "attemptToPreventCrashes": true,
+      "attemptToNavigateToHome": false
+    },
+    "ConsoleJanitor": {
+      "enabled": true,
+      "disableDiscordLogger": true,
+      "disableSpotifyLogger": true
+    },
+    "ClearURLs": { "enabled": true },
+    "AnonymiseFileNames": { "enabled": true, "method": 0, "randomize": true },
+    "NoRPC": { "enabled": true },
+    "SilentTyping": {
+      "enabled": true,
+      "defaultHidden": true,
+      "enabledGlobally": true,
+      "hideChatBoxTypingIndicators": true,
+      "hideMembersListTypingIndicators": true,
+      "chatIcon": false,
+      "chatContextMenu": false
+    },
+    "IgnoreActivities": {
+      "enabled": true,
+      "ignorePlaying": true,
+      "ignoreListening": true,
+      "ignoreStreaming": true,
+      "ignoreWatching": true,
+      "ignoreCompeting": true,
+      "listMode": 0,
+      "idsList": ""
+    },
+    "BetterActivities": {
+      "enabled": true,
+      "removeGameActivityStatus": true,
+      "memberList": false,
+      "userPopout": false,
+      "renderGifs": false,
+      "specialFirst": false,
+      "hideTooltip": true
+    },
+    "Declutter": {
+      "enabled": true,
+      "removeQuestsAboveDms": true,
+      "removeServerBoostInfo": true,
+      "removeNameplate": true,
+      "removeGiftButton": true,
+      "removeShopAboveDms": true,
+      "removeUnavailableEmojiPicker": true,
+      "removeButtonTooltips": true,
+      "removeBillingSettings": true,
+      "removeClanTag": true,
+      "removeProfileEffect": true,
+      "removeAvatarDecoration": true,
+      "removeAudioMenus": false,
+      "alwaysShowUsername": false
+    },
+    "HideChatButtons": { "enabled": true, "color": false, "open": false },
+    "EquicordHelper": {
+      "enabled": true,
+      "disableAdoptTagPrompt": true,
+      "noModalAnimation": true,
+      "removeActivitySection": true
+    },
+    "NoNitroUpsell": { "enabled": true },
+    "NoMosaic": { "enabled": true },
+    "NoPendingCount": {
+      "enabled": true,
+      "hideMessageRequestsCount": true,
+      "hidePremiumOffersCount": true,
+      "hideFriendRequestsCount": true
+    },
+    "NoProfileThemes": { "enabled": true },
+    "PlainFolderIcon": { "enabled": true },
+    "NoSystemBadge": { "enabled": true },
+    "NoBlockedMessages": { "enabled": true },
+    "CleanChannelName": { "enabled": true },
+    "NoRoleHeaders": { "enabled": false },
+    "NoServerEmojis": { "enabled": true },
+    "NoF1": { "enabled": true },
+    "NoOnboardingDelay": { "enabled": true },
+    "NoReplyMention": { "enabled": true },
+    "NoTypingAnimation": { "enabled": true },
+    "StopAutoUnread": { "enabled": true },
+    "OnePingPerDM": {
+      "enabled": true,
+      "allowMentions": false,
+      "allowEveryone": false
+    },
+    "NewGuildSettings": { "enabled": true },
+    "NotificationVolume": { "enabled": true, "notificationVolume": 25 },
+    "AlwaysTrust": { "enabled": true },
+    "SearchFix": { "enabled": true },
+    "DisableCallIdle": { "enabled": true },
+    "YoutubeAdblock": { "enabled": true },
+    "Settings": {
+      "enabled": true,
+      "settingsLocation": "aboveNitro",
+      "includeVencordInfoWhenCopying": false
+    },
+    "BetterSettings": {
+      "enabled": true,
+      "disableFade": true,
+      "eagerLoad": true,
+      "organizeMenu": true
+    },
+    "QuickReply": { "enabled": true },
+    "PinDMs": { "enabled": true },
+    "ValidReply": { "enabled": true },
+    "ValidUser": { "enabled": true },
+    "WebContextMenus": { "enabled": true },
+    "FakeNitro": {
+      "enabled": true,
+      "enableEmojiBypass": true,
+      "enableStickerBypass": true,
+      "enableStreamQualityBypass": true,
+      "transformEmojis": true,
+      "transformStickers": true,
+      "transformCompoundSentence": false,
+      "useHyperLinks": true,
+      "disableEmbedPermissionCheck": false
+    },
+
+    "ImageZoom": { "enabled": false },
+    "ViewIcons": { "enabled": false },
+    "CopyUserURLs": { "enabled": false },
+    "ReadAllNotificationsButton": { "enabled": false },
+    "FixImagesQuality": { "enabled": false },
+    "CallTimer": { "enabled": false },
+    "RoleColorEverywhere": { "enabled": false },
+    "ShowTimeouts": { "enabled": false },
+    "FixCodeblockGap": { "enabled": false },
+    "FixFileExtensions": { "enabled": false },
+    "BetterGifPicker": { "enabled": false },
+    "MessageClickActions": { "enabled": false },
+    "GameActivityToggle": { "enabled": false },
+    "StreamerModeOn": { "enabled": false }
+  }
+}

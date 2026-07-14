@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 100 100" fill="none">
+  <!-- Minimal SF-style Wi‑Fi: equal air between arcs and the center dot -->
+  <g transform="translate(50 55)" stroke="#FFF" stroke-width="7" stroke-linecap="round" fill="none">
+    <path d="M-14 0 A 14 14 0 0 1 14 0"/>
+    <path d="M-27 0 A 27 27 0 0 1 27 0"/>
+    <path d="M-40 0 A 40 40 0 0 1 40 0"/>
+  </g>
+  <circle cx="50" cy="55" r="4.6" fill="#FFF"/>
+</svg>

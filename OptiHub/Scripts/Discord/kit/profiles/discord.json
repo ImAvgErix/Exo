@@ -1,0 +1,38 @@
+{
+  "SKIP_HOST_UPDATE": true,
+  "OPEN_ON_STARTUP": false,
+  "MINIMIZE_TO_TRAY": true,
+  "START_MINIMIZED": false,
+  "IS_MAXIMIZED": true,
+  "IS_MINIMIZED": false,
+  "debugLogging": false,
+  "offloadAdmControls": true,
+  "useLegacyAudioDevice": false,
+  "asyncVideoInputDeviceInit": false,
+  "audioSubsystem": "standard",
+  "DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR": true,
+  "DESKTOP_TTI_DNSTCP_WARMUP": true,
+  "DESKTOP_TTI_EARLY_UPDATE_CHECK": false,
+  "DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS": 2000,
+  "openasar": {
+    "disableMediaKeys": false,
+    "noTrack": true,
+    "noTyping": true,
+    "quickstart": true,
+    "setup": true,
+    "domOptimizer": false,
+    "themeSync": false,
+    "autoupdate": false
+  },
+  "chromiumSwitches": {
+    "disable-breakpad": 1,
+    "disable-crash-reporter": 1,
+    "disable-domain-reliability": 1,
+    "disable-logging": 1,
+    "disable-component-update": 1,
+    "disable-background-networking": 1,
+    "no-pings": 1,
+    "disable-renderer-backgrounding": 1,
+    "disable-backgrounding-occluded-windows": 1
+  }
+}
