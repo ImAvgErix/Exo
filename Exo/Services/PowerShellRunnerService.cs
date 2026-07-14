@@ -1,5 +1,9 @@
 using System.Diagnostics;
+using System.IO.Compression;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Exo.Helpers;
 using Exo.Models;
@@ -915,7 +919,10 @@ public sealed class PowerShellRunnerService
     }
 
     /// <summary>
-    /// Requires PowerShell 7 Preview + Windows Terminal Preview. Installs both via winget if missing.
+    /// Requires PowerShell 7 Preview + Windows Terminal Preview. Installs both via
+    /// winget when available; otherwise (debloated Windows without winget, or a
+    /// failed winget install) falls back to the official Microsoft GitHub releases —
+    /// portable zip for PowerShell Preview, sideloaded msixbundle for Terminal Preview.
     /// </summary>
     public static async Task<(bool Ok, string Message)> EnsurePowerShellRuntimeAsync(
         CancellationToken cancellationToken = default)
@@ -926,26 +933,37 @@ public sealed class PowerShellRunnerService
         var psOk = TryGetPowerShellPath() is not null;
         if (!psOk)
         {
-            if (winget is null)
+            if (winget is not null)
             {
-                return (false,
-                    "PowerShell 7 Preview is required. Install Microsoft.PowerShell.Preview (winget/Store), then restart Exo.");
+                var psInstall = await RunWingetAsync(
+                    winget,
+                    new[]
+                    {
+                        "install", "--id", "Microsoft.PowerShell.Preview", "-e",
+                        "--accept-package-agreements", "--accept-source-agreements",
+                        "--disable-interactivity", "--silent"
+                    },
+                    cancellationToken).ConfigureAwait(false);
+                _cachedPowerShellPath = null;
+                psOk = TryGetPowerShellPath() is not null;
+                if (!psOk)
+                    parts.Add("winget pwsh install failed: " + psInstall.Detail);
             }
 
-            var psInstall = await RunWingetAsync(
-                winget,
-                new[]
-                {
-                    "install", "--id", "Microsoft.PowerShell.Preview", "-e",
-                    "--accept-package-agreements", "--accept-source-agreements",
-                    "--disable-interactivity", "--silent"
-                },
-                cancellationToken).ConfigureAwait(false);
-            _cachedPowerShellPath = null;
-            psOk = TryGetPowerShellPath() is not null;
-            parts.Add(psOk
-                ? "PowerShell Preview ready"
-                : "PowerShell Preview install failed: " + psInstall.Detail);
+            if (!psOk)
+            {
+                var portable = await InstallPortablePwshPreviewAsync(cancellationToken).ConfigureAwait(false);
+                _cachedPowerShellPath = null;
+                psOk = TryGetPowerShellPath() is not null;
+                parts.Add(psOk
+                    ? "PowerShell Preview ready (" + portable.Detail + ")"
+                    : "PowerShell Preview download failed: " + portable.Detail +
+                      " — install Microsoft.PowerShell.Preview manually, then restart Exo");
+            }
+            else
+            {
+                parts.Add("PowerShell Preview ready");
+            }
         }
         else
         {
@@ -955,27 +973,37 @@ public sealed class PowerShellRunnerService
         var wtOk = TryGetWindowsTerminalPreviewPath() is not null;
         if (!wtOk)
         {
-            if (winget is null)
+            if (winget is not null)
             {
-                return (false,
-                    "Windows Terminal Preview is required. Install Microsoft.WindowsTerminal.Preview (winget/Store), then restart Exo. " +
-                    string.Join("; ", parts));
+                var wtInstall = await RunWingetAsync(
+                    winget,
+                    new[]
+                    {
+                        "install", "--id", "Microsoft.WindowsTerminal.Preview", "-e",
+                        "--accept-package-agreements", "--accept-source-agreements",
+                        "--disable-interactivity", "--silent"
+                    },
+                    cancellationToken).ConfigureAwait(false);
+                _cachedTerminalPreviewPath = null;
+                wtOk = TryGetWindowsTerminalPreviewPath() is not null;
+                if (!wtOk)
+                    parts.Add("winget terminal install failed: " + wtInstall.Detail);
             }
 
-            var wtInstall = await RunWingetAsync(
-                winget,
-                new[]
-                {
-                    "install", "--id", "Microsoft.WindowsTerminal.Preview", "-e",
-                    "--accept-package-agreements", "--accept-source-agreements",
-                    "--disable-interactivity", "--silent"
-                },
-                cancellationToken).ConfigureAwait(false);
-            _cachedTerminalPreviewPath = null;
-            wtOk = TryGetWindowsTerminalPreviewPath() is not null;
-            parts.Add(wtOk
-                ? "Terminal Preview ready"
-                : "Terminal Preview install failed: " + wtInstall.Detail);
+            if (!wtOk)
+            {
+                var sideload = await InstallTerminalPreviewFallbackAsync(cancellationToken).ConfigureAwait(false);
+                _cachedTerminalPreviewPath = null;
+                wtOk = TryGetWindowsTerminalPreviewPath() is not null;
+                parts.Add(wtOk
+                    ? "Terminal Preview ready (" + sideload.Detail + ")"
+                    : "Terminal Preview install failed: " + sideload.Detail +
+                      " — install Microsoft.WindowsTerminal.Preview manually, then restart Exo");
+            }
+            else
+            {
+                parts.Add("Terminal Preview ready");
+            }
         }
         else
         {
@@ -986,6 +1014,234 @@ public sealed class PowerShellRunnerService
             return (true, string.Join("; ", parts));
 
         return (false, string.Join("; ", parts));
+    }
+
+    private static readonly HttpClient RuntimeHttp = CreateRuntimeHttp();
+
+    private static HttpClient CreateRuntimeHttp()
+    {
+        var c = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+        c.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Exo", "1.0"));
+        c.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        return c;
+    }
+
+    private static string PortablePwshDir =>
+        Path.Combine(PathHelper.AppDataDir, "runtime", "PowerShellPreview");
+
+    /// <summary>
+    /// Find the newest asset on a GitHub prerelease matching a name filter.
+    /// Returns url + size + sha256 digest (when GitHub provides one).
+    /// </summary>
+    private static async Task<(string? Url, long Size, string? Sha256, string? Tag)> FindLatestPreviewAssetAsync(
+        string repo,
+        Func<string, bool> assetNameMatches,
+        CancellationToken ct)
+    {
+        var json = await RuntimeHttp.GetStringAsync(
+            $"https://api.github.com/repos/{repo}/releases?per_page=15", ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        foreach (var rel in doc.RootElement.EnumerateArray())
+        {
+            if (!rel.TryGetProperty("prerelease", out var pre) || !pre.GetBoolean())
+                continue;
+            if (!rel.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
+                continue;
+            var tag = rel.TryGetProperty("tag_name", out var tn) ? tn.GetString() : null;
+            foreach (var a in assets.EnumerateArray())
+            {
+                var name = a.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                if (!assetNameMatches(name))
+                    continue;
+                var url = a.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
+                if (string.IsNullOrWhiteSpace(url))
+                    continue;
+                var size = a.TryGetProperty("size", out var sz) && sz.TryGetInt64(out var s) ? s : 0;
+                string? sha256 = null;
+                var digest = a.TryGetProperty("digest", out var dg) ? dg.GetString() : null;
+                if (digest is not null && digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
+                    sha256 = digest["sha256:".Length..];
+                return (url, size, sha256, tag);
+            }
+        }
+        return (null, 0, null, null);
+    }
+
+    private static async Task<(bool Ok, string Detail)> DownloadVerifiedAsync(
+        string url, long expectedSize, string? expectedSha256, string destPath, CancellationToken ct)
+    {
+        await using (var fs = File.Create(destPath))
+        await using (var stream = await RuntimeHttp.GetStreamAsync(url, ct).ConfigureAwait(false))
+        {
+            await stream.CopyToAsync(fs, ct).ConfigureAwait(false);
+        }
+
+        var length = new FileInfo(destPath).Length;
+        if (expectedSize > 0 && length != expectedSize)
+        {
+            TryDeleteFile(destPath);
+            return (false, "download size mismatch");
+        }
+
+        if (expectedSha256 is not null)
+        {
+            await using var check = File.OpenRead(destPath);
+            var hash = Convert.ToHexString(await SHA256.HashDataAsync(check, ct).ConfigureAwait(false));
+            if (!hash.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                TryDeleteFile(destPath);
+                return (false, "download failed SHA-256 verification");
+            }
+        }
+
+        return (true, "verified");
+    }
+
+    /// <summary>
+    /// Winget-less fallback: install the official PowerShell 7 Preview portable zip
+    /// (github.com/PowerShell/PowerShell prerelease, win-x64) under %LocalAppData%\Exo\runtime.
+    /// Per-user, no elevation. Preview only — stable releases are never selected.
+    /// </summary>
+    private static async Task<(bool Ok, string Detail)> InstallPortablePwshPreviewAsync(CancellationToken ct)
+    {
+        try
+        {
+            var (url, size, sha256, tag) = await FindLatestPreviewAssetAsync(
+                "PowerShell/PowerShell",
+                name => name.EndsWith("-win-x64.zip", StringComparison.OrdinalIgnoreCase),
+                ct).ConfigureAwait(false);
+            if (url is null || tag is null || !tag.Contains("preview", StringComparison.OrdinalIgnoreCase))
+                return (false, "no PowerShell Preview win-x64 zip release found");
+
+            var runtimeRoot = Path.GetDirectoryName(PortablePwshDir)!;
+            Directory.CreateDirectory(runtimeRoot);
+            var zipPath = Path.Combine(runtimeRoot, "pwsh-preview-download.zip");
+            var staging = PortablePwshDir + ".staging-" + Guid.NewGuid().ToString("N");
+
+            var download = await DownloadVerifiedAsync(url, size, sha256, zipPath, ct).ConfigureAwait(false);
+            if (!download.Ok)
+                return download;
+
+            try
+            {
+                ZipFile.ExtractToDirectory(zipPath, staging, overwriteFiles: true);
+            }
+            finally
+            {
+                TryDeleteFile(zipPath);
+            }
+
+            if (!File.Exists(Path.Combine(staging, "pwsh.exe")))
+            {
+                TryDeleteDirectory(staging);
+                return (false, "zip did not contain pwsh.exe");
+            }
+
+            if (Directory.Exists(PortablePwshDir))
+            {
+                try { Directory.Delete(PortablePwshDir, recursive: true); }
+                catch { /* in use — keep the existing copy */ }
+            }
+            if (Directory.Exists(PortablePwshDir))
+            {
+                TryDeleteDirectory(staging);
+                return (true, "existing portable copy kept (in use)");
+            }
+
+            Directory.Move(staging, PortablePwshDir);
+            return (true, "portable " + tag);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Winget-less fallback: sideload the official Windows Terminal Preview msixbundle
+    /// (github.com/microsoft/terminal prerelease) per-user via Add-AppxPackage.
+    /// Best-effort — a missing framework dependency surfaces as a clear error.
+    /// </summary>
+    private static async Task<(bool Ok, string Detail)> InstallTerminalPreviewFallbackAsync(CancellationToken ct)
+    {
+        try
+        {
+            var (url, size, sha256, tag) = await FindLatestPreviewAssetAsync(
+                "microsoft/terminal",
+                name => name.StartsWith("Microsoft.WindowsTerminalPreview_", StringComparison.OrdinalIgnoreCase)
+                        && name.EndsWith(".msixbundle", StringComparison.OrdinalIgnoreCase),
+                ct).ConfigureAwait(false);
+            if (url is null)
+                return (false, "no Terminal Preview msixbundle release found");
+
+            var runtimeRoot = Path.Combine(PathHelper.AppDataDir, "runtime");
+            Directory.CreateDirectory(runtimeRoot);
+            var bundlePath = Path.Combine(runtimeRoot, "terminal-preview.msixbundle");
+
+            var download = await DownloadVerifiedAsync(url, size, sha256, bundlePath, ct).ConfigureAwait(false);
+            if (!download.Ok)
+                return download;
+
+            try
+            {
+                // Windows PowerShell 5.1 always exists and carries Add-AppxPackage.
+                var psi = new ProcessStartInfo
+                {
+                    FileName = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.System),
+                        "WindowsPowerShell", "v1.0", "powershell.exe"),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                psi.ArgumentList.Add("-NoProfile");
+                psi.ArgumentList.Add("-ExecutionPolicy");
+                psi.ArgumentList.Add("Bypass");
+                psi.ArgumentList.Add("-Command");
+                psi.ArgumentList.Add("Add-AppxPackage -Path '" + bundlePath.Replace("'", "''") + "'");
+
+                using var p = Process.Start(psi);
+                if (p is null)
+                    return (false, "Add-AppxPackage host failed to start");
+                var stderr = await p.StandardError.ReadToEndAsync(ct).ConfigureAwait(false);
+                await p.WaitForExitAsync(ct).ConfigureAwait(false);
+                if (p.ExitCode != 0)
+                {
+                    var reason = stderr.Replace('\r', ' ').Replace('\n', ' ').Trim();
+                    return (false, "sideload exit=" + p.ExitCode +
+                        (reason.Length > 0 ? " " + (reason.Length > 180 ? reason[..180] + "…" : reason) : ""));
+                }
+
+                return (true, "sideloaded " + (tag ?? "preview"));
+            }
+            finally
+            {
+                TryDeleteFile(bundlePath);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { File.Delete(path); } catch { /* best-effort cleanup */ }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try { Directory.Delete(path, recursive: true); } catch { /* best-effort cleanup */ }
     }
 
     private static IEnumerable<string> EnumerateTerminalPreviewCandidates()
@@ -1231,6 +1487,9 @@ public sealed class PowerShellRunnerService
             yield return Path.Combine(appx, "pwsh.exe");
             yield return Path.Combine(appx, "pwsh-preview.exe");
         }
+
+        // Exo-managed portable preview (winget-less fallback install).
+        yield return Path.Combine(PortablePwshDir, "pwsh.exe");
 
         foreach (var root in new[] { programFiles, programW6432, programFilesX86 })
         {
