@@ -2,7 +2,7 @@
 
 - **Repo polish**: README / CONTRIBUTING / SECURITY, issue + PR templates, CI runs peak + UI smokes, `.editorconfig`
 - Removed dead `SettingsOverlayState` (settings is a flyout, not a modal overlay)
-- `.gitignore` covers local agent/IDE scratch (`override-diff-*`, `.cursor/`)
+- `.gitignore` covers local agent/IDE scratch (`override-diff-*`)
 - Docs and agent notes aligned with gear-flyout shell + crisp motion rules
 
 ## 2.2.3

@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Lets non-Windows tooling (GitHub dependency submission) restore the Windows-targeting projects. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+</Project>
