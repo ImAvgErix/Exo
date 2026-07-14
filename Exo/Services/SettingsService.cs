@@ -72,7 +72,9 @@ public sealed class SettingsService
         var changed = false;
         var repo = (settings.DiscordScriptsRepo ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(repo) ||
-            repo.Contains("DiscOpti", StringComparison.OrdinalIgnoreCase))
+            repo.Contains("DiscOpti", StringComparison.OrdinalIgnoreCase) ||
+            repo.Contains("OptiHub", StringComparison.OrdinalIgnoreCase) ||
+            repo.Contains("UhhErix", StringComparison.OrdinalIgnoreCase))
         {
             settings.DiscordScriptsRepo = "ImAvgErix/Exo";
             changed = true;

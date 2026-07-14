@@ -117,6 +117,11 @@ internal static class Program
             Thread.Sleep(600);
             StopOtherExo();
 
+            // One-time upgrade path: OptiHub (the app's old name) may still be
+            // installed. Close it, carry its settings/state over, remove it.
+            StopLegacyOptiHub();
+            MigrateLegacyOptiHub(local, root);
+
             string work = Path.Combine(Path.GetTempPath(), "exo-sfx-" + Guid.NewGuid().ToString("N"));
             string zipPath = Path.Combine(work, "payload.zip");
             string stage = Path.Combine(work, "stage");
@@ -628,6 +633,90 @@ internal static class Program
             }
             if (last != null) throw last;
         }
+    }
+
+    /// <summary>
+    /// Stop any running instance of the legacy OptiHub app (pre-rename builds).
+    /// </summary>
+    private static void StopLegacyOptiHub()
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            Process[] procs = Process.GetProcessesByName("OptiHub");
+            if (procs.Length == 0) return;
+            foreach (Process p in procs)
+            {
+                try { p.CloseMainWindow(); } catch { }
+                try { p.Dispose(); } catch { }
+            }
+
+            Thread.Sleep(250);
+
+            foreach (Process p in Process.GetProcessesByName("OptiHub"))
+            {
+                try
+                {
+                    if (!p.HasExited)
+                        p.Kill();
+                }
+                catch { }
+                try { p.Dispose(); } catch { }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Carry settings/optimizer state from a legacy %LocalAppData%\OptiHub install
+    /// into the Exo data folder, then remove the old install and its shortcut.
+    /// Never overwrites data Exo already has.
+    /// </summary>
+    private static void MigrateLegacyOptiHub(string local, string root)
+    {
+        string legacyRoot = Path.Combine(local, "OptiHub");
+        try
+        {
+            if (Directory.Exists(legacyRoot))
+            {
+                foreach (string src in Directory.GetFiles(legacyRoot, "*.json"))
+                {
+                    string dest = Path.Combine(root, Path.GetFileName(src));
+                    try
+                    {
+                        if (!File.Exists(dest))
+                            File.Copy(src, dest);
+                    }
+                    catch { }
+                }
+
+                try
+                {
+                    Directory.Delete(legacyRoot, true);
+                    Log("Migrated legacy OptiHub settings/state and removed the old install.");
+                }
+                catch (Exception ex)
+                {
+                    Log("Legacy OptiHub cleanup warning (files may be locked): " + ex.Message);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("Legacy OptiHub migration warning: " + ex.Message);
+        }
+
+        try
+        {
+            string oldLnk = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
+                "Programs",
+                "OptiHub.lnk");
+            if (File.Exists(oldLnk))
+            {
+                File.Delete(oldLnk);
+                Log("Removed legacy OptiHub Start Menu shortcut.");
+            }
+        }
+        catch { }
     }
 
     private static void CreateStartMenuShortcut(string targetExe, string workingDir, string iconLocation)
