@@ -1,9 +1,9 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.UI.Xaml.Media;
 using Exo.Models;
 using Exo.Services;
+using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 
 namespace Exo.ViewModels;

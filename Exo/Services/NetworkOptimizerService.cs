@@ -4,8 +4,8 @@ using System.Net.NetworkInformation;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Win32;
 using Exo.Models;
+using Microsoft.Win32;
 
 namespace Exo.Services;
 

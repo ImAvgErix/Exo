@@ -1,5 +1,5 @@
-using Microsoft.UI.Xaml;
 using Exo.Services;
+using Microsoft.UI.Xaml;
 
 namespace Exo;
 

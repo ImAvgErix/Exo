@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using Exo.Helpers;
+using Exo.Views;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -6,10 +8,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using Exo.Helpers;
-using Exo.Views;
-using Windows.Graphics;
 using WinRT.Interop;
+using Windows.Graphics;
 
 namespace Exo;
 

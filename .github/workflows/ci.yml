@@ -31,7 +31,7 @@ jobs:
         shell: pwsh
         run: |
           $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-          & $csc /nologo /target:winexe /optimize+ /out:"$env:RUNNER_TEMP\ExoSfx-test.exe" /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll tools/ExoSfx.cs
+          & $csc /nologo /target:winexe /optimize+ /out:"$env:RUNNER_TEMP\ExoSfx-test.exe" /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll tools\ExoSfx.cs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Validate scripts and bundled data

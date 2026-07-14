@@ -1,8 +1,8 @@
+using Exo.Models;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Exo.Models;
 using Windows.UI;
 
 namespace Exo.Services;
