@@ -9,7 +9,9 @@ param(
     [string]$NotesFile = '',
     [string]$Notes = '',
     [switch]$ReplaceExisting,
-    [switch]$PruneOldReleases
+    # Default: only the newest release stays (user wants one current installer).
+    [switch]$PruneOldReleases = $true,
+    [switch]$KeepHistoricalReleases
 )
 
 $ErrorActionPreference = 'Stop'
@@ -191,10 +193,10 @@ if (-not $ok) {
     throw "RELEASE VERIFY FAILED: /releases/latest is '$($last.Tag)' without Exo.exe."
 }
 
-if ($PruneOldReleases) {
-    Remove-OldReleasesAndTags -KeepTag $Tag
+if ($KeepHistoricalReleases) {
+    Write-Host '[*] Preserving historical releases (-KeepHistoricalReleases).' -ForegroundColor DarkGray
 } else {
-    Write-Host '[*] Preserving historical releases and tags (use -PruneOldReleases to remove them).' -ForegroundColor DarkGray
+    Remove-OldReleasesAndTags -KeepTag $Tag
 }
 
 $last = $null
