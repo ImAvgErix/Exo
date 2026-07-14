@@ -1,3 +1,8 @@
+## 2.2.5
+
+- **Upgrade path from OptiHub**: the installer now closes any running legacy OptiHub app, migrates saved settings and optimizer state from `%LocalAppData%\OptiHub` into `%LocalAppData%\Exo`, and removes the old install folder and Start Menu shortcut
+- Settings migration rewrites legacy script-update repos (`UhhErix`/`OptiHub`) to `ImAvgErix/Exo`, so carried-over settings can't point script updates at the deleted repo
+
 ## 2.2.4
 
 - **Repo polish**: README / CONTRIBUTING / SECURITY, issue + PR templates, CI runs peak + UI smokes, `.editorconfig`
