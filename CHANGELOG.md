@@ -1,3 +1,7 @@
+## 2.1.2
+
+- **Settings rail restored** (side panel under gear, not centered modal)
+- **Faster open**: gear crank ~140ms, rail expand ~160ms
 ## 2.1.1
 
 - **Settings rail**: gear cranks, then a full-height left panel grows out of the gear (stem connection)

@@ -25,8 +25,8 @@ public sealed partial class MainWindow : Window
 
     private ShellMode _mode = ShellMode.Home;
     private readonly CancellationTokenSource _lifetimeCts = new();
-    private bool _gearSpinning;
     private bool _settingsOpen;
+    private bool _gearSpinning;
     private const double SettingsRailWidth = 280;
 
     public MainWindow()
@@ -269,7 +269,6 @@ public sealed partial class MainWindow : Window
 
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {
-        // Settings rail is home-only chrome; close it when leaving home.
         if (_settingsOpen)
             CloseSettingsRail(immediate: true);
 
@@ -280,36 +279,27 @@ public sealed partial class MainWindow : Window
             ApplyChrome(mode);
     }
 
-    /// <summary>
-    /// Gear cranks, then a left rail grows downward out of the gear.
-    /// Content shifts right so the rail never covers the cards.
-    /// </summary>
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         if (_settingsOpen)
-        {
             CloseSettingsRail();
-            return;
-        }
-
-        SpinSettingsGear(() => OpenSettingsRail());
+        else
+            SpinSettingsGear(OpenSettingsRail);
     }
 
+    /// <summary>Fast gear crank, then rail expands down from the gear.</summary>
     private void OpenSettingsRail()
     {
         if (_settingsOpen) return;
         _settingsOpen = true;
 
-        // Push home content right so cards sit beside the rail, never under it.
+        // Shift cards right so the rail never covers them.
         ContentFrame.Margin = new Thickness(SettingsRailWidth, 0, 0, 0);
 
         SettingsRail.Visibility = Visibility.Visible;
         SettingsRail.Opacity = 1;
         if (SettingsRailTransform is not null)
-        {
-            SettingsRailTransform.ScaleY = 0.02;
-            SettingsRailTransform.TranslateY = 0;
-        }
+            SettingsRailTransform.ScaleY = 0.04;
 
         try
         {
@@ -318,9 +308,9 @@ public sealed partial class MainWindow : Window
             {
                 var scale = new DoubleAnimation
                 {
-                    From = 0.02,
+                    From = 0.04,
                     To = 1,
-                    Duration = TimeSpan.FromMilliseconds(380),
+                    Duration = TimeSpan.FromMilliseconds(160),
                     EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
                     EnableDependentAnimation = true
                 };
@@ -331,9 +321,9 @@ public sealed partial class MainWindow : Window
 
             var fade = new DoubleAnimation
             {
-                From = 0,
+                From = 0.6,
                 To = 1,
-                Duration = TimeSpan.FromMilliseconds(280),
+                Duration = TimeSpan.FromMilliseconds(120),
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
                 EnableDependentAnimation = true
             };
@@ -377,7 +367,7 @@ public sealed partial class MainWindow : Window
             SettingsRail.Visibility = Visibility.Collapsed;
             SettingsRail.Opacity = 1;
             if (SettingsRailTransform is not null)
-                SettingsRailTransform.ScaleY = 0.02;
+                SettingsRailTransform.ScaleY = 0.04;
             ContentFrame.Margin = new Thickness(0);
             try { if (SettingsGearRotate is not null) SettingsGearRotate.Angle = 0; } catch { }
         }
@@ -395,9 +385,9 @@ public sealed partial class MainWindow : Window
             {
                 var scale = new DoubleAnimation
                 {
-                    From = SettingsRailTransform.ScaleY <= 0 ? 1 : SettingsRailTransform.ScaleY,
-                    To = 0.02,
-                    Duration = TimeSpan.FromMilliseconds(220),
+                    From = Math.Max(SettingsRailTransform.ScaleY, 0.04),
+                    To = 0.04,
+                    Duration = TimeSpan.FromMilliseconds(120),
                     EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
                     EnableDependentAnimation = true
                 };
@@ -410,7 +400,7 @@ public sealed partial class MainWindow : Window
             {
                 From = SettingsRail.Opacity,
                 To = 0,
-                Duration = TimeSpan.FromMilliseconds(180),
+                Duration = TimeSpan.FromMilliseconds(100),
                 EnableDependentAnimation = true
             };
             Storyboard.SetTarget(fade, SettingsRail);
@@ -426,7 +416,7 @@ public sealed partial class MainWindow : Window
             }
             sb.Completed += (_, _) => Once();
             sb.Begin();
-            _ = Task.Delay(260).ContinueWith(_ => Once());
+            _ = Task.Delay(150).ContinueWith(_ => Once());
         }
         catch
         {
@@ -434,7 +424,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>Crank the gear ~1 full turn, then invoke onDone.</summary>
+    /// <summary>Quick gear crank (~quarter turn feel, snappy).</summary>
     private void SpinSettingsGear(Action onDone)
     {
         if (_gearSpinning)
@@ -457,8 +447,8 @@ public sealed partial class MainWindow : Window
             var anim = new DoubleAnimation
             {
                 From = 0,
-                To = 360,
-                Duration = TimeSpan.FromMilliseconds(400),
+                To = 180,
+                Duration = TimeSpan.FromMilliseconds(140),
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
                 EnableDependentAnimation = true
             };
@@ -471,12 +461,12 @@ public sealed partial class MainWindow : Window
             {
                 if (done) return;
                 done = true;
-                try { SettingsGearRotate.Angle = 360; } catch { }
+                try { SettingsGearRotate.Angle = 180; } catch { }
                 onDone();
             }
             sb.Completed += (_, _) => Once();
             sb.Begin();
-            _ = Task.Delay(450).ContinueWith(_ =>
+            _ = Task.Delay(160).ContinueWith(_ =>
             {
                 try { DispatcherQueue.TryEnqueue(Once); } catch { }
             });

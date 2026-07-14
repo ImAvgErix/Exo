@@ -5,10 +5,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Loaded="UserControl_Loaded">
 
-    <!--
-      Full-height rail content: stacks down, version pinned to bottom.
-      Lives inside the left settings rail (extension of the gear).
-    -->
     <Grid Padding="16,8,16,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
@@ -128,7 +124,6 @@
             </StackPanel>
         </ScrollViewer>
 
-        <!-- Version pinned to bottom of the rail -->
         <Grid Grid.Row="1" Margin="0,12,0,0">
             <Rectangle Height="1"
                        VerticalAlignment="Top"

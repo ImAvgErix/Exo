@@ -12,9 +12,6 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!--
-          Chrome buttons MUST live outside SetTitleBar.
-        -->
         <Grid Grid.Row="0" Background="{ThemeResource OptiPageBackgroundBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -70,7 +67,6 @@
                            IsHitTestVisible="False"
                            Visibility="Collapsed" />
 
-                <!-- Gear cranks open a left rail that grows out of this icon -->
                 <Button x:Name="SettingsButton"
                         Style="{StaticResource OptiIconButton}"
                         AutomationProperties.Name="Settings"
@@ -98,23 +94,17 @@
                   VerticalAlignment="Stretch" />
         </Grid>
 
-        <!-- Content + settings rail (rail never covers cards — content shifts right) -->
         <Grid Grid.Row="1">
             <Frame x:Name="ContentFrame"
                    Padding="0"
                    IsTabStop="True"
                    IsNavigationStackEnabled="False" />
 
-            <!--
-              Left rail: full height of the content area, under the gear.
-              Width matches the gutter so cards aren't covered (home shifts right when open).
-              Grows downward from the gear (ScaleY origin top).
-            -->
+            <!-- Left rail under gear; content shifts right so cards stay clear -->
             <Border x:Name="SettingsRail"
                     Width="280"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Stretch"
-                    Margin="0,0,0,0"
                     Visibility="Collapsed"
                     Background="{ThemeResource OptiCardFillBrush}"
                     BorderBrush="{ThemeResource OptiCardStrokeBrush}"
@@ -124,16 +114,14 @@
                 <Border.RenderTransform>
                     <CompositeTransform x:Name="SettingsRailTransform" ScaleY="0.01" />
                 </Border.RenderTransform>
-                <!-- Thin stem under gear so it reads as one piece with the icon -->
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="10" />
+                        <RowDefinition Height="8" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-                    <!-- Stem / notch aligned under gear column -->
                     <Border Grid.Row="0"
                             Width="28"
-                            Height="10"
+                            Height="8"
                             HorizontalAlignment="Left"
                             Margin="16,0,0,0"
                             Background="{ThemeResource OptiCardFillBrush}"

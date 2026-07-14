@@ -312,9 +312,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.1.1", File.ReadAllText(versionFile).Trim() == "2.1.1");
+    Expect("VERSION is 2.1.2", File.ReadAllText(versionFile).Trim() == "2.1.2");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.1.1", File.ReadAllText(csproj).Contains("<Version>2.1.1</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.1.2", File.ReadAllText(csproj).Contains("<Version>2.1.2</Version>", StringComparison.Ordinal));
 
 var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");
 if (File.Exists(appSettings))
