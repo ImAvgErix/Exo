@@ -25,7 +25,6 @@ dist/
 _DELETE_ME_*/
 _old_*/
 override-diff-*/
-.cursor/
 .idea/
 *.DotSettings.user
 
