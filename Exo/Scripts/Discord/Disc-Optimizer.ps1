@@ -205,7 +205,7 @@ function Get-DiscOptPwsh7 {
 function Install-DiscOptPwshPortable {
     # Winget-less fallback: official PowerShell *Preview* portable zip from
     # github.com/PowerShell/PowerShell (prerelease, win-x64). Per-user, no elevation.
-    # Preview only — stable releases are never selected.
+    # Preview only - stable releases are never selected.
     try {
         Write-Host '[*] Downloading PowerShell 7 Preview portable from GitHub releases...' -ForegroundColor Cyan
         $releases = Invoke-RestMethod -Uri 'https://api.github.com/repos/PowerShell/PowerShell/releases?per_page=15' `
