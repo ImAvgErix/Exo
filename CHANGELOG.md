@@ -1,3 +1,8 @@
+## 2.1.0
+
+- **Settings restart**: gear crank-spins, then a **dropdown flyout** (no full-screen modal)
+- Flyout: Dark / Light, check-on-launch, Check for updates, Report issue / Open logs, app version at bottom
+- Buttons match OptiQuiet / OptiPrimary chrome
 ## 2.0.6
 
 - **Settings stays centered for real**: star-grid center host; sheet never gets transform/opacity animation

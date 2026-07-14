@@ -5,10 +5,9 @@ using OptiHub.ViewModels;
 
 namespace OptiHub.Views.Controls;
 
+/// <summary>Settings dropdown content (Flyout). No modal overlay.</summary>
 public sealed partial class SettingsSheet : UserControl
 {
-    public event EventHandler? CloseRequested;
-
     public SettingsViewModel ViewModel { get; }
 
     public SettingsSheet()
@@ -26,6 +25,15 @@ public sealed partial class SettingsSheet : UserControl
             OptiUpdateDialog.InstallWithProgressAsync(XamlRoot, check, App.Services.Updater);
     }
 
-    private void CloseButton_Click(object sender, RoutedEventArgs e) =>
-        CloseRequested?.Invoke(this, EventArgs.Empty);
+    private void DarkMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (!ViewModel.IsDarkMode)
+            ViewModel.IsDarkMode = true;
+    }
+
+    private void LightMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (!ViewModel.IsLightMode)
+            ViewModel.IsLightMode = true;
+    }
 }

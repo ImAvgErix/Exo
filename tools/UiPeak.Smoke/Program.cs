@@ -122,31 +122,18 @@ if (File.Exists(settings))
     Expect("settings app version", s.Contains("App version", StringComparison.Ordinal)
         && s.Contains("AppVersion", StringComparison.Ordinal)
         && !s.Contains("KitVersion", StringComparison.Ordinal));
-    Expect("settings theme button", s.Contains("ToggleThemeCommand", StringComparison.Ordinal)
-        && (s.Contains("CurrentThemeLabel", StringComparison.Ordinal) || s.Contains("ThemeToggleLabel", StringComparison.Ordinal))
-        && s.Contains("ThemeSwitchHint", StringComparison.Ordinal)
-        && s.Contains("OptiThemeToggleButton", StringComparison.Ordinal));
-    Expect("settings theme current mode", s.Contains("CurrentThemeLabel", StringComparison.Ordinal)
-        && s.Contains("ThemeSwitchHint", StringComparison.Ordinal));
+    Expect("settings dark light buttons",
+        s.Contains("DarkMode_Click", StringComparison.Ordinal)
+        && s.Contains("LightMode_Click", StringComparison.Ordinal)
+        && s.Contains("Content=\"Dark\"", StringComparison.Ordinal)
+        && s.Contains("Content=\"Light\"", StringComparison.Ordinal));
     Expect("settings opti card", s.Contains("OptiCardFillBrush", StringComparison.Ordinal)
         || s.Contains("OptiCardRadius", StringComparison.Ordinal));
-    Expect("settings single card", s.Contains("Appearance", StringComparison.Ordinal)
-        && s.Contains("Support", StringComparison.Ordinal));
-    Expect("settings no title", !s.Contains("Text=\"Settings\"", StringComparison.Ordinal));
-    Expect("settings page padding token",
-        s.Contains("Padding=\"22,18,22,20\"", StringComparison.Ordinal)
-        || s.Contains("Padding=\"20,16,20,18\"", StringComparison.Ordinal)
-        || s.Contains("Padding=\"18,16\"", StringComparison.Ordinal));
-    Expect("settings overlay on main", File.Exists(mainXaml) && File.ReadAllText(mainXaml).Contains("SettingsOverlay", StringComparison.Ordinal)
-        && File.ReadAllText(mainXaml).Contains("AcrylicBrush", StringComparison.Ordinal)
-        && File.ReadAllText(mainXaml).Contains("SettingsSheetHost", StringComparison.Ordinal)
-        && File.ReadAllText(mainXaml).Contains("SettingsCenterHost", StringComparison.Ordinal)
-        && File.ReadAllText(mainXaml).Contains("Height=\"*\"", StringComparison.Ordinal));
-    Expect("no tooltips in settings", !s.Contains("ToolTip", StringComparison.OrdinalIgnoreCase)
-        && !s.Contains("ToolTipService", StringComparison.OrdinalIgnoreCase));
-    Expect("report issue secondary button",
-        (s.Contains("OptiSecondaryButton", StringComparison.Ordinal) || s.Contains("OptiWhiteButton", StringComparison.Ordinal))
-        && s.Contains("Report issue", StringComparison.Ordinal));
+    Expect("settings no modal title", !s.Contains("Text=\"Settings\"", StringComparison.Ordinal));
+    Expect("settings quiet support buttons",
+        s.Contains("OptiQuietButton", StringComparison.Ordinal)
+        && s.Contains("Report issue", StringComparison.Ordinal)
+        && s.Contains("Open logs", StringComparison.Ordinal));
     Expect("settings no motion slider",
         !s.Contains("MotionSlider", StringComparison.Ordinal)
         && !s.Contains("MotionIntensity", StringComparison.Ordinal)
@@ -157,6 +144,19 @@ if (File.Exists(settings))
         && s.Contains("UpdateProgressLabel", StringComparison.Ordinal));
     Expect("settings update progress bar", s.Contains("ProgressBar", StringComparison.Ordinal)
         && s.Contains("UpdateProgressPercent", StringComparison.Ordinal));
+    Expect("no tooltips in settings", !s.Contains("ToolTip", StringComparison.OrdinalIgnoreCase)
+        && !s.Contains("ToolTipService", StringComparison.OrdinalIgnoreCase));
+}
+// Settings is a gear flyout, not a full-window modal overlay.
+if (File.Exists(mainXaml))
+{
+    var mx = File.ReadAllText(mainXaml);
+    Expect("settings flyout on gear",
+        mx.Contains("SettingsFlyout", StringComparison.Ordinal)
+        && mx.Contains("SettingsSheetHost", StringComparison.Ordinal)
+        && mx.Contains("SettingsGearRotate", StringComparison.Ordinal)
+        && !mx.Contains("SettingsOverlay", StringComparison.Ordinal)
+        && !mx.Contains("SettingsScrim", StringComparison.Ordinal));
 }
 var updateDlg = Path.Combine(repo, "OptiHub", "Helpers", "OptiUpdateDialog.cs");
 if (File.Exists(updateDlg))
@@ -257,10 +257,6 @@ if (File.Exists(motionCs))
         && m.Contains("DoubleAnimation", StringComparison.Ordinal)
         && !m.Contains("StartAnimation(\"Offset\"", StringComparison.Ordinal)
         && !m.Contains("StartAnimation(\"Opacity\"", StringComparison.Ordinal));
-    Expect("OptiMotion scrim-only settings fade",
-        m.Contains("PlayScrimFadeIn", StringComparison.Ordinal)
-        && m.Contains("PlayScrimFadeOut", StringComparison.Ordinal)
-        && m.Contains("ClearCompositionOnly", StringComparison.Ordinal));
     Expect("OptiMotion PlaySelect", m.Contains("PlaySelect", StringComparison.Ordinal));
     Expect("OptiMotion page enter ensure visible",
         m.Contains("PlayPageEnter", StringComparison.Ordinal)
@@ -271,24 +267,12 @@ var mainCsPath = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
 if (File.Exists(mainCsPath))
 {
     var mc = File.ReadAllText(mainCsPath);
-    Expect("settings open uses scrim-only fade",
-        mc.Contains("OpenSettingsOverlay", StringComparison.Ordinal)
-        && mc.Contains("CloseSettingsOverlay", StringComparison.Ordinal)
-        && mc.Contains("PlayScrimFadeIn", StringComparison.Ordinal)
-        && mc.Contains("PlayScrimFadeOut", StringComparison.Ordinal)
-        && mc.Contains("PinSettingsSheetLayout", StringComparison.Ordinal)
-        && mc.Contains("SettingsCenterHost", StringComparison.Ordinal));
-    Expect("settings close always recovers",
-        mc.Contains("_settingsOpen = false", StringComparison.Ordinal)
-        && mc.Contains("Visibility.Collapsed", StringComparison.Ordinal)
-        && mc.Contains("SettingsButton.Visibility", StringComparison.Ordinal));
-    var openFn = mc.IndexOf("void OpenSettingsOverlay", StringComparison.Ordinal);
-    var openBody = openFn >= 0 ? mc.Substring(openFn, Math.Min(900, mc.Length - openFn)) : "";
-    Expect("settings open navigates home first",
-        openFn >= 0
-        && openBody.IndexOf("NavigateHome(", StringComparison.Ordinal) >= 0
-        && openBody.IndexOf("NavigateHome(", StringComparison.Ordinal)
-            < openBody.IndexOf("_settingsOpen = true", StringComparison.Ordinal));
+    Expect("settings gear spin + flyout",
+        mc.Contains("SpinSettingsGear", StringComparison.Ordinal)
+        && mc.Contains("SettingsFlyout", StringComparison.Ordinal)
+        && mc.Contains("ShowAt", StringComparison.Ordinal)
+        && !mc.Contains("OpenSettingsOverlay", StringComparison.Ordinal)
+        && !mc.Contains("SettingsOverlay", StringComparison.Ordinal));
     Expect("navigate ensures page visible",
         mc.Contains("OnContentNavigated", StringComparison.Ordinal)
         && mc.Contains("EnsureVisible", StringComparison.Ordinal));
@@ -324,9 +308,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.0.6", File.ReadAllText(versionFile).Trim() == "2.0.6");
+    Expect("VERSION is 2.1.0", File.ReadAllText(versionFile).Trim() == "2.1.0");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.0.6", File.ReadAllText(csproj).Contains("<Version>2.0.6</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.1.0", File.ReadAllText(csproj).Contains("<Version>2.1.0</Version>", StringComparison.Ordinal));
 
 var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");
 if (File.Exists(appSettings))

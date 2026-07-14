@@ -2,6 +2,7 @@ using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using OptiHub.Helpers;
@@ -25,7 +26,7 @@ public sealed partial class MainWindow : Window
 
     private ShellMode _mode = ShellMode.Home;
     private readonly CancellationTokenSource _lifetimeCts = new();
-    private bool _settingsOpen;
+    private bool _gearSpinning;
 
     public MainWindow()
     {
@@ -267,8 +268,7 @@ public sealed partial class MainWindow : Window
 
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {
-        if (_settingsOpen)
-            CloseSettingsOverlay();
+        HideSettingsFlyout();
 
         if (_mode == mode && ContentFrame.CurrentSourcePageType == pageType)
             return;
@@ -277,99 +277,116 @@ public sealed partial class MainWindow : Window
             ApplyChrome(mode);
     }
 
-    private void SettingsButton_Click(object sender, RoutedEventArgs e) =>
-        OpenSettingsOverlay();
-
-    private void SettingsSheet_CloseRequested(object? sender, EventArgs e) =>
-        CloseSettingsOverlay();
-
-    private void SettingsScrim_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e) =>
-        CloseSettingsOverlay();
-
-    /// <summary>
-    /// Settings open/close — sheet is NEVER animated (star-grid keeps it centered).
-    /// Only the scrim fades. Touching the sheet with transforms is what pinned top-left.
-    /// </summary>
-    private void OpenSettingsOverlay()
-    {
-        if (_settingsOpen)
-        {
-            SettingsOverlay.Visibility = Visibility.Visible;
-            SettingsButton.Visibility = Visibility.Collapsed;
-            PinSettingsSheetLayout();
-            return;
-        }
-
-        if (_mode != ShellMode.Home)
-            NavigateHome(suppressTransition: true);
-
-        _settingsOpen = true;
-        SettingsButton.Visibility = Visibility.Collapsed;
-        PinSettingsSheetLayout();
-        SettingsOverlay.Visibility = Visibility.Visible;
-        SettingsOverlay.UpdateLayout();
-        // Fade scrim only — never the sheet host.
-        OptiMotion.PlayScrimFadeIn(SettingsScrim);
-    }
-
-    private void CloseSettingsOverlay()
-    {
-        if (!_settingsOpen && SettingsOverlay.Visibility != Visibility.Visible)
-        {
-            SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
-            return;
-        }
-
-        _settingsOpen = false;
-        SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
-
-        void Finish()
-        {
-            SettingsOverlay.Visibility = Visibility.Collapsed;
-            PinSettingsSheetLayout();
-            SettingsScrim.Opacity = 1;
-            SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        var done = false;
-        void Once()
-        {
-            if (done) return;
-            done = true;
-            DispatcherQueue.TryEnqueue(Finish);
-        }
-
-        OptiMotion.PlayScrimFadeOut(SettingsScrim, Once);
-        _ = Task.Delay(180).ContinueWith(_ => Once());
-    }
-
-    /// <summary>Strip any transform/opacity residue; sheet stays layout-centered.</summary>
-    private void PinSettingsSheetLayout()
+    /// <summary>Gear crank spin, then open the settings dropdown under the button.</summary>
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            SettingsOverlay.Opacity = 1;
-            SettingsOverlay.RenderTransform = null;
-            SettingsCenterHost.Opacity = 1;
-            SettingsCenterHost.RenderTransform = null;
-            SettingsSheetHost.Opacity = 1;
-            SettingsSheetHost.RenderTransform = null;
-            SettingsSheetHost.IsHitTestVisible = true;
-            // Clear composition layer if anything ever touched it.
-            OptiMotion.ClearCompositionOnly(SettingsSheetHost);
-            OptiMotion.ClearCompositionOnly(SettingsOverlay);
-            OptiMotion.ClearCompositionOnly(SettingsCenterHost);
+            if (SettingsFlyout.IsOpen)
+            {
+                SettingsFlyout.Hide();
+                return;
+            }
+        }
+        catch { }
+
+        SpinSettingsGear(() =>
+        {
+            try
+            {
+                FlyoutBase.ShowAttachedFlyout(SettingsButton);
+            }
+            catch
+            {
+                try { SettingsFlyout.ShowAt(SettingsButton); } catch { }
+            }
+        });
+    }
+
+    private void SettingsFlyout_Opened(object sender, object e)
+    {
+        // Keep gear at end of crank while open.
+        try { if (SettingsGearRotate is not null) SettingsGearRotate.Angle = 360; } catch { }
+    }
+
+    private void SettingsFlyout_Closed(object sender, object e)
+    {
+        try
+        {
+            if (SettingsGearRotate is not null)
+                SettingsGearRotate.Angle = 0;
+        }
+        catch { }
+        _gearSpinning = false;
+    }
+
+    private void HideSettingsFlyout()
+    {
+        try
+        {
+            if (SettingsFlyout.IsOpen)
+                SettingsFlyout.Hide();
         }
         catch { }
     }
 
-    private void BackButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>Crank the gear ~1 full turn, then invoke onDone.</summary>
+    private void SpinSettingsGear(Action onDone)
     {
-        if (_settingsOpen || SettingsOverlay.Visibility == Visibility.Visible)
+        if (_gearSpinning)
         {
-            CloseSettingsOverlay();
+            onDone();
             return;
         }
+
+        _gearSpinning = true;
+        try
+        {
+            if (SettingsGearRotate is null)
+            {
+                _gearSpinning = false;
+                onDone();
+                return;
+            }
+
+            SettingsGearRotate.Angle = 0;
+            var anim = new DoubleAnimation
+            {
+                From = 0,
+                To = 360,
+                Duration = TimeSpan.FromMilliseconds(420),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                EnableDependentAnimation = true
+            };
+            Storyboard.SetTarget(anim, SettingsGearRotate);
+            Storyboard.SetTargetProperty(anim, "Angle");
+            var sb = new Storyboard();
+            sb.Children.Add(anim);
+            var done = false;
+            void Once()
+            {
+                if (done) return;
+                done = true;
+                try { SettingsGearRotate.Angle = 360; } catch { }
+                onDone();
+            }
+            sb.Completed += (_, _) => Once();
+            sb.Begin();
+            _ = Task.Delay(480).ContinueWith(_ =>
+            {
+                try { DispatcherQueue.TryEnqueue(Once); } catch { }
+            });
+        }
+        catch
+        {
+            _gearSpinning = false;
+            onDone();
+        }
+    }
+
+    private void BackButton_Click(object sender, RoutedEventArgs e)
+    {
+        HideSettingsFlyout();
         if (_mode == ShellMode.NvidiaPanel)
             NavigateToNvidia();
         else
