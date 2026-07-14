@@ -331,11 +331,16 @@ E 'ps detect-path soft-drift + state active' $debloatSoft
     }
 }
 
-// Live detect script: debloat feature row must be present (no Count throw skip)
+// Live detect script: a feature row must be present (no Count throw skip).
+// Without Discord installed (CI runners) detect takes the install branch,
+// so assert the row that branch emits via the same Add-Feature path.
 var detectPs1 = Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Exo-Discord-Detect.ps1");
 Expect("Exo-Discord-Detect.ps1 exists", File.Exists(detectPs1), detectPs1);
 if (File.Exists(detectPs1))
 {
+    var discordInstalled = Directory.Exists(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Discord"));
+    var expectedRow = discordInstalled ? "Complete client debloat" : "Discord install";
     var liveDir = Path.Combine(Path.GetTempPath(), "exo-discord-live-detect-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(liveDir);
     try
@@ -359,11 +364,11 @@ if (File.Exists(detectPs1))
             File.WriteAllText(Path.Combine(liveDir, $"detect-{i}.json.txt"), liveOut);
             if (!string.IsNullOrWhiteSpace(liveErr))
                 File.WriteAllText(Path.Combine(liveDir, $"detect-{i}.err.txt"), liveErr);
-            var hasDebloat = liveOut.Contains("Complete client debloat", StringComparison.OrdinalIgnoreCase);
+            var hasDebloat = liveOut.Contains(expectedRow, StringComparison.OrdinalIgnoreCase);
             if (hasDebloat) timesWithDebloat++;
             Log($"LIVE_DETECT[{i}] exit={pl.ExitCode} hasDebloatRow={hasDebloat} len={liveOut.Length}");
         }
-        Expect("live detect debloat row present 5/5", timesWithDebloat == 5,
+        Expect($"live detect '{expectedRow}' row present 5/5", timesWithDebloat == 5,
             $"present={timesWithDebloat}/5 (Count throw would skip Add-Feature)");
     }
     finally
