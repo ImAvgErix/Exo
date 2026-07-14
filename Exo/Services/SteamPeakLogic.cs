@@ -5,16 +5,28 @@ namespace Exo.Services;
 /// <summary>
 /// Pure Steam detect classifiers (no I/O). Aligned with Scripts/Steam/SteamDetectCore.ps1.
 /// </summary>
-public static class SteamPeakLogic
+public static partial class SteamPeakLogic
 {
+    [GeneratedRegex(@"(?i)steam\.exe")]
+    private static partial Regex SteamExeRegex();
+
+    [GeneratedRegex(@"(?i)start\s+""""\s+/HIGH")]
+    private static partial Regex HighPriorityStartRegex();
+
+    [GeneratedRegex(@"Start-Sleep\s+-Seconds\s+(\d+)", RegexOptions.IgnoreCase)]
+    private static partial Regex SleepSecondsRegex();
+
+    [GeneratedRegex(@"Start-Sleep\s+-Milliseconds\s+(\d+)", RegexOptions.IgnoreCase)]
+    private static partial Regex SleepMillisecondsRegex();
+
     public static bool IsCefLauncherText(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
-        return Regex.IsMatch(text, @"(?i)steam\.exe") &&
+        return SteamExeRegex().IsMatch(text) &&
                text.Contains("-cef-disable-gpu", StringComparison.OrdinalIgnoreCase) &&
                text.Contains("-nofriendsui", StringComparison.OrdinalIgnoreCase) &&
                text.Contains("-nointro", StringComparison.OrdinalIgnoreCase) &&
-               Regex.IsMatch(text, @"(?i)start\s+""""\s+/HIGH");
+               HighPriorityStartRegex().IsMatch(text);
     }
 
     /// <summary>
@@ -29,11 +41,11 @@ public static class SteamPeakLogic
         if (!text.Contains("ProcessPriorityClass]::High", StringComparison.Ordinal)) return false;
         if (!text.Contains("ProcessPriorityClass]::BelowNormal", StringComparison.Ordinal)) return false;
 
-        var sec = Regex.Match(text, @"Start-Sleep\s+-Seconds\s+(\d+)", RegexOptions.IgnoreCase);
+        var sec = SleepSecondsRegex().Match(text);
         if (sec.Success && int.TryParse(sec.Groups[1].Value, out var s) && s is >= 2 and <= 15)
             return true;
 
-        var ms = Regex.Match(text, @"Start-Sleep\s+-Milliseconds\s+(\d+)", RegexOptions.IgnoreCase);
+        var ms = SleepMillisecondsRegex().Match(text);
         if (ms.Success && int.TryParse(ms.Groups[1].Value, out var m) && m is >= 2000 and <= 15000)
             return true;
 

@@ -6,8 +6,26 @@ namespace Exo.Services;
 /// Pure Discord detect classifiers (no I/O). Keep aligned with
 /// Scripts/Discord/DiscordDetectCore.ps1 — host heuristic + smokes drive this type.
 /// </summary>
-public static class DiscordPeakLogic
+public static partial class DiscordPeakLogic
 {
+    [GeneratedRegex(@"(?m)^\s*EnableTrim\s*=\s*1\s*$")]
+    private static partial Regex EnableTrimRegex();
+
+    [GeneratedRegex(@"(?m)^\s*PriorityClass\s*=\s*3\s*$")]
+    private static partial Regex PriorityClassRegex();
+
+    [GeneratedRegex(@"(?m)^\s*TrimIntervalMs\s*=\s*(\d+)\s*$")]
+    private static partial Regex TrimIntervalRegex();
+
+    [GeneratedRegex(@"""quickstart""\s*:\s*true", RegexOptions.IgnoreCase)]
+    private static partial Regex QuickStartTrueRegex();
+
+    [GeneratedRegex(@"""openasar""", RegexOptions.IgnoreCase)]
+    private static partial Regex OpenAsarKeyRegex();
+
+    [GeneratedRegex(@"""OPEN_ON_STARTUP""\s*:\s*false", RegexOptions.IgnoreCase)]
+    private static partial Regex StartupOffRegex();
+
     public static bool IsStableDiscordPathText(string? text, string root)
     {
         if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(root)) return false;
@@ -43,9 +61,9 @@ public static class DiscordPeakLogic
     public static bool IsKernelConfigText(string? configText)
     {
         if (string.IsNullOrWhiteSpace(configText)) return false;
-        if (!Regex.IsMatch(configText, @"(?m)^\s*EnableTrim\s*=\s*1\s*$")) return false;
-        if (!Regex.IsMatch(configText, @"(?m)^\s*PriorityClass\s*=\s*3\s*$")) return false;
-        var m = Regex.Match(configText, @"(?m)^\s*TrimIntervalMs\s*=\s*(\d+)\s*$");
+        if (!EnableTrimRegex().IsMatch(configText)) return false;
+        if (!PriorityClassRegex().IsMatch(configText)) return false;
+        var m = TrimIntervalRegex().Match(configText);
         if (!m.Success) return false;
         if (!int.TryParse(m.Groups[1].Value, out var trimMs)) return false;
         return trimMs is >= 2000 and <= 15000;
@@ -85,14 +103,14 @@ public static class DiscordPeakLogic
     {
         if (string.IsNullOrWhiteSpace(json)) return false;
         // Minimal structural check without full JSON dependency for smoke fixtures
-        return Regex.IsMatch(json, @"""quickstart""\s*:\s*true", RegexOptions.IgnoreCase) &&
-               Regex.IsMatch(json, @"""openasar""", RegexOptions.IgnoreCase);
+        return QuickStartTrueRegex().IsMatch(json) &&
+               OpenAsarKeyRegex().IsMatch(json);
     }
 
     public static bool IsStartupOffSettingsJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return false;
-        return Regex.IsMatch(json, @"""OPEN_ON_STARTUP""\s*:\s*false", RegexOptions.IgnoreCase);
+        return StartupOffRegex().IsMatch(json);
     }
 
     /// <summary>

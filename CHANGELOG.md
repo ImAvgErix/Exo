@@ -4,6 +4,7 @@
 - **Window focus no longer does wasted work**: the taskbar-icon workaround re-ran file probing + Win32 icon loads (leaking icon handles) on every activation; it now runs once
 - **Faster NVIDIA detection and apply**: process checks in the detect script *and* the optimizer (overlay + debloat verification) query exact process names service-side instead of enumerating and regex-filtering every process on the system (4 full scans removed)
 - **README**: added Privacy and FAQ sections (SmartScreen, admin elevation, install location, update flow)
+- **Compile-time regexes**: all 37 detection classifiers across Network/Discord/Steam/NVIDIA peak logic now use source-generated `[GeneratedRegex]` (no runtime compilation or cache lookups; AOT-friendly)
 
 ## 2.2.5
 

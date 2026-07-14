@@ -7,8 +7,71 @@ namespace Exo.Services;
 /// Pure peak-path decisions for Internet optimizer (no elevation, no I/O).
 /// Used by detect, apply-script generation, and smoke tests — single source of truth.
 /// </summary>
-public static class NetworkPeakLogic
+public static partial class NetworkPeakLogic
 {
+    [GeneratedRegex(@"(?i)\bonly\b|\bexclusive\b")]
+    private static partial Regex BandOnlyRegex();
+
+    [GeneratedRegex(@"(?i)prefer|preferred|preferable|priority|favou?r")]
+    private static partial Regex BandPreferRegex();
+
+    [GeneratedRegex(@"(?i)2\.4|2,4|2400|2GHz|2\s*GHz")]
+    private static partial Regex Band24Regex();
+
+    [GeneratedRegex(@"(?i)no\s*pref|no\s*preference|auto|default|disabled|not\s*set|any\s*band|best\s*performance|\b802\.11\s*auto\b")]
+    private static partial Regex BandNeutralRegex();
+
+    [GeneratedRegex(@"(?i)6\s*GHz|6GHz|6,?0\s*GHz|Wi-?Fi\s*6E|802\.11be.*6|band\s*6")]
+    private static partial Regex Band6Regex();
+
+    [GeneratedRegex(@"(?i)5\s*GHz|5GHz|5\.2|5,0|5\.0|5800|band\s*5|802\.11a(?!x)|802\.11ac|802\.11n.*5")]
+    private static partial Regex Band5Regex();
+
+    [GeneratedRegex(@"(?i)6")]
+    private static partial Regex AnySixRegex();
+
+    [GeneratedRegex(@"(?i)2\.4|only")]
+    private static partial Regex TwoFourOrOnlyRegex();
+
+    [GeneratedRegex(@"(?i)5")]
+    private static partial Regex AnyFiveRegex();
+
+    [GeneratedRegex(@"(?i)2\.4|only|6")]
+    private static partial Regex TwoFourOnlyOrSixRegex();
+
+    [GeneratedRegex(@"(?i)Native 802\.11|802\.11|Wireless")]
+    private static partial Regex WifiPhysicalMediaRegex();
+
+    [GeneratedRegex(@"(?i)^802\.3$")]
+    private static partial Regex EthernetPhysicalMediaRegex();
+
+    [GeneratedRegex(@"(?i)Native 802|802\.11|Wireless|Wi-?Fi")]
+    private static partial Regex WifiMediaRegex();
+
+    [GeneratedRegex(@"(?i)Wi-?Fi|Wireless|802\.11|WLAN|MediaTek.*Wi|Intel.*Wi-?Fi|Realtek.*802\.11|Killer.*Wireless|Qualcomm.*Wi|Broadcom.*802|AX\d{3,4}|BE\d{3,4}|Wi-Fi\s*\d")]
+    private static partial Regex WifiDescriptionRegex();
+
+    [GeneratedRegex(@"(?i)^Wi-?Fi|Wireless|WLAN")]
+    private static partial Regex WifiNameRegex();
+
+    [GeneratedRegex(@"(?i)Bluetooth|Virtual|Hyper-V|vEthernet|TAP-|TUN-|WireGuard|OpenVPN|Wintun|Meta\s*Tunnel")]
+    private static partial Regex NonWifiVirtualRegex();
+
+    [GeneratedRegex(@"(?i)6\s*GHz|6GHz|Wi-?Fi\s*6E|Prefer\s*6|6\s*GHz\s*prefer|band\s*6")]
+    private static partial Regex Supports6Regex();
+
+    [GeneratedRegex(@"(?i)5\s*GHz|5GHz|Prefer\s*5|5\s*GHz\s*prefer|5\.2\s*GHz|band\s*5")]
+    private static partial Regex Supports5Regex();
+
+    [GeneratedRegex(@"(?i)802\.11be|Wi-?Fi\s*7")]
+    private static partial Regex WifiBeRegex();
+
+    [GeneratedRegex(@"(?i)802\.11ax|Wi-?Fi\s*6")]
+    private static partial Regex WifiAxRegex();
+
+    [GeneratedRegex(@"(?i)802\.11a|802\.11n|802\.11ac")]
+    private static partial Regex Legacy5GhzRegex();
+
     public sealed record PresetKnobs(
         string AutotuneNetsh,
         string AutotunePs,
@@ -153,22 +216,22 @@ public static class NetworkPeakLogic
     {
         if (string.IsNullOrWhiteSpace(value)) return 0;
         var v = value.Trim();
-        var isOnly = Regex.IsMatch(v, @"(?i)\bonly\b|\bexclusive\b");
-        var isPref = Regex.IsMatch(v, @"(?i)prefer|preferred|preferable|priority|favou?r");
+        var isOnly = BandOnlyRegex().IsMatch(v);
+        var isPref = BandPreferRegex().IsMatch(v);
 
-        if (Regex.IsMatch(v, @"(?i)2\.4|2,4|2400|2GHz|2\s*GHz"))
+        if (Band24Regex().IsMatch(v))
             return isOnly ? -200 : isPref ? -100 : -50;
 
-        if (Regex.IsMatch(v, @"(?i)no\s*pref|no\s*preference|auto|default|disabled|not\s*set|any\s*band|best\s*performance|\b802\.11\s*auto\b"))
+        if (BandNeutralRegex().IsMatch(v))
             return 1;
 
-        if (Regex.IsMatch(v, @"(?i)6\s*GHz|6GHz|6,?0\s*GHz|Wi-?Fi\s*6E|802\.11be.*6|band\s*6"))
+        if (Band6Regex().IsMatch(v))
         {
             if (want6) return isOnly ? 45 : isPref ? 100 : 90;
             return isOnly ? 5 : 25;
         }
 
-        if (Regex.IsMatch(v, @"(?i)5\s*GHz|5GHz|5\.2|5,0|5\.0|5800|band\s*5|802\.11a(?!x)|802\.11ac|802\.11n.*5"))
+        if (Band5Regex().IsMatch(v))
             return isOnly ? 35 : isPref ? 80 : 70;
 
         return 0;
@@ -204,12 +267,12 @@ public static class NetworkPeakLogic
         if (want6)
         {
             var fb6 = list.FirstOrDefault(x =>
-                Regex.IsMatch(x, @"(?i)6") && !Regex.IsMatch(x, @"(?i)2\.4|only"));
+                AnySixRegex().IsMatch(x) && !TwoFourOrOnlyRegex().IsMatch(x));
             if (fb6 is not null) return fb6;
         }
 
         return list.FirstOrDefault(x =>
-            Regex.IsMatch(x, @"(?i)5") && !Regex.IsMatch(x, @"(?i)2\.4|only|6"));
+            AnyFiveRegex().IsMatch(x) && !TwoFourOnlyOrSixRegex().IsMatch(x));
     }
 
     /// <summary>True when adapter facts indicate Wi‑Fi (not Ethernet 802.3).</summary>
@@ -224,15 +287,15 @@ public static class NetworkPeakLogic
         var d = interfaceDescription ?? "";
         var n = name ?? "";
 
-        if (Regex.IsMatch(pm, @"(?i)Native 802\.11|802\.11|Wireless")) return true;
-        if (Regex.IsMatch(pm, @"(?i)^802\.3$")) return false;
-        if (Regex.IsMatch(m, @"(?i)Native 802|802\.11|Wireless|Wi-?Fi")) return true;
+        if (WifiPhysicalMediaRegex().IsMatch(pm)) return true;
+        if (EthernetPhysicalMediaRegex().IsMatch(pm)) return false;
+        if (WifiMediaRegex().IsMatch(m)) return true;
         // USB/PCIe Wi‑Fi vendors + common names (not Bluetooth PAN as primary signal)
-        if (Regex.IsMatch(d, @"(?i)Wi-?Fi|Wireless|802\.11|WLAN|MediaTek.*Wi|Intel.*Wi-?Fi|Realtek.*802\.11|Killer.*Wireless|Qualcomm.*Wi|Broadcom.*802|AX\d{3,4}|BE\d{3,4}|Wi-Fi\s*\d"))
+        if (WifiDescriptionRegex().IsMatch(d))
             return true;
-        if (Regex.IsMatch(n, @"(?i)^Wi-?Fi|Wireless|WLAN")) return true;
+        if (WifiNameRegex().IsMatch(n)) return true;
         // Explicit non-wifi virtual/tunnel
-        if (Regex.IsMatch(d, @"(?i)Bluetooth|Virtual|Hyper-V|vEthernet|TAP-|TUN-|WireGuard|OpenVPN|Wintun|Meta\s*Tunnel"))
+        if (NonWifiVirtualRegex().IsMatch(d))
             return false;
         return false;
     }
@@ -301,18 +364,18 @@ public static class NetworkPeakLogic
     public static void InferBandSupport(string blob, ref bool band5, ref bool band6, ref bool ax, ref bool be)
     {
         if (string.IsNullOrEmpty(blob)) return;
-        if (Regex.IsMatch(blob, @"(?i)6\s*GHz|6GHz|Wi-?Fi\s*6E|Prefer\s*6|6\s*GHz\s*prefer|band\s*6"))
+        if (Supports6Regex().IsMatch(blob))
             band6 = true;
-        if (Regex.IsMatch(blob, @"(?i)5\s*GHz|5GHz|Prefer\s*5|5\s*GHz\s*prefer|5\.2\s*GHz|band\s*5"))
+        if (Supports5Regex().IsMatch(blob))
             band5 = true;
-        if (Regex.IsMatch(blob, @"(?i)802\.11be|Wi-?Fi\s*7"))
+        if (WifiBeRegex().IsMatch(blob))
         {
             be = true;
             band6 = true;
         }
-        if (Regex.IsMatch(blob, @"(?i)802\.11ax|Wi-?Fi\s*6"))
+        if (WifiAxRegex().IsMatch(blob))
             ax = true;
-        if (Regex.IsMatch(blob, @"(?i)802\.11a|802\.11n|802\.11ac"))
+        if (Legacy5GhzRegex().IsMatch(blob))
             band5 = true;
     }
 
