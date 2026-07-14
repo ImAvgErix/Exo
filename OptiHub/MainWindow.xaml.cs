@@ -78,17 +78,10 @@ public sealed partial class MainWindow : Window
 
     private void OnContentNavigated(object sender, Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
-        // Always force identity on the new page so residual composition never hides UI.
+        // Force every page fully visible — no entrance animation that can blank UI.
         if (e.Content is FrameworkElement page)
         {
             try { OptiMotion.EnsureVisible(page); } catch { }
-            if (page is not Views.DashboardPage)
-            {
-                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
-                {
-                    try { OptiMotion.PlayPageEnter(page); } catch { try { OptiMotion.EnsureVisible(page); } catch { } }
-                });
-            }
         }
     }
 
@@ -286,8 +279,7 @@ public sealed partial class MainWindow : Window
 
     private void OpenSettingsOverlay()
     {
-        // CRITICAL: go home first, then mark open. Navigate() closes any open sheet,
-        // so marking open before the home navigate instantly killed the sheet.
+        // CRITICAL: go home first, then mark open. Navigate() closes any open sheet.
         if (_settings.IsOpen) return;
         if (_mode != ShellMode.Home)
             NavigateHome(suppressTransition: true);
@@ -296,18 +288,19 @@ public sealed partial class MainWindow : Window
 
         SettingsButton.Visibility = Visibility.Collapsed;
 
-        // Identity transform on host + rows BEFORE show (no corner inheritance).
-        OptiMotion.ResetVisual(SettingsOverlay, show: false);
+        // Clear any leftover composition, then show with layout center only.
+        OptiMotion.EnsureVisible(SettingsOverlay);
         OptiMotion.EnsureVisible(SettingsSheetStage);
-        OptiMotion.ResetVisual(SettingsSheetHost, show: false);
+        OptiMotion.EnsureVisible(SettingsSheetHost);
         SettingsSheetHost.ResetRowVisuals();
 
         SettingsOverlay.Visibility = Visibility.Visible;
+        SettingsOverlay.Opacity = 1;
+        SettingsSheetHost.Opacity = 1;
         SettingsOverlay.UpdateLayout();
         SettingsSheetStage.UpdateLayout();
         SettingsSheetHost.UpdateLayout();
 
-        // Opacity-only open — layout keeps the sheet dead-center.
         OptiMotion.PlayOverlayOpen(SettingsOverlay, SettingsSheetHost);
         SettingsSheetHost.PlayOpenMotion();
     }
@@ -321,30 +314,18 @@ public sealed partial class MainWindow : Window
             // Stale close after re-open: epoch no longer matches — do nothing.
             if (!_settings.ShouldApplyCloseFinish(closeEpoch)) return;
 
-            OptiMotion.ResetVisual(SettingsOverlay, show: true);
-            OptiMotion.ResetVisual(SettingsSheetStage, show: true);
-            OptiMotion.ResetVisual(SettingsSheetHost, show: true);
+            OptiMotion.EnsureVisible(SettingsOverlay);
+            OptiMotion.EnsureVisible(SettingsSheetStage);
+            OptiMotion.EnsureVisible(SettingsSheetHost);
             SettingsSheetHost.ResetRowVisuals();
             SettingsOverlay.Visibility = Visibility.Collapsed;
+            SettingsOverlay.Opacity = 1;
+            SettingsSheetHost.Opacity = 1;
             SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        if (immediate)
-        {
-            Finish();
-            return;
-        }
-
-        var done = false;
-        void Once()
-        {
-            if (done) return;
-            done = true;
-            DispatcherQueue.TryEnqueue(Finish);
-        }
-
-        OptiMotion.PlayOverlayClose(SettingsOverlay, SettingsSheetHost, Once);
-        _ = Task.Delay(220).ContinueWith(_ => Once());
+        // Instant close — delayed composition close was racing re-open.
+        Finish();
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)

@@ -1,3 +1,9 @@
+## 2.0.2
+
+- **Stop composition blanking UI**: never set Composition Opacity to 0 (it overrides XAML and left pages/settings invisible)
+- **No entrance/stagger motion** that primes content hidden — open/navigate always fully visible
+- **Settings close is instant** (no delayed Finish race); host laid out 400px centered by layout only
+- **Home**: tagline full-width centered (36px); compact cards 248×120
 ## 2.0.1
 
 - **Settings open order**: navigate home *before* marking settings open (Navigate used to close the sheet we just opened)

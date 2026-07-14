@@ -101,7 +101,8 @@ if (File.Exists(dash))
     Expect("product card grid", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("polished 1.8 cards", d.Contains("OptiCardButton", StringComparison.Ordinal)
         && d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
-    Expect("hero entrance panel", d.Contains("HeroPanel", StringComparison.Ordinal));
+    Expect("hero tagline present", d.Contains("HeroTagline", StringComparison.Ordinal)
+        || d.Contains("Maximum performance", StringComparison.Ordinal));
     Expect("stretch uniform logos", d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal));
     // Logo-only cards — title lives on the module page (a11y still has AutomationProperties.Name).
     Expect("logo only cards", !d.Contains("Definition.Title}", StringComparison.Ordinal)
@@ -112,18 +113,20 @@ if (File.Exists(dash))
         d.Contains("TextAlignment=\"Center\"", StringComparison.Ordinal)
         && (d.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal)
             || d.Contains("HorizontalAlignment=\"Center\"", StringComparison.Ordinal))
-        && (d.Contains("FontSize=\"40\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"48\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"42\"", StringComparison.Ordinal)));
+        && (d.Contains("FontSize=\"36\"", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"40\"", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"48\"", StringComparison.Ordinal)));
     Expect("dashboard fixed cards under hero",
-        d.Contains("Width=\"268\"", StringComparison.Ordinal)
-        && d.Contains("Height=\"132\"", StringComparison.Ordinal));
+        d.Contains("Width=\"248\"", StringComparison.Ordinal)
+        && d.Contains("Height=\"120\"", StringComparison.Ordinal));
     // Cards must stay smaller than the old overpowering footprints.
     Expect("dashboard cards not oversized",
         !d.Contains("Width=\"352\"", StringComparison.Ordinal)
         && !d.Contains("Width=\"340\"", StringComparison.Ordinal)
+        && !d.Contains("Width=\"300\"", StringComparison.Ordinal)
         && !d.Contains("Height=\"200\"", StringComparison.Ordinal)
-        && !d.Contains("Height=\"190\"", StringComparison.Ordinal));
+        && !d.Contains("Height=\"190\"", StringComparison.Ordinal)
+        && !d.Contains("Height=\"158\"", StringComparison.Ordinal));
     Expect("dashboard no responsive layout",
         !File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
             .Contains("ApplyResponsiveLayout", StringComparison.Ordinal));
@@ -270,30 +273,20 @@ if (File.Exists(motionCs))
     Expect("OptiMotion ResetVisual", m.Contains("ResetVisual", StringComparison.Ordinal));
     Expect("OptiMotion EnsureVisible", m.Contains("EnsureVisible", StringComparison.Ordinal));
     Expect("OptiMotion overlay open", m.Contains("PlayOverlayOpen", StringComparison.Ordinal));
-    Expect("OptiMotion overlay close resets", m.Contains("PlayOverlayClose", StringComparison.Ordinal)
-        && m.Contains("ResetVisual", StringComparison.Ordinal));
-    // Host open must not animate Offset/Scale on the sheet (that pinned top-left).
-    Expect("OptiMotion overlay opacity-only host",
-        m.Contains("opacity only", StringComparison.OrdinalIgnoreCase)
-        || m.Contains("Opacity only", StringComparison.OrdinalIgnoreCase)
-        || m.Contains("opacity-only", StringComparison.OrdinalIgnoreCase)
-        || (m.Contains("layout owns", StringComparison.OrdinalIgnoreCase)
-            && m.Contains("PlayOverlayOpen", StringComparison.Ordinal)));
-    // After open starts, Offset must be forced to Zero (no rise on host).
-    var openIdx = m.IndexOf("PlayOverlayOpen", StringComparison.Ordinal);
-    var closeIdx = m.IndexOf("PlayOverlayClose", StringComparison.Ordinal);
-    Expect("OptiMotion open body identity offset",
-        openIdx >= 0 && closeIdx > openIdx
-        && m.Substring(openIdx, closeIdx - openIdx).Contains("Offset = Vector3.Zero", StringComparison.Ordinal)
-        && !m.Substring(openIdx, closeIdx - openIdx).Contains("StartAnimation(\"Offset\"", StringComparison.Ordinal));
+    Expect("OptiMotion overlay close", m.Contains("PlayOverlayClose", StringComparison.Ordinal));
+    // Composition visual opacity must stay at 1 (never blank UI via composition).
+    Expect("OptiMotion never zeros composition opacity",
+        m.Contains("visual.Opacity = 1f", StringComparison.Ordinal)
+        && !m.Contains("visual.Opacity = 0", StringComparison.Ordinal)
+        && !m.Contains("visual.Opacity = 0f", StringComparison.Ordinal));
+    Expect("OptiMotion no StartAnimation Offset",
+        !m.Contains("StartAnimation(\"Offset\"", StringComparison.Ordinal)
+        && !m.Contains("StartAnimation(\"Scale\"", StringComparison.Ordinal));
     Expect("OptiMotion MotionStrength", m.Contains("MotionStrength", StringComparison.Ordinal));
-    // Page enter must not prime whole page to opacity 0 (broke every module open).
-    var pageEnterIdx = m.IndexOf("PlayPageEnter", StringComparison.Ordinal);
     Expect("OptiMotion page enter ensure visible",
-        pageEnterIdx >= 0
-        && m.Substring(pageEnterIdx).Contains("EnsureVisible", StringComparison.Ordinal)
-        && !m.Substring(pageEnterIdx, Math.Min(400, m.Length - pageEnterIdx))
-            .Contains("PrimeHidden", StringComparison.Ordinal));
+        m.Contains("PlayPageEnter", StringComparison.Ordinal)
+        && m.Contains("EnsureVisible", StringComparison.Ordinal)
+        && !m.Contains("PrimeHidden", StringComparison.Ordinal));
 }
 var mainCsPath = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
 if (File.Exists(mainCsPath))
@@ -328,17 +321,19 @@ var dashCs = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs");
 if (File.Exists(dashCs))
 {
     var dc = File.ReadAllText(dashCs);
-    Expect("home ForceHomeVisible", dc.Contains("ForceHomeVisible", StringComparison.Ordinal)
-        && dc.Contains("EnsureVisible", StringComparison.Ordinal));
+    Expect("home ensure visible no stagger blank",
+        dc.Contains("EnsureVisible", StringComparison.Ordinal)
+        && !dc.Contains("PlayStagger", StringComparison.Ordinal)
+        && !dc.Contains("PrimeHidden", StringComparison.Ordinal));
 }
 
 // Version gate for 2.0.0 release
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.0.1", File.ReadAllText(versionFile).Trim() == "2.0.1");
+    Expect("VERSION is 2.0.2", File.ReadAllText(versionFile).Trim() == "2.0.2");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.0.1", File.ReadAllText(csproj).Contains("<Version>2.0.1</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.0.2", File.ReadAllText(csproj).Contains("<Version>2.0.2</Version>", StringComparison.Ordinal));
 
 // Live MotionIntensity is a real AppSettings + ViewModel path (not a fake).
 var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");

@@ -8,43 +8,34 @@
     Loaded="Page_Loaded">
 
     <!--
-      Fixed 1180×760 shell.
-      Hero tagline is the visual centerpiece (large, dead-center).
-      Cards are compact tiles under it — never larger than the title band.
+      Fixed 1180×760.
+      Tagline = full-width centered hero.
+      Cards = compact under it (clearly smaller than the title).
     -->
-    <Grid x:Name="PageRoot" Padding="36,18,36,24">
-        <Grid MaxWidth="960"
-              HorizontalAlignment="Center"
-              VerticalAlignment="Center">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+    <Grid x:Name="PageRoot"
+          Padding="40,20,40,28"
+          HorizontalAlignment="Stretch"
+          VerticalAlignment="Stretch">
+        <StackPanel HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MaxWidth="920"
+                    Spacing="0">
 
-            <!-- Full-width hero so TextAlignment=Center is truly middle of shell -->
-            <Grid x:Name="HeroPanel"
-                  HorizontalAlignment="Stretch"
-                  Margin="0,0,0,22"
-                  Opacity="1"
-                  IsHitTestVisible="True">
-                <TextBlock x:Name="HeroTagline"
-                           Text="Maximum performance. No compromise."
-                           Style="{StaticResource OptiTagline}"
-                           FontSize="40"
-                           LineHeight="48"
-                           CharacterSpacing="-20"
-                           TextWrapping="WrapWholeWords"
-                           TextAlignment="Center"
-                           HorizontalAlignment="Stretch"
-                           VerticalAlignment="Center"
-                           MaxWidth="880" />
-            </Grid>
+            <!-- Hero: stretch to panel width so TextAlignment=Center is real center -->
+            <TextBlock x:Name="HeroTagline"
+                       Text="Maximum performance. No compromise."
+                       Style="{StaticResource OptiTagline}"
+                       FontSize="36"
+                       LineHeight="44"
+                       CharacterSpacing="-16"
+                       TextWrapping="WrapWholeWords"
+                       TextAlignment="Center"
+                       HorizontalAlignment="Stretch"
+                       Margin="0,0,0,24"
+                       MaxWidth="880" />
 
-            <!-- Compact cards under the hero (3-up, same center axis) -->
             <ItemsControl x:Name="CardList"
-                          Grid.Row="1"
                           HorizontalAlignment="Center"
-                          Opacity="1"
                           ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -56,10 +47,9 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
                         <Button Style="{StaticResource OptiCardButton}"
-                                Width="268"
-                                Height="132"
+                                Width="248"
+                                Height="120"
                                 Margin="6"
-                                Opacity="1"
                                 Click="CardButton_Click"
                                 Tag="{x:Bind Definition.Id}"
                                 AutomationProperties.Name="{x:Bind Definition.Title}"
@@ -70,8 +60,8 @@
                                     Padding="10"
                                     Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
                                 <Grid>
-                                    <Image Width="72"
-                                           Height="72"
+                                    <Image Width="64"
+                                           Height="64"
                                            Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
@@ -91,6 +81,6 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-        </Grid>
+        </StackPanel>
     </Grid>
 </Page>
