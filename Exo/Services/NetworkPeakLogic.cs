@@ -402,6 +402,11 @@ public static partial class NetworkPeakLogic
         "congestionprovider=cubic",
         "wantBand6Live",
         "Select-BandDisplayValue",
+        "GameDVR_Enabled",
+        "HwSchMode",
+        "AutoGameModeEnabled",
+        "PowerThrottlingOff",
+        "EnableMulticast",
     };
 
     /// <summary>Audit a generated apply script for peak host markers and folklore absence.</summary>

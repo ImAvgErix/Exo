@@ -232,7 +232,9 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                 Title = feature.Title,
                 Detail = feature.IsActive ? "Applied" : "Not applied",
                 Glyph = Helpers.UiStatusPresentation.FeatureGlyph(feature.IsActive),
-                Opacity = Helpers.UiStatusPresentation.FeatureOpacity(feature.IsActive)
+                Opacity = Helpers.UiStatusPresentation.FeatureOpacity(feature.IsActive),
+                IsActive = feature.IsActive,
+                RailOpacity = Helpers.UiStatusPresentation.FeatureRailOpacity(feature.IsActive)
             });
         }
         RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";

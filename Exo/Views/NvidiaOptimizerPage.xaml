@@ -50,18 +50,21 @@
                         </ItemsRepeater.Layout>
                         <ItemsRepeater.ItemTemplate>
                             <DataTemplate x:DataType="vm:FeatureRowViewModel">
-                                <Border Style="{StaticResource OptiFeatureTile}" Opacity="1">
+                                <Border Style="{StaticResource OptiFeatureTile}" Opacity="{x:Bind Opacity}">
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
-                                        <Border Style="{StaticResource OptiIconWell}">
+                                        <Border Style="{StaticResource OptiStatusRail}"
+                                                Opacity="{x:Bind RailOpacity}" />
+                                        <Border Grid.Column="1" Style="{StaticResource OptiIconWell}">
                                             <FontIcon Glyph="{x:Bind Glyph}" FontSize="14"
                                                       Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
-                                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                        <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
                                             <TextBlock Text="{x:Bind Title}" Style="{StaticResource OptiFeatureTitle}" />
                                             <TextBlock Text="{x:Bind Detail}" Style="{StaticResource OptiFeatureDetail}" />
                                         </StackPanel>

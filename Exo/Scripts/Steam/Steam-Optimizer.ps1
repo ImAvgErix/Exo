@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.7.8'
+$Script:SteamOptVersion = '1.8.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 Preview only (never Windows PowerShell 5.1 / never stable 7) ---
@@ -83,7 +83,10 @@ $Script:DefaultCefArgs = @(
     '-cef-disable-breakpad',
     # Startup / CEF noise reduction (safe flags; no single-process/sandbox)
     '-cef-disable-spell-checking',
-    '-cef-disable-extensions'
+    '-cef-disable-extensions',
+    # Leaner CEF paint + less background chatter across multi-PC installs
+    '-cef-disable-occlusion',
+    '-cef-disable-renderer-accessibility'
 )
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
@@ -945,7 +948,14 @@ function Set-SteamLocalConfigTweaks {
         @{ K = 'SoundPlay_FriendOnline'; V = '0' },
         @{ K = 'FriendsAlwaysShowAvatars'; V = '0' },
         @{ K = 'AllowDownloadsDuringGameplay'; V = '0' },
-        @{ K = 'CloudEnabled'; V = '1' }
+        @{ K = 'CloudEnabled'; V = '1' },
+        @{ K = 'MusicPlayerEnabled'; V = '0' },
+        @{ K = 'FriendsUI'; V = '0' },
+        @{ K = 'LibraryDisableFriendsActivity'; V = '1' },
+        @{ K = 'ShaderPreCacheAllowed'; V = '1' },
+        @{ K = 'ShaderPreCacheProgress'; V = '0' },
+        @{ K = 'AutoUpdateWindowEnabled'; V = '0' },
+        @{ K = 'PersonaStateDesired'; V = '1' }
     )
     foreach ($file in $files) {
         try {
@@ -999,6 +1009,21 @@ function Set-SteamLocalConfigTweaks {
                 @{ K = 'CloudEnabled'; V = '1' }
             )) {
                 $raw = Set-SteamVdfKey $raw $pair.K $pair.V
+            }
+
+            # Extra quiet / less UI work (keys only apply when Steam still exposes them)
+            foreach ($pair in @(
+                @{ K = 'MusicPlayerEnabled'; V = '0' },
+                @{ K = 'FriendsUI'; V = '0' },
+                @{ K = 'LibraryDisableFriendsActivity'; V = '1' },
+                @{ K = 'ShaderPreCacheAllowed'; V = '1' },
+                @{ K = 'ShaderPreCacheProgress'; V = '0' },
+                @{ K = 'AutoUpdateWindowEnabled'; V = '0' },
+                @{ K = 'PersonaStateDesired'; V = '1' }
+            )) {
+                $before = $raw
+                $raw = Set-SteamVdfKey $raw $pair.K $pair.V
+                if ($raw -ne $before) { $anySnappy = $true }
             }
 
             if ($raw -ne $orig) {
@@ -1380,11 +1405,11 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
 
 function Install-WebHelperTrimHelper([string]$SteamPath) {
     # Maximum-performance helper: one instance, high client priority while idle,
-    # an in-game CPU yield, and a 5-second working-set trim with no suspension.
+    # an in-game CPU yield, and a 3-second working-set trim with no suspension.
     # Also re-enforces StartupMode=0 periodically so Steam cannot re-arm autostart.
     $helper = Join-Path $SteamPath 'Exo-SteamWebHelperTrim.ps1'
     $body = @'
-# Exo - aggressive 5s steamwebhelper trim + in-game priority yield + quiet re-enforce.
+# Exo - aggressive 3s steamwebhelper trim + in-game priority yield + quiet re-enforce.
 # No process suspension (suspension can break Steam IPC and overlay behavior).
 $ErrorActionPreference = 'SilentlyContinue'
 $created = $false
@@ -1485,7 +1510,7 @@ try {
     $ticks++
     # Every ~2 minutes while Steam is open, re-assert no autostart.
     if (($ticks % 24) -eq 0) { Reinstate-SteamQuiet }
-    Start-Sleep -Seconds 5
+    Start-Sleep -Seconds 3
   }
 } finally {
   try { $mutex.ReleaseMutex() } catch {}
@@ -1816,7 +1841,7 @@ try {
         $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
         $helperOk = $helperText -match 'Exo\.SteamWebHelper' -and
             $helperText -match 'EmptyWorkingSet' -and
-            $helperText -match 'Start-Sleep -Seconds 5' -and
+            $helperText -match 'Start-Sleep -Seconds (3|4|5)' -and
             $helperText -match 'ProcessPriorityClass\]::High' -and
             $helperText -match 'ProcessPriorityClass\]::BelowNormal'
     } catch { }

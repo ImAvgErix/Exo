@@ -1,6 +1,6 @@
 # Exo tweak audit (evidence-based)
 
-Last pass: v1.9.32. Goal: keep only knobs with real OS/driver behavior; drop folklore.
+Last pass: v2.3.0. Goal: max real OS/driver performance; still skip inventing dead registry folklore.
 
 ## Internet
 
@@ -26,6 +26,9 @@ Last pass: v1.9.32. Goal: keep only knobs with real OS/driver behavior; drop fol
 | PnPCapabilities 24 | **Keep** | Stops “turn off this device to save power” |
 | Dynamic ports via netsh | **Keep** | Modern replacement for MaxUserPort |
 | Fuzzy Preferred Band match | **Keep** | Vendor display strings vary; prefer never force-only |
+| Game Mode on / GameDVR off | **Keep** | Real Game Bar + capture path |
+| HAGS `HwSchMode=2` | **Keep** | Driver-supported GPU scheduling |
+| Ultimate/High performance + AC CPU 100% | **Keep** | Documented powercfg |
 | MaxUserPort / MaxFreeTcbs / TcpNumConnections | **Removed** | XP/server-era; ignored or irrelevant on modern desktop |
 | TCP chimney / NetDMA / DCA registry | **Removed** | Removed from modern Windows |
 | LargeSystemCache | **Removed** | Server-oriented; can hurt desktop |

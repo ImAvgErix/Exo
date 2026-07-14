@@ -46,7 +46,10 @@ public static class UiStatusPresentation
     };
 
     /// <summary>Feature row opacity: intentional inactive slightly dimmed, never hidden.</summary>
-    public static double FeatureOpacity(bool isActive) => isActive ? 1.0 : 0.72;
+    public static double FeatureOpacity(bool isActive) => isActive ? 1.0 : 0.78;
+
+    /// <summary>Status rail opacity for peak vs open feature tiles.</summary>
+    public static double FeatureRailOpacity(bool isActive) => isActive ? 1.0 : 0.28;
 
     /// <summary>Feature / policy row glyph: check when active, block when not.</summary>
     public static string FeatureGlyph(bool isActive) => isActive ? "\uE73E" : "\uE711";

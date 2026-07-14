@@ -587,12 +587,44 @@ function Test-DiscordWindowsSuppression {
     } catch { return $false }
 }
 function Apply-WindowsTweaks([string]$AppDir) {
-    Write-Step 'Applying Windows tweaks (notifications, tray, startup)...'
+    Write-Step 'Applying Windows tweaks (notifications, tray, startup, GPU)...'
     Disable-DiscordWindowsAutostart
     Disable-DiscordScheduledTasks
     Set-DiscordWindowsNotificationsOff
     Set-DiscordTrayIconHidden $AppDir
-    Write-Ok 'Windows tweaks applied (toasts OFF, tray hidden, no autostart)'
+    Set-DiscordGpuHighPerformance $AppDir
+    Set-DiscordFullscreenOptimizationsOff $AppDir
+    Write-Ok 'Windows tweaks applied (toasts OFF, tray hidden, no autostart, GPU high-perf)'
+}
+
+function Set-DiscordGpuHighPerformance([string]$AppDir) {
+    # Windows Graphics Settings -> High performance for Discord.exe (real multi-GPU path).
+    $exe = Join-Path $AppDir 'Discord.exe'
+    if (-not (Test-Path -LiteralPath $exe)) { return }
+    try {
+        $key = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
+        if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+        # GpuPreference=2 = High performance (1 = Power saving, 0 = Auto)
+        New-ItemProperty -LiteralPath $key -Name $exe -Value 'GpuPreference=2;' -PropertyType String -Force -ErrorAction Stop | Out-Null
+        Write-Ok 'Discord GPU preference = High performance'
+    } catch {
+        Write-Warn "GPU preference: $($_.Exception.Message)"
+    }
+}
+
+function Set-DiscordFullscreenOptimizationsOff([string]$AppDir) {
+    # DISABLEDXMAXIMIZEDWINDOWEDMODE reduces DWM interference when Discord is maximized.
+    $exe = Join-Path $AppDir 'Discord.exe'
+    if (-not (Test-Path -LiteralPath $exe)) { return }
+    try {
+        $key = 'HKCU:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
+        if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+        $flags = '~ DISABLEDXMAXIMIZEDWINDOWEDMODE HIGHDPIAWARE'
+        New-ItemProperty -LiteralPath $key -Name $exe -Value $flags -PropertyType String -Force -ErrorAction Stop | Out-Null
+        Write-Ok 'Discord fullscreen optimizations off + HighDPI aware'
+    } catch {
+        Write-Warn "Compat layers: $($_.Exception.Message)"
+    }
 }
 
 function Test-OpenAsarInstalled([string]$ResourcesDir) {

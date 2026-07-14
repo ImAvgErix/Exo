@@ -261,7 +261,9 @@ public partial class DiscordOptimizerViewModel : ObservableObject
                 Title = feature.Title,
                 Detail = feature.IsActive ? "Applied" : "Not applied",
                 Glyph = Helpers.UiStatusPresentation.FeatureGlyph(feature.IsActive),
-                Opacity = Helpers.UiStatusPresentation.FeatureOpacity(feature.IsActive)
+                Opacity = Helpers.UiStatusPresentation.FeatureOpacity(feature.IsActive),
+                IsActive = feature.IsActive,
+                RailOpacity = Helpers.UiStatusPresentation.FeatureRailOpacity(feature.IsActive)
             });
         }
         RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
@@ -306,4 +308,7 @@ public sealed class FeatureRowViewModel
     public string Detail { get; init; } = string.Empty;
     public string Glyph { get; init; } = "\uE73E";
     public double Opacity { get; init; } = 1.0;
+    /// <summary>Live peak bit — drives the AMOLED status rail on feature tiles.</summary>
+    public bool IsActive { get; init; }
+    public double RailOpacity { get; init; } = 0.28;
 }

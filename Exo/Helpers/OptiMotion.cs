@@ -14,18 +14,19 @@ namespace Exo.Helpers;
 /// </summary>
 public static class OptiMotion
 {
-    public const int EntranceMs = 340;
-    public const int FadeMs = 260;
-    public const int StaggerStepMs = 40;
-    public const int OverlayOpenMs = 260;
-    public const int OverlayCloseMs = 140;
-    public const int SelectMs = 140;
+    // Short, clean motion — no bouncy spring on content.
+    public const int EntranceMs = 220;
+    public const int FadeMs = 160;
+    public const int StaggerStepMs = 22;
+    public const int OverlayOpenMs = 180;
+    public const int OverlayCloseMs = 100;
+    public const int SelectMs = 90;
 
     public static EasingFunctionBase Glide() =>
         new CubicEase { EasingMode = EasingMode.EaseOut };
 
     public static EasingFunctionBase Spring() =>
-        new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.2 };
+        new CubicEase { EasingMode = EasingMode.EaseOut };
 
     public static CompositeTransform EnsureTransform(UIElement el)
     {
@@ -84,8 +85,8 @@ public static class OptiMotion
         bool enableHit = true)
     {
         // Snap rise to whole pixels so we never park mid-pixel.
-        var rise = (float)Math.Round(Math.Clamp(fromY, 0f, 16f));
-        ScheduleEnsureVisible(el, delayMs + EntranceMs + 80);
+        var rise = (float)Math.Round(Math.Clamp(fromY, 0f, 10f));
+        ScheduleEnsureVisible(el, delayMs + EntranceMs + 48);
 
         try
         {
@@ -140,7 +141,7 @@ public static class OptiMotion
         IReadOnlyList<UIElement> items,
         int baseDelayMs = 16,
         int stepMs = StaggerStepMs,
-        float fromY = 12f,
+        float fromY = 8f,
         float fromScale = 1f)
     {
         for (var i = 0; i < items.Count; i++)
@@ -164,9 +165,9 @@ public static class OptiMotion
             el.IsHitTestVisible = true;
 
             var sb = new Storyboard();
-            // Quick press-in, then release — readable without scale.
-            sb.Children.Add(Fade(el, 1, 0.78, 55, 0));
-            sb.Children.Add(Fade(el, 0.78, 1, 95, 55));
+            // Soft dim pulse — no scale, no bounce.
+            sb.Children.Add(Fade(el, 1, 0.86, 40, 0));
+            sb.Children.Add(Fade(el, 0.86, 1, 70, 40));
 
             var finished = false;
             void Once()

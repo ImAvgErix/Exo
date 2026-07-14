@@ -9,10 +9,12 @@ Aggressive must still be deterministic: scope actions to the selected applicatio
 ## Shell UI (current)
 
 - **Fixed frame** 1180×760, no maximize / free resize
+- **Dark = AMOLED** pure black page (`#000000`) + lifted cards (`#0C0C0C`)
 - **Settings** = gear flyout under the gear (not modal overlay, not side rail)
-- **Motion** = XAML Storyboards only; never Composition Opacity = 0 (blanks UI)
+- **Motion** = short XAML Storyboards only; never Composition Opacity = 0 (blanks UI); no spring bounce on content
 - **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)
-- **Home** = cached dashboard so Back does not re-stagger / shift layout
+- **Feature tiles** = thin status rail + Applied/Not applied (live detect)
+- **Home** = hero tagline only (no support subtitle); cached dashboard so Back does not re-stagger
 - **Version** = `VERSION` file and `Exo/Exo.csproj` must match; UiPeak.Smoke gates both
 
 ## Team structure

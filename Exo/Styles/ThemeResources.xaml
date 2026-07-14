@@ -12,7 +12,7 @@
     <CornerRadius x:Key="OptiCardRadius">18</CornerRadius>
     <CornerRadius x:Key="OptiTileRadius">14</CornerRadius>
     <x:Double x:Key="OptiPageMaxWidth">1000</x:Double>
-    <Thickness x:Key="OptiPagePadding">32,18,32,24</Thickness>
+    <Thickness x:Key="OptiPagePadding">28,16,28,20</Thickness>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
@@ -103,18 +103,28 @@
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
-        <Setter Property="Padding" Value="14,13" />
-        <Setter Property="MinHeight" Value="64" />
+        <Setter Property="Padding" Value="12,11" />
+        <Setter Property="MinHeight" Value="62" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
+    <!-- Minimal status rail (bright when peak, quiet when open) -->
+    <Style x:Key="OptiStatusRail" TargetType="Border">
+        <Setter Property="Width" Value="2" />
+        <Setter Property="CornerRadius" Value="1" />
+        <Setter Property="Background" Value="{ThemeResource OptiSuccessBrush}" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="Margin" Value="0,2,0,2" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+
     <Style x:Key="OptiMessageBanner" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
         <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
-        <Setter Property="Padding" Value="14,12" />
+        <Setter Property="Padding" Value="12,10" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
 
@@ -829,13 +839,13 @@
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity"
-                                                         To="0.55" Duration="0:0:0.16">
+                                                         To="0.72" Duration="0:0:0.12">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="HoverRing" Storyboard.TargetProperty="Opacity"
-                                                         To="0.75" Duration="0:0:0.16">
+                                                         To="0.92" Duration="0:0:0.12">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
@@ -845,9 +855,9 @@
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity"
-                                                         To="0.85" Duration="0:0:0.07" />
+                                                         To="0.95" Duration="0:0:0.06" />
                                         <DoubleAnimation Storyboard.TargetName="HoverRing" Storyboard.TargetProperty="Opacity"
-                                                         To="1" Duration="0:0:0.07" />
+                                                         To="1" Duration="0:0:0.06" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">

@@ -398,8 +398,17 @@ try {
         sb.AppendLine("    } else { Log '[Wi-Fi] no Preferred Band-like property on this driver' }");
         sb.AppendLine("    $roam = Find-AdvPropByName $n @('Roaming Aggressiveness','Roaming Sensitivity','Roam Aggressiveness','Roaming Aggressive')");
         sb.AppendLine("    if ($roam) {");
-        sb.AppendLine("      $rv = @($roam.ValidDisplayValues) | Where-Object { $_ -match '(?i)medium' } | Select-Object -First 1");
-        sb.AppendLine("      if (-not $rv) { $rv = @($roam.ValidDisplayValues) | Where-Object { $_ -match '(?i)3|mid' } | Select-Object -First 1 }");
+        // Latency: Low roam (stable BSS). Throughput: Medium (balanced handoff).
+        if (latency)
+        {
+            sb.AppendLine("      $rv = @($roam.ValidDisplayValues) | Where-Object { $_ -match '(?i)low|lowest|1|minimal' } | Select-Object -First 1");
+            sb.AppendLine("      if (-not $rv) { $rv = @($roam.ValidDisplayValues) | Where-Object { $_ -match '(?i)medium|3|mid' } | Select-Object -First 1 }");
+        }
+        else
+        {
+            sb.AppendLine("      $rv = @($roam.ValidDisplayValues) | Where-Object { $_ -match '(?i)medium' } | Select-Object -First 1");
+            sb.AppendLine("      if (-not $rv) { $rv = @($roam.ValidDisplayValues) | Where-Object { $_ -match '(?i)3|mid' } | Select-Object -First 1 }");
+        }
         sb.AppendLine("      if ($rv) { try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $roam.DisplayName -DisplayValue $rv -NoRestart -EA SilentlyContinue; Log \"[Wi-Fi] roam => $rv\" } catch {} }");
         sb.AppendLine("    }");
         // Prefer 5/6 GHz via netsh wlan profiles is too invasive; band prop is enough
@@ -469,6 +478,104 @@ try {
   New-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Force | Out-Null
   Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' 'NoActiveProbe' 1
   Log '[NCSI] NoActiveProbe=1'
+} catch {}
+# Game Mode ON — OS prioritizes foreground game / low-latency multimedia path
+try {
+  New-Item 'HKCU:\Software\Microsoft\GameBar' -Force | Out-Null
+  Set-Dword 'HKCU:\Software\Microsoft\GameBar' 'AutoGameModeEnabled' 1
+  Set-Dword 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode' 1
+  New-Item 'HKCU:\System\GameConfigStore' -Force | Out-Null
+  Set-Dword 'HKCU:\System\GameConfigStore' 'GameDVR_Enabled' 0
+  New-Item 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' -Force | Out-Null
+  Set-Dword 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled' 0
+  Set-Dword 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'HistoricalCaptureEnabled' 0
+  New-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR' -Force | Out-Null
+  Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR' 'AllowGameDVR' 0
+  Log '[Game] GameMode=on GameDVR=off'
+} catch { Log '[Game] GameMode/DVR skipped' }
+# Hardware-accelerated GPU scheduling (HAGS) when driver supports — lower present latency
+try {
+  $gfx = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
+  if (Test-Path $gfx) {
+    Set-Dword $gfx 'HwSchMode' 2
+    Log '[GPU] HwSchMode=2 (HAGS on)'
+  }
+} catch { Log '[GPU] HAGS skipped' }
+# Prefer Ultimate Performance power plan when present; else High performance
+try {
+  $ult = powercfg -list 2>$null | Select-String -Pattern 'Ultimate Performance'
+  if (-not $ult) {
+    # Hidden Ultimate Performance (Win10 1803+ / Win11)
+    powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null | Out-Null
+  }
+  $schemeLine = powercfg -list 2>$null | Select-String -Pattern 'Ultimate Performance' | Select-Object -First 1
+  if (-not $schemeLine) {
+    $schemeLine = powercfg -list 2>$null | Select-String -Pattern 'High performance' | Select-Object -First 1
+  }
+  if ($schemeLine -match '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})') {
+    $gid = $Matches[1]
+    powercfg /setactive $gid | Out-Null
+    # Processor: min 100% AC (no park/clock drop while gaming on wall power)
+    powercfg /setacvalueindex $gid SUB_PROCESSOR PROCTHROTTLEMIN 100 | Out-Null
+    powercfg /setacvalueindex $gid SUB_PROCESSOR PROCTHROTTLEMAX 100 | Out-Null
+    # Core parking off (when exposed)
+    try { powercfg /setacvalueindex $gid SUB_PROCESSOR CPMINCORES 100 | Out-Null } catch {}
+    try { powercfg /setacvalueindex $gid SUB_PROCESSOR CPMAXCORES 100 | Out-Null } catch {}
+    # Disk never sleep on AC
+    powercfg /setacvalueindex $gid SUB_DISK DISKIDLE 0 | Out-Null
+    # Display timeout leave alone (user preference)
+    powercfg /setactive $gid | Out-Null
+    Log "[power] active scheme $gid (max AC CPU / no disk idle)"
+  }
+} catch { Log '[power] ultimate/high plan skipped' }
+# Multimedia tasks: Games already High; ensure Capture / Pro Audio get CPU when present
+try {
+  foreach ($task in @('Games','Pro Audio','Audio','Capture','Window Manager','Playback','Distribution')) {
+    $p = Join-Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks' $task
+    if (-not (Test-Path $p)) { New-Item $p -Force | Out-Null }
+    Set-Dword $p 'GPU Priority' 8
+    Set-Dword $p 'Priority' 6
+    try { Set-ItemProperty $p -Name 'Scheduling Category' -Value 'High' -Force -EA SilentlyContinue } catch {}
+    try { Set-ItemProperty $p -Name 'SFIO Priority' -Value 'High' -Force -EA SilentlyContinue } catch {}
+  }
+  Log '[MMCSS] Games/Audio/Capture/Pro Audio High'
+} catch {}
+# Power throttling off for desktop gaming (real Win10+ PowerThrottling)
+try {
+  New-Item 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' -Force | Out-Null
+  Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' 'PowerThrottlingOff' 1
+  Log '[power] PowerThrottlingOff=1'
+} catch {}
+# LLMNR / mDNS discovery chatter off (reduces background name noise on LAN)
+try {
+  New-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' -Force | Out-Null
+  Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' 'EnableMulticast' 0
+  Log '[DNS] LLMNR multicast off'
+} catch {}
+try {
+  New-Item 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' -Force | Out-Null
+  # Larger DNS cache = fewer repeat lookups during gaming sessions
+  Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxCacheTtl' 86400
+  Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxNegativeCacheTtl' 5
+  Log '[DNS] cache TTL tuned'
+} catch {}
+# Disable SMBv1 if present (background noise + security)
+try {
+  $smb = Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -EA SilentlyContinue
+  if ($smb -and $smb.State -eq 'Enabled') {
+    Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart -EA SilentlyContinue | Out-Null
+    Log '[SMB] SMBv1 disabled'
+  }
+} catch {}
+# WinHTTP / IE auto-proxy detect off (avoids WPAD stalls)
+try {
+  Set-Dword 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' 'AutoDetect' 0
+  Log '[proxy] AutoDetect=0'
+} catch {}
+# Network Location Awareness: keep service; cut Network List Manager periodic scan weight via policy when available
+try {
+  New-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Force | Out-Null
+  Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' 'DisablePassivePolling' 0
 } catch {}
 Set-AdapterBindings
 """);
@@ -627,6 +734,21 @@ foreach ($pr in @('Internet','InternetCustom')) {
 try { Remove-Prop 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode' } catch {}
 # NCSI active probe policy
 try { Remove-Prop 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' 'NoActiveProbe' } catch {}
+# Game Mode / GameDVR / HAGS / power-throttle / LLMNR — clear Exo force-values
+try {
+  Remove-Prop 'HKCU:\Software\Microsoft\GameBar' 'AutoGameModeEnabled'
+  Remove-Prop 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode'
+  Remove-Prop 'HKCU:\System\GameConfigStore' 'GameDVR_Enabled'
+  Remove-Prop 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled'
+  Remove-Prop 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'HistoricalCaptureEnabled'
+  Remove-Prop 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR' 'AllowGameDVR'
+  Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'HwSchMode'
+  Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' 'PowerThrottlingOff'
+  Remove-Prop 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' 'EnableMulticast'
+  Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxCacheTtl'
+  Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxNegativeCacheTtl'
+  Remove-Prop 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' 'AutoDetect'
+} catch {}
 # NetBIOS over TCP/IP — default (system / DHCP)
 try {
   Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces' -EA SilentlyContinue | ForEach-Object {

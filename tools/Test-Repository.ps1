@@ -141,7 +141,7 @@ else {
 
     foreach ($marker in @(
         'EmptyWorkingSet',
-        'Start-Sleep -Seconds 5',
+        'Start-Sleep -Seconds 3',
         'ProcessPriorityClass]::High',
         'ProcessPriorityClass]::BelowNormal'
     )) {
@@ -150,7 +150,7 @@ else {
 }
 
 $discordConfig = Get-Content -LiteralPath (Join-Path $Root 'Exo\Scripts\Discord\kit\config.ini') -Raw
-foreach ($marker in @('TrimIntervalMs=4000', 'PriorityClass=3')) {
+foreach ($marker in @('TrimIntervalMs=3000', 'PriorityClass=3')) {
     Assert-ContainsText $discordConfig $marker 'Discord aggressive kernel config'
 }
 

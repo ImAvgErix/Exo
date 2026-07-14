@@ -1,13 +1,13 @@
 namespace Exo.Helpers;
 
-/// <summary>Shared finish copy so every optimizer banner reads the same.</summary>
+/// <summary>Shared finish copy — short, clean, same voice on every module.</summary>
 public static class OptimizerMessages
 {
     public const string Done = "Done.";
-    public const string RepairFinished = "Repair finished.";
+    public const string RepairFinished = "Repaired.";
     public const string Cancelled = "Cancelled.";
-    public const string StatusFailed = "Status failed.";
-    public const string RestartRequired = "Driver installed. Restart Windows, then Apply again.";
+    public const string StatusFailed = "Could not read status.";
+    public const string RestartRequired = "Restart Windows, then Apply again.";
     public const string CleanDriverFailed =
-        "Clean driver failed. Check log, free space, close games, Apply as Admin.";
+        "Driver install failed. Check the log, free disk space, close games, and Apply as admin.";
 }

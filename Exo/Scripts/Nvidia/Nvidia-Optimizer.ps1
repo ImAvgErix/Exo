@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.10.3'
+$Script:NvidiaOptVersion = '1.11.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
@@ -194,6 +194,17 @@ function Get-ExoGameProfileCatalog {
         @{ Name = 'Escape from Tarkov';  Tier = 'comp';   Exes = @('EscapeFromTarkov.exe', 'EscapeFromTarkov_BE.exe') },
         @{ Name = 'The Finals';          Tier = 'comp';   Exes = @('Discovery.exe') },
         @{ Name = 'Delta Force';         Tier = 'comp';   Exes = @('DeltaForceClient-Win64-Shipping.exe') }
+        @{ Name = 'Deadlock';            Tier = 'comp';   Exes = @('deadlock.exe', 'project8.exe') }
+        @{ Name = 'XDefiant';            Tier = 'comp';   Exes = @('XDefiant.exe') }
+        @{ Name = 'FragPunk';            Tier = 'comp';   Exes = @('FragPunk.exe', 'FragPunkClient-Win64-Shipping.exe') }
+        @{ Name = 'Warframe';            Tier = 'hybrid'; Exes = @('Warframe.x64.exe', 'Warframe.exe') }
+        @{ Name = 'Path of Exile 2';     Tier = 'hybrid'; Exes = @('PathOfExileSteam.exe', 'PathOfExile_x64Steam.exe', 'PathOfExile.exe') }
+        @{ Name = 'Dota 2';              Tier = 'comp';   Exes = @('dota2.exe') }
+        @{ Name = 'Team Fortress 2';     Tier = 'comp';   Exes = @('tf_win64.exe', 'hl2.exe') }
+        @{ Name = 'Helldivers 2';        Tier = 'hybrid'; Exes = @('helldivers2.exe') }
+        @{ Name = 'Black Myth Wukong';   Tier = 'hybrid'; Exes = @('b1-Win64-Shipping.exe') }
+        @{ Name = 'Elden Ring';          Tier = 'hybrid'; Exes = @('eldenring.exe') }
+        @{ Name = 'Wuthering Waves';     Tier = 'hybrid'; Exes = @('Client-Win64-Shipping.exe', 'Wuthering Waves.exe') }
     )
 }
 
@@ -2838,7 +2849,10 @@ function Apply-ExoDriverInstallTweaks {
             if (-not (Test-Path $p)) { New-Item -Path $p -Force -ErrorAction SilentlyContinue | Out-Null }
             if (Test-Path $p) {
                 # Known telemetry/advertising feature RIDs
-                foreach ($rid in @('EnableRID44231', 'EnableRID64640', 'EnableRID66610', 'EnableRID73779', 'EnableRID73780')) {
+                foreach ($rid in @(
+                    'EnableRID44231', 'EnableRID64640', 'EnableRID66610', 'EnableRID73779', 'EnableRID73780',
+                    'EnableRID57705', 'EnableRID48420', 'EnableRID44231'
+                )) {
                     New-ItemProperty -LiteralPath $p -Name $rid -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
                 }
             }
@@ -2849,7 +2863,34 @@ function Apply-ExoDriverInstallTweaks {
             New-ItemProperty -LiteralPath $gf -Name 'AllowAutoDownload' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
             New-ItemProperty -LiteralPath $gf -Name 'SilentInstalls' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
         }
-        Write-Ok 'Installer telemetry / advertising RIDs off'
+        # NvCamera / Ansel residual paths
+        foreach ($cam in @(
+            'HKLM:\SOFTWARE\NVIDIA Corporation\Global\NVTweak',
+            'HKCU:\Software\NVIDIA Corporation\Global\NVTweak',
+            'HKLM:\SOFTWARE\NVIDIA Corporation\Global\Ansel',
+            'HKCU:\Software\NVIDIA Corporation\Global\Ansel'
+        )) {
+            if (-not (Test-Path $cam)) { New-Item -Path $cam -Force -ErrorAction SilentlyContinue | Out-Null }
+            if (Test-Path $cam) {
+                New-ItemProperty -LiteralPath $cam -Name 'AnselEnable' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+                New-ItemProperty -LiteralPath $cam -Name 'EnableAnsel' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+            }
+        }
+        # Prefer maximum performance PowerMizer when notebook key present
+        try {
+            $classRoot = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+            Get-ChildItem -LiteralPath $classRoot -ErrorAction SilentlyContinue | Where-Object {
+                $_.PSChildName -match '^\d{4}$'
+            } | ForEach-Object {
+                $desc = [string](Get-ItemProperty -LiteralPath $_.PSPath -EA SilentlyContinue).DriverDesc
+                if ($desc -notmatch '(?i)NVIDIA|GeForce|RTX|GTX') { return }
+                # PowerMizerEnable 0 + PowerMizerLevel 1 = prefer max when exposed
+                New-ItemProperty -LiteralPath $_.PSPath -Name 'PowerMizerEnable' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
+                New-ItemProperty -LiteralPath $_.PSPath -Name 'PowerMizerLevel' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
+                New-ItemProperty -LiteralPath $_.PSPath -Name 'PowerMizerLevelAC' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
+            }
+        } catch { }
+        Write-Ok 'Installer telemetry / advertising RIDs off; Ansel/PowerMizer tuned'
     } catch { }
 
     Disable-NvidiaTelemetry

@@ -134,7 +134,8 @@ if (File.Exists(settings))
     Expect("settings dark light buttons",
         s.Contains("DarkMode_Click", StringComparison.Ordinal)
         && s.Contains("LightMode_Click", StringComparison.Ordinal)
-        && s.Contains("Content=\"Dark\"", StringComparison.Ordinal)
+        && (s.Contains("Content=\"Dark\"", StringComparison.Ordinal)
+            || s.Contains("Content=\"AMOLED\"", StringComparison.Ordinal))
         && s.Contains("Content=\"Light\"", StringComparison.Ordinal));
     Expect("settings theme choice selected state",
         s.Contains("OptiThemeChoice", StringComparison.Ordinal)
@@ -365,9 +366,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.2.7", File.ReadAllText(versionFile).Trim() == "2.2.7");
+    Expect("VERSION is 2.3.1", File.ReadAllText(versionFile).Trim() == "2.3.1");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.2.7", File.ReadAllText(csproj).Contains("<Version>2.2.7</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.3.1", File.ReadAllText(csproj).Contains("<Version>2.3.1</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));

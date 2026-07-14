@@ -1,3 +1,19 @@
+## 2.3.1
+
+- **UI**: original hero tagline only; tighter page padding; borderless result banners; shorter/cleaner motion (no bounce); messages shortened
+- **Internet**: power throttling off, LLMNR off, DNS cache TTL, SMBv1 off when present, proxy AutoDetect off, Wi‑Fi roam Low on latency preset
+- **Discord**: richer Chromium switches, OpenAsar media keys off + DOM optimizer, High-performance GPU preference, fullscreen opts off
+- **Steam**: more localconfig quiet/performance keys (music, friends activity, auto-update window, shader precache noise)
+- **NVIDIA**: extra privacy RIDs, Ansel keys, PowerMizer prefer max when exposed
+
+## 2.3.0
+
+- **AMOLED shell polish**: pure-black dark, feature status rails, stronger card hover
+- **Internet peak stack**: Game Mode on, GameDVR off, HAGS on, Ultimate/High performance plan + max AC CPU, MMCSS High
+- **Discord kernel**: 3s working-set trim + tighter raw-input patch timing
+- **Steam**: 3s webhelper reclaim, lean CEF flags
+- **NVIDIA**: expanded per-game profile catalog
+
 ## 2.2.7
 
 - **Runtime bootstrap works without winget**: when PowerShell 7 Preview or Windows Terminal Preview are missing and winget is unavailable or fails (common on debloated Windows), Exo now installs them directly from the official Microsoft GitHub releases — PowerShell Preview as a per-user portable zip under `%LocalAppData%\Exo\runtime` (no elevation), Terminal Preview sideloaded per-user via `Add-AppxPackage`; downloads are verified against the release size and SHA-256 digest

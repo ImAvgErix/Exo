@@ -77,7 +77,9 @@ public partial class InternetOptimizerViewModel : ObservableObject
                 Title = f.Title,
                 Detail = f.Status,
                 Glyph = UiStatusPresentation.FeatureGlyph(f.IsOk),
-                Opacity = UiStatusPresentation.FeatureOpacity(f.IsOk)
+                Opacity = UiStatusPresentation.FeatureOpacity(f.IsOk),
+                IsActive = f.IsOk,
+                RailOpacity = UiStatusPresentation.FeatureRailOpacity(f.IsOk)
             });
         }
 
