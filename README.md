@@ -124,6 +124,32 @@ Optimizers change application files, launchers, driver profiles, display prefs, 
 
 ---
 
+## Privacy
+
+Exo itself ships **no telemetry, no analytics, no accounts**. Everything runs and stays local:
+
+- Settings, logs, and optimizer state live in `%LocalAppData%\Exo` — nothing leaves your machine
+- Network calls happen only when you ask: GitHub for app/script updates, and vendor downloads the optimizers need (OpenAsar, Equicord, NVIDIA Profile Inspector)
+- The optimizers *remove* telemetry from their targets (Discord client tracking, NVIDIA telemetry services and tasks) — that's the point
+
+---
+
+## FAQ
+
+**Windows SmartScreen blocks the installer.**
+Exo is an unsigned open-source build, so SmartScreen hasn't "seen" it. Click **More info → Run anyway**. The updater verifies every download against the GitHub release SHA-256 before running it.
+
+**Why does it ask for admin?**
+Only when applying an optimizer — services, scheduled tasks, and driver profiles need elevation. Browsing the app doesn't.
+
+**Where does it install?**
+`%LocalAppData%\Exo\app`, per-user, no system folders touched. Uninstall = delete that folder and the Start Menu shortcut.
+
+**How do updates work?**
+The app checks GitHub Releases, downloads `Exo.exe`, verifies size + SHA-256 + version stamp, then stage-swaps itself and relaunches. Script kits update separately from the repo's `main`.
+
+---
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
