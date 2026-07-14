@@ -9,8 +9,8 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Drive the real shipped sources (not a reimplementation). -->
-    <Compile Include="..\..\OptiHub\Services\NetworkPeakLogic.cs" Link="Shipped\NetworkPeakLogic.cs" />
-    <Compile Include="..\..\OptiHub\Services\NetworkApplyScriptBuilder.cs" Link="Shipped\NetworkApplyScriptBuilder.cs" />
-    <Compile Include="..\..\OptiHub\Models\NetworkSnapshot.cs" Link="Shipped\NetworkSnapshot.cs" />
+    <Compile Include="..\..\Exo\Services\NetworkPeakLogic.cs" Link="Shipped\NetworkPeakLogic.cs" />
+    <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.cs" Link="Shipped\NetworkApplyScriptBuilder.cs" />
+    <Compile Include="..\..\Exo\Models\NetworkSnapshot.cs" Link="Shipped\NetworkSnapshot.cs" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,4 @@
-using OptiHub.Services;
+using Exo.Services;
 
 var logPath = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "nvidia-detect-tests.log");
 var lines = new List<string>();
@@ -62,12 +62,12 @@ var full = NvidiaPeakLogic.IsDisplayStatusPeakOk(true, false, true, true) &&
 Expect("fully applied fixture false_fail_count=0", full);
 
 var repo = FindRepoRoot();
-var core = Path.Combine(repo, "OptiHub", "Scripts", "Nvidia", "NvidiaDetectCore.ps1");
+var core = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "NvidiaDetectCore.ps1");
 Expect("NvidiaDetectCore.ps1 exists", File.Exists(core), core);
 
 if (File.Exists(core))
 {
-    var dir = Path.Combine(Path.GetTempPath(), "optihub-nv-peak-" + Guid.NewGuid().ToString("N"));
+    var dir = Path.Combine(Path.GetTempPath(), "exo-nv-peak-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(dir);
     try
     {
@@ -76,12 +76,12 @@ if (File.Exists(core))
 $failed=0
 function E($n,$c){{ if($c){{'PASS  '+$n}} else {{$script:failed++; 'FAIL  '+$n}} }}
 @(
- (E 'ps series 30' ((Get-OptiHubGpuSeriesFromName 'NVIDIA GeForce RTX 3070') -eq '30')),
- (E 'ps profile max' ((Get-OptiHubExpectedProfileFileName -SeriesId '40' -Gsync $false) -eq '40 Series.nip')),
- (E 'ps profile gsync' ((Get-OptiHubExpectedProfileFileName -SeriesId '40' -Gsync $true) -eq '40 Series G-SYNC.nip')),
- (E 'ps display peak orphan reg' (Test-OptiHubDisplayStatusPeakOk -RefreshOk $true -RegistryOk $false -ColorOk $true -PathScalingOk $true)),
- (E 'ps tray hidden' (Test-OptiHubDisplayTrayHidden -KeyExists $true -IsPromoted 0)),
- (E 'ps tray not hidden' (-not (Test-OptiHubDisplayTrayHidden -KeyExists $true -IsPromoted 1)))
+ (E 'ps series 30' ((Get-ExoGpuSeriesFromName 'NVIDIA GeForce RTX 3070') -eq '30')),
+ (E 'ps profile max' ((Get-ExoExpectedProfileFileName -SeriesId '40' -Gsync $false) -eq '40 Series.nip')),
+ (E 'ps profile gsync' ((Get-ExoExpectedProfileFileName -SeriesId '40' -Gsync $true) -eq '40 Series G-SYNC.nip')),
+ (E 'ps display peak orphan reg' (Test-ExoDisplayStatusPeakOk -RefreshOk $true -RegistryOk $false -ColorOk $true -PathScalingOk $true)),
+ (E 'ps tray hidden' (Test-ExoDisplayTrayHidden -KeyExists $true -IsPromoted 0)),
+ (E 'ps tray not hidden' (-not (Test-ExoDisplayTrayHidden -KeyExists $true -IsPromoted 1)))
 ) | % {{ $_ }}
 'CORE_FAILED=' + $failed
 ";
@@ -113,20 +113,20 @@ function E($n,$c){{ if($c){{'PASS  '+$n}} else {{$script:failed++; 'FAIL  '+$n}}
 
 var applyFiles = new[]
 {
-    Path.Combine(repo, "OptiHub", "Scripts", "Nvidia", "Nvidia-Optimizer.ps1"),
-    Path.Combine(repo, "OptiHub", "Scripts", "Nvidia", "OptiHub-Nvidia-TrayClear.ps1"),
-    Path.Combine(repo, "OptiHub", "Scripts", "Nvidia", "OptiHub-Display-Apply.ps1"),
+    Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Nvidia-Optimizer.ps1"),
+    Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-TrayClear.ps1"),
+    Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Display-Apply.ps1"),
 };
 var blob = string.Join("\n", applyFiles.Where(File.Exists).Select(File.ReadAllText));
 Expect("apply sources readable", blob.Length > 5000);
 var (ok, issues) = NvidiaPeakLogic.AuditApplyScriptText(blob);
 Expect("apply audit", ok, string.Join("; ", issues));
 Expect("no tray logon task create",
-    !System.Text.RegularExpressions.Regex.IsMatch(blob, @"Register-ScheduledTask[^\r\n]*OptiHub-Nvidia",
+    !System.Text.RegularExpressions.Regex.IsMatch(blob, @"Register-ScheduledTask[^\r\n]*Exo-Nvidia",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase));
 Expect("Unregister tray tasks present",
-    blob.Contains("Unregister-OptiHubTrayTasks", StringComparison.OrdinalIgnoreCase) ||
-    blob.Contains("OptiHub-NvidiaTrayHide", StringComparison.OrdinalIgnoreCase));
+    blob.Contains("Unregister-ExoTrayTasks", StringComparison.OrdinalIgnoreCase) ||
+    blob.Contains("Exo-NvidiaTrayHide", StringComparison.OrdinalIgnoreCase));
 
 // --- Panel pure helpers (shipped NvidiaPanelLogic) ---
 Expect("parse mode 2560x1440@165",
@@ -161,11 +161,11 @@ var rates = NvidiaPanelLogic.RefreshRatesForResolution(modes, "2560x1440");
 Expect("refresh rates for res", rates.Count == 2 && rates[0].Contains("165", StringComparison.Ordinal));
 
 // Live helper when present (not a reimplementation)
-var nvExe = Path.Combine(repo, "OptiHub", "Scripts", "Nvidia", "tools", "OptiHub.NvDisplay.exe");
+var nvExe = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "tools", "Exo.NvDisplay.exe");
 if (!File.Exists(nvExe))
 {
     // publish output path used by release
-    var alt = Path.Combine(repo, "tools", "OptiHub.NvDisplay", "bin", "Release", "net8.0-windows", "win-x64", "OptiHub.NvDisplay.exe");
+    var alt = Path.Combine(repo, "tools", "Exo.NvDisplay", "bin", "Release", "net8.0-windows", "win-x64", "Exo.NvDisplay.exe");
     if (File.Exists(alt)) nvExe = alt;
 }
 if (File.Exists(nvExe))
@@ -182,7 +182,7 @@ if (File.Exists(nvExe))
     using var p = System.Diagnostics.Process.Start(psi)!;
     var so = p.StandardOutput.ReadToEnd();
     p.WaitForExit(45000);
-    Expect("list-displays JSON", so.Contains("OPTIHUB_NVDISPLAY_JSON:", StringComparison.Ordinal), so.Length > 0 ? so[^Math.Min(200, so.Length)..] : "empty");
+    Expect("list-displays JSON", so.Contains("EXO_NVDISPLAY_JSON:", StringComparison.Ordinal), so.Length > 0 ? so[^Math.Min(200, so.Length)..] : "empty");
     Expect("list-displays modes field", so.Contains("\"modes\"", StringComparison.Ordinal) || so.Contains("modes", StringComparison.Ordinal));
     Expect("list-displays ok", so.Contains("\"ok\":true", StringComparison.Ordinal) || so.Contains("\"ok\": true", StringComparison.Ordinal));
 }
@@ -192,7 +192,7 @@ else
 }
 
 // Structural: helper Program exposes set-mode / set-scaling
-var nvProg = Path.Combine(repo, "tools", "OptiHub.NvDisplay", "Program.cs");
+var nvProg = Path.Combine(repo, "tools", "Exo.NvDisplay", "Program.cs");
 if (File.Exists(nvProg))
 {
     var src = File.ReadAllText(nvProg);
@@ -213,10 +213,10 @@ static string FindRepoRoot()
     var dir = new DirectoryInfo(AppContext.BaseDirectory);
     while (dir is not null)
     {
-        if (File.Exists(Path.Combine(dir.FullName, "OptiHub", "Scripts", "Nvidia", "NvidiaDetectCore.ps1")))
+        if (File.Exists(Path.Combine(dir.FullName, "Exo", "Scripts", "Nvidia", "NvidiaDetectCore.ps1")))
             return dir.FullName;
         if (File.Exists(Path.Combine(dir.FullName, "VERSION")) &&
-            Directory.Exists(Path.Combine(dir.FullName, "OptiHub", "Scripts", "Nvidia")))
+            Directory.Exists(Path.Combine(dir.FullName, "Exo", "Scripts", "Nvidia")))
             return dir.FullName;
         dir = dir.Parent;
     }

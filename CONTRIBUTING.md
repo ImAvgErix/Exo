@@ -1,6 +1,6 @@
-# Contributing to OptiHub
+# Contributing to Exo
 
-Thanks for helping. OptiHub stays small and aggressive — contributions should match that bar.
+Thanks for helping. Exo stays small and aggressive — contributions should match that bar.
 
 ## Ground rules
 
@@ -12,16 +12,16 @@ Thanks for helping. OptiHub stays small and aggressive — contributions should 
 ## Dev setup (Windows x64)
 
 ```powershell
-git clone https://github.com/UhhErix/OptiHub.git
-cd OptiHub
-dotnet build OptiHub\OptiHub.csproj -c Release
+git clone https://github.com/ImAvgErix/Exo.git
+cd Exo
+dotnet build Exo\Exo.csproj -c Release
 ```
 
 Full installer package:
 
 ```powershell
-.\Publish-OptiHub.ps1
-# → release\OptiHub.exe
+.\Publish-Exo.ps1
+# → release\Exo.exe
 ```
 
 ## Tests
@@ -41,7 +41,7 @@ UI changes must keep `tools/UiPeak.Smoke` green.
 
 1. One focused change per PR when possible
 2. Update `CHANGELOG.md` under a new or existing unreleased section
-3. Bump `VERSION` + `OptiHub/OptiHub.csproj` together when shipping a release
+3. Bump `VERSION` + `Exo/Exo.csproj` together when shipping a release
 4. Do not commit `publish/`, `release/`, `bin/`, or `obj/`
 
 ## Code style

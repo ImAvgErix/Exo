@@ -1,4 +1,4 @@
-using OptiHub.Services;
+using Exo.Services;
 
 var logPath = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "steam-detect-tests.log");
 var lines = new List<string>();
@@ -24,7 +24,7 @@ Expect("CEF peak launcher", SteamPeakLogic.IsCefLauncherText(cefGood));
 Expect("CEF missing /HIGH fails", !SteamPeakLogic.IsCefLauncherText(cefMissingHigh));
 
 var trim5 = """
-# OptiHub.SteamWebHelper
+# Exo.SteamWebHelper
 EmptyWorkingSet
 [System.Diagnostics.ProcessPriorityClass]::High
 [System.Diagnostics.ProcessPriorityClass]::BelowNormal
@@ -45,9 +45,9 @@ Expect("toasts intentional off",
 Expect("toasts none not applied",
     !SteamPeakLogic.AreToastsOff(new Dictionary<string, int?> { ["Steam"] = null }));
 Expect("legacy aggressive absent",
-    SteamPeakLogic.LegacyAggressiveCmdNamesAbsent(new[] { "steam.exe", "Steam-OptiHub.cmd" }));
+    SteamPeakLogic.LegacyAggressiveCmdNamesAbsent(new[] { "steam.exe", "Steam-Exo.cmd" }));
 Expect("legacy aggressive present fail",
-    !SteamPeakLogic.LegacyAggressiveCmdNamesAbsent(new[] { "Steam-OptiHub-Aggressive.cmd" }));
+    !SteamPeakLogic.LegacyAggressiveCmdNamesAbsent(new[] { "Steam-Exo-Aggressive.cmd" }));
 
 // Fully-applied fixture
 var fullCef = SteamPeakLogic.IsCefLauncherText(cefGood);
@@ -56,12 +56,12 @@ var fullToast = SteamPeakLogic.AreToastsOff(new Dictionary<string, int?> { ["Ste
 Expect("fully applied fixture false_fail_count=0", fullCef && fullTrim && fullToast);
 
 var repo = FindRepoRoot();
-var core = Path.Combine(repo, "OptiHub", "Scripts", "Steam", "SteamDetectCore.ps1");
+var core = Path.Combine(repo, "Exo", "Scripts", "Steam", "SteamDetectCore.ps1");
 Expect("SteamDetectCore.ps1 exists", File.Exists(core), core);
 
 if (File.Exists(core))
 {
-    var dir = Path.Combine(Path.GetTempPath(), "optihub-steam-peak-" + Guid.NewGuid().ToString("N"));
+    var dir = Path.Combine(Path.GetTempPath(), "exo-steam-peak-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(dir);
     try
     {
@@ -72,14 +72,14 @@ function E($n,$c){{ if($c){{'PASS  '+$n}} else {{$script:failed++; 'FAIL  '+$n}}
 @(
  (E 'ps cef' (Test-SteamCefLauncherText -Text 'start """" /HIGH steam.exe -cef-disable-gpu -nofriendsui -nointro')),
  (E 'ps trim 5' (Test-SteamTrimHelperText -Text @'
-OptiHub.SteamWebHelper
+Exo.SteamWebHelper
 EmptyWorkingSet
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
 Start-Sleep -Seconds 5
 '@)),
  (E 'ps trim 4' (Test-SteamTrimHelperText -Text @'
-OptiHub.SteamWebHelper
+Exo.SteamWebHelper
 EmptyWorkingSet
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
@@ -118,15 +118,15 @@ Start-Sleep -Seconds 4
 
 var applyFiles = new[]
 {
-    Path.Combine(repo, "OptiHub", "Scripts", "Steam", "Steam-Optimizer.ps1"),
-    Path.Combine(repo, "OptiHub", "Scripts", "Steam", "OptiHub-Steam-Run.ps1"),
+    Path.Combine(repo, "Exo", "Scripts", "Steam", "Steam-Optimizer.ps1"),
+    Path.Combine(repo, "Exo", "Scripts", "Steam", "Exo-Steam-Run.ps1"),
 };
 var blob = string.Join("\n", applyFiles.Where(File.Exists).Select(File.ReadAllText));
 Expect("apply sources readable", blob.Length > 1000);
 var (ok, issues) = SteamPeakLogic.AuditApplyScriptText(blob);
 Expect("apply audit", ok, string.Join("; ", issues));
-Expect("no OptiHub-Steam scheduled task create",
-    blob.IndexOf("Register-ScheduledTask -TaskName 'OptiHub-Steam", StringComparison.OrdinalIgnoreCase) < 0);
+Expect("no Exo-Steam scheduled task create",
+    blob.IndexOf("Register-ScheduledTask -TaskName 'Exo-Steam", StringComparison.OrdinalIgnoreCase) < 0);
 
 Log($"=== SUMMARY failed={failed} ===");
 Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
@@ -139,10 +139,10 @@ static string FindRepoRoot()
     var dir = new DirectoryInfo(AppContext.BaseDirectory);
     while (dir is not null)
     {
-        if (File.Exists(Path.Combine(dir.FullName, "OptiHub", "Scripts", "Steam", "SteamDetectCore.ps1")))
+        if (File.Exists(Path.Combine(dir.FullName, "Exo", "Scripts", "Steam", "SteamDetectCore.ps1")))
             return dir.FullName;
         if (File.Exists(Path.Combine(dir.FullName, "VERSION")) &&
-            Directory.Exists(Path.Combine(dir.FullName, "OptiHub", "Scripts", "Steam")))
+            Directory.Exists(Path.Combine(dir.FullName, "Exo", "Scripts", "Steam")))
             return dir.FullName;
         dir = dir.Parent;
     }

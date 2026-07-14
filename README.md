@@ -1,30 +1,30 @@
-# OptiHub
+# Exo
 
 **Peak performance optimizers for Windows — one hub, no folklore.**
 
-[![Release](https://img.shields.io/github/v/release/UhhErix/OptiHub?style=flat-square&label=latest)](https://github.com/UhhErix/OptiHub/releases/latest)
-[![CI](https://img.shields.io/github/actions/workflow/status/UhhErix/OptiHub/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/UhhErix/OptiHub/actions)
+[![Release](https://img.shields.io/github/v/release/ImAvgErix/Exo?style=flat-square&label=latest)](https://github.com/ImAvgErix/Exo/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/ImAvgErix/Exo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/ImAvgErix/Exo/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg?style=flat-square)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0f766e?style=flat-square)](https://github.com/UhhErix/OptiHub/releases/latest)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0f766e?style=flat-square)](https://github.com/ImAvgErix/Exo/releases/latest)
 
-OptiHub is a focused Windows performance hub. Each optimizer is **aggressive by design**, **deterministic**, and **honest about what it applied**. Live status checklists track real state — not marketing checkmarks.
+Exo is a focused Windows performance hub. Each optimizer is **aggressive by design**, **deterministic**, and **honest about what it applied**. Live status checklists track real state — not marketing checkmarks.
 
 ---
 
 ## Download
 
-Grab the latest **double-click installer** from [Releases](https://github.com/UhhErix/OptiHub/releases/latest):
+Grab the latest **double-click installer** from [Releases](https://github.com/ImAvgErix/Exo/releases/latest):
 
 | Asset | What it is |
 |-------|------------|
-| `OptiHub.exe` | Self-extracting installer (recommended) |
+| `Exo.exe` | Self-extracting installer (recommended) |
 
 **Requirements:** Windows 10/11 **x64**, admin elevation when applying optimizers, NVIDIA GPU for the NVIDIA path.
 
 One-liner (PowerShell):
 
 ```powershell
-irm https://raw.githubusercontent.com/UhhErix/OptiHub/main/Install-OptiHub.ps1 | iex
+irm https://raw.githubusercontent.com/ImAvgErix/Exo/main/Install-Exo.ps1 | iex
 ```
 
 ---
@@ -65,24 +65,24 @@ Built-in Control Panel–style controls (no mouse automation of the Store app):
 
 - **No folklore** — no invented registry keys, no “DNS AI”, no logon tray spam tasks
 - **Detect what you applied** — pure classifiers (`*PeakLogic` / `*DetectCore`) shared by UI and smoke tests
-- **Repair where it matters** — Discord and Steam include Repair for OptiHub-managed changes
-- **NVIDIA honesty** — Reset clears OptiHub status only; full driver recovery is manual (NVIDIA settings / reinstall)
+- **Repair where it matters** — Discord and Steam include Repair for Exo-managed changes
+- **NVIDIA honesty** — Reset clears Exo status only; full driver recovery is manual (NVIDIA settings / reinstall)
 
 ---
 
 ## Install from source
 
 ```powershell
-git clone https://github.com/UhhErix/OptiHub.git
-cd OptiHub
-.\Publish-OptiHub.ps1
-# → release\OptiHub.exe
+git clone https://github.com/ImAvgErix/Exo.git
+cd Exo
+.\Publish-Exo.ps1
+# → release\Exo.exe
 ```
 
 Build the WinUI app only:
 
 ```powershell
-dotnet build OptiHub\OptiHub.csproj -c Release
+dotnet build Exo\Exo.csproj -c Release
 ```
 
 Smoke tests (shipped logic, no UAC):
@@ -101,16 +101,16 @@ dotnet run --project tools\NvidiaPeak.Smoke -c Release
 ## Project layout
 
 ```
-OptiHub/                 WinUI 3 app + bundled scripts
+Exo/                 WinUI 3 app + bundled scripts
   Scripts/Discord|Steam|Nvidia|…
   Services/              Peak logic, runners, panel
   Views/                 Dashboard, optimizers, NVIDIA Panel
   Styles/                Theme + button chrome
-tools/                   Smoke projects + OptiHub.NvDisplay (NVAPI helper)
+tools/                   Smoke projects + Exo.NvDisplay (NVAPI helper)
 docs/                    Golden paths and audits
 .github/                 CI, issue & PR templates
-Publish-OptiHub.ps1      Single-file release build
-Release-OptiHub.ps1      GitHub release (OptiHub.exe only)
+Publish-Exo.ps1      Single-file release build
+Release-Exo.ps1      GitHub release (Exo.exe only)
 ```
 
 ---
@@ -119,8 +119,8 @@ Release-OptiHub.ps1      GitHub release (OptiHub.exe only)
 
 Optimizers change application files, launchers, driver profiles, display prefs, and Windows settings. Read each confirmation. **Use at your own risk.**
 
-- Discord / Steam: use **Repair** to undo OptiHub-managed pieces
-- NVIDIA: recovery is through NVIDIA tools or a clean driver install — OptiHub Reset is status-only
+- Discord / Steam: use **Repair** to undo Exo-managed pieces
+- NVIDIA: recovery is through NVIDIA tools or a clean driver install — Exo Reset is status-only
 
 ---
 
@@ -138,6 +138,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY
 
 ## Links
 
-- **Releases:** https://github.com/UhhErix/OptiHub/releases
-- **Issues:** https://github.com/UhhErix/OptiHub/issues
+- **Releases:** https://github.com/ImAvgErix/Exo/releases
+- **Issues:** https://github.com/ImAvgErix/Exo/issues
 - **Changelog:** [CHANGELOG.md](CHANGELOG.md)

@@ -17,21 +17,21 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Build OptiHub and NVIDIA display helper
+      - name: Build Exo and NVIDIA display helper
         run: |
-          dotnet build OptiHub.sln -c Release -p:Platform=x64
-          dotnet build tools/OptiHub.NvDisplay/OptiHub.NvDisplay.csproj -c Release
+          dotnet build Exo.sln -c Release -p:Platform=x64
+          dotnet build tools/Exo.NvDisplay/Exo.NvDisplay.csproj -c Release
 
       - name: Verify C# formatting
         run: |
-          dotnet format OptiHub.sln --verify-no-changes --no-restore
-          dotnet format tools/OptiHub.NvDisplay/OptiHub.NvDisplay.csproj --verify-no-changes --no-restore
+          dotnet format Exo.sln --verify-no-changes --no-restore
+          dotnet format tools/Exo.NvDisplay/Exo.NvDisplay.csproj --verify-no-changes --no-restore
 
       - name: Compile self-extracting installer source
         shell: pwsh
         run: |
           $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-          & $csc /nologo /target:winexe /optimize+ /out:"$env:RUNNER_TEMP\OptiHubSfx-test.exe" /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll tools/OptiHubSfx.cs
+          & $csc /nologo /target:winexe /optimize+ /out:"$env:RUNNER_TEMP\ExoSfx-test.exe" /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll tools/ExoSfx.cs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Validate scripts and bundled data

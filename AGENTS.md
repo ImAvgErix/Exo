@@ -1,10 +1,10 @@
-# OptiHub agent workflow
+# Exo agent workflow
 
 ## Product direction
 
-OptiHub is a no-compromise Windows performance and debloat tool. Aggressive memory trimming, background-process reduction, priority tuning, cache cleanup, telemetry removal, and latency/FPS optimization are intentional core features. Do not quietly weaken them into conservative defaults.
+Exo is a no-compromise Windows performance and debloat tool. Aggressive memory trimming, background-process reduction, priority tuning, cache cleanup, telemetry removal, and latency/FPS optimization are intentional core features. Do not quietly weaken them into conservative defaults.
 
-Aggressive must still be deterministic: scope actions to the selected application or hardware, report partial failures honestly, avoid invented registry settings, preserve data needed to prevent corruption, and keep Discord/Steam repair paths working. Never describe NVIDIA Reset as rollback: it only clears OptiHub status, while NVIDIA recovery remains manual through NVIDIA settings or a driver reinstall.
+Aggressive must still be deterministic: scope actions to the selected application or hardware, report partial failures honestly, avoid invented registry settings, preserve data needed to prevent corruption, and keep Discord/Steam repair paths working. Never describe NVIDIA Reset as rollback: it only clears Exo status, while NVIDIA recovery remains manual through NVIDIA settings or a driver reinstall.
 
 ## Shell UI (current)
 
@@ -13,7 +13,7 @@ Aggressive must still be deterministic: scope actions to the selected applicatio
 - **Motion** = XAML Storyboards only; never Composition Opacity = 0 (blanks UI)
 - **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)
 - **Home** = cached dashboard so Back does not re-stagger / shift layout
-- **Version** = `VERSION` file and `OptiHub/OptiHub.csproj` must match; UiPeak.Smoke gates both
+- **Version** = `VERSION` file and `Exo/Exo.csproj` must match; UiPeak.Smoke gates both
 
 ## Team structure
 
@@ -32,5 +32,5 @@ Use concise prompts and targeted diffs. Do not have the coordinator redo complet
 1. `dotnet run --project tools/UiPeak.Smoke -c Release`
 2. `.\tools\Test-Repository.ps1`
 3. Peak smokes as needed (Network / Discord / Steam / NVIDIA)
-4. `.\Publish-OptiHub.ps1` then install to `%LocalAppData%\OptiHub\app` for local QA
-5. `.\Release-OptiHub.ps1` only when intentionally publishing a GitHub release
+4. `.\Publish-Exo.ps1` then install to `%LocalAppData%\Exo\app` for local QA
+5. `.\Release-Exo.ps1` only when intentionally publishing a GitHub release

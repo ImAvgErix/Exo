@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>Exo</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- Default to x64 so `dotnet run` / `dotnet build` find the same output path -->
+    <Platforms>x64</Platforms>
+    <Platform Condition="'$(Platform)' == '' or '$(Platform)' == 'AnyCPU'">x64</Platform>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <ApplicationIcon>Assets\Exo.ico</ApplicationIcon>
+    <AssemblyName>Exo</AssemblyName>
+    <Product>Exo</Product>
+    <Company>Exo</Company>
+    <Version>2.2.4</Version>
+    <Description>One hub. Max performance.</Description>
+    <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <!-- Bundle optimizer scripts next to the app (exclude multi-MB caches; download on demand) -->
+  <ItemGroup>
+    <Content Include="Scripts\**\*" Exclude="Scripts\Placeholders\**\*;Scripts\Discord\kit\tools\discord-modules\**\*;Scripts\Discord\kit\tools\desktop.asar;Scripts\Discord\kit\tools\equicord.asar;Scripts\Discord\kit\tools\DiscordSetup*.exe;Scripts\Discord\kit\tools\Equilotl*.exe;Scripts\Discord\kit\tools\pwsh\**\*;Scripts\Discord\kit\downloads\**\*;Scripts\Discord\kit\logs\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\**\*" Exclude="Assets\Logos\_contact.png;Assets\Logos\*.tmp.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- Unpackaged WinUI 3 bootstrap -->
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+</Project>
+
+
+

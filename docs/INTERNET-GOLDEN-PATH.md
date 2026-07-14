@@ -2,7 +2,7 @@
 
 # Internet optimizer — peak path
 
-**Version:** ships with current OptiHub app release  
+**Version:** ships with current Exo app release  
 **Goal:** lowest latency / best gaming **and** complete Ethernet + Wi‑Fi coverage (bindings, advanced props, host stack).
 
 ## Detection (local facts only)
@@ -91,7 +91,7 @@
 
 ## Apply diagnostics
 
-- Log: `%TEMP%\optihub-net-last.log`
+- Log: `%TEMP%\exo-net-last.log`
 
 ## Explicit non-goals (do not re-add)
 

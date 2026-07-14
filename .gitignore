@@ -33,24 +33,24 @@ override-diff-*/
 Disc Optimizer/
 
 # Runtime logs and local caches (Discord kit)
-OptiHub/Scripts/Discord/kit/logs/*.log
-OptiHub/Scripts/Discord/kit/logs/last-*.log
-OptiHub/Scripts/Discord/kit/downloads/*
-OptiHub/Scripts/Discord/kit/downloads/*.zip
-OptiHub/Scripts/Discord/kit/tools/DiscordSetup*.exe
-OptiHub/Scripts/Discord/kit/tools/Equilotl*.exe
-OptiHub/Scripts/Discord/kit/tools/pwsh/
+Exo/Scripts/Discord/kit/logs/*.log
+Exo/Scripts/Discord/kit/logs/last-*.log
+Exo/Scripts/Discord/kit/downloads/*
+Exo/Scripts/Discord/kit/downloads/*.zip
+Exo/Scripts/Discord/kit/tools/DiscordSetup*.exe
+Exo/Scripts/Discord/kit/tools/Equilotl*.exe
+Exo/Scripts/Discord/kit/tools/pwsh/
 
 # App logs
 *.log
 
-# Built NVAPI helper (produced by Publish-OptiHub.ps1)
-OptiHub/Scripts/Nvidia/tools/
+# Built NVAPI helper (produced by Publish-Exo.ps1)
+Exo/Scripts/Nvidia/tools/
 
 .ui-shots/
 
-OptiHub/Assets/Logos/_contact.png
-OptiHub/Assets/Logos/*.tmp.png
-docs/optihub-live.png
+Exo/Assets/Logos/_contact.png
+Exo/Assets/Logos/*.tmp.png
+docs/exo-live.png
 
 

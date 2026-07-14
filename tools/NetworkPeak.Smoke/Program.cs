@@ -1,5 +1,5 @@
-using OptiHub.Models;
-using OptiHub.Services;
+using Exo.Models;
+using Exo.Services;
 
 // Smoke tests drive shipped NetworkPeakLogic + NetworkApplyScriptBuilder.
 // Exit 0 only if all cases pass. Args: optional log path.

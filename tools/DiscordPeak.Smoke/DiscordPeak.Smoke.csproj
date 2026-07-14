@@ -8,6 +8,6 @@
     <AssemblyName>DiscordPeak.Smoke</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\..\OptiHub\Services\DiscordPeakLogic.cs" Link="Shipped\DiscordPeakLogic.cs" />
+    <Compile Include="..\..\Exo\Services\DiscordPeakLogic.cs" Link="Shipped\DiscordPeakLogic.cs" />
   </ItemGroup>
 </Project>

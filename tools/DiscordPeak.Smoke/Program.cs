@@ -1,4 +1,4 @@
-using OptiHub.Services;
+using Exo.Services;
 
 // Smoke tests drive shipped DiscordPeakLogic + invoke shipped DiscordDetectCore.ps1 fixtures.
 var logPath = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "discord-detect-tests.log");
@@ -89,12 +89,12 @@ Expect("unrelated path not stable",
 
 // --- Invoke shipped DiscordDetectCore.ps1 (not a reimplementation) ---
 var repoRoot = FindRepoRoot();
-var corePs1 = Path.Combine(repoRoot, "OptiHub", "Scripts", "Discord", "DiscordDetectCore.ps1");
+var corePs1 = Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "DiscordDetectCore.ps1");
 Expect("DiscordDetectCore.ps1 exists", File.Exists(corePs1), corePs1);
 
 if (File.Exists(corePs1))
 {
-    var fixtureDir = Path.Combine(Path.GetTempPath(), "optihub-discord-peak-" + Guid.NewGuid().ToString("N"));
+    var fixtureDir = Path.Combine(Path.GetTempPath(), "exo-discord-peak-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(fixtureDir);
     try
     {
@@ -165,17 +165,17 @@ PriorityClass=3
 // --- Apply path audit: concatenate shipped apply sources ---
 var applyFiles = new[]
 {
-    Path.Combine(repoRoot, "OptiHub", "Scripts", "Discord", "Disc-Optimizer.ps1"),
-    Path.Combine(repoRoot, "OptiHub", "Scripts", "Discord", "OptiHub-Discord-Run.ps1"),
-    Path.Combine(repoRoot, "OptiHub", "Scripts", "Discord", "kit", "lib", "40-DebloatWindows.ps1"),
-    Path.Combine(repoRoot, "OptiHub", "Scripts", "Discord", "kit", "lib", "60-KernelBoot.ps1"),
+    Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Disc-Optimizer.ps1"),
+    Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Exo-Discord-Run.ps1"),
+    Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "kit", "lib", "40-DebloatWindows.ps1"),
+    Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "kit", "lib", "60-KernelBoot.ps1"),
 };
 var applyBlob = string.Join("\n", applyFiles.Where(File.Exists).Select(File.ReadAllText));
 Expect("apply sources readable", applyBlob.Length > 1000);
 var (auditOk, auditIssues) = DiscordPeakLogic.AuditApplyScriptText(applyBlob);
 Expect("apply audit", auditOk, string.Join("; ", auditIssues));
-Expect("no OptiHub-Discord scheduled task create",
-    applyBlob.IndexOf("Register-ScheduledTask -TaskName 'OptiHub-Discord", StringComparison.OrdinalIgnoreCase) < 0);
+Expect("no Exo-Discord scheduled task create",
+    applyBlob.IndexOf("Register-ScheduledTask -TaskName 'Exo-Discord", StringComparison.OrdinalIgnoreCase) < 0);
 Expect("Install-DiscOptKernel present",
     applyBlob.Contains("Install-DiscOptKernel", StringComparison.Ordinal));
 Expect("Apply-WindowsTweaks present",
@@ -209,7 +209,7 @@ Expect("debloat hard+soft with state still inactive",
     !DiscordPeakLogic.IsClientDebloatApplied(1, 0, 1, 0, true));
 
 // Empty module dir has no payload
-var emptyMod = Path.Combine(Path.GetTempPath(), "optihub-empty-mod-" + Guid.NewGuid().ToString("N"));
+var emptyMod = Path.Combine(Path.GetTempPath(), "exo-empty-mod-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(emptyMod);
 try
 {
@@ -223,12 +223,12 @@ finally
 }
 Expect("missing module dir no payload", !DiscordPeakLogic.ModuleDirHasPayload(null));
 Expect("missing module path no payload",
-    !DiscordPeakLogic.ModuleDirHasPayload(Path.Combine(Path.GetTempPath(), "no-such-optihub-mod")));
+    !DiscordPeakLogic.ModuleDirHasPayload(Path.Combine(Path.GetTempPath(), "no-such-exo-mod")));
 
 // --- Invoke shipped DiscordDetectCore debloat + fixture tree matching detect collection ---
 if (File.Exists(corePs1))
 {
-    var debloatFixture = Path.Combine(Path.GetTempPath(), "optihub-discord-debloat-" + Guid.NewGuid().ToString("N"));
+    var debloatFixture = Path.Combine(Path.GetTempPath(), "exo-discord-debloat-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(debloatFixture);
     try
     {
@@ -332,11 +332,11 @@ E 'ps detect-path soft-drift + state active' $debloatSoft
 }
 
 // Live detect script: debloat feature row must be present (no Count throw skip)
-var detectPs1 = Path.Combine(repoRoot, "OptiHub", "Scripts", "Discord", "OptiHub-Discord-Detect.ps1");
-Expect("OptiHub-Discord-Detect.ps1 exists", File.Exists(detectPs1), detectPs1);
+var detectPs1 = Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Exo-Discord-Detect.ps1");
+Expect("Exo-Discord-Detect.ps1 exists", File.Exists(detectPs1), detectPs1);
 if (File.Exists(detectPs1))
 {
-    var liveDir = Path.Combine(Path.GetTempPath(), "optihub-discord-live-detect-" + Guid.NewGuid().ToString("N"));
+    var liveDir = Path.Combine(Path.GetTempPath(), "exo-discord-live-detect-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(liveDir);
     try
     {
@@ -385,10 +385,10 @@ static string FindRepoRoot()
     var dir = new DirectoryInfo(AppContext.BaseDirectory);
     while (dir is not null)
     {
-        if (File.Exists(Path.Combine(dir.FullName, "OptiHub", "Scripts", "Discord", "DiscordDetectCore.ps1")))
+        if (File.Exists(Path.Combine(dir.FullName, "Exo", "Scripts", "Discord", "DiscordDetectCore.ps1")))
             return dir.FullName;
         if (File.Exists(Path.Combine(dir.FullName, "VERSION")) &&
-            Directory.Exists(Path.Combine(dir.FullName, "OptiHub", "Scripts", "Discord")))
+            Directory.Exists(Path.Combine(dir.FullName, "Exo", "Scripts", "Discord")))
             return dir.FullName;
         dir = dir.Parent;
     }

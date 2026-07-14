@@ -20,7 +20,7 @@ assignees: ''
 
 ## Environment
 
-- OptiHub version (Settings → App version):
+- Exo version (Settings → App version):
 - Windows version:
 - Module (Home / Discord / Steam / Internet / NVIDIA / Panel):
 
