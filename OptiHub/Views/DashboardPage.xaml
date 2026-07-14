@@ -53,7 +53,7 @@
                     <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
                         <Button Style="{StaticResource OptiCardButton}"
                                 Width="248"
-                                Height="120"
+                                Height="148"
                                 Margin="6"
                                 RenderTransformOrigin="0.5,0.5"
                                 Click="CardButton_Click"
@@ -63,9 +63,13 @@
                             <Border Style="{StaticResource OptiCard}"
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Stretch"
-                                    Padding="10"
+                                    Padding="12,12,12,10"
                                     Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
                                 <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
                                     <Image Width="64"
                                            Height="64"
                                            Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
@@ -73,14 +77,26 @@
                                            VerticalAlignment="Center"
                                            Stretch="Uniform"
                                            AutomationProperties.AccessibilityView="Raw" />
-                                    <TextBlock Text="Coming soon"
-                                               FontFamily="{StaticResource OptiUiFont}"
-                                               FontSize="11"
-                                               Foreground="{ThemeResource OptiMutedTextBrush}"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Bottom"
-                                               Margin="0,0,0,1"
-                                               Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <StackPanel Grid.Row="1"
+                                                Spacing="2"
+                                                HorizontalAlignment="Center"
+                                                Margin="0,6,0,0">
+                                        <TextBlock Text="{x:Bind Definition.Title, Mode=OneWay}"
+                                                   FontFamily="{StaticResource OptiUiFontSemiBold}"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                                                   HorizontalAlignment="Center"
+                                                   TextAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxLines="1" />
+                                        <TextBlock Text="Coming soon"
+                                                   FontFamily="{StaticResource OptiUiFont}"
+                                                   FontSize="11"
+                                                   Foreground="{ThemeResource OptiMutedTextBrush}"
+                                                   HorizontalAlignment="Center"
+                                                   Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                         </Button>

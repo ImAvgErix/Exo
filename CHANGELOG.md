@@ -1,3 +1,9 @@
+## 2.0.6
+
+- **Settings stays centered for real**: star-grid center host; sheet never gets transform/opacity animation
+- **Check for updates no longer kicks the card**: fixed-height progress slot (no height remeasure jump)
+- Scrim-only fade open/close
+- **Home card names**: title under each optimizer logo
 ## 2.0.5
 
 - **No more top-left drift**: settings open is fade-only (no scale/translate on the centered sheet); hard identity reset every close

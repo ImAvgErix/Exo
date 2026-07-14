@@ -213,94 +213,97 @@ public static class OptiMotion
     }
 
     /// <summary>
-    /// Settings open: opacity fade only on scrim + sheet.
-    /// No TranslateY/Scale on the centered sheet (that is what drifts top-left).
+    /// Settings scrim fade-in only. Do NOT pass the sheet — transforms/opacity on a
+    /// centered host is what pinned settings top-left after remeasure (Check for updates).
     /// </summary>
-    public static void PlayOverlayOpen(UIElement scrimHost, UIElement sheet)
+    public static void PlayScrimFadeIn(UIElement scrim)
     {
         try
         {
-            ForceCompositionIdentity(scrimHost);
-            ForceCompositionIdentity(sheet);
-            // Kill any leftover RenderTransform from prior broken builds.
-            ClearTransform(sheet);
-            ClearTransform(scrimHost);
-
-            scrimHost.Opacity = 0;
-            sheet.Opacity = 0;
-            sheet.IsHitTestVisible = true;
-            scrimHost.IsHitTestVisible = true;
-
+            ForceCompositionIdentity(scrim);
+            ClearTransform(scrim);
+            scrim.Opacity = 0;
             var sb = new Storyboard();
-            sb.Children.Add(Fade(scrimHost, 0, 1, 200, 0));
-            sb.Children.Add(Fade(sheet, 0, 1, OverlayOpenMs, 24));
+            sb.Children.Add(Fade(scrim, 0, 1, 200, 0));
             sb.Completed += (_, _) =>
             {
-                try
-                {
-                    scrimHost.Opacity = 1;
-                    sheet.Opacity = 1;
-                    ClearTransform(sheet);
-                    ClearTransform(scrimHost);
-                }
-                catch { }
+                try { scrim.Opacity = 1; ClearTransform(scrim); } catch { }
             };
             sb.Begin();
-
-            ScheduleEnsureVisible(scrimHost, OverlayOpenMs + 60);
-            ScheduleEnsureVisible(sheet, OverlayOpenMs + 60);
         }
         catch
         {
-            EnsureVisible(scrimHost);
-            EnsureVisible(sheet);
+            try { scrim.Opacity = 1; } catch { }
         }
     }
 
-    /// <summary>Settings close: opacity fade only, then onDone.</summary>
-    public static void PlayOverlayClose(UIElement scrimHost, UIElement sheet, Action? onDone = null)
+    /// <summary>Settings scrim fade-out only, then onDone.</summary>
+    public static void PlayScrimFadeOut(UIElement scrim, Action? onDone = null)
     {
         try
         {
-            ForceCompositionIdentity(scrimHost);
-            ForceCompositionIdentity(sheet);
-            ClearTransform(sheet);
-
+            ForceCompositionIdentity(scrim);
+            ClearTransform(scrim);
             var sb = new Storyboard();
-            sb.Children.Add(Fade(scrimHost, Math.Clamp(scrimHost.Opacity, 0, 1), 0, OverlayCloseMs, 0));
-            sb.Children.Add(Fade(sheet, Math.Clamp(sheet.Opacity, 0, 1), 0, OverlayCloseMs, 0));
-
+            sb.Children.Add(Fade(scrim, Math.Clamp(scrim.Opacity, 0, 1), 0, OverlayCloseMs, 0));
             var finished = false;
             void Once()
             {
                 if (finished) return;
                 finished = true;
-                try
-                {
-                    // Rest for next open (Visibility still Collapsed by caller).
-                    scrimHost.Opacity = 1;
-                    sheet.Opacity = 1;
-                    ClearTransform(sheet);
-                    ClearTransform(scrimHost);
-                    ForceCompositionIdentity(scrimHost);
-                    ForceCompositionIdentity(sheet);
-                }
-                catch { }
+                try { scrim.Opacity = 1; ClearTransform(scrim); } catch { }
                 onDone?.Invoke();
             }
             sb.Completed += (_, _) => Once();
             sb.Begin();
-            _ = Task.Delay(OverlayCloseMs + 50).ContinueWith(_ =>
+            _ = Task.Delay(OverlayCloseMs + 40).ContinueWith(_ =>
             {
-                try { scrimHost.DispatcherQueue?.TryEnqueue(Once); } catch { try { Once(); } catch { } }
+                try { scrim.DispatcherQueue?.TryEnqueue(Once); } catch { try { Once(); } catch { } }
             });
         }
         catch
         {
-            EnsureVisible(scrimHost);
-            EnsureVisible(sheet);
+            try { scrim.Opacity = 1; } catch { }
             onDone?.Invoke();
         }
+    }
+
+    /// <summary>Back-compat names — scrim-only; sheet argument ignored on purpose.</summary>
+    public static void PlayOverlayOpen(UIElement scrimHost, UIElement sheet)
+    {
+        // Sheet must stay layout-owned. Only fade scrim.
+        try
+        {
+            sheet.Opacity = 1;
+            sheet.RenderTransform = null;
+            ClearCompositionOnly(sheet);
+        }
+        catch { }
+        PlayScrimFadeIn(scrimHost);
+    }
+
+    public static void PlayOverlayClose(UIElement scrimHost, UIElement sheet, Action? onDone = null)
+    {
+        try
+        {
+            sheet.Opacity = 1;
+            sheet.RenderTransform = null;
+            ClearCompositionOnly(sheet);
+        }
+        catch { }
+        PlayScrimFadeOut(scrimHost, onDone);
+    }
+
+    /// <summary>Clear composition layer only — does not touch XAML Opacity (safe mid-layout).</summary>
+    public static void ClearCompositionOnly(UIElement el)
+    {
+        ForceCompositionIdentity(el);
+        try
+        {
+            if (el.RenderTransform is not null)
+                el.RenderTransform = null;
+        }
+        catch { }
     }
 
     /// <summary>Module page soft fade-in.</summary>

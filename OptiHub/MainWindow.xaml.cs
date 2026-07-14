@@ -287,35 +287,29 @@ public sealed partial class MainWindow : Window
         CloseSettingsOverlay();
 
     /// <summary>
-    /// Settings open: show overlay, then soft XAML fade/rise on the sheet.
-    /// Never uses Composition Opacity (that blanked the UI). Close always recovers.
+    /// Settings open/close — sheet is NEVER animated (star-grid keeps it centered).
+    /// Only the scrim fades. Touching the sheet with transforms is what pinned top-left.
     /// </summary>
     private void OpenSettingsOverlay()
     {
-        // Already open — snap identity so multi-open never drifts top-left.
         if (_settingsOpen)
         {
             SettingsOverlay.Visibility = Visibility.Visible;
             SettingsButton.Visibility = Visibility.Collapsed;
-            OptiMotion.EnsureVisible(SettingsOverlay);
-            OptiMotion.EnsureVisible(SettingsSheetHost);
+            PinSettingsSheetLayout();
             return;
         }
 
-        // Navigate home first while still closed (Navigate closes settings if open).
         if (_mode != ShellMode.Home)
             NavigateHome(suppressTransition: true);
 
         _settingsOpen = true;
         SettingsButton.Visibility = Visibility.Collapsed;
-
-        // Identity first, then show + fade (no scale/translate on the centered sheet).
-        OptiMotion.EnsureVisible(SettingsOverlay);
-        OptiMotion.EnsureVisible(SettingsSheetHost);
+        PinSettingsSheetLayout();
         SettingsOverlay.Visibility = Visibility.Visible;
         SettingsOverlay.UpdateLayout();
-        SettingsSheetHost.UpdateLayout();
-        OptiMotion.PlayOverlayOpen(SettingsOverlay, SettingsSheetHost);
+        // Fade scrim only — never the sheet host.
+        OptiMotion.PlayScrimFadeIn(SettingsScrim);
     }
 
     private void CloseSettingsOverlay()
@@ -332,9 +326,8 @@ public sealed partial class MainWindow : Window
         void Finish()
         {
             SettingsOverlay.Visibility = Visibility.Collapsed;
-            // Hard identity so the next open never inherits translate/scale residue.
-            OptiMotion.EnsureVisible(SettingsOverlay);
-            OptiMotion.EnsureVisible(SettingsSheetHost);
+            PinSettingsSheetLayout();
+            SettingsScrim.Opacity = 1;
             SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -346,8 +339,28 @@ public sealed partial class MainWindow : Window
             DispatcherQueue.TryEnqueue(Finish);
         }
 
-        OptiMotion.PlayOverlayClose(SettingsOverlay, SettingsSheetHost, Once);
-        _ = Task.Delay(200).ContinueWith(_ => Once());
+        OptiMotion.PlayScrimFadeOut(SettingsScrim, Once);
+        _ = Task.Delay(180).ContinueWith(_ => Once());
+    }
+
+    /// <summary>Strip any transform/opacity residue; sheet stays layout-centered.</summary>
+    private void PinSettingsSheetLayout()
+    {
+        try
+        {
+            SettingsOverlay.Opacity = 1;
+            SettingsOverlay.RenderTransform = null;
+            SettingsCenterHost.Opacity = 1;
+            SettingsCenterHost.RenderTransform = null;
+            SettingsSheetHost.Opacity = 1;
+            SettingsSheetHost.RenderTransform = null;
+            SettingsSheetHost.IsHitTestVisible = true;
+            // Clear composition layer if anything ever touched it.
+            OptiMotion.ClearCompositionOnly(SettingsSheetHost);
+            OptiMotion.ClearCompositionOnly(SettingsOverlay);
+            OptiMotion.ClearCompositionOnly(SettingsCenterHost);
+        }
+        catch { }
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)

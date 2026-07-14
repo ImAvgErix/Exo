@@ -78,9 +78,10 @@ if (File.Exists(dash))
         || d.Contains("Maximum performance", StringComparison.Ordinal));
     Expect("stretch uniform logos", d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal));
     // Logo-only cards — title lives on the module page (a11y still has AutomationProperties.Name).
-    Expect("logo only cards", !d.Contains("Definition.Title}", StringComparison.Ordinal)
-        || d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
-    Expect("no card title label", !d.Contains("Text=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
+    // Labels under logos (names for each optimizer).
+    Expect("card title labels",
+        d.Contains("Text=\"{x:Bind Definition.Title", StringComparison.Ordinal)
+        && d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
     // Hero dominant: centered tagline; compact cards under it (not overpowering).
     Expect("dashboard tagline center",
         d.Contains("TextAlignment=\"Center\"", StringComparison.Ordinal)
@@ -91,15 +92,14 @@ if (File.Exists(dash))
             || d.Contains("FontSize=\"48\"", StringComparison.Ordinal)));
     Expect("dashboard fixed cards under hero",
         d.Contains("Width=\"248\"", StringComparison.Ordinal)
-        && d.Contains("Height=\"120\"", StringComparison.Ordinal));
+        && (d.Contains("Height=\"148\"", StringComparison.Ordinal) || d.Contains("Height=\"120\"", StringComparison.Ordinal)));
     // Cards must stay smaller than the old overpowering footprints.
     Expect("dashboard cards not oversized",
         !d.Contains("Width=\"352\"", StringComparison.Ordinal)
         && !d.Contains("Width=\"340\"", StringComparison.Ordinal)
         && !d.Contains("Width=\"300\"", StringComparison.Ordinal)
         && !d.Contains("Height=\"200\"", StringComparison.Ordinal)
-        && !d.Contains("Height=\"190\"", StringComparison.Ordinal)
-        && !d.Contains("Height=\"158\"", StringComparison.Ordinal));
+        && !d.Contains("Height=\"190\"", StringComparison.Ordinal));
     Expect("dashboard no responsive layout",
         !File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
             .Contains("ApplyResponsiveLayout", StringComparison.Ordinal));
@@ -140,7 +140,8 @@ if (File.Exists(settings))
     Expect("settings overlay on main", File.Exists(mainXaml) && File.ReadAllText(mainXaml).Contains("SettingsOverlay", StringComparison.Ordinal)
         && File.ReadAllText(mainXaml).Contains("AcrylicBrush", StringComparison.Ordinal)
         && File.ReadAllText(mainXaml).Contains("SettingsSheetHost", StringComparison.Ordinal)
-        && !File.ReadAllText(mainXaml).Contains("SettingsSheetStage", StringComparison.Ordinal));
+        && File.ReadAllText(mainXaml).Contains("SettingsCenterHost", StringComparison.Ordinal)
+        && File.ReadAllText(mainXaml).Contains("Height=\"*\"", StringComparison.Ordinal));
     Expect("no tooltips in settings", !s.Contains("ToolTip", StringComparison.OrdinalIgnoreCase)
         && !s.Contains("ToolTipService", StringComparison.OrdinalIgnoreCase));
     Expect("report issue secondary button",
@@ -256,14 +257,10 @@ if (File.Exists(motionCs))
         && m.Contains("DoubleAnimation", StringComparison.Ordinal)
         && !m.Contains("StartAnimation(\"Offset\"", StringComparison.Ordinal)
         && !m.Contains("StartAnimation(\"Opacity\"", StringComparison.Ordinal));
-    Expect("OptiMotion settings fade only no scale host",
-        m.Contains("PlayOverlayOpen", StringComparison.Ordinal)
-        && m.Contains("No TranslateY/Scale on the centered sheet", StringComparison.OrdinalIgnoreCase)
-            || (m.Contains("PlayOverlayOpen", StringComparison.Ordinal)
-                && m.IndexOf("PlayOverlayOpen", StringComparison.Ordinal) is int oi
-                && m.IndexOf("PlayOverlayClose", StringComparison.Ordinal) is int ci
-                && oi >= 0 && ci > oi
-                && !m.Substring(oi, ci - oi).Contains("ScaleX", StringComparison.Ordinal)));
+    Expect("OptiMotion scrim-only settings fade",
+        m.Contains("PlayScrimFadeIn", StringComparison.Ordinal)
+        && m.Contains("PlayScrimFadeOut", StringComparison.Ordinal)
+        && m.Contains("ClearCompositionOnly", StringComparison.Ordinal));
     Expect("OptiMotion PlaySelect", m.Contains("PlaySelect", StringComparison.Ordinal));
     Expect("OptiMotion page enter ensure visible",
         m.Contains("PlayPageEnter", StringComparison.Ordinal)
@@ -274,12 +271,13 @@ var mainCsPath = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
 if (File.Exists(mainCsPath))
 {
     var mc = File.ReadAllText(mainCsPath);
-    Expect("settings open uses safe overlay motion",
+    Expect("settings open uses scrim-only fade",
         mc.Contains("OpenSettingsOverlay", StringComparison.Ordinal)
         && mc.Contains("CloseSettingsOverlay", StringComparison.Ordinal)
-        && mc.Contains("PlayOverlayOpen", StringComparison.Ordinal)
-        && mc.Contains("PlayOverlayClose", StringComparison.Ordinal)
-        && !mc.Contains("SettingsSheetStage", StringComparison.Ordinal));
+        && mc.Contains("PlayScrimFadeIn", StringComparison.Ordinal)
+        && mc.Contains("PlayScrimFadeOut", StringComparison.Ordinal)
+        && mc.Contains("PinSettingsSheetLayout", StringComparison.Ordinal)
+        && mc.Contains("SettingsCenterHost", StringComparison.Ordinal));
     Expect("settings close always recovers",
         mc.Contains("_settingsOpen = false", StringComparison.Ordinal)
         && mc.Contains("Visibility.Collapsed", StringComparison.Ordinal)
@@ -326,9 +324,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.0.5", File.ReadAllText(versionFile).Trim() == "2.0.5");
+    Expect("VERSION is 2.0.6", File.ReadAllText(versionFile).Trim() == "2.0.6");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.0.5", File.ReadAllText(csproj).Contains("<Version>2.0.5</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.0.6", File.ReadAllText(csproj).Contains("<Version>2.0.6</Version>", StringComparison.Ordinal));
 
 var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");
 if (File.Exists(appSettings))

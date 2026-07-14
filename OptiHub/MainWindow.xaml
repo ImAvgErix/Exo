@@ -101,9 +101,9 @@
                IsNavigationStackEnabled="False" />
 
         <!--
-          Settings modal — keep it dumb and reliable:
-          scrim (full bleed) + sheet (centered sibling). No intermediate stage that
-          steals hits. No composition motion. Visibility only.
+          Settings modal — star-grid center (survives content remeasure).
+          NEVER put RenderTransform / composition on the sheet host (that pins top-left).
+          Only the scrim may fade.
         -->
         <Grid x:Name="SettingsOverlay"
               Grid.RowSpan="2"
@@ -121,11 +121,28 @@
                 </Border.Background>
             </Border>
 
-            <controls:SettingsSheet x:Name="SettingsSheetHost"
-                                    Width="400"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    CloseRequested="SettingsSheet_CloseRequested" />
+            <!-- Equal stars force the Auto cell dead-center on every remeasure -->
+            <Grid x:Name="SettingsCenterHost"
+                  HorizontalAlignment="Stretch"
+                  VerticalAlignment="Stretch"
+                  IsHitTestVisible="False">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <controls:SettingsSheet x:Name="SettingsSheetHost"
+                                        Grid.Row="1"
+                                        Grid.Column="1"
+                                        Width="400"
+                                        IsHitTestVisible="True"
+                                        CloseRequested="SettingsSheet_CloseRequested" />
+            </Grid>
         </Grid>
     </Grid>
 </Window>

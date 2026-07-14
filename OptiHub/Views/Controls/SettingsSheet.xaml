@@ -7,6 +7,8 @@
 
     <Border x:Name="SheetRoot"
             Width="400"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
             Background="{ThemeResource OptiCardFillBrush}"
             BorderBrush="{ThemeResource OptiCardStrokeBrush}"
             BorderThickness="1"
@@ -83,29 +85,37 @@
                             Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    <StackPanel Spacing="8"
-                                Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBlock Text="{x:Bind ViewModel.UpdateProgressLabel, Mode=OneWay}"
-                                   FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                   FontSize="13"
-                                   FontWeight="SemiBold"
-                                   HorizontalAlignment="Center"
-                                   Foreground="{ThemeResource OptiPrimaryTextBrush}" />
-                        <ProgressBar Minimum="0"
-                                     Maximum="100"
-                                     Value="{x:Bind ViewModel.UpdateProgressPercent, Mode=OneWay}"
-                                     IsIndeterminate="{x:Bind ViewModel.IsUpdateProgressIndeterminate, Mode=OneWay}"
-                                     Height="4"
-                                     CornerRadius="2"
-                                     Foreground="{ThemeResource OptiAccentBrush}" />
-                    </StackPanel>
-                    <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
-                               Style="{StaticResource OptiCaption}"
-                               TextWrapping="WrapWholeWords"
-                               MaxLines="2"
-                               TextTrimming="CharacterEllipsis"
-                               Visibility="{x:Bind ViewModel.ShowIdleUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                               AutomationProperties.LiveSetting="Polite" />
+                    <!--
+                      Fixed-height slot so Check-for-updates does not remeasure the card
+                      height (remeasure + any transform residue = top-left jump).
+                    -->
+                    <Grid MinHeight="56" Margin="0,4,0,0">
+                        <StackPanel Spacing="8"
+                                    VerticalAlignment="Center"
+                                    Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TextBlock Text="{x:Bind ViewModel.UpdateProgressLabel, Mode=OneWay}"
+                                       FontFamily="{StaticResource OptiUiFontSemiBold}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{ThemeResource OptiPrimaryTextBrush}" />
+                            <ProgressBar Minimum="0"
+                                         Maximum="100"
+                                         Value="{x:Bind ViewModel.UpdateProgressPercent, Mode=OneWay}"
+                                         IsIndeterminate="{x:Bind ViewModel.IsUpdateProgressIndeterminate, Mode=OneWay}"
+                                         Height="4"
+                                         CornerRadius="2"
+                                         Foreground="{ThemeResource OptiAccentBrush}" />
+                        </StackPanel>
+                        <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
+                                   Style="{StaticResource OptiCaption}"
+                                   TextWrapping="WrapWholeWords"
+                                   MaxLines="2"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center"
+                                   Visibility="{x:Bind ViewModel.ShowIdleUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                   AutomationProperties.LiveSetting="Polite" />
+                    </Grid>
                 </StackPanel>
 
                 <Rectangle Height="1" Margin="0,16" Fill="{ThemeResource OptiCardStrokeBrush}" Opacity="0.7" />
