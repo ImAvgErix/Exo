@@ -46,10 +46,13 @@ $ReleaseDir = Join-Path $Root 'release'
 $SfxPath = Join-Path $ReleaseDir 'Exo.exe'
 
 function Get-LatestReleaseInfo {
-    Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers @{
+    $headers = @{
         'User-Agent' = 'Exo-Release/1.0'
         'Accept'     = 'application/vnd.github+json'
     }
+    # CI runners share anonymous API rate limits; authenticate when a token is available.
+    if ($env:GH_TOKEN) { $headers['Authorization'] = "Bearer $env:GH_TOKEN" }
+    Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers $headers
 }
 
 function Test-LatestIsTag([string]$ExpectedTag, [string]$ExpectedSha256) {
