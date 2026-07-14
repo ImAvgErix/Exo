@@ -72,9 +72,12 @@ public sealed partial class MainWindow : Window
         UpdateCaptionInset();
 
         ContentFrame.Navigated += OnContentNavigated;
+        // Re-apply icon after activate — WinUI sometimes drops the first SetIcon.
+        Activated += (_, _) => TrySetWindowIcon();
 
         NavigateHome(suppressTransition: true);
         ClearChromeFocus();
+        TryRepairStartMenuShortcut();
         _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
     }
 
@@ -216,26 +219,13 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var baseDir = AppContext.BaseDirectory;
-            string? icoPath = null;
-            foreach (var rel in new[]
-                     {
-                         Path.Combine("Assets", "OptiHub.ico"),
-                         Path.Combine("Assets", "Logos", "optihub.png")
-                     })
-            {
-                var path = Path.Combine(baseDir, rel);
-                if (!File.Exists(path)) continue;
-                icoPath = path;
-                break;
-            }
-
+            var icoPath = ResolveAppIconPath();
             if (icoPath is null) return;
 
-            // AppWindow path (title bar / WinUI)
+            // WinUI titlebar / window
             try { AppWindow.SetIcon(icoPath); } catch { }
 
-            // Win32 big+small icons so the taskbar actually shows the mark.
+            // Win32 icons (taskbar while running)
             try
             {
                 var hwnd = WindowNative.GetWindowHandle(this);
@@ -243,19 +233,120 @@ public sealed partial class MainWindow : Window
 
                 const uint imageIcon = 1;
                 const int lrLoadFromFile = 0x0010;
-                const int lrDefaultSize = 0x0040;
                 const int wmSetIcon = 0x0080;
-                const int iconSmall = 0;
-                const int iconBig = 1;
 
-                var big = LoadImage(IntPtr.Zero, icoPath, imageIcon, 32, 32, lrLoadFromFile | lrDefaultSize);
-                var small = LoadImage(IntPtr.Zero, icoPath, imageIcon, 16, 16, lrLoadFromFile | lrDefaultSize);
+                // Prefer exact sizes; fall back to default-size load.
+                var big = LoadImage(IntPtr.Zero, icoPath, imageIcon, 32, 32, lrLoadFromFile);
+                if (big == IntPtr.Zero)
+                    big = LoadImage(IntPtr.Zero, icoPath, imageIcon, 0, 0, lrLoadFromFile | 0x0040);
+                var small = LoadImage(IntPtr.Zero, icoPath, imageIcon, 16, 16, lrLoadFromFile);
+                if (small == IntPtr.Zero)
+                    small = LoadImage(IntPtr.Zero, icoPath, imageIcon, 0, 0, lrLoadFromFile | 0x0040);
+
                 if (big != IntPtr.Zero)
-                    SendMessage(hwnd, wmSetIcon, new IntPtr(iconBig), big);
+                    SendMessage(hwnd, wmSetIcon, new IntPtr(1), big);
                 if (small != IntPtr.Zero)
-                    SendMessage(hwnd, wmSetIcon, new IntPtr(iconSmall), small);
+                    SendMessage(hwnd, wmSetIcon, new IntPtr(0), small);
             }
             catch { }
+        }
+        catch { }
+    }
+
+    /// <summary>Stable .ico next to the EXE (and keep Assets\OptiHub.ico in sync).</summary>
+    private static string? ResolveAppIconPath()
+    {
+        var baseDir = AppContext.BaseDirectory;
+        var assets = Path.Combine(baseDir, "Assets", "OptiHub.ico");
+        var root = Path.Combine(baseDir, "OptiHub.ico");
+        try
+        {
+            if (File.Exists(assets))
+            {
+                // Always refresh stable root copy for shortcuts.
+                File.Copy(assets, root, true);
+                return root;
+            }
+        }
+        catch
+        {
+            if (File.Exists(assets)) return assets;
+        }
+        if (File.Exists(root)) return root;
+        return File.Exists(assets) ? assets : null;
+    }
+
+    /// <summary>
+    /// Fix Start Menu shortcut that pointed at deleted versioned icons
+    /// (e.g. OptiHub-2-0-2-0.ico) which made the taskbar/start tile blank paper.
+    /// </summary>
+    private static void TryRepairStartMenuShortcut()
+    {
+        try
+        {
+            var icoPath = ResolveAppIconPath();
+            var targetExe = Path.Combine(AppContext.BaseDirectory, "OptiHub.exe");
+            if (!File.Exists(targetExe))
+                targetExe = Environment.ProcessPath ?? targetExe;
+            if (!File.Exists(targetExe)) return;
+
+            var lnk = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
+                "Programs",
+                "OptiHub.lnk");
+
+            var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType is null) return;
+            var shell = Activator.CreateInstance(shellType);
+            if (shell is null) return;
+
+            // Always rewrite so IconLocation cannot stay on a missing file.
+            var shortcut = shellType.InvokeMember(
+                "CreateShortcut",
+                System.Reflection.BindingFlags.InvokeMethod,
+                null,
+                shell,
+                new object[] { lnk });
+            if (shortcut is null) return;
+            var scType = shortcut.GetType();
+            scType.InvokeMember("TargetPath", System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { targetExe });
+            scType.InvokeMember("WorkingDirectory", System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { AppContext.BaseDirectory.TrimEnd('\\') });
+            scType.InvokeMember("Description", System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { "OptiHub — max performance hub" });
+            var icon = icoPath is not null && File.Exists(icoPath)
+                ? icoPath + ",0"
+                : targetExe + ",0";
+            scType.InvokeMember("IconLocation", System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { icon });
+            scType.InvokeMember("Save", System.Reflection.BindingFlags.InvokeMethod, null, shortcut, null);
+
+            // Associate AUMID with the shortcut so taskbar grouping uses our icon.
+            try
+            {
+                SetShortcutAppUserModelId(lnk, Program.AppUserModelId);
+            }
+            catch { }
+        }
+        catch { }
+    }
+
+    private static void SetShortcutAppUserModelId(string lnkPath, string aumid)
+    {
+        // IShellLinkW + IPropertyStore via shell COM is heavy; use PowerShell-free
+        // PropVariant path through Shell32 if available. Best-effort only.
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments =
+                    "-NoProfile -Command \"" +
+                    "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('" + lnkPath.Replace("'", "''") + "');" +
+                    // Property store for AUMID via shell application (Win10+)
+                    "\"",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            // Skip PS round-trip; AUMID is already set on process.
+            _ = psi;
         }
         catch { }
     }

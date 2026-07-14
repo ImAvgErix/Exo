@@ -198,33 +198,24 @@ internal static class Program
                 // Start Menu only — never create Desktop shortcuts (user policy).
                 try
                 {
-                    // Prefer standalone .ico so Start Menu does not stick to a cached old EXE icon.
-                    // Version the filename so Explorer cannot keep showing a stale cached mark.
+                    // Stable icon path next to the EXE. Never use versioned names —
+                    // updates/robocopy wipe them and leave Start Menu/taskbar as blank paper.
                     string iconSrc = Path.Combine(installDir, "Assets", "OptiHub.ico");
-                    if (!File.Exists(iconSrc))
-                        iconSrc = Path.Combine(installDir, "OptiHub.ico");
-
                     string iconPath = targetExe + ",0";
                     if (File.Exists(iconSrc))
                     {
                         try
                         {
-                            string verTag = string.IsNullOrWhiteSpace(installedVersion)
-                                ? "app"
-                                : NormalizeVersion(installedVersion).Replace(".", "-");
-                            string versioned = Path.Combine(installDir, "OptiHub-" + verTag + ".ico");
-                            File.Copy(iconSrc, versioned, true);
-                            File.Copy(iconSrc, Path.Combine(installDir, "OptiHub.ico"), true);
-                            iconPath = versioned;
-                            // Drop older versioned icons so we do not pile up files.
+                            string stable = Path.Combine(installDir, "OptiHub.ico");
+                            File.Copy(iconSrc, stable, true);
+                            try { File.SetLastWriteTimeUtc(stable, DateTime.UtcNow); } catch { }
+                            iconPath = stable;
+                            // Remove legacy versioned icons (OptiHub-2-0-2-0.ico etc.)
                             try
                             {
                                 foreach (string oldIco in Directory.GetFiles(installDir, "OptiHub-*.ico"))
                                 {
-                                    if (!string.Equals(oldIco, versioned, StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        try { File.Delete(oldIco); } catch { }
-                                    }
+                                    try { File.Delete(oldIco); } catch { }
                                 }
                             }
                             catch { }

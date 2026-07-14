@@ -1,3 +1,7 @@
+## 2.1.5
+
+- **Taskbar blank-paper fix**: Start Menu shortcut pointed at deleted `OptiHub-2-0-2-0.ico` — now stable `OptiHub.ico` + auto-repair on launch
+- **AppUserModelID** set before window create; icon reapplied on activate
 ## 2.1.4
 
 - **Settings opens instantly**: flyout shows on tap; gear spins in parallel (no wait)

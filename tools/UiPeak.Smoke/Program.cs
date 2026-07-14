@@ -279,12 +279,28 @@ if (File.Exists(mainCsPath))
         && mc.IndexOf("ShowAttachedFlyout", StringComparison.Ordinal)
             < mc.IndexOf("SpinSettingsGear();", StringComparison.Ordinal));
     Expect("taskbar icon win32 set",
-        mc.Contains("WM_SETICON", StringComparison.OrdinalIgnoreCase)
-            || (mc.Contains("SendMessage", StringComparison.Ordinal) && mc.Contains("LoadImage", StringComparison.Ordinal)
-                && mc.Contains("TrySetWindowIcon", StringComparison.Ordinal)));
+        mc.Contains("SendMessage", StringComparison.Ordinal) && mc.Contains("LoadImage", StringComparison.Ordinal)
+        && mc.Contains("TrySetWindowIcon", StringComparison.Ordinal)
+        && mc.Contains("TryRepairStartMenuShortcut", StringComparison.Ordinal));
     Expect("navigate ensures page visible",
         mc.Contains("OnContentNavigated", StringComparison.Ordinal)
         && mc.Contains("EnsureVisible", StringComparison.Ordinal));
+}
+var programCs = Path.Combine(repo, "OptiHub", "Program.cs");
+if (File.Exists(programCs))
+{
+    var p = File.ReadAllText(programCs);
+    Expect("AppUserModelID set early",
+        p.Contains("SetCurrentProcessExplicitAppUserModelID", StringComparison.Ordinal)
+        && p.Contains("UhhErix.OptiHub", StringComparison.Ordinal));
+}
+var sfxCs = Path.Combine(repo, "tools", "OptiHubSfx.cs");
+if (File.Exists(sfxCs))
+{
+    var sx = File.ReadAllText(sfxCs);
+    Expect("SFX stable icon path",
+        sx.Contains("Never use versioned names", StringComparison.Ordinal)
+        && sx.Contains("OptiHub.ico", StringComparison.Ordinal));
 }
 
 var dashCs = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs");
@@ -317,9 +333,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.1.4", File.ReadAllText(versionFile).Trim() == "2.1.4");
+    Expect("VERSION is 2.1.5", File.ReadAllText(versionFile).Trim() == "2.1.5");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.1.4", File.ReadAllText(csproj).Contains("<Version>2.1.4</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.1.5", File.ReadAllText(csproj).Contains("<Version>2.1.5</Version>", StringComparison.Ordinal));
 
 var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");
 if (File.Exists(appSettings))
