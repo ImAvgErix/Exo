@@ -25,7 +25,7 @@ public sealed partial class MainWindow : Window
 
     private ShellMode _mode = ShellMode.Home;
     private readonly CancellationTokenSource _lifetimeCts = new();
-    private readonly SettingsOverlayState _settings = new();
+    private bool _settingsOpen;
 
     public MainWindow()
     {
@@ -258,8 +258,8 @@ public sealed partial class MainWindow : Window
 
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {
-        if (_settings.IsOpen)
-            CloseSettingsOverlay(immediate: true);
+        if (_settingsOpen)
+            CloseSettingsOverlay();
 
         if (_mode == mode && ContentFrame.CurrentSourcePageType == pageType)
             return;
@@ -277,60 +277,44 @@ public sealed partial class MainWindow : Window
     private void SettingsScrim_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e) =>
         CloseSettingsOverlay();
 
+    /// <summary>
+    /// Dumb, reliable settings: Visibility only. No composition, no intermediate stage.
+    /// Open can always recover (force open). Close always restores gear + collapses overlay.
+    /// </summary>
     private void OpenSettingsOverlay()
     {
-        // CRITICAL: go home first, then mark open. Navigate() closes any open sheet.
-        if (_settings.IsOpen) return;
+        // If already open, force-refresh the open state (never leave a stuck overlay).
+        if (_settingsOpen)
+        {
+            SettingsOverlay.Visibility = Visibility.Visible;
+            SettingsButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        // Navigate home first while still closed (Navigate closes settings if open).
         if (_mode != ShellMode.Home)
             NavigateHome(suppressTransition: true);
 
-        if (!_settings.TryBeginOpen()) return;
-
+        _settingsOpen = true;
         SettingsButton.Visibility = Visibility.Collapsed;
-
-        // Clear any leftover composition, then show with layout center only.
-        OptiMotion.EnsureVisible(SettingsOverlay);
-        OptiMotion.EnsureVisible(SettingsSheetStage);
-        OptiMotion.EnsureVisible(SettingsSheetHost);
-        SettingsSheetHost.ResetRowVisuals();
-
-        SettingsOverlay.Visibility = Visibility.Visible;
         SettingsOverlay.Opacity = 1;
         SettingsSheetHost.Opacity = 1;
-        SettingsOverlay.UpdateLayout();
-        SettingsSheetStage.UpdateLayout();
-        SettingsSheetHost.UpdateLayout();
-
-        OptiMotion.PlayOverlayOpen(SettingsOverlay, SettingsSheetHost);
-        SettingsSheetHost.PlayOpenMotion();
+        SettingsOverlay.Visibility = Visibility.Visible;
     }
 
-    private void CloseSettingsOverlay(bool immediate = false)
+    private void CloseSettingsOverlay()
     {
-        if (!_settings.TryBeginClose(out var closeEpoch)) return;
-
-        void Finish()
-        {
-            // Stale close after re-open: epoch no longer matches — do nothing.
-            if (!_settings.ShouldApplyCloseFinish(closeEpoch)) return;
-
-            OptiMotion.EnsureVisible(SettingsOverlay);
-            OptiMotion.EnsureVisible(SettingsSheetStage);
-            OptiMotion.EnsureVisible(SettingsSheetHost);
-            SettingsSheetHost.ResetRowVisuals();
-            SettingsOverlay.Visibility = Visibility.Collapsed;
-            SettingsOverlay.Opacity = 1;
-            SettingsSheetHost.Opacity = 1;
-            SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        // Instant close — delayed composition close was racing re-open.
-        Finish();
+        // Always collapse + restore gear even if flag is wrong (recovery path).
+        _settingsOpen = false;
+        SettingsOverlay.Visibility = Visibility.Collapsed;
+        SettingsOverlay.Opacity = 1;
+        SettingsSheetHost.Opacity = 1;
+        SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_settings.IsOpen)
+        if (_settingsOpen || SettingsOverlay.Visibility == Visibility.Visible)
         {
             CloseSettingsOverlay();
             return;

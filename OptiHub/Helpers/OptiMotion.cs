@@ -17,9 +17,6 @@ public static class OptiMotion
     public const int FadeMs = 0;
     public const int StaggerStepMs = 0;
 
-    /// <summary>Kept for settings slider binding; motion is currently off for stability.</summary>
-    public static double MotionStrength { get; set; } = 1.0;
-
     /// <summary>Hard-show at identity. Safe to call any time.</summary>
     public static void EnsureVisible(UIElement el)
     {

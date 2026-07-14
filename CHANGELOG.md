@@ -1,3 +1,7 @@
+## 2.0.3
+
+- **Settings fixed for real**: Visibility only (open/close). No composition, no intermediate stage that ate clicks. Close always restores gear; open always recovers.
+- **Removed Motion slider** (was never requested)
 ## 2.0.2
 
 - **Stop composition blanking UI**: never set Composition Opacity to 0 (it overrides XAML and left pages/settings invisible)

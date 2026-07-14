@@ -22,37 +22,10 @@ var busy = UiStatusPresentation.FromFlags(isBusy: true, hasError: false, hasSucc
 Expect("busy", busy == UiStatusPresentation.Tone.Busy);
 Expect("success", UiStatusPresentation.FromFlags(false, false, true) == UiStatusPresentation.Tone.Success);
 
-// Drive real AppSettings MotionIntensity (shipped model used by the live slider).
-var settingsA = new AppSettings { MotionIntensity = 73, Theme = AppSettings.DarkTheme };
+// Drive real AppSettings clone path (theme + auto-update).
+var settingsA = new AppSettings { Theme = AppSettings.DarkTheme, AutoUpdateScripts = true };
 var settingsB = settingsA.Clone();
-Expect("AppSettings MotionIntensity clone", Math.Abs(settingsB.MotionIntensity - 73) < 0.0001
-    && settingsB.Theme == AppSettings.DarkTheme);
-// Clamp contract used by SettingsViewModel live path (same bounds as shipped).
-static double ClampMotion(double v) => Math.Clamp(v, 0, 100);
-Expect("MotionIntensity clamp high", Math.Abs(ClampMotion(140) - 100) < 0.0001);
-Expect("MotionIntensity clamp low", Math.Abs(ClampMotion(-5) - 0) < 0.0001);
-Expect("MotionIntensity clamp mid", Math.Abs(ClampMotion(42) - 42) < 0.0001);
-
-// Drive shipped SettingsOverlayState — close→re-open race (skeptic gap).
-{
-    var ov = new SettingsOverlayState();
-    Expect("settings state open", ov.TryBeginOpen() && ov.IsOpen);
-    Expect("settings state no double open", !ov.TryBeginOpen());
-    Expect("settings state close", ov.TryBeginClose(out var closeEpoch) && !ov.IsOpen && closeEpoch > 0);
-    // Re-open before Finish: stale Finish must NOT apply.
-    Expect("settings state reopen", ov.TryBeginOpen() && ov.IsOpen);
-    Expect("settings stale close finish blocked", !ov.ShouldApplyCloseFinish(closeEpoch));
-    // Real close of the second open should still Finish.
-    Expect("settings second close", ov.TryBeginClose(out var close2) && !ov.IsOpen);
-    Expect("settings second finish ok", ov.ShouldApplyCloseFinish(close2));
-    // Double finish of same epoch still ok while closed.
-    Expect("settings finish idempotent while closed", ov.ShouldApplyCloseFinish(close2));
-    // After a brand-new open, old epoch is dead.
-    Expect("settings open again", ov.TryBeginOpen());
-    Expect("settings old epoch dead", !ov.ShouldApplyCloseFinish(close2));
-}
-
-// MainWindow must wire the epoch-gated Finish (string contract on shipped CS).
+Expect("AppSettings clone theme", settingsB.Theme == AppSettings.DarkTheme && settingsB.AutoUpdateScripts);
 
 var repo = FindRepoRoot();
 var appXaml = Path.Combine(repo, "OptiHub", "App.xaml");
@@ -166,19 +139,17 @@ if (File.Exists(settings))
         || s.Contains("Padding=\"18,16\"", StringComparison.Ordinal));
     Expect("settings overlay on main", File.Exists(mainXaml) && File.ReadAllText(mainXaml).Contains("SettingsOverlay", StringComparison.Ordinal)
         && File.ReadAllText(mainXaml).Contains("AcrylicBrush", StringComparison.Ordinal)
-        && File.ReadAllText(mainXaml).Contains("SettingsSheetStage", StringComparison.Ordinal));
-    // Ignore IsThumbToolTipEnabled (Slider API) — ban real ToolTip / ToolTipService only.
-    var settingsNoTip = Regex.Replace(s, @"IsThumbToolTipEnabled\s*=\s*""[^""]*""", "", RegexOptions.IgnoreCase);
-    Expect("no tooltips in settings", !settingsNoTip.Contains("ToolTip", StringComparison.OrdinalIgnoreCase)
-        && !settingsNoTip.Contains("ToolTipService", StringComparison.OrdinalIgnoreCase));
+        && File.ReadAllText(mainXaml).Contains("SettingsSheetHost", StringComparison.Ordinal)
+        && !File.ReadAllText(mainXaml).Contains("SettingsSheetStage", StringComparison.Ordinal));
+    Expect("no tooltips in settings", !s.Contains("ToolTip", StringComparison.OrdinalIgnoreCase)
+        && !s.Contains("ToolTipService", StringComparison.OrdinalIgnoreCase));
     Expect("report issue secondary button",
         (s.Contains("OptiSecondaryButton", StringComparison.Ordinal) || s.Contains("OptiWhiteButton", StringComparison.Ordinal))
         && s.Contains("Report issue", StringComparison.Ordinal));
-    Expect("settings live motion slider",
-        s.Contains("MotionSlider", StringComparison.Ordinal)
-        && s.Contains("OptiLiveSlider", StringComparison.Ordinal)
-        && s.Contains("MotionIntensity", StringComparison.Ordinal)
-        && s.Contains("<Slider", StringComparison.Ordinal));
+    Expect("settings no motion slider",
+        !s.Contains("MotionSlider", StringComparison.Ordinal)
+        && !s.Contains("MotionIntensity", StringComparison.Ordinal)
+        && !s.Contains("<Slider", StringComparison.Ordinal));
     Expect("settings update progress only", !s.Contains("OptiLoader", StringComparison.Ordinal)
         && s.Contains("IsUpdating", StringComparison.Ordinal)
         && s.Contains("UpdateProgressPercent", StringComparison.Ordinal)
@@ -282,7 +253,6 @@ if (File.Exists(motionCs))
     Expect("OptiMotion no StartAnimation Offset",
         !m.Contains("StartAnimation(\"Offset\"", StringComparison.Ordinal)
         && !m.Contains("StartAnimation(\"Scale\"", StringComparison.Ordinal));
-    Expect("OptiMotion MotionStrength", m.Contains("MotionStrength", StringComparison.Ordinal));
     Expect("OptiMotion page enter ensure visible",
         m.Contains("PlayPageEnter", StringComparison.Ordinal)
         && m.Contains("EnsureVisible", StringComparison.Ordinal)
@@ -292,26 +262,24 @@ var mainCsPath = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
 if (File.Exists(mainCsPath))
 {
     var mc = File.ReadAllText(mainCsPath);
-    Expect("settings open resets composition",
+    Expect("settings open visibility only",
         mc.Contains("OpenSettingsOverlay", StringComparison.Ordinal)
-        && mc.Contains("UpdateLayout", StringComparison.Ordinal)
-        && mc.Contains("SettingsSheetStage", StringComparison.Ordinal));
-    Expect("settings overlay epoch gate",
-        mc.Contains("SettingsOverlayState", StringComparison.Ordinal)
-        && mc.Contains("TryBeginOpen", StringComparison.Ordinal)
-        && mc.Contains("TryBeginClose", StringComparison.Ordinal)
-        && mc.Contains("ShouldApplyCloseFinish", StringComparison.Ordinal));
-    // Must not clear a naked bool before async Finish without a generation gate.
-    Expect("settings no naked _settingsOpen race",
-        !mc.Contains("_settingsOpen = false", StringComparison.Ordinal)
-        && !Regex.IsMatch(mc, @"bool\s+_settingsOpen"));
-    // Open order: home navigate call before TryBeginOpen call (Navigate closes open sheets).
+        && mc.Contains("CloseSettingsOverlay", StringComparison.Ordinal)
+        && mc.Contains("SettingsOverlay.Visibility", StringComparison.Ordinal)
+        && !mc.Contains("PlayOverlayOpen", StringComparison.Ordinal)
+        && !mc.Contains("SettingsSheetStage", StringComparison.Ordinal));
+    // Open must always be recoverable: close always collapses + restores gear.
+    Expect("settings close always recovers",
+        mc.Contains("_settingsOpen = false", StringComparison.Ordinal)
+        && mc.Contains("Visibility.Collapsed", StringComparison.Ordinal)
+        && mc.Contains("SettingsButton.Visibility", StringComparison.Ordinal));
     var openFn = mc.IndexOf("void OpenSettingsOverlay", StringComparison.Ordinal);
     var openBody = openFn >= 0 ? mc.Substring(openFn, Math.Min(900, mc.Length - openFn)) : "";
-    var navCall = openBody.IndexOf("NavigateHome(", StringComparison.Ordinal);
-    var tryCall = openBody.IndexOf("TryBeginOpen()", StringComparison.Ordinal);
     Expect("settings open navigates home first",
-        openFn >= 0 && navCall >= 0 && tryCall >= 0 && navCall < tryCall);
+        openFn >= 0
+        && openBody.IndexOf("NavigateHome(", StringComparison.Ordinal) >= 0
+        && openBody.IndexOf("NavigateHome(", StringComparison.Ordinal)
+            < openBody.IndexOf("_settingsOpen = true", StringComparison.Ordinal));
     Expect("navigate ensures page visible",
         mc.Contains("OnContentNavigated", StringComparison.Ordinal)
         && mc.Contains("EnsureVisible", StringComparison.Ordinal));
@@ -327,31 +295,29 @@ if (File.Exists(dashCs))
         && !dc.Contains("PrimeHidden", StringComparison.Ordinal));
 }
 
-// Version gate for 2.0.0 release
+// Version gate
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.0.2", File.ReadAllText(versionFile).Trim() == "2.0.2");
+    Expect("VERSION is 2.0.3", File.ReadAllText(versionFile).Trim() == "2.0.3");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.0.2", File.ReadAllText(csproj).Contains("<Version>2.0.2</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.0.3", File.ReadAllText(csproj).Contains("<Version>2.0.3</Version>", StringComparison.Ordinal));
 
-// Live MotionIntensity is a real AppSettings + ViewModel path (not a fake).
 var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");
 if (File.Exists(appSettings))
-    Expect("AppSettings MotionIntensity", File.ReadAllText(appSettings).Contains("MotionIntensity", StringComparison.Ordinal));
+    Expect("AppSettings no MotionIntensity", !File.ReadAllText(appSettings).Contains("MotionIntensity", StringComparison.Ordinal));
 var settingsVm = Path.Combine(repo, "OptiHub", "ViewModels", "SettingsViewModel.cs");
 if (File.Exists(settingsVm))
 {
     var svm = File.ReadAllText(settingsVm);
-    Expect("VM MotionIntensity live bind",
-        svm.Contains("MotionIntensity", StringComparison.Ordinal)
-        && svm.Contains("OptiMotion.MotionStrength", StringComparison.Ordinal));
+    Expect("VM no motion slider",
+        !svm.Contains("MotionIntensity", StringComparison.Ordinal)
+        && !svm.Contains("MotionStrength", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
 {
     var t2 = File.ReadAllText(theme);
     Expect("theme OptiSecondaryButton", t2.Contains("OptiSecondaryButton", StringComparison.Ordinal));
-    Expect("theme OptiLiveSlider", t2.Contains("OptiLiveSlider", StringComparison.Ordinal));
 }
 
 // Logo visual weight: measure real shipped PNG alpha ink.

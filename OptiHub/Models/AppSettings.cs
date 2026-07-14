@@ -11,12 +11,6 @@ public sealed class AppSettings
     public string Theme { get; set; } = DarkTheme;
 
     /// <summary>
-    /// UI motion strength 0–100 (live slider). 100 = full Kinetics entrance,
-    /// 0 = essentially instant fades. Applied via OptiMotion.MotionStrength.
-    /// </summary>
-    public double MotionIntensity { get; set; } = 100;
-
-    /// <summary>
     /// When true, on launch: prompt if a newer OptiHub.exe is on GitHub, and
     /// silently refresh the Discord script kit when newer.
     /// </summary>
@@ -40,7 +34,6 @@ public sealed class AppSettings
     public AppSettings Clone() => new()
     {
         Theme = Theme,
-        MotionIntensity = MotionIntensity,
         AutoUpdateScripts = AutoUpdateScripts,
         DiscordScriptsRepo = DiscordScriptsRepo,
         DiscordScriptsBranch = DiscordScriptsBranch,

@@ -1,6 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using OptiHub.Helpers;
 using OptiHub.Models;
 using OptiHub.Services;
 
@@ -22,9 +21,6 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _isLightMode;
     [ObservableProperty] private bool _autoUpdateScripts;
 
-    /// <summary>Live continuous setting 0–100. Drives entrance travel via OptiMotion.</summary>
-    [ObservableProperty] private double _motionIntensity = 100;
-
     /// <summary>Current theme name shown large (what you are in right now).</summary>
     public string CurrentThemeLabel => IsDarkMode ? "Dark mode" : "Light mode";
 
@@ -33,9 +29,6 @@ public partial class SettingsViewModel : ObservableObject
 
     /// <summary>Back-compat for smoke / older binds — always the current mode name.</summary>
     public string ThemeToggleLabel => CurrentThemeLabel;
-
-    /// <summary>Live label next to the motion slider (e.g. 80%).</summary>
-    public string MotionIntensityLabel => $"{MotionIntensity:0}%";
 
     [ObservableProperty] private string _appVersion = "-";
     [ObservableProperty] private string _kitVersion = "-";
@@ -180,21 +173,6 @@ public partial class SettingsViewModel : ObservableObject
             _services.Settings.Update(s => s.AutoUpdateScripts = value);
     }
 
-    partial void OnMotionIntensityChanged(double value)
-    {
-        var clamped = Math.Clamp(value, 0, 100);
-        if (Math.Abs(clamped - value) > 0.01)
-        {
-            MotionIntensity = clamped;
-            return;
-        }
-
-        OptiMotion.MotionStrength = clamped / 100.0;
-        OnPropertyChanged(nameof(MotionIntensityLabel));
-        if (!_suppressSettingsSync)
-            _services.Settings.Update(s => s.MotionIntensity = clamped);
-    }
-
     /// <summary>
     /// App-only update path. Each app release ships matching optimizer kits —
     /// no separate script refresh from GitHub.
@@ -311,8 +289,6 @@ public partial class SettingsViewModel : ObservableObject
             IsDarkMode = dark;
             IsLightMode = !dark;
             AutoUpdateScripts = s.AutoUpdateScripts;
-            MotionIntensity = Math.Clamp(s.MotionIntensity, 0, 100);
-            OptiMotion.MotionStrength = MotionIntensity / 100.0;
         }
         finally
         {
@@ -323,7 +299,6 @@ public partial class SettingsViewModel : ObservableObject
         RefreshKitVersionText();
         AppVersion = GetAppVersionText();
         UpdateStatus = string.Empty;
-        OnPropertyChanged(nameof(MotionIntensityLabel));
     }
 
     private void RefreshKitVersionText()

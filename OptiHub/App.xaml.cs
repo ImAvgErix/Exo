@@ -12,9 +12,6 @@ public partial class App : Application
     {
         InitializeComponent();
         Services.Initialize();
-        // Restore live motion strength before any page entrance plays.
-        Helpers.OptiMotion.MotionStrength =
-            Math.Clamp(Services.Settings.Current.MotionIntensity, 0, 100) / 100.0;
         UnhandledException += (_, e) =>
         {
             System.Diagnostics.Debug.WriteLine(e.Exception);
