@@ -9,13 +9,14 @@ namespace OptiHub.Views;
 
 /// <summary>
 /// Home grid for the fixed 1180×760 shell.
-/// Entrance: Composition stagger (no first-frame flash).
+/// Cards start visible; soft stagger is optional cosmetics with hard fail-safe.
 /// </summary>
 public sealed partial class DashboardPage : Page
 {
     private CancellationTokenSource? _refreshCts;
     private bool _entrancePlayed;
     private bool _entranceRunning;
+    private int _entranceGen;
 
     public DashboardViewModel ViewModel { get; }
 
@@ -35,14 +36,17 @@ public sealed partial class DashboardPage : Page
         };
     }
 
-    private void Page_Loaded(object sender, RoutedEventArgs e) =>
+    private void Page_Loaded(object sender, RoutedEventArgs e)
+    {
+        ForceHomeVisible();
         _ = TryPlayEntranceAsync();
+    }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        // Returning home: allow a soft re-entrance only if we left previously
-        // (first load is handled by Loaded + flag).
+        // Returning home: always show content first (never leave primed-hidden).
+        ForceHomeVisible();
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
         _refreshCts = new CancellationTokenSource();
@@ -55,20 +59,48 @@ public sealed partial class DashboardPage : Page
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
         _refreshCts = null;
-        // Next time we land home, play a light re-entrance
         _entrancePlayed = false;
+        _entranceGen++;
+        // Leaving home: leave nothing half-hidden for next visit.
+        ForceHomeVisible();
         base.OnNavigatedFrom(e);
+    }
+
+    private void ForceHomeVisible()
+    {
+        try
+        {
+            OptiMotion.EnsureVisible(PageRoot);
+            if (HeroPanel is not null)
+                OptiMotion.EnsureVisible(HeroPanel);
+            if (CardList is not null)
+                OptiMotion.EnsureVisible(CardList);
+
+            if (CardList is not null)
+            {
+                List<UIElement> cards = [];
+                CollectCardButtons(CardList, cards);
+                foreach (var c in cards)
+                    OptiMotion.EnsureVisible(c);
+            }
+        }
+        catch { }
     }
 
     private async Task TryPlayEntranceAsync()
     {
         if (_entrancePlayed || _entranceRunning) return;
         _entranceRunning = true;
+        var gen = ++_entranceGen;
         try
         {
+            // Always visible baseline.
+            ForceHomeVisible();
+
             List<UIElement> cards = [];
-            for (var attempt = 0; attempt < 28; attempt++)
+            for (var attempt = 0; attempt < 24; attempt++)
             {
+                if (gen != _entranceGen) return;
                 cards.Clear();
                 if (CardList is not null)
                     CollectCardButtons(CardList, cards);
@@ -77,29 +109,20 @@ public sealed partial class DashboardPage : Page
                 await Task.Delay(16);
             }
 
-            if (_entrancePlayed) return;
-
-            // Prime BEFORE host is fully visible — kills flicker.
-            if (HeroPanel is not null)
-                OptiMotion.PrimeHidden(HeroPanel, fromY: 14f, fromScale: 1f);
-
-            foreach (var el in cards)
-                OptiMotion.PrimeHidden(el, fromY: 18f, fromScale: 0.96f);
-
-            if (CardList is not null)
-                CardList.Opacity = 1;
-
-            // Two frames so composition + layout settle with opacity 0.
-            await Task.Delay(32);
-            if (_entrancePlayed) return;
+            if (gen != _entranceGen || _entrancePlayed) return;
             _entrancePlayed = true;
 
+            // Soft stagger is optional; fail-safe forces full visibility after.
             var sequence = new List<UIElement>();
             if (HeroPanel is not null)
                 sequence.Add(HeroPanel);
             sequence.AddRange(cards);
+            if (sequence.Count > 0)
+                OptiMotion.PlayStagger(sequence, baseDelayMs: 10, stepMs: 36, fromY: 10f, fromScale: 0.98f);
 
-            OptiMotion.PlayStagger(sequence, baseDelayMs: 20, stepMs: 50, fromY: 16f, fromScale: 0.97f);
+            await Task.Delay(520);
+            if (gen != _entranceGen) return;
+            ForceHomeVisible();
         }
         finally
         {

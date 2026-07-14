@@ -78,13 +78,17 @@ public sealed partial class MainWindow : Window
 
     private void OnContentNavigated(object sender, Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
-        // Cohesive page enter for module pages (home has its own card stagger).
-        if (e.Content is FrameworkElement page && e.Content is not Views.DashboardPage)
+        // Always force identity on the new page so residual composition never hides UI.
+        if (e.Content is FrameworkElement page)
         {
-            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            try { OptiMotion.EnsureVisible(page); } catch { }
+            if (page is not Views.DashboardPage)
             {
-                try { OptiMotion.PlayPageEnter(page); } catch { }
-            });
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                {
+                    try { OptiMotion.PlayPageEnter(page); } catch { try { OptiMotion.EnsureVisible(page); } catch { } }
+                });
+            }
         }
     }
 
@@ -282,17 +286,19 @@ public sealed partial class MainWindow : Window
 
     private void OpenSettingsOverlay()
     {
-        // Epoch bump invalidates any in-flight close Finish so a fast re-open
-        // cannot leave Visibility=Collapsed while state thinks settings is open.
-        if (!_settings.TryBeginOpen()) return;
+        // CRITICAL: go home first, then mark open. Navigate() closes any open sheet,
+        // so marking open before the home navigate instantly killed the sheet.
+        if (_settings.IsOpen) return;
         if (_mode != ShellMode.Home)
             NavigateHome(suppressTransition: true);
+
+        if (!_settings.TryBeginOpen()) return;
 
         SettingsButton.Visibility = Visibility.Collapsed;
 
         // Identity transform on host + rows BEFORE show (no corner inheritance).
         OptiMotion.ResetVisual(SettingsOverlay, show: false);
-        OptiMotion.ResetVisual(SettingsSheetStage, show: true);
+        OptiMotion.EnsureVisible(SettingsSheetStage);
         OptiMotion.ResetVisual(SettingsSheetHost, show: false);
         SettingsSheetHost.ResetRowVisuals();
 

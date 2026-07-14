@@ -1,3 +1,8 @@
+## 2.0.1
+
+- **Settings open order**: navigate home *before* marking settings open (Navigate used to close the sheet we just opened)
+- **UI never sticks half-hidden**: EnsureVisible fail-safe on every page enter, home return, settings open; page enter no longer primes whole page to opacity 0
+- **Home balance**: tagline full-width center (40px); compact cards 268×132 under it
 ## 2.0.0
 
 - **Settings never teleports**: sheet host is opacity-only; layout owns center (full-bleed stage). No composition Offset/Scale on the host — re-open stays dead center

@@ -11,7 +11,6 @@ public sealed partial class SettingsSheet : UserControl
 
     public SettingsViewModel ViewModel { get; }
 
-    private bool _staggerPlayed;
     private int _openGeneration;
 
     public SettingsSheet()
@@ -34,29 +33,44 @@ public sealed partial class SettingsSheet : UserControl
         RowAppearance, Div1, RowMotion, Div2, RowUpdates, Div3, RowVersion, Div4, RowSupport
     ];
 
-    /// <summary>Clear leftover composition on every row (re-open safety).</summary>
+    /// <summary>Force every row fully visible at identity (re-open / fail-safe).</summary>
     public void ResetRowVisuals()
     {
         foreach (var r in MotionRows())
-            OptiMotion.ResetVisual(r, show: true);
-        OptiMotion.ResetVisual(SheetRoot, show: true);
+            OptiMotion.EnsureVisible(r);
+        OptiMotion.EnsureVisible(SheetRoot);
     }
 
-    /// <summary>Call when the overlay opens so rows stagger in (shared motion language).</summary>
+    /// <summary>
+    /// Soft row stagger on open. Never leaves rows permanently primed-hidden —
+    /// EnsureVisible is always applied first and again after the stagger window.
+    /// </summary>
     public void PlayOpenMotion()
     {
         var gen = ++_openGeneration;
-        _staggerPlayed = false;
+        // Always show content first so a failed animation cannot blank the sheet.
+        ResetRowVisuals();
+
         DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
         {
             if (gen != _openGeneration) return;
-            if (_staggerPlayed) return;
-            _staggerPlayed = true;
             var rows = MotionRows();
-            // Soft fade+rise on rows only — host stays layout-centered.
-            foreach (var r in rows)
-                OptiMotion.PrimeHidden(r, fromY: 6f, fromScale: 0.99f);
-            OptiMotion.PlayStagger(rows, baseDelayMs: 40, stepMs: 36, fromY: 6f, fromScale: 0.99f);
+            // Light stagger from already-visible state (PlayEnter fails → EnsureVisible).
+            OptiMotion.PlayStagger(rows, baseDelayMs: 20, stepMs: 28, fromY: 6f, fromScale: 0.99f);
+
+            // Absolute fail-safe: after stagger window, everything is fully on.
+            _ = Task.Delay(500).ContinueWith(_ =>
+            {
+                try
+                {
+                    DispatcherQueue?.TryEnqueue(() =>
+                    {
+                        if (gen != _openGeneration) return;
+                        ResetRowVisuals();
+                    });
+                }
+                catch { }
+            });
         });
     }
 
