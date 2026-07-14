@@ -728,7 +728,7 @@ function Remove-NvidiaAppDesktopShortcuts {
 
 function Clear-NvidiaTrayGhostIcons {
     # NVDisplay.Container re-registers on soft-refresh/logon. Deleting its key makes it
-    # come back promoted — hide IsPromoted=0 instead. Delete App/GFE ghosts only.
+    # come back promoted - hide IsPromoted=0 instead. Delete App/GFE ghosts only.
     Write-Step 'Clearing / hiding NVIDIA tray icons (display hide + App delete)...'
     $trayScript = Join-Path $PSScriptRoot 'OptiHub-Nvidia-TrayClear.ps1'
     if (Test-Path -LiteralPath $trayScript) {
@@ -1151,7 +1151,7 @@ function Enable-NvidiaControlPanelDeveloperSettings {
 }
 
 function Remove-NvidiaControlPanel {
-    # OptiHub is the control panel — Store / desktop CPL is optional bloat.
+    # OptiHub is the control panel - Store / desktop CPL is optional bloat.
     Write-Step 'Removing NVIDIA Control Panel (OptiHub panel replaces it)...'
     Get-Process -Name 'nvcplui', 'nvcpl' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
@@ -1212,7 +1212,7 @@ function Remove-NvidiaControlPanel {
 
 function Install-NvidiaControlPanel {
     # Deprecated: OptiHub no longer installs Control Panel. Kept as no-op for old callers.
-    Write-Warn 'Install-NvidiaControlPanel ignored — OptiHub panel replaces Control Panel'
+    Write-Warn 'Install-NvidiaControlPanel ignored - OptiHub panel replaces Control Panel'
     return (Test-NvidiaControlPanelInstalled)
 }
 
@@ -3226,7 +3226,7 @@ function Disable-NvidiaTelemetry {
     if ($disabled -eq 0) { Write-Ok 'No telemetry tasks matched (already clean or names differ)' }
     else { Write-Ok "Telemetry/SelfUpdate tasks disabled ($disabled disable action(s))" }
 
-    # Remove noisy legacy persist tasks only. Keep OptiHub-NvidiaTrayHide —
+    # Remove noisy legacy persist tasks only. Keep OptiHub-NvidiaTrayHide -
     # it re-hides the display-container tray after reboot (HKCU IsPromoted=0).
     foreach ($legacyTask in @('OptiHub-NvidiaDisplayPersist', 'OptiHub-NvidiaBackgroundPersist')) {
         try { Unregister-ScheduledTask -TaskName $legacyTask -Confirm:$false -EA 0 } catch { }
@@ -3386,7 +3386,7 @@ function Set-NvidiaDisplayPreferences {
 
     $live = Test-OptiHubNvidiaDisplayLive
     if ([bool]$live.Available -and [bool]$live.Ok) {
-        Write-Ok "Display already matches ($($live.Detail)) — Display-Apply will skip re-touch"
+        Write-Ok "Display already matches ($($live.Detail)) - Display-Apply will skip re-touch"
         $skipped = $true
     } elseif ([bool]$live.Available) {
         Write-Ok "Display needs apply: $($live.Detail)"
@@ -3689,7 +3689,7 @@ try {
         [void](Remove-NvidiaControlPanel)
         $cplOk = Test-NvidiaControlPanelInstalled
         if (-not $cplOk) {
-            Write-Ok 'Control Panel removed — use OptiHub NVIDIA Panel for settings'
+            Write-Ok 'Control Panel removed - use OptiHub NVIDIA Panel for settings'
         } else {
             Write-Warn 'Control Panel still present; display still applies via NVAPI'
         }
@@ -3709,8 +3709,8 @@ try {
         ControlPanel = [bool]$cplOk
     }
 
-    # Single ordered stage — no triple-pass of the same Enable/Disable work.
-    # (Client wipe may still retry up to 3× only when App remains installed.)
+    # Single ordered stage - no triple-pass of the same Enable/Disable work.
+    # (Client wipe may still retry up to 3x only when App remains installed.)
     Write-HubProgress 78 'Privacy / system debloat (telemetry once)...'
     Disable-NvidiaTelemetry
 
@@ -3743,7 +3743,7 @@ try {
     if (-not $dispResult) {
         $dispResult = @{ Success = $false; Details = @('Display helper returned no result') }
     }
-    # One re-assert after display (NVAPI/DRS may touch profiles) — not a full second apply pass
+    # One re-assert after display (NVAPI/DRS may touch profiles) - not a full second apply pass
     Write-HubProgress 92 'Re-assert DRS advanced 3D + developer after display...'
     $advanced3dOk = Enable-NvidiaAdvanced3dImageSettings
     [void](Enable-NvidiaControlPanelDeveloperSettings)

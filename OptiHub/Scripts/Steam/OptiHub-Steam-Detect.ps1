@@ -1,7 +1,7 @@
 # OptiHub - detect Steam optimizer status (JSON for WinUI).
 # Checklist mirrors Discord parity: quiet launch, RAM kernel, complete debloat,
 # Windows suppression, Start Menu path, verified record.
-# Classifiers: SteamDetectCore.ps1 (pure) — keep aligned with SteamPeakLogic.cs
+# Classifiers: SteamDetectCore.ps1 (pure) - keep aligned with SteamPeakLogic.cs
 $ErrorActionPreference = 'SilentlyContinue'
 
 $core = Join-Path $PSScriptRoot 'SteamDetectCore.ps1'
@@ -305,7 +305,7 @@ if (-not $steamOk) {
     }
     Add-Feature 'Quiet CEF launcher' 'Fast quiet CEF flags + High priority Steam start (Steam launches before the trim helper).' $cefOk
 
-    # WebHelper trim + priority (2–15s reclaim interval accepted)
+    # WebHelper trim + priority (2-15s reclaim interval accepted)
     $trimOk = $false
     $helper = Join-Path $steam 'OptiHub-SteamWebHelperTrim.ps1'
     if (Test-Path -LiteralPath $helper) {

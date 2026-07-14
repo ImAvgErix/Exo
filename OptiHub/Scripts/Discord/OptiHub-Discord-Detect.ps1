@@ -1,6 +1,6 @@
 # OptiHub - detect whether Discord Optimizer is already applied.
 # Prints a single JSON object to stdout for the WinUI host.
-# Classifiers: DiscordDetectCore.ps1 (pure) — keep aligned with DiscordPeakLogic.cs
+# Classifiers: DiscordDetectCore.ps1 (pure) - keep aligned with DiscordPeakLogic.cs
 
 $ErrorActionPreference = 'SilentlyContinue'
 
@@ -167,7 +167,7 @@ if (-not (Test-Path $discordRoot)) {
             $configText = Get-Content -LiteralPath $configIni -Raw -ErrorAction SilentlyContinue
             $proxyHashOk = Test-FileHashMatch (Join-Path $kitDir 'ffmpeg.dll') $ffmpeg
             $verHashOk = Test-FileHashMatch (Join-Path $kitDir 'version.dll') $versionDll
-            # config.ini: content peak-valid (4000 or 5000 trim, etc.) — do not require exact kit hash
+            # config.ini: content peak-valid (4000 or 5000 trim, etc.) - do not require exact kit hash
             # (kit may ship a newer interval while an applied peak config remains correct)
             $kernelOk = Test-DiscOptKernelApplied `
                 -FfmpegProxyBytes $ffSize `
@@ -181,7 +181,7 @@ if (-not (Test-Path $discordRoot)) {
 
         $modPath = Join-Path $app.FullName 'modules'
         $optionalModules = @('discord_hook-1', 'discord_clips-1')
-        # Always force arrays with @() — bare if/pipeline can unwrap to $null (Count throws under StrictMode).
+        # Always force arrays with @() - bare if/pipeline can unwrap to $null (Count throws under StrictMode).
         $oldApps = @(Get-ChildItem -LiteralPath $discordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
             Where-Object {
                 try {
@@ -189,7 +189,7 @@ if (-not (Test-Path $discordRoot)) {
                         [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')
                 } catch { $_.FullName -ne $app.FullName }
             })
-        # Only count optional modules when they contain payload files (empty recreated dirs ≠ not debloated).
+        # Only count optional modules when they contain payload files (empty recreated dirs != not debloated).
         $optionalPresent = @()
         foreach ($name in $optionalModules) {
             $p = Join-Path $modPath $name
@@ -213,7 +213,7 @@ if (-not (Test-Path $discordRoot)) {
                 $stateMatchesApp = $stateApp -ieq $curApp
             } catch { }
         }
-        # Pure classifier (DiscordDetectCore) — soft-drift recovery only when hard signals are clean.
+        # Pure classifier (DiscordDetectCore) - soft-drift recovery only when hard signals are clean.
         $debloatOk = Test-DiscOptClientDebloat `
             -LeftoverAppBuildCount (@($oldApps).Count) `
             -OptionalModulePayloadCount (@($optionalPresent).Count) `

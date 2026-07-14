@@ -1,6 +1,6 @@
 # OptiHub - detect NVIDIA optimizer status (JSON for WinUI).
 # Feature order matches apply pipeline: GPU -> driver -> 3D profile -> display/privacy.
-# Classifiers: NvidiaDetectCore.ps1 (pure) — keep aligned with NvidiaPeakLogic.cs
+# Classifiers: NvidiaDetectCore.ps1 (pure) - keep aligned with NvidiaPeakLogic.cs
 $ErrorActionPreference = 'SilentlyContinue'
 
 $core = Join-Path $PSScriptRoot 'NvidiaDetectCore.ps1'
@@ -118,7 +118,7 @@ function Test-OptiHubDriverInstallTweaks([string]$CurrentNv, $State) {
         }
     } catch { }
     # Only fail MSI when we can see display PCI nodes and they lack High priority.
-    # msiSeen=0 (enum/permissions) is best-effort skip — not a mid-tier false fail.
+    # msiSeen=0 (enum/permissions) is best-effort skip - not a mid-tier false fail.
     if ($msiSeen -gt 0 -and $msiGaps -gt 0) {
         [void]$issues.Add("MSI High missing on $msiGaps of $msiSeen NVIDIA display device(s)")
     }
@@ -269,7 +269,7 @@ function Test-NvidiaDisplayLive {
         if (-not $jsonLine) { throw "display helper returned no status JSON: $stderr" }
         $status = $jsonLine.Substring('OPTIHUB_NVDISPLAY_JSON:'.Length) | ConvertFrom-Json
         # Peak gate (matches OptiHub.NvDisplay): refresh + (registry active OR live color+scale)
-        # Note: NvidiaDetectCore uses StrictMode — never touch optional props without existence checks.
+        # Note: NvidiaDetectCore uses StrictMode - never touch optional props without existence checks.
         $ok = $false
         if ($null -ne $status.PSObject.Properties['ok']) { $ok = [bool]$status.ok }
         $checks = $null
@@ -343,7 +343,7 @@ $tweaks = Test-OptiHubDriverInstallTweaks $currentNv $state
 $debloat = Test-NvidiaPerformanceDebloat
 $overlay = Test-NvidiaOverlayDisabled
 $needsRetweak = (-not $needsUpdate) -and [bool]$currentNv -and (-not $tweaks.Ok)
-# Notebook: never auto-download desktop GRD — but do NOT treat that as a permanent fail.
+# Notebook: never auto-download desktop GRD - but do NOT treat that as a permanent fail.
 # Profiles, display policy, and debloat still apply on laptops.
 $needsDriverAction = if ($isNotebookGpu) {
     -not [bool]$currentNv   # only fail driver stage if we cannot see any NVIDIA driver
@@ -553,7 +553,7 @@ $features.Add(@{
     active = $backgroundOk
 })
 
-# Tray: hide NVDisplay container (IsPromoted=0); App ghosts should be gone — no logon tasks.
+# Tray: hide NVDisplay container (IsPromoted=0); App ghosts should be gone - no logon tasks.
 $trayHideOk = $true
 $trayDetail = 'No NVIDIA tray keys found (or display container demoted).'
 try {

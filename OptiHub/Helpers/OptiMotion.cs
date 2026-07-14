@@ -65,34 +65,26 @@ public static class OptiMotion
         el.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
         try
         {
-            // Always clear transform if present (and don't leave scale/offset residue).
-            if (el.RenderTransform is CompositeTransform tf)
-            {
-                tf.TranslateX = 0;
-                tf.TranslateY = 0;
-                tf.ScaleX = 1;
-                tf.ScaleY = 1;
-                tf.Rotation = 0;
-            }
-            else if (el.RenderTransform is not null)
-            {
-                // Unknown transform type — drop it so layout owns position again.
-                el.RenderTransform = null;
-            }
+            // Drop transforms entirely — a leftover scale/translate matrix is the
+            // main reason text + logos stay soft after entrance/hover.
+            el.RenderTransform = null;
         }
         catch { }
     }
 
     /// <summary>
-    /// Card entrance: XAML fade + slight rise only (no scale — scale drifts toward top-left).
+    /// Card entrance: fade + short integer rise, then hard-clear transform.
+    /// Rise uses whole pixels only; transform is dropped at end so type stays crisp.
     /// </summary>
     public static void PlayEnter(
         UIElement el,
         int delayMs = 0,
-        float fromY = 12f,
-        float fromScale = 1f, // ignored — kept for call-site compat
+        float fromY = 10f,
+        float fromScale = 1f, // ignored — scale softens logos
         bool enableHit = true)
     {
+        // Snap rise to whole pixels so we never park mid-pixel.
+        var rise = (float)Math.Round(Math.Clamp(fromY, 0f, 16f));
         ScheduleEnsureVisible(el, delayMs + EntranceMs + 80);
 
         try
@@ -100,7 +92,7 @@ public static class OptiMotion
             ForceCompositionIdentity(el);
             var tf = EnsureTransform(el);
             tf.TranslateX = 0;
-            tf.TranslateY = fromY;
+            tf.TranslateY = rise;
             tf.ScaleX = 1;
             tf.ScaleY = 1;
 
@@ -109,17 +101,18 @@ public static class OptiMotion
 
             var sb = new Storyboard();
             sb.Children.Add(Fade(el, 0, 1, FadeMs, delayMs));
-            sb.Children.Add(TranslateY(tf, fromY, 0, EntranceMs, delayMs));
+            if (rise > 0)
+                sb.Children.Add(TranslateY(tf, rise, 0, EntranceMs, delayMs));
+
             sb.Completed += (_, _) =>
             {
                 try
                 {
                     el.Opacity = 1;
                     el.IsHitTestVisible = enableHit;
-                    tf.TranslateX = 0;
-                    tf.TranslateY = 0;
-                    tf.ScaleX = 1;
-                    tf.ScaleY = 1;
+                    // Drop transform so layout owns pixels (no residual matrix blur).
+                    el.RenderTransform = null;
+                    ForceCompositionIdentity(el);
                 }
                 catch { }
             };
@@ -158,30 +151,22 @@ public static class OptiMotion
     }
 
     /// <summary>
-    /// Card select / press: quick scale pulse, then callback (navigate).
-    /// Visible feedback when tapping a home card.
+    /// Card select: snappy dim pulse (no scale), then navigate.
+    /// Clear "you picked this" without softening logos.
     /// </summary>
     public static void PlaySelect(UIElement el, Action? onDone = null)
     {
         try
         {
             ForceCompositionIdentity(el);
-            var tf = EnsureTransform(el);
-            tf.ScaleX = 1;
-            tf.ScaleY = 1;
+            el.RenderTransform = null;
             el.Opacity = 1;
             el.IsHitTestVisible = true;
 
             var sb = new Storyboard();
-            // Press in
-            sb.Children.Add(Scale(tf, "ScaleX", 1, 0.94, 70, 0));
-            sb.Children.Add(Scale(tf, "ScaleY", 1, 0.94, 70, 0));
-            // Spring out
-            sb.Children.Add(Scale(tf, "ScaleX", 0.94, 1.02, 90, 70));
-            sb.Children.Add(Scale(tf, "ScaleY", 0.94, 1.02, 90, 70));
-            // Settle
-            sb.Children.Add(Scale(tf, "ScaleX", 1.02, 1, 80, 160));
-            sb.Children.Add(Scale(tf, "ScaleY", 1.02, 1, 80, 160));
+            // Quick press-in, then release — readable without scale.
+            sb.Children.Add(Fade(el, 1, 0.78, 55, 0));
+            sb.Children.Add(Fade(el, 0.78, 1, 95, 55));
 
             var finished = false;
             void Once()
@@ -190,17 +175,16 @@ public static class OptiMotion
                 finished = true;
                 try
                 {
-                    tf.ScaleX = 1;
-                    tf.ScaleY = 1;
-                    tf.TranslateY = 0;
                     el.Opacity = 1;
+                    el.RenderTransform = null;
+                    ForceCompositionIdentity(el);
                 }
                 catch { }
                 onDone?.Invoke();
             }
             sb.Completed += (_, _) => Once();
             sb.Begin();
-            _ = Task.Delay(SelectMs + 80).ContinueWith(_ =>
+            _ = Task.Delay(SelectMs + 50).ContinueWith(_ =>
             {
                 try { el.DispatcherQueue?.TryEnqueue(Once); } catch { try { Once(); } catch { } }
             });
@@ -413,7 +397,8 @@ public static class OptiMotion
             To = to,
             Duration = TimeSpan.FromMilliseconds(ms),
             BeginTime = TimeSpan.FromMilliseconds(delayMs),
-            EasingFunction = Spring(),
+            // EaseOut only — BackEase overshoot leaves subpixel soft frames.
+            EasingFunction = Glide(),
             EnableDependentAnimation = true
         };
         Storyboard.SetTarget(a, tf);

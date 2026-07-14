@@ -11,7 +11,7 @@
             </ResourceDictionary.MergedDictionaries>
 
             <ResourceDictionary.ThemeDictionaries>
-                <!-- AMOLED pure black shell + near-black cards for OLED batteries / contrast -->
+                <!-- AMOLED pure black shell + slightly lifted cards for clearer depth -->
                 <ResourceDictionary x:Key="Dark">
                     <Color x:Key="SystemAccentColor">#F5F5F4</Color>
                     <Color x:Key="SystemAccentColorLight1">#FAFAF9</Color>
@@ -26,14 +26,14 @@
                     <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#F5F5F4" />
                     <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#A8A29E" />
                     <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#000000" />
-                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#0A0A0A" />
-                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#28FFFFFF" />
+                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#0C0C0C" />
+                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#30FFFFFF" />
                     <SolidColorBrush x:Key="OptiAccentBrush" Color="#F5F5F4" />
                     <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#000000" />
-                    <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#14FFFFFF" />
-                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#14FFFFFF" />
-                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#40FFFFFF" />
-                    <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#16FFFFFF" />
+                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#18FFFFFF" />
+                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#48FFFFFF" />
+                    <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#0C0C0C" />
                     <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#FAFAF9" />
                     <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#D6D3D1" />
                     <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#A8A29E" />
@@ -42,7 +42,7 @@
                     <SolidColorBrush x:Key="OptiWarningSoftBrush" Color="#22F59E0B" />
                     <SolidColorBrush x:Key="OptiErrorBrush" Color="#F87171" />
                     <!-- Theme control: pure black tile + white type so "Dark mode" is unmistakable -->
-                    <SolidColorBrush x:Key="OptiThemeToggleFillBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiThemeToggleFillBrush" Color="#0C0C0C" />
                     <SolidColorBrush x:Key="OptiThemeToggleTextBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="OptiThemeToggleStrokeBrush" Color="#55FFFFFF" />
                     <!-- Secondary button (Marcel): soft fill + deliberate stroke -->
@@ -64,15 +64,15 @@
                     <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#5C5144" />
                     <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#2A231C" />
                     <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#5C5144" />
-                    <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#F3EDE3" />
-                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#FBF7F0" />
-                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#663D3429" />
+                    <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#F2EBE0" />
+                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#FCFAF6" />
+                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#593D3429" />
                     <SolidColorBrush x:Key="OptiAccentBrush" Color="#3D3429" />
-                    <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#FBF7F0" />
+                    <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#FCFAF6" />
                     <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#1A3D3429" />
                     <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#3D3429" />
                     <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#FF2A231C" />
-                    <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#FBF7F0" />
+                    <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#FCFAF6" />
                     <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#1C1712" />
                     <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#3D3429" />
                     <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#6B5F50" />
@@ -81,7 +81,7 @@
                     <SolidColorBrush x:Key="OptiWarningSoftBrush" Color="#18B45309" />
                     <SolidColorBrush x:Key="OptiErrorBrush" Color="#B91C1C" />
                     <!-- Theme control: cream tile + dark type so "Light mode" is unmistakable -->
-                    <SolidColorBrush x:Key="OptiThemeToggleFillBrush" Color="#FBF7F0" />
+                    <SolidColorBrush x:Key="OptiThemeToggleFillBrush" Color="#FCFAF6" />
                     <SolidColorBrush x:Key="OptiThemeToggleTextBrush" Color="#1C1712" />
                     <SolidColorBrush x:Key="OptiThemeToggleStrokeBrush" Color="#993D3429" />
                     <SolidColorBrush x:Key="OptiSecondaryButtonFillBrush" Color="#FFFFFF" />
@@ -93,14 +93,14 @@
                     <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#F5F5F4" />
                     <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#F5F5F4" />
                     <SolidColorBrush x:Key="OptiPageBackgroundBrush" Color="#000000" />
-                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#0A0A0A" />
-                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#28FFFFFF" />
+                    <SolidColorBrush x:Key="OptiCardFillBrush" Color="#0C0C0C" />
+                    <SolidColorBrush x:Key="OptiCardStrokeBrush" Color="#30FFFFFF" />
                     <SolidColorBrush x:Key="OptiAccentBrush" Color="#F5F5F4" />
                     <SolidColorBrush x:Key="OptiOnAccentBrush" Color="#000000" />
-                    <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#14FFFFFF" />
-                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#14FFFFFF" />
-                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#40FFFFFF" />
-                    <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiAccentSoftBrush" Color="#16FFFFFF" />
+                    <SolidColorBrush x:Key="OptiLogoWellFillBrush" Color="#18FFFFFF" />
+                    <SolidColorBrush x:Key="OptiLogoWellStrokeBrush" Color="#48FFFFFF" />
+                    <SolidColorBrush x:Key="OptiQuietButtonFillBrush" Color="#0C0C0C" />
                     <SolidColorBrush x:Key="OptiPrimaryTextBrush" Color="#FAFAF9" />
                     <SolidColorBrush x:Key="OptiSecondaryTextBrush" Color="#D6D3D1" />
                     <SolidColorBrush x:Key="OptiMutedTextBrush" Color="#A8A29E" />
@@ -108,7 +108,7 @@
                     <SolidColorBrush x:Key="OptiWarningBrush" Color="#FBBF24" />
                     <SolidColorBrush x:Key="OptiWarningSoftBrush" Color="#22F59E0B" />
                     <SolidColorBrush x:Key="OptiErrorBrush" Color="#F87171" />
-                    <SolidColorBrush x:Key="OptiThemeToggleFillBrush" Color="#0A0A0A" />
+                    <SolidColorBrush x:Key="OptiThemeToggleFillBrush" Color="#0C0C0C" />
                     <SolidColorBrush x:Key="OptiThemeToggleTextBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="OptiThemeToggleStrokeBrush" Color="#55FFFFFF" />
                     <SolidColorBrush x:Key="OptiSecondaryButtonFillBrush" Color="#141414" />

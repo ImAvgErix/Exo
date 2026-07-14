@@ -85,10 +85,12 @@ public sealed partial class MainWindow : Window
     {
         if (e.Content is FrameworkElement page)
         {
-            // Soft page fade for modules; home has its own card stagger.
+            // Soft page fade for modules; home has its own card stagger (first paint only).
+            // Always reset identity so Back never leaves a residual X offset on the shell.
             try
             {
                 OptiMotion.EnsureVisible(page);
+                OptiMotion.EnsureVisible(ContentFrame);
                 if (page is not Views.DashboardPage)
                     OptiMotion.PlayPageEnter(page);
             }
@@ -403,7 +405,10 @@ public sealed partial class MainWindow : Window
             ApplyChrome(mode);
     }
 
-    /// <summary>Open menu immediately; gear spins in parallel (no wait before show).</summary>
+    /// <summary>
+    /// Open flyout + gear crank together — menu entrance is timed with the spin
+    /// so the gear reads as opening the dropdown (not a delayed second step).
+    /// </summary>
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -416,7 +421,7 @@ public sealed partial class MainWindow : Window
         }
         catch { }
 
-        // Show first so the menu feels instant; crank plays alongside.
+        // Show first (menu starts invisible and plays open in Opened); crank alongside.
         try
         {
             FlyoutBase.ShowAttachedFlyout(SettingsButton);
@@ -430,12 +435,14 @@ public sealed partial class MainWindow : Window
 
     private void SettingsFlyout_Opened(object sender, object e)
     {
-        // Keep gear at end of crank while open.
-        try { if (SettingsGearRotate is not null) SettingsGearRotate.Angle = 180; } catch { }
+        // Cohesive open: panel drops/fades with the same duration as the gear crank.
+        // Do NOT snap gear angle here — that fights the spin animation.
+        try { SettingsSheetHost?.PlayOpenAnimation(); } catch { }
     }
 
     private void SettingsFlyout_Closed(object sender, object e)
     {
+        try { SettingsSheetHost?.ResetOpenVisual(); } catch { }
         try
         {
             if (SettingsGearRotate is not null)
@@ -455,7 +462,7 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    /// <summary>Quick gear crank (visual only — does not delay the menu).</summary>
+    /// <summary>Gear crank — same duration as SettingsSheet.OpenMs so spin = open.</summary>
     private void SpinSettingsGear()
     {
         if (_gearSpinning) return;
@@ -469,11 +476,12 @@ public sealed partial class MainWindow : Window
             }
 
             SettingsGearRotate.Angle = 0;
+            var ms = Views.Controls.SettingsSheet.OpenMs;
             var anim = new DoubleAnimation
             {
                 From = 0,
                 To = 180,
-                Duration = TimeSpan.FromMilliseconds(180),
+                Duration = TimeSpan.FromMilliseconds(ms),
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
                 EnableDependentAnimation = true
             };

@@ -8,15 +8,15 @@
     Background="Transparent">
 
     <Grid Padding="{StaticResource OptiPagePadding}">
-        <Grid MaxWidth="{StaticResource OptiPageMaxWidth}" HorizontalAlignment="Stretch" RowSpacing="16">
+        <Grid MaxWidth="{StaticResource OptiPageMaxWidth}" HorizontalAlignment="Stretch" RowSpacing="14">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <StackPanel Spacing="10">
-                <StackPanel Spacing="4">
-                    <TextBlock Text="NVIDIA" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+                <StackPanel Spacing="3">
+                    <TextBlock Text="NVIDIA" Style="{StaticResource OptiSectionTitle}" Margin="0,0,0,2" />
                     <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" Style="{StaticResource OptiPageTitle}" />
                 </StackPanel>
                 <Grid ColumnSpacing="12">
@@ -39,6 +39,9 @@
                                      Visibility="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              HorizontalScrollMode="Disabled"
+                              ZoomMode="Disabled"
                               Visibility="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                     <ItemsRepeater ItemsSource="{x:Bind ViewModel.Features, Mode=OneWay}">
                         <ItemsRepeater.Layout>

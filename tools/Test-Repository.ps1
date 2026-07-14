@@ -109,8 +109,12 @@ foreach ($file in $scripts) {
         $file.FullName,
         [ref]$tokens,
         [ref]$parseErrors)
-    foreach ($parseError in @($parseErrors)) {
-        Add-Failure "PowerShell parse error in $($file.Name): $($parseError.Message)"
+    # Only iterate real errors - @($null) is a one-element array in Windows PowerShell.
+    if ($null -ne $parseErrors -and $parseErrors.Count -gt 0) {
+        foreach ($parseError in $parseErrors) {
+            if ($null -eq $parseError) { continue }
+            Add-Failure "PowerShell parse error in $($file.Name): $($parseError.Message)"
+        }
     }
 }
 
@@ -146,12 +150,14 @@ else {
 }
 
 $discordConfig = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Discord\kit\config.ini') -Raw
-foreach ($marker in @('TrimIntervalMs=5000', 'PriorityClass=3')) {
+foreach ($marker in @('TrimIntervalMs=4000', 'PriorityClass=3')) {
     Assert-ContainsText $discordConfig $marker 'Discord aggressive kernel config'
 }
 
 $steamDetect = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Steam\OptiHub-Steam-Detect.ps1') -Raw
+$steamDetectCore = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Steam\SteamDetectCore.ps1') -Raw
 $discordDetect = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Discord\OptiHub-Discord-Detect.ps1') -Raw
+$discordDetectCore = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Discord\DiscordDetectCore.ps1') -Raw
 $discordWindows = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Discord\kit\lib\40-DebloatWindows.ps1') -Raw
 $discordRepair = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Discord\OptiHub-Discord-Repair.ps1') -Raw
 $stateService = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Services\OptimizerStateService.cs') -Raw
@@ -165,8 +171,8 @@ foreach ($marker in @(
 )) {
     Assert-ContainsText $steamOptimizer $marker 'Steam durable state/fail-closed contract'
 }
+Assert-ContainsText $steamDetectCore "[string]`$State.applyStatus -ne 'applied'" 'Steam live applied-state contract'
 foreach ($marker in @(
-    "[string]`$state.applyStatus -eq 'applied'",
     'Test-SteamStartupQuiet',
     'Test-SteamDownloadConfig',
     'Test-SteamClientTweaks',
@@ -174,8 +180,7 @@ foreach ($marker in @(
     'Windows quiet shell',
     'Test-SteamCompleteClientDebloat',
     'Test-SteamWindowsQuiet',
-    'Reinstate-SteamQuiet',
-    'do NOT pin exact kit version'
+    'Reinstate-SteamQuiet'
 )) {
     Assert-ContainsText $steamDetect $marker 'Steam live applied-state contract'
 }
@@ -227,12 +232,11 @@ foreach ($marker in @(
 )) {
     Assert-ContainsText $discordWindows $marker 'Discord scoped recovery contract'
 }
+Assert-ContainsText $discordDetectCore "[string]`$State.applyStatus -ne 'applied'" 'Discord live applied-state contract'
 foreach ($marker in @(
-    "[string]`$state.applyStatus -eq 'applied'",
     'Test-StableDiscordWindowsQuiet',
     '$markerOk -and $equicordOk',
-    '$launchOk',
-    'do not pin exact kit version'
+    '$launchOk'
 )) {
     Assert-ContainsText $discordDetect $marker 'Discord live applied-state contract'
 }
@@ -298,8 +302,8 @@ if ($nvidiaDetect -match '\(-not\s+\$displayLive\.Available\s+-or') {
 foreach ($marker in @(
     'DisplayEnumerationResult',
     'active-display-enumeration-failed',
-    'incomplete-display-mapping',
-    'best.Count != allowedDevices.Count'
+    'Complete mode coverage required',
+    'targets.Count != allowedDevices.Count'
 )) {
     Assert-ContainsText $nvDisplaySource $marker 'NVDisplay fail-closed coverage'
 }

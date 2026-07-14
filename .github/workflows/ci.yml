@@ -37,3 +37,19 @@ jobs:
       - name: Validate scripts and bundled data
         shell: pwsh
         run: ./tools/Test-Repository.ps1
+
+      - name: Peak + UI smoke (no UAC)
+        shell: pwsh
+        run: |
+          $projects = @(
+            'tools/UiPeak.Smoke/UiPeak.Smoke.csproj',
+            'tools/NetworkPeak.Smoke/NetworkPeak.Smoke.csproj',
+            'tools/DiscordPeak.Smoke/DiscordPeak.Smoke.csproj',
+            'tools/SteamPeak.Smoke/SteamPeak.Smoke.csproj',
+            'tools/NvidiaPeak.Smoke/NvidiaPeak.Smoke.csproj'
+          )
+          foreach ($p in $projects) {
+            Write-Host "=== $p ===" -ForegroundColor Cyan
+            dotnet run --project $p -c Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }

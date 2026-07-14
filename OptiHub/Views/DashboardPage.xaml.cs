@@ -8,7 +8,8 @@ using OptiHub.ViewModels;
 namespace OptiHub.Views;
 
 /// <summary>
-/// Home grid: soft card stagger on load; press pulse on select before navigate.
+/// Home grid: soft card stagger on first load; press pulse on select before navigate.
+/// Cached so Back does not rebuild/re-stagger (avoids layout glitch / left shift).
 /// </summary>
 public sealed partial class DashboardPage : Page
 {
@@ -22,6 +23,9 @@ public sealed partial class DashboardPage : Page
 
     public DashboardPage()
     {
+        // Keep home alive across module round-trips — no recreate, no re-stagger jump.
+        NavigationCacheMode = NavigationCacheMode.Enabled;
+
         ViewModel = new DashboardViewModel(App.Services);
         InitializeComponent();
         DataContext = ViewModel;
@@ -38,19 +42,25 @@ public sealed partial class DashboardPage : Page
 
     private void Page_Loaded(object sender, RoutedEventArgs e)
     {
-        OptiMotion.EnsureVisible(PageRoot);
+        StabilizeHome();
         _ = TryPlayEntranceAsync();
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        OptiMotion.EnsureVisible(PageRoot);
+        // Returning from a module: clear any leftover select/entrance transforms so
+        // centered cards do not sit a few pixels off (the "everything shifted left" glitch).
+        StabilizeHome();
+
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
         _refreshCts = new CancellationTokenSource();
         await ViewModel.RefreshStatesAsync(_refreshCts.Token);
-        _ = TryPlayEntranceAsync();
+
+        // Only animate first paint — replaying stagger on every Back is what felt glitchy.
+        if (!_entrancePlayed)
+            _ = TryPlayEntranceAsync();
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -58,10 +68,31 @@ public sealed partial class DashboardPage : Page
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
         _refreshCts = null;
-        _entrancePlayed = false;
-        _entranceGen++;
         _selecting = false;
+        // Keep _entrancePlayed so cached return stays solid (no second stagger).
+        _entranceGen++;
+        StabilizeHome();
         base.OnNavigatedFrom(e);
+    }
+
+    /// <summary>Identity transforms + full opacity on hero/cards — no residual offset.</summary>
+    private void StabilizeHome()
+    {
+        try
+        {
+            if (PageRoot is not null)
+                OptiMotion.EnsureVisible(PageRoot);
+            if (HeroTagline is not null)
+                OptiMotion.EnsureVisible(HeroTagline);
+            if (CardList is not null)
+            {
+                List<UIElement> cards = [];
+                CollectCardButtons(CardList, cards);
+                foreach (var c in cards)
+                    OptiMotion.EnsureVisible(c);
+            }
+        }
+        catch { }
     }
 
     private async Task TryPlayEntranceAsync()
@@ -91,15 +122,11 @@ public sealed partial class DashboardPage : Page
             sequence.AddRange(cards);
 
             if (sequence.Count > 0)
-                OptiMotion.PlayStagger(sequence, baseDelayMs: 20, stepMs: 48, fromY: 14f, fromScale: 1f);
+                OptiMotion.PlayStagger(sequence, baseDelayMs: 24, stepMs: 42, fromY: 10f, fromScale: 1f);
 
-            await Task.Delay(560);
+            await Task.Delay(520);
             if (gen != _entranceGen) return;
-            OptiMotion.EnsureVisible(PageRoot);
-            if (HeroTagline is not null)
-                OptiMotion.EnsureVisible(HeroTagline);
-            foreach (var c in cards)
-                OptiMotion.EnsureVisible(c);
+            StabilizeHome();
         }
         finally
         {
@@ -136,6 +163,8 @@ public sealed partial class DashboardPage : Page
         {
             try
             {
+                // Clear pulse transform before leave so cached home returns clean.
+                try { OptiMotion.EnsureVisible(btn); } catch { }
                 ViewModel.OpenOptimizerCommand.Execute(id);
             }
             finally

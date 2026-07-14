@@ -8,14 +8,14 @@
     Background="Transparent">
 
     <Grid Padding="{StaticResource OptiPagePadding}">
-        <Grid MaxWidth="{StaticResource OptiPageMaxWidth}" HorizontalAlignment="Stretch" RowSpacing="16">
+        <Grid MaxWidth="{StaticResource OptiPageMaxWidth}" HorizontalAlignment="Stretch" RowSpacing="14">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <StackPanel Spacing="4">
-                <TextBlock Text="INTERNET" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+            <StackPanel Spacing="3">
+                <TextBlock Text="INTERNET" Style="{StaticResource OptiSectionTitle}" Margin="0,0,0,2" />
                 <TextBlock Text="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}" Style="{StaticResource OptiPageTitle}" />
             </StackPanel>
             <Grid Grid.Row="1">
@@ -23,6 +23,9 @@
                                      Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              HorizontalScrollMode="Disabled"
+                              ZoomMode="Disabled"
                               Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                     <ItemsRepeater ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}">
                         <ItemsRepeater.Layout>

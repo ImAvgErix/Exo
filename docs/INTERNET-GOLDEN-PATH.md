@@ -1,8 +1,8 @@
-**Status: LIVE** — expanded through v1.9.84+ for full Ethernet Properties bindings + deep NIC/Wi‑Fi advanced knobs. Prefer real driver props over folklore.
+**Status: LIVE** — Ethernet Properties bindings + deep NIC/Wi‑Fi advanced knobs. Prefer real driver props over folklore.
 
 # Internet optimizer — peak path
 
-**Version:** 1.9.84+  
+**Version:** ships with current OptiHub app release  
 **Goal:** lowest latency / best gaming **and** complete Ethernet + Wi‑Fi coverage (bindings, advanced props, host stack).
 
 ## Detection (local facts only)

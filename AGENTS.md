@@ -6,15 +6,31 @@ OptiHub is a no-compromise Windows performance and debloat tool. Aggressive memo
 
 Aggressive must still be deterministic: scope actions to the selected application or hardware, report partial failures honestly, avoid invented registry settings, preserve data needed to prevent corruption, and keep Discord/Steam repair paths working. Never describe NVIDIA Reset as rollback: it only clears OptiHub status, while NVIDIA recovery remains manual through NVIDIA settings or a driver reinstall.
 
+## Shell UI (current)
+
+- **Fixed frame** 1180×760, no maximize / free resize
+- **Settings** = gear flyout under the gear (not modal overlay, not side rail)
+- **Motion** = XAML Storyboards only; never Composition Opacity = 0 (blanks UI)
+- **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)
+- **Home** = cached dashboard so Back does not re-stagger / shift layout
+- **Version** = `VERSION` file and `OptiHub/OptiHub.csproj` must match; UiPeak.Smoke gates both
+
 ## Team structure
 
 For substantial audits, refactors, optimizer work, or releases:
 
 1. Keep the root agent as coordinator, integrator, verifier, and publisher.
-2. Delegate implementation to three parallel executors with non-overlapping ownership.
-3. Prefer Luna or Terra executor models when model selection is exposed. Otherwise use available subagents and do not claim a model was forced.
-4. Give each executor exact files, acceptance criteria, tests, and prohibited actions.
-5. Executors must not commit, push, merge, publish releases, or run optimizer Apply/Repair actions unless explicitly authorized.
-6. The coordinator reviews the combined diff and runs full builds, script/data validation, package checks, publish smoke tests, and appropriate UI QA.
+2. Delegate implementation to parallel executors with non-overlapping ownership when useful.
+3. Give each executor exact files, acceptance criteria, tests, and prohibited actions.
+4. Executors must not commit, push, merge, publish releases, or run optimizer Apply/Repair actions unless explicitly authorized.
+5. The coordinator reviews the combined diff and runs full builds, script/data validation, package checks, publish smoke tests, and appropriate UI QA.
 
 Use concise prompts and targeted diffs. Do not have the coordinator redo completed executor analysis.
+
+## Ship checklist
+
+1. `dotnet run --project tools/UiPeak.Smoke -c Release`
+2. `.\tools\Test-Repository.ps1`
+3. Peak smokes as needed (Network / Discord / Steam / NVIDIA)
+4. `.\Publish-OptiHub.ps1` then install to `%LocalAppData%\OptiHub\app` for local QA
+5. `.\Release-OptiHub.ps1` only when intentionally publishing a GitHub release

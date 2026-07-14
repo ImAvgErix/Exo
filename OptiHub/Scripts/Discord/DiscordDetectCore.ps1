@@ -1,4 +1,4 @@
-# DiscordDetectCore.ps1 — pure detect classifiers (no Discord launch, no elevation).
+# DiscordDetectCore.ps1 - pure detect classifiers (no Discord launch, no elevation).
 # Dot-sourced by OptiHub-Discord-Detect.ps1; smokes call this file directly.
 # Keep in sync with OptiHub.Services.DiscordPeakLogic (C# host heuristic).
 
@@ -58,7 +58,7 @@ function Test-DiscOptKernelLayout {
 <#
 .SYNOPSIS
   True when config.ini content is a valid gaming DiscOpt kernel (not folklore).
-  Accepts current kit (TrimIntervalMs=4000) and prior peak (5000) — exact kit hash not required for ini.
+  Accepts current kit (TrimIntervalMs=4000) and prior peak (5000) - exact kit hash not required for ini.
 #>
 function Test-DiscOptKernelConfigText {
     param([AllowNull()][string]$ConfigText)
@@ -67,7 +67,7 @@ function Test-DiscOptKernelConfigText {
     if ($ConfigText -notmatch '(?m)^\s*PriorityClass\s*=\s*3\s*$') { return $false }
     if ($ConfigText -notmatch '(?m)^\s*TrimIntervalMs\s*=\s*(\d+)\s*$') { return $false }
     $trimMs = [int]$Matches[1]
-    # Peak range: 2s–15s idle trim (kit ships 4000; older applies used 5000)
+    # Peak range: 2s-15s idle trim (kit ships 4000; older applies used 5000)
     if ($trimMs -lt 2000 -or $trimMs -gt 15000) { return $false }
     return $true
 }
@@ -162,7 +162,7 @@ function Test-DiscOptModuleDirHasPayload {
 .SYNOPSIS
   Complete client debloat classifier (aligned with DiscordPeakLogic.IsClientDebloatApplied).
   Hard: leftover app builds + optional modules with payload files.
-  Soft: game SDK + extra locales — recoverable via state only when hard is clean.
+  Soft: game SDK + extra locales - recoverable via state only when hard is clean.
 #>
 function Test-DiscOptClientDebloat {
     param(

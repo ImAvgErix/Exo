@@ -1,5 +1,6 @@
-# Legacy entry point - OptiHub is now a double-click OptiHub.exe download.
-# This script only downloads and runs the official release EXE.
+# OptiHub bootstrap installer.
+# Downloads the latest release OptiHub.exe from GitHub and runs it.
+# Prefer the double-click asset from Releases when you already have it.
 
 $ErrorActionPreference = 'Stop'
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Windows only.' }

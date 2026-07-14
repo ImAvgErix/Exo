@@ -10,34 +10,29 @@
     <!--
       Fixed 1180×760.
       Tagline = full-width centered hero.
-      Cards = compact under it (clearly smaller than the title).
+      Cards = compact under it with logo wells + labels.
     -->
     <Grid x:Name="PageRoot"
-          Padding="40,20,40,28"
+          Padding="40,18,40,26"
           HorizontalAlignment="Stretch"
-          VerticalAlignment="Stretch">
+          VerticalAlignment="Stretch"
+          UseLayoutRounding="True">
         <StackPanel HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     MaxWidth="920"
-                    Spacing="0">
+                    Spacing="0"
+                    UseLayoutRounding="True">
 
-            <!-- Hero: stretch to panel width so TextAlignment=Center is real center -->
+            <!-- Hero: no RenderTransform — transforms keep italic type soft -->
             <TextBlock x:Name="HeroTagline"
                        Text="Maximum performance. No compromise."
                        Style="{StaticResource OptiTagline}"
-                       FontSize="36"
-                       LineHeight="44"
-                       CharacterSpacing="-16"
                        TextWrapping="WrapWholeWords"
                        TextAlignment="Center"
                        HorizontalAlignment="Stretch"
-                       Margin="0,0,0,24"
-                       MaxWidth="880"
-                       RenderTransformOrigin="0.5,0.5">
-                <TextBlock.RenderTransform>
-                    <CompositeTransform />
-                </TextBlock.RenderTransform>
-            </TextBlock>
+                       Margin="0,0,0,28"
+                       MaxWidth="860"
+                       UseLayoutRounding="True" />
 
             <ItemsControl x:Name="CardList"
                           HorizontalAlignment="Center"
@@ -52,10 +47,9 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
                         <Button Style="{StaticResource OptiCardButton}"
-                                Width="248"
-                                Height="148"
+                                Width="250"
+                                Height="156"
                                 Margin="6"
-                                RenderTransformOrigin="0.5,0.5"
                                 Click="CardButton_Click"
                                 Tag="{x:Bind Definition.Id}"
                                 AutomationProperties.Name="{x:Bind Definition.Title}"
@@ -63,36 +57,40 @@
                             <Border Style="{StaticResource OptiCard}"
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Stretch"
-                                    Padding="12,12,12,10"
+                                    Padding="14,14,14,12"
+                                    UseLayoutRounding="True"
                                     Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
-                                <Grid>
+                                <Grid UseLayoutRounding="True">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="*" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
+                                    <!-- Borderless logo @ 64px, decoded 2× for crisp DPI -->
                                     <Image Width="64"
                                            Height="64"
                                            Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
                                            Stretch="Uniform"
+                                           UseLayoutRounding="True"
                                            AutomationProperties.AccessibilityView="Raw" />
                                     <StackPanel Grid.Row="1"
                                                 Spacing="2"
                                                 HorizontalAlignment="Center"
-                                                Margin="0,6,0,0">
+                                                Margin="0,8,0,0">
                                         <TextBlock Text="{x:Bind Definition.Title, Mode=OneWay}"
                                                    FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                                   FontSize="13"
+                                                   FontSize="14"
                                                    FontWeight="SemiBold"
                                                    Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                                    HorizontalAlignment="Center"
                                                    TextAlignment="Center"
                                                    TextTrimming="CharacterEllipsis"
-                                                   MaxLines="1" />
+                                                   MaxLines="1"
+                                                   UseLayoutRounding="True" />
                                         <TextBlock Text="Coming soon"
                                                    FontFamily="{StaticResource OptiUiFont}"
-                                                   FontSize="11"
+                                                   FontSize="12"
                                                    Foreground="{ThemeResource OptiMutedTextBrush}"
                                                    HorizontalAlignment="Center"
                                                    Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />

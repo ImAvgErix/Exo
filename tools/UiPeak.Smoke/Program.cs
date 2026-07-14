@@ -43,7 +43,8 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("amoled black", a.Contains("#000000", StringComparison.Ordinal));
     Expect("stone white accent", a.Contains("#F5F5F4", StringComparison.Ordinal));
-    Expect("cream light page", a.Contains("#F3EDE3", StringComparison.Ordinal));
+    Expect("cream light page", a.Contains("#F2EBE0", StringComparison.Ordinal) || a.Contains("#F3EDE3", StringComparison.Ordinal));
+    Expect("dark card lift", a.Contains("#0C0C0C", StringComparison.Ordinal));
 }
 if (File.Exists(main))
 {
@@ -87,12 +88,20 @@ if (File.Exists(dash))
         d.Contains("TextAlignment=\"Center\"", StringComparison.Ordinal)
         && (d.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal)
             || d.Contains("HorizontalAlignment=\"Center\"", StringComparison.Ordinal))
-        && (d.Contains("FontSize=\"36\"", StringComparison.Ordinal)
+        && (d.Contains("OptiTagline", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"36\"", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"38\"", StringComparison.Ordinal)
             || d.Contains("FontSize=\"40\"", StringComparison.Ordinal)
             || d.Contains("FontSize=\"48\"", StringComparison.Ordinal)));
     Expect("dashboard fixed cards under hero",
-        d.Contains("Width=\"248\"", StringComparison.Ordinal)
-        && (d.Contains("Height=\"148\"", StringComparison.Ordinal) || d.Contains("Height=\"120\"", StringComparison.Ordinal)));
+        (d.Contains("Width=\"248\"", StringComparison.Ordinal) || d.Contains("Width=\"250\"", StringComparison.Ordinal))
+        && (d.Contains("Height=\"148\"", StringComparison.Ordinal)
+            || d.Contains("Height=\"156\"", StringComparison.Ordinal)
+            || d.Contains("Height=\"120\"", StringComparison.Ordinal)));
+    Expect("dashboard borderless logos",
+        d.Contains("Width=\"64\"", StringComparison.Ordinal)
+        && d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal)
+        && !d.Contains("OptiLogoWell", StringComparison.Ordinal));
     // Cards must stay smaller than the old overpowering footprints.
     Expect("dashboard cards not oversized",
         !d.Contains("Width=\"352\"", StringComparison.Ordinal)
@@ -117,8 +126,8 @@ if (File.Exists(theme))
 if (File.Exists(settings))
 {
     var s = File.ReadAllText(settings);
-    Expect("settings appearance", s.Contains("Appearance", StringComparison.Ordinal));
-    Expect("settings updates", s.Contains("Updates", StringComparison.Ordinal));
+    Expect("settings appearance", s.Contains("APPEARANCE", StringComparison.Ordinal) || s.Contains("Appearance", StringComparison.Ordinal));
+    Expect("settings updates", s.Contains("UPDATES", StringComparison.Ordinal) || s.Contains("Updates", StringComparison.Ordinal));
     Expect("settings app version", s.Contains("App version", StringComparison.Ordinal)
         && s.Contains("AppVersion", StringComparison.Ordinal)
         && !s.Contains("KitVersion", StringComparison.Ordinal));
@@ -127,6 +136,10 @@ if (File.Exists(settings))
         && s.Contains("LightMode_Click", StringComparison.Ordinal)
         && s.Contains("Content=\"Dark\"", StringComparison.Ordinal)
         && s.Contains("Content=\"Light\"", StringComparison.Ordinal));
+    Expect("settings theme choice selected state",
+        s.Contains("OptiThemeChoice", StringComparison.Ordinal)
+        && s.Contains("IsDarkMode", StringComparison.Ordinal)
+        && s.Contains("IsLightMode", StringComparison.Ordinal));
     Expect("settings opti chrome",
         s.Contains("OptiQuietButton", StringComparison.Ordinal)
         && s.Contains("OptiPrimaryButton", StringComparison.Ordinal));
@@ -147,6 +160,18 @@ if (File.Exists(settings))
         && s.Contains("UpdateProgressPercent", StringComparison.Ordinal));
     Expect("no tooltips in settings", !s.Contains("ToolTip", StringComparison.OrdinalIgnoreCase)
         && !s.Contains("ToolTipService", StringComparison.OrdinalIgnoreCase));
+    Expect("settings sheet open animation root",
+        s.Contains("SheetRoot", StringComparison.Ordinal)
+        && s.Contains("SheetTransform", StringComparison.Ordinal));
+}
+var settingsCs = Path.Combine(repo, "OptiHub", "Views", "Controls", "SettingsSheet.xaml.cs");
+if (File.Exists(settingsCs))
+{
+    var sc = File.ReadAllText(settingsCs);
+    Expect("settings play open animation",
+        sc.Contains("PlayOpenAnimation", StringComparison.Ordinal)
+        && sc.Contains("OpenMs", StringComparison.Ordinal)
+        && sc.Contains("ResetOpenVisual", StringComparison.Ordinal));
 }
 // Settings is gear flyout (2.1.0 style).
 if (File.Exists(mainXaml))
@@ -278,6 +303,10 @@ if (File.Exists(mainCsPath))
         mc.Contains("ShowAttachedFlyout", StringComparison.Ordinal)
         && mc.IndexOf("ShowAttachedFlyout", StringComparison.Ordinal)
             < mc.IndexOf("SpinSettingsGear();", StringComparison.Ordinal));
+    Expect("settings open plays menu entrance with gear",
+        mc.Contains("PlayOpenAnimation", StringComparison.Ordinal)
+        && mc.Contains("SettingsFlyout_Opened", StringComparison.Ordinal)
+        && mc.Contains("SettingsSheet.OpenMs", StringComparison.Ordinal));
     Expect("taskbar icon win32 set",
         mc.Contains("SendMessage", StringComparison.Ordinal) && mc.Contains("LoadImage", StringComparison.Ordinal)
         && mc.Contains("TrySetWindowIcon", StringComparison.Ordinal)
@@ -314,6 +343,9 @@ if (File.Exists(dashCs))
     Expect("home card select pulse",
         dc.Contains("PlaySelect", StringComparison.Ordinal)
         && dc.Contains("CardButton_Click", StringComparison.Ordinal));
+    Expect("dashboard cache for clean back",
+        dc.Contains("NavigationCacheMode.Enabled", StringComparison.Ordinal)
+        && dc.Contains("StabilizeHome", StringComparison.Ordinal));
 }
 
 // Card button must not force Left/Top (top-left drift).
@@ -333,9 +365,37 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.1.5", File.ReadAllText(versionFile).Trim() == "2.1.5");
+    Expect("VERSION is 2.2.4", File.ReadAllText(versionFile).Trim() == "2.2.4");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.1.5", File.ReadAllText(csproj).Contains("<Version>2.1.5</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.2.4", File.ReadAllText(csproj).Contains("<Version>2.2.4</Version>", StringComparison.Ordinal));
+// Dead modal settings state must stay gone.
+var overlayState = Path.Combine(repo, "OptiHub", "Helpers", "SettingsOverlayState.cs");
+Expect("no dead SettingsOverlayState", !File.Exists(overlayState));
+
+// Logos decode full-fidelity (no forced downscale that softens/pixelates).
+var convertersCs = Path.Combine(repo, "OptiHub", "Helpers", "ValueConverters.cs");
+if (File.Exists(convertersCs))
+{
+    var cv = File.ReadAllText(convertersCs);
+    Expect("logo decode 2x display",
+        cv.Contains("AssetPathToImageSourceConverter", StringComparison.Ordinal)
+        && cv.Contains("DecodePixelWidth = 128", StringComparison.Ordinal)
+        && cv.Contains("DecodePixelType.Logical", StringComparison.Ordinal));
+    var motion = File.ReadAllText(Path.Combine(repo, "OptiHub", "Helpers", "OptiMotion.cs"));
+    Expect("entrance rise then clear transform",
+        motion.Contains("TranslateY", StringComparison.Ordinal)
+        && motion.Contains("RenderTransform = null", StringComparison.Ordinal)
+        && motion.Contains("PlayEnter", StringComparison.Ordinal));
+}
+// Card hover ring (focus without scale blur).
+if (File.Exists(theme))
+{
+    var tMotion = File.ReadAllText(theme);
+    Expect("card hover ring not scale",
+        tMotion.Contains("HoverRing", StringComparison.Ordinal)
+        && tMotion.Contains("HoverWash", StringComparison.Ordinal)
+        && tMotion.Contains("OptiCardButton", StringComparison.Ordinal));
+}
 
 var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");
 if (File.Exists(appSettings))

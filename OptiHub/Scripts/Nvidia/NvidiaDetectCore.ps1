@@ -1,4 +1,4 @@
-# NvidiaDetectCore.ps1 — pure detect classifiers (no NVAPI launch required for unit paths).
+# NvidiaDetectCore.ps1 - pure detect classifiers (no NVAPI launch required for unit paths).
 # Dot-sourced by OptiHub-Nvidia-Detect.ps1; smokes call this file.
 # Keep aligned with OptiHub.Services.NvidiaPeakLogic.
 

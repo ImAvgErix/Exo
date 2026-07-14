@@ -11,15 +11,15 @@
     <Grid Padding="{StaticResource OptiPagePadding}">
         <Grid MaxWidth="{StaticResource OptiPageMaxWidth}"
               HorizontalAlignment="Stretch"
-              RowSpacing="16">
+              RowSpacing="14">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <StackPanel Spacing="4">
-                <TextBlock Text="DISPLAY" Style="{StaticResource OptiSectionTitle}" Margin="0" />
+            <StackPanel Spacing="3">
+                <TextBlock Text="DISPLAY" Style="{StaticResource OptiSectionTitle}" Margin="0,0,0,2" />
                 <TextBlock Text="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}"
                            Style="{StaticResource OptiPageTitle}" />
                 <TextBlock Text="{x:Bind ViewModel.HeaderDetail, Mode=OneWay}"
@@ -34,6 +34,8 @@
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled"
+                              HorizontalScrollMode="Disabled"
+                              ZoomMode="Disabled"
                               Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                     <StackPanel Spacing="12"
                                 Visibility="{x:Bind ViewModel.HasDisplays, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">

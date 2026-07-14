@@ -276,7 +276,7 @@ function Set-AllNvtweakDevices {
 }
 
 function Clear-NvidiaAppTrayAndContainer {
-    # Soft refresh restarts NVDisplay.Container → re-registers tray.
+    # Soft refresh restarts NVDisplay.Container -> re-registers tray.
     # Hide display-container (IsPromoted=0); delete App/GFE ghosts only.
     try {
         $svc = Get-Service -Name 'NvContainerLocalSystem' -ErrorAction SilentlyContinue
@@ -295,7 +295,7 @@ function Clear-NvidiaAppTrayAndContainer {
             Write-DLog 'Tray clear script finished'
             return
         } catch {
-            Write-DLog "Tray script failed: $($_.Exception.Message) — inline fallback"
+            Write-DLog "Tray script failed: $($_.Exception.Message) - inline fallback"
         }
     }
 
@@ -367,9 +367,9 @@ function Invoke-NvApiHelper {
 }
 
 function Invoke-SoftDriverRefresh {
-    # NEVER restart NVDisplay.ContainerLocalSystem — that re-registers a promoted tray icon.
+    # NEVER restart NVDisplay.ContainerLocalSystem - that re-registers a promoted tray icon.
     # Registry + NVAPI already push display policy without a container bounce.
-    Write-DLog 'Soft refresh skipped (no NVDisplay.Container restart — keeps tray hidden)'
+    Write-DLog 'Soft refresh skipped (no NVDisplay.Container restart - keeps tray hidden)'
     Get-Process nvcplui, nvcpl -EA 0 | Stop-Process -Force -EA 0
     return $false
 }
@@ -504,7 +504,7 @@ $ok = [bool]$registryOk -and ([bool]$nvApiOk -or $deviceCount -gt 0)
 
 if ($ok) {
     if (-not $nvApiOk) {
-        Write-DLog 'SUCCESS (registry OK; NVAPI best-effort incomplete — common on older GPUs)'
+        Write-DLog 'SUCCESS (registry OK; NVAPI best-effort incomplete - common on older GPUs)'
     } else {
         Write-DLog 'SUCCESS'
     }

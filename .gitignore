@@ -18,12 +18,16 @@ _pkginfo.txt
 *.msixbundle
 **/node_modules/
 
-# Local scratch
+# Local scratch / agent / IDE
 release-artifacts/
 extracted/
 dist/
 _DELETE_ME_*/
 _old_*/
+override-diff-*/
+.cursor/
+.idea/
+*.DotSettings.user
 
 # Legacy leftover (locked files during migration — safe to delete manually)
 Disc Optimizer/
@@ -48,4 +52,5 @@ OptiHub/Scripts/Nvidia/tools/
 OptiHub/Assets/Logos/_contact.png
 OptiHub/Assets/Logos/*.tmp.png
 docs/optihub-live.png
+
 

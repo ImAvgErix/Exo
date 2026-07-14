@@ -1,58 +1,93 @@
+## 2.2.4
+
+- **Repo polish**: README / CONTRIBUTING / SECURITY, issue + PR templates, CI runs peak + UI smokes, `.editorconfig`
+- Removed dead `SettingsOverlayState` (settings is a flyout, not a modal overlay)
+- `.gitignore` covers local agent/IDE scratch (`override-diff-*`, `.cursor/`)
+- Docs and agent notes aligned with gear-flyout shell + crisp motion rules
+
+## 2.2.3
+
+- **Cleaner interaction motion**: hover/press uses animated highlight wash + accent ring (not scale) so you always know focus without blur
+- **Home entrance** back: soft fade + short rise, then transform is dropped so type stays sharp
+- **Settings open**: fade + 8px drop from the gear again
+- **Select pulse** clearer dim before navigate
+
+## 2.2.2
+
+- **Sharpness pass**: drop hover/press **scale** on cards + CTAs (opacity only) — scale was softing type and logos
+- Entrance is **fade-only** (no translate); transforms are cleared after motion so nothing stays subpixel
+- Logos decode at **128 logical px** (2× the 64px display size) for clean DPI downscale
+
+## 2.2.1
+
+- **Borderless icons**: home logos float without a well outline; feature icon wells are fill-only (no stroke)
+- **Crisper logos & type**: full-fidelity bitmap decode (no forced 256 downscale), 64px marks, integer font sizes (13.5 → 14), gentler card hover so bitmaps stay sharp
+
+## 2.2.0
+
+- **UI polish pass**: selected Dark/Light theme pills, clearer card depth, tighter module headers
+- **Settings**: section caps + theme radios with white selected state
+- **Modules**: consistent page padding / title rhythm; feature tiles and icon wells more deliberate
+
+## 2.1.6
+
+- **Settings open is cohesive**: gear crank and menu entrance share the same ~220ms motion
+- **Back no longer shifts UI left**: home page is cached; transforms cleared on leave/return
+
 ## 2.1.5
 
-- **Taskbar blank-paper fix**: Start Menu shortcut pointed at deleted `OptiHub-2-0-2-0.ico` — now stable `OptiHub.ico` + auto-repair on launch
+- **Taskbar blank-paper fix**: stable `OptiHub.ico` + auto-repair on launch
 - **AppUserModelID** set before window create; icon reapplied on activate
+
 ## 2.1.4
 
-- **Settings opens instantly**: flyout shows on tap; gear spins in parallel (no wait)
+- **Settings opens instantly**: flyout shows on tap; gear spins in parallel
 - **Taskbar icon**: Win32 WM_SETICON big+small in addition to AppWindow.SetIcon
+
 ## 2.1.3
 
 - **Settings back to 2.1.0**: gear crank + dropdown flyout under the gear (not side rail)
+
 ## 2.1.2
 
 - **Settings rail restored** (side panel under gear, not centered modal)
 - **Faster open**: gear crank ~140ms, rail expand ~160ms
+
 ## 2.1.1
 
-- **Settings rail**: gear cranks, then a full-height left panel grows out of the gear (stem connection)
-- Home content shifts right so the rail **never covers cards** — lives in the gutter between app edge and grid
-- App version pinned to bottom of the rail; support buttons match OptiQuiet chrome
+- **Settings rail**: full-height left panel from the gear
+- Home content shifts right so the rail never covers cards
+
 ## 2.1.0
 
-- **Settings restart**: gear crank-spins, then a **dropdown flyout** (no full-screen modal)
-- Flyout: Dark / Light, check-on-launch, Check for updates, Report issue / Open logs, app version at bottom
-- Buttons match OptiQuiet / OptiPrimary chrome
+- **Settings restart**: gear crank + **dropdown flyout** (no full-screen modal)
+- Flyout: Dark / Light, check-on-launch, Check for updates, Report issue / Open logs, app version
+
 ## 2.0.6
 
-- **Settings stays centered for real**: star-grid center host; sheet never gets transform/opacity animation
-- **Check for updates no longer kicks the card**: fixed-height progress slot (no height remeasure jump)
-- Scrim-only fade open/close
+- Settings star-grid center host; check-for-updates fixed-height progress slot
 - **Home card names**: title under each optimizer logo
+
 ## 2.0.5
 
-- **No more top-left drift**: settings open is fade-only (no scale/translate on the centered sheet); hard identity reset every close
-- **Card select animation**: press pulse before navigate (`PlaySelect`)
-- **Card hover**: scale only (removed TranslateY lift that shifted cards); button alignment Center not Left/Top
+- No top-left drift on settings; card select pulse; card hover scale without TranslateY
+
 ## 2.0.4
 
-- **Soft open animations back** (safe path): settings fade+rise, home card stagger, module page fade — all XAML Storyboards
-- **Still never uses Composition Opacity** (that blanked the UI); every entrance has EnsureVisible fail-safe
+- Soft open animations via XAML Storyboards; never Composition Opacity
+
 ## 2.0.3
 
-- **Settings fixed for real**: Visibility only (open/close). No composition, no intermediate stage that ate clicks. Close always restores gear; open always recovers.
-- **Removed Motion slider** (was never requested)
+- Settings Visibility-only open/close; removed Motion slider
+
 ## 2.0.2
 
-- **Stop composition blanking UI**: never set Composition Opacity to 0 (it overrides XAML and left pages/settings invisible)
-- **No entrance/stagger motion** that primes content hidden — open/navigate always fully visible
-- **Settings close is instant** (no delayed Finish race); host laid out 400px centered by layout only
-- **Home**: tagline full-width centered (36px); compact cards 248×120
+- Stop composition blanking UI; home tagline centered; compact cards
+
 ## 2.0.1
 
-- **Settings open order**: navigate home *before* marking settings open (Navigate used to close the sheet we just opened)
-- **UI never sticks half-hidden**: EnsureVisible fail-safe on every page enter, home return, settings open; page enter no longer primes whole page to opacity 0
-- **Home balance**: tagline full-width center (40px); compact cards 268×132 under it
+- Settings open order fix; EnsureVisible fail-safes; home balance
+
 ## 2.0.0
 
 - **Settings never teleports**: sheet host is opacity-only; layout owns center (full-bleed stage). No composition Offset/Scale on the host — re-open stays dead center

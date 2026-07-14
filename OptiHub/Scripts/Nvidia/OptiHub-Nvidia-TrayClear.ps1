@@ -1,4 +1,4 @@
-# OptiHub — NVIDIA tray / overflow killer (gaming quiet)
+# OptiHub - NVIDIA tray / overflow killer (gaming quiet)
 #
 # Why icons "come back":
 #   NVDisplay.ContainerLocalSystem re-registers a tray key on soft-refresh / logon.
@@ -7,7 +7,7 @@
 # Strategy (original working approach from v1.9.23):
 #   1) Kill App-stack (NvContainerLocalSystem) permanently disabled
 #   2) DELETE App/GFE/ShadowPlay tray keys
-#   3) HIDE display-container tray (IsPromoted=0) — leave the key
+#   3) HIDE display-container tray (IsPromoted=0) - leave the key
 #   4) Multi-pass settle after container restart
 #   5) Lightweight HKCU logon task re-hides after reboot (no elevation)
 #
@@ -61,7 +61,7 @@ function Invoke-OptiHubNvidiaTrayPass {
             if (-not (Test-IsNvidiaTrayExe $exe)) { return }
 
             if (Test-IsDisplayContainerExe $exe) {
-                # Keep key (prevents re-create as promoted) — force overflow-hidden
+                # Keep key (prevents re-create as promoted) - force overflow-hidden
                 try {
                     New-ItemProperty -LiteralPath $keyPath -Name 'IsPromoted' -Value 0 -PropertyType DWord -Force -EA 0 | Out-Null
                     Set-ItemProperty -LiteralPath $keyPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0
@@ -73,7 +73,7 @@ function Invoke-OptiHubNvidiaTrayPass {
                 return
             }
 
-            # App / GFE / overlay ghosts — delete
+            # App / GFE / overlay ghosts - delete
             if ($exe -match $patternApp -or $exe -match '(?i)\\nvcontainer\.exe' -or -not (Test-IsDisplayContainerExe $exe)) {
                 if (-not (Test-IsDisplayContainerExe $exe)) {
                     try {
