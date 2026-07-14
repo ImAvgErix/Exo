@@ -2225,9 +2225,8 @@ function Configure-NvidiaAppExperience {
 function Test-NvidiaOverlayDisabled {
     $issues = New-Object System.Collections.Generic.List[string]
 
-    $overlayProcesses = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.ProcessName -match '(?i)^NVIDIA (Overlay|Share)$|^nvsphelper(64)?$'
-    })
+    $overlayProcesses = @(Get-Process -Name @(
+        'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper', 'nvsphelper64') -ErrorAction SilentlyContinue)
     if ($overlayProcesses.Count -gt 0) {
         [void]$issues.Add("Overlay processes still running: $($overlayProcesses.ProcessName -join ', ')")
     }
@@ -3270,9 +3269,9 @@ function Test-NvidiaPerformanceDebloat {
 
     # Fresh App is expected and may be opened on demand. Only flag background noise
     # (overlay / Share / helpers / legacy GFE) - not the main NVIDIA App process.
-    $background = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.ProcessName -match '(?i)^NVIDIA (Overlay|Share|Web Helper)$|^GFExperience$|^nvsphelper(64)?$'
-    })
+    $background = @(Get-Process -Name @(
+        'NVIDIA Overlay', 'NVIDIA Share', 'NVIDIA Web Helper',
+        'GFExperience', 'nvsphelper', 'nvsphelper64') -ErrorAction SilentlyContinue)
     if ($background.Count -gt 0) {
         [void]$issues.Add("Background clients still running: $($background.ProcessName -join ', ')")
     }

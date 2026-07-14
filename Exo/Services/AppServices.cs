@@ -24,13 +24,16 @@ public sealed class AppServices
     public void Initialize()
     {
         Settings.Load();
-        // Bind working kits to this exact app version first (full replace on upgrade),
-        // then warm Discord root off the UI thread.
-        try { Scripts.EnsureKitsMatchThisApp(); }
-        catch { /* first-run stamp is best-effort; Get*Root retries */ }
 
         _ = Task.Run(async () =>
         {
+            // Bind working kits to this exact app version (full replace on upgrade).
+            // Safe off the startup path: every Get*Root() self-ensures the stamp
+            // under the same lock, so early consumers stay correct while the
+            // upgrade copy no longer delays first paint.
+            try { Scripts.EnsureKitsMatchThisApp(); }
+            catch { /* first-run stamp is best-effort; Get*Root retries */ }
+
             try
             {
                 // Prefer PowerShell 7 Preview + Windows Terminal Preview; install via winget if missing.

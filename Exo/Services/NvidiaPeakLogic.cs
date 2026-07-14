@@ -5,18 +5,42 @@ namespace Exo.Services;
 /// <summary>
 /// Pure NVIDIA detect classifiers (no I/O). Aligned with Scripts/Nvidia/NvidiaDetectCore.ps1.
 /// </summary>
-public static class NvidiaPeakLogic
+public static partial class NvidiaPeakLogic
 {
+    [GeneratedRegex(@"(?i)\b(?:RTX|GTX)\s*([1-5])0\d{2}\b")]
+    private static partial Regex GpuSeriesPrefixedRegex();
+
+    [GeneratedRegex(@"(?i)\b([1-5])0\d{2}\b")]
+    private static partial Regex GpuSeriesBareRegex();
+
+    [GeneratedRegex(@"(?i)\b16\d{2}\b")]
+    private static partial Regex Gtx16SeriesRegex();
+
+    [GeneratedRegex(@"(?i)\b(?:Laptop GPU|Notebook|Mobile|Max-Q)\b|\bMX\d+\b|\b\d{3,4}M\b")]
+    private static partial Regex NotebookGpuRegex();
+
+    [GeneratedRegex(@"(?i)NVDisplay\.Container|Display\.NvContainer|nv_dispi\.inf")]
+    private static partial Regex DisplayContainerExeRegex();
+
+    [GeneratedRegex(@"(?i)NVIDIA App|GFExperience|NvBackend|NvNode|ShadowPlay|nvsphelper|nvapp")]
+    private static partial Regex AppTrayExeRegex();
+
+    [GeneratedRegex(@"^[a-fA-F0-9]{64}$")]
+    private static partial Regex Sha256HexRegex();
+
+    [GeneratedRegex(@"Register-ScheduledTask[^\r\n]*Exo-Nvidia", RegexOptions.IgnoreCase)]
+    private static partial Regex TrayTaskCreateRegex();
+
     /// <summary>Map GPU name to series id used for NIP packs (10/20/30/40/50).</summary>
     public static string? GetGpuSeriesFromName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return null;
-        var m = Regex.Match(name, @"(?i)\b(?:RTX|GTX)\s*([1-5])0\d{2}\b");
+        var m = GpuSeriesPrefixedRegex().Match(name);
         if (m.Success) return m.Groups[1].Value + "0";
-        m = Regex.Match(name, @"(?i)\b([1-5])0\d{2}\b");
+        m = GpuSeriesBareRegex().Match(name);
         if (m.Success) return m.Groups[1].Value + "0";
         // GTX 16xx → 10-series non-RT pack
-        if (Regex.IsMatch(name, @"(?i)\b16\d{2}\b")) return "10";
+        if (Gtx16SeriesRegex().IsMatch(name)) return "10";
         return null;
     }
 
@@ -26,7 +50,7 @@ public static class NvidiaPeakLogic
     public static bool IsNotebookGpuName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return false;
-        return Regex.IsMatch(name, @"(?i)\b(?:Laptop GPU|Notebook|Mobile|Max-Q)\b|\bMX\d+\b|\b\d{3,4}M\b");
+        return NotebookGpuRegex().IsMatch(name);
     }
 
     /// <summary>Display container tray should be hidden (IsPromoted=0), not deleted.</summary>
@@ -38,11 +62,11 @@ public static class NvidiaPeakLogic
 
     public static bool IsDisplayContainerExe(string? exe) =>
         !string.IsNullOrWhiteSpace(exe) &&
-        Regex.IsMatch(exe, @"(?i)NVDisplay\.Container|Display\.NvContainer|nv_dispi\.inf");
+        DisplayContainerExeRegex().IsMatch(exe);
 
     public static bool IsNvidiaAppTrayExe(string? exe) =>
         !string.IsNullOrWhiteSpace(exe) &&
-        Regex.IsMatch(exe, @"(?i)NVIDIA App|GFExperience|NvBackend|NvNode|ShadowPlay|nvsphelper|nvapp") &&
+        AppTrayExeRegex().IsMatch(exe) &&
         !IsDisplayContainerExe(exe);
 
     /// <summary>
@@ -67,7 +91,7 @@ public static class NvidiaPeakLogic
     }
 
     public static bool IsSha256Hex(string? hash) =>
-        !string.IsNullOrWhiteSpace(hash) && Regex.IsMatch(hash, @"^[a-fA-F0-9]{64}$");
+        !string.IsNullOrWhiteSpace(hash) && Sha256HexRegex().IsMatch(hash);
 
     public static readonly string[] RequiredApplyMarkers =
     {
@@ -107,7 +131,7 @@ public static class NvidiaPeakLogic
                 issues.Add("forbidden: " + f);
         }
         // Must not re-create logon tray tasks (unregister only is OK)
-        if (Regex.IsMatch(script, @"Register-ScheduledTask[^\r\n]*Exo-Nvidia", RegexOptions.IgnoreCase))
+        if (TrayTaskCreateRegex().IsMatch(script))
             issues.Add("forbidden: Register-ScheduledTask Exo-Nvidia*");
         return (issues.Count == 0, issues);
     }
