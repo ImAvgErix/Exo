@@ -1,3 +1,8 @@
+## 2.2.7
+
+- **Runtime bootstrap works without winget**: when PowerShell 7 Preview or Windows Terminal Preview are missing and winget is unavailable or fails (common on debloated Windows), Exo now installs them directly from the official Microsoft GitHub releases — PowerShell Preview as a per-user portable zip under `%LocalAppData%\Exo\runtime` (no elevation), Terminal Preview sideloaded per-user via `Add-AppxPackage`; downloads are verified against the release size and SHA-256 digest
+- **Standalone Disc-Optimizer**: same portable Preview fallback when run outside the app without winget
+
 ## 2.2.6
 
 - **Faster startup after updates**: the full script-kit reinstall that ran before first paint on every post-update launch now happens on the background warm-up path (consumers still self-ensure correctness under the same lock)

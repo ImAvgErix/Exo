@@ -170,7 +170,8 @@ function Get-DiscOptPwsh7 {
 
     foreach ($path in @(
         (Get-DiscOptEnvPath 'ProgramFiles' 'PowerShell\7-preview\pwsh.exe'),
-        (Get-DiscOptEnvPath 'LOCALAPPDATA' 'Microsoft\WindowsApps\pwsh-preview.exe')
+        (Get-DiscOptEnvPath 'LOCALAPPDATA' 'Microsoft\WindowsApps\pwsh-preview.exe'),
+        (Get-DiscOptEnvPath 'LOCALAPPDATA' 'Exo\runtime\PowerShellPreview\pwsh.exe')
     )) {
         if ($path) { [void]$candidates.Add($path) }
     }
@@ -201,29 +202,88 @@ function Get-DiscOptPwsh7 {
     return $null
 }
 
+function Install-DiscOptPwshPortable {
+    # Winget-less fallback: official PowerShell *Preview* portable zip from
+    # github.com/PowerShell/PowerShell (prerelease, win-x64). Per-user, no elevation.
+    # Preview only — stable releases are never selected.
+    try {
+        Write-Host '[*] Downloading PowerShell 7 Preview portable from GitHub releases...' -ForegroundColor Cyan
+        $releases = Invoke-RestMethod -Uri 'https://api.github.com/repos/PowerShell/PowerShell/releases?per_page=15' `
+            -Headers @{ 'User-Agent' = 'Exo-DiscOpt' } -TimeoutSec 120
+        foreach ($release in @($releases)) {
+            if (-not $release.prerelease) { continue }
+            if ([string]$release.tag_name -notmatch '(?i)preview') { continue }
+            $asset = @($release.assets) | Where-Object { $_.name -like '*-win-x64.zip' } | Select-Object -First 1
+            if (-not $asset) { continue }
+
+            $dest = Get-DiscOptEnvPath 'LOCALAPPDATA' 'Exo\runtime\PowerShellPreview'
+            if (-not $dest) { return $null }
+            $runtimeRoot = Split-Path -Parent $dest
+            New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
+            $zip = Join-Path $runtimeRoot 'pwsh-preview-download.zip'
+            $staging = "$dest-staging"
+
+            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
+            if ([long]$asset.size -gt 0 -and (Get-Item -LiteralPath $zip).Length -ne [long]$asset.size) {
+                Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+                return $null
+            }
+
+            if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue }
+            Expand-Archive -Path $zip -DestinationPath $staging -Force
+            Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+            if (-not (Test-Path -LiteralPath (Join-Path $staging 'pwsh.exe'))) {
+                Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+                return $null
+            }
+
+            if (Test-Path -LiteralPath $dest) {
+                try { Remove-Item -LiteralPath $dest -Recurse -Force } catch { }
+            }
+            if (-not (Test-Path -LiteralPath $dest)) { Move-Item -LiteralPath $staging -Destination $dest }
+            else { Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue }
+
+            $exe = Join-Path $dest 'pwsh.exe'
+            if (Test-Path -LiteralPath $exe) {
+                Write-Host "[+] PowerShell Preview portable ready ($($release.tag_name))" -ForegroundColor Green
+                return @{ Exe = $exe; Version = [string]$release.tag_name }
+            }
+            return $null
+        }
+    } catch {
+        Write-Host "[!] Portable PowerShell Preview download failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+    return $null
+}
+
 function Install-DiscOptPwsh7 {
-    # Preview only via winget/Store. No stable portable zip (Exo requires Preview + Terminal Preview).
+    # Preview only. Prefer winget/Store; without winget (debloated Windows) fall back
+    # to the official portable Preview zip from GitHub releases.
     $winget = Get-Command winget -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $winget) {
-        throw 'winget is required to install PowerShell 7 Preview. Install Microsoft.PowerShell.Preview and Windows Terminal Preview, then retry.'
+    if ($winget) {
+        Write-Host '[*] Installing PowerShell 7 Preview via winget (Microsoft.PowerShell.Preview)...' -ForegroundColor Cyan
+        $proc = Start-Process -FilePath $winget.Source -ArgumentList @(
+            'install', '-e', '-id', 'Microsoft.PowerShell.Preview',
+            '--accept-package-agreements', '--accept-source-agreements', '--silent'
+        ) -PassThru -WindowStyle Hidden
+        if (-not $proc.WaitForExit(600000)) {
+            try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch { }
+            Write-Host '[!] winget PowerShell Preview install timed out - trying portable fallback...' -ForegroundColor Yellow
+        } elseif ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne $null) {
+            #  -1978335189 already installed etc. still re-probe
+            Write-Host "[!] winget exit $($proc.ExitCode) - probing for Preview install..." -ForegroundColor Yellow
+        }
+        Start-Sleep -Seconds 2
+        $found = Get-DiscOptPwsh7
+        if ($found) { return $found }
+    } else {
+        Write-Host '[!] winget not found - using the official portable Preview fallback...' -ForegroundColor Yellow
     }
-    Write-Host '[*] Installing PowerShell 7 Preview via winget (Microsoft.PowerShell.Preview)...' -ForegroundColor Cyan
-    $proc = Start-Process -FilePath $winget.Source -ArgumentList @(
-        'install', '-e', '-id', 'Microsoft.PowerShell.Preview',
-        '--accept-package-agreements', '--accept-source-agreements', '--silent'
-    ) -PassThru -WindowStyle Hidden
-    if (-not $proc.WaitForExit(600000)) {
-        try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch { }
-        throw 'winget PowerShell Preview install timed out'
-    }
-    if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne $null) {
-        #  -1978335189 already installed etc. still re-probe
-        Write-Host "[!] winget exit $($proc.ExitCode) - probing for Preview install..." -ForegroundColor Yellow
-    }
-    Start-Sleep -Seconds 2
-    $found = Get-DiscOptPwsh7
-    if ($found) { return $found }
-    throw 'PowerShell 7 Preview install finished but pwsh-preview was not found. Install Microsoft.PowerShell.Preview and Windows Terminal Preview, then retry.'
+
+    $portable = Install-DiscOptPwshPortable
+    if ($portable) { return $portable }
+
+    throw 'PowerShell 7 Preview could not be installed automatically. Install Microsoft.PowerShell.Preview and Windows Terminal Preview, then retry.'
 }
 
 function Get-DiscOptBoundScriptArgs {
