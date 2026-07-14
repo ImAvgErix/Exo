@@ -1,3 +1,8 @@
+## 2.1.1
+
+- **Settings rail**: gear cranks, then a full-height left panel grows out of the gear (stem connection)
+- Home content shifts right so the rail **never covers cards** — lives in the gutter between app edge and grid
+- App version pinned to bottom of the rail; support buttons match OptiQuiet chrome
 ## 2.1.0
 
 - **Settings restart**: gear crank-spins, then a **dropdown flyout** (no full-screen modal)

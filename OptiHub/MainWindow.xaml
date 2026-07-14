@@ -13,9 +13,7 @@
         </Grid.RowDefinitions>
 
         <!--
-          Chrome buttons MUST live outside SetTitleBar. If they sit inside the
-          drag region, WinUI treats clicks as non-client: first hit often does
-          nothing useful, second hit can maximize the window.
+          Chrome buttons MUST live outside SetTitleBar.
         -->
         <Grid Grid.Row="0" Background="{ThemeResource OptiPageBackgroundBrush}">
             <Grid.ColumnDefinitions>
@@ -72,7 +70,7 @@
                            IsHitTestVisible="False"
                            Visibility="Collapsed" />
 
-                <!-- Gear spins, then dropdown flyout (no full-screen modal) -->
+                <!-- Gear cranks open a left rail that grows out of this icon -->
                 <Button x:Name="SettingsButton"
                         Style="{StaticResource OptiIconButton}"
                         AutomationProperties.Name="Settings"
@@ -90,24 +88,6 @@
                             <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
                         </FontIcon.RenderTransform>
                     </FontIcon>
-                    <!-- Attached flyout: opened from code after gear crank (not auto on Click) -->
-                    <FlyoutBase.AttachedFlyout>
-                        <Flyout x:Name="SettingsFlyout"
-                                Placement="BottomEdgeAlignedLeft"
-                                Opened="SettingsFlyout_Opened"
-                                Closed="SettingsFlyout_Closed">
-                            <Flyout.FlyoutPresenterStyle>
-                                <Style TargetType="FlyoutPresenter">
-                                    <Setter Property="Padding" Value="0" />
-                                    <Setter Property="BorderThickness" Value="0" />
-                                    <Setter Property="Background" Value="Transparent" />
-                                    <Setter Property="CornerRadius" Value="0" />
-                                    <Setter Property="MaxWidth" Value="360" />
-                                </Style>
-                            </Flyout.FlyoutPresenterStyle>
-                            <controls:SettingsSheet x:Name="SettingsSheetHost" />
-                        </Flyout>
-                    </FlyoutBase.AttachedFlyout>
                 </Button>
             </StackPanel>
 
@@ -118,10 +98,52 @@
                   VerticalAlignment="Stretch" />
         </Grid>
 
-        <Frame x:Name="ContentFrame"
-               Grid.Row="1"
-               Padding="0"
-               IsTabStop="True"
-               IsNavigationStackEnabled="False" />
+        <!-- Content + settings rail (rail never covers cards — content shifts right) -->
+        <Grid Grid.Row="1">
+            <Frame x:Name="ContentFrame"
+                   Padding="0"
+                   IsTabStop="True"
+                   IsNavigationStackEnabled="False" />
+
+            <!--
+              Left rail: full height of the content area, under the gear.
+              Width matches the gutter so cards aren't covered (home shifts right when open).
+              Grows downward from the gear (ScaleY origin top).
+            -->
+            <Border x:Name="SettingsRail"
+                    Width="280"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Stretch"
+                    Margin="0,0,0,0"
+                    Visibility="Collapsed"
+                    Background="{ThemeResource OptiCardFillBrush}"
+                    BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                    BorderThickness="0,0,1,0"
+                    Canvas.ZIndex="20"
+                    RenderTransformOrigin="0.5,0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SettingsRailTransform" ScaleY="0.01" />
+                </Border.RenderTransform>
+                <!-- Thin stem under gear so it reads as one piece with the icon -->
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="10" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <!-- Stem / notch aligned under gear column -->
+                    <Border Grid.Row="0"
+                            Width="28"
+                            Height="10"
+                            HorizontalAlignment="Left"
+                            Margin="16,0,0,0"
+                            Background="{ThemeResource OptiCardFillBrush}"
+                            CornerRadius="0,0,6,6" />
+                    <controls:SettingsSheet x:Name="SettingsSheetHost"
+                                            Grid.Row="1"
+                                            HorizontalAlignment="Stretch"
+                                            VerticalAlignment="Stretch" />
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </Window>
