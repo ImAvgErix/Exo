@@ -2,8 +2,8 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
-using OptiHub.Helpers;
-using OptiHub.Models;
+using Exo.Helpers;
+using Exo.Models;
 
 var logPath = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "ui-logic-tests.log");
 var lines = new List<string>();
@@ -28,14 +28,14 @@ var settingsB = settingsA.Clone();
 Expect("AppSettings clone theme", settingsB.Theme == AppSettings.DarkTheme && settingsB.AutoUpdateScripts);
 
 var repo = FindRepoRoot();
-var appXaml = Path.Combine(repo, "OptiHub", "App.xaml");
-var main = Path.Combine(repo, "OptiHub", "MainWindow.xaml");
-var dash = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml");
-var settings = Path.Combine(repo, "OptiHub", "Views", "Controls", "SettingsSheet.xaml");
-var mainXaml = Path.Combine(repo, "OptiHub", "MainWindow.xaml");
-var theme = Path.Combine(repo, "OptiHub", "Styles", "ThemeResources.xaml");
-var converters = Path.Combine(repo, "OptiHub", "Helpers", "ValueConverters.cs");
-var logosDir = Path.Combine(repo, "OptiHub", "Assets", "Logos");
+var appXaml = Path.Combine(repo, "Exo", "App.xaml");
+var main = Path.Combine(repo, "Exo", "MainWindow.xaml");
+var dash = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml");
+var settings = Path.Combine(repo, "Exo", "Views", "Controls", "SettingsSheet.xaml");
+var mainXaml = Path.Combine(repo, "Exo", "MainWindow.xaml");
+var theme = Path.Combine(repo, "Exo", "Styles", "ThemeResources.xaml");
+var converters = Path.Combine(repo, "Exo", "Helpers", "ValueConverters.cs");
+var logosDir = Path.Combine(repo, "Exo", "Assets", "Logos");
 
 Expect("files", File.Exists(appXaml) && File.Exists(main) && File.Exists(dash));
 if (File.Exists(appXaml))
@@ -58,7 +58,7 @@ if (File.Exists(main))
     Expect("no tooltips in main", !m.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
 }
 // SetTitleBar must target the drag strip only — not a parent that owns the gear/back buttons.
-var mainCs = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
+var mainCs = Path.Combine(repo, "Exo", "MainWindow.xaml.cs");
 if (File.Exists(mainCs))
 {
     var cs = File.ReadAllText(mainCs);
@@ -110,7 +110,7 @@ if (File.Exists(dash))
         && !d.Contains("Height=\"200\"", StringComparison.Ordinal)
         && !d.Contains("Height=\"190\"", StringComparison.Ordinal));
     Expect("dashboard no responsive layout",
-        !File.ReadAllText(Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs"))
+        !File.ReadAllText(Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs"))
             .Contains("ApplyResponsiveLayout", StringComparison.Ordinal));
     // Home is nav only — no applied/checking chips (status lives on the module page).
     Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
@@ -164,7 +164,7 @@ if (File.Exists(settings))
         s.Contains("SheetRoot", StringComparison.Ordinal)
         && s.Contains("SheetTransform", StringComparison.Ordinal));
 }
-var settingsCs = Path.Combine(repo, "OptiHub", "Views", "Controls", "SettingsSheet.xaml.cs");
+var settingsCs = Path.Combine(repo, "Exo", "Views", "Controls", "SettingsSheet.xaml.cs");
 if (File.Exists(settingsCs))
 {
     var sc = File.ReadAllText(settingsCs);
@@ -184,7 +184,7 @@ if (File.Exists(mainXaml))
         && !mx.Contains("SettingsRail", StringComparison.Ordinal)
         && !mx.Contains("SettingsOverlay", StringComparison.Ordinal));
 }
-var updateDlg = Path.Combine(repo, "OptiHub", "Helpers", "OptiUpdateDialog.cs");
+var updateDlg = Path.Combine(repo, "Exo", "Helpers", "OptiUpdateDialog.cs");
 if (File.Exists(updateDlg))
 {
     var u = File.ReadAllText(updateDlg);
@@ -225,7 +225,7 @@ foreach (var page in new[]
              "NvidiaOptimizerPage.xaml", "NvidiaPanelPage.xaml"
          })
 {
-    var p = Path.Combine(repo, "OptiHub", "Views", page);
+    var p = Path.Combine(repo, "Exo", "Views", page);
     if (!File.Exists(p)) continue;
     var x = File.ReadAllText(p);
     Expect(page + " CTA", x.Contains("OptiPrimaryButton", StringComparison.Ordinal) || x.Contains("OptiQuietButton", StringComparison.Ordinal));
@@ -240,7 +240,7 @@ foreach (var page in new[]
             && x.Contains("Highest download", StringComparison.Ordinal)
             && x.Contains("OptiWhiteButton", StringComparison.Ordinal));
         Expect("internet Repair button", x.Contains("Content=\"Repair\"", StringComparison.Ordinal));
-        var ics = Path.Combine(repo, "OptiHub", "Views", "InternetOptimizerPage.xaml.cs");
+        var ics = Path.Combine(repo, "Exo", "Views", "InternetOptimizerPage.xaml.cs");
         if (File.Exists(ics))
         {
             var ic = File.ReadAllText(ics);
@@ -250,7 +250,7 @@ foreach (var page in new[]
     }
 }
 
-var loaderCs = Path.Combine(repo, "OptiHub", "Views", "Controls", "OptiLoader.xaml.cs");
+var loaderCs = Path.Combine(repo, "Exo", "Views", "Controls", "OptiLoader.xaml.cs");
 Expect("OptiLoader control", File.Exists(loaderCs));
 if (File.Exists(loaderCs))
 {
@@ -264,7 +264,7 @@ if (File.Exists(loaderCs))
         !lc.Contains("Bar0Scale", StringComparison.Ordinal));
 }
 
-var motionCs = Path.Combine(repo, "OptiHub", "Helpers", "OptiMotion.cs");
+var motionCs = Path.Combine(repo, "Exo", "Helpers", "OptiMotion.cs");
 if (File.Exists(motionCs))
 {
     var m = File.ReadAllText(motionCs);
@@ -289,7 +289,7 @@ if (File.Exists(motionCs))
         && m.Contains("EnsureVisible", StringComparison.Ordinal)
         && !m.Contains("PrimeHidden", StringComparison.Ordinal));
 }
-var mainCsPath = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
+var mainCsPath = Path.Combine(repo, "Exo", "MainWindow.xaml.cs");
 if (File.Exists(mainCsPath))
 {
     var mc = File.ReadAllText(mainCsPath);
@@ -315,24 +315,24 @@ if (File.Exists(mainCsPath))
         mc.Contains("OnContentNavigated", StringComparison.Ordinal)
         && mc.Contains("EnsureVisible", StringComparison.Ordinal));
 }
-var programCs = Path.Combine(repo, "OptiHub", "Program.cs");
+var programCs = Path.Combine(repo, "Exo", "Program.cs");
 if (File.Exists(programCs))
 {
     var p = File.ReadAllText(programCs);
     Expect("AppUserModelID set early",
         p.Contains("SetCurrentProcessExplicitAppUserModelID", StringComparison.Ordinal)
-        && p.Contains("UhhErix.OptiHub", StringComparison.Ordinal));
+        && p.Contains("ImAvgErix.Exo", StringComparison.Ordinal));
 }
-var sfxCs = Path.Combine(repo, "tools", "OptiHubSfx.cs");
+var sfxCs = Path.Combine(repo, "tools", "ExoSfx.cs");
 if (File.Exists(sfxCs))
 {
     var sx = File.ReadAllText(sfxCs);
     Expect("SFX stable icon path",
         sx.Contains("Never use versioned names", StringComparison.Ordinal)
-        && sx.Contains("OptiHub.ico", StringComparison.Ordinal));
+        && sx.Contains("Exo.ico", StringComparison.Ordinal));
 }
 
-var dashCs = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs");
+var dashCs = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs");
 if (File.Exists(dashCs))
 {
     var dc = File.ReadAllText(dashCs);
@@ -363,17 +363,17 @@ if (File.Exists(theme))
 
 // Version gate
 var versionFile = Path.Combine(repo, "VERSION");
-var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
+var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
     Expect("VERSION is 2.2.4", File.ReadAllText(versionFile).Trim() == "2.2.4");
 if (File.Exists(csproj))
     Expect("csproj Version 2.2.4", File.ReadAllText(csproj).Contains("<Version>2.2.4</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
-var overlayState = Path.Combine(repo, "OptiHub", "Helpers", "SettingsOverlayState.cs");
+var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));
 
 // Logos decode full-fidelity (no forced downscale that softens/pixelates).
-var convertersCs = Path.Combine(repo, "OptiHub", "Helpers", "ValueConverters.cs");
+var convertersCs = Path.Combine(repo, "Exo", "Helpers", "ValueConverters.cs");
 if (File.Exists(convertersCs))
 {
     var cv = File.ReadAllText(convertersCs);
@@ -381,7 +381,7 @@ if (File.Exists(convertersCs))
         cv.Contains("AssetPathToImageSourceConverter", StringComparison.Ordinal)
         && cv.Contains("DecodePixelWidth = 128", StringComparison.Ordinal)
         && cv.Contains("DecodePixelType.Logical", StringComparison.Ordinal));
-    var motion = File.ReadAllText(Path.Combine(repo, "OptiHub", "Helpers", "OptiMotion.cs"));
+    var motion = File.ReadAllText(Path.Combine(repo, "Exo", "Helpers", "OptiMotion.cs"));
     Expect("entrance rise then clear transform",
         motion.Contains("TranslateY", StringComparison.Ordinal)
         && motion.Contains("RenderTransform = null", StringComparison.Ordinal)
@@ -397,10 +397,10 @@ if (File.Exists(theme))
         && tMotion.Contains("OptiCardButton", StringComparison.Ordinal));
 }
 
-var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");
+var appSettings = Path.Combine(repo, "Exo", "Models", "AppSettings.cs");
 if (File.Exists(appSettings))
     Expect("AppSettings no MotionIntensity", !File.ReadAllText(appSettings).Contains("MotionIntensity", StringComparison.Ordinal));
-var settingsVm = Path.Combine(repo, "OptiHub", "ViewModels", "SettingsViewModel.cs");
+var settingsVm = Path.Combine(repo, "Exo", "ViewModels", "SettingsViewModel.cs");
 if (File.Exists(settingsVm))
 {
     var svm = File.ReadAllText(settingsVm);
@@ -442,7 +442,7 @@ if (Directory.Exists(logosDir))
         $"fillW={internet.FillW:F1} fillH={internet.FillH:F1}");
 }
 
-var dashVm = Path.Combine(repo, "OptiHub", "ViewModels", "DashboardViewModel.cs");
+var dashVm = Path.Combine(repo, "Exo", "ViewModels", "DashboardViewModel.cs");
 if (File.Exists(dashVm))
 {
     var dvm = File.ReadAllText(dashVm);
@@ -458,11 +458,11 @@ if (File.Exists(Path.Combine(logosDir, "windows.png")))
 else
     Expect("windows logo asset", false, "missing Assets/Logos/windows.png");
 
-var panelVm = Path.Combine(repo, "OptiHub", "ViewModels", "NvidiaPanelViewModel.cs");
+var panelVm = Path.Combine(repo, "Exo", "ViewModels", "NvidiaPanelViewModel.cs");
 if (File.Exists(panelVm))
     Expect("panel force refresh", File.ReadAllText(panelVm).Contains("RefreshCoreAsync(force: true", StringComparison.Ordinal));
 
-var nv = Path.Combine(repo, "tools", "OptiHub.NvDisplay", "Program.cs");
+var nv = Path.Combine(repo, "tools", "Exo.NvDisplay", "Program.cs");
 if (File.Exists(nv))
 {
     var nvt = File.ReadAllText(nv);
@@ -475,7 +475,7 @@ if (File.Exists(nv))
     Expect("nv gdi fallback", nvt.Contains("EnumerateActiveGdiNames", StringComparison.Ordinal));
 }
 
-var nvDetect = Path.Combine(repo, "OptiHub", "Scripts", "Nvidia", "OptiHub-Nvidia-Detect.ps1");
+var nvDetect = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-Detect.ps1");
 if (File.Exists(nvDetect))
 {
     var det = File.ReadAllText(nvDetect);
@@ -486,7 +486,7 @@ if (File.Exists(nvDetect))
         det.Contains("no-active-nvidia-displays", StringComparison.Ordinal));
 }
 
-var nvHeuristic = Path.Combine(repo, "OptiHub", "Services", "OptimizerStateService.cs");
+var nvHeuristic = Path.Combine(repo, "Exo", "Services", "OptimizerStateService.cs");
 if (File.Exists(nvHeuristic))
 {
     var h = File.ReadAllText(nvHeuristic);
@@ -505,7 +505,7 @@ static string FindRepoRoot()
     var dir = new DirectoryInfo(AppContext.BaseDirectory);
     while (dir is not null)
     {
-        if (File.Exists(Path.Combine(dir.FullName, "VERSION")) && Directory.Exists(Path.Combine(dir.FullName, "OptiHub", "Views")))
+        if (File.Exists(Path.Combine(dir.FullName, "VERSION")) && Directory.Exists(Path.Combine(dir.FullName, "Exo", "Views")))
             return dir.FullName;
         dir = dir.Parent;
     }

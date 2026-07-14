@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Runs OptiHub's fast repository integrity checks.
+  Runs Exo's fast repository integrity checks.
 
 .DESCRIPTION
   Validates PowerShell syntax/encoding, version markers, JSON manifests, and
@@ -41,18 +41,18 @@ function Test-SemanticVersionFile([string]$RelativePath) {
 }
 
 $appVersion = Test-SemanticVersionFile 'VERSION'
-$discordVersion = Test-SemanticVersionFile 'OptiHub\Scripts\Discord\VERSION'
-$steamVersion = Test-SemanticVersionFile 'OptiHub\Scripts\Steam\VERSION'
-$nvidiaVersion = Test-SemanticVersionFile 'OptiHub\Scripts\Nvidia\VERSION'
-$null = Test-SemanticVersionFile 'OptiHub\Scripts\Nvidia\profiles\PROFILE_VERSION'
+$discordVersion = Test-SemanticVersionFile 'Exo\Scripts\Discord\VERSION'
+$steamVersion = Test-SemanticVersionFile 'Exo\Scripts\Steam\VERSION'
+$nvidiaVersion = Test-SemanticVersionFile 'Exo\Scripts\Nvidia\VERSION'
+$null = Test-SemanticVersionFile 'Exo\Scripts\Nvidia\profiles\PROFILE_VERSION'
 
-[xml]$project = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\OptiHub.csproj') -Raw
+[xml]$project = Get-Content -LiteralPath (Join-Path $Root 'Exo\Exo.csproj') -Raw
 $projectVersion = [string]($project.Project.PropertyGroup.Version | Select-Object -First 1)
 if ($projectVersion -ne $appVersion) {
-    Add-Failure "VERSION mismatch: VERSION=$appVersion, OptiHub.csproj=$projectVersion"
+    Add-Failure "VERSION mismatch: VERSION=$appVersion, Exo.csproj=$projectVersion"
 }
 
-$discordOptimizerPath = Join-Path $Root 'OptiHub\Scripts\Discord\Disc-Optimizer.ps1'
+$discordOptimizerPath = Join-Path $Root 'Exo\Scripts\Discord\Disc-Optimizer.ps1'
 $discordOptimizer = Get-Content -LiteralPath $discordOptimizerPath -Raw
 $discordMatch = [regex]::Match($discordOptimizer, '\$Script:DiscOptVersion\s*=\s*''([^'']+)''')
 if (-not $discordMatch.Success -or $discordMatch.Groups[1].Value -ne $discordVersion) {
@@ -61,11 +61,11 @@ if (-not $discordMatch.Success -or $discordMatch.Groups[1].Value -ne $discordVer
 
 foreach ($marker in @(
     @{
-        Path = 'OptiHub\Models\AppSettings.cs'
+        Path = 'Exo\Models\AppSettings.cs'
         Pattern = 'DiscordKitVersion\s*\{\s*get;\s*set;\s*\}\s*=\s*"([^"]+)"'
     },
     @{
-        Path = 'OptiHub\Services\SettingsService.cs'
+        Path = 'Exo\Services\SettingsService.cs'
         Pattern = 'settings\.DiscordKitVersion\s*=\s*"([^"]+)"'
     }
 )) {
@@ -76,15 +76,15 @@ foreach ($marker in @(
     }
 }
 
-$steamOptimizer = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Steam\Steam-Optimizer.ps1') -Raw
+$steamOptimizer = Get-Content -LiteralPath (Join-Path $Root 'Exo\Scripts\Steam\Steam-Optimizer.ps1') -Raw
 $steamMatch = [regex]::Match($steamOptimizer, '\$Script:SteamOptVersion\s*=\s*''([^'']+)''')
 if (-not $steamMatch.Success -or $steamMatch.Groups[1].Value -ne $steamVersion) {
     Add-Failure "Steam version mismatch: VERSION=$steamVersion, script=$($steamMatch.Groups[1].Value)"
 }
 
-$nvidiaOptimizer = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Nvidia\Nvidia-Optimizer.ps1') -Raw
-$nvidiaDetect = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Nvidia\OptiHub-Nvidia-Detect.ps1') -Raw
-$nvDisplaySource = Get-Content -LiteralPath (Join-Path $Root 'tools\OptiHub.NvDisplay\Program.cs') -Raw
+$nvidiaOptimizer = Get-Content -LiteralPath (Join-Path $Root 'Exo\Scripts\Nvidia\Nvidia-Optimizer.ps1') -Raw
+$nvidiaDetect = Get-Content -LiteralPath (Join-Path $Root 'Exo\Scripts\Nvidia\Exo-Nvidia-Detect.ps1') -Raw
+$nvDisplaySource = Get-Content -LiteralPath (Join-Path $Root 'tools\Exo.NvDisplay\Program.cs') -Raw
 $nvidiaMatch = [regex]::Match($nvidiaOptimizer, '\$Script:NvidiaOptVersion\s*=\s*''([^'']+)''')
 if (-not $nvidiaMatch.Success -or $nvidiaMatch.Groups[1].Value -ne $nvidiaVersion) {
     Add-Failure "NVIDIA version mismatch: VERSION=$nvidiaVersion, script=$($nvidiaMatch.Groups[1].Value)"
@@ -149,18 +149,18 @@ else {
     }
 }
 
-$discordConfig = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Discord\kit\config.ini') -Raw
+$discordConfig = Get-Content -LiteralPath (Join-Path $Root 'Exo\Scripts\Discord\kit\config.ini') -Raw
 foreach ($marker in @('TrimIntervalMs=4000', 'PriorityClass=3')) {
     Assert-ContainsText $discordConfig $marker 'Discord aggressive kernel config'
 }
 
-$steamDetect = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Steam\OptiHub-Steam-Detect.ps1') -Raw
-$steamDetectCore = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Steam\SteamDetectCore.ps1') -Raw
-$discordDetect = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Discord\OptiHub-Discord-Detect.ps1') -Raw
-$discordDetectCore = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Discord\DiscordDetectCore.ps1') -Raw
-$discordWindows = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Discord\kit\lib\40-DebloatWindows.ps1') -Raw
-$discordRepair = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Discord\OptiHub-Discord-Repair.ps1') -Raw
-$stateService = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Services\OptimizerStateService.cs') -Raw
+$steamDetect = Get-Content -LiteralPath (Join-Path $Root 'Exo\Scripts\Steam\Exo-Steam-Detect.ps1') -Raw
+$steamDetectCore = Get-Content -LiteralPath (Join-Path $Root 'Exo\Scripts\Steam\SteamDetectCore.ps1') -Raw
+$discordDetect = Get-Content -LiteralPath (Join-Path $Root 'Exo\Scripts\Discord\Exo-Discord-Detect.ps1') -Raw
+$discordDetectCore = Get-Content -LiteralPath (Join-Path $Root 'Exo\Scripts\Discord\DiscordDetectCore.ps1') -Raw
+$discordWindows = Get-Content -LiteralPath (Join-Path $Root 'Exo\Scripts\Discord\kit\lib\40-DebloatWindows.ps1') -Raw
+$discordRepair = Get-Content -LiteralPath (Join-Path $Root 'Exo\Scripts\Discord\Exo-Discord-Repair.ps1') -Raw
+$stateService = Get-Content -LiteralPath (Join-Path $Root 'Exo\Services\OptimizerStateService.cs') -Raw
 
 foreach ($marker in @(
     "applyStatus     = 'applying'",
@@ -257,14 +257,14 @@ foreach ($marker in @(
     Assert-ContainsText $stateService $marker 'Fast applied-state contract'
 }
 
-$nvidiaScriptRoot = Join-Path $Root 'OptiHub\Scripts\Nvidia'
+$nvidiaScriptRoot = Join-Path $Root 'Exo\Scripts\Nvidia'
 $nvidiaPowerShell = (Get-ChildItem -LiteralPath $nvidiaScriptRoot -Filter *.ps1 -File |
     ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 if ($nvidiaPowerShell -match '(?i)SendKeys|mouse_event|SetCursorPos') {
     Add-Failure 'NVIDIA scripts must not regress to mouse/keyboard UI automation.'
 }
-if ($nvidiaPowerShell -match 'OptiHubPrefer(?:GpuScaling|NoScaling|ScalingOverride|FullRgb)\s*=') {
-    Add-Failure 'NVIDIA scripts contain obsolete OptiHub-only Control Panel registry markers.'
+if ($nvidiaPowerShell -match 'ExoPrefer(?:GpuScaling|NoScaling|ScalingOverride|FullRgb)\s*=') {
+    Add-Failure 'NVIDIA scripts contain obsolete Exo-only Control Panel registry markers.'
 }
 if ($nvidiaOptimizer -notmatch "displayMethod\s*=\s*'nvapi'" -or
     $nvidiaPowerShell -notmatch "displayMethod.*-eq\s*'nvapi'") {
@@ -383,7 +383,7 @@ foreach ($marker in @(
     Assert-ContainsText $stateService $marker 'NVIDIA fast-state contract'
 }
 
-$releaseScript = Get-Content -LiteralPath (Join-Path $Root 'Release-OptiHub.ps1') -Raw
+$releaseScript = Get-Content -LiteralPath (Join-Path $Root 'Release-Exo.ps1') -Raw
 foreach ($marker in @(
     'status --porcelain=v1 --untracked-files=all',
     "branch -ne 'main'",
@@ -393,7 +393,7 @@ foreach ($marker in @(
     Assert-ContainsText $releaseScript $marker 'Release source-integrity guard'
 }
 
-$bundleService = Get-Content -LiteralPath (Join-Path $Root 'OptiHub\Services\ScriptBundleService.cs') -Raw
+$bundleService = Get-Content -LiteralPath (Join-Path $Root 'Exo\Services\ScriptBundleService.cs') -Raw
 foreach ($marker in @(
     'FilesMatch(bundledHelper, workingHelper)',
     'The NVIDIA display helper did not synchronize correctly.'
@@ -420,7 +420,7 @@ foreach ($file in $jsonFiles) {
     }
 }
 
-$profiles = @(Get-ChildItem -LiteralPath (Join-Path $Root 'OptiHub\Scripts\Nvidia\profiles') -Filter *.nip -File)
+$profiles = @(Get-ChildItem -LiteralPath (Join-Path $Root 'Exo\Scripts\Nvidia\profiles') -Filter *.nip -File)
 foreach ($profile in $profiles) {
     try {
         [xml]$xml = Get-Content -LiteralPath $profile.FullName -Raw
@@ -466,7 +466,7 @@ if ($profiles.Count -ne 10) {
     Add-Failure "Expected 10 NVIDIA series profiles; found $($profiles.Count)."
 }
 
-$profileRoot = Join-Path $Root 'OptiHub\Scripts\Discord\kit\profiles'
+$profileRoot = Join-Path $Root 'Exo\Scripts\Discord\kit\profiles'
 $equicordManifest = Join-Path $profileRoot 'equicordplugins.json'
 foreach ($name in @('equicordplugins.json', 'vencordplugins.json', 'equicord-overrides.json')) {
     if (-not (Test-Path -LiteralPath (Join-Path $profileRoot $name))) {

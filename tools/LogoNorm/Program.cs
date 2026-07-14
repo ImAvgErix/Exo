@@ -34,7 +34,7 @@ var processed = new List<(string name, Bitmap bmp)>();
 foreach (var f in Directory.GetFiles(logosDir, "*.png").OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
 {
     var name = Path.GetFileName(f);
-    if (name.Equals("optihub.png", StringComparison.OrdinalIgnoreCase)) continue;
+    if (name.Equals("exo.png", StringComparison.OrdinalIgnoreCase)) continue;
     if (name.Contains("discord-white", StringComparison.OrdinalIgnoreCase)) continue;
     if (name.StartsWith("_", StringComparison.Ordinal)) continue;
     if (name.Contains(".tmp", StringComparison.OrdinalIgnoreCase)) continue;

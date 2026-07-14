@@ -1,4 +1,4 @@
-# OptiHub tweak audit (evidence-based)
+# Exo tweak audit (evidence-based)
 
 Last pass: v1.9.32. Goal: keep only knobs with real OS/driver behavior; drop folklore.
 
@@ -56,7 +56,7 @@ Last pass: v1.9.32. Goal: keep only knobs with real OS/driver behavior; drop fol
 
 ### “Smart” detection (no cloud AI)
 
-OptiHub uses **local capability detection**, not a generative model:
+Exo uses **local capability detection**, not a generative model:
 
 - **Internet**: Ethernet-up? disable Wi‑Fi; Wi‑Fi radio/driver 5/6 GHz support via adapter properties + `netsh wlan`
 - **NVIDIA**: GPU series / G-SYNC / notebook detect (existing)
@@ -68,7 +68,7 @@ Router firmware is not queried over the WAN; band choice uses **your PC’s radi
 
 | Area | Verdict |
 |------|---------|
-| Driver-only + OptiHub panel | **Keep** — App/CPL are not required for gaming |
+| Driver-only + Exo panel | **Keep** — App/CPL are not required for gaming |
 | MSI High / telemetry / Ansel / HDCP off | **Keep** — real driver/service knobs |
 | Profile Inspector ULL / max perf / pre-render 1 | **Keep** — real DRS settings |
 | Tray: hide display IsPromoted=0; delete App ghosts | **Keep** — no logon task |

@@ -36,7 +36,7 @@
 
 ## 2.1.5
 
-- **Taskbar blank-paper fix**: stable `OptiHub.ico` + auto-repair on launch
+- **Taskbar blank-paper fix**: stable `Exo.ico` + auto-repair on launch
 - **AppUserModelID** set before window create; icon reapplied on activate
 
 ## 2.1.4
@@ -259,7 +259,7 @@
 
 - **Anti-generic PEAK UI** (screenshot-verified): pure AMOLED black + white signal — not purple SaaS
 - Dropped WORKSPACE / Command center / Linear violet clone
-- Italic OptiHub brand, dense module lanes, white primary CTA
+- Italic Exo brand, dense module lanes, white primary CTA
 - Thin rail selection bar instead of colored pill
 ## 1.9.55
 
@@ -356,7 +356,7 @@
 - **Resizable shell**: maximize + edge resize; removed fixed chrome re-lock and maximize block
 - **UI**: fluid layouts (wider page max), refreshed dashboard hero, taller title bar
 - **NVIDIA Display panel**: Control Panel–style per-monitor Resolution, Refresh rate, Color depth, NVIDIA color (Full/Limited), Scaling with real NVAPI/Win32 apply
-- OptiHub.NvDisplay: `--list-displays`, `--set-mode`, `--set-scaling`, `--set-color-range`
+- Exo.NvDisplay: `--list-displays`, `--set-mode`, `--set-scaling`, `--set-color-range`
 - `NvidiaPanelLogic` pure CLI builders + smoke coverage
 ## 1.9.39
 
@@ -367,7 +367,7 @@
 ## 1.9.38
 
 - **UI Signal theme**: teal/mint accent on cool graphite (dark) and clean teal (light); denser cards, refreshed dashboard hero
-- **NVIDIA Panel**: live color bit-depth dropdowns per display (`--list-color` / `--set-depth` via OptiHub.NvDisplay); peak Apply still forces best defaults
+- **NVIDIA Panel**: live color bit-depth dropdowns per display (`--list-color` / `--set-depth` via Exo.NvDisplay); peak Apply still forces best defaults
 - **Discord detect**: Complete client debloat no longer false-fails on empty recreated modules, soft SDK/locale drift, or verified full apply for the same build
 - **README**: project-page style (Winhance-class) with tables, download, layout, smokes
 - Dead-code trim on NvDisplay depth picker; color-depth elevated script path
@@ -384,13 +384,13 @@
 ## 1.9.35
 
 - **Steam peak detect 1.7.8**: `SteamDetectCore.ps1` + `SteamPeakLogic` — CEF launcher + trim helper classifiers; trim accepts 2–15s (not hard-coded 5s only)
-- Host heuristic uses same CEF/trim rules; smoke `tools/SteamPeak.Smoke`; no OptiHub-Steam scheduled tasks
+- Host heuristic uses same CEF/trim rules; smoke `tools/SteamPeak.Smoke`; no Exo-Steam scheduled tasks
 - Ships with Internet peak (NetworkPeakLogic) + Discord peak (DiscordDetectCore) from prior work
 ## Discord 1.3.22 / detect peak
 
 - **Discord detect peak**: `DiscordDetectCore.ps1` + `DiscordPeakLogic` — kernel OK for kit TrimIntervalMs=4000 and prior 5000; no exact config.ini hash false-fail
 - Toast quiet policy aligned host/heuristic with detect (≥1 Discord toast key Enabled=0)
-- Smoke: `tools/DiscordPeak.Smoke` drives shipped classifiers + apply audit (no OptiHub-Discord scheduled tasks / folklore)
+- Smoke: `tools/DiscordPeak.Smoke` drives shipped classifiers + apply audit (no Exo-Discord scheduled tasks / folklore)
 ## 1.9.34
 
 - **Probe preset-aware**: NIC peak (Flow Control / IM / IdleRestriction) scored per active preset — download intentional ons no longer false-fail
@@ -408,7 +408,7 @@
 - powercfg: wireless max performance, PCIe ASPM off, USB selective suspend off (AC)
 - Live re-probe of 6 GHz capability at apply time; broader Wi-Fi power-save property kill list
 - Probe/UI: show throttle value, eth metric, NIC peak (flow control / IM / idle restrict), current Preferred Band value
-- Apply log: %TEMP%\optihub-net-last.log
+- Apply log: %TEMP%\exo-net-last.log
 ## 1.9.31
 
 - **Internet Wi-Fi band matching**: fuzzy Preferred Band property + display-value matching for Intel/Realtek/MediaTek/Qualcomm/Killer string variants (Prefer 6GHz band, 5 GHz preferred, Preferable Band, etc.)
@@ -445,7 +445,7 @@
 
 - **No tray scheduled task**: remove logon noise; tray only on Apply/Clear (hide display icon, delete App ghosts)
 - **SystemResponsiveness = 10**: Microsoft clamps values &lt;10 to 20 — 0 was wrong; 10 is the real gaming minimum
-- Unregister any leftover OptiHub-NvidiaTrayHide tasks on apply
+- Unregister any leftover Exo-NvidiaTrayHide tasks on apply
 ## 1.9.23
 
 - **NVIDIA tray**: stop resurrection — hide NVDisplay container (IsPromoted=0) instead of deleting; wipe App ghosts; logon re-hide task; multi-pass after soft refresh
@@ -460,7 +460,7 @@
 - **Probe fix**: latency preset treats LSO/RSC off as pass; Nagle/throttle rows; post-apply verify
 ## 1.9.20
 
-- **Back to classic hub**: centered OptiHub + card grid (no sidebar / home stats)
+- **Back to classic hub**: centered Exo + card grid (no sidebar / home stats)
 - **Cards**: Internet (live) + AMD (coming soon) alongside Discord, Steam, NVIDIA, Brave, Riot, Epic
 - **Layout**: larger window, 4×2 grid, matching logo wells; Internet globe + official red AMD mark
 ## 1.9.19
@@ -527,7 +527,7 @@
 - Keep Internet + NVIDIA Display, resizable window, panel force-refresh, Closest path scaling
 ## 1.9.4
 
-- **NVIDIA Panel page**: full-card UI (same OptiHub styles) — Applied checkmarks + Apply; live probe of display/video/clients/tray; Clear tray icons
+- **NVIDIA Panel page**: full-card UI (same Exo styles) — Applied checkmarks + Apply; live probe of display/video/clients/tray; Clear tray icons
 - **Tray**: remove ALL NVIDIA overflow icons (including NVDisplay.Container registration) + ProgramData App leftovers
 - **Back** from panel returns to NVIDIA optimizer card
 ## 1.9.3
@@ -535,7 +535,7 @@
 - **NVIDIA Panel**: **Apply** (not Fix); checkmark when **Applied**; fixed policy primary highest Hz / secondary 60 Hz (no dropdowns)
 ## 1.9.2
 
-- **NVIDIA Panel**: **Applied** (checkmark) / **Not applied** rows with **Apply** (not Fix); **Apply all** sets OptiHub policy — primary highest Hz, secondary 60 Hz (no refresh dropdowns/toggles)
+- **NVIDIA Panel**: **Applied** (checkmark) / **Not applied** rows with **Apply** (not Fix); **Apply all** sets Exo policy — primary highest Hz, secondary 60 Hz (no refresh dropdowns/toggles)
 ## 1.9.1
 
 - **NVIDIA Panel**: fix false **Apply failed** when turning settings **off** — verify against your panel prefs (not hard-coded ON); NVAPI skips Full RGB/GPU scale when disabled; Store hive stamp is best-effort
@@ -543,10 +543,10 @@
 ## 1.9.0
 
 - **NVIDIA Panel UI**: new **NVIDIA panel** dialog on the NVIDIA card — display refresh (primary/secondary), Full RGB, GPU no-scaling + override, video NVIDIA color/image, developer counters, strip clients
-- **NVIDIA 1.10.0**: **driver only** — removes **App + Control Panel**; OptiHub panel is the only settings UI; panel prefs saved to `%LocalAppData%\OptiHub\nvidia-panel-settings.json` and applied via NVAPI
+- **NVIDIA 1.10.0**: **driver only** — removes **App + Control Panel**; Exo panel is the only settings UI; panel prefs saved to `%LocalAppData%\Exo\nvidia-panel-settings.json` and applied via NVAPI
 ## 1.8.32
 
-- **NVIDIA 1.9.8**: **OptiHub is the control panel** - green checks use live NVAPI/DRS (not Store CPL UI). Also stamp Store CPL **virtual hive** (`Packages\...\Helium\User.dat`) so CPL may match; CPL alone was never reading real HKCU
+- **NVIDIA 1.9.8**: **Exo is the control panel** - green checks use live NVAPI/DRS (not Store CPL UI). Also stamp Store CPL **virtual hive** (`Packages\...\Helium\User.dat`) so CPL may match; CPL alone was never reading real HKCU
 ## 1.8.31
 
 - **NVIDIA 1.9.7**: hard-stamp **every** monitor NVTweak key - scaling **override ON**, desktop **Use NVIDIA + Full** range, video **color+image NVIDIA** (both monitors); re-assert **Gestalt=2** after container refresh; re-disable App container + clear tray ghosts after soft refresh (was re-arming hidden icons)
@@ -574,7 +574,7 @@
 - **NVIDIA 1.9.0**: **Control Panel only** - always remove NVIDIA App/GFE, install classic Control Panel, accept CPL EULA, NVAPI for scaling/Hz (no App download/install path)
 ## 1.8.23
 
-- **Installer**: on every install/update, clear Windows icon/thumbnail caches + SHChangeNotify so Start Menu shows the new OptiHub icon (not a stale older mark)
+- **Installer**: on every install/update, clear Windows icon/thumbnail caches + SHChangeNotify so Start Menu shows the new Exo icon (not a stale older mark)
 - **NVIDIA 1.8.10**: Brian 1.8.9 log - after App exit -436207616, `[uint32]` hex logging threw and **Failed** Apply before Control Panel; safe Format-ExitCodeHex so Apply continues to CPL + NVAPI
 ## 1.8.22
 
@@ -655,10 +655,10 @@
 - Multi-size ICO 16–256; source SVG under Assets/Icons with LICENSE note
 ## 1.8.2
 
-- **Brand icon**: clean **OH** monogram (OptiHub) — fused O+H on pure black with mint accent; multi-size Start Menu ICO
+- **Brand icon**: clean **OH** monogram (Exo) — fused O+H on pure black with mint accent; multi-size Start Menu ICO
 ## 1.8.1
 
-- **Brand icon**: new unique OptiHub mark (hex hub + performance bars + mint accent) on pure black
+- **Brand icon**: new unique Exo mark (hex hub + performance bars + mint accent) on pure black
 - **Start Menu / pin**: multi-size .ico (16–256) so the glyph fills Windows Start tiles like other modern apps
 - Packaged as ApplicationIcon + Start Menu shortcut IconLocation (versioned path + shell refresh)
 ## 1.8.0
@@ -721,7 +721,7 @@
 - **Conflict cleanup** for App/GFE/CPL leftovers; Steam/Discord leftover clears on apply
 ## 1.2.0
 
-- **NVIDIA Optimizer** (live card): auto-detect GPU series, G-SYNC toggle, import OptiHub Base Profile via Profile Inspector
+- **NVIDIA Optimizer** (live card): auto-detect GPU series, G-SYNC toggle, import Exo Base Profile via Profile Inspector
 - Improved public .nip packs for 10/20/30/40/50 series (FPS/latency + series rBAR/DLSS)
 - Downloads Profile Inspector + optional NVIDIA App; telemetry task/service trim; display Full RGB / high bpc guidance
 
@@ -733,8 +733,8 @@
 ## 1.1.7
 
 - **Steam**: former aggressive CEF flags are now the only/default launcher (nofriendsui, nointro, etc.)
-- **No desktop shortcuts** created for Steam or Discord; removes prior OptiHub desktop icons
-- Start Menu / taskbar still retargeted to OptiHub launchers
+- **No desktop shortcuts** created for Steam or Discord; removes prior Exo desktop icons
+- Start Menu / taskbar still retargeted to Exo launchers
 
 ## 1.1.6
 
@@ -749,7 +749,7 @@
 - **5s webhelper EmptyWorkingSet** idle + in-game (no suspend)
 - **Shader pre-cache clean** + multi-library cache paths
 - **Overlay/library VDF hints**: quieter overlay noise, no downloads while playing when keys exist
-- Lean default launcher remains **Steam (OptiHub Lean)**
+- Lean default launcher remains **Steam (Exo Lean)**
 
 ## 1.1.4
 

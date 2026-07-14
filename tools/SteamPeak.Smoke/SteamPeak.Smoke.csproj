@@ -8,6 +8,6 @@
     <AssemblyName>SteamPeak.Smoke</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\..\OptiHub\Services\SteamPeakLogic.cs" Link="Shipped\SteamPeakLogic.cs" />
+    <Compile Include="..\..\Exo\Services\SteamPeakLogic.cs" Link="Shipped\SteamPeakLogic.cs" />
   </ItemGroup>
 </Project>
