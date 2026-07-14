@@ -164,9 +164,10 @@ function Test-NvidiaPerformanceDebloat {
     }
 
     # Fresh App is intentional and may be opened on demand. Only flag overlay/helpers/GFE noise.
-    $background = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.ProcessName -match '(?i)^NVIDIA (Overlay|Share|Web Helper)$|^GFExperience$|^nvsphelper(64)?$'
-    })
+    # Exact names, so filter in the service instead of enumerating every process.
+    $background = @(Get-Process -Name @(
+        'NVIDIA Overlay', 'NVIDIA Share', 'NVIDIA Web Helper',
+        'GFExperience', 'nvsphelper', 'nvsphelper64') -ErrorAction SilentlyContinue)
     if ($background.Count -gt 0) {
         [void]$issues.Add("Background clients running: $($background.ProcessName -join ', ')")
     }
@@ -201,9 +202,8 @@ function Test-NvidiaPerformanceDebloat {
 
 function Test-NvidiaOverlayDisabled {
     $issues = New-Object System.Collections.Generic.List[string]
-    $processes = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.ProcessName -match '(?i)^NVIDIA (Overlay|Share)$|^nvsphelper(64)?$'
-    })
+    $processes = @(Get-Process -Name @(
+        'NVIDIA Overlay', 'NVIDIA Share', 'nvsphelper', 'nvsphelper64') -ErrorAction SilentlyContinue)
     if ($processes.Count -gt 0) {
         [void]$issues.Add("Overlay processes running: $($processes.ProcessName -join ', ')")
     }

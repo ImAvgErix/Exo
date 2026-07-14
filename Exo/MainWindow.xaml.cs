@@ -72,8 +72,9 @@ public sealed partial class MainWindow : Window
         UpdateCaptionInset();
 
         ContentFrame.Navigated += OnContentNavigated;
-        // Re-apply icon after activate — WinUI sometimes drops the first SetIcon.
-        Activated += (_, _) => TrySetWindowIcon();
+        // Re-apply icon once after first activate — WinUI sometimes drops the
+        // first SetIcon. One-shot: per-activation reloads leak icon handles.
+        Activated += OnFirstActivationReapplyIcon;
 
         NavigateHome(suppressTransition: true);
         ClearChromeFocus();
@@ -99,6 +100,17 @@ public sealed partial class MainWindow : Window
                 try { OptiMotion.EnsureVisible(page); } catch { }
             }
         }
+    }
+
+    private bool _reappliedIcon;
+
+    private void OnFirstActivationReapplyIcon(object sender, WindowActivatedEventArgs args)
+    {
+        if (_reappliedIcon) return;
+        if (args.WindowActivationState == WindowActivationState.Deactivated) return;
+        _reappliedIcon = true;
+        Activated -= OnFirstActivationReapplyIcon;
+        TrySetWindowIcon();
     }
 
     private bool _clearedInitialFocus;

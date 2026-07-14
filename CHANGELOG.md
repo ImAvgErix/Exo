@@ -1,3 +1,9 @@
+## 2.2.6
+
+- **Faster startup after updates**: the full script-kit reinstall that ran before first paint on every post-update launch now happens on the background warm-up path (consumers still self-ensure correctness under the same lock)
+- **Window focus no longer does wasted work**: the taskbar-icon workaround re-ran file probing + Win32 icon loads (leaking icon handles) on every activation; it now runs once
+- **Faster NVIDIA detection**: process checks query the exact process names service-side instead of enumerating and regex-filtering every process on the system, twice
+
 ## 2.2.5
 
 - **Upgrade path from OptiHub**: the installer now closes any running legacy OptiHub app, migrates saved settings and optimizer state from `%LocalAppData%\OptiHub` into `%LocalAppData%\Exo`, and removes the old install folder and Start Menu shortcut
