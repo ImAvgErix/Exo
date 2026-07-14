@@ -2,6 +2,7 @@ using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using OptiHub.Helpers;
@@ -25,9 +26,7 @@ public sealed partial class MainWindow : Window
 
     private ShellMode _mode = ShellMode.Home;
     private readonly CancellationTokenSource _lifetimeCts = new();
-    private bool _settingsOpen;
     private bool _gearSpinning;
-    private const double SettingsRailWidth = 280;
 
     public MainWindow()
     {
@@ -269,8 +268,7 @@ public sealed partial class MainWindow : Window
 
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {
-        if (_settingsOpen)
-            CloseSettingsRail(immediate: true);
+        HideSettingsFlyout();
 
         if (_mode == mode && ContentFrame.CurrentSourcePageType == pageType)
             return;
@@ -279,152 +277,59 @@ public sealed partial class MainWindow : Window
             ApplyChrome(mode);
     }
 
+    /// <summary>Gear crank spin, then open the settings dropdown under the button (2.1.0).</summary>
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_settingsOpen)
-            CloseSettingsRail();
-        else
-            SpinSettingsGear(OpenSettingsRail);
-    }
-
-    /// <summary>Fast gear crank, then rail expands down from the gear.</summary>
-    private void OpenSettingsRail()
-    {
-        if (_settingsOpen) return;
-        _settingsOpen = true;
-
-        // Shift cards right so the rail never covers them.
-        ContentFrame.Margin = new Thickness(SettingsRailWidth, 0, 0, 0);
-
-        SettingsRail.Visibility = Visibility.Visible;
-        SettingsRail.Opacity = 1;
-        if (SettingsRailTransform is not null)
-            SettingsRailTransform.ScaleY = 0.04;
-
         try
         {
-            var sb = new Storyboard();
-            if (SettingsRailTransform is not null)
+            if (SettingsFlyout.IsOpen)
             {
-                var scale = new DoubleAnimation
-                {
-                    From = 0.04,
-                    To = 1,
-                    Duration = TimeSpan.FromMilliseconds(160),
-                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-                    EnableDependentAnimation = true
-                };
-                Storyboard.SetTarget(scale, SettingsRailTransform);
-                Storyboard.SetTargetProperty(scale, "ScaleY");
-                sb.Children.Add(scale);
+                SettingsFlyout.Hide();
+                return;
             }
-
-            var fade = new DoubleAnimation
-            {
-                From = 0.6,
-                To = 1,
-                Duration = TimeSpan.FromMilliseconds(120),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-                EnableDependentAnimation = true
-            };
-            Storyboard.SetTarget(fade, SettingsRail);
-            Storyboard.SetTargetProperty(fade, "Opacity");
-            sb.Children.Add(fade);
-
-            sb.Completed += (_, _) =>
-            {
-                try
-                {
-                    if (SettingsRailTransform is not null)
-                        SettingsRailTransform.ScaleY = 1;
-                    SettingsRail.Opacity = 1;
-                }
-                catch { }
-            };
-            sb.Begin();
         }
-        catch
+        catch { }
+
+        SpinSettingsGear(() =>
         {
-            if (SettingsRailTransform is not null)
-                SettingsRailTransform.ScaleY = 1;
-            SettingsRail.Opacity = 1;
-        }
+            try
+            {
+                FlyoutBase.ShowAttachedFlyout(SettingsButton);
+            }
+            catch
+            {
+                try { SettingsFlyout.ShowAt(SettingsButton); } catch { }
+            }
+        });
     }
 
-    private void CloseSettingsRail(bool immediate = false)
+    private void SettingsFlyout_Opened(object sender, object e)
     {
-        if (!_settingsOpen && SettingsRail.Visibility != Visibility.Visible)
-        {
-            ContentFrame.Margin = new Thickness(0);
-            return;
-        }
+        try { if (SettingsGearRotate is not null) SettingsGearRotate.Angle = 360; } catch { }
+    }
 
-        _settingsOpen = false;
+    private void SettingsFlyout_Closed(object sender, object e)
+    {
+        try
+        {
+            if (SettingsGearRotate is not null)
+                SettingsGearRotate.Angle = 0;
+        }
+        catch { }
         _gearSpinning = false;
-
-        void Finish()
-        {
-            SettingsRail.Visibility = Visibility.Collapsed;
-            SettingsRail.Opacity = 1;
-            if (SettingsRailTransform is not null)
-                SettingsRailTransform.ScaleY = 0.04;
-            ContentFrame.Margin = new Thickness(0);
-            try { if (SettingsGearRotate is not null) SettingsGearRotate.Angle = 0; } catch { }
-        }
-
-        if (immediate)
-        {
-            Finish();
-            return;
-        }
-
-        try
-        {
-            var sb = new Storyboard();
-            if (SettingsRailTransform is not null)
-            {
-                var scale = new DoubleAnimation
-                {
-                    From = Math.Max(SettingsRailTransform.ScaleY, 0.04),
-                    To = 0.04,
-                    Duration = TimeSpan.FromMilliseconds(120),
-                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
-                    EnableDependentAnimation = true
-                };
-                Storyboard.SetTarget(scale, SettingsRailTransform);
-                Storyboard.SetTargetProperty(scale, "ScaleY");
-                sb.Children.Add(scale);
-            }
-
-            var fade = new DoubleAnimation
-            {
-                From = SettingsRail.Opacity,
-                To = 0,
-                Duration = TimeSpan.FromMilliseconds(100),
-                EnableDependentAnimation = true
-            };
-            Storyboard.SetTarget(fade, SettingsRail);
-            Storyboard.SetTargetProperty(fade, "Opacity");
-            sb.Children.Add(fade);
-
-            var done = false;
-            void Once()
-            {
-                if (done) return;
-                done = true;
-                DispatcherQueue.TryEnqueue(Finish);
-            }
-            sb.Completed += (_, _) => Once();
-            sb.Begin();
-            _ = Task.Delay(150).ContinueWith(_ => Once());
-        }
-        catch
-        {
-            Finish();
-        }
     }
 
-    /// <summary>Quick gear crank (~quarter turn feel, snappy).</summary>
+    private void HideSettingsFlyout()
+    {
+        try
+        {
+            if (SettingsFlyout.IsOpen)
+                SettingsFlyout.Hide();
+        }
+        catch { }
+    }
+
+    /// <summary>Crank the gear ~1 full turn, then invoke onDone.</summary>
     private void SpinSettingsGear(Action onDone)
     {
         if (_gearSpinning)
@@ -447,8 +352,8 @@ public sealed partial class MainWindow : Window
             var anim = new DoubleAnimation
             {
                 From = 0,
-                To = 180,
-                Duration = TimeSpan.FromMilliseconds(140),
+                To = 360,
+                Duration = TimeSpan.FromMilliseconds(420),
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
                 EnableDependentAnimation = true
             };
@@ -461,12 +366,12 @@ public sealed partial class MainWindow : Window
             {
                 if (done) return;
                 done = true;
-                try { SettingsGearRotate.Angle = 180; } catch { }
+                try { SettingsGearRotate.Angle = 360; } catch { }
                 onDone();
             }
             sb.Completed += (_, _) => Once();
             sb.Begin();
-            _ = Task.Delay(160).ContinueWith(_ =>
+            _ = Task.Delay(480).ContinueWith(_ =>
             {
                 try { DispatcherQueue.TryEnqueue(Once); } catch { }
             });
@@ -480,11 +385,7 @@ public sealed partial class MainWindow : Window
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_settingsOpen)
-        {
-            CloseSettingsRail();
-            return;
-        }
+        HideSettingsFlyout();
         if (_mode == ShellMode.NvidiaPanel)
             NavigateToNvidia();
         else

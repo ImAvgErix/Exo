@@ -5,6 +5,7 @@ using OptiHub.ViewModels;
 
 namespace OptiHub.Views.Controls;
 
+/// <summary>Settings dropdown content (Flyout). No modal overlay.</summary>
 public sealed partial class SettingsSheet : UserControl
 {
     public SettingsViewModel ViewModel { get; }

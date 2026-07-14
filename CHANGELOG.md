@@ -1,3 +1,6 @@
+## 2.1.3
+
+- **Settings back to 2.1.0**: gear crank + dropdown flyout under the gear (not side rail)
 ## 2.1.2
 
 - **Settings rail restored** (side panel under gear, not centered modal)

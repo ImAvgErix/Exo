@@ -148,17 +148,16 @@ if (File.Exists(settings))
     Expect("no tooltips in settings", !s.Contains("ToolTip", StringComparison.OrdinalIgnoreCase)
         && !s.Contains("ToolTipService", StringComparison.OrdinalIgnoreCase));
 }
-// Settings is a left rail under the gear (not a modal overlay).
+// Settings is gear flyout (2.1.0 style).
 if (File.Exists(mainXaml))
 {
     var mx = File.ReadAllText(mainXaml);
-    Expect("settings left rail under gear",
-        mx.Contains("SettingsRail", StringComparison.Ordinal)
+    Expect("settings flyout on gear",
+        mx.Contains("SettingsFlyout", StringComparison.Ordinal)
         && mx.Contains("SettingsSheetHost", StringComparison.Ordinal)
         && mx.Contains("SettingsGearRotate", StringComparison.Ordinal)
-        && mx.Contains("SettingsRailTransform", StringComparison.Ordinal)
-        && !mx.Contains("SettingsOverlay", StringComparison.Ordinal)
-        && !mx.Contains("SettingsFlyout", StringComparison.Ordinal));
+        && !mx.Contains("SettingsRail", StringComparison.Ordinal)
+        && !mx.Contains("SettingsOverlay", StringComparison.Ordinal));
 }
 var updateDlg = Path.Combine(repo, "OptiHub", "Helpers", "OptiUpdateDialog.cs");
 if (File.Exists(updateDlg))
@@ -269,14 +268,12 @@ var mainCsPath = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
 if (File.Exists(mainCsPath))
 {
     var mc = File.ReadAllText(mainCsPath);
-    Expect("settings gear spin + rail",
+    Expect("settings gear spin + flyout",
         mc.Contains("SpinSettingsGear", StringComparison.Ordinal)
-        && mc.Contains("OpenSettingsRail", StringComparison.Ordinal)
-        && mc.Contains("CloseSettingsRail", StringComparison.Ordinal)
-        && mc.Contains("SettingsRailWidth", StringComparison.Ordinal)
-        && mc.Contains("ContentFrame.Margin", StringComparison.Ordinal)
-        && !mc.Contains("OpenSettingsOverlay", StringComparison.Ordinal)
-        && !mc.Contains("SettingsFlyout", StringComparison.Ordinal));
+        && mc.Contains("SettingsFlyout", StringComparison.Ordinal)
+        && mc.Contains("ShowAttachedFlyout", StringComparison.Ordinal)
+        && !mc.Contains("OpenSettingsRail", StringComparison.Ordinal)
+        && !mc.Contains("SettingsRail", StringComparison.Ordinal));
     Expect("navigate ensures page visible",
         mc.Contains("OnContentNavigated", StringComparison.Ordinal)
         && mc.Contains("EnsureVisible", StringComparison.Ordinal));
@@ -312,9 +309,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.1.2", File.ReadAllText(versionFile).Trim() == "2.1.2");
+    Expect("VERSION is 2.1.3", File.ReadAllText(versionFile).Trim() == "2.1.3");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.1.2", File.ReadAllText(csproj).Contains("<Version>2.1.2</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.1.3", File.ReadAllText(csproj).Contains("<Version>2.1.3</Version>", StringComparison.Ordinal));
 
 var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");
 if (File.Exists(appSettings))
