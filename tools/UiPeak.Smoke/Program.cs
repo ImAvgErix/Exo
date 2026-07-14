@@ -250,9 +250,12 @@ if (File.Exists(motionCs))
         m.Contains("visual.Opacity = 1f", StringComparison.Ordinal)
         && !m.Contains("visual.Opacity = 0", StringComparison.Ordinal)
         && !m.Contains("visual.Opacity = 0f", StringComparison.Ordinal));
-    Expect("OptiMotion no StartAnimation Offset",
-        !m.Contains("StartAnimation(\"Offset\"", StringComparison.Ordinal)
-        && !m.Contains("StartAnimation(\"Scale\"", StringComparison.Ordinal));
+    // XAML storyboards only — no composition StartAnimation for shell motion.
+    Expect("OptiMotion uses XAML storyboards",
+        m.Contains("Storyboard", StringComparison.Ordinal)
+        && m.Contains("DoubleAnimation", StringComparison.Ordinal)
+        && !m.Contains("StartAnimation(\"Offset\"", StringComparison.Ordinal)
+        && !m.Contains("StartAnimation(\"Opacity\"", StringComparison.Ordinal));
     Expect("OptiMotion page enter ensure visible",
         m.Contains("PlayPageEnter", StringComparison.Ordinal)
         && m.Contains("EnsureVisible", StringComparison.Ordinal)
@@ -262,13 +265,12 @@ var mainCsPath = Path.Combine(repo, "OptiHub", "MainWindow.xaml.cs");
 if (File.Exists(mainCsPath))
 {
     var mc = File.ReadAllText(mainCsPath);
-    Expect("settings open visibility only",
+    Expect("settings open uses safe overlay motion",
         mc.Contains("OpenSettingsOverlay", StringComparison.Ordinal)
         && mc.Contains("CloseSettingsOverlay", StringComparison.Ordinal)
-        && mc.Contains("SettingsOverlay.Visibility", StringComparison.Ordinal)
-        && !mc.Contains("PlayOverlayOpen", StringComparison.Ordinal)
+        && mc.Contains("PlayOverlayOpen", StringComparison.Ordinal)
+        && mc.Contains("PlayOverlayClose", StringComparison.Ordinal)
         && !mc.Contains("SettingsSheetStage", StringComparison.Ordinal));
-    // Open must always be recoverable: close always collapses + restores gear.
     Expect("settings close always recovers",
         mc.Contains("_settingsOpen = false", StringComparison.Ordinal)
         && mc.Contains("Visibility.Collapsed", StringComparison.Ordinal)
@@ -289,9 +291,9 @@ var dashCs = Path.Combine(repo, "OptiHub", "Views", "DashboardPage.xaml.cs");
 if (File.Exists(dashCs))
 {
     var dc = File.ReadAllText(dashCs);
-    Expect("home ensure visible no stagger blank",
-        dc.Contains("EnsureVisible", StringComparison.Ordinal)
-        && !dc.Contains("PlayStagger", StringComparison.Ordinal)
+    Expect("home card stagger entrance",
+        dc.Contains("PlayStagger", StringComparison.Ordinal)
+        && dc.Contains("EnsureVisible", StringComparison.Ordinal)
         && !dc.Contains("PrimeHidden", StringComparison.Ordinal));
 }
 
@@ -299,9 +301,9 @@ if (File.Exists(dashCs))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.0.3", File.ReadAllText(versionFile).Trim() == "2.0.3");
+    Expect("VERSION is 2.0.4", File.ReadAllText(versionFile).Trim() == "2.0.4");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.0.3", File.ReadAllText(csproj).Contains("<Version>2.0.3</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.0.4", File.ReadAllText(csproj).Contains("<Version>2.0.4</Version>", StringComparison.Ordinal));
 
 var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");
 if (File.Exists(appSettings))

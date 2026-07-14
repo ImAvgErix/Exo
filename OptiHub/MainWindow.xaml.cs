@@ -78,10 +78,19 @@ public sealed partial class MainWindow : Window
 
     private void OnContentNavigated(object sender, Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
-        // Force every page fully visible — no entrance animation that can blank UI.
         if (e.Content is FrameworkElement page)
         {
-            try { OptiMotion.EnsureVisible(page); } catch { }
+            // Soft page fade for modules; home has its own card stagger.
+            try
+            {
+                OptiMotion.EnsureVisible(page);
+                if (page is not Views.DashboardPage)
+                    OptiMotion.PlayPageEnter(page);
+            }
+            catch
+            {
+                try { OptiMotion.EnsureVisible(page); } catch { }
+            }
         }
     }
 
@@ -278,16 +287,18 @@ public sealed partial class MainWindow : Window
         CloseSettingsOverlay();
 
     /// <summary>
-    /// Dumb, reliable settings: Visibility only. No composition, no intermediate stage.
-    /// Open can always recover (force open). Close always restores gear + collapses overlay.
+    /// Settings open: show overlay, then soft XAML fade/rise on the sheet.
+    /// Never uses Composition Opacity (that blanked the UI). Close always recovers.
     /// </summary>
     private void OpenSettingsOverlay()
     {
-        // If already open, force-refresh the open state (never leave a stuck overlay).
+        // Already open — keep visible (recover if mid-close left it weird).
         if (_settingsOpen)
         {
             SettingsOverlay.Visibility = Visibility.Visible;
             SettingsButton.Visibility = Visibility.Collapsed;
+            OptiMotion.EnsureVisible(SettingsOverlay);
+            OptiMotion.EnsureVisible(SettingsSheetHost);
             return;
         }
 
@@ -297,19 +308,43 @@ public sealed partial class MainWindow : Window
 
         _settingsOpen = true;
         SettingsButton.Visibility = Visibility.Collapsed;
-        SettingsOverlay.Opacity = 1;
-        SettingsSheetHost.Opacity = 1;
         SettingsOverlay.Visibility = Visibility.Visible;
+        SettingsOverlay.UpdateLayout();
+        SettingsSheetHost.UpdateLayout();
+        OptiMotion.PlayOverlayOpen(SettingsOverlay, SettingsSheetHost);
     }
 
     private void CloseSettingsOverlay()
     {
-        // Always collapse + restore gear even if flag is wrong (recovery path).
+        if (!_settingsOpen && SettingsOverlay.Visibility != Visibility.Visible)
+        {
+            // Recovery: force gear back even if state was wrong.
+            SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
+            return;
+        }
+
         _settingsOpen = false;
-        SettingsOverlay.Visibility = Visibility.Collapsed;
-        SettingsOverlay.Opacity = 1;
-        SettingsSheetHost.Opacity = 1;
         SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
+
+        void Finish()
+        {
+            SettingsOverlay.Visibility = Visibility.Collapsed;
+            OptiMotion.EnsureVisible(SettingsOverlay);
+            OptiMotion.EnsureVisible(SettingsSheetHost);
+            SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        var done = false;
+        void Once()
+        {
+            if (done) return;
+            done = true;
+            DispatcherQueue.TryEnqueue(Finish);
+        }
+
+        OptiMotion.PlayOverlayClose(SettingsOverlay, SettingsSheetHost, Once);
+        // Safety if storyboard never completes
+        _ = Task.Delay(220).ContinueWith(_ => Once());
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)

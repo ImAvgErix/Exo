@@ -1,3 +1,7 @@
+## 2.0.4
+
+- **Soft open animations back** (safe path): settings fade+rise, home card stagger, module page fade — all XAML Storyboards
+- **Still never uses Composition Opacity** (that blanked the UI); every entrance has EnsureVisible fail-safe
 ## 2.0.3
 
 - **Settings fixed for real**: Visibility only (open/close). No composition, no intermediate stage that ate clicks. Close always restores gear; open always recovers.

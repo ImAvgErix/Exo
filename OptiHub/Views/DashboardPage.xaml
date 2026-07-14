@@ -32,7 +32,12 @@
                        TextAlignment="Center"
                        HorizontalAlignment="Stretch"
                        Margin="0,0,0,24"
-                       MaxWidth="880" />
+                       MaxWidth="880"
+                       RenderTransformOrigin="0.5,0.5">
+                <TextBlock.RenderTransform>
+                    <CompositeTransform />
+                </TextBlock.RenderTransform>
+            </TextBlock>
 
             <ItemsControl x:Name="CardList"
                           HorizontalAlignment="Center"
@@ -50,10 +55,14 @@
                                 Width="248"
                                 Height="120"
                                 Margin="6"
+                                RenderTransformOrigin="0.5,0.5"
                                 Click="CardButton_Click"
                                 Tag="{x:Bind Definition.Id}"
                                 AutomationProperties.Name="{x:Bind Definition.Title}"
                                 IsEnabled="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}">
+                            <Button.RenderTransform>
+                                <CompositeTransform />
+                            </Button.RenderTransform>
                             <Border Style="{StaticResource OptiCard}"
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Stretch"
