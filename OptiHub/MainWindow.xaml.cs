@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -216,6 +217,7 @@ public sealed partial class MainWindow : Window
         try
         {
             var baseDir = AppContext.BaseDirectory;
+            string? icoPath = null;
             foreach (var rel in new[]
                      {
                          Path.Combine("Assets", "OptiHub.ico"),
@@ -224,12 +226,45 @@ public sealed partial class MainWindow : Window
             {
                 var path = Path.Combine(baseDir, rel);
                 if (!File.Exists(path)) continue;
-                AppWindow.SetIcon(path);
-                return;
+                icoPath = path;
+                break;
             }
+
+            if (icoPath is null) return;
+
+            // AppWindow path (title bar / WinUI)
+            try { AppWindow.SetIcon(icoPath); } catch { }
+
+            // Win32 big+small icons so the taskbar actually shows the mark.
+            try
+            {
+                var hwnd = WindowNative.GetWindowHandle(this);
+                if (hwnd == IntPtr.Zero) return;
+
+                const uint imageIcon = 1;
+                const int lrLoadFromFile = 0x0010;
+                const int lrDefaultSize = 0x0040;
+                const int wmSetIcon = 0x0080;
+                const int iconSmall = 0;
+                const int iconBig = 1;
+
+                var big = LoadImage(IntPtr.Zero, icoPath, imageIcon, 32, 32, lrLoadFromFile | lrDefaultSize);
+                var small = LoadImage(IntPtr.Zero, icoPath, imageIcon, 16, 16, lrLoadFromFile | lrDefaultSize);
+                if (big != IntPtr.Zero)
+                    SendMessage(hwnd, wmSetIcon, new IntPtr(iconBig), big);
+                if (small != IntPtr.Zero)
+                    SendMessage(hwnd, wmSetIcon, new IntPtr(iconSmall), small);
+            }
+            catch { }
         }
         catch { }
     }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr LoadImage(IntPtr hInst, string name, uint type, int cx, int cy, int fuLoad);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
     private void TrySetContextLogo(string relativePath)
     {
@@ -277,7 +312,7 @@ public sealed partial class MainWindow : Window
             ApplyChrome(mode);
     }
 
-    /// <summary>Gear crank spin, then open the settings dropdown under the button (2.1.0).</summary>
+    /// <summary>Open menu immediately; gear spins in parallel (no wait before show).</summary>
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -290,22 +325,22 @@ public sealed partial class MainWindow : Window
         }
         catch { }
 
-        SpinSettingsGear(() =>
+        // Show first so the menu feels instant; crank plays alongside.
+        try
         {
-            try
-            {
-                FlyoutBase.ShowAttachedFlyout(SettingsButton);
-            }
-            catch
-            {
-                try { SettingsFlyout.ShowAt(SettingsButton); } catch { }
-            }
-        });
+            FlyoutBase.ShowAttachedFlyout(SettingsButton);
+        }
+        catch
+        {
+            try { SettingsFlyout.ShowAt(SettingsButton); } catch { }
+        }
+        SpinSettingsGear();
     }
 
     private void SettingsFlyout_Opened(object sender, object e)
     {
-        try { if (SettingsGearRotate is not null) SettingsGearRotate.Angle = 360; } catch { }
+        // Keep gear at end of crank while open.
+        try { if (SettingsGearRotate is not null) SettingsGearRotate.Angle = 180; } catch { }
     }
 
     private void SettingsFlyout_Closed(object sender, object e)
@@ -329,22 +364,16 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    /// <summary>Crank the gear ~1 full turn, then invoke onDone.</summary>
-    private void SpinSettingsGear(Action onDone)
+    /// <summary>Quick gear crank (visual only — does not delay the menu).</summary>
+    private void SpinSettingsGear()
     {
-        if (_gearSpinning)
-        {
-            onDone();
-            return;
-        }
-
+        if (_gearSpinning) return;
         _gearSpinning = true;
         try
         {
             if (SettingsGearRotate is null)
             {
                 _gearSpinning = false;
-                onDone();
                 return;
             }
 
@@ -352,8 +381,8 @@ public sealed partial class MainWindow : Window
             var anim = new DoubleAnimation
             {
                 From = 0,
-                To = 360,
-                Duration = TimeSpan.FromMilliseconds(420),
+                To = 180,
+                Duration = TimeSpan.FromMilliseconds(180),
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
                 EnableDependentAnimation = true
             };
@@ -361,25 +390,16 @@ public sealed partial class MainWindow : Window
             Storyboard.SetTargetProperty(anim, "Angle");
             var sb = new Storyboard();
             sb.Children.Add(anim);
-            var done = false;
-            void Once()
+            sb.Completed += (_, _) =>
             {
-                if (done) return;
-                done = true;
-                try { SettingsGearRotate.Angle = 360; } catch { }
-                onDone();
-            }
-            sb.Completed += (_, _) => Once();
+                try { SettingsGearRotate.Angle = 180; } catch { }
+                _gearSpinning = false;
+            };
             sb.Begin();
-            _ = Task.Delay(480).ContinueWith(_ =>
-            {
-                try { DispatcherQueue.TryEnqueue(Once); } catch { }
-            });
         }
         catch
         {
             _gearSpinning = false;
-            onDone();
         }
     }
 

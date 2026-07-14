@@ -1,3 +1,7 @@
+## 2.1.4
+
+- **Settings opens instantly**: flyout shows on tap; gear spins in parallel (no wait)
+- **Taskbar icon**: Win32 WM_SETICON big+small in addition to AppWindow.SetIcon
 ## 2.1.3
 
 - **Settings back to 2.1.0**: gear crank + dropdown flyout under the gear (not side rail)

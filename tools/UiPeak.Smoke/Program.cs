@@ -274,6 +274,14 @@ if (File.Exists(mainCsPath))
         && mc.Contains("ShowAttachedFlyout", StringComparison.Ordinal)
         && !mc.Contains("OpenSettingsRail", StringComparison.Ordinal)
         && !mc.Contains("SettingsRail", StringComparison.Ordinal));
+    Expect("settings open is immediate",
+        mc.Contains("ShowAttachedFlyout", StringComparison.Ordinal)
+        && mc.IndexOf("ShowAttachedFlyout", StringComparison.Ordinal)
+            < mc.IndexOf("SpinSettingsGear();", StringComparison.Ordinal));
+    Expect("taskbar icon win32 set",
+        mc.Contains("WM_SETICON", StringComparison.OrdinalIgnoreCase)
+            || (mc.Contains("SendMessage", StringComparison.Ordinal) && mc.Contains("LoadImage", StringComparison.Ordinal)
+                && mc.Contains("TrySetWindowIcon", StringComparison.Ordinal)));
     Expect("navigate ensures page visible",
         mc.Contains("OnContentNavigated", StringComparison.Ordinal)
         && mc.Contains("EnsureVisible", StringComparison.Ordinal));
@@ -309,9 +317,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.1.3", File.ReadAllText(versionFile).Trim() == "2.1.3");
+    Expect("VERSION is 2.1.4", File.ReadAllText(versionFile).Trim() == "2.1.4");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.1.3", File.ReadAllText(csproj).Contains("<Version>2.1.3</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.1.4", File.ReadAllText(csproj).Contains("<Version>2.1.4</Version>", StringComparison.Ordinal));
 
 var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");
 if (File.Exists(appSettings))
