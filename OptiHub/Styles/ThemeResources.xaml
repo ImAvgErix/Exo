@@ -803,8 +803,9 @@
         <Setter Property="CornerRadius" Value="{StaticResource OptiCardRadius}" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
-        <Setter Property="HorizontalAlignment" Value="Left" />
-        <Setter Property="VerticalAlignment" Value="Top" />
+        <!-- Center in wrap cell — Left/Top was part of the top-left drift -->
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Stretch" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
@@ -816,28 +817,31 @@
                           RenderTransformOrigin="0.5,0.5"
                           CornerRadius="{TemplateBinding CornerRadius}">
                         <Grid.RenderTransform>
-                            <CompositeTransform x:Name="RootScale" ScaleX="1" ScaleY="1" TranslateY="0" />
+                            <!-- Scale only — no TranslateY (hover lift was shifting cards around) -->
+                            <CompositeTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
                         </Grid.RenderTransform>
+                        <ContentPresenter Background="Transparent"
+                                          BorderThickness="0"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Padding="{TemplateBinding Padding}"
+                                          CornerRadius="{TemplateBinding CornerRadius}" />
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.4">
+                                                         To="1" Duration="0:0:0.28">
                                             <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.4" />
+                                                <BackEase EasingMode="EaseOut" Amplitude="0.28" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.4">
+                                                         To="1" Duration="0:0:0.28">
                                             <DoubleAnimation.EasingFunction>
-                                                <BackEase EasingMode="EaseOut" Amplitude="0.4" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="TranslateY"
-                                                         To="0" Duration="0:0:0.3">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
+                                                <BackEase EasingMode="EaseOut" Amplitude="0.28" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                     </Storyboard>
@@ -845,19 +849,13 @@
                                 <VisualState x:Name="PointerOver">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="1.035" Duration="0:0:0.24">
+                                                         To="1.04" Duration="0:0:0.18">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="1.035" Duration="0:0:0.24">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="TranslateY"
-                                                         To="-4" Duration="0:0:0.24">
+                                                         To="1.04" Duration="0:0:0.18">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
@@ -867,19 +865,17 @@
                                 <VisualState x:Name="Pressed">
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX"
-                                                         To="0.96" Duration="0:0:0.08">
+                                                         To="0.94" Duration="0:0:0.07">
                                             <DoubleAnimation.EasingFunction>
                                                 <QuadraticEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY"
-                                                         To="0.96" Duration="0:0:0.08">
+                                                         To="0.94" Duration="0:0:0.07">
                                             <DoubleAnimation.EasingFunction>
                                                 <QuadraticEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="TranslateY"
-                                                         To="1" Duration="0:0:0.08" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">
@@ -890,14 +886,6 @@
                                 </VisualState>
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
-                        <ContentPresenter Background="Transparent"
-                                          BorderThickness="0"
-                                          Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
-                                          Padding="{TemplateBinding Padding}"
-                                          CornerRadius="{TemplateBinding CornerRadius}" />
                     </Grid>
                 </ControlTemplate>
             </Setter.Value>

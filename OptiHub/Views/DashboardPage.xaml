@@ -60,9 +60,6 @@
                                 Tag="{x:Bind Definition.Id}"
                                 AutomationProperties.Name="{x:Bind Definition.Title}"
                                 IsEnabled="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}">
-                            <Button.RenderTransform>
-                                <CompositeTransform />
-                            </Button.RenderTransform>
                             <Border Style="{StaticResource OptiCard}"
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Stretch"

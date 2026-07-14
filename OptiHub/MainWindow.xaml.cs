@@ -292,7 +292,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OpenSettingsOverlay()
     {
-        // Already open — keep visible (recover if mid-close left it weird).
+        // Already open — snap identity so multi-open never drifts top-left.
         if (_settingsOpen)
         {
             SettingsOverlay.Visibility = Visibility.Visible;
@@ -308,6 +308,10 @@ public sealed partial class MainWindow : Window
 
         _settingsOpen = true;
         SettingsButton.Visibility = Visibility.Collapsed;
+
+        // Identity first, then show + fade (no scale/translate on the centered sheet).
+        OptiMotion.EnsureVisible(SettingsOverlay);
+        OptiMotion.EnsureVisible(SettingsSheetHost);
         SettingsOverlay.Visibility = Visibility.Visible;
         SettingsOverlay.UpdateLayout();
         SettingsSheetHost.UpdateLayout();
@@ -318,7 +322,6 @@ public sealed partial class MainWindow : Window
     {
         if (!_settingsOpen && SettingsOverlay.Visibility != Visibility.Visible)
         {
-            // Recovery: force gear back even if state was wrong.
             SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
             return;
         }
@@ -329,6 +332,7 @@ public sealed partial class MainWindow : Window
         void Finish()
         {
             SettingsOverlay.Visibility = Visibility.Collapsed;
+            // Hard identity so the next open never inherits translate/scale residue.
             OptiMotion.EnsureVisible(SettingsOverlay);
             OptiMotion.EnsureVisible(SettingsSheetHost);
             SettingsButton.Visibility = _mode == ShellMode.Home ? Visibility.Visible : Visibility.Collapsed;
@@ -343,8 +347,7 @@ public sealed partial class MainWindow : Window
         }
 
         OptiMotion.PlayOverlayClose(SettingsOverlay, SettingsSheetHost, Once);
-        // Safety if storyboard never completes
-        _ = Task.Delay(220).ContinueWith(_ => Once());
+        _ = Task.Delay(200).ContinueWith(_ => Once());
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)

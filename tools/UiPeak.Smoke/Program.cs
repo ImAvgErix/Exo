@@ -256,6 +256,15 @@ if (File.Exists(motionCs))
         && m.Contains("DoubleAnimation", StringComparison.Ordinal)
         && !m.Contains("StartAnimation(\"Offset\"", StringComparison.Ordinal)
         && !m.Contains("StartAnimation(\"Opacity\"", StringComparison.Ordinal));
+    Expect("OptiMotion settings fade only no scale host",
+        m.Contains("PlayOverlayOpen", StringComparison.Ordinal)
+        && m.Contains("No TranslateY/Scale on the centered sheet", StringComparison.OrdinalIgnoreCase)
+            || (m.Contains("PlayOverlayOpen", StringComparison.Ordinal)
+                && m.IndexOf("PlayOverlayOpen", StringComparison.Ordinal) is int oi
+                && m.IndexOf("PlayOverlayClose", StringComparison.Ordinal) is int ci
+                && oi >= 0 && ci > oi
+                && !m.Substring(oi, ci - oi).Contains("ScaleX", StringComparison.Ordinal)));
+    Expect("OptiMotion PlaySelect", m.Contains("PlaySelect", StringComparison.Ordinal));
     Expect("OptiMotion page enter ensure visible",
         m.Contains("PlayPageEnter", StringComparison.Ordinal)
         && m.Contains("EnsureVisible", StringComparison.Ordinal)
@@ -295,15 +304,31 @@ if (File.Exists(dashCs))
         dc.Contains("PlayStagger", StringComparison.Ordinal)
         && dc.Contains("EnsureVisible", StringComparison.Ordinal)
         && !dc.Contains("PrimeHidden", StringComparison.Ordinal));
+    Expect("home card select pulse",
+        dc.Contains("PlaySelect", StringComparison.Ordinal)
+        && dc.Contains("CardButton_Click", StringComparison.Ordinal));
+}
+
+// Card button must not force Left/Top (top-left drift).
+if (File.Exists(theme))
+{
+    var tCard = File.ReadAllText(theme);
+    var cardIdx = tCard.IndexOf("OptiCardButton", StringComparison.Ordinal);
+    var cardSlice = cardIdx >= 0 ? tCard.Substring(cardIdx, Math.Min(800, tCard.Length - cardIdx)) : "";
+    Expect("card button not top-left aligned",
+        cardIdx >= 0
+        && cardSlice.Contains("HorizontalAlignment", StringComparison.Ordinal)
+        && cardSlice.Contains("Value=\"Center\"", StringComparison.Ordinal)
+        && !cardSlice.Contains("Value=\"Left\"", StringComparison.Ordinal));
 }
 
 // Version gate
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "OptiHub", "OptiHub.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.0.4", File.ReadAllText(versionFile).Trim() == "2.0.4");
+    Expect("VERSION is 2.0.5", File.ReadAllText(versionFile).Trim() == "2.0.5");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.0.4", File.ReadAllText(csproj).Contains("<Version>2.0.4</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.0.5", File.ReadAllText(csproj).Contains("<Version>2.0.5</Version>", StringComparison.Ordinal));
 
 var appSettings = Path.Combine(repo, "OptiHub", "Models", "AppSettings.cs");
 if (File.Exists(appSettings))

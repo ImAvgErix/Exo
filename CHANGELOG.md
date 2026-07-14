@@ -1,3 +1,8 @@
+## 2.0.5
+
+- **No more top-left drift**: settings open is fade-only (no scale/translate on the centered sheet); hard identity reset every close
+- **Card select animation**: press pulse before navigate (`PlaySelect`)
+- **Card hover**: scale only (removed TranslateY lift that shifted cards); button alignment Center not Left/Top
 ## 2.0.4
 
 - **Soft open animations back** (safe path): settings fade+rise, home card stagger, module page fade — all XAML Storyboards

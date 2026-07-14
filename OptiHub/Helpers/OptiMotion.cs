@@ -7,44 +7,42 @@ using System.Numerics;
 namespace OptiHub.Helpers;
 
 /// <summary>
-/// Soft open animations via XAML Storyboards only.
-/// Never animates Composition visual.Opacity (that overrode XAML and blanked UI).
-/// Every entrance ends fully visible; a delayed EnsureVisible is the hard fail-safe.
+/// Safe open animations (XAML Storyboards only).
+/// - Never animates Composition Opacity (blanks UI).
+/// - Settings overlay: fade only (no scale/translate — those pin a centered host top-left).
+/// - Cards: fade + light rise; select: quick press pulse before navigate.
 /// </summary>
 public static class OptiMotion
 {
-    public const int EntranceMs = 380;
-    public const int FadeMs = 240;
-    public const int StaggerStepMs = 45;
-    public const int OverlayOpenMs = 320;
-    public const int OverlayCloseMs = 160;
+    public const int EntranceMs = 340;
+    public const int FadeMs = 260;
+    public const int StaggerStepMs = 40;
+    public const int OverlayOpenMs = 260;
+    public const int OverlayCloseMs = 140;
+    public const int SelectMs = 140;
 
     public static EasingFunctionBase Glide() =>
         new CubicEase { EasingMode = EasingMode.EaseOut };
 
     public static EasingFunctionBase Spring() =>
-        new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.22 };
+        new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.2 };
 
     public static CompositeTransform EnsureTransform(UIElement el)
     {
+        el.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
         if (el.RenderTransform is CompositeTransform ct)
             return ct;
         ct = new CompositeTransform();
         el.RenderTransform = ct;
-        el.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
         return ct;
     }
 
-    /// <summary>Hard-show at identity. Safe after any animation.</summary>
+    /// <summary>Hard identity + full opacity. Call after every open/close cycle.</summary>
     public static void EnsureVisible(UIElement el)
     {
         ResetVisual(el, show: true);
     }
 
-    /// <summary>
-    /// Clear composition overrides (always opacity 1) + XAML rest state.
-    /// Composition Opacity is never left at 0.
-    /// </summary>
     public static void ResetVisual(UIElement el, bool show = true)
     {
         try
@@ -64,61 +62,61 @@ public static class OptiMotion
 
         el.Opacity = show ? 1 : 0;
         el.IsHitTestVisible = show;
+        el.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
         try
         {
+            // Always clear transform if present (and don't leave scale/offset residue).
             if (el.RenderTransform is CompositeTransform tf)
             {
                 tf.TranslateX = 0;
                 tf.TranslateY = 0;
                 tf.ScaleX = 1;
                 tf.ScaleY = 1;
+                tf.Rotation = 0;
+            }
+            else if (el.RenderTransform is not null)
+            {
+                // Unknown transform type — drop it so layout owns position again.
+                el.RenderTransform = null;
             }
         }
         catch { }
     }
 
-    /// <summary>Card / row entrance: XAML fade + rise (composition opacity untouched).</summary>
+    /// <summary>
+    /// Card entrance: XAML fade + slight rise only (no scale — scale drifts toward top-left).
+    /// </summary>
     public static void PlayEnter(
         UIElement el,
         int delayMs = 0,
-        float fromY = 14f,
-        float fromScale = 0.97f,
+        float fromY = 12f,
+        float fromScale = 1f, // ignored — kept for call-site compat
         bool enableHit = true)
     {
-        // Fail-safe: always fully visible after the animation window.
-        ScheduleEnsureVisible(el, delayMs + EntranceMs + 100);
+        ScheduleEnsureVisible(el, delayMs + EntranceMs + 80);
 
         try
         {
-            // Force composition identity first so nothing overrides the XAML fade.
-            try
-            {
-                var visual = ElementCompositionPreview.GetElementVisual(el);
-                visual.StopAnimation("Opacity");
-                visual.Opacity = 1f;
-                visual.Offset = Vector3.Zero;
-                visual.Scale = Vector3.One;
-            }
-            catch { }
-
+            ForceCompositionIdentity(el);
             var tf = EnsureTransform(el);
+            tf.TranslateX = 0;
+            tf.TranslateY = fromY;
+            tf.ScaleX = 1;
+            tf.ScaleY = 1;
+
             el.Opacity = 0;
             el.IsHitTestVisible = false;
-            tf.TranslateY = fromY;
-            tf.ScaleX = fromScale;
-            tf.ScaleY = fromScale;
 
             var sb = new Storyboard();
             sb.Children.Add(Fade(el, 0, 1, FadeMs, delayMs));
             sb.Children.Add(TranslateY(tf, fromY, 0, EntranceMs, delayMs));
-            sb.Children.Add(Scale(tf, "ScaleX", fromScale, 1, EntranceMs, delayMs));
-            sb.Children.Add(Scale(tf, "ScaleY", fromScale, 1, EntranceMs, delayMs));
             sb.Completed += (_, _) =>
             {
                 try
                 {
                     el.Opacity = 1;
                     el.IsHitTestVisible = enableHit;
+                    tf.TranslateX = 0;
                     tf.TranslateY = 0;
                     tf.ScaleX = 1;
                     tf.ScaleY = 1;
@@ -130,7 +128,7 @@ public static class OptiMotion
             if (enableHit)
             {
                 var captured = el;
-                var d = delayMs + 80;
+                var d = delayMs + 70;
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(d);
@@ -147,10 +145,10 @@ public static class OptiMotion
 
     public static void PlayStagger(
         IReadOnlyList<UIElement> items,
-        int baseDelayMs = 20,
+        int baseDelayMs = 16,
         int stepMs = StaggerStepMs,
         float fromY = 12f,
-        float fromScale = 0.97f)
+        float fromScale = 1f)
     {
         for (var i = 0; i < items.Count; i++)
         {
@@ -160,48 +158,97 @@ public static class OptiMotion
     }
 
     /// <summary>
-    /// Settings open: scrim fades in, sheet fades + rises slightly.
-    /// Uses XAML Opacity only. Layout keeps the sheet centered.
+    /// Card select / press: quick scale pulse, then callback (navigate).
+    /// Visible feedback when tapping a home card.
+    /// </summary>
+    public static void PlaySelect(UIElement el, Action? onDone = null)
+    {
+        try
+        {
+            ForceCompositionIdentity(el);
+            var tf = EnsureTransform(el);
+            tf.ScaleX = 1;
+            tf.ScaleY = 1;
+            el.Opacity = 1;
+            el.IsHitTestVisible = true;
+
+            var sb = new Storyboard();
+            // Press in
+            sb.Children.Add(Scale(tf, "ScaleX", 1, 0.94, 70, 0));
+            sb.Children.Add(Scale(tf, "ScaleY", 1, 0.94, 70, 0));
+            // Spring out
+            sb.Children.Add(Scale(tf, "ScaleX", 0.94, 1.02, 90, 70));
+            sb.Children.Add(Scale(tf, "ScaleY", 0.94, 1.02, 90, 70));
+            // Settle
+            sb.Children.Add(Scale(tf, "ScaleX", 1.02, 1, 80, 160));
+            sb.Children.Add(Scale(tf, "ScaleY", 1.02, 1, 80, 160));
+
+            var finished = false;
+            void Once()
+            {
+                if (finished) return;
+                finished = true;
+                try
+                {
+                    tf.ScaleX = 1;
+                    tf.ScaleY = 1;
+                    tf.TranslateY = 0;
+                    el.Opacity = 1;
+                }
+                catch { }
+                onDone?.Invoke();
+            }
+            sb.Completed += (_, _) => Once();
+            sb.Begin();
+            _ = Task.Delay(SelectMs + 80).ContinueWith(_ =>
+            {
+                try { el.DispatcherQueue?.TryEnqueue(Once); } catch { try { Once(); } catch { } }
+            });
+        }
+        catch
+        {
+            EnsureVisible(el);
+            onDone?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Settings open: opacity fade only on scrim + sheet.
+    /// No TranslateY/Scale on the centered sheet (that is what drifts top-left).
     /// </summary>
     public static void PlayOverlayOpen(UIElement scrimHost, UIElement sheet)
     {
         try
         {
-            // Composition identity — never drive host opacity via composition.
             ForceCompositionIdentity(scrimHost);
             ForceCompositionIdentity(sheet);
+            // Kill any leftover RenderTransform from prior broken builds.
+            ClearTransform(sheet);
+            ClearTransform(scrimHost);
 
-            var tf = EnsureTransform(sheet);
             scrimHost.Opacity = 0;
             sheet.Opacity = 0;
-            sheet.IsHitTestVisible = false;
-            tf.TranslateY = 18;
-            tf.ScaleX = 0.97;
-            tf.ScaleY = 0.97;
+            sheet.IsHitTestVisible = true;
+            scrimHost.IsHitTestVisible = true;
 
             var sb = new Storyboard();
             sb.Children.Add(Fade(scrimHost, 0, 1, 200, 0));
-            sb.Children.Add(Fade(sheet, 0, 1, OverlayOpenMs, 20));
-            sb.Children.Add(TranslateY(tf, 18, 0, OverlayOpenMs, 20));
-            sb.Children.Add(Scale(tf, "ScaleX", 0.97, 1, OverlayOpenMs, 20));
-            sb.Children.Add(Scale(tf, "ScaleY", 0.97, 1, OverlayOpenMs, 20));
+            sb.Children.Add(Fade(sheet, 0, 1, OverlayOpenMs, 24));
             sb.Completed += (_, _) =>
             {
                 try
                 {
                     scrimHost.Opacity = 1;
                     sheet.Opacity = 1;
-                    sheet.IsHitTestVisible = true;
-                    tf.TranslateY = 0;
-                    tf.ScaleX = 1;
-                    tf.ScaleY = 1;
+                    ClearTransform(sheet);
+                    ClearTransform(scrimHost);
                 }
                 catch { }
             };
             sb.Begin();
 
-            ScheduleEnsureVisible(scrimHost, OverlayOpenMs + 80);
-            ScheduleEnsureVisible(sheet, OverlayOpenMs + 80);
+            ScheduleEnsureVisible(scrimHost, OverlayOpenMs + 60);
+            ScheduleEnsureVisible(sheet, OverlayOpenMs + 60);
         }
         catch
         {
@@ -210,19 +257,19 @@ public static class OptiMotion
         }
     }
 
-    /// <summary>Settings close: quick fade, then onDone (caller collapses Visibility).</summary>
+    /// <summary>Settings close: opacity fade only, then onDone.</summary>
     public static void PlayOverlayClose(UIElement scrimHost, UIElement sheet, Action? onDone = null)
     {
         try
         {
             ForceCompositionIdentity(scrimHost);
             ForceCompositionIdentity(sheet);
+            ClearTransform(sheet);
 
-            var tf = EnsureTransform(sheet);
             var sb = new Storyboard();
-            sb.Children.Add(Fade(scrimHost, scrimHost.Opacity, 0, OverlayCloseMs, 0));
-            sb.Children.Add(Fade(sheet, sheet.Opacity, 0, OverlayCloseMs, 0));
-            sb.Children.Add(TranslateY(tf, 0, 10, OverlayCloseMs, 0));
+            sb.Children.Add(Fade(scrimHost, Math.Clamp(scrimHost.Opacity, 0, 1), 0, OverlayCloseMs, 0));
+            sb.Children.Add(Fade(sheet, Math.Clamp(sheet.Opacity, 0, 1), 0, OverlayCloseMs, 0));
+
             var finished = false;
             void Once()
             {
@@ -230,19 +277,20 @@ public static class OptiMotion
                 finished = true;
                 try
                 {
-                    // Rest identity so next open starts clean.
+                    // Rest for next open (Visibility still Collapsed by caller).
                     scrimHost.Opacity = 1;
                     sheet.Opacity = 1;
-                    tf.TranslateY = 0;
-                    tf.ScaleX = 1;
-                    tf.ScaleY = 1;
+                    ClearTransform(sheet);
+                    ClearTransform(scrimHost);
+                    ForceCompositionIdentity(scrimHost);
+                    ForceCompositionIdentity(sheet);
                 }
                 catch { }
                 onDone?.Invoke();
             }
             sb.Completed += (_, _) => Once();
             sb.Begin();
-            _ = Task.Delay(OverlayCloseMs + 40).ContinueWith(_ =>
+            _ = Task.Delay(OverlayCloseMs + 50).ContinueWith(_ =>
             {
                 try { scrimHost.DispatcherQueue?.TryEnqueue(Once); } catch { try { Once(); } catch { } }
             });
@@ -255,24 +303,54 @@ public static class OptiMotion
         }
     }
 
-    /// <summary>Module page soft fade-in (XAML opacity only).</summary>
+    /// <summary>Module page soft fade-in.</summary>
     public static void PlayPageEnter(UIElement root)
     {
         ForceCompositionIdentity(root);
+        ClearTransform(root);
         try
         {
-            root.Opacity = 0.88;
+            root.Opacity = 0.9;
             root.IsHitTestVisible = true;
             var sb = new Storyboard();
-            sb.Children.Add(Fade(root, 0.88, 1, 220, 0));
-            sb.Completed += (_, _) => { try { root.Opacity = 1; } catch { } };
+            sb.Children.Add(Fade(root, 0.9, 1, 200, 0));
+            sb.Completed += (_, _) =>
+            {
+                try
+                {
+                    root.Opacity = 1;
+                    ClearTransform(root);
+                }
+                catch { }
+            };
             sb.Begin();
-            ScheduleEnsureVisible(root, 280);
+            ScheduleEnsureVisible(root, 260);
         }
         catch
         {
             EnsureVisible(root);
         }
+    }
+
+    private static void ClearTransform(UIElement el)
+    {
+        try
+        {
+            el.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
+            if (el.RenderTransform is CompositeTransform tf)
+            {
+                tf.TranslateX = 0;
+                tf.TranslateY = 0;
+                tf.ScaleX = 1;
+                tf.ScaleY = 1;
+                tf.Rotation = 0;
+            }
+            else
+            {
+                el.RenderTransform = null;
+            }
+        }
+        catch { }
     }
 
     private static void ForceCompositionIdentity(UIElement el)
@@ -286,6 +364,7 @@ public static class OptiMotion
             visual.Opacity = 1f;
             visual.Offset = Vector3.Zero;
             visual.Scale = Vector3.One;
+            visual.CenterPoint = Vector3.Zero;
         }
         catch { }
     }

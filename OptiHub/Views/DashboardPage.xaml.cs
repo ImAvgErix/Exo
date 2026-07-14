@@ -8,8 +8,7 @@ using OptiHub.ViewModels;
 namespace OptiHub.Views;
 
 /// <summary>
-/// Home grid. Soft card stagger on load using XAML storyboards only
-/// (never Composition Opacity — that blanked the UI).
+/// Home grid: soft card stagger on load; press pulse on select before navigate.
 /// </summary>
 public sealed partial class DashboardPage : Page
 {
@@ -17,6 +16,7 @@ public sealed partial class DashboardPage : Page
     private bool _entrancePlayed;
     private bool _entranceRunning;
     private int _entranceGen;
+    private bool _selecting;
 
     public DashboardViewModel ViewModel { get; }
 
@@ -60,6 +60,7 @@ public sealed partial class DashboardPage : Page
         _refreshCts = null;
         _entrancePlayed = false;
         _entranceGen++;
+        _selecting = false;
         base.OnNavigatedFrom(e);
     }
 
@@ -71,7 +72,7 @@ public sealed partial class DashboardPage : Page
         try
         {
             List<UIElement> cards = [];
-            for (var attempt = 0; attempt < 24; attempt++)
+            for (var attempt = 0; attempt < 28; attempt++)
             {
                 if (gen != _entranceGen) return;
                 cards.Clear();
@@ -90,10 +91,9 @@ public sealed partial class DashboardPage : Page
             sequence.AddRange(cards);
 
             if (sequence.Count > 0)
-                OptiMotion.PlayStagger(sequence, baseDelayMs: 16, stepMs: 42, fromY: 12f, fromScale: 0.97f);
+                OptiMotion.PlayStagger(sequence, baseDelayMs: 20, stepMs: 48, fromY: 14f, fromScale: 1f);
 
-            // Fail-safe: everything fully on after stagger window.
-            await Task.Delay(520);
+            await Task.Delay(560);
             if (gen != _entranceGen) return;
             OptiMotion.EnsureVisible(PageRoot);
             if (HeroTagline is not null)
@@ -122,12 +122,26 @@ public sealed partial class DashboardPage : Page
 
     private void CardButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_selecting) return;
         if (sender is not Button btn) return;
         var id = btn.Tag as string;
         if (string.IsNullOrWhiteSpace(id)) return;
         var card = ViewModel.Cards.FirstOrDefault(c => c.Definition.Id == id);
         if (card is null || card.IsComingSoon || card.Definition.Status == Models.OptimizerStatus.ComingSoon)
             return;
-        ViewModel.OpenOptimizerCommand.Execute(id);
+
+        // Visible select pulse, then navigate.
+        _selecting = true;
+        OptiMotion.PlaySelect(btn, () =>
+        {
+            try
+            {
+                ViewModel.OpenOptimizerCommand.Execute(id);
+            }
+            finally
+            {
+                _selecting = false;
+            }
+        });
     }
 }
