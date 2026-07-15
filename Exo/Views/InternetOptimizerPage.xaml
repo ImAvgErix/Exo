@@ -26,8 +26,8 @@
                               HorizontalScrollBarVisibility="Disabled"
                               HorizontalScrollMode="Disabled"
                               ZoomMode="Disabled"
-                              Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
-                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}">
+                              Visibility="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <ItemsRepeater x:Name="FeatureRepeater" ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}">
                         <ItemsRepeater.Layout>
                             <UniformGridLayout MaximumRowsOrColumns="2" Orientation="Horizontal"
                                                MinItemWidth="260" MinColumnSpacing="10" MinRowSpacing="10" ItemsStretch="Fill" />
@@ -60,6 +60,26 @@
                 </ScrollViewer>
             </Grid>
             <StackPanel Grid.Row="2" Spacing="10">
+                <!-- Honest auto-rollback marker from the last elevated apply run -->
+                <Border Style="{StaticResource OptiMessageBanner}"
+                        Visibility="{x:Bind ViewModel.HasRollback, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE7BA;" FontSize="15"
+                                  Foreground="{ThemeResource OptiWarningBrush}" VerticalAlignment="Top" />
+                        <TextBlock Text="{x:Bind ViewModel.RollbackNotice, Mode=OneWay}" Grid.Column="1"
+                                   Style="{StaticResource OptiBody}" TextWrapping="Wrap" />
+                    </Grid>
+                </Border>
+                <!-- Persisted before → after benchmark delta (green when ping p50 improved) -->
+                <TextBlock Text="{x:Bind ViewModel.BenchmarkSummary, Mode=OneWay}"
+                           Style="{StaticResource OptiCaption}"
+                           Foreground="{x:Bind ViewModel.BenchmarkBrush, Mode=OneWay}"
+                           TextAlignment="Center"
+                           Visibility="{x:Bind ViewModel.HasBenchmark, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                 <Border Style="{StaticResource OptiMessageBanner}"
                         Visibility="{x:Bind ViewModel.HasMessage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                     <Grid ColumnSpacing="10">
@@ -76,6 +96,53 @@
                 <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}"
                            TextAlignment="Center"
                            Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <!-- Compact expandable last-apply step report -->
+                <StackPanel Spacing="6"
+                            Visibility="{x:Bind ViewModel.HasApplyReport, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Button Style="{StaticResource OptiQuietButton}"
+                            MinHeight="34"
+                            Padding="12,6"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            Command="{x:Bind ViewModel.ToggleApplyReportCommand}"
+                            AutomationProperties.Name="Toggle last apply report">
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{x:Bind ViewModel.ApplyReportSummary, Mode=OneWay}"
+                                       Style="{StaticResource OptiCaption}"
+                                       Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                                       VerticalAlignment="Center" />
+                            <FontIcon Grid.Column="1"
+                                      Glyph="{x:Bind ViewModel.ApplyReportChevron, Mode=OneWay}"
+                                      FontSize="10"
+                                      Foreground="{ThemeResource OptiMutedTextBrush}"
+                                      VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                    <ScrollViewer MaxHeight="150"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Visibility="{x:Bind ViewModel.IsApplyReportOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.ApplyReportRows, Mode=OneWay}">
+                            <ItemsRepeater.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ApplyReportRowViewModel">
+                                    <Grid ColumnSpacing="8" Padding="8,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <FontIcon Glyph="{x:Bind Glyph}" FontSize="11"
+                                                  Foreground="{x:Bind Brush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{x:Bind Text}"
+                                                   Style="{StaticResource OptiCaption}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsRepeater.ItemTemplate>
+                        </ItemsRepeater>
+                    </ScrollViewer>
+                </StackPanel>
                 <Grid ColumnSpacing="10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -108,6 +175,10 @@
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                 </Grid>
+                <!-- Honest Repair caption: exact snapshot restore vs stock reset -->
+                <TextBlock Text="{x:Bind ViewModel.RepairHint, Mode=OneWay}"
+                           Style="{StaticResource OptiCaption}"
+                           TextAlignment="Center" />
             </StackPanel>
         </Grid>
     </Grid>

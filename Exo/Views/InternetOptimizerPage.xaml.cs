@@ -1,13 +1,16 @@
+using System.ComponentModel;
+using Exo.Helpers;
 using Exo.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 
 namespace Exo.Views;
 
 public sealed partial class InternetOptimizerPage : Page
 {
+    private bool _tilesEntered;
+
     public InternetOptimizerViewModel ViewModel { get; }
 
     public InternetOptimizerPage()
@@ -15,7 +18,7 @@ public sealed partial class InternetOptimizerPage : Page
         ViewModel = new InternetOptimizerViewModel(App.Services);
         InitializeComponent();
         DataContext = ViewModel;
-        ViewModel.ConfirmAsync = ConfirmRepairAsync;
+        ViewModel.PropertyChanged += ViewModel_PropertyChanged;
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -24,38 +27,14 @@ public sealed partial class InternetOptimizerPage : Page
         await ViewModel.InitializeAsync();
     }
 
-    private async Task<bool> ConfirmRepairAsync(string title, string message)
+    /// <summary>Staggered tile entrance on the first loading → loaded transition only.</summary>
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        var dialog = new ContentDialog
-        {
-            Title = title,
-            Content = new TextBlock
-            {
-                Text = message,
-                TextWrapping = TextWrapping.Wrap,
-                MaxWidth = 400,
-                FontSize = 13,
-                LineHeight = 20
-            },
-            PrimaryButtonText = "Repair",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot,
-            CornerRadius = new CornerRadius(18),
-            BorderThickness = new Thickness(1)
-        };
-        try
-        {
-            dialog.Background = (Brush)Application.Current.Resources["OptiCardFillBrush"];
-            dialog.BorderBrush = (Brush)Application.Current.Resources["OptiCardStrokeBrush"];
-            if (Application.Current.Resources.TryGetValue("OptiPrimaryButton", out var ps) && ps is Style primary)
-                dialog.PrimaryButtonStyle = primary;
-            if (Application.Current.Resources.TryGetValue("OptiQuietButton", out var qs) && qs is Style quiet)
-                dialog.CloseButtonStyle = quiet;
-        }
-        catch { }
-        var result = await dialog.ShowAsync();
-        return result == ContentDialogResult.Primary;
+        if (_tilesEntered) return;
+        if (e.PropertyName != nameof(ViewModel.IsFeatureListVisible) || !ViewModel.IsFeatureListVisible)
+            return;
+        _tilesEntered = true;
+        OptiMotion.PlayListEnter(FeatureRepeater, ViewModel.Rows.Count);
     }
 
     private void Latency_Click(object sender, RoutedEventArgs e) =>

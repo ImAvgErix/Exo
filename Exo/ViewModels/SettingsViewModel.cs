@@ -21,17 +21,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _isLightMode;
     [ObservableProperty] private bool _autoUpdateScripts;
 
-    /// <summary>Current theme name shown large (what you are in right now).</summary>
-    public string CurrentThemeLabel => IsDarkMode ? "Dark mode" : "Light mode";
-
-    /// <summary>Secondary line on the theme control (what a tap will do).</summary>
-    public string ThemeSwitchHint => IsDarkMode ? "Tap to switch to light" : "Tap to switch to dark";
-
-    /// <summary>Back-compat for smoke / older binds — always the current mode name.</summary>
-    public string ThemeToggleLabel => CurrentThemeLabel;
-
     [ObservableProperty] private string _appVersion = "-";
-    [ObservableProperty] private string _kitVersion = "-";
     [ObservableProperty] private string _updateStatus = string.Empty;
     [ObservableProperty] private bool _isUpdating;
     [ObservableProperty] private double _updateProgressPercent;
@@ -130,7 +120,6 @@ public partial class SettingsViewModel : ObservableObject
             _suppressThemeSync = false;
             _services.Theme.SetTheme(AppSettings.LightTheme);
         }
-        NotifyThemeLabels();
     }
 
     partial void OnIsLightModeChanged(bool value)
@@ -150,14 +139,6 @@ public partial class SettingsViewModel : ObservableObject
             _suppressThemeSync = false;
             _services.Theme.SetTheme(AppSettings.DarkTheme);
         }
-        NotifyThemeLabels();
-    }
-
-    private void NotifyThemeLabels()
-    {
-        OnPropertyChanged(nameof(CurrentThemeLabel));
-        OnPropertyChanged(nameof(ThemeSwitchHint));
-        OnPropertyChanged(nameof(ThemeToggleLabel));
     }
 
     [RelayCommand]
@@ -204,7 +185,6 @@ public partial class SettingsViewModel : ObservableObject
 
             var app = await _services.Updater.CheckAppUpdateAsync(status: status, progress: detail);
             AppVersion = GetAppVersionText();
-            RefreshKitVersionText();
 
             if (app.UpdateAvailable)
             {
@@ -229,7 +209,6 @@ public partial class SettingsViewModel : ObservableObject
 
                     UpdateStatus = install.Message;
                     AppVersion = GetAppVersionText();
-                    RefreshKitVersionText();
                     if (install.ShouldExit)
                     {
                         await Task.Delay(400);
@@ -296,18 +275,8 @@ public partial class SettingsViewModel : ObservableObject
             _suppressSettingsSync = false;
         }
 
-        RefreshKitVersionText();
         AppVersion = GetAppVersionText();
         UpdateStatus = string.Empty;
-    }
-
-    private void RefreshKitVersionText()
-    {
-        // Compact: Discord · Steam · NVIDIA
-        KitVersion =
-            $"{_services.Scripts.GetWorkingKitVersion("Discord")} · " +
-            $"{_services.Scripts.GetWorkingKitVersion("Steam")} · " +
-            $"{_services.Scripts.GetWorkingKitVersion("Nvidia")}";
     }
 
     private static string GetAppVersionText()

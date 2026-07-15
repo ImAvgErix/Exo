@@ -43,8 +43,19 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("amoled black", a.Contains("#000000", StringComparison.Ordinal));
     Expect("stone white accent", a.Contains("#F5F5F4", StringComparison.Ordinal));
-    Expect("cream light page", a.Contains("#F2EBE0", StringComparison.Ordinal) || a.Contains("#F3EDE3", StringComparison.Ordinal));
+    // Single cream everywhere: #F3EDE3 (matches ThemeService.SoftStone); old #F2EBE0 must stay gone.
+    Expect("cream light page unified", a.Contains("#F3EDE3", StringComparison.Ordinal)
+        && !a.Contains("#F2EBE0", StringComparison.Ordinal)
+        && !a.Contains("#F3EBE3", StringComparison.Ordinal));
     Expect("dark card lift", a.Contains("#0C0C0C", StringComparison.Ordinal));
+}
+var themeServiceCs = Path.Combine(repo, "Exo", "Services", "ThemeService.cs");
+if (File.Exists(themeServiceCs))
+{
+    var ts = File.ReadAllText(themeServiceCs);
+    Expect("theme service cream matches app.xaml",
+        ts.Contains("243, 237, 227", StringComparison.Ordinal)
+        && ts.Contains("#F3EDE3", StringComparison.Ordinal));
 }
 if (File.Exists(main))
 {
@@ -173,6 +184,11 @@ if (File.Exists(settingsCs))
         sc.Contains("PlayOpenAnimation", StringComparison.Ordinal)
         && sc.Contains("OpenMs", StringComparison.Ordinal)
         && sc.Contains("ResetOpenVisual", StringComparison.Ordinal));
+    // Mirrored close (fade + rise) must exist and never strand a reopened sheet at opacity 0.
+    Expect("settings play close animation",
+        sc.Contains("PlayCloseAnimation", StringComparison.Ordinal)
+        && sc.Contains("CloseMs", StringComparison.Ordinal)
+        && sc.Contains("FinishClose", StringComparison.Ordinal));
 }
 // Settings is gear flyout (2.1.0 style).
 if (File.Exists(mainXaml))
@@ -241,6 +257,11 @@ foreach (var page in new[]
             && x.Contains("Highest download", StringComparison.Ordinal)
             && x.Contains("OptiWhiteButton", StringComparison.Ordinal));
         Expect("internet Repair button", x.Contains("Content=\"Repair\"", StringComparison.Ordinal));
+        // Proof layer: benchmark delta, rollback banner, honest Repair caption.
+        Expect("internet proof layer",
+            x.Contains("BenchmarkSummary", StringComparison.Ordinal)
+            && x.Contains("RollbackNotice", StringComparison.Ordinal)
+            && x.Contains("RepairHint", StringComparison.Ordinal));
         var ics = Path.Combine(repo, "Exo", "Views", "InternetOptimizerPage.xaml.cs");
         if (File.Exists(ics))
         {
@@ -249,6 +270,65 @@ foreach (var page in new[]
             Expect("internet repair wired", ic.Contains("Repair_Click", StringComparison.Ordinal));
         }
     }
+}
+
+// Friction-free apply/repair: no blocking ContentDialog confirmations on module pages
+// (update consent dialogs live in OptiUpdateDialog only), and every module plays the
+// staggered feature-tile entrance on its first loading → loaded transition.
+foreach (var page in new[]
+         {
+             "DiscordOptimizerPage", "SteamOptimizerPage", "InternetOptimizerPage", "NvidiaOptimizerPage"
+         })
+{
+    var cs = Path.Combine(repo, "Exo", "Views", page + ".xaml.cs");
+    if (!File.Exists(cs)) continue;
+    var code = File.ReadAllText(cs);
+    Expect(page + " no confirm dialog",
+        !code.Contains("ContentDialog", StringComparison.Ordinal)
+        && !code.Contains("ConfirmAsync", StringComparison.Ordinal));
+    Expect(page + " tile entrance",
+        code.Contains("PlayListEnter", StringComparison.Ordinal)
+        && code.Contains("IsFeatureListVisible", StringComparison.Ordinal));
+}
+foreach (var vmName in new[]
+         {
+             "DiscordOptimizerViewModel", "SteamOptimizerViewModel",
+             "InternetOptimizerViewModel", "NvidiaOptimizerViewModel"
+         })
+{
+    var vmPath = Path.Combine(repo, "Exo", "ViewModels", vmName + ".cs");
+    if (!File.Exists(vmPath)) continue;
+    var vmCode = File.ReadAllText(vmPath);
+    Expect(vmName + " no confirm gate", !vmCode.Contains("ConfirmAsync", StringComparison.Ordinal));
+}
+
+// Last-apply step report is surfaced on Internet / Discord / Steam (NVIDIA has no
+// applyReport data — intentionally omitted, never faked).
+foreach (var page in new[] { "DiscordOptimizerPage", "SteamOptimizerPage", "InternetOptimizerPage" })
+{
+    var px = Path.Combine(repo, "Exo", "Views", page + ".xaml");
+    if (!File.Exists(px)) continue;
+    var pxText = File.ReadAllText(px);
+    Expect(page + " last apply report",
+        pxText.Contains("ApplyReportRows", StringComparison.Ordinal)
+        && pxText.Contains("ApplyReportSummary", StringComparison.Ordinal));
+}
+var steamXamlPath = Path.Combine(repo, "Exo", "Views", "SteamOptimizerPage.xaml");
+if (File.Exists(steamXamlPath))
+{
+    var sx = File.ReadAllText(steamXamlPath);
+    Expect("steam trim stats row",
+        sx.Contains("TrimStatsText", StringComparison.Ordinal)
+        && sx.Contains("HasTrimStats", StringComparison.Ordinal));
+}
+var nvidiaXamlPath = Path.Combine(repo, "Exo", "Views", "NvidiaOptimizerPage.xaml");
+if (File.Exists(nvidiaXamlPath))
+{
+    var nx = File.ReadAllText(nvidiaXamlPath);
+    // NVIDIA Reset is status-clear only — honest caption, no rollback wording.
+    Expect("nvidia reset honest caption",
+        nx.Contains("Reset clears Exo status only", StringComparison.Ordinal)
+        && !nx.Contains("rollback", StringComparison.OrdinalIgnoreCase));
 }
 
 var loaderCs = Path.Combine(repo, "Exo", "Views", "Controls", "OptiLoader.xaml.cs");
@@ -271,8 +351,14 @@ if (File.Exists(motionCs))
     var m = File.ReadAllText(motionCs);
     Expect("OptiMotion ResetVisual", m.Contains("ResetVisual", StringComparison.Ordinal));
     Expect("OptiMotion EnsureVisible", m.Contains("EnsureVisible", StringComparison.Ordinal));
-    Expect("OptiMotion overlay open", m.Contains("PlayOverlayOpen", StringComparison.Ordinal));
-    Expect("OptiMotion overlay close", m.Contains("PlayOverlayClose", StringComparison.Ordinal));
+    // Dead overlay/scrim era APIs must stay deleted (settings is a gear flyout now).
+    Expect("OptiMotion dead overlay APIs gone",
+        !m.Contains("PlayOverlayOpen", StringComparison.Ordinal)
+        && !m.Contains("PlayOverlayClose", StringComparison.Ordinal)
+        && !m.Contains("PlayScrimFade", StringComparison.Ordinal)
+        && !m.Contains("ClearCompositionOnly", StringComparison.Ordinal)
+        && !m.Contains("Spring()", StringComparison.Ordinal));
+    Expect("OptiMotion list enter", m.Contains("PlayListEnter", StringComparison.Ordinal));
     // Composition visual opacity must stay at 1 (never blank UI via composition).
     Expect("OptiMotion never zeros composition opacity",
         m.Contains("visual.Opacity = 1f", StringComparison.Ordinal)
@@ -308,6 +394,11 @@ if (File.Exists(mainCsPath))
         mc.Contains("PlayOpenAnimation", StringComparison.Ordinal)
         && mc.Contains("SettingsFlyout_Opened", StringComparison.Ordinal)
         && mc.Contains("SettingsSheet.OpenMs", StringComparison.Ordinal));
+    Expect("settings close plays menu exit with gear",
+        mc.Contains("PlayCloseAnimation", StringComparison.Ordinal)
+        && mc.Contains("SettingsFlyout_Closing", StringComparison.Ordinal)
+        && mc.Contains("SpinSettingsGearBack", StringComparison.Ordinal)
+        && mc.Contains("SettingsSheet.CloseMs", StringComparison.Ordinal));
     Expect("taskbar icon win32 set",
         mc.Contains("SendMessage", StringComparison.Ordinal) && mc.Contains("LoadImage", StringComparison.Ordinal)
         && mc.Contains("TrySetWindowIcon", StringComparison.Ordinal)
@@ -408,11 +499,22 @@ if (File.Exists(settingsVm))
     Expect("VM no motion slider",
         !svm.Contains("MotionIntensity", StringComparison.Ordinal)
         && !svm.Contains("MotionStrength", StringComparison.Ordinal));
+    // Old theme-toggle era leftovers must stay deleted.
+    Expect("VM no dead settings leftovers",
+        !svm.Contains("KitVersion", StringComparison.Ordinal)
+        && !svm.Contains("CurrentThemeLabel", StringComparison.Ordinal)
+        && !svm.Contains("ThemeSwitchHint", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
 {
     var t2 = File.ReadAllText(theme);
-    Expect("theme OptiSecondaryButton", t2.Contains("OptiSecondaryButton", StringComparison.Ordinal));
+    // Dead styles must stay deleted; no BackEase (spring bounce) anywhere in the theme.
+    Expect("theme dead styles gone",
+        !t2.Contains("OptiSecondaryButton", StringComparison.Ordinal)
+        && !t2.Contains("OptiThemeToggleButton", StringComparison.Ordinal)
+        && !t2.Contains("OptiTaglineSupport", StringComparison.Ordinal)
+        && !t2.Contains("OptiLogoWell", StringComparison.Ordinal));
+    Expect("theme no BackEase", !t2.Contains("BackEase", StringComparison.Ordinal));
 }
 
 // Logo visual weight: measure real shipped PNG alpha ink.

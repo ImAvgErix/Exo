@@ -452,8 +452,37 @@ public sealed partial class MainWindow : Window
         try { SettingsSheetHost?.PlayOpenAnimation(); } catch { }
     }
 
+    private bool _settingsCloseAnimated;
+
+    /// <summary>
+    /// Mirrored close: cancel the first dismiss, play the menu rise/fade with the
+    /// gear counter-crank, then hide for real once the storyboard (or its safety
+    /// fallback) completes.
+    /// </summary>
+    private void SettingsFlyout_Closing(FlyoutBase sender, FlyoutBaseClosingEventArgs args)
+    {
+        if (_settingsCloseAnimated) return;
+        if (SettingsSheetHost is null) return;
+
+        args.Cancel = true;
+        _settingsCloseAnimated = true;
+        SpinSettingsGearBack();
+        try
+        {
+            SettingsSheetHost.PlayCloseAnimation(() =>
+            {
+                try { SettingsFlyout.Hide(); } catch { }
+            });
+        }
+        catch
+        {
+            try { SettingsFlyout.Hide(); } catch { }
+        }
+    }
+
     private void SettingsFlyout_Closed(object sender, object e)
     {
+        _settingsCloseAnimated = false;
         try { SettingsSheetHost?.ResetOpenVisual(); } catch { }
         try
         {
@@ -504,6 +533,45 @@ public sealed partial class MainWindow : Window
             sb.Completed += (_, _) =>
             {
                 try { SettingsGearRotate.Angle = 180; } catch { }
+                _gearSpinning = false;
+            };
+            sb.Begin();
+        }
+        catch
+        {
+            _gearSpinning = false;
+        }
+    }
+
+    /// <summary>Gear counter-crank — mirrors the open spin while the menu rises away.</summary>
+    private void SpinSettingsGearBack()
+    {
+        if (_gearSpinning) return;
+        _gearSpinning = true;
+        try
+        {
+            if (SettingsGearRotate is null)
+            {
+                _gearSpinning = false;
+                return;
+            }
+
+            var ms = Views.Controls.SettingsSheet.CloseMs;
+            var anim = new DoubleAnimation
+            {
+                From = SettingsGearRotate.Angle,
+                To = 0,
+                Duration = TimeSpan.FromMilliseconds(ms),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                EnableDependentAnimation = true
+            };
+            Storyboard.SetTarget(anim, SettingsGearRotate);
+            Storyboard.SetTargetProperty(anim, "Angle");
+            var sb = new Storyboard();
+            sb.Children.Add(anim);
+            sb.Completed += (_, _) =>
+            {
+                try { SettingsGearRotate.Angle = 0; } catch { }
                 _gearSpinning = false;
             };
             sb.Begin();

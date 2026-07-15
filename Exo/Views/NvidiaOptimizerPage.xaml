@@ -42,8 +42,8 @@
                               HorizontalScrollBarVisibility="Disabled"
                               HorizontalScrollMode="Disabled"
                               ZoomMode="Disabled"
-                              Visibility="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
-                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.Features, Mode=OneWay}">
+                              Visibility="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <ItemsRepeater x:Name="FeatureRepeater" ItemsSource="{x:Bind ViewModel.Features, Mode=OneWay}">
                         <ItemsRepeater.Layout>
                             <UniformGridLayout MaximumRowsOrColumns="2" Orientation="Horizontal"
                                                MinItemWidth="260" MinColumnSpacing="10" MinRowSpacing="10" ItemsStretch="Fill" />
@@ -108,6 +108,10 @@
                     <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click" HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                 </Grid>
+                <!-- Honest Reset caption: status-clear only, driver untouched -->
+                <TextBlock Text="Reset clears Exo status only — NVIDIA driver and profiles stay."
+                           Style="{StaticResource OptiCaption}"
+                           TextAlignment="Center" />
             </StackPanel>
         </Grid>
     </Grid>

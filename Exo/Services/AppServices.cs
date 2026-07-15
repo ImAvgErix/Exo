@@ -36,7 +36,7 @@ public sealed class AppServices
 
             try
             {
-                // Prefer PowerShell 7 Preview + Windows Terminal Preview; install via winget if missing.
+                // Ensure stable PowerShell 7; install via winget (or portable fallback) if missing.
                 await PowerShellRunnerService.EnsurePowerShellRuntimeAsync().ConfigureAwait(false);
             }
             catch { /* install is best-effort; RunAsync still surfaces clear errors */ }
