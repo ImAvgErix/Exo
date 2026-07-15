@@ -1,3 +1,16 @@
+## 2.4.0
+
+- **Internet — snapshot + true Repair**: pre-apply snapshot of every touched setting to `%LocalAppData%\Exo\network-snapshot.json`; Repair restores that exact snapshot (not a generic "stock-like" reset); post-apply **auto-rollback** when the connectivity probe fails; Wi‑Fi disable is now gated on a connectivity probe (never cuts your only working link); standalone `Repair-Internet.ps1` rescue one-liner (`irm | iex`, like `Repair-Discord.ps1`)
+- **Internet — new tweak layer**: TCP fast path (initial RTO, MinRto, timestamps off, pacing off, TCP Fast Open, HyStart per preset); UDP URO off on Win11 24H2+ for latency; ECN per preset; DNS ServiceProvider priorities; RSS CPU spread; deeper adapter power kill; Delivery Optimization service to Manual
+- **Internet — locale-independent NIC matching**: advanced-property tweaks match by `RegistryKeyword`, so they apply on non-English Windows
+- **Internet — before/after benchmark**: ping / jitter / DNS lookup measured before and after apply and shown in the UI
+- **NVIDIA — live DRS verification**: after Profile Inspector import, Exo exports the driver's actual profile database (NPI 3.0.1.11 `-exportCustomized`, version-pinned + SHA-256) and verifies pinned values; detect re-verifies live, so the UI shows **"Verified in driver"** vs **"Drifted — re-apply"**
+- **NVIDIA — expanded catalog + pins**: per-game profiles for Apex, OW2, Marvel Rivals, R6, PUBG, CoD, Rust, Tarkov, LoL, Dota 2, Rocket League, GTA V/FiveM; more per-series DRS pins (Resizable BAR, present method, background FPS cap); deeper driver component strip at install (ShadowPlay/NvBackend/telemetry sub-packages); **digital vibrance** in the Exo NVIDIA Panel. Reset remains status-clear only — driver recovery stays manual
+- **Discord — voice QoS + tighter detect**: DSCP 46 QoS policy for voice UDP across Stable/PTB/Canary; all Discord variants optimized; deeper module/dictionary debloat; binary detection tightened — the legacy OpenAsar layout is no longer accepted (fully replaced by Exo Host); Equicord + AMOLED theme + DiscOpt kernel (4s RAM trim, AboveNormal priority) unchanged
+- **Steam — VDF injection + deeper quiet**: peak settings now inserted even when modern Steam omits the keys; library low-bandwidth/low-perf and community content off; webhelper RAM trim stats surfaced in the UI ("RAM reclaimed"); stable launcher flags; multi-library support
+- **Runtime — stable PowerShell 7**: replaces the old PowerShell 7 Preview + Windows Terminal Preview requirement; a dependency doctor at install/update auto-installs stable pwsh (winget, MSI fallback) and **uninstalls the preview channels**; cache hygiene prunes old tool/driver/app-staging versions
+- **App**: .NET 10 LTS + Windows App SDK 2.2 + C# 14; per-module last-apply report (step-by-step ok/fail/skip); confirmation dialogs removed
+
 ## 2.3.4
 
 - **Detect fix**: Discord status checks no longer require OpenAsar (Exo Host + stock `_app.asar` + host flags); Start Menu accepts `Update.exe --processStart`; StrictMode no longer false-fails host flags; checks show green when Apply actually worked

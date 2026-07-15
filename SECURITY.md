@@ -28,6 +28,7 @@ Reports we prioritize:
 - Remote code execution or unexpected network download of untrusted code
 - Privilege escalation beyond the elevation you already approve
 - Installer / update path integrity failures (wrong binary, no version check)
+- Integrity failures in the public one-liner scripts (`Install-Exo.ps1`, `Repair-Discord.ps1`, `Repair-Internet.ps1`) or in verified vendor downloads (size/SHA-256 bypass)
 
 Out of scope:
 

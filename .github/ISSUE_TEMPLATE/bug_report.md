@@ -21,9 +21,15 @@ assignees: ''
 ## Environment
 
 - Exo version (Settings → App version):
-- Windows version:
-- Module (Home / Discord / Steam / Internet / NVIDIA / Panel):
+- Windows version + build (`winver`, e.g. 23H2 22631.x):
+- Module (Home / Internet / Discord / Steam / NVIDIA / NVIDIA Panel):
 
-## Logs
+## Last-apply report / logs
 
-<!-- Settings → Open logs, attach relevant lines if useful -->
+<!--
+If the issue is about an optimizer, attach:
+- The module's last-apply report (step-by-step ok/fail/skip) shown in the app after Apply
+- Optimizer state / logs from %LocalAppData%\Exo
+- The matching exo-*.log file(s) from %TEMP% (e.g. exo-net-last.log)
+Settings → Open logs takes you there.
+-->
