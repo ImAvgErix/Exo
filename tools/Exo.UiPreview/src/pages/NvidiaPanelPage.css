@@ -1,0 +1,134 @@
+.nvidia-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.nvidia-panel__body {
+  flex: 1;
+  min-height: 0;
+  padding: 18px 28px 10px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 980px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto;
+}
+
+.nvidia-panel__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nvidia-panel__section {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--exo-muted);
+}
+
+.nvidia-panel__status {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 32px;
+  color: var(--exo-text);
+}
+
+.nvidia-panel__detail {
+  margin: 2px 0 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--exo-muted);
+}
+
+.nvidia-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.display-card {
+  background: var(--exo-card);
+  border: 1px solid var(--exo-stroke);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+.display-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.display-card__title {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--exo-text);
+}
+
+.display-card__apply {
+  min-width: 96px;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+.display-card__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.display-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--exo-muted);
+}
+
+.display-field--span {
+  grid-column: 1 / -1;
+}
+
+.display-field select,
+.display-field input[type='range'] {
+  width: 100%;
+}
+
+.display-field select {
+  min-height: 34px;
+  border: 1px solid var(--exo-stroke);
+  border-radius: 10px;
+  background: #000;
+  color: var(--exo-text);
+  padding: 0 10px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.display-field__vibrance-label {
+  display: flex;
+  justify-content: space-between;
+}
+
+.display-field input[type='range'] {
+  accent-color: var(--exo-accent);
+  height: 28px;
+  margin-top: 4px;
+}

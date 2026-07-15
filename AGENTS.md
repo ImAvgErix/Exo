@@ -48,6 +48,11 @@ Toolchain (already present via the VM snapshot; the update script only runs `dot
 What runs on Linux (one command):
 - `pwsh -NoProfile -File ./tools/Test-Linux.ps1` — repository integrity + Network / Steam / Nvidia / Discord / Ui smokes. Must pass with `failed=0`.
 
+UI click-testing on Linux (mock shell only — not the WinUI app):
+- `cd tools/Exo.UiPreview && npm install && npx playwright install chromium && npm run preview:click`
+- Dev server: `npm run dev` then open `http://127.0.0.1:5173`
+- This is a **React/Vite preview** of the v2.5 rail UI for layout/nav QA. Real Apply/Repair remains Windows-only.
+
 Also individually:
 - `pwsh -NoProfile -File ./tools/Test-Repository.ps1`
 - `dotnet run --project tools/Network.Smoke|Steam.Smoke|Nvidia.Smoke|Discord.Smoke|Ui.Smoke -c Release`
