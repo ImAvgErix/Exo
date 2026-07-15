@@ -371,16 +371,18 @@ function Test-DiscOptimizer {
         Write-Warn 'Equicord loader not verified'
     }
 
+    if (Test-ExoHostInstalled $app.FullName) {
+        Write-Ok 'Exo Host active (Equicord loader on app.asar)'
+    } elseif (-not $SkipEquicord) {
+        Write-Warn 'Exo Host / Equicord loader not verified on app.asar'
+    }
     if (Test-OpenAsarInstalled $resources) {
-        $size = [math]::Round((Get-Item $bootstrap).Length / 1KB, 1)
-        Write-Ok "OpenASAR active on _app.asar ($size KB)"
-    } elseif (-not $SkipOpenAsar -and -not $SkipEquicord) {
-        Write-Warn 'OpenASAR not detected on _app.asar'
+        Write-Warn 'Legacy OpenAsar still on _app.asar - removed on next Apply'
     }
 
     if (Test-Path $stockBackup) {
-        Write-Ok 'Stock bootstrap backup present (_app.asar.stock)'
-    } elseif (-not $SkipOpenAsar -and -not $SkipEquicord) {
+        Write-Ok 'Stock shell backup present (_app.asar.stock)'
+    } elseif (-not $SkipEquicord) {
         Write-Warn 'No _app.asar.stock backup yet'
     }
 

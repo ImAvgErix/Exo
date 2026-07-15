@@ -248,8 +248,16 @@ function Apply-EquicordProfile {
 }
 
 function New-EquicordLoaderAsar([string]$EquicordAsarPath) {
+    # Exo Host bootstrap: lean env, then Equicord (actively maintained client).
+    # Replaces OpenAsar - we do not ship a fragile full desktop-shell rewrite.
     $escaped = $EquicordAsarPath.Replace('\', '\\')
-    $indexJs = "require(`"$escaped`")`n"
+    # Keep the stub minimal - do NOT set DISCORD_USER_DATA_DIR (breaks %AppData%\discord).
+    $indexJs = @(
+        '// Exo Host - Equicord bootstrap (no OpenAsar)'
+        'try { process.env.ELECTRON_NO_ATTACH_CONSOLE = "1"; } catch (e) {}'
+        "require(`"$escaped`");"
+        ''
+    ) -join "`n"
     $packageJson = "{`n`t`"name`": `"discord`",`n`t`"main`": `"index.js`"`n}"
     $indexBytes = [Text.Encoding]::UTF8.GetBytes($indexJs)
     $pkgBytes = [Text.Encoding]::UTF8.GetBytes($packageJson)
@@ -271,20 +279,18 @@ function New-EquicordLoaderAsar([string]$EquicordAsarPath) {
 }
 
 function Test-EquicordReady([string]$AppDir) {
-    $resources = Join-Path $AppDir 'resources'
-    $loaderOk = Test-EquicordLoaderPatched $AppDir
-    $openAsarOk = $SkipOpenAsar -or (Test-OpenAsarInstalled $resources)
-    return ($loaderOk -and $openAsarOk)
+    # Peak = Equicord loader + Exo Host flags path (OpenAsar no longer required).
+    return (Test-EquicordLoaderPatched $AppDir)
 }
 
 function Install-EquicordDirect([string]$AppDir) {
-    # Fast path only: bundled/cached Equicord asar + stub loader + OpenASAR.
-    # Never calls Equilot (interactive CLI hangs Exo).
+    # Fast path: Equicord asar + Exo Host loader + profile/theme/plugins.
+    # Never calls Equilot (interactive CLI hangs Exo). Never installs OpenAsar.
     $equicordAsar = Join-Path $EquicordData 'equicord.asar'
     if (-not (Test-Path $EquicordData)) { New-Item -ItemType Directory -Path $EquicordData -Force | Out-Null }
 
     Write-HubProgress 56 'Installing Equicord (fast)...'
-    Write-Step 'Installing Equicord + OpenASAR (direct, no Equilot)...'
+    Write-Step 'Installing Equicord + Exo Host (direct, no OpenAsar)...'
     Stop-Discord
 
     $dl = Resolve-EquicordDesktopAsar $equicordAsar
@@ -322,53 +328,109 @@ function Install-EquicordDirect([string]$AppDir) {
     }
 
     Ensure-AsarStockBackup $AppDir
+    Remove-LegacyOpenAsar $AppDir
 
+    # Equilotl / Equicord require stock Discord desktop as _app.asar (large).
+    # app.asar becomes the tiny require("equicord.asar") stub. Missing _app.asar
+    # shows a bare "Error" window on modern Discord hosts.
+    $bootstrap = Join-Path $resources '_app.asar'
+    $stock = Join-Path $resources '_app.asar.stock'
     $loaderLen = if (Test-Path $appAsar) { (Get-Item $appAsar).Length } else { 0 }
-    if ($loaderLen -ge 64 -and $loaderLen -lt 4096) {
-        Write-Ok 'Equicord loader already patched'
-    } else {
-        if ($loaderLen -gt 0 -and $loaderLen -lt 64) {
-            Write-Warn "Equicord loader corrupt ($loaderLen bytes) - rewriting stub"
+    if ($loaderLen -gt 1000000) {
+        Copy-Item -LiteralPath $appAsar -Destination $bootstrap -Force
+        if (-not (Test-Path -LiteralPath $stock)) {
+            Copy-Item -LiteralPath $appAsar -Destination $stock -Force
         }
-        $backupAsar = Join-Path $resources '_app.asar'
-        if (-not (Test-Path $backupAsar) -and (Test-Path $appAsar) -and (Get-Item $appAsar).Length -gt 1000000) {
-            Copy-Item $appAsar $backupAsar -Force
+        Write-Ok 'Stock Discord shell moved to _app.asar (Equicord layout)'
+    } elseif (-not (Test-Path -LiteralPath $bootstrap) -or ((Get-Item $bootstrap).Length -lt 1000000)) {
+        if (Test-Path -LiteralPath $stock) {
+            Copy-Item -LiteralPath $stock -Destination $bootstrap -Force
+            Write-Ok 'Restored stock shell to _app.asar from backup'
+        } else {
+            throw 'Missing stock Discord app.asar for Equicord (_app.asar). Reinstall Discord, then re-run Exo Discord Apply.'
         }
-        Write-DiscordResourceBytes -Path $appAsar -Bytes (New-EquicordLoaderAsar $equicordAsar)
-        Write-Ok 'Installed Equicord loader stub'
     }
 
-    if (-not $SkipOpenAsar) {
-        Write-HubProgress 66 'Installing OpenASAR...'
-        Install-OpenAsar $AppDir
-    } else {
-        Write-Warn 'Skipped OpenASAR install (-SkipOpenAsar)'
-    }
+    Write-DiscordResourceBytes -Path $appAsar -Bytes (New-EquicordLoaderAsar $equicordAsar)
+    Write-Ok 'Installed Exo Host Equicord loader (app.asar stub)'
 
-    Write-HubProgress 62 'Applying Equicord profile...'
+    Write-HubProgress 66 'Exo Host flags...'
+    Install-ExoHost $AppDir
+
+    Write-HubProgress 62 'Applying Equicord profile (theme + plugins)...'
     Apply-EquicordProfile -AppDir $AppDir
 
     if (-not (Test-EquicordReady $AppDir)) {
-        throw 'Direct Equicord install did not verify (loader/OpenASAR check failed)'
+        throw 'Direct Equicord install did not verify (loader check failed)'
     }
-    Write-Ok 'Equicord + OpenASAR ready (direct path)'
+    Write-Ok 'Equicord + Exo Host ready (theme/plugins applied; no OpenAsar)'
+}
+
+function Install-EquicordViaEquilotl([string]$DiscordRoot) {
+    # Official Equicord installer (non-interactive). Produces the correct
+    # app.asar stub + large stock _app.asar layout modern Discord needs.
+    $cli = Join-Path $ToolsDir 'EquilotlCli.exe'
+    if (-not (Test-Path -LiteralPath $cli)) {
+        $url = 'https://github.com/Equicord/Equilotl/releases/latest/download/EquilotlCli.exe'
+        Write-Step 'Downloading Equilotl CLI (official Equicord installer)...'
+        try {
+            if (-not (Test-Path -LiteralPath $ToolsDir)) {
+                New-Item -ItemType Directory -Path $ToolsDir -Force | Out-Null
+            }
+            Invoke-WebRequest -Uri $url -OutFile $cli -UseBasicParsing -TimeoutSec 120
+        } catch {
+            Write-Warn "Equilotl download failed: $($_.Exception.Message)"
+            return $false
+        }
+    }
+    if (-not (Test-Path -LiteralPath $cli) -or (Get-Item $cli).Length -lt 1MB) { return $false }
+    Stop-Discord
+    Write-Step 'Installing Equicord via Equilotl (no OpenAsar)...'
+    $p = Start-Process -FilePath $cli -ArgumentList @('-install', '-location', $DiscordRoot) -Wait -PassThru -NoNewWindow
+    if ($p.ExitCode -ne 0) {
+        Write-Warn "Equilotl exit $($p.ExitCode) - will try direct path"
+        return $false
+    }
+    return $true
 }
 
 function Install-Equicord([string]$AppDir) {
-    Write-Step 'Verifying Equicord + OpenASAR...'
+    Write-Step 'Verifying Equicord + Exo Host...'
     Write-HubProgress 55 'Checking Equicord...'
-    $resources = Join-Path $AppDir 'resources'
     $loaderOk = Test-EquicordLoaderPatched $AppDir
-    $openOk = $SkipOpenAsar -or (Test-OpenAsarInstalled $resources)
-    if ($loaderOk -and $openOk) {
-        Write-Ok 'Equicord + OpenASAR already installed - applying tweaks only'
+    if ($loaderOk) {
+        Write-Ok 'Equicord loader present - refreshing host + profile'
+        Remove-LegacyOpenAsar $AppDir
+        # Keep large stock on _app.asar (Equicord needs it)
+        $resources = Join-Path $AppDir 'resources'
+        $bootstrap = Join-Path $resources '_app.asar'
+        $stock = Join-Path $resources '_app.asar.stock'
+        if ((-not (Test-Path $bootstrap) -or (Get-Item $bootstrap).Length -lt 1000000) -and (Test-Path $stock)) {
+            Copy-Item $stock $bootstrap -Force
+            Write-Ok 'Restored stock shell on _app.asar for Equicord'
+        }
+        Install-ExoHost $AppDir
         Apply-EquicordProfile -AppDir $AppDir
         return
     }
-    if (-not $loaderOk) {
-        Write-Warn 'Equicord loader missing/corrupt - repairing via direct install'
+    Write-Warn 'Equicord loader missing - trying Equilotl then direct path'
+    $root = Split-Path -Parent (Split-Path -Parent $AppDir)
+    if ($root -and (Install-EquicordViaEquilotl $root)) {
+        if (Test-EquicordLoaderPatched $AppDir) {
+            Remove-LegacyOpenAsar $AppDir
+            Install-ExoHost $AppDir
+            Apply-EquicordProfile -AppDir $AppDir
+            Write-Ok 'Equicord installed via Equilotl + Exo Host profile'
+            return
+        }
+        # App folder may have been recreated
+        $active = Get-ActiveApp
+        if ($active -and (Test-EquicordLoaderPatched $active.FullName)) {
+            Install-ExoHost $active.FullName
+            Apply-EquicordProfile -AppDir $active.FullName
+            Write-Ok 'Equicord installed via Equilotl + Exo Host profile'
+            return
+        }
     }
-
-    Write-Step 'Equicord/OpenASAR missing - installing (fast path)...'
     Install-EquicordDirect $AppDir
 }

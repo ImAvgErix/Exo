@@ -1,3 +1,10 @@
+## 2.3.3
+
+- **Discord Exo Host** (replaces OpenAsar): OpenAsar is no longer installed — it is outdated vs modern Discord host integrity and Equicord’s layout
+- **Equicord install**: uses official **Equilotl** CLI when available (`app.asar` stub + full stock `_app.asar`); direct path fixed to keep large stock on `_app.asar` (missing shell caused bare “Error” window)
+- **Equicord profile**: AMOLED theme + curated plugins restored; host flags via settings (`SKIP_HOST_UPDATE`, chromium lean, TTI) without OpenAsar
+- **Start Menu / launch**: one Discord Inc tile; Update.exe launch path kept for reliability
+
 ## 2.3.2
 
 - **CRITICAL launch fix**: Discord now launches via official `Update.exe` (modern host integrity); stock host restored when inject path breaks boot; shortcuts no longer point only at a dead VBS path

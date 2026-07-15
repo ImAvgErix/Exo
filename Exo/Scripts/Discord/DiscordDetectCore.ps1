@@ -115,7 +115,15 @@ function Test-DiscOptQuickStartFromSettingsJson {
     if ([string]::IsNullOrWhiteSpace($JsonText)) { return $false }
     try {
         $sj = $JsonText | ConvertFrom-Json
-        return [bool]($sj.openasar -and $sj.openasar.quickstart -eq $true)
+        # Legacy OpenAsar quickstart
+        if ($sj.openasar -and $sj.openasar.quickstart -eq $true) { return $true }
+        # Modern Exo Host: SKIP_HOST_UPDATE + chromium lean / TTI flags
+        if ($sj.SKIP_HOST_UPDATE -eq $true) {
+            if ($sj.chromiumSwitches) { return $true }
+            $names = @($sj.PSObject.Properties.Name)
+            if ($names | Where-Object { $_ -match 'DESKTOP_TTI' }) { return $true }
+        }
+        return $false
     } catch { return $false }
 }
 

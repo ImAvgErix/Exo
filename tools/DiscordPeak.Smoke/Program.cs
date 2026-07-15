@@ -72,9 +72,15 @@ Expect("toasts none seen not applied",
 Expect("toasts one enabled fail",
     !DiscordPeakLogic.AreToastsOff(new Dictionary<string, int?> { ["Discord"] = 1 }));
 
-// Settings JSON
-Expect("quickstart true",
+// Settings JSON — legacy OpenAsar + modern Exo Host
+Expect("quickstart legacy openasar",
     DiscordPeakLogic.IsQuickStartSettingsJson("""{"openasar":{"quickstart":true}}"""));
+Expect("exo host skip + chromium",
+    DiscordPeakLogic.IsQuickStartSettingsJson(
+        """{"SKIP_HOST_UPDATE":true,"chromiumSwitches":{"no-pings":1}}"""));
+Expect("exo host skip + tti",
+    DiscordPeakLogic.IsQuickStartSettingsJson(
+        """{"SKIP_HOST_UPDATE":true,"DESKTOP_TTI_DNSTCP_WARMUP":true}"""));
 Expect("startup off",
     DiscordPeakLogic.IsStartupOffSettingsJson("""{"OPEN_ON_STARTUP":false}"""));
 Expect("startup on fail",

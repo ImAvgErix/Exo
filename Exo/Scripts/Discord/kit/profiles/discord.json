@@ -14,16 +14,6 @@
   "DESKTOP_TTI_DNSTCP_WARMUP": true,
   "DESKTOP_TTI_EARLY_UPDATE_CHECK": false,
   "DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS": 2000,
-  "openasar": {
-    "disableMediaKeys": false,
-    "noTrack": true,
-    "noTyping": true,
-    "quickstart": true,
-    "setup": true,
-    "domOptimizer": false,
-    "themeSync": false,
-    "autoupdate": false
-  },
   "chromiumSwitches": {
     "disable-breakpad": 1,
     "disable-crash-reporter": 1,

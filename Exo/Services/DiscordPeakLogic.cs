@@ -23,6 +23,12 @@ public static partial class DiscordPeakLogic
     [GeneratedRegex(@"""openasar""", RegexOptions.IgnoreCase)]
     private static partial Regex OpenAsarKeyRegex();
 
+    [GeneratedRegex(@"""SKIP_HOST_UPDATE""\s*:\s*true", RegexOptions.IgnoreCase)]
+    private static partial Regex SkipHostUpdateTrueRegex();
+
+    [GeneratedRegex(@"""chromiumSwitches""", RegexOptions.IgnoreCase)]
+    private static partial Regex ChromiumSwitchesKeyRegex();
+
     [GeneratedRegex(@"""OPEN_ON_STARTUP""\s*:\s*false", RegexOptions.IgnoreCase)]
     private static partial Regex StartupOffRegex();
 
@@ -102,9 +108,12 @@ public static partial class DiscordPeakLogic
     public static bool IsQuickStartSettingsJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return false;
-        // Minimal structural check without full JSON dependency for smoke fixtures
-        return QuickStartTrueRegex().IsMatch(json) &&
-               OpenAsarKeyRegex().IsMatch(json);
+        // Legacy OpenAsar quickstart OR modern Exo Host (SKIP_HOST_UPDATE + chromium/TTI)
+        if (QuickStartTrueRegex().IsMatch(json) && OpenAsarKeyRegex().IsMatch(json))
+            return true;
+        return SkipHostUpdateTrueRegex().IsMatch(json) &&
+               (ChromiumSwitchesKeyRegex().IsMatch(json) ||
+                json.Contains("DESKTOP_TTI", StringComparison.OrdinalIgnoreCase));
     }
 
     public static bool IsStartupOffSettingsJson(string? json)

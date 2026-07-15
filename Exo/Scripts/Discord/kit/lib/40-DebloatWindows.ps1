@@ -649,10 +649,21 @@ function Set-DiscordFullscreenOptimizationsOff([string]$AppDir) {
 }
 
 function Test-OpenAsarInstalled([string]$ResourcesDir) {
+    # Legacy OpenAsar was a small rewrite on _app.asar. Exo Host no longer uses it.
+    # Kept for detect/repair of old installs only.
     $target = Join-Path $ResourcesDir '_app.asar'
     if (-not (Test-Path $target)) { return $false }
     $size = (Get-Item $target).Length
     return ($size -gt 10000 -and $size -lt 500000)
+}
+
+function Test-ExoHostInstalled([string]$AppDir) {
+    # Modern path: tiny Equicord loader on app.asar + host flags (no OpenAsar).
+    $resources = Join-Path $AppDir 'resources'
+    $loader = Join-Path $resources 'app.asar'
+    if (-not (Test-Path -LiteralPath $loader)) { return $false }
+    $len = (Get-Item -LiteralPath $loader).Length
+    return ($len -ge 64 -and $len -lt 4096)
 }
 
 function Ensure-AsarStockBackup([string]$AppDir) {
@@ -675,47 +686,44 @@ function Ensure-AsarStockBackup([string]$AppDir) {
     Write-Warn 'No _app.asar.stock backup yet'
 }
 
-function Install-OpenAsar([string]$AppDir) {
-    Write-Step 'Installing OpenASAR (Equicord-compatible)...'
+function Remove-LegacyOpenAsar([string]$AppDir) {
+    # OpenAsar (small rewrite on _app.asar) breaks modern Equicord which needs
+    # the FULL stock Discord package at _app.asar. Always restore stock shell.
     $resources = Join-Path $AppDir 'resources'
-    $target = Join-Path $resources '_app.asar'
-    $stockBackup = Join-Path $resources '_app.asar.stock'
-
-    if ($Quick -and (Test-OpenAsarInstalled $resources)) {
-        Write-Ok 'OpenASAR already active on _app.asar (-Quick)'
-        return
-    }
-
-    Ensure-AsarStockBackup $AppDir
-
-    if (-not (Test-Path $target)) {
-        throw 'Missing _app.asar - install Equicord loader first'
-    }
-
-    if (-not (Test-Path $stockBackup)) {
-        if ((Get-Item $target).Length -gt 1000000) {
-            Copy-Item $target $stockBackup -Force
-            Write-Ok 'Backed up stock Discord bootstrap -> _app.asar.stock'
-        }
-    }
-
-    $temp = Get-DiscOptTempPath 'discopt-openasar-app.asar'
-    $bundled = Get-BundledOpenAsar
-    if ($bundled) {
-        Copy-Item $bundled $temp -Force
-        Write-Ok "Using bundled OpenASAR from tools/ ($([math]::Round((Get-Item $bundled).Length / 1KB, 1)) KB)"
+    $bootstrap = Join-Path $resources '_app.asar'
+    $stock = Join-Path $resources '_app.asar.stock'
+    if (-not (Test-Path -LiteralPath $bootstrap)) { return }
+    $len = (Get-Item -LiteralPath $bootstrap).Length
+    # OpenAsar is ~30-100KB; stock is multi-MB
+    if ($len -gt 500000) { return }
+    if (Test-Path -LiteralPath $stock) {
+        Copy-Item -LiteralPath $stock -Destination $bootstrap -Force
+        Write-Ok 'Replaced outdated OpenAsar with stock Discord shell on _app.asar'
     } else {
-        Invoke-WebRequest -Uri $OpenAsarUrl -OutFile $temp -UseBasicParsing -TimeoutSec 90
+        Write-Warn 'OpenAsar-sized _app.asar found but no _app.asar.stock - reinstall Discord if Equicord errors'
     }
-    if ((Get-Item $temp).Length -lt 10000) {
-        throw 'Downloaded OpenASAR app.asar looks invalid'
+}
+
+function Install-ExoHost([string]$AppDir) {
+    # Exo Host = modern replacement for OpenAsar:
+    #  - Equicord owns the client (actively maintained)
+    #  - Tiny Exo loader on app.asar
+    #  - Discord settings.json host flags (SKIP_HOST_UPDATE, chromium lean, TTI)
+    #  - Stock shell kept as _app.asar.stock for repair (never a third-party asar rewrite)
+    Write-Step 'Installing Exo Host (Equicord path - no OpenAsar)...'
+    Ensure-AsarStockBackup $AppDir
+    Remove-LegacyOpenAsar $AppDir
+    Apply-DiscordProfile
+    if (-not (Test-ExoHostInstalled $AppDir)) {
+        Write-Warn 'Equicord loader not on app.asar yet - Install-Equicord will place it'
+    } else {
+        Write-Ok 'Exo Host ready (Equicord loader + host flags)'
     }
+}
 
-    if (-not (Test-Path $ToolsDir)) { New-Item -ItemType Directory -Path $ToolsDir -Force | Out-Null }
-    Copy-Item $temp (Join-Path $ToolsDir 'openasar.asar') -Force
-
-    Write-DiscordResourceBytes -Path $target -Bytes ([IO.File]::ReadAllBytes($temp))
-    Write-Ok "OpenASAR nightly installed ($([math]::Round((Get-Item $target).Length / 1KB, 1)) KB on _app.asar)"
+function Install-OpenAsar([string]$AppDir) {
+    # Back-compat name: OpenAsar is no longer installed.
+    Install-ExoHost $AppDir
 }
 
 function Unlock-DiscordSettings([string]$DestPath = '') {
@@ -734,8 +742,11 @@ function Get-DiscOptPowerShellExe {
     throw 'PowerShell 7 Preview is required. Install Microsoft.PowerShell.Preview and Windows Terminal Preview.'
 }
 
-function Apply-DiscordProfile([string]$DestPath) {
+function Apply-DiscordProfile([string]$DestPath = '') {
     Write-Step 'Applying boot/optimizer flags (preserving your in-app settings)...'
+    if ([string]::IsNullOrWhiteSpace($DestPath)) {
+        $DestPath = Join-Path $AppData 'settings.json'
+    }
     $profilePath = Join-Path $Profiles 'discord.json'
     if (-not (Test-Path $profilePath)) { throw 'Missing profiles/discord.json' }
 
@@ -757,7 +768,7 @@ function Apply-DiscordProfile([string]$DestPath) {
     }
 
     # Kit keys we may stamp - do NOT force hardware acceleration or BACKGROUND_COLOR.
-    # Equicord themes handle dark/AMOLED; OpenAsar must not inject CSS that paints pure black.
+    # Equicord themes handle dark/AMOLED (not OpenAsar CSS).
     $allowed = @(
         'SKIP_HOST_UPDATE', 'OPEN_ON_STARTUP', 'MINIMIZE_TO_TRAY', 'START_MINIMIZED',
         'IS_MAXIMIZED', 'IS_MINIMIZED', 'debugLogging', 'offloadAdmControls',
@@ -771,14 +782,13 @@ function Apply-DiscordProfile([string]$DestPath) {
     }
     # Leave enableHardwareAcceleration alone (Discord default = on). Remove forced false from old kits.
     if ($merged.Keys -contains 'enableHardwareAcceleration' -and $merged['enableHardwareAcceleration'] -eq $false) {
-        # Only strip Exo-forced false if user did not set it this session via kit profile
         if (-not ($kit.Keys -contains 'enableHardwareAcceleration')) {
             $merged.Remove('enableHardwareAcceleration')
             Write-LogLine 'OK' 'Hardware acceleration left at Discord default (not forced off)'
         }
     }
 
-    # Startup-lean Chromium flags (safe; no single-process / sandbox kills).
+    # Exo Host chromium lean (safe; no single-process / sandbox kills).
     $merged.chromiumSwitches = @{
         'disable-breakpad'                        = 1
         'disable-crash-reporter'                  = 1
@@ -790,27 +800,11 @@ function Apply-DiscordProfile([string]$DestPath) {
         'disable-renderer-backgrounding'          = 1
         'disable-backgrounding-occluded-windows'  = 1
     }
-    if ($kit.openasar) {
-        $merged.openasar = ConvertTo-HashtableDeep $kit.openasar
-    } else {
-        $merged.openasar = @{}
-    }
-    $merged.openasar.setup = $true
-    # No cmdPreset=perf (blank client risk). No OpenAsar CSS - Equicord themes handle dark mode.
-    if ($merged.openasar.Keys -contains 'cmdPreset') { $merged.openasar.Remove('cmdPreset') }
-    if ($merged.openasar.Keys -contains 'css') { $merged.openasar.Remove('css') }
-    # OpenAsar quickstart skips slow host waits so Discord paints sooner.
-    $merged.openasar.quickstart = $true
-    $merged.openasar.domOptimizer = $false
-    $merged.openasar.themeSync = $false
-    $merged.openasar.autoupdate = $false
-    $merged.openasar.noTrack = $true
-    $merged.openasar.noTyping = $true
-    $merged.openasar.disableMediaKeys = $false
+    # Drop legacy OpenAsar settings block - Equicord NoTrack/SilentTyping cover that surface.
+    if ($merged.Keys -contains 'openasar') { $merged.Remove('openasar') }
 
-    # Stable boot flags (do not force BACKGROUND_COLOR - Equicord AMOLED theme owns look)
+    # Stable boot flags (Equicord AMOLED theme owns look)
     $merged['DESKTOP_TTI_EARLY_UPDATE_CHECK'] = $false
-    # Warm DNS/TCP early so first UI is ready sooner after launch.
     $merged['DESKTOP_TTI_DNSTCP_WARMUP'] = $true
     $merged['DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR'] = $true
     $merged['DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS'] = 2000
@@ -819,8 +813,8 @@ function Apply-DiscordProfile([string]$DestPath) {
     $merged['asyncVideoInputDeviceInit'] = $false
     $merged['debugLogging'] = $false
     $merged['OPEN_ON_STARTUP'] = $false
-    # Skip host update ping on launch (reduces hitch); Discord still updates via its own updater later.
     $merged['SKIP_HOST_UPDATE'] = $true
+    $merged['MINIMIZE_TO_TRAY'] = $true
     if ($merged.Keys -contains 'BACKGROUND_COLOR') { $merged.Remove('BACKGROUND_COLOR') }
 
     # Never force host-update skip until modules are healthy - SKIP_HOST_UPDATE=true
@@ -836,6 +830,6 @@ function Apply-DiscordProfile([string]$DestPath) {
     Unlock-DiscordSettings $DestPath
 
     Write-JsonFile $DestPath $merged 20
-    Write-Ok 'Boot/optimizer flags applied (OpenASAR perf + chromium + standard audio)'
+    Write-Ok 'Exo Host flags applied (SKIP_HOST_UPDATE + chromium lean + TTI; no OpenAsar)'
 }
 
