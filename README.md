@@ -101,6 +101,21 @@ dotnet run --project tools\Steam.Smoke -c Release
 dotnet run --project tools\Nvidia.Smoke -c Release
 ```
 
+Linux / cloud agents (logic + UI contract smokes):
+
+```bash
+pwsh -NoProfile -File ./tools/Test-Linux.ps1
+```
+
+Clickable UI preview (React mock of the v2.5 shell — not Apply/Repair):
+
+```bash
+cd tools/Exo.UiPreview
+npm install && npx playwright install chromium
+npm run preview:click    # Playwright navigation clicks
+npm run dev              # http://127.0.0.1:5173
+```
+
 ---
 
 ## Project layout
@@ -111,7 +126,7 @@ Exo/                 WinUI 3 app + bundled scripts
   Services/              Logic, runners, panel
   Views/                 Dashboard, optimizers, NVIDIA Panel
   Styles/                Theme + button chrome
-tools/                   Smoke projects + Exo.NvDisplay (NVAPI helper)
+tools/                   Smoke projects, Exo.NvDisplay, Exo.UiPreview
 docs/                    Golden paths and audits
 .github/                 CI, issue & PR templates
 Publish-Exo.ps1      Single-file release build

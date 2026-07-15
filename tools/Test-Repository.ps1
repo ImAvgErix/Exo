@@ -90,7 +90,8 @@ if (-not $nvidiaMatch.Success -or $nvidiaMatch.Groups[1].Value -ne $nvidiaVersio
     Add-Failure "NVIDIA version mismatch: VERSION=$nvidiaVersion, script=$($nvidiaMatch.Groups[1].Value)"
 }
 
-$excludedDirectories = '\\(bin|obj|publish|release|node_modules)\\'
+# Match Windows + Linux path separators (cloud agents run on Linux).
+$excludedDirectories = '[\\/](bin|obj|publish|release|node_modules|dist|playwright-report|test-results)[\\/]'
 $scripts = @(Get-ChildItem -LiteralPath $Root -Recurse -Filter *.ps1 -File |
     Where-Object { $_.FullName -notmatch $excludedDirectories })
 
@@ -410,7 +411,10 @@ foreach ($file in $vbsFiles) {
 }
 
 $jsonFiles = @(Get-ChildItem -LiteralPath $Root -Recurse -Filter *.json -File |
-    Where-Object { $_.FullName -notmatch $excludedDirectories })
+    Where-Object {
+        $_.FullName -notmatch $excludedDirectories -and
+        $_.Name -notin @('package-lock.json', 'package.json')
+    })
 foreach ($file in $jsonFiles) {
     try {
         $null = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json -ErrorAction Stop
