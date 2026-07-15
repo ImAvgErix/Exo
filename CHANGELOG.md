@@ -1,6 +1,6 @@
 ## 2.5.2
 
-- **Linux test harness**: `tools/Test-Linux.ps1` runs repository integrity + Network/Steam/Nvidia/Discord/Ui smokes on Linux/cloud agents; `Ui.Smoke` targets `net10.0` and skips Windows-only logo ink measurement; `DiscordLogic.IsStableDiscordPathText` uses a backslash-normalized compare so Discord smoke passes off-Windows (the WinUI app itself remains Windows-only)
+- **Detect / smoke hardening**: `Ui.Smoke` runs cleanly off-Windows (`net10.0`; logo ink measure stays Windows-only); `DiscordLogic.IsStableDiscordPathText` uses a backslash-normalized compare so Discord path checks are stable across hosts
 
 ## 2.5.1
 
