@@ -120,7 +120,19 @@ jobs:
           Start-Sleep -Seconds 20
           Get-Process -Name Discord -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force }
           if (-not (Test-Path -LiteralPath $updateExe)) { throw "Discord install failed: $updateExe missing" }
-          Write-Host "Discord installed: $updateExe"
+          # The optimizer refuses non-interactive apply without a logged-in
+          # session (data-preservation guard). A CI runner has no session to
+          # protect, so seed the leveldb session stores the guard checks —
+          # this exercises the full apply pipeline without weakening the
+          # guard for real users.
+          $discordAppData = Join-Path $env:APPDATA 'discord'
+          foreach ($dir in @('IndexedDB\https_discord.com_0.indexeddb.leveldb', 'Local Storage\leveldb')) {
+            $full = Join-Path $discordAppData $dir
+            New-Item -ItemType Directory -Path $full -Force | Out-Null
+            [System.IO.File]::WriteAllBytes((Join-Path $full '000003.log'), (New-Object byte[] 4096))
+            [System.IO.File]::WriteAllBytes((Join-Path $full '000004.ldb'), (New-Object byte[] 4096))
+          }
+          Write-Host "Discord installed: $updateExe (CI session store seeded)"
           exit 0
 
       - name: Discord E2E (apply, detect, repair)
