@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>Exo</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -24,7 +24,7 @@
     <AssemblyName>Exo</AssemblyName>
     <Product>Exo</Product>
     <Company>Exo</Company>
-    <Version>2.3.4</Version>
+    <Version>2.4.0</Version>
     <Description>One hub. Max performance.</Description>
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>

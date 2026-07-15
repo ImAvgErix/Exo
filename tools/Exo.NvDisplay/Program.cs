@@ -53,6 +53,8 @@ static class Program
         var setModeRaw = GetArgValue(rawArgs, "--set-mode") ?? GetArgValue(rawArgs, "/set-mode");
         var setScalingRaw = GetArgValue(rawArgs, "--set-scaling") ?? GetArgValue(rawArgs, "/set-scaling");
         var setColorRangeRaw = GetArgValue(rawArgs, "--set-color-range") ?? GetArgValue(rawArgs, "/set-color-range");
+        var setVibranceRaw = GetArgValue(rawArgs, "--set-vibrance") ?? GetArgValue(rawArgs, "/set-vibrance");
+        var getVibrance = normalizedArgs.Any(a => a is "--get-vibrance" or "/get-vibrance");
         var displayIdRaw = GetArgValue(rawArgs, "--display-id") ?? GetArgValue(rawArgs, "/display-id");
 
         var knownPrefixes = new[]
@@ -61,12 +63,14 @@ static class Program
             "--list-color", "/list-color", "--list-displays", "/list-displays",
             "--set-depth", "/set-depth", "--set-mode", "/set-mode",
             "--set-scaling", "/set-scaling", "--set-color-range", "/set-color-range",
+            "--set-vibrance", "/set-vibrance", "--get-vibrance", "/get-vibrance",
             "--display-id", "/display-id"
         };
         var valueTaking = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "--set-depth", "/set-depth", "--set-mode", "/set-mode",
             "--set-scaling", "/set-scaling", "--set-color-range", "/set-color-range",
+            "--set-vibrance", "/set-vibrance",
             "--display-id", "/display-id"
         };
         {
@@ -85,9 +89,10 @@ static class Program
         }
 
         var panelMutate = setDepthRaw is not null || setModeRaw is not null ||
-                          setScalingRaw is not null || setColorRangeRaw is not null;
+                          setScalingRaw is not null || setColorRangeRaw is not null ||
+                          setVibranceRaw is not null;
         var statusOnly = normalizedArgs.Any(a => a is "--status" or "-s" or "/status");
-        var apply = !statusOnly && !listColor && !listDisplays && !panelMutate;
+        var apply = !statusOnly && !listColor && !listDisplays && !panelMutate && !getVibrance;
         if (normalizedArgs.Any(a => a is "--apply" or "-a" or "/apply")) apply = true;
         if (statusOnly && apply)
         {
@@ -105,6 +110,8 @@ static class Program
             Console.WriteLine("  --set-depth 8|10|12 [--display-id ID]  Set color bit depth");
             Console.WriteLine("  --set-scaling gpu-noscaling|gpu|display [--display-id ID]");
             Console.WriteLine("  --set-color-range full|limited [--display-id ID]");
+            Console.WriteLine("  --get-vibrance [--display-id ID]  Read digital vibrance (DVC) levels");
+            Console.WriteLine("  --set-vibrance LEVEL [--display-id ID]  Set digital vibrance (driver range, usually 0-63)");
             return 0;
         }
 
@@ -168,6 +175,38 @@ static class Program
                     displays = list
                 }));
                 return 0;
+            }
+
+            if (getVibrance)
+            {
+                var vibList = ListVibrance(devices, onlyId);
+                Console.WriteLine("EXO_NVDISPLAY_JSON:" + JsonSerializer.Serialize(new
+                {
+                    ok = true,
+                    mode = "get-vibrance",
+                    displays = vibList
+                }));
+                return 0;
+            }
+
+            if (!string.IsNullOrWhiteSpace(setVibranceRaw))
+            {
+                if (!int.TryParse(setVibranceRaw.Trim(), out var vibLevel))
+                {
+                    Console.Error.WriteLine("Invalid --set-vibrance. Use an integer DVC level (see --get-vibrance for the driver range).");
+                    return 64;
+                }
+                var setOk = ApplyVibrance(devices, vibLevel, onlyId, out var vibApplied, out var vibErr);
+                Console.WriteLine("EXO_NVDISPLAY_JSON:" + JsonSerializer.Serialize(new
+                {
+                    ok = setOk,
+                    mode = "set-vibrance",
+                    level = vibLevel,
+                    displays = vibApplied,
+                    error = setOk ? null : vibErr,
+                    displayId = onlyId
+                }));
+                return setOk ? 0 : 6;
             }
 
             if (!string.IsNullOrWhiteSpace(setModeRaw))
@@ -497,6 +536,7 @@ static class Program
                             colorUnsupported = colorUnsupportedCount,
                             pathScalingOk
                         },
+                        vibrance = ListVibrance(devices, null),
                         refreshPolicy = "primary-max-hz, secondary-60hz"
                     });
                     Console.WriteLine("EXO_NVDISPLAY_JSON:" + json);
@@ -601,6 +641,84 @@ static class Program
         }
 
         return new DisplayEnumerationResult { Succeeded = true, Devices = list };
+    }
+
+    /// <summary>Digital vibrance (DVC) snapshot for one display via NvAPIWrapper GPUOutput.</summary>
+    static object ReadVibranceInfo(DisplayDevice dev)
+    {
+        try
+        {
+            var dvc = dev.Output.DigitalVibranceControl;
+            return new
+            {
+                displayId = dev.DisplayId,
+                connection = dev.ConnectionType.ToString(),
+                currentLevel = dvc.CurrentLevel,
+                defaultLevel = dvc.DefaultLevel,
+                minimumLevel = dvc.MinimumLevel,
+                maximumLevel = dvc.MaximumLevel
+            };
+        }
+        catch (Exception ex)
+        {
+            return new
+            {
+                displayId = dev.DisplayId,
+                connection = dev.ConnectionType.ToString(),
+                error = "vibrance unavailable: " + ex.Message
+            };
+        }
+    }
+
+    static List<object> ListVibrance(List<DisplayDevice> devices, uint? onlyId)
+    {
+        var list = new List<object>();
+        foreach (var dev in devices)
+        {
+            if (onlyId is not null && dev.DisplayId != onlyId.Value) continue;
+            list.Add(ReadVibranceInfo(dev));
+        }
+        return list;
+    }
+
+    static bool ApplyVibrance(
+        List<DisplayDevice> devices, int level, uint? onlyId,
+        out List<object> applied, out string error)
+    {
+        applied = new List<object>();
+        error = "";
+        var any = false;
+        var ok = true;
+        foreach (var dev in devices)
+        {
+            if (onlyId is not null && dev.DisplayId != onlyId.Value) continue;
+            any = true;
+            try
+            {
+                var dvc = dev.Output.DigitalVibranceControl;
+                var clamped = Math.Max(dvc.MinimumLevel, Math.Min(dvc.MaximumLevel, level));
+                dvc.CurrentLevel = clamped;
+                // Honest verification: re-read the live driver level after the set.
+                var live = dev.Output.DigitalVibranceControl.CurrentLevel;
+                Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: vibrance requested {level} -> clamped {clamped}, driver now {live}");
+                applied.Add(new { displayId = dev.DisplayId, requested = clamped, verified = live });
+                if (live != clamped) ok = false;
+            }
+            catch (Exception ex)
+            {
+                ok = false;
+                error = ex.Message;
+                Console.WriteLine($"[NVAPI] Display #{dev.DisplayId}: vibrance set failed: {ex.Message}");
+            }
+        }
+        if (!any)
+        {
+            error = onlyId is not null
+                ? $"display {onlyId.Value} not found among active NVIDIA displays"
+                : "no active NVIDIA displays";
+            return false;
+        }
+        return ok;
     }
 
     static string? GetArgValue(string[] args, string key)

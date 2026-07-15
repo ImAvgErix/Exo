@@ -28,6 +28,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private bool _isProgressVisible;
     [ObservableProperty] private bool _isStatusLoading = true;
+    [ObservableProperty] private bool _isFeatureListVisible;
     [ObservableProperty] private double _progressPercent;
     [ObservableProperty] private string _progressStatus = string.Empty;
     [ObservableProperty] private string _lastResult = string.Empty;
@@ -36,14 +37,13 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     [ObservableProperty] private Brush _lastResultBrush;
     [ObservableProperty] private bool _useGsync;
 
-    public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
-
     [RelayCommand]
     private async Task RefreshAsync()
     {
         if (IsBusy) return;
         IsBusy = true;
         IsStatusLoading = true;
+        IsFeatureListVisible = false;
         try
         {
             StatusText = "Checking status...";
@@ -59,6 +59,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         finally
         {
             IsStatusLoading = false;
+            IsFeatureListVisible = Features.Count > 0;
             IsBusy = false;
         }
     }
@@ -151,13 +152,8 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
 
-        var ok = ConfirmAsync is not null
-            ? await ConfirmAsync(
-                "Reset Exo NVIDIA status?",
-                "Clears Exo status only. Driver and profiles stay.")
-            : true;
-        if (!ok) return;
-
+        // Reset is status-clear only (never a driver rollback) — runs immediately;
+        // the page carries the honest one-line description next to the button.
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;
@@ -238,6 +234,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             });
         }
         RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
+        IsFeatureListVisible = Features.Count > 0;
     }
 
     private void SetResult(string message, bool success)

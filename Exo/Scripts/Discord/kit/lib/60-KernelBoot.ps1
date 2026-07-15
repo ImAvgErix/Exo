@@ -142,7 +142,7 @@ function Confirm-DiscordBootsAfterMods([string]$AppDir) {
         Stop-Discord
         $Script:KernelRolledBack = $true
         Write-Warn 'Kernel disabled automatically - Discord loads without it on this PC.'
-        Write-Warn 'Everything else (Equicord, OpenASAR, theme, tweaks) is still active.'
+        Write-Warn 'Everything else (Equicord, Exo Host, theme, tweaks) is still active.'
         return
     }
 

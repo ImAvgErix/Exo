@@ -14,10 +14,13 @@ jobs:
         with:
           ref: main
 
-      - name: Setup .NET 8
+      # App and tools target .NET 10 LTS; 8.0.x kept as a transitional fallback.
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Build Exo.exe and publish GitHub release
         shell: pwsh

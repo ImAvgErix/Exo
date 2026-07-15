@@ -303,6 +303,107 @@ if (Test-Path $statePath) {
     try { $state = Get-Content $statePath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
 }
 
+# --- Live DRS verification (managed NPI v3.0.1.11+ -exportCustomized) ---
+# Reads the live driver database back and compares the Base Profile pins against
+# the recorded pack. Classification is pure (NvidiaDetectCore.ps1); this block
+# only does the I/O. Non-elevated: the export lands next to the managed exe under
+# %LocalAppData% and is deleted after parsing.
+
+function Get-ExoNipBaseProfileMap([string]$NipPath) {
+    if (-not $NipPath -or -not (Test-Path -LiteralPath $NipPath)) { return $null }
+    try { [xml]$doc = [IO.File]::ReadAllText($NipPath) } catch { return $null }
+    $base = @($doc.ArrayOfProfile.Profile) |
+        Where-Object { [string]$_.ProfileName -eq 'Base Profile' } |
+        Select-Object -First 1
+    if (-not $base) { return $null }
+    $map = @{}
+    foreach ($s in @($base.SelectNodes('Settings/ProfileSetting'))) {
+        $id = [string]$s.SettingID
+        if ($id) { $map[$id] = [string]$s.SettingValue }
+    }
+    return $map
+}
+
+function Invoke-ExoNpiExportCustomized([string]$NpiPath, [int]$TimeoutSec = 30) {
+    if (-not $NpiPath -or -not (Test-Path -LiteralPath $NpiPath)) { return $null }
+    $npiWorkDir = Split-Path -Parent $NpiPath
+    $startUtc = (Get-Date).ToUniversalTime()
+    $proc = $null
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $NpiPath
+        $psi.Arguments = '-exportCustomized'
+        $psi.WorkingDirectory = $npiWorkDir
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $proc = [Diagnostics.Process]::Start($psi)
+        if (-not $proc) { return $null }
+        if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
+            try { $proc.Kill() } catch { }
+            return $null
+        }
+    } catch {
+        return $null
+    } finally {
+        if ($proc) { try { $proc.Dispose() } catch { } }
+    }
+    $exported = @(Get-ChildItem -LiteralPath $npiWorkDir -Filter '*.nip' -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTimeUtc -ge $startUtc.AddSeconds(-5) } |
+        Sort-Object LastWriteTimeUtc -Descending) | Select-Object -First 1
+    if (-not $exported) { return $null }
+    return [string]$exported.FullName
+}
+
+function Get-ExoDrsExportBaseMap([string]$ExportPath) {
+    # $null = unparseable export; empty map = parsed but no customized Base Profile (drift).
+    try { [xml]$doc = [IO.File]::ReadAllText($ExportPath) } catch { return $null }
+    $base = @($doc.ArrayOfProfile.Profile) |
+        Where-Object { [string]$_.ProfileName -eq 'Base Profile' } |
+        Select-Object -First 1
+    if (-not $base) { return @{} }
+    $map = @{}
+    foreach ($s in @($base.SelectNodes('Settings/ProfileSetting'))) {
+        $id = [string]$s.SettingID
+        if ($id) { $map[$id] = [string]$s.SettingValue }
+    }
+    return $map
+}
+
+$drsVerifiedText = if (Get-Command Get-ExoDrsVerifiedDetailText -ErrorAction SilentlyContinue) {
+    Get-ExoDrsVerifiedDetailText
+} else { 'Verified in driver' }
+$drsDriftedText = if (Get-Command Get-ExoDrsDriftedDetailText -ErrorAction SilentlyContinue) {
+    Get-ExoDrsDriftedDetailText
+} else { ('Drifted ' + [char]0x2014 + ' re-apply') }
+
+$drsLive = 'unavailable'
+$drsLiveText = ''
+$drsMismatch = @()
+$drsComparedCount = 0
+$npiManagedExe = Join-Path $env:LOCALAPPDATA 'Exo\tools\nvidiaProfileInspector\nvidiaProfileInspector.exe'
+if ($state -and [bool]$state.profileApplied -and $state.profileFile -and
+    (Test-Path -LiteralPath $npiManagedExe) -and
+    (Get-Command Get-ExoDrsVerificationResult -ErrorAction SilentlyContinue)) {
+    $recordedPackPath = Join-Path $profilesDir ([string]$state.profileFile)
+    $drsExpectedMap = Get-ExoNipBaseProfileMap $recordedPackPath
+    $drsExportPath = Invoke-ExoNpiExportCustomized $npiManagedExe
+    $drsExportedMap = $null
+    if ($drsExportPath) {
+        try { $drsExportedMap = Get-ExoDrsExportBaseMap $drsExportPath }
+        finally { Remove-Item -LiteralPath $drsExportPath -Force -ErrorAction SilentlyContinue }
+    }
+    $drsRequiredPins = @('274197361', '390467', '277041152', '277041154', '294973784')
+    $drsResult = Get-ExoDrsVerificationResult -Expected $drsExpectedMap -Exported $drsExportedMap -RequiredIds $drsRequiredPins
+    $drsLive = [string]$drsResult.Status
+    $drsMismatch = @($drsResult.Mismatches)
+    $drsComparedCount = [int]$drsResult.ComparedCount
+}
+$drsLiveText = switch ($drsLive) {
+    'verified' { $drsVerifiedText }
+    'drifted'  { $drsDriftedText }
+    default    { '' }
+}
+
 # 1) GPU - name only (series is for profile pick; no "30 Series" suffix, no fancy dots that turn into ?)
 $gpuDetail = if (-not $gpuOk) {
     'NVIDIA GPU + drivers required.'
@@ -412,17 +513,25 @@ if ($state -and -not $pendingAfterDriver -and -not $applyInProgress) {
         }
     }
 }
-$applied = $profileOk
+# Profile stage applied = durable state record AND live DRS not drifted.
+$applied = $profileOk -and ($drsLive -ne 'drifted')
 $gsyncDetail = if ($state -and $state.gsync) { 'G-SYNC pack' } else { 'Max FPS / latency pack' }
 $features.Add(@{
     title  = '3D Base Profile'
-    detail = $(if ($applied) {
+    detail = $(if ($profileOk -and $drsLive -eq 'drifted') {
+        $drsDriftedText
+    } elseif ($applied -and $drsLive -eq 'verified') {
         $pf = if ($state.profileFile) { [string]$state.profileFile } else { 'profile applied' }
-        "$gsyncDetail - $pf (silent import verified)"
+        "$gsyncDetail - $pf ($drsVerifiedText)"
+    } elseif ($applied) {
+        $pf = if ($state.profileFile) { [string]$state.profileFile } else { 'profile applied' }
+        "$gsyncDetail - $pf (silent import verified; live DRS check unavailable)"
     } else {
         'Not applied yet. Apply runs Profile Inspector -silentImport (no GUI / replace click).'
     })
     active = $applied
+    drsLive = $drsLive
+    drsLiveText = $drsLiveText
 })
 
 $gameOk = $false
@@ -514,19 +623,25 @@ if ($state -and $state.PSObject.Properties.Name -contains 'exoPanel' -and [bool]
 
 # 3D "advanced" = driver DRS profiles applied (Profile Inspector), NOT the CPL radio button.
 # Store CPL virtual hive often shows "Let the 3D application decide" even when DRS is forced.
-$advanced3dOk = [bool]$profileOk -and [bool]$gameOk
-if ($state -and $state.PSObject.Properties.Name -contains 'profileApplied' -and [bool]$state.profileApplied -and $profileOk) {
+$advanced3dOk = [bool]$applied -and [bool]$gameOk
+if ($state -and $state.PSObject.Properties.Name -contains 'profileApplied' -and [bool]$state.profileApplied -and $applied) {
     $advanced3dOk = $true
 }
 
 $features.Add(@{
     title  = 'Exo 3D profile (driver DRS)'
-    detail = $(if ($advanced3dOk) {
+    detail = $(if ($advanced3dOk -and $drsLive -eq 'verified') {
+        "$drsVerifiedText - Base + per-game profiles forced at driver level via Profile Inspector. Trust this over NVIDIA Control Panel radios."
+    } elseif ($advanced3dOk) {
         'Base + per-game profiles forced at driver level via Profile Inspector. Trust this over NVIDIA Control Panel radios.'
+    } elseif ($profileOk -and $drsLive -eq 'drifted') {
+        $drsDriftedText
     } else {
         '3D profiles not fully verified. Apply to import Base + per-game packs.'
     })
     active = $advanced3dOk
+    drsLive = $drsLive
+    drsLiveText = $drsLiveText
 })
 
 $features.Add(@{
@@ -617,6 +732,7 @@ elseif (-not $currentNv) { 'Driver status unavailable' }
 elseif (-not $isNotebookGpu -and $needsUpdate) { 'Driver update available' }
 elseif (-not $isNotebookGpu -and $needsRetweak) { 'Driver tweaks available' }
 elseif ($driverChanged -or (-not $profileOk -and $state -and $state.profileApplied)) { 'Driver changed - reapply' }
+elseif ($profileOk -and $drsLive -eq 'drifted') { 'Profile drifted - reapply' }
 elseif (-not $profileOk) { '3D profile incomplete' }
 elseif (-not $gameOk) { 'Game profiles incomplete' }
 elseif (-not $displayOk) { 'Display policy incomplete' }
@@ -634,6 +750,7 @@ elseif ($isNotebookGpu -and -not $isApplied) { 'Laptop GPU: desktop auto-update 
 elseif (-not $isNotebookGpu -and $needsUpdate) { 'Apply can install a clean display driver package, then continues with profiles and display prefs.' }
 elseif (-not $isNotebookGpu -and $needsRetweak) { 'Driver version is current; Apply will set MSI/privacy tweaks in place.' }
 elseif ($driverChanged) { "Driver is now $currentNv but last verified $($state.profileDriverVersion). Apply again." }
+elseif ($profileOk -and $drsLive -eq 'drifted') { "The driver DRS no longer matches the imported Exo pack ($($drsMismatch.Count) pin(s) drifted). Apply again to re-import." }
 elseif (-not $profileOk) { $(if ($applyInProgress) { 'Previous Apply was interrupted. Apply again.' } else { '3D profile not fully verified. Apply again.' }) }
 elseif (-not $gameOk) { 'Base profile is present but per-game catalog is incomplete. Apply again.' }
 elseif (-not $displayOk) { 'Display policy incomplete (resolution/refresh/color/scaling). Apply again or use Display panel.' }
@@ -657,4 +774,8 @@ else { 'Apply to set profiles and display policy for this GPU.' }
     needsDriverUpdate  = $needsUpdate
     needsDriverRetweak = $needsRetweak
     driverTweaksOk     = [bool]$tweaks.Ok
+    drsLive            = $drsLive
+    drsLiveText        = $drsLiveText
+    drsMismatch        = @($drsMismatch)
+    drsComparedCount   = $drsComparedCount
 } | ConvertTo-Json -Compress -Depth 5

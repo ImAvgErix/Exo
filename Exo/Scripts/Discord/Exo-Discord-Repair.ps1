@@ -331,6 +331,60 @@ function Restore-RepairWindowsTweaks([string]$DiscordRoot, $Recovery, [ref]$Fail
     }
 }
 
+function Remove-ExoDiscordQosPolicies {
+    # Exo-created voice QoS policies use fixed documented names - always safe to
+    # remove on repair (they never exist unless Exo created them). The recovery
+    # snapshot (recovery.QosPolicies) records the same names.
+    $root = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS'
+    $removed = 0
+    foreach ($name in @('Exo Discord Voice', 'Exo Discord PTB Voice', 'Exo Discord Canary Voice')) {
+        $path = Join-Path $root $name
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        try {
+            Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
+            if (Test-Path -LiteralPath $path) { throw 'policy key is still present' }
+            $removed++
+            Write-RepOk "Removed QoS policy: $name"
+        } catch {
+            Write-RepWarn "QoS policy $name`: $($_.Exception.Message)"
+        }
+    }
+    if ($removed -eq 0) { Write-RepOk 'No Exo QoS policies to remove' }
+    return $removed
+}
+
+function Restore-ExoDiscordVariantSettings([string]$AppDataRoot) {
+    # PTB / Canary: strip Exo-written boot flags so test channels return to stock.
+    # Full program reinstall for variants stays a manual step (test-channel data
+    # safety); removing our flags restores stock behavior deterministically.
+    foreach ($dir in @('discordptb', 'discordcanary')) {
+        $settings = Join-Path $AppDataRoot (Join-Path $dir 'settings.json')
+        if (-not (Test-Path -LiteralPath $settings)) { continue }
+        try {
+            attrib -R $settings 2>$null
+            $sj = Get-Content -LiteralPath $settings -Raw -Encoding UTF8 | ConvertFrom-Json
+            $names = @($sj.PSObject.Properties.Name)
+            $dropped = 0
+            foreach ($key in @(
+                'chromiumSwitches',
+                'DESKTOP_TTI_EARLY_UPDATE_CHECK', 'DESKTOP_TTI_DNSTCP_WARMUP',
+                'DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR', 'DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS'
+            )) {
+                if ($names -contains $key) {
+                    $sj.PSObject.Properties.Remove($key)
+                    $dropped++
+                }
+            }
+            if ($dropped -gt 0) {
+                [IO.File]::WriteAllText($settings, ($sj | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
+                Write-RepOk "Restored stock boot flags: $dir ($dropped key(s) removed)"
+            }
+        } catch {
+            Write-RepWarn "Variant settings $dir`: $($_.Exception.Message)"
+        }
+    }
+}
+
 function Remove-BrokenThemes([string]$AppDataRoot) {
     $equicordThemes = Join-Path $AppDataRoot 'Equicord\themes'
     if (-not (Test-Path -LiteralPath $equicordThemes)) { return }
@@ -399,6 +453,9 @@ try {
     Restore-RepairDiscordShortcuts $app.FullName
     Write-HubProgress 83 'Restoring Windows integration...'
     Restore-RepairWindowsTweaks $discordRoot $recovery ([ref]$repairFailures)
+    Write-HubProgress 84 'Removing Exo QoS policies / variant flags...'
+    [void](Remove-ExoDiscordQosPolicies)
+    Restore-ExoDiscordVariantSettings $appData
     if ($repairFailures.Count -gt 0) {
         Save-RepairDiscordState @{
             version        = '1.3.0'

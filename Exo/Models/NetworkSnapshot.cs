@@ -97,3 +97,47 @@ public sealed class NetworkApplyOptions
     /// <summary>When Ethernet is up, disable Wi‑Fi adapters (default true).</summary>
     public bool PreferEthernetDisableWifi { get; init; } = true;
 }
+
+/// <summary>
+/// One structured step emitted by the generated apply/repair scripts as
+/// <c>EXO_REPORT:&lt;name&gt;|ok</c> / <c>|fail:&lt;reason&gt;</c> / <c>|skip:&lt;reason&gt;</c>.
+/// </summary>
+public sealed class NetworkApplyReportStep
+{
+    public required string Name { get; init; }
+    /// <summary>ok | fail | skip</summary>
+    public required string Status { get; init; }
+    public string Reason { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Quick ping/DNS benchmark (BuildBenchmark output, one EXO_BENCH JSON line).
+/// Persisted as before/after pairs in the optimizer state so the UI can show deltas.
+/// </summary>
+public sealed class NetworkBenchmarkResult
+{
+    public bool Ok { get; init; }
+    public double PingP50Ms { get; init; }
+    public double PingP95Ms { get; init; }
+    public double JitterMs { get; init; }
+    /// <summary>Average DNS resolve time in ms (-1 when resolution failed).</summary>
+    public double DnsMs { get; init; }
+    public int Samples { get; init; }
+    public string TimestampUtc { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Honest post-apply outcome written by the elevated apply script into
+/// %LocalAppData%\Exo\network-apply-state.json (rollback marker + Wi‑Fi record).
+/// </summary>
+public sealed class NetworkRollbackStatus
+{
+    /// <summary>True when the apply script auto-rolled back path changes (Wi‑Fi + metrics).</summary>
+    public bool RolledBack { get; init; }
+    public string Reason { get; init; } = string.Empty;
+    /// <summary>Result of the final TCP-443 connectivity probe at end of apply.</summary>
+    public bool ConnectivityAfterApply { get; init; } = true;
+    /// <summary>Wi‑Fi adapter names the apply script disabled (after the verified Ethernet probe).</summary>
+    public IReadOnlyList<string> WifiDisabled { get; init; } = Array.Empty<string>();
+    public string AppliedUtc { get; init; } = string.Empty;
+}

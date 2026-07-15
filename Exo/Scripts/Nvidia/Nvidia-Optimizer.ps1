@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.11.0'
+$Script:NvidiaOptVersion = '1.12.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
@@ -37,53 +37,62 @@ $StatePath = Join-Path $StateDir 'nvidia-optimizer.json'
 $NpiDir = Join-Path $StateDir 'tools\nvidiaProfileInspector'
 $DriverCacheDir = Join-Path $StateDir 'drivers'
 $NpiExeName = 'nvidiaProfileInspector.exe'
+# Pinned Profile Inspector release. v3.0.1.11 (2026-04-16) added -exportCustomized,
+# which Exo uses for live DRS verification. SHA-256 computed from the release asset.
+$Script:NpiPinnedTag = 'v3.0.1.11'
+$Script:NpiPinnedZipUrl = 'https://github.com/Orbmu2k/nvidiaProfileInspector/releases/download/v3.0.1.11/nvidiaProfileInspector.zip'
+$Script:NpiPinnedZipSha256 = '68DB1640186DD6FD78B5F7949348808B9A542EE95E2A52810B2EEED026E80236'
 
-# --- PowerShell 7 Preview only (never Windows PowerShell 5.1 / never stable 7) ---
-function Test-ExoIsPwshPreviewHost {
+# --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
+function Test-ExoIsPwsh7Host {
+    # Any pwsh 7.x host is accepted (stable preferred; preview tolerated).
+    # Windows PowerShell 5.1 is rejected - the optimizer uses Core-only APIs.
     if ($PSVersionTable.PSEdition -ne 'Core') { return $false }
     if ([int]$PSVersionTable.PSVersion.Major -lt 7) { return $false }
     $hostPath = ''
     try { $hostPath = [string](Get-Process -Id $PID -ErrorAction Stop).Path } catch { }
     if ($hostPath -match 'WindowsPowerShell') { return $false }
-    if ($hostPath -match '(?i)7-preview|PowerShellPreview|pwsh-preview') { return $true }
-    $pre = ''
-    try { $pre = [string]$PSVersionTable.PSVersion.PreReleaseLabel } catch { }
-    if (-not [string]::IsNullOrWhiteSpace($pre)) { return $true }
-    if ([string]$PSVersionTable.GitCommitId -match '(?i)preview') { return $true }
-    if ($hostPath -match '(?i)PowerShell[\\/]7[\\/]' -and $hostPath -notmatch '(?i)preview') { return $false }
-    return $false
+    return $true
 }
-function Get-ExoPwshPreview {
+function Get-ExoPwsh {
+    # Stable PowerShell 7 first; preview paths only as a last resort.
     $candidates = [System.Collections.Generic.List[string]]::new()
+    $stable = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
+    if ($stable) { [void]$candidates.Add($stable) }
+
+    $cmdPwsh = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmdPwsh -and $cmdPwsh.Source) { [void]$candidates.Add([string]$cmdPwsh.Source) }
+
+    $appsRoot = Join-Path $env:ProgramFiles 'WindowsApps'
+    if (Test-Path -LiteralPath $appsRoot) {
+        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShell_*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { [void]$candidates.Add((Join-Path $_.FullName 'pwsh.exe')) }
+    }
+
+    # Preview is a fallback only - never the requirement.
     foreach ($p in @(
         (Join-Path $env:ProgramFiles 'PowerShell\7-preview\pwsh.exe'),
         (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh-preview.exe')
     )) {
         if ($p) { [void]$candidates.Add($p) }
     }
-    $cmd = Get-Command pwsh-preview -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($cmd -and $cmd.Source) { [void]$candidates.Add([string]$cmd.Source) }
-    $appsRoot = Join-Path $env:ProgramFiles 'WindowsApps'
-    if (Test-Path -LiteralPath $appsRoot) {
-        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShellPreview*' -ErrorAction SilentlyContinue |
-            Sort-Object Name -Descending |
-            ForEach-Object { [void]$candidates.Add((Join-Path $_.FullName 'pwsh.exe')) }
-    }
+
     foreach ($p in ($candidates | Select-Object -Unique)) {
         if (-not $p -or $p -match 'WindowsPowerShell') { continue }
-        if ($p -match 'PowerShell\\7\\' -and $p -notmatch '(?i)preview') { continue }
         if (Test-Path -LiteralPath $p) { return $p }
     }
-    return $null
+    throw 'PowerShell 7 is required for Exo NVIDIA helpers. Install it with: winget install Microsoft.PowerShell'
 }
-function Assert-ExoPwshPreview {
-    if (Test-ExoIsPwshPreviewHost) { return }
-    $hint = Get-ExoPwshPreview
-    $msg = 'NVIDIA Optimizer requires PowerShell 7 Preview (not Windows PowerShell 5.1, not stable PowerShell 7). Install Microsoft.PowerShell.Preview and Windows Terminal Preview, then re-run from Exo.'
-    if ($hint) { $msg += " Found Preview at: $hint" }
+function Assert-ExoPwsh7 {
+    if (Test-ExoIsPwsh7Host) { return }
+    $hint = $null
+    try { $hint = Get-ExoPwsh } catch { }
+    $msg = 'PowerShell 7 is required to run the NVIDIA Optimizer (not Windows PowerShell 5.1). Install it with: winget install Microsoft.PowerShell, then re-run from Exo.'
+    if ($hint) { $msg += " Found PowerShell 7 at: $hint" }
     throw $msg
 }
-Assert-ExoPwshPreview
+Assert-ExoPwsh7
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
     $p = [Math]::Max(0, [Math]::Min(100, $Percent))
@@ -178,17 +187,21 @@ function Get-ExoGameProfileCatalog {
     # Tier:
     #   comp   - pure competitive: sticky latency stack + disable Frame Gen override when present
     #   hybrid - still sticky latency (no driver FPS cap / prf=1) but leave FG as the series pack
+    # Minecraft (javaw.exe) is intentionally NOT in this catalog: javaw.exe is shared by
+    # every desktop Java app, and the clone mechanism applies the full Base pack + tier
+    # deltas per exe - too broad for a shared host process (would force max-perf pins on
+    # IDEs and installers). Excluded with reason instead of shipping an unsafe profile.
     @(
         @{ Name = 'Valorant';            Tier = 'comp';   Exes = @('VALORANT-Win64-Shipping.exe') },
         @{ Name = 'Counter-Strike 2';    Tier = 'comp';   Exes = @('cs2.exe') },
-        @{ Name = 'Marvel Rivals';       Tier = 'comp';   Exes = @('Marvel-Win64-Shipping.exe', 'MarvelRivals-Win64-Shipping.exe') },
-        @{ Name = 'Rainbow Six Siege';   Tier = 'comp';   Exes = @('RainbowSix.exe', 'RainbowSix_Vulkan.exe', 'RainbowSixGame.exe') },
+        @{ Name = 'Marvel Rivals';       Tier = 'comp';   Exes = @('Marvel-Win64-Shipping.exe', 'MarvelRivals-Win64-Shipping.exe', 'marvel-rivals.exe', 'MarvelRivals_Launcher.exe') },
+        @{ Name = 'Rainbow Six Siege';   Tier = 'comp';   Exes = @('RainbowSix.exe', 'RainbowSix_Vulkan.exe', 'RainbowSixGame.exe', 'RainbowSix_BE.exe') },
         @{ Name = 'Fortnite';            Tier = 'comp';   Exes = @('FortniteClient-Win64-Shipping.exe') },
         @{ Name = 'Apex Legends';        Tier = 'comp';   Exes = @('r5apex.exe', 'r5apex_dx12.exe') },
         @{ Name = 'League of Legends';   Tier = 'comp';   Exes = @('League of Legends.exe') },
         @{ Name = 'Overwatch 2';         Tier = 'comp';   Exes = @('Overwatch.exe') },
         @{ Name = 'Rocket League';       Tier = 'comp';   Exes = @('RocketLeague.exe') },
-        @{ Name = 'Call of Duty';        Tier = 'comp';   Exes = @('cod.exe', 'cod24.exe', 'cod23.exe', 'cod22.exe') },
+        @{ Name = 'Call of Duty';        Tier = 'comp';   Exes = @('cod.exe', 'cod24.exe', 'cod23.exe', 'cod22.exe', 'cod22-cod.exe', 'cod23-cod.exe') },
         @{ Name = 'Destiny 2';           Tier = 'hybrid'; Exes = @('destiny2.exe') },
         @{ Name = 'PUBG';                Tier = 'comp';   Exes = @('TslGame.exe') },
         @{ Name = 'Escape from Tarkov';  Tier = 'comp';   Exes = @('EscapeFromTarkov.exe', 'EscapeFromTarkov_BE.exe') },
@@ -201,6 +214,9 @@ function Get-ExoGameProfileCatalog {
         @{ Name = 'Path of Exile 2';     Tier = 'hybrid'; Exes = @('PathOfExileSteam.exe', 'PathOfExile_x64Steam.exe', 'PathOfExile.exe') }
         @{ Name = 'Dota 2';              Tier = 'comp';   Exes = @('dota2.exe') }
         @{ Name = 'Team Fortress 2';     Tier = 'comp';   Exes = @('tf_win64.exe', 'hl2.exe') }
+        @{ Name = 'Rust';                Tier = 'comp';   Exes = @('RustClient.exe') }
+        @{ Name = 'GTA V';               Tier = 'hybrid'; Exes = @('GTA5.exe') }
+        @{ Name = 'FiveM';               Tier = 'comp';   Exes = @('FiveM.exe', 'FiveM_GTAProcess.exe') }
         @{ Name = 'Helldivers 2';        Tier = 'hybrid'; Exes = @('helldivers2.exe') }
         @{ Name = 'Black Myth Wukong';   Tier = 'hybrid'; Exes = @('b1-Win64-Shipping.exe') }
         @{ Name = 'Elden Ring';          Tier = 'hybrid'; Exes = @('eldenring.exe') }
@@ -488,34 +504,21 @@ function Test-ManagedNpiCache {
 }
 
 function Install-NpiFresh {
-    # Reuse the managed copy when current, and keep it as an offline fallback.
-    Write-Step 'Checking Exo managed NVIDIA Profile Inspector...'
+    # Pinned Profile Inspector release only ($Script:NpiPinnedTag). The managed copy is
+    # reused when the stamp matches the pinned tag AND the exe hash still verifies;
+    # stale/older copies are replaced so -exportCustomized (v3.0.1.11+) is available.
+    Write-Step "Checking Exo managed NVIDIA Profile Inspector (pinned $Script:NpiPinnedTag)..."
     $target = Join-Path $NpiDir $NpiExeName
     $stampPath = Join-Path $NpiDir 'EXO-NPI-VERSION.txt'
-    $api = 'https://api.github.com/repos/Orbmu2k/nvidiaProfileInspector/releases/latest'
-    $headers = @{ 'User-Agent' = 'Exo-Nvidia/1.5.0'; 'Accept' = 'application/vnd.github+json' }
-    $rel = $null
-    try {
-        $rel = Invoke-RestMethod -Uri $api -Headers $headers -TimeoutSec 20
-    } catch {
-        if (Test-ManagedNpiCache -ExePath $target -StampPath $stampPath) {
-            Write-Warn "Could not check for a Profile Inspector update; using cached managed copy: $($_.Exception.Message)"
-            return $target
-        }
-        throw "Profile Inspector lookup failed and no cached copy is available: $($_.Exception.Message)"
-    }
+    $headers = @{ 'User-Agent' = 'Exo-Nvidia/1.5.0'; 'Accept' = 'application/octet-stream' }
 
-    $tag = [string]$rel.tag_name
-    if (-not $tag) { throw 'Profile Inspector release did not include a version tag' }
-    if (Test-ManagedNpiCache -ExePath $target -StampPath $stampPath -ExpectedTag $tag) {
-        Write-Ok "Managed Profile Inspector is current and hash-verified ($tag)"
+    if (Test-ManagedNpiCache -ExePath $target -StampPath $stampPath -ExpectedTag $Script:NpiPinnedTag) {
+        Write-Ok "Managed Profile Inspector is pinned and hash-verified ($Script:NpiPinnedTag)"
         return $target
     }
 
-    $asset = @($rel.assets | Where-Object { $_.name -match '(?i)^nvidiaProfileInspector.*\.zip$' }) | Select-Object -First 1
-    if (-not $asset) { $asset = @($rel.assets | Where-Object { $_.name -match '(?i)\.zip$' }) | Select-Object -First 1 }
-    if (-not $asset) { throw 'No zip on nvidiaProfileInspector latest release' }
-    $downloadUri = [uri]$asset.browser_download_url
+    $tag = $Script:NpiPinnedTag
+    $downloadUri = [uri]$Script:NpiPinnedZipUrl
     if ($downloadUri.Scheme -ne 'https' -or $downloadUri.Host -notmatch '(?i)(^|\.)github\.com$') {
         throw "Unexpected Profile Inspector download host: $($downloadUri.Host)"
     }
@@ -523,25 +526,18 @@ function Install-NpiFresh {
     $workId = [guid]::NewGuid().ToString('n')
     $zip = Join-Path $env:TEMP ("exo-npi-$workId.zip")
     $extract = Join-Path $env:TEMP ("exo-npi-$workId")
-    Write-Ok "Latest NPI release: $tag ($($asset.name))"
+    Write-Ok "Pinned NPI release: $tag"
     try {
-        Invoke-WebRequest -Uri $downloadUri.AbsoluteUri -OutFile $zip -UseBasicParsing -Headers $headers -TimeoutSec 120
-        $actualSize = (Get-Item -LiteralPath $zip).Length
-        $expectedSize = 0L
-        try { $expectedSize = [long]$asset.size } catch { }
-        if ($expectedSize -gt 0 -and $actualSize -ne $expectedSize) {
-            throw "Profile Inspector archive size mismatch (expected $expectedSize, got $actualSize)"
+        try {
+            Invoke-WebRequest -Uri $downloadUri.AbsoluteUri -OutFile $zip -UseBasicParsing -Headers $headers -TimeoutSec 120
+        } catch {
+            throw "Profile Inspector download failed and no verified cached copy is available: $($_.Exception.Message)"
         }
-        $publishedDigest = [string]$asset.digest
-        if ($publishedDigest -notmatch '(?i)^sha256:([a-f0-9]{64})$') {
-            throw 'Profile Inspector release did not provide a valid GitHub SHA256 digest'
-        }
-        $expectedDigest = $publishedDigest.Substring('sha256:'.Length)
         $actualDigest = (Get-FileHash -LiteralPath $zip -Algorithm SHA256 -ErrorAction Stop).Hash
-        if ($actualDigest -ine $expectedDigest) {
-            throw 'Profile Inspector archive SHA256 did not match the GitHub release digest'
+        if ($actualDigest -ine $Script:NpiPinnedZipSha256) {
+            throw "Profile Inspector archive SHA256 did not match the pinned digest (expected $Script:NpiPinnedZipSha256, got $actualDigest)"
         }
-        Write-Ok 'Verified Profile Inspector release SHA256'
+        Write-Ok 'Verified Profile Inspector archive against pinned SHA256'
         New-Item -ItemType Directory -Force -Path $extract | Out-Null
         Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
         $found = Get-ChildItem -LiteralPath $extract -Recurse -Filter $NpiExeName -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -639,6 +635,174 @@ function Import-ExoNipProfile {
         NipFile   = (Split-Path $NipPath -Leaf)
         ManagedNpi = $true
         NpiFolder = $NpiDir
+    }
+}
+
+function Get-ExoNipBaseProfileMap {
+    # SettingID -> SettingValue map of the Base Profile inside a .nip pack.
+    param([Parameter(Mandatory)][string]$NipPath)
+    if (-not (Test-Path -LiteralPath $NipPath)) { return $null }
+    try { [xml]$doc = [IO.File]::ReadAllText($NipPath) } catch { return $null }
+    $base = @($doc.ArrayOfProfile.Profile) |
+        Where-Object { [string]$_.ProfileName -eq 'Base Profile' } |
+        Select-Object -First 1
+    if (-not $base) { return $null }
+    return (Get-ExoNipSettingMap -ProfileNode $base)
+}
+
+function Invoke-ExoNpiExportCustomized {
+    param(
+        [Parameter(Mandatory)][string]$NpiPath,
+        [int]$TimeoutSec = 60
+    )
+    # NPI v3.0.1.11+ CLI: -exportCustomized writes every customized profile into a
+    # timestamped .nip next to the exe, then exits. Older builds produce nothing;
+    # the caller records drsVerified='unavailable' (non-fatal) in that case.
+    if (-not (Test-Path -LiteralPath $NpiPath)) { return $null }
+    $npiWorkDir = Split-Path -Parent $NpiPath
+    $startUtc = (Get-Date).ToUniversalTime()
+    $proc = $null
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $NpiPath
+        $psi.Arguments = '-exportCustomized'
+        $psi.WorkingDirectory = $npiWorkDir
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+        $proc = [Diagnostics.Process]::Start($psi)
+        if (-not $proc) { return $null }
+        if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
+            try { $proc.Kill() } catch { }
+            return $null
+        }
+    } catch {
+        return $null
+    } finally {
+        if ($proc) { try { $proc.Dispose() } catch { } }
+    }
+
+    $exported = @(Get-ChildItem -LiteralPath $npiWorkDir -Filter '*.nip' -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTimeUtc -ge $startUtc.AddSeconds(-5) } |
+        Sort-Object LastWriteTimeUtc -Descending) | Select-Object -First 1
+    if (-not $exported) { return $null }
+    return [string]$exported.FullName
+}
+
+function Get-ExoDrsExportBaseMap {
+    # Base Profile SettingID -> SettingValue map from an -exportCustomized dump.
+    # Returns $null when the export cannot be parsed; an EMPTY map when the export
+    # parsed but contains no customized Base Profile (stock driver = drift).
+    param([Parameter(Mandatory)][string]$ExportPath)
+    try { [xml]$doc = [IO.File]::ReadAllText($ExportPath) } catch { return $null }
+    $base = @($doc.ArrayOfProfile.Profile) |
+        Where-Object { [string]$_.ProfileName -eq 'Base Profile' } |
+        Select-Object -First 1
+    if (-not $base) { return @{} }
+    return (Get-ExoNipSettingMap -ProfileNode $base)
+}
+
+function Get-ExoDrsVerificationResult {
+    # Pure classifier - keep aligned with NvidiaDetectCore.ps1 + NvidiaPeakLogic.cs.
+    # Compares the intersection of pack settings vs the live driver export.
+    # RequiredIds must be present in the export (they are always customized by the
+    # pack, so a correct import exports them); a missing required pin is drift.
+    param(
+        [AllowNull()][hashtable]$Expected,
+        [AllowNull()][hashtable]$Exported,
+        [string[]]$RequiredIds = @()
+    )
+    if ($null -eq $Expected -or $Expected.Count -eq 0) {
+        return [pscustomobject]@{ Status = 'unavailable'; ComparedCount = 0; Mismatches = @() }
+    }
+    if ($null -eq $Exported) {
+        return [pscustomobject]@{ Status = 'unavailable'; ComparedCount = 0; Mismatches = @() }
+    }
+    $mismatches = New-Object System.Collections.Generic.List[string]
+    $compared = 0
+    foreach ($id in @($Expected.Keys | Sort-Object)) {
+        if (-not $Exported.ContainsKey($id)) { continue }
+        $compared++
+        if ([string]$Exported[$id] -ne [string]$Expected[$id]) {
+            [void]$mismatches.Add(("{0}: expected {1}, driver has {2}" -f $id, $Expected[$id], $Exported[$id]))
+        }
+    }
+    foreach ($id in @($RequiredIds)) {
+        if (-not $Expected.ContainsKey($id)) { continue }
+        if (-not $Exported.ContainsKey($id)) {
+            [void]$mismatches.Add(("{0}: expected {1}, missing from driver export" -f $id, $Expected[$id]))
+        }
+    }
+    if ($compared -eq 0 -and $mismatches.Count -eq 0) {
+        return [pscustomobject]@{
+            Status        = 'drifted'
+            ComparedCount = 0
+            Mismatches    = @('no imported pack settings present in the driver export')
+        }
+    }
+    $status = if ($mismatches.Count -eq 0) { 'verified' } else { 'drifted' }
+    return [pscustomobject]@{
+        Status        = $status
+        ComparedCount = $compared
+        Mismatches    = @($mismatches)
+    }
+}
+
+# Pins that every Exo pack customizes and a correct import must therefore export:
+# power management mode, ULL (CPL state + enabled), frame limiter off, G-SYNC global.
+$Script:DrsRequiredPinIds = @('274197361', '390467', '277041152', '277041154', '294973784')
+
+function Test-ExoDrsImportVerified {
+    # Post-import verification: export live DRS with the managed NPI and compare the
+    # Base Profile pins against the imported pack .nip (expected values derived from
+    # the pack itself, never hardcoded).
+    param(
+        [Parameter(Mandatory)][string]$NpiPath,
+        [Parameter(Mandatory)][string]$PackNipPath
+    )
+    $nowUtc = (Get-Date).ToUniversalTime().ToString('o')
+    $expected = Get-ExoNipBaseProfileMap -NipPath $PackNipPath
+    if ($null -eq $expected -or $expected.Count -eq 0) {
+        return @{
+            Verified     = 'unavailable'
+            VerifiedAt   = $nowUtc
+            SettingCount = 0
+            Mismatches   = @()
+            Reason       = 'imported pack could not be parsed for expected pins'
+        }
+    }
+
+    $exportPath = Invoke-ExoNpiExportCustomized -NpiPath $NpiPath
+    if (-not $exportPath) {
+        return @{
+            Verified     = 'unavailable'
+            VerifiedAt   = $nowUtc
+            SettingCount = 0
+            Mismatches   = @()
+            Reason       = '-exportCustomized produced no export (Profile Inspector older than v3.0.1.11?)'
+        }
+    }
+
+    $exportedMap = $null
+    try {
+        $exportedMap = Get-ExoDrsExportBaseMap -ExportPath $exportPath
+    } finally {
+        try { Remove-Item -LiteralPath $exportPath -Force -ErrorAction SilentlyContinue } catch { }
+    }
+
+    $result = Get-ExoDrsVerificationResult -Expected $expected -Exported $exportedMap -RequiredIds $Script:DrsRequiredPinIds
+    $verified = switch ([string]$result.Status) {
+        'verified' { $true }
+        'drifted'  { $false }
+        default    { 'unavailable' }
+    }
+    $reason = if ($verified -eq 'unavailable') { 'driver export could not be parsed' } else { $null }
+    return @{
+        Verified     = $verified
+        VerifiedAt   = $nowUtc
+        SettingCount = [int]$result.ComparedCount
+        Mismatches   = @($result.Mismatches)
+        Reason       = $reason
     }
 }
 
@@ -1349,6 +1513,16 @@ function Test-Nvi2AudioPackageName([string]$Name) {
     return ($Name -match '(?i)VirtualAudio|HDAudio|Display\.Audio|^Audio\.|HD\.Audio')
 }
 
+function Test-Nvi2BloatPackageName([string]$Name) {
+    # Install-time strip beyond HD/Virtual Audio: ShadowPlay, NvBackend, NodeJS,
+    # and telemetry sub-packages exposed by the NVI2 setup package set.
+    # Display.Driver, PhysX, and NVI2 installer plumbing/containers are never touched.
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
+    if (Test-Nvi2ProtectedPackageName $Name) { return $false }
+    if ($Name -match '(?i)PhysX') { return $false }
+    return ($Name -match '(?i)ShadowPlay|NvBackend|NodeJS|Node\.js|Telemetry')
+}
+
 function Invoke-Nvi2UninstallPackage {
     param(
         [Parameter(Mandatory)][string]$PackageName,
@@ -1574,6 +1748,44 @@ function Remove-NvidiaAudioComponents {
         return $true
     }
     Write-Warn ("NVIDIA audio still present: packages=[{0}] devices=[{1}]" -f ($stillPkg -join ','), (($stillDev | ForEach-Object FriendlyName) -join ','))
+    return $false
+}
+
+function Remove-NvidiaBloatComponents {
+    # Same NVI2 silent-uninstall mechanism as the audio strip, extended to the
+    # remaining install-time bloat: ShadowPlay, NvBackend, NodeJS, telemetry
+    # sub-packages. Keeps Display.Driver + PhysX. No INF edits, no EAC strip.
+    Write-Step 'Stripping NVI2 bloat packages (ShadowPlay / NvBackend / NodeJS / telemetry)...'
+    $present = @(Get-Nvi2InstalledPackageNames | Where-Object { Test-Nvi2BloatPackageName $_ })
+    if ($present.Count -eq 0) {
+        Write-Ok 'No NVI2 bloat packages registered (ShadowPlay / NvBackend / NodeJS / telemetry absent)'
+    }
+    foreach ($pkg in $present) {
+        [void](Invoke-Nvi2UninstallPackage -PackageName $pkg -TimeoutSec 75)
+    }
+
+    # Leftover Installer2 folders for the same package families
+    foreach ($i2 in @(
+        (Join-Path $env:ProgramFiles 'NVIDIA Corporation\Installer2'),
+        (Join-Path ${env:ProgramFiles(x86)} 'NVIDIA Corporation\Installer2')
+    )) {
+        if (-not (Test-Path -LiteralPath $i2)) { continue }
+        Get-ChildItem -LiteralPath $i2 -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $base = if ($_.Name -match '^(?<pkg>.+)\.\{[0-9A-Fa-f\-]{36}\}$') { $Matches['pkg'] } else { $_.Name }
+            if (Test-Nvi2BloatPackageName $base) {
+                if (Remove-ExoTreeForce -Path $_.FullName) {
+                    Write-Ok "Removed bloat package folder: $($_.Name)"
+                }
+            }
+        }
+    }
+
+    $still = @(Get-Nvi2InstalledPackageNames | Where-Object { Test-Nvi2BloatPackageName $_ })
+    if ($still.Count -eq 0) {
+        Write-Ok 'NVI2 bloat strip complete (Display.Driver + PhysX preserved)'
+        return $true
+    }
+    Write-Warn ("NVI2 bloat packages still registered after strip: {0}" -f ($still -join ', '))
     return $false
 }
 
@@ -2721,6 +2933,8 @@ function Install-ExoCleanDriver {
         Start-Sleep -Seconds 2
         # Clean install can leave prior Virtual Audio; strip every time after driver setup
         [void](Remove-NvidiaAudioComponents)
+        # Same pass for ShadowPlay/NvBackend/NodeJS/telemetry sub-packages
+        [void](Remove-NvidiaBloatComponents)
         $installedVersion = Convert-WindowsDriverToNvidia (Get-WindowsDriverVersionString)
         if ($exitCode -eq 0 -and $installedVersion -and
             (Compare-NvidiaVersion $installedVersion $Version) -lt 0) {
@@ -2895,7 +3109,8 @@ function Apply-ExoDriverInstallTweaks {
 
     Disable-NvidiaTelemetry
     [void](Remove-NvidiaAudioComponents)
-    Write-Ok 'Expert tweaks done (MSI High, telemetry off, Ansel off, HDCP off; audio stripped)'
+    [void](Remove-NvidiaBloatComponents)
+    Write-Ok 'Expert tweaks done (MSI High, telemetry off, Ansel off, HDCP off; audio + bloat stripped)'
 }
 
 function Test-ExoDriverInstallTweaks {
@@ -3652,6 +3867,13 @@ try {
     $npi = $null
     $profileImport = $null
     $profileApplied = $false
+    $drsVerification = @{
+        Verified     = 'unavailable'
+        VerifiedAt   = $null
+        SettingCount = 0
+        Mismatches   = @()
+        Reason       = 'profile import skipped'
+    }
     $profileSha256 = ''
     $profilePackVersion = ''
     $profileVersionPath = Join-Path $ProfilesDir 'PROFILE_VERSION'
@@ -3695,6 +3917,23 @@ try {
             throw '3D Base Profile was NOT applied (silent import did not succeed).'
         }
         Write-Ok ("Imported Base Profile + {0} game profiles" -f $gameProfiles.Count)
+
+        # Post-import DRS verification: read the live driver database back via
+        # -exportCustomized and confirm the Base Profile pins actually landed.
+        Write-HubProgress 52 'Verifying imported pins against the live driver DRS...'
+        $drsVerification = Test-ExoDrsImportVerified -NpiPath $npi -PackNipPath $nip
+        switch ([string]$drsVerification.Verified) {
+            'True' {
+                Write-Ok ("DRS verified in driver: {0} Base Profile pins match the imported pack" -f $drsVerification.SettingCount)
+            }
+            'False' {
+                Write-Warn ("DRS verification found {0} mismatched pin(s) after import: {1}" -f `
+                    @($drsVerification.Mismatches).Count, (@($drsVerification.Mismatches) -join '; '))
+            }
+            default {
+                Write-Warn ("DRS verification unavailable: {0}" -f [string]$drsVerification.Reason)
+            }
+        }
     } else {
         Write-Ok '3D profile import skipped (-SkipProfile)'
     }
@@ -3743,8 +3982,9 @@ try {
         Write-Ok "App=$(if ($appInstalled) { 'present' } else { 'absent' }) CPL=$(if ($cplOk) { 'present' } else { 'absent' })"
     }
 
-    Write-HubProgress 70 'Stripping NVIDIA audio + tray ghosts...'
+    Write-HubProgress 70 'Stripping NVIDIA audio + bloat packages + tray ghosts...'
     [void](Remove-NvidiaAudioComponents)
+    [void](Remove-NvidiaBloatComponents)
     [void](Clear-NvidiaTrayGhostIcons)
 
     $displayClient = @{
@@ -3831,6 +4071,13 @@ try {
         profileSha256       = $profileSha256
         profileDriverVersion = $profileDriverVersion
         profileImport       = $profileImport
+        # Live DRS verification of the imported Base Profile pins (-exportCustomized).
+        # true/false when the export ran; 'unavailable' with drsVerifyReason otherwise.
+        drsVerified         = $drsVerification.Verified
+        drsVerifiedAt       = $drsVerification.VerifiedAt
+        drsVerifiedSettingCount = [int]$drsVerification.SettingCount
+        drsMismatch         = @($drsVerification.Mismatches)
+        drsVerifyReason     = $drsVerification.Reason
         npiPath             = $npi
         nvidiaApp           = $false
         nvidiaControlPanel  = [bool]$cplOk

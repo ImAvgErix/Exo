@@ -63,7 +63,25 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     [ObservableProperty]
     private Brush _lastResultBrush;
 
-    public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
+    // Compact expandable "Last apply" report (state-file applyReport array).
+    public ObservableCollection<ApplyReportRowViewModel> ApplyReportRows { get; } = new();
+
+    [ObservableProperty]
+    private bool _hasApplyReport;
+
+    [ObservableProperty]
+    private bool _isApplyReportOpen;
+
+    [ObservableProperty]
+    private string _applyReportSummary = "Last apply";
+
+    public string ApplyReportChevron => IsApplyReportOpen ? "\uE70E" : "\uE70D";
+
+    partial void OnIsApplyReportOpenChanged(bool value) =>
+        OnPropertyChanged(nameof(ApplyReportChevron));
+
+    [RelayCommand]
+    private void ToggleApplyReport() => IsApplyReportOpen = !IsApplyReportOpen;
 
     [RelayCommand]
     private async Task RefreshAsync()
@@ -179,13 +197,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
 
-        var ok = ConfirmAsync is not null
-            ? await ConfirmAsync(
-                "Repair Discord?",
-                "Stock Discord, login kept. Optimizations removed. Admin may be required.")
-            : true;
-        if (!ok) return;
-
+        // Quiet secondary action — runs immediately. Stock Discord, login kept.
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;
@@ -269,6 +281,18 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
         if (!IsStatusLoading)
             IsFeatureListVisible = Features.Count > 0;
+        LoadApplyReport();
+    }
+
+    private void LoadApplyReport()
+    {
+        var rows = ApplyReportPresentation.FromEntries(
+            OptimizerStateService.TryReadApplyReport("discord"));
+        ApplyReportRows.Clear();
+        foreach (var row in rows)
+            ApplyReportRows.Add(row);
+        HasApplyReport = ApplyReportRows.Count > 0;
+        ApplyReportSummary = ApplyReportPresentation.Summarize(rows);
     }
 
     private void SetResult(string message, bool success)

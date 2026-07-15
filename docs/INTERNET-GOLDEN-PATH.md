@@ -3,7 +3,16 @@
 # Internet optimizer — peak path
 
 **Version:** ships with current Exo app release  
-**Goal:** lowest latency / best gaming **and** complete Ethernet + Wi‑Fi coverage (bindings, advanced props, host stack).
+**Goal:** lowest latency / best gaming **and** complete Ethernet + Wi‑Fi coverage (bindings, advanced props, host stack) — with a snapshot/rollback safety net that makes "reinstall Windows to get internet back" impossible.
+
+## Safety contract (non-negotiable, gated by smoke)
+
+1. **Pre-apply snapshot** — before the first mutation the apply script captures the original state to `%LocalAppData%\Exo\network-snapshot.json` (`snapshotVersion` + timestamp): every registry value it writes (or `absent`), netsh tcp/udp globals, `Get-NetTCPSetting` fields, per-adapter advanced properties by `RegistryKeyword`, bindings, interface metrics (+ `AutomaticMetric`), adapter enabled state, RSS config, powercfg values, dynamic ports, IPv6 prefix policies, `DoSvc` start type. An existing snapshot is **never overwritten** (first snapshot = pristine baseline). If snapshot capture fails, the apply **aborts** with no mutation.
+2. **Verified Ethernet gate** — Wi‑Fi is only disabled after a real TCP‑443 probe (`1.1.1.1` / `8.8.8.8`, ~3 s timeout) **bound to the Ethernet adapter's IPv4 endpoint** succeeds. Wi‑Fi‑only machines no-op. Disabled adapters are recorded in `network-apply-state.json`.
+3. **Post-apply check + auto-rollback** — apply ends with an any-interface connectivity probe. On failure it re-enables the Wi‑Fi it just disabled, restores interface metrics from the snapshot, re-probes, and writes `rollback:true` + reason into `network-apply-state.json`. `NetworkOptimizerService` surfaces this honestly (apply reports failure, probe shows the marker).
+4. **True restore** — `BuildRepair` restores exact snapshot values (registry restored or removed when `absent`, advanced props by `RegistryKeyword`, bindings, metrics, adapter enable, netsh/TCP, RSS, powercfg, ports, prefix policies, services). Snapshot + state are deleted only on full success. Without a snapshot it falls back to the approximate stock reset. Adapters Exo disabled are always re-enabled.
+5. **Standalone rescue** — `Repair-Internet.ps1` at repo root (self-elevating, `irm | iex`-runnable) does the same restore/stock-reset + re-enable without the app.
+6. **Proof + honesty** — every major step emits `EXO_REPORT:<step>|ok|fail:<reason>|skip:<reason>`; a non-elevated ping/DNS benchmark runs before/after apply and the delta is persisted in state.
 
 ## Detection (local facts only)
 
@@ -40,6 +49,20 @@
 | powercfg wireless | Max Performance | Max Performance | Stops radio power save |
 | powercfg PCIe ASPM | Off | Off | Link state power stalls |
 | powercfg USB sel-suspend (AC) | Off | Off | USB NIC dongles |
+| TCP timestamps | disabled | disabled | 12-byte header saving, documented netsh |
+| TCP Fast Open (+fallback) | enabled | enabled | RFC 7413, Win10+ |
+| pacingprofile | **off** | untouched | Removes send pacing delay (latency) |
+| HyStart | **disabled** | untouched | Avoids slow-start ramp stalls (latency) |
+| UDP URO | **disabled** (24H2+ only, else skip-with-reason) | untouched | Coalescing adds latency; build-gated ≥ 26100 |
+| ECN capability | **disabled** | **enabled** | AQM marks help throughput, spare marks hurt latency |
+| InitialRtoMs / MinRtoMs | **1000 / 300** | untouched | Faster retransmit on loss (latency) |
+| MaxSynRetransmissions | 2 | 2 | Faster connect failure |
+| NonSackRttResiliency | Disabled | Disabled | Default-off resiliency stays off |
+| DNS ServiceProvider priorities | 4/5/6/7 | same | Documented Local/Hosts/Dns/Netbt order |
+| RSS BaseProcessorNumber | **2** on Ethernet when ≥ 4 logical CPUs | same | Keeps NIC interrupts off core 0 |
+| IPv4 fast path | prefixpolicy `::ffff:0:0/96` 55 4 | same | Documented precedence, replaces old "IPv6 metric = IPv4+20" hack |
+| Delivery Optimization | DODownloadMode 0 + DoSvc Manual | same | Background download quiet |
+| BITS throttle policy | remove `EnableBITSMaxBandwidth` if present | same | No hidden bandwidth cap |
 
 ## Ethernet NIC (when not Wi‑Fi)
 
@@ -85,13 +108,24 @@
 
 ## Path policy (gaming)
 
-1. If **any Ethernet is Up + real IPv4** → metric 1 on fastest usable eth, **disable all Wi‑Fi adapters**.  
+1. If **any Ethernet is Up + real IPv4** → metric 1 on fastest usable eth, then **probe internet over that Ethernet endpoint (TCP 443)**; only on probe success **disable all Wi‑Fi adapters** (recorded in state).  
 2. Else if Wi‑Fi only → keep Wi‑Fi, apply band prefer from **live** client capability.  
-3. Cable linked without IP → **do not** disable Wi‑Fi.
+3. Cable linked without IP, or Ethernet probe fails → **do not** disable Wi‑Fi.
+4. End of apply → any-interface probe; on failure auto-rollback (re-enable Wi‑Fi, restore metrics from snapshot) and mark `rollback:true`.
+
+## Adapter targeting (locale + hardware safe)
+
+- Advanced properties are written by **`RegistryKeyword`** (`*FlowControl`, `*InterruptModeration`, `*LsoV2IPv4/6`, `*RscIPv4/6`, `*EEE`, `*JumboPacket`, `*ReceiveBuffers`, `*TransmitBuffers`, `*RSS`, `*NumRssQueues`, `*PriorityVLANTag`, `*WakeOnMagicPacket`, `*WakeOnPattern`, `*SpeedDuplex`, …); English `DisplayName` fuzzy match remains only for vendor-specific knobs with no standardized keyword.
+- VPN/virtual adapters are excluded via `Get-NetAdapter` `Virtual`/`HardwareInterface` + interface description, not name heuristics alone.
+- Every netsh option that may not exist on a given build is try/catch-wrapped and reported as `skip:<reason>` — never silent.
 
 ## Apply diagnostics
 
 - Log: `%TEMP%\exo-net-last.log`
+- Structured report: `EXO_REPORT:<step>|ok` / `|fail:<reason>` / `|skip:<reason>` lines, parsed into `network-optimizer.json`
+- Snapshot: `%LocalAppData%\Exo\network-snapshot.json` (pristine baseline, never overwritten)
+- Apply outcome: `%LocalAppData%\Exo\network-apply-state.json` (rollback marker, disabled Wi‑Fi list, post-apply connectivity)
+- Benchmark before/after: persisted in `network-optimizer.json` (`benchmark.before` / `benchmark.after`)
 
 ## Explicit non-goals (do not re-add)
 
@@ -106,9 +140,12 @@
 
 ## Implementation core
 
-- `NetworkPeakLogic` — pure band/path/knob decisions
-- `NetworkApplyScriptBuilder` — elevated script (same knobs)
-- `tools/NetworkPeak.Smoke` — gates band/media/script audit
+- `NetworkPeakLogic` — pure band/path/knob decisions + report/benchmark parsing
+- `NetworkApplyScriptBuilder` — elevated apply/repair scripts + non-elevated benchmark (snapshot, probe gate, rollback baked in)
+- `NetworkOptimizerService` — apply/repair orchestration, benchmark before/after, report + rollback surfacing
+- `Repair-Internet.ps1` — standalone self-elevating rescue (snapshot restore or stock reset)
+- `tools/NetworkPeak.Smoke` — gates band/media/script audit, ordering (snapshot → probe → disable → rollback), tweak markers, and PS parse of every generated script
+- `tools/NetScriptDump` — dumps generated scripts for Windows CI E2E execution
 
 ## Change rule
 

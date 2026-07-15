@@ -36,7 +36,7 @@ function Remove-Safe([string]$Path, [ref]$Freed) {
 }
 
 function Stop-Discord {
-    # Hard-kill Discord/Update so resources\app.asar is not locked during Equicord/OpenASAR writes.
+    # Hard-kill Discord/Update so resources\app.asar is not locked during Equicord/Exo Host writes.
     # Update.exe is a common process name, so path-scope every candidate to this
     # Discord install before terminating it. Never use image-name taskkill here.
     $names = @('Discord', 'Discord.bin', 'Update')
@@ -284,16 +284,6 @@ function Get-BundledEquicordAsar {
     foreach ($name in @('desktop.asar', 'equicord.asar')) {
         $path = Join-Path $ToolsDir $name
         if (Test-ValidEquicordAsar $path) { return $path }
-    }
-    return $null
-}
-
-function Get-BundledOpenAsar {
-    foreach ($name in @('openasar.asar', 'OpenAsar.asar')) {
-        $path = Join-Path $ToolsDir $name
-        if ((Test-Path $path) -and (Get-Item $path).Length -gt 10000 -and (Get-Item $path).Length -lt 500000) {
-            return $path
-        }
     }
     return $null
 }

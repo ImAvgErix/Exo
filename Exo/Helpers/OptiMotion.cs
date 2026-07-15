@@ -9,8 +9,7 @@ namespace Exo.Helpers;
 /// <summary>
 /// Safe open animations (XAML Storyboards only).
 /// - Never animates Composition Opacity (blanks UI).
-/// - Settings overlay: fade only (no scale/translate — those pin a centered host top-left).
-/// - Cards: fade + light rise; select: quick press pulse before navigate.
+/// - Cards / feature tiles: fade + light rise; select: quick press pulse before navigate.
 /// </summary>
 public static class OptiMotion
 {
@@ -18,14 +17,11 @@ public static class OptiMotion
     public const int EntranceMs = 220;
     public const int FadeMs = 160;
     public const int StaggerStepMs = 22;
-    public const int OverlayOpenMs = 180;
-    public const int OverlayCloseMs = 100;
     public const int SelectMs = 90;
+    /// <summary>Feature-tile list entrance stagger (module pages).</summary>
+    public const int ListStaggerStepMs = 28;
 
     public static EasingFunctionBase Glide() =>
-        new CubicEase { EasingMode = EasingMode.EaseOut };
-
-    public static EasingFunctionBase Spring() =>
         new CubicEase { EasingMode = EasingMode.EaseOut };
 
     public static CompositeTransform EnsureTransform(UIElement el)
@@ -82,11 +78,13 @@ public static class OptiMotion
         int delayMs = 0,
         float fromY = 10f,
         float fromScale = 1f, // ignored — scale softens logos
-        bool enableHit = true)
+        bool enableHit = true,
+        double toOpacity = 1.0)
     {
         // Snap rise to whole pixels so we never park mid-pixel.
         var rise = (float)Math.Round(Math.Clamp(fromY, 0f, 10f));
-        ScheduleEnsureVisible(el, delayMs + EntranceMs + 48);
+        var settle = Math.Clamp(toOpacity, 0.1, 1.0);
+        ScheduleEnsureVisible(el, delayMs + EntranceMs + 48, settle);
 
         try
         {
@@ -101,7 +99,7 @@ public static class OptiMotion
             el.IsHitTestVisible = false;
 
             var sb = new Storyboard();
-            sb.Children.Add(Fade(el, 0, 1, FadeMs, delayMs));
+            sb.Children.Add(Fade(el, 0, settle, FadeMs, delayMs));
             if (rise > 0)
                 sb.Children.Add(TranslateY(tf, rise, 0, EntranceMs, delayMs));
 
@@ -109,7 +107,7 @@ public static class OptiMotion
             {
                 try
                 {
-                    el.Opacity = 1;
+                    el.Opacity = settle;
                     el.IsHitTestVisible = enableHit;
                     // Drop transform so layout owns pixels (no residual matrix blur).
                     el.RenderTransform = null;
@@ -149,6 +147,47 @@ public static class OptiMotion
             if (items[i] is null) continue;
             PlayEnter(items[i], baseDelayMs + i * stepMs, fromY, fromScale);
         }
+    }
+
+    /// <summary>
+    /// Feature-list entrance for module pages: subtle staggered fade + short rise
+    /// on the freshly realized tiles (same storyboard language as the dashboard
+    /// PlayStagger). Waits a few frames for the ItemsRepeater to realize children,
+    /// then animates each tile toward its current (data-bound) opacity so dimmed
+    /// inactive tiles stay dimmed. Callers gate re-entry (first loaded-only).
+    /// </summary>
+    public static void PlayListEnter(FrameworkElement host, int expectedCount = 0)
+    {
+        if (host is null) return;
+        _ = RunListEnterAsync(host, expectedCount);
+    }
+
+    private static async Task RunListEnterAsync(FrameworkElement host, int expectedCount)
+    {
+        try
+        {
+            // Wait (UI thread) until the repeater realized its items.
+            for (var attempt = 0; attempt < 24; attempt++)
+            {
+                var count = VisualTreeHelper.GetChildrenCount(host);
+                if (count > 0 && count >= expectedCount)
+                    break;
+                await Task.Delay(16);
+            }
+
+            var items = new List<(UIElement El, double Target)>();
+            var childCount = VisualTreeHelper.GetChildrenCount(host);
+            for (var i = 0; i < childCount; i++)
+            {
+                if (VisualTreeHelper.GetChild(host, i) is UIElement el)
+                    items.Add((el, el.Opacity <= 0 ? 1.0 : el.Opacity));
+            }
+            if (items.Count == 0) return;
+
+            for (var i = 0; i < items.Count; i++)
+                PlayEnter(items[i].El, i * ListStaggerStepMs, fromY: 8f, toOpacity: items[i].Target);
+        }
+        catch { }
     }
 
     /// <summary>
@@ -195,100 +234,6 @@ public static class OptiMotion
             EnsureVisible(el);
             onDone?.Invoke();
         }
-    }
-
-    /// <summary>
-    /// Settings scrim fade-in only. Do NOT pass the sheet — transforms/opacity on a
-    /// centered host is what pinned settings top-left after remeasure (Check for updates).
-    /// </summary>
-    public static void PlayScrimFadeIn(UIElement scrim)
-    {
-        try
-        {
-            ForceCompositionIdentity(scrim);
-            ClearTransform(scrim);
-            scrim.Opacity = 0;
-            var sb = new Storyboard();
-            sb.Children.Add(Fade(scrim, 0, 1, 200, 0));
-            sb.Completed += (_, _) =>
-            {
-                try { scrim.Opacity = 1; ClearTransform(scrim); } catch { }
-            };
-            sb.Begin();
-        }
-        catch
-        {
-            try { scrim.Opacity = 1; } catch { }
-        }
-    }
-
-    /// <summary>Settings scrim fade-out only, then onDone.</summary>
-    public static void PlayScrimFadeOut(UIElement scrim, Action? onDone = null)
-    {
-        try
-        {
-            ForceCompositionIdentity(scrim);
-            ClearTransform(scrim);
-            var sb = new Storyboard();
-            sb.Children.Add(Fade(scrim, Math.Clamp(scrim.Opacity, 0, 1), 0, OverlayCloseMs, 0));
-            var finished = false;
-            void Once()
-            {
-                if (finished) return;
-                finished = true;
-                try { scrim.Opacity = 1; ClearTransform(scrim); } catch { }
-                onDone?.Invoke();
-            }
-            sb.Completed += (_, _) => Once();
-            sb.Begin();
-            _ = Task.Delay(OverlayCloseMs + 40).ContinueWith(_ =>
-            {
-                try { scrim.DispatcherQueue?.TryEnqueue(Once); } catch { try { Once(); } catch { } }
-            });
-        }
-        catch
-        {
-            try { scrim.Opacity = 1; } catch { }
-            onDone?.Invoke();
-        }
-    }
-
-    /// <summary>Back-compat names — scrim-only; sheet argument ignored on purpose.</summary>
-    public static void PlayOverlayOpen(UIElement scrimHost, UIElement sheet)
-    {
-        // Sheet must stay layout-owned. Only fade scrim.
-        try
-        {
-            sheet.Opacity = 1;
-            sheet.RenderTransform = null;
-            ClearCompositionOnly(sheet);
-        }
-        catch { }
-        PlayScrimFadeIn(scrimHost);
-    }
-
-    public static void PlayOverlayClose(UIElement scrimHost, UIElement sheet, Action? onDone = null)
-    {
-        try
-        {
-            sheet.Opacity = 1;
-            sheet.RenderTransform = null;
-            ClearCompositionOnly(sheet);
-        }
-        catch { }
-        PlayScrimFadeOut(scrimHost, onDone);
-    }
-
-    /// <summary>Clear composition layer only — does not touch XAML Opacity (safe mid-layout).</summary>
-    public static void ClearCompositionOnly(UIElement el)
-    {
-        ForceCompositionIdentity(el);
-        try
-        {
-            if (el.RenderTransform is not null)
-                el.RenderTransform = null;
-        }
-        catch { }
     }
 
     /// <summary>Module page soft fade-in.</summary>
@@ -357,9 +302,10 @@ public static class OptiMotion
         catch { }
     }
 
-    private static void ScheduleEnsureVisible(UIElement el, int delayMs)
+    private static void ScheduleEnsureVisible(UIElement el, int delayMs, double settleOpacity = 1.0)
     {
         var captured = el;
+        var opacity = Math.Clamp(settleOpacity, 0.1, 1.0);
         _ = Task.Run(async () =>
         {
             try
@@ -367,7 +313,13 @@ public static class OptiMotion
                 await Task.Delay(Math.Max(0, delayMs));
                 captured.DispatcherQueue?.TryEnqueue(() =>
                 {
-                    try { EnsureVisible(captured); } catch { }
+                    try
+                    {
+                        EnsureVisible(captured);
+                        if (opacity < 1.0)
+                            captured.Opacity = opacity;
+                    }
+                    catch { }
                 });
             }
             catch { }
@@ -404,22 +356,6 @@ public static class OptiMotion
         };
         Storyboard.SetTarget(a, tf);
         Storyboard.SetTargetProperty(a, "TranslateY");
-        return a;
-    }
-
-    private static DoubleAnimation Scale(CompositeTransform tf, string prop, double from, double to, int ms, int delayMs)
-    {
-        var a = new DoubleAnimation
-        {
-            From = from,
-            To = to,
-            Duration = TimeSpan.FromMilliseconds(ms),
-            BeginTime = TimeSpan.FromMilliseconds(delayMs),
-            EasingFunction = Spring(),
-            EnableDependentAnimation = true
-        };
-        Storyboard.SetTarget(a, tf);
-        Storyboard.SetTargetProperty(a, prop);
         return a;
     }
 }

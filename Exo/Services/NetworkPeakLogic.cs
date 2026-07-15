@@ -80,7 +80,22 @@ public static partial class NetworkPeakLogic
         string InterruptMod,  // "0" | "1"
         string FlowControl,   // "0" | "3"
         string IdleRestrict,  // "1" = prevent NIC idle (latency)
-        bool NagleOff);
+        bool NagleOff)
+    {
+        // --- Extended tweak layer (all snapshot-covered; documented netsh / Set-NetTCPSetting only) ---
+        /// <summary>netsh ecncapability value: disabled (latency) | enabled (throughput) | default (balanced).</summary>
+        public string Ecn { get; init; } = "default";
+        /// <summary>Latency preset only: netsh pacingprofile=off.</summary>
+        public bool PacingOff { get; init; }
+        /// <summary>Latency preset only: netsh hystart=disabled.</summary>
+        public bool HystartOff { get; init; }
+        /// <summary>Latency preset only: netsh int udp set global uro=disabled (24H2+ gate, build 26100).</summary>
+        public bool UroOff { get; init; }
+        /// <summary>Latency preset only: Set-NetTCPSetting InternetCustom InitialRtoMs 1000 + MinRtoMs 300.</summary>
+        public bool TightRto { get; init; }
+        /// <summary>Both presets: netsh timestamps=disabled, fastopen(+fallback)=enabled, MaxSyn 2, NonSackRttResiliency Disabled.</summary>
+        public bool SharedTcpTweaks { get; init; } = true;
+    }
 
     public sealed record PathDecision(
         string PolicyLine,
@@ -102,7 +117,15 @@ public static partial class NetworkPeakLogic
             InterruptMod: bulk ? "1" : "0",
             FlowControl: bulk ? "3" : "0",
             IdleRestrict: bulk ? "0" : "1",
-            NagleOff: latency);
+            NagleOff: latency)
+        {
+            Ecn = latency ? "disabled" : bulk ? "enabled" : "default",
+            PacingOff = latency,
+            HystartOff = latency,
+            UroOff = latency,
+            TightRto = latency,
+            SharedTcpTweaks = true
+        };
     }
 
     /// <summary>
@@ -434,6 +457,8 @@ public static partial class NetworkPeakLogic
         "Set-Dword $tcp 'TcpWindowSize'",
         "Set-Dword $tcp 'GlobalMaxTcpWindowSize'",
         "Set-Dword $tcp 'EnableTCPChimney' 1",
+        // Retired crude IPv4-first hack (replaced by documented prefix-policy precedence)
+        "$want6 = $base + 20",
     };
 
     /// <summary>Required host-stack markers in every apply script (network-only).</summary>
@@ -449,6 +474,34 @@ public static partial class NetworkPeakLogic
         "EnableMulticast",
         "BufferStrategy",
         "RssQueueBudget",
+        // Safety layer: pristine pre-apply snapshot + verified Ethernet gate + rollback + report
+        "network-snapshot.json",
+        "Save-ExoNetworkSnapshot",
+        "Test-ExoConnectivity",
+        "EXO_REPORT:",
+        "network-apply-state.json",
+        // Shared TCP tweak layer (both presets)
+        "timestamps=disabled",
+        "fastopen=enabled",
+        "fastopenfallback=enabled",
+        "-MaxSynRetransmissions 2",
+        "-NonSackRttResiliency Disabled",
+        // DNS ServiceProvider priorities (documented DWORDs)
+        "LocalPriority' 4",
+        "HostsPriority' 5",
+        "DnsPriority' 6",
+        "NetbtPriority' 7",
+        // Background download quiet
+        "DoSvc",
+        "EnableBITSMaxBandwidth",
+        // RSS off core 0 + keyword-first adapter writes
+        "BaseProcessorNumber 2",
+        "'*FlowControl'",
+        "'*SpeedDuplex'",
+        "'*JumboPacket'",
+        "'*PriorityVLANTag'",
+        // IPv4 fast path via documented prefix policy (not metric hack)
+        "set prefixpolicy ::ffff:0:0/96 55 4",
     };
 
     /// <summary>Audit a generated apply script for peak host markers and folklore absence.</summary>
@@ -490,6 +543,107 @@ public static partial class NetworkPeakLogic
         if (script.IndexOf("'*FlowControl' " + knobs.FlowControl, StringComparison.Ordinal) < 0)
             issues.Add("FlowControl mismatch for " + preset + " expect " + knobs.FlowControl);
 
+        // --- Extended tweak layer: preset divergence must be present / absent exactly ---
+        if (script.IndexOf("ecncapability=" + knobs.Ecn, StringComparison.OrdinalIgnoreCase) < 0)
+            issues.Add("ECN mismatch for " + preset + " expect " + knobs.Ecn);
+
+        if (knobs.PacingOff)
+        {
+            if (script.IndexOf("pacingprofile=off", StringComparison.OrdinalIgnoreCase) < 0)
+                issues.Add("missing pacingprofile=off for " + preset);
+        }
+        else if (script.IndexOf("pacingprofile=off", StringComparison.OrdinalIgnoreCase) >= 0)
+            issues.Add("pacingprofile=off must not appear for " + preset);
+
+        if (knobs.HystartOff)
+        {
+            if (script.IndexOf("hystart=disabled", StringComparison.OrdinalIgnoreCase) < 0)
+                issues.Add("missing hystart=disabled for " + preset);
+        }
+        else if (script.IndexOf("hystart=disabled", StringComparison.OrdinalIgnoreCase) >= 0)
+            issues.Add("hystart=disabled must not appear for " + preset);
+
+        if (knobs.UroOff)
+        {
+            if (script.IndexOf("uro=disabled", StringComparison.OrdinalIgnoreCase) < 0)
+                issues.Add("missing uro=disabled for " + preset);
+            if (script.IndexOf("26100", StringComparison.Ordinal) < 0)
+                issues.Add("missing 24H2 build gate (26100) for uro on " + preset);
+        }
+        else if (script.IndexOf("uro=disabled", StringComparison.OrdinalIgnoreCase) >= 0)
+            issues.Add("uro=disabled must not appear for " + preset);
+
+        if (knobs.TightRto)
+        {
+            if (script.IndexOf("-InitialRtoMs 1000", StringComparison.Ordinal) < 0)
+                issues.Add("missing InitialRtoMs 1000 for " + preset);
+            if (script.IndexOf("-MinRtoMs 300", StringComparison.Ordinal) < 0)
+                issues.Add("missing MinRtoMs 300 for " + preset);
+        }
+        else
+        {
+            if (script.IndexOf("-InitialRtoMs 1000", StringComparison.Ordinal) >= 0)
+                issues.Add("InitialRtoMs 1000 must not appear for " + preset);
+        }
+
         return (issues.Count == 0, issues);
+    }
+
+    [GeneratedRegex(@"EXO_REPORT:([A-Za-z0-9_\-\. ]+)\|(ok|fail|skip)(?::([^\r\n]*))?", RegexOptions.IgnoreCase)]
+    private static partial Regex ApplyReportRegex();
+
+    /// <summary>
+    /// Parse EXO_REPORT structured lines from the elevated apply/repair run log
+    /// (%TEMP%\exo-net-last.log). Order preserved; duplicates kept (honest trace).
+    /// </summary>
+    public static IReadOnlyList<NetworkApplyReportStep> ParseApplyReport(string? logText)
+    {
+        var list = new List<NetworkApplyReportStep>();
+        if (string.IsNullOrEmpty(logText)) return list;
+        foreach (System.Text.RegularExpressions.Match m in ApplyReportRegex().Matches(logText))
+        {
+            list.Add(new NetworkApplyReportStep
+            {
+                Name = m.Groups[1].Value.Trim(),
+                Status = m.Groups[2].Value.ToLowerInvariant(),
+                Reason = m.Groups[3].Success ? m.Groups[3].Value.Trim() : string.Empty
+            });
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Parse the single EXO_BENCH JSON line printed by the BuildBenchmark script.
+    /// Returns null when no valid benchmark line is present.
+    /// </summary>
+    public static NetworkBenchmarkResult? TryParseBenchmark(string? output)
+    {
+        if (string.IsNullOrEmpty(output)) return null;
+        const string marker = "EXO_BENCH:";
+        var idx = output.LastIndexOf(marker, StringComparison.Ordinal);
+        if (idx < 0) return null;
+        var line = output[(idx + marker.Length)..];
+        var nl = line.IndexOfAny(new[] { '\r', '\n' });
+        if (nl >= 0) line = line[..nl];
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(line);
+            var root = doc.RootElement;
+            double D(string n) =>
+                root.TryGetProperty(n, out var e) && e.ValueKind == System.Text.Json.JsonValueKind.Number
+                    ? e.GetDouble() : 0;
+            return new NetworkBenchmarkResult
+            {
+                Ok = root.TryGetProperty("ok", out var ok) && ok.ValueKind == System.Text.Json.JsonValueKind.True,
+                PingP50Ms = D("pingP50Ms"),
+                PingP95Ms = D("pingP95Ms"),
+                JitterMs = D("jitterMs"),
+                DnsMs = D("dnsMs"),
+                Samples = (int)D("samples"),
+                TimestampUtc = root.TryGetProperty("timestampUtc", out var ts) && ts.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? ts.GetString() ?? string.Empty : string.Empty
+            };
+        }
+        catch { return null; }
     }
 }

@@ -53,12 +53,12 @@ Expect("kernel fails without proxy hash",
 // Old false-fail: requiring exact TrimIntervalMs=5000 while kit is 4000
 Expect("4000 is not rejected as non-5000", DiscordPeakLogic.IsKernelConfigText(kitCfg));
 
-// OpenAsar / Equicord loader
-Expect("openasar size ok", DiscordPeakLogic.IsOpenAsarSize(41385));
-Expect("openasar stock asar too big", !DiscordPeakLogic.IsOpenAsarSize(50_000_000));
+// Equicord loader (legacy OpenAsar size classifier is intentionally removed)
 var loader = "module.exports = require('C:\\\\Users\\\\x\\\\AppData\\\\Roaming\\\\Equicord\\\\equicord.asar');";
 Expect("equicord loader text", DiscordPeakLogic.IsEquicordLoaderText(loader, loader.Length));
 Expect("empty loader fail", !DiscordPeakLogic.IsEquicordLoaderText("", 0));
+Expect("OpenAsar size classifier removed from DiscordPeakLogic",
+    typeof(DiscordPeakLogic).GetMethod("IsOpenAsarSize") is null);
 
 // Toasts: intentional off active; missing all → not applied; one enabled → fail
 var toastOk = new Dictionary<string, int?>
@@ -72,19 +72,57 @@ Expect("toasts none seen not applied",
 Expect("toasts one enabled fail",
     !DiscordPeakLogic.AreToastsOff(new Dictionary<string, int?> { ["Discord"] = 1 }));
 
-// Settings JSON — legacy OpenAsar + modern Exo Host
-Expect("quickstart legacy openasar",
-    DiscordPeakLogic.IsQuickStartSettingsJson("""{"openasar":{"quickstart":true}}"""));
+// Settings JSON — Exo Host only; legacy OpenAsar acceptance removed (negative)
+Expect("legacy openasar quickstart NOT accepted",
+    !DiscordPeakLogic.IsQuickStartSettingsJson("""{"openasar":{"quickstart":true}}"""));
 Expect("exo host skip + chromium",
     DiscordPeakLogic.IsQuickStartSettingsJson(
         """{"SKIP_HOST_UPDATE":true,"chromiumSwitches":{"no-pings":1}}"""));
 Expect("exo host skip + tti",
     DiscordPeakLogic.IsQuickStartSettingsJson(
         """{"SKIP_HOST_UPDATE":true,"DESKTOP_TTI_DNSTCP_WARMUP":true}"""));
+Expect("chromium without skip fails",
+    !DiscordPeakLogic.IsQuickStartSettingsJson("""{"chromiumSwitches":{"no-pings":1}}"""));
 Expect("startup off",
     DiscordPeakLogic.IsStartupOffSettingsJson("""{"OPEN_ON_STARTUP":false}"""));
 Expect("startup on fail",
     !DiscordPeakLogic.IsStartupOffSettingsJson("""{"OPEN_ON_STARTUP":true}"""));
+
+// --- Voice QoS DSCP policy classifier ---
+var qosGood = new Dictionary<string, string?>
+{
+    ["Version"] = "1.0",
+    ["Application Name"] = "Discord.exe",
+    ["Protocol"] = "UDP",
+    ["Local Port"] = "*",
+    ["Remote Port"] = "*",
+    ["Local IP"] = "*",
+    ["Remote IP"] = "*",
+    ["DSCP Value"] = "46",
+    ["Throttle Rate"] = "-1",
+};
+Expect("qos policy good map", DiscordPeakLogic.IsQosPolicyMap(qosGood, "Discord.exe"));
+Expect("qos policy exe mismatch fails", !DiscordPeakLogic.IsQosPolicyMap(qosGood, "DiscordPTB.exe"));
+var qosWrongDscp = new Dictionary<string, string?>(qosGood) { ["DSCP Value"] = "0" };
+Expect("qos policy wrong dscp fails", !DiscordPeakLogic.IsQosPolicyMap(qosWrongDscp));
+var qosNoApp = new Dictionary<string, string?>(qosGood);
+qosNoApp.Remove("Application Name");
+Expect("qos policy missing app fails", !DiscordPeakLogic.IsQosPolicyMap(qosNoApp));
+Expect("qos policy empty map fails", !DiscordPeakLogic.IsQosPolicyMap(new Dictionary<string, string?>()));
+
+// --- Variant (PTB/Canary) classifiers ---
+Expect("variant definitions cover stable+ptb+canary",
+    DiscordPeakLogic.VariantDefinitions.Length == 3 &&
+    DiscordPeakLogic.VariantDefinitions.Any(v => v.LocalDir == "DiscordPTB" && v.Exe == "DiscordPTB.exe") &&
+    DiscordPeakLogic.VariantDefinitions.Any(v => v.LocalDir == "DiscordCanary" && v.AppDataDir == "discordcanary"));
+Expect("variant settings good",
+    DiscordPeakLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":false,"chromiumSwitches":{"no-pings":1}}"""));
+Expect("variant settings startup on fails",
+    !DiscordPeakLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":true,"chromiumSwitches":{"no-pings":1}}"""));
+Expect("variant settings missing chromium fails",
+    !DiscordPeakLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":false}"""));
+Expect("variant optimized all true", DiscordPeakLogic.IsVariantOptimized(true, true, true));
+Expect("variant optimized missing qos fails", !DiscordPeakLogic.IsVariantOptimized(true, true, false));
 
 // Path stability
 var root = @"C:\Users\Erix\AppData\Local\Discord";
@@ -121,7 +159,18 @@ TrimIntervalMs=5000
 PriorityClass=3
 '@)),
   (E 'ps bad trim off' (-not (Test-DiscOptKernelConfigText -ConfigText 'EnableTrim=0`nTrimIntervalMs=4000`nPriorityClass=3'))),
-  (E 'ps openasar size' (Test-DiscOptOpenAsarSize -SizeBytes 41385)),
+  (E 'ps openasar classifier removed' (-not (Get-Command Test-DiscOptOpenAsarSize -ErrorAction SilentlyContinue))),
+  (E 'ps legacy openasar quickstart not accepted' (-not (Test-DiscOptQuickStartFromSettingsJson -JsonText '{{""openasar"":{{""quickstart"":true}}}}'))),
+  (E 'ps exo host quickstart accepted' (Test-DiscOptQuickStartFromSettingsJson -JsonText '{{""SKIP_HOST_UPDATE"":true,""chromiumSwitches"":{{""no-pings"":1}}}}')),
+  (E 'ps qos map good' (Test-DiscOptQosPolicyMap -Map @{{ 'Version' = '1.0'; 'Application Name' = 'Discord.exe'; 'Protocol' = 'UDP'; 'DSCP Value' = '46'; 'Throttle Rate' = '-1' }} -ExpectedExe 'Discord.exe')),
+  (E 'ps qos map wrong dscp' (-not (Test-DiscOptQosPolicyMap -Map @{{ 'Version' = '1.0'; 'Application Name' = 'Discord.exe'; 'Protocol' = 'UDP'; 'DSCP Value' = '0'; 'Throttle Rate' = '-1' }}))),
+  (E 'ps qos map exe mismatch' (-not (Test-DiscOptQosPolicyMap -Map @{{ 'Version' = '1.0'; 'Application Name' = 'Discord.exe'; 'Protocol' = 'UDP'; 'DSCP Value' = '46'; 'Throttle Rate' = '-1' }} -ExpectedExe 'DiscordPTB.exe'))),
+  (E 'ps variant defs 3' (@(Get-DiscOptVariantDefinitions).Count -eq 3)),
+  (E 'ps variant defs ptb' (@(Get-DiscOptVariantDefinitions | Where-Object {{ $_.LocalDir -eq 'DiscordPTB' -and $_.Exe -eq 'DiscordPTB.exe' -and $_.QosPolicy -eq 'Exo Discord PTB Voice' }}).Count -eq 1)),
+  (E 'ps variant settings good' (Test-DiscOptVariantSettingsJson -JsonText '{{""OPEN_ON_STARTUP"":false,""chromiumSwitches"":{{""no-pings"":1}}}}')),
+  (E 'ps variant settings startup on' (-not (Test-DiscOptVariantSettingsJson -JsonText '{{""OPEN_ON_STARTUP"":true,""chromiumSwitches"":{{""no-pings"":1}}}}'))),
+  (E 'ps variant optimized' (Test-DiscOptVariantOptimized -SettingsFlagsOk $true -AutostartQuiet $true -QosOk $true)),
+  (E 'ps variant not optimized without qos' (-not (Test-DiscOptVariantOptimized -SettingsFlagsOk $true -AutostartQuiet $true -QosOk $false))),
   (E 'ps toast intentional' (Test-DiscOptToastsOffFromMap -Map @{{ Discord = 0; Other = $null }})),
   (E 'ps toast missing all' (-not (Test-DiscOptToastsOffFromMap -Map @{{ Discord = $null }}))),
   (E 'ps kernel applied' (Test-DiscOptKernelApplied -FfmpegProxyBytes 24000 -FfmpegRealBytes 2000000 -VersionDllBytes 120000 -ConfigText @'
@@ -173,6 +222,7 @@ var applyFiles = new[]
 {
     Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Disc-Optimizer.ps1"),
     Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Exo-Discord-Run.ps1"),
+    Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "kit", "lib", "10-Logging.ps1"),
     Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "kit", "lib", "40-DebloatWindows.ps1"),
     Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "kit", "lib", "60-KernelBoot.ps1"),
 };
@@ -186,6 +236,56 @@ Expect("Install-DiscOptKernel present",
     applyBlob.Contains("Install-DiscOptKernel", StringComparison.Ordinal));
 Expect("Apply-WindowsTweaks present",
     applyBlob.Contains("Apply-WindowsTweaks", StringComparison.Ordinal));
+Expect("QoS apply present (Set-DiscordVoiceQosPolicies + DSCP 46)",
+    applyBlob.Contains("Set-DiscordVoiceQosPolicies", StringComparison.Ordinal) &&
+    applyBlob.Contains("'DSCP Value'; V = '46'", StringComparison.Ordinal));
+Expect("variant quiet apply present",
+    applyBlob.Contains("Set-DiscordVariantQuiet", StringComparison.Ordinal));
+Expect("spellcheck debloat present (keeps en-US + system locale)",
+    applyBlob.Contains("Remove-DiscordExtraSpellcheckDictionaries", StringComparison.Ordinal));
+Expect("structured apply report emitted",
+    applyBlob.Contains("EXO_REPORT:", StringComparison.Ordinal) &&
+    applyBlob.Contains("applyReport", StringComparison.Ordinal));
+
+// Stable PowerShell 7 host (preview requirement removed; preview = last-resort probe only)
+var discOptText = File.ReadAllText(applyFiles[0]);
+Expect("stable pwsh host classifier present",
+    discOptText.Contains("function Test-DiscOptIsPwsh7Host", StringComparison.Ordinal) &&
+    discOptText.Contains("function Test-DiscOptIsPwsh7Path", StringComparison.Ordinal) &&
+    discOptText.Contains("function Get-DiscOptPwsh7", StringComparison.Ordinal));
+Expect("pwsh candidate order: stable Program Files first",
+    discOptText.IndexOf(@"PowerShell\7\pwsh.exe", StringComparison.OrdinalIgnoreCase) >= 0 &&
+    discOptText.IndexOf(@"PowerShell\7\pwsh.exe", StringComparison.OrdinalIgnoreCase) <
+    discOptText.IndexOf(@"PowerShell\7-preview\pwsh.exe", StringComparison.OrdinalIgnoreCase));
+Expect("portable fallback downloads STABLE release into Exo runtime",
+    discOptText.Contains(@"Exo\runtime\PowerShell", StringComparison.Ordinal) &&
+    discOptText.Contains("PowerShell-7*-win-x64.zip", StringComparison.Ordinal) &&
+    discOptText.Contains("$release.prerelease) { continue }", StringComparison.Ordinal));
+Expect("retired PowerShellPreview runtime dir not referenced",
+    !applyBlob.Contains(@"runtime\PowerShellPreview", StringComparison.OrdinalIgnoreCase));
+Expect("pwsh install hint uses stable winget id",
+    applyBlob.Contains("winget install Microsoft.PowerShell", StringComparison.Ordinal) &&
+    !applyBlob.Contains("Microsoft.PowerShell.Preview", StringComparison.Ordinal));
+Expect("preview host requirement removed",
+    !applyBlob.Contains("Test-DiscOptIsPwshPreviewHost", StringComparison.Ordinal) &&
+    !applyBlob.Contains("requires PowerShell 7 Preview", StringComparison.Ordinal) &&
+    !applyBlob.Contains("DISCOPT_PS7_PREVIEW", StringComparison.Ordinal));
+
+// Repair must remove Exo QoS policies and variant flags
+var repairPath = Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Exo-Discord-Repair.ps1");
+var repairText = File.Exists(repairPath) ? File.ReadAllText(repairPath) : "";
+Expect("repair removes Exo QoS policies",
+    repairText.Contains("Remove-ExoDiscordQosPolicies", StringComparison.Ordinal));
+Expect("repair restores variant settings",
+    repairText.Contains("Restore-ExoDiscordVariantSettings", StringComparison.Ordinal));
+
+// Detect script rows for QoS + variants; OpenAsar acceptance removed (negative)
+var detectText = File.ReadAllText(Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Exo-Discord-Detect.ps1"));
+Expect("detect has QoS row", detectText.Contains("Voice priority", StringComparison.Ordinal));
+Expect("detect has variants row", detectText.Contains("Discord variants", StringComparison.Ordinal));
+Expect("detect no legacy OpenAsar acceptance",
+    !detectText.Contains("legacyOpenAsarOk", StringComparison.Ordinal) &&
+    !detectText.Contains("Test-DiscOptOpenAsarSize", StringComparison.Ordinal));
 
 // Fully-applied fixture: intentional quiet/kernel should score active
 var fullToast = new Dictionary<string, int?> { ["Discord"] = 0, ["Discord.Desktop"] = 0 };

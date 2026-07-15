@@ -3,7 +3,7 @@
 Bundled with Exo. The default UI action is a full no-compromise pass:
 
 - quiet CEF launch flags and aggressive client/overlay settings;
-- steamwebhelper working-set reclamation every 5 seconds;
+- steamwebhelper working-set reclamation every 3 seconds;
 - High client priority while idle and Below Normal priority while gaming;
 - deep disposable web/client cache cleanup and orphaned shader-cache cleanup;
 - Windows startup suppression and Start menu/taskbar launcher retargeting.

@@ -332,7 +332,7 @@ function Invoke-NvApiHelper {
         return $false
     }
     Write-DLog "NVAPI: $exe"
-    # PS7 Preview / .NET Core: ArgumentList + async stream reads.
+    # PS7 / .NET Core: ArgumentList + async stream reads.
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = $exe
     $psi.ArgumentList.Add('--apply')

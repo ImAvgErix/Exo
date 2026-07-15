@@ -7,7 +7,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0f766e?style=flat-square)](https://github.com/ImAvgErix/Exo/releases/latest)
 
-Exo is a focused Windows performance hub. Each optimizer is **aggressive by design**, **deterministic**, and **honest about what it applied**. Live status checklists track real state — not marketing checkmarks.
+<!-- hero: docs/exo-shell.png — capture on Windows QA pass -->
+
+Exo is a focused Windows performance hub. Each optimizer is **aggressive by design**, **deterministic**, and **honest about what it applied**. Live status checklists track real state — not marketing checkmarks. Internet shows **before/after ping, jitter, and DNS numbers** measured on your machine; NVIDIA reads the driver's actual profile database back and shows **"Verified in driver"** — or tells you it drifted.
 
 ---
 
@@ -19,7 +21,7 @@ Grab the latest **double-click installer** from [Releases](https://github.com/Im
 |-------|------------|
 | `Exo.exe` | Self-extracting installer (recommended) |
 
-**Requirements:** Windows 10/11 **x64**, admin elevation when applying optimizers, NVIDIA GPU for the NVIDIA path.
+**Requirements:** Windows 10/11 **x64**, admin elevation when applying optimizers, NVIDIA GPU for the NVIDIA path. PowerShell 7 is installed automatically by the app — no manual runtime setup.
 
 One-liner (PowerShell):
 
@@ -31,14 +33,14 @@ irm https://raw.githubusercontent.com/ImAvgErix/Exo/main/Install-Exo.ps1 | iex
 
 ## What’s live
 
-| Module | What it does |
-|--------|----------------|
-| **Internet** | Ethernet-first metrics, Wi‑Fi band prefer (6 → 5 GHz), NIC latency knobs, throttle index, power-plan network bits |
-| **Discord** | DiscOpt kernel (RAM trim + priority), OpenAsar, Equicord theme, full client debloat, Windows quiet (tray/toasts/autostart) |
-| **Steam** | High-priority CEF launcher, webhelper trim, client debloat, launch hygiene |
-| **NVIDIA** | Series profile packs (Profile Inspector), Full RGB + peak refresh, GPU no-scaling, tray cleanup, **NVIDIA Panel** for live color depth |
+| Module | What it does | Recovery |
+|--------|--------------|----------|
+| **Internet** | Ethernet-first metrics with connectivity-probe-gated Wi‑Fi disable, TCP fast path (initial RTO, MinRto, timestamps off, pacing off, TCP Fast Open, HyStart per preset), UDP URO off on Win11 24H2+, ECN per preset, DNS provider priorities, RSS CPU spread, deep adapter power kill, NIC latency knobs matched by `RegistryKeyword` (works on non-English Windows), throttle index, Delivery Optimization to Manual — with a **before/after ping / jitter / DNS benchmark** in the UI | Pre-apply snapshot to `%LocalAppData%\Exo\network-snapshot.json`, true snapshot-restore **Repair**, post-apply **auto-rollback** if connectivity breaks, standalone [`Repair-Internet.ps1`](Repair-Internet.ps1) rescue one-liner |
+| **Discord** | DiscOpt kernel (4s RAM trim, AboveNormal priority), Exo Host, Equicord + AMOLED theme, deep module/dictionary debloat, **DSCP 46 QoS for voice UDP** across Stable/PTB/Canary, Windows quiet (tray/toasts/autostart) | **Repair** restores stock, bootable Discord; [`Repair-Discord.ps1`](Repair-Discord.ps1) one-liner works even without Exo installed |
+| **Steam** | High-priority CEF launcher with stable flags, webhelper RAM trim with **"RAM reclaimed" stats in the UI**, VDF key injection (peak settings inserted even when modern Steam omits the keys), deep client quiet (library low-bandwidth/low-perf, community content off), multi-library support | **Repair** restores backed-up configs and the stock launch path |
+| **NVIDIA** | Series profile packs imported via Profile Inspector and **verified live against the driver's own profile database** ("Verified in driver" vs "Drifted — re-apply"), expanded per-game catalog (Apex, OW2, Marvel Rivals, R6, PUBG, CoD, Rust, Tarkov, LoL, Dota 2, Rocket League, GTA V/FiveM), per-series DRS pins (Resizable BAR, present method, background FPS cap), deep driver component strip (ShadowPlay/NvBackend/telemetry), Full RGB + peak refresh, GPU no-scaling, **NVIDIA Panel** with live color depth + digital vibrance | **Reset clears Exo status only** — driver recovery is manual (NVIDIA settings / clean driver reinstall) |
 
-**Coming soon:** AMD, Brave, Riot, Epic, Windows.
+**Coming soon:** Epic, Riot, Brave, Windows.
 
 ---
 
@@ -48,6 +50,7 @@ irm https://raw.githubusercontent.com/ImAvgErix/Exo/main/Install-Exo.ps1 | iex
 - **Home** — centered tagline + logo cards (labels under marks)
 - **Settings** — gear crank + dropdown flyout (Dark/Light, updates, logs, version)
 - **Motion** — highlight rings / wash on hover (no blurry content scale); crisp logos at 2× decode
+- **Last-apply report** — every module keeps a step-by-step ok/fail/skip report of its last Apply
 
 ---
 
@@ -56,6 +59,7 @@ irm https://raw.githubusercontent.com/ImAvgErix/Exo/main/Install-Exo.ps1 | iex
 Built-in Control Panel–style controls (no mouse automation of the Store app):
 
 - **Color bit depth** — dropdown per display (8 / 10 / 12-bit); **Set** applies via NVAPI
+- **Digital vibrance** — per-display slider, applied live
 - **Peak defaults** — Full RGB, primary max Hz / secondary 60 Hz, GPU no-scaling, video NVIDIA color/image, tray clean
 - Optimizer **Apply** still forces peak defaults; the Panel is the manual override
 
@@ -65,7 +69,8 @@ Built-in Control Panel–style controls (no mouse automation of the Store app):
 
 - **No folklore** — no invented registry keys, no “DNS AI”, no logon tray spam tasks
 - **Detect what you applied** — pure classifiers (`*PeakLogic` / `*DetectCore`) shared by UI and smoke tests
-- **Repair where it matters** — Discord and Steam include Repair for Exo-managed changes
+- **Verify, don't assume** — NVIDIA exports the driver's real profile database after import and pins are checked value-by-value; Internet benchmarks ping/jitter/DNS before and after
+- **Repair where it matters** — Internet restores its pre-apply snapshot; Discord and Steam include Repair for Exo-managed changes
 - **NVIDIA honesty** — Reset clears Exo status only; full driver recovery is manual (NVIDIA settings / reinstall)
 
 ---
@@ -115,12 +120,9 @@ Release-Exo.ps1      GitHub release (Exo.exe only)
 
 ---
 
-## Safety & disclaimer
+## Safety
 
-Optimizers change application files, launchers, driver profiles, display prefs, and Windows settings. Read each confirmation. **Use at your own risk.**
-
-- Discord / Steam: use **Repair** to undo Exo-managed pieces
-- NVIDIA: recovery is through NVIDIA tools or a clean driver install — Exo Reset is status-only
+Optimizers change application files, launchers, driver profiles, display prefs, and Windows settings — recovery for each module is listed in the table above.
 
 ---
 
@@ -128,8 +130,8 @@ Optimizers change application files, launchers, driver profiles, display prefs, 
 
 Exo itself ships **no telemetry, no analytics, no accounts**. Everything runs and stays local:
 
-- Settings, logs, and optimizer state live in `%LocalAppData%\Exo` — nothing leaves your machine
-- Network calls happen only when you ask: GitHub for app/script updates, and vendor downloads the optimizers need (OpenAsar, Equicord, NVIDIA Profile Inspector)
+- Settings, logs, optimizer state, and the network snapshot live in `%LocalAppData%\Exo` — nothing leaves your machine
+- Network calls happen only when you ask: GitHub for app/script updates, and vendor downloads the optimizers need (Equicord, NVIDIA Profile Inspector, PowerShell 7 runtime)
 - The optimizers *remove* telemetry from their targets (Discord client tracking, NVIDIA telemetry services and tasks) — that's the point
 
 ---
@@ -146,7 +148,10 @@ Only when applying an optimizer — services, scheduled tasks, and driver profil
 `%LocalAppData%\Exo\app`, per-user, no system folders touched. Uninstall = delete that folder and the Start Menu shortcut.
 
 **How do updates work?**
-The app checks GitHub Releases, downloads `Exo.exe`, verifies size + SHA-256 + version stamp, then stage-swaps itself and relaunches. Script kits update separately from the repo's `main`.
+The app checks GitHub Releases, downloads `Exo.exe`, verifies size + SHA-256 + version stamp, then stage-swaps itself and relaunches. Script kits update separately from the repo's `main`. A dependency doctor runs at install/update: it installs stable PowerShell 7 if missing (winget, MSI fallback), removes the old Preview channels, and prunes stale tool/driver/staging caches.
+
+**An optimizer broke something — how do I get back?**
+Internet: Repair restores the exact pre-apply snapshot (and auto-rollback already fires if connectivity breaks right after apply); offline, run [`Repair-Internet.ps1`](Repair-Internet.ps1). Discord/Steam: use **Repair** in the app or [`Repair-Discord.ps1`](Repair-Discord.ps1). NVIDIA: Reset clears Exo status only — restore driver settings through NVIDIA tools or a clean driver install.
 
 ---
 

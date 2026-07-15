@@ -12,10 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET 8
+      # App and tools target .NET 10 LTS; 8.0.x kept as a transitional fallback.
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Build Exo and NVIDIA display helper
         run: |
@@ -38,6 +41,7 @@ jobs:
         shell: pwsh
         run: ./tools/Test-Repository.ps1
 
+      # All five smokes: UI, Network, Discord, Steam, NVIDIA.
       - name: Peak + UI smoke (no UAC)
         shell: pwsh
         run: |
@@ -53,3 +57,152 @@ jobs:
             dotnet run --project $p -c Release
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+
+  # Real end-to-end optimizer runs on a disposable elevated runner:
+  # install the target app, Apply, assert detect isApplied=true, Repair,
+  # assert detect flips back. The runner session is admin (UAC disabled),
+  # so scripts that require elevation run directly, and apply/repair
+  # killing target processes by PID is fine here.
+  #
+  # Honest scope note: GitHub-hosted runners have NO NVIDIA GPU, so the
+  # NVIDIA optimizer (Profile Inspector import + live DRS verification)
+  # is NOT covered by this job — it stays on the Windows QA pass.
+  e2e-optimizers:
+    runs-on: windows-latest
+    needs: build-and-validate
+    timeout-minutes: 30
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      # winget is not guaranteed on the windows-latest (Server) image, so
+      # each install tries winget first and falls back to the vendor's
+      # official installer with its documented silent flag:
+      #   SteamSetup.exe /S   (NSIS silent install)
+      #   DiscordSetup.exe -s (Squirrel silent install)
+      - name: Install Steam
+        shell: pwsh
+        run: |
+          $steamExe = "${env:ProgramFiles(x86)}\Steam\steam.exe"
+          if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget install Valve.Steam --silent --accept-package-agreements --accept-source-agreements --source winget
+          }
+          if (-not (Test-Path -LiteralPath $steamExe)) {
+            $setup = Join-Path $env:RUNNER_TEMP 'SteamSetup.exe'
+            Invoke-WebRequest -Uri 'https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe' -OutFile $setup
+            Start-Process -FilePath $setup -ArgumentList '/S' -Wait
+          }
+          if (-not (Test-Path -LiteralPath $steamExe)) { throw "Steam install failed: $steamExe missing" }
+          Write-Host "Steam installed: $steamExe"
+          exit 0
+
+      - name: Install Discord
+        shell: pwsh
+        run: |
+          $updateExe = Join-Path $env:LOCALAPPDATA 'Discord\Update.exe'
+          if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget install Discord.Discord --silent --accept-package-agreements --accept-source-agreements --source winget
+          }
+          if (-not (Test-Path -LiteralPath $updateExe)) {
+            $setup = Join-Path $env:RUNNER_TEMP 'DiscordSetup.exe'
+            Invoke-WebRequest -Uri 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64' -OutFile $setup
+            Start-Process -FilePath $setup -ArgumentList '-s' -Wait
+          }
+          # The Squirrel installer auto-launches Discord; let it settle,
+          # then stop it by PID so the optimizer starts from a closed client.
+          Start-Sleep -Seconds 20
+          Get-Process -Name Discord -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force }
+          if (-not (Test-Path -LiteralPath $updateExe)) { throw "Discord install failed: $updateExe missing" }
+          Write-Host "Discord installed: $updateExe"
+          exit 0
+
+      - name: Discord E2E (apply, detect, repair)
+        shell: pwsh
+        run: |
+          function Get-DiscordDetect {
+            $raw = pwsh -NoProfile -File Exo/Scripts/Discord/Exo-Discord-Detect.ps1
+            if ($LASTEXITCODE -ne 0) { throw "Discord detect exited $LASTEXITCODE" }
+            return ($raw | Select-Object -Last 1 | ConvertFrom-Json)
+          }
+          pwsh -NoProfile -File Exo/Scripts/Discord/Exo-Discord-Run.ps1 -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw "Discord apply exited $LASTEXITCODE" }
+          $d = Get-DiscordDetect
+          if (-not $d.isApplied) { throw "Detect after apply: isApplied=false ($($d.statusText))" }
+          Write-Host "Detect after apply: isApplied=true ($($d.statusText))"
+          pwsh -NoProfile -File Exo/Scripts/Discord/Exo-Discord-Repair.ps1 -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw "Discord repair exited $LASTEXITCODE" }
+          $d = Get-DiscordDetect
+          if ($d.isApplied) { throw "Detect after repair still reports isApplied=true" }
+          Write-Host "Detect after repair: isApplied=false ($($d.statusText))"
+
+      # Steam optimizer aborts when a game is running — never the case here.
+      - name: Steam E2E (apply, detect, repair)
+        shell: pwsh
+        run: |
+          function Get-SteamDetect {
+            $raw = pwsh -NoProfile -File Exo/Scripts/Steam/Exo-Steam-Detect.ps1
+            if ($LASTEXITCODE -ne 0) { throw "Steam detect exited $LASTEXITCODE" }
+            return ($raw | Select-Object -Last 1 | ConvertFrom-Json)
+          }
+          pwsh -NoProfile -File Exo/Scripts/Steam/Exo-Steam-Run.ps1 -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw "Steam apply exited $LASTEXITCODE" }
+          $s = Get-SteamDetect
+          if (-not $s.isApplied) { throw "Detect after apply: isApplied=false ($($s.statusText))" }
+          Write-Host "Detect after apply: isApplied=true ($($s.statusText))"
+          pwsh -NoProfile -File Exo/Scripts/Steam/Exo-Steam-Repair.ps1 -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw "Steam repair exited $LASTEXITCODE" }
+          $s = Get-SteamDetect
+          if ($s.isApplied) { throw "Detect after repair still reports isApplied=true" }
+          Write-Host "Detect after repair: isApplied=false ($($s.statusText))"
+
+      # NetScriptDump writes the generated network apply/repair/benchmark
+      # scripts to a folder; the runner session is already elevated, so the
+      # apply script runs with the rights the real optimizer would request.
+      - name: Internet E2E (dump scripts, apply, snapshot, repair)
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'netscripts'
+          dotnet run --project tools/NetScriptDump -c Release -- $out
+          if ($LASTEXITCODE -ne 0) { throw "NetScriptDump exited $LASTEXITCODE" }
+          Get-ChildItem -Path $out | ForEach-Object { Write-Host $_.FullName }
+          $apply = Get-ChildItem -Path $out -Filter '*apply*.ps1' | Select-Object -First 1
+          if (-not $apply) { throw "No apply script dumped under $out" }
+          pwsh -NoProfile -ExecutionPolicy Bypass -File $apply.FullName
+          if ($LASTEXITCODE -ne 0) { throw "Network apply exited $LASTEXITCODE" }
+          $snapshot = Join-Path $env:LOCALAPPDATA 'Exo\network-snapshot.json'
+          if (-not (Test-Path -LiteralPath $snapshot)) { throw "Pre-apply snapshot missing: $snapshot" }
+          Write-Host "Snapshot present: $snapshot"
+          $repair = Get-ChildItem -Path $out -Filter '*repair*.ps1' | Select-Object -First 1
+          if (-not $repair) { throw "No repair script dumped under $out" }
+          pwsh -NoProfile -ExecutionPolicy Bypass -File $repair.FullName
+          if ($LASTEXITCODE -ne 0) { throw "Network repair exited $LASTEXITCODE" }
+          Write-Host 'Network repair exited cleanly'
+
+      - name: Collect Exo logs
+        if: failure()
+        shell: pwsh
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'exo-failure-logs'
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          Get-ChildItem -Path $env:TEMP -Filter 'exo-*.log' -ErrorAction SilentlyContinue |
+            Copy-Item -Destination $dest -ErrorAction SilentlyContinue
+          $state = Join-Path $env:LOCALAPPDATA 'Exo'
+          if (Test-Path -LiteralPath $state) {
+            Copy-Item -Path $state -Destination (Join-Path $dest 'ExoState') -Recurse -ErrorAction SilentlyContinue
+          }
+          exit 0
+
+      - name: Upload Exo logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-exo-logs
+          path: ${{ runner.temp }}/exo-failure-logs
+          if-no-files-found: warn

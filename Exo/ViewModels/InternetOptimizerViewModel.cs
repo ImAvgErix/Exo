@@ -24,17 +24,37 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
     public ObservableCollection<FeatureRowViewModel> Rows { get; } = new();
 
-    /// <summary>Repair confirm (title, message).</summary>
-    public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
-
     [ObservableProperty] private string _headerStatus = "Checking...";
     [ObservableProperty] private bool _isLoading = true;
+    [ObservableProperty] private bool _isFeatureListVisible;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _progressStatus = string.Empty;
     [ObservableProperty] private string _message = string.Empty;
     [ObservableProperty] private bool _hasMessage;
     [ObservableProperty] private string _messageGlyph = "\uE73E";
     [ObservableProperty] private Brush _messageBrush;
+
+    // Proof layer — persisted benchmark delta, honest rollback marker, restore capability.
+    [ObservableProperty] private bool _hasBenchmark;
+    [ObservableProperty] private string _benchmarkSummary = string.Empty;
+    [ObservableProperty] private Brush _benchmarkBrush = new SolidColorBrush(Color.FromArgb(255, 161, 161, 170));
+    [ObservableProperty] private bool _hasRollback;
+    [ObservableProperty] private string _rollbackNotice = string.Empty;
+    [ObservableProperty] private string _repairHint = "Repair: reset to stock defaults";
+
+    // Compact expandable "Last apply" report (EXO_REPORT structured steps).
+    public ObservableCollection<ApplyReportRowViewModel> ApplyReportRows { get; } = new();
+    [ObservableProperty] private bool _hasApplyReport;
+    [ObservableProperty] private bool _isApplyReportOpen;
+    [ObservableProperty] private string _applyReportSummary = "Last apply";
+
+    public string ApplyReportChevron => IsApplyReportOpen ? "\uE70E" : "\uE70D";
+
+    partial void OnIsApplyReportOpenChanged(bool value) =>
+        OnPropertyChanged(nameof(ApplyReportChevron));
+
+    [RelayCommand]
+    private void ToggleApplyReport() => IsApplyReportOpen = !IsApplyReportOpen;
 
     [RelayCommand]
     public Task RefreshAsync() => LoadSnapshotAsync(showFullPageLoading: !IsBusy);
@@ -46,7 +66,10 @@ public partial class InternetOptimizerViewModel : ObservableObject
     private async Task LoadSnapshotAsync(bool showFullPageLoading)
     {
         if (showFullPageLoading)
+        {
             IsLoading = true;
+            IsFeatureListVisible = false;
+        }
         try
         {
             var snap = await _services.Network.ProbeAsync();
@@ -61,8 +84,74 @@ public partial class InternetOptimizerViewModel : ObservableObject
         {
             if (showFullPageLoading)
                 IsLoading = false;
+            IsFeatureListVisible = Rows.Count > 0;
+        }
+        await LoadProofLayerAsync();
+    }
+
+    /// <summary>
+    /// Persisted proof layer: before/after benchmark, honest rollback marker,
+    /// last-apply step report and restore capability. All reads are defensive.
+    /// </summary>
+    private async Task LoadProofLayerAsync()
+    {
+        try
+        {
+            var (report, bench, rollback, hasSnapshot) = await Task.Run(() =>
+            {
+                var r = _services.Network.LoadLastApplyReport();
+                var b = _services.Network.LoadBenchmark();
+                var rb = _services.Network.LoadRollbackStatus();
+                var hs = NetworkOptimizerService.HasRestoreSnapshot();
+                return (r, b, rb, hs);
+            });
+
+            RepairHint = hasSnapshot
+                ? "Repair: restore exact pre-Exo state"
+                : "Repair: reset to stock defaults";
+
+            HasRollback = rollback?.RolledBack == true;
+            RollbackNotice = HasRollback
+                ? "Apply rolled back: " + (string.IsNullOrWhiteSpace(rollback!.Reason)
+                    ? "connectivity check failed"
+                    : rollback.Reason)
+                : string.Empty;
+
+            if (bench.Before is { Ok: true } before && bench.After is { Ok: true } after)
+            {
+                var improved = after.PingP50Ms < before.PingP50Ms;
+                BenchmarkSummary =
+                    $"Ping p50 {FormatMs(before.PingP50Ms)} → {FormatMs(after.PingP50Ms)} ms" +
+                    $" · jitter {FormatMs(before.JitterMs)} → {FormatMs(after.JitterMs)} ms" +
+                    $" · DNS {FormatDns(before.DnsMs)} → {FormatDns(after.DnsMs)}";
+                BenchmarkBrush = ResolveBrush(
+                    improved ? "OptiSuccessBrush" : "OptiMutedTextBrush",
+                    improved ? Color.FromArgb(255, 34, 197, 94) : Color.FromArgb(255, 161, 161, 170));
+                HasBenchmark = true;
+            }
+            else
+            {
+                HasBenchmark = false;
+                BenchmarkSummary = string.Empty;
+            }
+
+            ApplyReportRows.Clear();
+            foreach (var step in report)
+                ApplyReportRows.Add(ApplyReportPresentation.Row(step.Name, step.Status, step.Reason));
+            HasApplyReport = ApplyReportRows.Count > 0;
+            ApplyReportSummary = ApplyReportPresentation.Summarize(ApplyReportRows.ToList());
+        }
+        catch
+        {
+            // Proof layer is additive — never break the page over it.
         }
     }
+
+    private static string FormatMs(double value) =>
+        value < 0 ? "—" : value.ToString(value >= 100 ? "0" : "0.0");
+
+    private static string FormatDns(double value) =>
+        value < 0 ? "fail" : value.ToString(value >= 100 ? "0" : "0.0") + " ms";
 
     private void ApplySnapshotToUi(NetworkSnapshot snap, bool preserveSuccessMessage)
     {
@@ -82,6 +171,9 @@ public partial class InternetOptimizerViewModel : ObservableObject
                 RailOpacity = UiStatusPresentation.FeatureRailOpacity(f.IsOk)
             });
         }
+
+        if (!IsLoading)
+            IsFeatureListVisible = Rows.Count > 0;
 
         // Path (Ethernet vs Wi‑Fi) lives in the header only — no redundant banner on open.
         if (!string.IsNullOrWhiteSpace(snap.Detail) && !snap.ProbeOk)
@@ -138,6 +230,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
             {
                 // Keep apply message even if re-probe fails
             }
+            await LoadProofLayerAsync();
         }
         catch (Exception ex)
         {
@@ -157,13 +250,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
 
-        var ok = ConfirmAsync is not null
-            ? await ConfirmAsync(
-                "Repair Internet?",
-                "Restores stock-like network settings: adapter bindings, automatic metric, default TCP/auto-tune, re-enables Wi‑Fi if Exo disabled it.\n\nNeeds Administrator.")
-            : true;
-        if (!ok) return;
-
+        // Quiet secondary action — runs immediately. The RepairHint caption states
+        // whether this restores the exact pre-Exo snapshot or resets to stock defaults.
         IsBusy = true;
         HasMessage = false;
         ProgressStatus = "Repairing...";
@@ -180,6 +268,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
                 SetMessage(success ? Helpers.OptimizerMessages.RepairFinished : msg, success);
             }
             catch { }
+            await LoadProofLayerAsync();
         }
         catch (Exception ex)
         {

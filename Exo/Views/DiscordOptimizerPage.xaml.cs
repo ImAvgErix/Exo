@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using Exo.Helpers;
 using Exo.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -7,6 +9,8 @@ namespace Exo.Views;
 
 public sealed partial class DiscordOptimizerPage : Page
 {
+    private bool _tilesEntered;
+
     public DiscordOptimizerViewModel ViewModel { get; }
 
     public DiscordOptimizerPage()
@@ -14,14 +18,23 @@ public sealed partial class DiscordOptimizerPage : Page
         ViewModel = new DiscordOptimizerViewModel(App.Services);
         InitializeComponent();
         DataContext = ViewModel;
-
-        ViewModel.ConfirmAsync = ConfirmAsync;
+        ViewModel.PropertyChanged += ViewModel_PropertyChanged;
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         await ViewModel.InitializeAsync();
+    }
+
+    /// <summary>Staggered tile entrance on the first loading → loaded transition only.</summary>
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_tilesEntered) return;
+        if (e.PropertyName != nameof(ViewModel.IsFeatureListVisible) || !ViewModel.IsFeatureListVisible)
+            return;
+        _tilesEntered = true;
+        OptiMotion.PlayListEnter(FeatureRepeater, ViewModel.Features.Count);
     }
 
     private void Run_Click(object sender, RoutedEventArgs e) =>
@@ -32,28 +45,4 @@ public sealed partial class DiscordOptimizerPage : Page
 
     private void Refresh_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RefreshCommand.Execute(null);
-
-    private async Task<bool> ConfirmAsync(string title, string message)
-    {
-        var dialog = new ContentDialog
-        {
-            Title = title,
-            Content = new ScrollViewer
-            {
-                MaxHeight = 420,
-                Content = new TextBlock
-                {
-                    Text = message,
-                    TextWrapping = TextWrapping.Wrap,
-                    MaxWidth = 420
-                }
-            },
-            PrimaryButtonText = "Continue",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot
-        };
-        var result = await dialog.ShowAsync();
-        return result == ContentDialogResult.Primary;
-    }
 }

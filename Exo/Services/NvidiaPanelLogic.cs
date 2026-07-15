@@ -156,6 +156,26 @@ public static class NvidiaPanelLogic
             : $"--set-color-range {r} --display-id {displayId.Value}";
     }
 
+    /// <summary>Digital vibrance (DVC) raw driver range fallback; live min/max come from --get-vibrance.</summary>
+    public const int VibranceDefaultMinimum = 0;
+    public const int VibranceDefaultMaximum = 63;
+
+    public static int ClampVibranceLevel(int level, int minimum = VibranceDefaultMinimum, int maximum = VibranceDefaultMaximum)
+    {
+        if (maximum < minimum) (minimum, maximum) = (maximum, minimum);
+        return Math.Clamp(level, minimum, maximum);
+    }
+
+    public static string BuildGetVibranceArgs() => "--get-vibrance";
+
+    public static string BuildSetVibranceArgs(int level, uint? displayId)
+    {
+        var v = ClampVibranceLevel(level);
+        return displayId is null or 0
+            ? $"--set-vibrance {v}"
+            : $"--set-vibrance {v} --display-id {displayId.Value}";
+    }
+
     /// <summary>
     /// Distinct resolution labels from mode list (WxH only), sorted largest first.
     /// </summary>

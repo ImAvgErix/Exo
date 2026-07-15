@@ -14,9 +14,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# Hosted by Exo via PowerShell 7 Preview (+ Terminal Preview on the machine).
+# Hosted by Exo via stable PowerShell 7 (any 7.x; never Windows PowerShell 5.1).
 if ($PSVersionTable.PSEdition -ne 'Core' -or [int]$PSVersionTable.PSVersion.Major -lt 7) {
-    throw 'Exo-Discord-Run requires PowerShell 7 Preview. Install Microsoft.PowerShell.Preview.'
+    throw 'Exo-Discord-Run requires PowerShell 7. Install it with: winget install Microsoft.PowerShell'
 }
 $env:EXO = '1'
 $env:DISCOPT_NONINTERACTIVE = '1'
@@ -25,7 +25,7 @@ $env:EXO_SKIP_BOOT_FLASH = '1'
 $env:DISCOPT_SKIP_MANIFEST = '1'
 # Force NoLaunch for every Exo-hosted run (UI owns launch).
 $NoLaunch = $true
-# DiscOpt kernel (aggressive 5s trim + raw input + Above Normal priority) stays ON.
+# DiscOpt kernel (aggressive 4s trim + raw input + Above Normal priority) stays ON.
 # Only skip when the user/host explicitly passes -SkipKernel.
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
@@ -62,7 +62,7 @@ function Get-ProgressForLine([string]$Line, [int]$Current) {
         'Debloat'                         = @{ P = 40; S = 'Debloating Discord...' }
         'cache'                           = @{ P = 48; S = 'Cleaning cache...' }
         'Equicord'                        = @{ P = 58; S = 'Applying Equicord...' }
-        'OpenASAR'                        = @{ P = 68; S = 'Installing OpenASAR...' }
+        'Exo Host'                        = @{ P = 68; S = 'Installing Exo Host...' }
         'AMOLED'                          = @{ P = 72; S = 'Applying AMOLED theme...' }
         'kernel'                          = @{ P = 78; S = 'Installing DiscOpt kernel...' }
         'Boot check'                      = @{ P = 86; S = 'Verifying Discord still boots...' }

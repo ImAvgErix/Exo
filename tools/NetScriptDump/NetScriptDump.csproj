@@ -4,8 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>NetworkPeak.Smoke</RootNamespace>
-    <AssemblyName>NetworkPeak.Smoke</AssemblyName>
+    <RootNamespace>NetScriptDump</RootNamespace>
+    <AssemblyName>NetScriptDump</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
     <!-- Drive the real shipped sources (not a reimplementation). -->

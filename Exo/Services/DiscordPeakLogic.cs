@@ -17,12 +17,6 @@ public static partial class DiscordPeakLogic
     [GeneratedRegex(@"(?m)^\s*TrimIntervalMs\s*=\s*(\d+)\s*$")]
     private static partial Regex TrimIntervalRegex();
 
-    [GeneratedRegex(@"""quickstart""\s*:\s*true", RegexOptions.IgnoreCase)]
-    private static partial Regex QuickStartTrueRegex();
-
-    [GeneratedRegex(@"""openasar""", RegexOptions.IgnoreCase)]
-    private static partial Regex OpenAsarKeyRegex();
-
     [GeneratedRegex(@"""SKIP_HOST_UPDATE""\s*:\s*true", RegexOptions.IgnoreCase)]
     private static partial Regex SkipHostUpdateTrueRegex();
 
@@ -52,8 +46,59 @@ public static partial class DiscordPeakLogic
                text.Contains("require", StringComparison.OrdinalIgnoreCase);
     }
 
-    public static bool IsOpenAsarSize(long sizeBytes) =>
-        sizeBytes is > 10_000 and < 500_000;
+    /// <summary>
+    /// Universal Discord variant map (stable + PTB + Canary).
+    /// Keep in sync with Get-DiscOptVariantDefinitions in DiscordDetectCore.ps1.
+    /// </summary>
+    public static readonly (string Name, string LocalDir, string AppDataDir, string Exe, string QosPolicy)[] VariantDefinitions =
+    {
+        ("stable", "Discord", "discord", "Discord.exe", "Exo Discord Voice"),
+        ("ptb", "DiscordPTB", "discordptb", "DiscordPTB.exe", "Exo Discord PTB Voice"),
+        ("canary", "DiscordCanary", "discordcanary", "DiscordCanary.exe", "Exo Discord Canary Voice"),
+    };
+
+    /// <summary>
+    /// True when a QoS policy value map matches the documented Exo Discord voice
+    /// policy (DSCP 46, UDP, no throttle). Keep in sync with Test-DiscOptQosPolicyMap.
+    /// </summary>
+    public static bool IsQosPolicyMap(IReadOnlyDictionary<string, string?>? map, string? expectedExe = null)
+    {
+        if (map is null || map.Count == 0) return false;
+        foreach (var (name, value) in new[]
+                 {
+                     ("Version", "1.0"),
+                     ("Protocol", "UDP"),
+                     ("DSCP Value", "46"),
+                     ("Throttle Rate", "-1"),
+                 })
+        {
+            if (!map.TryGetValue(name, out var actual)) return false;
+            if (!string.Equals(actual, value, StringComparison.Ordinal)) return false;
+        }
+        if (!map.TryGetValue("Application Name", out var app) || string.IsNullOrWhiteSpace(app)) return false;
+        if (!string.IsNullOrWhiteSpace(expectedExe) &&
+            !string.Equals(app, expectedExe, StringComparison.OrdinalIgnoreCase)) return false;
+        return true;
+    }
+
+    /// <summary>Keep in sync with Test-DiscOptVariantOptimized.</summary>
+    public static bool IsVariantOptimized(bool settingsFlagsOk, bool autostartQuiet, bool qosOk) =>
+        settingsFlagsOk && autostartQuiet && qosOk;
+
+    [GeneratedRegex(@"""OPEN_ON_STARTUP""\s*:\s*false", RegexOptions.IgnoreCase)]
+    private static partial Regex VariantStartupOffRegex();
+
+    /// <summary>
+    /// Variant (PTB/Canary) settings.json flags: startup off + chromium lean present.
+    /// Keep in sync with Test-DiscOptVariantSettingsJson (SKIP_HOST_UPDATE not required
+    /// on test channels).
+    /// </summary>
+    public static bool IsVariantSettingsJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return false;
+        return VariantStartupOffRegex().IsMatch(json) &&
+               ChromiumSwitchesKeyRegex().IsMatch(json);
+    }
 
     public static bool IsKernelLayout(long ffmpegProxyBytes, long ffmpegRealBytes, long versionDllBytes) =>
         ffmpegProxyBytes is > 0 and < 500_000 &&
@@ -108,9 +153,8 @@ public static partial class DiscordPeakLogic
     public static bool IsQuickStartSettingsJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return false;
-        // Legacy OpenAsar quickstart OR modern Exo Host (SKIP_HOST_UPDATE + chromium/TTI)
-        if (QuickStartTrueRegex().IsMatch(json) && OpenAsarKeyRegex().IsMatch(json))
-            return true;
+        // Exo Host only (SKIP_HOST_UPDATE + chromium/TTI). Legacy OpenAsar
+        // quickstart is intentionally not accepted anymore.
         return SkipHostUpdateTrueRegex().IsMatch(json) &&
                (ChromiumSwitchesKeyRegex().IsMatch(json) ||
                 json.Contains("DESKTOP_TTI", StringComparison.OrdinalIgnoreCase));
@@ -181,6 +225,8 @@ public static partial class DiscordPeakLogic
         "IsPromoted",
         "OPEN_ON_STARTUP",
         "EXO",
+        "Exo Discord Voice",
+        "EXO_REPORT",
     };
 
     public static (bool Ok, List<string> Issues) AuditApplyScriptText(string script)

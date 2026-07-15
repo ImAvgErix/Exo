@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Exo.Models;
 using Microsoft.Win32;
@@ -23,6 +24,48 @@ public sealed class NetworkOptimizerService
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Exo", "network-optimizer.json");
 
+    /// <summary>Pristine pre-apply baseline written by the elevated apply script (never overwritten).</summary>
+    private static readonly string SnapshotPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Exo", "network-snapshot.json");
+
+    /// <summary>Honest apply outcome (rollback marker + disabled Wi‑Fi record) from the elevated script.</summary>
+    private static readonly string ApplyStatePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Exo", "network-apply-state.json");
+
+    /// <summary>Elevated apply run log (EXO_REPORT structured lines).</summary>
+    private static string ApplyLogPath => Path.Combine(Path.GetTempPath(), "exo-net-last.log");
+
+    /// <summary>True when a pristine pre-apply snapshot exists (true restore is possible).</summary>
+    public static bool HasRestoreSnapshot()
+    {
+        try { return File.Exists(SnapshotPath); }
+        catch { return false; }
+    }
+
+    private JsonObject LoadStateObject()
+    {
+        try
+        {
+            if (File.Exists(StatePath) &&
+                JsonNode.Parse(File.ReadAllText(StatePath)) is JsonObject o)
+                return o;
+        }
+        catch { }
+        return new JsonObject();
+    }
+
+    private void SaveStateObject(JsonObject state)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(StatePath)!);
+            File.WriteAllText(StatePath, state.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch { }
+    }
+
     public NetworkPreset LoadSavedPreset()
     {
         try
@@ -41,14 +84,13 @@ public sealed class NetworkOptimizerService
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(StatePath)!);
-            File.WriteAllText(StatePath, JsonSerializer.Serialize(new
-            {
-                preset = preset.ToString(),
-                appliedUtc = DateTime.UtcNow.ToString("o"),
-                // Used by probe so "Wi‑Fi while Ethernet" only fails when we actually preferred eth-first
-                preferEthernetDisableWifi = options?.PreferEthernetDisableWifi ?? true
-            }));
+            // Merge-write: keep benchmark / report / rollback keys intact across preset saves.
+            var state = LoadStateObject();
+            state["preset"] = preset.ToString();
+            state["appliedUtc"] = DateTime.UtcNow.ToString("o");
+            // Used by probe so "Wi‑Fi while Ethernet" only fails when we actually preferred eth-first
+            state["preferEthernetDisableWifi"] = options?.PreferEthernetDisableWifi ?? true;
+            SaveStateObject(state);
         }
         catch { }
     }
@@ -77,14 +119,26 @@ public sealed class NetworkOptimizerService
             if (File.Exists(StatePath)) File.Delete(StatePath);
         }
         catch { }
+        try
+        {
+            if (File.Exists(ApplyStatePath)) File.Delete(ApplyStatePath);
+        }
+        catch { }
     }
 
-    /// <summary>Undo Exo network apply (elevated). Restores stock-ish bindings + host stack.</summary>
+    /// <summary>
+    /// Undo Exo network apply (elevated). TRUE RESTORE from the pristine pre-apply
+    /// snapshot when %LocalAppData%\Exo\network-snapshot.json exists; otherwise an
+    /// approximate stock reset (fallback). Wi‑Fi Exo disabled is always re-enabled.
+    /// </summary>
     public async Task<(bool Ok, string Message)> RepairAsync(
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
-        progress?.Report("Preparing repair (stock network stack)...");
+        var hadSnapshot = HasRestoreSnapshot();
+        progress?.Report(hadSnapshot
+            ? "Preparing repair (exact restore from pre-apply snapshot)..."
+            : "Preparing repair (stock network stack — no snapshot found)...");
         var script = NetworkApplyScriptBuilder.BuildRepair();
         var path = Path.Combine(Path.GetTempPath(), $"exo-net-repair-{Guid.NewGuid():N}.ps1");
         await File.WriteAllTextAsync(path, script, ct).ConfigureAwait(false);
@@ -108,7 +162,14 @@ public sealed class NetworkOptimizerService
             progress?.Report("Clearing Exo network preset...");
             ClearSavedPreset();
             await Task.Delay(800, ct).ConfigureAwait(false);
-            return (true, "Network stack repaired to stock-like defaults. Ethernet Properties bindings restored; Wi‑Fi re-enabled if Exo disabled it.");
+            if (hadSnapshot && HasRestoreSnapshot())
+            {
+                // Snapshot kept = script recorded restore failures; be honest, allow retry.
+                return (true, "Repair ran, but some values could not be restored exactly — the snapshot was kept so you can retry Repair. Wi‑Fi was re-enabled if Exo disabled it.");
+            }
+            return (true, hadSnapshot
+                ? "Network restored to the exact pre-Exo state from the snapshot. Wi‑Fi re-enabled if Exo disabled it; snapshot cleared."
+                : "Network stack repaired to stock-like defaults (no snapshot was available). Ethernet Properties bindings restored; Wi‑Fi re-enabled if Exo disabled it.");
         }
         catch (System.ComponentModel.Win32Exception)
         {
@@ -122,6 +183,160 @@ public sealed class NetworkOptimizerService
         {
             try { File.Delete(path); } catch { }
         }
+    }
+
+    /// <summary>
+    /// Proof layer: run the non-elevated ping/DNS benchmark script and parse its
+    /// EXO_BENCH JSON line. Returns null when the benchmark could not run/parse.
+    /// </summary>
+    public async Task<NetworkBenchmarkResult?> RunBenchmarkAsync(CancellationToken ct = default)
+    {
+        var script = NetworkApplyScriptBuilder.BuildBenchmark();
+        var path = Path.Combine(Path.GetTempPath(), $"exo-net-bench-{Guid.NewGuid():N}.ps1");
+        try
+        {
+            await File.WriteAllTextAsync(path, script, ct).ConfigureAwait(false);
+            var stdout = await RunCaptureAsync(
+                "powershell",
+                $"-NoProfile -ExecutionPolicy Bypass -File \"{path}\"",
+                ct).ConfigureAwait(false);
+            return NetworkPeakLogic.TryParseBenchmark(stdout);
+        }
+        catch { return null; }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    /// <summary>Persisted before/after benchmark pair (state JSON: benchmark.before / benchmark.after).</summary>
+    public (NetworkBenchmarkResult? Before, NetworkBenchmarkResult? After) LoadBenchmark()
+    {
+        try
+        {
+            var state = LoadStateObject();
+            if (state["benchmark"] is not JsonObject bench) return (null, null);
+            NetworkBenchmarkResult? Read(string key) =>
+                bench[key] is JsonObject o
+                    ? JsonSerializer.Deserialize<NetworkBenchmarkResult>(o.ToJsonString(), BenchJson)
+                    : null;
+            return (Read("before"), Read("after"));
+        }
+        catch { return (null, null); }
+    }
+
+    /// <summary>Structured step list parsed from the last elevated apply run (EXO_REPORT lines).</summary>
+    public IReadOnlyList<NetworkApplyReportStep> LoadLastApplyReport()
+    {
+        try
+        {
+            var state = LoadStateObject();
+            if (state["lastApplyReport"] is not JsonArray arr) return Array.Empty<NetworkApplyReportStep>();
+            var list = new List<NetworkApplyReportStep>();
+            foreach (var node in arr)
+            {
+                if (node is not JsonObject o) continue;
+                var name = o["name"]?.GetValue<string>();
+                var status = o["status"]?.GetValue<string>();
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(status)) continue;
+                list.Add(new NetworkApplyReportStep
+                {
+                    Name = name,
+                    Status = status,
+                    Reason = o["reason"]?.GetValue<string>() ?? string.Empty
+                });
+            }
+            return list;
+        }
+        catch { return Array.Empty<NetworkApplyReportStep>(); }
+    }
+
+    /// <summary>
+    /// Honest rollback status recorded by the elevated apply script
+    /// (%LocalAppData%\Exo\network-apply-state.json). Null when no apply ran yet.
+    /// </summary>
+    public NetworkRollbackStatus? LoadRollbackStatus()
+    {
+        try
+        {
+            if (!File.Exists(ApplyStatePath)) return null;
+            using var doc = JsonDocument.Parse(File.ReadAllText(ApplyStatePath));
+            var root = doc.RootElement;
+            var wifi = new List<string>();
+            if (root.TryGetProperty("wifiDisabled", out var wd) && wd.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var w in wd.EnumerateArray())
+                    if (w.ValueKind == JsonValueKind.String && w.GetString() is { Length: > 0 } s)
+                        wifi.Add(s);
+            }
+            return new NetworkRollbackStatus
+            {
+                RolledBack = root.TryGetProperty("rollback", out var rb) && rb.ValueKind == JsonValueKind.True,
+                Reason = root.TryGetProperty("rollbackReason", out var rr) && rr.ValueKind == JsonValueKind.String
+                    ? rr.GetString() ?? string.Empty : string.Empty,
+                ConnectivityAfterApply = !root.TryGetProperty("connectivityAfterApply", out var ca) ||
+                    ca.ValueKind != JsonValueKind.False,
+                WifiDisabled = wifi,
+                AppliedUtc = root.TryGetProperty("appliedUtc", out var au) && au.ValueKind == JsonValueKind.String
+                    ? au.GetString() ?? string.Empty : string.Empty
+            };
+        }
+        catch { return null; }
+    }
+
+    private static readonly JsonSerializerOptions BenchJson = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private void PersistBenchmark(NetworkBenchmarkResult? before, NetworkBenchmarkResult? after)
+    {
+        try
+        {
+            var state = LoadStateObject();
+            var bench = state["benchmark"] as JsonObject ?? new JsonObject();
+            if (before is not null)
+                bench["before"] = JsonSerializer.SerializeToNode(before, BenchJson);
+            if (after is not null)
+                bench["after"] = JsonSerializer.SerializeToNode(after, BenchJson);
+            state["benchmark"] = bench;
+            SaveStateObject(state);
+        }
+        catch { }
+    }
+
+    private void PersistApplyOutcome(IReadOnlyList<NetworkApplyReportStep> report, NetworkRollbackStatus? rollback)
+    {
+        try
+        {
+            var state = LoadStateObject();
+            var arr = new JsonArray();
+            foreach (var step in report)
+            {
+                arr.Add(new JsonObject
+                {
+                    ["name"] = step.Name,
+                    ["status"] = step.Status,
+                    ["reason"] = step.Reason
+                });
+            }
+            state["lastApplyReport"] = arr;
+            if (rollback is not null)
+            {
+                var wifi = new JsonArray();
+                foreach (var w in rollback.WifiDisabled) wifi.Add(w);
+                state["rollback"] = new JsonObject
+                {
+                    ["rolledBack"] = rollback.RolledBack,
+                    ["reason"] = rollback.Reason,
+                    ["connectivityAfterApply"] = rollback.ConnectivityAfterApply,
+                    ["wifiDisabled"] = wifi,
+                    ["appliedUtc"] = rollback.AppliedUtc
+                };
+            }
+            SaveStateObject(state);
+        }
+        catch { }
     }
 
     public async Task<NetworkSnapshot> ProbeAsync(CancellationToken ct = default)
@@ -373,6 +588,23 @@ public sealed class NetworkOptimizerService
                 features.Add(Row("Adapter",
                     $"{mediaProfile.PrimaryMediaKind} · {mediaProfile.NicVendor} · {link}",
                     true));
+            }
+        }
+        catch { }
+
+        // Honest last-apply surface: rollback marker written by the elevated apply script.
+        try
+        {
+            var rollback = LoadRollbackStatus();
+            if (rollback is { RolledBack: true })
+            {
+                features.Add(Row("Last apply",
+                    $"Auto-rollback ({rollback.Reason}) — Wi‑Fi restored",
+                    false));
+            }
+            else if (rollback is { ConnectivityAfterApply: false })
+            {
+                features.Add(Row("Last apply", "Connectivity check failed after apply", false));
             }
         }
         catch { }
@@ -817,6 +1049,15 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         progress?.Report("Detecting adapters & radio capabilities...");
         var media = await DetectMediaProfileAsync(ct).ConfigureAwait(false);
 
+        // Proof layer: capture the "before" benchmark once (kept across re-applies so the
+        // delta always compares against the pre-Exo baseline).
+        if (LoadBenchmark().Before is null)
+        {
+            progress?.Report("Measuring baseline latency (ping/DNS)...");
+            var baseline = await RunBenchmarkAsync(ct).ConfigureAwait(false);
+            if (baseline is not null) PersistBenchmark(baseline, null);
+        }
+
         progress?.Report("Preparing stack (Ethernet-first when available)...");
         var script = NetworkApplyScriptBuilder.Build(preset, options, media);
         var path = Path.Combine(Path.GetTempPath(), $"exo-net-{Guid.NewGuid():N}.ps1");
@@ -849,6 +1090,34 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             // Give netsh / NIC props time to settle (esp. after adapter restart).
             await Task.Delay(options.RestartEthernet ? 3500 : 1600, ct).ConfigureAwait(false);
             SavePreset(preset, options);
+
+            // Honest apply outcome: structured EXO_REPORT steps from the elevated run log
+            // + rollback marker written by the script itself.
+            IReadOnlyList<NetworkApplyReportStep> report = Array.Empty<NetworkApplyReportStep>();
+            try
+            {
+                if (File.Exists(ApplyLogPath))
+                    report = NetworkPeakLogic.ParseApplyReport(await File.ReadAllTextAsync(ApplyLogPath, ct).ConfigureAwait(false));
+            }
+            catch { }
+            var rollback = LoadRollbackStatus();
+            PersistApplyOutcome(report, rollback);
+
+            if (rollback is { RolledBack: true })
+            {
+                // Aggressive but deterministic: the script already re-enabled Wi‑Fi and
+                // restored metrics. Report the partial failure honestly instead of "verified".
+                return (false,
+                    "Connectivity was lost after apply, so Exo automatically rolled back the path changes " +
+                    "(Wi‑Fi re-enabled, interface metrics restored). Host-stack tweaks remain applied. " +
+                    "Use Repair to restore the exact pre-Exo state from the snapshot.");
+            }
+
+            // Proof layer: post-apply benchmark for the before/after delta.
+            progress?.Report("Measuring post-apply latency (ping/DNS)...");
+            var after = await RunBenchmarkAsync(ct).ConfigureAwait(false);
+            if (after is not null) PersistBenchmark(null, after);
+
             var snap = await ProbeAsync(ct).ConfigureAwait(false);
             var matched = MatchesPreset(snap, preset);
             // One re-probe if first verify is soft-incomplete (stale netsh / adapter props).
@@ -903,6 +1172,12 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         NetworkApplyOptions options,
         NetworkMediaProfile media) =>
         NetworkApplyScriptBuilder.Build(preset, options, media);
+
+    /// <summary>Expose repair script generation for audit/smokes (same path as elevated repair).</summary>
+    public static string BuildRepairScript() => NetworkApplyScriptBuilder.BuildRepair();
+
+    /// <summary>Expose benchmark script generation for audit/smokes (same path as RunBenchmarkAsync).</summary>
+    public static string BuildBenchmarkScript() => NetworkApplyScriptBuilder.BuildBenchmark();
 
     // BuildFullApplyScript removed — see NetworkApplyScriptBuilder
     private static NetworkFeatureRow Row(string title, string status, bool ok, string? note = null) => new()

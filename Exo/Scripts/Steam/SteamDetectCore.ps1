@@ -21,7 +21,7 @@ function Test-SteamTrimHelperText {
     if ($Text -notmatch 'EmptyWorkingSet') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::High') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::BelowNormal') { return $false }
-    # Peak range: 2-15s reclaim loop (kit uses 5; do not hard-fail other valid intervals)
+    # Peak range: 2-15s reclaim loop (kit uses 3; do not hard-fail other valid intervals)
     if ($Text -match 'Start-Sleep\s+-Seconds\s+(\d+)') {
         $sec = [int]$Matches[1]
         if ($sec -ge 2 -and $sec -le 15) { return $true }

@@ -18,6 +18,36 @@ public sealed class OptimizerStateService
         _scripts = scripts;
     }
 
+    /// <summary>
+    /// Last-apply structured report from a module state file
+    /// (%LocalAppData%\Exo\&lt;module&gt;-optimizer.json, "applyReport" array).
+    /// Entries have the form "&lt;step&gt;|ok", "&lt;step&gt;|fail:&lt;reason&gt;" or
+    /// "&lt;step&gt;|skip:&lt;reason&gt;". Returns an empty list when the state file or
+    /// the array is missing (older applies) — never throws.
+    /// Module names: "discord", "steam".
+    /// </summary>
+    public static IReadOnlyList<string> TryReadApplyReport(string module)
+    {
+        try
+        {
+            var statePath = Path.Combine(PathHelper.AppDataDir, $"{module}-optimizer.json");
+            if (!File.Exists(statePath)) return Array.Empty<string>();
+            using var doc = JsonDocument.Parse(File.ReadAllText(statePath));
+            if (!doc.RootElement.TryGetProperty("applyReport", out var report) ||
+                report.ValueKind != JsonValueKind.Array)
+                return Array.Empty<string>();
+            var entries = new List<string>();
+            foreach (var item in report.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.String) continue;
+                var text = item.GetString();
+                if (!string.IsNullOrWhiteSpace(text)) entries.Add(text!);
+            }
+            return entries;
+        }
+        catch { return Array.Empty<string>(); }
+    }
+
     public async Task<OptimizerStateInfo> DetectDiscordAsync(
         CancellationToken ct = default,
         bool fastOnly = false)
@@ -242,11 +272,11 @@ public sealed class OptimizerStateService
                          loaderText.Contains("require", StringComparison.OrdinalIgnoreCase);
         features.Add(MakeFeature("Equicord", "", equicordOk));
 
-        // Exo Host: stock shell on _app.asar (large) OR legacy OpenAsar (small) + host flags.
+        // Exo Host: stock shell on _app.asar (large) + host flags. Legacy OpenAsar
+        // (small _app.asar rewrite) is intentionally not accepted anymore.
         var innerAsar = Path.Combine(resources, "_app.asar");
         var bootLen = File.Exists(innerAsar) ? new FileInfo(innerAsar).Length : 0L;
         var stockShellOk = bootLen > 1_000_000;
-        var legacyOpenAsarOk = DiscordPeakLogic.IsOpenAsarSize(bootLen);
         var hostFlagsOk = false;
         var settingsPathEarly = Path.Combine(appData, "discord", "settings.json");
         if (File.Exists(settingsPathEarly))
@@ -258,7 +288,7 @@ public sealed class OptimizerStateService
             }
             catch { /* ignore */ }
         }
-        var exoHostOk = equicordOk && hostFlagsOk && (stockShellOk || legacyOpenAsarOk);
+        var exoHostOk = equicordOk && hostFlagsOk && stockShellOk;
         features.Add(MakeFeature("Exo Host", "", exoHostOk));
 
         var kernelOk = false;
@@ -432,10 +462,39 @@ public sealed class OptimizerStateService
             catch { /* ignore */ }
         }
         features.Add(MakeFeature("Quiet launch", "", launchOk));
+
+        // Voice QoS DSCP 46 for every installed variant (stable always; PTB/Canary when present).
+        var qosOk = true;
+        var variantsOk = true;
+        foreach (var (name, localDir, appDataDir, exe, qosPolicy) in DiscordPeakLogic.VariantDefinitions)
+        {
+            var variantRoot = Path.Combine(local, localDir);
+            var installed = name == "stable" || Directory.Exists(variantRoot);
+            if (!installed) continue;
+
+            qosOk &= IsQosPolicyPresent(qosPolicy, exe);
+
+            if (name == "stable") continue;
+            var variantSettings = Path.Combine(appData, appDataDir, "settings.json");
+            var variantFlagsOk = false;
+            if (File.Exists(variantSettings))
+            {
+                try
+                {
+                    variantFlagsOk = DiscordPeakLogic.IsVariantSettingsJson(File.ReadAllText(variantSettings));
+                }
+                catch { /* ignore */ }
+            }
+            variantsOk &= DiscordPeakLogic.IsVariantOptimized(
+                variantFlagsOk,
+                IsStableDiscordRunQuiet(variantRoot),
+                IsQosPolicyPresent(qosPolicy, exe));
+        }
+        features.Add(MakeFeature("Voice priority (QoS)", "", qosOk));
         features.Add(MakeFeature("Apply record", "", markerOk));
 
         var applied = markerOk && equicordOk && exoHostOk && kernelOk && debloatOk &&
-                      windowsQuietOk && amoledOk && runtimeOk && launchOk;
+                      windowsQuietOk && amoledOk && runtimeOk && launchOk && qosOk && variantsOk;
         return new OptimizerStateInfo
         {
             IsApplied = applied,
@@ -443,6 +502,21 @@ public sealed class OptimizerStateService
             Detail = string.Empty,
             Features = features
         };
+    }
+
+    private static bool IsQosPolicyPresent(string policyName, string exe)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                $@"SOFTWARE\Policies\Microsoft\Windows\QoS\{policyName}");
+            if (key is null) return false;
+            var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in key.GetValueNames())
+                map[name] = key.GetValue(name)?.ToString();
+            return DiscordPeakLogic.IsQosPolicyMap(map, exe);
+        }
+        catch { return false; }
     }
 
     private static bool PathsEqual(string? left, string? right)

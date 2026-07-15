@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Exo.Helpers;
 using Exo.Models;
 using Exo.Services;
 using Microsoft.UI.Xaml.Media;
@@ -36,7 +38,23 @@ public partial class SteamOptimizerViewModel : ObservableObject
     [ObservableProperty] private string _lastResultGlyph = "\uE73E";
     [ObservableProperty] private Brush _lastResultBrush;
 
-    public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
+    // RAM reclaimed by the resident trim loop (steam-trim-stats.json — may not exist).
+    [ObservableProperty] private bool _hasTrimStats;
+    [ObservableProperty] private string _trimStatsText = string.Empty;
+
+    // Compact expandable "Last apply" report (state-file applyReport array).
+    public ObservableCollection<ApplyReportRowViewModel> ApplyReportRows { get; } = new();
+    [ObservableProperty] private bool _hasApplyReport;
+    [ObservableProperty] private bool _isApplyReportOpen;
+    [ObservableProperty] private string _applyReportSummary = "Last apply";
+
+    public string ApplyReportChevron => IsApplyReportOpen ? "\uE70E" : "\uE70D";
+
+    partial void OnIsApplyReportOpenChanged(bool value) =>
+        OnPropertyChanged(nameof(ApplyReportChevron));
+
+    [RelayCommand]
+    private void ToggleApplyReport() => IsApplyReportOpen = !IsApplyReportOpen;
 
     [RelayCommand]
     private async Task RefreshAsync()
@@ -137,13 +155,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
 
-        var ok = ConfirmAsync is not null
-            ? await ConfirmAsync(
-                "Repair Steam?",
-                "Restores Exo backups and clears status. Games stay.")
-            : true;
-        if (!ok) return;
-
+        // Quiet secondary action — runs immediately. Restores Exo backups; games stay.
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;
@@ -224,6 +236,64 @@ public partial class SteamOptimizerViewModel : ObservableObject
         RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
         if (!IsStatusLoading)
             IsFeatureListVisible = Features.Count > 0;
+        LoadApplyReport();
+        LoadTrimStats();
+    }
+
+    private void LoadApplyReport()
+    {
+        var rows = ApplyReportPresentation.FromEntries(
+            OptimizerStateService.TryReadApplyReport("steam"));
+        ApplyReportRows.Clear();
+        foreach (var row in rows)
+            ApplyReportRows.Add(row);
+        HasApplyReport = ApplyReportRows.Count > 0;
+        ApplyReportSummary = ApplyReportPresentation.Summarize(rows);
+    }
+
+    /// <summary>Read %LocalAppData%\Exo\steam-trim-stats.json defensively (may not exist).</summary>
+    private void LoadTrimStats()
+    {
+        try
+        {
+            var path = Path.Combine(PathHelper.AppDataDir, "steam-trim-stats.json");
+            if (!File.Exists(path))
+            {
+                HasTrimStats = false;
+                return;
+            }
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var root = doc.RootElement;
+            var total = ReadInt64(root, "totalReclaimedBytes");
+            var last24h = ReadInt64(root, "last24hReclaimedBytes");
+            if (total <= 0 && last24h <= 0)
+            {
+                HasTrimStats = false;
+                return;
+            }
+
+            TrimStatsText = $"RAM reclaimed · {FormatBytes(last24h)} last 24 h · {FormatBytes(total)} total";
+            HasTrimStats = true;
+        }
+        catch
+        {
+            HasTrimStats = false;
+        }
+    }
+
+    private static long ReadInt64(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var el) &&
+        el.ValueKind == JsonValueKind.Number &&
+        el.TryGetInt64(out var value)
+            ? value
+            : 0;
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1L << 30)
+            return $"{bytes / (double)(1L << 30):0.0} GB";
+        return $"{Math.Max(0, bytes) / (double)(1L << 20):0} MB";
     }
 
     private void SetResult(string message, bool success)

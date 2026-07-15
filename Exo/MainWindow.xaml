@@ -93,6 +93,7 @@
                         <Flyout x:Name="SettingsFlyout"
                                 Placement="BottomEdgeAlignedLeft"
                                 Opened="SettingsFlyout_Opened"
+                                Closing="SettingsFlyout_Closing"
                                 Closed="SettingsFlyout_Closed">
                             <Flyout.FlyoutPresenterStyle>
                                 <Style TargetType="FlyoutPresenter">

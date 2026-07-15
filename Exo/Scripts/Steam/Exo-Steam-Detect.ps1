@@ -357,7 +357,7 @@ if (-not $steamOk) {
     elseif (-not $windowsQuietOk) { 'Windows quiet incomplete' }
     else { 'Ready to optimize' }
     $detail = if ($isApplied) {
-        'Quiet CEF, debloat, Windows quiet, 5s RAM trim, and autostart re-enforce are active.'
+        'Quiet CEF, debloat, Windows quiet, 3s RAM trim, and autostart re-enforce are active.'
     } elseif (-not $cefOk -or -not $trimOk) {
         'Steam launcher or trim helper is missing. Run to restore the Exo launch path.'
     } else {

@@ -6,9 +6,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# Hosted by Exo via PowerShell 7 Preview (+ Terminal Preview on the machine).
+# Hosted by Exo via stable PowerShell 7 (any 7.x; never Windows PowerShell 5.1).
 if ($PSVersionTable.PSEdition -ne 'Core' -or [int]$PSVersionTable.PSVersion.Major -lt 7) {
-    throw 'Exo-Steam-Run requires PowerShell 7 Preview. Install Microsoft.PowerShell.Preview.'
+    throw 'Exo-Steam-Run requires PowerShell 7. Install it with: winget install Microsoft.PowerShell'
 }
 $env:EXO = '1'
 $env:DISCOPT_NONINTERACTIVE = '1'

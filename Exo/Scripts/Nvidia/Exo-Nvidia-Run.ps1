@@ -8,9 +8,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# Hosted by Exo via PowerShell 7 Preview (+ Terminal Preview on the machine).
+# Hosted by Exo via PowerShell 7 (stable pwsh 7.x; preview tolerated).
 if ($PSVersionTable.PSEdition -ne 'Core' -or [int]$PSVersionTable.PSVersion.Major -lt 7) {
-    throw 'Exo-Nvidia-Run requires PowerShell 7 Preview. Install Microsoft.PowerShell.Preview.'
+    throw 'Exo-Nvidia-Run requires PowerShell 7. Install it with: winget install Microsoft.PowerShell'
 }
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Optimizer = Join-Path $Root 'Nvidia-Optimizer.ps1'

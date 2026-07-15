@@ -27,6 +27,12 @@ public sealed class NvidiaPanelSettings
     /// <summary>Force driver-level 3D packs (Profile Inspector). Always on for full Apply.</summary>
     public bool Force3dProfiles { get; set; } = true;
 
+    /// <summary>
+    /// Digital vibrance (DVC) level applied from the panel vibrance row.
+    /// Raw driver units (usually 0-63); 0 = driver default (no boost).
+    /// </summary>
+    public int DigitalVibrance { get; set; } = 0;
+
     /// <summary>Remove NVIDIA App + Control Panel clients; Exo is the only UI.</summary>
     public bool StripAppAndControlPanel { get; set; } = true;
 

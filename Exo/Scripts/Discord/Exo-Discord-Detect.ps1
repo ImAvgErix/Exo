@@ -98,6 +98,44 @@ function Test-DiscordToastsOff {
     return (Test-DiscOptToastsOffFromMap -Map $map)
 }
 
+function Get-DiscordQosPolicyValueMap([string]$PolicyName) {
+    $path = Join-Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS' $PolicyName
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    $map = @{}
+    try {
+        $item = Get-Item -LiteralPath $path -ErrorAction Stop
+        foreach ($name in @($item.GetValueNames())) {
+            $map[$name] = [string]$item.GetValue($name)
+        }
+    } catch { return $null }
+    return $map
+}
+
+function Get-InstalledDetectVariants {
+    $installed = @()
+    foreach ($variant in @(Get-DiscOptVariantDefinitions)) {
+        $root = Join-Path $local ([string]$variant.LocalDir)
+        if (Test-Path -LiteralPath $root) {
+            $apps = @(Get-ChildItem -LiteralPath $root -Directory -Filter 'app-*' -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $installed += , $variant }
+        }
+    }
+    return @($installed)
+}
+
+function Test-VariantAutostartQuiet([string]$LocalDir) {
+    try {
+        $variantRoot = Join-Path $local $LocalDir
+        $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+        if (-not (Test-Path $runKey)) { return $true }
+        $run = Get-Item -Path $runKey -ErrorAction Stop
+        foreach ($name in @($run.GetValueNames())) {
+            if (Test-DiscOptStablePathText ([string]$run.GetValue($name)) $variantRoot) { return $false }
+        }
+        return $true
+    } catch { return $false }
+}
+
 function Test-FileHashMatch([string]$Source, [string]$Destination) {
     try {
         if (-not (Test-Path -LiteralPath $Source) -or -not (Test-Path -LiteralPath $Destination)) { return $false }
@@ -144,13 +182,10 @@ if (-not (Test-Path $discordRoot)) {
         Add-Feature 'Client mods & privacy' 'Equicord loads privacy plugins and strips noisy telemetry.' $equicordOk
 
         # Exo Host (current): stock shell on _app.asar (large) + host flags in settings.json.
-        # Legacy OpenAsar was a small rewrite on _app.asar - still accepted if present.
+        # Legacy OpenAsar (small _app.asar rewrite) is NOT accepted - Apply never produces it.
         $stockShellOk = $false
-        $legacyOpenAsarOk = $false
         if (Test-Path -LiteralPath $openAsarTarget) {
-            $bootLen = (Get-Item -LiteralPath $openAsarTarget).Length
-            $legacyOpenAsarOk = Test-DiscOptOpenAsarSize -SizeBytes $bootLen
-            $stockShellOk = $bootLen -gt 1000000
+            $stockShellOk = (Get-Item -LiteralPath $openAsarTarget).Length -gt 1000000
         }
         $quickStartOk = $false
         $settingsPathForQs = Join-Path $appData 'discord\settings.json'
@@ -160,8 +195,8 @@ if (-not (Test-Path $discordRoot)) {
                 $quickStartOk = Test-DiscOptQuickStartFromSettingsJson -JsonText $sjRaw
             } catch { }
         }
-        # Peak host path: Equicord + (stock _app.asar OR legacy OpenAsar) + host flags
-        $exoHostOk = $equicordOk -and $quickStartOk -and ($stockShellOk -or $legacyOpenAsarOk)
+        # Peak host path: Equicord + stock _app.asar + host flags (binary, no legacy path)
+        $exoHostOk = $equicordOk -and $quickStartOk -and $stockShellOk
         Add-Feature 'Exo Host (fast launch)' 'Equicord loader + stock Discord shell + SKIP_HOST_UPDATE / chromium lean (no OpenAsar).' $exoHostOk
 
         $kernelOk = $false
@@ -283,11 +318,49 @@ if (-not (Test-Path $discordRoot)) {
         } catch {}
         Add-Feature 'Start Menu / apps launch path' 'Start Menu Discord shortcut uses Update.exe (or Exo launch helper). No desktop icons.' $launchOk
 
+        # Voice QoS (DSCP 46 / UDP) policy for every installed variant
+        $installedVariants = @(Get-InstalledDetectVariants)
+        $qosOk = $installedVariants.Count -gt 0
+        foreach ($variant in $installedVariants) {
+            $map = Get-DiscordQosPolicyValueMap ([string]$variant.QosPolicy)
+            if (-not (Test-DiscOptQosPolicyMap -Map $map -ExpectedExe ([string]$variant.Exe))) {
+                $qosOk = $false
+                break
+            }
+        }
+        Add-Feature 'Voice priority (QoS DSCP 46)' 'Windows QoS policy tags Discord voice UDP traffic as Expedited Forwarding for every installed variant.' $qosOk
+
+        # PTB / Canary variants: all installed variants must be optimized
+        $extraVariants = @($installedVariants | Where-Object { [string]$_.Name -ne 'stable' })
+        $variantsOk = $true
+        foreach ($variant in $extraVariants) {
+            $variantSettings = Join-Path $appData ((([string]$variant.AppDataDir)) + '\settings.json')
+            $variantFlagsOk = $false
+            if (Test-Path -LiteralPath $variantSettings) {
+                try {
+                    $variantFlagsOk = Test-DiscOptVariantSettingsJson -JsonText (Get-Content -LiteralPath $variantSettings -Raw -Encoding UTF8)
+                } catch { }
+            }
+            $variantAutostartOk = Test-VariantAutostartQuiet ([string]$variant.LocalDir)
+            $variantQosOk = Test-DiscOptQosPolicyMap -Map (Get-DiscordQosPolicyValueMap ([string]$variant.QosPolicy)) -ExpectedExe ([string]$variant.Exe)
+            if (-not (Test-DiscOptVariantOptimized -SettingsFlagsOk $variantFlagsOk -AutostartQuiet $variantAutostartOk -QosOk $variantQosOk)) {
+                $variantsOk = $false
+                break
+            }
+        }
+        $variantDetail = if ($extraVariants.Count -eq 0) {
+            'Only stable Discord is installed; PTB/Canary would be optimized automatically.'
+        } else {
+            'Every installed PTB/Canary variant has quiet flags, no autostart, and voice QoS.'
+        }
+        Add-Feature 'Discord variants (PTB/Canary)' $variantDetail $variantsOk
+
         $markerOk = Test-DiscOptApplyRecord -State $state -CurrentAppDir $app.FullName
         Add-Feature 'Verified optimizer record' 'A completed full apply is recorded for this exact Discord build.' $markerOk
 
         $isApplied = [bool]($markerOk -and $equicordOk -and $exoHostOk -and $kernelOk -and
-            $debloatOk -and $windowsQuietOk -and $amoledOk -and $runtimeOk -and $launchOk)
+            $debloatOk -and $windowsQuietOk -and $amoledOk -and $runtimeOk -and $launchOk -and
+            $qosOk -and $variantsOk)
         if ($isApplied) {
             $statusText = 'Already optimized'
             $detail = 'No-compromise pack active: Equicord, Exo Host, aggressive trim, full debloat, AMOLED.'
