@@ -31,8 +31,19 @@ public static partial class DiscordLogic
         if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(root)) return false;
         try
         {
-            var prefix = Path.GetFullPath(root).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
+            // Discord installs are Windows-only. Normalize to backslashes for a stable
+            // string compare so Linux smoke harnesses can exercise the classifier too
+            // (Path.GetFullPath on a C:\... root is not meaningful on non-Windows).
             var expanded = Environment.ExpandEnvironmentVariables(text).Replace('/', '\\');
+            string prefix;
+            if (OperatingSystem.IsWindows())
+            {
+                prefix = Path.GetFullPath(root).TrimEnd('\\', '/') + '\\';
+            }
+            else
+            {
+                prefix = root.Replace('/', '\\').TrimEnd('\\') + '\\';
+            }
             return expanded.IndexOf(prefix, StringComparison.OrdinalIgnoreCase) >= 0;
         }
         catch { return false; }

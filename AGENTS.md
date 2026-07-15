@@ -33,7 +33,7 @@ Use concise prompts and targeted diffs. Do not have the coordinator redo complet
 
 ## Ship checklist
 
-1. `dotnet run --project tools/Ui.Smoke -c Release`
+1. `pwsh -NoProfile -File ./tools/Test-Linux.ps1` (Linux/cloud) or `dotnet run --project tools/Ui.Smoke -c Release` (Windows)
 2. `.\tools\Test-Repository.ps1`
 3. Optimizer smokes as needed (Network / Discord / Steam / NVIDIA)
 4. `.\Publish-Exo.ps1` then install to `%LocalAppData%\Exo\app` for local QA
@@ -45,14 +45,16 @@ Exo is a **Windows-only WinUI 3** app. Cloud agents run on **Linux**, so what is
 
 Toolchain (already present via the VM snapshot; the update script only runs `dotnet restore`): **.NET 8 SDK** at `~/.dotnet` (symlinked to `/usr/local/bin/dotnet`) and **PowerShell 7** as `pwsh`. A `/usr/local/bin/powershell.exe -> pwsh` shim exists because the Discord/Steam/Nvidia smoke harnesses hardcode `FileName = "powershell.exe"`; without that shim they abort at the `*DetectCore.ps1` step on Linux.
 
-What runs on Linux:
-- `pwsh -NoProfile -File ./tools/Test-Repository.ps1` — repo/script/data integrity gate. Passes.
-- `dotnet run --project tools/Network.Smoke -c Release` — passes (`failed=0`).
-- `dotnet run --project tools/Steam.Smoke -c Release` — passes (`failed=0`).
-- `dotnet run --project tools/Nvidia.Smoke -c Release` — passes (`failed=0`).
-- `dotnet run --project tools/Discord.Smoke -c Release` — reports `failed=1`. The only failure is `stable path under root`: `DiscordLogic.IsStableDiscordPathText` relies on Windows path semantics (`Path.GetFullPath` on a `C:\...` string + backslash separators), which cannot pass on Linux. This is an environment limitation, **not a code bug** — do not "fix" it. Everything else in that smoke passes.
+What runs on Linux (one command):
+- `pwsh -NoProfile -File ./tools/Test-Linux.ps1` — repository integrity + Network / Steam / Nvidia / Discord / Ui smokes. Must pass with `failed=0`.
+
+Also individually:
+- `pwsh -NoProfile -File ./tools/Test-Repository.ps1`
+- `dotnet run --project tools/Network.Smoke|Steam.Smoke|Nvidia.Smoke|Discord.Smoke|Ui.Smoke -c Release`
+
+`DiscordLogic.IsStableDiscordPathText` normalizes Windows-style Discord roots with backslash compare so the Discord smoke passes on Linux too (product paths remain Windows install paths).
 
 Windows-only here (do not treat failures as regressions):
-- Main app build `dotnet build Exo.sln -c Release -p:Platform=x64` — restore succeeds, but the WinUI XAML compiler (`XamlCompiler.exe`) is a Windows binary → "Exec format error". Cannot build the GUI or run the app on Linux.
-- `dotnet run --project tools/Ui.Smoke -c Release` — builds, but throws at runtime on `System.Drawing.Common` (logo bitmap measurement), which is Windows-only.
+- Main app build `dotnet build Exo.sln -c Release -p:Platform=x64` — restore succeeds, but the WinUI XAML compiler (`XamlCompiler.exe`) is a Windows binary → "Exec format error". **Cannot build or run the GUI on Linux.**
+- Ui.Smoke logo *ink* measurement (`System.Drawing.Common`) — skipped on Linux; logo *file presence* is still asserted.
 - `dotnet format Exo.sln --verify-no-changes` and the SFX `csc.exe` compile step depend on the Windows build/toolchain.

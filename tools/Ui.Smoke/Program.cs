@@ -1,6 +1,8 @@
+#if EXO_HAS_DRAWING
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+#endif
 using System.Text.RegularExpressions;
 using Exo.Helpers;
 using Exo.Models;
@@ -528,9 +530,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.5.1", File.ReadAllText(versionFile).Trim() == "2.5.1");
+    Expect("VERSION is 2.5.2", File.ReadAllText(versionFile).Trim() == "2.5.2");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.5.1", File.ReadAllText(csproj).Contains("<Version>2.5.1</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.5.2", File.ReadAllText(csproj).Contains("<Version>2.5.2</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));
@@ -588,9 +590,12 @@ if (File.Exists(theme))
     Expect("theme no BackEase", !t2.Contains("BackEase", StringComparison.Ordinal));
 }
 
-// Logo visual weight: measure real shipped PNG alpha ink.
+// Logo visual weight: measure real shipped PNG alpha ink (Windows only —
+// System.Drawing.Common is not supported on Linux). On Linux we still assert
+// the logo files exist so packaging regressions are caught.
 if (Directory.Exists(logosDir))
 {
+#if EXO_HAS_DRAWING
     var discord = MeasureInkFill(Path.Combine(logosDir, "discord.png"));
     var steam = MeasureInkFill(Path.Combine(logosDir, "steam.png"));
     var nvidia = MeasureInkFill(Path.Combine(logosDir, "nvidia.png"));
@@ -614,6 +619,11 @@ if (Directory.Exists(logosDir))
     // Minimal Wi‑Fi mark is wide arcs — height can sit just under 50% of canvas.
     Expect("internet not tiny", internet.FillH >= 42 && internet.FillW >= 55,
         $"fillW={internet.FillW:F1} fillH={internet.FillH:F1}");
+#else
+    Log("SKIP  logo ink measure (System.Drawing.Common Windows-only)");
+    foreach (var name in new[] { "discord.png", "steam.png", "nvidia.png", "amd.png", "internet.png" })
+        Expect("logo asset " + name, File.Exists(Path.Combine(logosDir, name)));
+#endif
 }
 
 var dashVm = Path.Combine(repo, "Exo", "ViewModels", "DashboardViewModel.cs");
@@ -694,6 +704,7 @@ static string FindRepoRoot()
     return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 }
 
+#if EXO_HAS_DRAWING
 static InkMetrics MeasureInkFill(string path)
 {
     if (!File.Exists(path)) return new InkMetrics(0, 0, 0);
@@ -739,3 +750,4 @@ static InkMetrics MeasureInkFill(string path)
 }
 
 readonly record struct InkMetrics(double FillW, double FillH, double MaxFill);
+#endif
