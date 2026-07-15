@@ -36,3 +36,21 @@ Use concise prompts and targeted diffs. Do not have the coordinator redo complet
 3. Peak smokes as needed (Network / Discord / Steam / NVIDIA)
 4. `.\Publish-Exo.ps1` then install to `%LocalAppData%\Exo\app` for local QA
 5. `.\Release-Exo.ps1` only when intentionally publishing a GitHub release
+
+## Cursor Cloud specific instructions
+
+Exo is a **Windows-only WinUI 3** app. Cloud agents run on **Linux**, so what is verifiable here is limited; the full product, real Apply/Repair, `Publish-Exo.ps1`, and CI parity remain Windows-only.
+
+Toolchain (already present via the VM snapshot; the update script only runs `dotnet restore`): **.NET 8 SDK** at `~/.dotnet` (symlinked to `/usr/local/bin/dotnet`) and **PowerShell 7** as `pwsh`. A `/usr/local/bin/powershell.exe -> pwsh` shim exists because the Discord/Steam/Nvidia smoke harnesses hardcode `FileName = "powershell.exe"`; without that shim they abort at the `*DetectCore.ps1` step on Linux.
+
+What runs on Linux:
+- `pwsh -NoProfile -File ./tools/Test-Repository.ps1` — repo/script/data integrity gate. Passes.
+- `dotnet run --project tools/NetworkPeak.Smoke -c Release` — passes (`failed=0`).
+- `dotnet run --project tools/SteamPeak.Smoke -c Release` — passes (`failed=0`).
+- `dotnet run --project tools/NvidiaPeak.Smoke -c Release` — passes (`failed=0`).
+- `dotnet run --project tools/DiscordPeak.Smoke -c Release` — reports `failed=1`. The only failure is `stable path under root`: `DiscordPeakLogic.IsStableDiscordPathText` relies on Windows path semantics (`Path.GetFullPath` on a `C:\...` string + backslash separators), which cannot pass on Linux. This is an environment limitation, **not a code bug** — do not "fix" it. Everything else in that smoke passes.
+
+Windows-only here (do not treat failures as regressions):
+- Main app build `dotnet build Exo.sln -c Release -p:Platform=x64` — restore succeeds, but the WinUI XAML compiler (`XamlCompiler.exe`) is a Windows binary → "Exec format error". Cannot build the GUI or run the app on Linux.
+- `dotnet run --project tools/UiPeak.Smoke -c Release` — builds, but throws at runtime on `System.Drawing.Common` (logo bitmap measurement), which is Windows-only.
+- `dotnet format Exo.sln --verify-no-changes` and the SFX `csc.exe` compile step depend on the Windows build/toolchain.
