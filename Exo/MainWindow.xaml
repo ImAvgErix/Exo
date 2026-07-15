@@ -27,9 +27,9 @@
             <StackPanel x:Name="ChromeButtons"
                         Grid.Column="0"
                         Orientation="Horizontal"
-                        Spacing="6"
+                        Spacing="8"
                         VerticalAlignment="Center"
-                        Margin="14,0,8,0"
+                        Margin="16,0,8,0"
                         Height="40"
                         Background="{ThemeResource OptiPageBackgroundBrush}">
                 <Button x:Name="BackButton"
@@ -37,23 +37,23 @@
                         AutomationProperties.Name="Back to dashboard"
                         Click="BackButton_Click"
                         Visibility="Collapsed"
-                        Width="36" Height="36"
+                        Width="34" Height="34"
                         VerticalAlignment="Center"
                         AllowFocusOnInteraction="True"
                         IsTabStop="True"
                         UseSystemFocusVisuals="True">
-                    <FontIcon Glyph="&#xE72B;" FontSize="13" />
+                    <FontIcon Glyph="&#xE72B;" FontSize="12" />
                 </Button>
 
                 <Border x:Name="ContextLogoHost"
-                        Width="28" Height="28"
-                        CornerRadius="8"
+                        Width="26" Height="26"
+                        CornerRadius="7"
                         Background="Transparent"
                         Visibility="Collapsed"
                         VerticalAlignment="Center"
                         IsHitTestVisible="False">
                     <Image x:Name="ContextLogo"
-                           Width="20" Height="20"
+                           Width="18" Height="18"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            Stretch="Uniform"
@@ -64,9 +64,9 @@
                            Text=""
                            VerticalAlignment="Center"
                            FontFamily="{StaticResource OptiUiFontSemiBold}"
-                           FontSize="15"
+                           FontSize="14"
                            FontWeight="SemiBold"
-                           CharacterSpacing="-8"
+                           CharacterSpacing="-6"
                            Foreground="{ThemeResource OptiPrimaryTextBrush}"
                            Margin="0,0,2,0"
                            IsHitTestVisible="False"
@@ -76,14 +76,14 @@
                         Style="{StaticResource OptiIconButton}"
                         AutomationProperties.Name="Settings"
                         Click="SettingsButton_Click"
-                        Width="36" Height="36"
+                        Width="34" Height="34"
                         VerticalAlignment="Center"
                         AllowFocusOnInteraction="True"
                         IsTabStop="True"
                         UseSystemFocusVisuals="True">
                     <FontIcon x:Name="SettingsGearIcon"
                               Glyph="&#xE713;"
-                              FontSize="14"
+                              FontSize="13"
                               RenderTransformOrigin="0.5,0.5">
                         <FontIcon.RenderTransform>
                             <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
@@ -101,7 +101,7 @@
                                     <Setter Property="BorderThickness" Value="0" />
                                     <Setter Property="Background" Value="Transparent" />
                                     <Setter Property="CornerRadius" Value="0" />
-                                    <Setter Property="MaxWidth" Value="360" />
+                                    <Setter Property="MaxWidth" Value="340" />
                                 </Style>
                             </Flyout.FlyoutPresenterStyle>
                             <controls:SettingsSheet x:Name="SettingsSheetHost" />

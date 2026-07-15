@@ -25,15 +25,15 @@
             <ItemsRepeater.Layout>
                 <UniformGridLayout MaximumRowsOrColumns="2"
                                    Orientation="Horizontal"
-                                   MinItemWidth="260"
-                                   MinColumnSpacing="10"
-                                   MinRowSpacing="10"
+                                   MinItemWidth="248"
+                                   MinColumnSpacing="12"
+                                   MinRowSpacing="12"
                                    ItemsStretch="Fill" />
             </ItemsRepeater.Layout>
             <ItemsRepeater.ItemTemplate>
                 <DataTemplate x:DataType="vm:FeatureRowViewModel">
                     <Border Style="{StaticResource OptiFeatureTile}" Opacity="{x:Bind Opacity}">
-                        <Grid ColumnSpacing="12">
+                        <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
@@ -43,7 +43,7 @@
                                     Opacity="{x:Bind RailOpacity}" />
                             <Border Grid.Column="1" Style="{StaticResource OptiIconWell}">
                                 <FontIcon Glyph="{x:Bind Glyph}"
-                                          FontSize="14"
+                                          FontSize="13"
                                           Foreground="{ThemeResource OptiPrimaryTextBrush}"
                                           HorizontalAlignment="Center"
                                           VerticalAlignment="Center" />

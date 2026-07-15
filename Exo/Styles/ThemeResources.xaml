@@ -9,10 +9,11 @@
     <FontFamily x:Key="OptiUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
     <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
-    <CornerRadius x:Key="OptiCardRadius">18</CornerRadius>
-    <CornerRadius x:Key="OptiTileRadius">14</CornerRadius>
-    <x:Double x:Key="OptiPageMaxWidth">1000</x:Double>
-    <Thickness x:Key="OptiPagePadding">28,16,28,20</Thickness>
+    <!-- Spacing scale: 8 / 12 / 16 / 20 / 28 — tighter radii, hairline cards -->
+    <CornerRadius x:Key="OptiCardRadius">16</CornerRadius>
+    <CornerRadius x:Key="OptiTileRadius">12</CornerRadius>
+    <x:Double x:Key="OptiPageMaxWidth">1040</x:Double>
+    <Thickness x:Key="OptiPagePadding">28,20,28,24</Thickness>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
@@ -24,13 +25,13 @@
 
     <Style x:Key="OptiTagline" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiDisplayFontItalic}" />
-        <Setter Property="FontSize" Value="36" />
+        <Setter Property="FontSize" Value="34" />
         <Setter Property="FontStyle" Value="Italic" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="-8" />
+        <Setter Property="CharacterSpacing" Value="-6" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
         <Setter Property="TextAlignment" Value="Center" />
-        <Setter Property="LineHeight" Value="44" />
+        <Setter Property="LineHeight" Value="42" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
         <Setter Property="UseLayoutRounding" Value="True" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
@@ -40,7 +41,7 @@
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
         <Setter Property="FontSize" Value="11" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="80" />
+        <Setter Property="CharacterSpacing" Value="90" />
         <Setter Property="Margin" Value="0,0,0,8" />
         <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
     </Style>
@@ -51,23 +52,23 @@
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Foreground" Value="{ThemeResource OptiSecondaryTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="LineHeight" Value="19" />
     </Style>
 
     <Style x:Key="OptiCaption" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
         <Setter Property="FontSize" Value="12" />
+        <Setter Property="LineHeight" Value="16" />
         <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <!-- Optimizer page headline (kept for Internet / Display / module pages) -->
     <Style x:Key="OptiPageTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="21" />
+        <Setter Property="FontSize" Value="22" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="-12" />
-        <Setter Property="LineHeight" Value="27" />
+        <Setter Property="CharacterSpacing" Value="-14" />
+        <Setter Property="LineHeight" Value="28" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
     </Style>
@@ -94,19 +95,18 @@
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
-        <Setter Property="Padding" Value="12,11" />
-        <Setter Property="MinHeight" Value="62" />
+        <Setter Property="Padding" Value="12,12" />
+        <Setter Property="MinHeight" Value="64" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
-    <!-- Minimal status rail (bright when peak, quiet when open) -->
     <Style x:Key="OptiStatusRail" TargetType="Border">
         <Setter Property="Width" Value="2" />
         <Setter Property="CornerRadius" Value="1" />
         <Setter Property="Background" Value="{ThemeResource OptiSuccessBrush}" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
-        <Setter Property="Margin" Value="0,2,0,2" />
+        <Setter Property="Margin" Value="0,1,0,1" />
         <Setter Property="IsHitTestVisible" Value="False" />
     </Style>
 
@@ -119,11 +119,10 @@
         <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
 
-    <!-- Soft fill, no stroke — glyph icons look cleaner without a box outline -->
     <Style x:Key="OptiIconWell" TargetType="Border">
-        <Setter Property="Width" Value="34" />
-        <Setter Property="Height" Value="34" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Width" Value="30" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
@@ -132,14 +131,14 @@
 
     <Style x:Key="OptiCard" TargetType="Border">
         <Setter Property="CornerRadius" Value="{StaticResource OptiCardRadius}" />
-        <Setter Property="Padding" Value="18,16" />
+        <Setter Property="Padding" Value="16,14" />
         <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 
     <Style x:Key="OptiRiskCard" TargetType="Border">
-        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="CornerRadius" Value="10" />
         <Setter Property="Padding" Value="12,10" />
         <Setter Property="Background" Value="{ThemeResource OptiWarningSoftBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiWarningBrush}" />
@@ -161,10 +160,10 @@
     -->
     <Style x:Key="OptiThemeChoice" TargetType="RadioButton">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="MinHeight" Value="44" />
-        <Setter Property="Padding" Value="14,12" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Padding" Value="12,10" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -176,20 +175,17 @@
                     <Grid x:Name="Root"
                           MinHeight="{TemplateBinding MinHeight}"
                           HorizontalAlignment="Stretch">
-                        <!-- Base + stroke (always visible) -->
                         <Border x:Name="Base"
                                 Background="{ThemeResource OptiPageBackgroundBrush}"
                                 BorderBrush="{ThemeResource OptiCardStrokeBrush}"
                                 BorderThickness="1"
                                 CornerRadius="{StaticResource OptiTileRadius}" />
-                        <!-- Hover underlay — never paints over selected white -->
                         <Border x:Name="HoverFill"
                                 Background="{ThemeResource OptiAccentSoftBrush}"
                                 CornerRadius="{StaticResource OptiTileRadius}"
                                 Margin="1"
                                 Opacity="0"
                                 IsHitTestVisible="False" />
-                        <!-- Selected white — ON TOP of hover so it never vanishes -->
                         <Border x:Name="CheckedFill"
                                 Background="#FFFFFF"
                                 BorderBrush="#FFFFFF"
@@ -254,7 +250,6 @@
 
     <Style x:Key="OptiThemeRadio" TargetType="RadioButton" BasedOn="{StaticResource OptiThemeChoice}" />
 
-    <!-- Compact toggle — hide On/Off labels, no huge min width -->
     <Style x:Key="OptiCompactSwitch" TargetType="ToggleSwitch">
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="OnContent" Value="" />
@@ -272,11 +267,11 @@
     -->
     <Style x:Key="OptiPrimaryButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="Padding" Value="18,12" />
+        <Setter Property="Padding" Value="20,13" />
         <Setter Property="CornerRadius" Value="12" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="MinHeight" Value="46" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="Background" Value="{ThemeResource OptiAccentBrush}" />
@@ -294,7 +289,6 @@
                           CornerRadius="{TemplateBinding CornerRadius}"
                           BorderBrush="{TemplateBinding BorderBrush}"
                           BorderThickness="{TemplateBinding BorderThickness}">
-                        <!-- Wash sits under label; content never scaled -->
                         <Border x:Name="HoverWash"
                                 Background="{ThemeResource OptiOnAccentBrush}"
                                 CornerRadius="{TemplateBinding CornerRadius}"
@@ -360,15 +354,16 @@
 
     <Style x:Key="OptiQuietButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource OptiUiFontMedium}" />
-        <Setter Property="Padding" Value="14,10" />
-        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="14,9" />
+        <Setter Property="CornerRadius" Value="10" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="MinHeight" Value="40" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="Background" Value="{ThemeResource OptiQuietButtonFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1.5" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -461,7 +456,6 @@
         </Setter>
     </Style>
 
-    <!-- Live continuous slider (premium track + thumb) -->
     <Style x:Key="OptiLiveSlider" TargetType="Slider">
         <Setter Property="Foreground" Value="{ThemeResource OptiAccentBrush}" />
         <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
@@ -470,16 +464,18 @@
         <Setter Property="StepFrequency" Value="1" />
         <Setter Property="IsThumbToolTipEnabled" Value="False" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
-        <Setter Property="MinHeight" Value="32" />
-        <Setter Property="Margin" Value="0,2,0,0" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="Margin" Value="0,4,0,0" />
     </Style>
 
-    <!-- Solid white CTA — wash + fill animation, no scale. -->
     <Style x:Key="OptiWhiteButton" TargetType="Button" BasedOn="{StaticResource OptiQuietButton}">
         <Setter Property="Background" Value="#FFFFFF" />
         <Setter Property="BorderBrush" Value="#FFFFFF" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Foreground" Value="#0A0A0A" />
+        <Setter Property="MinHeight" Value="46" />
+        <Setter Property="Padding" Value="20,13" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -575,7 +571,6 @@
                                           VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
                                           Padding="{TemplateBinding Padding}"
                                           CornerRadius="{TemplateBinding CornerRadius}" />
-                        <!-- Highlight layers above content so ring reads; never scale content -->
                         <Border x:Name="HoverWash"
                                 Background="{ThemeResource OptiAccentSoftBrush}"
                                 CornerRadius="{TemplateBinding CornerRadius}"
@@ -647,10 +642,10 @@
     </Style>
 
     <Style x:Key="OptiIconButton" TargetType="Button">
-        <Setter Property="Width" Value="36" />
-        <Setter Property="Height" Value="36" />
+        <Setter Property="Width" Value="34" />
+        <Setter Property="Height" Value="34" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="9" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />

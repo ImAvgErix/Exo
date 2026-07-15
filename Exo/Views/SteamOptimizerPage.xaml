@@ -8,17 +8,19 @@
     Background="Transparent">
 
     <Grid Padding="{StaticResource OptiPagePadding}">
-        <Grid MaxWidth="{StaticResource OptiPageMaxWidth}" HorizontalAlignment="Stretch" RowSpacing="14">
+        <Grid MaxWidth="{StaticResource OptiPageMaxWidth}" HorizontalAlignment="Stretch" RowSpacing="20">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <StackPanel Spacing="3">
-                <TextBlock Text="STEAM" Style="{StaticResource OptiSectionTitle}" Margin="0,0,0,2" />
+
+            <StackPanel Spacing="4" Margin="0,0,0,4">
+                <TextBlock Text="STEAM" Style="{StaticResource OptiSectionTitle}" Margin="0" />
                 <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" Style="{StaticResource OptiPageTitle}" />
             </StackPanel>
-            <Grid Grid.Row="1">
+
+            <Grid Grid.Row="1" Margin="0,0,0,4">
                 <controls:OptiLoader IsActive="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay}"
                                      Visibility="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -28,7 +30,8 @@
                                           ItemsSource="{x:Bind ViewModel.Features, Mode=OneWay}"
                                           Visibility="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
             </Grid>
-            <StackPanel Grid.Row="2" Spacing="10">
+
+            <StackPanel Grid.Row="2" Spacing="12">
                 <Border Style="{StaticResource OptiMessageBanner}"
                         Visibility="{x:Bind ViewModel.HasLastResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                     <Grid ColumnSpacing="10">
@@ -36,7 +39,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <FontIcon Glyph="{x:Bind ViewModel.LastResultGlyph, Mode=OneWay}" FontSize="15"
+                        <FontIcon Glyph="{x:Bind ViewModel.LastResultGlyph, Mode=OneWay}" FontSize="14"
                                   Foreground="{x:Bind ViewModel.LastResultBrush, Mode=OneWay}" VerticalAlignment="Top" />
                         <TextBlock Text="{x:Bind ViewModel.LastResult, Mode=OneWay}" Grid.Column="1"
                                    Style="{StaticResource OptiBody}" TextWrapping="Wrap" />
@@ -45,20 +48,18 @@
                 <StackPanel Spacing="6"
                             Visibility="{x:Bind ViewModel.IsProgressVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                     <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
-                                 Height="4" CornerRadius="2" Foreground="{ThemeResource OptiAccentBrush}" />
+                                 Height="3" CornerRadius="2" Foreground="{ThemeResource OptiAccentBrush}" />
                     <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}" TextAlignment="Center" />
                 </StackPanel>
-                <!-- Resident trim proof: RAM reclaimed (steam-trim-stats.json, when present) -->
                 <TextBlock Text="{x:Bind ViewModel.TrimStatsText, Mode=OneWay}"
                            Style="{StaticResource OptiCaption}"
                            Foreground="{ThemeResource OptiSuccessBrush}"
                            TextAlignment="Center"
                            Visibility="{x:Bind ViewModel.HasTrimStats, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <!-- Compact expandable last-apply step report -->
                 <StackPanel Spacing="6"
                             Visibility="{x:Bind ViewModel.HasApplyReport, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                     <Button Style="{StaticResource OptiQuietButton}"
-                            MinHeight="34"
+                            MinHeight="32"
                             Padding="12,6"
                             HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Stretch"
@@ -80,7 +81,7 @@
                                       VerticalAlignment="Center" />
                         </Grid>
                     </Button>
-                    <ScrollViewer MaxHeight="150"
+                    <ScrollViewer MaxHeight="140"
                                   VerticalScrollBarVisibility="Auto"
                                   Visibility="{x:Bind ViewModel.IsApplyReportOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                         <ItemsRepeater ItemsSource="{x:Bind ViewModel.ApplyReportRows, Mode=OneWay}">
@@ -101,17 +102,20 @@
                         </ItemsRepeater>
                     </ScrollViewer>
                 </StackPanel>
+
                 <Button Style="{StaticResource OptiPrimaryButton}" Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}" Click="Run_Click" HorizontalAlignment="Stretch"
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                         AutomationProperties.Name="Apply Steam" />
-                <Grid ColumnSpacing="10">
+                <Grid ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource OptiQuietButton}" Content="Repair" Click="Repair_Click" HorizontalAlignment="Stretch"
+                    <Button Style="{StaticResource OptiQuietButton}" Content="Repair" Click="Repair_Click"
+                            MinHeight="38" HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click" HorizontalAlignment="Stretch"
+                    <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click"
+                            MinHeight="38" HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                 </Grid>
             </StackPanel>

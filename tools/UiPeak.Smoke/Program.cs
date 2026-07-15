@@ -500,9 +500,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.4.2", File.ReadAllText(versionFile).Trim() == "2.4.2");
+    Expect("VERSION is 2.4.3", File.ReadAllText(versionFile).Trim() == "2.4.3");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.4.2", File.ReadAllText(csproj).Contains("<Version>2.4.2</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.4.3", File.ReadAllText(csproj).Contains("<Version>2.4.3</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));

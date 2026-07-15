@@ -1,3 +1,7 @@
+## 2.4.3
+
+- **UI — full visual rebuild**: redesigned theme tokens (8/12/16/20/28 spacing, tighter radii), home hero + compact 248×148 cards, clearer module page hierarchy (section label → status title → feature grid → primary CTA), NVIDIA G-SYNC strip in a lifted card, denser Settings flyout and NVIDIA display panel — same shell contracts (fixed 1180×760, gear flyout, AMOLED `#000000` / `#0C0C0C`, `FeatureTileGrid` stretch)
+
 ## 2.4.2
 
 - **UI — layout fix**: module feature tiles no longer stack in the top-left corner — `FeatureTileGrid` keeps `ItemsRepeater` width in sync with the scroll host so the two-column grid stretches correctly on every optimizer page
