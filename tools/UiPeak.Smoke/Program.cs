@@ -249,7 +249,14 @@ foreach (var page in new[]
     Expect(page + " page padding", x.Contains("OptiPagePadding", StringComparison.Ordinal));
     Expect(page + " unique loader", x.Contains("OptiLoader", StringComparison.Ordinal) && !x.Contains("<ProgressRing", StringComparison.Ordinal));
     if (page.Contains("NvidiaPanel", StringComparison.Ordinal))
+    {
         Expect(page + " apply label", x.Contains("ApplyLabel", StringComparison.Ordinal) && x.Contains("ChangeHint", StringComparison.Ordinal));
+        // Digital vibrance row: per-display slider, hidden when the driver DVC API is unavailable.
+        Expect(page + " vibrance slider",
+            x.Contains("Digital vibrance", StringComparison.Ordinal)
+            && x.Contains("SelectedVibrance", StringComparison.Ordinal)
+            && x.Contains("VibranceSupported", StringComparison.Ordinal));
+    }
     if (page.StartsWith("Internet", StringComparison.Ordinal))
     {
         Expect("internet dual white CTAs",
@@ -457,9 +464,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.4.0", File.ReadAllText(versionFile).Trim() == "2.4.0");
+    Expect("VERSION is 2.4.1", File.ReadAllText(versionFile).Trim() == "2.4.1");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.4.0", File.ReadAllText(csproj).Contains("<Version>2.4.0</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.4.1", File.ReadAllText(csproj).Contains("<Version>2.4.1</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));
@@ -563,7 +570,15 @@ else
 
 var panelVm = Path.Combine(repo, "Exo", "ViewModels", "NvidiaPanelViewModel.cs");
 if (File.Exists(panelVm))
-    Expect("panel force refresh", File.ReadAllText(panelVm).Contains("RefreshCoreAsync(force: true", StringComparison.Ordinal));
+{
+    var pv = File.ReadAllText(panelVm);
+    Expect("panel force refresh", pv.Contains("RefreshCoreAsync(force: true", StringComparison.Ordinal));
+    // Vibrance is loaded with the display list and applied through the same dirty-diff Apply.
+    Expect("panel vibrance wired",
+        pv.Contains("ListVibranceAsync", StringComparison.Ordinal)
+        && pv.Contains("SetVibranceAsync", StringComparison.Ordinal)
+        && pv.Contains("IsVibranceDirty", StringComparison.Ordinal));
+}
 
 var nv = Path.Combine(repo, "tools", "Exo.NvDisplay", "Program.cs");
 if (File.Exists(nv))

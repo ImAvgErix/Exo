@@ -31,12 +31,21 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
     [ObservableProperty] private string _changeHint = string.Empty;
     [ObservableProperty] private bool _hasChangeHint;
 
+    // Digital vibrance (DVC) — hidden when the driver's DVC API is unavailable for this display.
+    [ObservableProperty] private bool _vibranceSupported;
+    [ObservableProperty] private double _vibranceMinimum;
+    [ObservableProperty] private double _vibranceMaximum = NvidiaPanelLogic.VibranceDefaultMaximum;
+    [ObservableProperty] private double _selectedVibrance;
+    [ObservableProperty] private string _vibranceValueLabel = "";
+
     // Snapshot of values loaded from driver — only Apply diffs.
     public string LoadedResolution { get; private set; } = "";
     public int LoadedHz { get; private set; }
     public string LoadedDepth { get; private set; } = "";
     public string LoadedColorRange { get; private set; } = "";
     public string LoadedScaling { get; private set; } = "";
+    public int LoadedVibrance { get; private set; }
+    public int VibranceDefaultLevel { get; private set; }
 
     private bool _suppress;
 
@@ -83,6 +92,54 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
             _suppress = false;
             UpdateCanApply();
         }
+    }
+
+    /// <summary>Load the digital vibrance snapshot for this display (separate helper call).</summary>
+    public void LoadVibrance(NvidiaDisplayVibranceInfo info)
+    {
+        _suppress = true;
+        try
+        {
+            VibranceSupported = true;
+            VibranceMinimum = info.MinimumLevel;
+            VibranceMaximum = info.MaximumLevel > info.MinimumLevel
+                ? info.MaximumLevel
+                : NvidiaPanelLogic.VibranceDefaultMaximum;
+            VibranceDefaultLevel = info.DefaultLevel;
+            LoadedVibrance = info.CurrentLevel;
+            SelectedVibrance = info.CurrentLevel;
+            VibranceValueLabel = FormatVibranceLabel(info.CurrentLevel);
+        }
+        finally
+        {
+            _suppress = false;
+            UpdateCanApply();
+        }
+    }
+
+    /// <summary>Sync vibrance to live driver state (after Apply / soft refresh).</summary>
+    public void SoftUpdateVibrance(NvidiaDisplayVibranceInfo info, bool commitSelection)
+    {
+        VibranceSupported = true;
+        LoadedVibrance = info.CurrentLevel;
+        VibranceDefaultLevel = info.DefaultLevel;
+        if (commitSelection)
+        {
+            _suppress = true;
+            try
+            {
+                SelectedVibrance = info.CurrentLevel;
+                VibranceValueLabel = FormatVibranceLabel(info.CurrentLevel);
+            }
+            finally { _suppress = false; }
+        }
+        UpdateCanApply();
+    }
+
+    private string FormatVibranceLabel(double level)
+    {
+        var v = (int)Math.Round(level);
+        return v == VibranceDefaultLevel ? $"{v} (default)" : v.ToString();
     }
 
     /// <summary>
@@ -162,6 +219,13 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
         UpdateCanApply();
     }
 
+    partial void OnSelectedVibranceChanged(double value)
+    {
+        VibranceValueLabel = FormatVibranceLabel(value);
+        if (_suppress) return;
+        UpdateCanApply();
+    }
+
     private void RebuildRefreshOptions(int selectHz, bool force)
     {
         var rates = string.IsNullOrWhiteSpace(SelectedResolution)
@@ -192,7 +256,8 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
     private void UpdateCanApply()
     {
         // Never gate on IsApplying (that left Apply stuck gray after apply).
-        var dirty = IsModeDirty() || IsDepthDirty() || IsColorRangeDirty() || IsScalingDirty();
+        var dirty = IsModeDirty() || IsDepthDirty() || IsColorRangeDirty() || IsScalingDirty() ||
+                    IsVibranceDirty();
         CanApply = dirty;
         ApplyLabel = dirty ? "Apply" : "Up to date";
         ChangeHint = BuildChangeHint();
@@ -214,6 +279,8 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
             parts.Add(SelectedColorRange!);
         if (IsScalingDirty())
             parts.Add(SelectedScaling!);
+        if (IsVibranceDirty())
+            parts.Add($"Vibrance {SelectedVibranceLevel}");
 
         return parts.Count == 0 ? string.Empty : "Will change: " + string.Join(", ", parts);
     }
@@ -230,6 +297,8 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
             parts.Add(SelectedColorRange!);
         if (IsScalingDirty())
             parts.Add(SelectedScaling!);
+        if (IsVibranceDirty())
+            parts.Add($"Vibrance {SelectedVibranceLevel}");
         return parts;
     }
 
@@ -253,6 +322,12 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
     public bool IsScalingDirty() =>
         !string.IsNullOrWhiteSpace(SelectedScaling) &&
         !string.Equals(SelectedScaling, LoadedScaling, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Slider value rounded to raw driver units for apply.</summary>
+    public int SelectedVibranceLevel => (int)Math.Round(SelectedVibrance);
+
+    public bool IsVibranceDirty() =>
+        VibranceSupported && SelectedVibranceLevel != LoadedVibrance;
 
     public bool TryGetSelectedMode(out int w, out int h, out int hz)
     {

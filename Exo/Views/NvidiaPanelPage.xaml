@@ -7,7 +7,7 @@
     xmlns:controls="using:Exo.Views.Controls"
     Background="Transparent">
 
-    <!-- Selectors only: res / Hz / depth / color / scaling. No policy "applied" tiles. -->
+    <!-- Selectors only: res / Hz / depth / color / scaling / vibrance. No policy "applied" tiles. -->
     <Grid Padding="{StaticResource OptiPagePadding}">
         <Grid MaxWidth="{StaticResource OptiPageMaxWidth}"
               HorizontalAlignment="Stretch"
@@ -88,6 +88,7 @@
                                                     <RowDefinition Height="Auto" />
                                                     <RowDefinition Height="Auto" />
                                                     <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
                                                 </Grid.RowDefinitions>
 
                                                 <StackPanel Spacing="4">
@@ -129,6 +130,25 @@
                                                               HorizontalAlignment="Stretch"
                                                               MinHeight="36"
                                                               AutomationProperties.Name="Scaling" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Spacing="4"
+                                                            Visibility="{x:Bind VibranceSupported, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <Grid ColumnSpacing="8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Digital vibrance" Style="{StaticResource OptiCaption}" />
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{x:Bind VibranceValueLabel, Mode=OneWay}"
+                                                                   Style="{StaticResource OptiCaption}" />
+                                                    </Grid>
+                                                    <Slider Minimum="{x:Bind VibranceMinimum, Mode=OneWay}"
+                                                            Maximum="{x:Bind VibranceMaximum, Mode=OneWay}"
+                                                            Value="{x:Bind SelectedVibrance, Mode=TwoWay}"
+                                                            StepFrequency="1"
+                                                            HorizontalAlignment="Stretch"
+                                                            AutomationProperties.Name="Digital vibrance" />
                                                 </StackPanel>
                                             </Grid>
                                         </StackPanel>

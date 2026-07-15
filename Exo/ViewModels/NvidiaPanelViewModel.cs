@@ -42,7 +42,10 @@ public partial class NvidiaPanelViewModel : ObservableObject
             IsLoading = true;
         try
         {
-            var infos = await _services.NvidiaPanel.ListDisplaysAsync().ConfigureAwait(true);
+            var infosTask = _services.NvidiaPanel.ListDisplaysAsync();
+            var vibranceTask = _services.NvidiaPanel.ListVibranceAsync();
+            var infos = await infosTask.ConfigureAwait(true);
+            var vibrance = await vibranceTask.ConfigureAwait(true);
             if (soft && Displays.Count > 0 &&
                 Displays.Select(d => d.DisplayId).SequenceEqual(infos.Select(i => i.DisplayId)))
             {
@@ -50,6 +53,9 @@ public partial class NvidiaPanelViewModel : ObservableObject
                 {
                     var row = Displays.FirstOrDefault(d => d.DisplayId == info.DisplayId);
                     row?.SoftUpdateSummary(info, commitSelections);
+                    var v = vibrance.FirstOrDefault(x => x.DisplayId == info.DisplayId);
+                    if (row is not null && v is not null)
+                        row.SoftUpdateVibrance(v, commitSelections);
                 }
             }
             else
@@ -64,6 +70,9 @@ public partial class NvidiaPanelViewModel : ObservableObject
                         IsPrimary = d.IsPrimary
                     };
                     row.LoadFrom(d);
+                    var v = vibrance.FirstOrDefault(x => x.DisplayId == d.DisplayId);
+                    if (v is not null)
+                        row.LoadVibrance(v);
                     Displays.Add(row);
                 }
             }
@@ -152,6 +161,18 @@ public partial class NvidiaPanelViewModel : ObservableObject
                 allOk &= ok;
             }
 
+            if (row.IsVibranceDirty())
+            {
+                any = true;
+                ProgressStatus = $"Setting vibrance {row.SelectedVibranceLevel}…";
+                ProgressPercent = 92;
+                var (ok, msg) = await _services.NvidiaPanel.SetVibranceAsync(row.SelectedVibranceLevel, row.DisplayId);
+                if (!string.IsNullOrWhiteSpace(msg)) messages.Add(msg);
+                if (ok)
+                    PersistVibrance(row.SelectedVibranceLevel);
+                allOk &= ok;
+            }
+
             ProgressPercent = 100;
             if (!any)
             {
@@ -193,6 +214,20 @@ public partial class NvidiaPanelViewModel : ObservableObject
         catch
         {
             // refresh best-effort
+        }
+    }
+
+    private void PersistVibrance(int level)
+    {
+        try
+        {
+            var settings = _services.NvidiaPanel.Load();
+            settings.DigitalVibrance = level;
+            _services.NvidiaPanel.Save(settings);
+        }
+        catch
+        {
+            // Persistence is best-effort; the driver value is already applied.
         }
     }
 
