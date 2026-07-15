@@ -363,30 +363,17 @@ public sealed class NetworkOptimizerService
             }
             if (!string.IsNullOrWhiteSpace(mediaProfile.NicPeakHints) && mediaProfile.NicPeakHints is not "—")
                 features.Add(Row("NIC peak", mediaProfile.NicPeakHints, mediaProfile.NicPeakOk));
-            if (!string.IsNullOrWhiteSpace(mediaProfile.TailoredPlan))
-                features.Add(Row("Tailored plan", mediaProfile.TailoredPlan, true));
-            // Host gaming stack detect (Game Mode / DVR / HAGS / power throttle)
-            try
+            // Path / media only (no Windows Game Mode / CPU plan rows — those are not Internet)
+            if (!string.IsNullOrWhiteSpace(mediaProfile.NicVendor) &&
+                mediaProfile.NicVendor is not ("Unknown" or "Other" or ""))
             {
-                var gm = ReadRegistryDword(Registry.CurrentUser
-                    .OpenSubKey(@"Software\Microsoft\GameBar")?.GetValue("AutoGameModeEnabled"));
-                var dvr = ReadRegistryDword(Registry.CurrentUser
-                    .OpenSubKey(@"System\GameConfigStore")?.GetValue("GameDVR_Enabled"));
-                var hags = ReadRegistryDword(Registry.LocalMachine
-                    .OpenSubKey(@"SYSTEM\CurrentControlSet\Control\GraphicsDrivers")?.GetValue("HwSchMode"));
-                var ptoff = ReadRegistryDword(Registry.LocalMachine
-                    .OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling")
-                    ?.GetValue("PowerThrottlingOff"));
-                var hostOk = (gm is null or 1) && (dvr is null or 0) && (hags is null or 2) && (ptoff is null or 1);
-                var hostBits = new List<string>();
-                hostBits.Add(gm is 1 ? "GameMode on" : gm is 0 ? "GameMode off" : "GameMode —");
-                hostBits.Add(dvr is 0 ? "DVR off" : dvr is 1 ? "DVR on" : "DVR —");
-                hostBits.Add(hags is 2 ? "HAGS on" : hags is 1 ? "HAGS off" : "HAGS —");
-                hostBits.Add(ptoff is 1 ? "no power-throttle" : "power-throttle —");
-                var presetOn = LoadSavedPreset() is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput;
-                features.Add(Row("Host gaming", string.Join(" · ", hostBits), hostOk || !presetOn));
+                var link = mediaProfile.PrimaryLinkSpeedBps >= 2_500_000_000 ? "2.5G+"
+                    : mediaProfile.PrimaryLinkSpeedBps >= 1_000_000_000 ? "1G"
+                    : mediaProfile.PrimaryLinkSpeedBps >= 100_000_000 ? "100M" : "—";
+                features.Add(Row("Adapter",
+                    $"{mediaProfile.PrimaryMediaKind} · {mediaProfile.NicVendor} · {link}",
+                    true));
             }
-            catch { }
         }
         catch { }
 
@@ -447,6 +434,7 @@ public sealed class NetworkOptimizerService
         long linkBps = 0;
         var isLaptop = false;
         var logicals = Environment.ProcessorCount;
+        var physicalCores = 0;
         var activeForPeak = LoadSavedPreset();
 
         try
@@ -629,13 +617,18 @@ if ($laptop -eq 0) {
   } catch {}
 }
 $cpuN = [Environment]::ProcessorCount
+$coreN = 0
+try {
+  $coreN = [int]((Get-CimInstance Win32_Processor -EA SilentlyContinue | Measure-Object -Property NumberOfCores -Sum).Sum)
+} catch { $coreN = 0 }
+if ($coreN -le 0) { $coreN = [Math]::Max(1, [int]($cpuN / 2)) }
 # Sanitize free-text for ; delimiter parse
 $hintS = ($hint -replace '[;=]', ' ').Trim()
 $radiosS = ($radios -replace '[;=]', ' ').Trim()
 $curBandS = ($curBand -replace '[;=]', ' ').Trim()
 $bindHintS = ($bindHint -replace '[;=]', ',').Trim()
 $descS = ($primaryDesc -replace '[;=]', ' ').Trim()
-Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;AX=$ax;BE=$be;HINT=$hintS;RADIOS=$radiosS;CURBAND=$curBandS;EMETRIC=$eMetric;FC=$fcR;IM=$imR;IDLE=$idleR;SS=$ssR;BINDOK=$bindOk;BINDHINT=$bindHintS;VENDOR=$vendor;LINK=$linkBps;LAPTOP=$laptop;CPU=$cpuN;MEDIA=$mediaKind;DESC=$descS"
+Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;AX=$ax;BE=$be;HINT=$hintS;RADIOS=$radiosS;CURBAND=$curBandS;EMETRIC=$eMetric;FC=$fcR;IM=$imR;IDLE=$idleR;SS=$ssR;BINDOK=$bindOk;BINDHINT=$bindHintS;VENDOR=$vendor;LINK=$linkBps;LAPTOP=$laptop;CPU=$cpuN;CORES=$coreN;MEDIA=$mediaKind;DESC=$descS"
 """, ct).ConfigureAwait(false);
             try
             {
@@ -683,6 +676,9 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                             break;
                         case "CPU" when int.TryParse(v, out var cn) && cn > 0:
                             logicals = cn;
+                            break;
+                        case "CORES" when int.TryParse(v, out var cores) && cores > 0:
+                            physicalCores = cores;
                             break;
                         case "MEDIA" when v is not ("-" or ""):
                             primaryMedia = v;
@@ -756,9 +752,9 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         if (primaryMedia is "Unknown" or "")
             primaryMedia = ethInUse || ethUp ? "Ethernet" : wifiUp || wifiAvail ? "WiFi" : "Unknown";
         if (logicals <= 0) logicals = Environment.ProcessorCount;
-
-        var tailored = NetworkPeakLogic.BuildTailoredPlan(
-            activeForPeak, nicVendor, primaryMedia, linkBps, logicals, isLaptop, supports6);
+        // Physical cores: prefer probe; else half of logicals (HT) as floor estimate
+        if (physicalCores <= 0)
+            physicalCores = Math.Max(1, logicals / 2);
 
         return new NetworkMediaProfile
         {
@@ -786,7 +782,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             PrimaryLinkSpeedBps = linkBps,
             IsLikelyLaptop = isLaptop,
             LogicalProcessors = logicals,
-            TailoredPlan = tailored
+            PhysicalCores = physicalCores
         };
     }
 

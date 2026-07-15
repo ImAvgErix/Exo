@@ -143,9 +143,14 @@ if (-not (Test-Path $discordRoot)) {
         }
         Add-Feature 'Client mods & privacy' 'Equicord loads privacy plugins and strips noisy telemetry.' $equicordOk
 
-        $openAsarOk = $false
+        # Exo Host (current): stock shell on _app.asar (large) + host flags in settings.json.
+        # Legacy OpenAsar was a small rewrite on _app.asar - still accepted if present.
+        $stockShellOk = $false
+        $legacyOpenAsarOk = $false
         if (Test-Path -LiteralPath $openAsarTarget) {
-            $openAsarOk = Test-DiscOptOpenAsarSize -SizeBytes ((Get-Item -LiteralPath $openAsarTarget).Length)
+            $bootLen = (Get-Item -LiteralPath $openAsarTarget).Length
+            $legacyOpenAsarOk = Test-DiscOptOpenAsarSize -SizeBytes $bootLen
+            $stockShellOk = $bootLen -gt 1000000
         }
         $quickStartOk = $false
         $settingsPathForQs = Join-Path $appData 'discord\settings.json'
@@ -155,7 +160,9 @@ if (-not (Test-Path $discordRoot)) {
                 $quickStartOk = Test-DiscOptQuickStartFromSettingsJson -JsonText $sjRaw
             } catch { }
         }
-        Add-Feature 'Faster Discord startup' 'OpenASAR + quickstart and lean Chromium switches so Discord opens quicker.' ($openAsarOk -and $quickStartOk)
+        # Peak host path: Equicord + (stock _app.asar OR legacy OpenAsar) + host flags
+        $exoHostOk = $equicordOk -and $quickStartOk -and ($stockShellOk -or $legacyOpenAsarOk)
+        Add-Feature 'Exo Host (fast launch)' 'Equicord loader + stock Discord shell + SKIP_HOST_UPDATE / chromium lean (no OpenAsar).' $exoHostOk
 
         $kernelOk = $false
         $ffmpegReal = Join-Path $app.FullName 'ffmpeg_real.dll'
@@ -264,29 +271,35 @@ if (-not (Test-Path $discordRoot)) {
             $sm = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk'
             if (Test-Path $sm) {
                 $sc = (New-Object -ComObject WScript.Shell).CreateShortcut($sm)
-                if ([string]$sc.TargetPath -match '(?i)wscript\.exe$' -and
-                    [string]$sc.Arguments -match '(?i)Discord\.vbs') { $launchOk = $true }
+                $tp = [string]$sc.TargetPath
+                $args = [string]$sc.Arguments
+                # Preferred: official Update.exe --processStart Discord.exe
+                if ($tp -match '(?i)Update\.exe$' -and $args -match '(?i)processStart') { $launchOk = $true }
+                # Legacy: Discord.vbs via wscript
+                elseif ($tp -match '(?i)wscript\.exe$' -and $args -match '(?i)Discord\.vbs') { $launchOk = $true }
+                # Also accept direct Discord.exe in app-* (still works)
+                elseif ($tp -match '(?i)Discord\.exe$') { $launchOk = $true }
             }
         } catch {}
-        Add-Feature 'Start Menu / apps launch path' 'Start Menu and taskbar Discord shortcuts use the Exo -Launch path (OpenASAR + kernel). No desktop icons created.' $launchOk
+        Add-Feature 'Start Menu / apps launch path' 'Start Menu Discord shortcut uses Update.exe (or Exo launch helper). No desktop icons.' $launchOk
 
         $markerOk = Test-DiscOptApplyRecord -State $state -CurrentAppDir $app.FullName
         Add-Feature 'Verified optimizer record' 'A completed full apply is recorded for this exact Discord build.' $markerOk
 
-        $isApplied = [bool]($markerOk -and $equicordOk -and $openAsarOk -and $kernelOk -and
+        $isApplied = [bool]($markerOk -and $equicordOk -and $exoHostOk -and $kernelOk -and
             $debloatOk -and $windowsQuietOk -and $amoledOk -and $runtimeOk -and $launchOk)
         if ($isApplied) {
             $statusText = 'Already optimized'
-            $detail = 'No-compromise pack active: aggressive trim, Above Normal priority, full debloat, OpenASAR, and Equicord.'
+            $detail = 'No-compromise pack active: Equicord, Exo Host, aggressive trim, full debloat, AMOLED.'
         } elseif ($state -and $state.applied -eq $true -and -not $markerOk) {
             $statusText = 'Discord updated - reapply'
-            $detail = 'Discord installed a new build. Run again to restore OpenAsar, kernel, debloat, and Windows quiet. Daily Start Menu launch auto-heals OpenAsar/kernel when missing.'
-        } elseif (-not $openAsarOk -or -not $kernelOk -or -not $equicordOk) {
+            $detail = 'Discord installed a new build. Run Apply again to restore Equicord, Exo Host, kernel, and Windows quiet.'
+        } elseif (-not $exoHostOk -or -not $kernelOk -or -not $equicordOk) {
             $statusText = 'Mods need restore'
-            $detail = 'OpenAsar, Equicord, or the DiscOpt kernel is missing (often after a Discord update). Run to restore, or open Discord from Start Menu for auto-heal.'
+            $detail = 'Equicord, Exo Host, or the DiscOpt kernel is incomplete. Run Apply to restore.'
         } else {
             $statusText = 'Ready to optimize'
-            $detail = 'Some pieces are missing. Run to finish setup and unlock the savings below.'
+            $detail = 'Some pieces are missing. Run Apply to finish setup.'
         }
     }
 }

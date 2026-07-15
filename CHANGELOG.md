@@ -1,3 +1,7 @@
+## 2.3.4
+
+- **Detect fix**: Discord status checks no longer require OpenAsar (Exo Host + stock `_app.asar` + host flags); Start Menu accepts `Update.exe --processStart`; StrictMode no longer false-fails host flags; checks show green when Apply actually worked
+
 ## 2.3.3
 
 - **Discord Exo Host** (replaces OpenAsar): OpenAsar is no longer installed — it is outdated vs modern Discord host integrity and Equicord’s layout

@@ -242,10 +242,24 @@ public sealed class OptimizerStateService
                          loaderText.Contains("require", StringComparison.OrdinalIgnoreCase);
         features.Add(MakeFeature("Equicord", "", equicordOk));
 
+        // Exo Host: stock shell on _app.asar (large) OR legacy OpenAsar (small) + host flags.
         var innerAsar = Path.Combine(resources, "_app.asar");
-        var openAsarLength = File.Exists(innerAsar) ? new FileInfo(innerAsar).Length : 0L;
-        var openAsarOk = openAsarLength is > 10_000 and < 500_000;
-        features.Add(MakeFeature("OpenASAR", "", openAsarOk));
+        var bootLen = File.Exists(innerAsar) ? new FileInfo(innerAsar).Length : 0L;
+        var stockShellOk = bootLen > 1_000_000;
+        var legacyOpenAsarOk = DiscordPeakLogic.IsOpenAsarSize(bootLen);
+        var hostFlagsOk = false;
+        var settingsPathEarly = Path.Combine(appData, "discord", "settings.json");
+        if (File.Exists(settingsPathEarly))
+        {
+            try
+            {
+                var settingsRaw = File.ReadAllText(settingsPathEarly);
+                hostFlagsOk = DiscordPeakLogic.IsQuickStartSettingsJson(settingsRaw);
+            }
+            catch { /* ignore */ }
+        }
+        var exoHostOk = equicordOk && hostFlagsOk && (stockShellOk || legacyOpenAsarOk);
+        features.Add(MakeFeature("Exo Host", "", exoHostOk));
 
         var kernelOk = false;
         if (File.Exists(versionDll) && File.Exists(ffmpeg) &&
@@ -339,6 +353,23 @@ public sealed class OptimizerStateService
             }
             catch { /* ignore */ }
         }
+        // Equicord AMOLED theme (primary signal — not BACKGROUND_COLOR)
+        try
+        {
+            var eqTheme = Path.Combine(appData, "Equicord", "themes", "amoled-cord.theme.css");
+            var eqSettings = Path.Combine(appData, "Equicord", "settings", "settings.json");
+            if (File.Exists(eqTheme) && File.Exists(eqSettings))
+            {
+                var eqRaw = File.ReadAllText(eqSettings);
+                if (eqRaw.Contains("amoled", StringComparison.OrdinalIgnoreCase))
+                    amoledOk = true;
+                else if (File.Exists(eqTheme))
+                    amoledOk = true;
+            }
+            else if (File.Exists(eqTheme))
+                amoledOk = true;
+        }
+        catch { /* ignore */ }
 
         features.Add(MakeFeature("AMOLED theme", "", amoledOk));
 
@@ -385,17 +416,25 @@ public sealed class OptimizerStateService
                 var bytes = File.ReadAllBytes(shortcutPath);
                 var unicode = Encoding.Unicode.GetString(bytes);
                 var utf8 = Encoding.UTF8.GetString(bytes);
-                launchOk = (unicode.Contains("Discord.vbs", StringComparison.OrdinalIgnoreCase) &&
-                            unicode.Contains("wscript.exe", StringComparison.OrdinalIgnoreCase)) ||
-                           (utf8.Contains("Discord.vbs", StringComparison.OrdinalIgnoreCase) &&
-                            utf8.Contains("wscript.exe", StringComparison.OrdinalIgnoreCase));
+                // Preferred: Update.exe --processStart; legacy: Discord.vbs; also Discord.exe
+                launchOk =
+                    ((unicode.Contains("Update.exe", StringComparison.OrdinalIgnoreCase) ||
+                      utf8.Contains("Update.exe", StringComparison.OrdinalIgnoreCase)) &&
+                     (unicode.Contains("processStart", StringComparison.OrdinalIgnoreCase) ||
+                      utf8.Contains("processStart", StringComparison.OrdinalIgnoreCase))) ||
+                    ((unicode.Contains("Discord.vbs", StringComparison.OrdinalIgnoreCase) ||
+                      utf8.Contains("Discord.vbs", StringComparison.OrdinalIgnoreCase)) &&
+                     (unicode.Contains("wscript.exe", StringComparison.OrdinalIgnoreCase) ||
+                      utf8.Contains("wscript.exe", StringComparison.OrdinalIgnoreCase))) ||
+                    unicode.Contains("Discord.exe", StringComparison.OrdinalIgnoreCase) ||
+                    utf8.Contains("Discord.exe", StringComparison.OrdinalIgnoreCase);
             }
             catch { /* ignore */ }
         }
         features.Add(MakeFeature("Quiet launch", "", launchOk));
         features.Add(MakeFeature("Apply record", "", markerOk));
 
-        var applied = markerOk && equicordOk && openAsarOk && kernelOk && debloatOk &&
+        var applied = markerOk && equicordOk && exoHostOk && kernelOk && debloatOk &&
                       windowsQuietOk && amoledOk && runtimeOk && launchOk;
         return new OptimizerStateInfo
         {

@@ -134,54 +134,20 @@ public static partial class NetworkPeakLogic
         preset == NetworkPreset.HighestThroughput ? "max" : "mid";
 
     /// <summary>
-    /// RSS queue budget: latency caps at ~half cores (lower DPC scatter); throughput uses all cores.
-    /// Floor 2, ceiling logical processors.
+    /// RSS queue budget from physical core count (not HT threads).
+    /// Latency: up to physical cores; throughput: same ceiling (driver max still wins).
     /// </summary>
-    public static int RssQueueBudget(NetworkPreset preset, int logicalProcessors)
+    public static int RssQueueBudget(NetworkPreset preset, int physicalCores)
     {
-        var n = Math.Max(1, logicalProcessors);
+        var n = Math.Max(1, physicalCores);
         if (preset == NetworkPreset.HighestThroughput) return n;
-        // Latency: avoid spraying every core when many logicals (HT noise)
-        return Math.Max(2, Math.Min(n, (n + 1) / 2));
+        // Latency: prefer fewer queues on high-core counts (less DPC scatter)
+        return Math.Max(2, Math.Min(n, Math.Max(2, n / 2 + n % 2)));
     }
 
-    /// <summary>Prefer elevating IPv6 metric (IPv4 first) on gaming latency / eth-primary paths.</summary>
+    /// <summary>Prefer elevating IPv6 metric (IPv4 first) on latency / eth-primary paths.</summary>
     public static bool PreferIpv4First(NetworkPreset preset, bool ethernetInUse) =>
         preset != NetworkPreset.HighestThroughput || ethernetInUse;
-
-    /// <summary>Human-readable tailored plan for UI + apply log.</summary>
-    public static string BuildTailoredPlan(
-        NetworkPreset preset,
-        string? nicVendor,
-        string? primaryMedia,
-        long linkSpeedBps,
-        int logicalProcessors,
-        bool isLaptop,
-        bool supports6Ghz)
-    {
-        var parts = new List<string>();
-        var media = string.IsNullOrWhiteSpace(primaryMedia) ? "Unknown" : primaryMedia;
-        parts.Add(media);
-        if (!string.IsNullOrWhiteSpace(nicVendor) && nicVendor is not ("Unknown" or "Other"))
-            parts.Add(nicVendor);
-        if (linkSpeedBps >= 10_000_000_000) parts.Add("10G+");
-        else if (linkSpeedBps >= 5_000_000_000) parts.Add("5G");
-        else if (linkSpeedBps >= 2_500_000_000) parts.Add("2.5G");
-        else if (linkSpeedBps >= 1_000_000_000) parts.Add("1G");
-        else if (linkSpeedBps >= 100_000_000) parts.Add("100M");
-        parts.Add(preset switch
-        {
-            NetworkPreset.LowestLatency => "latency",
-            NetworkPreset.HighestThroughput => "download",
-            _ => "balanced"
-        });
-        if (logicalProcessors > 0) parts.Add(logicalProcessors + "c");
-        if (isLaptop) parts.Add("laptop");
-        if (string.Equals(media, "WiFi", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(media, "Wi-Fi", StringComparison.OrdinalIgnoreCase))
-            parts.Add(supports6Ghz ? "prefer-6" : "prefer-5");
-        return string.Join(" · ", parts);
-    }
 
     /// <summary>Raw NIC advanced-property facts (null = not exposed by driver).</summary>
     public sealed record NicPeakFacts(
@@ -470,7 +436,7 @@ public static partial class NetworkPeakLogic
         "Set-Dword $tcp 'EnableTCPChimney' 1",
     };
 
-    /// <summary>Required host-stack markers in every apply script.</summary>
+    /// <summary>Required host-stack markers in every apply script (network-only).</summary>
     public static readonly string[] RequiredHostMarkers =
     {
         "SystemResponsiveness' 10",
@@ -480,14 +446,9 @@ public static partial class NetworkPeakLogic
         "congestionprovider=cubic",
         "wantBand6Live",
         "Select-BandDisplayValue",
-        "GameDVR_Enabled",
-        "HwSchMode",
-        "AutoGameModeEnabled",
-        "PowerThrottlingOff",
         "EnableMulticast",
         "BufferStrategy",
         "RssQueueBudget",
-        "TailoredPlan",
     };
 
     /// <summary>Audit a generated apply script for peak host markers and folklore absence.</summary>

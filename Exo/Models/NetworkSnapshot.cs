@@ -49,10 +49,10 @@ public sealed class NetworkMediaProfile
     public long PrimaryLinkSpeedBps { get; init; }
     /// <summary>Chassis looks like laptop/notebook (battery present or chassis type).</summary>
     public bool IsLikelyLaptop { get; init; }
-    /// <summary>Environment.ProcessorCount at detect time (RSS queue budget).</summary>
+    /// <summary>Logical processors (HT threads) — diagnostics only.</summary>
     public int LogicalProcessors { get; init; }
-    /// <summary>Human plan line used by apply (e.g. Intel 2.5G eth · latency · 16c).</summary>
-    public string TailoredPlan { get; init; } = string.Empty;
+    /// <summary>Physical cores (for RSS queue budget — not HT).</summary>
+    public int PhysicalCores { get; init; }
 }
 
 public sealed class NetworkSnapshot
