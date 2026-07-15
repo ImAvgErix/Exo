@@ -1,4 +1,4 @@
-# Disc Optimizer - PowerShell 7 Preview only (+ Windows Terminal Preview via Exo host).
+# Disc Optimizer - stable PowerShell 7 host (any 7.x; never Windows PowerShell 5.1).
 # First run installs + optimizes Discord. After that, use the Start menu Discord shortcut.
 #
 #   Disc-Optimizer.ps1           first-time / full setup (log in when prompted)
@@ -133,30 +133,27 @@ function Write-DiscOptBootstrapFailure($ErrorRecord) {
     } catch {}
 }
 
-function Test-DiscOptIsPwshPreviewPath([string]$Exe) {
+function Test-DiscOptIsPwsh7Path([string]$Exe) {
+    # Any pwsh path is acceptable except Windows PowerShell 5.1.
     if ([string]::IsNullOrWhiteSpace($Exe)) { return $false }
     if ($Exe -match 'WindowsPowerShell') { return $false }
-    if ($Exe -match '(?i)7-preview|PowerShellPreview|pwsh-preview') { return $true }
-    if ($Exe -match '(?i)PowerShell[\\/]7[\\/]' -and $Exe -notmatch '(?i)preview') { return $false }
-    return $false
+    return $true
 }
 
-function Test-DiscOptIsPwshPreviewHost {
+function Test-DiscOptIsPwsh7Host {
+    # Any pwsh 7.x host is accepted (stable preferred; preview tolerated).
+    # Windows PowerShell 5.1 is rejected - the optimizer uses Core-only APIs.
     if ($PSVersionTable.PSEdition -ne 'Core') { return $false }
     if ([int]$PSVersionTable.PSVersion.Major -lt 7) { return $false }
     $hostPath = ''
     try { $hostPath = [string](Get-Process -Id $PID -ErrorAction Stop).Path } catch { }
-    if (Test-DiscOptIsPwshPreviewPath $hostPath) { return $true }
-    $pre = ''
-    try { $pre = [string]$PSVersionTable.PSVersion.PreReleaseLabel } catch { }
-    if (-not [string]::IsNullOrWhiteSpace($pre)) { return $true }
-    if ([string]$PSVersionTable.GitCommitId -match '(?i)preview') { return $true }
-    return $false
+    if ($hostPath -match 'WindowsPowerShell') { return $false }
+    return $true
 }
 
 function Get-DiscOptPwshVersion([string]$Exe) {
     if (-not (Test-Path -LiteralPath $Exe)) { return $null }
-    if (-not (Test-DiscOptIsPwshPreviewPath $Exe)) { return $null }
+    if (-not (Test-DiscOptIsPwsh7Path $Exe)) { return $null }
     try {
         $raw = & $Exe -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>$null
         if ($raw -and ("$raw" -match '^(\d+)\.') -and [int]$Matches[1] -ge 7) { return "$raw".Trim() }
@@ -165,21 +162,41 @@ function Get-DiscOptPwshVersion([string]$Exe) {
 }
 
 function Get-DiscOptPwsh7 {
-    # PowerShell 7 Preview only. Never Windows PowerShell 5.1 / never stable 7.
+    # Stable PowerShell 7 first; existing preview installs only as a last resort.
+    # Never Windows PowerShell 5.1.
     $candidates = [System.Collections.Generic.List[string]]::new()
 
+    $stable = Get-DiscOptEnvPath 'ProgramFiles' 'PowerShell\7\pwsh.exe'
+    if ($stable) { [void]$candidates.Add($stable) }
+
+    $cmdPwsh = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmdPwsh -and $cmdPwsh.Source) { [void]$candidates.Add([string]$cmdPwsh.Source) }
+
+    $appsRoot = Get-DiscOptEnvPath 'ProgramFiles' 'WindowsApps'
+    if ($appsRoot -and (Test-Path -LiteralPath $appsRoot)) {
+        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShell_*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object {
+                $exe = Join-Path $_.FullName 'pwsh.exe'
+                if (Test-Path -LiteralPath $exe) { [void]$candidates.Add($exe) }
+            }
+    }
+
+    # Exo-managed portable STABLE runtime (the legacy 'PowerShellPreview'
+    # runtime dir is retired and pruned by the dependency doctor).
+    $portable = Get-DiscOptEnvPath 'LOCALAPPDATA' 'Exo\runtime\PowerShell\pwsh.exe'
+    if ($portable) { [void]$candidates.Add($portable) }
+
+    # Preview installs are a last-resort fallback only - never downloaded,
+    # never required.
     foreach ($path in @(
         (Get-DiscOptEnvPath 'ProgramFiles' 'PowerShell\7-preview\pwsh.exe'),
-        (Get-DiscOptEnvPath 'LOCALAPPDATA' 'Microsoft\WindowsApps\pwsh-preview.exe'),
-        (Get-DiscOptEnvPath 'LOCALAPPDATA' 'Exo\runtime\PowerShellPreview\pwsh.exe')
+        (Get-DiscOptEnvPath 'LOCALAPPDATA' 'Microsoft\WindowsApps\pwsh-preview.exe')
     )) {
         if ($path) { [void]$candidates.Add($path) }
     }
-
     $cmdPreview = Get-Command pwsh-preview -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($cmdPreview -and $cmdPreview.Source) { [void]$candidates.Add([string]$cmdPreview.Source) }
-
-    $appsRoot = Get-DiscOptEnvPath 'ProgramFiles' 'WindowsApps'
     if ($appsRoot -and (Test-Path -LiteralPath $appsRoot)) {
         Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShellPreview*' -ErrorAction SilentlyContinue |
             Sort-Object Name -Descending |
@@ -190,37 +207,37 @@ function Get-DiscOptPwsh7 {
     }
 
     foreach ($exe in ($candidates | Select-Object -Unique)) {
-        if (-not (Test-DiscOptIsPwshPreviewPath $exe)) { continue }
+        if (-not (Test-DiscOptIsPwsh7Path $exe)) { continue }
         $ver = Get-DiscOptPwshVersion $exe
         if ($ver) {
             return @{ Exe = $exe; Version = $ver }
         }
         if (Test-Path -LiteralPath $exe) {
-            return @{ Exe = $exe; Version = 'preview' }
+            return @{ Exe = $exe; Version = '7' }
         }
     }
     return $null
 }
 
 function Install-DiscOptPwshPortable {
-    # Winget-less fallback: official PowerShell *Preview* portable zip from
-    # github.com/PowerShell/PowerShell (prerelease, win-x64). Per-user, no elevation.
-    # Preview only - stable releases are never selected.
+    # Winget-less fallback: official STABLE PowerShell portable zip from
+    # github.com/PowerShell/PowerShell (latest non-prerelease, win-x64).
+    # Per-user, no elevation. Preview releases are never downloaded.
     try {
-        Write-Host '[*] Downloading PowerShell 7 Preview portable from GitHub releases...' -ForegroundColor Cyan
+        Write-Host '[*] Downloading PowerShell 7 portable from GitHub releases...' -ForegroundColor Cyan
         $releases = Invoke-RestMethod -Uri 'https://api.github.com/repos/PowerShell/PowerShell/releases?per_page=15' `
             -Headers @{ 'User-Agent' = 'Exo-DiscOpt' } -TimeoutSec 120
         foreach ($release in @($releases)) {
-            if (-not $release.prerelease) { continue }
-            if ([string]$release.tag_name -notmatch '(?i)preview') { continue }
-            $asset = @($release.assets) | Where-Object { $_.name -like '*-win-x64.zip' } | Select-Object -First 1
+            if ($release.prerelease) { continue }
+            if ([string]$release.tag_name -match '(?i)preview|rc') { continue }
+            $asset = @($release.assets) | Where-Object { $_.name -like 'PowerShell-7*-win-x64.zip' } | Select-Object -First 1
             if (-not $asset) { continue }
 
-            $dest = Get-DiscOptEnvPath 'LOCALAPPDATA' 'Exo\runtime\PowerShellPreview'
+            $dest = Get-DiscOptEnvPath 'LOCALAPPDATA' 'Exo\runtime\PowerShell'
             if (-not $dest) { return $null }
             $runtimeRoot = Split-Path -Parent $dest
             New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
-            $zip = Join-Path $runtimeRoot 'pwsh-preview-download.zip'
+            $zip = Join-Path $runtimeRoot 'pwsh-download.zip'
             $staging = "$dest-staging"
 
             Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
@@ -245,45 +262,45 @@ function Install-DiscOptPwshPortable {
 
             $exe = Join-Path $dest 'pwsh.exe'
             if (Test-Path -LiteralPath $exe) {
-                Write-Host "[+] PowerShell Preview portable ready ($($release.tag_name))" -ForegroundColor Green
+                Write-Host "[+] PowerShell 7 portable ready ($($release.tag_name))" -ForegroundColor Green
                 return @{ Exe = $exe; Version = [string]$release.tag_name }
             }
             return $null
         }
     } catch {
-        Write-Host "[!] Portable PowerShell Preview download failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "[!] Portable PowerShell 7 download failed: $($_.Exception.Message)" -ForegroundColor Yellow
     }
     return $null
 }
 
 function Install-DiscOptPwsh7 {
-    # Preview only. Prefer winget/Store; without winget (debloated Windows) fall back
-    # to the official portable Preview zip from GitHub releases.
+    # Stable PowerShell 7 only. Prefer winget; without winget (debloated Windows)
+    # fall back to the official portable STABLE zip from GitHub releases.
     $winget = Get-Command winget -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($winget) {
-        Write-Host '[*] Installing PowerShell 7 Preview via winget (Microsoft.PowerShell.Preview)...' -ForegroundColor Cyan
+        Write-Host '[*] Installing PowerShell 7 via winget (Microsoft.PowerShell)...' -ForegroundColor Cyan
         $proc = Start-Process -FilePath $winget.Source -ArgumentList @(
-            'install', '-e', '-id', 'Microsoft.PowerShell.Preview',
+            'install', '-e', '-id', 'Microsoft.PowerShell',
             '--accept-package-agreements', '--accept-source-agreements', '--silent'
         ) -PassThru -WindowStyle Hidden
         if (-not $proc.WaitForExit(600000)) {
             try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch { }
-            Write-Host '[!] winget PowerShell Preview install timed out - trying portable fallback...' -ForegroundColor Yellow
+            Write-Host '[!] winget PowerShell 7 install timed out - trying portable fallback...' -ForegroundColor Yellow
         } elseif ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne $null) {
             #  -1978335189 already installed etc. still re-probe
-            Write-Host "[!] winget exit $($proc.ExitCode) - probing for Preview install..." -ForegroundColor Yellow
+            Write-Host "[!] winget exit $($proc.ExitCode) - probing for PowerShell 7 install..." -ForegroundColor Yellow
         }
         Start-Sleep -Seconds 2
         $found = Get-DiscOptPwsh7
         if ($found) { return $found }
     } else {
-        Write-Host '[!] winget not found - using the official portable Preview fallback...' -ForegroundColor Yellow
+        Write-Host '[!] winget not found - using the official portable fallback...' -ForegroundColor Yellow
     }
 
     $portable = Install-DiscOptPwshPortable
     if ($portable) { return $portable }
 
-    throw 'PowerShell 7 Preview could not be installed automatically. Install Microsoft.PowerShell.Preview and Windows Terminal Preview, then retry.'
+    throw 'PowerShell 7 is required and could not be installed automatically. Install it with: winget install Microsoft.PowerShell, then retry.'
 }
 
 function Get-DiscOptBoundScriptArgs {
@@ -305,13 +322,13 @@ function Initialize-DiscOptRuntime {
 
     $isAdmin = Test-DiscOptIsElevated
     $needElevate = (-not $Launch) -and (-not $isAdmin)
-    # Exo already elevates + hosts PowerShell 7 Preview silently.
+    # Exo already elevates + hosts stable PowerShell 7 silently.
     $hostedByExo = ($env:EXO -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1')
 
-    # Fast path: already on Preview and elevated (or Exo-hosted apply).
-    if ((Test-DiscOptIsPwshPreviewHost) -and (-not $needElevate -or $hostedByExo)) {
+    # Fast path: already on pwsh 7 and elevated (or Exo-hosted apply).
+    if ((Test-DiscOptIsPwsh7Host) -and (-not $needElevate -or $hostedByExo)) {
         $env:DISCOPT_RUNTIME_READY = '1'
-        $env:DISCOPT_PS7_PREVIEW = '1'
+        $env:DISCOPT_PS7 = '1'
         if ($isAdmin) { $env:DISCOPT_ELEVATED = '1' }
         return
     }
@@ -319,8 +336,8 @@ function Initialize-DiscOptRuntime {
     $pwshInfo = Get-DiscOptPwsh7
     if (-not $pwshInfo) {
         Write-Host ''
-        Write-Host '  Disc Optimizer - PowerShell 7 Preview setup' -ForegroundColor Magenta
-        Write-Host '[*] PowerShell 7 Preview not found - installing Microsoft.PowerShell.Preview...' -ForegroundColor Cyan
+        Write-Host '  Disc Optimizer - PowerShell 7 setup' -ForegroundColor Magenta
+        Write-Host '[*] PowerShell 7 not found - installing Microsoft.PowerShell...' -ForegroundColor Cyan
         try {
             $pwshInfo = Install-DiscOptPwsh7
         } catch {
@@ -329,11 +346,11 @@ function Initialize-DiscOptRuntime {
             exit 1
         }
         if (-not $pwshInfo) {
-            Write-Host '[-] Could not install PowerShell 7 Preview. Check internet / winget and try again.' -ForegroundColor Red
+            Write-Host '[-] Could not install PowerShell 7. Check internet / winget and try again.' -ForegroundColor Red
             Wait-DiscOptClosePrompt
             exit 1
         }
-        Write-Host "[+] PowerShell 7 Preview ready ($($pwshInfo.Version))" -ForegroundColor Green
+        Write-Host "[+] PowerShell 7 ready ($($pwshInfo.Version))" -ForegroundColor Green
     }
 
     $extraArgs = Get-DiscOptBoundScriptArgs
@@ -352,8 +369,8 @@ function Initialize-DiscOptRuntime {
         exit 0
     }
 
-    # Re-enter under Preview when the current host is not Preview.
-    if (-not (Test-DiscOptIsPwshPreviewHost)) {
+    # Re-enter under pwsh 7 when the current host is not pwsh 7 (e.g. 5.1).
+    if (-not (Test-DiscOptIsPwsh7Host)) {
         $allArgs = $baseArgs + @('-File', $Script:SelfPath) + $extraArgs
         & $pwshInfo.Exe @allArgs
         if ($null -eq $LASTEXITCODE) { exit 1 }
@@ -361,7 +378,7 @@ function Initialize-DiscOptRuntime {
     }
 
     $env:DISCOPT_RUNTIME_READY = '1'
-    $env:DISCOPT_PS7_PREVIEW = '1'
+    $env:DISCOPT_PS7 = '1'
     if ($isAdmin) { $env:DISCOPT_ELEVATED = '1' }
 }
 
@@ -390,12 +407,14 @@ $Script:LogPath = $null
 $Script:DiscordInstalledThisRun = $false
 $Script:KernelRolledBack = $false
 $Script:ModsRolledBack = $false
+$Script:DiscordVariantResults = @()
+$Script:DiscordQosResults = @()
+$Script:ExoApplyReport = $null
 
 $Protected = @(
     'version.dll', 'config.ini', 'Discord.exe', 'ffmpeg.dll', 'ffmpeg_real.dll',
     'Discord.bin.exe', 'Update.exe', 'app.asar', '_app.asar', '_app.asar.stock'
 )
-$OpenAsarUrl = 'https://github.com/GooseMod/OpenAsar/releases/download/nightly/app.asar'
 $DiscordSetupUrl = 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64'
 # Modern Discord (1.0.92xx+) no longer ships discord_dispatch / discord_modules.
 # Only require modules that always exist on a healthy stable install.
@@ -508,7 +527,13 @@ Confirm-WindowsDiscordTarget
 $Script:DiscordWindowsRecovery = Initialize-DiscordApplyState
 
 # 1) Discord - restore stock + update latest, or fresh install (-FreshInstall)
-Prepare-Discord
+try {
+    Prepare-Discord
+    Add-ExoReport 'discord-install' 'ok'
+} catch {
+    Add-ExoReport 'discord-install' 'fail' $_.Exception.Message
+    throw
+}
 
 Stop-Discord
 $app = Assert-DiscordInstall
@@ -531,25 +556,41 @@ foreach ($name in @('version.dll', 'config.ini')) {
 $freed = [ref]0L
 if ($SkipDebloat) {
     Write-Ok 'Debloat skipped (-SkipDebloat)'
+    Add-ExoReport 'debloat' 'skip' 'SkipDebloat switch'
 } else {
     $debloatCheck = Test-DebloatNeeded $app.FullName
     if ($Quick -and -not $debloatCheck.Needed) {
         Write-Ok 'Debloat skipped (-Quick, already lean)'
+        Add-ExoReport 'debloat' 'skip' 'already lean (Quick)'
     } elseif ($ForceDebloat -or $debloatCheck.Needed) {
         Write-Step "Debloating Discord ($($debloatCheck.Reasons -join ', '))..."
-        Invoke-Debloat $app.FullName $freed
-        Ensure-DiscordCompatibilityRecovery $app.FullName
-        Disable-Fso $app.FullName
+        try {
+            Invoke-Debloat $app.FullName $freed
+            Ensure-DiscordCompatibilityRecovery $app.FullName
+            Disable-Fso $app.FullName
+            Add-ExoReport 'debloat' 'ok'
+        } catch {
+            Add-ExoReport 'debloat' 'fail' $_.Exception.Message
+            throw
+        }
     } else {
         Write-Ok 'Debloat skipped (already lean)'
+        Add-ExoReport 'debloat' 'ok' 'already lean'
     }
 }
 
 if ($SkipCacheClean) {
     Write-Ok 'Cache clean skipped (-SkipCacheClean)'
+    Add-ExoReport 'cache-clean' 'skip' 'SkipCacheClean switch'
 } else {
-    Clear-DiscordConflictLeftovers | Out-Null
-    Clear-DiscordSafeCache $freed
+    try {
+        Clear-DiscordConflictLeftovers | Out-Null
+        Clear-DiscordSafeCache $freed
+        Add-ExoReport 'cache-clean' 'ok'
+    } catch {
+        Add-ExoReport 'cache-clean' 'fail' $_.Exception.Message
+        throw
+    }
 }
 Ensure-KrispModule $app.FullName
 Ensure-RuntimeModules $app.FullName
@@ -559,23 +600,43 @@ if (-not $Quick) {
 Ensure-AsarStockBackup $app.FullName
 
 # 3) Boot flags only (never touches login/session storage)
-Apply-DiscordProfile (Join-Path $AppData 'settings.json')
+try {
+    Apply-DiscordProfile (Join-Path $AppData 'settings.json')
+    Add-ExoReport 'host-flags' 'ok'
+} catch {
+    Add-ExoReport 'host-flags' 'fail' $_.Exception.Message
+    throw
+}
 
-# 4) Equicord + OpenASAR + profile
+# 4) Equicord + Exo Host + profile
 if (-not $SkipEquicord) {
-    Install-Equicord $app.FullName
+    try {
+        Install-Equicord $app.FullName
+        Add-ExoReport 'equicord' 'ok'
+    } catch {
+        Add-ExoReport 'equicord' 'fail' $_.Exception.Message
+        throw
+    }
 } else {
     Apply-EquicordProfile -AppDir $app.FullName
     if (-not $SkipOpenAsar) {
         Install-OpenAsar $app.FullName
     }
+    Add-ExoReport 'equicord' 'skip' 'SkipEquicord switch'
 }
 
-# 5) DiscOpt kernel - core feature (aggressive 5s trim + raw input + Above Normal priority)
+# 5) DiscOpt kernel - core feature (aggressive trim + raw input + Above Normal priority)
 if (-not $SkipKernel) {
-    Install-DiscOptKernel $app.FullName
+    try {
+        Install-DiscOptKernel $app.FullName
+        Add-ExoReport 'kernel' 'ok'
+    } catch {
+        Add-ExoReport 'kernel' 'fail' $_.Exception.Message
+        throw
+    }
 } else {
     Write-Warn 'Skipped DiscOpt kernel (-SkipKernel) - aggressive trim / raw input not installed'
+    Add-ExoReport 'kernel' 'skip' 'SkipKernel switch'
 }
 
 # 5b) Boot safety
@@ -629,11 +690,37 @@ if ($exoQuiet) {
 
 # 6) Windows tweaks + shortcut
 if (-not $Quick) {
-    Apply-WindowsTweaks $app.FullName
+    try {
+        Apply-WindowsTweaks $app.FullName
+        Add-ExoReport 'windows-quiet' 'ok'
+    } catch {
+        Add-ExoReport 'windows-quiet' 'fail' $_.Exception.Message
+        throw
+    }
+    $qosFailed = @($Script:DiscordQosResults | Where-Object { -not $_.Ok })
+    if (@($Script:DiscordQosResults).Count -gt 0 -and $qosFailed.Count -eq 0) {
+        Add-ExoReport 'voice-qos' 'ok'
+    } elseif ($qosFailed.Count -gt 0) {
+        Add-ExoReport 'voice-qos' 'fail' (($qosFailed | ForEach-Object { $_.Policy }) -join ', ')
+    } else {
+        Add-ExoReport 'voice-qos' 'skip' 'no installed variants detected'
+    }
+
+    # 6b) PTB / Canary variants (quiet + host flags; QoS handled above)
+    [void](Set-DiscordVariantQuiet)
+    $variantFailed = @($Script:DiscordVariantResults | Where-Object { -not ($_.SettingsFlags -and $_.AutostartQuiet) })
+    if (@($Script:DiscordVariantResults).Count -eq 0) {
+        Add-ExoReport 'variants' 'skip' 'stable only'
+    } elseif ($variantFailed.Count -eq 0) {
+        Add-ExoReport 'variants' 'ok'
+    } else {
+        Add-ExoReport 'variants' 'fail' (($variantFailed | ForEach-Object { $_.Variant }) -join ', ')
+    }
 } else {
     Refresh-DiscordWindowsRecovery
     Disable-DiscordWindowsAutostart
     Write-Ok 'Windows tweaks skipped (-Quick)'
+    Add-ExoReport 'windows-quiet' 'skip' 'Quick pass'
 }
 Restore-StartMenu
 
@@ -648,24 +735,31 @@ if ($Quick) {
         quick         = $true
         recovery      = $Script:DiscordWindowsRecovery
         appliedUtc    = (Get-Date).ToUniversalTime().ToString('o')
+        applyReport   = @(Get-ExoReportEntries)
     }
     Write-Warn 'Quick pass completed; the verified no-compromise applied state still requires a full run'
 } else {
-    $debloatState = Test-DebloatNeeded $app.FullName
-    if ($debloatState.Needed) {
-        throw "Discord debloat verification incomplete: $($debloatState.Reasons -join ', ')"
-    }
-    if (-not (Test-DiscordWindowsSuppression)) {
-        throw 'Stable Discord Windows suppression verification failed after apply'
-    }
-    $settingsPath = Join-Path $AppData 'settings.json'
     try {
-        $settingsState = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json
-        if ($settingsState.OPEN_ON_STARTUP -ne $false) { throw 'OPEN_ON_STARTUP is not false' }
+        $debloatState = Test-DebloatNeeded $app.FullName
+        if ($debloatState.Needed) {
+            throw "Discord debloat verification incomplete: $($debloatState.Reasons -join ', ')"
+        }
+        if (-not (Test-DiscordWindowsSuppression)) {
+            throw 'Stable Discord Windows suppression verification failed after apply'
+        }
+        $settingsPath = Join-Path $AppData 'settings.json'
+        try {
+            $settingsState = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json
+            if ($settingsState.OPEN_ON_STARTUP -ne $false) { throw 'OPEN_ON_STARTUP is not false' }
+        } catch {
+            throw "Discord startup settings verification failed: $($_.Exception.Message)"
+        }
+        $fullApplyVerified = $true
+        Add-ExoReport 'verify' 'ok'
     } catch {
-        throw "Discord startup settings verification failed: $($_.Exception.Message)"
+        Add-ExoReport 'verify' 'fail' $_.Exception.Message
+        throw
     }
-    $fullApplyVerified = $true
 }
 
 Write-RunSummary -AppDir $app.FullName -Launched $false
@@ -684,6 +778,24 @@ if (-not $Quick -and $fullApplyVerified) {
 }
 exit 0
 } catch {
+    # Persist the structured apply report on failure too (recovery preserved).
+    try {
+        $failedState = Read-DiscordOptState
+        $failedRecovery = if ($failedState -and ($failedState.PSObject.Properties.Name -contains 'recovery')) {
+            $failedState.recovery
+        } else { $Script:DiscordWindowsRecovery }
+        if ($failedState -or $Script:DiscordWindowsRecovery) {
+            Save-DiscordOptState @{
+                version     = $Script:DiscOptVersion
+                applyStatus = 'incomplete'
+                applied     = $false
+                fullApply   = $false
+                recovery    = $failedRecovery
+                appliedUtc  = (Get-Date).ToUniversalTime().ToString('o')
+                applyReport = @(Get-ExoReportEntries)
+            }
+        }
+    } catch { }
     $detail = Write-LogFailure $_
     Write-Host ''
     Write-Err 'Disc Optimizer failed.'

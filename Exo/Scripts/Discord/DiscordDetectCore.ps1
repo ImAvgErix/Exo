@@ -39,9 +39,69 @@ function Test-DiscOptEquicordLoaderText {
     return ($Text -match '(?i)equicord\.asar') -and ($Text -match '(?i)require')
 }
 
-function Test-DiscOptOpenAsarSize {
-    param([long]$SizeBytes)
-    return ($SizeBytes -gt 10000 -and $SizeBytes -lt 500000)
+function Get-DiscOptVariantDefinitions {
+    # Universal Discord variant map (stable + PTB + Canary). Pure data - keep in
+    # sync with DiscordPeakLogic.VariantDefinitions.
+    return @(
+        @{ Name = 'stable'; LocalDir = 'Discord'; AppDataDir = 'discord'; Exe = 'Discord.exe'; QosPolicy = 'Exo Discord Voice' },
+        @{ Name = 'ptb'; LocalDir = 'DiscordPTB'; AppDataDir = 'discordptb'; Exe = 'DiscordPTB.exe'; QosPolicy = 'Exo Discord PTB Voice' },
+        @{ Name = 'canary'; LocalDir = 'DiscordCanary'; AppDataDir = 'discordcanary'; Exe = 'DiscordCanary.exe'; QosPolicy = 'Exo Discord Canary Voice' }
+    )
+}
+
+<#
+.SYNOPSIS
+  True when a QoS policy value map matches the documented Exo Discord voice
+  policy (DSCP 46, UDP, no throttle). $Map: value name -> string value.
+#>
+function Test-DiscOptQosPolicyMap {
+    param(
+        [hashtable]$Map,
+        [AllowNull()][string]$ExpectedExe = ''
+    )
+    if ($null -eq $Map -or $Map.Count -eq 0) { return $false }
+    foreach ($pair in @(
+        @{ N = 'Version'; V = '1.0' },
+        @{ N = 'Protocol'; V = 'UDP' },
+        @{ N = 'DSCP Value'; V = '46' },
+        @{ N = 'Throttle Rate'; V = '-1' }
+    )) {
+        if (-not $Map.ContainsKey($pair.N)) { return $false }
+        if ([string]$Map[$pair.N] -ne [string]$pair.V) { return $false }
+    }
+    if (-not $Map.ContainsKey('Application Name')) { return $false }
+    $app = [string]$Map['Application Name']
+    if ([string]::IsNullOrWhiteSpace($app)) { return $false }
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedExe) -and ($app -ine $ExpectedExe)) { return $false }
+    return $true
+}
+
+function Test-DiscOptVariantOptimized {
+    param(
+        [bool]$SettingsFlagsOk,
+        [bool]$AutostartQuiet,
+        [bool]$QosOk
+    )
+    return ($SettingsFlagsOk -and $AutostartQuiet -and $QosOk)
+}
+
+<#
+.SYNOPSIS
+  Variant (PTB/Canary) settings.json flags: startup off + chromium lean present.
+  SKIP_HOST_UPDATE is intentionally NOT required on test channels (frequent
+  host updates; forcing skip can freeze a broken install on Starting).
+#>
+function Test-DiscOptVariantSettingsJson {
+    param([AllowNull()][string]$JsonText)
+    if ([string]::IsNullOrWhiteSpace($JsonText)) { return $false }
+    try {
+        $sj = $JsonText | ConvertFrom-Json
+        $names = @($sj.PSObject.Properties.Name)
+        if ($names -notcontains 'OPEN_ON_STARTUP') { return $false }
+        if ($sj.OPEN_ON_STARTUP -ne $false) { return $false }
+        if ($names -notcontains 'chromiumSwitches') { return $false }
+        return [bool]$sj.chromiumSwitches
+    } catch { return $false }
 }
 
 function Test-DiscOptKernelLayout {
@@ -116,14 +176,9 @@ function Test-DiscOptQuickStartFromSettingsJson {
     try {
         $sj = $JsonText | ConvertFrom-Json
         $names = @($sj.PSObject.Properties.Name)
-        # Legacy OpenAsar quickstart (property may be absent under StrictMode)
-        if ($names -contains 'openasar') {
-            $oa = $sj.openasar
-            if ($oa -and ($oa.PSObject.Properties.Name -contains 'quickstart') -and $oa.quickstart -eq $true) {
-                return $true
-            }
-        }
-        # Modern Exo Host: SKIP_HOST_UPDATE + chromium lean / TTI flags
+        # Exo Host only: SKIP_HOST_UPDATE + chromium lean / TTI flags.
+        # Legacy OpenAsar quickstart is intentionally NOT accepted - Apply no
+        # longer produces it and detect rows must be binary and trustworthy.
         $skip = $false
         if ($names -contains 'SKIP_HOST_UPDATE') { $skip = ($sj.SKIP_HOST_UPDATE -eq $true) }
         if ($skip) {

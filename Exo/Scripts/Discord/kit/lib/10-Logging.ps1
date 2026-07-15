@@ -11,11 +11,10 @@ function Write-Banner {
     $pre = ''
     try { $pre = [string]$PSVersionTable.PSVersion.PreReleaseLabel } catch { }
     if ($pre) { $psLabel += " [$pre]" }
-    elseif ($env:DISCOPT_PS7_PREVIEW -eq '1') { $psLabel += ' [Preview]' }
     Write-Host ''
     Write-Host "  Disc Optimizer v$Script:DiscOptVersion" -ForegroundColor Magenta
     Write-Host '  AMOLED | privacy | perf | cache trim | raw input' -ForegroundColor DarkGray
-    Write-Host "  $psLabel  -  requires PowerShell 7 Preview" -ForegroundColor Cyan
+    Write-Host "  $psLabel  -  requires PowerShell 7" -ForegroundColor Cyan
     if ($env:DISCOPT_ELEVATED -eq '1') {
         Write-Host '  (running as Administrator)' -ForegroundColor DarkGray
     }
@@ -199,6 +198,23 @@ function Write-Warn([string]$Msg) {
 function Write-Err([string]$Msg) {
     Write-Host "[-] $Msg" -ForegroundColor Red
     Write-LogLine 'ERROR' $Msg
+}
+
+function Add-ExoReport([string]$Step, [string]$Status, [string]$Reason = '') {
+    # Structured last-apply report line: EXO_REPORT:<step>|ok / |fail:<reason> / |skip:<reason>
+    if ($null -eq $Script:ExoApplyReport) {
+        $Script:ExoApplyReport = [Collections.Generic.List[string]]::new()
+    }
+    $entry = if ([string]::IsNullOrWhiteSpace($Reason)) { "$Step|$Status" } else { "$Step|$Status`:$Reason" }
+    $Script:ExoApplyReport.Add($entry)
+    $line = "EXO_REPORT:$entry"
+    Write-Host $line
+    Write-ExoLogMirror $line
+}
+
+function Get-ExoReportEntries {
+    if ($null -eq $Script:ExoApplyReport) { return @() }
+    return @($Script:ExoApplyReport)
 }
 
 function Initialize-Network {

@@ -15,66 +15,68 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.8.1'
+$Script:SteamOptVersion = '1.9.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# --- PowerShell 7 Preview only (never Windows PowerShell 5.1 / never stable 7) ---
-function Test-ExoIsPwshPreviewHost {
+# --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
+function Test-ExoIsPwsh7Host {
+    # Any pwsh 7.x host is accepted (stable preferred; preview tolerated).
+    # Windows PowerShell 5.1 is rejected - the optimizer uses Core-only APIs.
     if ($PSVersionTable.PSEdition -ne 'Core') { return $false }
     if ([int]$PSVersionTable.PSVersion.Major -lt 7) { return $false }
     $hostPath = ''
     try { $hostPath = [string](Get-Process -Id $PID -ErrorAction Stop).Path } catch { }
     if ($hostPath -match 'WindowsPowerShell') { return $false }
-    if ($hostPath -match '(?i)7-preview|PowerShellPreview|pwsh-preview') { return $true }
-    $pre = ''
-    try { $pre = [string]$PSVersionTable.PSVersion.PreReleaseLabel } catch { }
-    if (-not [string]::IsNullOrWhiteSpace($pre)) { return $true }
-    if ([string]$PSVersionTable.GitCommitId -match '(?i)preview') { return $true }
-    if ($hostPath -match '(?i)PowerShell[\\/]7[\\/]' -and $hostPath -notmatch '(?i)preview') { return $false }
-    return $false
+    return $true
 }
 function Get-ExoPwsh {
-    # PowerShell 7 Preview only. Never Windows PowerShell 5.1 / never stable 7.
+    # Stable PowerShell 7 first; preview paths only as a last resort.
     $candidates = [System.Collections.Generic.List[string]]::new()
+    $stable = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
+    if ($stable) { [void]$candidates.Add($stable) }
+
+    $cmdPwsh = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmdPwsh -and $cmdPwsh.Source) { [void]$candidates.Add([string]$cmdPwsh.Source) }
+
+    $appsRoot = Join-Path $env:ProgramFiles 'WindowsApps'
+    if (Test-Path -LiteralPath $appsRoot) {
+        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShell_*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { [void]$candidates.Add((Join-Path $_.FullName 'pwsh.exe')) }
+    }
+
+    # Preview is a fallback only - never the requirement.
     foreach ($p in @(
         (Join-Path $env:ProgramFiles 'PowerShell\7-preview\pwsh.exe'),
         (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh-preview.exe')
     )) {
         if ($p) { [void]$candidates.Add($p) }
     }
-    $cmdPreview = Get-Command pwsh-preview -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($cmdPreview -and $cmdPreview.Source) { [void]$candidates.Add([string]$cmdPreview.Source) }
-
-    $appsRoot = Join-Path $env:ProgramFiles 'WindowsApps'
-    if (Test-Path -LiteralPath $appsRoot) {
-        Get-ChildItem -LiteralPath $appsRoot -Directory -Filter 'Microsoft.PowerShellPreview*' -ErrorAction SilentlyContinue |
-            Sort-Object Name -Descending |
-            ForEach-Object { [void]$candidates.Add((Join-Path $_.FullName 'pwsh.exe')) }
-    }
 
     foreach ($p in ($candidates | Select-Object -Unique)) {
         if (-not $p -or $p -match 'WindowsPowerShell') { continue }
-        if ($p -match 'PowerShell\\7\\' -and $p -notmatch '(?i)preview') { continue }
         if (Test-Path -LiteralPath $p) { return $p }
     }
-    throw 'PowerShell 7 Preview is required for Exo Steam helpers. Install Microsoft.PowerShell.Preview and Windows Terminal Preview.'
+    throw 'PowerShell 7 is required for Exo Steam helpers. Install it with: winget install Microsoft.PowerShell'
 }
-function Assert-ExoPwshPreview {
-    if (Test-ExoIsPwshPreviewHost) { return }
+function Assert-ExoPwsh7 {
+    if (Test-ExoIsPwsh7Host) { return }
     $hint = $null
     try { $hint = Get-ExoPwsh } catch { }
-    $msg = 'Steam Optimizer requires PowerShell 7 Preview (not Windows PowerShell 5.1, not stable PowerShell 7). Install Microsoft.PowerShell.Preview and Windows Terminal Preview, then re-run from Exo.'
-    if ($hint) { $msg += " Found Preview at: $hint" }
+    $msg = 'PowerShell 7 is required to run the Steam Optimizer (not Windows PowerShell 5.1). Install it with: winget install Microsoft.PowerShell, then re-run from Exo.'
+    if ($hint) { $msg += " Found PowerShell 7 at: $hint" }
     throw $msg
 }
-Assert-ExoPwshPreview
+Assert-ExoPwsh7
 
 # Default Steam launch flags (formerly "aggressive" - this is the only tier).
 # Tuned for faster cold start + lower CEF cost. Avoid sandbox/single-process
 # flags - those crash on some PCs.
 $Script:DefaultCefArgs = @(
-    # Safe multi-PC CEF set only. Do NOT add -cef-disable-occlusion /
-    # -cef-disable-renderer-accessibility - those blank or hang Steam on some GPUs.
+    # Safe multi-PC CEF set only. The occlusion and renderer-accessibility CEF
+    # disable flags are FORBIDDEN - they blank or hang Steam on some GPUs.
+    # -silent was evaluated and excluded: this launcher backs explicit Start
+    # Menu launches, and starting minimized-to-tray there confuses users.
     '-cef-disable-gpu',
     '-cef-disable-gpu-compositing',
     '-nofriendsui',
@@ -108,6 +110,21 @@ function Write-Step([string]$Msg) { Write-SteamLog '[*]' $Msg }
 function Write-Ok([string]$Msg)   { Write-SteamLog '[+]' $Msg }
 function Write-Warn([string]$Msg) { Write-SteamLog '[!]' $Msg }
 function Write-Err([string]$Msg)  { Write-SteamLog '[-]' $Msg }
+
+$Script:ExoApplyReport = [Collections.Generic.List[string]]::new()
+function Add-ExoReport([string]$Step, [string]$Status, [string]$Reason = '') {
+    # Structured last-apply report line: EXO_REPORT:<step>|ok / |fail:<reason> / |skip:<reason>
+    $entry = if ([string]::IsNullOrWhiteSpace($Reason)) { "$Step|$Status" } else { "$Step|$Status`:$Reason" }
+    [void]$Script:ExoApplyReport.Add($entry)
+    $line = "EXO_REPORT:$entry"
+    Write-Host $line
+    if ($env:EXO_LOG) {
+        try { Add-Content -LiteralPath $env:EXO_LOG -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }
+    }
+}
+function Get-ExoReportEntries {
+    return @($Script:ExoApplyReport)
+}
 
 function Get-SteamInstallPath {
     $candidates = @()
@@ -872,14 +889,111 @@ function Clear-SteamShaderCaches([string]$SteamPath) {
 }
 
 function Set-SteamVdfKey([string]$Raw, [string]$Key, [string]$Value) {
+    # Rewrite-existing-only. Used for keys whose modern section path is not
+    # verified; missing keys are skipped, never invented at a guessed path.
     $pattern = '"' + [regex]::Escape($Key) + '"\s+"[^"]*"'
     $replacement = '"' + $Key + '"		"' + $Value + '"'
     if ($Raw -match $pattern) {
         return [regex]::Replace($Raw, $pattern, $replacement)
     }
-    # Insert near top of first big block if possible - append before final closing braces is fragile.
-    # Prefer inject after first "{" in file for unknown keys under a synthetic Exo block.
     return $Raw
+}
+
+function Find-ExoVdfSection([string]$Raw, [int]$From, [int]$To, [string]$Name) {
+    # Locate a "<Name>" { ... } section at the TOP level of the given range.
+    # Returns @{ Open = index-after-open-brace; Close = index-of-close-brace }
+    # or $null. Quote-aware and depth-aware so nested same-named sections in
+    # deeper blocks are never matched by accident.
+    $depth = 0
+    $i = $From
+    while ($i -lt $To) {
+        $ch = $Raw[$i]
+        if ($ch -eq '"') {
+            $tokenStart = $i + 1
+            $tokenEnd = $Raw.IndexOf('"', $tokenStart)
+            if ($tokenEnd -lt 0 -or $tokenEnd -ge $To) { return $null }
+            $token = $Raw.Substring($tokenStart, $tokenEnd - $tokenStart)
+            $i = $tokenEnd + 1
+            if ($depth -ne 0) { continue }
+            $j = $i
+            while ($j -lt $To -and [char]::IsWhiteSpace($Raw[$j])) { $j++ }
+            if ($j -lt $To -and $Raw[$j] -eq '"') {
+                # Key-value pair: skip the value token.
+                $valueEnd = $Raw.IndexOf('"', $j + 1)
+                if ($valueEnd -lt 0 -or $valueEnd -ge $To) { return $null }
+                $i = $valueEnd + 1
+                continue
+            }
+            if ($j -lt $To -and $Raw[$j] -eq '{' -and ($token -ieq $Name)) {
+                $braceDepth = 0
+                for ($k = $j; $k -lt $To; $k++) {
+                    $c = $Raw[$k]
+                    if ($c -eq '"') {
+                        $k = $Raw.IndexOf('"', $k + 1)
+                        if ($k -lt 0 -or $k -ge $To) { return $null }
+                        continue
+                    }
+                    if ($c -eq '{') { $braceDepth++ }
+                    elseif ($c -eq '}') {
+                        $braceDepth--
+                        if ($braceDepth -eq 0) { return @{ Open = ($j + 1); Close = $k } }
+                    }
+                }
+                return $null
+            }
+            continue
+        }
+        if ($ch -eq '{') { $depth++ }
+        elseif ($ch -eq '}') {
+            $depth--
+            if ($depth -lt 0) { return $null }
+        }
+        $i++
+    }
+    return $null
+}
+
+function Set-SteamVdfKeyAtPath([string]$Raw, [string[]]$SectionPath, [string]$Key, [string]$Value) {
+    # VDF-aware injector: rewrite the key when present anywhere; otherwise INSERT
+    # it at the exact section path (creating intermediate sections as needed)
+    # with tab indentation matching Valve's own writer. Callers back up the file
+    # (.exo-bak) before persisting the result.
+    $pattern = '"' + [regex]::Escape($Key) + '"\s+"[^"]*"'
+    if ($Raw -match $pattern) {
+        return [regex]::Replace($Raw, $pattern, ('"' + $Key + '"' + "`t`t" + '"' + $Value + '"'))
+    }
+
+    $nl = "`n"
+    if ($Raw -match "`r`n") { $nl = "`r`n" }
+
+    $from = 0
+    $to = $Raw.Length
+    $depth = 0
+    foreach ($name in $SectionPath) {
+        $section = Find-ExoVdfSection $Raw $from $to $name
+        if ($null -eq $section) {
+            $indent = "`t" * $depth
+            if ($depth -eq 0) {
+                # Missing root (empty/new file): create it at the top.
+                $block = '"' + $name + '"' + $nl + '{' + $nl + '}' + $nl
+                $Raw = $Raw.Insert(0, $block)
+            } else {
+                $block = $nl + $indent + '"' + $name + '"' + $nl + $indent + '{' + $nl + $indent + '}'
+                $Raw = $Raw.Insert($from, $block)
+                $to = $to + $block.Length
+            }
+            if ($depth -eq 0) { $to = $Raw.Length }
+            $section = Find-ExoVdfSection $Raw $from $to $name
+            if ($null -eq $section) { return $Raw }
+        }
+        $from = [int]$section.Open
+        $to = [int]$section.Close
+        $depth++
+    }
+
+    $keyIndent = "`t" * $depth
+    $line = $nl + $keyIndent + '"' + $Key + '"' + "`t`t" + '"' + $Value + '"'
+    return $Raw.Insert($from, $line)
 }
 
 function Test-SteamVdfExpectations([string]$Raw, [object[]]$Expectations) {
@@ -924,37 +1038,64 @@ function Set-SteamLocalConfigTweaks {
     $lastPath = $null
     $verificationOk = $true
     $verificationObserved = 0
-    $expectations = @(
-        @{ K = 'H264HWAccel'; V = '0' },
-        @{ K = 'GPUAccelWebViews'; V = '0' },
-        @{ K = 'GPUAccelWebViews2'; V = '0' },
-        @{ K = 'GPUAccelWebViewsD3D11'; V = '0' },
+
+    # INJECTED keys: section path verified against public localconfig.vdf
+    # documentation (l3laze/Steam-Data + Valve VDF dumps). Missing keys are
+    # inserted at the exact path; present keys are rewritten in place.
+    $injectSet = @(
+        # Library quiet / low-churn (documented direct UserLocalConfigStore keys)
+        @{ Path = @('UserLocalConfigStore'); K = 'LibraryLowBandwidthMode'; V = '0'; Kind = 'snappy' },
+        @{ Path = @('UserLocalConfigStore'); K = 'LibraryLowPerfMode'; V = '0'; Kind = 'snappy' },
+        @{ Path = @('UserLocalConfigStore'); K = 'LibraryDisableCommunityContent'; V = '1'; Kind = 'snappy' },
+        # Friends notification set fully quieted (UserLocalConfigStore\friends)
+        @{ Path = @('UserLocalConfigStore', 'friends'); K = 'PersonaStateDesired'; V = '1'; Kind = 'snappy' },
+        @{ Path = @('UserLocalConfigStore', 'friends'); K = 'Notifications_ShowIngame'; V = '0'; Kind = 'quiet' },
+        @{ Path = @('UserLocalConfigStore', 'friends'); K = 'Notifications_ShowOnline'; V = '0'; Kind = 'quiet' },
+        @{ Path = @('UserLocalConfigStore', 'friends'); K = 'Notifications_ShowMessage'; V = '0'; Kind = 'quiet' },
+        @{ Path = @('UserLocalConfigStore', 'friends'); K = 'Notifications_EventsAndAnnouncements'; V = '0'; Kind = 'quiet' },
+        @{ Path = @('UserLocalConfigStore', 'friends'); K = 'Sounds_PlayIngame'; V = '0'; Kind = 'quiet' },
+        @{ Path = @('UserLocalConfigStore', 'friends'); K = 'Sounds_PlayOnline'; V = '0'; Kind = 'quiet' },
+        @{ Path = @('UserLocalConfigStore', 'friends'); K = 'Sounds_PlayMessage'; V = '0'; Kind = 'quiet' },
+        @{ Path = @('UserLocalConfigStore', 'friends'); K = 'Sounds_EventsAndAnnouncements'; V = '0'; Kind = 'quiet' },
+        # Interface noise (UserLocalConfigStore\News)
+        @{ Path = @('UserLocalConfigStore', 'News'); K = 'NotifyAvailableGames'; V = '0'; Kind = 'quiet' },
+        # Overlay: keep ON, quiet the hitch sources (UserLocalConfigStore\system)
+        @{ Path = @('UserLocalConfigStore', 'system'); K = 'EnableGameOverlay'; V = '1'; Kind = 'snappy' },
+        @{ Path = @('UserLocalConfigStore', 'system'); K = 'InGameOverlayScreenshotNotification'; V = '0'; Kind = 'snappy' },
+        @{ Path = @('UserLocalConfigStore', 'system'); K = 'InGameOverlayScreenshotPlaySound'; V = '0'; Kind = 'quiet' }
+    )
+
+    # REWRITE-ONLY keys: real on older clients but the modern section path is
+    # not verifiable, so they are updated only when Steam itself wrote them.
+    $rewriteGpu = @('H264HWAccel', 'GPUAccelWebViews', 'GPUAccelWebViews2', 'GPUAccelWebViewsD3D11')
+    $rewriteSnappy = @(
         @{ K = 'SmoothScrollWebViews'; V = '0' },
-        @{ K = 'LibraryLowBandwidthMode'; V = '0' },
-        @{ K = 'LibraryLowPerfMode'; V = '0' },
         @{ K = 'StartupMovieMode'; V = '0' },
-        @{ K = 'LibraryDisableCommunityContent'; V = '1' },
         @{ K = 'LibraryDisplayIconInGameList'; V = '0' },
-        @{ K = 'EnableGameOverlay'; V = '1' },
-        @{ K = 'InGameOverlayScreenshotNotification'; V = '0' },
         @{ K = 'InGameOverlayShowFPSCounterHotKey'; V = '0' },
         @{ K = 'SteamInputConfigEnabled'; V = '1' },
         @{ K = 'Controller_EnableChrome'; V = '0' },
         @{ K = 'BigPictureInForeground'; V = '0' },
-        @{ K = 'NotifyAvailableGames'; V = '0' },
-        @{ K = 'SoundPlay_DownloadComplete'; V = '0' },
-        @{ K = 'SoundPlay_FriendOnline'; V = '0' },
-        @{ K = 'FriendsAlwaysShowAvatars'; V = '0' },
-        @{ K = 'AllowDownloadsDuringGameplay'; V = '0' },
-        @{ K = 'CloudEnabled'; V = '1' },
         @{ K = 'MusicPlayerEnabled'; V = '0' },
         @{ K = 'FriendsUI'; V = '0' },
         @{ K = 'LibraryDisableFriendsActivity'; V = '1' },
         @{ K = 'ShaderPreCacheAllowed'; V = '1' },
         @{ K = 'ShaderPreCacheProgress'; V = '0' },
-        @{ K = 'AutoUpdateWindowEnabled'; V = '0' },
-        @{ K = 'PersonaStateDesired'; V = '1' }
+        @{ K = 'AutoUpdateWindowEnabled'; V = '0' }
     )
+    $rewriteQuiet = @(
+        @{ K = 'SoundPlay_DownloadComplete'; V = '0' },
+        @{ K = 'SoundPlay_FriendOnline'; V = '0' },
+        @{ K = 'FriendsAlwaysShowAvatars'; V = '0' },
+        @{ K = 'AllowDownloadsDuringGameplay'; V = '0' },
+        @{ K = 'CloudEnabled'; V = '1' }
+    )
+
+    $expectations = @()
+    foreach ($entry in $injectSet) { $expectations += @{ K = $entry.K; V = $entry.V } }
+    foreach ($k in $rewriteGpu) { $expectations += @{ K = $k; V = '0' } }
+    foreach ($pair in ($rewriteSnappy + $rewriteQuiet)) { $expectations += @{ K = $pair.K; V = $pair.V } }
+
     foreach ($file in $files) {
         try {
             attrib -R $file.FullName 2>$null
@@ -962,66 +1103,27 @@ function Set-SteamLocalConfigTweaks {
             $orig = $raw
 
             # Webhelper / CEF load (GPU decode of web UI is a common RAM+GPU hog)
-            foreach ($k in @('H264HWAccel', 'GPUAccelWebViews', 'GPUAccelWebViews2', 'GPUAccelWebViewsD3D11')) {
+            foreach ($k in $rewriteGpu) {
                 $before = $raw
                 $raw = Set-SteamVdfKey $raw $k '0'
                 if ($raw -ne $before) { $anyGpu = $true }
             }
 
-            # Snappier feel: less animation chrome, keep library responsive
-            foreach ($pair in @(
-                @{ K = 'SmoothScrollWebViews'; V = '0' },
-                @{ K = 'LibraryLowBandwidthMode'; V = '0' },
-                @{ K = 'LibraryLowPerfMode'; V = '0' },
-                @{ K = 'StartupMovieMode'; V = '0' },
-                @{ K = 'LibraryDisableCommunityContent'; V = '1' },
-                @{ K = 'LibraryDisplayIconInGameList'; V = '0' }
-            )) {
+            # VDF-aware injection at verified section paths (insert when missing)
+            foreach ($entry in $injectSet) {
+                $before = $raw
+                $raw = Set-SteamVdfKeyAtPath $raw ([string[]]$entry.Path) ([string]$entry.K) ([string]$entry.V)
+                if ($raw -ne $before -and [string]$entry.Kind -eq 'snappy') { $anySnappy = $true }
+            }
+
+            # Rewrite-existing-only extras (older client keys)
+            foreach ($pair in $rewriteSnappy) {
                 $before = $raw
                 $raw = Set-SteamVdfKey $raw $pair.K $pair.V
                 if ($raw -ne $before) { $anySnappy = $true }
             }
-
-            # Overlay extras: keep overlay on, cut browser/noise hitch sources when keys exist
-            foreach ($pair in @(
-                @{ K = 'EnableGameOverlay'; V = '1' },
-                @{ K = 'InGameOverlayScreenshotNotification'; V = '0' },
-                @{ K = 'InGameOverlayShowFPSCounterHotKey'; V = '0' },
-                @{ K = 'SteamInputConfigEnabled'; V = '1' },
-                @{ K = 'Controller_EnableChrome'; V = '0' },
-                @{ K = 'BigPictureInForeground'; V = '0' }
-            )) {
-                $before = $raw
+            foreach ($pair in $rewriteQuiet) {
                 $raw = Set-SteamVdfKey $raw $pair.K $pair.V
-                if ($raw -ne $before) { $anySnappy = $true }
-            }
-
-            # Quieter / less background wakeups
-            foreach ($k in @('NotifyAvailableGames', 'SoundPlay_DownloadComplete', 'SoundPlay_FriendOnline', 'FriendsAlwaysShowAvatars')) {
-                $raw = Set-SteamVdfKey $raw $k '0'
-            }
-
-            # Prefer not downloading while playing (smoother 1% lows); cloud stays on
-            foreach ($pair in @(
-                @{ K = 'AllowDownloadsDuringGameplay'; V = '0' },
-                @{ K = 'CloudEnabled'; V = '1' }
-            )) {
-                $raw = Set-SteamVdfKey $raw $pair.K $pair.V
-            }
-
-            # Extra quiet / less UI work (keys only apply when Steam still exposes them)
-            foreach ($pair in @(
-                @{ K = 'MusicPlayerEnabled'; V = '0' },
-                @{ K = 'FriendsUI'; V = '0' },
-                @{ K = 'LibraryDisableFriendsActivity'; V = '1' },
-                @{ K = 'ShaderPreCacheAllowed'; V = '1' },
-                @{ K = 'ShaderPreCacheProgress'; V = '0' },
-                @{ K = 'AutoUpdateWindowEnabled'; V = '0' },
-                @{ K = 'PersonaStateDesired'; V = '1' }
-            )) {
-                $before = $raw
-                $raw = Set-SteamVdfKey $raw $pair.K $pair.V
-                if ($raw -ne $before) { $anySnappy = $true }
             }
 
             if ($raw -ne $orig) {
@@ -1042,10 +1144,8 @@ function Set-SteamLocalConfigTweaks {
     }
 
     if (-not $anyPatched) {
-        # Modern Steam builds often omit the old localconfig web-GPU keys entirely.
-        # CEF launch flags + download config still deliver the performance win - do not
-        # fail the whole apply when there is nothing to patch and nothing conflicting.
-        Write-Ok 'localconfig.vdf: no matching keys - CEF launch flags + download config still apply'
+        # All peak keys already at target values (injection guarantees presence).
+        Write-Ok 'localconfig.vdf: peak keys already present at target values'
     }
 
     return @{
@@ -1147,19 +1247,29 @@ function Set-SteamLibraryConfigHints([string]$SteamPath) {
         $raw = [IO.File]::ReadAllText($config)
         $orig = $raw
 
-        # Unlimited / max download throughput when keys exist
+        # Verified config.vdf keys (InstallConfigStore\Software\Valve\Steam per
+        # public Steam-Data docs): inject when missing, rewrite when present.
+        $steamSection = @('InstallConfigStore', 'Software', 'Valve', 'Steam')
         foreach ($pair in @(
             @{ K = 'DownloadThrottleKbps'; V = '0' },
+            @{ K = 'AllowDownloadsDuringGameplay'; V = '0' },
+            @{ K = 'AutoUpdateWindowEnabled'; V = '0' }
+        )) {
+            $raw = Set-SteamVdfKeyAtPath $raw $steamSection $pair.K $pair.V
+        }
+
+        # Unverified section path - rewrite-existing-only (never invented)
+        foreach ($pair in @(
             @{ K = 'ThrottleKbps'; V = '0' },
             @{ K = 'RateLimitBps'; V = '0' },
-            @{ K = 'MaxSimDownloads'; V = '8' },
-            @{ K = 'AutoUpdateWindowEnabled'; V = '0' }
+            @{ K = 'MaxSimDownloads'; V = '8' }
         )) {
             $raw = Set-SteamVdfKey $raw $pair.K $pair.V
         }
 
         $verification = Test-SteamVdfExpectations $raw @(
             @{ K = 'DownloadThrottleKbps'; V = '0' },
+            @{ K = 'AllowDownloadsDuringGameplay'; V = '0' },
             @{ K = 'ThrottleKbps'; V = '0' },
             @{ K = 'RateLimitBps'; V = '0' },
             @{ K = 'MaxSimDownloads'; V = '8' },
@@ -1214,10 +1324,10 @@ function Write-SteamLaunchCmd([string]$CmdPath, [string]$SteamPath, [string]$Hel
     $cmdPs = $ps.Replace('%', '%%')
     # Start Steam first (HIGH) so the UI appears ASAP; kick the trim helper right
     # after without waiting for it. Helper self-limits with a mutex.
-    # Always host helpers with PowerShell 7 Preview (pwsh-preview path from Get-ExoPwsh).
+    # Helpers are hosted by stable PowerShell 7 (resolved via Get-ExoPwsh).
     $cmd = @(
         '@echo off'
-        ("rem Exo {0} - fast quiet CEF + aggressive webhelper trim (PowerShell 7 Preview)" -f $Label)
+        ("rem Exo {0} - fast quiet CEF + aggressive webhelper trim (PowerShell 7)" -f $Label)
         ('start "" /HIGH /D "{0}" "{1}" {2} %*' -f $cmdSteamPath, $cmdExe, $args)
         ('start "" /MIN "{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $cmdPs, $cmdHelper)
     ) -join "`r`n"
@@ -1307,7 +1417,7 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
     $wsh = New-Object -ComObject WScript.Shell
     $patched = 0
     $seen = @{}
-    $desc = 'Steam (Exo - quiet CEF + aggressive 5s webhelper trim)'
+    $desc = 'Steam (Exo - quiet CEF + aggressive 3s webhelper trim)'
 
     foreach ($root in (Get-SteamShortcutSearchRoots)) {
         $lnks = @(Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse -Force -ErrorAction SilentlyContinue)
@@ -1442,6 +1552,7 @@ function Install-WebHelperTrimHelper([string]$SteamPath) {
     $body = @'
 # Exo - aggressive 3s steamwebhelper trim + in-game priority yield + quiet re-enforce.
 # No process suspension (suspension can break Steam IPC and overlay behavior).
+# Reclaimed working-set bytes accumulate into %LocalAppData%\Exo\steam-trim-stats.json.
 $ErrorActionPreference = 'SilentlyContinue'
 $created = $false
 $mutex = [Threading.Mutex]::new($true, 'Local\Exo.SteamWebHelper', [ref]$created)
@@ -1456,6 +1567,61 @@ public static class ExoWs {
   public const uint ACCESS = 0x0500;
 }
 "@
+
+$statsDir = Join-Path $env:LOCALAPPDATA 'Exo'
+$statsPath = Join-Path $statsDir 'steam-trim-stats.json'
+
+function Read-TrimStats {
+  try {
+    if (Test-Path -LiteralPath $statsPath) {
+      $obj = Get-Content -LiteralPath $statsPath -Raw | ConvertFrom-Json
+      $hourly = @{}
+      if ($obj.PSObject.Properties.Name -contains 'hourly' -and $obj.hourly) {
+        foreach ($p in $obj.hourly.PSObject.Properties) { $hourly[[string]$p.Name] = [long]$p.Value }
+      }
+      return @{
+        Total  = [long]$obj.totalReclaimedBytes
+        Passes = [long]$obj.totalTrimPasses
+        Hourly = $hourly
+      }
+    }
+  } catch {}
+  return @{ Total = [long]0; Passes = [long]0; Hourly = @{} }
+}
+
+function Save-TrimStats($Stats) {
+  try {
+    if (-not (Test-Path -LiteralPath $statsDir)) {
+      New-Item -ItemType Directory -Path $statsDir -Force | Out-Null
+    }
+    $now = (Get-Date).ToUniversalTime()
+    $cutoff = $now.AddHours(-24)
+    $pruned = @{}
+    [long]$last24 = 0
+    foreach ($k in @($Stats.Hourly.Keys)) {
+      $t = [DateTime]::MinValue
+      $parsed = [DateTime]::TryParseExact(
+        [string]$k, 'yyyy-MM-ddTHH',
+        [Globalization.CultureInfo]::InvariantCulture,
+        ([Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal),
+        [ref]$t)
+      if ($parsed -and $t -ge $cutoff.AddHours(-1)) {
+        $pruned[[string]$k] = [long]$Stats.Hourly[$k]
+        $last24 += [long]$Stats.Hourly[$k]
+      }
+    }
+    $Stats.Hourly = $pruned
+    $doc = [ordered]@{
+      version               = 1
+      updatedUtc            = $now.ToString('o')
+      totalReclaimedBytes   = [long]$Stats.Total
+      totalTrimPasses       = [long]$Stats.Passes
+      last24hReclaimedBytes = $last24
+      hourly                = $pruned
+    }
+    [IO.File]::WriteAllText($statsPath, ($doc | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))
+  } catch {}
+}
 
 function Test-SteamGameRunning {
   try {
@@ -1474,14 +1640,21 @@ function Test-SteamGameRunning {
 }
 
 function Trim-WebHelpers {
+  # Returns reclaimed working-set bytes (sum of positive pre-post deltas).
+  [long]$reclaimed = 0
   Get-Process steamwebhelper -ErrorAction SilentlyContinue | ForEach-Object {
     try {
+      $before = [long]$_.WorkingSet64
       $h = [ExoWs]::OpenProcess([ExoWs]::ACCESS, $false, $_.Id)
       if ($h -eq [IntPtr]::Zero) { return }
       try { [void][ExoWs]::EmptyWorkingSet($h) }
       finally { [void][ExoWs]::CloseHandle($h) }
+      $_.Refresh()
+      $after = [long]$_.WorkingSet64
+      if ($before -gt $after) { $reclaimed += ($before - $after) }
     } catch {}
   }
+  return $reclaimed
 }
 
 function Set-SteamClientPriority([bool]$InGame) {
@@ -1533,23 +1706,37 @@ try {
   }
 
   Reinstate-SteamQuiet
+  $stats = Read-TrimStats
   $ticks = 0
   while (Get-Process steam -ErrorAction SilentlyContinue) {
     $inGame = Test-SteamGameRunning
     Set-SteamClientPriority -InGame:$inGame
-    Trim-WebHelpers
+    $reclaimedBytes = [long](Trim-WebHelpers)
+    $stats.Passes = [long]$stats.Passes + 1
+    if ($reclaimedBytes -gt 0) {
+      $stats.Total = [long]$stats.Total + $reclaimedBytes
+      $bucket = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH')
+      if ($stats.Hourly.ContainsKey($bucket)) {
+        $stats.Hourly[$bucket] = [long]$stats.Hourly[$bucket] + $reclaimedBytes
+      } else {
+        $stats.Hourly[$bucket] = $reclaimedBytes
+      }
+    }
     $ticks++
+    # Flush proof stats every ~1 minute (writing on every 3s pass is wasteful).
+    if (($ticks % 20) -eq 0) { Save-TrimStats $stats }
     # Every ~2 minutes while Steam is open, re-assert no autostart.
-    if (($ticks % 24) -eq 0) { Reinstate-SteamQuiet }
+    if (($ticks % 40) -eq 0) { Reinstate-SteamQuiet }
     Start-Sleep -Seconds 3
   }
 } finally {
+  Save-TrimStats $stats
   try { $mutex.ReleaseMutex() } catch {}
   $mutex.Dispose()
 }
 '@
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
-    Write-Ok 'WebHelper helper installed (5s trim + priority + quiet re-enforce)'
+    Write-Ok 'WebHelper helper installed (3s trim + priority + quiet re-enforce + trim stats)'
     return $helper
 }
 
@@ -1809,17 +1996,22 @@ try {
 
     Write-HubProgress 24 'Complete client debloat...'
     $debloatResult = Invoke-SteamCompleteClientDebloat $steam
+    Add-ExoReport 'client-debloat' 'ok'
 
     Write-HubProgress 30 'Disabling Windows startup...'
     $startupResult = Disable-SteamWindowsStartup $currentStartup
     if (-not $startupResult.Success -or -not (Test-SteamWindowsStartupDisabled)) {
+        Add-ExoReport 'startup-quiet' 'fail' 'startup suppression could not be verified'
         throw 'Steam startup suppression could not be fully verified; recovery state was kept'
     }
+    Add-ExoReport 'startup-quiet' 'ok'
 
     Write-HubProgress 34 'Windows quiet shell (toasts / tray / tasks)...'
     Apply-SteamWindowsQuiet $steam
+    Add-ExoReport 'windows-quiet' 'ok'
     Write-HubProgress 36 'GPU preference (discrete when present)...'
     Set-SteamGpuHighPerformance $steam
+    Add-ExoReport 'gpu-preference' 'ok'
 
     Write-HubProgress 40 'Cleaning webhelper / CEF caches...'
     $freed = [long]$debloatResult.Freed
@@ -1827,34 +2019,48 @@ try {
     $shaderInventoryVerified = $false
     if (-not $Quick) {
         $freed += [long](Clear-SteamSafeCaches $steam)
+        Add-ExoReport 'cache-clean' 'ok'
         Write-HubProgress 46 'Cleaning orphaned shader pre-caches...'
         $shaderResult = Clear-SteamShaderCaches $steam
         $shaderFreed = [long]$shaderResult.Freed
         $shaderInventoryVerified = [bool]$shaderResult.InventoryVerified
         if (-not $shaderInventoryVerified) {
+            Add-ExoReport 'shader-orphans' 'fail' 'manifest inventory unreadable or ambiguous'
             throw 'Shader cleanup stopped because the installed-game manifest inventory was unreadable or ambiguous'
         }
-        $freed += $shaderFreed
+        Add-ExoReport 'shader-orphans' 'ok'
         Write-HubProgress 50 'Checking resumable downloads...'
         [void](Optimize-SteamDownloadFolder $steam)
     } else {
         Write-Ok 'Deep cache/shader clean skipped (-Quick) - still applying CEF lean + helpers'
+        Add-ExoReport 'cache-clean' 'skip' 'quick pass requested'
+        Add-ExoReport 'shader-orphans' 'skip' 'quick pass requested'
     }
     Write-Ok ("Cache cleanup freed ~{0:N1} MB" -f ($freed / 1MB))
 
     Write-HubProgress 58 'Installing aggressive webhelper helper...'
     $helper = Install-WebHelperTrimHelper $steam
+    Add-ExoReport 'webhelper-trim' 'ok'
     Write-HubProgress 68 'Writing quiet CEF launcher...'
     $launch = Install-LeanSteamLauncher $steam $helper
+    Add-ExoReport 'cef-launcher' 'ok'
 
     Write-HubProgress 74 'Fast login / skip bootstrap update pause...'
-    [void](Set-SteamBootstrapFastStart $steam)
-    [void](Set-SteamFastLoginHints $steam)
+    $bootstrapOk = Set-SteamBootstrapFastStart $steam
+    if ($bootstrapOk) { Add-ExoReport 'bootstrap-faststart' 'ok' }
+    else { Add-ExoReport 'bootstrap-faststart' 'fail' 'steam.cfg could not be written' }
+    $loginOk = Set-SteamFastLoginHints $steam
+    if ($loginOk) { Add-ExoReport 'fast-login' 'ok' }
+    else { Add-ExoReport 'fast-login' 'skip' 'loginusers.vdf not writable yet' }
 
     Write-HubProgress 78 'Download speed / config.vdf...'
     $cfgOk = Set-SteamLibraryConfigHints $steam
+    if ($cfgOk) { Add-ExoReport 'download-config' 'ok' }
+    else { Add-ExoReport 'download-config' 'fail' 'config.vdf could not be verified' }
     Write-HubProgress 88 'Overlay / library / localconfig...'
     $local = Set-SteamLocalConfigTweaks
+    if ([bool]$local.Verified) { Add-ExoReport 'localconfig-tweaks' 'ok' }
+    else { Add-ExoReport 'localconfig-tweaks' 'fail' 'localconfig.vdf verification failed' }
 
     Write-HubProgress 94 'Saving status...'
     $startupOk = Test-SteamWindowsStartupDisabled
@@ -1923,6 +2129,7 @@ try {
         noDesktopShortcuts   = $debloatOk
         fullApply            = $fullPassOk
         quick                = [bool]$Quick
+        applyReport          = @(Get-ExoReportEntries)
     }
     Save-SteamOptState $state
 
@@ -1947,13 +2154,31 @@ try {
         throw ("Steam apply finished with incomplete verification: {0}" -f ($missing -join ', '))
     }
 
-    Write-Ok 'Steam Optimizer finished (CEF quiet, full debloat, Windows quiet, 5s trim, priority yield)'
+    Write-Ok 'Steam Optimizer finished (CEF quiet, full debloat, Windows quiet, 3s trim, priority yield)'
     Write-Ok 'Start Steam from Start Menu / taskbar (no desktop shortcuts created).'
     Write-HubProgress 100 'Completed successfully'
     Write-Output 'DONE - Steam optimized (debloat + Windows quiet + CEF + aggressive trim)'
     exit 0
 } catch {
     $failureRecord = $_
+    if (-not $Repair) {
+        # Persist the structured report for incomplete applies so the UI can
+        # show exactly which step failed. Recovery data is preserved.
+        try {
+            $failedState = Read-SteamOptState
+            $failedRecovery = Get-SteamRecoveryFromState $failedState
+            Add-ExoReport 'apply' 'fail' ([string]$failureRecord.Exception.Message)
+            Save-SteamOptState @{
+                version     = $Script:SteamOptVersion
+                applyStatus = 'incomplete'
+                applied     = $false
+                steamPath   = $(if ($failedState -and $failedState.PSObject.Properties.Name -contains 'steamPath') { [string]$failedState.steamPath } else { '' })
+                recovery    = $failedRecovery
+                applyReport = @(Get-ExoReportEntries)
+                failedUtc   = (Get-Date).ToUniversalTime().ToString('o')
+            }
+        } catch { }
+    }
     if ($Repair) {
         try {
             $failedState = Read-SteamOptState

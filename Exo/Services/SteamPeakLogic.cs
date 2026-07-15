@@ -85,6 +85,17 @@ public static partial class SteamPeakLogic
         "/HIGH",
         "IsPromoted",
         "EmptyWorkingSet",
+        // Structured last-apply report persisted to steam-optimizer.json
+        "EXO_REPORT:",
+        "applyReport",
+        // Trim-proof stats accumulated by the webhelper helper
+        "steam-trim-stats.json",
+        // VDF-aware injector (insert missing peak keys, .exo-bak first)
+        "Set-SteamVdfKeyAtPath",
+        ".exo-bak",
+        // Stable PowerShell 7 host resolution (never 5.1, preview only fallback)
+        "Get-ExoPwsh",
+        "winget install Microsoft.PowerShell",
     };
 
     public static readonly string[] ForbiddenApplyPatterns =
@@ -94,6 +105,15 @@ public static partial class SteamPeakLogic
         "MaxUserPort",
         "FPS Unlocker",
         "Win32PrioritySeparation",
+        // CEF flags with documented client blanking/hangs
+        "-cef-disable-occlusion",
+        "-cef-disable-renderer-accessibility",
+        // Steam must not start minimized from explicit Start Menu launches
+        "'-silent'",
+        // Preview-host hard requirement was replaced by stable pwsh 7
+        "Assert-ExoPwshPreview",
+        "Test-ExoIsPwshPreviewHost",
+        "Microsoft.PowerShell.Preview",
     };
 
     public static (bool Ok, List<string> Issues) AuditApplyScriptText(string script)

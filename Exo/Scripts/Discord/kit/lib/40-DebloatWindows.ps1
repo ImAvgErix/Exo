@@ -26,6 +26,29 @@ function Save-DiscordOptState([hashtable]$State) {
     }
 }
 
+function Get-DiscordVariantMap {
+    # Universal Discord variant map (stable + PTB + Canary). Keep in sync with
+    # Get-DiscOptVariantDefinitions (DiscordDetectCore.ps1) and
+    # DiscordPeakLogic.VariantDefinitions (C#).
+    return @(
+        @{ Name = 'stable'; LocalDir = 'Discord'; AppDataDir = 'discord'; Exe = 'Discord.exe'; QosPolicy = 'Exo Discord Voice' },
+        @{ Name = 'ptb'; LocalDir = 'DiscordPTB'; AppDataDir = 'discordptb'; Exe = 'DiscordPTB.exe'; QosPolicy = 'Exo Discord PTB Voice' },
+        @{ Name = 'canary'; LocalDir = 'DiscordCanary'; AppDataDir = 'discordcanary'; Exe = 'DiscordCanary.exe'; QosPolicy = 'Exo Discord Canary Voice' }
+    )
+}
+
+function Get-InstalledDiscordVariants {
+    $installed = [Collections.Generic.List[hashtable]]::new()
+    foreach ($variant in @(Get-DiscordVariantMap)) {
+        $root = Get-DiscOptEnvPath 'LOCALAPPDATA' ([string]$variant.LocalDir)
+        if ($root -and (Test-Path -LiteralPath $root)) {
+            $app = @(Get-ChildItem -LiteralPath $root -Directory -Filter 'app-*' -ErrorAction SilentlyContinue)
+            if ($app.Count -gt 0) { $installed.Add($variant) }
+        }
+    }
+    return @($installed)
+}
+
 function Test-StableDiscordText([string]$Text) {
     if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
     try {
@@ -141,7 +164,27 @@ function Get-DiscordWindowsSnapshot {
         ScheduledTasks   = @($scheduledTasks)
         TrayEntries      = @(Get-StableDiscordTrayEntries)
         Compatibility    = @()
+        QosPolicies      = @(Get-ExoDiscordQosPolicySnapshot)
     }
+}
+
+function Get-ExoDiscordQosPolicyRoot {
+    return 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS'
+}
+
+function Get-ExoDiscordQosPolicySnapshot {
+    # Records Exo-created Discord voice QoS policy names so repair knows exactly
+    # what to remove. Exo policies are always safe to delete on repair - they
+    # never exist unless Exo created them (documented fixed names).
+    $names = [Collections.Generic.List[hashtable]]::new()
+    $root = Get-ExoDiscordQosPolicyRoot
+    foreach ($variant in @(Get-DiscordVariantMap)) {
+        $path = Join-Path $root ([string]$variant.QosPolicy)
+        if (Test-Path -LiteralPath $path) {
+            $names.Add(@{ Name = [string]$variant.QosPolicy; Existed = $true })
+        }
+    }
+    return @($names)
 }
 
 function Merge-DiscordRecoveryItems($Prior, $Current, [string[]]$IdentityFields) {
@@ -161,6 +204,9 @@ function Merge-DiscordRecoveryItems($Prior, $Current, [string[]]$IdentityFields)
 
 function Merge-DiscordWindowsRecovery($Prior, [hashtable]$Current) {
     if (-not $Prior) { return $Current }
+    $priorQos = if ($Prior.PSObject -and ($Prior.PSObject.Properties.Name -contains 'QosPolicies')) { $Prior.QosPolicies }
+        elseif ($Prior -is [hashtable] -and $Prior.ContainsKey('QosPolicies')) { $Prior.QosPolicies }
+        else { @() }
     return @{
         RunEntries      = @(Merge-DiscordRecoveryItems $Prior.RunEntries $Current.RunEntries @('Key', 'Name'))
         StartupApproved = @(Merge-DiscordRecoveryItems $Prior.StartupApproved $Current.StartupApproved @('Key', 'Name'))
@@ -168,6 +214,7 @@ function Merge-DiscordWindowsRecovery($Prior, [hashtable]$Current) {
         ScheduledTasks  = @(Merge-DiscordRecoveryItems $Prior.ScheduledTasks $Current.ScheduledTasks @('TaskPath', 'TaskName'))
         TrayEntries     = @(Merge-DiscordRecoveryItems $Prior.TrayEntries $Current.TrayEntries @('Key'))
         Compatibility   = @(Merge-DiscordRecoveryItems $Prior.Compatibility $Current.Compatibility @('Key', 'Name'))
+        QosPolicies     = @(Merge-DiscordRecoveryItems $priorQos $Current.QosPolicies @('Name'))
     }
 }
 
@@ -212,6 +259,9 @@ function Complete-DiscordApplyState([string]$AppDir) {
         appDir            = $AppDir
         appliedUtc        = (Get-Date).ToUniversalTime().ToString('o')
         recovery          = $recovery
+        applyReport       = @(Get-ExoReportEntries)
+        variants          = @($Script:DiscordVariantResults)
+        qosPolicies       = @($Script:DiscordQosResults)
     }
 }
 
@@ -267,6 +317,10 @@ function Invoke-Debloat([string]$AppDir, [ref]$Freed) {
         Get-ChildItem "$localePath\*.pak" | Where-Object { $_.Name -ne 'en-US.pak' } |
             ForEach-Object { if (Remove-Safe $_.FullName $freed) { Write-Ok "Removed locale $($_.Name)" } }
     }
+
+    # Deeper debloat: unused Chromium spellcheck dictionaries (keep en-US +
+    # current system locale). Full repair reinstall restores everything.
+    [void](Remove-DiscordExtraSpellcheckDictionaries $freed)
 
     # NOTE: never remove d3dcompiler_47.dll, vulkan-1.dll, vk_swiftshader*, or
     # chrome_*_percent.pak - Chromium needs them for rendering and removing them
@@ -566,6 +620,177 @@ function Set-DiscordTrayIconHidden([string]$AppDir) {
     else { Write-Warn 'Tray icon registry entry not found yet - launch once, then re-run' }
 }
 
+function Set-DiscordVoiceQosPolicies {
+    # Documented Windows QoS policy (DSCP 46 / Expedited Forwarding on UDP) so
+    # routers with WMM/DSCP trust prioritize Discord voice. One policy per
+    # installed variant, fixed names, recorded in recovery for exact removal.
+    Write-Step 'Applying voice QoS policies (DSCP 46, UDP)...'
+    $results = [Collections.Generic.List[hashtable]]::new()
+    $root = Get-ExoDiscordQosPolicyRoot
+    foreach ($variant in @(Get-InstalledDiscordVariants)) {
+        $policyName = [string]$variant.QosPolicy
+        $path = Join-Path $root $policyName
+        $ok = $false
+        try {
+            if (-not (Test-Path -LiteralPath $path)) { New-Item -Path $path -Force -ErrorAction Stop | Out-Null }
+            foreach ($pair in @(
+                @{ N = 'Version'; V = '1.0' },
+                @{ N = 'Application Name'; V = [string]$variant.Exe },
+                @{ N = 'Protocol'; V = 'UDP' },
+                @{ N = 'Local Port'; V = '*' },
+                @{ N = 'Remote Port'; V = '*' },
+                @{ N = 'Local IP'; V = '*' },
+                @{ N = 'Remote IP'; V = '*' },
+                @{ N = 'DSCP Value'; V = '46' },
+                @{ N = 'Throttle Rate'; V = '-1' }
+            )) {
+                New-ItemProperty -LiteralPath $path -Name ([string]$pair.N) -Value ([string]$pair.V) -PropertyType String -Force -ErrorAction Stop | Out-Null
+            }
+            # Verify readback - honest partial-failure reporting.
+            $item = Get-Item -LiteralPath $path -ErrorAction Stop
+            $ok = ([string]$item.GetValue('DSCP Value') -eq '46') -and
+                ([string]$item.GetValue('Application Name') -ieq [string]$variant.Exe) -and
+                ([string]$item.GetValue('Protocol') -eq 'UDP')
+        } catch {
+            Write-Warn "QoS policy $policyName`: $($_.Exception.Message)"
+        }
+        if ($ok) { Write-Ok "QoS DSCP 46 policy active: $policyName ($($variant.Exe))" }
+        else { Write-Warn "QoS policy not verified: $policyName" }
+        $results.Add(@{ Variant = [string]$variant.Name; Policy = $policyName; Ok = $ok })
+    }
+    $Script:DiscordQosResults = @($results)
+    # Record created policies for repair removal.
+    if ($Script:DiscordWindowsRecovery) {
+        $Script:DiscordWindowsRecovery.QosPolicies = @(Get-ExoDiscordQosPolicySnapshot)
+        Save-DiscordOptState @{
+            version         = $Script:DiscOptVersion
+            applyStatus     = 'applying'
+            applied         = $false
+            applyStartedUtc = (Get-Date).ToUniversalTime().ToString('o')
+            recovery        = $Script:DiscordWindowsRecovery
+        }
+    }
+    return @($results)
+}
+
+function Test-DiscordVoiceQosApplied {
+    $root = Get-ExoDiscordQosPolicyRoot
+    foreach ($variant in @(Get-InstalledDiscordVariants)) {
+        $path = Join-Path $root ([string]$variant.QosPolicy)
+        if (-not (Test-Path -LiteralPath $path)) { return $false }
+        try {
+            $item = Get-Item -LiteralPath $path -ErrorAction Stop
+            if ([string]$item.GetValue('DSCP Value') -ne '46') { return $false }
+            if ([string]$item.GetValue('Protocol') -ne 'UDP') { return $false }
+        } catch { return $false }
+    }
+    return $true
+}
+
+function Remove-DiscordExtraSpellcheckDictionaries([ref]$Freed) {
+    # Chromium spellcheck dictionaries (*.bdic) under %AppData%\discord\dictionaries.
+    # Keep en-US plus the current system locale; Discord re-downloads a dictionary
+    # on demand if the user changes spellcheck language (and full repair reinstall
+    # restores everything). Deterministic: exact file-name allow list.
+    $dictDir = Join-Path $AppData 'dictionaries'
+    if (-not (Test-Path -LiteralPath $dictDir)) { return 0 }
+    $keep = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    [void]$keep.Add('en-US')
+    try {
+        $culture = [Globalization.CultureInfo]::CurrentCulture.Name
+        if (-not [string]::IsNullOrWhiteSpace($culture)) { [void]$keep.Add($culture) }
+    } catch { }
+    $removed = 0
+    foreach ($file in @(Get-ChildItem -LiteralPath $dictDir -File -Filter '*.bdic' -ErrorAction SilentlyContinue)) {
+        # File names look like en-US-10-1.bdic / de-DE-3-0.bdic - locale prefix.
+        $locale = $file.BaseName -replace '-\d+-\d+$', ''
+        if ($keep.Contains($locale)) { continue }
+        if (Remove-Safe $file.FullName $Freed) {
+            $removed++
+            Write-Ok "Removed spellcheck dictionary $($file.Name)"
+        }
+    }
+    if ($removed -eq 0) { Write-Ok 'Spellcheck dictionaries already lean' }
+    return $removed
+}
+
+function Set-DiscordVariantQuiet {
+    # PTB / Canary quiet pass: host boot flags + no autostart + safe caches.
+    # Equicord / DiscOpt kernel stay stable-only by design (test channels update
+    # frequently; module layout is not guaranteed). QoS policies are applied per
+    # variant by Set-DiscordVoiceQosPolicies.
+    $results = [Collections.Generic.List[hashtable]]::new()
+    foreach ($variant in @(Get-InstalledDiscordVariants)) {
+        if ([string]$variant.Name -eq 'stable') { continue }
+        $name = [string]$variant.Name
+        Write-Step "Optimizing Discord $name variant..."
+        $flagsOk = $false
+        $autostartOk = $false
+        try {
+            $variantAppData = Get-DiscOptEnvPath 'APPDATA' ([string]$variant.AppDataDir)
+            $settingsPath = Join-Path $variantAppData 'settings.json'
+            $merged = @{}
+            if (Test-Path -LiteralPath $settingsPath) {
+                try {
+                    $merged = ConvertTo-HashtableDeep (Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+                } catch { $merged = @{} }
+            }
+            $merged['OPEN_ON_STARTUP'] = $false
+            $merged['MINIMIZE_TO_TRAY'] = $true
+            $merged['SKIP_HOST_UPDATE'] = $false
+            $merged['DESKTOP_TTI_EARLY_UPDATE_CHECK'] = $false
+            $merged['DESKTOP_TTI_DNSTCP_WARMUP'] = $true
+            $merged['DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR'] = $true
+            $merged['DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS'] = 2000
+            $merged.chromiumSwitches = @{
+                'disable-breakpad'                        = 1
+                'disable-crash-reporter'                  = 1
+                'disable-domain-reliability'              = 1
+                'disable-logging'                         = 1
+                'disable-component-update'                = 1
+                'disable-background-networking'           = 1
+                'no-pings'                                = 1
+                'disable-renderer-backgrounding'          = 1
+                'disable-backgrounding-occluded-windows'  = 1
+                'disable-background-timer-throttling'     = 1
+                'disable-hang-monitor'                    = 1
+            }
+            if (-not (Test-Path -LiteralPath $variantAppData)) {
+                New-Item -ItemType Directory -Path $variantAppData -Force | Out-Null
+            }
+            if (Test-Path -LiteralPath $settingsPath) { attrib -R $settingsPath 2>$null }
+            Write-JsonFile $settingsPath $merged 20
+            $flagsOk = $true
+            Write-Ok "$name settings.json flags applied (startup off, chromium lean)"
+        } catch {
+            Write-Warn "$name settings.json: $($_.Exception.Message)"
+        }
+        try {
+            $variantRoot = Get-DiscOptEnvPath 'LOCALAPPDATA' ([string]$variant.LocalDir)
+            $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+            if (Test-Path $runKey) {
+                $item = Get-Item -Path $runKey -ErrorAction Stop
+                $prefix = [IO.Path]::GetFullPath($variantRoot).TrimEnd('\') + '\'
+                foreach ($valueName in @($item.GetValueNames())) {
+                    $value = [string]$item.GetValue($valueName)
+                    $expanded = [Environment]::ExpandEnvironmentVariables($value).Replace('/', '\')
+                    if ($expanded.IndexOf($prefix, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                        Remove-ItemProperty -Path $runKey -Name $valueName -Force -ErrorAction SilentlyContinue
+                        Write-Ok "$name startup entry removed: $valueName"
+                    }
+                }
+            }
+            $autostartOk = $true
+        } catch {
+            Write-Warn "$name autostart: $($_.Exception.Message)"
+        }
+        $results.Add(@{ Variant = $name; SettingsFlags = $flagsOk; AutostartQuiet = $autostartOk })
+    }
+    if ($results.Count -eq 0) { Write-Ok 'No PTB/Canary variants installed (stable-only pipeline)' }
+    $Script:DiscordVariantResults = @($results)
+    return @($results)
+}
+
 function Test-DiscordWindowsSuppression {
     try {
         if (@(Get-StableDiscordRunSnapshot).Count -ne 0) { return $false }
@@ -587,14 +812,15 @@ function Test-DiscordWindowsSuppression {
     } catch { return $false }
 }
 function Apply-WindowsTweaks([string]$AppDir) {
-    Write-Step 'Applying Windows tweaks (notifications, tray, startup, GPU)...'
+    Write-Step 'Applying Windows tweaks (notifications, tray, startup, GPU, QoS)...'
     Disable-DiscordWindowsAutostart
     Disable-DiscordScheduledTasks
     Set-DiscordWindowsNotificationsOff
     Set-DiscordTrayIconHidden $AppDir
     Set-DiscordGpuHighPerformance $AppDir
     Set-DiscordFullscreenOptimizationsOff $AppDir
-    Write-Ok 'Windows tweaks applied (toasts OFF, tray hidden, no autostart, GPU high-perf)'
+    [void](Set-DiscordVoiceQosPolicies)
+    Write-Ok 'Windows tweaks applied (toasts OFF, tray hidden, no autostart, GPU high-perf, voice QoS)'
 }
 
 function Test-ExoHasDiscreteGpu {
@@ -732,14 +958,14 @@ function Unlock-DiscordSettings([string]$DestPath = '') {
 }
 
 function Get-DiscOptPowerShellExe {
-    # PowerShell 7 Preview only - never Windows PowerShell 5.1, never stable 7.
+    # Stable PowerShell 7 host for helpers (any pwsh 7.x; never 5.1).
     $found = Get-DiscOptPwsh7
     if ($found -and $found.Exe) { return $found.Exe }
-    $preview = Get-Command pwsh-preview -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($preview -and $preview.Source -and ($preview.Source -match '(?i)preview|PowerShellPreview')) {
-        return $preview.Source
+    $cmd = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd -and $cmd.Source -and ($cmd.Source -notmatch 'WindowsPowerShell')) {
+        return $cmd.Source
     }
-    throw 'PowerShell 7 Preview is required. Install Microsoft.PowerShell.Preview and Windows Terminal Preview.'
+    throw 'PowerShell 7 is required. Install it with: winget install Microsoft.PowerShell'
 }
 
 function Apply-DiscordProfile([string]$DestPath = '') {
@@ -789,6 +1015,12 @@ function Apply-DiscordProfile([string]$DestPath = '') {
     }
 
     # Exo Host chromium lean (safe; no single-process / sandbox kills).
+    # disable-background-timer-throttling: keep JS timers full-rate when the
+    # window is hidden (voice/notification latency; real Chromium switch).
+    # disable-hang-monitor: no "page unresponsive" watchdog dialogs (real switch;
+    # UI-only watchdog, no renderer behavior change).
+    # FORBIDDEN here (documented client blanking): single-process, disable-gpu,
+    # disable-software-rasterizer, disable-gpu-compositing, in-process-gpu.
     $merged.chromiumSwitches = @{
         'disable-breakpad'                        = 1
         'disable-crash-reporter'                  = 1
@@ -799,6 +1031,8 @@ function Apply-DiscordProfile([string]$DestPath = '') {
         'no-pings'                                = 1
         'disable-renderer-backgrounding'          = 1
         'disable-backgrounding-occluded-windows'  = 1
+        'disable-background-timer-throttling'     = 1
+        'disable-hang-monitor'                    = 1
     }
     # Drop legacy OpenAsar settings block - Equicord NoTrack/SilentTyping cover that surface.
     if ($merged.Keys -contains 'openasar') { $merged.Remove('openasar') }
