@@ -591,6 +591,11 @@ public sealed class GitHubUpdateService
                 };
             }
 
+            // Post-update hook: migrate the machine to stable PowerShell 7, remove the
+            // preview channels Exo used to require, and prune stale update leftovers.
+            // Detached + copied out of the app dir so the stage-swap cannot break it.
+            TryRunDependencyDoctorDetached("post-app-update");
+
             Report(status, progress, $"Restarting into v{check.RemoteVersion}…", percent: 100);
             return new AppUpdateResult
             {
@@ -617,6 +622,61 @@ public sealed class GitHubUpdateService
                 RemoteVersion = check.RemoteVersion,
                 Message = $"App update failed: {ex.Message}"
             };
+        }
+    }
+
+    /// <summary>
+    /// Launches Scripts\Setup\Exo-DependencyDoctor.ps1 detached, hidden and
+    /// best-effort. The script is copied to %LocalAppData%\Exo\setup first so the
+    /// installer's stage-swap of the app folder cannot pull it out from under the
+    /// running doctor. Hosted by stable pwsh when available, else Windows
+    /// PowerShell 5.1 (always present) so bootstrap works when pwsh 7 is missing.
+    /// </summary>
+    public static void TryRunDependencyDoctorDetached(string reason)
+    {
+        try
+        {
+            var source = Path.Combine(PathHelper.ScriptsRoot, "Setup", "Exo-DependencyDoctor.ps1");
+            if (!File.Exists(source))
+                return;
+
+            var setupDir = Path.Combine(PathHelper.AppDataDir, "setup");
+            Directory.CreateDirectory(setupDir);
+            var copy = Path.Combine(setupDir, "Exo-DependencyDoctor.ps1");
+            File.Copy(source, copy, overwrite: true);
+
+            var logPath = Path.Combine(
+                PathHelper.LogsDir,
+                $"dependency-doctor-{DateTime.Now:yyyyMMddHHmmss}.log");
+
+            var host = PowerShellRunnerService.TryGetPowerShellPath()
+                       ?? Path.Combine(
+                           Environment.GetFolderPath(Environment.SpecialFolder.System),
+                           "WindowsPowerShell", "v1.0", "powershell.exe");
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = host,
+                WorkingDirectory = setupDir,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+            psi.ArgumentList.Add("-NoProfile");
+            psi.ArgumentList.Add("-ExecutionPolicy");
+            psi.ArgumentList.Add("Bypass");
+            psi.ArgumentList.Add("-File");
+            psi.ArgumentList.Add(copy);
+            psi.ArgumentList.Add("-Reason");
+            psi.ArgumentList.Add(reason);
+            psi.ArgumentList.Add("-LogPath");
+            psi.ArgumentList.Add(logPath);
+
+            using var p = Process.Start(psi);
+        }
+        catch
+        {
+            // The doctor is a hygiene pass, never a reason to fail an update.
         }
     }
 

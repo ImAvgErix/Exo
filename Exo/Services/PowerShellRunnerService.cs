@@ -47,9 +47,8 @@ public sealed class PowerShellRunnerService
             await _runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                // Always silent: PowerShell 7 Preview only, no visible Terminal window.
-                // Windows Terminal Preview is still required on the machine (checked at startup)
-                // but scripts never flash UI to the user.
+                // Always silent: PowerShell 7 (stable), no visible terminal window.
+                // Elevated and non-elevated runs both stay hidden.
                 if (elevate)
                 {
                     return await RunElevatedSilentAsync(
@@ -210,246 +209,7 @@ public sealed class PowerShellRunnerService
     }
 
     /// <summary>
-    /// Runs apply/repair in Windows Terminal Preview hosting PowerShell 7 Preview.
-    /// Progress is polled from EXO_LOG + exit file.
-    /// </summary>
-    private static async Task<ScriptRunResult> RunViaTerminalPreviewAsync(
-        string scriptPath,
-        List<string> opts,
-        string workDir,
-        IProgress<ScriptRunProgress>? progress,
-        bool elevate,
-        CancellationToken cancellationToken)
-    {
-        Directory.CreateDirectory(PathHelper.LogsDir);
-        var stamp = Guid.NewGuid().ToString("N");
-        var logPath = Path.Combine(PathHelper.LogsDir, $"run-{stamp}.log");
-        var exitPath = Path.Combine(PathHelper.LogsDir, $"exit-{stamp}.txt");
-        var wrapper = Path.Combine(PathHelper.LogsDir, $"wrap-{stamp}.ps1");
-        var vbsPath = Path.Combine(PathHelper.LogsDir, $"elevate-{stamp}.vbs");
-        var cancelPath = Path.Combine(PathHelper.LogsDir, $"cancel-{stamp}.txt");
-
-        var pwsh = ResolvePowerShell();
-        var terminal = ResolveWindowsTerminalPreview();
-
-        var scriptEsc = scriptPath.Replace("'", "''");
-        var logEsc = logPath.Replace("'", "''");
-        var exitEsc = exitPath.Replace("'", "''");
-        var workEsc = workDir.Replace("'", "''");
-        var cancelEsc = cancelPath.Replace("'", "''");
-        var pwshEsc = pwsh.Replace("'", "''");
-
-        var lines = new List<string>
-        {
-            "$ErrorActionPreference = 'Continue'",
-            "$Host.UI.RawUI.WindowTitle = 'Exo · PowerShell 7 Preview'",
-            "$env:EXO = '1'",
-            "$env:DISCOPT_NONINTERACTIVE = '1'",
-            "$env:EXO_SKIP_BOOT_FLASH = '1'",
-            "$env:DISCOPT_SKIP_MANIFEST = '1'",
-            "$env:EXO_LOG = '" + logEsc + "'",
-            "Set-Location -LiteralPath '" + workEsc + "'",
-            "$log = '" + logEsc + "'",
-            "$exitFile = '" + exitEsc + "'",
-            "$cancelFile = '" + cancelEsc + "'",
-            "$script = '" + scriptEsc + "'",
-            "$pwsh = '" + pwshEsc + "'",
-            "function Write-LogLine([string]$line) {",
-            "  if ([string]::IsNullOrWhiteSpace($line)) { return }",
-            "  try { Add-Content -LiteralPath $log -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }",
-            "  try { Write-Host $line } catch { }",
-            "}",
-            "'' | Set-Content -LiteralPath $log -Encoding UTF8",
-            "Write-LogLine 'EXO_PROGRESS:5|Windows Terminal Preview + PowerShell 7 Preview'",
-            "$code = 1",
-            "if (Test-Path -LiteralPath $cancelFile) {",
-            "  Write-LogLine 'EXO_PROGRESS:0|Cancelled'",
-            "  Set-Content -LiteralPath $exitFile -Value -2 -Encoding ascii",
-            "  exit -2",
-            "}",
-            "try {",
-            "  Write-LogLine 'EXO_PROGRESS:8|Starting optimizer...'",
-            "  $argList = @('-NoProfile','-ExecutionPolicy','Bypass','-File',$script)"
-        };
-        foreach (var o in opts)
-            lines.Add("  $argList += '" + o.Replace("'", "''") + "'");
-        lines.AddRange(new[]
-        {
-            "  & $pwsh @argList 2>&1 | ForEach-Object { Write-LogLine (\"$_\") }",
-            "  $code = 0",
-            "  if ($null -ne $LASTEXITCODE) { $code = [int]$LASTEXITCODE }",
-            "} catch {",
-            "  Write-LogLine ('[-] ' + $_.Exception.Message)",
-            "  $code = 1",
-            "}",
-            "if ($code -eq 0) { Write-LogLine 'EXO_PROGRESS:100|Completed successfully' }",
-            "elseif ($code -eq -2) { Write-LogLine 'EXO_PROGRESS:0|Cancelled' }",
-            "else { Write-LogLine 'EXO_PROGRESS:100|Finished with errors' }",
-            "Set-Content -LiteralPath $exitFile -Value $code -Encoding ascii",
-            "if ($code -ne 0) { Start-Sleep -Seconds 8 } else { Start-Sleep -Seconds 2 }",
-            "exit $code"
-        });
-        await File.WriteAllTextAsync(wrapper, string.Join(Environment.NewLine, lines), cancellationToken)
-            .ConfigureAwait(false);
-
-        var wtArgs =
-            "-w 0 nt --title \"Exo\" -- \"" + pwsh + "\" -NoProfile -ExecutionPolicy Bypass -File \"" +
-            wrapper + "\"";
-
-        using var cancellationRegistration = cancellationToken.Register(() =>
-        {
-            try { File.WriteAllText(cancelPath, "1"); } catch { }
-        });
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (elevate)
-        {
-            progress?.Report(new ScriptRunProgress
-            {
-                Percent = 4,
-                Status = "Waiting for Administrator approval (Terminal Preview)..."
-            });
-            var wtEsc = terminal.Replace("\"", "\"\"");
-            var argsEsc = wtArgs.Replace("\"", "\"\"");
-            var vbsBody =
-                "Set shell = CreateObject(\"Shell.Application\")\r\n" +
-                "shell.ShellExecute \"" + wtEsc + "\", \"" + argsEsc + "\", \"\", \"runas\", 1\r\n";
-            await File.WriteAllTextAsync(vbsPath, vbsBody, cancellationToken).ConfigureAwait(false);
-            var psi = new ProcessStartInfo
-            {
-                FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "wscript.exe"),
-                Arguments = "//B //Nologo \"" + vbsPath + "\"",
-                WorkingDirectory = workDir,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var launcher = Process.Start(psi);
-            if (launcher is null)
-            {
-                return new ScriptRunResult
-                {
-                    Success = false,
-                    ExitCode = -1,
-                    ErrorMessage = "Failed to start elevated Windows Terminal Preview.",
-                    Summary = "Launch failed"
-                };
-            }
-            await launcher.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            progress?.Report(new ScriptRunProgress
-            {
-                Percent = 4,
-                Status = "Opening Windows Terminal Preview..."
-            });
-            var psi = new ProcessStartInfo
-            {
-                FileName = terminal,
-                Arguments = wtArgs,
-                WorkingDirectory = workDir,
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Normal
-            };
-            using var launcher = Process.Start(psi);
-            if (launcher is null)
-            {
-                return new ScriptRunResult
-                {
-                    Success = false,
-                    ExitCode = -1,
-                    ErrorMessage = "Failed to start Windows Terminal Preview.",
-                    Summary = "Launch failed"
-                };
-            }
-        }
-
-        var lastPercent = 5.0;
-        var lastStatus = elevate
-            ? "Waiting for Administrator approval (Terminal Preview)..."
-            : "Running in Terminal Preview...";
-        var lastLength = 0;
-        var startedUtc = DateTime.UtcNow;
-        var sawLog = false;
-        var timeout = TimeSpan.FromMinutes(25);
-
-        while (!File.Exists(exitPath))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (File.Exists(logPath))
-            {
-                if (!sawLog)
-                {
-                    sawLog = true;
-                    lastStatus = "Optimizer running in Terminal Preview...";
-                    progress?.Report(new ScriptRunProgress { Percent = 8, Status = lastStatus });
-                }
-                PollLog(logPath, ref lastLength, ref lastPercent, ref lastStatus, progress);
-            }
-            else if (elevate && DateTime.UtcNow - startedUtc > TimeSpan.FromSeconds(45) && !sawLog)
-            {
-                progress?.Report(new ScriptRunProgress { Percent = 0, Status = "Elevation cancelled" });
-                try { File.Delete(wrapper); } catch { }
-                try { File.Delete(vbsPath); } catch { }
-                return new ScriptRunResult
-                {
-                    Success = false,
-                    ExitCode = -1,
-                    Summary = "Elevation cancelled",
-                    ErrorMessage = "Administrator approval was cancelled or Terminal Preview never started."
-                };
-            }
-
-            if (DateTime.UtcNow - startedUtc > timeout)
-            {
-                var timedOutOutput = File.Exists(logPath)
-                    ? await File.ReadAllTextAsync(logPath, cancellationToken).ConfigureAwait(false)
-                    : string.Empty;
-                return new ScriptRunResult
-                {
-                    Success = false,
-                    ExitCode = -1,
-                    FullOutput = timedOutOutput,
-                    Summary = "Timed out",
-                    ErrorMessage = "Optimizer timed out in Terminal Preview.",
-                    LogPath = logPath
-                };
-            }
-
-            await Task.Delay(150, cancellationToken).ConfigureAwait(false);
-        }
-
-        PollLog(logPath, ref lastLength, ref lastPercent, ref lastStatus, progress);
-        var exitText = (await File.ReadAllTextAsync(exitPath, cancellationToken).ConfigureAwait(false)).Trim();
-        _ = int.TryParse(exitText, out var exitCode);
-        var fullOutput = File.Exists(logPath)
-            ? await File.ReadAllTextAsync(logPath, cancellationToken).ConfigureAwait(false)
-            : string.Empty;
-        var ok = exitCode == 0;
-        progress?.Report(new ScriptRunProgress
-        {
-            Percent = ok ? 100 : lastPercent,
-            Status = ok ? "Completed successfully" : exitCode == -2 ? "Cancelled" : "Finished with errors"
-        });
-
-        try { File.Delete(wrapper); } catch { }
-        try { File.Delete(vbsPath); } catch { }
-        try { File.Delete(cancelPath); } catch { }
-        try { File.Delete(exitPath); } catch { }
-
-        return new ScriptRunResult
-        {
-            Success = ok,
-            ExitCode = exitCode,
-            FullOutput = fullOutput,
-            Summary = ok ? "Completed successfully" : exitCode == -2 ? "Cancelled" : $"Exited with code {exitCode}",
-            ErrorMessage = ok ? null : ExtractError(fullOutput, logPath),
-            LogPath = logPath
-        };
-    }
-
-    /// <summary>
-    /// Elevated apply/repair via PowerShell 7 Preview — hidden, no Terminal window.
+    /// Elevated apply/repair via PowerShell 7 — hidden, no terminal window.
     /// Progress still polled from EXO_LOG + exit file.
     /// </summary>
     private static async Task<ScriptRunResult> RunElevatedSilentAsync(
@@ -513,7 +273,7 @@ public sealed class PowerShellRunnerService
             "  } catch { }",
             "}",
             "'' | Set-Content -LiteralPath $log -Encoding UTF8",
-            "Write-LogLine 'EXO_PROGRESS:5|Elevated PowerShell 7 Preview (silent)'",
+            "Write-LogLine 'EXO_PROGRESS:5|Elevated PowerShell 7 (silent)'",
             "$code = 1",
             "if (Test-Path -LiteralPath $cancelFile) {",
             "  Write-LogLine 'EXO_PROGRESS:0|Cancelled'",
@@ -606,7 +366,7 @@ public sealed class PowerShellRunnerService
             {
                 Success = false,
                 ExitCode = -1,
-                ErrorMessage = "Failed to start elevated PowerShell 7 Preview.",
+                ErrorMessage = "Failed to start elevated PowerShell 7.",
                 Summary = "Launch failed"
             };
         }
@@ -835,75 +595,50 @@ public sealed class PowerShellRunnerService
     }
 
     private static string? _cachedPowerShellPath;
-    private static string? _cachedTerminalPreviewPath;
 
     /// <summary>
-    /// Path to PowerShell 7 Preview only. Never Windows PowerShell 5.1, never stable 7.
+    /// Path to PowerShell 7 (stable channel preferred). Never Windows PowerShell 5.1.
+    /// Preview installs are accepted only as a fallback when no stable copy exists.
     /// </summary>
     public static string ResolvePowerShell()
     {
-        if (_cachedPowerShellPath is not null && File.Exists(_cachedPowerShellPath) &&
-            LooksLikePowerShellPreview(_cachedPowerShellPath))
+        if (_cachedPowerShellPath is not null && File.Exists(_cachedPowerShellPath))
             return _cachedPowerShellPath;
 
-        string? stableHint = null;
-        foreach (var path in EnumeratePowerShellPreviewCandidates())
+        string? previewFallback = null;
+        foreach (var path in EnumeratePowerShellCandidates())
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
                     continue;
+                if (IsWindowsPowerShell51(path))
+                    continue;
                 if (LooksLikePowerShellPreview(path))
                 {
-                    _cachedPowerShellPath = path;
-                    return path;
+                    previewFallback ??= path;
+                    continue;
                 }
 
-                // Remember stable 7 for a clearer error (common mix-up).
-                if (stableHint is null && LooksLikePowerShellStable(path))
-                    stableHint = path;
+                // Any non-preview pwsh.exe is the stable channel we want.
+                _cachedPowerShellPath = path;
+                return path;
             }
             catch { /* continue */ }
         }
 
-        if (stableHint is not null)
+        if (previewFallback is not null)
         {
-            throw new InvalidOperationException(
-                "Found stable PowerShell 7, but Exo needs PowerShell 7 Preview.\n" +
-                $"Stable: {stableHint}\n" +
-                "Install Preview: winget install Microsoft.PowerShell.Preview\n" +
-                "Then restart Exo (and sign out if the Store just finished installing).");
+            // Preview channel accepted as fallback only; the dependency doctor
+            // migrates these machines to stable PowerShell 7.
+            _cachedPowerShellPath = previewFallback;
+            return previewFallback;
         }
 
         throw new InvalidOperationException(
-            "PowerShell 7 Preview not found.\n" +
-            "Install: winget install Microsoft.PowerShell.Preview\n" +
-            "Or Microsoft Store → “PowerShell Preview”. Then restart Exo.");
-    }
-
-    /// <summary>Windows Terminal Preview host used to run optimizer scripts.</summary>
-    public static string ResolveWindowsTerminalPreview()
-    {
-        if (_cachedTerminalPreviewPath is not null && File.Exists(_cachedTerminalPreviewPath))
-            return _cachedTerminalPreviewPath;
-
-        foreach (var path in EnumerateTerminalPreviewCandidates())
-        {
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-                {
-                    _cachedTerminalPreviewPath = path;
-                    return path;
-                }
-            }
-            catch { /* continue */ }
-        }
-
-        throw new InvalidOperationException(
-            "Windows Terminal Preview not found.\n" +
-            "Install: winget install Microsoft.WindowsTerminal.Preview\n" +
-            "Then restart Exo.");
+            "PowerShell 7 not found.\n" +
+            "Install: winget install Microsoft.PowerShell\n" +
+            "Or Microsoft Store -> \"PowerShell\". Then restart Exo.");
     }
 
     public static string? TryGetPowerShellPath()
@@ -912,108 +647,72 @@ public sealed class PowerShellRunnerService
         catch { return null; }
     }
 
-    public static string? TryGetWindowsTerminalPreviewPath()
+    /// <summary>Stable PowerShell 7 only — returns null when only preview/5.1 exist.</summary>
+    public static string? TryGetStablePowerShellPath()
     {
-        try { return ResolveWindowsTerminalPreview(); }
-        catch { return null; }
+        foreach (var path in EnumeratePowerShellCandidates())
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                    continue;
+                if (IsWindowsPowerShell51(path) || LooksLikePowerShellPreview(path))
+                    continue;
+                return path;
+            }
+            catch { /* continue */ }
+        }
+
+        return null;
     }
 
     /// <summary>
-    /// Requires PowerShell 7 Preview + Windows Terminal Preview. Installs both via
-    /// winget when available; otherwise (debloated Windows without winget, or a
-    /// failed winget install) falls back to the official Microsoft GitHub releases —
-    /// portable zip for PowerShell Preview, sideloaded msixbundle for Terminal Preview.
+    /// Requires stable PowerShell 7. Installs it via winget when available;
+    /// otherwise (debloated Windows without winget, or a failed winget install)
+    /// falls back to the official portable zip from the Microsoft GitHub release.
+    /// An existing preview install keeps Exo working until the doctor migrates it.
     /// </summary>
     public static async Task<(bool Ok, string Message)> EnsurePowerShellRuntimeAsync(
         CancellationToken cancellationToken = default)
     {
-        var winget = FindWinget();
+        if (TryGetStablePowerShellPath() is { } stable)
+            return (true, "PowerShell 7: " + stable);
+
         var parts = new List<string>();
-
-        var psOk = TryGetPowerShellPath() is not null;
-        if (!psOk)
+        var winget = FindWinget();
+        if (winget is not null)
         {
-            if (winget is not null)
-            {
-                var psInstall = await RunWingetAsync(
-                    winget,
-                    new[]
-                    {
-                        "install", "--id", "Microsoft.PowerShell.Preview", "-e",
-                        "--accept-package-agreements", "--accept-source-agreements",
-                        "--disable-interactivity", "--silent"
-                    },
-                    cancellationToken).ConfigureAwait(false);
-                _cachedPowerShellPath = null;
-                psOk = TryGetPowerShellPath() is not null;
-                if (!psOk)
-                    parts.Add("winget pwsh install failed: " + psInstall.Detail);
-            }
-
-            if (!psOk)
-            {
-                var portable = await InstallPortablePwshPreviewAsync(cancellationToken).ConfigureAwait(false);
-                _cachedPowerShellPath = null;
-                psOk = TryGetPowerShellPath() is not null;
-                parts.Add(psOk
-                    ? "PowerShell Preview ready (" + portable.Detail + ")"
-                    : "PowerShell Preview download failed: " + portable.Detail +
-                      " — install Microsoft.PowerShell.Preview manually, then restart Exo");
-            }
-            else
-            {
-                parts.Add("PowerShell Preview ready");
-            }
+            var psInstall = await RunWingetAsync(
+                winget,
+                new[]
+                {
+                    "install", "--id", "Microsoft.PowerShell", "-e",
+                    "--accept-package-agreements", "--accept-source-agreements",
+                    "--disable-interactivity", "--silent"
+                },
+                cancellationToken).ConfigureAwait(false);
+            _cachedPowerShellPath = null;
+            if (TryGetStablePowerShellPath() is { } viaWinget)
+                return (true, "PowerShell 7 installed via winget: " + viaWinget);
+            parts.Add("winget pwsh install failed: " + psInstall.Detail);
         }
         else
         {
-            parts.Add("PowerShell Preview: " + TryGetPowerShellPath());
+            parts.Add("winget not found");
         }
 
-        var wtOk = TryGetWindowsTerminalPreviewPath() is not null;
-        if (!wtOk)
-        {
-            if (winget is not null)
-            {
-                var wtInstall = await RunWingetAsync(
-                    winget,
-                    new[]
-                    {
-                        "install", "--id", "Microsoft.WindowsTerminal.Preview", "-e",
-                        "--accept-package-agreements", "--accept-source-agreements",
-                        "--disable-interactivity", "--silent"
-                    },
-                    cancellationToken).ConfigureAwait(false);
-                _cachedTerminalPreviewPath = null;
-                wtOk = TryGetWindowsTerminalPreviewPath() is not null;
-                if (!wtOk)
-                    parts.Add("winget terminal install failed: " + wtInstall.Detail);
-            }
+        var portable = await InstallPortablePwshStableAsync(cancellationToken).ConfigureAwait(false);
+        _cachedPowerShellPath = null;
+        if (TryGetStablePowerShellPath() is { } viaPortable)
+            return (true, "PowerShell 7 ready (" + portable.Detail + "): " + viaPortable);
+        parts.Add("portable pwsh install failed: " + portable.Detail);
 
-            if (!wtOk)
-            {
-                var sideload = await InstallTerminalPreviewFallbackAsync(cancellationToken).ConfigureAwait(false);
-                _cachedTerminalPreviewPath = null;
-                wtOk = TryGetWindowsTerminalPreviewPath() is not null;
-                parts.Add(wtOk
-                    ? "Terminal Preview ready (" + sideload.Detail + ")"
-                    : "Terminal Preview install failed: " + sideload.Detail +
-                      " — install Microsoft.WindowsTerminal.Preview manually, then restart Exo");
-            }
-            else
-            {
-                parts.Add("Terminal Preview ready");
-            }
-        }
-        else
-        {
-            parts.Add("Terminal Preview: " + TryGetWindowsTerminalPreviewPath());
-        }
+        if (TryGetPowerShellPath() is { } preview)
+            return (true, "Using PowerShell 7 Preview as fallback: " + preview + " (" + string.Join("; ", parts) + ")");
 
-        if (psOk && wtOk)
-            return (true, string.Join("; ", parts));
-
-        return (false, string.Join("; ", parts));
+        return (false,
+            "PowerShell 7 unavailable: " + string.Join("; ", parts) +
+            " — install with 'winget install Microsoft.PowerShell' or from the Microsoft Store (\"PowerShell\"), then restart Exo.");
     }
 
     private static readonly HttpClient RuntimeHttp = CreateRuntimeHttp();
@@ -1027,13 +726,13 @@ public sealed class PowerShellRunnerService
     }
 
     private static string PortablePwshDir =>
-        Path.Combine(PathHelper.AppDataDir, "runtime", "PowerShellPreview");
+        Path.Combine(PathHelper.AppDataDir, "runtime", "PowerShell");
 
     /// <summary>
-    /// Find the newest asset on a GitHub prerelease matching a name filter.
+    /// Find the newest asset on a GitHub stable release matching a name filter.
     /// Returns url + size + sha256 digest (when GitHub provides one).
     /// </summary>
-    private static async Task<(string? Url, long Size, string? Sha256, string? Tag)> FindLatestPreviewAssetAsync(
+    private static async Task<(string? Url, long Size, string? Sha256, string? Tag)> FindLatestStableAssetAsync(
         string repo,
         Func<string, bool> assetNameMatches,
         CancellationToken ct)
@@ -1043,7 +742,9 @@ public sealed class PowerShellRunnerService
         using var doc = JsonDocument.Parse(json);
         foreach (var rel in doc.RootElement.EnumerateArray())
         {
-            if (!rel.TryGetProperty("prerelease", out var pre) || !pre.GetBoolean())
+            if (rel.TryGetProperty("prerelease", out var pre) && pre.GetBoolean())
+                continue;
+            if (rel.TryGetProperty("draft", out var draft) && draft.GetBoolean())
                 continue;
             if (!rel.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
                 continue;
@@ -1098,24 +799,24 @@ public sealed class PowerShellRunnerService
     }
 
     /// <summary>
-    /// Winget-less fallback: install the official PowerShell 7 Preview portable zip
-    /// (github.com/PowerShell/PowerShell prerelease, win-x64) under %LocalAppData%\Exo\runtime.
-    /// Per-user, no elevation. Preview only — stable releases are never selected.
+    /// Winget-less fallback: install the official stable PowerShell 7 portable zip
+    /// (github.com/PowerShell/PowerShell stable release, win-x64) under %LocalAppData%\Exo\runtime.
+    /// Per-user, no elevation. Stable only — prereleases are never selected.
     /// </summary>
-    private static async Task<(bool Ok, string Detail)> InstallPortablePwshPreviewAsync(CancellationToken ct)
+    private static async Task<(bool Ok, string Detail)> InstallPortablePwshStableAsync(CancellationToken ct)
     {
         try
         {
-            var (url, size, sha256, tag) = await FindLatestPreviewAssetAsync(
+            var (url, size, sha256, tag) = await FindLatestStableAssetAsync(
                 "PowerShell/PowerShell",
                 name => name.EndsWith("-win-x64.zip", StringComparison.OrdinalIgnoreCase),
                 ct).ConfigureAwait(false);
-            if (url is null || tag is null || !tag.Contains("preview", StringComparison.OrdinalIgnoreCase))
-                return (false, "no PowerShell Preview win-x64 zip release found");
+            if (url is null || tag is null || tag.Contains("preview", StringComparison.OrdinalIgnoreCase))
+                return (false, "no stable PowerShell win-x64 zip release found");
 
             var runtimeRoot = Path.GetDirectoryName(PortablePwshDir)!;
             Directory.CreateDirectory(runtimeRoot);
-            var zipPath = Path.Combine(runtimeRoot, "pwsh-preview-download.zip");
+            var zipPath = Path.Combine(runtimeRoot, "pwsh-download.zip");
             var staging = PortablePwshDir + ".staging-" + Guid.NewGuid().ToString("N");
 
             var download = await DownloadVerifiedAsync(url, size, sha256, zipPath, ct).ConfigureAwait(false);
@@ -1161,79 +862,6 @@ public sealed class PowerShellRunnerService
         }
     }
 
-    /// <summary>
-    /// Winget-less fallback: sideload the official Windows Terminal Preview msixbundle
-    /// (github.com/microsoft/terminal prerelease) per-user via Add-AppxPackage.
-    /// Best-effort — a missing framework dependency surfaces as a clear error.
-    /// </summary>
-    private static async Task<(bool Ok, string Detail)> InstallTerminalPreviewFallbackAsync(CancellationToken ct)
-    {
-        try
-        {
-            var (url, size, sha256, tag) = await FindLatestPreviewAssetAsync(
-                "microsoft/terminal",
-                name => name.StartsWith("Microsoft.WindowsTerminalPreview_", StringComparison.OrdinalIgnoreCase)
-                        && name.EndsWith(".msixbundle", StringComparison.OrdinalIgnoreCase),
-                ct).ConfigureAwait(false);
-            if (url is null)
-                return (false, "no Terminal Preview msixbundle release found");
-
-            var runtimeRoot = Path.Combine(PathHelper.AppDataDir, "runtime");
-            Directory.CreateDirectory(runtimeRoot);
-            var bundlePath = Path.Combine(runtimeRoot, "terminal-preview.msixbundle");
-
-            var download = await DownloadVerifiedAsync(url, size, sha256, bundlePath, ct).ConfigureAwait(false);
-            if (!download.Ok)
-                return download;
-
-            try
-            {
-                // Windows PowerShell 5.1 always exists and carries Add-AppxPackage.
-                var psi = new ProcessStartInfo
-                {
-                    FileName = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.System),
-                        "WindowsPowerShell", "v1.0", "powershell.exe"),
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                };
-                psi.ArgumentList.Add("-NoProfile");
-                psi.ArgumentList.Add("-ExecutionPolicy");
-                psi.ArgumentList.Add("Bypass");
-                psi.ArgumentList.Add("-Command");
-                psi.ArgumentList.Add("Add-AppxPackage -Path '" + bundlePath.Replace("'", "''") + "'");
-
-                using var p = Process.Start(psi);
-                if (p is null)
-                    return (false, "Add-AppxPackage host failed to start");
-                var stderr = await p.StandardError.ReadToEndAsync(ct).ConfigureAwait(false);
-                await p.WaitForExitAsync(ct).ConfigureAwait(false);
-                if (p.ExitCode != 0)
-                {
-                    var reason = stderr.Replace('\r', ' ').Replace('\n', ' ').Trim();
-                    return (false, "sideload exit=" + p.ExitCode +
-                        (reason.Length > 0 ? " " + (reason.Length > 180 ? reason[..180] + "…" : reason) : ""));
-                }
-
-                return (true, "sideloaded " + (tag ?? "preview"));
-            }
-            finally
-            {
-                TryDeleteFile(bundlePath);
-            }
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message);
-        }
-    }
-
     private static void TryDeleteFile(string path)
     {
         try { File.Delete(path); } catch { /* best-effort cleanup */ }
@@ -1242,44 +870,6 @@ public sealed class PowerShellRunnerService
     private static void TryDeleteDirectory(string path)
     {
         try { Directory.Delete(path, recursive: true); } catch { /* best-effort cleanup */ }
-    }
-
-    private static IEnumerable<string> EnumerateTerminalPreviewCandidates()
-    {
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-        var winApps = Path.Combine(programFiles, "WindowsApps");
-
-        // AppX path first — avoids access-denied when listing WindowsApps.
-        var appx = TryFindAppxInstallPath("Microsoft.WindowsTerminalPreview");
-        if (appx is not null)
-        {
-            yield return Path.Combine(appx, "WindowsTerminal.exe");
-            yield return Path.Combine(appx, "wt.exe");
-        }
-
-        if (Directory.Exists(winApps))
-        {
-            string[] dirs = Array.Empty<string>();
-            try
-            {
-                dirs = Directory.GetDirectories(winApps, "Microsoft.WindowsTerminalPreview_*")
-                    .Where(d => !d.Contains("~", StringComparison.Ordinal))
-                    .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-            }
-            catch { }
-
-            foreach (var dir in dirs)
-            {
-                yield return Path.Combine(dir, "WindowsTerminal.exe");
-                yield return Path.Combine(dir, "wt.exe");
-            }
-        }
-
-        yield return Path.Combine(local, "Microsoft", "WindowsApps", "wt-preview.exe");
-        yield return Path.Combine(local, "Microsoft", "WindowsApps", "WindowsTerminalPreview.exe");
-        yield return Path.Combine(local, "Microsoft", "WindowsApps", "wt.exe");
     }
 
     private static string? FindWinget()
@@ -1370,37 +960,17 @@ public sealed class PowerShellRunnerService
         return t.Length > 180 ? t[..180] + "…" : t;
     }
 
-    private static bool LooksLikePowerShellStable(string path)
+    /// <summary>Windows PowerShell 5.1 is never a valid host for Exo scripts.</summary>
+    private static bool IsWindowsPowerShell51(string path)
     {
         if (path.Contains("WindowsPowerShell", StringComparison.OrdinalIgnoreCase))
-            return false;
-        var name = Path.GetFileName(path);
-        if (!name.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase))
-            return false;
-        if (path.Contains("7-preview", StringComparison.OrdinalIgnoreCase) ||
-            path.Contains("PowerShellPreview", StringComparison.OrdinalIgnoreCase))
-            return false;
-        if (path.Contains("PowerShell\\7\\", StringComparison.OrdinalIgnoreCase) ||
-            path.Contains("PowerShell/7/", StringComparison.OrdinalIgnoreCase))
             return true;
-        try
-        {
-            var vi = FileVersionInfo.GetVersionInfo(path);
-            var blob = $"{vi.ProductName} {vi.FileDescription} {vi.ProductVersion} {vi.FileVersion}";
-            if (blob.Contains("preview", StringComparison.OrdinalIgnoreCase))
-                return false;
-            if (blob.Contains("PowerShell", StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-        catch { }
-        return false;
+        var name = Path.GetFileName(path);
+        return name.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool LooksLikePowerShellPreview(string path)
     {
-        if (path.Contains("WindowsPowerShell", StringComparison.OrdinalIgnoreCase))
-            return false;
-
         var name = Path.GetFileName(path);
         if (name.Equals("pwsh-preview.exe", StringComparison.OrdinalIgnoreCase))
             return true;
@@ -1421,35 +991,26 @@ public sealed class PowerShellRunnerService
         }
         catch { }
 
+        // Store execution alias: version info is unreadable on the reparse point,
+        // so a preview-only store install must be identified via siblings/AppX.
         if (path.Contains("WindowsApps", StringComparison.OrdinalIgnoreCase))
         {
             var dir = Path.GetDirectoryName(path) ?? "";
-            if (File.Exists(Path.Combine(dir, "pwsh-preview.exe")))
+            if (File.Exists(Path.Combine(dir, "pwsh-preview.exe")) &&
+                TryFindAppxInstallPath("Microsoft.PowerShell") is null &&
+                TryFindAppxInstallPath("Microsoft.PowerShellPreview") is not null)
                 return true;
-            if (TryFindAppxInstallPath("Microsoft.PowerShellPreview") is not null)
-                return true;
-            try
-            {
-                var winApps = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WindowsApps");
-                if (Directory.Exists(winApps) &&
-                    Directory.GetDirectories(winApps, "Microsoft.PowerShellPreview_*").Length > 0)
-                    return true;
-            }
-            catch { }
         }
-
-        if (path.Contains("PowerShell\\7\\", StringComparison.OrdinalIgnoreCase) ||
-            path.Contains("PowerShell/7/", StringComparison.OrdinalIgnoreCase))
-            return false;
 
         return false;
     }
 
     /// <summary>
     /// Store/AppX install path without listing Program Files\WindowsApps (often access-denied).
+    /// Exact package name match — "Microsoft.PowerShell" must never match
+    /// "Microsoft.PowerShellPreview".
     /// </summary>
-    private static string? TryFindAppxInstallPath(string packageNamePrefix)
+    private static string? TryFindAppxInstallPath(string packageName)
     {
         try
         {
@@ -1460,7 +1021,7 @@ public sealed class PowerShellRunnerService
                 {
                     var name = pkg.Id?.Name;
                     if (string.IsNullOrEmpty(name)) continue;
-                    if (!name.StartsWith(packageNamePrefix, StringComparison.OrdinalIgnoreCase))
+                    if (!name.Equals(packageName, StringComparison.OrdinalIgnoreCase))
                         continue;
                     var loc = pkg.InstalledLocation?.Path;
                     if (!string.IsNullOrWhiteSpace(loc) && Directory.Exists(loc))
@@ -1474,24 +1035,73 @@ public sealed class PowerShellRunnerService
         return null;
     }
 
-    private static IEnumerable<string> EnumeratePowerShellPreviewCandidates()
+    /// <summary>
+    /// PowerShell 7 candidates, stable first:
+    /// (a) %ProgramFiles%\PowerShell\7\pwsh.exe, (b) pwsh.exe on PATH,
+    /// (c) Microsoft.PowerShell store install (AppX / WindowsApps),
+    /// (d) preview locations — accepted by ResolvePowerShell as fallback only.
+    /// </summary>
+    private static IEnumerable<string> EnumeratePowerShellCandidates()
     {
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
         var programW6432 = Environment.GetEnvironmentVariable("ProgramW6432");
+        var roots = new[] { programFiles, programW6432, programFilesX86 };
 
-        var appx = TryFindAppxInstallPath("Microsoft.PowerShellPreview");
-        if (appx is not null)
+        // (a) Machine-wide MSI install of stable PowerShell 7.
+        foreach (var root in roots)
         {
-            yield return Path.Combine(appx, "pwsh.exe");
-            yield return Path.Combine(appx, "pwsh-preview.exe");
+            if (string.IsNullOrWhiteSpace(root)) continue;
+            yield return Path.Combine(root, "PowerShell", "7", "pwsh.exe");
         }
 
-        // Exo-managed portable preview (winget-less fallback install).
+        // (b) pwsh.exe on PATH.
+        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            string full;
+            try { full = Path.Combine(dir.Trim().Trim('"'), "pwsh.exe"); }
+            catch { continue; }
+            yield return full;
+        }
+
+        // (c) Microsoft Store install of stable PowerShell.
+        var stableAppx = TryFindAppxInstallPath("Microsoft.PowerShell");
+        if (stableAppx is not null)
+            yield return Path.Combine(stableAppx, "pwsh.exe");
+
+        var winApps = Path.Combine(programFiles, "WindowsApps");
+        if (Directory.Exists(winApps))
+        {
+            string[] stableMatches = Array.Empty<string>();
+            try
+            {
+                stableMatches = Directory.GetDirectories(winApps, "Microsoft.PowerShell_*")
+                    .Where(d => !d.Contains("~", StringComparison.Ordinal))
+                    .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+            catch { }
+
+            foreach (var dir in stableMatches)
+                yield return Path.Combine(dir, "pwsh.exe");
+        }
+
+        yield return Path.Combine(local, "Microsoft", "WindowsApps", "pwsh.exe");
+
+        // Exo-managed portable stable copy (winget-less fallback install).
         yield return Path.Combine(PortablePwshDir, "pwsh.exe");
 
-        foreach (var root in new[] { programFiles, programW6432, programFilesX86 })
+        // (d) Preview locations — fallback only, never preferred over stable.
+        var previewAppx = TryFindAppxInstallPath("Microsoft.PowerShellPreview");
+        if (previewAppx is not null)
+        {
+            yield return Path.Combine(previewAppx, "pwsh.exe");
+            yield return Path.Combine(previewAppx, "pwsh-preview.exe");
+        }
+
+        foreach (var root in roots)
         {
             if (string.IsNullOrWhiteSpace(root)) continue;
             yield return Path.Combine(root, "PowerShell", "7-preview", "pwsh.exe");
@@ -1499,9 +1109,10 @@ public sealed class PowerShellRunnerService
         }
 
         yield return Path.Combine(local, "Microsoft", "WindowsApps", "pwsh-preview.exe");
-        yield return Path.Combine(local, "Microsoft", "WindowsApps", "pwsh.exe");
 
-        var winApps = Path.Combine(programFiles, "WindowsApps");
+        // Legacy Exo-managed portable preview copy (pre-stable-migration installs).
+        yield return Path.Combine(PathHelper.AppDataDir, "runtime", "PowerShellPreview", "pwsh.exe");
+
         if (Directory.Exists(winApps))
         {
             string[] previewMatches = Array.Empty<string>();
@@ -1518,16 +1129,12 @@ public sealed class PowerShellRunnerService
                 yield return Path.Combine(dir, "pwsh.exe");
         }
 
-        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-        foreach (var name in new[] { "pwsh-preview.exe", "pwsh.exe" })
+        foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
-            foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-            {
-                string full;
-                try { full = Path.Combine(dir.Trim().Trim('"'), name); }
-                catch { continue; }
-                yield return full;
-            }
+            string full;
+            try { full = Path.Combine(dir.Trim().Trim('"'), "pwsh-preview.exe"); }
+            catch { continue; }
+            yield return full;
         }
     }
 
