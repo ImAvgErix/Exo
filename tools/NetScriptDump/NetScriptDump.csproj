@@ -9,7 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Drive the real shipped sources (not a reimplementation). -->
-    <Compile Include="..\..\Exo\Services\NetworkPeakLogic.cs" Link="Shipped\NetworkPeakLogic.cs" />
+    <Compile Include="..\..\Exo\Services\NetworkLogic.cs" Link="Shipped\NetworkLogic.cs" />
     <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.cs" Link="Shipped\NetworkApplyScriptBuilder.cs" />
     <Compile Include="..\..\Exo\Models\NetworkSnapshot.cs" Link="Shipped\NetworkSnapshot.cs" />
   </ItemGroup>

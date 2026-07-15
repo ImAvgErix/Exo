@@ -607,7 +607,7 @@ public sealed class NvidiaPanelSettingsService
             psi.Environment["EXO_PRIMARY_REFRESH"] = "max";
             psi.Environment["EXO_SECONDARY_REFRESH"] = "60";
             psi.Environment["EXO_FULL_RGB"] = "1";
-            // GPU + No scaling (peak default)
+            // GPU + No scaling (applied default)
             psi.Environment["EXO_GPU_NOSCALE"] = "1";
 
             using var proc = Process.Start(psi);
@@ -647,9 +647,9 @@ public sealed class NvidiaPanelSettingsService
                     scalingOk = true;
                 registryOk = checks.TryGetProperty("registryOk", out var g) && g.GetBoolean();
             }
-            // Peak gate: refresh + (registry OR color+scaling)
+            // Status gate: refresh + (registry OR color+scaling)
             if (el.TryGetProperty("checks", out _))
-                ok = NvidiaPeakLogic.IsDisplayStatusPeakOk(refreshOk, registryOk, colorOk, scalingOk) || ok;
+                ok = NvidiaDetectLogic.IsDisplayStatusOk(refreshOk, registryOk, colorOk, scalingOk) || ok;
             var detail = $"color={colorOk}, refresh={refreshOk}, scaling={scalingOk}, registry={registryOk}";
             return (ok, colorOk, refreshOk, scalingOk, registryOk, detail);
         }

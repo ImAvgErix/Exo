@@ -10,49 +10,49 @@ void Expect(string name, bool cond, string detail = "")
     else { failed++; Log($"FAIL  {name}" + (detail.Length > 0 ? " :: " + detail : "")); }
 }
 
-Log("=== NvidiaPeak.Smoke (shipped NvidiaPeakLogic + NvidiaDetectCore.ps1) ===");
+Log("=== Nvidia.Smoke (shipped NvidiaDetectLogic + NvidiaDetectCore.ps1) ===");
 Log(DateTime.UtcNow.ToString("o"));
 
-Expect("RTX 3070 series 30", NvidiaPeakLogic.GetGpuSeriesFromName("NVIDIA GeForce RTX 3070") == "30");
-Expect("RTX 4070 series 40", NvidiaPeakLogic.GetGpuSeriesFromName("GeForce RTX 4070 SUPER") == "40");
-Expect("GTX 1660 series 10", NvidiaPeakLogic.GetGpuSeriesFromName("NVIDIA GeForce GTX 1660 Ti") == "10");
-Expect("notebook name", NvidiaPeakLogic.IsNotebookGpuName("GeForce RTX 4060 Laptop GPU"));
-Expect("desktop not notebook", !NvidiaPeakLogic.IsNotebookGpuName("GeForce RTX 3070"));
+Expect("RTX 3070 series 30", NvidiaDetectLogic.GetGpuSeriesFromName("NVIDIA GeForce RTX 3070") == "30");
+Expect("RTX 4070 series 40", NvidiaDetectLogic.GetGpuSeriesFromName("GeForce RTX 4070 SUPER") == "40");
+Expect("GTX 1660 series 10", NvidiaDetectLogic.GetGpuSeriesFromName("NVIDIA GeForce GTX 1660 Ti") == "10");
+Expect("notebook name", NvidiaDetectLogic.IsNotebookGpuName("GeForce RTX 4060 Laptop GPU"));
+Expect("desktop not notebook", !NvidiaDetectLogic.IsNotebookGpuName("GeForce RTX 3070"));
 
 Expect("max fps profile name",
-    NvidiaPeakLogic.ExpectedProfileFileName("30", false) == "30 Series.nip");
+    NvidiaDetectLogic.ExpectedProfileFileName("30", false) == "30 Series.nip");
 Expect("gsync profile name",
-    NvidiaPeakLogic.ExpectedProfileFileName("30", true) == "30 Series G-SYNC.nip");
+    NvidiaDetectLogic.ExpectedProfileFileName("30", true) == "30 Series G-SYNC.nip");
 Expect("profile name matches",
-    NvidiaPeakLogic.ProfileNameMatchesSeries("30 Series.nip", "30", false));
+    NvidiaDetectLogic.ProfileNameMatchesSeries("30 Series.nip", "30", false));
 Expect("profile name mismatch",
-    !NvidiaPeakLogic.ProfileNameMatchesSeries("40 Series.nip", "30", false));
+    !NvidiaDetectLogic.ProfileNameMatchesSeries("40 Series.nip", "30", false));
 
 Expect("display container exe",
-    NvidiaPeakLogic.IsDisplayContainerExe(@"C:\Windows\System32\DriverStore\...\NVDisplay.Container.exe"));
+    NvidiaDetectLogic.IsDisplayContainerExe(@"C:\Windows\System32\DriverStore\...\NVDisplay.Container.exe"));
 Expect("app tray exe",
-    NvidiaPeakLogic.IsNvidiaAppTrayExe(@"C:\Program Files\NVIDIA Corporation\NVIDIA App\NVIDIA App.exe"));
+    NvidiaDetectLogic.IsNvidiaAppTrayExe(@"C:\Program Files\NVIDIA Corporation\NVIDIA App\NVIDIA App.exe"));
 Expect("display not app tray",
-    !NvidiaPeakLogic.IsNvidiaAppTrayExe(@"...\NVDisplay.Container.exe"));
+    !NvidiaDetectLogic.IsNvidiaAppTrayExe(@"...\NVDisplay.Container.exe"));
 
-Expect("tray hidden IsPromoted=0", NvidiaPeakLogic.IsDisplayContainerTrayHidden(true, 0));
-Expect("tray not hidden IsPromoted=1", !NvidiaPeakLogic.IsDisplayContainerTrayHidden(true, 1));
-Expect("tray missing key ok", NvidiaPeakLogic.IsDisplayContainerTrayHidden(false, null));
-Expect("app ghost gone", NvidiaPeakLogic.IsAppTrayGhostGone(false));
-Expect("app ghost present fail", !NvidiaPeakLogic.IsAppTrayGhostGone(true));
+Expect("tray hidden IsPromoted=0", NvidiaDetectLogic.IsDisplayContainerTrayHidden(true, 0));
+Expect("tray not hidden IsPromoted=1", !NvidiaDetectLogic.IsDisplayContainerTrayHidden(true, 1));
+Expect("tray missing key ok", NvidiaDetectLogic.IsDisplayContainerTrayHidden(false, null));
+Expect("app ghost gone", NvidiaDetectLogic.IsAppTrayGhostGone(false));
+Expect("app ghost present fail", !NvidiaDetectLogic.IsAppTrayGhostGone(true));
 
-// Display peak gate: orphan registry must not fail when color+scale live OK
-Expect("display peak: refresh+registry",
-    NvidiaPeakLogic.IsDisplayStatusPeakOk(true, true, false, false));
-Expect("display peak: refresh+live color/scale without registry",
-    NvidiaPeakLogic.IsDisplayStatusPeakOk(true, false, true, true));
-Expect("display peak: no refresh fails",
-    !NvidiaPeakLogic.IsDisplayStatusPeakOk(false, true, true, true));
-Expect("display peak: no registry and no live fails",
-    !NvidiaPeakLogic.IsDisplayStatusPeakOk(true, false, true, false));
+// Display status gate: orphan registry must not fail when color+scale live OK
+Expect("display status: refresh+registry",
+    NvidiaDetectLogic.IsDisplayStatusOk(true, true, false, false));
+Expect("display status: refresh+live color/scale without registry",
+    NvidiaDetectLogic.IsDisplayStatusOk(true, false, true, true));
+Expect("display status: no refresh fails",
+    !NvidiaDetectLogic.IsDisplayStatusOk(false, true, true, true));
+Expect("display status: no registry and no live fails",
+    !NvidiaDetectLogic.IsDisplayStatusOk(true, false, true, false));
 
-Expect("sha256 hex", NvidiaPeakLogic.IsSha256Hex(new string('a', 64)));
-Expect("sha256 bad", !NvidiaPeakLogic.IsSha256Hex("zz"));
+Expect("sha256 hex", NvidiaDetectLogic.IsSha256Hex(new string('a', 64)));
+Expect("sha256 bad", !NvidiaDetectLogic.IsSha256Hex("zz"));
 
 // --- Live DRS verification classifier (post-import + detect drsLive) ---
 var drsExpected = new Dictionary<string, string>
@@ -64,35 +64,35 @@ var drsExpected = new Dictionary<string, string>
     ["294973784"] = "0",  // G-SYNC global (max-FPS pack)
     ["549528094"] = "1",  // threaded optimization
 };
-var drsRequired = NvidiaPeakLogic.DrsRequiredPinIds;
+var drsRequired = NvidiaDetectLogic.DrsRequiredPinIds;
 Expect("drs required pins cover PM/ULL/FRL/G-SYNC",
     drsRequired.Contains("274197361") && drsRequired.Contains("390467") &&
     drsRequired.Contains("277041152") && drsRequired.Contains("277041154") &&
     drsRequired.Contains("294973784"));
 
 var drsMatch = new Dictionary<string, string>(drsExpected);
-var (vStatus, vCount, vMism) = NvidiaPeakLogic.ClassifyDrsVerification(drsExpected, drsMatch, drsRequired);
+var (vStatus, vCount, vMism) = NvidiaDetectLogic.ClassifyDrsVerification(drsExpected, drsMatch, drsRequired);
 Expect("drs verified when export matches", vStatus == "verified" && vCount == drsExpected.Count && vMism.Count == 0,
     $"{vStatus}/{vCount}/{string.Join(";", vMism)}");
 
 var drsDrift = new Dictionary<string, string>(drsExpected) { ["274197361"] = "0" };
-var (dStatus, _, dMism) = NvidiaPeakLogic.ClassifyDrsVerification(drsExpected, drsDrift, drsRequired);
+var (dStatus, _, dMism) = NvidiaDetectLogic.ClassifyDrsVerification(drsExpected, drsDrift, drsRequired);
 Expect("drs drifted on pin mismatch", dStatus == "drifted" && dMism.Count == 1 && dMism[0].Contains("274197361"),
     string.Join(";", dMism));
 
-var (uStatus, _, _) = NvidiaPeakLogic.ClassifyDrsVerification(drsExpected, null, drsRequired);
+var (uStatus, _, _) = NvidiaDetectLogic.ClassifyDrsVerification(drsExpected, null, drsRequired);
 Expect("drs unavailable when export missing (old NPI)", uStatus == "unavailable");
-var (nStatus, _, _) = NvidiaPeakLogic.ClassifyDrsVerification(null, drsMatch, drsRequired);
+var (nStatus, _, _) = NvidiaDetectLogic.ClassifyDrsVerification(null, drsMatch, drsRequired);
 Expect("drs unavailable when pack missing", nStatus == "unavailable");
 
-var (eStatus, _, eMism) = NvidiaPeakLogic.ClassifyDrsVerification(
+var (eStatus, _, eMism) = NvidiaDetectLogic.ClassifyDrsVerification(
     drsExpected, new Dictionary<string, string>(), drsRequired);
 Expect("drs drifted when export has no base pins", eStatus == "drifted" && eMism.Count > 0,
     string.Join(";", eMism));
 
 var drsPartial = new Dictionary<string, string>(drsExpected);
 drsPartial.Remove("277041154"); // frame limiter pin missing from driver export
-var (pStatus, _, pMism) = NvidiaPeakLogic.ClassifyDrsVerification(drsExpected, drsPartial, drsRequired);
+var (pStatus, _, pMism) = NvidiaDetectLogic.ClassifyDrsVerification(drsExpected, drsPartial, drsRequired);
 Expect("drs drifted when required pin missing from export",
     pStatus == "drifted" && pMism.Any(m => m.Contains("277041154") && m.Contains("missing")),
     string.Join(";", pMism));
@@ -100,25 +100,25 @@ Expect("drs drifted when required pin missing from export",
 // Non-required extra pack pins missing from export are tolerated (intersection compare)
 var drsIntersect = new Dictionary<string, string>(drsExpected);
 drsIntersect.Remove("549528094");
-var (iStatus, iCount, _) = NvidiaPeakLogic.ClassifyDrsVerification(drsExpected, drsIntersect, drsRequired);
+var (iStatus, iCount, _) = NvidiaDetectLogic.ClassifyDrsVerification(drsExpected, drsIntersect, drsRequired);
 Expect("drs intersection tolerates missing optional pin", iStatus == "verified" && iCount == drsExpected.Count - 1);
 
 Expect("profile stage applied = record + not drifted",
-    NvidiaPeakLogic.IsProfileStageApplied(true, "verified") &&
-    NvidiaPeakLogic.IsProfileStageApplied(true, "unavailable") &&
-    !NvidiaPeakLogic.IsProfileStageApplied(true, "drifted") &&
-    !NvidiaPeakLogic.IsProfileStageApplied(false, "verified"));
+    NvidiaDetectLogic.IsProfileStageApplied(true, "verified") &&
+    NvidiaDetectLogic.IsProfileStageApplied(true, "unavailable") &&
+    !NvidiaDetectLogic.IsProfileStageApplied(true, "drifted") &&
+    !NvidiaDetectLogic.IsProfileStageApplied(false, "verified"));
 
-Expect("drs verified row string", NvidiaPeakLogic.DrsVerifiedDetailText == "Verified in driver");
+Expect("drs verified row string", NvidiaDetectLogic.DrsVerifiedDetailText == "Verified in driver");
 Expect("drs drifted row string uses em dash",
-    NvidiaPeakLogic.DrsDriftedDetailText == "Drifted \u2014 re-apply");
-Expect("drs live states", NvidiaPeakLogic.DrsLiveStates.SequenceEqual(new[] { "verified", "drifted", "unavailable" }));
+    NvidiaDetectLogic.DrsDriftedDetailText == "Drifted \u2014 re-apply");
+Expect("drs live states", NvidiaDetectLogic.DrsLiveStates.SequenceEqual(new[] { "verified", "drifted", "unavailable" }));
 
 // Fully applied fixture intentional actives
-var full = NvidiaPeakLogic.IsDisplayStatusPeakOk(true, false, true, true) &&
-           NvidiaPeakLogic.IsDisplayContainerTrayHidden(true, 0) &&
-           NvidiaPeakLogic.ProfileNameMatchesSeries("30 Series.nip", "30", false) &&
-           NvidiaPeakLogic.IsAppTrayGhostGone(false);
+var full = NvidiaDetectLogic.IsDisplayStatusOk(true, false, true, true) &&
+           NvidiaDetectLogic.IsDisplayContainerTrayHidden(true, 0) &&
+           NvidiaDetectLogic.ProfileNameMatchesSeries("30 Series.nip", "30", false) &&
+           NvidiaDetectLogic.IsAppTrayGhostGone(false);
 Expect("fully applied fixture false_fail_count=0", full);
 
 var repo = FindRepoRoot();
@@ -127,7 +127,7 @@ Expect("NvidiaDetectCore.ps1 exists", File.Exists(core), core);
 
 if (File.Exists(core))
 {
-    var dir = Path.Combine(Path.GetTempPath(), "exo-nv-peak-" + Guid.NewGuid().ToString("N"));
+    var dir = Path.Combine(Path.GetTempPath(), "exo-nv-smoke-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(dir);
     try
     {
@@ -147,7 +147,7 @@ $rEmpty = Get-ExoDrsVerificationResult -Expected $exp -Exported @{{}} -RequiredI
  (E 'ps series 30' ((Get-ExoGpuSeriesFromName 'NVIDIA GeForce RTX 3070') -eq '30')),
  (E 'ps profile max' ((Get-ExoExpectedProfileFileName -SeriesId '40' -Gsync $false) -eq '40 Series.nip')),
  (E 'ps profile gsync' ((Get-ExoExpectedProfileFileName -SeriesId '40' -Gsync $true) -eq '40 Series G-SYNC.nip')),
- (E 'ps display peak orphan reg' (Test-ExoDisplayStatusPeakOk -RefreshOk $true -RegistryOk $false -ColorOk $true -PathScalingOk $true)),
+ (E 'ps display status orphan reg' (Test-ExoDisplayStatusOk -RefreshOk $true -RegistryOk $false -ColorOk $true -PathScalingOk $true)),
  (E 'ps tray hidden' (Test-ExoDisplayTrayHidden -KeyExists $true -IsPromoted 0)),
  (E 'ps tray not hidden' (-not (Test-ExoDisplayTrayHidden -KeyExists $true -IsPromoted 1))),
  (E 'ps drs verified' ($rVerified.Status -eq 'verified' -and $rVerified.ComparedCount -eq 5)),
@@ -193,7 +193,7 @@ var applyFiles = new[]
 };
 var blob = string.Join("\n", applyFiles.Where(File.Exists).Select(File.ReadAllText));
 Expect("apply sources readable", blob.Length > 5000);
-var (ok, issues) = NvidiaPeakLogic.AuditApplyScriptText(blob);
+var (ok, issues) = NvidiaDetectLogic.AuditApplyScriptText(blob);
 Expect("apply audit", ok, string.Join("; ", issues));
 Expect("no tray logon task create",
     !System.Text.RegularExpressions.Regex.IsMatch(blob, @"Register-ScheduledTask[^\r\n]*Exo-Nvidia",

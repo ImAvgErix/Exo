@@ -262,7 +262,7 @@ function Apply-ExoGameProfileDeltas {
 
     # --- Sticky latency / clarity stack (every title) ---
     # Re-assert so an app-level NVIDIA/App profile cannot leave softer defaults.
-    # Peak pack: pre-render 1, max perf, highest Hz, no post-process latency traps.
+    # Profile pack: pre-render 1, max perf, highest Hz, no post-process latency traps.
     $common = @{
         '8102046'   = '1'          # Maximum Pre-Rendered Frames = 1
         '546199011' = '1'          # Maximum frames allowed = 1
@@ -703,7 +703,7 @@ function Get-ExoDrsExportBaseMap {
 }
 
 function Get-ExoDrsVerificationResult {
-    # Pure classifier - keep aligned with NvidiaDetectCore.ps1 + NvidiaPeakLogic.cs.
+    # Pure classifier - keep aligned with NvidiaDetectCore.ps1 + NvidiaDetectLogic.cs.
     # Compares the intersection of pack settings vs the live driver export.
     # RequiredIds must be present in the export (they are always customized by the
     # pack, so a correct import exports them); a missing required pin is drift.

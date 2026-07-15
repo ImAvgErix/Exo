@@ -8,8 +8,8 @@
     VerticalAlignment="Stretch">
 
     <!--
-      UniformGridLayout inside ScrollViewer collapses to 0 width without an explicit
-      ItemsRepeater width — tiles stack at (0,0). SizeChanged keeps stretch honest.
+      Vertical feature list. SizeChanged keeps ItemsRepeater width honest
+      so tiles stretch full-width inside ScrollViewer.
     -->
     <ScrollViewer x:Name="ScrollHost"
                   VerticalScrollBarVisibility="Auto"
@@ -23,34 +23,29 @@
                        ItemsSource="{x:Bind ItemsSource, Mode=OneWay}"
                        HorizontalAlignment="Stretch">
             <ItemsRepeater.Layout>
-                <UniformGridLayout MaximumRowsOrColumns="2"
-                                   Orientation="Horizontal"
-                                   MinItemWidth="248"
-                                   MinColumnSpacing="12"
-                                   MinRowSpacing="12"
-                                   ItemsStretch="Fill" />
+                <StackLayout Orientation="Vertical" Spacing="8" />
             </ItemsRepeater.Layout>
             <ItemsRepeater.ItemTemplate>
                 <DataTemplate x:DataType="vm:FeatureRowViewModel">
-                    <Border Style="{StaticResource OptiFeatureTile}" Opacity="{x:Bind Opacity}">
+                    <Border Style="{StaticResource ExoFeatureTile}" Opacity="{x:Bind Opacity}">
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <Border Style="{StaticResource OptiStatusRail}"
+                            <Border Style="{StaticResource ExoStatusRail}"
                                     Opacity="{x:Bind RailOpacity}" />
-                            <Border Grid.Column="1" Style="{StaticResource OptiIconWell}">
+                            <Border Grid.Column="1" Style="{StaticResource ExoIconWell}">
                                 <FontIcon Glyph="{x:Bind Glyph}"
                                           FontSize="13"
-                                          Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                                          Foreground="{ThemeResource ExoPrimaryTextBrush}"
                                           HorizontalAlignment="Center"
                                           VerticalAlignment="Center" />
                             </Border>
                             <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
-                                <TextBlock Text="{x:Bind Title}" Style="{StaticResource OptiFeatureTitle}" />
-                                <TextBlock Text="{x:Bind Detail}" Style="{StaticResource OptiFeatureDetail}" />
+                                <TextBlock Text="{x:Bind Title}" Style="{StaticResource ExoFeatureTitle}" />
+                                <TextBlock Text="{x:Bind Detail}" Style="{StaticResource ExoFeatureDetail}" />
                             </StackPanel>
                         </Grid>
                     </Border>

@@ -119,8 +119,8 @@ internal static class Program
 
             // One-time upgrade path: OptiHub (the app's old name) may still be
             // installed. Close it, carry its settings/state over, remove it.
-            StopLegacyOptiHub();
-            MigrateLegacyOptiHub(local, root);
+            StopLegacyApp();
+            MigrateLegacyApp(local, root);
 
             string work = Path.Combine(Path.GetTempPath(), "exo-sfx-" + Guid.NewGuid().ToString("N"));
             string zipPath = Path.Combine(work, "payload.zip");
@@ -638,7 +638,7 @@ internal static class Program
     /// <summary>
     /// Stop any running instance of the legacy OptiHub app (pre-rename builds).
     /// </summary>
-    private static void StopLegacyOptiHub()
+    private static void StopLegacyApp()
     {
         for (int i = 0; i < 8; i++)
         {
@@ -670,7 +670,7 @@ internal static class Program
     /// into the Exo data folder, then remove the old install and its shortcut.
     /// Never overwrites data Exo already has.
     /// </summary>
-    private static void MigrateLegacyOptiHub(string local, string root)
+    private static void MigrateLegacyApp(string local, string root)
     {
         string legacyRoot = Path.Combine(local, "OptiHub");
         try

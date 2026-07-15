@@ -11,7 +11,7 @@ namespace Exo.Helpers;
 /// - Never animates Composition Opacity (blanks UI).
 /// - Cards / feature tiles: fade + light rise; select: quick press pulse before navigate.
 /// </summary>
-public static class OptiMotion
+public static class ExoMotion
 {
     // Short, clean motion — no bouncy spring on content.
     public const int EntranceMs = 220;

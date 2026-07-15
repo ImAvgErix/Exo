@@ -14,7 +14,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
     public NvidiaPanelViewModel(AppServices services)
     {
         _services = services;
-        MessageBrush = ResolveBrush("OptiSuccessBrush", Color.FromArgb(255, 34, 197, 94));
+        MessageBrush = ResolveBrush("ExoSuccessBrush", Color.FromArgb(255, 34, 197, 94));
     }
 
     public ObservableCollection<NvidiaDisplayColorRowViewModel> Displays { get; } = new();

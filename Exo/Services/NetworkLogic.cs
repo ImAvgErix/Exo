@@ -4,10 +4,10 @@ using Exo.Models;
 namespace Exo.Services;
 
 /// <summary>
-/// Pure peak-path decisions for Internet optimizer (no elevation, no I/O).
+/// Pure path decisions for Internet optimizer (no elevation, no I/O).
 /// Used by detect, apply-script generation, and smoke tests — single source of truth.
 /// </summary>
-public static partial class NetworkPeakLogic
+public static partial class NetworkLogic
 {
     [GeneratedRegex(@"(?i)\bonly\b|\bexclusive\b")]
     private static partial Regex BandOnlyRegex();
@@ -173,17 +173,17 @@ public static partial class NetworkPeakLogic
         preset != NetworkPreset.HighestThroughput || ethernetInUse;
 
     /// <summary>Raw NIC advanced-property facts (null = not exposed by driver).</summary>
-    public sealed record NicPeakFacts(
+    public sealed record NicFacts(
         bool? FlowControlOn,
         bool? InterruptModerationOn,
         bool? IdleRestrictOn,
         bool? SelectiveSuspendOn);
 
     /// <summary>
-    /// Preset-aware NIC peak: latency wants flow/IM off + idle-restrict on;
+    /// Preset-aware NIC status: latency wants flow/IM off + idle-restrict on;
     /// highest download wants flow/IM on + idle-restrict off. Missing props do not fail.
     /// </summary>
-    public static (bool Ok, string Hints) EvaluateNicPeak(NetworkPreset preset, NicPeakFacts f)
+    public static (bool Ok, string Hints) EvaluateNic(NetworkPreset preset, NicFacts f)
     {
         var bulk = preset == NetworkPreset.HighestThroughput;
         var bits = new List<string>();
@@ -504,7 +504,7 @@ public static partial class NetworkPeakLogic
         "set prefixpolicy ::ffff:0:0/96 55 4",
     };
 
-    /// <summary>Audit a generated apply script for peak host markers and folklore absence.</summary>
+    /// <summary>Audit a generated apply script for host markers and folklore absence.</summary>
     public static (bool Ok, List<string> Issues) AuditApplyScript(string script, NetworkPreset preset)
     {
         var issues = new List<string>();

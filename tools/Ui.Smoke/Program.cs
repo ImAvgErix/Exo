@@ -15,7 +15,7 @@ void Expect(string name, bool cond, string detail = "")
     else { failed++; Log($"FAIL  {name}" + (detail.Length > 0 ? " :: " + detail : "")); }
 }
 
-Log("=== UiPeak.Smoke ===");
+Log("=== Ui.Smoke ===");
 
 // Real shipped helper — not a reimplementation.
 var busy = UiStatusPresentation.FromFlags(isBusy: true, hasError: false, hasSuccess: false);
@@ -60,10 +60,16 @@ if (File.Exists(themeServiceCs))
 if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
+    // v2.5 left icon rail (custom — not NavigationView).
+    Expect("nav rail", m.Contains("NavRail", StringComparison.Ordinal));
+    Expect("rail nav home", m.Contains("NavHome", StringComparison.Ordinal));
+    Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
+    Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
+    Expect("rail nav internet", m.Contains("NavInternet", StringComparison.Ordinal));
+    Expect("rail nav nvidia", m.Contains("NavNvidia", StringComparison.Ordinal));
     Expect("settings gear", m.Contains("SettingsButton", StringComparison.Ordinal));
     Expect("back chrome", m.Contains("BackButton", StringComparison.Ordinal));
     Expect("drag region separate", m.Contains("TitleBarDragRegion", StringComparison.Ordinal));
-    Expect("no sidebar NavHome", !m.Contains("NavHome", StringComparison.Ordinal));
     Expect("no NavigationView", !m.Contains("<NavigationView", StringComparison.Ordinal));
     Expect("ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
     Expect("no tooltips in main", !m.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
@@ -77,52 +83,41 @@ if (File.Exists(mainCs))
     Expect("not SetTitleBar whole host", !cs.Contains("SetTitleBar(TitleBarHost)", StringComparison.Ordinal));
     Expect("fixed shell no maximize", cs.Contains("IsMaximizable = false", StringComparison.Ordinal));
     Expect("fixed shell no resize", cs.Contains("IsResizable = false", StringComparison.Ordinal));
+    Expect("rail selection helper", cs.Contains("UpdateRailSelection", StringComparison.Ordinal));
+    // Settings gear lives on the rail — ApplyChrome must keep it visible on modules.
+    Expect("settings always on rail",
+        cs.Contains("SettingsButton.Visibility = Visibility.Visible", StringComparison.Ordinal)
+        && !cs.Contains("SettingsButton.Visibility = Visibility.Collapsed", StringComparison.Ordinal));
     Expect("no titlebar settings text", !cs.Contains("AppTitleText.Text = \"Settings\"", StringComparison.Ordinal));
 }
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    Expect("v17 hero line", d.Contains("Maximum performance", StringComparison.Ordinal));
-    Expect("product card grid", d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
-    Expect("polished 1.8 cards", d.Contains("OptiCardButton", StringComparison.Ordinal)
-        && d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
-    Expect("hero tagline present", d.Contains("HeroTagline", StringComparison.Ordinal)
-        || d.Contains("Maximum performance", StringComparison.Ordinal));
+    Expect("hero tagline",
+        d.Contains("HeroTagline", StringComparison.Ordinal)
+        && d.Contains("Maximum performance", StringComparison.Ordinal));
+    // Directory home: full-width rows — not the old wrap-grid product cards.
+    Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
+    Expect("no fixed product cards",
+        !d.Contains("Width=\"248\"", StringComparison.Ordinal)
+        && !d.Contains("Width=\"250\"", StringComparison.Ordinal)
+        && !d.Contains("Height=\"148\"", StringComparison.Ordinal));
+    Expect("directory vertical stack",
+        d.Contains("ItemsStackPanel", StringComparison.Ordinal)
+        || d.Contains("Orientation=\"Vertical\"", StringComparison.Ordinal));
+    Expect("directory row style", d.Contains("ExoDirectoryRow", StringComparison.Ordinal)
+        || d.Contains("ExoCardButton", StringComparison.Ordinal));
+    Expect("directory stretch rows", d.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal));
     Expect("stretch uniform logos", d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal));
-    // Logo-only cards — title lives on the module page (a11y still has AutomationProperties.Name).
-    // Labels under logos (names for each optimizer).
-    Expect("card title labels",
+    Expect("directory title labels",
         d.Contains("Text=\"{x:Bind Definition.Title", StringComparison.Ordinal)
         && d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
-    // Hero dominant: centered tagline; compact cards under it (not overpowering).
-    Expect("dashboard tagline center",
-        d.Contains("TextAlignment=\"Center\"", StringComparison.Ordinal)
-        && (d.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal)
-            || d.Contains("HorizontalAlignment=\"Center\"", StringComparison.Ordinal))
-        && (d.Contains("OptiTagline", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"36\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"38\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"40\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"48\"", StringComparison.Ordinal)));
-    Expect("dashboard fixed cards under hero",
-        (d.Contains("Width=\"248\"", StringComparison.Ordinal) || d.Contains("Width=\"250\"", StringComparison.Ordinal))
-        && (d.Contains("Height=\"148\"", StringComparison.Ordinal)
-            || d.Contains("Height=\"156\"", StringComparison.Ordinal)
-            || d.Contains("Height=\"120\"", StringComparison.Ordinal)));
-    Expect("dashboard borderless logos",
-        d.Contains("Width=\"64\"", StringComparison.Ordinal)
-        && d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal)
-        && !d.Contains("OptiLogoWell", StringComparison.Ordinal));
-    // Cards must stay smaller than the old overpowering footprints.
-    Expect("dashboard cards not oversized",
-        !d.Contains("Width=\"352\"", StringComparison.Ordinal)
-        && !d.Contains("Width=\"340\"", StringComparison.Ordinal)
-        && !d.Contains("Width=\"300\"", StringComparison.Ordinal)
-        && !d.Contains("Height=\"200\"", StringComparison.Ordinal)
-        && !d.Contains("Height=\"190\"", StringComparison.Ordinal));
-    Expect("dashboard stretch cards",
-        File.ReadAllText(Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs"))
-            .Contains("UpdateCardListWidth", StringComparison.Ordinal));
+    Expect("hero tagline style",
+        d.Contains("ExoTagline", StringComparison.Ordinal)
+        || d.Contains("FontSize=\"36\"", StringComparison.Ordinal)
+        || d.Contains("FontSize=\"38\"", StringComparison.Ordinal)
+        || d.Contains("FontSize=\"40\"", StringComparison.Ordinal)
+        || d.Contains("FontSize=\"48\"", StringComparison.Ordinal));
     // Home is nav only — no applied/checking chips (status lives on the module page).
     Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
     Expect("no pick-a-target blurb", !d.Contains("Pick a target", StringComparison.Ordinal));
@@ -149,22 +144,22 @@ if (File.Exists(settings))
             || s.Contains("Content=\"AMOLED\"", StringComparison.Ordinal))
         && s.Contains("Content=\"Light\"", StringComparison.Ordinal));
     Expect("settings theme choice selected state",
-        s.Contains("OptiThemeChoice", StringComparison.Ordinal)
+        s.Contains("ExoThemeChoice", StringComparison.Ordinal)
         && s.Contains("IsDarkMode", StringComparison.Ordinal)
         && s.Contains("IsLightMode", StringComparison.Ordinal));
-    Expect("settings opti chrome",
-        s.Contains("OptiQuietButton", StringComparison.Ordinal)
-        && s.Contains("OptiPrimaryButton", StringComparison.Ordinal));
+    Expect("settings exo chrome",
+        s.Contains("ExoQuietButton", StringComparison.Ordinal)
+        && s.Contains("ExoPrimaryButton", StringComparison.Ordinal));
     Expect("settings no modal title", !s.Contains("Text=\"Settings\"", StringComparison.Ordinal));
     Expect("settings quiet support buttons",
-        s.Contains("OptiQuietButton", StringComparison.Ordinal)
+        s.Contains("ExoQuietButton", StringComparison.Ordinal)
         && s.Contains("Report issue", StringComparison.Ordinal)
         && s.Contains("Open logs", StringComparison.Ordinal));
     Expect("settings no motion slider",
         !s.Contains("MotionSlider", StringComparison.Ordinal)
         && !s.Contains("MotionIntensity", StringComparison.Ordinal)
         && !s.Contains("<Slider", StringComparison.Ordinal));
-    Expect("settings update progress only", !s.Contains("OptiLoader", StringComparison.Ordinal)
+    Expect("settings update progress only", !s.Contains("ExoLoader", StringComparison.Ordinal)
         && s.Contains("IsUpdating", StringComparison.Ordinal)
         && s.Contains("UpdateProgressPercent", StringComparison.Ordinal)
         && s.Contains("UpdateProgressLabel", StringComparison.Ordinal));
@@ -201,11 +196,11 @@ if (File.Exists(mainXaml))
         && !mx.Contains("SettingsRail", StringComparison.Ordinal)
         && !mx.Contains("SettingsOverlay", StringComparison.Ordinal));
 }
-var updateDlg = Path.Combine(repo, "Exo", "Helpers", "OptiUpdateDialog.cs");
+var updateDlg = Path.Combine(repo, "Exo", "Helpers", "ExoUpdateDialog.cs");
 if (File.Exists(updateDlg))
 {
     var u = File.ReadAllText(updateDlg);
-    Expect("update dialog no loader", !u.Contains("OptiLoader", StringComparison.Ordinal));
+    Expect("update dialog no loader", !u.Contains("ExoLoader", StringComparison.Ordinal));
     Expect("update dialog progress", u.Contains("ProgressBar", StringComparison.Ordinal)
         && u.Contains("statusTb", StringComparison.Ordinal));
     Expect("update dialog install", u.Contains("InstallWithProgressAsync", StringComparison.Ordinal));
@@ -213,14 +208,23 @@ if (File.Exists(updateDlg))
 if (File.Exists(theme))
 {
     var t = File.ReadAllText(theme);
-    Expect("theme OptiPrimaryButton", t.Contains("OptiPrimaryButton", StringComparison.Ordinal));
-    Expect("theme OptiWhiteButton", t.Contains("OptiWhiteButton", StringComparison.Ordinal));
-    Expect("theme OptiCardButton", t.Contains("OptiCardButton", StringComparison.Ordinal));
-    Expect("theme OptiFeatureTile", t.Contains("OptiFeatureTile", StringComparison.Ordinal));
-    Expect("theme OptiIconWell", t.Contains("OptiIconWell", StringComparison.Ordinal));
-    Expect("theme OptiPagePadding", t.Contains("OptiPagePadding", StringComparison.Ordinal));
-    Expect("theme OptiThemeChoice", t.Contains("OptiThemeChoice", StringComparison.Ordinal));
-    Expect("display italic", t.Contains("OptiDisplayFontItalic", StringComparison.Ordinal));
+    Expect("theme ExoPrimaryButton", t.Contains("ExoPrimaryButton", StringComparison.Ordinal));
+    Expect("theme ExoWhiteButton", t.Contains("ExoWhiteButton", StringComparison.Ordinal));
+    Expect("theme ExoCardButton", t.Contains("ExoCardButton", StringComparison.Ordinal));
+    Expect("theme ExoFeatureTile", t.Contains("ExoFeatureTile", StringComparison.Ordinal));
+    Expect("theme ExoActionBar", t.Contains("ExoActionBar", StringComparison.Ordinal));
+    Expect("theme ExoIconWell", t.Contains("ExoIconWell", StringComparison.Ordinal));
+    Expect("theme ExoPagePadding", t.Contains("ExoPagePadding", StringComparison.Ordinal));
+    Expect("theme ExoThemeChoice", t.Contains("ExoThemeChoice", StringComparison.Ordinal));
+    Expect("display italic", t.Contains("ExoDisplayFontItalic", StringComparison.Ordinal));
+    // Opti* theme keys must stay gone (Exo* rename).
+    Expect("theme no Opti keys",
+        !t.Contains("OptiPrimaryButton", StringComparison.Ordinal)
+        && !t.Contains("OptiFeatureTile", StringComparison.Ordinal)
+        && !t.Contains("OptiPagePadding", StringComparison.Ordinal)
+        && !t.Contains("OptiThemeChoice", StringComparison.Ordinal)
+        && !t.Contains("OptiDisplayFontItalic", StringComparison.Ordinal)
+        && !t.Contains("x:Key=\"Opti", StringComparison.Ordinal));
 }
 
 // Drive shipped converter source: coming-soon opacity must stay readable for B&W marks.
@@ -245,9 +249,13 @@ foreach (var page in new[]
     var p = Path.Combine(repo, "Exo", "Views", page);
     if (!File.Exists(p)) continue;
     var x = File.ReadAllText(p);
-    Expect(page + " CTA", x.Contains("OptiPrimaryButton", StringComparison.Ordinal) || x.Contains("OptiQuietButton", StringComparison.Ordinal));
-    Expect(page + " page padding", x.Contains("OptiPagePadding", StringComparison.Ordinal));
-    Expect(page + " unique loader", x.Contains("OptiLoader", StringComparison.Ordinal) && !x.Contains("<ProgressRing", StringComparison.Ordinal));
+    Expect(page + " CTA", x.Contains("ExoPrimaryButton", StringComparison.Ordinal) || x.Contains("ExoQuietButton", StringComparison.Ordinal));
+    // Module chrome: ExoPagePadding resource and/or ExoPageMaxWidth + inline pad (v2.5 remodel).
+    Expect(page + " page padding",
+        x.Contains("ExoPagePadding", StringComparison.Ordinal)
+        || x.Contains("ExoPageMaxWidth", StringComparison.Ordinal));
+    Expect(page + " unique loader", x.Contains("ExoLoader", StringComparison.Ordinal) && !x.Contains("<ProgressRing", StringComparison.Ordinal));
+    Expect(page + " action bar", x.Contains("ExoActionBar", StringComparison.Ordinal));
     if (page.Contains("NvidiaPanel", StringComparison.Ordinal))
     {
         Expect(page + " apply label", x.Contains("ApplyLabel", StringComparison.Ordinal) && x.Contains("ChangeHint", StringComparison.Ordinal));
@@ -265,7 +273,7 @@ foreach (var page in new[]
         Expect("internet dual white CTAs",
             x.Contains("Low latency", StringComparison.Ordinal)
             && x.Contains("Highest download", StringComparison.Ordinal)
-            && x.Contains("OptiWhiteButton", StringComparison.Ordinal));
+            && x.Contains("ExoWhiteButton", StringComparison.Ordinal));
         Expect("internet Repair button", x.Contains("Content=\"Repair\"", StringComparison.Ordinal));
         // Proof layer: benchmark delta, rollback banner, honest Repair caption.
         Expect("internet proof layer",
@@ -282,7 +290,7 @@ foreach (var page in new[]
     }
 }
 
-// Feature tiles must stretch — bare ItemsRepeater in module ScrollViewers stacks at (0,0).
+// Feature tiles: vertical StackLayout + SizeChanged width sync (full-width list).
 var featureGridXaml = Path.Combine(repo, "Exo", "Views", "Controls", "FeatureTileGrid.xaml");
 var featureGridCs = Path.Combine(repo, "Exo", "Views", "Controls", "FeatureTileGrid.xaml.cs");
 Expect("FeatureTileGrid control", File.Exists(featureGridXaml) && File.Exists(featureGridCs));
@@ -291,8 +299,12 @@ if (File.Exists(featureGridXaml))
     var fg = File.ReadAllText(featureGridXaml);
     Expect("feature grid stretch host",
         fg.Contains("ScrollHost_SizeChanged", StringComparison.Ordinal)
-        && fg.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal)
-        && fg.Contains("UniformGridLayout", StringComparison.Ordinal));
+        && fg.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal));
+    Expect("feature grid vertical layout",
+        (fg.Contains("StackLayout", StringComparison.Ordinal)
+            && fg.Contains("Orientation=\"Vertical\"", StringComparison.Ordinal))
+        || (fg.Contains("Layout", StringComparison.Ordinal)
+            && fg.Contains("Orientation=\"Vertical\"", StringComparison.Ordinal)));
 }
 if (File.Exists(featureGridCs))
 {
@@ -311,12 +323,13 @@ foreach (var page in new[]
     if (!File.Exists(p)) continue;
     var x = File.ReadAllText(p);
     Expect(page + " uses FeatureTileGrid",
-        x.Contains("FeatureTileGrid", StringComparison.Ordinal)
+        (x.Contains("FeatureTileGrid", StringComparison.Ordinal)
+            || x.Contains("ViewerTileGrid", StringComparison.Ordinal))
         && !x.Contains("x:Name=\"FeatureRepeater\"", StringComparison.Ordinal));
 }
 
 // Friction-free apply/repair: no blocking ContentDialog confirmations on module pages
-// (update consent dialogs live in OptiUpdateDialog only), and every module plays the
+// (update consent dialogs live in ExoUpdateDialog only), and every module plays the
 // staggered feature-tile entrance on its first loading → loaded transition.
 foreach (var page in new[]
          {
@@ -374,47 +387,50 @@ if (File.Exists(nvidiaXamlPath))
         && !nx.Contains("rollback", StringComparison.OrdinalIgnoreCase));
 }
 
-var loaderCs = Path.Combine(repo, "Exo", "Views", "Controls", "OptiLoader.xaml.cs");
-Expect("OptiLoader control", File.Exists(loaderCs));
+var loaderCs = Path.Combine(repo, "Exo", "Views", "Controls", "ExoLoader.xaml.cs");
+Expect("ExoLoader control", File.Exists(loaderCs));
+Expect("no OptiLoader", !File.Exists(Path.Combine(repo, "Exo", "Views", "Controls", "OptiLoader.xaml.cs"))
+    && !File.Exists(Path.Combine(repo, "Exo", "Views", "Controls", "OptiLoader.xaml")));
 if (File.Exists(loaderCs))
 {
     var lc = File.ReadAllText(loaderCs);
-    Expect("OptiLoader IsActive", lc.Contains("IsActiveProperty", StringComparison.Ordinal));
+    Expect("ExoLoader IsActive", lc.Contains("IsActiveProperty", StringComparison.Ordinal));
     // Composition-driven orbit (works in ContentDialog + Visibility-toggled Settings host)
-    Expect("OptiLoader orbit bead",
+    Expect("ExoLoader orbit bead",
         lc.Contains("RotationAngleInDegrees", StringComparison.Ordinal) &&
         lc.Contains("ElementCompositionPreview", StringComparison.Ordinal) &&
         lc.Contains("Orbit", StringComparison.Ordinal) &&
         !lc.Contains("Bar0Scale", StringComparison.Ordinal));
 }
 
-var motionCs = Path.Combine(repo, "Exo", "Helpers", "OptiMotion.cs");
+var motionCs = Path.Combine(repo, "Exo", "Helpers", "ExoMotion.cs");
+Expect("no OptiMotion", !File.Exists(Path.Combine(repo, "Exo", "Helpers", "OptiMotion.cs")));
 if (File.Exists(motionCs))
 {
     var m = File.ReadAllText(motionCs);
-    Expect("OptiMotion ResetVisual", m.Contains("ResetVisual", StringComparison.Ordinal));
-    Expect("OptiMotion EnsureVisible", m.Contains("EnsureVisible", StringComparison.Ordinal));
+    Expect("ExoMotion ResetVisual", m.Contains("ResetVisual", StringComparison.Ordinal));
+    Expect("ExoMotion EnsureVisible", m.Contains("EnsureVisible", StringComparison.Ordinal));
     // Dead overlay/scrim era APIs must stay deleted (settings is a gear flyout now).
-    Expect("OptiMotion dead overlay APIs gone",
+    Expect("ExoMotion dead overlay APIs gone",
         !m.Contains("PlayOverlayOpen", StringComparison.Ordinal)
         && !m.Contains("PlayOverlayClose", StringComparison.Ordinal)
         && !m.Contains("PlayScrimFade", StringComparison.Ordinal)
         && !m.Contains("ClearCompositionOnly", StringComparison.Ordinal)
         && !m.Contains("Spring()", StringComparison.Ordinal));
-    Expect("OptiMotion list enter", m.Contains("PlayListEnter", StringComparison.Ordinal));
+    Expect("ExoMotion list enter", m.Contains("PlayListEnter", StringComparison.Ordinal));
     // Composition visual opacity must stay at 1 (never blank UI via composition).
-    Expect("OptiMotion never zeros composition opacity",
+    Expect("ExoMotion never zeros composition opacity",
         m.Contains("visual.Opacity = 1f", StringComparison.Ordinal)
         && !m.Contains("visual.Opacity = 0", StringComparison.Ordinal)
         && !m.Contains("visual.Opacity = 0f", StringComparison.Ordinal));
     // XAML storyboards only — no composition StartAnimation for shell motion.
-    Expect("OptiMotion uses XAML storyboards",
+    Expect("ExoMotion uses XAML storyboards",
         m.Contains("Storyboard", StringComparison.Ordinal)
         && m.Contains("DoubleAnimation", StringComparison.Ordinal)
         && !m.Contains("StartAnimation(\"Offset\"", StringComparison.Ordinal)
         && !m.Contains("StartAnimation(\"Opacity\"", StringComparison.Ordinal));
-    Expect("OptiMotion PlaySelect", m.Contains("PlaySelect", StringComparison.Ordinal));
-    Expect("OptiMotion page enter ensure visible",
+    Expect("ExoMotion PlaySelect", m.Contains("PlaySelect", StringComparison.Ordinal));
+    Expect("ExoMotion page enter ensure visible",
         m.Contains("PlayPageEnter", StringComparison.Ordinal)
         && m.Contains("EnsureVisible", StringComparison.Ordinal)
         && !m.Contains("PrimeHidden", StringComparison.Ordinal));
@@ -487,7 +503,7 @@ if (File.Exists(dashCs))
 if (File.Exists(theme))
 {
     var tCard = File.ReadAllText(theme);
-    var cardIdx = tCard.IndexOf("OptiCardButton", StringComparison.Ordinal);
+    var cardIdx = tCard.IndexOf("ExoCardButton", StringComparison.Ordinal);
     var cardSlice = cardIdx >= 0 ? tCard.Substring(cardIdx, Math.Min(800, tCard.Length - cardIdx)) : "";
     Expect("card button not top-left aligned",
         cardIdx >= 0
@@ -500,9 +516,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.4.3", File.ReadAllText(versionFile).Trim() == "2.4.3");
+    Expect("VERSION is 2.5.0", File.ReadAllText(versionFile).Trim() == "2.5.0");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.4.3", File.ReadAllText(csproj).Contains("<Version>2.4.3</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.5.0", File.ReadAllText(csproj).Contains("<Version>2.5.0</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));
@@ -516,7 +532,7 @@ if (File.Exists(convertersCs))
         cv.Contains("AssetPathToImageSourceConverter", StringComparison.Ordinal)
         && cv.Contains("DecodePixelWidth = 128", StringComparison.Ordinal)
         && cv.Contains("DecodePixelType.Logical", StringComparison.Ordinal));
-    var motion = File.ReadAllText(Path.Combine(repo, "Exo", "Helpers", "OptiMotion.cs"));
+    var motion = File.ReadAllText(Path.Combine(repo, "Exo", "Helpers", "ExoMotion.cs"));
     Expect("entrance rise then clear transform",
         motion.Contains("TranslateY", StringComparison.Ordinal)
         && motion.Contains("RenderTransform = null", StringComparison.Ordinal)
@@ -529,7 +545,7 @@ if (File.Exists(theme))
     Expect("card hover ring not scale",
         tMotion.Contains("HoverRing", StringComparison.Ordinal)
         && tMotion.Contains("HoverWash", StringComparison.Ordinal)
-        && tMotion.Contains("OptiCardButton", StringComparison.Ordinal));
+        && tMotion.Contains("ExoCardButton", StringComparison.Ordinal));
 }
 
 var appSettings = Path.Combine(repo, "Exo", "Models", "AppSettings.cs");
@@ -553,10 +569,10 @@ if (File.Exists(theme))
     var t2 = File.ReadAllText(theme);
     // Dead styles must stay deleted; no BackEase (spring bounce) anywhere in the theme.
     Expect("theme dead styles gone",
-        !t2.Contains("OptiSecondaryButton", StringComparison.Ordinal)
-        && !t2.Contains("OptiThemeToggleButton", StringComparison.Ordinal)
-        && !t2.Contains("OptiTaglineSupport", StringComparison.Ordinal)
-        && !t2.Contains("OptiLogoWell", StringComparison.Ordinal));
+        !t2.Contains("ExoSecondaryButton", StringComparison.Ordinal)
+        && !t2.Contains("ExoThemeToggleButton", StringComparison.Ordinal)
+        && !t2.Contains("ExoTaglineSupport", StringComparison.Ordinal)
+        && !t2.Contains("ExoLogoWell", StringComparison.Ordinal));
     Expect("theme no BackEase", !t2.Contains("BackEase", StringComparison.Ordinal));
 }
 

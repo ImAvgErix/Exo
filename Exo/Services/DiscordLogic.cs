@@ -6,7 +6,7 @@ namespace Exo.Services;
 /// Pure Discord detect classifiers (no I/O). Keep aligned with
 /// Scripts/Discord/DiscordDetectCore.ps1 — host heuristic + smokes drive this type.
 /// </summary>
-public static partial class DiscordPeakLogic
+public static partial class DiscordLogic
 {
     [GeneratedRegex(@"(?m)^\s*EnableTrim\s*=\s*1\s*$")]
     private static partial Regex EnableTrimRegex();
@@ -107,7 +107,7 @@ public static partial class DiscordPeakLogic
 
     /// <summary>
     /// Valid gaming DiscOpt config: EnableTrim=1, PriorityClass=3, TrimIntervalMs in 2000–15000.
-    /// Accepts kit (4000) and prior peak applies (5000) — does not hardcode a single interval.
+    /// Accepts kit (4000) and prior applies (5000) — does not hardcode a single interval.
     /// </summary>
     public static bool IsKernelConfigText(string? configText)
     {

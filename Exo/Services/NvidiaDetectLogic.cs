@@ -5,7 +5,7 @@ namespace Exo.Services;
 /// <summary>
 /// Pure NVIDIA detect classifiers (no I/O). Aligned with Scripts/Nvidia/NvidiaDetectCore.ps1.
 /// </summary>
-public static partial class NvidiaPeakLogic
+public static partial class NvidiaDetectLogic
 {
     [GeneratedRegex(@"(?i)\b(?:RTX|GTX)\s*([1-5])0\d{2}\b")]
     private static partial Regex GpuSeriesPrefixedRegex();
@@ -70,10 +70,10 @@ public static partial class NvidiaPeakLogic
         !IsDisplayContainerExe(exe);
 
     /// <summary>
-    /// Live display status JSON peak: refresh + (registry active-keys OR color+scaling live).
-    /// Mirrors Exo.NvDisplay ok gate after peak fix.
+    /// Live display status JSON gate: refresh + (registry active-keys OR color+scaling live).
+    /// Mirrors Exo.NvDisplay ok gate after status-gate fix.
     /// </summary>
-    public static bool IsDisplayStatusPeakOk(
+    public static bool IsDisplayStatusOk(
         bool refreshOk,
         bool registryOk,
         bool colorOk,

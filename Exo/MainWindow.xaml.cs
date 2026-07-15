@@ -90,14 +90,14 @@ public sealed partial class MainWindow : Window
             // Always reset identity so Back never leaves a residual X offset on the shell.
             try
             {
-                OptiMotion.EnsureVisible(page);
-                OptiMotion.EnsureVisible(ContentFrame);
+                ExoMotion.EnsureVisible(page);
+                ExoMotion.EnsureVisible(ContentFrame);
                 if (page is not Views.DashboardPage)
-                    OptiMotion.PlayPageEnter(page);
+                    ExoMotion.PlayPageEnter(page);
             }
             catch
             {
-                try { OptiMotion.EnsureVisible(page); } catch { }
+                try { ExoMotion.EnsureVisible(page); } catch { }
             }
         }
     }
@@ -184,7 +184,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            if (Application.Current.Resources.TryGetValue("OptiPageBackgroundBrush", out var b) && b is Brush brush)
+            if (Application.Current.Resources.TryGetValue("ExoPageBackgroundBrush", out var b) && b is Brush brush)
                 RootGrid.Background = brush;
         }
         catch
@@ -215,19 +215,66 @@ public sealed partial class MainWindow : Window
     private void ApplyChrome(ShellMode mode)
     {
         _mode = mode;
-        var home = mode == ShellMode.Home;
-        var optimizer = mode is ShellMode.Discord or ShellMode.Steam or ShellMode.Internet
-            or ShellMode.Nvidia or ShellMode.NvidiaPanel;
 
-        BackButton.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
-        SettingsButton.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
+        // Rail shell: settings gear lives on the rail — always visible.
+        SettingsButton.Visibility = Visibility.Visible;
+        // Back only for Nvidia panel → Nvidia optimizer (rail covers other hops).
+        BackButton.Visibility = mode == ShellMode.NvidiaPanel
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
-        // No logo/title next to Back — each page owns its own header (Settings, DISCORD, …).
+        // Legacy chrome names kept collapsed (pages own their headers).
         ContextLogoHost.Visibility = Visibility.Collapsed;
         ContextLogo.Source = null;
         AppTitleText.Text = string.Empty;
         AppTitleText.Visibility = Visibility.Collapsed;
+
+        UpdateRailSelection(mode);
     }
+
+    /// <summary>
+    /// Highlight the active rail button: full opacity + soft accent fill.
+    /// NvidiaPanel keeps NavNvidia selected (panel is under GPU).
+    /// </summary>
+    private void UpdateRailSelection(ShellMode mode)
+    {
+        var selected = mode switch
+        {
+            ShellMode.Home => NavHome,
+            ShellMode.Discord => NavDiscord,
+            ShellMode.Steam => NavSteam,
+            ShellMode.Internet => NavInternet,
+            ShellMode.Nvidia or ShellMode.NvidiaPanel => NavNvidia,
+            _ => NavHome
+        };
+
+        Brush? accentSoft = null;
+        try
+        {
+            if (Application.Current.Resources.TryGetValue("ExoAccentSoftBrush", out var b) && b is Brush brush)
+                accentSoft = brush;
+        }
+        catch { }
+
+        accentSoft ??= new SolidColorBrush(ColorHelper.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
+
+        foreach (var btn in new[] { NavHome, NavDiscord, NavSteam, NavInternet, NavNvidia })
+        {
+            var on = ReferenceEquals(btn, selected);
+            btn.Opacity = on ? 1.0 : 0.55;
+            btn.Background = on ? accentSoft : new SolidColorBrush(Colors.Transparent);
+        }
+    }
+
+    private void NavHome_Click(object sender, RoutedEventArgs e) => NavigateHome();
+
+    private void NavDiscord_Click(object sender, RoutedEventArgs e) => NavigateToDiscord();
+
+    private void NavSteam_Click(object sender, RoutedEventArgs e) => NavigateToSteam();
+
+    private void NavInternet_Click(object sender, RoutedEventArgs e) => NavigateToInternet();
+
+    private void NavNvidia_Click(object sender, RoutedEventArgs e) => NavigateToNvidia();
 
     private void TrySetWindowIcon()
     {
@@ -606,14 +653,14 @@ public sealed partial class MainWindow : Window
             var appCheck = await App.Services.Updater.CheckAppUpdateAsync(ct: ct);
             if (!appCheck.UpdateAvailable) return;
 
-            var installNow = await OptiUpdateDialog.ConfirmInstallAsync(
+            var installNow = await ExoUpdateDialog.ConfirmInstallAsync(
                 RootGrid.XamlRoot,
                 appCheck.LocalVersion,
                 appCheck.RemoteVersion);
             ct.ThrowIfCancellationRequested();
             if (!installNow) return;
 
-            var install = await OptiUpdateDialog.InstallWithProgressAsync(
+            var install = await ExoUpdateDialog.InstallWithProgressAsync(
                 RootGrid.XamlRoot,
                 appCheck,
                 App.Services.Updater,
@@ -625,7 +672,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            await OptiUpdateDialog.ShowMessageAsync(
+            await ExoUpdateDialog.ShowMessageAsync(
                 RootGrid.XamlRoot,
                 "Update could not finish",
                 install.Message);

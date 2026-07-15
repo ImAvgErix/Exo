@@ -102,8 +102,8 @@ static class Program
         if (normalizedArgs.Any(a => a is "--help" or "-h" or "/?"))
         {
             Console.WriteLine("Exo.NvDisplay - NVAPI + NVTweak display performance settings");
-            Console.WriteLine("  --apply              Peak: Full RGB, primary max-Hz / secondary 60Hz, GPU no-scaling");
-            Console.WriteLine("  --status             Verify peak display policy");
+            Console.WriteLine("  --apply              Apply: Full RGB, primary max-Hz / secondary 60Hz, GPU no-scaling");
+            Console.WriteLine("  --status             Verify display policy");
             Console.WriteLine("  --list-displays      List displays: modes, depth, scaling, color (Panel)");
             Console.WriteLine("  --list-color         List color bit depths only");
             Console.WriteLine("  --set-mode WxH@Hz [--display-id ID]  Set resolution + refresh");
@@ -460,7 +460,7 @@ static class Program
                 var scalingOk = !wantGpuNoScale || pathScalingOk || registryOk;
 
                 // Hard gate: refresh policy is required. Registry must pass for *active* display
-                // IDs only — orphan NVTweak keys must not false-fail peak color/scale/Hz.
+                // IDs only — orphan NVTweak keys must not false-fail color/scale/Hz.
                 // Live NVAPI Full RGB + path GPU scaling can also authorize when active registry is clean.
                 var ok = modesOk && (registryOk || (colorOk && pathScalingOk));
                 try
@@ -518,7 +518,7 @@ static class Program
                 var pathScalingOk = VerifyGpuScaling();
                 var scalingOk = !wantGpuNoScale || pathScalingOk || registryOk;
 
-                // Same hard gate as apply: refresh required; active-display registry OR live NVAPI peak.
+                // Same hard gate as apply: refresh required; active-display registry OR live NVAPI status.
                 var ok = refreshOk && (registryOk || (colorOk && pathScalingOk));
                 try
                 {
@@ -1026,7 +1026,7 @@ static class Program
             Console.Error.WriteLine("[MODE] No matching display for --set-mode (NVAPI map and GDI fallback empty).");
             return false;
         }
-        // Stage + commit like peak path
+        // Stage + commit like apply path
         var staged = 0;
         foreach (var kv in targets)
         {
@@ -1122,7 +1122,7 @@ static class Program
                 foreach (var t in path.TargetsInfo)
                 {
                     if (onlyId is not null && t.DisplayDevice.DisplayId != onlyId.Value) continue;
-                    // Best-effort GPU scan-out path — peak path uses same idea.
+                    // Best-effort GPU scan-out path — apply path uses same idea.
                     Console.WriteLine($"[NVAPI] Path target #{t.DisplayDevice.DisplayId}: request GPU scaling path");
                 }
             }
@@ -2079,7 +2079,7 @@ static class Program
                 using var dev = root.OpenSubKey(name);
                 if (dev == null) { ok = false; continue; }
                 checkedAny = true;
-                // Peak: GPU + full-screen (0). Optional no-scaling (2) only when explicitly requested.
+                // Apply: GPU + full-screen (0). Optional no-scaling (2) only when explicitly requested.
                 var sm = Convert.ToInt32(dev.GetValue("ScalingMode", -1));
                 var scaleOk = !requireGpuScale
                     ? (Convert.ToInt32(dev.GetValue("PerformScalingOn", -1)) == RegGpu &&

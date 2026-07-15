@@ -1,3 +1,9 @@
+## 2.5.0
+
+- **UI — full remodel**: left icon rail (`NavRail` + Home/Discord/Steam/Internet/NVIDIA) replaces the old chrome; home is an editorial directory (hero tagline + full-width module rows) instead of a wrap-grid of product cards; module features are a vertical `FeatureTileGrid` (`StackLayout`) with sticky `ExoActionBar` footers — fixed 1180×760, AMOLED shell, settings still a gear flyout on the rail
+- **Naming — Opti→Exo**: theme/styles/motion/loader keys are `Exo*` (`ExoPrimaryButton`, `ExoFeatureTile`, `ExoMotion`, `ExoLoader`, …) — no `Opti*` leftovers
+- **Tooling — Peak→Logic/Smoke**: peak classifiers and smoke harnesses renamed to `*Logic` / `*.Smoke` (e.g. `NetworkLogic`, `DiscordLogic`, `Ui.Smoke`)
+
 ## 2.4.3
 
 - **UI — full visual rebuild**: redesigned theme tokens (8/12/16/20/28 spacing, tighter radii), home hero + compact 248×148 cards, clearer module page hierarchy (section label → status title → feature grid → primary CTA), NVIDIA G-SYNC strip in a lifted card, denser Settings flyout and NVIDIA display panel — same shell contracts (fixed 1180×760, gear flyout, AMOLED `#000000` / `#0C0C0C`, `FeatureTileGrid` stretch)

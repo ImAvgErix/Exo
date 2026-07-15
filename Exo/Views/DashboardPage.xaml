@@ -8,31 +8,29 @@
     Loaded="Page_Loaded">
 
     <!--
-      Fixed 1180×760.
-      Hero italic tagline centered; compact logo cards underneath.
+      Fixed 1180×760 editorial directory.
+      Hero italic tagline; full-width module rows underneath.
       No support subtitle. No RenderTransform on italic type.
     -->
     <Grid x:Name="PageRoot"
           Padding="40,28,40,32"
           HorizontalAlignment="Stretch"
           VerticalAlignment="Stretch"
-          UseLayoutRounding="True"
-          SizeChanged="PageRoot_SizeChanged">
+          UseLayoutRounding="True">
         <StackPanel x:Name="HomeStack"
-                    HorizontalAlignment="Center"
+                    HorizontalAlignment="Stretch"
                     VerticalAlignment="Center"
-                    MaxWidth="880"
+                    MaxWidth="720"
                     Spacing="0"
                     UseLayoutRounding="True">
 
             <TextBlock x:Name="HeroTagline"
                        Text="Maximum performance. No compromise."
-                       Style="{StaticResource OptiTagline}"
+                       Style="{StaticResource ExoTagline}"
                        TextWrapping="WrapWholeWords"
-                       TextAlignment="Center"
+                       TextAlignment="Left"
                        HorizontalAlignment="Stretch"
-                       Margin="0,0,0,32"
-                       MaxWidth="780"
+                       Margin="0,0,0,28"
                        UseLayoutRounding="True" />
 
             <ItemsControl x:Name="CardList"
@@ -40,62 +38,57 @@
                           ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <ItemsWrapGrid Orientation="Horizontal"
-                                       MaximumRowsOrColumns="3"
-                                       HorizontalAlignment="Center" />
+                        <ItemsStackPanel Orientation="Vertical" />
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
-                        <Button Style="{StaticResource OptiCardButton}"
-                                Width="248"
-                                Height="148"
-                                Margin="8"
+                        <Button Style="{StaticResource ExoCardButton}"
+                                HorizontalAlignment="Stretch"
+                                Margin="0,0,0,8"
                                 Click="CardButton_Click"
                                 Tag="{x:Bind Definition.Id}"
                                 AutomationProperties.Name="{x:Bind Definition.Title}"
                                 IsEnabled="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}">
-                            <Border Style="{StaticResource OptiCard}"
-                                    HorizontalAlignment="Stretch"
-                                    VerticalAlignment="Stretch"
-                                    Padding="12,16,12,14"
-                                    UseLayoutRounding="True"
+                            <Border Style="{StaticResource ExoDirectoryRow}"
                                     Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
-                                <Grid UseLayoutRounding="True">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
-                                    <Image Width="64"
-                                           Height="64"
+                                <Grid ColumnSpacing="14" UseLayoutRounding="True">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Image Width="40"
+                                           Height="40"
                                            Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
-                                           HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
                                            Stretch="Uniform"
                                            UseLayoutRounding="True"
                                            AutomationProperties.AccessibilityView="Raw" />
-                                    <StackPanel Grid.Row="1"
+                                    <StackPanel Grid.Column="1"
                                                 Spacing="2"
-                                                HorizontalAlignment="Center"
-                                                Margin="0,10,0,0">
+                                                VerticalAlignment="Center">
                                         <TextBlock Text="{x:Bind Definition.Title, Mode=OneWay}"
-                                                   FontFamily="{StaticResource OptiUiFontSemiBold}"
-                                                   FontSize="13"
+                                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                                   FontSize="15"
                                                    FontWeight="SemiBold"
                                                    CharacterSpacing="-4"
-                                                   Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                   HorizontalAlignment="Center"
-                                                   TextAlignment="Center"
+                                                   Foreground="{ThemeResource ExoPrimaryTextBrush}"
                                                    TextTrimming="CharacterEllipsis"
                                                    MaxLines="1"
                                                    UseLayoutRounding="True" />
                                         <TextBlock Text="Coming soon"
-                                                   FontFamily="{StaticResource OptiUiFont}"
-                                                   FontSize="11"
-                                                   Foreground="{ThemeResource OptiMutedTextBrush}"
-                                                   HorizontalAlignment="Center"
+                                                   FontFamily="{StaticResource ExoUiFont}"
+                                                   FontSize="12"
+                                                   Foreground="{ThemeResource ExoMutedTextBrush}"
                                                    Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     </StackPanel>
+                                    <FontIcon Grid.Column="2"
+                                              Glyph="&#xE76C;"
+                                              FontSize="12"
+                                              Foreground="{ThemeResource ExoMutedTextBrush}"
+                                              VerticalAlignment="Center"
+                                              Opacity="0.7" />
                                 </Grid>
                             </Border>
                         </Button>

@@ -1,6 +1,6 @@
 using Exo.Services;
 
-// Smoke tests drive shipped DiscordPeakLogic + invoke shipped DiscordDetectCore.ps1 fixtures.
+// Smoke tests drive shipped DiscordLogic + invoke shipped DiscordDetectCore.ps1 fixtures.
 var logPath = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "discord-detect-tests.log");
 var lines = new List<string>();
 var failed = 0;
@@ -12,7 +12,7 @@ void Expect(string name, bool cond, string detail = "")
     else { failed++; Log($"FAIL  {name}" + (string.IsNullOrEmpty(detail) ? "" : " :: " + detail)); }
 }
 
-Log("=== DiscordPeak.Smoke (shipped DiscordPeakLogic + DiscordDetectCore.ps1) ===");
+Log("=== Discord.Smoke (shipped DiscordLogic + DiscordDetectCore.ps1) ===");
 Log(DateTime.UtcNow.ToString("o"));
 
 // --- Kernel config: kit 4000 and prior 5000 both OK; folklore interval not ---
@@ -22,7 +22,7 @@ EnableTrim=1
 TrimIntervalMs=4000
 PriorityClass=3
 """;
-var oldPeakCfg = """
+var oldCfg = """
 [Settings]
 EnableTrim=1
 TrimIntervalMs=5000
@@ -33,32 +33,32 @@ EnableTrim=0
 TrimIntervalMs=5000
 PriorityClass=3
 """;
-Expect("kit config 4000 peak-valid", DiscordPeakLogic.IsKernelConfigText(kitCfg));
-Expect("prior config 5000 peak-valid", DiscordPeakLogic.IsKernelConfigText(oldPeakCfg));
-Expect("EnableTrim=0 not peak", !DiscordPeakLogic.IsKernelConfigText(badCfg));
+Expect("kit config 4000 valid", DiscordLogic.IsKernelConfigText(kitCfg));
+Expect("prior config 5000 valid", DiscordLogic.IsKernelConfigText(oldCfg));
+Expect("EnableTrim=0 rejected", !DiscordLogic.IsKernelConfigText(badCfg));
 Expect("wrong PriorityClass fails",
-    !DiscordPeakLogic.IsKernelConfigText("EnableTrim=1\nTrimIntervalMs=4000\nPriorityClass=2\n"));
+    !DiscordLogic.IsKernelConfigText("EnableTrim=1\nTrimIntervalMs=4000\nPriorityClass=2\n"));
 
 // Layout
-Expect("kernel layout good", DiscordPeakLogic.IsKernelLayout(24000, 2_000_000, 120000));
-Expect("kernel layout stock ffmpeg fails", !DiscordPeakLogic.IsKernelLayout(2_000_000, 2_000_000, 120000));
+Expect("kernel layout good", DiscordLogic.IsKernelLayout(24000, 2_000_000, 120000));
+Expect("kernel layout stock ffmpeg fails", !DiscordLogic.IsKernelLayout(2_000_000, 2_000_000, 120000));
 
 // Full kernel applied: hashes + config
 Expect("kernel applied with kit cfg",
-    DiscordPeakLogic.IsKernelApplied(24000, 2_000_000, 120000, kitCfg, true, true));
+    DiscordLogic.IsKernelApplied(24000, 2_000_000, 120000, kitCfg, true, true));
 Expect("kernel applied with 5000 cfg",
-    DiscordPeakLogic.IsKernelApplied(24000, 2_000_000, 120000, oldPeakCfg, true, true));
+    DiscordLogic.IsKernelApplied(24000, 2_000_000, 120000, oldCfg, true, true));
 Expect("kernel fails without proxy hash",
-    !DiscordPeakLogic.IsKernelApplied(24000, 2_000_000, 120000, kitCfg, false, true));
+    !DiscordLogic.IsKernelApplied(24000, 2_000_000, 120000, kitCfg, false, true));
 // Old false-fail: requiring exact TrimIntervalMs=5000 while kit is 4000
-Expect("4000 is not rejected as non-5000", DiscordPeakLogic.IsKernelConfigText(kitCfg));
+Expect("4000 is not rejected as non-5000", DiscordLogic.IsKernelConfigText(kitCfg));
 
 // Equicord loader (legacy OpenAsar size classifier is intentionally removed)
 var loader = "module.exports = require('C:\\\\Users\\\\x\\\\AppData\\\\Roaming\\\\Equicord\\\\equicord.asar');";
-Expect("equicord loader text", DiscordPeakLogic.IsEquicordLoaderText(loader, loader.Length));
-Expect("empty loader fail", !DiscordPeakLogic.IsEquicordLoaderText("", 0));
-Expect("OpenAsar size classifier removed from DiscordPeakLogic",
-    typeof(DiscordPeakLogic).GetMethod("IsOpenAsarSize") is null);
+Expect("equicord loader text", DiscordLogic.IsEquicordLoaderText(loader, loader.Length));
+Expect("empty loader fail", !DiscordLogic.IsEquicordLoaderText("", 0));
+Expect("OpenAsar size classifier removed from DiscordLogic",
+    typeof(DiscordLogic).GetMethod("IsOpenAsarSize") is null);
 
 // Toasts: intentional off active; missing all → not applied; one enabled → fail
 var toastOk = new Dictionary<string, int?>
@@ -66,27 +66,27 @@ var toastOk = new Dictionary<string, int?>
     ["Discord"] = 0,
     ["Discord.Desktop"] = null,
 };
-Expect("toasts intentional off active", DiscordPeakLogic.AreToastsOff(toastOk));
+Expect("toasts intentional off active", DiscordLogic.AreToastsOff(toastOk));
 Expect("toasts none seen not applied",
-    !DiscordPeakLogic.AreToastsOff(new Dictionary<string, int?> { ["Discord"] = null }));
+    !DiscordLogic.AreToastsOff(new Dictionary<string, int?> { ["Discord"] = null }));
 Expect("toasts one enabled fail",
-    !DiscordPeakLogic.AreToastsOff(new Dictionary<string, int?> { ["Discord"] = 1 }));
+    !DiscordLogic.AreToastsOff(new Dictionary<string, int?> { ["Discord"] = 1 }));
 
 // Settings JSON — Exo Host only; legacy OpenAsar acceptance removed (negative)
 Expect("legacy openasar quickstart NOT accepted",
-    !DiscordPeakLogic.IsQuickStartSettingsJson("""{"openasar":{"quickstart":true}}"""));
+    !DiscordLogic.IsQuickStartSettingsJson("""{"openasar":{"quickstart":true}}"""));
 Expect("exo host skip + chromium",
-    DiscordPeakLogic.IsQuickStartSettingsJson(
+    DiscordLogic.IsQuickStartSettingsJson(
         """{"SKIP_HOST_UPDATE":true,"chromiumSwitches":{"no-pings":1}}"""));
 Expect("exo host skip + tti",
-    DiscordPeakLogic.IsQuickStartSettingsJson(
+    DiscordLogic.IsQuickStartSettingsJson(
         """{"SKIP_HOST_UPDATE":true,"DESKTOP_TTI_DNSTCP_WARMUP":true}"""));
 Expect("chromium without skip fails",
-    !DiscordPeakLogic.IsQuickStartSettingsJson("""{"chromiumSwitches":{"no-pings":1}}"""));
+    !DiscordLogic.IsQuickStartSettingsJson("""{"chromiumSwitches":{"no-pings":1}}"""));
 Expect("startup off",
-    DiscordPeakLogic.IsStartupOffSettingsJson("""{"OPEN_ON_STARTUP":false}"""));
+    DiscordLogic.IsStartupOffSettingsJson("""{"OPEN_ON_STARTUP":false}"""));
 Expect("startup on fail",
-    !DiscordPeakLogic.IsStartupOffSettingsJson("""{"OPEN_ON_STARTUP":true}"""));
+    !DiscordLogic.IsStartupOffSettingsJson("""{"OPEN_ON_STARTUP":true}"""));
 
 // --- Voice QoS DSCP policy classifier ---
 var qosGood = new Dictionary<string, string?>
@@ -101,35 +101,35 @@ var qosGood = new Dictionary<string, string?>
     ["DSCP Value"] = "46",
     ["Throttle Rate"] = "-1",
 };
-Expect("qos policy good map", DiscordPeakLogic.IsQosPolicyMap(qosGood, "Discord.exe"));
-Expect("qos policy exe mismatch fails", !DiscordPeakLogic.IsQosPolicyMap(qosGood, "DiscordPTB.exe"));
+Expect("qos policy good map", DiscordLogic.IsQosPolicyMap(qosGood, "Discord.exe"));
+Expect("qos policy exe mismatch fails", !DiscordLogic.IsQosPolicyMap(qosGood, "DiscordPTB.exe"));
 var qosWrongDscp = new Dictionary<string, string?>(qosGood) { ["DSCP Value"] = "0" };
-Expect("qos policy wrong dscp fails", !DiscordPeakLogic.IsQosPolicyMap(qosWrongDscp));
+Expect("qos policy wrong dscp fails", !DiscordLogic.IsQosPolicyMap(qosWrongDscp));
 var qosNoApp = new Dictionary<string, string?>(qosGood);
 qosNoApp.Remove("Application Name");
-Expect("qos policy missing app fails", !DiscordPeakLogic.IsQosPolicyMap(qosNoApp));
-Expect("qos policy empty map fails", !DiscordPeakLogic.IsQosPolicyMap(new Dictionary<string, string?>()));
+Expect("qos policy missing app fails", !DiscordLogic.IsQosPolicyMap(qosNoApp));
+Expect("qos policy empty map fails", !DiscordLogic.IsQosPolicyMap(new Dictionary<string, string?>()));
 
 // --- Variant (PTB/Canary) classifiers ---
 Expect("variant definitions cover stable+ptb+canary",
-    DiscordPeakLogic.VariantDefinitions.Length == 3 &&
-    DiscordPeakLogic.VariantDefinitions.Any(v => v.LocalDir == "DiscordPTB" && v.Exe == "DiscordPTB.exe") &&
-    DiscordPeakLogic.VariantDefinitions.Any(v => v.LocalDir == "DiscordCanary" && v.AppDataDir == "discordcanary"));
+    DiscordLogic.VariantDefinitions.Length == 3 &&
+    DiscordLogic.VariantDefinitions.Any(v => v.LocalDir == "DiscordPTB" && v.Exe == "DiscordPTB.exe") &&
+    DiscordLogic.VariantDefinitions.Any(v => v.LocalDir == "DiscordCanary" && v.AppDataDir == "discordcanary"));
 Expect("variant settings good",
-    DiscordPeakLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":false,"chromiumSwitches":{"no-pings":1}}"""));
+    DiscordLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":false,"chromiumSwitches":{"no-pings":1}}"""));
 Expect("variant settings startup on fails",
-    !DiscordPeakLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":true,"chromiumSwitches":{"no-pings":1}}"""));
+    !DiscordLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":true,"chromiumSwitches":{"no-pings":1}}"""));
 Expect("variant settings missing chromium fails",
-    !DiscordPeakLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":false}"""));
-Expect("variant optimized all true", DiscordPeakLogic.IsVariantOptimized(true, true, true));
-Expect("variant optimized missing qos fails", !DiscordPeakLogic.IsVariantOptimized(true, true, false));
+    !DiscordLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":false}"""));
+Expect("variant optimized all true", DiscordLogic.IsVariantOptimized(true, true, true));
+Expect("variant optimized missing qos fails", !DiscordLogic.IsVariantOptimized(true, true, false));
 
 // Path stability
 var root = @"C:\Users\Erix\AppData\Local\Discord";
 Expect("stable path under root",
-    DiscordPeakLogic.IsStableDiscordPathText(root + @"\Update.exe", root));
+    DiscordLogic.IsStableDiscordPathText(root + @"\Update.exe", root));
 Expect("unrelated path not stable",
-    !DiscordPeakLogic.IsStableDiscordPathText(@"C:\Windows\System32\cmd.exe", root));
+    !DiscordLogic.IsStableDiscordPathText(@"C:\Windows\System32\cmd.exe", root));
 
 // --- Invoke shipped DiscordDetectCore.ps1 (not a reimplementation) ---
 var repoRoot = FindRepoRoot();
@@ -138,7 +138,7 @@ Expect("DiscordDetectCore.ps1 exists", File.Exists(corePs1), corePs1);
 
 if (File.Exists(corePs1))
 {
-    var fixtureDir = Path.Combine(Path.GetTempPath(), "exo-discord-peak-" + Guid.NewGuid().ToString("N"));
+    var fixtureDir = Path.Combine(Path.GetTempPath(), "exo-discord-smoke-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(fixtureDir);
     try
     {
@@ -228,7 +228,7 @@ var applyFiles = new[]
 };
 var applyBlob = string.Join("\n", applyFiles.Where(File.Exists).Select(File.ReadAllText));
 Expect("apply sources readable", applyBlob.Length > 1000);
-var (auditOk, auditIssues) = DiscordPeakLogic.AuditApplyScriptText(applyBlob);
+var (auditOk, auditIssues) = DiscordLogic.AuditApplyScriptText(applyBlob);
 Expect("apply audit", auditOk, string.Join("; ", auditIssues));
 Expect("no Exo-Discord scheduled task create",
     applyBlob.IndexOf("Register-ScheduledTask -TaskName 'Exo-Discord", StringComparison.OrdinalIgnoreCase) < 0);
@@ -289,47 +289,47 @@ Expect("detect no legacy OpenAsar acceptance",
 
 // Fully-applied fixture: intentional quiet/kernel should score active
 var fullToast = new Dictionary<string, int?> { ["Discord"] = 0, ["Discord.Desktop"] = 0 };
-var fullKernel = DiscordPeakLogic.IsKernelApplied(24000, 2_000_000, 120000, kitCfg, true, true);
-var fullQuiet = DiscordPeakLogic.AreToastsOff(fullToast) &&
-                DiscordPeakLogic.IsStartupOffSettingsJson("""{"OPEN_ON_STARTUP":false}""");
+var fullKernel = DiscordLogic.IsKernelApplied(24000, 2_000_000, 120000, kitCfg, true, true);
+var fullQuiet = DiscordLogic.AreToastsOff(fullToast) &&
+                DiscordLogic.IsStartupOffSettingsJson("""{"OPEN_ON_STARTUP":false}""");
 Expect("fully applied fixture kernel active", fullKernel);
 Expect("fully applied fixture quiet active", fullQuiet);
 Expect("fully applied fixture false_fail_count=0", fullKernel && fullQuiet);
 
-// --- Client debloat pure classifiers (shipped DiscordPeakLogic) ---
+// --- Client debloat pure classifiers (shipped DiscordLogic) ---
 Expect("debloat clean all zero active",
-    DiscordPeakLogic.IsClientDebloatApplied(0, 0, 0, 0, false));
+    DiscordLogic.IsClientDebloatApplied(0, 0, 0, 0, false));
 Expect("debloat empty optional payload count 0 active",
-    DiscordPeakLogic.IsClientDebloatApplied(0, 0, 0, 0, false));
+    DiscordLogic.IsClientDebloatApplied(0, 0, 0, 0, false));
 Expect("debloat soft locale drift without state inactive",
-    !DiscordPeakLogic.IsClientDebloatApplied(0, 0, 0, 2, false));
+    !DiscordLogic.IsClientDebloatApplied(0, 0, 0, 2, false));
 Expect("debloat soft locale drift with state active",
-    DiscordPeakLogic.IsClientDebloatApplied(0, 0, 0, 2, true));
+    DiscordLogic.IsClientDebloatApplied(0, 0, 0, 2, true));
 Expect("debloat soft sdk drift with state active",
-    DiscordPeakLogic.IsClientDebloatApplied(0, 0, 1, 0, true));
+    DiscordLogic.IsClientDebloatApplied(0, 0, 1, 0, true));
 Expect("debloat hard leftover app never trusts state",
-    !DiscordPeakLogic.IsClientDebloatApplied(1, 0, 0, 0, true));
+    !DiscordLogic.IsClientDebloatApplied(1, 0, 0, 0, true));
 Expect("debloat hard optional payload never trusts state",
-    !DiscordPeakLogic.IsClientDebloatApplied(0, 1, 0, 0, true));
+    !DiscordLogic.IsClientDebloatApplied(0, 1, 0, 0, true));
 Expect("debloat hard+soft with state still inactive",
-    !DiscordPeakLogic.IsClientDebloatApplied(1, 0, 1, 0, true));
+    !DiscordLogic.IsClientDebloatApplied(1, 0, 1, 0, true));
 
 // Empty module dir has no payload
 var emptyMod = Path.Combine(Path.GetTempPath(), "exo-empty-mod-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(emptyMod);
 try
 {
-    Expect("empty module dir no payload", !DiscordPeakLogic.ModuleDirHasPayload(emptyMod));
+    Expect("empty module dir no payload", !DiscordLogic.ModuleDirHasPayload(emptyMod));
     File.WriteAllText(Path.Combine(emptyMod, "x.dll"), "x");
-    Expect("module dir with file has payload", DiscordPeakLogic.ModuleDirHasPayload(emptyMod));
+    Expect("module dir with file has payload", DiscordLogic.ModuleDirHasPayload(emptyMod));
 }
 finally
 {
     try { Directory.Delete(emptyMod, true); } catch { }
 }
-Expect("missing module dir no payload", !DiscordPeakLogic.ModuleDirHasPayload(null));
+Expect("missing module dir no payload", !DiscordLogic.ModuleDirHasPayload(null));
 Expect("missing module path no payload",
-    !DiscordPeakLogic.ModuleDirHasPayload(Path.Combine(Path.GetTempPath(), "no-such-exo-mod")));
+    !DiscordLogic.ModuleDirHasPayload(Path.Combine(Path.GetTempPath(), "no-such-exo-mod")));
 
 // --- Invoke shipped DiscordDetectCore debloat + fixture tree matching detect collection ---
 if (File.Exists(corePs1))
@@ -503,6 +503,6 @@ static string FindRepoRoot()
             return dir.FullName;
         dir = dir.Parent;
     }
-    // tools/DiscordPeak.Smoke/bin/Release/net8.0 → up to repo
+    // tools/Discord.Smoke/bin/Release/net8.0 → up to repo
     return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 }

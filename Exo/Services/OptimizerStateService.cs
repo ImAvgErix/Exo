@@ -284,7 +284,7 @@ public sealed class OptimizerStateService
             try
             {
                 var settingsRaw = File.ReadAllText(settingsPathEarly);
-                hostFlagsOk = DiscordPeakLogic.IsQuickStartSettingsJson(settingsRaw);
+                hostFlagsOk = DiscordLogic.IsQuickStartSettingsJson(settingsRaw);
             }
             catch { /* ignore */ }
         }
@@ -299,9 +299,9 @@ public sealed class OptimizerStateService
             {
                 var config = File.ReadAllText(configIni);
                 var bundledKit = Path.Combine(PathHelper.DiscordScriptsDir, "kit");
-                // Peak config (EnableTrim/PriorityClass/TrimIntervalMs range) + kit proxy/version hashes.
+                // Applied config (EnableTrim/PriorityClass/TrimIntervalMs range) + kit proxy/version hashes.
                 // Do not require exact config.ini hash (kit interval may differ from a prior valid apply).
-                kernelOk = DiscordPeakLogic.IsKernelApplied(
+                kernelOk = DiscordLogic.IsKernelApplied(
                     new FileInfo(ffmpeg).Length,
                     new FileInfo(ffmpegReal).Length,
                     new FileInfo(versionDll).Length,
@@ -323,7 +323,7 @@ public sealed class OptimizerStateService
         var modulesPath = Path.Combine(appDir, "modules");
         // Empty recreated hook/clips dirs are not "present" — need payload files.
         var optionalPayloadCount = new[] { "discord_hook-1", "discord_clips-1" }
-            .Count(name => DiscordPeakLogic.ModuleDirHasPayload(Path.Combine(modulesPath, name)));
+            .Count(name => DiscordLogic.ModuleDirHasPayload(Path.Combine(modulesPath, name)));
         var gameSdkCount = 0;
         try
         {
@@ -352,7 +352,7 @@ public sealed class OptimizerStateService
         }
         catch { extraLocaleCount = 1; }
         // Soft-drift recovery only when hard signals clean (aligned with Exo-Discord-Detect.ps1).
-        var debloatOk = DiscordPeakLogic.IsClientDebloatApplied(
+        var debloatOk = DiscordLogic.IsClientDebloatApplied(
             leftoverAppCount,
             optionalPayloadCount,
             gameSdkCount,
@@ -410,7 +410,7 @@ public sealed class OptimizerStateService
             "DiscordInc.Discord",
             "com.squirrel.Discord.Discord"
         };
-        // Align with DiscordPeakLogic / detect: present keys must be 0; missing ids ignored; need ≥1 key.
+        // Align with DiscordLogic / detect: present keys must be 0; missing ids ignored; need ≥1 key.
         var toastMap = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
         try
         {
@@ -428,7 +428,7 @@ public sealed class OptimizerStateService
         {
             toastMap.Clear();
         }
-        var notificationsOk = DiscordPeakLogic.AreToastsOff(toastMap);
+        var notificationsOk = DiscordLogic.AreToastsOff(toastMap);
         var windowsQuietOk = startupOk && notificationsOk &&
                              IsStableDiscordRunQuiet(discordRoot) &&
                              AreStableDiscordScheduledTasksDisabled(discordRoot) &&
@@ -466,7 +466,7 @@ public sealed class OptimizerStateService
         // Voice QoS DSCP 46 for every installed variant (stable always; PTB/Canary when present).
         var qosOk = true;
         var variantsOk = true;
-        foreach (var (name, localDir, appDataDir, exe, qosPolicy) in DiscordPeakLogic.VariantDefinitions)
+        foreach (var (name, localDir, appDataDir, exe, qosPolicy) in DiscordLogic.VariantDefinitions)
         {
             var variantRoot = Path.Combine(local, localDir);
             var installed = name == "stable" || Directory.Exists(variantRoot);
@@ -481,11 +481,11 @@ public sealed class OptimizerStateService
             {
                 try
                 {
-                    variantFlagsOk = DiscordPeakLogic.IsVariantSettingsJson(File.ReadAllText(variantSettings));
+                    variantFlagsOk = DiscordLogic.IsVariantSettingsJson(File.ReadAllText(variantSettings));
                 }
                 catch { /* ignore */ }
             }
-            variantsOk &= DiscordPeakLogic.IsVariantOptimized(
+            variantsOk &= DiscordLogic.IsVariantOptimized(
                 variantFlagsOk,
                 IsStableDiscordRunQuiet(variantRoot),
                 IsQosPolicyPresent(qosPolicy, exe));
@@ -514,7 +514,7 @@ public sealed class OptimizerStateService
             var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             foreach (var name in key.GetValueNames())
                 map[name] = key.GetValue(name)?.ToString();
-            return DiscordPeakLogic.IsQosPolicyMap(map, exe);
+            return DiscordLogic.IsQosPolicyMap(map, exe);
         }
         catch { return false; }
     }
@@ -778,7 +778,7 @@ public sealed class OptimizerStateService
         {
             try
             {
-                cefLauncherOk = SteamPeakLogic.IsCefLauncherText(File.ReadAllText(launcherPath));
+                cefLauncherOk = SteamLogic.IsCefLauncherText(File.ReadAllText(launcherPath));
             }
             catch { /* ignore */ }
         }
@@ -795,8 +795,8 @@ public sealed class OptimizerStateService
         {
             try
             {
-                // Peak: 2–15s reclaim (not hard-coded Seconds 5 only)
-                aggressiveTrimOk = SteamPeakLogic.IsTrimHelperText(File.ReadAllText(helperPath));
+                // Target: 2–15s reclaim (not hard-coded Seconds 5 only)
+                aggressiveTrimOk = SteamLogic.IsTrimHelperText(File.ReadAllText(helperPath));
             }
             catch { /* ignore */ }
         }

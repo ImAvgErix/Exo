@@ -1,6 +1,6 @@
 # Exo - detect NVIDIA optimizer status (JSON for WinUI).
 # Feature order matches apply pipeline: GPU -> driver -> 3D profile -> display/privacy.
-# Classifiers: NvidiaDetectCore.ps1 (pure) - keep aligned with NvidiaPeakLogic.cs
+# Classifiers: NvidiaDetectCore.ps1 (pure) - keep aligned with NvidiaDetectLogic.cs
 $ErrorActionPreference = 'SilentlyContinue'
 
 $core = Join-Path $PSScriptRoot 'NvidiaDetectCore.ps1'
@@ -268,13 +268,13 @@ function Test-NvidiaDisplayLive {
         $jsonLine = @($stdout -split "`r?`n") | Where-Object { $_ -like 'EXO_NVDISPLAY_JSON:*' } | Select-Object -Last 1
         if (-not $jsonLine) { throw "display helper returned no status JSON: $stderr" }
         $status = $jsonLine.Substring('EXO_NVDISPLAY_JSON:'.Length) | ConvertFrom-Json
-        # Peak gate (matches Exo.NvDisplay): refresh + (registry active OR live color+scale)
+        # Status gate (matches Exo.NvDisplay): refresh + (registry active OR live color+scale)
         # Note: NvidiaDetectCore uses StrictMode - never touch optional props without existence checks.
         $ok = $false
         if ($null -ne $status.PSObject.Properties['ok']) { $ok = [bool]$status.ok }
         $checks = $null
         if ($null -ne $status.PSObject.Properties['checks']) { $checks = $status.checks }
-        if ($checks -and (Get-Command Test-ExoDisplayStatusPeakOk -ErrorAction SilentlyContinue)) {
+        if ($checks -and (Get-Command Test-ExoDisplayStatusOk -ErrorAction SilentlyContinue)) {
             $refreshOk = $false; $registryOk = $false; $colorOk = $false; $pathOk = $false
             if ($null -ne $checks.PSObject.Properties['refreshOk']) { $refreshOk = [bool]$checks.refreshOk }
             if ($null -ne $checks.PSObject.Properties['modesOk'] -and [bool]$checks.modesOk) { $refreshOk = $true }
@@ -282,12 +282,12 @@ function Test-NvidiaDisplayLive {
             if ($null -ne $checks.PSObject.Properties['colorOk']) { $colorOk = [bool]$checks.colorOk }
             if ($null -ne $checks.PSObject.Properties['pathScalingOk']) { $pathOk = [bool]$checks.pathScalingOk }
             if ($null -ne $checks.PSObject.Properties['scalingOk'] -and [bool]$checks.scalingOk) { $pathOk = $true }
-            $ok = Test-ExoDisplayStatusPeakOk -RefreshOk $refreshOk -RegistryOk $registryOk -ColorOk $colorOk -PathScalingOk $pathOk
+            $ok = Test-ExoDisplayStatusOk -RefreshOk $refreshOk -RegistryOk $registryOk -ColorOk $colorOk -PathScalingOk $pathOk
         }
         $skipped = $null
         if ($null -ne $status.PSObject.Properties['skipped']) { $skipped = [string]$status.skipped }
         $detail = if ($skipped) { $skipped } elseif ($checks) {
-            "color=$colorOk, refresh=$refreshOk, scaling=$pathOk, registry=$registryOk, peakOk=$ok"
+            "color=$colorOk, refresh=$refreshOk, scaling=$pathOk, registry=$registryOk, statusOk=$ok"
         } else { "exit=$($process.ExitCode)" }
         return [pscustomobject]@{ Available = $true; Ok = $ok; Detail = $detail }
     } catch {
@@ -574,7 +574,7 @@ $displaySkippedNoPanels = [bool]($displayLive.Available -and (
     ([string]$displayLive.Detail -eq 'no-active-nvidia-displays')
 ))
 $displayLiveOk = [bool]$displayLive.Available -and ([bool]$displayLive.Ok -or $displaySkippedNoPanels)
-# Live peak policy alone is enough after apply; marker is best-effort.
+# Live display policy alone is enough after apply; marker is best-effort.
 $displayOk = (-not $pendingAfterDriver) -and (-not $applyInProgress) -and (
     $displaySkippedNoPanels -or
     ($displayLiveOk -and ($displayMarkerOk -or [bool]$displayLive.Ok))

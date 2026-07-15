@@ -33,9 +33,9 @@ public sealed partial class SettingsSheet : UserControl
     private void UserControl_Loaded(object sender, RoutedEventArgs e)
     {
         ViewModel.ConfirmUpdateAsync = (local, remote) =>
-            OptiUpdateDialog.ConfirmInstallAsync(XamlRoot, local, remote);
+            ExoUpdateDialog.ConfirmInstallAsync(XamlRoot, local, remote);
         ViewModel.InstallUpdateAsync = check =>
-            OptiUpdateDialog.InstallWithProgressAsync(XamlRoot, check, App.Services.Updater);
+            ExoUpdateDialog.InstallWithProgressAsync(XamlRoot, check, App.Services.Updater);
     }
 
     /// <summary>

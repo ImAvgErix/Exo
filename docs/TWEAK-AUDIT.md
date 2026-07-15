@@ -133,7 +133,7 @@ Reset stays status-clear only — never a rollback.
 | Surface | Verdict | Why |
 |---------|---------|-----|
 | CEF lean launcher /HIGH + cache clean | **Keep** | Real client overhead reduction |
-| VDF key **injection** at verified section paths | **Implemented (v2.4.0)** | Missing peak keys inserted (`.exo-bak` first); modern Steam omits them |
+| VDF key **injection** at verified section paths | **Implemented (v2.4.0)** | Missing target keys inserted (`.exo-bak` first); modern Steam omits them |
 | Library low-bandwidth / low-perf / community content off | **Implemented (v2.4.0)** | Verified `UserLocalConfigStore` keys |
 | Friends notifications + sounds fully quiet | **Implemented (v2.4.0)** | Verified `friends` section |
 | config.vdf: `DownloadThrottleKbps=0`, `AllowDownloadsDuringGameplay=0`, `AutoUpdateWindowEnabled=0` | **Implemented (v2.4.0)** | Verified `InstallConfigStore` path |

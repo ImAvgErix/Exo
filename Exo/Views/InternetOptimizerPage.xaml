@@ -7,32 +7,44 @@
     xmlns:controls="using:Exo.Views.Controls"
     Background="Transparent">
 
-    <Grid Padding="{StaticResource OptiPagePadding}">
-        <Grid MaxWidth="{StaticResource OptiPageMaxWidth}" HorizontalAlignment="Stretch" RowSpacing="20">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-            <StackPanel Spacing="4" Margin="0,0,0,4">
-                <TextBlock Text="INTERNET" Style="{StaticResource OptiSectionTitle}" Margin="0" />
-                <TextBlock Text="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}" Style="{StaticResource OptiPageTitle}" />
-            </StackPanel>
+        <Grid Padding="24,16,28,12">
+            <Grid MaxWidth="{StaticResource ExoPageMaxWidth}"
+                  HorizontalAlignment="Stretch"
+                  RowSpacing="16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
 
-            <Grid Grid.Row="1" Margin="0,0,0,4">
-                <controls:OptiLoader IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
-                                     Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
-                <controls:FeatureTileGrid x:Name="FeatureGrid"
-                                          HorizontalAlignment="Stretch"
-                                          VerticalAlignment="Stretch"
-                                          ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}"
-                                          Visibility="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <StackPanel Spacing="4" Margin="0,0,0,4">
+                    <TextBlock Text="INTERNET" Style="{StaticResource ExoSectionTitle}" Margin="0" />
+                    <TextBlock Text="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}" Style="{StaticResource ExoPageTitle}" />
+                </StackPanel>
+
+                <Grid Grid.Row="1">
+                    <controls:ExoLoader IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
+                                         Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <controls:FeatureTileGrid x:Name="FeatureGrid"
+                                              HorizontalAlignment="Stretch"
+                                              VerticalAlignment="Stretch"
+                                              ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}"
+                                              Visibility="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </Grid>
             </Grid>
+        </Grid>
 
-            <StackPanel Grid.Row="2" Spacing="12">
-                <Border Style="{StaticResource OptiMessageBanner}"
+        <Border Grid.Row="1" Style="{StaticResource ExoActionBar}">
+            <StackPanel MaxWidth="{StaticResource ExoPageMaxWidth}"
+                        HorizontalAlignment="Stretch"
+                        Spacing="12">
+                <Border Style="{StaticResource ExoMessageBanner}"
                         Visibility="{x:Bind ViewModel.HasRollback, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                     <Grid ColumnSpacing="10">
                         <Grid.ColumnDefinitions>
@@ -40,17 +52,17 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <FontIcon Glyph="&#xE7BA;" FontSize="14"
-                                  Foreground="{ThemeResource OptiWarningBrush}" VerticalAlignment="Top" />
+                                  Foreground="{ThemeResource ExoWarningBrush}" VerticalAlignment="Top" />
                         <TextBlock Text="{x:Bind ViewModel.RollbackNotice, Mode=OneWay}" Grid.Column="1"
-                                   Style="{StaticResource OptiBody}" TextWrapping="Wrap" />
+                                   Style="{StaticResource ExoBody}" TextWrapping="Wrap" />
                     </Grid>
                 </Border>
                 <TextBlock Text="{x:Bind ViewModel.BenchmarkSummary, Mode=OneWay}"
-                           Style="{StaticResource OptiCaption}"
+                           Style="{StaticResource ExoCaption}"
                            Foreground="{x:Bind ViewModel.BenchmarkBrush, Mode=OneWay}"
                            TextAlignment="Center"
                            Visibility="{x:Bind ViewModel.HasBenchmark, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <Border Style="{StaticResource OptiMessageBanner}"
+                <Border Style="{StaticResource ExoMessageBanner}"
                         Visibility="{x:Bind ViewModel.HasMessage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                     <Grid ColumnSpacing="10">
                         <Grid.ColumnDefinitions>
@@ -60,15 +72,15 @@
                         <FontIcon Glyph="{x:Bind ViewModel.MessageGlyph, Mode=OneWay}" FontSize="14"
                                   Foreground="{x:Bind ViewModel.MessageBrush, Mode=OneWay}" VerticalAlignment="Top" />
                         <TextBlock Text="{x:Bind ViewModel.Message, Mode=OneWay}" Grid.Column="1"
-                                   Style="{StaticResource OptiBody}" TextWrapping="Wrap" />
+                                   Style="{StaticResource ExoBody}" TextWrapping="Wrap" />
                     </Grid>
                 </Border>
-                <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource OptiCaption}"
+                <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource ExoCaption}"
                            TextAlignment="Center"
                            Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                 <StackPanel Spacing="6"
                             Visibility="{x:Bind ViewModel.HasApplyReport, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Button Style="{StaticResource OptiQuietButton}"
+                    <Button Style="{StaticResource ExoQuietButton}"
                             MinHeight="32"
                             Padding="12,6"
                             HorizontalAlignment="Stretch"
@@ -81,13 +93,13 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Bind ViewModel.ApplyReportSummary, Mode=OneWay}"
-                                       Style="{StaticResource OptiCaption}"
-                                       Foreground="{ThemeResource OptiPrimaryTextBrush}"
+                                       Style="{StaticResource ExoCaption}"
+                                       Foreground="{ThemeResource ExoPrimaryTextBrush}"
                                        VerticalAlignment="Center" />
                             <FontIcon Grid.Column="1"
                                       Glyph="{x:Bind ViewModel.ApplyReportChevron, Mode=OneWay}"
                                       FontSize="10"
-                                      Foreground="{ThemeResource OptiMutedTextBrush}"
+                                      Foreground="{ThemeResource ExoMutedTextBrush}"
                                       VerticalAlignment="Center" />
                         </Grid>
                     </Button>
@@ -105,7 +117,7 @@
                                         <FontIcon Glyph="{x:Bind Glyph}" FontSize="11"
                                                   Foreground="{x:Bind Brush}" VerticalAlignment="Center" />
                                         <TextBlock Grid.Column="1" Text="{x:Bind Text}"
-                                                   Style="{StaticResource OptiCaption}" />
+                                                   Style="{StaticResource ExoCaption}" />
                                     </Grid>
                                 </DataTemplate>
                             </ItemsRepeater.ItemTemplate>
@@ -119,14 +131,14 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource OptiWhiteButton}"
+                    <Button Style="{StaticResource ExoWhiteButton}"
                             Content="Low latency"
                             Click="Latency_Click"
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                             AutomationProperties.Name="Apply lowest latency network stack" />
                     <Button Grid.Column="1"
-                            Style="{StaticResource OptiWhiteButton}"
+                            Style="{StaticResource ExoWhiteButton}"
                             Content="Highest download"
                             Click="Throughput_Click"
                             HorizontalAlignment="Stretch"
@@ -138,18 +150,18 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource OptiQuietButton}" Content="Repair" Click="Repair_Click"
+                    <Button Style="{StaticResource ExoQuietButton}" Content="Repair" Click="Repair_Click"
                             MinHeight="38" HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                             AutomationProperties.Name="Repair internet stack" />
-                    <Button Grid.Column="1" Style="{StaticResource OptiQuietButton}" Content="Refresh" Click="Refresh_Click"
+                    <Button Grid.Column="1" Style="{StaticResource ExoQuietButton}" Content="Refresh" Click="Refresh_Click"
                             MinHeight="38" HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                 </Grid>
                 <TextBlock Text="{x:Bind ViewModel.RepairHint, Mode=OneWay}"
-                           Style="{StaticResource OptiCaption}"
+                           Style="{StaticResource ExoCaption}"
                            TextAlignment="Center" />
             </StackPanel>
-        </Grid>
+        </Border>
     </Grid>
 </Page>

@@ -4,10 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>DiscordPeak.Smoke</RootNamespace>
-    <AssemblyName>DiscordPeak.Smoke</AssemblyName>
+    <RootNamespace>Discord.Smoke</RootNamespace>
+    <AssemblyName>Discord.Smoke</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\..\Exo\Services\DiscordPeakLogic.cs" Link="Shipped\DiscordPeakLogic.cs" />
+    <Compile Include="..\..\Exo\Services\DiscordLogic.cs" Link="Shipped\DiscordLogic.cs" />
   </ItemGroup>
 </Project>

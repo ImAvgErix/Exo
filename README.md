@@ -1,6 +1,6 @@
 # Exo
 
-**Peak performance optimizers for Windows — one hub, no folklore.**
+**Performance optimizers for Windows — one hub, no folklore.**
 
 [![Release](https://img.shields.io/github/v/release/ImAvgErix/Exo?style=flat-square&label=latest)](https://github.com/ImAvgErix/Exo/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/ImAvgErix/Exo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/ImAvgErix/Exo/actions)
@@ -37,8 +37,8 @@ irm https://raw.githubusercontent.com/ImAvgErix/Exo/main/Install-Exo.ps1 | iex
 |--------|--------------|----------|
 | **Internet** | Ethernet-first metrics with connectivity-probe-gated Wi‑Fi disable, TCP fast path (initial RTO, MinRto, timestamps off, pacing off, TCP Fast Open, HyStart per preset), UDP URO off on Win11 24H2+, ECN per preset, DNS provider priorities, RSS CPU spread, deep adapter power kill, NIC latency knobs matched by `RegistryKeyword` (works on non-English Windows), throttle index, Delivery Optimization to Manual — with a **before/after ping / jitter / DNS benchmark** in the UI | Pre-apply snapshot to `%LocalAppData%\Exo\network-snapshot.json`, true snapshot-restore **Repair**, post-apply **auto-rollback** if connectivity breaks, standalone [`Repair-Internet.ps1`](Repair-Internet.ps1) rescue one-liner |
 | **Discord** | DiscOpt kernel (4s RAM trim, AboveNormal priority), Exo Host, Equicord + AMOLED theme, deep module/dictionary debloat, **DSCP 46 QoS for voice UDP** across Stable/PTB/Canary, Windows quiet (tray/toasts/autostart) | **Repair** restores stock, bootable Discord; [`Repair-Discord.ps1`](Repair-Discord.ps1) one-liner works even without Exo installed |
-| **Steam** | High-priority CEF launcher with stable flags, webhelper RAM trim with **"RAM reclaimed" stats in the UI**, VDF key injection (peak settings inserted even when modern Steam omits the keys), deep client quiet (library low-bandwidth/low-perf, community content off), multi-library support | **Repair** restores backed-up configs and the stock launch path |
-| **NVIDIA** | Series profile packs imported via Profile Inspector and **verified live against the driver's own profile database** ("Verified in driver" vs "Drifted — re-apply"), expanded per-game catalog (Apex, OW2, Marvel Rivals, R6, PUBG, CoD, Rust, Tarkov, LoL, Dota 2, Rocket League, GTA V/FiveM), per-series DRS pins (Resizable BAR, present method, background FPS cap), deep driver component strip (ShadowPlay/NvBackend/telemetry), Full RGB + peak refresh, GPU no-scaling, **NVIDIA Panel** with live color depth + digital vibrance | **Reset clears Exo status only** — driver recovery is manual (NVIDIA settings / clean driver reinstall) |
+| **Steam** | High-priority CEF launcher with stable flags, webhelper RAM trim with **"RAM reclaimed" stats in the UI**, VDF key injection (target settings inserted even when modern Steam omits the keys), deep client quiet (library low-bandwidth/low-perf, community content off), multi-library support | **Repair** restores backed-up configs and the stock launch path |
+| **NVIDIA** | Series profile packs imported via Profile Inspector and **verified live against the driver's own profile database** ("Verified in driver" vs "Drifted — re-apply"), expanded per-game catalog (Apex, OW2, Marvel Rivals, R6, PUBG, CoD, Rust, Tarkov, LoL, Dota 2, Rocket League, GTA V/FiveM), per-series DRS pins (Resizable BAR, present method, background FPS cap), deep driver component strip (ShadowPlay/NvBackend/telemetry), Full RGB + max refresh, GPU no-scaling, **NVIDIA Panel** with live color depth + digital vibrance | **Reset clears Exo status only** — driver recovery is manual (NVIDIA settings / clean driver reinstall) |
 
 **Coming soon:** Epic, Riot, Brave, Windows.
 
@@ -60,15 +60,15 @@ Built-in Control Panel–style controls (no mouse automation of the Store app):
 
 - **Color bit depth** — dropdown per display (8 / 10 / 12-bit); **Set** applies via NVAPI
 - **Digital vibrance** — per-display slider, applied live
-- **Peak defaults** — Full RGB, primary max Hz / secondary 60 Hz, GPU no-scaling, video NVIDIA color/image, tray clean
-- Optimizer **Apply** still forces peak defaults; the Panel is the manual override
+- **Applied defaults** — Full RGB, primary max Hz / secondary 60 Hz, GPU no-scaling, video NVIDIA color/image, tray clean
+- Optimizer **Apply** still forces those defaults; the Panel is the manual override
 
 ---
 
 ## Philosophy
 
 - **No folklore** — no invented registry keys, no “DNS AI”, no logon tray spam tasks
-- **Detect what you applied** — pure classifiers (`*PeakLogic` / `*DetectCore`) shared by UI and smoke tests
+- **Detect what you applied** — pure classifiers (`*Logic` / `*DetectCore`) shared by UI and smoke tests
 - **Verify, don't assume** — NVIDIA exports the driver's real profile database after import and pins are checked value-by-value; Internet benchmarks ping/jitter/DNS before and after
 - **Repair where it matters** — Internet restores its pre-apply snapshot; Discord and Steam include Repair for Exo-managed changes
 - **NVIDIA honesty** — Reset clears Exo status only; full driver recovery is manual (NVIDIA settings / reinstall)
@@ -94,11 +94,11 @@ Smoke tests (shipped logic, no UAC):
 
 ```powershell
 .\tools\Test-Repository.ps1
-dotnet run --project tools\UiPeak.Smoke -c Release
-dotnet run --project tools\NetworkPeak.Smoke -c Release
-dotnet run --project tools\DiscordPeak.Smoke -c Release
-dotnet run --project tools\SteamPeak.Smoke -c Release
-dotnet run --project tools\NvidiaPeak.Smoke -c Release
+dotnet run --project tools\Ui.Smoke -c Release
+dotnet run --project tools\Network.Smoke -c Release
+dotnet run --project tools\Discord.Smoke -c Release
+dotnet run --project tools\Steam.Smoke -c Release
+dotnet run --project tools\Nvidia.Smoke -c Release
 ```
 
 ---
@@ -108,7 +108,7 @@ dotnet run --project tools\NvidiaPeak.Smoke -c Release
 ```
 Exo/                 WinUI 3 app + bundled scripts
   Scripts/Discord|Steam|Nvidia|…
-  Services/              Peak logic, runners, panel
+  Services/              Logic, runners, panel
   Views/                 Dashboard, optimizers, NVIDIA Panel
   Styles/                Theme + button chrome
 tools/                   Smoke projects + Exo.NvDisplay (NVAPI helper)

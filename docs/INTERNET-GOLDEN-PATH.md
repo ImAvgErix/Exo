@@ -1,6 +1,6 @@
 **Status: LIVE** — Ethernet Properties bindings + deep NIC/Wi‑Fi advanced knobs. Prefer real driver props over folklore.
 
-# Internet optimizer — peak path
+# Internet optimizer — applied path
 
 **Version:** ships with current Exo app release  
 **Goal:** lowest latency / best gaming **and** complete Ethernet + Wi‑Fi coverage (bindings, advanced props, host stack) — with a snapshot/rollback safety net that makes "reinstall Windows to get internet back" impossible.
@@ -25,7 +25,7 @@
 | Client 5 GHz | drivers + Preferred Band values | Prefer 5 GHz if no 6 |
 | Connected band | `netsh wlan show interfaces`: Band / Radio type / Channel | UI hint only |
 | Current Preferred Band | Driver `DisplayValue` (fuzzy name match) | UI verify |
-| NIC peak | Flow Control, Interrupt Moderation, IdleRestriction, SelectiveSuspend (if exposed) | UI status |
+| NIC status | Flow Control, Interrupt Moderation, IdleRestriction, SelectiveSuspend (if exposed) | UI status |
 | Dual NIC | All physical adapters | Tune both; policy on usable Ethernet |
 
 **Not used:** cloud AI, router admin APIs, ISP APIs.
@@ -140,11 +140,11 @@
 
 ## Implementation core
 
-- `NetworkPeakLogic` — pure band/path/knob decisions + report/benchmark parsing
+- `NetworkLogic` — pure band/path/knob decisions + report/benchmark parsing
 - `NetworkApplyScriptBuilder` — elevated apply/repair scripts + non-elevated benchmark (snapshot, probe gate, rollback baked in)
 - `NetworkOptimizerService` — apply/repair orchestration, benchmark before/after, report + rollback surfacing
 - `Repair-Internet.ps1` — standalone self-elevating rescue (snapshot restore or stock reset)
-- `tools/NetworkPeak.Smoke` — gates band/media/script audit, ordering (snapshot → probe → disable → rollback), tweak markers, and PS parse of every generated script
+- `tools/Network.Smoke` — gates band/media/script audit, ordering (snapshot → probe → disable → rollback), tweak markers, and PS parse of every generated script
 - `tools/NetScriptDump` — dumps generated scripts for Windows CI E2E execution
 
 ## Change rule

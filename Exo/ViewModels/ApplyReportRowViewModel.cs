@@ -61,9 +61,9 @@ public static class ApplyReportPresentation
             },
             Brush = normalized switch
             {
-                "ok" => ResolveBrush("OptiSuccessBrush", Color.FromArgb(255, 34, 197, 94)),
-                "fail" => ResolveBrush("OptiErrorBrush", Color.FromArgb(255, 220, 38, 38)),
-                _ => ResolveBrush("OptiMutedTextBrush", Color.FromArgb(255, 161, 161, 170))
+                "ok" => ResolveBrush("ExoSuccessBrush", Color.FromArgb(255, 34, 197, 94)),
+                "fail" => ResolveBrush("ExoErrorBrush", Color.FromArgb(255, 220, 38, 38)),
+                _ => ResolveBrush("ExoMutedTextBrush", Color.FromArgb(255, 161, 161, 170))
             }
         };
     }

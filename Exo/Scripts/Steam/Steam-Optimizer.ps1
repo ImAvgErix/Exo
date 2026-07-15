@@ -1144,8 +1144,8 @@ function Set-SteamLocalConfigTweaks {
     }
 
     if (-not $anyPatched) {
-        # All peak keys already at target values (injection guarantees presence).
-        Write-Ok 'localconfig.vdf: peak keys already present at target values'
+        # All target keys already at target values (injection guarantees presence).
+        Write-Ok 'localconfig.vdf: target keys already present at target values'
     }
 
     return @{

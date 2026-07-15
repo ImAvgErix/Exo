@@ -4,11 +4,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>NvidiaPeak.Smoke</RootNamespace>
-    <AssemblyName>NvidiaPeak.Smoke</AssemblyName>
+    <RootNamespace>Nvidia.Smoke</RootNamespace>
+    <AssemblyName>Nvidia.Smoke</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\..\Exo\Services\NvidiaPeakLogic.cs" Link="Shipped\NvidiaPeakLogic.cs" />
+    <Compile Include="..\..\Exo\Services\NvidiaDetectLogic.cs" Link="Shipped\NvidiaDetectLogic.cs" />
     <Compile Include="..\..\Exo\Services\NvidiaPanelLogic.cs" Link="Shipped\NvidiaPanelLogic.cs" />
   </ItemGroup>
 </Project>

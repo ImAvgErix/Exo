@@ -30,11 +30,11 @@ public sealed class NetworkMediaProfile
     public string CurrentBandSetting { get; init; } = "—";
     /// <summary>IPv4 InterfaceMetric of primary usable Ethernet (lower = preferred).</summary>
     public int? EthernetMetric { get; init; }
-    /// <summary>Live NIC peak status (flow control, selective suspend, etc.).</summary>
-    public string NicPeakHints { get; init; } = "—";
-    public bool NicPeakOk { get; init; } = true;
+    /// <summary>Live NIC status (flow control, selective suspend, etc.).</summary>
+    public string NicHints { get; init; } = "—";
+    public bool NicOk { get; init; } = true;
     /// <summary>
-    /// Ethernet Properties → Networking checkboxes match Exo peak
+    /// Ethernet Properties → Networking checkboxes match Exo targets
     /// (QoS+IPv4+IPv6 on; Client/File share/LLDP/LLTD off).
     /// </summary>
     public bool AdapterBindingsOk { get; init; } = true;

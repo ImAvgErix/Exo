@@ -5,7 +5,7 @@ namespace Exo.Services;
 /// <summary>
 /// Pure Steam detect classifiers (no I/O). Aligned with Scripts/Steam/SteamDetectCore.ps1.
 /// </summary>
-public static partial class SteamPeakLogic
+public static partial class SteamLogic
 {
     [GeneratedRegex(@"(?i)steam\.exe")]
     private static partial Regex SteamExeRegex();
@@ -90,7 +90,7 @@ public static partial class SteamPeakLogic
         "applyReport",
         // Trim-proof stats accumulated by the webhelper helper
         "steam-trim-stats.json",
-        // VDF-aware injector (insert missing peak keys, .exo-bak first)
+        // VDF-aware injector (insert missing target keys, .exo-bak first)
         "Set-SteamVdfKeyAtPath",
         ".exo-bak",
         // Stable PowerShell 7 host resolution (never 5.1, preview only fallback)

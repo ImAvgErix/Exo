@@ -12,7 +12,7 @@ namespace Exo.Views.Controls;
 /// the animation keeps running inside ContentDialog / Opacity-toggled hosts
 /// (DispatcherTimer + RotateTransform and XAML Storyboards both go stale there).
 /// </summary>
-public sealed partial class OptiLoader : UserControl
+public sealed partial class ExoLoader : UserControl
 {
     private bool _running;
     private ScalarKeyFrameAnimation? _spinAnim;
@@ -27,7 +27,7 @@ public sealed partial class OptiLoader : UserControl
         DependencyProperty.Register(
             nameof(IsActive),
             typeof(bool),
-            typeof(OptiLoader),
+            typeof(ExoLoader),
             new PropertyMetadata(false, OnIsActiveChanged));
 
     public bool IsActive
@@ -36,7 +36,7 @@ public sealed partial class OptiLoader : UserControl
         set => SetValue(IsActiveProperty, value);
     }
 
-    public OptiLoader()
+    public ExoLoader()
     {
         InitializeComponent();
         Loaded += (_, _) =>
@@ -65,7 +65,7 @@ public sealed partial class OptiLoader : UserControl
 
     private static void OnIsActiveChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is not OptiLoader loader) return;
+        if (d is not ExoLoader loader) return;
         if (e.NewValue is true)
         {
             // Defer so first layout (dialog / opacity host) has real size + visuals.

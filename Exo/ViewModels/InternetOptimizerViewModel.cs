@@ -125,7 +125,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
                     $" · jitter {FormatMs(before.JitterMs)} → {FormatMs(after.JitterMs)} ms" +
                     $" · DNS {FormatDns(before.DnsMs)} → {FormatDns(after.DnsMs)}";
                 BenchmarkBrush = ResolveBrush(
-                    improved ? "OptiSuccessBrush" : "OptiMutedTextBrush",
+                    improved ? "ExoSuccessBrush" : "ExoMutedTextBrush",
                     improved ? Color.FromArgb(255, 34, 197, 94) : Color.FromArgb(255, 161, 161, 170));
                 HasBenchmark = true;
             }
