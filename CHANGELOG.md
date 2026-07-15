@@ -1,3 +1,9 @@
+## 2.4.1
+
+- **NVIDIA Panel — digital vibrance slider**: the DVC backend that shipped in 2.4.0 (`Exo.NvDisplay --get/set-vibrance`) is now surfaced as a per-display slider on the panel page; applied through the same dirty-diff Apply as resolution/depth/color/scaling, persisted to `nvidia-panel-settings.json`, hidden when the driver's DVC API is unavailable for a display
+- **NVIDIA Panel — G-SYNC decision recorded**: per-display consumer G-SYNC toggle stays excluded — public NVAPI `GSync_*` is Quadro Sync genlock hardware, NvAPIWrapper has no G-SYNC surface, and there is no documented public API for consumer VRR; the DRS `* G-SYNC.nip` pack pins remain the supported path (see `docs/TWEAK-AUDIT.md`)
+- **CI — startup measurement + AOT probe**: the e2e job now publishes the real app and reports startup time (`EXO_STARTUP_MS`, process start → main window); an informational Native AOT compile probe records toolchain status. Shipping publish stays self-contained + ReadyToRun — the app's reflection-based `System.Text.Json` state serialization makes Native AOT unsafe without a source-generation migration and on-hardware QA (documented in the tweak audit)
+
 ## 2.4.0
 
 - **Internet — snapshot + true Repair**: pre-apply snapshot of every touched setting to `%LocalAppData%\Exo\network-snapshot.json`; Repair restores that exact snapshot (not a generic "stock-like" reset); post-apply **auto-rollback** when the connectivity probe fails; Wi‑Fi disable is now gated on a connectivity probe (never cuts your only working link); standalone `Repair-Internet.ps1` rescue one-liner (`irm | iex`, like `Repair-Discord.ps1`)
