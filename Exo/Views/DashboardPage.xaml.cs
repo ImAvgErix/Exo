@@ -82,6 +82,8 @@ public sealed partial class DashboardPage : Page
         {
             if (PageRoot is not null)
                 ExoMotion.EnsureVisible(PageRoot);
+            if (HeroBrand is not null)
+                ExoMotion.EnsureVisible(HeroBrand);
             if (HeroTagline is not null)
                 ExoMotion.EnsureVisible(HeroTagline);
             if (CardList is not null)
@@ -117,6 +119,8 @@ public sealed partial class DashboardPage : Page
             _entrancePlayed = true;
 
             var sequence = new List<UIElement>();
+            if (HeroBrand is not null)
+                sequence.Add(HeroBrand);
             if (HeroTagline is not null)
                 sequence.Add(HeroTagline);
             sequence.AddRange(cards);

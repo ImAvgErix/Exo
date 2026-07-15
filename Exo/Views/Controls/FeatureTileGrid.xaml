@@ -10,6 +10,7 @@
     <!--
       Vertical feature list. SizeChanged keeps ItemsRepeater width honest
       so tiles stretch full-width inside ScrollViewer.
+      v2.5.1: denser row chrome, 3px status rail, 28px icon well.
     -->
     <ScrollViewer x:Name="ScrollHost"
                   VerticalScrollBarVisibility="Auto"
@@ -23,29 +24,46 @@
                        ItemsSource="{x:Bind ItemsSource, Mode=OneWay}"
                        HorizontalAlignment="Stretch">
             <ItemsRepeater.Layout>
-                <StackLayout Orientation="Vertical" Spacing="8" />
+                <StackLayout Orientation="Vertical" Spacing="6" />
             </ItemsRepeater.Layout>
             <ItemsRepeater.ItemTemplate>
                 <DataTemplate x:DataType="vm:FeatureRowViewModel">
-                    <Border Style="{StaticResource ExoFeatureTile}" Opacity="{x:Bind Opacity}">
-                        <Grid ColumnSpacing="10">
+                    <Border Style="{StaticResource ExoFeatureTile}"
+                            Padding="12,10"
+                            MinHeight="52"
+                            Opacity="{x:Bind Opacity}">
+                        <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
+                            <!-- Thicker live-detect rail (3px) for clearer Applied state -->
                             <Border Style="{StaticResource ExoStatusRail}"
+                                    Width="3"
+                                    CornerRadius="1.5"
+                                    Margin="0,0,0,0"
                                     Opacity="{x:Bind RailOpacity}" />
-                            <Border Grid.Column="1" Style="{StaticResource ExoIconWell}">
+                            <Border Grid.Column="1"
+                                    Style="{StaticResource ExoIconWell}"
+                                    Width="28"
+                                    Height="28"
+                                    CornerRadius="7">
                                 <FontIcon Glyph="{x:Bind Glyph}"
-                                          FontSize="13"
+                                          FontSize="12"
                                           Foreground="{ThemeResource ExoPrimaryTextBrush}"
                                           HorizontalAlignment="Center"
                                           VerticalAlignment="Center" />
                             </Border>
-                            <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
-                                <TextBlock Text="{x:Bind Title}" Style="{StaticResource ExoFeatureTitle}" />
-                                <TextBlock Text="{x:Bind Detail}" Style="{StaticResource ExoFeatureDetail}" />
+                            <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
+                                <TextBlock Text="{x:Bind Title}"
+                                           Style="{StaticResource ExoFeatureTitle}"
+                                           FontSize="13"
+                                           CharacterSpacing="-4" />
+                                <TextBlock Text="{x:Bind Detail}"
+                                           Style="{StaticResource ExoFeatureDetail}"
+                                           FontSize="11"
+                                           LineHeight="15" />
                             </StackPanel>
                         </Grid>
                     </Border>
