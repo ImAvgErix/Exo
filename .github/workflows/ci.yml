@@ -162,10 +162,13 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Discord detect exited $LASTEXITCODE" }
             return ($raw | Select-Object -Last 1 | ConvertFrom-Json)
           }
+          function Show-DetectRows($detect) {
+            foreach ($f in $detect.features) { Write-Host ("  row: {0} => active={1}" -f $f.title, $f.active) }
+          }
           pwsh -NoProfile -File Exo/Scripts/Discord/Exo-Discord-Run.ps1 -NonInteractive
           if ($LASTEXITCODE -ne 0) { throw "Discord apply exited $LASTEXITCODE" }
           $d = Get-DiscordDetect
-          if (-not $d.isApplied) { throw "Detect after apply: isApplied=false ($($d.statusText))" }
+          if (-not $d.isApplied) { Show-DetectRows $d; throw "Detect after apply: isApplied=false ($($d.statusText))" }
           Write-Host "Detect after apply: isApplied=true ($($d.statusText))"
           pwsh -NoProfile -File Exo/Scripts/Discord/Exo-Discord-Repair.ps1 -NonInteractive
           if ($LASTEXITCODE -ne 0) { throw "Discord repair exited $LASTEXITCODE" }
@@ -182,10 +185,13 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Steam detect exited $LASTEXITCODE" }
             return ($raw | Select-Object -Last 1 | ConvertFrom-Json)
           }
+          function Show-DetectRows($detect) {
+            foreach ($f in $detect.features) { Write-Host ("  row: {0} => active={1}" -f $f.title, $f.active) }
+          }
           pwsh -NoProfile -File Exo/Scripts/Steam/Exo-Steam-Run.ps1 -NonInteractive
           if ($LASTEXITCODE -ne 0) { throw "Steam apply exited $LASTEXITCODE" }
           $s = Get-SteamDetect
-          if (-not $s.isApplied) { throw "Detect after apply: isApplied=false ($($s.statusText))" }
+          if (-not $s.isApplied) { Show-DetectRows $s; throw "Detect after apply: isApplied=false ($($s.statusText))" }
           Write-Host "Detect after apply: isApplied=true ($($s.statusText))"
           pwsh -NoProfile -File Exo/Scripts/Steam/Exo-Steam-Repair.ps1 -NonInteractive
           if ($LASTEXITCODE -ne 0) { throw "Steam repair exited $LASTEXITCODE" }
