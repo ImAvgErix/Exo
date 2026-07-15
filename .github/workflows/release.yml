@@ -1,7 +1,14 @@
 name: Release
 
+# Publishing is intentional only: manual dispatch, or pushing a version tag
+# (e.g. `git tag v2.4.1 && git push origin v2.4.1`). Either way the build is
+# taken from main; Release-Exo.ps1 refuses anything that is not origin/main
+# and recreates the tag against the released commit (-ReplaceExisting).
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
