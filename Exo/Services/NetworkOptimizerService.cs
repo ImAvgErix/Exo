@@ -363,6 +363,30 @@ public sealed class NetworkOptimizerService
             }
             if (!string.IsNullOrWhiteSpace(mediaProfile.NicPeakHints) && mediaProfile.NicPeakHints is not "—")
                 features.Add(Row("NIC peak", mediaProfile.NicPeakHints, mediaProfile.NicPeakOk));
+            if (!string.IsNullOrWhiteSpace(mediaProfile.TailoredPlan))
+                features.Add(Row("Tailored plan", mediaProfile.TailoredPlan, true));
+            // Host gaming stack detect (Game Mode / DVR / HAGS / power throttle)
+            try
+            {
+                var gm = ReadRegistryDword(Registry.CurrentUser
+                    .OpenSubKey(@"Software\Microsoft\GameBar")?.GetValue("AutoGameModeEnabled"));
+                var dvr = ReadRegistryDword(Registry.CurrentUser
+                    .OpenSubKey(@"System\GameConfigStore")?.GetValue("GameDVR_Enabled"));
+                var hags = ReadRegistryDword(Registry.LocalMachine
+                    .OpenSubKey(@"SYSTEM\CurrentControlSet\Control\GraphicsDrivers")?.GetValue("HwSchMode"));
+                var ptoff = ReadRegistryDword(Registry.LocalMachine
+                    .OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling")
+                    ?.GetValue("PowerThrottlingOff"));
+                var hostOk = (gm is null or 1) && (dvr is null or 0) && (hags is null or 2) && (ptoff is null or 1);
+                var hostBits = new List<string>();
+                hostBits.Add(gm is 1 ? "GameMode on" : gm is 0 ? "GameMode off" : "GameMode —");
+                hostBits.Add(dvr is 0 ? "DVR off" : dvr is 1 ? "DVR on" : "DVR —");
+                hostBits.Add(hags is 2 ? "HAGS on" : hags is 1 ? "HAGS off" : "HAGS —");
+                hostBits.Add(ptoff is 1 ? "no power-throttle" : "power-throttle —");
+                var presetOn = LoadSavedPreset() is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput;
+                features.Add(Row("Host gaming", string.Join(" · ", hostBits), hostOk || !presetOn));
+            }
+            catch { }
         }
         catch { }
 
@@ -418,6 +442,11 @@ public sealed class NetworkOptimizerService
         int fcR = -1, imR = -1, idleR = -1, ssR = -1;
         var bindOk = true;
         var bindHint = "—";
+        var nicVendor = "Unknown";
+        var primaryMedia = "Unknown";
+        long linkBps = 0;
+        var isLaptop = false;
+        var logicals = Environment.ProcessorCount;
         var activeForPeak = LoadSavedPreset();
 
         try
@@ -557,7 +586,56 @@ if ($bindProbe) {
   }
   if ($gaps.Count -gt 0) { $bindOk = 0; $bindHint = ($gaps -join ', ') } else { $bindHint = 'peak bindings' }
 }
-Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;AX=$ax;BE=$be;HINT=$hint;RADIOS=$radios;CURBAND=$curBand;EMETRIC=$eMetric;FC=$fcR;IM=$imR;IDLE=$idleR;SS=$ssR;BINDOK=$bindOk;BINDHINT=$bindHint"
+# Vendor / link / chassis for tailored apply
+$vendor = 'Unknown'
+$linkBps = 0
+$mediaKind = 'Unknown'
+$primaryDesc = ''
+if ($bestEth) {
+  $primaryDesc = [string]$bestEth.InterfaceDescription
+  $mediaKind = 'Ethernet'
+  try { $linkBps = [int64]$bestEth.ReceiveLinkSpeed } catch { $linkBps = 0 }
+} elseif (@($wifi | Where-Object Status -eq 'Up').Count -gt 0) {
+  $w0 = @($wifi | Where-Object Status -eq 'Up' | Select-Object -First 1)
+  $primaryDesc = [string]$w0.InterfaceDescription
+  $mediaKind = 'WiFi'
+  try { $linkBps = [int64]$w0.ReceiveLinkSpeed } catch { $linkBps = 0 }
+} elseif ($primary) {
+  $primaryDesc = [string]$primary.InterfaceDescription
+  $mediaKind = if (IsWifi $primary) { 'WiFi' } else { 'Ethernet' }
+  try { $linkBps = [int64]$primary.ReceiveLinkSpeed } catch { $linkBps = 0 }
+}
+$d = $primaryDesc
+if ($d -match '(?i)Killer') { $vendor = 'Killer' }
+elseif ($d -match '(?i)Intel') { $vendor = 'Intel' }
+elseif ($d -match '(?i)Realtek') { $vendor = 'Realtek' }
+elseif ($d -match '(?i)MediaTek|MT7') { $vendor = 'MediaTek' }
+elseif ($d -match '(?i)Qualcomm|QCA|Atheros') { $vendor = 'Qualcomm' }
+elseif ($d -match '(?i)Broadcom|BCM') { $vendor = 'Broadcom' }
+elseif ($d) { $vendor = 'Other' }
+$laptop = 0
+try {
+  $bat = Get-CimInstance -ClassName Win32_Battery -EA SilentlyContinue
+  if ($bat) { $laptop = 1 }
+} catch {}
+if ($laptop -eq 0) {
+  try {
+    $ch = Get-CimInstance -ClassName Win32_SystemEnclosure -EA SilentlyContinue
+    $types = @($ch.ChassisTypes)
+    # 8-11 portable/laptop/notebook/handheld; 14 subnotebook; 30-32 tablet/convertible
+    foreach ($t in $types) {
+      if ($t -in 8,9,10,11,14,30,31,32) { $laptop = 1; break }
+    }
+  } catch {}
+}
+$cpuN = [Environment]::ProcessorCount
+# Sanitize free-text for ; delimiter parse
+$hintS = ($hint -replace '[;=]', ' ').Trim()
+$radiosS = ($radios -replace '[;=]', ' ').Trim()
+$curBandS = ($curBand -replace '[;=]', ' ').Trim()
+$bindHintS = ($bindHint -replace '[;=]', ',').Trim()
+$descS = ($primaryDesc -replace '[;=]', ' ').Trim()
+Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Count -gt 0);WIFIUP=$wUp;B6=$band6;B5=$band5;AX=$ax;BE=$be;HINT=$hintS;RADIOS=$radiosS;CURBAND=$curBandS;EMETRIC=$eMetric;FC=$fcR;IM=$imR;IDLE=$idleR;SS=$ssR;BINDOK=$bindOk;BINDHINT=$bindHintS;VENDOR=$vendor;LINK=$linkBps;LAPTOP=$laptop;CPU=$cpuN;MEDIA=$mediaKind;DESC=$descS"
 """, ct).ConfigureAwait(false);
             try
             {
@@ -593,6 +671,24 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                             break;
                         case "BINDHINT" when v is not ("-" or ""):
                             bindHint = v.Replace(',', '·');
+                            break;
+                        case "VENDOR" when v is not ("-" or ""):
+                            nicVendor = v;
+                            break;
+                        case "LINK" when long.TryParse(v, out var lb) && lb > 0:
+                            linkBps = lb;
+                            break;
+                        case "LAPTOP":
+                            isLaptop = v is "1" or "True" or "true";
+                            break;
+                        case "CPU" when int.TryParse(v, out var cn) && cn > 0:
+                            logicals = cn;
+                            break;
+                        case "MEDIA" when v is not ("-" or ""):
+                            primaryMedia = v;
+                            break;
+                        case "DESC" when v is not ("-" or "") && nicVendor is ("Unknown" or ""):
+                            nicVendor = NetworkPeakLogic.ClassifyNicVendor(v);
                             break;
                     }
                 }
@@ -657,6 +753,13 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             ethAvail, ethUp, ethInUse, wifiAvail, wifiUp,
             supports6, supports5, wifi6 || supports6, wifi7);
 
+        if (primaryMedia is "Unknown" or "")
+            primaryMedia = ethInUse || ethUp ? "Ethernet" : wifiUp || wifiAvail ? "WiFi" : "Unknown";
+        if (logicals <= 0) logicals = Environment.ProcessorCount;
+
+        var tailored = NetworkPeakLogic.BuildTailoredPlan(
+            activeForPeak, nicVendor, primaryMedia, linkBps, logicals, isLaptop, supports6);
+
         return new NetworkMediaProfile
         {
             EthernetAvailable = ethAvail,
@@ -677,7 +780,13 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             NicPeakOk = nicPeakOk,
             AdapterBindingsOk = bindOk,
             AdapterBindingsHint = bindHint,
-            PolicyLine = path.PolicyLine
+            PolicyLine = path.PolicyLine,
+            NicVendor = nicVendor,
+            PrimaryMediaKind = primaryMedia,
+            PrimaryLinkSpeedBps = linkBps,
+            IsLikelyLaptop = isLaptop,
+            LogicalProcessors = logicals,
+            TailoredPlan = tailored
         };
     }
 

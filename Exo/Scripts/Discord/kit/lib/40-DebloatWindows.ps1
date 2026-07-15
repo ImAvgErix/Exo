@@ -597,16 +597,37 @@ function Apply-WindowsTweaks([string]$AppDir) {
     Write-Ok 'Windows tweaks applied (toasts OFF, tray hidden, no autostart, GPU high-perf)'
 }
 
+function Test-ExoHasDiscreteGpu {
+    try {
+        $gpus = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object { [string]$_.Name })
+        foreach ($n in $gpus) {
+            if ($n -match '(?i)NVIDIA|GeForce|RTX|GTX|Quadro|Radeon|RX\s*\d|Arc\s*A') {
+                # Skip Microsoft Basic / Hyper-V / remote display
+                if ($n -match '(?i)Microsoft Basic|Hyper-V|Remote|Virtual') { continue }
+                return $true
+            }
+        }
+    } catch { }
+    return $false
+}
+
 function Set-DiscordGpuHighPerformance([string]$AppDir) {
-    # Windows Graphics Settings -> High performance for Discord.exe (real multi-GPU path).
+    # Windows Graphics Settings -> High performance only when a discrete GPU exists
+    # (multi-GPU / laptop dGPU). Single iGPU PCs stay Auto (avoids pointless override).
     $exe = Join-Path $AppDir 'Discord.exe'
     if (-not (Test-Path -LiteralPath $exe)) { return }
     try {
         $key = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
         if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
-        # GpuPreference=2 = High performance (1 = Power saving, 0 = Auto)
-        New-ItemProperty -LiteralPath $key -Name $exe -Value 'GpuPreference=2;' -PropertyType String -Force -ErrorAction Stop | Out-Null
-        Write-Ok 'Discord GPU preference = High performance'
+        if (Test-ExoHasDiscreteGpu) {
+            # GpuPreference=2 = High performance
+            New-ItemProperty -LiteralPath $key -Name $exe -Value 'GpuPreference=2;' -PropertyType String -Force -ErrorAction Stop | Out-Null
+            Write-Ok 'Discord GPU preference = High performance (discrete GPU detected)'
+        } else {
+            # Clear stale High preference on iGPU-only machines
+            Remove-ItemProperty -LiteralPath $key -Name $exe -Force -ErrorAction SilentlyContinue
+            Write-Ok 'Discord GPU preference = Auto (no discrete GPU)'
+        }
     } catch {
         Write-Warn "GPU preference: $($_.Exception.Message)"
     }

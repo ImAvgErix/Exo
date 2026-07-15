@@ -40,6 +40,19 @@ public sealed class NetworkMediaProfile
     public bool AdapterBindingsOk { get; init; } = true;
     public string AdapterBindingsHint { get; init; } = "—";
     public string PolicyLine { get; init; } = string.Empty;
+
+    /// <summary>Intel | Realtek | Killer | MediaTek | Qualcomm | Broadcom | Other | Unknown</summary>
+    public string NicVendor { get; init; } = "Unknown";
+    /// <summary>Primary active media: Ethernet | WiFi | Unknown</summary>
+    public string PrimaryMediaKind { get; init; } = "Unknown";
+    /// <summary>Primary link speed in bits/sec (0 = unknown).</summary>
+    public long PrimaryLinkSpeedBps { get; init; }
+    /// <summary>Chassis looks like laptop/notebook (battery present or chassis type).</summary>
+    public bool IsLikelyLaptop { get; init; }
+    /// <summary>Environment.ProcessorCount at detect time (RSS queue budget).</summary>
+    public int LogicalProcessors { get; init; }
+    /// <summary>Human plan line used by apply (e.g. Intel 2.5G eth · latency · 16c).</summary>
+    public string TailoredPlan { get; init; } = string.Empty;
 }
 
 public sealed class NetworkSnapshot

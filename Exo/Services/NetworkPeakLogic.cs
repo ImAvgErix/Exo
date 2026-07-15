@@ -105,6 +105,84 @@ public static partial class NetworkPeakLogic
             NagleOff: latency);
     }
 
+    /// <summary>
+    /// Classify NIC vendor from InterfaceDescription (Intel I225/I226, Realtek, Killer, …).
+    /// Used to pick vendor-specific advanced properties without inventing keys.
+    /// </summary>
+    public static string ClassifyNicVendor(string? interfaceDescription)
+    {
+        if (string.IsNullOrWhiteSpace(interfaceDescription)) return "Unknown";
+        var d = interfaceDescription;
+        if (d.Contains("Killer", StringComparison.OrdinalIgnoreCase)) return "Killer";
+        if (d.Contains("Intel", StringComparison.OrdinalIgnoreCase)) return "Intel";
+        if (d.Contains("Realtek", StringComparison.OrdinalIgnoreCase)) return "Realtek";
+        if (d.Contains("MediaTek", StringComparison.OrdinalIgnoreCase) ||
+            d.Contains("MT7", StringComparison.OrdinalIgnoreCase)) return "MediaTek";
+        if (d.Contains("Qualcomm", StringComparison.OrdinalIgnoreCase) ||
+            d.Contains("QCA", StringComparison.OrdinalIgnoreCase) ||
+            d.Contains("Atheros", StringComparison.OrdinalIgnoreCase)) return "Qualcomm";
+        if (d.Contains("Broadcom", StringComparison.OrdinalIgnoreCase) ||
+            d.Contains("BCM", StringComparison.OrdinalIgnoreCase)) return "Broadcom";
+        return "Other";
+    }
+
+    /// <summary>
+    /// Buffer strategy: latency uses mid-high (not always absolute max — large rings can add jitter);
+    /// throughput uses max. Returns "max" | "mid".
+    /// </summary>
+    public static string BufferStrategy(NetworkPreset preset) =>
+        preset == NetworkPreset.HighestThroughput ? "max" : "mid";
+
+    /// <summary>
+    /// RSS queue budget: latency caps at ~half cores (lower DPC scatter); throughput uses all cores.
+    /// Floor 2, ceiling logical processors.
+    /// </summary>
+    public static int RssQueueBudget(NetworkPreset preset, int logicalProcessors)
+    {
+        var n = Math.Max(1, logicalProcessors);
+        if (preset == NetworkPreset.HighestThroughput) return n;
+        // Latency: avoid spraying every core when many logicals (HT noise)
+        return Math.Max(2, Math.Min(n, (n + 1) / 2));
+    }
+
+    /// <summary>Prefer elevating IPv6 metric (IPv4 first) on gaming latency / eth-primary paths.</summary>
+    public static bool PreferIpv4First(NetworkPreset preset, bool ethernetInUse) =>
+        preset != NetworkPreset.HighestThroughput || ethernetInUse;
+
+    /// <summary>Human-readable tailored plan for UI + apply log.</summary>
+    public static string BuildTailoredPlan(
+        NetworkPreset preset,
+        string? nicVendor,
+        string? primaryMedia,
+        long linkSpeedBps,
+        int logicalProcessors,
+        bool isLaptop,
+        bool supports6Ghz)
+    {
+        var parts = new List<string>();
+        var media = string.IsNullOrWhiteSpace(primaryMedia) ? "Unknown" : primaryMedia;
+        parts.Add(media);
+        if (!string.IsNullOrWhiteSpace(nicVendor) && nicVendor is not ("Unknown" or "Other"))
+            parts.Add(nicVendor);
+        if (linkSpeedBps >= 10_000_000_000) parts.Add("10G+");
+        else if (linkSpeedBps >= 5_000_000_000) parts.Add("5G");
+        else if (linkSpeedBps >= 2_500_000_000) parts.Add("2.5G");
+        else if (linkSpeedBps >= 1_000_000_000) parts.Add("1G");
+        else if (linkSpeedBps >= 100_000_000) parts.Add("100M");
+        parts.Add(preset switch
+        {
+            NetworkPreset.LowestLatency => "latency",
+            NetworkPreset.HighestThroughput => "download",
+            _ => "balanced"
+        });
+        if (logicalProcessors > 0) parts.Add(logicalProcessors + "c");
+        if (isLaptop) parts.Add("laptop");
+        if (string.Equals(media, "WiFi", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(media, "Wi-Fi", StringComparison.OrdinalIgnoreCase))
+            parts.Add(supports6Ghz ? "prefer-6" : "prefer-5");
+        return string.Join(" · ", parts);
+    }
+
     /// <summary>Raw NIC advanced-property facts (null = not exposed by driver).</summary>
     public sealed record NicPeakFacts(
         bool? FlowControlOn,
@@ -407,6 +485,9 @@ public static partial class NetworkPeakLogic
         "AutoGameModeEnabled",
         "PowerThrottlingOff",
         "EnableMulticast",
+        "BufferStrategy",
+        "RssQueueBudget",
+        "TailoredPlan",
     };
 
     /// <summary>Audit a generated apply script for peak host markers and folklore absence.</summary>

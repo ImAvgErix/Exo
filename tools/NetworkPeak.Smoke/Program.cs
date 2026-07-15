@@ -175,6 +175,33 @@ Expect("no wifi Restart-NetAdapter force",
     !System.Text.RegularExpressions.Regex.IsMatch(latScript, @"Restart-NetAdapter.*Wi-?Fi",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase));
 
+// --- Tailored detection helpers ---
+ExpectEq("vendor Intel I226",
+    NetworkPeakLogic.ClassifyNicVendor("Intel(R) Ethernet Controller I226-V"), "Intel");
+ExpectEq("vendor Realtek",
+    NetworkPeakLogic.ClassifyNicVendor("Realtek PCIe GbE Family Controller"), "Realtek");
+ExpectEq("vendor Killer",
+    NetworkPeakLogic.ClassifyNicVendor("Killer E3100G 2.5 Gigabit Ethernet Controller"), "Killer");
+Expect("buffer latency mid", NetworkPeakLogic.BufferStrategy(NetworkPreset.LowestLatency) == "mid");
+Expect("buffer throughput max", NetworkPeakLogic.BufferStrategy(NetworkPreset.HighestThroughput) == "max");
+Expect("rss latency caps cores",
+    NetworkPeakLogic.RssQueueBudget(NetworkPreset.LowestLatency, 16) == 8);
+Expect("rss throughput full cores",
+    NetworkPeakLogic.RssQueueBudget(NetworkPreset.HighestThroughput, 16) == 16);
+Expect("prefer ipv4 on latency",
+    NetworkPeakLogic.PreferIpv4First(NetworkPreset.LowestLatency, ethernetInUse: false));
+var plan = NetworkPeakLogic.BuildTailoredPlan(
+    NetworkPreset.LowestLatency, "Intel", "Ethernet", 2_500_000_000, 16, false, false);
+Expect("tailored plan has intel", plan.Contains("Intel", StringComparison.Ordinal));
+Expect("tailored plan has 2.5G", plan.Contains("2.5G", StringComparison.Ordinal));
+Expect("tailored plan has latency", plan.Contains("latency", StringComparison.Ordinal));
+Expect("lat script BufferStrategy", latScript.Contains("BufferStrategy", StringComparison.Ordinal));
+Expect("lat script RssQueueBudget", latScript.Contains("RssQueueBudget", StringComparison.Ordinal));
+Expect("lat script TailoredPlan", latScript.Contains("TailoredPlan", StringComparison.Ordinal));
+Expect("lat script PreferIpv4", latScript.Contains("PreferIpv4First", StringComparison.Ordinal));
+Expect("lat script Intel extras", latScript.Contains("isIntel", StringComparison.OrdinalIgnoreCase)
+    || latScript.Contains("Intel 2.5G", StringComparison.OrdinalIgnoreCase));
+
 // KnobsFor consistency
 var lk = NetworkPeakLogic.KnobsFor(NetworkPreset.LowestLatency);
 var tk = NetworkPeakLogic.KnobsFor(NetworkPreset.HighestThroughput);

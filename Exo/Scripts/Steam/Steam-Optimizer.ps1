@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.8.0'
+$Script:SteamOptVersion = '1.8.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 Preview only (never Windows PowerShell 5.1 / never stable 7) ---
@@ -73,6 +73,8 @@ Assert-ExoPwshPreview
 # Tuned for faster cold start + lower CEF cost. Avoid sandbox/single-process
 # flags - those crash on some PCs.
 $Script:DefaultCefArgs = @(
+    # Safe multi-PC CEF set only. Do NOT add -cef-disable-occlusion /
+    # -cef-disable-renderer-accessibility - those blank or hang Steam on some GPUs.
     '-cef-disable-gpu',
     '-cef-disable-gpu-compositing',
     '-nofriendsui',
@@ -81,12 +83,8 @@ $Script:DefaultCefArgs = @(
     '-vrdisable',
     '-no-dwrite',
     '-cef-disable-breakpad',
-    # Startup / CEF noise reduction (safe flags; no single-process/sandbox)
     '-cef-disable-spell-checking',
-    '-cef-disable-extensions',
-    # Leaner CEF paint + less background chatter across multi-PC installs
-    '-cef-disable-occlusion',
-    '-cef-disable-renderer-accessibility'
+    '-cef-disable-extensions'
 )
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
@@ -1403,6 +1401,39 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
     }
 }
 
+function Set-SteamGpuHighPerformance([string]$SteamPath) {
+    # Prefer discrete GPU for steam.exe + steamwebhelper when multi-GPU (laptop dGPU / multi-adapter).
+    $targets = @(
+        (Join-Path $SteamPath 'steam.exe'),
+        (Join-Path $SteamPath 'bin\cef\cef.win64\steamwebhelper.exe'),
+        (Join-Path $SteamPath 'steamwebhelper.exe')
+    )
+    $hasDgpu = $false
+    try {
+        foreach ($n in @(Get-CimInstance Win32_VideoController -EA SilentlyContinue | ForEach-Object { [string]$_.Name })) {
+            if ($n -match '(?i)NVIDIA|GeForce|RTX|GTX|Radeon|RX\s*\d|Arc\s*A' -and $n -notmatch '(?i)Microsoft Basic|Hyper-V|Remote') {
+                $hasDgpu = $true; break
+            }
+        }
+    } catch { }
+    $key = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
+    try {
+        if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+        foreach ($exe in $targets) {
+            if (-not (Test-Path -LiteralPath $exe)) { continue }
+            if ($hasDgpu) {
+                New-ItemProperty -LiteralPath $key -Name $exe -Value 'GpuPreference=2;' -PropertyType String -Force -EA SilentlyContinue | Out-Null
+            } else {
+                Remove-ItemProperty -LiteralPath $key -Name $exe -Force -EA SilentlyContinue
+            }
+        }
+        if ($hasDgpu) { Write-Ok 'Steam GPU preference = High performance (discrete GPU)' }
+        else { Write-Ok 'Steam GPU preference = Auto (no discrete GPU)' }
+    } catch {
+        Write-Warn "Steam GPU preference: $($_.Exception.Message)"
+    }
+}
+
 function Install-WebHelperTrimHelper([string]$SteamPath) {
     # Maximum-performance helper: one instance, high client priority while idle,
     # an in-game CPU yield, and a 3-second working-set trim with no suspension.
@@ -1787,6 +1818,8 @@ try {
 
     Write-HubProgress 34 'Windows quiet shell (toasts / tray / tasks)...'
     Apply-SteamWindowsQuiet $steam
+    Write-HubProgress 36 'GPU preference (discrete when present)...'
+    Set-SteamGpuHighPerformance $steam
 
     Write-HubProgress 40 'Cleaning webhelper / CEF caches...'
     $freed = [long]$debloatResult.Freed

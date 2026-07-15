@@ -3541,6 +3541,9 @@ try {
     }
     if ($isNotebookGpu) {
         Write-Warn 'Notebook/Laptop GPU: automatic driver lookup is explicitly disabled; -SkipDriver was requested.'
+        Write-Ok 'Notebook path: profile + display + debloat + PowerMizer AC max (no desktop driver package)'
+    } else {
+        Write-Ok 'Desktop GPU path: series driver + full expert tweaks available'
     }
 
     $seriesId = if ($Series) { $Series } else { Get-GpuSeriesFromName $primary.Name }

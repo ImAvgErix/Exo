@@ -27,6 +27,16 @@ public static class NetworkApplyScriptBuilder
         var preferEth = options.PreferEthernetDisableWifi ? "1" : "0";
         // Hint only — apply script re-probes live for band capability
         var prefer6Hint = media.ClientSupports6Ghz ? "1" : "0";
+        var logicals = media.LogicalProcessors > 0 ? media.LogicalProcessors : Environment.ProcessorCount;
+        var rssBudget = NetworkPeakLogic.RssQueueBudget(preset, logicals);
+        var bufferStrategy = NetworkPeakLogic.BufferStrategy(preset);
+        var preferIpv4 = NetworkPeakLogic.PreferIpv4First(preset, media.EthernetInUse) ? "1" : "0";
+        var vendorHint = string.IsNullOrWhiteSpace(media.NicVendor) ? "Unknown" : media.NicVendor;
+        var plan = string.IsNullOrWhiteSpace(media.TailoredPlan)
+            ? NetworkPeakLogic.BuildTailoredPlan(
+                preset, media.NicVendor, media.PrimaryMediaKind, media.PrimaryLinkSpeedBps,
+                logicals, media.IsLikelyLaptop, media.ClientSupports6Ghz)
+            : media.TailoredPlan;
         // Nagle keys only for latency (TCP games); throughput clears them
         var ackBlock = latency
             ? """
@@ -40,13 +50,20 @@ public static class NetworkApplyScriptBuilder
   Remove-Prop $p 'TcpDelAckTicks'
 """;
 
-        var sb = new StringBuilder(18_000);
+        var sb = new StringBuilder(20_000);
         sb.AppendLine("$ErrorActionPreference = 'Continue'");
         sb.AppendLine("$ProgressPreference = 'SilentlyContinue'");
         sb.AppendLine("$log = Join-Path $env:TEMP 'exo-net-last.log'");
         sb.AppendLine("function Log([string]$m) { $ts = Get-Date -Format o; Add-Content -Path $log -Value \"$ts $m\" -EA SilentlyContinue; Write-Host $m }");
         sb.AppendLine("'' | Set-Content -Path $log -EA SilentlyContinue");
         sb.AppendLine("Log '[Exo-NET] Preset=" + preset + " ethFirst=" + preferEth + " restartEth=" + restartEth + " band6hint=" + prefer6Hint + "'");
+        sb.AppendLine("Log '[Exo-NET] TailoredPlan=" + plan.Replace("'", "") + "'");
+        sb.AppendLine("$BufferStrategy = '" + bufferStrategy + "'");
+        sb.AppendLine("$RssQueueBudget = " + rssBudget);
+        sb.AppendLine("$PreferIpv4First = " + preferIpv4);
+        sb.AppendLine("$VendorHint = '" + vendorHint.Replace("'", "") + "'");
+        sb.AppendLine("$IsLaptopHint = " + (media.IsLikelyLaptop ? "1" : "0"));
+        sb.AppendLine("Log \"[Exo-NET] BufferStrategy=$BufferStrategy RssQueueBudget=$RssQueueBudget PreferIpv4=$PreferIpv4First Vendor=$VendorHint Laptop=$IsLaptopHint\"");
         sb.AppendLine("""
 function Set-Dword([string]$Path, [string]$Name, [int]$Value) {
   if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force | Out-Null }
@@ -274,7 +291,21 @@ try {
         sb.AppendLine("  if (-not $isWifi) {");
         sb.AppendLine("    Set-Adv $n '*RSS' 1");
         sb.AppendLine("    try { Set-NetAdapterRss -Name $n -Enabled $true -EA SilentlyContinue } catch {}");
-        sb.AppendLine("    try { $q = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*NumRssQueues' -EA SilentlyContinue; if ($q -and $q.ValidRegistryValues) { $max = ($q.ValidRegistryValues | Measure-Object -Maximum).Maximum; if ($max -gt 0) { Set-Adv $n '*NumRssQueues' ([int]$max) } } } catch {}");
+        // RSS queues: cap by tailored budget (latency uses fewer cores; download uses max available)
+        sb.AppendLine("    try {");
+        sb.AppendLine("      $q = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*NumRssQueues' -EA SilentlyContinue");
+        sb.AppendLine("      if ($q -and $q.ValidRegistryValues -and @($q.ValidRegistryValues).Count -gt 0) {");
+        sb.AppendLine("        $sorted = @($q.ValidRegistryValues | ForEach-Object { [int]$_ } | Sort-Object)");
+        sb.AppendLine("        $maxQ = $sorted[-1]");
+        sb.AppendLine("        $wantQ = [Math]::Min($maxQ, [int]$RssQueueBudget)");
+        sb.AppendLine("        if ($wantQ -lt $sorted[0]) { $wantQ = $sorted[0] }");
+        sb.AppendLine("        # pick nearest valid <= want");
+        sb.AppendLine("        $pick = ($sorted | Where-Object { $_ -le $wantQ } | Select-Object -Last 1)");
+        sb.AppendLine("        if (-not $pick) { $pick = $sorted[0] }");
+        sb.AppendLine("        Set-Adv $n '*NumRssQueues' ([int]$pick)");
+        sb.AppendLine("        Log \"[RSS] queues => $pick (budget=$RssQueueBudget max=$maxQ)\"");
+        sb.AppendLine("      }");
+        sb.AppendLine("    } catch {}");
         // Ethernet-only deep driver knobs (Intel I225/I226, Realtek, Killer…)
         sb.AppendLine("    # DMA coalescing / adaptive IFS — latency killers when on");
         sb.AppendLine("    foreach ($kw in @('*DMACoalescing','DMACoalescing')) { Set-Adv $n $kw 0 }");
@@ -285,6 +316,38 @@ try {
         sb.AppendLine("    try { Set-AdvDisplay $n 'Speed & Duplex' 'Auto Negotiation' | Out-Null } catch {}");
         sb.AppendLine("    try { Set-AdvDisplay $n 'Wait for Link' 'Auto Detect' | Out-Null } catch {}");
         sb.AppendLine("    try { Set-AdvDisplay $n 'Log Link State Event' 'Disabled' | Out-Null } catch {}");
+        // Vendor-tailored extras (only DisplayNames that exist are applied)
+        sb.AppendLine("    $descLow = ([string]$a.InterfaceDescription).ToLowerInvariant()");
+        sb.AppendLine("    $isIntel = ($descLow -match 'intel' -or $VendorHint -eq 'Intel')");
+        sb.AppendLine("    $isRealtek = ($descLow -match 'realtek' -or $VendorHint -eq 'Realtek')");
+        sb.AppendLine("    $isKiller = ($descLow -match 'killer' -or $VendorHint -eq 'Killer')");
+        sb.AppendLine("    if ($isIntel) {");
+        sb.AppendLine("      try { Set-AdvDisplay $n 'Ultra Low Power Mode' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("      try { Set-AdvDisplay $n 'System Idle Power Saver' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("      try { Set-AdvDisplay $n 'Energy Efficient Ethernet' 'Off' | Out-Null } catch {}");
+        sb.AppendLine("      try { Set-AdvDisplay $n 'Reduce Speed On Power Down' 'Disabled' | Out-Null } catch {}");
+        // I225/I226: keep IdleRestriction ON for latency (already set); force Link Speed Auto
+        sb.AppendLine("      if ($descLow -match 'i225|i226|i219|i211') {");
+        sb.AppendLine("        try { Set-AdvDisplay $n 'Wait for Link' 'Off or Disabled' | Out-Null } catch {}");
+        sb.AppendLine("        try { Set-AdvDisplay $n 'Legacy Switch Compatibility Mode' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("        Log '[NIC] Intel 2.5G/1G family extras'");
+        sb.AppendLine("      }");
+        sb.AppendLine("    }");
+        sb.AppendLine("    if ($isRealtek) {");
+        sb.AppendLine("      try { Set-AdvDisplay $n 'Green Ethernet' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("      try { Set-AdvDisplay $n 'Energy-Efficient Ethernet' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("      try { Set-AdvDisplay $n 'Advanced EEE' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("      try { Set-AdvDisplay $n 'Power Saving Mode' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("      try { Set-AdvDisplay $n 'ARP Offload' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("      try { Set-AdvDisplay $n 'NS Offload' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("      Log '[NIC] Realtek power/offload extras'");
+        sb.AppendLine("    }");
+        sb.AppendLine("    if ($isKiller) {");
+        sb.AppendLine("      # Do not kill Killer service (breaks some installs); only advanced props");
+        sb.AppendLine("      try { Set-AdvDisplay $n 'Idle Power Saving' 'Disabled' | Out-Null } catch {}");
+        sb.AppendLine("      try { Set-AdvDisplay $n 'Energy Efficient Ethernet' 'Off' | Out-Null } catch {}");
+        sb.AppendLine("      Log '[NIC] Killer power extras'");
+        sb.AppendLine("    }");
         sb.AppendLine("    # Jumbo: keep standard Ethernet (gaming); only force 1514/Disabled if exposed");
         sb.AppendLine("    try {");
         sb.AppendLine("      $jp = Find-AdvPropByName $n @('Jumbo Packet','Jumbo Frames','Jumbo Frame')");
@@ -311,8 +374,22 @@ try {
         sb.AppendLine("    try { Set-NetAdapterRss -Name $n -Profile NUMAStatic -EA SilentlyContinue } catch {}");
         sb.AppendLine("    try { Set-NetAdapterRss -Name $n -Profile ClosestProcessor -EA SilentlyContinue } catch {}");
         sb.AppendLine("  }");
+        // Ring buffers: download = max; latency = mid-high (absolute max can add jitter on some NICs)
         sb.AppendLine("  foreach ($kw in @('*ReceiveBuffers','*TransmitBuffers','ReceiveBuffers','TransmitBuffers')) {");
-        sb.AppendLine("    try { $prop = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword $kw -EA SilentlyContinue; if ($prop -and $prop.ValidRegistryValues -and @($prop.ValidRegistryValues).Count -gt 0) { $max = ($prop.ValidRegistryValues | Measure-Object -Maximum).Maximum; if ($max -gt 0) { Set-Adv $n $kw ([int]$max) } } } catch {}");
+        sb.AppendLine("    try {");
+        sb.AppendLine("      $prop = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword $kw -EA SilentlyContinue");
+        sb.AppendLine("      if (-not $prop -or -not $prop.ValidRegistryValues -or @($prop.ValidRegistryValues).Count -eq 0) { continue }");
+        sb.AppendLine("      $vals = @($prop.ValidRegistryValues | ForEach-Object { [int]$_ } | Sort-Object)");
+        sb.AppendLine("      if ($vals.Count -eq 0) { continue }");
+        sb.AppendLine("      if ($BufferStrategy -eq 'max') { $pick = $vals[-1] }");
+        sb.AppendLine("      else {");
+        sb.AppendLine("        # mid-high: ~75th percentile of valid values");
+        sb.AppendLine("        $idx = [Math]::Max(0, [int][Math]::Floor(($vals.Count - 1) * 0.75))");
+        sb.AppendLine("        $pick = $vals[$idx]");
+        sb.AppendLine("      }");
+        sb.AppendLine("      Set-Adv $n $kw ([int]$pick)");
+        sb.AppendLine("      Log \"[buf] $n $kw => $pick ($BufferStrategy)\"");
+        sb.AppendLine("    } catch {}");
         sb.AppendLine("  }");
         // Wi-Fi: full gaming radio path
         sb.AppendLine("  if ($isWifi) {");
@@ -626,6 +703,33 @@ function Set-EthMetrics {
 }
 """);
         sb.AppendLine("$ethReadyOk = Set-EthMetrics");
+        // Prefer IPv4 for gaming: raise IPv6 interface metric so dual-stack apps pick IPv4 first
+        sb.AppendLine("if ($PreferIpv4First -eq 1) {");
+        sb.AppendLine("  foreach ($a in @(Get-NetAdapter -Physical -EA SilentlyContinue | Where-Object Status -eq 'Up')) {");
+        sb.AppendLine("    try {");
+        sb.AppendLine("      $v4 = Get-NetIPInterface -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -EA SilentlyContinue");
+        sb.AppendLine("      $v6 = Get-NetIPInterface -InterfaceIndex $a.ifIndex -AddressFamily IPv6 -EA SilentlyContinue");
+        sb.AppendLine("      if ($v4 -and $v6) {");
+        sb.AppendLine("        $base = [int]$v4.InterfaceMetric");
+        sb.AppendLine("        if ($base -le 0) { $base = 10 }");
+        sb.AppendLine("        $want6 = $base + 20");
+        sb.AppendLine("        Set-NetIPInterface -InterfaceIndex $a.ifIndex -AddressFamily IPv6 -AutomaticMetric Disabled -InterfaceMetric $want6 -EA SilentlyContinue");
+        sb.AppendLine("        Log \"[IPv6] $($a.Name) metric => $want6 (IPv4 first)\"");
+        sb.AppendLine("      }");
+        sb.AppendLine("    } catch {}");
+        sb.AppendLine("  }");
+        sb.AppendLine("}");
+        // Laptop: keep AC path peak; do not force DC min-CPU 100% (battery). Only re-stamp wireless max on DC.
+        sb.AppendLine("if ($IsLaptopHint -eq 1) {");
+        sb.AppendLine("  try {");
+        sb.AppendLine("    $scheme = (powercfg /getactivescheme) -replace '.*GUID:\\s*([0-9a-f\\-]+).*','$1'");
+        sb.AppendLine("    if ($scheme) {");
+        sb.AppendLine("      powercfg /setdcvalueindex $scheme 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 0 | Out-Null");
+        sb.AppendLine("      powercfg /setactive $scheme | Out-Null");
+        sb.AppendLine("      Log '[laptop] DC wireless=max kept; AC CPU peak unchanged'");
+        sb.AppendLine("    }");
+        sb.AppendLine("  } catch {}");
+        sb.AppendLine("}");
         sb.AppendLine("if (" + preferEth + " -eq 1) {");
         sb.AppendLine("  # Prefer eth when any eth is Up with IP; still raise Wi-Fi metric if eth only linked");
         sb.AppendLine("  $ads = @(Get-NetAdapter -Physical -EA SilentlyContinue)");

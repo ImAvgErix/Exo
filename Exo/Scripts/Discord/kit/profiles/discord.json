@@ -15,12 +15,12 @@
   "DESKTOP_TTI_EARLY_UPDATE_CHECK": false,
   "DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS": 2000,
   "openasar": {
-    "disableMediaKeys": true,
+    "disableMediaKeys": false,
     "noTrack": true,
     "noTyping": true,
     "quickstart": true,
     "setup": true,
-    "domOptimizer": true,
+    "domOptimizer": false,
     "themeSync": false,
     "autoupdate": false
   },
@@ -33,12 +33,6 @@
     "disable-background-networking": 1,
     "no-pings": 1,
     "disable-renderer-backgrounding": 1,
-    "disable-backgrounding-occluded-windows": 1,
-    "disable-background-timer-throttling": 1,
-    "disable-hang-monitor": 1,
-    "disable-ipc-flooding-protection": 1,
-    "disable-features": "CalculateNativeWinOcclusion,BackForwardCache,MediaRouter,DialMediaRouteProvider,AutofillServerCommunication,OptimizationHints",
-    "metrics-recording-only": 1,
-    "disable-default-apps": 1
+    "disable-backgrounding-occluded-windows": 1
   }
 }

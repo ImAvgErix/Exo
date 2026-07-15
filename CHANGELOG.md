@@ -1,3 +1,12 @@
+## 2.3.2
+
+- **CRITICAL launch fix**: Discord now launches via official `Update.exe` (modern host integrity); stock host restored when inject path breaks boot; shortcuts no longer point only at a dead VBS path
+- **Start Menu**: one Discord entry under `Discord Inc` only — removed root `Programs\Discord.lnk` that created a second app tile
+- **Steam**: removed CEF flags that blanked/hung clients on some GPUs (`-cef-disable-occlusion`, `-cef-disable-renderer-accessibility`); safer Steam-Exo.cmd
+- **Discord profile**: dialed back aggressive Chromium/OpenAsar options that could prevent boot; kernel trim back to stable 4s
+- **Internet tailored apply**: NIC vendor / link speed / laptop / CPU detection; RSS budget; mid vs max buffers; IPv4-first; vendor NIC extras; Host gaming detect rows
+- **Discord/Steam GPU**: High preference only when a discrete GPU exists
+
 ## 2.3.1
 
 - **UI**: original hero tagline only; tighter page padding; borderless result banners; shorter/cleaner motion (no bounce); messages shortened

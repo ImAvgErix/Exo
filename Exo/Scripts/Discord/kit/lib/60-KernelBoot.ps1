@@ -173,14 +173,13 @@ function Disable-Fso([string]$AppDir) {
 }
 
 function Restore-StartMenu {
-    # Point Start Menu / taskbar / desktop Discord shortcuts at Discord.vbs (-Launch)
-    # so OpenASAR + kernel + flags load no matter how the user opens Discord.
+    # Prefer official Update.exe launch (modern Discord host integrity).
+    # One Start Menu entry only: Programs\Discord Inc\Discord.lnk
+    # Never also create Programs\Discord.lnk (that shows as a second app).
     $app = Get-ActiveApp
     if (-not $app) { throw 'No Discord app folder - cannot refresh shortcuts' }
 
     $vbs = Join-Path $KitDir 'Discord.vbs'
-    # Never overwrite Discord.vbs here - the kit ships a direct Discord.exe launcher
-    # (PowerShell only if mods are missing). Overwriting it caused a launch hitch.
     if (-not (Test-Path -LiteralPath $vbs)) {
         throw "Missing Discord.vbs at $vbs - reinstall Exo Discord kit"
     }
@@ -193,7 +192,8 @@ function Restore-StartMenu {
     $iconLoc = if (Test-Path -LiteralPath $icon) { "$icon,0" } else { "$($app.FullName)\Discord.exe,0" }
     $discordExe = Join-Path $app.FullName 'Discord.exe'
     $updateExe = Get-DiscOptEnvPath 'LOCALAPPDATA' 'Discord\Update.exe'
-    $desc = 'Discord (Exo - Launch path)'
+    $useUpdate = $updateExe -and (Test-Path -LiteralPath $updateExe)
+    $desc = 'Discord'
     $wsh = New-Object -ComObject WScript.Shell
 
     function Set-DiscordLnk([string]$Path) {
@@ -202,9 +202,16 @@ function Restore-StartMenu {
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
         }
         $sc = $wsh.CreateShortcut($Path)
-        $sc.TargetPath = $wscript
-        $sc.Arguments = "`"$vbs`" //B"
-        $sc.WorkingDirectory = $Root
+        if ($useUpdate) {
+            # Official squirrel path - most reliable on 1.0.92xx+
+            $sc.TargetPath = $updateExe
+            $sc.Arguments = '--processStart Discord.exe'
+            $sc.WorkingDirectory = (Split-Path -Parent $updateExe)
+        } else {
+            $sc.TargetPath = $wscript
+            $sc.Arguments = "`"$vbs`" //B"
+            $sc.WorkingDirectory = $Root
+        }
         $sc.Description = $desc
         $sc.IconLocation = $iconLoc
         $sc.WindowStyle = 1
@@ -261,22 +268,41 @@ function Restore-StartMenu {
         }
     }
 
-    # Canonical Start Menu only (never create Desktop shortcuts)
+    # Canonical Start Menu: ONE entry under Discord Inc (user). Never root Discord.lnk.
     $ensure = @(
-        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk'),
-        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord.lnk'),
-        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord Inc\Discord.lnk'),
-        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord.lnk')
+        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk')
     ) | Where-Object { $_ }
 
     foreach ($path in $ensure) {
         try {
             Set-DiscordLnk $path
             $patched++
-            Write-Ok ("Shortcut -> Discord.vbs: {0}" -f ($path -replace [regex]::Escape($env:USERPROFILE), '~' -replace [regex]::Escape($env:ProgramData), '%ProgramData%'))
+            $via = if ($useUpdate) { 'Update.exe' } else { 'Discord.vbs' }
+            Write-Ok ("Shortcut -> ${via}: {0}" -f ($path -replace [regex]::Escape($env:USERPROFILE), '~'))
         } catch {
             Write-Warn "Ensure shortcut failed ($path): $($_.Exception.Message)"
         }
+    }
+
+    # Remove duplicate root-level Discord.lnk (causes "two Discord apps" in Start)
+    foreach ($dup in @(
+        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord Inc\Discord.lnk'),
+        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc.\Discord.lnk')
+    )) {
+        if ($dup -and (Test-Path -LiteralPath $dup)) {
+            try {
+                Remove-Item -LiteralPath $dup -Force -ErrorAction SilentlyContinue
+                Write-Ok "Removed duplicate shortcut: $dup"
+            } catch { }
+        }
+    }
+    # "Discord Inc." (with period) folder is a second Start tile - remove if "Discord Inc" exists
+    $inc = Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc'
+    $incDot = Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc.'
+    if ($inc -and $incDot -and (Test-Path -LiteralPath $inc) -and (Test-Path -LiteralPath $incDot)) {
+        try { Remove-Item -LiteralPath $incDot -Recurse -Force -ErrorAction SilentlyContinue } catch { }
     }
 
     # Never leave Discord / Exo icons on user or public Desktop
