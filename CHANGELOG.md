@@ -1,3 +1,9 @@
+## 2.4.2
+
+- **UI — layout fix**: module feature tiles no longer stack in the top-left corner — `FeatureTileGrid` keeps `ItemsRepeater` width in sync with the scroll host so the two-column grid stretches correctly on every optimizer page
+- **UI — dashboard stretch**: home card grid binds to the hero column width so cards stay centered and evenly wrapped
+- **NVIDIA — Control Panel fallback**: Apply no longer strips the classic NVIDIA Control Panel; winget install is restored when missing; detect treats App-removed + CPL-present as applied; Exo NVIDIA Panel adds **Open NVIDIA Control Panel** when `nvcplui` is available
+
 ## 2.4.1
 
 - **NVIDIA Panel — digital vibrance slider**: the DVC backend that shipped in 2.4.0 (`Exo.NvDisplay --get/set-vibrance`) is now surfaced as a per-display slider on the panel page; applied through the same dirty-diff Apply as resolution/depth/color/scaling, persisted to `nvidia-panel-settings.json`, hidden when the driver's DVC API is unavailable for a display

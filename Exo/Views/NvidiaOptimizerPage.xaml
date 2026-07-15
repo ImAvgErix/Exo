@@ -38,42 +38,11 @@
                 <controls:OptiLoader IsActive="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay}"
                                      Visibility="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              HorizontalScrollMode="Disabled"
-                              ZoomMode="Disabled"
-                              Visibility="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <ItemsRepeater x:Name="FeatureRepeater" ItemsSource="{x:Bind ViewModel.Features, Mode=OneWay}">
-                        <ItemsRepeater.Layout>
-                            <UniformGridLayout MaximumRowsOrColumns="2" Orientation="Horizontal"
-                                               MinItemWidth="260" MinColumnSpacing="10" MinRowSpacing="10" ItemsStretch="Fill" />
-                        </ItemsRepeater.Layout>
-                        <ItemsRepeater.ItemTemplate>
-                            <DataTemplate x:DataType="vm:FeatureRowViewModel">
-                                <Border Style="{StaticResource OptiFeatureTile}" Opacity="{x:Bind Opacity}">
-                                    <Grid ColumnSpacing="12">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Style="{StaticResource OptiStatusRail}"
-                                                Opacity="{x:Bind RailOpacity}" />
-                                        <Border Grid.Column="1" Style="{StaticResource OptiIconWell}">
-                                            <FontIcon Glyph="{x:Bind Glyph}" FontSize="14"
-                                                      Foreground="{ThemeResource OptiPrimaryTextBrush}"
-                                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                        </Border>
-                                        <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
-                                            <TextBlock Text="{x:Bind Title}" Style="{StaticResource OptiFeatureTitle}" />
-                                            <TextBlock Text="{x:Bind Detail}" Style="{StaticResource OptiFeatureDetail}" />
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsRepeater.ItemTemplate>
-                    </ItemsRepeater>
-                </ScrollViewer>
+                <controls:FeatureTileGrid x:Name="FeatureGrid"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch"
+                                          ItemsSource="{x:Bind ViewModel.Features, Mode=OneWay}"
+                                          Visibility="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
             </Grid>
             <StackPanel Grid.Row="2" Spacing="10">
                 <Border Style="{StaticResource OptiMessageBanner}"

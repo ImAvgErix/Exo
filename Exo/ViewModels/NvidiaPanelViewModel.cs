@@ -34,6 +34,17 @@ public partial class NvidiaPanelViewModel : ObservableObject
     [RelayCommand]
     public Task RefreshAsync() => RefreshCoreAsync(force: false, soft: false);
 
+    [ObservableProperty] private bool _hasControlPanel;
+
+    [RelayCommand]
+    public void OpenControlPanel()
+    {
+        if (_services.NvidiaPanel.TryLaunchControlPanel(out var error))
+            SetMessage("Opened NVIDIA Control Panel.", success: true);
+        else
+            SetMessage(error ?? "Could not open NVIDIA Control Panel.", success: false);
+    }
+
     private async Task RefreshCoreAsync(bool force, bool soft, bool commitSelections = false)
     {
         if (IsBusy && !force) return;
@@ -77,6 +88,7 @@ public partial class NvidiaPanelViewModel : ObservableObject
                 }
             }
             HasDisplays = Displays.Count > 0;
+            HasControlPanel = _services.NvidiaPanel.IsControlPanelInstalled();
 
             HeaderStatus = HasDisplays
                 ? $"{Displays.Count} display{(Displays.Count == 1 ? "" : "s")}"

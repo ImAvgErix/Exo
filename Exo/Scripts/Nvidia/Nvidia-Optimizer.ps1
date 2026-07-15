@@ -1386,9 +1386,41 @@ function Remove-NvidiaControlPanel {
 }
 
 function Install-NvidiaControlPanel {
-    # Deprecated: Exo no longer installs Control Panel. Kept as no-op for old callers.
-    Write-Warn 'Install-NvidiaControlPanel ignored - Exo panel replaces Control Panel'
-    return (Test-NvidiaControlPanelInstalled)
+    if (Test-NvidiaControlPanelInstalled) {
+        Write-Ok 'NVIDIA Control Panel already installed'
+        return $true
+    }
+
+    Write-Step 'Installing NVIDIA Control Panel (display UI fallback)...'
+    $winget = Get-ExoWingetPath
+    if (-not $winget) {
+        Write-Warn 'winget unavailable - cannot install Control Panel automatically'
+        return $false
+    }
+
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $winget
+        $psi.Arguments = 'install --id 9NF8H0H7WMLT -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity'
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $p = [Diagnostics.Process]::Start($psi)
+        if ($p -and -not $p.WaitForExit(120000)) {
+            try { $p.Kill($true) } catch { try { $p.Kill() } catch { } }
+            Write-Warn 'Control Panel winget install timed out'
+            return (Test-NvidiaControlPanelInstalled)
+        }
+    } catch {
+        Write-Warn "Control Panel winget install failed: $($_.Exception.Message)"
+    }
+
+    if (Test-NvidiaControlPanelInstalled) {
+        Write-Ok 'NVIDIA Control Panel installed'
+        Accept-NvidiaControlPanelEula
+        return $true
+    }
+    Write-Warn 'Control Panel install finished but package not detected'
+    return $false
 }
 
 function Ensure-NvidiaDisplayClient {
@@ -3967,13 +3999,12 @@ try {
             Write-Ok 'NVIDIA App removed'
         }
 
-        Write-HubProgress 72 'Removing NVIDIA Control Panel (Exo panel replaces it)...'
-        [void](Remove-NvidiaControlPanel)
-        $cplOk = Test-NvidiaControlPanelInstalled
-        if (-not $cplOk) {
-            Write-Ok 'Control Panel removed - use Exo NVIDIA Panel for settings'
+        Write-HubProgress 72 'Ensuring NVIDIA Control Panel (display UI fallback)...'
+        $cplOk = Install-NvidiaControlPanel
+        if ($cplOk) {
+            Write-Ok 'Control Panel ready - Exo panel + NVIDIA Control Panel both available'
         } else {
-            Write-Warn 'Control Panel still present; display still applies via NVAPI'
+            Write-Warn 'Control Panel not installed; display still applies via NVAPI + Exo panel'
         }
     } else {
         Write-HubProgress 64 'Client stack skipped (-SkipApp)...'

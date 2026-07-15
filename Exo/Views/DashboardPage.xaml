@@ -16,8 +16,10 @@
           Padding="40,18,40,26"
           HorizontalAlignment="Stretch"
           VerticalAlignment="Stretch"
-          UseLayoutRounding="True">
-        <StackPanel HorizontalAlignment="Center"
+          UseLayoutRounding="True"
+          SizeChanged="PageRoot_SizeChanged">
+        <StackPanel x:Name="HomeStack"
+                    HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     MaxWidth="920"
                     Spacing="0"
@@ -35,7 +37,7 @@
                        UseLayoutRounding="True" />
 
             <ItemsControl x:Name="CardList"
-                          HorizontalAlignment="Center"
+                          HorizontalAlignment="Stretch"
                           ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>

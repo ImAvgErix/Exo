@@ -28,6 +28,9 @@ public sealed partial class NvidiaPanelPage : Page
             ViewModel.ApplyDisplaySettingsCommand.Execute(row);
     }
 
+    private void OpenControlPanel_Click(object sender, RoutedEventArgs e) =>
+        ViewModel.OpenControlPanelCommand.Execute(null);
+
     private void Refresh_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RefreshCommand.Execute(null);
 }
