@@ -268,7 +268,41 @@ function Restore-StartMenu {
         }
     }
 
+    # Remove duplicate root-level Discord.lnk (causes "two Discord apps" in Start).
+    # Runs BEFORE the canonical shortcut is created: Win32 strips trailing dots
+    # from path segments, so deleting "Discord Inc.\Discord.lnk" by plain path
+    # can alias onto "Discord Inc\Discord.lnk" and destroy the shortcut we just
+    # made. Trailing-dot paths are addressed with the \\?\ literal prefix so the
+    # real dot-named entry (Squirrel authors metadata is "Discord Inc.") is the
+    # only thing removed.
+    foreach ($dup in @(
+        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord Inc\Discord.lnk')
+    )) {
+        if ($dup -and (Test-Path -LiteralPath $dup)) {
+            try {
+                Remove-Item -LiteralPath $dup -Force -ErrorAction SilentlyContinue
+                Write-Ok "Removed duplicate shortcut: $dup"
+            } catch { }
+        }
+    }
+    # "Discord Inc." (with period) folder is a second Start tile. Enumerate the
+    # real directory entries so the dot-named folder is only removed when it is
+    # a genuinely distinct entry, and delete via \\?\ to bypass normalization.
+    $programsDir = Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs'
+    if ($programsDir -and (Test-Path -LiteralPath $programsDir)) {
+        Get-ChildItem -LiteralPath $programsDir -Directory -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -eq 'Discord Inc.' } | ForEach-Object {
+                try {
+                    Remove-Item -LiteralPath ("\\?\" + $_.FullName) -Recurse -Force -ErrorAction SilentlyContinue
+                    Write-Ok 'Removed duplicate Start tile folder: Discord Inc.'
+                } catch { }
+            }
+    }
+
     # Canonical Start Menu: ONE entry under Discord Inc (user). Never root Discord.lnk.
+    # Created LAST so no cleanup pass above can take it out.
     $ensure = @(
         (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc\Discord.lnk')
     ) | Where-Object { $_ }
@@ -282,27 +316,6 @@ function Restore-StartMenu {
         } catch {
             Write-Warn "Ensure shortcut failed ($path): $($_.Exception.Message)"
         }
-    }
-
-    # Remove duplicate root-level Discord.lnk (causes "two Discord apps" in Start)
-    foreach ($dup in @(
-        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord.lnk'),
-        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord.lnk'),
-        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Discord Inc\Discord.lnk'),
-        (Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc.\Discord.lnk')
-    )) {
-        if ($dup -and (Test-Path -LiteralPath $dup)) {
-            try {
-                Remove-Item -LiteralPath $dup -Force -ErrorAction SilentlyContinue
-                Write-Ok "Removed duplicate shortcut: $dup"
-            } catch { }
-        }
-    }
-    # "Discord Inc." (with period) folder is a second Start tile - remove if "Discord Inc" exists
-    $inc = Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc'
-    $incDot = Get-DiscOptEnvPath 'APPDATA' 'Microsoft\Windows\Start Menu\Programs\Discord Inc.'
-    if ($inc -and $incDot -and (Test-Path -LiteralPath $inc) -and (Test-Path -LiteralPath $incDot)) {
-        try { Remove-Item -LiteralPath $incDot -Recurse -Force -ErrorAction SilentlyContinue } catch { }
     }
 
     # Never leave Discord / Exo icons on user or public Desktop
