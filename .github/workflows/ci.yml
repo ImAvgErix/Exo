@@ -100,7 +100,63 @@ jobs:
             Start-Process -FilePath $setup -ArgumentList '/S' -Wait
           }
           if (-not (Test-Path -LiteralPath $steamExe)) { throw "Steam install failed: $steamExe missing" }
-          Write-Host "Steam installed: $steamExe"
+          $steamRoot = Split-Path -Parent $steamExe
+          # First launch bootstraps the runtime (bin\cef\...\steamwebhelper.exe)
+          # and writes config\config.vdf. Steam self-updates on first run, so
+          # wait until both exist. It never reaches a logged-in state on CI —
+          # that is handled by seeding userdata below.
+          Start-Process -FilePath $steamExe -ArgumentList '-silent','-no-browser','+app_info_update','1'
+          $deadline = (Get-Date).AddMinutes(10)
+          while ((Get-Date) -lt $deadline) {
+            $cfg = Test-Path -LiteralPath (Join-Path $steamRoot 'config\config.vdf')
+            $helper = Get-ChildItem -Path (Join-Path $steamRoot 'bin') -Filter 'steamwebhelper.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($cfg -and $helper) { break }
+            Start-Sleep -Seconds 15
+          }
+          Get-Process -Name steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          Start-Sleep -Seconds 5
+          # localconfig.vdf only exists after a real login, which CI cannot do.
+          # Seed a minimal userdata account so the optimizer's VDF injection /
+          # rewrite paths run against a real file (the actual thing under test).
+          $userConfig = Join-Path $steamRoot 'userdata\1000\config'
+          New-Item -ItemType Directory -Path $userConfig -Force | Out-Null
+          $t = [char]9
+          $seedLines = @(
+            '"UserLocalConfigStore"',
+            '{',
+            ($t + '"friends"'),
+            ($t + '{'),
+            ($t + $t + '"PersonaStateDesired"' + $t + $t + '"1"'),
+            ($t + '}'),
+            ($t + '"system"'),
+            ($t + '{'),
+            ($t + $t + '"EnableGameOverlay"' + $t + $t + '"1"'),
+            ($t + '}'),
+            '}'
+          )
+          Set-Content -LiteralPath (Join-Path $userConfig 'localconfig.vdf') -Value ($seedLines -join "`n") -Encoding ASCII
+          # Ensure a minimal config.vdf exists even if first-run self-update was slow.
+          $steamConfig = Join-Path $steamRoot 'config'
+          New-Item -ItemType Directory -Path $steamConfig -Force | Out-Null
+          $cfgPath = Join-Path $steamConfig 'config.vdf'
+          if (-not (Test-Path -LiteralPath $cfgPath)) {
+            $cfgLines = @(
+              '"InstallConfigStore"',
+              '{',
+              ($t + '"Software"'),
+              ($t + '{'),
+              ($t + $t + '"Valve"'),
+              ($t + $t + '{'),
+              ($t + $t + $t + '"Steam"'),
+              ($t + $t + $t + '{'),
+              ($t + $t + $t + '}'),
+              ($t + $t + '}'),
+              ($t + '}'),
+              '}'
+            )
+            Set-Content -LiteralPath $cfgPath -Value ($cfgLines -join "`n") -Encoding ASCII
+          }
+          Write-Host "Steam installed: $steamExe (runtime + config + seeded userdata ready)"
           exit 0
 
       - name: Install Discord
