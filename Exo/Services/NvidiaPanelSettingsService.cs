@@ -26,6 +26,21 @@ public sealed class NvidiaDisplayColorInfo
             : $"{Connection} · #{DisplayId}";
 }
 
+/// <summary>Digital vibrance (DVC) snapshot from Exo.NvDisplay --get-vibrance.</summary>
+public sealed class NvidiaDisplayVibranceInfo
+{
+    public required uint DisplayId { get; init; }
+    public required string Connection { get; init; }
+    public int CurrentLevel { get; init; }
+    public int DefaultLevel { get; init; }
+    public int MinimumLevel { get; init; }
+    public int MaximumLevel { get; init; } = NvidiaPanelLogic.VibranceDefaultMaximum;
+    public string Title =>
+        string.IsNullOrWhiteSpace(Connection)
+            ? $"Display #{DisplayId}"
+            : $"{Connection} · #{DisplayId}";
+}
+
 /// <summary>Full Control Panel–style display snapshot from Exo.NvDisplay --list-displays.</summary>
 public sealed class NvidiaDisplayInfo
 {
@@ -382,6 +397,46 @@ public sealed class NvidiaPanelSettingsService
         RunPanelMutateAsync(
             NvidiaPanelLogic.BuildSetColorRangeArgs(rangeLabel, displayId),
             $"NVIDIA color → {NvidiaPanelLogic.NormalizeColorRangeLabel(rangeLabel)}",
+            ct);
+
+    /// <summary>Digital vibrance per active display (panel vibrance row source).</summary>
+    public async Task<IReadOnlyList<NvidiaDisplayVibranceInfo>> ListVibranceAsync(CancellationToken ct = default)
+    {
+        var result = new List<NvidiaDisplayVibranceInfo>();
+        try
+        {
+            var (ok, root, _) = await RunNvDisplayJsonAsync(NvidiaPanelLogic.BuildGetVibranceArgs(), ct)
+                .ConfigureAwait(false);
+            if (!ok || root is null) return result;
+            if (!root.Value.TryGetProperty("displays", out var displays) ||
+                displays.ValueKind != JsonValueKind.Array)
+                return result;
+
+            foreach (var d in displays.EnumerateArray())
+            {
+                // Entries with an "error" field are displays whose DVC API is unavailable.
+                if (d.TryGetProperty("error", out var err) && err.ValueKind == JsonValueKind.String)
+                    continue;
+                result.Add(new NvidiaDisplayVibranceInfo
+                {
+                    DisplayId = d.TryGetProperty("displayId", out var idEl) ? idEl.GetUInt32() : 0u,
+                    Connection = d.TryGetProperty("connection", out var c) ? c.GetString() ?? "" : "",
+                    CurrentLevel = d.TryGetProperty("currentLevel", out var cur) ? cur.GetInt32() : 0,
+                    DefaultLevel = d.TryGetProperty("defaultLevel", out var def) ? def.GetInt32() : 0,
+                    MinimumLevel = d.TryGetProperty("minimumLevel", out var min) ? min.GetInt32() : NvidiaPanelLogic.VibranceDefaultMinimum,
+                    MaximumLevel = d.TryGetProperty("maximumLevel", out var max) ? max.GetInt32() : NvidiaPanelLogic.VibranceDefaultMaximum
+                });
+            }
+        }
+        catch { }
+        return result;
+    }
+
+    public Task<(bool Success, string Message)> SetVibranceAsync(
+        int level, uint? displayId = null, CancellationToken ct = default) =>
+        RunPanelMutateAsync(
+            NvidiaPanelLogic.BuildSetVibranceArgs(level, displayId),
+            $"Digital vibrance → {NvidiaPanelLogic.ClampVibranceLevel(level)}",
             ct);
 
     private async Task<(bool Success, string Message)> RunPanelMutateAsync(
