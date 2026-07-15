@@ -192,6 +192,14 @@
                 </StackPanel>
 
                 <Button Style="{StaticResource OptiQuietButton}"
+                        Content="Open NVIDIA Control Panel"
+                        Click="OpenControlPanel_Click"
+                        HorizontalAlignment="Stretch"
+                        Visibility="{x:Bind ViewModel.HasControlPanel, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                        AutomationProperties.Name="Open NVIDIA Control Panel" />
+
+                <Button Style="{StaticResource OptiQuietButton}"
                         Content="Refresh"
                         Click="Refresh_Click"
                         HorizontalAlignment="Stretch"

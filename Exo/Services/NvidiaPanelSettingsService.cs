@@ -720,6 +720,53 @@ public sealed class NvidiaPanelSettingsService
         return paths.Any(File.Exists);
     }
 
+    public bool IsControlPanelInstalled() => ProbeNvidiaControlPanelPresent();
+
+    /// <summary>Launch classic NVIDIA Control Panel when Exo.NvDisplay is unavailable.</summary>
+    public bool TryLaunchControlPanel(out string? error)
+    {
+        error = null;
+        try
+        {
+            foreach (var path in new[]
+                     {
+                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                             @"NVIDIA Corporation\Control Panel Client\nvcplui.exe"),
+                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                             @"NVIDIA Corporation\NVIDIA Control Panel\nvcplui.exe")
+                     })
+            {
+                if (!File.Exists(path)) continue;
+                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+                return true;
+            }
+
+            var local = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Packages");
+            if (Directory.Exists(local))
+            {
+                foreach (var pkg in Directory.EnumerateDirectories(local, "NVIDIACorp.NVIDIAControlPanel*"))
+                {
+                    var aumid = Path.GetFileName(pkg) + "!NVIDIACorp.NVIDIAControlPanel";
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"shell:AppsFolder\\{aumid}")
+                    {
+                        UseShellExecute = true
+                    });
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+
+        error = "NVIDIA Control Panel not found. Run NVIDIA Apply to install it, or use driver settings.";
+        return false;
+    }
+
     private static bool ProbeNvidiaControlPanelPresent()
     {
         try

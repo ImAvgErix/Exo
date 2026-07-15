@@ -42,8 +42,24 @@ public sealed partial class DashboardPage : Page
 
     private void Page_Loaded(object sender, RoutedEventArgs e)
     {
+        UpdateCardListWidth();
         StabilizeHome();
         _ = TryPlayEntranceAsync();
+    }
+
+    private void PageRoot_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        UpdateCardListWidth();
+
+    private void UpdateCardListWidth()
+    {
+        try
+        {
+            if (HomeStack is null || CardList is null) return;
+            var w = HomeStack.ActualWidth;
+            if (w > 0)
+                CardList.Width = w;
+        }
+        catch { }
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)

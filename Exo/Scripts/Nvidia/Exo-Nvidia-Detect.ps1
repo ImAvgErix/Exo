@@ -646,14 +646,14 @@ $features.Add(@{
 
 $features.Add(@{
     title  = 'Driver only (no App / CPL)'
-    detail = $(if (-not $appInstalled -and -not $cplInstalled) {
-        'NVIDIA App and Control Panel removed. Use Exo NVIDIA Panel for display/video policy.'
-    } elseif (-not $appInstalled -and $cplInstalled) {
-        'App gone but Control Panel still installed. Re-Apply to strip CPL; Exo panel is the UI.'
+    detail = $(if (-not $appInstalled -and $cplInstalled) {
+        'NVIDIA App removed; classic Control Panel kept for display UI. Exo panel + NVAPI apply policy.'
+    } elseif (-not $appInstalled -and -not $cplInstalled) {
+        'NVIDIA App removed. No Control Panel UI - use Exo NVIDIA Panel or Re-Apply to install CPL.'
     } else {
-        'NVIDIA App still installed. Re-Apply to strip App + Control Panel.'
+        'NVIDIA App still installed. Re-Apply to strip App and keep Control Panel + Exo panel.'
     })
-    active = (-not $appInstalled) -and (-not $cplInstalled)
+    active = (-not $appInstalled)
 })
 
 $backgroundOk = [bool]$debloat.Ok -and [bool]$overlay.Ok

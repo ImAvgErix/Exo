@@ -120,9 +120,9 @@ if (File.Exists(dash))
         && !d.Contains("Width=\"300\"", StringComparison.Ordinal)
         && !d.Contains("Height=\"200\"", StringComparison.Ordinal)
         && !d.Contains("Height=\"190\"", StringComparison.Ordinal));
-    Expect("dashboard no responsive layout",
-        !File.ReadAllText(Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs"))
-            .Contains("ApplyResponsiveLayout", StringComparison.Ordinal));
+    Expect("dashboard stretch cards",
+        File.ReadAllText(Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs"))
+            .Contains("UpdateCardListWidth", StringComparison.Ordinal));
     // Home is nav only — no applied/checking chips (status lives on the module page).
     Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
     Expect("no pick-a-target blurb", !d.Contains("Pick a target", StringComparison.Ordinal));
@@ -256,6 +256,9 @@ foreach (var page in new[]
             x.Contains("Digital vibrance", StringComparison.Ordinal)
             && x.Contains("SelectedVibrance", StringComparison.Ordinal)
             && x.Contains("VibranceSupported", StringComparison.Ordinal));
+        Expect(page + " control panel fallback",
+            x.Contains("Open NVIDIA Control Panel", StringComparison.Ordinal)
+            && x.Contains("HasControlPanel", StringComparison.Ordinal));
     }
     if (page.StartsWith("Internet", StringComparison.Ordinal))
     {
@@ -277,6 +280,39 @@ foreach (var page in new[]
             Expect("internet repair wired", ic.Contains("Repair_Click", StringComparison.Ordinal));
         }
     }
+}
+
+// Feature tiles must stretch — bare ItemsRepeater in module ScrollViewers stacks at (0,0).
+var featureGridXaml = Path.Combine(repo, "Exo", "Views", "Controls", "FeatureTileGrid.xaml");
+var featureGridCs = Path.Combine(repo, "Exo", "Views", "Controls", "FeatureTileGrid.xaml.cs");
+Expect("FeatureTileGrid control", File.Exists(featureGridXaml) && File.Exists(featureGridCs));
+if (File.Exists(featureGridXaml))
+{
+    var fg = File.ReadAllText(featureGridXaml);
+    Expect("feature grid stretch host",
+        fg.Contains("ScrollHost_SizeChanged", StringComparison.Ordinal)
+        && fg.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal)
+        && fg.Contains("UniformGridLayout", StringComparison.Ordinal));
+}
+if (File.Exists(featureGridCs))
+{
+    var fgc = File.ReadAllText(featureGridCs);
+    Expect("feature grid width sync",
+        fgc.Contains("TileRepeater.Width", StringComparison.Ordinal)
+        && fgc.Contains("ScrollHost_SizeChanged", StringComparison.Ordinal));
+}
+foreach (var page in new[]
+         {
+             "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml",
+             "InternetOptimizerPage.xaml", "NvidiaOptimizerPage.xaml"
+         })
+{
+    var p = Path.Combine(repo, "Exo", "Views", page);
+    if (!File.Exists(p)) continue;
+    var x = File.ReadAllText(p);
+    Expect(page + " uses FeatureTileGrid",
+        x.Contains("FeatureTileGrid", StringComparison.Ordinal)
+        && !x.Contains("x:Name=\"FeatureRepeater\"", StringComparison.Ordinal));
 }
 
 // Friction-free apply/repair: no blocking ContentDialog confirmations on module pages
@@ -464,9 +500,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.4.1", File.ReadAllText(versionFile).Trim() == "2.4.1");
+    Expect("VERSION is 2.4.2", File.ReadAllText(versionFile).Trim() == "2.4.2");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.4.1", File.ReadAllText(csproj).Contains("<Version>2.4.1</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.4.2", File.ReadAllText(csproj).Contains("<Version>2.4.2</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));
