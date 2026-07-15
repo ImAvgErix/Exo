@@ -38,17 +38,17 @@ public static class UiStatusPresentation
     /// <summary>Brush resource key under ThemeResources (for documentation / hosts).</summary>
     public static string BrushKeyFor(Tone tone) => tone switch
     {
-        Tone.Success => "OptiSuccessBrush",
-        Tone.Error => "OptiErrorBrush",
-        Tone.Warning => "OptiWarningBrush",
-        Tone.Busy => "OptiMutedTextBrush",
-        _ => "OptiPrimaryTextBrush"
+        Tone.Success => "ExoSuccessBrush",
+        Tone.Error => "ExoErrorBrush",
+        Tone.Warning => "ExoWarningBrush",
+        Tone.Busy => "ExoMutedTextBrush",
+        _ => "ExoPrimaryTextBrush"
     };
 
     /// <summary>Feature row opacity: intentional inactive slightly dimmed, never hidden.</summary>
     public static double FeatureOpacity(bool isActive) => isActive ? 1.0 : 0.78;
 
-    /// <summary>Status rail opacity for peak vs open feature tiles.</summary>
+    /// <summary>Status rail opacity for applied vs open feature tiles.</summary>
     public static double FeatureRailOpacity(bool isActive) => isActive ? 1.0 : 0.28;
 
     /// <summary>Feature / policy row glyph: check when active, block when not.</summary>

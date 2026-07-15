@@ -10,7 +10,7 @@ void Expect(string name, bool cond, string detail = "")
     else { failed++; Log($"FAIL  {name}" + (detail.Length > 0 ? " :: " + detail : "")); }
 }
 
-Log("=== SteamPeak.Smoke (shipped SteamPeakLogic + SteamDetectCore.ps1) ===");
+Log("=== Steam.Smoke (shipped SteamLogic + SteamDetectCore.ps1) ===");
 Log(DateTime.UtcNow.ToString("o"));
 
 var cefGood = """
@@ -20,8 +20,8 @@ start "" /HIGH /D "C:\Steam" "C:\Steam\steam.exe" -cef-disable-gpu -nofriendsui 
 var cefMissingHigh = """
 start "" "C:\Steam\steam.exe" -cef-disable-gpu -nofriendsui -nointro
 """;
-Expect("CEF peak launcher", SteamPeakLogic.IsCefLauncherText(cefGood));
-Expect("CEF missing /HIGH fails", !SteamPeakLogic.IsCefLauncherText(cefMissingHigh));
+Expect("CEF launcher", SteamLogic.IsCefLauncherText(cefGood));
+Expect("CEF missing /HIGH fails", !SteamLogic.IsCefLauncherText(cefMissingHigh));
 
 var trim5 = """
 # Exo.SteamWebHelper
@@ -33,26 +33,26 @@ Start-Sleep -Seconds 5
 var trim4 = trim5.Replace("Seconds 5", "Seconds 4");
 var trimMs = trim5.Replace("Start-Sleep -Seconds 5", "Start-Sleep -Milliseconds 4000");
 var trimBad = trim5.Replace("Seconds 5", "Seconds 60");
-Expect("trim 5s ok", SteamPeakLogic.IsTrimHelperText(trim5));
-Expect("trim 4s ok (not hard-fail 5-only)", SteamPeakLogic.IsTrimHelperText(trim4));
-Expect("trim 4000ms ok", SteamPeakLogic.IsTrimHelperText(trimMs));
-Expect("trim 60s fail", !SteamPeakLogic.IsTrimHelperText(trimBad));
+Expect("trim 5s ok", SteamLogic.IsTrimHelperText(trim5));
+Expect("trim 4s ok (not hard-fail 5-only)", SteamLogic.IsTrimHelperText(trim4));
+Expect("trim 4000ms ok", SteamLogic.IsTrimHelperText(trimMs));
+Expect("trim 60s fail", !SteamLogic.IsTrimHelperText(trimBad));
 Expect("trim missing EmptyWorkingSet fail",
-    !SteamPeakLogic.IsTrimHelperText(trim5.Replace("EmptyWorkingSet", "Nope")));
+    !SteamLogic.IsTrimHelperText(trim5.Replace("EmptyWorkingSet", "Nope")));
 
 Expect("toasts intentional off",
-    SteamPeakLogic.AreToastsOff(new Dictionary<string, int?> { ["Steam"] = 0, ["Other"] = null }));
+    SteamLogic.AreToastsOff(new Dictionary<string, int?> { ["Steam"] = 0, ["Other"] = null }));
 Expect("toasts none not applied",
-    !SteamPeakLogic.AreToastsOff(new Dictionary<string, int?> { ["Steam"] = null }));
+    !SteamLogic.AreToastsOff(new Dictionary<string, int?> { ["Steam"] = null }));
 Expect("legacy aggressive absent",
-    SteamPeakLogic.LegacyAggressiveCmdNamesAbsent(new[] { "steam.exe", "Steam-Exo.cmd" }));
+    SteamLogic.LegacyAggressiveCmdNamesAbsent(new[] { "steam.exe", "Steam-Exo.cmd" }));
 Expect("legacy aggressive present fail",
-    !SteamPeakLogic.LegacyAggressiveCmdNamesAbsent(new[] { "Steam-Exo-Aggressive.cmd" }));
+    !SteamLogic.LegacyAggressiveCmdNamesAbsent(new[] { "Steam-Exo-Aggressive.cmd" }));
 
 // Fully-applied fixture
-var fullCef = SteamPeakLogic.IsCefLauncherText(cefGood);
-var fullTrim = SteamPeakLogic.IsTrimHelperText(trim5);
-var fullToast = SteamPeakLogic.AreToastsOff(new Dictionary<string, int?> { ["Steam"] = 0 });
+var fullCef = SteamLogic.IsCefLauncherText(cefGood);
+var fullTrim = SteamLogic.IsTrimHelperText(trim5);
+var fullToast = SteamLogic.AreToastsOff(new Dictionary<string, int?> { ["Steam"] = 0 });
 Expect("fully applied fixture false_fail_count=0", fullCef && fullTrim && fullToast);
 
 var repo = FindRepoRoot();
@@ -61,7 +61,7 @@ Expect("SteamDetectCore.ps1 exists", File.Exists(core), core);
 
 if (File.Exists(core))
 {
-    var dir = Path.Combine(Path.GetTempPath(), "exo-steam-peak-" + Guid.NewGuid().ToString("N"));
+    var dir = Path.Combine(Path.GetTempPath(), "exo-steam-smoke-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(dir);
     try
     {
@@ -123,7 +123,7 @@ var applyFiles = new[]
 };
 var blob = string.Join("\n", applyFiles.Where(File.Exists).Select(File.ReadAllText));
 Expect("apply sources readable", blob.Length > 1000);
-var (ok, issues) = SteamPeakLogic.AuditApplyScriptText(blob);
+var (ok, issues) = SteamLogic.AuditApplyScriptText(blob);
 Expect("apply audit", ok, string.Join("; ", issues));
 Expect("no Exo-Steam scheduled task create",
     blob.IndexOf("Register-ScheduledTask -TaskName 'Exo-Steam", StringComparison.OrdinalIgnoreCase) < 0);
@@ -196,7 +196,7 @@ void RunVdfInjectorFixtureTests(string optimizer)
     Directory.CreateDirectory(dir);
     try
     {
-        // Fixture mimics a modern localconfig.vdf that omits most peak keys.
+        // Fixture mimics a modern localconfig.vdf that omits most target keys.
         var fixtureVdf = "\"UserLocalConfigStore\"\n{\n\t\"friends\"\n\t{\n\t\t\"PersonaStateDesired\"\t\t\"1\"\n\t}\n\t\"Software\"\n\t{\n\t\t\"Valve\"\n\t\t{\n\t\t\t\"Steam\"\n\t\t\t{\n\t\t\t\t\"SmoothScrollWebViews\"\t\t\"1\"\n\t\t\t}\n\t\t}\n\t}\n}\n";
         var fixturePath = Path.Combine(dir, "localconfig.vdf");
         File.WriteAllText(fixturePath, fixtureVdf);

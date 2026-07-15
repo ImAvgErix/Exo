@@ -16,7 +16,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     public NvidiaOptimizerViewModel(AppServices services)
     {
         _services = services;
-        LastResultBrush = ResolveBrush("OptiSuccessBrush", Color.FromArgb(255, 34, 197, 94));
+        LastResultBrush = ResolveBrush("ExoSuccessBrush", Color.FromArgb(255, 34, 197, 94));
     }
 
     [ObservableProperty] private string _statusText = "Checking status...";

@@ -279,7 +279,7 @@ function New-EquicordLoaderAsar([string]$EquicordAsarPath) {
 }
 
 function Test-EquicordReady([string]$AppDir) {
-    # Peak = Equicord loader + Exo Host flags path (OpenAsar no longer required).
+    # Applied = Equicord loader + Exo Host flags path (OpenAsar no longer required).
     return (Test-EquicordLoaderPatched $AppDir)
 }
 

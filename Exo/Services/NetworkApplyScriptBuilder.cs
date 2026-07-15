@@ -5,7 +5,7 @@ namespace Exo.Services;
 
 /// <summary>
 /// Generates the elevated PowerShell apply script (shipped path).
-/// Pure string build — no elevation. Driven by <see cref="NetworkPeakLogic"/> knobs.
+/// Pure string build — no elevation. Driven by <see cref="NetworkLogic"/> knobs.
 /// Safety contract:
 ///  1. Pristine pre-apply snapshot to %LocalAppData%\Exo\network-snapshot.json BEFORE any mutation
 ///     (never overwritten by re-applies — first snapshot is the restore baseline).
@@ -123,7 +123,7 @@ function Test-ExoDnsResolve {
         NetworkApplyOptions options,
         NetworkMediaProfile media)
     {
-        var knobs = NetworkPeakLogic.KnobsFor(preset);
+        var knobs = NetworkLogic.KnobsFor(preset);
         var latency = knobs.NagleOff;
         var autotune = knobs.AutotuneNetsh;
         var autoTuningPs = knobs.AutotunePs;
@@ -141,9 +141,9 @@ function Test-ExoDnsResolve {
             ? media.PhysicalCores
             : (media.LogicalProcessors > 0 ? Math.Max(1, media.LogicalProcessors / 2) : Math.Max(1, Environment.ProcessorCount / 2));
         var logicalCpus = media.LogicalProcessors > 0 ? media.LogicalProcessors : Environment.ProcessorCount;
-        var rssBudget = NetworkPeakLogic.RssQueueBudget(preset, coreBudget);
-        var bufferStrategy = NetworkPeakLogic.BufferStrategy(preset);
-        var preferIpv4 = NetworkPeakLogic.PreferIpv4First(preset, media.EthernetInUse) ? "1" : "0";
+        var rssBudget = NetworkLogic.RssQueueBudget(preset, coreBudget);
+        var bufferStrategy = NetworkLogic.BufferStrategy(preset);
+        var preferIpv4 = NetworkLogic.PreferIpv4First(preset, media.EthernetInUse) ? "1" : "0";
         var vendorHint = string.IsNullOrWhiteSpace(media.NicVendor) ? "Unknown" : media.NicVendor;
         // Nagle keys only for latency (TCP games); throughput clears them
         var ackBlock = latency
@@ -202,7 +202,7 @@ function Invoke-ExoNetshGlobal([string]$Step, [string[]]$NetshArgs) {
 }
 """);
 
-        // Classification mirrors NetworkPeakLogic.IsWifiAdapter (keep in sync).
+        // Classification mirrors NetworkLogic.IsWifiAdapter (keep in sync).
         // Defined before the snapshot so the baseline records Wi-Fi vs Ethernet correctly.
         sb.AppendLine("function Test-IsWifiAdapter($a) {");
         sb.AppendLine("  $pm = [string]$a.PhysicalMediaType; $m = [string]$a.MediaType");
@@ -1110,14 +1110,14 @@ function Set-EthMetrics {
         sb.AppendLine("} else {");
         sb.AppendLine("  Report 'prefix-policy' 'skip' 'preset keeps default address precedence'");
         sb.AppendLine("}");
-        // Laptop: keep AC path peak; do not force DC min-CPU 100% (battery). Only re-stamp wireless max on DC.
+        // Laptop: keep AC path max; do not force DC min-CPU 100% (battery). Only re-stamp wireless max on DC.
         sb.AppendLine("if ($IsLaptopHint -eq 1) {");
         sb.AppendLine("  try {");
         sb.AppendLine("    $scheme = (powercfg /getactivescheme) -replace '.*GUID:\\s*([0-9a-f\\-]+).*','$1'");
         sb.AppendLine("    if ($scheme) {");
         sb.AppendLine("      powercfg /setdcvalueindex $scheme 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 0 | Out-Null");
         sb.AppendLine("      powercfg /setactive $scheme | Out-Null");
-        sb.AppendLine("      Log '[laptop] DC wireless=max kept; AC CPU peak unchanged'");
+        sb.AppendLine("      Log '[laptop] DC wireless=max kept; AC CPU max unchanged'");
         sb.AppendLine("    }");
         sb.AppendLine("  } catch {}");
         sb.AppendLine("}");
@@ -1646,7 +1646,7 @@ exit 0
     /// <summary>
     /// Non-elevated proof-layer benchmark: ping p50/p95 + jitter (10 pings each to
     /// 1.1.1.1 and 8.8.8.8) and average DNS resolve time. Prints exactly one
-    /// EXO_BENCH:{json} line for <see cref="NetworkPeakLogic.TryParseBenchmark"/>.
+    /// EXO_BENCH:{json} line for <see cref="NetworkLogic.TryParseBenchmark"/>.
     /// </summary>
     public static string BuildBenchmark()
     {

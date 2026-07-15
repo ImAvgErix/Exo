@@ -4,15 +4,16 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:helpers="using:Exo.Helpers">
 
-    <FontFamily x:Key="OptiDisplayFontItalic">ms-appx:///Assets/Fonts/CormorantGaramond-Italic.ttf#Cormorant Garamond</FontFamily>
-    <FontFamily x:Key="OptiUiFont">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
-    <FontFamily x:Key="OptiUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
-    <FontFamily x:Key="OptiUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
+    <FontFamily x:Key="ExoDisplayFontItalic">ms-appx:///Assets/Fonts/CormorantGaramond-Italic.ttf#Cormorant Garamond</FontFamily>
+    <FontFamily x:Key="ExoUiFont">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
+    <FontFamily x:Key="ExoUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
+    <FontFamily x:Key="ExoUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
-    <CornerRadius x:Key="OptiCardRadius">18</CornerRadius>
-    <CornerRadius x:Key="OptiTileRadius">14</CornerRadius>
-    <x:Double x:Key="OptiPageMaxWidth">1000</x:Double>
-    <Thickness x:Key="OptiPagePadding">28,16,28,20</Thickness>
+    <!-- Spacing scale: 8 / 12 / 16 / 20 / 28 — denser v2.5 directory chrome -->
+    <CornerRadius x:Key="ExoCardRadius">16</CornerRadius>
+    <CornerRadius x:Key="ExoTileRadius">12</CornerRadius>
+    <x:Double x:Key="ExoPageMaxWidth">980</x:Double>
+    <Thickness x:Key="ExoPagePadding">24,16,28,16</Thickness>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
@@ -22,136 +23,157 @@
     <helpers:BoolToShowOpacityConverter x:Key="BoolToShowOpacityConverter" />
     <helpers:AssetPathToImageSourceConverter x:Key="AssetPathToImageSourceConverter" />
 
-    <Style x:Key="OptiTagline" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiDisplayFontItalic}" />
-        <Setter Property="FontSize" Value="36" />
+    <Style x:Key="ExoTagline" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource ExoDisplayFontItalic}" />
+        <Setter Property="FontSize" Value="34" />
         <Setter Property="FontStyle" Value="Italic" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="-8" />
+        <Setter Property="CharacterSpacing" Value="-6" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
         <Setter Property="TextAlignment" Value="Center" />
-        <Setter Property="LineHeight" Value="44" />
+        <Setter Property="LineHeight" Value="42" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
         <Setter Property="UseLayoutRounding" Value="True" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
     </Style>
 
-    <Style x:Key="OptiSectionTitle" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
+    <Style x:Key="ExoSectionTitle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
         <Setter Property="FontSize" Value="11" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="80" />
+        <Setter Property="CharacterSpacing" Value="90" />
         <Setter Property="Margin" Value="0,0,0,8" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoMutedTextBrush}" />
     </Style>
 
-    <Style x:Key="OptiBody" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
+    <Style x:Key="ExoBody" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource ExoUiFont}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="Medium" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiSecondaryTextBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoSecondaryTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="LineHeight" Value="19" />
     </Style>
 
-    <Style x:Key="OptiCaption" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
+    <Style x:Key="ExoCaption" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource ExoUiFont}" />
         <Setter Property="FontSize" Value="12" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
+        <Setter Property="LineHeight" Value="16" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoMutedTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <!-- Optimizer page headline (kept for Internet / Display / module pages) -->
-    <Style x:Key="OptiPageTitle" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="21" />
+    <Style x:Key="ExoPageTitle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
+        <Setter Property="FontSize" Value="28" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="-12" />
-        <Setter Property="LineHeight" Value="27" />
+        <Setter Property="CharacterSpacing" Value="-20" />
+        <Setter Property="LineHeight" Value="34" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
     </Style>
 
-    <Style x:Key="OptiFeatureTitle" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
+    <Style x:Key="ExoFeatureTitle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
     </Style>
 
-    <Style x:Key="OptiFeatureDetail" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
+    <Style x:Key="ExoFeatureDetail" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource ExoUiFont}" />
         <Setter Property="FontSize" Value="12" />
         <Setter Property="LineHeight" Value="16" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiMutedTextBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoMutedTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <Style x:Key="OptiFeatureTile" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
+    <Style x:Key="ExoFeatureTile" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
-        <Setter Property="Padding" Value="12,11" />
-        <Setter Property="MinHeight" Value="62" />
+        <Setter Property="CornerRadius" Value="{StaticResource ExoTileRadius}" />
+        <Setter Property="Padding" Value="14,12" />
+        <Setter Property="MinHeight" Value="56" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
-    <!-- Minimal status rail (bright when peak, quiet when open) -->
-    <Style x:Key="OptiStatusRail" TargetType="Border">
+    <!-- Home directory row chrome -->
+    <Style x:Key="ExoDirectoryRow" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="MinHeight" Value="72" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="UseLayoutRounding" Value="True" />
+    </Style>
+
+    <!-- Sticky module action bar -->
+    <Style x:Key="ExoActionBar" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="UseLayoutRounding" Value="True" />
+    </Style>
+
+    <Style x:Key="ExoStatusRail" TargetType="Border">
         <Setter Property="Width" Value="2" />
         <Setter Property="CornerRadius" Value="1" />
-        <Setter Property="Background" Value="{ThemeResource OptiSuccessBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoSuccessBrush}" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
-        <Setter Property="Margin" Value="0,2,0,2" />
+        <Setter Property="Margin" Value="0,1,0,1" />
         <Setter Property="IsHitTestVisible" Value="False" />
     </Style>
 
-    <Style x:Key="OptiMessageBanner" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
+    <Style x:Key="ExoMessageBanner" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource ExoAccentSoftBrush}" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="CornerRadius" Value="{StaticResource OptiTileRadius}" />
+        <Setter Property="CornerRadius" Value="{StaticResource ExoTileRadius}" />
         <Setter Property="Padding" Value="12,10" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
 
-    <!-- Soft fill, no stroke — glyph icons look cleaner without a box outline -->
-    <Style x:Key="OptiIconWell" TargetType="Border">
-        <Setter Property="Width" Value="34" />
-        <Setter Property="Height" Value="34" />
-        <Setter Property="CornerRadius" Value="10" />
-        <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
+    <Style x:Key="ExoIconWell" TargetType="Border">
+        <Setter Property="Width" Value="30" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Background" Value="{ThemeResource ExoAccentSoftBrush}" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <Style x:Key="OptiCard" TargetType="Border">
-        <Setter Property="CornerRadius" Value="{StaticResource OptiCardRadius}" />
-        <Setter Property="Padding" Value="18,16" />
-        <Setter Property="Background" Value="{ThemeResource OptiCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
+    <Style x:Key="ExoCard" TargetType="Border">
+        <Setter Property="CornerRadius" Value="{StaticResource ExoCardRadius}" />
+        <Setter Property="Padding" Value="16,14" />
+        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 
-    <Style x:Key="OptiRiskCard" TargetType="Border">
-        <Setter Property="CornerRadius" Value="12" />
+    <Style x:Key="ExoRiskCard" TargetType="Border">
+        <Setter Property="CornerRadius" Value="10" />
         <Setter Property="Padding" Value="12,10" />
-        <Setter Property="Background" Value="{ThemeResource OptiWarningSoftBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiWarningBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoWarningSoftBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoWarningBrush}" />
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 
-    <Style x:Key="OptiRiskLabel" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
+    <Style x:Key="ExoRiskLabel" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
         <Setter Property="FontSize" Value="10" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="CharacterSpacing" Value="100" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiWarningBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoWarningBrush}" />
     </Style>
 
     <!--
@@ -159,16 +181,16 @@
       PointerOver + Checked both apply in WinUI — if hover sets Background it wipes
       the white selected fill and black label “disappears” on dark shell.
     -->
-    <Style x:Key="OptiThemeChoice" TargetType="RadioButton">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="14" />
+    <Style x:Key="ExoThemeChoice" TargetType="RadioButton">
+        <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="MinHeight" Value="44" />
-        <Setter Property="Padding" Value="14,12" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Padding" Value="12,10" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
@@ -176,25 +198,22 @@
                     <Grid x:Name="Root"
                           MinHeight="{TemplateBinding MinHeight}"
                           HorizontalAlignment="Stretch">
-                        <!-- Base + stroke (always visible) -->
                         <Border x:Name="Base"
-                                Background="{ThemeResource OptiPageBackgroundBrush}"
-                                BorderBrush="{ThemeResource OptiCardStrokeBrush}"
+                                Background="{ThemeResource ExoPageBackgroundBrush}"
+                                BorderBrush="{ThemeResource ExoCardStrokeBrush}"
                                 BorderThickness="1"
-                                CornerRadius="{StaticResource OptiTileRadius}" />
-                        <!-- Hover underlay — never paints over selected white -->
+                                CornerRadius="{StaticResource ExoTileRadius}" />
                         <Border x:Name="HoverFill"
-                                Background="{ThemeResource OptiAccentSoftBrush}"
-                                CornerRadius="{StaticResource OptiTileRadius}"
+                                Background="{ThemeResource ExoAccentSoftBrush}"
+                                CornerRadius="{StaticResource ExoTileRadius}"
                                 Margin="1"
                                 Opacity="0"
                                 IsHitTestVisible="False" />
-                        <!-- Selected white — ON TOP of hover so it never vanishes -->
                         <Border x:Name="CheckedFill"
                                 Background="#FFFFFF"
                                 BorderBrush="#FFFFFF"
                                 BorderThickness="1"
-                                CornerRadius="{StaticResource OptiTileRadius}"
+                                CornerRadius="{StaticResource ExoTileRadius}"
                                 Opacity="0"
                                 IsHitTestVisible="False" />
                         <TextBlock x:Name="Label"
@@ -252,16 +271,15 @@
         </Setter>
     </Style>
 
-    <Style x:Key="OptiThemeRadio" TargetType="RadioButton" BasedOn="{StaticResource OptiThemeChoice}" />
+    <Style x:Key="ExoThemeRadio" TargetType="RadioButton" BasedOn="{StaticResource ExoThemeChoice}" />
 
-    <!-- Compact toggle — hide On/Off labels, no huge min width -->
-    <Style x:Key="OptiCompactSwitch" TargetType="ToggleSwitch">
+    <Style x:Key="ExoCompactSwitch" TargetType="ToggleSwitch">
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="OnContent" Value="" />
         <Setter Property="OffContent" Value="" />
         <Setter Property="HorizontalAlignment" Value="Right" />
         <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFont}" />
+        <Setter Property="FontFamily" Value="{StaticResource ExoUiFont}" />
     </Style>
 
     <!--
@@ -270,17 +288,17 @@
       - Hover/press = animated highlight wash + ring on a separate layer.
       - Short ease-out (~140ms) so you always know what you're on.
     -->
-    <Style x:Key="OptiPrimaryButton" TargetType="Button">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontSemiBold}" />
-        <Setter Property="Padding" Value="18,12" />
+    <Style x:Key="ExoPrimaryButton" TargetType="Button">
+        <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
+        <Setter Property="Padding" Value="20,13" />
         <Setter Property="CornerRadius" Value="12" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="MinHeight" Value="46" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
-        <Setter Property="Background" Value="{ThemeResource OptiAccentBrush}" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiOnAccentBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoAccentBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoOnAccentBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
@@ -294,9 +312,8 @@
                           CornerRadius="{TemplateBinding CornerRadius}"
                           BorderBrush="{TemplateBinding BorderBrush}"
                           BorderThickness="{TemplateBinding BorderThickness}">
-                        <!-- Wash sits under label; content never scaled -->
                         <Border x:Name="HoverWash"
-                                Background="{ThemeResource OptiOnAccentBrush}"
+                                Background="{ThemeResource ExoOnAccentBrush}"
                                 CornerRadius="{TemplateBinding CornerRadius}"
                                 Opacity="0"
                                 IsHitTestVisible="False" />
@@ -358,18 +375,19 @@
         </Setter>
     </Style>
 
-    <Style x:Key="OptiQuietButton" TargetType="Button">
-        <Setter Property="FontFamily" Value="{StaticResource OptiUiFontMedium}" />
-        <Setter Property="Padding" Value="14,10" />
-        <Setter Property="CornerRadius" Value="12" />
+    <Style x:Key="ExoQuietButton" TargetType="Button">
+        <Setter Property="FontFamily" Value="{StaticResource ExoUiFontMedium}" />
+        <Setter Property="Padding" Value="14,9" />
+        <Setter Property="CornerRadius" Value="10" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="MinHeight" Value="40" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
-        <Setter Property="Background" Value="{ThemeResource OptiQuietButtonFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource OptiCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1.5" />
-        <Setter Property="Foreground" Value="{ThemeResource OptiPrimaryTextBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoQuietButtonFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
@@ -384,12 +402,12 @@
                           BorderBrush="{TemplateBinding BorderBrush}"
                           BorderThickness="{TemplateBinding BorderThickness}">
                         <Border x:Name="HoverWash"
-                                Background="{ThemeResource OptiAccentSoftBrush}"
+                                Background="{ThemeResource ExoAccentSoftBrush}"
                                 CornerRadius="{TemplateBinding CornerRadius}"
                                 Opacity="0"
                                 IsHitTestVisible="False" />
                         <Border x:Name="HoverRing"
-                                BorderBrush="{ThemeResource OptiAccentBrush}"
+                                BorderBrush="{ThemeResource ExoAccentBrush}"
                                 BorderThickness="1"
                                 CornerRadius="{TemplateBinding CornerRadius}"
                                 Opacity="0"
@@ -461,25 +479,26 @@
         </Setter>
     </Style>
 
-    <!-- Live continuous slider (premium track + thumb) -->
-    <Style x:Key="OptiLiveSlider" TargetType="Slider">
-        <Setter Property="Foreground" Value="{ThemeResource OptiAccentBrush}" />
-        <Setter Property="Background" Value="{ThemeResource OptiAccentSoftBrush}" />
+    <Style x:Key="ExoLiveSlider" TargetType="Slider">
+        <Setter Property="Foreground" Value="{ThemeResource ExoAccentBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoAccentSoftBrush}" />
         <Setter Property="Minimum" Value="0" />
         <Setter Property="Maximum" Value="100" />
         <Setter Property="StepFrequency" Value="1" />
         <Setter Property="IsThumbToolTipEnabled" Value="False" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
-        <Setter Property="MinHeight" Value="32" />
-        <Setter Property="Margin" Value="0,2,0,0" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="Margin" Value="0,4,0,0" />
     </Style>
 
-    <!-- Solid white CTA — wash + fill animation, no scale. -->
-    <Style x:Key="OptiWhiteButton" TargetType="Button" BasedOn="{StaticResource OptiQuietButton}">
+    <Style x:Key="ExoWhiteButton" TargetType="Button" BasedOn="{StaticResource ExoQuietButton}">
         <Setter Property="Background" Value="#FFFFFF" />
         <Setter Property="BorderBrush" Value="#FFFFFF" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Foreground" Value="#0A0A0A" />
+        <Setter Property="MinHeight" Value="46" />
+        <Setter Property="Padding" Value="20,13" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -545,12 +564,12 @@
       Hover = soft wash + accent ring so you always know focus.
       Press = stronger ring (clear "this is the one").
     -->
-    <Style x:Key="OptiCardButton" TargetType="Button">
+    <Style x:Key="ExoCardButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="CornerRadius" Value="{StaticResource OptiCardRadius}" />
+        <Setter Property="CornerRadius" Value="{StaticResource ExoCardRadius}" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="HorizontalAlignment" Value="Center" />
@@ -575,14 +594,13 @@
                                           VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
                                           Padding="{TemplateBinding Padding}"
                                           CornerRadius="{TemplateBinding CornerRadius}" />
-                        <!-- Highlight layers above content so ring reads; never scale content -->
                         <Border x:Name="HoverWash"
-                                Background="{ThemeResource OptiAccentSoftBrush}"
+                                Background="{ThemeResource ExoAccentSoftBrush}"
                                 CornerRadius="{TemplateBinding CornerRadius}"
                                 Opacity="0"
                                 IsHitTestVisible="False" />
                         <Border x:Name="HoverRing"
-                                BorderBrush="{ThemeResource OptiAccentBrush}"
+                                BorderBrush="{ThemeResource ExoAccentBrush}"
                                 BorderThickness="1.5"
                                 CornerRadius="{TemplateBinding CornerRadius}"
                                 Opacity="0"
@@ -646,11 +664,11 @@
         </Setter>
     </Style>
 
-    <Style x:Key="OptiIconButton" TargetType="Button">
-        <Setter Property="Width" Value="36" />
-        <Setter Property="Height" Value="36" />
+    <Style x:Key="ExoIconButton" TargetType="Button">
+        <Setter Property="Width" Value="34" />
+        <Setter Property="Height" Value="34" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="9" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -668,7 +686,7 @@
                           UseLayoutRounding="True"
                           CornerRadius="{TemplateBinding CornerRadius}">
                         <Border x:Name="HoverWash"
-                                Background="{ThemeResource OptiAccentSoftBrush}"
+                                Background="{ThemeResource ExoAccentSoftBrush}"
                                 CornerRadius="{TemplateBinding CornerRadius}"
                                 Opacity="0"
                                 IsHitTestVisible="False" />
@@ -706,6 +724,89 @@
                                                          To="1" Duration="0:0:0.07" />
                                         <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
                                                          To="0.9" Duration="0:0:0.07" />
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Opacity" Value="0.4" />
+                                        <Setter Target="HoverWash.Opacity" Value="0" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+      Left rail nav: square-ish 56×56, transparent base.
+      Selection fill is applied from code via Background (ExoAccentSoftBrush).
+      Hover/press = wash only — never scale (keeps icons sharp).
+    -->
+    <Style x:Key="ExoRailButton" TargetType="Button">
+        <Setter Property="Width" Value="56" />
+        <Setter Property="Height" Value="56" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="ClickMode" Value="Press" />
+        <Setter Property="AllowFocusOnInteraction" Value="True" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="UseLayoutRounding" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid x:Name="Root"
+                          UseLayoutRounding="True"
+                          Background="{TemplateBinding Background}"
+                          CornerRadius="{TemplateBinding CornerRadius}">
+                        <Border x:Name="HoverWash"
+                                Background="{ThemeResource ExoAccentSoftBrush}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                Opacity="0"
+                                IsHitTestVisible="False" />
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Foreground="{TemplateBinding Foreground}" />
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.14">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="PointerOver">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity"
+                                                         To="0.85" Duration="0:0:0.14">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                                         To="0.92" Duration="0:0:0.08" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">

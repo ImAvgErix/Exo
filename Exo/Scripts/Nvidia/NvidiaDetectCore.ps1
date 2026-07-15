@@ -1,6 +1,6 @@
 # NvidiaDetectCore.ps1 - pure detect classifiers (no NVAPI launch required for unit paths).
 # Dot-sourced by Exo-Nvidia-Detect.ps1; smokes call this file.
-# Keep aligned with Exo.Services.NvidiaPeakLogic.
+# Keep aligned with Exo.Services.NvidiaDetectLogic.
 
 Set-StrictMode -Version Latest
 
@@ -37,7 +37,7 @@ function Test-ExoDisplayTrayHidden {
     try { return ([int]$IsPromoted -eq 0) } catch { return $false }
 }
 
-function Test-ExoDisplayStatusPeakOk {
+function Test-ExoDisplayStatusOk {
     param([bool]$RefreshOk, [bool]$RegistryOk, [bool]$ColorOk, [bool]$PathScalingOk)
     return [bool]($RefreshOk -and ($RegistryOk -or ($ColorOk -and $PathScalingOk)))
 }
@@ -56,7 +56,7 @@ function Get-ExoDrsDriftedDetailText { return ('Drifted ' + [char]0x2014 + ' re-
 
 function Get-ExoDrsVerificationResult {
     # Pure DRS live/import verification classifier.
-    # Keep aligned with Nvidia-Optimizer.ps1 + Exo.Services.NvidiaPeakLogic.ClassifyDrsVerification.
+    # Keep aligned with Nvidia-Optimizer.ps1 + Exo.Services.NvidiaDetectLogic.ClassifyDrsVerification.
     # Compares the intersection of pack pins vs a -exportCustomized driver dump:
     #   Expected $null/empty  -> unavailable (no pack to compare against)
     #   Exported $null        -> unavailable (export missing/unparseable, e.g. old NPI)

@@ -5,7 +5,7 @@ Thanks for helping. Exo stays small and aggressive — contributions should matc
 ## Ground rules
 
 - **Deterministic optimizers** — no folklore keys, no invented registry paths; every tweak must be documented behavior
-- **Honest status** — detectors and UI must agree; smoke tests cover peak logic
+- **Honest status** — detectors and UI must agree; smoke tests cover detect logic
 - **Every tweak ships complete** — a new tweak needs its detect row, a repair path, and a smoke-test marker in the same PR
 - **Repair where we break things** — Internet restores its pre-apply snapshot; Discord/Steam repair paths stay working
 - **NVIDIA Reset is not rollback** — status clear only; driver recovery is manual
@@ -29,16 +29,16 @@ Full installer package:
 
 ```powershell
 .\tools\Test-Repository.ps1
-dotnet run --project tools\UiPeak.Smoke -c Release
-dotnet run --project tools\NetworkPeak.Smoke -c Release
-dotnet run --project tools\DiscordPeak.Smoke -c Release
-dotnet run --project tools\SteamPeak.Smoke -c Release
-dotnet run --project tools\NvidiaPeak.Smoke -c Release
+dotnet run --project tools\Ui.Smoke -c Release
+dotnet run --project tools\Network.Smoke -c Release
+dotnet run --project tools\Discord.Smoke -c Release
+dotnet run --project tools\Steam.Smoke -c Release
+dotnet run --project tools\Nvidia.Smoke -c Release
 ```
 
-UI changes must keep `tools/UiPeak.Smoke` green.
+UI changes must keep `tools/Ui.Smoke` green.
 
-**Linux note:** the WinUI app build and `UiPeak.Smoke` are Windows-only (XAML compiler / `System.Drawing.Common`). On Linux, `Test-Repository.ps1` and the Network/Discord/Steam/NVIDIA smokes still run; the single Discord smoke failure `stable path under root` is a known Linux path-semantics limitation, not a regression.
+**Linux note:** the WinUI app build and `Ui.Smoke` are Windows-only (XAML compiler / `System.Drawing.Common`). On Linux, `Test-Repository.ps1` and the Network/Discord/Steam/NVIDIA smokes still run; the single Discord smoke failure `stable path under root` is a known Linux path-semantics limitation, not a regression.
 
 ## Pull requests
 

@@ -200,7 +200,7 @@ public sealed class NetworkOptimizerService
                 "powershell",
                 $"-NoProfile -ExecutionPolicy Bypass -File \"{path}\"",
                 ct).ConfigureAwait(false);
-            return NetworkPeakLogic.TryParseBenchmark(stdout);
+            return NetworkLogic.TryParseBenchmark(stdout);
         }
         catch { return null; }
         finally
@@ -480,10 +480,10 @@ public sealed class NetworkOptimizerService
             netPing = await PingMsAsync("1.1.1.1", ct).ConfigureAwait(false)
                       ?? await PingMsAsync("8.8.8.8", ct).ConfigureAwait(false);
 
-            // Feature cards = optimizer knobs only (aligned with NetworkPeakLogic.KnobsFor)
-            var lsoOk = NetworkPeakLogic.LsoMatches(activePreset, lso);
-            var rscOk = NetworkPeakLogic.RscMatches(activePreset, rsc);
-            var autoOk = NetworkPeakLogic.AutotuneMatches(activePreset, autoTuning);
+            // Feature cards = optimizer knobs only (aligned with NetworkLogic.KnobsFor)
+            var lsoOk = NetworkLogic.LsoMatches(activePreset, lso);
+            var rscOk = NetworkLogic.RscMatches(activePreset, rsc);
+            var autoOk = NetworkLogic.AutotuneMatches(activePreset, autoTuning);
             var nagleOk = !latency || nagleOff != false;
             if (throughput) nagleOk = nagleOff != true;
 
@@ -497,7 +497,7 @@ public sealed class NetworkOptimizerService
                     : rsc == false ? (latency ? "Off · latency" : "Off") : "—",
                 rscOk));
             features.Add(Row("Auto-tuning",
-                autoOk ? autoTuning : $"{autoTuning} (want {NetworkPeakLogic.KnobsFor(activePreset).AutotuneNetsh})",
+                autoOk ? autoTuning : $"{autoTuning} (want {NetworkLogic.KnobsFor(activePreset).AutotuneNetsh})",
                 autoOk));
             features.Add(Row("Congestion", congestion, true));
             features.Add(Row("Nagle / ACK",
@@ -525,7 +525,7 @@ public sealed class NetworkOptimizerService
                 var presetApplied = LoadSavedPreset() is NetworkPreset.LowestLatency
                     or NetworkPreset.HighestThroughput;
                 var bindStatus = mediaProfile.AdapterBindingsOk
-                    ? "Peak (QoS+IP on · Client/LLDP off)"
+                    ? "Applied (QoS+IP on · Client/LLDP off)"
                     : mediaProfile.AdapterBindingsHint is ("—" or "")
                         ? "Needs apply"
                         : mediaProfile.AdapterBindingsHint;
@@ -576,8 +576,8 @@ public sealed class NetworkOptimizerService
                     bandDetail += $" · set: {mediaProfile.CurrentBandSetting}";
                 features.Add(Row("Wi‑Fi capability", bandDetail, true));
             }
-            if (!string.IsNullOrWhiteSpace(mediaProfile.NicPeakHints) && mediaProfile.NicPeakHints is not "—")
-                features.Add(Row("NIC peak", mediaProfile.NicPeakHints, mediaProfile.NicPeakOk));
+            if (!string.IsNullOrWhiteSpace(mediaProfile.NicHints) && mediaProfile.NicHints is not "—")
+                features.Add(Row("NIC status", mediaProfile.NicHints, mediaProfile.NicOk));
             // Path / media only (no Windows Game Mode / CPU plan rows — those are not Internet)
             if (!string.IsNullOrWhiteSpace(mediaProfile.NicVendor) &&
                 mediaProfile.NicVendor is not ("Unknown" or "Other" or ""))
@@ -657,7 +657,7 @@ public sealed class NetworkOptimizerService
         var currentBand = "—";
         int? ethMetric = null;
         var nicHints = "—";
-        var nicPeakOk = true;
+        var nicOk = true;
         int fcR = -1, imR = -1, idleR = -1, ssR = -1;
         var bindOk = true;
         var bindHint = "—";
@@ -667,7 +667,7 @@ public sealed class NetworkOptimizerService
         var isLaptop = false;
         var logicals = Environment.ProcessorCount;
         var physicalCores = 0;
-        var activeForPeak = LoadSavedPreset();
+        var activePreset = LoadSavedPreset();
 
         try
         {
@@ -677,11 +677,11 @@ public sealed class NetworkOptimizerService
             // - Usable Ethernet: Up + IPv4 not APIPA + InterfaceMetric
             // - Bands: Preferred Band valid values + netsh wlan show drivers (Radio types)
             // - Connected: netsh wlan show interfaces (Band / Radio type / Channel)
-            // - NIC peak: Flow Control, SelectiveSuspend, InterruptModeration, IdleRestriction
+            // - NIC status: Flow Control, SelectiveSuspend, InterruptModeration, IdleRestriction
             await File.WriteAllTextAsync(probePs, """
 $ErrorActionPreference = 'SilentlyContinue'
 function IsWifi($a) {
-  # Mirrors NetworkPeakLogic.IsWifiAdapter
+  # Mirrors NetworkLogic.IsWifiAdapter
   $pm = [string]$a.PhysicalMediaType
   $m  = [string]$a.MediaType
   $d  = [string]$a.InterfaceDescription
@@ -759,7 +759,7 @@ if ($hint -match '(?i)6\s*GHz|6GHz') { $band6 = $true }
 if ($hint -match '(?i)5\s*GHz|5GHz') { $band5 = $true }
 if ($hint -match '(?i)802\.11be') { $be = $true }
 if ($hint -match '(?i)802\.11ax') { $ax = $true }
-# Raw NIC peak facts (C# scores preset-aware via NetworkPeakLogic.EvaluateNicPeak)
+# Raw NIC facts (C# scores preset-aware via NetworkLogic.EvaluateNic)
 # FC/IM/IDLE/SS: 1=on, 0=off, -1=not exposed
 $fcR = -1; $imR = -1; $idleR = -1; $ssR = -1
 $primary = if ($bestEth) { $bestEth } else { @($phys | Where-Object Status -eq 'Up' | Select-Object -First 1) }
@@ -787,7 +787,7 @@ if ($primary) {
   }
 }
 # Ethernet Properties checkbox bindings (ComponentIDs)
-# Peak: pacer+tcpip+tcpip6 ON; client/server/lldp/lltd/implat OFF
+# Target: pacer+tcpip+tcpip6 ON; client/server/lldp/lltd/implat OFF
 $bindOk = 1
 $bindHint = '-'
 $bindProbe = if ($bestEth) { $bestEth } else { @($eth | Select-Object -First 1) }
@@ -804,7 +804,7 @@ if ($bindProbe) {
     $row = $all | Where-Object { $_.ComponentID -eq $id } | Select-Object -First 1
     if ($row -and $row.Enabled) { $gaps += "$id on" }
   }
-  if ($gaps.Count -gt 0) { $bindOk = 0; $bindHint = ($gaps -join ', ') } else { $bindHint = 'peak bindings' }
+  if ($gaps.Count -gt 0) { $bindOk = 0; $bindHint = ($gaps -join ', ') } else { $bindHint = 'target bindings' }
 }
 # Vendor / link / chassis for tailored apply
 $vendor = 'Unknown'
@@ -916,21 +916,21 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                             primaryMedia = v;
                             break;
                         case "DESC" when v is not ("-" or "") && nicVendor is ("Unknown" or ""):
-                            nicVendor = NetworkPeakLogic.ClassifyNicVendor(v);
+                            nicVendor = NetworkLogic.ClassifyNicVendor(v);
                             break;
                     }
                 }
 
                 static bool? Tri(int r) => r < 0 ? null : r != 0;
-                var peak = NetworkPeakLogic.EvaluateNicPeak(
-                    activeForPeak,
-                    new NetworkPeakLogic.NicPeakFacts(
+                var nicEval = NetworkLogic.EvaluateNic(
+                    activePreset,
+                    new NetworkLogic.NicFacts(
                         FlowControlOn: Tri(fcR),
                         InterruptModerationOn: Tri(imR),
                         IdleRestrictOn: Tri(idleR),
                         SelectiveSuspendOn: Tri(ssR)));
-                nicPeakOk = peak.Ok;
-                nicHints = peak.Hints;
+                nicOk = nicEval.Ok;
+                nicHints = nicEval.Hints;
             }
             finally
             {
@@ -977,7 +977,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
 
         if (wifiAvail && !supports5 && !supports6) supports5 = true;
 
-        var path = NetworkPeakLogic.DecidePath(
+        var path = NetworkLogic.DecidePath(
             ethAvail, ethUp, ethInUse, wifiAvail, wifiUp,
             supports6, supports5, wifi6 || supports6, wifi7);
 
@@ -1004,8 +1004,8 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             DriverRadios = driverRadios,
             CurrentBandSetting = currentBand,
             EthernetMetric = ethMetric,
-            NicPeakHints = nicHints,
-            NicPeakOk = nicPeakOk,
+            NicHints = nicHints,
+            NicOk = nicOk,
             AdapterBindingsOk = bindOk,
             AdapterBindingsHint = bindHint,
             PolicyLine = path.PolicyLine,
@@ -1023,12 +1023,12 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
     {
         if (!snap.ProbeOk) return false;
         if (snap.TaskOffloadDisabled == true) return false;
-        if (!NetworkPeakLogic.AutotuneMatches(preset, snap.AutoTuning)) return false;
-        if (!NetworkPeakLogic.LsoMatches(preset, snap.LsoEnabled)) return false;
-        if (!NetworkPeakLogic.RscMatches(preset, snap.RscEnabled)) return false;
-        // NIC peak: when probe computed it for this saved preset, require OK
-        if (snap.ActivePreset == preset && !snap.Media.NicPeakOk &&
-            snap.Media.NicPeakHints is not ("—" or "" or null))
+        if (!NetworkLogic.AutotuneMatches(preset, snap.AutoTuning)) return false;
+        if (!NetworkLogic.LsoMatches(preset, snap.LsoEnabled)) return false;
+        if (!NetworkLogic.RscMatches(preset, snap.RscEnabled)) return false;
+        // NIC status: when probe computed it for this saved preset, require OK
+        if (snap.ActivePreset == preset && !snap.Media.NicOk &&
+            snap.Media.NicHints is not ("—" or "" or null))
             return false;
         return true;
     }
@@ -1097,7 +1097,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             try
             {
                 if (File.Exists(ApplyLogPath))
-                    report = NetworkPeakLogic.ParseApplyReport(await File.ReadAllTextAsync(ApplyLogPath, ct).ConfigureAwait(false));
+                    report = NetworkLogic.ParseApplyReport(await File.ReadAllTextAsync(ApplyLogPath, ct).ConfigureAwait(false));
             }
             catch { }
             var rollback = LoadRollbackStatus();

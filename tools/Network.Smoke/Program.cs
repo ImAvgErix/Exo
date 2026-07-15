@@ -1,7 +1,7 @@
 using Exo.Models;
 using Exo.Services;
 
-// Smoke tests drive shipped NetworkPeakLogic + NetworkApplyScriptBuilder.
+// Smoke tests drive shipped NetworkLogic + NetworkApplyScriptBuilder.
 // Exit 0 only if all cases pass. Args: optional log path.
 
 var logPath = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "band-media-tests.log");
@@ -29,63 +29,63 @@ void ExpectEq(string name, string? got, string? expect)
     Expect(name, string.Equals(got, expect, StringComparison.Ordinal), $"got=[{got}] expect=[{expect}]");
 }
 
-Log("=== NetworkPeak.Smoke (shipped NetworkPeakLogic + NetworkApplyScriptBuilder) ===");
+Log("=== Network.Smoke (shipped NetworkLogic + NetworkApplyScriptBuilder) ===");
 Log(DateTime.UtcNow.ToString("o"));
 
 // --- Band selection: Prefer beats Only; 2.4 never wins when higher exists ---
 ExpectEq("Intel classic prefer 5",
-    NetworkPeakLogic.SelectBandDisplayValue(
+    NetworkLogic.SelectBandDisplayValue(
         new[] { "No Preference", "Prefer 2.4GHz band", "Prefer 5GHz band" }, want6: false),
     "Prefer 5GHz band");
 
 ExpectEq("Intel 6E prefer 6",
-    NetworkPeakLogic.SelectBandDisplayValue(
+    NetworkLogic.SelectBandDisplayValue(
         new[] { "No Preference", "Prefer 2.4GHz band", "Prefer 5GHz band", "Prefer 6GHz band" }, want6: true),
     "Prefer 6GHz band");
 
 ExpectEq("Realtek prefer over only",
-    NetworkPeakLogic.SelectBandDisplayValue(
+    NetworkLogic.SelectBandDisplayValue(
         new[] { "Auto", "2.4GHz only", "5GHz only", "Prefer 5GHz" }, want6: false),
     "Prefer 5GHz");
 
 ExpectEq("MediaTek spaced 6 preferred",
-    NetworkPeakLogic.SelectBandDisplayValue(
+    NetworkLogic.SelectBandDisplayValue(
         new[] { "Auto", "2.4 GHz preferred", "5 GHz preferred", "6 GHz preferred" }, want6: true),
     "6 GHz preferred");
 
 ExpectEq("Prefer 6 beats only 6",
-    NetworkPeakLogic.SelectBandDisplayValue(
+    NetworkLogic.SelectBandDisplayValue(
         new[] { "6GHz only", "Prefer 6GHz band", "Prefer 5GHz band" }, want6: true),
     "Prefer 6GHz band");
 
 ExpectEq("No 6 client picks 5 not 6",
-    NetworkPeakLogic.SelectBandDisplayValue(
+    NetworkLogic.SelectBandDisplayValue(
         new[] { "Prefer 6GHz band", "Prefer 5GHz band", "No Preference" }, want6: false),
     "Prefer 5GHz band");
 
 ExpectEq("Weird 5.2 GHz",
-    NetworkPeakLogic.SelectBandDisplayValue(
+    NetworkLogic.SelectBandDisplayValue(
         new[] { "Auto", "Prefer 5.2 GHz", "Prefer 2.4 GHz" }, want6: false),
     "Prefer 5.2 GHz");
 
 // Score: 2.4 only is worst
 Expect("2.4 only score negative",
-    NetworkPeakLogic.ScoreBandDisplayValue("2.4GHz only", want6: true) < 0);
+    NetworkLogic.ScoreBandDisplayValue("2.4GHz only", want6: true) < 0);
 
 // --- Media classification ---
 Expect("802.3 is ethernet",
-    !NetworkPeakLogic.IsWifiAdapter("802.3", "802.3", "Intel(R) Ethernet Controller I226-V", "Ethernet"));
+    !NetworkLogic.IsWifiAdapter("802.3", "802.3", "Intel(R) Ethernet Controller I226-V", "Ethernet"));
 Expect("Native 802.11 is wifi",
-    NetworkPeakLogic.IsWifiAdapter("Native 802.11", "Native 802.11", "Intel(R) Wi-Fi 6E AX211", "Wi-Fi"));
+    NetworkLogic.IsWifiAdapter("Native 802.11", "Native 802.11", "Intel(R) Wi-Fi 6E AX211", "Wi-Fi"));
 Expect("Realtek USB wifi by desc",
-    NetworkPeakLogic.IsWifiAdapter("", "", "Realtek 8822CE Wireless LAN 802.11ac PCI-E NIC", "Ethernet 2"));
+    NetworkLogic.IsWifiAdapter("", "", "Realtek 8822CE Wireless LAN 802.11ac PCI-E NIC", "Ethernet 2"));
 Expect("Bluetooth not wifi primary",
-    !NetworkPeakLogic.IsWifiAdapter("BlueTooth", "", "Bluetooth Device (Personal Area Network)", "Bluetooth Network Connection"));
+    !NetworkLogic.IsWifiAdapter("BlueTooth", "", "Bluetooth Device (Personal Area Network)", "Bluetooth Network Connection"));
 Expect("Hyper-V not wifi",
-    !NetworkPeakLogic.IsWifiAdapter("", "", "Hyper-V Virtual Ethernet Adapter", "vEthernet (Default Switch)"));
+    !NetworkLogic.IsWifiAdapter("", "", "Hyper-V Virtual Ethernet Adapter", "vEthernet (Default Switch)"));
 
 // --- Path policy ---
-var ethUsable = NetworkPeakLogic.DecidePath(
+var ethUsable = NetworkLogic.DecidePath(
     ethAvailable: true, ethUp: true, ethInUse: true,
     wifiAvailable: true, wifiUp: true,
     supports6Ghz: true, supports5Ghz: true, wifi6: true, wifi7: false);
@@ -93,18 +93,18 @@ Expect("eth usable disables wifi path", ethUsable.DisableWifiWhenPreferEth);
 Expect("eth usable policy mentions disable", ethUsable.PolicyLine.Contains("disable", StringComparison.OrdinalIgnoreCase));
 Expect("eth usable band target 6", ethUsable.PreferredBandTarget == "6GHz");
 
-var ethNoIp = NetworkPeakLogic.DecidePath(
+var ethNoIp = NetworkLogic.DecidePath(
     ethAvailable: true, ethUp: true, ethInUse: false,
     wifiAvailable: true, wifiUp: true,
     supports6Ghz: false, supports5Ghz: true, wifi6: false, wifi7: false);
 Expect("link no IP keeps wifi", ethNoIp.KeepWifiBecauseEthNoIp);
 Expect("link no IP does not disable wifi flag", !ethNoIp.DisableWifiWhenPreferEth);
 Expect("ShouldDisableWifi false when no IP",
-    !NetworkPeakLogic.ShouldDisableWifi(true, ethInUse: false, wifiAvailable: true));
+    !NetworkLogic.ShouldDisableWifi(true, ethInUse: false, wifiAvailable: true));
 Expect("ShouldDisableWifi true when eth in use",
-    NetworkPeakLogic.ShouldDisableWifi(true, ethInUse: true, wifiAvailable: true));
+    NetworkLogic.ShouldDisableWifi(true, ethInUse: true, wifiAvailable: true));
 
-var wifiOnly = NetworkPeakLogic.DecidePath(
+var wifiOnly = NetworkLogic.DecidePath(
     ethAvailable: false, ethUp: false, ethInUse: false,
     wifiAvailable: true, wifiUp: true,
     supports6Ghz: false, supports5Ghz: true, wifi6: true, wifi7: false);
@@ -112,13 +112,13 @@ Expect("wifi only prefer 5", wifiOnly.PreferredBandTarget == "5GHz");
 Expect("wifi only no disable eth flag", !wifiOnly.DisableWifiWhenPreferEth);
 
 // Usable IPv4
-Expect("APIPA not usable", !NetworkPeakLogic.IsUsableIpv4("169.254.1.2"));
-Expect("private usable", NetworkPeakLogic.IsUsableIpv4("192.168.1.10"));
-Expect("empty not usable", !NetworkPeakLogic.IsUsableIpv4(""));
+Expect("APIPA not usable", !NetworkLogic.IsUsableIpv4("169.254.1.2"));
+Expect("private usable", NetworkLogic.IsUsableIpv4("192.168.1.10"));
+Expect("empty not usable", !NetworkLogic.IsUsableIpv4(""));
 
 // Band infer
 bool b5 = false, b6 = false, ax = false, be = false;
-NetworkPeakLogic.InferBandSupport("Prefer 6GHz band 802.11be", ref b5, ref b6, ref ax, ref be);
+NetworkLogic.InferBandSupport("Prefer 6GHz band 802.11be", ref b5, ref b6, ref ax, ref be);
 Expect("infer 6 from prefer 6", b6);
 Expect("infer be from 802.11be", be);
 
@@ -135,8 +135,8 @@ var opts = new NetworkApplyOptions { PreferEthernetDisableWifi = true, RestartEt
 var latScript = NetworkApplyScriptBuilder.Build(NetworkPreset.LowestLatency, opts, media);
 var thrScript = NetworkApplyScriptBuilder.Build(NetworkPreset.HighestThroughput, opts, media);
 
-var (latOk, latIssues) = NetworkPeakLogic.AuditApplyScript(latScript, NetworkPreset.LowestLatency);
-var (thrOk, thrIssues) = NetworkPeakLogic.AuditApplyScript(thrScript, NetworkPreset.HighestThroughput);
+var (latOk, latIssues) = NetworkLogic.AuditApplyScript(latScript, NetworkPreset.LowestLatency);
+var (thrOk, thrIssues) = NetworkLogic.AuditApplyScript(thrScript, NetworkPreset.HighestThroughput);
 Expect("latency apply script audit", latOk, string.Join("; ", latIssues));
 Expect("throughput apply script audit", thrOk, string.Join("; ", thrIssues));
 
@@ -178,21 +178,21 @@ Expect("no wifi Restart-NetAdapter force",
 
 // --- NIC helpers (network-only; no Windows Game Mode markers) ---
 ExpectEq("vendor Intel I226",
-    NetworkPeakLogic.ClassifyNicVendor("Intel(R) Ethernet Controller I226-V"), "Intel");
+    NetworkLogic.ClassifyNicVendor("Intel(R) Ethernet Controller I226-V"), "Intel");
 ExpectEq("vendor Realtek",
-    NetworkPeakLogic.ClassifyNicVendor("Realtek PCIe GbE Family Controller"), "Realtek");
+    NetworkLogic.ClassifyNicVendor("Realtek PCIe GbE Family Controller"), "Realtek");
 ExpectEq("vendor Killer",
-    NetworkPeakLogic.ClassifyNicVendor("Killer E3100G 2.5 Gigabit Ethernet Controller"), "Killer");
-Expect("buffer latency mid", NetworkPeakLogic.BufferStrategy(NetworkPreset.LowestLatency) == "mid");
-Expect("buffer throughput max", NetworkPeakLogic.BufferStrategy(NetworkPreset.HighestThroughput) == "max");
+    NetworkLogic.ClassifyNicVendor("Killer E3100G 2.5 Gigabit Ethernet Controller"), "Killer");
+Expect("buffer latency mid", NetworkLogic.BufferStrategy(NetworkPreset.LowestLatency) == "mid");
+Expect("buffer throughput max", NetworkLogic.BufferStrategy(NetworkPreset.HighestThroughput) == "max");
 // Physical cores (e.g. 6-core/12-thread): budget uses cores, not HT threads
 Expect("rss 6-core latency",
-    NetworkPeakLogic.RssQueueBudget(NetworkPreset.LowestLatency, 6) >= 2 &&
-    NetworkPeakLogic.RssQueueBudget(NetworkPreset.LowestLatency, 6) <= 6);
+    NetworkLogic.RssQueueBudget(NetworkPreset.LowestLatency, 6) >= 2 &&
+    NetworkLogic.RssQueueBudget(NetworkPreset.LowestLatency, 6) <= 6);
 Expect("rss throughput uses cores",
-    NetworkPeakLogic.RssQueueBudget(NetworkPreset.HighestThroughput, 6) == 6);
+    NetworkLogic.RssQueueBudget(NetworkPreset.HighestThroughput, 6) == 6);
 Expect("prefer ipv4 on latency",
-    NetworkPeakLogic.PreferIpv4First(NetworkPreset.LowestLatency, ethernetInUse: false));
+    NetworkLogic.PreferIpv4First(NetworkPreset.LowestLatency, ethernetInUse: false));
 Expect("lat script BufferStrategy", latScript.Contains("BufferStrategy", StringComparison.Ordinal));
 Expect("lat script RssQueueBudget", latScript.Contains("RssQueueBudget", StringComparison.Ordinal));
 Expect("lat script PreferIpv4", latScript.Contains("PreferIpv4First", StringComparison.Ordinal));
@@ -210,59 +210,59 @@ Expect("lat script Intel extras", latScript.Contains("isIntel", StringComparison
     || latScript.Contains("Intel 2.5G", StringComparison.OrdinalIgnoreCase));
 
 // KnobsFor consistency
-var lk = NetworkPeakLogic.KnobsFor(NetworkPreset.LowestLatency);
-var tk = NetworkPeakLogic.KnobsFor(NetworkPreset.HighestThroughput);
+var lk = NetworkLogic.KnobsFor(NetworkPreset.LowestLatency);
+var tk = NetworkLogic.KnobsFor(NetworkPreset.HighestThroughput);
 Expect("knobs diverge rsc", lk.Rsc != tk.Rsc);
 Expect("knobs diverge lso", lk.Lso != tk.Lso);
 Expect("knobs diverge autotune", lk.AutotuneNetsh != tk.AutotuneNetsh);
 Expect("latency nagle off", lk.NagleOff);
 Expect("throughput nagle not forced", !tk.NagleOff);
 
-// --- Preset-aware NIC peak (no false-fail for intentional download settings) ---
-var latPeakGood = NetworkPeakLogic.EvaluateNicPeak(
+// --- Preset-aware NIC status (no false-fail for intentional download settings) ---
+var latNicGood = NetworkLogic.EvaluateNic(
     NetworkPreset.LowestLatency,
-    new NetworkPeakLogic.NicPeakFacts(FlowControlOn: false, InterruptModerationOn: false, IdleRestrictOn: true, SelectiveSuspendOn: false));
-Expect("latency peak OK when flow/IM off idle on", latPeakGood.Ok);
+    new NetworkLogic.NicFacts(FlowControlOn: false, InterruptModerationOn: false, IdleRestrictOn: true, SelectiveSuspendOn: false));
+Expect("latency NIC OK when flow/IM off idle on", latNicGood.Ok);
 
-var latPeakBadFc = NetworkPeakLogic.EvaluateNicPeak(
+var latNicBadFc = NetworkLogic.EvaluateNic(
     NetworkPreset.LowestLatency,
-    new NetworkPeakLogic.NicPeakFacts(FlowControlOn: true, InterruptModerationOn: false, IdleRestrictOn: true, SelectiveSuspendOn: null));
-Expect("latency peak FAIL when flow on", !latPeakBadFc.Ok);
+    new NetworkLogic.NicFacts(FlowControlOn: true, InterruptModerationOn: false, IdleRestrictOn: true, SelectiveSuspendOn: null));
+Expect("latency NIC FAIL when flow on", !latNicBadFc.Ok);
 
-var thrPeakGood = NetworkPeakLogic.EvaluateNicPeak(
+var thrNicGood = NetworkLogic.EvaluateNic(
     NetworkPreset.HighestThroughput,
-    new NetworkPeakLogic.NicPeakFacts(FlowControlOn: true, InterruptModerationOn: true, IdleRestrictOn: false, SelectiveSuspendOn: false));
-Expect("throughput peak OK when flow/IM on idle off", thrPeakGood.Ok);
+    new NetworkLogic.NicFacts(FlowControlOn: true, InterruptModerationOn: true, IdleRestrictOn: false, SelectiveSuspendOn: false));
+Expect("throughput NIC OK when flow/IM on idle off", thrNicGood.Ok);
 
-var thrPeakBad = NetworkPeakLogic.EvaluateNicPeak(
+var thrNicBad = NetworkLogic.EvaluateNic(
     NetworkPreset.HighestThroughput,
-    new NetworkPeakLogic.NicPeakFacts(FlowControlOn: false, InterruptModerationOn: true, IdleRestrictOn: false, SelectiveSuspendOn: null));
-Expect("throughput peak FAIL when flow off", !thrPeakBad.Ok);
+    new NetworkLogic.NicFacts(FlowControlOn: false, InterruptModerationOn: true, IdleRestrictOn: false, SelectiveSuspendOn: null));
+Expect("throughput NIC FAIL when flow off", !thrNicBad.Ok);
 
 // Same hardware state: latency OK + throughput FAIL for flow-off (not false-fail for thr intentional)
-var sharedLatencyState = new NetworkPeakLogic.NicPeakFacts(false, false, true, null);
+var sharedLatencyState = new NetworkLogic.NicFacts(false, false, true, null);
 Expect("shared state OK for latency",
-    NetworkPeakLogic.EvaluateNicPeak(NetworkPreset.LowestLatency, sharedLatencyState).Ok);
+    NetworkLogic.EvaluateNic(NetworkPreset.LowestLatency, sharedLatencyState).Ok);
 Expect("shared latency state NOT ok for throughput",
-    !NetworkPeakLogic.EvaluateNicPeak(NetworkPreset.HighestThroughput, sharedLatencyState).Ok);
+    !NetworkLogic.EvaluateNic(NetworkPreset.HighestThroughput, sharedLatencyState).Ok);
 
 // Autotune must match knobs
 Expect("autotune normal matches latency",
-    NetworkPeakLogic.AutotuneMatches(NetworkPreset.LowestLatency, "normal"));
+    NetworkLogic.AutotuneMatches(NetworkPreset.LowestLatency, "normal"));
 Expect("autotune normal does NOT match throughput",
-    !NetworkPeakLogic.AutotuneMatches(NetworkPreset.HighestThroughput, "normal"));
+    !NetworkLogic.AutotuneMatches(NetworkPreset.HighestThroughput, "normal"));
 Expect("autotune experimental matches throughput",
-    NetworkPeakLogic.AutotuneMatches(NetworkPreset.HighestThroughput, "experimental"));
+    NetworkLogic.AutotuneMatches(NetworkPreset.HighestThroughput, "experimental"));
 Expect("autotune experimental does NOT match latency",
-    !NetworkPeakLogic.AutotuneMatches(NetworkPreset.LowestLatency, "experimental"));
-Expect("LSO off matches latency", NetworkPeakLogic.LsoMatches(NetworkPreset.LowestLatency, false));
-Expect("LSO on matches throughput", NetworkPeakLogic.LsoMatches(NetworkPreset.HighestThroughput, true));
-Expect("LSO off does not match throughput", !NetworkPeakLogic.LsoMatches(NetworkPreset.HighestThroughput, false));
-Expect("null LSO skips", NetworkPeakLogic.LsoMatches(NetworkPreset.HighestThroughput, null));
+    !NetworkLogic.AutotuneMatches(NetworkPreset.LowestLatency, "experimental"));
+Expect("LSO off matches latency", NetworkLogic.LsoMatches(NetworkPreset.LowestLatency, false));
+Expect("LSO on matches throughput", NetworkLogic.LsoMatches(NetworkPreset.HighestThroughput, true));
+Expect("LSO off does not match throughput", !NetworkLogic.LsoMatches(NetworkPreset.HighestThroughput, false));
+Expect("null LSO skips", NetworkLogic.LsoMatches(NetworkPreset.HighestThroughput, null));
 // Unknown autotune must skip (probe gap ≠ fail closed after apply)
-Expect("autotune unknown skips", NetworkPeakLogic.AutotuneMatches(NetworkPreset.LowestLatency, "—"));
-Expect("autotune empty skips", NetworkPeakLogic.AutotuneMatches(NetworkPreset.HighestThroughput, ""));
-Expect("autotune first-token normal", NetworkPeakLogic.AutotuneMatches(NetworkPreset.LowestLatency, "normal  "));
+Expect("autotune unknown skips", NetworkLogic.AutotuneMatches(NetworkPreset.LowestLatency, "—"));
+Expect("autotune empty skips", NetworkLogic.AutotuneMatches(NetworkPreset.HighestThroughput, ""));
+Expect("autotune first-token normal", NetworkLogic.AutotuneMatches(NetworkPreset.LowestLatency, "normal  "));
 
 // ============================================================================
 // SAFETY LAYER — ordering assertions (snapshot -> mutations -> probe gate ->
@@ -424,7 +424,7 @@ var sampleLog = string.Join('\n', new[]
     "2026-01-01T00:00:02 EXO_REPORT:wifi-disable|ok:disabled after verified probe: Wi-Fi",
     "2026-01-01T00:00:03 EXO_REPORT:rollback|fail:connectivity still down - run Repair or Repair-Internet.ps1",
 });
-var parsedReport = NetworkPeakLogic.ParseApplyReport(sampleLog);
+var parsedReport = NetworkLogic.ParseApplyReport(sampleLog);
 Expect("report parser count", parsedReport.Count == 4, $"got {parsedReport.Count}");
 Expect("report parser ok step", parsedReport[0].Name == "snapshot" && parsedReport[0].Status == "ok");
 Expect("report parser skip reason",
@@ -442,14 +442,14 @@ Expect("benchmark DNS resolve timing",
     benchScript.Contains("Resolve-DnsName", StringComparison.Ordinal));
 Expect("benchmark single JSON line", benchScript.Contains("EXO_BENCH:", StringComparison.Ordinal) &&
     benchScript.Contains("ConvertTo-Json -Compress", StringComparison.Ordinal));
-var benchParsed = NetworkPeakLogic.TryParseBenchmark(
+var benchParsed = NetworkLogic.TryParseBenchmark(
     "noise\nEXO_BENCH:{\"ok\":true,\"pingP50Ms\":12.5,\"pingP95Ms\":18,\"jitterMs\":1.2,\"dnsMs\":22.7,\"samples\":20,\"timestampUtc\":\"2026-01-01T00:00:00Z\"}\n");
 Expect("benchmark parser values",
     benchParsed is { Ok: true, Samples: 20 } &&
     Math.Abs(benchParsed.PingP50Ms - 12.5) < 0.001 &&
     Math.Abs(benchParsed.DnsMs - 22.7) < 0.001,
     benchParsed is null ? "null" : $"p50={benchParsed.PingP50Ms}");
-Expect("benchmark parser rejects garbage", NetworkPeakLogic.TryParseBenchmark("no marker here") is null);
+Expect("benchmark parser rejects garbage", NetworkLogic.TryParseBenchmark("no marker here") is null);
 
 // (c) BuildRepair: snapshot-driven true restore + fallback stock reset
 Expect("repair reads snapshot json",
@@ -596,7 +596,7 @@ finally
 // (PSObject-wrapped List[object] + @() in pwsh 7.6) and the inverse
 // restore-side type-coercion bugs. String audits and AST parses cannot
 // catch these — this actually executes the generated code.
-var smokeDir = repoRoot is null ? null : Path.Combine(repoRoot, "tools", "NetworkPeak.Smoke");
+var smokeDir = repoRoot is null ? null : Path.Combine(repoRoot, "tools", "Network.Smoke");
 var harnessPath = smokeDir is null ? null : Path.Combine(smokeDir, "SnapshotExecHarness.ps1");
 var mocksPath = smokeDir is null ? null : Path.Combine(smokeDir, "SnapshotExecMocks.ps1");
 Expect("snapshot exec harness present",

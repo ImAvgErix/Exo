@@ -4,8 +4,8 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>UiPeak.Smoke</RootNamespace>
-    <AssemblyName>UiPeak.Smoke</AssemblyName>
+    <RootNamespace>Ui.Smoke</RootNamespace>
+    <AssemblyName>Ui.Smoke</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\Exo\Helpers\UiStatusPresentation.cs" Link="Shipped\UiStatusPresentation.cs" />

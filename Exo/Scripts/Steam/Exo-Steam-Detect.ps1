@@ -1,7 +1,7 @@
 # Exo - detect Steam optimizer status (JSON for WinUI).
 # Checklist mirrors Discord parity: quiet launch, RAM kernel, complete debloat,
 # Windows suppression, Start Menu path, verified record.
-# Classifiers: SteamDetectCore.ps1 (pure) - keep aligned with SteamPeakLogic.cs
+# Classifiers: SteamDetectCore.ps1 (pure) - keep aligned with SteamLogic.cs
 $ErrorActionPreference = 'SilentlyContinue'
 
 $core = Join-Path $PSScriptRoot 'SteamDetectCore.ps1'
@@ -294,7 +294,7 @@ if (-not $steamOk) {
 } else {
     Add-Feature 'Steam install' 'Client found and ready.' $true
 
-    # Quiet CEF launcher (SteamPeakLogic / SteamDetectCore)
+    # Quiet CEF launcher (SteamLogic / SteamDetectCore)
     $cefOk = $false
     $launcher = Join-Path $steam 'Steam-Exo.cmd'
     if (Test-Path -LiteralPath $launcher) {

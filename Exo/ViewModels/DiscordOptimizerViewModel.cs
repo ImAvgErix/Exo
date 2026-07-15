@@ -16,7 +16,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     public DiscordOptimizerViewModel(AppServices services)
     {
         _services = services;
-        LastResultBrush = ResolveBrush("OptiSuccessBrush", Color.FromArgb(255, 34, 197, 94));
+        LastResultBrush = ResolveBrush("ExoSuccessBrush", Color.FromArgb(255, 34, 197, 94));
     }
 
     [ObservableProperty]
@@ -332,7 +332,7 @@ public sealed class FeatureRowViewModel
     public string Detail { get; init; } = string.Empty;
     public string Glyph { get; init; } = "\uE73E";
     public double Opacity { get; init; } = 1.0;
-    /// <summary>Live peak bit — drives the AMOLED status rail on feature tiles.</summary>
+    /// <summary>Live applied bit — drives the AMOLED status rail on feature tiles.</summary>
     public bool IsActive { get; init; }
     public double RailOpacity { get; init; } = 0.28;
 }

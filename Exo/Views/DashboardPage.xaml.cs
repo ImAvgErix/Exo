@@ -8,7 +8,7 @@ using Microsoft.UI.Xaml.Navigation;
 namespace Exo.Views;
 
 /// <summary>
-/// Home grid: soft card stagger on first load; press pulse on select before navigate.
+/// Home directory: soft row stagger on first load; press pulse on select before navigate.
 /// Cached so Back does not rebuild/re-stagger (avoids layout glitch / left shift).
 /// </summary>
 public sealed partial class DashboardPage : Page
@@ -42,31 +42,15 @@ public sealed partial class DashboardPage : Page
 
     private void Page_Loaded(object sender, RoutedEventArgs e)
     {
-        UpdateCardListWidth();
         StabilizeHome();
         _ = TryPlayEntranceAsync();
-    }
-
-    private void PageRoot_SizeChanged(object sender, SizeChangedEventArgs e) =>
-        UpdateCardListWidth();
-
-    private void UpdateCardListWidth()
-    {
-        try
-        {
-            if (HomeStack is null || CardList is null) return;
-            var w = HomeStack.ActualWidth;
-            if (w > 0)
-                CardList.Width = w;
-        }
-        catch { }
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         // Returning from a module: clear any leftover select/entrance transforms so
-        // centered cards do not sit a few pixels off (the "everything shifted left" glitch).
+        // directory rows do not sit a few pixels off.
         StabilizeHome();
 
         _refreshCts?.Cancel();
@@ -91,21 +75,21 @@ public sealed partial class DashboardPage : Page
         base.OnNavigatedFrom(e);
     }
 
-    /// <summary>Identity transforms + full opacity on hero/cards — no residual offset.</summary>
+    /// <summary>Identity transforms + full opacity on hero/rows — no residual offset.</summary>
     private void StabilizeHome()
     {
         try
         {
             if (PageRoot is not null)
-                OptiMotion.EnsureVisible(PageRoot);
+                ExoMotion.EnsureVisible(PageRoot);
             if (HeroTagline is not null)
-                OptiMotion.EnsureVisible(HeroTagline);
+                ExoMotion.EnsureVisible(HeroTagline);
             if (CardList is not null)
             {
                 List<UIElement> cards = [];
                 CollectCardButtons(CardList, cards);
                 foreach (var c in cards)
-                    OptiMotion.EnsureVisible(c);
+                    ExoMotion.EnsureVisible(c);
             }
         }
         catch { }
@@ -138,7 +122,7 @@ public sealed partial class DashboardPage : Page
             sequence.AddRange(cards);
 
             if (sequence.Count > 0)
-                OptiMotion.PlayStagger(sequence, baseDelayMs: 24, stepMs: 42, fromY: 10f, fromScale: 1f);
+                ExoMotion.PlayStagger(sequence, baseDelayMs: 24, stepMs: 42, fromY: 10f, fromScale: 1f);
 
             await Task.Delay(520);
             if (gen != _entranceGen) return;
@@ -175,12 +159,12 @@ public sealed partial class DashboardPage : Page
 
         // Visible select pulse, then navigate.
         _selecting = true;
-        OptiMotion.PlaySelect(btn, () =>
+        ExoMotion.PlaySelect(btn, () =>
         {
             try
             {
                 // Clear pulse transform before leave so cached home returns clean.
-                try { OptiMotion.EnsureVisible(btn); } catch { }
+                try { ExoMotion.EnsureVisible(btn); } catch { }
                 ViewModel.OpenOptimizerCommand.Execute(id);
             }
             finally

@@ -17,7 +17,7 @@ public sealed class NvidiaPanelSettings
     public string SecondaryRefresh { get; set; } = "60";
 
     public bool FullRgb { get; set; } = true;
-    /// <summary>GPU + No scaling + Override (user peak default).</summary>
+    /// <summary>GPU + No scaling + Override (user applied default).</summary>
     public bool GpuNoScaling { get; set; } = true;
     public bool ScalingOverride { get; set; } = true;
     public bool VideoNvidiaColor { get; set; } = true;

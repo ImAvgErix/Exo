@@ -1,6 +1,6 @@
 # SteamDetectCore.ps1 - pure detect classifiers (no Steam launch).
 # Dot-sourced by Exo-Steam-Detect.ps1; smokes invoke this file.
-# Keep aligned with Exo.Services.SteamPeakLogic.
+# Keep aligned with Exo.Services.SteamLogic.
 
 Set-StrictMode -Version Latest
 
@@ -21,7 +21,7 @@ function Test-SteamTrimHelperText {
     if ($Text -notmatch 'EmptyWorkingSet') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::High') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::BelowNormal') { return $false }
-    # Peak range: 2-15s reclaim loop (kit uses 3; do not hard-fail other valid intervals)
+    # Valid range: 2-15s reclaim loop (kit uses 3; do not hard-fail other valid intervals)
     if ($Text -match 'Start-Sleep\s+-Seconds\s+(\d+)') {
         $sec = [int]$Matches[1]
         if ($sec -ge 2 -and $sec -le 15) { return $true }

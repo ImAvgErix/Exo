@@ -42,7 +42,7 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>Branded confirm (localVer, remoteVer) → Install / Later.</summary>
     public Func<string, string, Task<bool>>? ConfirmUpdateAsync { get; set; }
 
-    /// <summary>Modal install UI with OptiLoader + progress bar.</summary>
+    /// <summary>Modal install UI with ExoLoader + progress bar.</summary>
     public Func<AppUpdateResult, Task<AppUpdateResult>>? InstallUpdateAsync { get; set; }
 
     partial void OnUpdateStatusChanged(string value)

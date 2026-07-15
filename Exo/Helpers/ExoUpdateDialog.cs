@@ -10,7 +10,7 @@ namespace Exo.Helpers;
 /// In-app update prompts styled like Exo (card chrome + percent progress bar).
 /// Used by Settings "Check for updates" and launch auto-check.
 /// </summary>
-public static class OptiUpdateDialog
+public static class ExoUpdateDialog
 {
     /// <summary>Confirm install of a known update. Returns true if user chose Install.</summary>
     public static async Task<bool> ConfirmInstallAsync(
@@ -22,9 +22,9 @@ public static class OptiUpdateDialog
         body.Children.Add(new TextBlock
         {
             Text = "You have a new version. Update now.",
-            FontFamily = (FontFamily)Application.Current.Resources["OptiUiFont"],
+            FontFamily = (FontFamily)Application.Current.Resources["ExoUiFont"],
             FontSize = 14,
-            Foreground = (Brush)Application.Current.Resources["OptiPrimaryTextBrush"],
+            Foreground = (Brush)Application.Current.Resources["ExoPrimaryTextBrush"],
             TextWrapping = TextWrapping.Wrap,
             LineHeight = 22
         });
@@ -54,10 +54,10 @@ public static class OptiUpdateDialog
         var statusTb = new TextBlock
         {
             Text = "0%",
-            FontFamily = (FontFamily)Application.Current.Resources["OptiUiFontSemiBold"],
+            FontFamily = (FontFamily)Application.Current.Resources["ExoUiFontSemiBold"],
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = (Brush)Application.Current.Resources["OptiPrimaryTextBrush"],
+            Foreground = (Brush)Application.Current.Resources["ExoPrimaryTextBrush"],
             TextAlignment = TextAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 4, 0, 8)
@@ -70,8 +70,8 @@ public static class OptiUpdateDialog
             Value = 0,
             Height = 6,
             CornerRadius = new CornerRadius(3),
-            Foreground = (Brush)Application.Current.Resources["OptiAccentBrush"],
-            Background = (Brush)Application.Current.Resources["OptiCardStrokeBrush"],
+            Foreground = (Brush)Application.Current.Resources["ExoAccentBrush"],
+            Background = (Brush)Application.Current.Resources["ExoCardStrokeBrush"],
             IsIndeterminate = false
         };
 
@@ -176,9 +176,9 @@ public static class OptiUpdateDialog
         var body = new TextBlock
         {
             Text = message,
-            FontFamily = (FontFamily)Application.Current.Resources["OptiUiFont"],
+            FontFamily = (FontFamily)Application.Current.Resources["ExoUiFont"],
             FontSize = 13,
-            Foreground = (Brush)Application.Current.Resources["OptiSecondaryTextBrush"],
+            Foreground = (Brush)Application.Current.Resources["ExoSecondaryTextBrush"],
             TextWrapping = TextWrapping.Wrap,
             MaxWidth = 380,
             LineHeight = 20
@@ -217,12 +217,12 @@ public static class OptiUpdateDialog
 
         try
         {
-            dialog.Background = (Brush)Application.Current.Resources["OptiCardFillBrush"];
-            dialog.BorderBrush = (Brush)Application.Current.Resources["OptiCardStrokeBrush"];
-            dialog.Foreground = (Brush)Application.Current.Resources["OptiPrimaryTextBrush"];
-            if (Application.Current.Resources.TryGetValue("OptiAccentBrush", out var accent) && accent is Brush ab)
+            dialog.Background = (Brush)Application.Current.Resources["ExoCardFillBrush"];
+            dialog.BorderBrush = (Brush)Application.Current.Resources["ExoCardStrokeBrush"];
+            dialog.Foreground = (Brush)Application.Current.Resources["ExoPrimaryTextBrush"];
+            if (Application.Current.Resources.TryGetValue("ExoAccentBrush", out var accent) && accent is Brush ab)
                 dialog.PrimaryButtonStyle = CreateDialogPrimaryStyle(ab);
-            if (Application.Current.Resources.TryGetValue("OptiQuietButton", out var quiet) && quiet is Style qs)
+            if (Application.Current.Resources.TryGetValue("ExoQuietButton", out var quiet) && quiet is Style qs)
                 dialog.CloseButtonStyle = qs;
         }
         catch { /* fall back to system chrome */ }
@@ -232,13 +232,13 @@ public static class OptiUpdateDialog
 
     private static Style CreateDialogPrimaryStyle(Brush accent)
     {
-        if (Application.Current.Resources.TryGetValue("OptiPrimaryButton", out var s) && s is Style existing)
+        if (Application.Current.Resources.TryGetValue("ExoPrimaryButton", out var s) && s is Style existing)
             return existing;
 
         var style = new Style(typeof(Button));
         style.Setters.Add(new Setter(Control.BackgroundProperty, accent));
         style.Setters.Add(new Setter(Control.ForegroundProperty,
-            Application.Current.Resources.TryGetValue("OptiOnAccentBrush", out var on) && on is Brush ob
+            Application.Current.Resources.TryGetValue("ExoOnAccentBrush", out var on) && on is Brush ob
                 ? ob
                 : new SolidColorBrush(Microsoft.UI.Colors.Black)));
         style.Setters.Add(new Setter(Control.CornerRadiusProperty, new CornerRadius(12)));

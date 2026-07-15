@@ -29,7 +29,7 @@ function Save-DiscordOptState([hashtable]$State) {
 function Get-DiscordVariantMap {
     # Universal Discord variant map (stable + PTB + Canary). Keep in sync with
     # Get-DiscOptVariantDefinitions (DiscordDetectCore.ps1) and
-    # DiscordPeakLogic.VariantDefinitions (C#).
+    # DiscordLogic.VariantDefinitions (C#).
     return @(
         @{ Name = 'stable'; LocalDir = 'Discord'; AppDataDir = 'discord'; Exe = 'Discord.exe'; QosPolicy = 'Exo Discord Voice' },
         @{ Name = 'ptb'; LocalDir = 'DiscordPTB'; AppDataDir = 'discordptb'; Exe = 'DiscordPTB.exe'; QosPolicy = 'Exo Discord PTB Voice' },
