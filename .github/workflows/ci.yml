@@ -115,11 +115,30 @@ jobs:
             Invoke-WebRequest -Uri 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64' -OutFile $setup
             Start-Process -FilePath $setup -ArgumentList '-s' -Wait
           }
-          # The Squirrel installer auto-launches Discord; let it settle,
-          # then stop it by PID so the optimizer starts from a closed client.
-          Start-Sleep -Seconds 20
-          Get-Process -Name Discord -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force }
           if (-not (Test-Path -LiteralPath $updateExe)) { throw "Discord install failed: $updateExe missing" }
+          # The Squirrel installer auto-launches Discord, which downloads its
+          # modules (voice/desktop_core/...) during first run. Killing it too
+          # early leaves a broken module state the optimizer cannot repair in
+          # CI, so wait until the module set exists and is stable first.
+          if (-not (Get-Process -Name Discord -ErrorAction SilentlyContinue)) {
+            Start-Process -FilePath $updateExe -ArgumentList '--processStart','Discord.exe','--process-start-args','--start-minimized'
+          }
+          $deadline = (Get-Date).AddMinutes(8)
+          $modulesReady = $false
+          while ((Get-Date) -lt $deadline) {
+            $core = Get-ChildItem -Path (Join-Path $env:APPDATA 'discord') -Directory -Filter 'discord_desktop_core*' -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
+            $voice = Get-ChildItem -Path (Join-Path $env:APPDATA 'discord') -Directory -Filter 'discord_voice*' -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($core -and $voice) { $modulesReady = $true; break }
+            Start-Sleep -Seconds 10
+          }
+          if ($modulesReady) {
+            Write-Host 'Discord modules installed; letting first run settle...'
+            Start-Sleep -Seconds 30
+          } else {
+            Write-Host '::warning::Discord modules did not finish installing within 8 minutes; continuing anyway'
+          }
+          Get-Process -Name Discord -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force }
+          Start-Sleep -Seconds 5
           # The optimizer refuses non-interactive apply without a logged-in
           # session (data-preservation guard). A CI runner has no session to
           # protect, so seed the leveldb session stores the guard checks —
