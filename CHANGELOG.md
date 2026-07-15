@@ -1,3 +1,7 @@
+## 2.5.2
+
+- **Linux test harness**: `tools/Test-Linux.ps1` runs repository integrity + Network/Steam/Nvidia/Discord/Ui smokes on Linux/cloud agents; `Ui.Smoke` targets `net10.0` and skips Windows-only logo ink measurement; `DiscordLogic.IsStableDiscordPathText` uses a backslash-normalized compare so Discord smoke passes off-Windows (the WinUI app itself remains Windows-only)
+
 ## 2.5.1
 
 - **UI — brand-forward home**: large Exo mark leads the dashboard; italic “Maximum performance” tagline sits under the brand (not competing with it)
