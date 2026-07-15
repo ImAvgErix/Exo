@@ -25,6 +25,30 @@ jobs:
           dotnet build Exo.sln -c Release -p:Platform=x64
           dotnet build tools/Exo.NvDisplay/Exo.NvDisplay.csproj -c Release
 
+      # Informational Native AOT probe (Workstream 10): shipping publish stays
+      # ReadyToRun because the app's state serialization (SettingsService /
+      # NetworkOptimizerService / NvidiaPanelSettingsService) uses reflection-based
+      # System.Text.Json, which AOT cannot guarantee without a source-generation
+      # migration + on-hardware QA. This step records whether the toolchain-level
+      # AOT compile even succeeds; it never gates the build.
+      - name: Native AOT publish probe (informational)
+        continue-on-error: true
+        timeout-minutes: 25
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'aot-probe'
+          dotnet publish Exo/Exo.csproj -c Release -r win-x64 `
+            -p:PublishAot=true `
+            -p:WindowsPackageType=None `
+            -p:WindowsAppSDKSelfContained=true `
+            -o $out
+          if ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $out 'Exo.exe'))) {
+            Write-Host 'EXO_AOT_PROBE: compile-success (runtime QA still required before adoption)'
+          } else {
+            Write-Host "EXO_AOT_PROBE: failed (exit $LASTEXITCODE) — ReadyToRun fallback stands"
+          }
+          exit 0
+
       - name: Verify C# formatting
         run: |
           dotnet format Exo.sln --verify-no-changes --no-restore
@@ -277,6 +301,45 @@ jobs:
           pwsh -NoProfile -ExecutionPolicy Bypass -File $repair.FullName
           if ($LASTEXITCODE -ne 0) { throw "Network repair exited $LASTEXITCODE" }
           Write-Host 'Network repair exited cleanly'
+
+      # Startup-time measurement (Workstream 12/10 proof): publish the app the
+      # same way Publish-Exo.ps1 does (self-contained + ReadyToRun) and time
+      # process start -> main window handle. A publish failure is a real
+      # regression and fails the job; a missing window is a headless-runner
+      # limitation and only warns.
+      - name: Measure app startup (informational)
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'startup-probe'
+          dotnet publish Exo/Exo.csproj -c Release -r win-x64 `
+            --self-contained true `
+            -p:WindowsPackageType=None `
+            -p:WindowsAppSDKSelfContained=true `
+            -p:PublishReadyToRun=true `
+            -o $out
+          if ($LASTEXITCODE -ne 0) { throw "Startup probe publish failed (exit $LASTEXITCODE)" }
+          $exe = Join-Path $out 'Exo.exe'
+          if (-not (Test-Path -LiteralPath $exe)) { throw "Exo.exe missing after publish: $exe" }
+          $sw = [System.Diagnostics.Stopwatch]::StartNew()
+          $p = Start-Process -FilePath $exe -PassThru
+          $ready = $false
+          $deadline = (Get-Date).AddSeconds(90)
+          while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 100
+            $p.Refresh()
+            if ($p.HasExited) { break }
+            if ($p.MainWindowHandle -ne [IntPtr]::Zero) { $ready = $true; break }
+          }
+          $sw.Stop()
+          if ($ready) {
+            Write-Host ("EXO_STARTUP_MS: {0}" -f $sw.ElapsedMilliseconds)
+          } elseif ($p.HasExited) {
+            Write-Host "::warning::Startup probe: app exited (code $($p.ExitCode)) before a window appeared — runner has no interactive GPU/desktop guarantee; informational only."
+          } else {
+            Write-Host '::warning::Startup probe: no main window within 90s on the runner — informational only.'
+          }
+          Get-Process -Name Exo -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          exit 0
 
       - name: Collect Exo logs
         if: failure()

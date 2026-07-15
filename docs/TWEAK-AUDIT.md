@@ -103,8 +103,8 @@ Reset stays status-clear only — never a rollback.
 | Per-game catalog | **Expanded to 29 titles (v2.4.0)** | Comp deltas: PRF=1, max perf, ULL per pack, frame-gen off |
 | Minecraft `javaw.exe` profile | **Excluded** | Shared Java host — would force max-perf pins on every Java app |
 | CPL: resolution / refresh / scaling / color range / depth | **Keep** | Exo.NvDisplay (NvAPI) |
-| CPL: digital vibrance (DVC) | **Implemented (v2.4.0)** | get/set/status with readback verify |
-| CPL: per-display G-SYNC toggle | **Excluded** | No clean NvAPIWrapper surface; DRS pins cover behavior |
+| CPL: digital vibrance (DVC) | **Implemented (v2.4.0; panel slider v2.4.1)** | get/set/status with readback verify; per-display slider in the Exo NVIDIA Panel |
+| CPL: per-display G-SYNC toggle | **Excluded** | Public NVAPI `GSync_*` APIs are Quadro Sync genlock hardware, not consumer VRR; NvAPIWrapper ships no G-SYNC surface. Consumer per-display VRR has no documented public API — DRS pack pins (`* G-SYNC.nip`) cover behavior |
 | Unsigned INF edits (NvCleanInstall "tweaks") | **Excluded** | Breaks driver signing |
 | EAC/anti-cheat component strip | **Excluded** | Prohibited |
 | `D3PCLatency` / PCIe latency registry keys | **Excluded** | Folklore-grade; not verifiably documented |
@@ -145,6 +145,15 @@ Reset stays status-clear only — never a rollback.
 | `-cef-disable-occlusion` / `-cef-disable-renderer-accessibility` | **Excluded (forbidden)** | Documented blanking/hangs on some GPUs |
 | Windows quiet (toasts/tray/autostart) | **Keep** | Real startup/notification reduction |
 | Random "FPS registry packs" | **Not used** | Folklore |
+
+## App runtime / publish
+
+| Surface | Verdict | Why |
+|---------|---------|-----|
+| Self-contained win-x64 + ReadyToRun publish | **Keep** | End users need no runtime; R2R removes JIT warmup |
+| Native AOT publish | **Excluded (v2.4.1)** | App state serialization (`SettingsService`, `NetworkOptimizerService`, `NvidiaPanelSettingsService`) is reflection-based `System.Text.Json`; AOT silently degrades those loads to defaults instead of failing loudly. Adoption requires a source-generated-context migration plus on-hardware QA. CI carries an informational compile probe (`EXO_AOT_PROBE`) so the toolchain status stays visible |
+| Assembly trimming | **Excluded** | Same reflection surface; WinUI 3 + trimming risks runtime type loss for no measured startup win over R2R |
+| CI startup measurement | **Implemented (v2.4.1)** | e2e job publishes the real app and reports `EXO_STARTUP_MS` (process start → main window); headless-runner misses warn instead of faking a number |
 
 ## How we decide
 
