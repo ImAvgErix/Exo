@@ -589,6 +589,62 @@ finally
     try { Directory.Delete(parseDir, recursive: true); } catch { }
 }
 
+// (g) EXECUTION regression gate: run the emitted snapshot capture + the full
+// repair script under pwsh against Windows-shaped mocks with MIXED-TYPE
+// registry values (Int32/Int64/String/ExpandString/String[]/Byte[]).
+// Guards the real-Windows 'Argument types do not match' snapshot abort
+// (PSObject-wrapped List[object] + @() in pwsh 7.6) and the inverse
+// restore-side type-coercion bugs. String audits and AST parses cannot
+// catch these — this actually executes the generated code.
+var smokeDir = repoRoot is null ? null : Path.Combine(repoRoot, "tools", "NetworkPeak.Smoke");
+var harnessPath = smokeDir is null ? null : Path.Combine(smokeDir, "SnapshotExecHarness.ps1");
+var mocksPath = smokeDir is null ? null : Path.Combine(smokeDir, "SnapshotExecMocks.ps1");
+Expect("snapshot exec harness present",
+    harnessPath is not null && File.Exists(harnessPath) && File.Exists(mocksPath!),
+    $"harness={harnessPath}");
+if (harnessPath is not null && File.Exists(harnessPath) && File.Exists(mocksPath!))
+{
+    var execDir = Path.Combine(Path.GetTempPath(), "exo-netexec-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(execDir);
+    try
+    {
+        var repairPath = Path.Combine(execDir, "repair.ps1");
+        File.WriteAllText(repairPath, repairScript);
+        foreach (var (presetName, applyText) in new[] { ("latency", latScript), ("throughput", thrScript) })
+        {
+            var applyPath = Path.Combine(execDir, $"apply-{presetName}.ps1");
+            File.WriteAllText(applyPath, applyText);
+            var workDir = Path.Combine(execDir, $"work-{presetName}");
+            var execOut = RunPs(
+                "-NoProfile -ExecutionPolicy Bypass -File \"" + harnessPath + "\"" +
+                " -ApplyScriptPath \"" + applyPath + "\"" +
+                " -RepairScriptPath \"" + repairPath + "\"" +
+                " -MocksPath \"" + mocksPath + "\"" +
+                " -WorkDir \"" + workDir + "\"");
+            Expect($"exec harness ran ({presetName})", execOut is not null);
+            if (execOut is null) continue;
+            var flat = execOut.Replace('\r', ' ').Replace('\n', ' ');
+            Expect($"exec: snapshot serializes mixed types ({presetName})",
+                execOut.Contains("EXOTEST:snapshot-exec succeeds (mixed-type registry values)|pass", StringComparison.Ordinal), flat);
+            Expect($"exec: repair restores typed values ({presetName})",
+                execOut.Contains("EXOTEST:repair-exec MultiString restored as String[]|pass", StringComparison.Ordinal) &&
+                execOut.Contains("EXOTEST:repair-exec Binary restored as Byte[]|pass", StringComparison.Ordinal) &&
+                execOut.Contains("EXOTEST:repair-exec DWord -1 restored|pass", StringComparison.Ordinal), flat);
+            Expect($"exec: zero harness failures ({presetName})",
+                execOut.Contains("EXOTEST-SUMMARY:failed=0", StringComparison.Ordinal), flat);
+            var failLines = execOut.Split('\n')
+                .Where(l => l.Contains("EXOTEST:", StringComparison.Ordinal) && l.Contains("|fail", StringComparison.Ordinal))
+                .ToList();
+            Expect($"exec: no individual assertion failed ({presetName})",
+                failLines.Count == 0, string.Join(" // ", failLines));
+        }
+    }
+    finally
+    {
+        try { Directory.Delete(execDir, recursive: true); } catch { }
+    }
+}
+
 Log($"=== SUMMARY failed={failed} ===");
 Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
 File.WriteAllLines(logPath, lines);

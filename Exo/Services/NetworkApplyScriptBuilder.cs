@@ -271,7 +271,11 @@ function Save-ExoNetworkSnapshot {
       }
     })
     # --- every registry value the apply may write (pre-value or 'absent') ---
-    $regVals = New-Object System.Collections.Generic.List[object]
+    # NOTE: lists are created via ::new() and materialized via .ToArray() —
+    # @() over a New-Object-created (PSObject-wrapped) List[object] throws
+    # 'Argument types do not match' in pwsh 7.6 (PSToObjectArrayBinder), which
+    # aborted the whole snapshot on real Windows.
+    $regVals = [System.Collections.Generic.List[object]]::new()
     foreach ($t in $ExoRegTargets) {
       $entry = [ordered]@{ path = $t.Path; name = $t.Name; kind = 'absent'; value = $null }
       try {
@@ -322,11 +326,11 @@ function Save-ExoNetworkSnapshot {
         }
       } catch {}
     }
-    $snap.regValues = @($regVals)
+    $snap.regValues = $regVals.ToArray()
     # --- adapters: advanced properties (by RegistryKeyword), bindings, enable state ---
     $phys = Get-ExoPhysicalAdapters
-    $advList = New-Object System.Collections.Generic.List[object]
-    $bindList = New-Object System.Collections.Generic.List[object]
+    $advList = [System.Collections.Generic.List[object]]::new()
+    $bindList = [System.Collections.Generic.List[object]]::new()
     foreach ($a in $phys) {
       foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -EA SilentlyContinue)) {
         if (-not $p.RegistryKeyword) { continue }
@@ -346,8 +350,8 @@ function Save-ExoNetworkSnapshot {
         })
       }
     }
-    $snap.advancedProps = @($advList)
-    $snap.bindings = @($bindList)
+    $snap.advancedProps = $advList.ToArray()
+    $snap.bindings = $bindList.ToArray()
     $snap.adapterStates = @(Get-NetAdapter -Physical -EA SilentlyContinue | ForEach-Object {
       [pscustomobject]@{
         name    = [string]$_.Name
@@ -368,7 +372,7 @@ function Save-ExoNetworkSnapshot {
       }
     })
     # --- RSS config for every Ethernet NIC (BaseProcessorNumber restore) ---
-    $rssList = New-Object System.Collections.Generic.List[object]
+    $rssList = [System.Collections.Generic.List[object]]::new()
     foreach ($a in @($phys | Where-Object { -not (Test-IsWifiAdapter $_) })) {
       $r = Get-NetAdapterRss -Name $a.Name -EA SilentlyContinue
       if ($r) {
@@ -380,9 +384,9 @@ function Save-ExoNetworkSnapshot {
         })
       }
     }
-    $snap.rss = @($rssList)
+    $snap.rss = $rssList.ToArray()
     # --- powercfg values the apply changes (AC/DC indexes, last two hex = current) ---
-    $pcList = New-Object System.Collections.Generic.List[object]
+    $pcList = [System.Collections.Generic.List[object]]::new()
     try {
       $scheme = (powercfg /getactivescheme) -replace '.*GUID:\s*([0-9a-f\-]+).*', '$1'
       if ($scheme) {
@@ -400,9 +404,9 @@ function Save-ExoNetworkSnapshot {
         }
       }
     } catch {}
-    $snap.powercfg = @($pcList)
+    $snap.powercfg = $pcList.ToArray()
     # --- dynamic port ranges ---
-    $dpList = New-Object System.Collections.Generic.List[object]
+    $dpList = [System.Collections.Generic.List[object]]::new()
     foreach ($fam in @('ipv4', 'ipv6')) {
       foreach ($proto in @('tcp', 'udp')) {
         try {
@@ -414,7 +418,7 @@ function Save-ExoNetworkSnapshot {
         } catch {}
       }
     }
-    $snap.dynamicPorts = @($dpList)
+    $snap.dynamicPorts = $dpList.ToArray()
     # --- IPv6 prefix policies (restore target for the IPv4-first precedence change) ---
     $ppRaw = (netsh int ipv6 show prefixpolicies 2>$null | Out-String)
     $snap.prefixPoliciesRaw = $ppRaw.Trim()

@@ -100,7 +100,63 @@ jobs:
             Start-Process -FilePath $setup -ArgumentList '/S' -Wait
           }
           if (-not (Test-Path -LiteralPath $steamExe)) { throw "Steam install failed: $steamExe missing" }
-          Write-Host "Steam installed: $steamExe"
+          $steamRoot = Split-Path -Parent $steamExe
+          # First launch bootstraps the runtime (bin\cef\...\steamwebhelper.exe)
+          # and writes config\config.vdf. Steam self-updates on first run, so
+          # wait until both exist. It never reaches a logged-in state on CI —
+          # that is handled by seeding userdata below.
+          Start-Process -FilePath $steamExe -ArgumentList '-silent','-no-browser','+app_info_update','1'
+          $deadline = (Get-Date).AddMinutes(10)
+          while ((Get-Date) -lt $deadline) {
+            $cfg = Test-Path -LiteralPath (Join-Path $steamRoot 'config\config.vdf')
+            $helper = Get-ChildItem -Path (Join-Path $steamRoot 'bin') -Filter 'steamwebhelper.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($cfg -and $helper) { break }
+            Start-Sleep -Seconds 15
+          }
+          Get-Process -Name steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          Start-Sleep -Seconds 5
+          # localconfig.vdf only exists after a real login, which CI cannot do.
+          # Seed a minimal userdata account so the optimizer's VDF injection /
+          # rewrite paths run against a real file (the actual thing under test).
+          $userConfig = Join-Path $steamRoot 'userdata\1000\config'
+          New-Item -ItemType Directory -Path $userConfig -Force | Out-Null
+          $t = [char]9
+          $seedLines = @(
+            '"UserLocalConfigStore"',
+            '{',
+            ($t + '"friends"'),
+            ($t + '{'),
+            ($t + $t + '"PersonaStateDesired"' + $t + $t + '"1"'),
+            ($t + '}'),
+            ($t + '"system"'),
+            ($t + '{'),
+            ($t + $t + '"EnableGameOverlay"' + $t + $t + '"1"'),
+            ($t + '}'),
+            '}'
+          )
+          Set-Content -LiteralPath (Join-Path $userConfig 'localconfig.vdf') -Value ($seedLines -join "`n") -Encoding ASCII
+          # Ensure a minimal config.vdf exists even if first-run self-update was slow.
+          $steamConfig = Join-Path $steamRoot 'config'
+          New-Item -ItemType Directory -Path $steamConfig -Force | Out-Null
+          $cfgPath = Join-Path $steamConfig 'config.vdf'
+          if (-not (Test-Path -LiteralPath $cfgPath)) {
+            $cfgLines = @(
+              '"InstallConfigStore"',
+              '{',
+              ($t + '"Software"'),
+              ($t + '{'),
+              ($t + $t + '"Valve"'),
+              ($t + $t + '{'),
+              ($t + $t + $t + '"Steam"'),
+              ($t + $t + $t + '{'),
+              ($t + $t + $t + '}'),
+              ($t + $t + '}'),
+              ($t + '}'),
+              '}'
+            )
+            Set-Content -LiteralPath $cfgPath -Value ($cfgLines -join "`n") -Encoding ASCII
+          }
+          Write-Host "Steam installed: $steamExe (runtime + config + seeded userdata ready)"
           exit 0
 
       - name: Install Discord
@@ -115,11 +171,30 @@ jobs:
             Invoke-WebRequest -Uri 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64' -OutFile $setup
             Start-Process -FilePath $setup -ArgumentList '-s' -Wait
           }
-          # The Squirrel installer auto-launches Discord; let it settle,
-          # then stop it by PID so the optimizer starts from a closed client.
-          Start-Sleep -Seconds 20
-          Get-Process -Name Discord -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force }
           if (-not (Test-Path -LiteralPath $updateExe)) { throw "Discord install failed: $updateExe missing" }
+          # The Squirrel installer auto-launches Discord, which downloads its
+          # modules (voice/desktop_core/...) during first run. Killing it too
+          # early leaves a broken module state the optimizer cannot repair in
+          # CI, so wait until the module set exists and is stable first.
+          if (-not (Get-Process -Name Discord -ErrorAction SilentlyContinue)) {
+            Start-Process -FilePath $updateExe -ArgumentList '--processStart','Discord.exe','--process-start-args','--start-minimized'
+          }
+          $deadline = (Get-Date).AddMinutes(8)
+          $modulesReady = $false
+          while ((Get-Date) -lt $deadline) {
+            $core = Get-ChildItem -Path (Join-Path $env:APPDATA 'discord') -Directory -Filter 'discord_desktop_core*' -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
+            $voice = Get-ChildItem -Path (Join-Path $env:APPDATA 'discord') -Directory -Filter 'discord_voice*' -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($core -and $voice) { $modulesReady = $true; break }
+            Start-Sleep -Seconds 10
+          }
+          if ($modulesReady) {
+            Write-Host 'Discord modules installed; letting first run settle...'
+            Start-Sleep -Seconds 30
+          } else {
+            Write-Host '::warning::Discord modules did not finish installing within 8 minutes; continuing anyway'
+          }
+          Get-Process -Name Discord -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force }
+          Start-Sleep -Seconds 5
           # The optimizer refuses non-interactive apply without a logged-in
           # session (data-preservation guard). A CI runner has no session to
           # protect, so seed the leveldb session stores the guard checks —
@@ -143,10 +218,13 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Discord detect exited $LASTEXITCODE" }
             return ($raw | Select-Object -Last 1 | ConvertFrom-Json)
           }
+          function Show-DetectRows($detect) {
+            foreach ($f in $detect.features) { Write-Host ("  row: {0} => active={1}" -f $f.title, $f.active) }
+          }
           pwsh -NoProfile -File Exo/Scripts/Discord/Exo-Discord-Run.ps1 -NonInteractive
           if ($LASTEXITCODE -ne 0) { throw "Discord apply exited $LASTEXITCODE" }
           $d = Get-DiscordDetect
-          if (-not $d.isApplied) { throw "Detect after apply: isApplied=false ($($d.statusText))" }
+          if (-not $d.isApplied) { Show-DetectRows $d; throw "Detect after apply: isApplied=false ($($d.statusText))" }
           Write-Host "Detect after apply: isApplied=true ($($d.statusText))"
           pwsh -NoProfile -File Exo/Scripts/Discord/Exo-Discord-Repair.ps1 -NonInteractive
           if ($LASTEXITCODE -ne 0) { throw "Discord repair exited $LASTEXITCODE" }
@@ -163,10 +241,13 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Steam detect exited $LASTEXITCODE" }
             return ($raw | Select-Object -Last 1 | ConvertFrom-Json)
           }
+          function Show-DetectRows($detect) {
+            foreach ($f in $detect.features) { Write-Host ("  row: {0} => active={1}" -f $f.title, $f.active) }
+          }
           pwsh -NoProfile -File Exo/Scripts/Steam/Exo-Steam-Run.ps1 -NonInteractive
           if ($LASTEXITCODE -ne 0) { throw "Steam apply exited $LASTEXITCODE" }
           $s = Get-SteamDetect
-          if (-not $s.isApplied) { throw "Detect after apply: isApplied=false ($($s.statusText))" }
+          if (-not $s.isApplied) { Show-DetectRows $s; throw "Detect after apply: isApplied=false ($($s.statusText))" }
           Write-Host "Detect after apply: isApplied=true ($($s.statusText))"
           pwsh -NoProfile -File Exo/Scripts/Steam/Exo-Steam-Repair.ps1 -NonInteractive
           if ($LASTEXITCODE -ne 0) { throw "Steam repair exited $LASTEXITCODE" }
