@@ -53,8 +53,12 @@
                             AutomationProperties.Name="Discord"
                             Click="NavDiscord_Click"
                             Tag="discord">
-                        <StackPanel Spacing="4" HorizontalAlignment="Center">
-                            <FontIcon Glyph="&#xE8BD;" FontSize="16" />
+                        <StackPanel Spacing="3" HorizontalAlignment="Center">
+                            <Image Source="ms-appx:///Assets/Logos/discord.png"
+                                   Width="22" Height="22"
+                                   Stretch="Uniform"
+                                   UseLayoutRounding="True"
+                                   AutomationProperties.AccessibilityView="Raw" />
                             <TextBlock Text="Discord" FontSize="10" FontFamily="{StaticResource ExoUiFont}" Opacity="0.75" HorizontalAlignment="Center" />
                         </StackPanel>
                     </Button>
@@ -63,8 +67,12 @@
                             AutomationProperties.Name="Steam"
                             Click="NavSteam_Click"
                             Tag="steam">
-                        <StackPanel Spacing="4" HorizontalAlignment="Center">
-                            <FontIcon Glyph="&#xE7FC;" FontSize="16" />
+                        <StackPanel Spacing="3" HorizontalAlignment="Center">
+                            <Image Source="ms-appx:///Assets/Logos/steam.png"
+                                   Width="22" Height="22"
+                                   Stretch="Uniform"
+                                   UseLayoutRounding="True"
+                                   AutomationProperties.AccessibilityView="Raw" />
                             <TextBlock Text="Steam" FontSize="10" FontFamily="{StaticResource ExoUiFont}" Opacity="0.75" HorizontalAlignment="Center" />
                         </StackPanel>
                     </Button>
@@ -73,8 +81,12 @@
                             AutomationProperties.Name="Internet"
                             Click="NavInternet_Click"
                             Tag="internet">
-                        <StackPanel Spacing="4" HorizontalAlignment="Center">
-                            <FontIcon Glyph="&#xE774;" FontSize="16" />
+                        <StackPanel Spacing="3" HorizontalAlignment="Center">
+                            <Image Source="ms-appx:///Assets/Logos/internet.png"
+                                   Width="22" Height="22"
+                                   Stretch="Uniform"
+                                   UseLayoutRounding="True"
+                                   AutomationProperties.AccessibilityView="Raw" />
                             <TextBlock Text="Net" FontSize="10" FontFamily="{StaticResource ExoUiFont}" Opacity="0.75" HorizontalAlignment="Center" />
                         </StackPanel>
                     </Button>
@@ -83,8 +95,12 @@
                             AutomationProperties.Name="NVIDIA"
                             Click="NavNvidia_Click"
                             Tag="nvidia">
-                        <StackPanel Spacing="4" HorizontalAlignment="Center">
-                            <FontIcon Glyph="&#xE7F3;" FontSize="16" />
+                        <StackPanel Spacing="3" HorizontalAlignment="Center">
+                            <Image Source="ms-appx:///Assets/Logos/nvidia.png"
+                                   Width="22" Height="22"
+                                   Stretch="Uniform"
+                                   UseLayoutRounding="True"
+                                   AutomationProperties.AccessibilityView="Raw" />
                             <TextBlock Text="GPU" FontSize="10" FontFamily="{StaticResource ExoUiFont}" Opacity="0.75" HorizontalAlignment="Center" />
                         </StackPanel>
                     </Button>

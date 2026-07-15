@@ -24,7 +24,7 @@
     <AssemblyName>Exo</AssemblyName>
     <Product>Exo</Product>
     <Company>Exo</Company>
-    <Version>2.5.0</Version>
+    <Version>2.5.1</Version>
     <Description>One hub. Max performance.</Description>
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>

@@ -1,3 +1,9 @@
+## 2.5.1
+
+- **UI — brand-forward home**: large Exo mark leads the dashboard; italic “Maximum performance” tagline sits under the brand (not competing with it)
+- **UI — rail product logos**: Discord / Steam / Internet / NVIDIA marks on the left `NavRail` (logo-friendly hover — wash only, no scale)
+- **UI — module craft polish**: denser feature tiles + status rail + icon wells; taller premium directory rows; clearer sticky `ExoActionBar` hairline and padding
+
 ## 2.5.0
 
 - **UI — full remodel**: left icon rail (`NavRail` + Home/Discord/Steam/Internet/NVIDIA) replaces the old chrome; home is an editorial directory (hero tagline + full-width module rows) instead of a wrap-grid of product cards; module features are a vertical `FeatureTileGrid` (`StackLayout`) with sticky `ExoActionBar` footers — fixed 1180×760, AMOLED shell, settings still a gear flyout on the rail

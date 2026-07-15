@@ -7,26 +7,34 @@
     xmlns:controls="using:Exo.Views.Controls"
     Background="Transparent">
 
-    <!-- Selectors only: res / Hz / depth / color / scaling / vibrance. No policy "applied" tiles. -->
+    <!--
+      Tool-like layout: header + scrollable display cards + sticky footer
+      (CPL button + Refresh). Selectors only — no policy "applied" tiles.
+    -->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Grid Padding="24,16,28,12">
+        <Grid Padding="28,18,28,10">
             <Grid MaxWidth="{StaticResource ExoPageMaxWidth}"
                   HorizontalAlignment="Stretch"
-                  RowSpacing="16">
+                  RowSpacing="14">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Spacing="4" Margin="0,0,0,4">
-                    <TextBlock Text="DISPLAY" Style="{StaticResource ExoSectionTitle}" Margin="0" />
+                <StackPanel Spacing="4">
+                    <TextBlock Text="DISPLAY"
+                               Style="{StaticResource ExoSectionTitle}"
+                               Margin="0" />
                     <TextBlock Text="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}"
-                               Style="{StaticResource ExoPageTitle}" />
+                               Style="{StaticResource ExoPageTitle}"
+                               FontSize="26"
+                               LineHeight="32"
+                               CharacterSpacing="-24" />
                     <TextBlock Text="{x:Bind ViewModel.HeaderDetail, Mode=OneWay}"
                                Style="{StaticResource ExoCaption}"
                                Margin="0,2,0,0" />
@@ -43,7 +51,7 @@
                                   HorizontalScrollMode="Disabled"
                                   ZoomMode="Disabled"
                                   Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
-                        <StackPanel Spacing="12"
+                        <StackPanel Spacing="10"
                                     Visibility="{x:Bind ViewModel.HasDisplays, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                             <ItemsControl ItemsSource="{x:Bind ViewModel.Displays, Mode=OneWay}">
                                 <ItemsControl.ItemsPanel>
@@ -54,19 +62,20 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:NvidiaDisplayColorRowViewModel">
                                         <Border Style="{StaticResource ExoCard}"
-                                                Padding="16,14"
-                                                Margin="0,0,0,12"
+                                                Padding="14,12"
+                                                Margin="0,0,0,10"
                                                 HorizontalAlignment="Stretch">
-                                            <StackPanel Spacing="14">
+                                            <StackPanel Spacing="12">
                                                 <Grid ColumnSpacing="12">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
-                                                    <StackPanel Spacing="3" VerticalAlignment="Center">
+                                                    <StackPanel Spacing="2" VerticalAlignment="Center">
                                                         <TextBlock Text="{x:Bind Title}"
                                                                    Style="{StaticResource ExoFeatureTitle}"
-                                                                   FontSize="15" />
+                                                                   FontSize="14"
+                                                                   CharacterSpacing="-4" />
                                                         <TextBlock Text="{x:Bind ChangeHint, Mode=OneWay}"
                                                                    Style="{StaticResource ExoCaption}"
                                                                    FontSize="11"
@@ -76,16 +85,16 @@
                                                     <Button Grid.Column="1"
                                                             Style="{StaticResource ExoPrimaryButton}"
                                                             Content="{x:Bind ApplyLabel, Mode=OneWay}"
-                                                            MinWidth="100"
-                                                            MinHeight="38"
-                                                            Padding="14,8"
+                                                            MinWidth="96"
+                                                            MinHeight="36"
+                                                            Padding="12,8"
                                                             Click="ApplyDisplay_Click"
                                                             Tag="{x:Bind}"
                                                             IsEnabled="{x:Bind CanApply, Mode=OneWay}"
                                                             AutomationProperties.Name="Apply display settings" />
                                                 </Grid>
 
-                                                <Grid ColumnSpacing="12" RowSpacing="12">
+                                                <Grid ColumnSpacing="10" RowSpacing="10">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="*" />
@@ -169,7 +178,9 @@
             </Grid>
         </Grid>
 
-        <Border Grid.Row="1" Style="{StaticResource ExoActionBar}">
+        <Border Grid.Row="1"
+                Style="{StaticResource ExoActionBar}"
+                Padding="28,12,28,14">
             <StackPanel MaxWidth="{StaticResource ExoPageMaxWidth}"
                         HorizontalAlignment="Stretch"
                         Spacing="10">
@@ -203,22 +214,31 @@
                                TextAlignment="Center" />
                 </StackPanel>
 
-                <Button Style="{StaticResource ExoQuietButton}"
-                        Content="Open NVIDIA Control Panel"
-                        Click="OpenControlPanel_Click"
-                        MinHeight="40"
-                        HorizontalAlignment="Stretch"
-                        Visibility="{x:Bind ViewModel.HasControlPanel, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                        AutomationProperties.Name="Open NVIDIA Control Panel" />
-
-                <Button Style="{StaticResource ExoQuietButton}"
-                        Content="Refresh"
-                        Click="Refresh_Click"
-                        MinHeight="38"
-                        HorizontalAlignment="Stretch"
-                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                        AutomationProperties.Name="Refresh displays" />
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button Style="{StaticResource ExoQuietButton}"
+                            Content="Open NVIDIA Control Panel"
+                            Click="OpenControlPanel_Click"
+                            MinHeight="36"
+                            Padding="12,8"
+                            HorizontalAlignment="Stretch"
+                            Visibility="{x:Bind ViewModel.HasControlPanel, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                            AutomationProperties.Name="Open NVIDIA Control Panel" />
+                    <Button Grid.Column="1"
+                            Style="{StaticResource ExoQuietButton}"
+                            Content="Refresh"
+                            Click="Refresh_Click"
+                            MinHeight="36"
+                            MinWidth="96"
+                            Padding="12,8"
+                            HorizontalAlignment="Stretch"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                            AutomationProperties.Name="Refresh displays" />
+                </Grid>
             </StackPanel>
         </Border>
     </Grid>

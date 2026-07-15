@@ -7,25 +7,35 @@
     xmlns:controls="using:Exo.Views.Controls"
     Background="Transparent">
 
+    <!--
+      Module craft surface: header + G-SYNC/Display controls + feature list + sticky bar.
+      Reset clears Exo status only — status clear, not a driver restore.
+    -->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Grid Padding="24,16,28,12">
+        <Grid Padding="28,18,28,10">
             <Grid MaxWidth="{StaticResource ExoPageMaxWidth}"
                   HorizontalAlignment="Stretch"
-                  RowSpacing="16">
+                  RowSpacing="14">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Spacing="12" Margin="0,0,0,4">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="NVIDIA" Style="{StaticResource ExoSectionTitle}" Margin="0" />
-                        <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" Style="{StaticResource ExoPageTitle}" />
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="NVIDIA"
+                                   Style="{StaticResource ExoSectionTitle}"
+                                   Margin="0" />
+                        <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                                   Style="{StaticResource ExoPageTitle}"
+                                   FontSize="26"
+                                   LineHeight="32"
+                                   CharacterSpacing="-24" />
                     </StackPanel>
                     <Border Style="{StaticResource ExoCard}" Padding="14,10">
                         <Grid ColumnSpacing="12">
@@ -44,7 +54,7 @@
                                     Content="Display panel"
                                     Click="Panel_Click"
                                     MinWidth="120"
-                                    MinHeight="36"
+                                    MinHeight="34"
                                     Padding="12,8"
                                     VerticalAlignment="Center"
                                     IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
@@ -66,10 +76,12 @@
             </Grid>
         </Grid>
 
-        <Border Grid.Row="1" Style="{StaticResource ExoActionBar}">
+        <Border Grid.Row="1"
+                Style="{StaticResource ExoActionBar}"
+                Padding="28,12,28,14">
             <StackPanel MaxWidth="{StaticResource ExoPageMaxWidth}"
                         HorizontalAlignment="Stretch"
-                        Spacing="12">
+                        Spacing="10">
                 <Border Style="{StaticResource ExoMessageBanner}"
                         Visibility="{x:Bind ViewModel.HasLastResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                     <Grid ColumnSpacing="10">
@@ -90,7 +102,10 @@
                     <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource ExoCaption}" TextAlignment="Center" />
                 </StackPanel>
 
-                <Button Style="{StaticResource ExoPrimaryButton}" Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}" Click="Run_Click" HorizontalAlignment="Stretch"
+                <Button Style="{StaticResource ExoPrimaryButton}"
+                        Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
+                        Click="Run_Click"
+                        HorizontalAlignment="Stretch"
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                         AutomationProperties.Name="Apply NVIDIA" />
                 <Grid ColumnSpacing="8">
@@ -98,11 +113,20 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource ExoQuietButton}" Content="Reset" Click="Repair_Click"
-                            MinHeight="38" HorizontalAlignment="Stretch"
+                    <Button Style="{StaticResource ExoQuietButton}"
+                            Content="Reset"
+                            Click="Repair_Click"
+                            MinHeight="34"
+                            Padding="12,6"
+                            HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    <Button Grid.Column="1" Style="{StaticResource ExoQuietButton}" Content="Refresh" Click="Refresh_Click"
-                            MinHeight="38" HorizontalAlignment="Stretch"
+                    <Button Grid.Column="1"
+                            Style="{StaticResource ExoQuietButton}"
+                            Content="Refresh"
+                            Click="Refresh_Click"
+                            MinHeight="34"
+                            Padding="12,6"
+                            HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                 </Grid>
                 <TextBlock Text="Reset clears Exo status only — NVIDIA driver and profiles stay."

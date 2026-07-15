@@ -67,6 +67,11 @@ if (File.Exists(main))
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
     Expect("rail nav internet", m.Contains("NavInternet", StringComparison.Ordinal));
     Expect("rail nav nvidia", m.Contains("NavNvidia", StringComparison.Ordinal));
+    // v2.5.1 — product logos on the rail (not glyph-only).
+    Expect("rail logo discord", m.Contains("discord.png", StringComparison.Ordinal));
+    Expect("rail logo steam", m.Contains("steam.png", StringComparison.Ordinal));
+    Expect("rail logo internet", m.Contains("internet.png", StringComparison.Ordinal));
+    Expect("rail logo nvidia", m.Contains("nvidia.png", StringComparison.Ordinal));
     Expect("settings gear", m.Contains("SettingsButton", StringComparison.Ordinal));
     Expect("back chrome", m.Contains("BackButton", StringComparison.Ordinal));
     Expect("drag region separate", m.Contains("TitleBarDragRegion", StringComparison.Ordinal));
@@ -93,6 +98,13 @@ if (File.Exists(mainCs))
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
+    // v2.5.1 brand-forward home: large Exo mark + italic performance tagline.
+    Expect("hero brand",
+        d.Contains("HeroBrand", StringComparison.Ordinal)
+        || (d.Contains("Text=\"Exo\"", StringComparison.Ordinal)
+            && (d.Contains("FontSize=\"44\"", StringComparison.Ordinal)
+                || d.Contains("FontSize=\"48\"", StringComparison.Ordinal)
+                || d.Contains("FontSize=\"52\"", StringComparison.Ordinal))));
     Expect("hero tagline",
         d.Contains("HeroTagline", StringComparison.Ordinal)
         && d.Contains("Maximum performance", StringComparison.Ordinal));
@@ -516,9 +528,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.5.0", File.ReadAllText(versionFile).Trim() == "2.5.0");
+    Expect("VERSION is 2.5.1", File.ReadAllText(versionFile).Trim() == "2.5.1");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.5.0", File.ReadAllText(csproj).Contains("<Version>2.5.0</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.5.1", File.ReadAllText(csproj).Contains("<Version>2.5.1</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));

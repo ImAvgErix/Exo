@@ -23,18 +23,19 @@
     <helpers:BoolToShowOpacityConverter x:Key="BoolToShowOpacityConverter" />
     <helpers:AssetPathToImageSourceConverter x:Key="AssetPathToImageSourceConverter" />
 
+    <!-- Home subhead under brand — slightly smaller italic, not competing with HeroBrand -->
     <Style x:Key="ExoTagline" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource ExoDisplayFontItalic}" />
-        <Setter Property="FontSize" Value="34" />
+        <Setter Property="FontSize" Value="22" />
         <Setter Property="FontStyle" Value="Italic" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="-6" />
+        <Setter Property="CharacterSpacing" Value="-4" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
-        <Setter Property="TextAlignment" Value="Center" />
-        <Setter Property="LineHeight" Value="42" />
+        <Setter Property="TextAlignment" Value="Left" />
+        <Setter Property="LineHeight" Value="28" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
         <Setter Property="UseLayoutRounding" Value="True" />
-        <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoSecondaryTextBrush}" />
     </Style>
 
     <Style x:Key="ExoSectionTitle" TargetType="TextBlock">
@@ -90,46 +91,47 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <!-- Feature rows — denser professional chrome (matches FeatureTileGrid) -->
     <Style x:Key="ExoFeatureTile" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource ExoTileRadius}" />
-        <Setter Property="Padding" Value="14,12" />
-        <Setter Property="MinHeight" Value="56" />
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="MinHeight" Value="52" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
-    <!-- Home directory row chrome -->
+    <!-- Home directory row chrome — premium ~60px rows, 44px logos -->
     <Style x:Key="ExoDirectoryRow" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="14" />
-        <Setter Property="Padding" Value="16" />
-        <Setter Property="MinHeight" Value="72" />
+        <Setter Property="Padding" Value="16,10" />
+        <Setter Property="MinHeight" Value="60" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
-    <!-- Sticky module action bar -->
+    <!-- Sticky module action bar — clear top hairline + breathing room -->
     <Style x:Key="ExoActionBar" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="BorderThickness" Value="0,1.5,0,0" />
         <Setter Property="CornerRadius" Value="0" />
-        <Setter Property="Padding" Value="16" />
+        <Setter Property="Padding" Value="20,14,20,16" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
     <Style x:Key="ExoStatusRail" TargetType="Border">
-        <Setter Property="Width" Value="2" />
-        <Setter Property="CornerRadius" Value="1" />
+        <Setter Property="Width" Value="3" />
+        <Setter Property="CornerRadius" Value="1.5" />
         <Setter Property="Background" Value="{ThemeResource ExoSuccessBrush}" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
-        <Setter Property="Margin" Value="0,1,0,1" />
+        <Setter Property="Margin" Value="0,0,0,0" />
         <Setter Property="IsHitTestVisible" Value="False" />
     </Style>
 
@@ -143,9 +145,9 @@
     </Style>
 
     <Style x:Key="ExoIconWell" TargetType="Border">
-        <Setter Property="Width" Value="30" />
-        <Setter Property="Height" Value="30" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="CornerRadius" Value="7" />
         <Setter Property="Background" Value="{ThemeResource ExoAccentSoftBrush}" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
@@ -742,8 +744,8 @@
 
     <!--
       Left rail nav: square-ish 56×56, transparent base.
-      Selection fill is applied from code via Background (ExoAccentSoftBrush).
-      Hover/press = wash only — never scale (keeps icons sharp).
+      Product logos live here — hover/press = wash only, NEVER scale
+      (scale softens bitmaps). Selection fill applied from code via Background.
     -->
     <Style x:Key="ExoRailButton" TargetType="Button">
         <Setter Property="Width" Value="56" />
@@ -767,6 +769,7 @@
                           UseLayoutRounding="True"
                           Background="{TemplateBinding Background}"
                           CornerRadius="{TemplateBinding CornerRadius}">
+                        <!-- Wash behind content so logos stay sharp on top -->
                         <Border x:Name="HoverWash"
                                 Background="{ThemeResource ExoAccentSoftBrush}"
                                 CornerRadius="{TemplateBinding CornerRadius}"
@@ -805,8 +808,9 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity"
                                                          To="1" Duration="0:0:0.08" />
+                                        <!-- Opacity dip only — never ScaleTransform on logo content -->
                                         <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
-                                                         To="0.92" Duration="0:0:0.08" />
+                                                         To="0.94" Duration="0:0:0.08" />
                                     </Storyboard>
                                 </VisualState>
                                 <VisualState x:Name="Disabled">

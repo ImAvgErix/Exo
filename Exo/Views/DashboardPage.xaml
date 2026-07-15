@@ -8,9 +8,8 @@
     Loaded="Page_Loaded">
 
     <!--
-      Fixed 1180×760 editorial directory.
-      Hero italic tagline; full-width module rows underneath.
-      No support subtitle. No RenderTransform on italic type.
+      Brand-forward home: Exo mark → italic tagline → module directory.
+      No support subtitle. No RenderTransform on italic type. No status chips.
     -->
     <Grid x:Name="PageRoot"
           Padding="40,28,40,32"
@@ -24,9 +23,25 @@
                     Spacing="0"
                     UseLayoutRounding="True">
 
+            <TextBlock x:Name="HeroBrand"
+                       Text="Exo"
+                       FontFamily="{StaticResource ExoUiFontSemiBold}"
+                       FontSize="44"
+                       FontWeight="SemiBold"
+                       CharacterSpacing="-28"
+                       LineHeight="48"
+                       Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                       TextAlignment="Left"
+                       HorizontalAlignment="Stretch"
+                       OpticalMarginAlignment="TrimSideBearings"
+                       UseLayoutRounding="True"
+                       Margin="0,0,0,6" />
+
             <TextBlock x:Name="HeroTagline"
                        Text="Maximum performance. No compromise."
                        Style="{StaticResource ExoTagline}"
+                       FontSize="22"
+                       LineHeight="28"
                        TextWrapping="WrapWholeWords"
                        TextAlignment="Left"
                        HorizontalAlignment="Stretch"
@@ -58,8 +73,8 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <Image Width="40"
-                                           Height="40"
+                                    <Image Width="44"
+                                           Height="44"
                                            Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                            VerticalAlignment="Center"
                                            Stretch="Uniform"
@@ -85,10 +100,10 @@
                                     </StackPanel>
                                     <FontIcon Grid.Column="2"
                                               Glyph="&#xE76C;"
-                                              FontSize="12"
-                                              Foreground="{ThemeResource ExoMutedTextBrush}"
+                                              FontSize="14"
+                                              Foreground="{ThemeResource ExoSecondaryTextBrush}"
                                               VerticalAlignment="Center"
-                                              Opacity="0.7" />
+                                              Opacity="0.85" />
                                 </Grid>
                             </Border>
                         </Button>
