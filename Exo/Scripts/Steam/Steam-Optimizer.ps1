@@ -216,7 +216,7 @@ function Get-ExoSteamStatePath {
 
 function Save-SteamOptState([hashtable]$State) {
     $path = Get-ExoSteamStatePath
-    $json = $State | ConvertTo-Json -Depth 8
+    $json = $State | ConvertTo-Json -Depth 12
     $temp = "$path.$PID.$([Guid]::NewGuid().ToString('N')).tmp"
     try {
         [IO.File]::WriteAllText($temp, $json, [Text.UTF8Encoding]::new($false))
@@ -233,24 +233,75 @@ function Read-SteamOptState {
     catch { return $null }
 }
 
+function Get-SteamObjectProperty($Object, [string]$Name, $Default = $null) {
+    if (-not $Object) { return $Default }
+    if ($Object -is [hashtable] -and $Object.ContainsKey($Name)) { return $Object[$Name] }
+    if ($Object.PSObject -and ($Object.PSObject.Properties.Name -contains $Name)) { return $Object.$Name }
+    return $Default
+}
+
 function Get-SteamRecoveryFromState($State) {
     if (-not $State) { return $null }
     $source = if ($State.PSObject.Properties.Name -contains 'recovery') { $State.recovery } else { $State }
     if (-not $source) { return $null }
 
-    $hasEntries = $source.PSObject.Properties.Name -contains 'startupEntries'
-    $hasMode = $source.PSObject.Properties.Name -contains 'startupModeCaptured'
-    $hasLegacyMode = $source.PSObject.Properties.Name -contains 'hadStartupMode'
-    if (-not $hasEntries -and -not $hasMode -and -not $hasLegacyMode) { return $null }
+    $names = @($source.PSObject.Properties.Name)
+    $hasEntries = $names -contains 'startupEntries'
+    $hasMode = $names -contains 'startupModeCaptured'
+    $hasLegacyMode = $names -contains 'hadStartupMode'
+    $hasWindowsRecovery = $hasEntries -or $hasMode -or $hasLegacyMode -or
+        ($names -contains 'scheduledTasks') -or
+        ($names -contains 'notifications') -or
+        ($names -contains 'trayEntries') -or
+        ($names -contains 'appPath')
+    if (-not $hasWindowsRecovery) { return $null }
 
     return @{
-        StartupEntries         = @($source.startupEntries | Where-Object { $_ })
+        StartupEntries          = @(Get-SteamObjectProperty $source 'startupEntries' @() | Where-Object { $_ })
         StartupModeCaptured    = if ($hasMode) { [bool]$source.startupModeCaptured } else { $hasLegacyMode }
         HadStartupMode         = if ($hasLegacyMode) { [bool]$source.hadStartupMode } else { $false }
         PreviousStartupMode    = $source.previousStartupMode
-        PreviousStartupModeKind = if ($source.PSObject.Properties.Name -contains 'previousStartupModeKind') {
+        PreviousStartupModeKind = if ($names -contains 'previousStartupModeKind') {
             [string]$source.previousStartupModeKind
         } else { 'DWord' }
+        ScheduledTasks         = @(Get-SteamObjectProperty $source 'scheduledTasks' @() | Where-Object { $_ })
+        Notifications          = @(Get-SteamObjectProperty $source 'notifications' @() | Where-Object { $_ })
+        TrayEntries            = @(Get-SteamObjectProperty $source 'trayEntries' @() | Where-Object { $_ })
+        AppPath                = Get-SteamObjectProperty $source 'appPath' $null
+    }
+}
+
+function Get-SteamRegistryValueSnapshot([string]$Key, [string]$Name) {
+    if (-not (Test-Path $Key)) { return $null }
+    $item = Get-Item -Path $Key -ErrorAction Stop
+    if ($item.GetValueNames() -notcontains $Name) { return $null }
+    return @{
+        Key   = $Key
+        Name  = $Name
+        Value = $item.GetValue($Name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        Kind  = $item.GetValueKind($Name).ToString()
+    }
+}
+
+function Restore-SteamRegistryValue($Entry) {
+    if (-not (Test-Path $Entry.Key)) { New-Item -Path $Entry.Key -Force -ErrorAction Stop | Out-Null }
+    $kind = if ([string]$Entry.Kind -in @('String', 'ExpandString', 'Binary', 'DWord', 'MultiString', 'QWord')) {
+        [string]$Entry.Kind
+    } else { 'String' }
+    $value = switch ($kind) {
+        'Binary' { [byte[]]$Entry.Value; break }
+        'DWord' { [int]$Entry.Value; break }
+        'QWord' { [long]$Entry.Value; break }
+        'MultiString' { [string[]]$Entry.Value; break }
+        default { [string]$Entry.Value }
+    }
+    New-ItemProperty -Path $Entry.Key -Name ([string]$Entry.Name) -Value $value -PropertyType $kind -Force -ErrorAction Stop | Out-Null
+    $item = Get-Item -Path $Entry.Key -ErrorAction Stop
+    if ($item.GetValueNames() -notcontains [string]$Entry.Name) { throw 'registry value is missing after restore' }
+    $actual = $item.GetValue([string]$Entry.Name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    if ($item.GetValueKind([string]$Entry.Name).ToString() -ne $kind -or
+        (($actual | ConvertTo-Json -Compress -Depth 4) -ne ($value | ConvertTo-Json -Compress -Depth 4))) {
+        throw 'registry value verification failed'
     }
 }
 
@@ -315,6 +366,165 @@ function Get-SteamWindowsStartupSnapshot {
     }
 }
 
+function Test-SteamScheduledTaskMatch($Task) {
+    if (-not $Task) { return $false }
+    return (($Task.TaskName -match '(?i)\bSteam\b' -or $Task.TaskPath -match '(?i)\\Steam\\') -and
+        $Task.TaskName -notmatch '(?i)Steam(VR|Link|OS|Deck)' -and
+        $Task.TaskPath -notmatch '(?i)Steam(VR|Link|OS|Deck)')
+}
+
+function Get-SteamScheduledTaskMatches {
+    try {
+        return @(Get-ScheduledTask -ErrorAction Stop | Where-Object { Test-SteamScheduledTaskMatch $_ })
+    } catch {
+        Write-Warn "Scheduled task inventory skipped: $($_.Exception.Message)"
+        return @()
+    }
+}
+
+function Get-SteamNotificationIds {
+    return @(
+        'Steam',
+        'Valve.Steam',
+        'Valve.Steam.Client',
+        'com.valvesoftware.Steam',
+        'steam.exe',
+        'SteamClient'
+    )
+}
+
+function New-SteamNotificationSnapshotEntry([string]$Id) {
+    $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    $path = Join-Path $base $Id
+    $keyExisted = Test-Path $path
+    $enabled = if ($keyExisted) { Get-SteamRegistryValueSnapshot $path 'Enabled' } else { $null }
+    $show = if ($keyExisted) { Get-SteamRegistryValueSnapshot $path 'ShowInActionCenter' } else { $null }
+    return @{
+        Id                         = $Id
+        KeyExisted                 = $keyExisted
+        EnabledExisted             = [bool]$enabled
+        EnabledValue               = if ($enabled) { $enabled.Value } else { $null }
+        EnabledKind                = if ($enabled) { $enabled.Kind } else { 'DWord' }
+        ShowInActionCenterExisted  = [bool]$show
+        ShowInActionCenterValue    = if ($show) { $show.Value } else { $null }
+        ShowInActionCenterKind     = if ($show) { $show.Kind } else { 'DWord' }
+    }
+}
+
+function Get-SteamNotificationSnapshot {
+    $entries = [Collections.Generic.List[hashtable]]::new()
+    $seen = @{}
+    foreach ($id in (Get-SteamNotificationIds)) {
+        $seen[$id.ToLowerInvariant()] = $true
+        $entries.Add((New-SteamNotificationSnapshotEntry $id))
+    }
+
+    $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    if (Test-Path $base) {
+        Get-ChildItem $base -ErrorAction SilentlyContinue |
+            Where-Object { $_.PSChildName -match '(?i)steam' -and $_.PSChildName -notmatch '(?i)steam(vr|link|os|deck)' } |
+            ForEach-Object {
+                $id = [string]$_.PSChildName
+                $key = $id.ToLowerInvariant()
+                if ($seen.ContainsKey($key)) { return }
+                $seen[$key] = $true
+                $entries.Add((New-SteamNotificationSnapshotEntry $id))
+            }
+    }
+    return @($entries)
+}
+
+function Test-SteamTrayExecutablePath([string]$Path, [string]$SteamPath) {
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+    if ($Path -match '(?i)[\\/]steam\.exe$' -or $Path -match '(?i)\\Steam\\') { return $true }
+    try {
+        $prefix = [IO.Path]::GetFullPath($SteamPath).TrimEnd('\') + '\'
+        $full = [IO.Path]::GetFullPath($Path)
+        return $full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
+    } catch {
+        return $false
+    }
+}
+
+function Get-SteamTraySnapshot([string]$SteamPath) {
+    $entries = [Collections.Generic.List[hashtable]]::new()
+    $notifyKey = 'HKCU:\Control Panel\NotifyIconSettings'
+    if (-not (Test-Path $notifyKey)) { return @($entries) }
+    foreach ($key in @(Get-ChildItem $notifyKey -ErrorAction SilentlyContinue)) {
+        try {
+            $item = Get-Item -Path $key.PSPath -ErrorAction Stop
+            $exe = [string]$item.GetValue('ExecutablePath')
+            if (-not (Test-SteamTrayExecutablePath $exe $SteamPath)) { continue }
+            $hasPromoted = $item.GetValueNames() -contains 'IsPromoted'
+            $entries.Add(@{
+                Key               = $key.PSPath
+                Name              = $key.PSChildName
+                ExecutablePath    = $exe
+                IsPromotedExisted = $hasPromoted
+                IsPromotedValue   = if ($hasPromoted) { $item.GetValue('IsPromoted') } else { $null }
+                IsPromotedKind    = if ($hasPromoted) { $item.GetValueKind('IsPromoted').ToString() } else { 'DWord' }
+            })
+        } catch { }
+    }
+    return @($entries)
+}
+
+function Get-SteamAppPathSnapshot {
+    $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\steam.exe'
+    $keyExisted = Test-Path $key
+    $default = if ($keyExisted) { Get-SteamRegistryValueSnapshot $key '(default)' } else { $null }
+    $pathValue = if ($keyExisted) { Get-SteamRegistryValueSnapshot $key 'Path' } else { $null }
+    return @{
+        Key            = $key
+        KeyExisted     = $keyExisted
+        DefaultExisted = [bool]$default
+        DefaultValue   = if ($default) { $default.Value } else { $null }
+        DefaultKind    = if ($default) { $default.Kind } else { 'String' }
+        PathExisted    = [bool]$pathValue
+        PathValue      = if ($pathValue) { $pathValue.Value } else { $null }
+        PathKind       = if ($pathValue) { $pathValue.Kind } else { 'String' }
+    }
+}
+
+function Get-SteamWindowsRecoverySnapshot([string]$SteamPath) {
+    $startup = Get-SteamWindowsStartupSnapshot
+    $scheduledTasks = [Collections.Generic.List[hashtable]]::new()
+    foreach ($task in @(Get-SteamScheduledTaskMatches)) {
+        $scheduledTasks.Add(@{
+            TaskName = [string]$task.TaskName
+            TaskPath = [string]$task.TaskPath
+            Enabled  = [bool]$task.Settings.Enabled
+        })
+    }
+
+    return @{
+        StartupEntries          = @($startup.StartupEntries)
+        StartupModeCaptured     = [bool]$startup.StartupModeCaptured
+        HadStartupMode          = [bool]$startup.HadStartupMode
+        PreviousStartupMode     = $startup.PreviousStartupMode
+        PreviousStartupModeKind = [string]$startup.PreviousStartupModeKind
+        ScheduledTasks          = @($scheduledTasks)
+        Notifications           = @(Get-SteamNotificationSnapshot)
+        TrayEntries             = @(Get-SteamTraySnapshot $SteamPath)
+        AppPath                 = Get-SteamAppPathSnapshot
+    }
+}
+
+function Merge-SteamRecoveryItems($Prior, $Current, [string[]]$IdentityFields) {
+    $result = [Collections.Generic.List[object]]::new()
+    $seen = @{}
+    foreach ($set in @($Prior, $Current)) {
+        foreach ($item in @($set | Where-Object { $_ })) {
+            $parts = foreach ($field in $IdentityFields) { [string](Get-SteamObjectProperty $item $field '') }
+            $id = ($parts -join "`0").ToLowerInvariant()
+            if ($seen.ContainsKey($id)) { continue }
+            $seen[$id] = $true
+            $result.Add($item)
+        }
+    }
+    return @($result)
+}
+
 function Merge-SteamStartupRecovery($Prior, [hashtable]$Current) {
     $merged = [Collections.Generic.List[hashtable]]::new()
     $seen = @{}
@@ -340,6 +550,10 @@ function Merge-SteamStartupRecovery($Prior, [hashtable]$Current) {
         HadStartupMode          = if ($usePriorMode) { [bool]$Prior.HadStartupMode } else { [bool]$Current.HadStartupMode }
         PreviousStartupMode     = if ($usePriorMode) { $Prior.PreviousStartupMode } else { $Current.PreviousStartupMode }
         PreviousStartupModeKind = if ($usePriorMode) { [string]$Prior.PreviousStartupModeKind } else { [string]$Current.PreviousStartupModeKind }
+        ScheduledTasks          = @(Merge-SteamRecoveryItems (Get-SteamObjectProperty $Prior 'ScheduledTasks' @()) (Get-SteamObjectProperty $Current 'ScheduledTasks' @()) @('TaskPath', 'TaskName'))
+        Notifications           = @(Merge-SteamRecoveryItems (Get-SteamObjectProperty $Prior 'Notifications' @()) (Get-SteamObjectProperty $Current 'Notifications' @()) @('Id'))
+        TrayEntries             = @(Merge-SteamRecoveryItems (Get-SteamObjectProperty $Prior 'TrayEntries' @()) (Get-SteamObjectProperty $Current 'TrayEntries' @()) @('Key'))
+        AppPath                 = if (Get-SteamObjectProperty $Prior 'AppPath' $null) { Get-SteamObjectProperty $Prior 'AppPath' $null } else { Get-SteamObjectProperty $Current 'AppPath' $null }
     }
 }
 
@@ -403,12 +617,7 @@ function Test-SteamWindowsStartupDisabled {
 
 function Disable-SteamScheduledTasks {
     try {
-        $tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue |
-            Where-Object {
-                ($_.TaskName -match '(?i)\bSteam\b' -or $_.TaskPath -match '(?i)\\Steam\\') -and
-                $_.TaskName -notmatch '(?i)Steam(VR|Link|OS|Deck)' -and
-                $_.TaskPath -notmatch '(?i)Steam(VR|Link|OS|Deck)'
-            })
+        $tasks = @(Get-SteamScheduledTaskMatches)
         foreach ($task in $tasks) {
             if (-not [bool]$task.Settings.Enabled) { continue }
             Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue | Out-Null
@@ -433,14 +642,7 @@ function Set-SteamWindowsNotificationsOff {
         Set-ItemProperty -Path $path -Name 'ShowInActionCenter' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
     }
 
-    foreach ($id in @(
-        'Steam',
-        'Valve.Steam',
-        'Valve.Steam.Client',
-        'com.valvesoftware.Steam',
-        'steam.exe',
-        'SteamClient'
-    )) {
+    foreach ($id in (Get-SteamNotificationIds)) {
         & $setOff $id
     }
 
@@ -460,25 +662,12 @@ function Set-SteamTrayIconHidden([string]$SteamPath) {
     $notifyKey = 'HKCU:\Control Panel\NotifyIconSettings'
     if (-not (Test-Path $notifyKey)) { return }
 
-    $steamExe = Join-Path $SteamPath 'steam.exe'
-    $prefix = $null
-    try { $prefix = [IO.Path]::GetFullPath($SteamPath).TrimEnd('\') + '\' } catch { }
-
     $hidden = 0
     Get-ChildItem $notifyKey -ErrorAction SilentlyContinue | ForEach-Object {
         $item = Get-Item -Path $_.PSPath -ErrorAction SilentlyContinue
         if (-not $item) { return }
         $path = [string]$item.GetValue('ExecutablePath')
-        if (-not $path) { return }
-        $isSteam = $false
-        if ($path -match '(?i)[\\/]steam\.exe$' -or $path -match '(?i)\\Steam\\') { $isSteam = $true }
-        if (-not $isSteam -and $prefix) {
-            try {
-                $full = [IO.Path]::GetFullPath($path)
-                if ($full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { $isSteam = $true }
-            } catch { }
-        }
-        if (-not $isSteam) { return }
+        if (-not (Test-SteamTrayExecutablePath $path $SteamPath)) { return }
         Set-ItemProperty -Path $_.PSPath -Name 'IsPromoted' -Value 0 -Type DWord -Force
         $hidden++
     }
@@ -515,21 +704,11 @@ function Test-SteamToastsOff {
 function Test-SteamTrayQuiet([string]$SteamPath) {
     $notifyKey = 'HKCU:\Control Panel\NotifyIconSettings'
     if (-not (Test-Path $notifyKey)) { return $true }
-    $prefix = $null
-    try { $prefix = [IO.Path]::GetFullPath($SteamPath).TrimEnd('\') + '\' } catch { }
     foreach ($key in @(Get-ChildItem -Path $notifyKey -ErrorAction SilentlyContinue)) {
         $item = Get-Item -Path $key.PSPath -ErrorAction SilentlyContinue
         if (-not $item) { continue }
         $exe = [string]$item.GetValue('ExecutablePath')
-        if (-not $exe) { continue }
-        $isSteam = ($exe -match '(?i)[\\/]steam\.exe$' -or $exe -match '(?i)\\Steam\\')
-        if (-not $isSteam -and $prefix) {
-            try {
-                $full = [IO.Path]::GetFullPath($exe)
-                if ($full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { $isSteam = $true }
-            } catch { }
-        }
-        if (-not $isSteam) { continue }
+        if (-not (Test-SteamTrayExecutablePath $exe $SteamPath)) { continue }
         if ($item.GetValueNames() -notcontains 'IsPromoted' -or [int]$item.GetValue('IsPromoted') -ne 0) {
             return $false
         }
@@ -539,9 +718,7 @@ function Test-SteamTrayQuiet([string]$SteamPath) {
 
 function Test-SteamScheduledTasksQuiet {
     try {
-        foreach ($task in @(Get-ScheduledTask -ErrorAction SilentlyContinue)) {
-            if ($task.TaskName -notmatch '(?i)\bSteam\b' -and $task.TaskPath -notmatch '(?i)\\Steam\\') { continue }
-            if ($task.TaskName -match '(?i)Steam(VR|Link|OS|Deck)' -or $task.TaskPath -match '(?i)Steam(VR|Link|OS|Deck)') { continue }
+        foreach ($task in @(Get-SteamScheduledTaskMatches)) {
             if ([bool]$task.Settings.Enabled) { return $false }
         }
         return $true
@@ -1012,12 +1189,14 @@ function Test-SteamVdfExpectations([string]$Raw, [object[]]$Expectations) {
 
 function Set-SteamLocalConfigTweaks {
     $steamPath = Get-SteamInstallPath
-    if (-not $steamPath) { return @{ Gpu = $false; Patched = $false; Path = $null; Snappy = $false } }
+    if (-not $steamPath) {
+        return @{ Gpu = $false; Patched = $false; Path = $null; Snappy = $false; Verified = $false; Skipped = $false; Present = $false; Reason = 'Steam path was not found' }
+    }
 
     $userdata = Join-Path $steamPath 'userdata'
     if (-not (Test-Path $userdata)) {
         Write-Warn 'No userdata yet - open Steam once, then Reapply for deeper client tweaks'
-        return @{ Gpu = $false; Patched = $false; Path = $null; Snappy = $false }
+        return @{ Gpu = $false; Patched = $false; Path = $null; Snappy = $false; Verified = $true; Skipped = $true; Present = $false; Reason = 'userdata not present yet' }
     }
 
     $files = @(Get-ChildItem -LiteralPath $userdata -Directory -ErrorAction SilentlyContinue |
@@ -1028,7 +1207,7 @@ function Set-SteamLocalConfigTweaks {
 
     if ($files.Count -eq 0) {
         Write-Warn 'No localconfig.vdf yet - open Steam once, then Reapply'
-        return @{ Gpu = $false; Patched = $false; Path = $null; Snappy = $false }
+        return @{ Gpu = $false; Patched = $false; Path = $null; Snappy = $false; Verified = $true; Skipped = $true; Present = $false; Reason = 'localconfig.vdf not present yet' }
     }
 
     # Patch all accounts on this PC (universal multi-user machine)
@@ -1153,9 +1332,12 @@ function Set-SteamLocalConfigTweaks {
         Patched = $anyPatched
         Path    = $lastPath
         Snappy  = $anySnappy
-        # Soft-pass when keys are absent (Observed=0). Fail only on present-but-wrong values.
-        Verified = ($files.Count -gt 0 -and $verificationOk)
+        # Missing first-run files soft-pass above. Existing files must verify.
+        Verified = $verificationOk
         Observed = $verificationObserved
+        Skipped  = $false
+        Present  = $true
+        Reason   = ''
     }
 }
 
@@ -1208,26 +1390,45 @@ function Set-SteamFastLoginHints([string]$SteamPath) {
     }
 }
 
+function Merge-SteamCfgKey([string]$Raw, [string]$Key, [string]$Value) {
+    $lines = [Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrEmpty($Raw)) {
+        foreach ($line in ($Raw -split "\r?\n")) { [void]$lines.Add($line) }
+        while ($lines.Count -gt 0 -and [string]::IsNullOrWhiteSpace($lines[$lines.Count - 1])) {
+            $lines.RemoveAt($lines.Count - 1)
+        }
+    }
+
+    $found = $false
+    $pattern = '^\s*' + [regex]::Escape($Key) + '\s*='
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match $pattern) {
+            $lines[$i] = "$Key=$Value"
+            $found = $true
+        }
+    }
+    if (-not $found) { [void]$lines.Add("$Key=$Value") }
+    return ($lines -join "`r`n")
+}
+
 function Set-SteamBootstrapFastStart([string]$SteamPath) {
     # steam.cfg next to steam.exe stops the bootstrapper "Checking for updates" pause
     # on every launch. Client can still update via Steam > Check for Steam Client Updates.
     $cfg = Join-Path $SteamPath 'steam.cfg'
-    $body = @(
-        'BootStrapperInhibitAll=enable'
-        'BootStrapperForceSelfUpdate=disable'
-    ) -join "`r`n"
     try {
         $existing = if (Test-Path -LiteralPath $cfg) {
             [IO.File]::ReadAllText($cfg)
         } else { '' }
-        if ($existing -match '(?i)BootStrapperInhibitAll\s*=\s*enable') {
+        $merged = Merge-SteamCfgKey $existing 'BootStrapperInhibitAll' 'enable'
+        $merged = Merge-SteamCfgKey $merged 'BootStrapperForceSelfUpdate' 'disable'
+        if (($merged.TrimEnd() + "`r`n") -eq ($existing.TrimEnd() + "`r`n")) {
             Write-Ok 'steam.cfg: bootstrap update check already inhibited'
             return $true
         }
         if ((Test-Path -LiteralPath $cfg) -and -not (Test-Path -LiteralPath ($cfg + '.exo-bak'))) {
             Copy-Item -LiteralPath $cfg -Destination ($cfg + '.exo-bak') -Force
         }
-        [IO.File]::WriteAllText($cfg, $body + "`r`n", [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($cfg, $merged.TrimEnd() + "`r`n", [Text.UTF8Encoding]::new($false))
         Write-Ok 'steam.cfg: skip bootstrap update check on launch (manual client update still available)'
         return $true
     } catch {
@@ -1239,8 +1440,8 @@ function Set-SteamBootstrapFastStart([string]$SteamPath) {
 function Set-SteamLibraryConfigHints([string]$SteamPath) {
     $config = Join-Path $SteamPath 'config\config.vdf'
     if (-not (Test-Path -LiteralPath $config)) {
-        Write-Warn 'config.vdf not found'
-        return $false
+        Write-Warn 'config.vdf not found - open Steam once, then Reapply for download config tweaks'
+        return @{ Verified = $true; Skipped = $true; Present = $false; Touched = $false; Reason = 'config.vdf not present yet' }
     }
     try {
         attrib -R $config 2>$null
@@ -1277,7 +1478,7 @@ function Set-SteamLibraryConfigHints([string]$SteamPath) {
         )
         if (-not $verification.Valid) {
             Write-Warn 'config.vdf verification found a conflicting download value'
-            return $false
+            return @{ Verified = $false; Skipped = $false; Present = $true; Touched = $false; Reason = 'config.vdf verification found a conflicting download value' }
         }
 
         if ($raw -ne $orig) {
@@ -1285,13 +1486,13 @@ function Set-SteamLibraryConfigHints([string]$SteamPath) {
             if (-not (Test-Path $bak)) { Copy-Item $config $bak -Force }
             [IO.File]::WriteAllText($config, $raw, [Text.UTF8Encoding]::new($false))
             Write-Ok 'config.vdf: download throttle off / snappier download settings'
-            return $true
+            return @{ Verified = $true; Skipped = $false; Present = $true; Touched = $true; Reason = '' }
         }
         Write-Ok 'config.vdf: no download keys to patch (Steam UI rate limit still available in Settings)'
-        return $true
+        return @{ Verified = $true; Skipped = $false; Present = $true; Touched = $false; Reason = '' }
     } catch {
         Write-Warn "config.vdf: $($_.Exception.Message)"
-        return $false
+        return @{ Verified = $false; Skipped = $false; Present = $true; Touched = $false; Reason = $_.Exception.Message }
     }
 }
 
@@ -1342,7 +1543,6 @@ function Get-SteamShortcutSearchRoots {
         [Environment]::GetFolderPath('Desktop'),
         [Environment]::GetFolderPath('CommonDesktopDirectory'),
         (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch'),
-        (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar'),
         (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\StartMenu'),
         (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu'),
         (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu')
@@ -1353,6 +1553,11 @@ function Get-SteamShortcutSearchRoots {
         }
     }
     return @($roots)
+}
+
+function Test-SteamTaskbarPinnedShortcut([string]$LnkPath) {
+    if ([string]::IsNullOrWhiteSpace($LnkPath)) { return $false }
+    return (($LnkPath -replace '/', '\') -match '(?i)\\User Pinned\\TaskBar\\')
 }
 
 function Test-LnkIsSteamClient([string]$LnkPath, [string]$SteamExe, $Wsh) {
@@ -1384,6 +1589,18 @@ function Test-LnkIsSteamClient([string]$LnkPath, [string]$SteamExe, $Wsh) {
     }
 }
 
+function Set-SteamShortcutStockTarget([string]$LnkPath, [string]$SteamPath, [string]$SteamExe, $Wsh) {
+    $sc = $Wsh.CreateShortcut($LnkPath)
+    $existingArguments = [string]$sc.Arguments
+    $sc.TargetPath = $SteamExe
+    $sc.Arguments = $existingArguments
+    $sc.WorkingDirectory = $SteamPath
+    $sc.IconLocation = "$SteamExe,0"
+    $sc.WindowStyle = 1
+    $sc.Description = 'Steam'
+    $sc.Save()
+}
+
 function Set-SteamShortcutTarget([string]$LnkPath, [string]$TargetCmd, [string]$SteamPath, [string]$SteamExe, [string]$Description, $Wsh) {
     $sc = $Wsh.CreateShortcut($LnkPath)
     $existingArguments = [string]$sc.Arguments
@@ -1399,8 +1616,9 @@ function Set-SteamShortcutTarget([string]$LnkPath, [string]$TargetCmd, [string]$
 }
 
 function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
-    # Single default launcher (full CEF quiet flags). Patch Start Menu / taskbar only.
-    # Never create Desktop shortcuts.
+    # Single default launcher (full CEF quiet flags). Patch Start Menu only.
+    # Taskbar pins stay pointed at steam.exe because Windows pinning can reject
+    # command targets. Never create Desktop shortcuts.
     $exe = Join-Path $SteamPath 'steam.exe'
     $cmdPath = Join-Path $SteamPath 'Steam-Exo.cmd'
     Write-SteamLaunchCmd $cmdPath $SteamPath $HelperPath $Script:DefaultCefArgs 'default CEF'
@@ -1425,6 +1643,21 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
             $key = $lnk.FullName.ToLowerInvariant()
             if ($seen.ContainsKey($key)) { continue }
             if (-not (Test-LnkIsSteamClient $lnk.FullName $exe $wsh)) { continue }
+            if (Test-SteamTaskbarPinnedShortcut $lnk.FullName) {
+                try {
+                    $sc = $wsh.CreateShortcut($lnk.FullName)
+                    if ([string]$sc.TargetPath -match '(?i)Steam-Exo|Exo') {
+                        Set-SteamShortcutStockTarget $lnk.FullName $SteamPath $exe $wsh
+                        Write-Ok ("Taskbar pin kept on steam.exe: {0}" -f $lnk.Name)
+                    } else {
+                        Write-Ok ("Skipped taskbar pin (kept steam.exe): {0}" -f $lnk.Name)
+                    }
+                } catch {
+                    Write-Warn "Taskbar pin skip $($lnk.Name): $($_.Exception.Message)"
+                }
+                $seen[$key] = $true
+                continue
+            }
             # Never create/keep Exo-branded desktop entries - remove if found
             $onDesktop = $lnk.FullName -match '(?i)[\\/]Desktop[\\/]'
             if ($onDesktop -and $lnk.Name -match '(?i)Exo') {
@@ -1503,7 +1736,7 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
         Set-ItemProperty -Path $appPaths -Name 'Path' -Value $SteamPath -Force
     } catch { }
 
-    Write-Ok "Updated $patched Steam shortcut(s) (Start Menu / taskbar; no desktop icons created)"
+    Write-Ok "Updated $patched Steam shortcut(s) (Start Menu; taskbar pins kept on steam.exe; no desktop icons created)"
     return @{
         Cmd       = $cmdPath
         Args      = ($Script:DefaultCefArgs -join ' ')
@@ -1741,6 +1974,141 @@ try {
 }
 
 
+function Remove-SteamCfgExoKeys([string]$SteamCfg) {
+    if (-not (Test-Path -LiteralPath $SteamCfg)) { return $false }
+    $txt = [IO.File]::ReadAllText($SteamCfg)
+    $lines = [Collections.Generic.List[string]]::new()
+    $removed = $false
+    foreach ($line in ($txt -split "\r?\n")) {
+        if ($line -match '^\s*BootStrapper(InhibitAll|ForceSelfUpdate)\s*=') {
+            $removed = $true
+            continue
+        }
+        [void]$lines.Add($line)
+    }
+    if (-not $removed) { return $false }
+    while ($lines.Count -gt 0 -and [string]::IsNullOrWhiteSpace($lines[$lines.Count - 1])) {
+        $lines.RemoveAt($lines.Count - 1)
+    }
+    if ($lines.Count -eq 0) {
+        Remove-Item -LiteralPath $SteamCfg -Force -ErrorAction Stop
+    } else {
+        [IO.File]::WriteAllText($SteamCfg, (($lines -join "`r`n").TrimEnd() + "`r`n"), [Text.UTF8Encoding]::new($false))
+    }
+    return $true
+}
+
+function Restore-SteamOptionalRegistryValue([string]$Key, [string]$Name, [bool]$Existed, $Value, [string]$Kind) {
+    if ($Existed) {
+        Restore-SteamRegistryValue @{
+            Key = $Key; Name = $Name; Value = $Value; Kind = $Kind
+        }
+    } elseif (Test-Path $Key) {
+        Remove-ItemProperty -Path $Key -Name $Name -Force -ErrorAction SilentlyContinue
+        if ((Get-Item -Path $Key -ErrorAction Stop).GetValueNames() -contains $Name) {
+            throw "$Name value is still present"
+        }
+    }
+}
+
+function Restore-SteamWindowsIntegration([string]$SteamPath, $Recovery, [ref]$Failures) {
+    Write-Step 'Repair: restoring captured Steam Windows integration...'
+    if (-not $Recovery) {
+        Write-Warn 'No Steam Windows recovery snapshot exists (older optimizer state); re-enabling matching scheduled tasks only'
+        foreach ($task in @(Get-SteamScheduledTaskMatches)) {
+            try {
+                Enable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction Stop | Out-Null
+                Write-Ok "Re-enabled Steam task: $($task.TaskPath)$($task.TaskName)"
+            } catch {
+                $Failures.Value.Add("Task $($task.TaskPath)$($task.TaskName): $($_.Exception.Message)")
+            }
+        }
+        return
+    }
+
+    $taskEntries = @(Get-SteamObjectProperty $Recovery 'ScheduledTasks' @())
+    if ($taskEntries.Count -gt 0) {
+        foreach ($entry in $taskEntries) {
+            try {
+                $task = Get-ScheduledTask -TaskName ([string]$entry.TaskName) -TaskPath ([string]$entry.TaskPath) -ErrorAction SilentlyContinue
+                if (-not $task) {
+                    Write-Warn "Captured Steam task no longer exists: $($entry.TaskPath)$($entry.TaskName)"
+                    continue
+                }
+                if ([bool]$entry.Enabled) {
+                    Enable-ScheduledTask -TaskName $entry.TaskName -TaskPath $entry.TaskPath -ErrorAction Stop | Out-Null
+                } else {
+                    Disable-ScheduledTask -TaskName $entry.TaskName -TaskPath $entry.TaskPath -ErrorAction Stop | Out-Null
+                }
+                $verified = Get-ScheduledTask -TaskName $entry.TaskName -TaskPath $entry.TaskPath -ErrorAction Stop
+                if ([bool]$verified.Settings.Enabled -ne [bool]$entry.Enabled) { throw 'task enabled state verification failed' }
+                Write-Ok "Restored task state: $($entry.TaskPath)$($entry.TaskName)"
+            } catch {
+                $Failures.Value.Add("Task $($entry.TaskPath)$($entry.TaskName): $($_.Exception.Message)")
+            }
+        }
+    } else {
+        foreach ($task in @(Get-SteamScheduledTaskMatches)) {
+            try {
+                Enable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction Stop | Out-Null
+                Write-Ok "Re-enabled Steam task: $($task.TaskPath)$($task.TaskName)"
+            } catch {
+                $Failures.Value.Add("Task $($task.TaskPath)$($task.TaskName): $($_.Exception.Message)")
+            }
+        }
+    }
+
+    $notificationRoot = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    foreach ($entry in @(Get-SteamObjectProperty $Recovery 'Notifications' @())) {
+        $path = Join-Path $notificationRoot ([string]$entry.Id)
+        try {
+            Restore-SteamOptionalRegistryValue $path 'Enabled' `
+                ([bool]$entry.EnabledExisted) $entry.EnabledValue ([string]$entry.EnabledKind)
+            Restore-SteamOptionalRegistryValue $path 'ShowInActionCenter' `
+                ([bool]$entry.ShowInActionCenterExisted) $entry.ShowInActionCenterValue ([string]$entry.ShowInActionCenterKind)
+            Write-Ok "Restored notification state: $($entry.Id)"
+        } catch {
+            $Failures.Value.Add("Notification $($entry.Id): $($_.Exception.Message)")
+        }
+    }
+
+    foreach ($entry in @(Get-SteamObjectProperty $Recovery 'TrayEntries' @())) {
+        try {
+            if (-not (Test-Path $entry.Key)) {
+                Write-Warn "Captured tray entry no longer exists: $($entry.ExecutablePath)"
+                continue
+            }
+            Restore-SteamOptionalRegistryValue ([string]$entry.Key) 'IsPromoted' `
+                ([bool]$entry.IsPromotedExisted) $entry.IsPromotedValue ([string]$entry.IsPromotedKind)
+            Write-Ok "Restored tray state: $($entry.ExecutablePath)"
+        } catch {
+            $Failures.Value.Add("Tray $($entry.ExecutablePath): $($_.Exception.Message)")
+        }
+    }
+
+    $appPath = Get-SteamObjectProperty $Recovery 'AppPath' $null
+    if ($appPath) {
+        $key = [string]$appPath.Key
+        try {
+            if ([bool]$appPath.KeyExisted) {
+                Restore-SteamOptionalRegistryValue $key '(default)' `
+                    ([bool]$appPath.DefaultExisted) $appPath.DefaultValue ([string]$appPath.DefaultKind)
+                Restore-SteamOptionalRegistryValue $key 'Path' `
+                    ([bool]$appPath.PathExisted) $appPath.PathValue ([string]$appPath.PathKind)
+                Write-Ok 'Restored Steam App Paths entry'
+            } elseif (Test-Path $key) {
+                Remove-Item -Path $key -Recurse -Force -ErrorAction Stop
+                if (Test-Path $key) { throw 'App Paths key is still present' }
+                Write-Ok 'Removed Exo-created Steam App Paths entry'
+            }
+        } catch {
+            $Failures.Value.Add("App Paths steam.exe: $($_.Exception.Message)")
+        }
+    } else {
+        Write-Warn 'No Steam App Paths recovery snapshot exists; App Paths entry left untouched'
+    }
+}
+
 function Invoke-SteamRepair([string]$SteamPath) {
     Write-Step 'Repair: restoring backups and stock Steam shortcuts...'
     $restored = 0
@@ -1778,11 +2146,9 @@ function Invoke-SteamRepair([string]$SteamPath) {
         Write-Ok 'Restored steam.cfg'
     } elseif (Test-Path -LiteralPath $steamCfg) {
         try {
-            $txt = [IO.File]::ReadAllText($steamCfg)
-            if ($txt -match '(?i)BootStrapperInhibitAll') {
-                Remove-Item -LiteralPath $steamCfg -Force -ErrorAction Stop
+            if (Remove-SteamCfgExoKeys $steamCfg) {
                 $restored++
-                Write-Ok 'Removed Exo steam.cfg bootstrap inhibit'
+                Write-Ok 'Removed Exo bootstrap keys from steam.cfg'
             }
         } catch { }
     }
@@ -1866,6 +2232,8 @@ function Invoke-SteamRepair([string]$SteamPath) {
             } catch { $failures.Add("Remove $agg`: $($_.Exception.Message)") }
         }
     }
+
+    Restore-SteamWindowsIntegration $SteamPath $recovery ([ref]$failures)
 
     if ($recovery) {
         foreach ($entry in @($recovery.StartupEntries)) {
@@ -1983,8 +2351,8 @@ try {
     # the original pre-Exo value for every key already captured.
     $priorState = Read-SteamOptState
     $priorRecovery = Get-SteamRecoveryFromState $priorState
-    $currentStartup = Get-SteamWindowsStartupSnapshot
-    $recovery = Merge-SteamStartupRecovery $priorRecovery $currentStartup
+    $currentRecovery = Get-SteamWindowsRecoverySnapshot $steam
+    $recovery = Merge-SteamStartupRecovery $priorRecovery $currentRecovery
     Save-SteamOptState @{
         version         = $Script:SteamOptVersion
         applyStatus     = 'applying'
@@ -1999,7 +2367,7 @@ try {
     Add-ExoReport 'client-debloat' 'ok'
 
     Write-HubProgress 30 'Disabling Windows startup...'
-    $startupResult = Disable-SteamWindowsStartup $currentStartup
+    $startupResult = Disable-SteamWindowsStartup $currentRecovery
     if (-not $startupResult.Success -or -not (Test-SteamWindowsStartupDisabled)) {
         Add-ExoReport 'startup-quiet' 'fail' 'startup suppression could not be verified'
         throw 'Steam startup suppression could not be fully verified; recovery state was kept'
@@ -2054,12 +2422,18 @@ try {
     else { Add-ExoReport 'fast-login' 'skip' 'loginusers.vdf not writable yet' }
 
     Write-HubProgress 78 'Download speed / config.vdf...'
-    $cfgOk = Set-SteamLibraryConfigHints $steam
-    if ($cfgOk) { Add-ExoReport 'download-config' 'ok' }
-    else { Add-ExoReport 'download-config' 'fail' 'config.vdf could not be verified' }
+    $cfg = Set-SteamLibraryConfigHints $steam
+    $cfgOk = [bool]$cfg.Verified
+    $cfgSkipped = [bool]$cfg.Skipped
+    if ($cfgOk -and $cfgSkipped) { Add-ExoReport 'download-config' 'skip' ([string]$cfg.Reason) }
+    elseif ($cfgOk) { Add-ExoReport 'download-config' 'ok' }
+    else { Add-ExoReport 'download-config' 'fail' ([string]$cfg.Reason) }
     Write-HubProgress 88 'Overlay / library / localconfig...'
     $local = Set-SteamLocalConfigTweaks
-    if ([bool]$local.Verified) { Add-ExoReport 'localconfig-tweaks' 'ok' }
+    $clientTweaksOk = [bool]$local.Verified
+    $clientTweaksSkipped = [bool]$local.Skipped
+    if ($clientTweaksOk -and $clientTweaksSkipped) { Add-ExoReport 'localconfig-tweaks' 'skip' ([string]$local.Reason) }
+    elseif ($clientTweaksOk) { Add-ExoReport 'localconfig-tweaks' 'ok' }
     else { Add-ExoReport 'localconfig-tweaks' 'fail' 'localconfig.vdf verification failed' }
 
     Write-HubProgress 94 'Saving status...'
@@ -2084,7 +2458,6 @@ try {
             $helperText -match 'ProcessPriorityClass\]::High' -and
             $helperText -match 'ProcessPriorityClass\]::BelowNormal'
     } catch { }
-    $clientTweaksOk = [bool]$local.Verified
     $fullPassOk = -not [bool]$Quick
     $essentialOk = $startupOk -and $windowsQuietOk -and $debloatOk -and $runtimeOk -and
         $launchPathOk -and $launcherOk -and $helperOk -and [bool]$cfgOk -and
@@ -2111,12 +2484,14 @@ try {
         cacheCleanupCompleted = $fullPassOk
         shaderCacheFreedBytes = $shaderFreed
         shaderInventoryVerified = $shaderInventoryVerified
-        configTouched        = [bool]$cfgOk
+        configTouched        = [bool]$cfg.Touched
         configVerified       = [bool]$cfgOk
+        configSkipped        = $cfgSkipped
         clientTweaksVerified = $clientTweaksOk
-        webGpuReduced        = $clientTweaksOk
-        snappyUi             = $clientTweaksOk
-        overlayTweaks        = $clientTweaksOk
+        clientTweaksSkipped  = $clientTweaksSkipped
+        webGpuReduced        = ($clientTweaksOk -and -not $clientTweaksSkipped)
+        snappyUi             = ($clientTweaksOk -and -not $clientTweaksSkipped)
+        overlayTweaks        = ($clientTweaksOk -and -not $clientTweaksSkipped)
         cefLeanLaunch        = $launcherOk
         cefArgs              = ($Script:DefaultCefArgs -join ' ')
         leanCmd              = $launch.Cmd
@@ -2124,7 +2499,7 @@ try {
         aggressiveTrim       = $helperOk
         inGamePriorityYield  = $helperOk
         highPriority         = $helperOk
-        downloadOptimized    = [bool]$cfgOk
+        downloadOptimized    = ([bool]$cfgOk -and -not $cfgSkipped)
         installedShaderCachesPreserved = $shaderInventoryVerified
         noDesktopShortcuts   = $debloatOk
         fullApply            = $fullPassOk
@@ -2155,7 +2530,7 @@ try {
     }
 
     Write-Ok 'Steam Optimizer finished (CEF quiet, full debloat, Windows quiet, 3s trim, priority yield)'
-    Write-Ok 'Start Steam from Start Menu / taskbar (no desktop shortcuts created).'
+    Write-Ok 'Start Steam from Start Menu for Exo launcher; taskbar pins stay stock steam.exe.'
     Write-HubProgress 100 'Completed successfully'
     Write-Output 'DONE - Steam optimized (debloat + Windows quiet + CEF + aggressive trim)'
     exit 0

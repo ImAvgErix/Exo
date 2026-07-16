@@ -202,10 +202,12 @@ public partial class InternetOptimizerViewModel : ObservableObject
             _lastSnap = snap;
             HeaderStatus = BuildStatus(snap);
 
+            // Fail-closed defaults: never disable Wi-Fi, never restart NICs.
+            // Ethernet-first is metrics-only (see NetworkApplyScriptBuilder).
             var options = new NetworkApplyOptions
             {
-                PreferEthernetDisableWifi = true,
-                RestartEthernet = snap.Media.EthernetUp || snap.Media.EthernetAvailable
+                PreferEthernetDisableWifi = false,
+                RestartEthernet = false
             };
 
             ProgressStatus = snap.Media.EthernetInUse

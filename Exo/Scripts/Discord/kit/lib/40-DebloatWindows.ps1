@@ -460,16 +460,38 @@ function Install-DiscordModuleFromManifest([string]$AppDir, [string]$ModuleName)
     }
 }
 
+function Add-DiscordModuleSkipReport([string]$Step, [string]$Reason) {
+    if (Get-Command Add-ExoReport -ErrorAction SilentlyContinue) {
+        Add-ExoReport $Step 'skip' $Reason
+    }
+}
+
 function Ensure-RuntimeModules([string]$AppDir) {
+    $skipped = [Collections.Generic.List[string]]::new()
     foreach ($name in $RuntimeModules) {
         $folder = Join-Path $AppDir "modules\$name-1"
         if (Test-Path $folder) {
             Write-Ok "$name module present"
             continue
         }
-        Write-Step "Installing $name module (required by Discord core)..."
-        Install-DiscordModuleFromManifest $AppDir $name | Out-Null
-        Write-Ok "$name module installed"
+        Write-Step "Installing $name module (optional runtime module)..."
+        try {
+            Install-DiscordModuleFromManifest $AppDir $name | Out-Null
+            if (-not (Test-Path $folder)) { throw "$name module missing after CDN install" }
+            Write-Ok "$name module installed"
+        } catch {
+            $folderName = "$name-1"
+            $isBootCritical = (@($RequiredModules) -contains $folderName) -or (@($RequiredModules) -contains $name)
+            if ($isBootCritical) { throw }
+
+            $msg = "$name module skipped: $($_.Exception.Message)"
+            Write-Warn $msg
+            $skipped.Add($msg)
+            continue
+        }
+    }
+    if ($skipped.Count -gt 0) {
+        Add-DiscordModuleSkipReport 'runtime-modules' (($skipped | ForEach-Object { [string]$_ }) -join '; ')
     }
 }
 
@@ -481,9 +503,15 @@ function Ensure-KrispModule([string]$AppDir) {
     }
 
     Write-Step 'Installing Krisp module (noise suppression dropdown)...'
-    Install-DiscordModuleFromManifest $AppDir 'discord_krisp' | Out-Null
-    if (-not (Test-Path $krisp)) { throw 'Krisp module missing after CDN install' }
-    Write-Ok 'Krisp module installed'
+    try {
+        Install-DiscordModuleFromManifest $AppDir 'discord_krisp' | Out-Null
+        if (-not (Test-Path $krisp)) { throw 'Krisp module missing after CDN install' }
+        Write-Ok 'Krisp module installed'
+    } catch {
+        $msg = "Krisp module skipped: $($_.Exception.Message)"
+        Write-Warn $msg
+        Add-DiscordModuleSkipReport 'krisp' $msg
+    }
 }
 
 function Test-DebloatNeeded([string]$AppDir) {

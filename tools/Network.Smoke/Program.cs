@@ -89,8 +89,10 @@ var ethUsable = NetworkLogic.DecidePath(
     ethAvailable: true, ethUp: true, ethInUse: true,
     wifiAvailable: true, wifiUp: true,
     supports6Ghz: true, supports5Ghz: true, wifi6: true, wifi7: false);
-Expect("eth usable disables wifi path", ethUsable.DisableWifiWhenPreferEth);
-Expect("eth usable policy mentions disable", ethUsable.PolicyLine.Contains("disable", StringComparison.OrdinalIgnoreCase));
+Expect("eth usable never disables wifi path", !ethUsable.DisableWifiWhenPreferEth);
+Expect("eth usable policy is metrics-only",
+    ethUsable.PolicyLine.Contains("stays enabled", StringComparison.OrdinalIgnoreCase) ||
+    ethUsable.PolicyLine.Contains("higher metric", StringComparison.OrdinalIgnoreCase));
 Expect("eth usable band target 6", ethUsable.PreferredBandTarget == "6GHz");
 
 var ethNoIp = NetworkLogic.DecidePath(
@@ -99,10 +101,10 @@ var ethNoIp = NetworkLogic.DecidePath(
     supports6Ghz: false, supports5Ghz: true, wifi6: false, wifi7: false);
 Expect("link no IP keeps wifi", ethNoIp.KeepWifiBecauseEthNoIp);
 Expect("link no IP does not disable wifi flag", !ethNoIp.DisableWifiWhenPreferEth);
-Expect("ShouldDisableWifi false when no IP",
+Expect("ShouldDisableWifi always false (no IP)",
     !NetworkLogic.ShouldDisableWifi(true, ethInUse: false, wifiAvailable: true));
-Expect("ShouldDisableWifi true when eth in use",
-    NetworkLogic.ShouldDisableWifi(true, ethInUse: true, wifiAvailable: true));
+Expect("ShouldDisableWifi always false (eth in use)",
+    !NetworkLogic.ShouldDisableWifi(true, ethInUse: true, wifiAvailable: true));
 
 var wifiOnly = NetworkLogic.DecidePath(
     ethAvailable: false, ethUp: false, ethInUse: false,
@@ -155,16 +157,18 @@ Expect("scripts force throttle 10",
 Expect("scripts force responsiveness 10",
     latScript.Contains("SystemResponsiveness' 10", StringComparison.Ordinal));
 Expect("live band re-probe present", latScript.Contains("wantBand6Live", StringComparison.Ordinal));
-Expect("disable wifi when eth ready", latScript.Contains("Disable-NetAdapter", StringComparison.Ordinal));
+Expect("never disable wifi adapters",
+    latScript.Contains("never disable wifi adapters", StringComparison.OrdinalIgnoreCase) &&
+    !latScript.Contains("Disable-NetAdapter -Name", StringComparison.Ordinal));
 Expect("eth metric restamp after restart", latScript.Contains("Re-stamping", StringComparison.OrdinalIgnoreCase)
     || latScript.Contains("Set-EthMetrics", StringComparison.Ordinal));
-Expect("LLTD bindings off", latScript.Contains("ms_lltdio", StringComparison.OrdinalIgnoreCase));
 Expect("QoS pacer on", latScript.Contains("ms_pacer", StringComparison.OrdinalIgnoreCase));
 Expect("DO download mode 0", latScript.Contains("DODownloadMode", StringComparison.Ordinal));
-Expect("binding client off", latScript.Contains("ms_msclient", StringComparison.OrdinalIgnoreCase));
-Expect("binding lldp off", latScript.Contains("ms_lldp", StringComparison.OrdinalIgnoreCase));
+Expect("bindings enable critical only (no client/lldp disable)",
+    latScript.Contains("ms_tcpip", StringComparison.OrdinalIgnoreCase) &&
+    !latScript.Contains("$disable = @('ms_msclient'", StringComparison.Ordinal));
 var repairScript = NetworkApplyScriptBuilder.BuildRepair();
-Expect("repair script restores client", repairScript.Contains("ms_msclient", StringComparison.OrdinalIgnoreCase));
+Expect("repair script restores stock bindings fallback", repairScript.Contains("ms_msclient", StringComparison.OrdinalIgnoreCase));
 Expect("repair script automatic metric", repairScript.Contains("AutomaticMetric Enabled", StringComparison.OrdinalIgnoreCase));
 var benchScript = NetworkApplyScriptBuilder.BuildBenchmark();
 Expect("eth DMA coalescing off", latScript.Contains("DMACoalescing", StringComparison.OrdinalIgnoreCase)
@@ -300,16 +304,9 @@ Expect("snapshot covers advanced props + bindings + metrics + adapters + powercf
     latScript.Contains("$snap.services = ", StringComparison.Ordinal) &&
     latScript.Contains("$snap.rss = ", StringComparison.Ordinal));
 
-// (a) Ordering: verified Ethernet gate — probe fn + eth-bound call precede Disable-NetAdapter
+// (a) Connectivity probe + metrics-only prefer-ethernet (never Disable-NetAdapter)
 var probeDef = IdxOf(latScript, "function Test-ExoConnectivity");
-var probeCall = IdxOf(latScript, "Test-ExoConnectivity -BindIp $ethIp");
-// NOTE: needle must include ' -Name' so it cannot match Disable-NetAdapterLso/Rsc.
-var wifiDisableIdx = IdxOf(latScript, "Disable-NetAdapter -Name");
-Expect("wifi Disable-NetAdapter present", wifiDisableIdx >= 0);
-Expect("probe fn precedes wifi disable", probeDef >= 0 && wifiDisableIdx > probeDef,
-    $"probeDef={probeDef} wifiDisable={wifiDisableIdx}");
-Expect("eth-bound probe call precedes wifi disable", probeCall >= 0 && wifiDisableIdx > probeCall,
-    $"probeCall={probeCall} wifiDisable={wifiDisableIdx}");
+Expect("probe fn present", probeDef >= 0);
 Expect("probe binds TcpClient to eth IPv4",
     latScript.Contains("System.Net.Sockets.TcpClient", StringComparison.Ordinal) &&
     latScript.Contains("$client.Client.Bind", StringComparison.Ordinal) &&
@@ -317,16 +314,19 @@ Expect("probe binds TcpClient to eth IPv4",
     latScript.Contains("'8.8.8.8'", StringComparison.Ordinal) &&
     latScript.Contains("443", StringComparison.Ordinal));
 Expect("probe has DNS resolve option", latScript.Contains("Test-ExoDnsResolve", StringComparison.Ordinal));
-Expect("eth existence asserted before wifi disable",
-    IdxOf(latScript, "$ethAdapters.Count -eq 0") >= 0 &&
-    IdxOf(latScript, "$ethAdapters.Count -eq 0") < wifiDisableIdx);
-Expect("disabled wifi recorded for state", latScript.Contains("$ExoWifiDisabled += $w.Name", StringComparison.Ordinal));
+Expect("no Disable-NetAdapter -Name in apply",
+    !latScript.Contains("Disable-NetAdapter -Name", StringComparison.Ordinal));
+Expect("NCSI left alone",
+    latScript.Contains("active probe untouched", StringComparison.OrdinalIgnoreCase) &&
+    !latScript.Contains("NoActiveProbe' 1", StringComparison.Ordinal));
+Expect("default PreferEthernetDisableWifi is false",
+    !new NetworkApplyOptions().PreferEthernetDisableWifi);
 
 // (a) Ordering: post-apply rollback block exists after apply body
 var rollbackIdx = IdxOf(latScript, "rolling back path changes automatically");
-Expect("rollback block after wifi disable", rollbackIdx > wifiDisableIdx,
-    $"rollback={rollbackIdx} wifiDisable={wifiDisableIdx}");
-Expect("rollback re-enables wifi", latScript.Contains("Enable-NetAdapter -Name $wn", StringComparison.Ordinal));
+Expect("rollback block present", rollbackIdx > probeDef,
+    $"rollback={rollbackIdx} probeDef={probeDef}");
+Expect("rollback re-enables adapters", latScript.Contains("Enable-NetAdapter", StringComparison.Ordinal));
 Expect("rollback restores metrics from snapshot",
     rollbackIdx >= 0 &&
     latScript.IndexOf("interface metrics restored from snapshot", StringComparison.Ordinal) > rollbackIdx);
@@ -367,12 +367,11 @@ Expect("rollback reason includes probe timing",
     latScript.Contains("$rollbackReason = 'post-apply-connectivity-failed (' + $probeDetail + ')'", StringComparison.Ordinal));
 Expect("rollback re-probe has its own retry window",
     latScript.Contains("$rbSw.Elapsed.TotalSeconds -lt 45", StringComparison.Ordinal));
-Expect("eth gate probe retries before skipping wifi disable",
-    latScript.Contains("$ethGateSw.Elapsed.TotalSeconds -lt 20", StringComparison.Ordinal) &&
-    latScript.Contains("$ethGateAttempts", StringComparison.Ordinal));
 // Old too-eager probe shape must be gone (single 3s retry then rollback)
 Expect("old single-retry probe removed",
     !latScript.Contains("if (-not $postOk) { Start-Sleep -Seconds 3; $postOk = Test-ExoConnectivity }", StringComparison.Ordinal));
+Expect("old wifi Disable-NetAdapter gate removed",
+    !latScript.Contains("$ExoWifiDisabled += $w.Name", StringComparison.Ordinal));
 
 // (b) Markers for every new tweak (+ preset divergence)
 Expect("timestamps disabled both",
@@ -420,12 +419,13 @@ Expect("RSS BaseProcessorNumber 2 gated on >=4 CPUs",
     latScript.Contains("$LogicalCpuCount -ge 4", StringComparison.Ordinal));
 Expect("RegistryKeyword-first adapter writes",
     latScript.Contains("'*FlowControl'", StringComparison.Ordinal) &&
-    latScript.Contains("'*SpeedDuplex'", StringComparison.Ordinal) &&
     latScript.Contains("'*JumboPacket'", StringComparison.Ordinal) &&
     latScript.Contains("'*PriorityVLANTag'", StringComparison.Ordinal) &&
     latScript.Contains("'*InterruptModeration'", StringComparison.Ordinal) &&
     latScript.Contains("'*LsoV2IPv6'", StringComparison.Ordinal) &&
     latScript.Contains("'*WakeOnMagicPacket'", StringComparison.Ordinal));
+Expect("SpeedDuplex never forced",
+    !latScript.Contains("'*SpeedDuplex'", StringComparison.Ordinal));
 Expect("deeper adapter power kill keywords",
     latScript.Contains("AdvancedEEE", StringComparison.Ordinal) &&
     latScript.Contains("GreenEthernet", StringComparison.Ordinal) &&
@@ -526,10 +526,9 @@ Expect("repair restarts adapters after advanced prop restore",
     repairScript.Contains("adapter restarted so advanced props apply", StringComparison.Ordinal));
 Expect("repair forces critical tcpip bindings",
     repairScript.Contains("'ms_tcpip','ms_tcpip6','ms_pacer'", StringComparison.Ordinal));
-Expect("repair hard-resets winsock when still offline",
-    repairScript.Contains("netsh winsock reset", StringComparison.Ordinal) &&
-    repairScript.Contains("exit 2", StringComparison.Ordinal) &&
-    repairScript.Contains("'hard-reset' 'ok'", StringComparison.Ordinal));
+Expect("repair does not auto winsock reset",
+    repairScript.Contains("'hard-reset' 'skip'", StringComparison.Ordinal) &&
+    !repairScript.Contains("applying hard winsock/ip reset", StringComparison.Ordinal));
 Expect("repair emits EXO_REPORT", repairScript.Contains("EXO_REPORT:", StringComparison.Ordinal));
 
 // (d) Repair-Internet.ps1 standalone rescue at repo root

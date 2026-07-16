@@ -105,6 +105,7 @@ function Test-ExoIsAdmin {
 # --- Stage tracking: every throw is attributed to the stage that was running so
 # --- the state json / detect / UI can say exactly where Apply failed.
 $Script:CurrentStage = 'init'
+$Script:CompletedPartialDisplayPolicy = $false
 function Set-ExoStage([string]$Name) {
     $Script:CurrentStage = $Name
 }
@@ -4190,6 +4191,63 @@ try {
         Write-Warn 'NVIDIA App is still present on this PC after wipe; Exo prefers Control Panel only.'
     }
     if (-not [bool]$displayPrefsOk) {
+        if ([bool]$profileApplied -and [string]$drsVerification.Verified -eq 'True') {
+            $partialDisplayMethod = if ($displayRegistryOk) { 'registry' } else { $null }
+            $partialDisplayError = 'Profiles imported and verified, but display NVAPI verification failed. Apply again or use Display panel.'
+            Set-ExoStage 'display-policy'
+            Save-State @{
+                version             = $Script:NvidiaOptVersion
+                appliedUtc          = (Get-Date).ToUniversalTime().ToString('o')
+                gpuName             = $primary.Name
+                driver              = $primary.Driver
+                series              = $seriesId
+                gsync               = $useGsync
+                # The profile contract is complete because NPI import and DRS readback both succeeded.
+                profileFile         = $(if ($nip) { Split-Path $nip -Leaf } else { $null })
+                profileApplied      = $true
+                profileVersion      = $profilePackVersion
+                profileSha256       = $profileSha256
+                profileDriverVersion = $profileDriverVersion
+                profileImport       = $profileImport
+                drsVerified         = $drsVerification.Verified
+                drsVerifiedAt       = $drsVerification.VerifiedAt
+                drsVerifiedSettingCount = [int]$drsVerification.SettingCount
+                drsMismatch         = @($drsVerification.Mismatches)
+                drsVerifyReason     = $drsVerification.Reason
+                npiPath             = $npi
+                nvidiaApp           = $false
+                nvidiaControlPanel  = [bool]$cplOk
+                clientWipe          = $clientWipe
+                clientReinstall     = (-not [bool]$SkipApp)
+                nvidiaAppOptional   = $true
+                nvidiaAppUnsupported = $true
+                nvidiaAppBeta       = $false
+                nvidiaAppConfigured = $false
+                controlPanelOnly    = $false
+                exoPanel            = $true
+                advanced3dImageSettings = [bool]$advanced3dOk
+                displayClient       = 'exo-panel'
+                displayPrefs        = $false
+                displayMethod       = $partialDisplayMethod
+                displayDetails      = $dispResult.Details
+                debloatApplied      = [bool]$debloatResult.Ok
+                overlayDisabled     = [bool]$overlayResult.Ok
+                driverUpdatePass    = $driverInfo
+                applyInProgress     = $false
+                pendingAfterDriver  = $false
+                driverTweaksVerified = [bool]$driverTweaksVerified
+                driverTweaksVersion = $tweaksVer
+                gameProfilesApplied = [bool]$gameProfilesApplied
+                gameProfiles        = @($gameProfiles)
+                gameProfileCount    = @($gameProfiles).Count
+                gameProfileDeltas   = $true
+                lastErrorStage      = 'display-policy'
+                lastError           = $partialDisplayError
+                lastErrorUtc        = (Get-Date).ToUniversalTime().ToString('o')
+            }
+            $Script:CompletedPartialDisplayPolicy = $true
+            throw $partialDisplayError
+        }
         throw 'The 3D profile was applied, but NVIDIA display preferences could not be verified. Check the log and Apply again.'
     }
     if (-not [bool]$debloatResult.Ok) {
@@ -4278,7 +4336,9 @@ try {
     $failMessage = [string]$_.Exception.Message
     # Persist the failing stage + reason so detect/UI can explain the failure
     # after the run banner is gone (applyInProgress stays fail-closed).
-    Save-ExoFailureState -Stage $failStage -Message $failMessage
+    if (-not [bool]$Script:CompletedPartialDisplayPolicy) {
+        Save-ExoFailureState -Stage $failStage -Message $failMessage
+    }
     Write-Err ("Apply failed at stage '{0}': {1}" -f $failStage, $failMessage)
     Write-HubProgress 100 ("Failed at {0}" -f $failStage)
     exit 1

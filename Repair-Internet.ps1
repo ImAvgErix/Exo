@@ -451,10 +451,9 @@ function Invoke-ExoInternetRepair {
         return 0
     }
 
-    Write-RepairStep 'Still offline after restore - applying hard winsock/IP reset.' 'Yellow'
-    Invoke-ExoHardStackReset
-    Write-RepairStep 'Exo Internet repair finished - REBOOT REQUIRED (still probe-failed).' 'Yellow'
-    return 2
+    Write-RepairStep 'Still offline after restore. Hard winsock/IP reset is NOT automatic.' 'Yellow'
+    Write-RepairStep 'Re-run with -Hard then reboot if you explicitly want netsh winsock/ip reset.' 'Yellow'
+    return 1
 }
 
 # ---------------------------------------------------------------------------

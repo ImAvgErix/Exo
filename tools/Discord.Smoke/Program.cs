@@ -246,6 +246,25 @@ Expect("spellcheck debloat present (keeps en-US + system locale)",
 Expect("structured apply report emitted",
     applyBlob.Contains("EXO_REPORT:", StringComparison.Ordinal) &&
     applyBlob.Contains("applyReport", StringComparison.Ordinal));
+var debloatText = File.ReadAllText(applyFiles[3]);
+var kernelText = File.ReadAllText(applyFiles[4]);
+Expect("Krisp CDN failure soft-skips",
+    debloatText.Contains("Krisp module skipped", StringComparison.Ordinal) &&
+    debloatText.Contains("Add-DiscordModuleSkipReport 'krisp'", StringComparison.Ordinal));
+Expect("optional runtime module failure soft-skips",
+    debloatText.Contains("optional runtime module", StringComparison.Ordinal) &&
+    debloatText.Contains("Add-DiscordModuleSkipReport 'runtime-modules'", StringComparison.Ordinal) &&
+    debloatText.Contains("if ($isBootCritical) { throw }", StringComparison.Ordinal));
+Expect("kernel proxy fallback keeps stock ffmpeg",
+    kernelText.Contains("Restore-DiscOptStockFfmpeg", StringComparison.Ordinal) &&
+    kernelText.Contains("stock ffmpeg.dll kept", StringComparison.Ordinal) &&
+    kernelText.Contains("DiscOptKernelProxyActive", StringComparison.Ordinal));
+Expect("kernel install failure continues to boot safety",
+    applyBlob.Contains("continuing to boot safety check", StringComparison.Ordinal) &&
+    applyBlob.Contains("Confirm-DiscordBootsAfterMods $app.FullName", StringComparison.Ordinal));
+Expect("launch heal verifies boot after reinstall",
+    applyBlob.Contains("Launch heal boot check failed", StringComparison.Ordinal) &&
+    applyBlob.Contains("Kernel heal failed", StringComparison.Ordinal));
 
 // Stable PowerShell 7 host (preview requirement removed; preview = last-resort probe only)
 var discOptText = File.ReadAllText(applyFiles[0]);

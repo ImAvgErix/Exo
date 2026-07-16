@@ -479,20 +479,16 @@ if (File.Exists(loaderCs))
 {
     var lc = File.ReadAllText(loaderCs);
     Expect("ExoLoader IsActive", lc.Contains("IsActiveProperty", StringComparison.Ordinal));
-    // Composition-driven orbit (works in ContentDialog + Visibility-toggled Settings host)
-    Expect("ExoLoader orbit bead",
-        lc.Contains("RotationAngleInDegrees", StringComparison.Ordinal) &&
-        lc.Contains("ElementCompositionPreview", StringComparison.Ordinal) &&
-        lc.Contains("Orbit", StringComparison.Ordinal) &&
+    // Pure XAML Storyboards — no ElementCompositionPreview (v2.6.0 crash class).
+    Expect("ExoLoader XAML storyboard orbit",
+        lc.Contains("Storyboard", StringComparison.Ordinal) &&
+        lc.Contains("DoubleAnimation", StringComparison.Ordinal) &&
+        lc.Contains("OrbitRotate", StringComparison.Ordinal) &&
         !lc.Contains("Bar0Scale", StringComparison.Ordinal));
-    // Crash-loop safe mode must cover the loader (shell ExoMotion alone is not enough).
-    Expect("ExoLoader honors MotionDisabled safe mode",
-        lc.Contains("ExoMotion.MotionDisabled", StringComparison.Ordinal) &&
-        lc.Contains("StopComposition()", StringComparison.Ordinal));
-    // Composition Scale/Opacity hand-off writes are the crash-prone class — rotation only.
-    Expect("ExoLoader no composition Scale/Opacity writes",
-        !lc.Contains("StartAnimation(\"Scale", StringComparison.Ordinal) &&
-        !lc.Contains("StartAnimation(\"Opacity\"", StringComparison.Ordinal));
+    Expect("ExoLoader zero composition API",
+        !lc.Contains("ElementCompositionPreview", StringComparison.Ordinal) &&
+        !lc.Contains("Microsoft.UI.Xaml.Hosting", StringComparison.Ordinal) &&
+        !lc.Contains("StartAnimation", StringComparison.Ordinal));
 }
 
 var motionCs = Path.Combine(repo, "Exo", "Helpers", "ExoMotion.cs");
@@ -610,9 +606,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.6.5", File.ReadAllText(versionFile).Trim() == "2.6.5");
+    Expect("VERSION is 2.6.6", File.ReadAllText(versionFile).Trim() == "2.6.6");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.6.5", File.ReadAllText(csproj).Contains("<Version>2.6.5</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.6.6", File.ReadAllText(csproj).Contains("<Version>2.6.6</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));
