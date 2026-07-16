@@ -19,24 +19,24 @@ public partial class NvidiaDisplayColorRowViewModel : ObservableObject
     public ObservableCollection<string> ColorRangeOptions { get; } = new();
     public ObservableCollection<string> ScalingOptions { get; } = new();
 
-    [ObservableProperty] private string _currentSummary = "—";
-    [ObservableProperty] private string? _selectedResolution;
-    [ObservableProperty] private string? _selectedRefresh;
-    [ObservableProperty] private string? _selectedDepth;
-    [ObservableProperty] private string? _selectedColorRange;
-    [ObservableProperty] private string? _selectedScaling;
-    [ObservableProperty] private bool _canApply;
-    [ObservableProperty] private bool _isApplying;
-    [ObservableProperty] private string _applyLabel = "Up to date";
-    [ObservableProperty] private string _changeHint = string.Empty;
-    [ObservableProperty] private bool _hasChangeHint;
+    [ObservableProperty] public partial string CurrentSummary { get; set; } = "—";
+    [ObservableProperty] public partial string? SelectedResolution { get; set; }
+    [ObservableProperty] public partial string? SelectedRefresh { get; set; }
+    [ObservableProperty] public partial string? SelectedDepth { get; set; }
+    [ObservableProperty] public partial string? SelectedColorRange { get; set; }
+    [ObservableProperty] public partial string? SelectedScaling { get; set; }
+    [ObservableProperty] public partial bool CanApply { get; set; }
+    [ObservableProperty] public partial bool IsApplying { get; set; }
+    [ObservableProperty] public partial string ApplyLabel { get; set; } = "Up to date";
+    [ObservableProperty] public partial string ChangeHint { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool HasChangeHint { get; set; }
 
     // Digital vibrance (DVC) — hidden when the driver's DVC API is unavailable for this display.
-    [ObservableProperty] private bool _vibranceSupported;
-    [ObservableProperty] private double _vibranceMinimum;
-    [ObservableProperty] private double _vibranceMaximum = NvidiaPanelLogic.VibranceDefaultMaximum;
-    [ObservableProperty] private double _selectedVibrance;
-    [ObservableProperty] private string _vibranceValueLabel = "";
+    [ObservableProperty] public partial bool VibranceSupported { get; set; }
+    [ObservableProperty] public partial double VibranceMinimum { get; set; }
+    [ObservableProperty] public partial double VibranceMaximum { get; set; } = NvidiaPanelLogic.VibranceDefaultMaximum;
+    [ObservableProperty] public partial double SelectedVibrance { get; set; }
+    [ObservableProperty] public partial string VibranceValueLabel { get; set; } = "";
 
     // Snapshot of values loaded from driver — only Apply diffs.
     public string LoadedResolution { get; private set; } = "";

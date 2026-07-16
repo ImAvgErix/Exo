@@ -19,25 +19,25 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         LastResultBrush = ResolveBrush("ExoSuccessBrush", Color.FromArgb(255, 34, 197, 94));
     }
 
-    [ObservableProperty] private string _statusText = "Checking status...";
-    [ObservableProperty] private string _detailText = string.Empty;
-    [ObservableProperty] private string _guidanceText = "Detecting this PC...";
-    [ObservableProperty] private bool _hasGuidance = true;
+    [ObservableProperty] public partial string StatusText { get; set; } = "Checking status...";
+    [ObservableProperty] public partial string DetailText { get; set; } = string.Empty;
+    [ObservableProperty] public partial string GuidanceText { get; set; } = "Detecting this PC...";
+    [ObservableProperty] public partial bool HasGuidance { get; set; } = true;
     public ObservableCollection<FeatureRowViewModel> Features { get; } = new();
 
-    [ObservableProperty] private string _runButtonLabel = "Apply profile";
-    [ObservableProperty] private bool _isApplied;
-    [ObservableProperty] private bool _isBusy;
-    [ObservableProperty] private bool _isProgressVisible;
-    [ObservableProperty] private bool _isStatusLoading = true;
-    [ObservableProperty] private bool _isFeatureListVisible;
-    [ObservableProperty] private double _progressPercent;
-    [ObservableProperty] private string _progressStatus = string.Empty;
-    [ObservableProperty] private string _lastResult = string.Empty;
-    [ObservableProperty] private bool _hasLastResult;
-    [ObservableProperty] private string _lastResultGlyph = "\uE73E";
-    [ObservableProperty] private Brush _lastResultBrush;
-    [ObservableProperty] private bool _useGsync;
+    [ObservableProperty] public partial string RunButtonLabel { get; set; } = "Apply profile";
+    [ObservableProperty] public partial bool IsApplied { get; set; }
+    [ObservableProperty] public partial bool IsBusy { get; set; }
+    [ObservableProperty] public partial bool IsProgressVisible { get; set; }
+    [ObservableProperty] public partial bool IsStatusLoading { get; set; } = true;
+    [ObservableProperty] public partial bool IsFeatureListVisible { get; set; }
+    [ObservableProperty] public partial double ProgressPercent { get; set; }
+    [ObservableProperty] public partial string ProgressStatus { get; set; } = string.Empty;
+    [ObservableProperty] public partial string LastResult { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool HasLastResult { get; set; }
+    [ObservableProperty] public partial string LastResultGlyph { get; set; } = "\uE73E";
+    [ObservableProperty] public partial Brush LastResultBrush { get; set; }
+    [ObservableProperty] public partial bool UseGsync { get; set; }
 
     [RelayCommand]
     private async Task RefreshAsync()

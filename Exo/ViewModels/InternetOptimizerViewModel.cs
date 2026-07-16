@@ -24,31 +24,31 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
     public ObservableCollection<FeatureRowViewModel> Rows { get; } = new();
 
-    [ObservableProperty] private string _headerStatus = "Checking...";
-    [ObservableProperty] private string _guidanceText = "Detecting this PC...";
-    [ObservableProperty] private bool _hasGuidance = true;
-    [ObservableProperty] private bool _isLoading = true;
-    [ObservableProperty] private bool _isFeatureListVisible;
-    [ObservableProperty] private bool _isBusy;
-    [ObservableProperty] private string _progressStatus = string.Empty;
-    [ObservableProperty] private string _message = string.Empty;
-    [ObservableProperty] private bool _hasMessage;
-    [ObservableProperty] private string _messageGlyph = "\uE73E";
-    [ObservableProperty] private Brush _messageBrush;
+    [ObservableProperty] public partial string HeaderStatus { get; set; } = "Checking...";
+    [ObservableProperty] public partial string GuidanceText { get; set; } = "Detecting this PC...";
+    [ObservableProperty] public partial bool HasGuidance { get; set; } = true;
+    [ObservableProperty] public partial bool IsLoading { get; set; } = true;
+    [ObservableProperty] public partial bool IsFeatureListVisible { get; set; }
+    [ObservableProperty] public partial bool IsBusy { get; set; }
+    [ObservableProperty] public partial string ProgressStatus { get; set; } = string.Empty;
+    [ObservableProperty] public partial string Message { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool HasMessage { get; set; }
+    [ObservableProperty] public partial string MessageGlyph { get; set; } = "\uE73E";
+    [ObservableProperty] public partial Brush MessageBrush { get; set; }
 
     // Proof layer — persisted benchmark delta, honest rollback marker, restore capability.
-    [ObservableProperty] private bool _hasBenchmark;
-    [ObservableProperty] private string _benchmarkSummary = string.Empty;
-    [ObservableProperty] private Brush _benchmarkBrush = new SolidColorBrush(Color.FromArgb(255, 161, 161, 170));
-    [ObservableProperty] private bool _hasRollback;
-    [ObservableProperty] private string _rollbackNotice = string.Empty;
-    [ObservableProperty] private string _repairHint = "Repair: reset to stock defaults";
+    [ObservableProperty] public partial bool HasBenchmark { get; set; }
+    [ObservableProperty] public partial string BenchmarkSummary { get; set; } = string.Empty;
+    [ObservableProperty] public partial Brush BenchmarkBrush { get; set; } = new SolidColorBrush(Color.FromArgb(255, 161, 161, 170));
+    [ObservableProperty] public partial bool HasRollback { get; set; }
+    [ObservableProperty] public partial string RollbackNotice { get; set; } = string.Empty;
+    [ObservableProperty] public partial string RepairHint { get; set; } = "Repair: reset to stock defaults";
 
     // Compact expandable "Last apply" report (EXO_REPORT structured steps).
     public ObservableCollection<ApplyReportRowViewModel> ApplyReportRows { get; } = new();
-    [ObservableProperty] private bool _hasApplyReport;
-    [ObservableProperty] private bool _isApplyReportOpen;
-    [ObservableProperty] private string _applyReportSummary = "Last apply";
+    [ObservableProperty] public partial bool HasApplyReport { get; set; }
+    [ObservableProperty] public partial bool IsApplyReportOpen { get; set; }
+    [ObservableProperty] public partial string ApplyReportSummary { get; set; } = "Last apply";
 
     public string ApplyReportChevron => IsApplyReportOpen ? "\uE70E" : "\uE70D";
 

@@ -20,67 +20,67 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     }
 
     [ObservableProperty]
-    private string _statusText = "Checking status...";
+    public partial string StatusText { get; set; } = "Checking status...";
 
     [ObservableProperty]
-    private string _detailText = string.Empty;
+    public partial string DetailText { get; set; } = string.Empty;
 
     /// <summary>Live next-step coach from detect (what to click / what's missing).</summary>
     [ObservableProperty]
-    private string _guidanceText = "Detecting this PC...";
+    public partial string GuidanceText { get; set; } = "Detecting this PC...";
 
     [ObservableProperty]
-    private bool _hasGuidance = true;
+    public partial bool HasGuidance { get; set; } = true;
 
     public ObservableCollection<FeatureRowViewModel> Features { get; } = new();
 
     [ObservableProperty]
-    private string _runButtonLabel = "Run";
+    public partial string RunButtonLabel { get; set; } = "Run";
 
     [ObservableProperty]
-    private bool _isApplied;
+    public partial bool IsApplied { get; set; }
 
     [ObservableProperty]
-    private bool _isBusy;
+    public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
-    private bool _isStatusLoading = true;
+    public partial bool IsStatusLoading { get; set; } = true;
 
     [ObservableProperty]
-    private bool _isFeatureListVisible;
+    public partial bool IsFeatureListVisible { get; set; }
 
     [ObservableProperty]
-    private bool _isProgressVisible;
+    public partial bool IsProgressVisible { get; set; }
 
     [ObservableProperty]
-    private double _progressPercent;
+    public partial double ProgressPercent { get; set; }
 
     [ObservableProperty]
-    private string _progressStatus = string.Empty;
+    public partial string ProgressStatus { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _lastResult = string.Empty;
+    public partial string LastResult { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private bool _hasLastResult;
+    public partial bool HasLastResult { get; set; }
 
     [ObservableProperty]
-    private string _lastResultGlyph = "\uE73E";
+    public partial string LastResultGlyph { get; set; } = "\uE73E";
 
     [ObservableProperty]
-    private Brush _lastResultBrush;
+    public partial Brush LastResultBrush { get; set; }
 
     // Compact expandable "Last apply" report (state-file applyReport array).
     public ObservableCollection<ApplyReportRowViewModel> ApplyReportRows { get; } = new();
 
     [ObservableProperty]
-    private bool _hasApplyReport;
+    public partial bool HasApplyReport { get; set; }
 
     [ObservableProperty]
-    private bool _isApplyReportOpen;
+    public partial bool IsApplyReportOpen { get; set; }
 
     [ObservableProperty]
-    private string _applyReportSummary = "Last apply";
+    public partial string ApplyReportSummary { get; set; } = "Last apply";
 
     public string ApplyReportChevron => IsApplyReportOpen ? "\uE70E" : "\uE70D";
 

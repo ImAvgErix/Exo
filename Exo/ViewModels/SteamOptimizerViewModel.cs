@@ -21,34 +21,34 @@ public partial class SteamOptimizerViewModel : ObservableObject
         LastResultBrush = ResolveBrush("ExoSuccessBrush", Color.FromArgb(255, 34, 197, 94));
     }
 
-    [ObservableProperty] private string _statusText = "Checking status...";
-    [ObservableProperty] private string _detailText = string.Empty;
-    [ObservableProperty] private string _guidanceText = "Detecting this PC...";
-    [ObservableProperty] private bool _hasGuidance = true;
+    [ObservableProperty] public partial string StatusText { get; set; } = "Checking status...";
+    [ObservableProperty] public partial string DetailText { get; set; } = string.Empty;
+    [ObservableProperty] public partial string GuidanceText { get; set; } = "Detecting this PC...";
+    [ObservableProperty] public partial bool HasGuidance { get; set; } = true;
     public ObservableCollection<FeatureRowViewModel> Features { get; } = new();
 
-    [ObservableProperty] private string _runButtonLabel = "Run";
-    [ObservableProperty] private bool _isApplied;
-    [ObservableProperty] private bool _isBusy;
-    [ObservableProperty] private bool _isStatusLoading = true;
-    [ObservableProperty] private bool _isFeatureListVisible;
-    [ObservableProperty] private bool _isProgressVisible;
-    [ObservableProperty] private double _progressPercent;
-    [ObservableProperty] private string _progressStatus = string.Empty;
-    [ObservableProperty] private string _lastResult = string.Empty;
-    [ObservableProperty] private bool _hasLastResult;
-    [ObservableProperty] private string _lastResultGlyph = "\uE73E";
-    [ObservableProperty] private Brush _lastResultBrush;
+    [ObservableProperty] public partial string RunButtonLabel { get; set; } = "Run";
+    [ObservableProperty] public partial bool IsApplied { get; set; }
+    [ObservableProperty] public partial bool IsBusy { get; set; }
+    [ObservableProperty] public partial bool IsStatusLoading { get; set; } = true;
+    [ObservableProperty] public partial bool IsFeatureListVisible { get; set; }
+    [ObservableProperty] public partial bool IsProgressVisible { get; set; }
+    [ObservableProperty] public partial double ProgressPercent { get; set; }
+    [ObservableProperty] public partial string ProgressStatus { get; set; } = string.Empty;
+    [ObservableProperty] public partial string LastResult { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool HasLastResult { get; set; }
+    [ObservableProperty] public partial string LastResultGlyph { get; set; } = "\uE73E";
+    [ObservableProperty] public partial Brush LastResultBrush { get; set; }
 
     // RAM reclaimed by the resident trim loop (steam-trim-stats.json — may not exist).
-    [ObservableProperty] private bool _hasTrimStats;
-    [ObservableProperty] private string _trimStatsText = string.Empty;
+    [ObservableProperty] public partial bool HasTrimStats { get; set; }
+    [ObservableProperty] public partial string TrimStatsText { get; set; } = string.Empty;
 
     // Compact expandable "Last apply" report (state-file applyReport array).
     public ObservableCollection<ApplyReportRowViewModel> ApplyReportRows { get; } = new();
-    [ObservableProperty] private bool _hasApplyReport;
-    [ObservableProperty] private bool _isApplyReportOpen;
-    [ObservableProperty] private string _applyReportSummary = "Last apply";
+    [ObservableProperty] public partial bool HasApplyReport { get; set; }
+    [ObservableProperty] public partial bool IsApplyReportOpen { get; set; }
+    [ObservableProperty] public partial string ApplyReportSummary { get; set; } = "Last apply";
 
     public string ApplyReportChevron => IsApplyReportOpen ? "\uE70E" : "\uE70D";
 

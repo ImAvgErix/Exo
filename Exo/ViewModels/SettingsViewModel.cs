@@ -17,15 +17,15 @@ public partial class SettingsViewModel : ObservableObject
         LoadFromSettings();
     }
 
-    [ObservableProperty] private bool _isDarkMode = true;
-    [ObservableProperty] private bool _isLightMode;
-    [ObservableProperty] private bool _autoUpdateScripts;
+    [ObservableProperty] public partial bool IsDarkMode { get; set; } = true;
+    [ObservableProperty] public partial bool IsLightMode { get; set; }
+    [ObservableProperty] public partial bool AutoUpdateScripts { get; set; }
 
-    [ObservableProperty] private string _appVersion = "-";
-    [ObservableProperty] private string _updateStatus = string.Empty;
-    [ObservableProperty] private bool _isUpdating;
-    [ObservableProperty] private double _updateProgressPercent;
-    [ObservableProperty] private bool _isUpdateProgressIndeterminate = true;
+    [ObservableProperty] public partial string AppVersion { get; set; } = "-";
+    [ObservableProperty] public partial string UpdateStatus { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool IsUpdating { get; set; }
+    [ObservableProperty] public partial double UpdateProgressPercent { get; set; }
+    [ObservableProperty] public partial bool IsUpdateProgressIndeterminate { get; set; } = true;
 
     /// <summary>True when there is status text to show (hides empty gray well).</summary>
     public bool HasUpdateStatus => !string.IsNullOrWhiteSpace(UpdateStatus);
