@@ -1,3 +1,8 @@
+## 3.0.6
+
+- **Steam Apply crash**: skip-if-verified startup path no longer leaves $startupResult unset (was failing every re-Apply when startup already quiet)
+- **Discord Apply fail**: optional module residuals (e.g. discord_hook) are re-stripped before verify and soft-skip if Discord re-pulls them — no longer fails a successful Equicord/quiet Apply
+- **Debloat detect**: optional modules only count when they still have payload files (empty dirs ignored)
 ## 3.0.5
 
 - **Discord launch fix**: elevated Exo Apply no longer leaves DiscOpt kernel (version.dll + ffmpeg proxy) active without a boot check — kernel is skipped/disarmed so Discord opens from Start Menu; Equicord stub without asar restored to stock

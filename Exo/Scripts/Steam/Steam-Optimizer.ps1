@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.9.1'
+$Script:SteamOptVersion = '1.9.2'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
@@ -2378,9 +2378,15 @@ try {
     }
 
     Write-HubProgress 30 'Disabling Windows startup...'
+    # Always initialize - skip path used to leave $startupResult unset and crash state save.
+    $startupResult = @{ Success = $true; Count = 0 }
     if (Test-SteamWindowsStartupDisabled) {
         Write-Ok 'Windows startup already quiet - skip'
         Add-ExoReport 'startup-quiet' 'skip' 'already verified'
+        $startupResult = @{
+            Success = $true
+            Count   = @($recovery.StartupEntries).Count
+        }
     } else {
         $startupResult = Disable-SteamWindowsStartup $currentRecovery
         if (-not $startupResult.Success -or -not (Test-SteamWindowsStartupDisabled)) {
@@ -2500,7 +2506,7 @@ try {
         steamPath            = $steam
         recovery             = $recovery
         startupDisabled      = $startupOk
-        startupRemoved       = [int]$startupResult.Count
+        startupRemoved       = [int]$(if ($null -ne $startupResult -and $null -ne $startupResult.Count) { $startupResult.Count } else { 0 })
         startupEntries       = @($recovery.StartupEntries)
         startupModeCaptured  = [bool]$recovery.StartupModeCaptured
         hadStartupMode       = [bool]$recovery.HadStartupMode

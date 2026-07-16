@@ -45,7 +45,7 @@ if ($env:EXO -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.3.50'
+$Script:DiscOptVersion = '1.3.51'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -795,9 +795,27 @@ if ($Quick) {
     Write-Warn 'Quick pass completed; the verified no-compromise applied state still requires a full run'
 } else {
     try {
+        # One more strip pass before verify - optional modules (e.g. discord_hook) often
+        # reappear when Discord/Equicord touch the install mid-apply.
         $debloatState = Test-DebloatNeeded $app.FullName
-        if ($debloatState.Needed) {
-            throw "Discord debloat verification incomplete: $($debloatState.Reasons -join ', ')"
+        if ($debloatState.Needed -and -not $SkipDebloat) {
+            Write-Step "Re-stripping leftovers before verify ($($debloatState.Reasons -join ', '))..."
+            try {
+                $reFreed = [ref]0L
+                Invoke-Debloat $app.FullName $reFreed
+            } catch {
+                Write-Warn "Re-debloat pass: $($_.Exception.Message)"
+            }
+            $debloatState = Test-DebloatNeeded $app.FullName
+        }
+        if ($debloatState.HardNeeded) {
+            throw "Discord debloat verification incomplete: $($debloatState.HardReasons -join ', ')"
+        }
+        if ($debloatState.SoftNeeded) {
+            # Soft leftovers (optional modules / extra locales) must not fail Apply after
+            # Equicord + Windows quiet succeeded - Discord may re-pull hook under lock.
+            Write-Warn "Debloat soft residual (not failing Apply): $($debloatState.SoftReasons -join ', ')"
+            Add-ExoReport 'verify-debloat' 'skip' ("soft residual: " + ($debloatState.SoftReasons -join ', '))
         }
         if (-not (Test-DiscordWindowsSuppression)) {
             throw 'Stable Discord Windows suppression verification failed after apply'

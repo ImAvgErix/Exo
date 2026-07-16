@@ -514,29 +514,62 @@ function Ensure-KrispModule([string]$AppDir) {
     }
 }
 
+function Test-OptionalModuleDirHasPayload([string]$ModuleDir) {
+    # Align with DiscordDetectCore: empty dirs recreated by Discord != not debloated.
+    if ([string]::IsNullOrWhiteSpace($ModuleDir)) { return $false }
+    if (-not (Test-Path -LiteralPath $ModuleDir)) { return $false }
+    try {
+        return (@(Get-ChildItem -LiteralPath $ModuleDir -File -Recurse -ErrorAction SilentlyContinue).Count -gt 0)
+    } catch {
+        return $true
+    }
+}
+
 function Test-DebloatNeeded([string]$AppDir) {
     $reasons = @()
+    $hardReasons = @()
+    $softReasons = @()
 
     $oldApps = @(Get-ChildItem $DiscordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
         Where-Object { $_.FullName -ne $AppDir })
-    if ($oldApps.Count -gt 0) { $reasons += "$($oldApps.Count) old app-* folder(s)" }
+    if ($oldApps.Count -gt 0) {
+        $r = "$($oldApps.Count) old app-* folder(s)"
+        $reasons += $r
+        $hardReasons += $r
+    }
 
     $modPath = Join-Path $AppDir 'modules'
     if (Test-Path $modPath) {
-        $optionalPresent = @($OptionalModules | Where-Object { Test-Path (Join-Path $modPath $_) })
-        if ($optionalPresent.Count -gt 0) { $reasons += "$($optionalPresent.Count) optional module(s)" }
+        # Only count optional modules that still have payload files (empty shells are fine).
+        $optionalPresent = @($OptionalModules | Where-Object {
+            Test-OptionalModuleDirHasPayload (Join-Path $modPath $_)
+        })
+        if ($optionalPresent.Count -gt 0) {
+            $r = "$($optionalPresent.Count) optional module(s)"
+            $reasons += $r
+            # Optional leftovers are soft: Discord may re-download hook while elevated Apply runs.
+            $softReasons += $r
+        }
     }
 
     $localePath = Join-Path $AppDir 'locales'
     if (Test-Path $localePath) {
         $extraLocales = @(Get-ChildItem "$localePath\*.pak" -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -ne 'en-US.pak' })
-        if ($extraLocales.Count -gt 0) { $reasons += "$($extraLocales.Count) extra locale(s)" }
+        if ($extraLocales.Count -gt 0) {
+            $r = "$($extraLocales.Count) extra locale(s)"
+            $reasons += $r
+            $softReasons += $r
+        }
     }
 
     return @{
-        Needed  = ($reasons.Count -gt 0)
-        Reasons = $reasons
+        Needed      = ($reasons.Count -gt 0)
+        HardNeeded  = ($hardReasons.Count -gt 0)
+        SoftNeeded  = ($softReasons.Count -gt 0)
+        Reasons     = $reasons
+        HardReasons = $hardReasons
+        SoftReasons = $softReasons
     }
 }
 
