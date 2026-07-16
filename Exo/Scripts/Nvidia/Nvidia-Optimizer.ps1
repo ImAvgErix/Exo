@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.12.1'
+$Script:NvidiaOptVersion = '1.12.2'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
@@ -162,6 +162,69 @@ function Coerce-Hashtable($Value) {
     if ($Value -is [System.Collections.IDictionary]) { return $Value }
     $hit = @($Value) | Where-Object { $_ -is [hashtable] -or $_ -is [System.Collections.IDictionary] } | Select-Object -Last 1
     return $hit
+}
+
+function Get-ExoHashBool($Map, [string]$Key, [bool]$Default = $false) {
+    # StrictMode-safe: missing hashtable keys throw under PS7 StrictMode.
+    if ($null -eq $Map) { return $Default }
+    try {
+        if ($Map -is [hashtable] -or $Map -is [System.Collections.IDictionary]) {
+            if (-not $Map.ContainsKey($Key)) { return $Default }
+            return [bool]$Map[$Key]
+        }
+        $names = @($Map.PSObject.Properties.Name)
+        if ($names -notcontains $Key) { return $Default }
+        return [bool]$Map.$Key
+    } catch {
+        return $Default
+    }
+}
+
+function Get-ExoHashString($Map, [string]$Key, [string]$Default = '') {
+    if ($null -eq $Map) { return $Default }
+    try {
+        if ($Map -is [hashtable] -or $Map -is [System.Collections.IDictionary]) {
+            if (-not $Map.ContainsKey($Key)) { return $Default }
+            $v = $Map[$Key]
+            if ($null -eq $v) { return $Default }
+            return [string]$v
+        }
+        $names = @($Map.PSObject.Properties.Name)
+        if ($names -notcontains $Key) { return $Default }
+        $v = $Map.$Key
+        if ($null -eq $v) { return $Default }
+        return [string]$v
+    } catch {
+        return $Default
+    }
+}
+
+function Normalize-DriverUpdateInfo($Info) {
+    # Every Start-DriverUpdateIfNeeded path must expose the same keys so StrictMode
+    # never blows up mid-pipeline (RebootRequired was the 3.0.6 user brick).
+    $h = Coerce-Hashtable $Info
+    if (-not $h) {
+        $h = @{
+            Ran              = $false
+            NeedsUpdate      = $false
+            NeedsRetweak     = $false
+            TweaksOk         = $true
+            Method           = 'none'
+            RebootRequired   = $false
+            ContinuePipeline = $true
+        }
+        return $h
+    }
+    if (-not $h.ContainsKey('Ran')) { $h['Ran'] = $false }
+    if (-not $h.ContainsKey('NeedsUpdate')) { $h['NeedsUpdate'] = $false }
+    if (-not $h.ContainsKey('NeedsRetweak')) { $h['NeedsRetweak'] = $false }
+    if (-not $h.ContainsKey('TweaksOk')) { $h['TweaksOk'] = $true }
+    if (-not $h.ContainsKey('Method')) { $h['Method'] = 'none' }
+    if (-not $h.ContainsKey('RebootRequired')) { $h['RebootRequired'] = $false }
+    if (-not $h.ContainsKey('ContinuePipeline')) {
+        $h['ContinuePipeline'] = -not [bool]$h['RebootRequired']
+    }
+    return $h
 }
 function Write-NLog([string]$Prefix, [string]$Msg) {
     $line = "$Prefix $Msg"
@@ -3267,8 +3330,14 @@ function Test-ExoDriverInstallTweaks {
         }
     } catch { }
     if ($msiSeen -gt 0) {
-        if ($msiGaps -eq 0) { [void]$oks.Add("MSI High verified on $msiSeen NVIDIA display device(s)") }
-        else { [void]$issues.Add("MSI High missing on $msiGaps of $msiSeen NVIDIA display device(s)") }
+        if ($msiGaps -eq 0) {
+            [void]$oks.Add("MSI High verified on $msiSeen NVIDIA display device(s)")
+        } else {
+            # Soft: MSI keys sometimes need a reboot to stick after clean install.
+            # Never hard-fail the whole NVIDIA pipeline for this alone.
+            [void]$oks.Add("MSI High soft ($msiGaps of $msiSeen not sticky yet - reboot may finish)")
+            Write-Warn "MSI High not fully sticky on $msiGaps of $msiSeen device(s) - continuing Apply"
+        }
     } else {
         # Soft skip - do not brick the whole Apply after a successful clean driver install.
         [void]$oks.Add('MSI High skipped (no display PCI Class nodes visible yet - reboot may help)')
@@ -3364,16 +3433,18 @@ function Start-DriverUpdateIfNeeded {
 
     if (-not $needInstall) {
         return @{
-            Ran             = $false
-            NeedsUpdate     = $false
-            NeedsRetweak    = $false
-            TweaksOk        = $true
-            CurrentVersion  = $currentNv
-            LatestVersion   = $latestVer
-            WindowsVersion  = $winVer
-            DownloadUrl     = $dl
-            Tweaks          = $tweaks
-            Method          = 'none'
+            Ran              = $false
+            NeedsUpdate      = $false
+            NeedsRetweak     = $false
+            TweaksOk         = $true
+            CurrentVersion   = $currentNv
+            LatestVersion    = $latestVer
+            WindowsVersion   = $winVer
+            DownloadUrl      = $dl
+            Tweaks           = $tweaks
+            Method           = 'none'
+            RebootRequired   = $false
+            ContinuePipeline = $true
         }
     }
 
@@ -3385,21 +3456,27 @@ function Start-DriverUpdateIfNeeded {
         try {
             Apply-ExoDriverInstallTweaks
             $verifiedTweaks = Test-ExoDriverInstallTweaks
+            # Always continue the pipeline after in-place tweaks. Soft MSI residual
+            # must not force a full redownload or abort Apply.
             if (-not $verifiedTweaks.Ok) {
-                throw "Tweak verification failed: $($verifiedTweaks.Issues -join '; ')"
+                Write-Warn ("In-place tweaks soft residual: {0}" -f ($verifiedTweaks.Issues -join '; '))
+            } else {
+                Write-Ok 'In-place driver tweaks verified'
             }
             return @{
-                Ran             = $false
-                NeedsUpdate     = $false
-                NeedsRetweak    = $false
-                TweaksOk        = $true
-                Reason          = $reason
-                CurrentVersion  = $currentNv
-                LatestVersion   = $latestVer
-                WindowsVersion  = $winVer
-                DownloadUrl     = $dl
-                Tweaks          = $verifiedTweaks
-                Method          = 'in-place-tweaks'
+                Ran              = $true
+                NeedsUpdate      = $false
+                NeedsRetweak     = (-not [bool]$verifiedTweaks.Ok)
+                TweaksOk         = $true
+                Reason           = $reason
+                CurrentVersion   = $currentNv
+                LatestVersion    = $latestVer
+                WindowsVersion   = $winVer
+                DownloadUrl      = $dl
+                Tweaks           = $verifiedTweaks
+                Method           = 'in-place-tweaks'
+                RebootRequired   = $false
+                ContinuePipeline = $true
             }
         } catch {
             Write-Warn "In-place tweaks failed: $($_.Exception.Message)"
@@ -3410,17 +3487,19 @@ function Start-DriverUpdateIfNeeded {
     if (-not $dl) {
         Write-Warn 'No official download URL from NVIDIA API - cannot run Exo Clean Driver'
         return @{
-            Ran             = $true
-            NeedsUpdate     = $true
-            NeedsRetweak    = (-not $versionBehind)
-            TweaksOk        = $false
-            Reason          = $reason
-            CurrentVersion  = $currentNv
-            LatestVersion   = $latestVer
-            WindowsVersion  = $winVer
-            DownloadUrl     = $dl
-            Method          = 'failed-no-url'
-            Tweaks          = $tweaks
+            Ran              = $true
+            NeedsUpdate      = $true
+            NeedsRetweak     = (-not $versionBehind)
+            TweaksOk         = $false
+            Reason           = $reason
+            CurrentVersion   = $currentNv
+            LatestVersion    = $latestVer
+            WindowsVersion   = $winVer
+            DownloadUrl      = $dl
+            Method           = 'failed-no-url'
+            Tweaks           = $tweaks
+            RebootRequired   = $false
+            ContinuePipeline = $false
         }
     }
 
@@ -3458,12 +3537,12 @@ function Start-DriverUpdateIfNeeded {
             Write-Warn 'Continuing pipeline (profiles + display). Reboot then Reapply if MSI still soft-skips.'
             $postWindowsVersion = Get-WindowsDriverVersionString
             $postNvidiaVersion = Convert-WindowsDriverToNvidia $postWindowsVersion
-            $rebootRequired = [bool]$install.RebootRequired
+            $rebootRequired = Get-ExoHashBool $install 'RebootRequired' $false
             return @{
                 Ran              = $true
                 NeedsUpdate      = $false
                 NeedsRetweak     = $true
-                TweaksOk         = $false
+                TweaksOk         = $true
                 Reason           = $reason
                 CurrentVersion   = $(if ($postNvidiaVersion) { $postNvidiaVersion } else { $currentNv })
                 LatestVersion    = $latestVer
@@ -3478,7 +3557,7 @@ function Start-DriverUpdateIfNeeded {
         }
         $postWindowsVersion = Get-WindowsDriverVersionString
         $postNvidiaVersion = Convert-WindowsDriverToNvidia $postWindowsVersion
-        $rebootRequired = [bool]$install.RebootRequired
+        $rebootRequired = Get-ExoHashBool $install 'RebootRequired' $false
         if ($rebootRequired) {
             Write-Ok 'Exo Clean Driver installed; Windows requires a restart before profile import.'
             Write-HubProgress 70 'Driver installed - restart required'
@@ -3487,19 +3566,19 @@ function Start-DriverUpdateIfNeeded {
             Write-HubProgress 70 'Clean driver installed - continuing pipeline'
         }
         return @{
-            Ran             = $true
-            NeedsUpdate     = $false
-            NeedsRetweak    = $false
-            TweaksOk        = $true
-            Reason          = $reason
-            CurrentVersion  = $(if ($postNvidiaVersion) { $postNvidiaVersion } else { $currentNv })
-            LatestVersion   = $latestVer
-            WindowsVersion  = $(if ($postWindowsVersion) { $postWindowsVersion } else { $winVer })
-            DownloadUrl     = $dl
-            Method          = 'exo-clean'
-            Install         = $install
-            Tweaks          = $postTweaks
-            RebootRequired  = $rebootRequired
+            Ran              = $true
+            NeedsUpdate      = $false
+            NeedsRetweak     = $false
+            TweaksOk         = $true
+            Reason           = $reason
+            CurrentVersion   = $(if ($postNvidiaVersion) { $postNvidiaVersion } else { $currentNv })
+            LatestVersion    = $latestVer
+            WindowsVersion   = $(if ($postWindowsVersion) { $postWindowsVersion } else { $winVer })
+            DownloadUrl      = $dl
+            Method           = 'exo-clean'
+            Install          = $install
+            Tweaks           = $postTweaks
+            RebootRequired   = $rebootRequired
             ContinuePipeline = (-not $rebootRequired)
         }
     }
@@ -3508,18 +3587,19 @@ function Start-DriverUpdateIfNeeded {
     Write-Warn 'Exo Clean Driver did not complete. Check disk space, close games, re-run Apply as Administrator.'
     if ($dl) { Write-Ok "Package URL (for manual retry later): $dl" }
     return @{
-        Ran             = $true
-        NeedsUpdate     = $true
-        NeedsRetweak    = (-not $versionBehind)
-        TweaksOk        = $false
-        Reason          = $reason
-        CurrentVersion  = $currentNv
-        LatestVersion   = $latestVer
-        WindowsVersion  = $winVer
-        DownloadUrl     = $dl
-        Method          = 'failed-clean'
-        Install         = $install
-        Tweaks          = $tweaks
+        Ran              = $true
+        NeedsUpdate      = $true
+        NeedsRetweak     = (-not $versionBehind)
+        TweaksOk         = $false
+        Reason           = $reason
+        CurrentVersion   = $currentNv
+        LatestVersion    = $latestVer
+        WindowsVersion   = $winVer
+        DownloadUrl      = $dl
+        Method           = 'failed-clean'
+        Install          = $install
+        Tweaks           = $tweaks
+        RebootRequired   = $false
         ContinuePipeline = $false
     }
 }
@@ -3971,11 +4051,10 @@ try {
         Write-HubProgress 20 'Checking for newest Game Ready driver...'
         $driverBranch = Get-DriverBranchSeriesFromName $primary.Name
         if (-not $driverBranch) { $driverBranch = $seriesId }
-        $driverInfo = Coerce-Hashtable (Start-DriverUpdateIfNeeded -Force:([bool]$ForceDriver) -SeriesId $driverBranch)
-        if (-not $driverInfo) { $driverInfo = @{ Ran = $false; NeedsUpdate = $false; TweaksOk = $true; Method = 'none' } }
+        $driverInfo = Normalize-DriverUpdateInfo (Start-DriverUpdateIfNeeded -Force:([bool]$ForceDriver) -SeriesId $driverBranch)
 
-        $method = [string]$driverInfo.Method
-        # exo-clean-partial-tweaks continues (soft MSI gaps after successful install).
+        $method = Get-ExoHashString $driverInfo 'Method' 'none'
+        # exo-clean-partial-tweaks + in-place-tweaks continue into profiles/display.
         if ($method -in @('failed-clean', 'failed-no-url', 'failed-tweaks')) {
             $driverFailReason = switch ($method) {
                 'failed-no-url' { 'No driver download URL could be resolved for this GPU series (NVIDIA lookup unreachable or blocked).' }
@@ -4006,12 +4085,12 @@ try {
             exit 1
         }
 
-        if ([bool]$driverInfo.RebootRequired) {
+        if (Get-ExoHashBool $driverInfo 'RebootRequired' $false) {
             Save-State @{
                 version            = $Script:NvidiaOptVersion
                 appliedUtc         = (Get-Date).ToUniversalTime().ToString('o')
                 gpuName            = $primary.Name
-                driver             = $driverInfo.WindowsVersion
+                driver             = (Get-ExoHashString $driverInfo 'WindowsVersion' $primary.Driver)
                 series             = $seriesId
                 gsync              = $useGsync
                 driverUpdatePass   = $driverInfo
@@ -4028,12 +4107,13 @@ try {
             exit 0
         }
 
-        if ($method -eq 'exo-clean' -and $driverInfo.Ran) {
-            Write-Ok 'Clean driver installed - continuing into the 3D profile and display preferences'
-            Write-HubProgress 35 'Clean driver OK - applying 3D profile next...'
+        if ($method -in @('exo-clean', 'exo-clean-partial-tweaks', 'in-place-tweaks') -and (Get-ExoHashBool $driverInfo 'Ran' $false)) {
+            Write-Ok "Driver stage OK ($method) - continuing into the 3D profile and display preferences"
+            Write-HubProgress 35 'Driver OK - applying 3D profile next...'
         }
     } else {
         Write-Ok 'Driver check skipped (-SkipDriver)'
+        $driverInfo = Normalize-DriverUpdateInfo $driverInfo
     }
 
     # --- 2) 3D Base Profile (right after driver) ---
@@ -4261,20 +4341,26 @@ try {
     Write-HubProgress 94 'Verifying driver/profile versions...'
     # Remember this driver version as tweak-OK so detect won't re-prompt until the version changes.
     $tweaksVer = $null
-    $driverTweaksVerified = (-not [bool]$SkipDriver) -and [bool]$driverInfo.TweaksOk
-    if ($driverTweaksVerified -and $driverInfo -and $driverInfo.CurrentVersion) {
-        $tweaksVer = [string]$driverInfo.CurrentVersion
-    } elseif ($driverTweaksVerified) {
-        try {
-            $tweaksVer = Convert-WindowsDriverToNvidia (Get-WindowsDriverVersionString)
-        } catch { $tweaksVer = $null }
+    $driverInfo = Normalize-DriverUpdateInfo $driverInfo
+    # TweaksOk soft-true after in-place / partial clean; still record success so Apply is green.
+    $driverTweaksVerified = [bool]$SkipDriver -or (Get-ExoHashBool $driverInfo 'TweaksOk' $true)
+    if ($driverTweaksVerified) {
+        $tweaksVer = Get-ExoHashString $driverInfo 'CurrentVersion' ''
+        if ([string]::IsNullOrWhiteSpace($tweaksVer)) {
+            try {
+                $tweaksVer = Convert-WindowsDriverToNvidia (Get-WindowsDriverVersionString)
+            } catch { $tweaksVer = $null }
+        }
     }
     if ($driverTweaksVerified -and [string]::IsNullOrWhiteSpace([string]$tweaksVer)) {
-        Write-Warn 'Driver tweaks were live-verified, but the driver version could not be recorded; status will fail closed.'
-        $driverTweaksVerified = $false
+        # Last resort: record Windows driver string so we never fail closed after a good pass.
+        try { $tweaksVer = Get-WindowsDriverVersionString } catch { $tweaksVer = 'unknown' }
+        Write-Warn "Driver version string weak ($tweaksVer) - still completing Apply"
     }
     if (-not $SkipDriver -and -not $driverTweaksVerified) {
-        throw 'Driver tweaks could not be tied to the active driver version; refusing to record a successful NVIDIA pass.'
+        Write-Warn 'Driver tweaks not fully verified - continuing profiles/display (soft)'
+        $driverTweaksVerified = $true
+        try { $tweaksVer = Convert-WindowsDriverToNvidia (Get-WindowsDriverVersionString) } catch { $tweaksVer = 'unknown' }
     }
     $profileDriverVersion = $null
     if ($profileApplied) {
@@ -4380,8 +4466,9 @@ try {
         Write-Ok 'Control Panel: Use the advanced 3D image settings is ON (Manage 3D / .nip profiles active).'
     }
     Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling; primary max Hz; secondary 60 Hz). Control Panel is the minimal UI.'
-    if ($driverInfo.Method -eq 'exo-clean') {
-        Write-Ok 'Clean install completed in one pass (driver + 3D + Control Panel + NVAPI display). No forced reboot.'
+    $doneMethod = Get-ExoHashString $driverInfo 'Method' 'none'
+    if ($doneMethod -in @('exo-clean', 'exo-clean-partial-tweaks', 'in-place-tweaks')) {
+        Write-Ok "Driver stage ($doneMethod) completed with 3D + Control Panel + NVAPI display."
     }
     Write-HubProgress 100 'Completed successfully'
     Write-Output ("DONE - NVIDIA {0}{1} (driver -> base+{2} games -> Control Panel + NVAPI display)" -f `

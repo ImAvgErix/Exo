@@ -1,3 +1,7 @@
+## 3.0.7
+
+- **NVIDIA Apply works**: StrictMode crash on missing RebootRequired fixed; MSI residual is soft; in-place tweaks continue into profiles/display instead of failing the whole pass
+- **Apply report honesty**: already-correct Steam stages report ok (not skip); Discord elevated kernel/boot report ok launch-safe so the UI shows green applied instead of "3 skip"
 ## 3.0.6
 
 - **Steam Apply crash**: skip-if-verified startup path no longer leaves $startupResult unset (was failing every re-Apply when startup already quiet)

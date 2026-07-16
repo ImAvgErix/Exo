@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.9.2'
+$Script:SteamOptVersion = '1.9.3'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
@@ -2370,8 +2370,8 @@ try {
     Write-HubProgress 24 'Complete client debloat...'
     $debloatResult = @{ Freed = 0L }
     if (Test-SteamCompleteClientDebloat $steam) {
-        Write-Ok 'Client debloat already verified - skip'
-        Add-ExoReport 'client-debloat' 'skip' 'already verified'
+        Write-Ok 'Client debloat already correct'
+        Add-ExoReport 'client-debloat' 'ok' 'already correct'
     } else {
         $debloatResult = Invoke-SteamCompleteClientDebloat $steam
         Add-ExoReport 'client-debloat' 'ok'
@@ -2381,8 +2381,8 @@ try {
     # Always initialize - skip path used to leave $startupResult unset and crash state save.
     $startupResult = @{ Success = $true; Count = 0 }
     if (Test-SteamWindowsStartupDisabled) {
-        Write-Ok 'Windows startup already quiet - skip'
-        Add-ExoReport 'startup-quiet' 'skip' 'already verified'
+        Write-Ok 'Windows startup already quiet'
+        Add-ExoReport 'startup-quiet' 'ok' 'already correct'
         $startupResult = @{
             Success = $true
             Count   = @($recovery.StartupEntries).Count
@@ -2398,8 +2398,8 @@ try {
 
     Write-HubProgress 34 'Windows quiet shell (toasts / tray / tasks)...'
     if (Test-SteamWindowsQuiet $steam) {
-        Write-Ok 'Windows quiet shell already verified - skip'
-        Add-ExoReport 'windows-quiet' 'skip' 'already verified'
+        Write-Ok 'Windows quiet shell already correct'
+        Add-ExoReport 'windows-quiet' 'ok' 'already correct'
     } else {
         Apply-SteamWindowsQuiet $steam
         Add-ExoReport 'windows-quiet' 'ok'

@@ -295,7 +295,8 @@ foreach ($marker in @(
 }
 
 $invalidationIndex = $nvidiaOptimizer.IndexOf('applyInProgress       = $true', [StringComparison]::Ordinal)
-$driverStageIndex = $nvidiaOptimizer.IndexOf('$driverInfo = Coerce-Hashtable (Start-DriverUpdateIfNeeded', [StringComparison]::Ordinal)
+# Accept both Coerce-Hashtable and Normalize-DriverUpdateInfo wrappers (3.0.7+).
+$driverStageIndex = $nvidiaOptimizer.IndexOf('Start-DriverUpdateIfNeeded', [StringComparison]::Ordinal)
 if ($invalidationIndex -lt 0 -or $driverStageIndex -lt 0 -or $invalidationIndex -gt $driverStageIndex) {
     Add-Failure 'NVIDIA success marker is not invalidated before the driver/profile mutation pipeline.'
 }
