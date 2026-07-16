@@ -463,6 +463,11 @@ public static partial class NetworkLogic
         "Set-Dword $tcp 'EnableTCPChimney' 1",
         // Retired crude IPv4-first hack (replaced by documented prefix-policy precedence)
         "$want6 = $base + 20",
+        // Retired DNS-priority folklore (v3.0.11): measured DNS 100ms -> 1s+.
+        // 6/7 are substring-safe (cannot match the 2000/2001 defaults); 4/5 are not
+        // (they prefix 499/500), so they stay covered by the required markers only.
+        "Set-Dword $sp 'DnsPriority' 6",
+        "Set-Dword $sp 'NetbtPriority' 7",
     };
 
     /// <summary>Required host-stack markers in every apply script (network-only).</summary>
@@ -491,11 +496,12 @@ public static partial class NetworkLogic
         "fastopenfallback=enabled",
         "-MaxSynRetransmissions 2",
         "-NonSackRttResiliency Disabled",
-        // DNS ServiceProvider priorities (documented DWORDs)
-        "LocalPriority' 4",
-        "HostsPriority' 5",
-        "DnsPriority' 6",
-        "NetbtPriority' 7",
+        // DNS ServiceProvider priorities pinned to documented Windows defaults
+        // (folklore 4/5/6/7 retired v3.0.11: measured DNS 100ms -> 1s+)
+        "LocalPriority' 499",
+        "HostsPriority' 500",
+        "DnsPriority' 2000",
+        "NetbtPriority' 2001",
         // Background download quiet
         "DoSvc",
         "EnableBITSMaxBandwidth",

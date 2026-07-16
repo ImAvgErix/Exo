@@ -404,11 +404,15 @@ Expect("MaxSyn + NonSackRttResiliency both presets",
     thrScript.Contains("-MaxSynRetransmissions 2", StringComparison.Ordinal) &&
     latScript.Contains("-NonSackRttResiliency Disabled", StringComparison.Ordinal) &&
     thrScript.Contains("-NonSackRttResiliency Disabled", StringComparison.Ordinal));
-Expect("DNS ServiceProvider priorities",
-    latScript.Contains("LocalPriority' 4", StringComparison.Ordinal) &&
-    latScript.Contains("HostsPriority' 5", StringComparison.Ordinal) &&
-    latScript.Contains("DnsPriority' 6", StringComparison.Ordinal) &&
-    latScript.Contains("NetbtPriority' 7", StringComparison.Ordinal));
+Expect("DNS ServiceProvider priorities pinned to defaults",
+    latScript.Contains("LocalPriority' 499", StringComparison.Ordinal) &&
+    latScript.Contains("HostsPriority' 500", StringComparison.Ordinal) &&
+    latScript.Contains("DnsPriority' 2000", StringComparison.Ordinal) &&
+    latScript.Contains("NetbtPriority' 2001", StringComparison.Ordinal) &&
+    thrScript.Contains("DnsPriority' 2000", StringComparison.Ordinal) &&
+    thrScript.Contains("NetbtPriority' 2001", StringComparison.Ordinal) &&
+    !latScript.Contains("Set-Dword $sp 'DnsPriority' 6", StringComparison.Ordinal) &&
+    !latScript.Contains("Set-Dword $sp 'NetbtPriority' 7", StringComparison.Ordinal));
 Expect("DoSvc demand-start + snapshot of StartType",
     latScript.Contains("Set-Service -Name 'DoSvc' -StartupType Manual", StringComparison.Ordinal) &&
     latScript.Contains("startType", StringComparison.Ordinal));
