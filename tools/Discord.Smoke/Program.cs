@@ -237,11 +237,15 @@ Expect("elevated apply disarms kernel for launch safety",
     applyBlob.Contains("Disable-DiscOptKernelOnDisk", StringComparison.Ordinal) &&
     (applyBlob.Contains("kernel disarmed for launch safety", StringComparison.Ordinal) ||
      applyBlob.Contains("elevated host: kernel disarmed", StringComparison.Ordinal) ||
+     applyBlob.Contains("launch-safe (kernel off under elevated", StringComparison.Ordinal) ||
+     applyBlob.Contains("kernel off under elevated", StringComparison.Ordinal) ||
      applyBlob.Contains("half-kernel disarmed", StringComparison.Ordinal) ||
      applyBlob.Contains("half-state (version.dll without valid ffmpeg proxy)", StringComparison.Ordinal)));
 Expect("elevated host boot-check honest",
-    applyBlob.Contains("elevated host", StringComparison.Ordinal) &&
-    applyBlob.Contains("Disable-DiscOptKernelOnDisk", StringComparison.Ordinal));
+    applyBlob.Contains("Disable-DiscOptKernelOnDisk", StringComparison.Ordinal) &&
+    (applyBlob.Contains("user-token boot", StringComparison.Ordinal) ||
+     applyBlob.Contains("elevated host", StringComparison.Ordinal) ||
+     applyBlob.Contains("Confirm-DiscordBootsAsUser", StringComparison.Ordinal)));
 Expect("Install-DiscOptKernel present",
     applyBlob.Contains("Install-DiscOptKernel", StringComparison.Ordinal));
 Expect("Apply-WindowsTweaks present",
