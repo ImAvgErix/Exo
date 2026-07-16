@@ -184,6 +184,15 @@ Expect("EXO_REPORT emitter + state persistence",
 Expect("EXO_REPORT persisted on failed apply too",
     System.Text.RegularExpressions.Regex.IsMatch(optimizerText,
         @"applyStatus\s*=\s*'incomplete'[\s\S]{0,600}applyReport"));
+// Wave-1 trust: first-run VDF soft-skip must not set full applied
+Expect("essential applied requires VDF ready (no soft-skip applied)",
+    optimizerText.Contains("$vdfReady = ", StringComparison.Ordinal) &&
+    optimizerText.Contains("-not $cfgSkipped", StringComparison.Ordinal) &&
+    optimizerText.Contains("-not $clientTweaksSkipped", StringComparison.Ordinal) &&
+    optimizerText.Contains("$essentialOk = $coreOk -and $vdfReady", StringComparison.Ordinal));
+Expect("first-run VDF incomplete exits 0 not full applied",
+    optimizerText.Contains("open-steam-once", StringComparison.Ordinal) &&
+    optimizerText.Contains("DONE - Steam core optimized", StringComparison.Ordinal));
 
 // --- 3s messaging consistency (trim interval is 3 seconds everywhere) ---
 var steamScriptFiles = Directory.GetFiles(Path.Combine(repo, "Exo", "Scripts", "Steam"))

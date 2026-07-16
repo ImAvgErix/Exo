@@ -1,3 +1,11 @@
+## 2.7.0
+
+- **Release trust**: GitHub Release workflow runs build + repository integrity + all five smokes before publishing Exo.exe (no untested ship)
+- **Steam honesty**: first-run VDF soft-skip no longer sets full `applied`; core pack can complete with incomplete status until Steam is opened once then Reapply
+- **Discord elevated Apply**: quiet path disarms half-kernel (version.dll without valid ffmpeg proxy) so non-admin launch stays stock-safe; boot-check reported honestly as skip under elevated host
+- **Internet UI contract**: smoke locks QoS+IP bindings label and Wi-Fi-while-Ethernet never hard-fails for "still up"
+- **No Exo scheduled tasks**: Test-Repository fails if any `Exo/Scripts` file creates Exo-* tasks
+
 ## 2.6.8
 
 - **No Exo background footprint**: never register logon/scheduled tasks (removed `Exo-NvidiaTrayHide`); purge all leftover `Exo-*` tasks on Apply/tray clear; no Exo Run-key startup or Exo services

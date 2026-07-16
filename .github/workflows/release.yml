@@ -4,6 +4,8 @@ name: Release
 # (e.g. `git tag v2.4.1 && git push origin v2.4.1`). Either way the build is
 # taken from main; Release-Exo.ps1 refuses anything that is not origin/main
 # and recreates the tag against the released commit (-ReplaceExisting).
+#
+# Wave-1 trust: never publish Exo.exe without the same smoke gates as CI.
 on:
   workflow_dispatch:
   push:
@@ -14,8 +16,50 @@ permissions:
   contents: write
 
 jobs:
+  # Same critical validation as ci.yml build-and-validate (smokes + repo integrity).
+  # Blocks publish when validation fails so a red main cannot ship a release.
+  validate-before-publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Build Exo and NVIDIA display helper
+        run: |
+          dotnet build Exo.sln -c Release -p:Platform=x64
+          dotnet build tools/Exo.NvDisplay/Exo.NvDisplay.csproj -c Release
+
+      - name: Validate scripts and bundled data
+        shell: pwsh
+        run: ./tools/Test-Repository.ps1
+
+      - name: UI + optimizer smoke (no UAC)
+        shell: pwsh
+        run: |
+          $projects = @(
+            'tools/Ui.Smoke/Ui.Smoke.csproj',
+            'tools/Network.Smoke/Network.Smoke.csproj',
+            'tools/Discord.Smoke/Discord.Smoke.csproj',
+            'tools/Steam.Smoke/Steam.Smoke.csproj',
+            'tools/Nvidia.Smoke/Nvidia.Smoke.csproj'
+          )
+          foreach ($p in $projects) {
+            Write-Host "=== $p ===" -ForegroundColor Cyan
+            dotnet run --project $p -c Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
   publish-release:
     runs-on: windows-latest
+    needs: validate-before-publish
     steps:
       - uses: actions/checkout@v4
         with:
