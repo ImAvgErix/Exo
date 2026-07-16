@@ -644,10 +644,15 @@ if (File.Exists(theme))
 // Version gate
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
+// Version-agnostic: assert the two stamps agree with each other and look like semver,
+// so a version bump never requires editing this test (Bump-Version.ps1 only touches csproj).
+var csprojText = File.Exists(csproj) ? File.ReadAllText(csproj) : "";
+var csprojVersion = System.Text.RegularExpressions.Regex.Match(csprojText, "<Version>([^<]+)</Version>").Groups[1].Value;
+Expect("csproj has semver Version", System.Text.RegularExpressions.Regex.IsMatch(csprojVersion, @"^\d+\.\d+\.\d+$"),
+    $"got=[{csprojVersion}]");
 if (File.Exists(versionFile))
-    Expect("VERSION is 3.0.11", File.ReadAllText(versionFile).Trim() == "3.0.11");
-if (File.Exists(csproj))
-    Expect("csproj Version 3.0.11", File.ReadAllText(csproj).Contains("<Version>3.0.11</Version>", StringComparison.Ordinal));
+    Expect("VERSION matches csproj Version", File.ReadAllText(versionFile).Trim() == csprojVersion,
+        $"VERSION=[{File.ReadAllText(versionFile).Trim()}] csproj=[{csprojVersion}]");
 
 // Live advisor (realtime next-step coach on every optimizer)
 var advisorPath = Path.Combine(repo, "Exo", "Services", "OptimizerAdvisor.cs");

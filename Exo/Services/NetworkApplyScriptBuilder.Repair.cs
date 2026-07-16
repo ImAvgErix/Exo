@@ -184,6 +184,35 @@ if ($snap) {
     } catch {}
   }
   Report 'restore-bindings' 'ok'
+  # --- 6b) Per-adapter DNS servers + DoH registrations (privacy feature) ---
+  if ($snap.dnsServers) {
+    foreach ($ds in @($snap.dnsServers)) {
+      try {
+        $t = $null
+        if ($ds.ifIndex) { $t = Get-NetAdapter -InterfaceIndex ([int]$ds.ifIndex) -EA SilentlyContinue }
+        if (-not $t -and $ds.name) { $t = Get-NetAdapter -Name ([string]$ds.name) -EA SilentlyContinue }
+        if (-not $t) { continue }
+        $v4 = @($ds.ipv4 | Where-Object { $_ })
+        $v6 = @($ds.ipv6 | Where-Object { $_ })
+        if ($v4.Count -gt 0) { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -AddressFamily IPv4 -ServerAddresses $v4 -EA SilentlyContinue }
+        else { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -AddressFamily IPv4 -ResetServerAddresses -EA SilentlyContinue }
+        if ($v6.Count -gt 0) { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -AddressFamily IPv6 -ServerAddresses $v6 -EA SilentlyContinue }
+        else { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -AddressFamily IPv6 -ResetServerAddresses -EA SilentlyContinue }
+      } catch {}
+    }
+    Report 'restore-dns' 'ok'
+  } else {
+    Report 'restore-dns' 'skip' 'snapshot predates dns capture'
+  }
+  # DoH: remove only registrations that were absent before apply (leave user's own intact)
+  try {
+    $priorDoh = [string]$snap.dohRaw
+    foreach ($svr in @('1.1.1.1','1.0.0.1','2606:4700:4700::1111','2606:4700:4700::1001')) {
+      if ($priorDoh -notmatch [regex]::Escape($svr)) {
+        netsh dns delete encryption server=$svr 2>&1 | Out-Null
+      }
+    }
+  } catch {}
   # --- 7) Interface metrics incl. AutomaticMetric Enabled/Disabled ---
   foreach ($mi in @($snap.ipInterfaces)) {
     try {

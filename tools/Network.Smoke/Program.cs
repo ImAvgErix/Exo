@@ -180,6 +180,31 @@ Expect("no wifi Restart-NetAdapter force",
     !System.Text.RegularExpressions.Regex.IsMatch(latScript, @"Restart-NetAdapter.*Wi-?Fi",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase));
 
+// --- Private DNS (DoH) feature contract ---
+var dohScript = NetworkApplyScriptBuilder.Build(NetworkPreset.LowestLatency,
+    new NetworkApplyOptions { PreferEthernetDisableWifi = true, RestartEthernet = false, PrivateDns = true }, media);
+Expect("DoH bake flag on", dohScript.Contains("$ExoPrivateDns = 1", StringComparison.Ordinal));
+Expect("DoH registers encryption", dohScript.Contains("dns add encryption", StringComparison.OrdinalIgnoreCase));
+Expect("DoH uses Cloudflare template", dohScript.Contains("cloudflare-dns.com/dns-query", StringComparison.OrdinalIgnoreCase));
+Expect("DoH pins Cloudflare resolvers", dohScript.Contains("1.1.1.1", StringComparison.Ordinal)
+    && dohScript.Contains("2606:4700:4700::1111", StringComparison.Ordinal));
+Expect("DoH gated to Win11 22H2+", dohScript.Contains("22621", StringComparison.Ordinal));
+Expect("DoH reports step", dohScript.Contains("private-dns", StringComparison.Ordinal));
+var dohThrScript = NetworkApplyScriptBuilder.Build(NetworkPreset.HighestThroughput,
+    new NetworkApplyOptions { PreferEthernetDisableWifi = true, RestartEthernet = false, PrivateDns = true }, media);
+Expect("DoH applies under throughput preset too", dohThrScript.Contains("dns add encryption", StringComparison.OrdinalIgnoreCase)
+    && dohThrScript.Contains("$ExoPrivateDns = 1", StringComparison.Ordinal));
+// Section text is always emitted but runtime-gated by the baked flag (default off).
+Expect("default apply bakes DoH flag off", latScript.Contains("$ExoPrivateDns = 0", StringComparison.Ordinal)
+    && thrScript.Contains("$ExoPrivateDns = 0", StringComparison.Ordinal));
+// Snapshot must capture per-adapter DNS + existing DoH so Repair can truly restore.
+Expect("apply snapshot captures adapter DNS", latScript.Contains("$snap.dnsServers", StringComparison.Ordinal));
+Expect("apply snapshot captures DoH registrations", latScript.Contains("$snap.dohRaw", StringComparison.Ordinal));
+Expect("repair restores DNS from snapshot", repairScript.Contains("restore-dns", StringComparison.Ordinal)
+    && repairScript.Contains("snap.dnsServers", StringComparison.Ordinal));
+Expect("repair prunes only Exo-added DoH", repairScript.Contains("snap.dohRaw", StringComparison.Ordinal)
+    && repairScript.Contains("dns delete encryption", StringComparison.OrdinalIgnoreCase));
+
 // --- NIC helpers (network-only; no Windows Game Mode markers) ---
 ExpectEq("vendor Intel I226",
     NetworkLogic.ClassifyNicVendor("Intel(R) Ethernet Controller I226-V"), "Intel");

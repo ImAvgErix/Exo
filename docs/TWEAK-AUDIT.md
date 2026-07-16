@@ -59,7 +59,7 @@ without the app. See `docs/INTERNET-GOLDEN-PATH.md`.
 | DefaultTTL / KeepAlive / SynAttackProtect | **Excluded** | No meaningful client gaming effect |
 | Tcp1323Opts registry | **Excluded** | Superseded by netsh timestamps (implemented) |
 | Disable IPv6 (`DisabledComponents`) | **Excluded** | Breaks modern stacks; IPv4-first via prefix policy instead |
-| Force public DNS | **Excluded** | User choice (product rule) |
+| Force public DNS | **Implemented as opt-in (v3.0.12)** | Was excluded as forced; now a user toggle (**Private DNS**) — Cloudflare dual-stack + DoH registration (`netsh dns add encryption`, autoupgrade + UDP fallback), Win11 22H2+ gated, off by default. Snapshot captures prior per-adapter DNS + DoH registrations; Repair restores/removes exactly |
 | Force MTU / jumbo for gaming | **Excluded** | Path-MTU breakage risk (PPPoE/VPN) |
 | Interrupt affinity via registry | **Excluded** | `Set-NetAdapterRss` is the supported path (implemented) |
 | Game Mode / GameDVR / HAGS / power plan | **Out of module scope** | Internet module is network-only since v2.3.4; these belong to the future Windows module |
