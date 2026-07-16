@@ -70,7 +70,7 @@ function Assert-ExoPwsh7 {
 Assert-ExoPwsh7
 
 # Default Steam launch flags (quiet cold start).
-# NEVER use -cef-disable-gpu / -cef-disable-gpu-compositing — modern Steam's
+# NEVER use -cef-disable-gpu / -cef-disable-gpu-compositing - modern Steam's
 # steamwebhelper goes blank or freezes on many GPUs (2024+ CEF).
 # Also forbidden: occlusion / renderer-accessibility disables, -silent on Start Menu.
 $Script:DefaultCefArgs = @(
@@ -1868,7 +1868,7 @@ function Test-SteamGameRunning {
 
 function Trim-WebHelpers {
   # Returns reclaimed working-set bytes (sum of positive pre-post deltas).
-  # Skip small helpers (<180 MB) — thrashing CEF every few seconds breaks the UI.
+  # Skip small helpers (<180 MB) - thrashing CEF every few seconds breaks the UI.
   [long]$reclaimed = 0
   $minWs = 180MB
   Get-Process steamwebhelper -ErrorAction SilentlyContinue | ForEach-Object {
@@ -1889,7 +1889,7 @@ function Trim-WebHelpers {
 
 function Set-SteamClientPriority([bool]$InGame) {
   # steam.exe: High when idle (snappy UI), BelowNormal in-game.
-  # steamwebhelper: Normal always — High + EmptyWorkingSet thrashes CEF and freezes the library.
+  # steamwebhelper: Normal always - High + EmptyWorkingSet thrashes CEF and freezes the library.
   $steamCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
   } else {

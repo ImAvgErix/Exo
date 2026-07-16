@@ -142,11 +142,11 @@ else {
 
     foreach ($marker in @(
         'EmptyWorkingSet',
-        'Start-Sleep -Seconds 3',
+        'Start-Sleep -Seconds 6',
         'ProcessPriorityClass]::High',
         'ProcessPriorityClass]::BelowNormal'
     )) {
-        Assert-ContainsText $embeddedHelper $marker 'Steam aggressive helper'
+        Assert-ContainsText $embeddedHelper $marker 'Steam webhelper helper'
     }
 }
 

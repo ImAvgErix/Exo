@@ -3242,7 +3242,7 @@ function Test-ExoDriverInstallTweaks {
     }
 
     # MSI: if the key exists and is 0, fail; if 1, pass; if no display PCI nodes found,
-    # soft-skip (clean installs often omit Class under StrictMode — not a hard fail).
+    # soft-skip (clean installs often omit Class under StrictMode - not a hard fail).
     $msiSeen = 0
     $msiGaps = 0
     try {
@@ -3270,8 +3270,8 @@ function Test-ExoDriverInstallTweaks {
         if ($msiGaps -eq 0) { [void]$oks.Add("MSI High verified on $msiSeen NVIDIA display device(s)") }
         else { [void]$issues.Add("MSI High missing on $msiGaps of $msiSeen NVIDIA display device(s)") }
     } else {
-        # Soft skip — do not brick the whole Apply after a successful clean driver install.
-        [void]$oks.Add('MSI High skipped (no display PCI Class nodes visible yet — reboot may help)')
+        # Soft skip - do not brick the whole Apply after a successful clean driver install.
+        [void]$oks.Add('MSI High skipped (no display PCI Class nodes visible yet - reboot may help)')
     }
 
     # Exo remembered this exact driver version as tweaked
@@ -3452,7 +3452,7 @@ function Start-DriverUpdateIfNeeded {
         if (-not $postTweaks -or -not $postTweaks.Ok) {
             $gaps = if ($postTweaks) { @($postTweaks.Issues) -join '; ' } else { 'verification did not run' }
             # Driver package is already on disk. Soft gaps (MSI Class enum) must not
-            # abort profile import / display prefs — that left users with "failed"
+            # abort profile import / display prefs - that left users with "failed"
             # after a successful clean install and a broken-looking UI mid-pipeline.
             Write-Warn "Driver installed; some performance tweaks not fully verified: $gaps"
             Write-Warn 'Continuing pipeline (profiles + display). Reboot then Reapply if MSI still soft-skips.'
