@@ -227,6 +227,10 @@ public static partial class DiscordLogic
         "SystemResponsiveness' 0",
         "FPS Unlocker",
         "Win32PrioritySeparation",
+        // StrictMode landmines: reading an unset Script var throws even inside a
+        // $null probe (e2e-found crash v3.0.11) - probe with Get-Variable instead.
+        "$null -eq $Script:HubStepPct",
+        "$null -eq $Script:ExoApplyReport",
     };
 
     public static readonly string[] RequiredApplyMarkers =
@@ -238,6 +242,9 @@ public static partial class DiscordLogic
         "EXO",
         "Exo Discord Voice",
         "EXO_REPORT",
+        // StrictMode-safe probes for the hub progress + apply-report Script vars.
+        "Get-Variable -Name HubStepPct",
+        "Get-Variable -Name ExoApplyReport",
     };
 
     public static (bool Ok, List<string> Issues) AuditApplyScriptText(string script)
