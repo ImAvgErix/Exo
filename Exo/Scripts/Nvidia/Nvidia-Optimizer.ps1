@@ -4056,6 +4056,41 @@ try {
     }
     $gameProfiles = @()
     $gameProfilesApplied = $false
+    # Skip re-import when state already has this pack applied + DRS verified (same G-SYNC + series).
+    if (-not $SkipProfile) {
+        try {
+            if (Test-Path -LiteralPath $StatePath) {
+                $prior = Get-Content -LiteralPath $StatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+                $sameSeries = [string]$prior.series -eq [string]$seriesId
+                $sameGsync = [bool]$prior.gsync -eq [bool]$useGsync
+                $already = [bool]$prior.profileApplied -and
+                    [string]$prior.drsVerified -eq 'True' -and
+                    $sameSeries -and $sameGsync -and
+                    (-not [string]::IsNullOrWhiteSpace([string]$prior.profileSha256))
+                if ($already) {
+                    $nipCheck = Get-ProfileFile $seriesId $useGsync
+                    $hashNow = if ($nipCheck) {
+                        (Get-FileHash -LiteralPath $nipCheck -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
+                    } else { '' }
+                    if ($hashNow -and [string]$prior.profileSha256 -eq $hashNow) {
+                        Write-Ok '3D profile pack already applied + DRS verified - skip re-import'
+                        $SkipProfile = $true
+                        $profileApplied = $true
+                        $profileSha256 = [string]$prior.profileSha256
+                        $drsVerification = @{
+                            Verified     = 'True'
+                            VerifiedAt   = [string]$prior.drsVerifiedAt
+                            SettingCount = [int]$prior.drsVerifiedSettingCount
+                            Mismatches   = @()
+                            Reason       = 'already verified - skipped re-import'
+                        }
+                    }
+                }
+            }
+        } catch {
+            Write-Warn "Could not evaluate prior profile state: $($_.Exception.Message)"
+        }
+    }
     if (-not $SkipProfile) {
         Set-ExoStage 'profile-pack-verify'
         if ([string]::IsNullOrWhiteSpace($profilePackVersion)) {

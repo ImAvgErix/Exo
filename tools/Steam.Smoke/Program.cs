@@ -15,10 +15,10 @@ Log(DateTime.UtcNow.ToString("o"));
 
 var cefGood = """
 @echo off
-start "" /HIGH /D "C:\Steam" "C:\Steam\steam.exe" -cef-disable-gpu -nofriendsui -nointro %*
+start "" /HIGH /D "C:\Steam" "C:\Steam\steam.exe" -nofriendsui -nointro %*
 """;
 var cefMissingHigh = """
-start "" "C:\Steam\steam.exe" -cef-disable-gpu -nofriendsui -nointro
+start "" "C:\Steam\steam.exe" -nofriendsui -nointro
 """;
 Expect("CEF launcher", SteamLogic.IsCefLauncherText(cefGood));
 Expect("CEF missing /HIGH fails", !SteamLogic.IsCefLauncherText(cefMissingHigh));
@@ -70,7 +70,7 @@ if (File.Exists(core))
 $failed=0
 function E($n,$c){{ if($c){{'PASS  '+$n}} else {{$script:failed++; 'FAIL  '+$n}} }}
 @(
- (E 'ps cef' (Test-SteamCefLauncherText -Text 'start """" /HIGH steam.exe -cef-disable-gpu -nofriendsui -nointro')),
+ (E 'ps cef' (Test-SteamCefLauncherText -Text 'start """" /HIGH steam.exe -nofriendsui -nointro')),
  (E 'ps trim 5' (Test-SteamTrimHelperText -Text @'
 Exo.SteamWebHelper
 EmptyWorkingSet
@@ -194,7 +194,7 @@ Expect("first-run VDF incomplete exits 0 not full applied",
     optimizerText.Contains("open-steam-once", StringComparison.Ordinal) &&
     optimizerText.Contains("DONE - Steam core optimized", StringComparison.Ordinal));
 
-// --- 3s messaging consistency (trim interval is 3 seconds everywhere) ---
+// --- gentle trim interval (6s) ---
 var steamScriptFiles = Directory.GetFiles(Path.Combine(repo, "Exo", "Scripts", "Steam"))
     .Where(f => f.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase) ||
                 f.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
@@ -208,9 +208,14 @@ foreach (var f in steamScriptFiles)
 }
 Expect("no stale 5s messaging in Steam scripts", staleFiveSecond.Count == 0,
     string.Join(", ", staleFiveSecond));
-Expect("3s trim messaging present",
-    optimizerText.Contains("3s", StringComparison.Ordinal) &&
-    optimizerText.Contains("Start-Sleep -Seconds 3", StringComparison.Ordinal));
+Expect("6s gentle trim present",
+    optimizerText.Contains("Start-Sleep -Seconds 6", StringComparison.Ordinal) &&
+    optimizerText.Contains("gentle", StringComparison.OrdinalIgnoreCase));
+Expect("default CEF does not disable GPU",
+    !System.Text.RegularExpressions.Regex.IsMatch(
+        optimizerText,
+        @"DefaultCefArgs\s*=\s*@\((?:[^)]|\n)*?-cef-disable-gpu",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase));
 
 // --- Placeholder cleanup (dead Steam stub deleted) ---
 Expect("Placeholders Steam stub deleted",

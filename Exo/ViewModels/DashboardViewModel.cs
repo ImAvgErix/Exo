@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Exo.Helpers;
 using Exo.Models;
 using Exo.Services;
 
@@ -28,44 +30,44 @@ public partial class DashboardViewModel : ObservableObject
         foreach (var card in Cards)
             card.InitializePresentation();
 
-        // Card set is fixed — materialize once instead of re-allocating per binding read.
         SoonCards = Cards.Where(c => c.IsComingSoon).ToList();
-
         RefreshDashboard();
     }
 
     public IReadOnlyList<OptimizerCardViewModel> Cards { get; }
-
     public IReadOnlyList<OptimizerCardViewModel> SoonCards { get; }
-
     public ObservableCollection<HomeSparkBar> SparkBars { get; } = new();
 
-    // FPS / frame-time capture is not shipped — stay honest with empty until it is.
-    [ObservableProperty] private string _fpsPrimary = "—";
-    [ObservableProperty] private string _fpsSecondary = "No capture yet";
-    [ObservableProperty] private string _frameTimePrimary = "—";
-    [ObservableProperty] private string _frameTimeSecondary = "No frame-time capture yet";
+    [ObservableProperty] private string _heroSummary = "Maximum performance. No compromise.";
+
+    [ObservableProperty] private string _memoryPrimary = "—";
+    [ObservableProperty] private string _memorySecondary = "Reading system memory...";
+    [ObservableProperty] private string _memoryLoadText = "";
+    [ObservableProperty] private bool _hasMemory;
 
     [ObservableProperty] private bool _hasTrimStats;
     [ObservableProperty] private string _reclaimedPrimary = "—";
-    [ObservableProperty] private string _reclaimedSecondary = "Apply Steam to start reclaiming";
+    [ObservableProperty] private string _reclaimedSecondary = "Apply Steam to reclaim RAM";
 
-    [ObservableProperty] private bool _hasMemory;
-    [ObservableProperty] private string _memoryPrimary = "—";
-    [ObservableProperty] private string _memorySecondary = "Live memory unavailable";
-    [ObservableProperty] private string _memoryLoadText = "";
+    [ObservableProperty] private string _discordStatusPrimary = "—";
+    [ObservableProperty] private string _discordStatusSecondary = "Not optimized yet";
+    [ObservableProperty] private string _steamStatusPrimary = "—";
+    [ObservableProperty] private string _steamStatusSecondary = "Not optimized yet";
 
     [ObservableProperty] private bool _hasLatency;
     [ObservableProperty] private string _latencyPrimary = "—";
-    [ObservableProperty] private string _latencySecondary = "No Internet benchmark yet";
+    [ObservableProperty] private string _latencySecondary = "Apply Internet for ping";
 
     [ObservableProperty] private bool _hasNvidiaPath;
     [ObservableProperty] private string _nvidiaPathPrimary = "—";
-    [ObservableProperty] private string _nvidiaPathSecondary = "Apply NVIDIA to lock the frame path";
+    [ObservableProperty] private string _nvidiaPathSecondary = "Apply NVIDIA profiles";
 
-    /// <summary>
-    /// Refresh file-backed stats + live memory. No Detect* probes — those stay on module pages.
-    /// </summary>
+    // Kept for any leftover bindings / smokes that still mention FPS fields.
+    [ObservableProperty] private string _fpsPrimary = "—";
+    [ObservableProperty] private string _fpsSecondary = "";
+    [ObservableProperty] private string _frameTimePrimary = "—";
+    [ObservableProperty] private string _frameTimeSecondary = "";
+
     public Task RefreshStatesAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
@@ -89,116 +91,181 @@ public partial class DashboardViewModel : ObservableObject
             ? mem.TotalBytes - mem.AvailableBytes
             : 0UL;
         HasMemory = true;
-        MemoryLoadText = $"{mem.LoadPercent}%";
+        MemoryLoadText = $"{mem.LoadPercent}% in use";
         MemoryPrimary = HomeDashboardReader.FormatBytes(used);
-        MemorySecondary = $"in use · {HomeDashboardReader.FormatBytes(mem.TotalBytes)} total";
+        MemorySecondary = $"{HomeDashboardReader.FormatBytes(mem.AvailableBytes)} free · {HomeDashboardReader.FormatBytes(mem.TotalBytes)} total";
     }
 
     private void RefreshDashboard()
     {
-        // Hero pair: NVIDIA pack path + Discord apply (honest file-backed, no fake FPS).
-        // FPS capture is not shipped — use pack/apply status so home is not all dashes.
         SparkBars.Clear();
+        var appliedCount = 0;
 
-        var nvidia = HomeDashboardReader.TryReadNvidiaPath();
-        if (nvidia is null)
+        // Discord
+        var discord = ReadModuleState("discord-optimizer.json");
+        if (discord.Applied)
         {
-            HasNvidiaPath = false;
-            FpsPrimary = "—";
-            FpsSecondary = "Apply NVIDIA to lock the pack";
-            NvidiaPathPrimary = "—";
-            NvidiaPathSecondary = "Apply NVIDIA to lock the frame path";
+            appliedCount++;
+            DiscordStatusPrimary = "Optimized";
+            DiscordStatusSecondary = discord.Detail ?? "Last Apply OK · kernel off under elevated Exo for launch safety";
         }
         else
         {
-            HasNvidiaPath = true;
-            FpsPrimary = nvidia.Gsync ? "G-SYNC" : "Max FPS";
-            FpsSecondary = string.IsNullOrWhiteSpace(nvidia.ProfileFile)
-                ? "Profile pack applied"
-                : nvidia.ProfileFile!;
-            NvidiaPathPrimary = nvidia.Gsync ? "G-SYNC pack" : "Max FPS pack";
-            NvidiaPathSecondary = string.IsNullOrWhiteSpace(nvidia.ProfileFile)
-                ? "Profile applied"
-                : nvidia.ProfileFile!;
+            DiscordStatusPrimary = "Not yet";
+            DiscordStatusSecondary = "Open Discord module → Apply";
         }
 
-        // Frame-time slot: Discord apply status (real state file) until capture ships.
-        var discordApplied = HomeDashboardReader.TryReadDiscordApplied();
-        if (discordApplied)
+        // Steam
+        var steam = ReadModuleState("steam-optimizer.json");
+        if (steam.Applied)
         {
-            FrameTimePrimary = "Applied";
-            FrameTimeSecondary = "Discord optimizer last apply OK";
+            appliedCount++;
+            SteamStatusPrimary = "Optimized";
+            SteamStatusSecondary = steam.Detail ?? "CEF quiet + webhelper trim";
         }
         else
         {
-            FrameTimePrimary = "—";
-            FrameTimeSecondary = "Apply Discord · frame capture later";
+            SteamStatusPrimary = "Not yet";
+            SteamStatusSecondary = "Open Steam module → Apply";
         }
 
         var trim = HomeDashboardReader.TryReadTrimStats();
         if (trim is null)
         {
             HasTrimStats = false;
-            ReclaimedPrimary = "—";
-            ReclaimedSecondary = "Apply Steam to reclaim RAM / cache";
+            ReclaimedPrimary = steam.Applied ? "Active" : "—";
+            ReclaimedSecondary = steam.Applied
+                ? "Open Steam to accumulate live webhelper reclaim"
+                : "Apply Steam to reclaim RAM / cache";
         }
         else
         {
             HasTrimStats = true;
-            var heroBytes = trim.Last24hBytes > 0 ? trim.Last24hBytes : trim.TotalBytes;
-            if (heroBytes > 0)
+            var hero = trim.Last24hBytes > 0 ? trim.Last24hBytes : trim.TotalBytes;
+            if (hero > 0)
             {
-                ReclaimedPrimary = HomeDashboardReader.FormatBytes(heroBytes);
+                ReclaimedPrimary = HomeDashboardReader.FormatBytes(hero);
                 ReclaimedSecondary = trim.Last24hBytes > 0
-                    ? $"last 24 h · {HomeDashboardReader.FormatBytes(trim.TotalBytes)} total"
-                    : (trim.Passes > 0 ? "from last Steam Apply (cache free)" : "total reclaimed");
+                    ? $"last 24h · {HomeDashboardReader.FormatBytes(trim.TotalBytes)} total · {trim.Passes} trim passes"
+                    : $"total · {trim.Passes} trim passes";
             }
             else
             {
-                ReclaimedPrimary = "Active";
-                ReclaimedSecondary = "Steam optimized · open Steam for live trim";
+                ReclaimedPrimary = "Ready";
+                ReclaimedSecondary = "Helper installed · open Steam for live reclaim";
             }
 
-            // Spark from hourly series when present.
             if (trim.HourlyBytes.Count > 0)
             {
                 var max = Math.Max(1L, trim.HourlyBytes.Max());
                 foreach (var b in trim.HourlyBytes)
-                {
-                    var h = 8 + (40.0 * b / max);
-                    SparkBars.Add(new HomeSparkBar { Height = h });
-                }
+                    SparkBars.Add(new HomeSparkBar { Height = 8 + (40.0 * b / max) });
             }
         }
 
+        // Internet
         var latency = HomeDashboardReader.TryReadLatency(_services.Network);
-        if (latency is null)
+        if (latency is not null)
         {
-            var netStatus = HomeDashboardReader.TryReadInternetStatus();
-            if (netStatus is not null)
-            {
-                HasLatency = true;
-                LatencyPrimary = "Applied";
-                LatencySecondary = $"Internet {netStatus} · run Apply again for ping delta";
-            }
-            else
-            {
-                HasLatency = false;
-                LatencyPrimary = "—";
-                LatencySecondary = "Apply Internet for ping before/after";
-            }
-        }
-        else
-        {
+            appliedCount++;
             HasLatency = true;
             var delta = latency.AfterP50Ms - latency.BeforeP50Ms;
             var sign = delta > 0 ? "+" : "";
             LatencyPrimary = $"{sign}{delta:0.0} ms";
-            LatencySecondary =
-                $"ping {latency.BeforeP50Ms:0.0} → {latency.AfterP50Ms:0.0} ms";
+            LatencySecondary = $"ping {latency.BeforeP50Ms:0.0} → {latency.AfterP50Ms:0.0} ms";
+        }
+        else
+        {
+            var netStatus = HomeDashboardReader.TryReadInternetStatus();
+            if (netStatus is not null)
+            {
+                appliedCount++;
+                HasLatency = true;
+                LatencyPrimary = "Applied";
+                LatencySecondary = $"{netStatus} · Reapply for ping delta";
+            }
+            else
+            {
+                HasLatency = false;
+                LatencyPrimary = "Not yet";
+                LatencySecondary = "Apply Internet for ping before/after";
+            }
         }
 
+        // NVIDIA
+        var nvidia = HomeDashboardReader.TryReadNvidiaPath();
+        if (nvidia is not null)
+        {
+            appliedCount++;
+            HasNvidiaPath = true;
+            NvidiaPathPrimary = nvidia.Gsync ? "G-SYNC" : "Max FPS";
+            NvidiaPathSecondary = string.IsNullOrWhiteSpace(nvidia.ProfileFile)
+                ? "Profile pack applied"
+                : nvidia.ProfileFile!;
+        }
+        else
+        {
+            // Show last error / incomplete honestly
+            var nvState = ReadModuleState("nvidia-optimizer.json");
+            HasNvidiaPath = false;
+            if (!string.IsNullOrWhiteSpace(nvState.Detail))
+            {
+                NvidiaPathPrimary = "Needs work";
+                NvidiaPathSecondary = nvState.Detail!;
+            }
+            else
+            {
+                NvidiaPathPrimary = "Not yet";
+                NvidiaPathSecondary = "Apply NVIDIA for 3D profiles";
+            }
+        }
+
+        FpsPrimary = NvidiaPathPrimary;
+        FpsSecondary = NvidiaPathSecondary;
+        FrameTimePrimary = DiscordStatusPrimary;
+        FrameTimeSecondary = DiscordStatusSecondary;
+
+        HeroSummary = appliedCount switch
+        {
+            0 => "Apply optimizers — home fills with real results.",
+            1 => "1 module optimized. Keep going.",
+            4 => "All four modules optimized.",
+            _ => $"{appliedCount} modules optimized."
+        };
+
         RefreshLiveMemory();
+    }
+
+    private static (bool Applied, string? Detail) ReadModuleState(string fileName)
+    {
+        try
+        {
+            var path = Path.Combine(PathHelper.AppDataDir, fileName);
+            if (!File.Exists(path)) return (false, null);
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var root = doc.RootElement;
+            var applied = root.TryGetProperty("applied", out var a) && a.ValueKind == JsonValueKind.True;
+            if (!applied && root.TryGetProperty("applyStatus", out var s) && s.ValueKind == JsonValueKind.String)
+                applied = string.Equals(s.GetString(), "applied", StringComparison.OrdinalIgnoreCase);
+
+            string? detail = null;
+            if (root.TryGetProperty("lastError", out var err) && err.ValueKind == JsonValueKind.String)
+            {
+                var e = err.GetString();
+                if (!string.IsNullOrWhiteSpace(e) && !applied)
+                    detail = e.Length > 90 ? e[..87] + "..." : e;
+            }
+            if (detail is null && root.TryGetProperty("appliedUtc", out var utc) && utc.ValueKind == JsonValueKind.String)
+            {
+                if (DateTime.TryParse(utc.GetString(), null, System.Globalization.DateTimeStyles.RoundtripKind, out var t))
+                    detail = "Last Apply " + t.ToLocalTime().ToString("g");
+            }
+            return (applied, detail);
+        }
+        catch
+        {
+            return (false, null);
+        }
     }
 
     private static OptimizerCardViewModel Card(
