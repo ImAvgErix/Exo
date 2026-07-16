@@ -19,22 +19,22 @@ public partial class NvidiaPanelViewModel : ObservableObject
 
     public ObservableCollection<NvidiaDisplayColorRowViewModel> Displays { get; } = new();
 
-    [ObservableProperty] private string _headerStatus = "Checking...";
-    [ObservableProperty] private string _headerDetail = string.Empty;
-    [ObservableProperty] private bool _isLoading = true;
-    [ObservableProperty] private bool _isBusy;
-    [ObservableProperty] private bool _hasDisplays;
-    [ObservableProperty] private double _progressPercent;
-    [ObservableProperty] private string _progressStatus = string.Empty;
-    [ObservableProperty] private string _message = string.Empty;
-    [ObservableProperty] private bool _hasMessage;
-    [ObservableProperty] private string _messageGlyph = "\uE73E";
-    [ObservableProperty] private Brush _messageBrush;
+    [ObservableProperty] public partial string HeaderStatus { get; set; } = "Checking...";
+    [ObservableProperty] public partial string HeaderDetail { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool IsLoading { get; set; } = true;
+    [ObservableProperty] public partial bool IsBusy { get; set; }
+    [ObservableProperty] public partial bool HasDisplays { get; set; }
+    [ObservableProperty] public partial double ProgressPercent { get; set; }
+    [ObservableProperty] public partial string ProgressStatus { get; set; } = string.Empty;
+    [ObservableProperty] public partial string Message { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool HasMessage { get; set; }
+    [ObservableProperty] public partial string MessageGlyph { get; set; } = "\uE73E";
+    [ObservableProperty] public partial Brush MessageBrush { get; set; }
 
     [RelayCommand]
     public Task RefreshAsync() => RefreshCoreAsync(force: false, soft: false);
 
-    [ObservableProperty] private bool _hasControlPanel;
+    [ObservableProperty] public partial bool HasControlPanel { get; set; }
 
     [RelayCommand]
     public void OpenControlPanel()

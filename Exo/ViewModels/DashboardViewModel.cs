@@ -38,35 +38,35 @@ public partial class DashboardViewModel : ObservableObject
     public IReadOnlyList<OptimizerCardViewModel> SoonCards { get; }
     public ObservableCollection<HomeSparkBar> SparkBars { get; } = new();
 
-    [ObservableProperty] private string _heroSummary = "Maximum performance. No compromise.";
+    [ObservableProperty] public partial string HeroSummary { get; set; } = "Maximum performance. No compromise.";
 
-    [ObservableProperty] private string _memoryPrimary = "—";
-    [ObservableProperty] private string _memorySecondary = "Reading system memory...";
-    [ObservableProperty] private string _memoryLoadText = "";
-    [ObservableProperty] private bool _hasMemory;
+    [ObservableProperty] public partial string MemoryPrimary { get; set; } = "—";
+    [ObservableProperty] public partial string MemorySecondary { get; set; } = "Reading system memory...";
+    [ObservableProperty] public partial string MemoryLoadText { get; set; } = "";
+    [ObservableProperty] public partial bool HasMemory { get; set; }
 
     // Kept for smokes / leftover bindings that still reference reclaim hero fields.
-    [ObservableProperty] private bool _hasTrimStats;
-    [ObservableProperty] private string _reclaimedPrimary = "—";
-    [ObservableProperty] private string _reclaimedSecondary = "Apply Steam to reclaim cache";
+    [ObservableProperty] public partial bool HasTrimStats { get; set; }
+    [ObservableProperty] public partial string ReclaimedPrimary { get; set; } = "—";
+    [ObservableProperty] public partial string ReclaimedSecondary { get; set; } = "Apply Steam to reclaim cache";
 
-    [ObservableProperty] private string _discordStatusPrimary = "—";
-    [ObservableProperty] private string _discordStatusSecondary = "Not optimized yet";
-    [ObservableProperty] private string _steamStatusPrimary = "—";
-    [ObservableProperty] private string _steamStatusSecondary = "Not optimized yet";
+    [ObservableProperty] public partial string DiscordStatusPrimary { get; set; } = "—";
+    [ObservableProperty] public partial string DiscordStatusSecondary { get; set; } = "Not optimized yet";
+    [ObservableProperty] public partial string SteamStatusPrimary { get; set; } = "—";
+    [ObservableProperty] public partial string SteamStatusSecondary { get; set; } = "Not optimized yet";
 
-    [ObservableProperty] private bool _hasLatency;
-    [ObservableProperty] private string _latencyPrimary = "—";
-    [ObservableProperty] private string _latencySecondary = "Apply Internet for ping";
+    [ObservableProperty] public partial bool HasLatency { get; set; }
+    [ObservableProperty] public partial string LatencyPrimary { get; set; } = "—";
+    [ObservableProperty] public partial string LatencySecondary { get; set; } = "Apply Internet for ping";
 
-    [ObservableProperty] private bool _hasNvidiaPath;
-    [ObservableProperty] private string _nvidiaPathPrimary = "—";
-    [ObservableProperty] private string _nvidiaPathSecondary = "Apply NVIDIA profiles";
+    [ObservableProperty] public partial bool HasNvidiaPath { get; set; }
+    [ObservableProperty] public partial string NvidiaPathPrimary { get; set; } = "—";
+    [ObservableProperty] public partial string NvidiaPathSecondary { get; set; } = "Apply NVIDIA profiles";
 
-    [ObservableProperty] private string _fpsPrimary = "—";
-    [ObservableProperty] private string _fpsSecondary = "";
-    [ObservableProperty] private string _frameTimePrimary = "—";
-    [ObservableProperty] private string _frameTimeSecondary = "";
+    [ObservableProperty] public partial string FpsPrimary { get; set; } = "—";
+    [ObservableProperty] public partial string FpsSecondary { get; set; } = "";
+    [ObservableProperty] public partial string FrameTimePrimary { get; set; } = "—";
+    [ObservableProperty] public partial string FrameTimeSecondary { get; set; } = "";
 
     public Task RefreshStatesAsync(CancellationToken ct = default)
     {
@@ -387,7 +387,7 @@ public partial class OptimizerCardViewModel : ObservableObject
 {
     public required OptimizerDefinition Definition { get; init; }
 
-    [ObservableProperty] private bool _isComingSoon;
+    [ObservableProperty] public partial bool IsComingSoon { get; set; }
 
     public void InitializePresentation()
     {

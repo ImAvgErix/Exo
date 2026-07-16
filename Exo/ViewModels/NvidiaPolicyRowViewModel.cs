@@ -12,10 +12,10 @@ public partial class NvidiaPolicyRowViewModel : ObservableObject
     /// <summary>If false, row shows Not applied but Apply is disabled (needs full profile pass).</summary>
     public bool CanApplyFromPanel { get; init; } = true;
 
-    [ObservableProperty] private string _status = "Checking...";
-    [ObservableProperty] private bool _isApplied;
-    [ObservableProperty] private string _glyph = "\uE895";
-    [ObservableProperty] private double _opacity = 0.7;
+    [ObservableProperty] public partial string Status { get; set; } = "Checking...";
+    [ObservableProperty] public partial bool IsApplied { get; set; }
+    [ObservableProperty] public partial string Glyph { get; set; } = "\uE895";
+    [ObservableProperty] public partial double Opacity { get; set; } = 0.7;
 
     public Visibility NeedsFix =>
         (!IsApplied && CanApplyFromPanel) ? Visibility.Visible : Visibility.Collapsed;
