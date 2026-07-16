@@ -267,7 +267,9 @@ if ($nvidiaPowerShell -match '(?i)SendKeys|mouse_event|SetCursorPos') {
 if ($nvidiaPowerShell -match 'ExoPrefer(?:GpuScaling|NoScaling|ScalingOverride|FullRgb)\s*=') {
     Add-Failure 'NVIDIA scripts contain obsolete Exo-only Control Panel registry markers.'
 }
-if ($nvidiaOptimizer -notmatch "displayMethod\s*=\s*'nvapi'" -or
+$optimizerWritesNvapiMethod = $nvidiaOptimizer -match "displayMethod\s*=\s*'nvapi'" -or
+    $nvidiaOptimizer -match '\$displayMethod\s*=\s*if\s*\(\$displayNvApiOk\)\s*\{\s*''nvapi''\s*\}'
+if (-not $optimizerWritesNvapiMethod -or
     $nvidiaPowerShell -notmatch "displayMethod.*-eq\s*'nvapi'") {
     Add-Failure 'NVIDIA apply/detect scripts do not require the verified NVAPI display marker.'
 }

@@ -1,19 +1,20 @@
 .action-foot {
   flex-shrink: 0;
-  padding: 10px 14px 12px;
+  padding: 8px 14px 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .action-foot__message {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.08);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 15px;
   color: var(--exo-text);
   animation: rise-in var(--dur) var(--ease-out);
 }
@@ -21,13 +22,18 @@
 .action-foot__controls {
   display: flex;
   flex-direction: column;
+  gap: 6px;
+}
+
+.action-foot__internet-grid {
+  display: grid;
+  grid-template-columns: 3fr 3fr 2fr 2fr;
   gap: 8px;
 }
 
-.action-foot__dual {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.action-foot__internet-grid .btn {
+  min-width: 0;
+  padding-inline: 12px;
 }
 
 .action-foot__secondary {
@@ -45,6 +51,7 @@
   text-align: center;
   font-family: var(--font-ui);
   font-size: 11px;
+  line-height: 14px;
   color: var(--exo-muted);
 }
 

@@ -11,17 +11,14 @@ namespace Exo.Views.Controls;
 /// Exo orbit-bead loader. Uses the Windows Composition API for rotation so
 /// the animation keeps running inside ContentDialog / Opacity-toggled hosts
 /// (DispatcherTimer + RotateTransform and XAML Storyboards both go stale there).
+/// Composition Scale/Opacity writes are intentionally avoided (v2.6.0 crash class).
+/// Crash-loop safe mode (ExoMotion.MotionDisabled) skips composition entirely.
 /// </summary>
 public sealed partial class ExoLoader : UserControl
 {
     private bool _running;
     private ScalarKeyFrameAnimation? _spinAnim;
     private ScalarKeyFrameAnimation? _trailAnim;
-    private ScalarKeyFrameAnimation? _ghostAnim;
-    private ScalarKeyFrameAnimation? _breathAnim;
-    private ScalarKeyFrameAnimation? _haloAnim;
-    private ScalarKeyFrameAnimation? _haloOpacityAnim;
-    private ScalarKeyFrameAnimation? _coreOpacityAnim;
 
     public static readonly DependencyProperty IsActiveProperty =
         DependencyProperty.Register(
@@ -86,6 +83,17 @@ public sealed partial class ExoLoader : UserControl
         if (!IsLoaded) return;
         if (_running && !force) return;
 
+        // Crash-loop safe mode: previous launch died before first frame.
+        // Never poke composition visuals here — that path is what can brick
+        // startup on real GPUs (same class as the v2.6.0 flash-close). Static
+        // beads stay visible; ExoMotion.MotionDisabled owns the gate.
+        if (Helpers.ExoMotion.MotionDisabled)
+        {
+            try { StopComposition(); } catch { }
+            _running = false;
+            return;
+        }
+
         try
         {
             StopComposition();
@@ -120,9 +128,6 @@ public sealed partial class ExoLoader : UserControl
         // Prefer composition visuals on the orbit hosts — independent of XAML storyboard clocks.
         var orbitVis = ElementCompositionPreview.GetElementVisual(Orbit);
         var trailVis = ElementCompositionPreview.GetElementVisual(TrailOrbit);
-        var ghostVis = ElementCompositionPreview.GetElementVisual(GhostOrbit);
-        var coreVis = ElementCompositionPreview.GetElementVisual(Core);
-        var haloVis = ElementCompositionPreview.GetElementVisual(Halo);
         var compositor = orbitVis.Compositor;
 
         // Pivot at element center (orbit grids are 32×32).
@@ -137,9 +142,6 @@ public sealed partial class ExoLoader : UserControl
 
         Center(orbitVis, Orbit);
         Center(trailVis, TrailOrbit);
-        Center(ghostVis, GhostOrbit);
-        Center(coreVis, Core);
-        Center(haloVis, Halo);
 
         // Clear leftover XAML RotateTransforms so composition owns the spin.
         if (OrbitRotate is not null) OrbitRotate.Angle = 0;
@@ -159,53 +161,10 @@ public sealed partial class ExoLoader : UserControl
         _trailAnim.Duration = TimeSpan.FromMilliseconds(1000);
         _trailAnim.IterationBehavior = AnimationIterationBehavior.Forever;
 
-        _ghostAnim = compositor.CreateScalarKeyFrameAnimation();
-        _ghostAnim.InsertKeyFrame(0f, -78f);
-        _ghostAnim.InsertKeyFrame(1f, 282f);
-        _ghostAnim.Duration = TimeSpan.FromMilliseconds(1000);
-        _ghostAnim.IterationBehavior = AnimationIterationBehavior.Forever;
-
-        // Core breath via scale
-        _breathAnim = compositor.CreateScalarKeyFrameAnimation();
-        _breathAnim.InsertKeyFrame(0f, 0.78f);
-        _breathAnim.InsertKeyFrame(0.5f, 1.12f);
-        _breathAnim.InsertKeyFrame(1f, 0.78f);
-        _breathAnim.Duration = TimeSpan.FromMilliseconds(1040);
-        _breathAnim.IterationBehavior = AnimationIterationBehavior.Forever;
-
-        _coreOpacityAnim = compositor.CreateScalarKeyFrameAnimation();
-        _coreOpacityAnim.InsertKeyFrame(0f, 0.55f);
-        _coreOpacityAnim.InsertKeyFrame(0.5f, 1f);
-        _coreOpacityAnim.InsertKeyFrame(1f, 0.55f);
-        _coreOpacityAnim.Duration = TimeSpan.FromMilliseconds(1040);
-        _coreOpacityAnim.IterationBehavior = AnimationIterationBehavior.Forever;
-
-        _haloAnim = compositor.CreateScalarKeyFrameAnimation();
-        _haloAnim.InsertKeyFrame(0f, 0.92f);
-        _haloAnim.InsertKeyFrame(0.75f, 1.18f);
-        _haloAnim.InsertKeyFrame(1f, 0.92f);
-        _haloAnim.Duration = TimeSpan.FromMilliseconds(1200);
-        _haloAnim.IterationBehavior = AnimationIterationBehavior.Forever;
-
-        _haloOpacityAnim = compositor.CreateScalarKeyFrameAnimation();
-        _haloOpacityAnim.InsertKeyFrame(0f, 0.14f);
-        _haloOpacityAnim.InsertKeyFrame(0.75f, 0f);
-        _haloOpacityAnim.InsertKeyFrame(1f, 0.14f);
-        _haloOpacityAnim.Duration = TimeSpan.FromMilliseconds(1200);
-        _haloOpacityAnim.IterationBehavior = AnimationIterationBehavior.Forever;
-
-        // One orbit language: primary bead + soft trail (no ghost/sweep race).
+        // One orbit language: primary bead + soft trail. Rotation only —
+        // composition Scale/Opacity hand-off writes are the crash-prone class.
         orbitVis.StartAnimation("RotationAngleInDegrees", _spinAnim);
         trailVis.StartAnimation("RotationAngleInDegrees", _trailAnim);
-
-        // Soft core + halo breath only (same Kinetics family as page enter springs).
-        coreVis.StartAnimation("Scale.X", _breathAnim);
-        coreVis.StartAnimation("Scale.Y", _breathAnim);
-        coreVis.StartAnimation("Opacity", _coreOpacityAnim);
-
-        haloVis.StartAnimation("Scale.X", _haloAnim);
-        haloVis.StartAnimation("Scale.Y", _haloAnim);
-        haloVis.StartAnimation("Opacity", _haloOpacityAnim);
     }
 
     private void StopComposition()
@@ -236,6 +195,7 @@ public sealed partial class ExoLoader : UserControl
                 v.StopAnimation("RotationAngleInDegrees");
                 v.RotationAngleInDegrees = 0;
             }
+            // Clear any leftover Scale/Opacity from older builds that still wrote them.
             if (Core is not null)
             {
                 var v = ElementCompositionPreview.GetElementVisual(Core);
@@ -259,10 +219,5 @@ public sealed partial class ExoLoader : UserControl
 
         _spinAnim = null;
         _trailAnim = null;
-        _ghostAnim = null;
-        _breathAnim = null;
-        _haloAnim = null;
-        _haloOpacityAnim = null;
-        _coreOpacityAnim = null;
     }
 }

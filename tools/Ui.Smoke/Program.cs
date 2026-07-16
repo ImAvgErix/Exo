@@ -100,12 +100,14 @@ if (File.Exists(main))
     Expect("ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
     Expect("no tooltips in main", !m.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
 }
-// SetTitleBar must target the drag strip only — not a parent that owns the gear/back buttons.
+// SetTitleBar targets the full NavRail (52px). WinUI still delivers pointer hits to
+// interactive children (EXO / module circles / Settings); the old 8px drag strip
+// made the fixed window feel undraggable.
 var mainCs = Path.Combine(repo, "Exo", "MainWindow.xaml.cs");
 if (File.Exists(mainCs))
 {
     var cs = File.ReadAllText(mainCs);
-    Expect("SetTitleBar drag strip", cs.Contains("SetTitleBar(TitleBarDragRegion)", StringComparison.Ordinal));
+    Expect("SetTitleBar NavRail drag", cs.Contains("SetTitleBar(NavRail)", StringComparison.Ordinal));
     Expect("not SetTitleBar whole host", !cs.Contains("SetTitleBar(TitleBarHost)", StringComparison.Ordinal));
     Expect("fixed shell no maximize", cs.Contains("IsMaximizable = false", StringComparison.Ordinal));
     Expect("fixed shell no resize", cs.Contains("IsResizable = false", StringComparison.Ordinal));
@@ -264,6 +266,10 @@ if (File.Exists(theme))
     Expect("theme ExoCardButton", t.Contains("ExoCardButton", StringComparison.Ordinal));
     Expect("theme ExoFeatureTile", t.Contains("ExoFeatureTile", StringComparison.Ordinal));
     Expect("theme ExoActionBar", t.Contains("ExoActionBar", StringComparison.Ordinal));
+    Expect("theme compact message banners",
+        t.Contains("ExoMessageText", StringComparison.Ordinal)
+        && t.Contains("ExoInfoMessageText", StringComparison.Ordinal)
+        && t.Contains("Property=\"Padding\" Value=\"10,6\"", StringComparison.Ordinal));
     Expect("theme ExoIconWell", t.Contains("ExoIconWell", StringComparison.Ordinal));
     Expect("theme ExoPagePadding", t.Contains("ExoPagePadding", StringComparison.Ordinal));
     Expect("theme ExoThemeChoice", t.Contains("ExoThemeChoice", StringComparison.Ordinal));
@@ -357,6 +363,15 @@ if (File.Exists(featureGridXaml))
             && fg.Contains("Orientation=\"Vertical\"", StringComparison.Ordinal))
         || (fg.Contains("Layout", StringComparison.Ordinal)
             && fg.Contains("Orientation=\"Vertical\"", StringComparison.Ordinal)));
+    Expect("feature grid overlay scrollbar",
+        fg.Contains("DefaultScrollBarStyle", StringComparison.Ordinal)
+        && fg.Contains("ScrollBarTrackFill", StringComparison.Ordinal)
+        && fg.Contains("ExoFeatureScrollTransparentBrush", StringComparison.Ordinal)
+        && fg.Contains("ScrollBarThumbFill", StringComparison.Ordinal)
+        && fg.Contains("VerticalScrollBarVisibility=\"Auto\"", StringComparison.Ordinal));
+    Expect("feature grid bottom scroll cue",
+        fg.Contains("Margin=\"0,0,0,16\"", StringComparison.Ordinal)
+        && fg.Contains("Trailing scroll buffer", StringComparison.Ordinal));
 }
 if (File.Exists(featureGridCs))
 {
@@ -378,6 +393,23 @@ foreach (var page in new[]
         (x.Contains("FeatureTileGrid", StringComparison.Ordinal)
             || x.Contains("ViewerTileGrid", StringComparison.Ordinal))
         && !x.Contains("x:Name=\"FeatureRepeater\"", StringComparison.Ordinal));
+    Expect(page + " compact action footer",
+        x.Contains("Padding=\"16,8,16,10\"", StringComparison.Ordinal)
+        && x.Contains("Spacing=\"6\"", StringComparison.Ordinal));
+}
+
+var internetDensityXaml = Path.Combine(repo, "Exo", "Views", "InternetOptimizerPage.xaml");
+if (File.Exists(internetDensityXaml))
+{
+    var ix = File.ReadAllText(internetDensityXaml);
+    Expect("internet single-row action density",
+        ix.Contains("ExoInternetActionGrid", StringComparison.Ordinal)
+        && ix.Contains("<ColumnDefinition Width=\"3*\"", StringComparison.Ordinal)
+        && ix.Contains("Grid.Column=\"3\"", StringComparison.Ordinal));
+    Expect("internet compact honest messages",
+        ix.Contains("RollbackNotice", StringComparison.Ordinal)
+        && ix.Contains("Style=\"{StaticResource ExoMessageText}\"", StringComparison.Ordinal)
+        && ix.Contains("Style=\"{StaticResource ExoInfoMessageText}\"", StringComparison.Ordinal));
 }
 
 // Friction-free apply/repair: no blocking ContentDialog confirmations on module pages
@@ -453,6 +485,14 @@ if (File.Exists(loaderCs))
         lc.Contains("ElementCompositionPreview", StringComparison.Ordinal) &&
         lc.Contains("Orbit", StringComparison.Ordinal) &&
         !lc.Contains("Bar0Scale", StringComparison.Ordinal));
+    // Crash-loop safe mode must cover the loader (shell ExoMotion alone is not enough).
+    Expect("ExoLoader honors MotionDisabled safe mode",
+        lc.Contains("ExoMotion.MotionDisabled", StringComparison.Ordinal) &&
+        lc.Contains("StopComposition()", StringComparison.Ordinal));
+    // Composition Scale/Opacity hand-off writes are the crash-prone class — rotation only.
+    Expect("ExoLoader no composition Scale/Opacity writes",
+        !lc.Contains("StartAnimation(\"Scale", StringComparison.Ordinal) &&
+        !lc.Contains("StartAnimation(\"Opacity\"", StringComparison.Ordinal));
 }
 
 var motionCs = Path.Combine(repo, "Exo", "Helpers", "ExoMotion.cs");
@@ -570,9 +610,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.6.4", File.ReadAllText(versionFile).Trim() == "2.6.4");
+    Expect("VERSION is 2.6.5", File.ReadAllText(versionFile).Trim() == "2.6.5");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.6.4", File.ReadAllText(csproj).Contains("<Version>2.6.4</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.6.5", File.ReadAllText(csproj).Contains("<Version>2.6.5</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));

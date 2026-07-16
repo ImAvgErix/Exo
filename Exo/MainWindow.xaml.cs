@@ -55,9 +55,10 @@ public sealed partial class MainWindow : Window
         TrySetWindowIcon();
 
         ExtendsContentIntoTitleBar = true;
-        // Only the empty middle strip is draggable. Chrome buttons sit outside
-        // so they receive real pointer hits (not non-client drag / maximize).
-        SetTitleBar(TitleBarDragRegion);
+        // Drag the whole top nav rail (52px). Interactive children (EXO / module
+        // circles / Settings) still receive pointer hits in WinUI custom title bars;
+        // the old 8px TitleBarDragRegion made the fixed window feel undraggable.
+        SetTitleBar(NavRail);
 
         AppWindow.Changed += (_, args) =>
         {

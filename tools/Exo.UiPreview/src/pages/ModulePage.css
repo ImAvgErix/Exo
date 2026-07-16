@@ -108,7 +108,31 @@
 .module-plate__features {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: 16px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.module-plate__features::-webkit-scrollbar {
+  width: 8px;
+}
+
+.module-plate__features::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.module-plate__features::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 8px;
+}
+
+.module-plate__features::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.36);
 }
 
 .module-plate .action-foot {
@@ -118,4 +142,12 @@
 .theme-light .module-plate__header,
 .theme-light .module-plate__nvidia-controls {
   border-bottom-color: rgba(61, 52, 41, 0.08);
+}
+
+.theme-light .module-plate__features {
+  scrollbar-color: rgba(61, 52, 41, 0.3) transparent;
+}
+
+.theme-light .module-plate__features::-webkit-scrollbar-thumb {
+  background-color: rgba(61, 52, 41, 0.3);
 }

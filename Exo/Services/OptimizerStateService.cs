@@ -1071,6 +1071,8 @@ public sealed class OptimizerStateService
         var debloatApplied = false;
         var restartPending = false;
         var applyInProgress = false;
+        string? lastErrorStage = null;
+        string? lastError = null;
 
         string? gpuName = null;
         string? series = null;
@@ -1125,6 +1127,8 @@ public sealed class OptimizerStateService
                                   IsTrue(root, "overlayDisabled");
                 restartPending = IsTrue(root, "pendingAfterDriver");
                 applyInProgress = IsTrue(root, "applyInProgress");
+                lastErrorStage = ReadString(root, "lastErrorStage");
+                lastError = ReadString(root, "lastError");
             }
             catch { /* invalid markers are not trusted */ }
         }
@@ -1170,6 +1174,8 @@ public sealed class OptimizerStateService
             ? "No NVIDIA GPU"
             : restartPending
             ? "Restart required"
+            : applyInProgress && !string.IsNullOrWhiteSpace(lastErrorStage)
+                ? $"Failed at {lastErrorStage}"
             : !profileApplied
                 ? "3D profile incomplete"
                 : !displayStageOk
@@ -1181,7 +1187,9 @@ public sealed class OptimizerStateService
                             : applied
                                 ? "All applied"
                                 : "Not applied";
-        var detail = string.Empty;
+        var detail = applyInProgress && !string.IsNullOrWhiteSpace(lastError)
+            ? lastError!
+            : string.Empty;
 
         return new OptimizerStateInfo
         {

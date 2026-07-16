@@ -290,9 +290,9 @@ function Clear-NvidiaAppTrayAndContainer {
     $trayScript = Join-Path $PSScriptRoot 'Exo-Nvidia-TrayClear.ps1'
     if (Test-Path -LiteralPath $trayScript) {
         try {
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $trayScript -SettlePasses 3 2>&1 |
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $trayScript -NoTask -SettlePasses 3 2>&1 |
                 ForEach-Object { Write-DLog "$_" }
-            Write-DLog 'Tray clear script finished'
+            Write-DLog 'Tray clear script finished (no background task)'
             return
         } catch {
             Write-DLog "Tray script failed: $($_.Exception.Message) - inline fallback"
@@ -496,19 +496,17 @@ try {
     Write-DLog "Gestalt=$g"
 } catch { }
 
-# Registry is the hard gate (Full RGB / GPU scale / video). NVAPI is best-effort for
-# refresh + color on GPUs where path/color APIs fail (common on 10-series).
-# Prefer NVAPI success when available; accept registry-only when devices were stamped.
-$deviceCount = $deviceKeys.Count
-$ok = [bool]$registryOk -and ([bool]$nvApiOk -or $deviceCount -gt 0)
-
-if ($ok) {
-    if (-not $nvApiOk) {
-        Write-DLog 'SUCCESS (registry OK; NVAPI best-effort incomplete - common on older GPUs)'
-    } else {
-        Write-DLog 'SUCCESS'
-    }
+# Full display success requires both the NVAPI helper and registry verification.
+# Registry-only is useful state, but callers must not mark displayPrefs fully applied.
+if ([bool]$registryOk -and [bool]$nvApiOk) {
+    Write-DLog 'SUCCESS'
     exit 0
 }
+
+if ([bool]$registryOk -and -not [bool]$nvApiOk) {
+    Write-DLog 'PARTIAL registry-ok nvapi-failed'
+    exit 2
+}
+
 Write-DLog ("FAIL nvApiOk={0} registryOk={1}" -f $nvApiOk, $registryOk)
 exit 1

@@ -121,7 +121,7 @@
         <Setter Property="BorderBrush" Value="{ThemeResource ExoSpecularStrokeBrush}" />
         <Setter Property="BorderThickness" Value="0,1,0,0" />
         <Setter Property="CornerRadius" Value="0" />
-        <Setter Property="Padding" Value="16,12,16,14" />
+        <Setter Property="Padding" Value="16,8,16,10" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
@@ -139,9 +139,20 @@
         <Setter Property="Background" Value="{ThemeResource ExoAccentSoftBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource ExoSpecularStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="{StaticResource ExoTileRadius}" />
-        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="10,6" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style x:Key="ExoMessageText" TargetType="TextBlock" BasedOn="{StaticResource ExoBody}">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="LineHeight" Value="16" />
+    </Style>
+
+    <Style x:Key="ExoInfoMessageText" TargetType="TextBlock" BasedOn="{StaticResource ExoMessageText}">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="LineHeight" Value="15" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoMutedTextBrush}" />
     </Style>
 
     <Style x:Key="ExoIconWell" TargetType="Border">

@@ -53,21 +53,21 @@
 
         <Border Grid.Row="1"
                 Style="{StaticResource ExoActionBar}"
-                Padding="16,10,16,12">
+                Padding="16,8,16,10">
             <StackPanel
                         HorizontalAlignment="Stretch"
-                        Spacing="10">
+                        Spacing="6">
                 <Border Style="{StaticResource ExoMessageBanner}"
                         Visibility="{x:Bind ViewModel.HasRollback, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Grid ColumnSpacing="10">
+                    <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <FontIcon Glyph="&#xE7BA;" FontSize="14"
+                        <FontIcon Glyph="&#xE7BA;" FontSize="12"
                                   Foreground="{ThemeResource ExoWarningBrush}" VerticalAlignment="Top" />
                         <TextBlock Text="{x:Bind ViewModel.RollbackNotice, Mode=OneWay}" Grid.Column="1"
-                                   Style="{StaticResource ExoBody}" TextWrapping="Wrap" />
+                                   Style="{StaticResource ExoMessageText}" TextWrapping="Wrap" />
                     </Grid>
                 </Border>
                 <TextBlock Text="{x:Bind ViewModel.BenchmarkSummary, Mode=OneWay}"
@@ -77,25 +77,25 @@
                            Visibility="{x:Bind ViewModel.HasBenchmark, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                 <Border Style="{StaticResource ExoMessageBanner}"
                         Visibility="{x:Bind ViewModel.HasMessage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Grid ColumnSpacing="10">
+                    <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <FontIcon Glyph="{x:Bind ViewModel.MessageGlyph, Mode=OneWay}" FontSize="14"
+                        <FontIcon Glyph="{x:Bind ViewModel.MessageGlyph, Mode=OneWay}" FontSize="12"
                                   Foreground="{x:Bind ViewModel.MessageBrush, Mode=OneWay}" VerticalAlignment="Top" />
                         <TextBlock Text="{x:Bind ViewModel.Message, Mode=OneWay}" Grid.Column="1"
-                                   Style="{StaticResource ExoBody}" TextWrapping="Wrap" />
+                                   Style="{StaticResource ExoInfoMessageText}" TextWrapping="Wrap" />
                     </Grid>
                 </Border>
                 <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource ExoCaption}"
                            TextAlignment="Center"
                            Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <StackPanel Spacing="6"
+                <StackPanel Spacing="4"
                             Visibility="{x:Bind ViewModel.HasApplyReport, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                     <Button Style="{StaticResource ExoQuietButton}"
-                            MinHeight="32"
-                            Padding="12,6"
+                            MinHeight="28"
+                            Padding="10,4"
                             HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Stretch"
                             Command="{x:Bind ViewModel.ToggleApplyReportCommand}"
@@ -116,7 +116,7 @@
                                       VerticalAlignment="Center" />
                         </Grid>
                     </Button>
-                    <ScrollViewer MaxHeight="140"
+                    <ScrollViewer MaxHeight="120"
                                   VerticalScrollBarVisibility="Auto"
                                   Visibility="{x:Bind ViewModel.IsApplyReportOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                         <ItemsRepeater ItemsSource="{x:Bind ViewModel.ApplyReportRows, Mode=OneWay}">
@@ -138,11 +138,13 @@
                     </ScrollViewer>
                 </StackPanel>
 
-                <!-- Dual primary CTAs (same role as Apply elsewhere) -->
-                <Grid ColumnSpacing="8">
+                <!-- Wide plate: keep all four actions on one row so results do not squeeze the feature list. -->
+                <Grid x:Name="ExoInternetActionGrid" ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="3*" />
+                        <ColumnDefinition Width="3*" />
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="2*" />
                     </Grid.ColumnDefinitions>
                     <Button Style="{StaticResource ExoWhiteButton}"
                             Content="Low latency"
@@ -157,25 +159,20 @@
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                             AutomationProperties.Name="Apply highest download network stack" />
-                </Grid>
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource ExoQuietButton}"
+                    <Button Grid.Column="2"
+                            Style="{StaticResource ExoQuietButton}"
                             Content="Repair"
                             Click="Repair_Click"
-                            MinHeight="34"
+                            MinHeight="40"
                             Padding="12,6"
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                             AutomationProperties.Name="Repair internet stack" />
-                    <Button Grid.Column="1"
+                    <Button Grid.Column="3"
                             Style="{StaticResource ExoQuietButton}"
                             Content="Refresh"
                             Click="Refresh_Click"
-                            MinHeight="34"
+                            MinHeight="40"
                             Padding="12,6"
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
