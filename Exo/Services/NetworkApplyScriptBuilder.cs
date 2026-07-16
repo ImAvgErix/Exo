@@ -167,6 +167,7 @@ function Test-ExoDnsResolve {
         sb.AppendLine("$PreferIpv4First = " + preferIpv4);
         sb.AppendLine("$VendorHint = '" + vendorHint.Replace("'", "") + "'");
         sb.AppendLine("$IsLaptopHint = " + (media.IsLikelyLaptop ? "1" : "0"));
+        sb.AppendLine("$ExoPrivateDns = " + (options.PrivateDns ? "1" : "0"));
         sb.AppendLine("$ExoWifiDisabled = @()");
         sb.AppendLine("Log \"[Exo-NET] net-only BufferStrategy=$BufferStrategy RssQueues<=$RssQueueBudget PreferIpv4=$PreferIpv4First Vendor=$VendorHint\"");
         sb.AppendLine(CommonSafetyFunctions);
@@ -348,6 +349,18 @@ function Save-ExoNetworkSnapshot {
     }
     $snap.advancedProps = $advList.ToArray()
     $snap.bindings = $bindList.ToArray()
+    # --- per-adapter DNS servers + DoH registrations (privacy feature + repair) ---
+    $snap.dnsServers = @($phys | ForEach-Object {
+      try {
+        [pscustomobject]@{
+          ifIndex = [int]$_.ifIndex
+          name    = [string]$_.Name
+          ipv4    = @((Get-DnsClientServerAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -EA SilentlyContinue).ServerAddresses)
+          ipv6    = @((Get-DnsClientServerAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv6 -EA SilentlyContinue).ServerAddresses)
+        }
+      } catch {}
+    })
+    $snap.dohRaw = ((netsh dns show encryption 2>$null | Out-String)).Trim()
     $snap.adapterStates = @(Get-NetAdapter -Physical -EA SilentlyContinue | ForEach-Object {
       [pscustomobject]@{
         name    = [string]$_.Name
@@ -1117,6 +1130,25 @@ function Set-EthMetrics {
         sb.AppendLine("  } catch { Report 'dns-servers' 'skip' $_.Exception.Message }");
         sb.AppendLine("} else {");
         sb.AppendLine("  Report 'prefix-policy' 'skip' 'preset keeps default address precedence'");
+        sb.AppendLine("}");
+        // Private DNS (opt-in): Cloudflare servers + DoH encryption registration (Win11 22H2+).
+        // Runs for BOTH presets — it sits outside the PreferIpv4First branch on purpose.
+        sb.AppendLine("if ($ExoPrivateDns -eq 1) {");
+        sb.AppendLine("  if ([Environment]::OSVersion.Version.Build -lt 22621) {");
+        sb.AppendLine("    Report 'private-dns' 'skip' 'needs Windows 11 22H2+ for encrypted DNS'");
+        sb.AppendLine("  } else {");
+        sb.AppendLine("    try {");
+        sb.AppendLine("      $pdTargets = @(Get-ExoPhysicalAdapters | Where-Object { [string]$_.Status -eq 'Up' -or @(Get-NetIPAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -EA SilentlyContinue).Count -gt 0 })");
+        sb.AppendLine("      foreach ($t in $pdTargets) { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -ServerAddresses @('1.1.1.1','1.0.0.1','2606:4700:4700::1111','2606:4700:4700::1001') -EA SilentlyContinue }");
+        sb.AppendLine("      $dohFail = @()");
+        sb.AppendLine("      foreach ($svr in @('1.1.1.1','1.0.0.1','2606:4700:4700::1111','2606:4700:4700::1001')) {");
+        sb.AppendLine("        netsh dns add encryption server=$svr dohtemplate=https://cloudflare-dns.com/dns-query autoupgrade=yes udpfallback=yes 2>&1 | Out-Null");
+        sb.AppendLine("        if ($LASTEXITCODE -ne 0) { $dohFail += $svr }");
+        sb.AppendLine("      }");
+        sb.AppendLine("      if ($dohFail.Count -eq 0) { Report 'private-dns' 'ok' 'cloudflare DoH (auto-upgrade, UDP fallback)' }");
+        sb.AppendLine("      else { Report 'private-dns' 'fail' ('registration failed: ' + ($dohFail -join ',')) }");
+        sb.AppendLine("    } catch { Report 'private-dns' 'fail' $_.Exception.Message }");
+        sb.AppendLine("  }");
         sb.AppendLine("}");
         // Laptop: keep AC path max; do not force DC min-CPU 100% (battery). Only re-stamp wireless max on DC.
         sb.AppendLine("if ($IsLaptopHint -eq 1) {");

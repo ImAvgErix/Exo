@@ -44,6 +44,10 @@ public partial class InternetOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial string RollbackNotice { get; set; } = string.Empty;
     [ObservableProperty] public partial string RepairHint { get; set; } = "Repair: reset to stock defaults";
 
+    // Opt-in privacy feature: Cloudflare DNS + DNS-over-HTTPS (Win11 22H2+).
+    // Original DNS servers are snapshotted before any change; Repair restores them.
+    [ObservableProperty] public partial bool PrivateDnsEnabled { get; set; }
+
     // Compact expandable "Last apply" report (EXO_REPORT structured steps).
     public ObservableCollection<ApplyReportRowViewModel> ApplyReportRows { get; } = new();
     [ObservableProperty] public partial bool HasApplyReport { get; set; }
@@ -225,7 +229,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
             var options = new NetworkApplyOptions
             {
                 PreferEthernetDisableWifi = false,
-                RestartEthernet = false
+                RestartEthernet = false,
+                PrivateDns = PrivateDnsEnabled
             };
 
             ProgressStatus = snap.Media.EthernetInUse

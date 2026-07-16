@@ -99,6 +99,13 @@ public sealed class NetworkApplyOptions
     /// (default false — disabling Wi-Fi stranded users when Ethernet later dropped).
     /// </summary>
     public bool PreferEthernetDisableWifi { get; init; } = false;
+
+    /// <summary>
+    /// Opt-in privacy feature: point active adapters at Cloudflare DNS and register
+    /// DNS-over-HTTPS encryption (Win11 22H2+). Original DNS servers are snapshotted
+    /// first, so Repair restores them exactly.
+    /// </summary>
+    public bool PrivateDns { get; init; } = false;
 }
 
 /// <summary>
