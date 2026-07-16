@@ -67,9 +67,10 @@ if (File.Exists(themeServiceCs))
 if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
-    // v2.6 floating glass nav pill (custom — not NavigationView).
+    // v2.6 instrument workspace — dock + content share equal insets (not centered float).
     Expect("nav rail", m.Contains("NavRail", StringComparison.Ordinal));
     Expect("rail glass fill", m.Contains("ExoRailGlassFillBrush", StringComparison.Ordinal));
+    Expect("workspace equal insets", m.Contains("Padding=\"20\"", StringComparison.Ordinal));
     Expect("rail nav home", m.Contains("NavHome", StringComparison.Ordinal));
     Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
@@ -106,39 +107,30 @@ if (File.Exists(mainCs))
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    // v2.5.1 brand-forward home: large Exo mark + italic performance tagline.
+    // v2.6 instrument home: huge Exo mark + blade strip (not App Library orbs / directory stack).
     Expect("hero brand",
         d.Contains("HeroBrand", StringComparison.Ordinal)
-        || (d.Contains("Text=\"Exo\"", StringComparison.Ordinal)
-            && (d.Contains("FontSize=\"44\"", StringComparison.Ordinal)
-                || d.Contains("FontSize=\"48\"", StringComparison.Ordinal)
-                || d.Contains("FontSize=\"52\"", StringComparison.Ordinal))));
+        && (d.Contains("FontSize=\"72\"", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"64\"", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"56\"", StringComparison.Ordinal)));
     Expect("hero tagline",
         d.Contains("HeroTagline", StringComparison.Ordinal)
         && d.Contains("Maximum performance", StringComparison.Ordinal));
-    // Directory home: full-width rows — not the old wrap-grid product cards.
     Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("no fixed product cards",
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)
         && !d.Contains("Width=\"250\"", StringComparison.Ordinal)
         && !d.Contains("Height=\"148\"", StringComparison.Ordinal));
-    Expect("directory vertical stack",
-        d.Contains("ItemsStackPanel", StringComparison.Ordinal)
-        || d.Contains("Orientation=\"Vertical\"", StringComparison.Ordinal));
-    Expect("directory row style", d.Contains("ExoDirectoryRow", StringComparison.Ordinal)
-        || d.Contains("ExoCardButton", StringComparison.Ordinal));
-    Expect("directory stretch rows", d.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal));
+    Expect("blade strip home",
+        d.Contains("BladeStrip", StringComparison.Ordinal)
+        || d.Contains("LiveCards", StringComparison.Ordinal)
+        || d.Contains("UniformGrid", StringComparison.Ordinal));
+    Expect("blade uses card buttons", d.Contains("ExoCardButton", StringComparison.Ordinal));
     Expect("stretch uniform logos", d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal));
     Expect("directory title labels",
         d.Contains("Text=\"{x:Bind Definition.Title", StringComparison.Ordinal)
         && d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
-    Expect("hero tagline style",
-        d.Contains("ExoTagline", StringComparison.Ordinal)
-        || d.Contains("FontSize=\"36\"", StringComparison.Ordinal)
-        || d.Contains("FontSize=\"38\"", StringComparison.Ordinal)
-        || d.Contains("FontSize=\"40\"", StringComparison.Ordinal)
-        || d.Contains("FontSize=\"48\"", StringComparison.Ordinal));
-    // Home is nav only — no applied/checking chips (status lives on the module page).
+    Expect("hero tagline style", d.Contains("ExoTagline", StringComparison.Ordinal));
     Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
     Expect("no pick-a-target blurb", !d.Contains("Pick a target", StringComparison.Ordinal));
 }

@@ -28,16 +28,16 @@ export function ActionBar({
   message,
 }: ActionBarProps) {
   return (
-    <footer className="action-island" data-testid="action-bar">
+    <footer className="action-foot" data-testid="action-bar">
       {message ? (
-        <div className="action-island__message glass glass--soft" data-testid="action-message">
+        <div className="action-foot__message" data-testid="action-message">
           {message}
         </div>
       ) : null}
 
-      <div className="action-island__bar glass glass--strong">
+      <div className="action-foot__controls">
         {variant === 'internet' ? (
-          <div className="action-island__dual">
+          <div className="action-foot__dual">
             <button
               type="button"
               className="btn btn-primary"
@@ -56,7 +56,7 @@ export function ActionBar({
             </button>
           </div>
         ) : variant === 'panel' ? (
-          <div className="action-island__secondary">
+          <div className="action-foot__secondary">
             <button
               type="button"
               className="btn btn-ghost"
@@ -77,7 +77,7 @@ export function ActionBar({
         ) : (
           <button
             type="button"
-            className="btn btn-primary action-island__grow"
+            className="btn btn-primary action-foot__grow"
             data-testid="btn-apply"
             onClick={onApply}
           >
@@ -86,7 +86,7 @@ export function ActionBar({
         )}
 
         {variant !== 'panel' && variant !== 'internet' ? (
-          <div className="action-island__secondary">
+          <div className="action-foot__secondary">
             <button
               type="button"
               className="btn btn-ghost"
@@ -107,7 +107,7 @@ export function ActionBar({
         ) : null}
 
         {variant === 'internet' ? (
-          <div className="action-island__secondary">
+          <div className="action-foot__secondary">
             <button
               type="button"
               className="btn btn-ghost"
@@ -128,7 +128,7 @@ export function ActionBar({
         ) : null}
       </div>
 
-      {hint ? <p className="action-island__hint">{hint}</p> : null}
+      {hint ? <p className="action-foot__hint">{hint}</p> : null}
     </footer>
   )
 }

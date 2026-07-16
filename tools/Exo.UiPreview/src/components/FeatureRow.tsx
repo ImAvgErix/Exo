@@ -3,12 +3,13 @@ import './FeatureRow.css'
 
 interface FeatureRowProps {
   feature: FeatureItem
+  isLast?: boolean
 }
 
-export function FeatureRow({ feature }: FeatureRowProps) {
+export function FeatureRow({ feature, isLast }: FeatureRowProps) {
   return (
     <div
-      className={`feature-row glass glass--soft stagger-child ${feature.applied ? 'is-applied' : ''}`}
+      className={`feature-row stagger-child ${feature.applied ? 'is-applied' : ''} ${isLast ? 'is-last' : ''}`}
       data-testid={`feature-${feature.id}`}
     >
       <span

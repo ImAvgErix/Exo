@@ -17,55 +17,46 @@
   --exo-warning: #fbbf24;
   --exo-error: #f87171;
 
-  /* Liquid Glass */
-  --glass-fill: rgba(255, 255, 255, 0.06);
-  --glass-fill-mid: rgba(255, 255, 255, 0.09);
-  --glass-fill-strong: rgba(255, 255, 255, 0.12);
-  --glass-rim: rgba(255, 255, 255, 0.22);
-  --glass-rim-soft: rgba(255, 255, 255, 0.12);
+  /* Edge glass — instrument panel, not iOS blur */
+  --glass-fill: rgba(255, 255, 255, 0.04);
+  --glass-fill-mid: rgba(255, 255, 255, 0.06);
+  --glass-fill-strong: rgba(255, 255, 255, 0.08);
+  --glass-rim: rgba(255, 255, 255, 0.14);
+  --glass-rim-soft: rgba(255, 255, 255, 0.08);
   --glass-specular: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.22) 0%,
-    rgba(255, 255, 255, 0.06) 22%,
-    rgba(255, 255, 255, 0) 52%
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.02) 18%,
+    rgba(255, 255, 255, 0) 40%
   );
-  --glass-blur: blur(36px) saturate(1.65);
-  --glass-blur-sm: blur(22px) saturate(1.5);
-  --glass-rim-conic: conic-gradient(
-    from 225deg at 50% 50%,
-    rgba(255, 255, 255, 0.38) 0deg,
-    rgba(255, 255, 255, 0.08) 55deg,
-    rgba(255, 255, 255, 0.02) 120deg,
-    rgba(255, 255, 255, 0.06) 200deg,
-    rgba(255, 255, 255, 0.28) 280deg,
-    rgba(255, 255, 255, 0.38) 360deg
+  --glass-blur: blur(16px) saturate(1.1);
+  --glass-blur-sm: blur(12px) saturate(1.05);
+  --glass-edge-rim: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.06) 40%,
+    rgba(255, 255, 255, 0.02) 60%,
+    rgba(255, 255, 255, 0) 100%
   );
   --glass-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.16) inset,
-    1px 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.35) inset,
-    0 16px 48px rgba(0, 0, 0, 0.62),
-    0 6px 16px rgba(0, 0, 0, 0.45);
+    1px 0 0 rgba(255, 255, 255, 0.1) inset,
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.4) inset,
+    0 12px 40px rgba(0, 0, 0, 0.55);
   --glass-shadow-soft:
-    0 1px 0 rgba(255, 255, 255, 0.12) inset,
-    1px 1px 0 rgba(255, 255, 255, 0.04) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.28) inset,
-    0 8px 28px rgba(0, 0, 0, 0.48),
-    0 3px 8px rgba(0, 0, 0, 0.35);
+    1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 1px 0 rgba(255, 255, 255, 0.1) inset,
+    0 8px 24px rgba(0, 0, 0, 0.45);
 
-  --radius-panel: 26px;
-  --radius-row: 18px;
-  --radius-chip: 15px;
+  --radius-panel: 12px;
+  --radius-row: 10px;
+  --radius-chip: 8px;
   --radius-pill: 999px;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
-  --ease-spring-sheet: cubic-bezier(0.22, 1.35, 0.36, 1);
-  --dur-fast: 150ms;
-  --dur: 220ms;
-  --dur-page: 280ms;
-  --dur-sheet: 380ms;
-  --dur-sheen: 7s;
+  --dur-fast: 140ms;
+  --dur: 200ms;
+  --dur-page: 240ms;
 
   --dock-size: 72px;
   --dock-gap: 18px;
@@ -138,86 +129,42 @@ img {
   max-width: 100%;
 }
 
-/* ── Liquid glass surface ── */
+/* ── Edge glass surface ── */
 .glass {
   position: relative;
   background: var(--glass-fill);
-  border: 1px solid transparent;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: var(--glass-shadow);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   overflow: hidden;
 }
 
-/* Saturated conic rim — top-left refraction highlight */
+/* Hard left + top specular rim */
 .glass::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 1px;
-  background: var(--glass-rim-conic);
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  mask-composite: exclude;
+  background: var(--glass-edge-rim);
   pointer-events: none;
   z-index: 2;
 }
 
-/* Static specular cap + animated sheen sweep */
+/* Static top-edge highlight — no animated sheen */
 .glass::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background:
-    linear-gradient(
-      105deg,
-      transparent 36%,
-      rgba(255, 255, 255, 0.03) 44%,
-      rgba(255, 255, 255, 0.08) 50%,
-      rgba(255, 255, 255, 0.03) 56%,
-      transparent 64%
-    ),
-    linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.14) 0%,
-      rgba(255, 255, 255, 0.02) 28%,
-      transparent 50%
-    ),
-    var(--glass-specular);
-  background-size: 220% 220%, 100% 100%, 100% 100%;
-  background-position: -60% -10%, 0 0, 0 0;
+  background: var(--glass-specular);
   pointer-events: none;
   z-index: 1;
-  animation: glass-sheen var(--dur-sheen) ease-in-out infinite;
 }
 
 .glass > * {
   position: relative;
   z-index: 3;
-}
-
-@keyframes glass-sheen {
-  0%,
-  100% {
-    background-position: -70% -12%, 0 0, 0 0;
-  }
-  50% {
-    background-position: 170% 112%, 0 0, 0 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .glass::after {
-    animation: none;
-    background-position: 0 0, 0 0, 0 0;
-  }
 }
 
 .glass--soft {
@@ -396,17 +343,13 @@ img {
 }
 
 @keyframes sheet-in {
-  0% {
+  from {
     opacity: 0;
-    transform: translateY(18px) scale(0.94);
+    transform: translateY(10px);
   }
-  55% {
+  to {
     opacity: 1;
-    transform: translateY(-3px) scale(1.01);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 

@@ -1,9 +1,9 @@
 ## 2.6.0
 
-- **UI — black Liquid Glass**: floating glass nav pill over AMOLED black; translucent glass fills + specular rims on cards, feature rows, and action bars; acrylic-backed Settings flyout; denser Control Center–like grouping
-- **UI — one system**: feature rows = status rail + icon + Applied/Not applied only; primary = solid accent (`ExoPrimaryButton` / `ExoWhiteButton` alias); secondary = quiet glass; no “Open” status language
-- **UI — motion polish**: shorter entrance/fade timings; rail selection = soft fill + accent ring (no logo scale)
-- **Preview — agent Liquid Glass mock**: `tools/Exo.UiPreview` tracks the glass language (animated sheen, liquid dock indicator, orb home, spring sheet) for Linux click QA — not shipping Apply
+- **UI — Exo Instrument**: shared workspace so dock + content share the same top/bottom edges (fixes optimizer sitting higher than the rail); one edge-glass module plate; home is huge brand + connected blade strip (not App Library orbs / directory stack)
+- **UI — one system**: feature rows = status rail + icon + Applied/Not applied only; primary = solid accent; secondary = quiet glass
+- **UI — motion polish**: short ease-out storyboards; rail selection = wash + accent ring (no logo scale)
+- **Preview — agent instrument mock**: `tools/Exo.UiPreview` tracks the same layout language for Linux click QA — not shipping Apply
 
 ## 2.5.2
 

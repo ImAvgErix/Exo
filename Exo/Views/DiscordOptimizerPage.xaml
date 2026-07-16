@@ -8,26 +8,27 @@
     Background="Transparent">
 
     <!--
-      Module craft surface: header zone + feature list + sticky instrument bar.
-      Primary Apply owns the footer; Repair/Refresh stay quieter side-by-side.
+      Exo Instrument plate: header + feature list + action foot share one edge-glass surface
+      so the optimizer block top aligns with the dock column.
     -->
-    <Grid>
+    <Border Style="{StaticResource ExoModulePlate}">
+        <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Grid Padding="28,18,28,10">
+        <Grid Padding="20,16,20,8">
             <Grid MaxWidth="{StaticResource ExoPageMaxWidth}"
                   HorizontalAlignment="Stretch"
-                  RowSpacing="14">
+                  RowSpacing="12">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
                 <!-- Top header zone -->
-                <StackPanel Spacing="6">
+                <StackPanel Spacing="4">
                     <TextBlock Text="DISCORD"
                                Style="{StaticResource ExoSectionTitle}"
                                Margin="0" />
@@ -51,10 +52,10 @@
             </Grid>
         </Grid>
 
-        <!-- Sticky bottom action bar -->
+        <!-- Plate foot — primary Apply, quiet Repair/Refresh -->
         <Border Grid.Row="1"
                 Style="{StaticResource ExoActionBar}"
-                Padding="28,12,28,14">
+                Padding="20,12,20,14">
             <StackPanel MaxWidth="{StaticResource ExoPageMaxWidth}"
                         HorizontalAlignment="Stretch"
                         Spacing="10">
@@ -153,5 +154,6 @@
                 </Grid>
             </StackPanel>
         </Border>
-    </Grid>
+        </Grid>
+    </Border>
 </Page>

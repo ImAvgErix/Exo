@@ -17,12 +17,6 @@ export function HomePage({ onOpen }: HomePageProps) {
 
   return (
     <div className="home-page page-enter" data-testid="page-home">
-      <div className="home-page__atmosphere" aria-hidden="true">
-        <span className="home-page__blob home-page__blob--a" />
-        <span className="home-page__blob home-page__blob--b" />
-        <span className="home-page__blob home-page__blob--c" />
-      </div>
-
       <header className="home-page__hero stagger-child">
         <h1 className="home-page__brand" data-testid="hero-brand">
           Exo
@@ -32,57 +26,49 @@ export function HomePage({ onOpen }: HomePageProps) {
         </p>
       </header>
 
-      <div className="home-page__carousel stagger-child" role="list">
-        {live.map((card) => (
-          <button
-            key={card.id}
-            type="button"
-            className="home-orb glass glass--soft"
-            data-testid={`card-${card.id}`}
-            role="listitem"
-            onClick={() => handleCard(card)}
-          >
-            <span className="home-orb__glow" aria-hidden="true" />
-            <span className="home-orb__icon">
-              <img
-                src={card.logo}
-                alt=""
-                width={48}
-                height={48}
-                className="home-orb__logo"
-                draggable={false}
-              />
-            </span>
-            <span className="home-orb__title">{card.title}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="home-page__soon stagger-child">
-        <p className="home-page__soon-label">Coming soon</p>
-        <div className="home-page__soon-row">
-          {soon.map((card) => (
+      <div className="home-page__rack stagger-child" role="list">
+        <div className="home-blade glass">
+          {live.map((card, index) => (
             <button
               key={card.id}
               type="button"
-              className="home-chip glass glass--soft is-soon"
+              className={`home-blade__seg ${index > 0 ? 'has-divider' : ''}`}
               data-testid={`card-${card.id}`}
-              disabled
-              aria-disabled="true"
+              role="listitem"
+              onClick={() => handleCard(card)}
             >
               <img
                 src={card.logo}
                 alt=""
-                width={22}
-                height={22}
-                className="home-chip__logo"
+                width={28}
+                height={28}
+                className="home-blade__logo"
                 draggable={false}
               />
-              <span>{card.title}</span>
+              <span className="home-blade__title">{card.title}</span>
             </button>
           ))}
         </div>
       </div>
+
+      <p className="home-page__soon stagger-child">
+        <span className="home-page__soon-label">Coming soon</span>
+        <span className="home-page__soon-items">
+          {soon.map((card) => (
+            <span key={card.id} className="home-page__soon-item">
+              <button
+                type="button"
+                className="home-page__soon-chip"
+                data-testid={`card-${card.id}`}
+                disabled
+                aria-disabled="true"
+              >
+                {card.title}
+              </button>
+            </span>
+          ))}
+        </span>
+      </p>
     </div>
   )
 }

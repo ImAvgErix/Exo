@@ -36,7 +36,7 @@ export function SettingsFlyout({
         role="dialog"
         aria-label="Settings"
       >
-        <div className="settings-sheet__group glass glass--soft">
+        <div className="settings-sheet__group">
           <p className="settings-sheet__section">APPEARANCE</p>
           <div className="settings-sheet__theme">
             <SegmentedControl
@@ -50,7 +50,7 @@ export function SettingsFlyout({
           </div>
         </div>
 
-        <div className="settings-sheet__group glass glass--soft">
+        <div className="settings-sheet__group">
           <p className="settings-sheet__section">UPDATES</p>
           <div className="settings-sheet__row">
             <span>Check on launch</span>

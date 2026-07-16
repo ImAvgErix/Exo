@@ -24,7 +24,7 @@
                        ItemsSource="{x:Bind ItemsSource, Mode=OneWay}"
                        HorizontalAlignment="Stretch">
             <ItemsRepeater.Layout>
-                <StackLayout Orientation="Vertical" Spacing="6" />
+                <StackLayout Orientation="Vertical" Spacing="0" />
             </ItemsRepeater.Layout>
             <ItemsRepeater.ItemTemplate>
                 <DataTemplate x:DataType="vm:FeatureRowViewModel">

@@ -7,163 +7,184 @@
     Title="Exo">
 
     <!--
-      v2.6 Liquid Glass shell:
-      floating glass pill nav over AMOLED black + content column.
+      v2.6 Exo Instrument shell:
+      shared workspace — dock column + content share the same top/bottom insets
+      (no vertically-centered floating pill that leaves optimizer content higher).
       Settings gear stays a flyout on the rail.
     -->
-    <Grid x:Name="RootGrid" Background="{ThemeResource ExoPageBackgroundBrush}">
+    <Grid x:Name="RootGrid"
+          Background="{ThemeResource ExoPageBackgroundBrush}"
+          Padding="20">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="84" />
+            <ColumnDefinition Width="72" />
+            <ColumnDefinition Width="16" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- ===== FLOATING GLASS NAV PILL ===== -->
-        <Grid Grid.Column="0" Background="Transparent">
-            <Border x:Name="NavRail"
-                    Margin="12,16,8,16"
-                    Background="{ThemeResource ExoRailGlassFillBrush}"
-                    BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
-                    BorderThickness="1"
-                    CornerRadius="{StaticResource ExoGlassRadius}"
-                    Padding="8,12,8,12">
+        <!-- ===== DOCK COLUMN (full workspace height) ===== -->
+        <Border x:Name="NavRail"
+                Grid.Column="0"
+                Background="{ThemeResource ExoRailGlassFillBrush}"
+                BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
+                BorderThickness="1"
+                CornerRadius="14"
+                Padding="6,10"
+                VerticalAlignment="Stretch">
+            <Grid>
+                <Border BorderBrush="{ThemeResource ExoSpecularStrokeBrush}"
+                        BorderThickness="1,1,0,0"
+                        CornerRadius="14"
+                        Margin="0"
+                        IsHitTestVisible="False"
+                        Opacity="0.55" />
                 <Grid>
-                    <Border BorderBrush="{ThemeResource ExoSpecularStrokeBrush}"
-                            BorderThickness="0,1,0,0"
-                            CornerRadius="{StaticResource ExoGlassRadius}"
-                            Margin="1,0,1,0"
-                            IsHitTestVisible="False"
-                            VerticalAlignment="Top"
-                            Height="18"
-                            Opacity="0.85" />
-                    <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                <!-- Brand → Home -->
-                <Button x:Name="NavHome"
-                        Style="{StaticResource ExoRailButton}"
-                        AutomationProperties.Name="Home"
-                        Click="NavHome_Click"
-                        Margin="0,0,0,14"
-                        Height="48">
-                    <TextBlock Text="EXO"
-                               FontFamily="{StaticResource ExoUiFontSemiBold}"
-                               FontSize="13"
-                               FontWeight="Bold"
-                               CharacterSpacing="120"
-                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                               HorizontalAlignment="Center" />
-                </Button>
+                    <!-- Brand → Home -->
+                    <Button x:Name="NavHome"
+                            Style="{StaticResource ExoRailButton}"
+                            AutomationProperties.Name="Home"
+                            Click="NavHome_Click"
+                            Height="48">
+                        <TextBlock Text="EXO"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="12"
+                                   FontWeight="Bold"
+                                   CharacterSpacing="120"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                                   HorizontalAlignment="Center" />
+                    </Button>
 
-                <StackPanel Grid.Row="1" Spacing="6">
-                    <Button x:Name="NavDiscord"
-                            Style="{StaticResource ExoRailButton}"
-                            AutomationProperties.Name="Discord"
-                            Click="NavDiscord_Click"
-                            Tag="discord">
-                        <StackPanel Spacing="3" HorizontalAlignment="Center">
-                            <Image Source="ms-appx:///Assets/Logos/discord.png"
-                                   Width="22" Height="22"
-                                   Stretch="Uniform"
-                                   UseLayoutRounding="True"
-                                   AutomationProperties.AccessibilityView="Raw" />
-                            <TextBlock Text="Discord" FontSize="10" FontFamily="{StaticResource ExoUiFont}" Opacity="0.75" HorizontalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="NavSteam"
-                            Style="{StaticResource ExoRailButton}"
-                            AutomationProperties.Name="Steam"
-                            Click="NavSteam_Click"
-                            Tag="steam">
-                        <StackPanel Spacing="3" HorizontalAlignment="Center">
-                            <Image Source="ms-appx:///Assets/Logos/steam.png"
-                                   Width="22" Height="22"
-                                   Stretch="Uniform"
-                                   UseLayoutRounding="True"
-                                   AutomationProperties.AccessibilityView="Raw" />
-                            <TextBlock Text="Steam" FontSize="10" FontFamily="{StaticResource ExoUiFont}" Opacity="0.75" HorizontalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="NavInternet"
-                            Style="{StaticResource ExoRailButton}"
-                            AutomationProperties.Name="Internet"
-                            Click="NavInternet_Click"
-                            Tag="internet">
-                        <StackPanel Spacing="3" HorizontalAlignment="Center">
-                            <Image Source="ms-appx:///Assets/Logos/internet.png"
-                                   Width="22" Height="22"
-                                   Stretch="Uniform"
-                                   UseLayoutRounding="True"
-                                   AutomationProperties.AccessibilityView="Raw" />
-                            <TextBlock Text="Net" FontSize="10" FontFamily="{StaticResource ExoUiFont}" Opacity="0.75" HorizontalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="NavNvidia"
-                            Style="{StaticResource ExoRailButton}"
-                            AutomationProperties.Name="NVIDIA"
-                            Click="NavNvidia_Click"
-                            Tag="nvidia">
-                        <StackPanel Spacing="3" HorizontalAlignment="Center">
-                            <Image Source="ms-appx:///Assets/Logos/nvidia.png"
-                                   Width="22" Height="22"
-                                   Stretch="Uniform"
-                                   UseLayoutRounding="True"
-                                   AutomationProperties.AccessibilityView="Raw" />
-                            <TextBlock Text="GPU" FontSize="10" FontFamily="{StaticResource ExoUiFont}" Opacity="0.75" HorizontalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
+                    <StackPanel Grid.Row="1"
+                                Spacing="4"
+                                VerticalAlignment="Center">
+                        <Button x:Name="NavDiscord"
+                                Style="{StaticResource ExoRailButton}"
+                                AutomationProperties.Name="Discord"
+                                Click="NavDiscord_Click"
+                                Tag="discord">
+                            <StackPanel Spacing="2" HorizontalAlignment="Center">
+                                <Image Source="ms-appx:///Assets/Logos/discord.png"
+                                       Width="22" Height="22"
+                                       Stretch="Uniform"
+                                       UseLayoutRounding="True"
+                                       AutomationProperties.AccessibilityView="Raw" />
+                                <TextBlock Text="Discord"
+                                           FontSize="9"
+                                           FontFamily="{StaticResource ExoUiFont}"
+                                           Opacity="0.7"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="NavSteam"
+                                Style="{StaticResource ExoRailButton}"
+                                AutomationProperties.Name="Steam"
+                                Click="NavSteam_Click"
+                                Tag="steam">
+                            <StackPanel Spacing="2" HorizontalAlignment="Center">
+                                <Image Source="ms-appx:///Assets/Logos/steam.png"
+                                       Width="22" Height="22"
+                                       Stretch="Uniform"
+                                       UseLayoutRounding="True"
+                                       AutomationProperties.AccessibilityView="Raw" />
+                                <TextBlock Text="Steam"
+                                           FontSize="9"
+                                           FontFamily="{StaticResource ExoUiFont}"
+                                           Opacity="0.7"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="NavInternet"
+                                Style="{StaticResource ExoRailButton}"
+                                AutomationProperties.Name="Internet"
+                                Click="NavInternet_Click"
+                                Tag="internet">
+                            <StackPanel Spacing="2" HorizontalAlignment="Center">
+                                <Image Source="ms-appx:///Assets/Logos/internet.png"
+                                       Width="22" Height="22"
+                                       Stretch="Uniform"
+                                       UseLayoutRounding="True"
+                                       AutomationProperties.AccessibilityView="Raw" />
+                                <TextBlock Text="Net"
+                                           FontSize="9"
+                                           FontFamily="{StaticResource ExoUiFont}"
+                                           Opacity="0.7"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="NavNvidia"
+                                Style="{StaticResource ExoRailButton}"
+                                AutomationProperties.Name="NVIDIA"
+                                Click="NavNvidia_Click"
+                                Tag="nvidia">
+                            <StackPanel Spacing="2" HorizontalAlignment="Center">
+                                <Image Source="ms-appx:///Assets/Logos/nvidia.png"
+                                       Width="22" Height="22"
+                                       Stretch="Uniform"
+                                       UseLayoutRounding="True"
+                                       AutomationProperties.AccessibilityView="Raw" />
+                                <TextBlock Text="GPU"
+                                           FontSize="9"
+                                           FontFamily="{StaticResource ExoUiFont}"
+                                           Opacity="0.7"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
 
-                <Button x:Name="SettingsButton"
-                        Grid.Row="2"
-                        Style="{StaticResource ExoRailButton}"
-                        AutomationProperties.Name="Settings"
-                        Click="SettingsButton_Click"
-                        Height="44">
-                    <FontIcon x:Name="SettingsGearIcon"
-                              Glyph="&#xE713;"
-                              FontSize="15"
-                              RenderTransformOrigin="0.5,0.5">
-                        <FontIcon.RenderTransform>
-                            <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
-                        </FontIcon.RenderTransform>
-                    </FontIcon>
-                    <FlyoutBase.AttachedFlyout>
-                        <Flyout x:Name="SettingsFlyout"
-                                Placement="Right"
-                                Opened="SettingsFlyout_Opened"
-                                Closing="SettingsFlyout_Closing"
-                                Closed="SettingsFlyout_Closed">
-                            <Flyout.FlyoutPresenterStyle>
-                                <Style TargetType="FlyoutPresenter">
-                                    <Setter Property="Padding" Value="0" />
-                                    <Setter Property="BorderThickness" Value="0" />
-                                    <Setter Property="Background" Value="Transparent" />
-                                    <Setter Property="CornerRadius" Value="0" />
-                                    <Setter Property="MaxWidth" Value="360" />
-                                </Style>
-                            </Flyout.FlyoutPresenterStyle>
-                            <controls:SettingsSheet x:Name="SettingsSheetHost" />
-                        </Flyout>
-                    </FlyoutBase.AttachedFlyout>
-                </Button>
-                    </Grid>
+                    <Button x:Name="SettingsButton"
+                            Grid.Row="2"
+                            Style="{StaticResource ExoRailButton}"
+                            AutomationProperties.Name="Settings"
+                            Click="SettingsButton_Click"
+                            Height="44">
+                        <FontIcon x:Name="SettingsGearIcon"
+                                  Glyph="&#xE713;"
+                                  FontSize="15"
+                                  RenderTransformOrigin="0.5,0.5">
+                            <FontIcon.RenderTransform>
+                                <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
+                            </FontIcon.RenderTransform>
+                        </FontIcon>
+                        <FlyoutBase.AttachedFlyout>
+                            <Flyout x:Name="SettingsFlyout"
+                                    Placement="Right"
+                                    Opened="SettingsFlyout_Opened"
+                                    Closing="SettingsFlyout_Closing"
+                                    Closed="SettingsFlyout_Closed">
+                                <Flyout.FlyoutPresenterStyle>
+                                    <Style TargetType="FlyoutPresenter">
+                                        <Setter Property="Padding" Value="0" />
+                                        <Setter Property="BorderThickness" Value="0" />
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="CornerRadius" Value="0" />
+                                        <Setter Property="MaxWidth" Value="360" />
+                                    </Style>
+                                </Flyout.FlyoutPresenterStyle>
+                                <controls:SettingsSheet x:Name="SettingsSheetHost" />
+                            </Flyout>
+                        </FlyoutBase.AttachedFlyout>
+                    </Button>
                 </Grid>
-            </Border>
-        </Grid>
+            </Grid>
+        </Border>
 
-        <!-- ===== CONTENT COLUMN ===== -->
-        <Grid Grid.Column="1">
+        <!-- ===== CONTENT COLUMN (same top/bottom as dock) ===== -->
+        <Grid Grid.Column="2">
             <Grid.RowDefinitions>
-                <RowDefinition Height="36" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
             <!-- Drag strip + contextual back (Nvidia panel only) -->
-            <Grid Grid.Row="0" Background="{ThemeResource ExoPageBackgroundBrush}">
+            <Grid x:Name="TitleBarHost"
+                  Grid.Row="0"
+                  Background="Transparent"
+                  MinHeight="0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -176,7 +197,7 @@
                         Click="BackButton_Click"
                         Visibility="Collapsed"
                         Width="32" Height="32"
-                        Margin="12,0,0,0"
+                        Margin="0,0,0,8"
                         VerticalAlignment="Center"
                         AllowFocusOnInteraction="True"
                         IsTabStop="True"
@@ -193,7 +214,8 @@
                       Grid.Column="1"
                       Background="Transparent"
                       HorizontalAlignment="Stretch"
-                      VerticalAlignment="Stretch" />
+                      VerticalAlignment="Stretch"
+                      MinHeight="12" />
             </Grid>
 
             <Frame x:Name="ContentFrame"

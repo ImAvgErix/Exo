@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { fakeDisplays } from '../data/mock'
 import { ActionBar } from '../components/ActionBar'
+import './ModulePage.css'
 import './NvidiaPanelPage.css'
 
 export function NvidiaPanelPage() {
@@ -16,11 +17,11 @@ export function NvidiaPanelPage() {
 
   return (
     <div className="nvidia-panel page-enter" data-testid="page-nvidia-panel">
-      <div className="nvidia-panel__body">
-        <header className="nvidia-panel__header glass glass--mid stagger-child">
+      <div className="module-plate glass">
+        <header className="module-plate__header stagger-child">
           <div>
-            <p className="nvidia-panel__section">DISPLAY</p>
-            <h2 className="nvidia-panel__status" data-testid="nvidia-panel-status">
+            <p className="module-plate__section">DISPLAY</p>
+            <h2 className="module-plate__status" data-testid="nvidia-panel-status">
               2 displays
             </h2>
             <p className="nvidia-panel__detail">Selectors only — mock preview data.</p>
@@ -28,17 +29,17 @@ export function NvidiaPanelPage() {
         </header>
 
         <div className="nvidia-panel__list stagger-list">
-          {fakeDisplays.map((display) => (
+          {fakeDisplays.map((display, displayIndex) => (
             <article
               key={display.id}
-              className="display-sheet glass glass--soft stagger-child"
+              className={`display-block stagger-child ${displayIndex < fakeDisplays.length - 1 ? 'has-divider' : ''}`}
               data-testid={`display-${display.id}`}
             >
-              <div className="display-sheet__top">
-                <h3 className="display-sheet__title">{display.title}</h3>
+              <div className="display-block__top">
+                <h3 className="display-block__title">{display.title}</h3>
                 <button
                   type="button"
-                  className="btn btn-primary display-sheet__apply"
+                  className="btn btn-primary display-block__apply"
                   data-testid={`btn-apply-${display.id}`}
                   onClick={() => flash(`Applied ${display.title} (mock).`)}
                 >
@@ -46,7 +47,7 @@ export function NvidiaPanelPage() {
                 </button>
               </div>
 
-              <div className="display-sheet__grid">
+              <div className="display-block__grid">
                 <label className="display-field">
                   <span>Resolution</span>
                   <div className="display-field__segment">
@@ -133,14 +134,14 @@ export function NvidiaPanelPage() {
             </article>
           ))}
         </div>
-      </div>
 
-      <ActionBar
-        variant="panel"
-        message={message}
-        onOpenCpl={() => flash('Open NVIDIA Control Panel (mock).')}
-        onRefresh={() => flash('Displays refreshed (mock).')}
-      />
+        <ActionBar
+          variant="panel"
+          message={message}
+          onOpenCpl={() => flash('Open NVIDIA Control Panel (mock).')}
+          onRefresh={() => flash('Displays refreshed (mock).')}
+        />
+      </div>
     </div>
   )
 }

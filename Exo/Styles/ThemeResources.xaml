@@ -92,13 +92,24 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <!-- Feature rows — glass tiles with thin status rail -->
-    <Style x:Key="ExoFeatureTile" TargetType="Border">
+    <!-- Module instrument plate — one edge-glass surface for header + list + actions -->
+    <Style x:Key="ExoModulePlate" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="{StaticResource ExoTileRadius}" />
-        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="UseLayoutRounding" Value="True" />
+    </Style>
+
+    <!-- Feature rows — hairline list rows inside the plate (not separate pills) -->
+    <Style x:Key="ExoFeatureTile" TargetType="Border">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Padding" Value="14,12" />
         <Setter Property="MinHeight" Value="52" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />

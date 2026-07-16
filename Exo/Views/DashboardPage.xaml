@@ -8,108 +8,123 @@
     Loaded="Page_Loaded">
 
     <!--
-      Brand-forward home: Exo mark → italic tagline → module directory.
-      No support subtitle. No RenderTransform on italic type. No status chips.
+      Exo Instrument home: huge brand + italic tagline + connected blade strip.
+      Coming soon is a quiet secondary line — not a second card stack.
     -->
     <Grid x:Name="PageRoot"
-          Padding="40,28,40,32"
+          Padding="8,12,12,12"
           HorizontalAlignment="Stretch"
           VerticalAlignment="Stretch"
           UseLayoutRounding="True">
         <StackPanel x:Name="HomeStack"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Center"
-                    MaxWidth="720"
                     Spacing="0"
                     UseLayoutRounding="True">
 
             <TextBlock x:Name="HeroBrand"
                        Text="Exo"
                        FontFamily="{StaticResource ExoUiFontSemiBold}"
-                       FontSize="44"
+                       FontSize="72"
                        FontWeight="SemiBold"
-                       CharacterSpacing="-28"
-                       LineHeight="48"
+                       CharacterSpacing="-40"
+                       LineHeight="72"
                        Foreground="{ThemeResource ExoPrimaryTextBrush}"
                        TextAlignment="Left"
                        HorizontalAlignment="Stretch"
                        OpticalMarginAlignment="TrimSideBearings"
                        UseLayoutRounding="True"
-                       Margin="0,0,0,6" />
+                       Margin="0,0,0,8" />
 
             <TextBlock x:Name="HeroTagline"
                        Text="Maximum performance. No compromise."
                        Style="{StaticResource ExoTagline}"
-                       FontSize="22"
-                       LineHeight="28"
+                       FontSize="24"
+                       LineHeight="30"
                        TextWrapping="WrapWholeWords"
                        TextAlignment="Left"
                        HorizontalAlignment="Stretch"
                        Margin="0,0,0,28"
                        UseLayoutRounding="True" />
 
-            <ItemsControl x:Name="CardList"
-                          HorizontalAlignment="Stretch"
-                          ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <ItemsStackPanel Orientation="Vertical" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
-                        <Button Style="{StaticResource ExoCardButton}"
-                                HorizontalAlignment="Stretch"
-                                Margin="0,0,0,8"
-                                Click="CardButton_Click"
-                                Tag="{x:Bind Definition.Id}"
-                                AutomationProperties.Name="{x:Bind Definition.Title}"
-                                IsEnabled="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}">
-                            <Border Style="{StaticResource ExoDirectoryRow}"
-                                    Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
-                                <Grid ColumnSpacing="14" UseLayoutRounding="True">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <Image Width="44"
-                                           Height="44"
+            <!-- Connected blade strip — live modules only -->
+            <Border x:Name="BladeStrip"
+                    Background="{ThemeResource ExoGlassFillBrush}"
+                    BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Padding="4"
+                    Margin="0,0,0,16"
+                    HorizontalAlignment="Stretch">
+                <ItemsControl x:Name="CardList"
+                              HorizontalAlignment="Stretch"
+                              ItemsSource="{x:Bind ViewModel.LiveCards, Mode=OneWay}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="4" Rows="1" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
+                            <Button Style="{StaticResource ExoCardButton}"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch"
+                                    Margin="2"
+                                    MinHeight="88"
+                                    Click="CardButton_Click"
+                                    Tag="{x:Bind Definition.Id}"
+                                    AutomationProperties.Name="{x:Bind Definition.Title}">
+                                <StackPanel Spacing="8"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Padding="8,12">
+                                    <Image Width="28"
+                                           Height="28"
                                            Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
-                                           VerticalAlignment="Center"
                                            Stretch="Uniform"
                                            UseLayoutRounding="True"
+                                           HorizontalAlignment="Center"
                                            AutomationProperties.AccessibilityView="Raw" />
-                                    <StackPanel Grid.Column="1"
-                                                Spacing="2"
-                                                VerticalAlignment="Center">
-                                        <TextBlock Text="{x:Bind Definition.Title, Mode=OneWay}"
-                                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                                   FontSize="15"
-                                                   FontWeight="SemiBold"
-                                                   CharacterSpacing="-4"
-                                                   Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   MaxLines="1"
-                                                   UseLayoutRounding="True" />
-                                        <TextBlock Text="Coming soon"
-                                                   FontFamily="{StaticResource ExoUiFont}"
-                                                   FontSize="12"
-                                                   Foreground="{ThemeResource ExoMutedTextBrush}"
-                                                   Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                    </StackPanel>
-                                    <FontIcon Grid.Column="2"
-                                              Glyph="&#xE76C;"
-                                              FontSize="14"
-                                              Foreground="{ThemeResource ExoSecondaryTextBrush}"
-                                              VerticalAlignment="Center"
-                                              Opacity="0.85" />
-                                </Grid>
-                            </Border>
-                        </Button>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                                    <TextBlock Text="{x:Bind Definition.Title, Mode=OneWay}"
+                                               FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               CharacterSpacing="-4"
+                                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                                               HorizontalAlignment="Center"
+                                               TextAlignment="Center"
+                                               UseLayoutRounding="True" />
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock Text="Coming soon"
+                           FontFamily="{StaticResource ExoUiFontSemiBold}"
+                           FontSize="11"
+                           CharacterSpacing="60"
+                           Foreground="{ThemeResource ExoMutedTextBrush}"
+                           VerticalAlignment="Center" />
+                <ItemsControl ItemsSource="{x:Bind ViewModel.SoonCards, Mode=OneWay}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="12" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
+                            <TextBlock Text="{x:Bind Definition.Title, Mode=OneWay}"
+                                       FontFamily="{StaticResource ExoUiFont}"
+                                       FontSize="12"
+                                       Foreground="{ThemeResource ExoMutedTextBrush}"
+                                       Opacity="0.75" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
         </StackPanel>
     </Grid>
 </Page>

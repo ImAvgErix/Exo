@@ -31,6 +31,12 @@ public partial class DashboardViewModel : ObservableObject
 
     public IReadOnlyList<OptimizerCardViewModel> Cards { get; }
 
+    public IReadOnlyList<OptimizerCardViewModel> LiveCards =>
+        Cards.Where(c => !c.IsComingSoon).ToList();
+
+    public IReadOnlyList<OptimizerCardViewModel> SoonCards =>
+        Cards.Where(c => c.IsComingSoon).ToList();
+
     public event EventHandler<string>? NavigateToOptimizer;
 
     [RelayCommand]

@@ -48,30 +48,30 @@ export default function App() {
   return (
     <div className={`app-page ${darkMode ? 'theme-dark' : 'theme-light'}`}>
       <div className="exo-shell" data-testid="exo-shell">
-        <FloatingDock
-          active={dockActive(page)}
-          settingsOpen={settingsOpen}
-          onNavigate={navigate}
-          onToggleSettings={() => setSettingsOpen((v) => !v)}
-        />
+        <div className="exo-workspace">
+          <FloatingDock
+            active={dockActive(page)}
+            settingsOpen={settingsOpen}
+            onNavigate={navigate}
+            onToggleSettings={() => setSettingsOpen((v) => !v)}
+          />
 
-        <div className="exo-stage">
-          <div className="exo-titlebar">
+          <div className="exo-stage">
             {showBack ? (
-              <button
-                type="button"
-                className="exo-back"
-                data-testid="btn-back"
-                aria-label="Back"
-                onClick={() => setPage('nvidia')}
-              >
-                ‹
-              </button>
-            ) : (
-              <span className="exo-back-spacer" />
-            )}
+              <div className="exo-titlebar">
+                <button
+                  type="button"
+                  className="exo-back"
+                  data-testid="btn-back"
+                  aria-label="Back"
+                  onClick={() => setPage('nvidia')}
+                >
+                  ‹
+                </button>
+              </div>
+            ) : null}
+            <main className="exo-main">{content}</main>
           </div>
-          <main className="exo-main">{content}</main>
         </div>
 
         <SettingsFlyout

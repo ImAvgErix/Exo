@@ -3,37 +3,39 @@
   inset: 0;
   z-index: 20;
   border: 0;
-  background: rgba(0, 0, 0, 0.52);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  backdrop-filter: blur(14px) saturate(1.4);
+  background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   cursor: default;
-  animation: backdrop-in 260ms var(--ease-out);
+  animation: backdrop-in 200ms var(--ease-out);
 }
 
 .settings-sheet {
   position: absolute;
-  left: calc(var(--dock-size) + 22px);
-  bottom: 24px;
+  left: 20px;
+  bottom: 20px;
   z-index: 30;
-  width: 300px;
-  padding: 10px;
-  border-radius: 24px;
+  width: 280px;
+  padding: 12px;
+  border-radius: 10px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  animation: sheet-in var(--dur-sheet) var(--ease-spring-sheet);
+  gap: 6px;
+  animation: sheet-in var(--dur) var(--ease-out);
   transform-origin: left bottom;
 }
 
 .settings-sheet__group {
-  padding: 10px;
-  border-radius: 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .settings-sheet__section {
-  margin: 0 0 6px;
-  padding: 0 2px;
+  margin: 0 0 8px;
+  padding: 0;
   font-family: var(--font-ui);
   font-size: 10px;
   font-weight: 600;
@@ -57,7 +59,6 @@
   justify-content: space-between;
   min-height: 26px;
   margin-bottom: 8px;
-  padding: 0 2px;
   font-family: var(--font-ui);
   font-size: 13px;
   color: var(--exo-text);
@@ -71,9 +72,7 @@
   background: rgba(255, 255, 255, 0.08);
   padding: 2px;
   cursor: pointer;
-  transition:
-    background-color var(--dur) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
 
 .settings-sheet__switch.is-on {
@@ -88,7 +87,7 @@
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-  transition: transform 320ms var(--ease-spring);
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 
 .settings-sheet__switch.is-on .settings-sheet__knob {
@@ -114,7 +113,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 2px 4px 0;
+  padding: 4px 2px 0;
   font-family: var(--font-ui);
   font-size: 11px;
   color: var(--exo-muted);
@@ -129,4 +128,9 @@
   min-height: 36px;
   padding: 7px 12px;
   font-size: 13px;
+}
+
+.theme-light .settings-sheet__group {
+  background: rgba(61, 52, 41, 0.03);
+  border-color: rgba(61, 52, 41, 0.08);
 }
