@@ -167,6 +167,11 @@
   transform: translate(-50%, 0);
 }
 
+/* The active circle's page is already on screen — its label is noise. */
+.glass-circle.is-active .glass-circle__label {
+  opacity: 0;
+}
+
 .top-bar__exo {
   position: relative;
   z-index: 1;

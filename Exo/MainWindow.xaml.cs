@@ -253,25 +253,28 @@ public sealed partial class MainWindow : Window
         };
 
         // Glass circles keep their rim-lit gradient; selection = brighter hairline ring.
-        var ringOn = new SolidColorBrush(ColorHelper.FromArgb(0xD9, 0xFF, 0xFF, 0xFF));
-        var ringOff = new SolidColorBrush(ColorHelper.FromArgb(0x66, 0xFF, 0xFF, 0xFF));
-
         foreach (var btn in new[] { NavHome, NavDiscord, NavSteam, NavInternet, NavNvidia })
         {
             // Home control is collapsed on the dashboard — skip selection chrome there.
             if (ReferenceEquals(btn, NavHome) && mode == ShellMode.Home)
             {
-                btn.BorderBrush = ringOff;
+                btn.BorderBrush = _ringOff;
                 btn.Opacity = 1.0;
                 continue;
             }
 
             var on = ReferenceEquals(btn, selected);
             btn.Opacity = on ? 1.0 : 0.72;
-            btn.BorderBrush = on ? ringOn : ringOff;
+            btn.BorderBrush = on ? _ringOn : _ringOff;
             btn.BorderThickness = new Thickness(1);
         }
     }
+
+    // Cached ring brushes — UpdateRailSelection runs on every navigation.
+    private static readonly SolidColorBrush _ringOn =
+        new(ColorHelper.FromArgb(0xD9, 0xFF, 0xFF, 0xFF));
+    private static readonly SolidColorBrush _ringOff =
+        new(ColorHelper.FromArgb(0x66, 0xFF, 0xFF, 0xFF));
 
     private void NavHome_Click(object sender, RoutedEventArgs e) => NavigateHome();
 

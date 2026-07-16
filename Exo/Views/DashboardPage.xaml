@@ -14,9 +14,9 @@
     -->
     <Border x:Name="PageRoot"
             Style="{StaticResource ExoModulePlate}"
-            Padding="24,20,24,14"
+            Padding="24,20,24,16"
             UseLayoutRounding="True">
-        <Grid RowSpacing="14">
+        <Grid RowSpacing="12">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -52,7 +52,7 @@
 
             <Grid x:Name="FrameHero"
                   Grid.Row="1"
-                  ColumnSpacing="10">
+                  ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
@@ -142,7 +142,7 @@
 
             <Grid x:Name="StatRow"
                   Grid.Row="2"
-                  ColumnSpacing="10">
+                  ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />

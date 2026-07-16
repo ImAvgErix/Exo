@@ -10,12 +10,13 @@
       v2.6 top bar: EXO · icon modules (no text labels) · Settings.
       Live modules are not duplicated on the home page.
     -->
+    <!-- exo-ui-craft: 16px side margins, 12px gap between bar and stage -->
     <Grid x:Name="RootGrid"
           Background="{ThemeResource ExoPageBackgroundBrush}"
-          Padding="12">
+          Padding="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="8" />
+            <RowDefinition Height="12" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 

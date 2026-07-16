@@ -83,7 +83,9 @@ export function HomePage() {
                   <span
                     key={i}
                     className="home-spark__bar"
-                    style={{ height: `${h}px` }}
+                    style={
+                      { height: `${h}px`, '--i': i } as React.CSSProperties
+                    }
                   />
                 ))}
               </div>

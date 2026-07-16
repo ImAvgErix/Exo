@@ -71,7 +71,7 @@ if (File.Exists(main))
     Expect("nav rail", m.Contains("NavRail", StringComparison.Ordinal));
     Expect("glass circle nav", m.Contains("ExoGlassCircle", StringComparison.Ordinal)
         && !m.Contains("ExoRailGlassFillBrush", StringComparison.Ordinal));
-    Expect("top bar workspace", m.Contains("Padding=\"12\"", StringComparison.Ordinal));
+    Expect("top bar workspace", m.Contains("Padding=\"16\"", StringComparison.Ordinal));
     Expect("top bar row layout",
         m.Contains("RowDefinitions", StringComparison.Ordinal)
         && m.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));

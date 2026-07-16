@@ -18,9 +18,10 @@
   align-self: stretch;
   border-radius: 12px;
   overflow: hidden;
-  padding: 20px 24px 14px;
+  padding: 20px 24px 16px;
   box-sizing: border-box;
-  gap: 14px;
+  /* exo-ui-craft: one 12px gap between stacked rows */
+  gap: 12px;
 }
 
 .home-plate__hero {
@@ -50,6 +51,7 @@
   font-weight: 400;
   color: var(--exo-secondary);
   opacity: 0.9;
+  text-wrap: balance;
 }
 
 .home-plate__section {
@@ -67,7 +69,7 @@
   min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
 .home-frame__card {
@@ -108,18 +110,33 @@
   min-height: 36px;
 }
 
+/* Bars grow in staggered on entrance — state indication, plays once. */
+@keyframes spark-up {
+  from {
+    transform: scaleY(0.15);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
 .home-spark__bar {
   width: 6px;
   border-radius: 2px;
   background: color-mix(in srgb, var(--exo-accent) 45%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--exo-accent) 25%, transparent);
+  transform-origin: bottom;
+  animation: spark-up 420ms var(--ease-out) both;
+  animation-delay: calc(320ms + var(--i, 0) * 18ms);
 }
 
 .home-stats {
   flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .home-stat {

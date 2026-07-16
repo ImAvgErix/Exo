@@ -28,13 +28,15 @@ public partial class DashboardViewModel : ObservableObject
         foreach (var card in Cards)
             card.InitializePresentation();
 
+        // Card set is fixed — materialize once instead of re-allocating per binding read.
+        SoonCards = Cards.Where(c => c.IsComingSoon).ToList();
+
         RefreshDashboard();
     }
 
     public IReadOnlyList<OptimizerCardViewModel> Cards { get; }
 
-    public IReadOnlyList<OptimizerCardViewModel> SoonCards =>
-        Cards.Where(c => c.IsComingSoon).ToList();
+    public IReadOnlyList<OptimizerCardViewModel> SoonCards { get; }
 
     public ObservableCollection<HomeSparkBar> SparkBars { get; } = new();
 
