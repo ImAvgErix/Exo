@@ -32,9 +32,21 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         Helpers.StartupLog.Mark("main-window-ctor");
+
+        // Crash-loop safe mode: previous launch died before presenting a frame —
+        // boot with all entrance motion collapsed to instant visibility.
+        if (Helpers.StartupLog.PreviousLaunchDiedBeforeFirstFrame)
+        {
+            ExoMotion.MotionDisabled = true;
+            Helpers.StartupLog.Mark("safe-mode-motion-off");
+        }
+
         InitializeComponent();
         Helpers.StartupLog.Mark("main-window-xaml-loaded");
         App.MainAppWindow = this;
+
+        // One-shot first-frame marker — proves composition actually presented.
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendered += OnFirstFrameRendered;
 
         // Fixed shell — no maximize / no edge-resize (UI is designed for this frame).
         AppWindow.Resize(new SizeInt32(1180, 760));
@@ -83,6 +95,16 @@ public sealed partial class MainWindow : Window
         ClearChromeFocus();
         TryRepairStartMenuShortcut();
         _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
+    }
+
+    private bool _firstFrameMarked;
+
+    private void OnFirstFrameRendered(object? sender, Microsoft.UI.Xaml.Media.RenderedEventArgs e)
+    {
+        if (_firstFrameMarked) return;
+        _firstFrameMarked = true;
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendered -= OnFirstFrameRendered;
+        Helpers.StartupLog.Mark(Helpers.StartupLog.FirstFrameMarker);
     }
 
     private void OnContentNavigated(object sender, Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)

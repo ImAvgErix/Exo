@@ -13,6 +13,13 @@ namespace Exo.Helpers;
 /// </summary>
 public static class ExoMotion
 {
+    /// <summary>
+    /// Crash-loop safe mode: when the previous launch died before presenting a
+    /// frame, all entrance motion collapses to instant EnsureVisible so a
+    /// composition-animation failure cannot brick startup twice.
+    /// </summary>
+    public static bool MotionDisabled { get; set; }
+
     // Short, clean motion — no bouncy spring on content.
     public const int EntranceMs = 240;
     public const int FadeMs = 180;
@@ -81,6 +88,14 @@ public static class ExoMotion
         bool enableHit = true,
         double toOpacity = 1.0)
     {
+        if (MotionDisabled)
+        {
+            EnsureVisible(el);
+            if (toOpacity < 1.0)
+                el.Opacity = Math.Clamp(toOpacity, 0.1, 1.0);
+            return;
+        }
+
         // Snap rise to whole pixels so we never park mid-pixel.
         var rise = (float)Math.Round(Math.Clamp(fromY, 0f, 10f));
         var settle = Math.Clamp(toOpacity, 0.1, 1.0);
@@ -159,6 +174,7 @@ public static class ExoMotion
     public static void PlayListEnter(FrameworkElement host, int expectedCount = 0)
     {
         if (host is null) return;
+        if (MotionDisabled) return; // rows are data-bound visible; nothing to reveal
         _ = RunListEnterAsync(host, expectedCount);
     }
 
@@ -196,6 +212,13 @@ public static class ExoMotion
     /// </summary>
     public static void PlaySelect(UIElement el, Action? onDone = null)
     {
+        if (MotionDisabled)
+        {
+            EnsureVisible(el);
+            onDone?.Invoke();
+            return;
+        }
+
         try
         {
             ForceCompositionIdentity(el);
@@ -239,6 +262,12 @@ public static class ExoMotion
     /// <summary>Module page soft fade-in.</summary>
     public static void PlayPageEnter(UIElement root)
     {
+        if (MotionDisabled)
+        {
+            EnsureVisible(root);
+            return;
+        }
+
         ForceCompositionIdentity(root);
         ClearTransform(root);
         try

@@ -1,3 +1,8 @@
+## 2.6.2
+
+- **Crash-loop safe mode**: when a launch dies before presenting a frame (v2.6.0/2.6.1 black-flash regression), the next launch automatically disables all entrance motion — composition-animation failures can no longer brick startup twice in a row
+- **First-frame proof**: `startup.log` now records `first-frame-rendered` (via `CompositionTarget.Rendered`), separating "window activated" from "pixels actually presented" in crash reports
+
 ## 2.6.1
 
 - **CRITICAL launch fix**: v2.6.0 died at startup with `0xC000027B` (composition failure) on real GPUs — the settings-flyout `AcrylicBrush` is created while `MainWindow` parses, and the acrylic composition object can fail before first frame. Replaced with solid near-opaque sheet brushes (visually equivalent to the old tint + fallback)
