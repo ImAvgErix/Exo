@@ -14,10 +14,16 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# Hosted by Exo via stable PowerShell 7 (any 7.x; never Windows PowerShell 5.1).
-if ($PSVersionTable.PSEdition -ne 'Core' -or [int]$PSVersionTable.PSVersion.Major -lt 7) {
+# Shared Wave-2 libs (PS7 assert, log, no Exo background footprint).
+$__exoScriptsRoot = Split-Path -Parent $PSScriptRoot
+if (-not $PSScriptRoot) { $__exoScriptsRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path) }
+$__exoCommon = Join-Path $__exoScriptsRoot 'lib\Exo.Common.ps1'
+$__exoNoBg = Join-Path $__exoScriptsRoot 'lib\Exo.NoBackground.ps1'
+if (Test-Path -LiteralPath $__exoCommon) { . $__exoCommon; Assert-ExoPwsh7; [void](Initialize-ExoRunLog -Module 'Discord') }
+elseif ($PSVersionTable.PSEdition -ne 'Core' -or [int]$PSVersionTable.PSVersion.Major -lt 7) {
     throw 'Exo-Discord-Run requires PowerShell 7. Install it with: winget install Microsoft.PowerShell'
 }
+if (Test-Path -LiteralPath $__exoNoBg) { . $__exoNoBg; [void](Unregister-ExoBackground -Quiet) }
 $env:EXO = '1'
 $env:DISCOPT_NONINTERACTIVE = '1'
 # Never open Discord from elevated Exo - causes black screens and false boot failures.

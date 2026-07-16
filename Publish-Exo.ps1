@@ -161,9 +161,11 @@ if (Test-Path -LiteralPath $nvDisplayProj) {
     if ($LASTEXITCODE -ne 0) { throw "Exo.NvDisplay publish failed (exit $LASTEXITCODE)" }
     $nvExe = Join-Path $nvDisplayOut 'Exo.NvDisplay.exe'
     if (-not (Test-Path -LiteralPath $nvExe)) { throw "Missing $nvExe after publish" }
-    Write-Host "[+] NVAPI helper: $nvExe ($([math]::Round((Get-Item $nvExe).Length/1MB,1)) MB)" -ForegroundColor Green
+    $nvLen = (Get-Item -LiteralPath $nvExe).Length
+    if ($nvLen -lt 1MB) { throw "Exo.NvDisplay.exe too small ($nvLen bytes) - publish single-file may have failed" }
+    Write-Host "[+] NVAPI helper: $nvExe ($([math]::Round($nvLen/1MB,1)) MB)" -ForegroundColor Green
 } else {
-    Write-Host "[!] Exo.NvDisplay project missing at $nvDisplayProj" -ForegroundColor DarkYellow
+    throw "Exo.NvDisplay project missing at $nvDisplayProj - display Apply will fail on user PCs"
 }
 
 Write-Host "[*] dotnet publish (Version=$asmVersion)..." -ForegroundColor DarkGray
@@ -192,6 +194,22 @@ Write-Host "[+] Embedded version FileVersion=$fv ProductVersion=$pv (expected $a
 if ($fv -notlike "$asmVersion*") {
     throw "Publish version stamp failed: FileVersion is '$fv' but VERSION file says '$asmVersion'. Fix csproj/publish props."
 }
+
+# Wave-2: scripts + NvDisplay must be inside the published app tree (or beside SFX payload).
+$publishedNv = @(
+    (Join-Path $OutDir 'Scripts\Nvidia\tools\Exo.NvDisplay.exe'),
+    (Join-Path $Root 'Exo\Scripts\Nvidia\tools\Exo.NvDisplay.exe')
+) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $publishedNv) {
+    throw 'Wave-2 publish check: Exo.NvDisplay.exe missing after publish (display Apply would fail).'
+}
+Write-Host "[+] Publish check: NvDisplay present ($publishedNv)" -ForegroundColor Green
+$sharedLib = Join-Path $Root 'Exo\Scripts\lib\Exo.Common.ps1'
+$noBgLib = Join-Path $Root 'Exo\Scripts\lib\Exo.NoBackground.ps1'
+if (-not (Test-Path -LiteralPath $sharedLib) -or -not (Test-Path -LiteralPath $noBgLib)) {
+    throw 'Wave-2 publish check: Exo/Scripts/lib shared helpers missing (Exo.Common / Exo.NoBackground).'
+}
+Write-Host '[+] Publish check: shared script libs present' -ForegroundColor Green
 
 if (Test-Path $ZipPath) { Remove-Item -LiteralPath $ZipPath -Force }
 Write-Host '[*] Packing payload zip (internal only)...' -ForegroundColor DarkGray

@@ -184,12 +184,19 @@ public partial class InternetOptimizerViewModel : ObservableObject
             ClearMessage();
 
         var applied = Rows.Count > 0 && Rows.All(r => r.IsActive);
-        GuidanceText = OptimizerAdvisor.Build(
+        var failSteps = ApplyReportRows
+            .Where(r => r.Status == "fail")
+            .Select(r => r.Text.Split('·')[0].Trim())
+            .Where(s => s.Length > 0)
+            .Take(4)
+            .ToList();
+        GuidanceText = OptimizerAdvisor.BuildV2(
             "Internet",
             applied,
             HeaderStatus,
             snap.Detail,
-            Rows.Select(r => (r.Title, r.IsActive, r.Detail)).ToList());
+            Rows.Select(r => (r.Title, r.IsActive, r.Detail)).ToList(),
+            failSteps);
         HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
     }
 

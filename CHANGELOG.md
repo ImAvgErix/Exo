@@ -1,3 +1,9 @@
+## 2.7.1
+
+- **Shared script platform**: `Exo/Scripts/lib/Exo.Common.ps1` (PS7 assert, run logs) + `Exo.NoBackground.ps1` (purge Exo tasks/Run keys); wired into Discord/Steam/NVIDIA Run wrappers
+- **Advisor v2**: CTA-first guidance with missing features + last-apply fail steps (`OptimizerAdvisor.BuildV2`)
+- **Publish**: hard-fail if `Exo.NvDisplay.exe` or shared libs missing after build
+
 ## 2.7.0
 
 - **Release trust**: GitHub Release workflow runs build + repository integrity + all five smokes before publishing Exo.exe (no untested ship)
