@@ -1,3 +1,9 @@
+## 2.6.4
+
+- **CRITICAL Internet rescue**: post-apply auto-rollback now does a **full snapshot restore** (registry, NIC advanced props, bindings, TCP, metrics) instead of Wi-Fi/metrics-only — the old path left host-stack tweaks applied and could leave the box offline
+- **Repair actually applies**: advanced props are restored then the NIC is restarted (`-NoRestart` alone was a silent no-op); every disabled physical adapter is re-enabled; `ms_tcpip` / `ms_tcpip6` / `ms_pacer` are force-enabled
+- **Hard fallback**: if still offline after Repair → `netsh winsock reset` + `netsh int ip/ipv6 reset` (exit 2, reboot required). Standalone `Repair-Internet.ps1` gains `-Hard` plus an offline emergency paste block
+
 ## 2.6.3
 
 - **Launch crash root cause fixed**: `ExoMotion` wrote hand-off composition visual properties (`Visual.Offset`/`Scale`) around every entrance — that detaches elements from XAML layout (v2.6.2 safe mode piled the whole home page at the top-left) and poking those visuals before first frame fails fast with `0xC000027B` on real GPUs (the v2.6.0/2.6.1 flash-and-close). All composition-visual writes removed; XAML layout owns positions, storyboards own motion. Window drag region works again

@@ -330,8 +330,49 @@ Expect("rollback re-enables wifi", latScript.Contains("Enable-NetAdapter -Name $
 Expect("rollback restores metrics from snapshot",
     rollbackIdx >= 0 &&
     latScript.IndexOf("interface metrics restored from snapshot", StringComparison.Ordinal) > rollbackIdx);
+// Full snapshot restore on connectivity failure (not Wi-Fi/metrics-only — that stranded users).
+Expect("rollback full snapshot restore (registry + advanced props + bindings)",
+    rollbackIdx >= 0 &&
+    latScript.IndexOf("FULL snapshot restore", StringComparison.Ordinal) > rollbackIdx &&
+    latScript.IndexOf("registry restored from snapshot", StringComparison.Ordinal) > rollbackIdx &&
+    latScript.IndexOf("$snapJson.advancedProps", StringComparison.Ordinal) > rollbackIdx &&
+    latScript.IndexOf("$snapJson.bindings", StringComparison.Ordinal) > rollbackIdx);
+Expect("rollback restarts adapters so advanced props apply",
+    latScript.Contains("adapter restarted so advanced props apply", StringComparison.Ordinal));
+Expect("rollback forces critical tcpip bindings",
+    latScript.Contains("Enable-NetAdapterBinding -Name $a.Name -ComponentID $id", StringComparison.Ordinal) &&
+    latScript.Contains("'ms_tcpip','ms_tcpip6','ms_pacer'", StringComparison.Ordinal));
 Expect("apply-state json written", latScript.Contains("network-apply-state.json", StringComparison.Ordinal) &&
     latScript.Contains("rollbackReason", StringComparison.Ordinal));
+
+// (a2) Post-apply probe honesty: FULL retry window (link renegotiation after NIC
+// advanced-property writes takes 5-20s; a single early probe must never rollback).
+Expect("post-probe retry window >= 45s",
+    latScript.Contains("$probeWindowSec = 60", StringComparison.Ordinal) &&
+    thrScript.Contains("$probeWindowSec = 60", StringComparison.Ordinal));
+Expect("post-probe loops until window elapses",
+    latScript.Contains("while (-not $postOk -and $probeSw.Elapsed.TotalSeconds -lt $probeWindowSec)", StringComparison.Ordinal));
+Expect("post-probe gates on adapter link state",
+    latScript.Contains("Get-NetAdapter -Physical", StringComparison.Ordinal) &&
+    latScript.Contains("$linkUp", StringComparison.Ordinal));
+Expect("post-probe uses DNS resolve as second anchor",
+    latScript.Contains("elseif (Test-ExoDnsResolve)", StringComparison.Ordinal));
+Expect("post-probe reports attempts + elapsed in reason",
+    latScript.Contains("'attempts=' + $probeAttempts", StringComparison.Ordinal) &&
+    latScript.Contains("'post-probe' 'fail' ('no tcp 443 / dns reachability after full retry window", StringComparison.Ordinal) &&
+    latScript.Contains("$probeDetail", StringComparison.Ordinal));
+Expect("post-probe ok also carries timing detail",
+    latScript.Contains("'post-probe' 'ok' ('reachable via '", StringComparison.Ordinal));
+Expect("rollback reason includes probe timing",
+    latScript.Contains("$rollbackReason = 'post-apply-connectivity-failed (' + $probeDetail + ')'", StringComparison.Ordinal));
+Expect("rollback re-probe has its own retry window",
+    latScript.Contains("$rbSw.Elapsed.TotalSeconds -lt 45", StringComparison.Ordinal));
+Expect("eth gate probe retries before skipping wifi disable",
+    latScript.Contains("$ethGateSw.Elapsed.TotalSeconds -lt 20", StringComparison.Ordinal) &&
+    latScript.Contains("$ethGateAttempts", StringComparison.Ordinal));
+// Old too-eager probe shape must be gone (single 3s retry then rollback)
+Expect("old single-retry probe removed",
+    !latScript.Contains("if (-not $postOk) { Start-Sleep -Seconds 3; $postOk = Test-ExoConnectivity }", StringComparison.Ordinal));
 
 // (b) Markers for every new tweak (+ preset divergence)
 Expect("timestamps disabled both",
@@ -478,9 +519,17 @@ Expect("repair deletes snapshot only on full success",
 Expect("repair fallback path marker",
     repairScript.Contains("no-snapshot-fallback-stock-reset", StringComparison.Ordinal) &&
     repairScript.Contains("APPROXIMATE", StringComparison.Ordinal));
-Expect("repair always re-enables wifi regardless of path",
-    repairScript.Contains("Wi-Fi re-enabled", StringComparison.Ordinal) &&
+Expect("repair always re-enables adapters regardless of path",
+    repairScript.Contains("adapter re-enabled", StringComparison.Ordinal) &&
     repairScript.Contains("'wifi-reenable' 'ok'", StringComparison.Ordinal));
+Expect("repair restarts adapters after advanced prop restore",
+    repairScript.Contains("adapter restarted so advanced props apply", StringComparison.Ordinal));
+Expect("repair forces critical tcpip bindings",
+    repairScript.Contains("'ms_tcpip','ms_tcpip6','ms_pacer'", StringComparison.Ordinal));
+Expect("repair hard-resets winsock when still offline",
+    repairScript.Contains("netsh winsock reset", StringComparison.Ordinal) &&
+    repairScript.Contains("exit 2", StringComparison.Ordinal) &&
+    repairScript.Contains("'hard-reset' 'ok'", StringComparison.Ordinal));
 Expect("repair emits EXO_REPORT", repairScript.Contains("EXO_REPORT:", StringComparison.Ordinal));
 
 // (d) Repair-Internet.ps1 standalone rescue at repo root
@@ -523,6 +572,16 @@ if (rescuePath is not null && File.Exists(rescuePath))
         rescue.Contains("network-apply-state.json", StringComparison.Ordinal) &&
         rescue.Contains("network-optimizer.json", StringComparison.Ordinal));
     Expect("rescue supports irm|iex bootstrap", rescue.Contains("| iex", StringComparison.Ordinal));
+    Expect("rescue has Hard switch + winsock reset",
+        rescue.Contains("[switch]$Hard", StringComparison.Ordinal) &&
+        rescue.Contains("netsh winsock reset", StringComparison.Ordinal) &&
+        rescue.Contains("Invoke-ExoHardStackReset", StringComparison.Ordinal));
+    Expect("rescue restarts adapters after advanced props",
+        rescue.Contains("Restart-NetAdapter", StringComparison.Ordinal) &&
+        rescue.Contains("advanced props apply", StringComparison.Ordinal));
+    Expect("rescue documents offline emergency block",
+        rescue.Contains("EMERGENCY", StringComparison.Ordinal) &&
+        rescue.Contains("netsh int ip reset", StringComparison.Ordinal));
 }
 
 // (f) Parse EVERY generated script with the PowerShell language parser (zero errors)

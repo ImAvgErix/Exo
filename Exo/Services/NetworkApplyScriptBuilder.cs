@@ -1143,11 +1143,21 @@ function Set-EthMetrics {
         sb.AppendLine("      Report 'wifi-disable' 'skip' 'ethernet has no usable ipv4'");
         sb.AppendLine("    } else {");
         sb.AppendLine("      Log \"[Exo-NET] Probing real internet over Ethernet ($ethIp) before touching Wi-Fi...\"");
-        sb.AppendLine("      $ethProbeOk = Test-ExoConnectivity -BindIp $ethIp");
+        // Short retry window: binding/advanced-property writes just above can bounce the
+        // link for a few seconds; a single instant probe would false-skip the eth path.
+        sb.AppendLine("      $ethGateSw = [System.Diagnostics.Stopwatch]::StartNew()");
+        sb.AppendLine("      $ethGateAttempts = 0");
+        sb.AppendLine("      $ethProbeOk = $false");
+        sb.AppendLine("      while (-not $ethProbeOk -and $ethGateSw.Elapsed.TotalSeconds -lt 20) {");
+        sb.AppendLine("        $ethGateAttempts++");
+        sb.AppendLine("        $ethProbeOk = Test-ExoConnectivity -BindIp $ethIp");
+        sb.AppendLine("        if (-not $ethProbeOk) { Start-Sleep -Seconds 2 }");
+        sb.AppendLine("      }");
+        sb.AppendLine("      $ethGateSw.Stop()");
         sb.AppendLine("      if ($ethProbeOk) { if (Test-ExoDnsResolve) { Log '[probe] DNS resolve OK' } else { Log '[probe] DNS resolve failed (TCP probe passed - continuing)' } }");
         sb.AppendLine("      if (-not $ethProbeOk) {");
         sb.AppendLine("        Log '[Exo-NET] Ethernet internet probe FAILED - Wi-Fi stays enabled'");
-        sb.AppendLine("        Report 'wifi-disable' 'skip' 'ethernet internet probe failed (tcp 443)'");
+        sb.AppendLine("        Report 'wifi-disable' 'skip' ('ethernet internet probe failed (tcp 443, ' + $ethGateAttempts + ' attempts over ' + [int]$ethGateSw.Elapsed.TotalSeconds + 's)')");
         sb.AppendLine("      } else {");
         sb.AppendLine("        Log '[Exo-NET] Ethernet verified (TCP 443) - preferring Ethernet (lowest latency)'");
         sb.AppendLine("        foreach ($w in @($ads | Where-Object { Test-IsWifiAdapter $_ })) {");
@@ -1194,50 +1204,187 @@ function Set-EthMetrics {
         sb.AppendLine("}");
 
         // ============================================================================
-        // POST-APPLY CONNECTIVITY CHECK + AUTO-ROLLBACK — if the box lost internet,
-        // re-enable Wi-Fi adapters we just disabled, restore interface metrics from
-        // the pristine snapshot, re-probe, and record an honest rollback marker.
+        // POST-APPLY CONNECTIVITY CHECK + AUTO-ROLLBACK
+        // Probe runs inside a FULL retry window (link renegotiation after NIC
+        // advanced-property writes / adapter restart can take 5-20s+ with DHCP).
+        // On failure: FULL snapshot restore (registry + advanced props + bindings +
+        // TCP + metrics + adapter enable) — NOT the old Wi-Fi/metrics-only path that
+        // left host-stack / NIC tweaks applied and stranded users.
         // ============================================================================
         sb.AppendLine("""
-Log '[Exo-NET] Post-apply connectivity check...'
-$postOk = Test-ExoConnectivity
-if (-not $postOk) { Start-Sleep -Seconds 3; $postOk = Test-ExoConnectivity }
+Log '[Exo-NET] Post-apply connectivity check (retry window - link renegotiation can take 5-20s)...'
+$probeWindowSec = 60
+$probeSw = [System.Diagnostics.Stopwatch]::StartNew()
+$probeAttempts = 0
+$probeLinkWaits = 0
+$postOk = $false
+$postVia = ''
+while (-not $postOk -and $probeSw.Elapsed.TotalSeconds -lt $probeWindowSec) {
+  # Link gate: while no physical adapter reports Up the stack is still renegotiating -
+  # probing now burns the window on instant 'unreachable' failures.
+  $linkUp = $true
+  try { $linkUp = @(Get-NetAdapter -Physical -EA SilentlyContinue | Where-Object { $_.Status -eq 'Up' }).Count -gt 0 } catch { $linkUp = $true }
+  if (-not $linkUp) {
+    $probeLinkWaits++
+    Log ('[probe] no adapter link yet at ' + [int]$probeSw.Elapsed.TotalSeconds + 's - waiting for renegotiation')
+  } else {
+    $probeAttempts++
+    if (Test-ExoConnectivity) { $postOk = $true; $postVia = 'tcp-443' }
+    elseif (Test-ExoDnsResolve) {
+      $postOk = $true; $postVia = 'dns-resolve'
+      Log '[probe] DNS resolve OK (TCP 443 anchors blocked - DNS round-trip proves connectivity)'
+    }
+  }
+  if (-not $postOk) { Start-Sleep -Seconds 2 }
+}
+$probeSw.Stop()
+$probeElapsedSec = [int][Math]::Round($probeSw.Elapsed.TotalSeconds)
+$probeDetail = 'attempts=' + $probeAttempts + ' linkWaits=' + $probeLinkWaits + ' elapsed=' + $probeElapsedSec + 's window=' + $probeWindowSec + 's'
+Log ('[probe] post-apply result ok=' + $postOk + ' ' + $probeDetail)
 $didRollback = $false
 $rollbackReason = ''
 if (-not $postOk) {
-  Report 'post-probe' 'fail' 'no tcp 443 reachability after apply'
+  Report 'post-probe' 'fail' ('no tcp 443 / dns reachability after full retry window (' + $probeDetail + ')')
   Log '[Exo-NET] POST-APPLY CONNECTIVITY FAILED - rolling back path changes automatically'
   $didRollback = $true
-  $rollbackReason = 'post-apply-connectivity-failed'
+  $rollbackReason = 'post-apply-connectivity-failed (' + $probeDetail + ')'
+  # Always bring every physical adapter back (not only the Wi-Fi list we just disabled).
+  foreach ($a in @(Get-NetAdapter -Physical -EA SilentlyContinue)) {
+    try {
+      if ([string]$a.Status -eq 'Disabled') {
+        Enable-NetAdapter -Name $a.Name -Confirm:$false -EA SilentlyContinue
+        Log ('[rollback] adapter re-enabled: ' + $a.Name)
+      }
+    } catch {}
+  }
   foreach ($wn in @($ExoWifiDisabled)) {
     try {
       Enable-NetAdapter -Name $wn -Confirm:$false -EA SilentlyContinue
       Log "[rollback] Wi-Fi re-enabled: $wn"
     } catch { Log "[rollback] could not re-enable $wn" }
   }
+  # FULL snapshot restore — Wi-Fi + metrics alone left host-stack / NIC props applied.
+  $snapJson = $null
   try {
     if (Test-Path -LiteralPath $ExoSnapshotPath) {
       $snapJson = Get-Content -LiteralPath $ExoSnapshotPath -Raw | ConvertFrom-Json
-      foreach ($mi in @($snapJson.ipInterfaces)) {
-        try {
-          if ($mi.automaticMetric) {
-            Set-NetIPInterface -InterfaceIndex ([int]$mi.ifIndex) -AddressFamily ([string]$mi.family) -AutomaticMetric Enabled -EA SilentlyContinue
-          } else {
-            Set-NetIPInterface -InterfaceIndex ([int]$mi.ifIndex) -AddressFamily ([string]$mi.family) -AutomaticMetric Disabled -InterfaceMetric ([int]$mi.metric) -EA SilentlyContinue
-          }
-        } catch {}
-      }
-      Log '[rollback] interface metrics restored from snapshot'
-    } else {
-      Log '[rollback] WARN snapshot missing - metrics not restored'
     }
-  } catch { Log '[rollback] metric restore error' }
-  Start-Sleep -Seconds 4
-  $postOk = Test-ExoConnectivity
-  if ($postOk) { Report 'rollback' 'ok' 'connectivity restored after rollback' }
-  else { Report 'rollback' 'fail' 'connectivity still down - run Repair or Repair-Internet.ps1' }
+  } catch { $snapJson = $null }
+  if ($snapJson) {
+    Log '[rollback] FULL snapshot restore (registry, NIC advanced props, bindings, TCP, metrics)...'
+    foreach ($rv in @($snapJson.regValues)) {
+      try {
+        $kind = [string]$rv.kind
+        if ($kind -eq 'absent') {
+          if (Test-Path -LiteralPath $rv.path) { Remove-ItemProperty -LiteralPath $rv.path -Name $rv.name -Force -EA SilentlyContinue }
+        } else {
+          if (-not (Test-Path -LiteralPath $rv.path)) { New-Item -Path $rv.path -Force -EA SilentlyContinue | Out-Null }
+          if ($kind -eq 'Binary') {
+            $bytes = [byte[]]@(@($rv.value) | ForEach-Object { [byte]$_ })
+            Set-ItemProperty -LiteralPath $rv.path -Name $rv.name -Value $bytes -Type Binary -Force -EA SilentlyContinue
+          } elseif ($kind -eq 'MultiString') {
+            Set-ItemProperty -LiteralPath $rv.path -Name $rv.name -Value ([string[]]@($rv.value)) -Type MultiString -Force -EA SilentlyContinue
+          } else {
+            Set-ItemProperty -LiteralPath $rv.path -Name $rv.name -Value $rv.value -Type $kind -Force -EA SilentlyContinue
+          }
+        }
+      } catch {}
+    }
+    Log '[rollback] registry restored from snapshot'
+    $liveRb = @(Get-NetAdapter -EA SilentlyContinue)
+    $touchedRb = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($ap in @($snapJson.advancedProps)) {
+      $target = $liveRb | Where-Object { [string]$_.Name -eq [string]$ap.adapter } | Select-Object -First 1
+      if (-not $target -and $ap.ifDesc) { $target = $liveRb | Where-Object { [string]$_.InterfaceDescription -eq [string]$ap.ifDesc } | Select-Object -First 1 }
+      if (-not $target) { continue }
+      $vals = @(([string]$ap.value) -split ',' | Where-Object { $_ -ne '' })
+      if ($vals.Count -eq 0) { continue }
+      try {
+        Set-NetAdapterAdvancedProperty -Name $target.Name -RegistryKeyword ([string]$ap.keyword) -RegistryValue $vals -NoRestart -EA SilentlyContinue
+        [void]$touchedRb.Add([string]$target.Name)
+      } catch {}
+    }
+    foreach ($b in @($snapJson.bindings)) {
+      $target = $liveRb | Where-Object { [string]$_.Name -eq [string]$b.adapter } | Select-Object -First 1
+      if (-not $target -and $b.ifDesc) { $target = $liveRb | Where-Object { [string]$_.InterfaceDescription -eq [string]$b.ifDesc } | Select-Object -First 1 }
+      if (-not $target) { continue }
+      try {
+        if ($b.enabled) { Enable-NetAdapterBinding -Name $target.Name -ComponentID ([string]$b.componentId) -EA SilentlyContinue }
+        else { Disable-NetAdapterBinding -Name $target.Name -ComponentID ([string]$b.componentId) -EA SilentlyContinue }
+      } catch {}
+    }
+    foreach ($mi in @($snapJson.ipInterfaces)) {
+      try {
+        if ($mi.automaticMetric) {
+          Set-NetIPInterface -InterfaceIndex ([int]$mi.ifIndex) -AddressFamily ([string]$mi.family) -AutomaticMetric Enabled -EA SilentlyContinue
+        } else {
+          Set-NetIPInterface -InterfaceIndex ([int]$mi.ifIndex) -AddressFamily ([string]$mi.family) -AutomaticMetric Disabled -InterfaceMetric ([int]$mi.metric) -EA SilentlyContinue
+        }
+      } catch {}
+    }
+    Log '[rollback] interface metrics restored from snapshot'
+    $inetRb = @($snapJson.tcpSettings) | Where-Object { [string]$_.settingName -eq 'Internet' } | Select-Object -First 1
+    if ($inetRb -and $inetRb.autoTuningLevelLocal) {
+      try { netsh int tcp set global autotuninglevel=$(([string]$inetRb.autoTuningLevelLocal).ToLowerInvariant()) | Out-Null } catch {}
+    }
+    $tcpRawRb = [string]$snapJson.netshTcpGlobalRaw
+    foreach ($pair in @(
+        @{ Label = 'RFC 1323 Timestamps'; Opt = 'timestamps'; Default = 'default' },
+        @{ Label = 'Fast Open'; Opt = 'fastopen'; Default = 'enabled' },
+        @{ Label = 'Fast Open Fallback'; Opt = 'fastopenfallback'; Default = 'enabled' },
+        @{ Label = 'HyStart'; Opt = 'hystart'; Default = 'enabled' },
+        @{ Label = 'Pacing Profile'; Opt = 'pacingprofile'; Default = 'off' },
+        @{ Label = 'ECN Capability'; Opt = 'ecncapability'; Default = 'default' }
+    )) {
+      $val = $pair.Default
+      $m = [regex]::Match($tcpRawRb, ('(?im)^\s*' + [regex]::Escape($pair.Label) + '\s*:\s*(\S+)'))
+      if ($m.Success) { $val = $m.Groups[1].Value.ToLowerInvariant() }
+      try { $null = (netsh int tcp set global "$($pair.Opt)=$val" 2>&1 | Out-String) } catch {}
+    }
+    # Advanced props with -NoRestart do not take effect until the NIC is bounced.
+    foreach ($n in @($touchedRb)) {
+      try {
+        Restart-NetAdapter -Name $n -Confirm:$false -EA SilentlyContinue
+        Log ('[rollback] adapter restarted so advanced props apply: ' + $n)
+      } catch {}
+    }
+    Log '[rollback] full snapshot restore applied'
+  } else {
+    Log '[rollback] WARN snapshot missing - cannot full-restore; forcing critical bindings + stock DNS/NCSI'
+  }
+  # Hard safety net even when snapshot is incomplete/missing.
+  foreach ($a in @(Get-NetAdapter -Physical -EA SilentlyContinue)) {
+    foreach ($id in @('ms_tcpip','ms_tcpip6','ms_pacer')) {
+      try { Enable-NetAdapterBinding -Name $a.Name -ComponentID $id -EA SilentlyContinue } catch {}
+    }
+    foreach ($af in @('IPv4','IPv6')) {
+      try { Set-NetIPInterface -InterfaceIndex $a.ifIndex -AddressFamily $af -AutomaticMetric Enabled -EA SilentlyContinue } catch {}
+    }
+  }
+  try {
+    $sp = 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\ServiceProvider'
+    if (Test-Path -LiteralPath $sp) {
+      Set-ItemProperty -LiteralPath $sp -Name LocalPriority -Value 499 -Type DWord -Force -EA SilentlyContinue
+      Set-ItemProperty -LiteralPath $sp -Name HostsPriority -Value 500 -Type DWord -Force -EA SilentlyContinue
+      Set-ItemProperty -LiteralPath $sp -Name DnsPriority -Value 2000 -Type DWord -Force -EA SilentlyContinue
+      Set-ItemProperty -LiteralPath $sp -Name NetbtPriority -Value 2001 -Type DWord -Force -EA SilentlyContinue
+    }
+  } catch {}
+  try { Remove-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'NoActiveProbe' -Force -EA SilentlyContinue } catch {}
+  try { Clear-DnsClientCache -EA SilentlyContinue } catch {}
+  try { ipconfig /renew | Out-Null } catch {}
+  # Re-probe with its own window (Wi-Fi re-association + NIC bounce takes a few seconds)
+  $rbSw = [System.Diagnostics.Stopwatch]::StartNew()
+  while (-not $postOk -and $rbSw.Elapsed.TotalSeconds -lt 45) {
+    Start-Sleep -Seconds 3
+    if (Test-ExoConnectivity) { $postOk = $true }
+    elseif (Test-ExoDnsResolve) { $postOk = $true }
+  }
+  $rbSw.Stop()
+  if ($postOk) { Report 'rollback' 'ok' ('connectivity restored after full snapshot rollback (' + [int]$rbSw.Elapsed.TotalSeconds + 's)') }
+  else { Report 'rollback' 'fail' 'connectivity still down after full restore - run Repair or Repair-Internet.ps1 -Hard' }
 } else {
-  Report 'post-probe' 'ok'
+  Report 'post-probe' 'ok' ('reachable via ' + $postVia + ' (' + $probeDetail + ')')
 }
 # Honest apply-state marker (surfaced by NetworkOptimizerService status/probe API)
 try {
@@ -1252,7 +1399,7 @@ try {
   }
   $applyState | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $ExoApplyStatePath -Encoding UTF8
 } catch { Log '[Exo-NET] WARN could not write apply-state json' }
-if ($didRollback) { Report 'apply' 'fail' 'connectivity lost after apply - path changes rolled back automatically' }
+if ($didRollback) { Report 'apply' 'fail' 'connectivity lost after apply - full snapshot rolled back automatically' }
 else { Report 'apply' 'ok' }
 """);
         sb.AppendLine("Log '[Exo-NET] DONE preset=" + preset + "'");
@@ -1407,7 +1554,10 @@ if ($snap) {
   }
   Report 'restore-adapter-state' 'ok'
   # --- 5) Advanced properties by RegistryKeyword (exact recorded values) ---
+  # -NoRestart writes driver settings without applying them; we bounce touched
+  # adapters below so Repair actually undoes the NIC tweaks that break links.
   $advFail = 0
+  $touchedAdv = New-Object 'System.Collections.Generic.HashSet[string]'
   foreach ($ap in @($snap.advancedProps)) {
     $target = Resolve-ExoAdapter ([string]$ap.adapter) ([string]$ap.ifDesc)
     if (-not $target) { continue }
@@ -1415,10 +1565,18 @@ if ($snap) {
     if ($vals.Count -eq 0) { continue }
     try {
       Set-NetAdapterAdvancedProperty -Name $target.Name -RegistryKeyword ([string]$ap.keyword) -RegistryValue $vals -NoRestart -EA SilentlyContinue
+      [void]$touchedAdv.Add([string]$target.Name)
     } catch { $advFail++ }
   }
   Report 'restore-advanced-props' $(if ($advFail -eq 0) { 'ok' } else { 'fail' }) $(if ($advFail -gt 0) { "$advFail keyword(s) failed" } else { '' })
   if ($advFail -gt 0) { $restoreFailures += $advFail }
+  foreach ($n in @($touchedAdv)) {
+    try {
+      Restart-NetAdapter -Name $n -Confirm:$false -EA SilentlyContinue
+      Log ('[repair] adapter restarted so advanced props apply: ' + $n)
+    } catch {}
+  }
+  if ($touchedAdv.Count -gt 0) { Start-Sleep -Seconds 4 }
   # --- 6) Bindings (ComponentID + Enabled exactly as recorded) ---
   foreach ($b in @($snap.bindings)) {
     $target = Resolve-ExoAdapter ([string]$b.adapter) ([string]$b.ifDesc)
@@ -1622,23 +1780,56 @@ if ($snap) {
   Remove-Item -LiteralPath $ExoApplyStatePath -Force -EA SilentlyContinue
 }
 # ============================================================================
-# ALWAYS (both paths): re-enable Wi-Fi adapters Exo may have disabled.
+# ALWAYS (both paths): re-enable EVERY disabled physical adapter, force critical
+# bindings (IPv4/IPv6/QoS), clear DNS, renew DHCP. Old repair only re-enabled
+# Wi-Fi by name heuristic and left advanced props unapplied (-NoRestart).
 # ============================================================================
 $allPhys = @(Get-NetAdapter -Physical -EA SilentlyContinue)
-foreach ($w in @($allPhys | Where-Object { [string]$_.PhysicalMediaType -match '802\.11|Wireless' -or [string]$_.Name -match '(?i)Wi-?Fi|Wireless|WLAN' })) {
+foreach ($a in $allPhys) {
   try {
-    if ($w.Status -eq 'Disabled') {
-      Enable-NetAdapter -Name $w.Name -Confirm:$false -EA SilentlyContinue
-      Log "[repair] Wi-Fi re-enabled: $($w.Name)"
+    if ([string]$a.Status -eq 'Disabled') {
+      Enable-NetAdapter -Name $a.Name -Confirm:$false -EA SilentlyContinue
+      Log ('[repair] adapter re-enabled: ' + $a.Name)
     }
   } catch {}
+  foreach ($id in @('ms_tcpip','ms_tcpip6','ms_pacer')) {
+    try { Enable-NetAdapterBinding -Name $a.Name -ComponentID $id -EA SilentlyContinue } catch {}
+  }
 }
 Report 'wifi-reenable' 'ok'
 try { Clear-DnsClientCache -EA SilentlyContinue } catch {}
-$repairProbe = Test-ExoConnectivity
-if ($repairProbe) { Report 'post-probe' 'ok' } else { Report 'post-probe' 'fail' 'no tcp 443 reachability after repair' }
-Log '[Exo-NET-REPAIR] DONE'
-exit 0
+try { ipconfig /renew | Out-Null } catch {}
+Start-Sleep -Seconds 3
+$repairProbe = $false
+$rpSw = [System.Diagnostics.Stopwatch]::StartNew()
+while (-not $repairProbe -and $rpSw.Elapsed.TotalSeconds -lt 30) {
+  if (Test-ExoConnectivity) { $repairProbe = $true }
+  elseif (Test-ExoDnsResolve) { $repairProbe = $true }
+  if (-not $repairProbe) { Start-Sleep -Seconds 2 }
+}
+$rpSw.Stop()
+if ($repairProbe) {
+  Report 'post-probe' 'ok'
+  Remove-Item -LiteralPath (Join-Path $ExoDir 'network-optimizer.json') -Force -EA SilentlyContinue
+  Log '[Exo-NET-REPAIR] DONE'
+  exit 0
+}
+# Nuclear fallback: snapshot/stock restore still left the box offline. Reset
+# Winsock + TCP/IP stack catalog (requires reboot) and clear remaining Exo state.
+Report 'post-probe' 'fail' 'no tcp 443 / dns reachability after repair - applying hard winsock/ip reset'
+Log '[Exo-NET-REPAIR] HARD RESET: netsh winsock reset + netsh int ip reset (reboot required)'
+try { $null = (netsh winsock reset 2>&1 | Out-String) } catch {}
+try { $null = (netsh int ip reset 2>&1 | Out-String) } catch {}
+try { $null = (netsh int ipv6 reset 2>&1 | Out-String) } catch {}
+try {
+  Remove-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'NoActiveProbe' -Force -EA SilentlyContinue
+  Remove-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' -Name 'EnableMulticast' -Force -EA SilentlyContinue
+} catch {}
+Remove-Item -LiteralPath $ExoApplyStatePath -Force -EA SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $ExoDir 'network-optimizer.json') -Force -EA SilentlyContinue
+Report 'hard-reset' 'ok' 'winsock+ip reset applied - REBOOT REQUIRED'
+Log '[Exo-NET-REPAIR] DONE - REBOOT REQUIRED (exit 2)'
+exit 2
 """);
         return sb.ToString();
     }
