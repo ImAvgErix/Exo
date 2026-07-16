@@ -36,8 +36,7 @@
                     <media:AcrylicBrush x:Key="ExoSettingsAcrylicBrush"
                                         TintColor="#0A0A0A"
                                         TintOpacity="0.78"
-                                        FallbackColor="#E60C0C0C"
-                                        BackgroundSource="Backdrop" />
+                                        FallbackColor="#E60C0C0C" />
                     <SolidColorBrush x:Key="ExoAccentBrush" Color="#F5F5F4" />
                     <SolidColorBrush x:Key="ExoOnAccentBrush" Color="#000000" />
                     <SolidColorBrush x:Key="ExoAccentSoftBrush" Color="#20FFFFFF" />
@@ -75,8 +74,7 @@
                     <media:AcrylicBrush x:Key="ExoSettingsAcrylicBrush"
                                         TintColor="#F3EDE3"
                                         TintOpacity="0.82"
-                                        FallbackColor="#F5FCFAF6"
-                                        BackgroundSource="Backdrop" />
+                                        FallbackColor="#F5FCFAF6" />
                     <SolidColorBrush x:Key="ExoAccentBrush" Color="#3D3429" />
                     <SolidColorBrush x:Key="ExoOnAccentBrush" Color="#FCFAF6" />
                     <SolidColorBrush x:Key="ExoAccentSoftBrush" Color="#1A3D3429" />
@@ -103,8 +101,7 @@
                     <media:AcrylicBrush x:Key="ExoSettingsAcrylicBrush"
                                         TintColor="#0A0A0A"
                                         TintOpacity="0.78"
-                                        FallbackColor="#E60C0C0C"
-                                        BackgroundSource="Backdrop" />
+                                        FallbackColor="#E60C0C0C" />
                     <SolidColorBrush x:Key="ExoAccentBrush" Color="#F5F5F4" />
                     <SolidColorBrush x:Key="ExoOnAccentBrush" Color="#000000" />
                     <SolidColorBrush x:Key="ExoAccentSoftBrush" Color="#20FFFFFF" />
