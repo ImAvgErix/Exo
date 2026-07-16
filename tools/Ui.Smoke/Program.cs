@@ -67,10 +67,13 @@ if (File.Exists(themeServiceCs))
 if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
-    // v2.6 instrument workspace — dock + content share equal insets (not centered float).
+    // v2.6 top bar — full-width NavRail over content that fills the frame.
     Expect("nav rail", m.Contains("NavRail", StringComparison.Ordinal));
     Expect("rail glass fill", m.Contains("ExoRailGlassFillBrush", StringComparison.Ordinal));
-    Expect("workspace equal insets", m.Contains("Padding=\"20\"", StringComparison.Ordinal));
+    Expect("top bar workspace", m.Contains("Padding=\"16\"", StringComparison.Ordinal));
+    Expect("top bar row layout",
+        m.Contains("RowDefinitions", StringComparison.Ordinal)
+        && m.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));
     Expect("rail nav home", m.Contains("NavHome", StringComparison.Ordinal));
     Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));

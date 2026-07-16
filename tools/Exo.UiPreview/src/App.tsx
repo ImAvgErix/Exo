@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react'
 import type { ModuleId, PageId } from './data/mock'
 import { modules } from './data/mock'
-import { FloatingDock } from './components/FloatingDock'
+import { TopBar } from './components/TopBar'
 import { SettingsFlyout } from './components/SettingsFlyout'
 import { HomePage } from './pages/HomePage'
 import { ModulePage } from './pages/ModulePage'
 import { NvidiaPanelPage } from './pages/NvidiaPanelPage'
 import './App.css'
 
-function dockActive(page: PageId): ModuleId | 'home' | null {
+function barActive(page: PageId): ModuleId | 'home' | null {
   if (page === 'home') return 'home'
   if (page === 'nvidia-panel') return 'nvidia'
   return page
@@ -49,8 +49,8 @@ export default function App() {
     <div className={`app-page ${darkMode ? 'theme-dark' : 'theme-light'}`}>
       <div className="exo-shell" data-testid="exo-shell">
         <div className="exo-workspace">
-          <FloatingDock
-            active={dockActive(page)}
+          <TopBar
+            active={barActive(page)}
             settingsOpen={settingsOpen}
             onNavigate={navigate}
             onToggleSettings={() => setSettingsOpen((v) => !v)}

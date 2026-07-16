@@ -12,10 +12,10 @@
 
 .settings-sheet {
   position: absolute;
-  left: 20px;
-  bottom: 20px;
+  top: 84px;
+  right: 16px;
   z-index: 30;
-  width: 280px;
+  width: 300px;
   padding: 12px;
   border-radius: 10px;
   box-sizing: border-box;
@@ -23,7 +23,7 @@
   flex-direction: column;
   gap: 6px;
   animation: sheet-in var(--dur) var(--ease-out);
-  transform-origin: left bottom;
+  transform-origin: top right;
 }
 
 .settings-sheet__group {

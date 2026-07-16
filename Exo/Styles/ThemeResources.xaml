@@ -13,7 +13,7 @@
     <CornerRadius x:Key="ExoCardRadius">22</CornerRadius>
     <CornerRadius x:Key="ExoTileRadius">16</CornerRadius>
     <CornerRadius x:Key="ExoGlassRadius">26</CornerRadius>
-    <x:Double x:Key="ExoPageMaxWidth">980</x:Double>
+    <x:Double x:Key="ExoPageMaxWidth">1120</x:Double>
     <Thickness x:Key="ExoPagePadding">24,16,28,16</Thickness>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
@@ -694,11 +694,13 @@
       Left rail nav: glass pill items — logos stay sharp (no scale).
       Selection ring applied from MainWindow code via BorderBrush/Thickness.
     -->
+    <!-- Top-bar nav chip — width set by caller (home / modules / gear) -->
     <Style x:Key="ExoRailButton" TargetType="Button">
-        <Setter Property="Width" Value="56" />
-        <Setter Property="Height" Value="56" />
+        <Setter Property="MinWidth" Value="44" />
+        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="Height" Value="44" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="CornerRadius" Value="10" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />

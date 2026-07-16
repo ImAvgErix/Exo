@@ -9,12 +9,12 @@ Aggressive must still be deterministic: scope actions to the selected applicatio
 ## Shell UI (current — v2.6 Exo Instrument)
 
 - **Fixed frame** 1180×760, no maximize / free resize
-- **Dark = AMOLED** pure black + edge-glass fills (hard left/top specular; WinUI cannot match CSS `backdrop-filter`)
-- **Workspace** = dock column + content share the **same** top/bottom insets — never vertically-center the rail while content starts higher
-- **Navigation** = full-height glass dock (`NavRail`) with Home + modules + Settings gear — **not** WinUI `NavigationView`
-- **Settings** = gear flyout attached to the rail gear (acrylic/frosted panel — not modal overlay, not a separate settings page)
-- **Home** = huge Exo mark + italic tagline + connected blade strip (live modules); coming soon as a quiet line; cached so returns do not re-stagger
-- **Modules** = one `ExoModulePlate` (header + hairline feature list + action foot)
+- **Dark = AMOLED** pure black + edge-glass fills (hard top specular; WinUI cannot match CSS `backdrop-filter`)
+- **Workspace** = full-width **top bar** + content stage that fills the rest of the frame
+- **Navigation** = top glass bar (`NavRail`): EXO left · modules centered · Settings right — **not** WinUI `NavigationView`, **not** a left sidebar
+- **Settings** = gear flyout under the top-bar gear (acrylic/frosted panel — not modal overlay, not a separate settings page)
+- **Home** = centered huge Exo mark + italic tagline + full-width blade strip; coming soon as a quiet line; cached so returns do not re-stagger
+- **Modules** = one `ExoModulePlate` filling the stage (header + hairline feature list + action foot)
 - **Motion** = short XAML Storyboards only; never Composition Opacity = 0 (blanks UI); no spring bounce on content
 - **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)
 - **Feature rows** = thin status rail + Applied/Not applied (live detect)

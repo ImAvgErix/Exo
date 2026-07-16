@@ -59,8 +59,8 @@ export const directoryCards: DirectoryCard[] = [
 export const navItems: { id: ModuleId; label: string; logo: string }[] = [
   { id: 'discord', label: 'Discord', logo: '/logos/discord.png' },
   { id: 'steam', label: 'Steam', logo: '/logos/steam.png' },
-  { id: 'internet', label: 'Net', logo: '/logos/internet.png' },
-  { id: 'nvidia', label: 'GPU', logo: '/logos/nvidia.png' },
+  { id: 'internet', label: 'Internet', logo: '/logos/internet.png' },
+  { id: 'nvidia', label: 'NVIDIA', logo: '/logos/nvidia.png' },
 ]
 
 /* Icon wells are decorative only — never ✓/status glyphs. Status = rail + Applied/Not applied. */

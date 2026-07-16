@@ -19,7 +19,7 @@
         </Grid.RowDefinitions>
 
         <Grid Padding="20,16,20,8">
-            <Grid MaxWidth="{StaticResource ExoPageMaxWidth}"
+            <Grid
                   HorizontalAlignment="Stretch"
                   RowSpacing="12">
                 <Grid.RowDefinitions>
@@ -56,7 +56,7 @@
         <Border Grid.Row="1"
                 Style="{StaticResource ExoActionBar}"
                 Padding="20,12,20,14">
-            <StackPanel MaxWidth="{StaticResource ExoPageMaxWidth}"
+            <StackPanel
                         HorizontalAlignment="Stretch"
                         Spacing="10">
                 <Border Style="{StaticResource ExoMessageBanner}"

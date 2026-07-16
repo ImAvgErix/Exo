@@ -8,11 +8,11 @@
     Loaded="Page_Loaded">
 
     <!--
-      Exo Instrument home: huge brand + italic tagline + connected blade strip.
-      Coming soon is a quiet secondary line — not a second card stack.
+      Centered instrument home under the top bar — fills the stage.
+      Blade strip spans width; coming soon is a quiet centered line.
     -->
     <Grid x:Name="PageRoot"
-          Padding="8,12,12,12"
+          Padding="8,8,8,12"
           HorizontalAlignment="Stretch"
           VerticalAlignment="Stretch"
           UseLayoutRounding="True">
@@ -30,7 +30,7 @@
                        CharacterSpacing="-40"
                        LineHeight="72"
                        Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                       TextAlignment="Left"
+                       TextAlignment="Center"
                        HorizontalAlignment="Stretch"
                        OpticalMarginAlignment="TrimSideBearings"
                        UseLayoutRounding="True"
@@ -42,12 +42,11 @@
                        FontSize="24"
                        LineHeight="30"
                        TextWrapping="WrapWholeWords"
-                       TextAlignment="Left"
+                       TextAlignment="Center"
                        HorizontalAlignment="Stretch"
                        Margin="0,0,0,28"
                        UseLayoutRounding="True" />
 
-            <!-- Connected blade strip — live modules only -->
             <Border x:Name="BladeStrip"
                     Background="{ThemeResource ExoGlassFillBrush}"
                     BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
@@ -55,7 +54,8 @@
                     CornerRadius="14"
                     Padding="4"
                     Margin="0,0,0,16"
-                    HorizontalAlignment="Stretch">
+                    HorizontalAlignment="Stretch"
+                    MaxWidth="920">
                 <ItemsControl x:Name="CardList"
                               HorizontalAlignment="Stretch"
                               ItemsSource="{x:Bind ViewModel.LiveCards, Mode=OneWay}">
@@ -70,16 +70,16 @@
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Stretch"
                                     Margin="2"
-                                    MinHeight="88"
+                                    MinHeight="104"
                                     Click="CardButton_Click"
                                     Tag="{x:Bind Definition.Id}"
                                     AutomationProperties.Name="{x:Bind Definition.Title}">
                                 <StackPanel Spacing="8"
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
-                                            Padding="8,12">
-                                    <Image Width="28"
-                                           Height="28"
+                                            Padding="8,14">
+                                    <Image Width="30"
+                                           Height="30"
                                            Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
                                            Stretch="Uniform"
                                            UseLayoutRounding="True"
@@ -101,7 +101,9 @@
                 </ItemsControl>
             </Border>
 
-            <StackPanel Orientation="Horizontal" Spacing="10">
+            <StackPanel Orientation="Horizontal"
+                        Spacing="10"
+                        HorizontalAlignment="Center">
                 <TextBlock Text="Coming soon"
                            FontFamily="{StaticResource ExoUiFontSemiBold}"
                            FontSize="11"

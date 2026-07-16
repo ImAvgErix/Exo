@@ -26,28 +26,29 @@
 .exo-workspace {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: auto 1fr;
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  padding: 20px;
-  gap: 16px;
-  align-items: stretch;
+  padding: 16px;
+  gap: 12px;
   min-height: 0;
+  box-sizing: border-box;
 }
 
 .exo-stage {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
   min-height: 0;
   min-width: 0;
+  width: 100%;
 }
 
 .exo-titlebar {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  height: 36px;
+  height: 32px;
   margin-bottom: 4px;
 }
 
@@ -73,7 +74,10 @@
 .exo-main {
   flex: 1;
   min-height: 0;
+  width: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .theme-light .exo-shell {
