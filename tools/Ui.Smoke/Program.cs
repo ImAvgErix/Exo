@@ -642,9 +642,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 3.0.1", File.ReadAllText(versionFile).Trim() == "3.0.1");
+    Expect("VERSION is 3.0.2", File.ReadAllText(versionFile).Trim() == "3.0.2");
 if (File.Exists(csproj))
-    Expect("csproj Version 3.0.1", File.ReadAllText(csproj).Contains("<Version>3.0.1</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 3.0.2", File.ReadAllText(csproj).Contains("<Version>3.0.2</Version>", StringComparison.Ordinal));
 
 // Live advisor (realtime next-step coach on every optimizer)
 var advisorPath = Path.Combine(repo, "Exo", "Services", "OptimizerAdvisor.cs");

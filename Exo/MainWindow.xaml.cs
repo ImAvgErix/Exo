@@ -28,42 +28,52 @@ public sealed partial class MainWindow : Window
     private ShellMode _mode = ShellMode.Home;
     private readonly CancellationTokenSource _lifetimeCts = new();
     private bool _gearSpinning;
+    private bool _firstFrameMarked;
+    private bool _stickySafeMode;
+    private bool _homeBootstrapped;
+    private bool _postFirstFrameWorkStarted;
 
     public MainWindow()
     {
         Helpers.StartupLog.Mark("main-window-ctor");
 
-        // Crash-loop safe mode: previous launch died before presenting a frame —
-        // boot with all entrance motion collapsed to instant visibility.
-        if (Helpers.StartupLog.PreviousLaunchDiedBeforeFirstFrame)
-        {
-            ExoMotion.MotionDisabled = true;
+        // ALWAYS freeze entrance motion until the first pixel is on screen.
+        // Pre-first-frame storyboards / composition pokes caused v2.6 flash-close
+        // (0xC000027B) and still flicker-kill some GPUs on cold install.
+        ExoMotion.MotionDisabled = true;
+        // Sticky for the whole session if the previous run never painted.
+        _stickySafeMode = Helpers.StartupLog.PreviousLaunchDiedBeforeFirstFrame;
+        if (_stickySafeMode)
             Helpers.StartupLog.Mark("safe-mode-motion-off");
-        }
+        else
+            Helpers.StartupLog.Mark("boot-motion-frozen-until-first-frame");
 
         InitializeComponent();
         Helpers.StartupLog.Mark("main-window-xaml-loaded");
         App.MainAppWindow = this;
 
-        // One-shot first-frame marker — proves composition actually presented.
+        // Prove composition presented before any deferred work or re-enabling motion.
         Microsoft.UI.Xaml.Media.CompositionTarget.Rendered += OnFirstFrameRendered;
 
         // Fixed shell — no maximize / no edge-resize (UI is designed for this frame).
-        AppWindow.Resize(new SizeInt32(1180, 760));
-        ApplyFixedWindowChrome();
-        TryCenterOnScreen();
-        TrySetWindowIcon();
+        try
+        {
+            AppWindow.Resize(new SizeInt32(1180, 760));
+            ApplyFixedWindowChrome();
+            TryCenterOnScreen();
+            TrySetWindowIcon();
+        }
+        catch
+        {
+            Helpers.StartupLog.Mark("chrome-setup-partial");
+        }
 
         ExtendsContentIntoTitleBar = true;
-        // Drag: whole NavRail is the title bar. Buttons still click; empty glass
-        // (center field + caption column) is the drag surface. CaptionSpacer keeps
-        // Settings/Home clear of min/close so they are not under system chrome.
-        SetTitleBar(NavRail);
+        // SetTitleBar AFTER first frame — doing it pre-paint has killed cold boots.
 
         AppWindow.Changed += (_, args) =>
         {
             UpdateCaptionInset();
-            // Re-apply fixed chrome if the system swaps presenters.
             if (args.DidPresenterChange)
                 ApplyFixedWindowChrome();
         };
@@ -71,12 +81,13 @@ public sealed partial class MainWindow : Window
         {
             UpdateCaptionInset();
             ApplyFixedWindowChrome();
-            SetTitleBar(NavRail);
             ClearChromeFocus();
+            BootstrapHomeOnce("root-loaded");
         };
         RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
         Activated += OnWindowActivatedClearFocus;
+        Activated += OnFirstActivationBootstrap;
         Closed += (_, _) =>
         {
             _lifetimeCts.Cancel();
@@ -88,25 +99,80 @@ public sealed partial class MainWindow : Window
         UpdateCaptionInset();
 
         ContentFrame.Navigated += OnContentNavigated;
-        // Re-apply icon once after first activate — WinUI sometimes drops the
-        // first SetIcon. One-shot: per-activation reloads leak icon handles.
         Activated += OnFirstActivationReapplyIcon;
 
-        NavigateHome(suppressTransition: true);
-        Helpers.StartupLog.Mark("home-navigated");
-        ClearChromeFocus();
-        TryRepairStartMenuShortcut();
-        _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
+        // Do NOT navigate / auto-update / SetTitleBar in the ctor. That work
+        // runs after Activate so the HWND exists and composition can present.
+        Helpers.StartupLog.Mark("main-window-ctor-done");
     }
-
-    private bool _firstFrameMarked;
 
     private void OnFirstFrameRendered(object? sender, Microsoft.UI.Xaml.Media.RenderedEventArgs e)
     {
         if (_firstFrameMarked) return;
         _firstFrameMarked = true;
-        Microsoft.UI.Xaml.Media.CompositionTarget.Rendered -= OnFirstFrameRendered;
+        try { Microsoft.UI.Xaml.Media.CompositionTarget.Rendered -= OnFirstFrameRendered; } catch { }
         Helpers.StartupLog.Mark(Helpers.StartupLog.FirstFrameMarker);
+
+        // Re-enable motion only when this session is not sticky safe-mode.
+        if (!_stickySafeMode)
+        {
+            ExoMotion.MotionDisabled = false;
+            Helpers.StartupLog.Mark("boot-motion-enabled");
+        }
+
+        try
+        {
+            SetTitleBar(NavRail);
+            Helpers.StartupLog.Mark("titlebar-set");
+        }
+        catch
+        {
+            Helpers.StartupLog.Mark("titlebar-set-failed");
+        }
+
+        StartPostFirstFrameWork();
+    }
+
+    /// <summary>First Activate: navigate home if Loaded hasn't already.</summary>
+    private void OnFirstActivationBootstrap(object sender, WindowActivatedEventArgs args)
+    {
+        if (args.WindowActivationState == WindowActivationState.Deactivated) return;
+        Activated -= OnFirstActivationBootstrap;
+        BootstrapHomeOnce("window-activated");
+    }
+
+    private void BootstrapHomeOnce(string reason)
+    {
+        if (_homeBootstrapped) return;
+        _homeBootstrapped = true;
+        try
+        {
+            NavigateHome(suppressTransition: true);
+            Helpers.StartupLog.Mark("home-navigated:" + reason);
+            ClearChromeFocus();
+        }
+        catch (Exception ex)
+        {
+            Helpers.StartupLog.Mark("home-navigate-failed:" + ex.GetType().Name);
+        }
+    }
+
+    private void StartPostFirstFrameWork()
+    {
+        if (_postFirstFrameWorkStarted) return;
+        _postFirstFrameWorkStarted = true;
+        try
+        {
+            TryRepairStartMenuShortcut();
+            Helpers.StartupLog.Mark("shortcut-repair-done");
+        }
+        catch { }
+        try
+        {
+            _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
+            Helpers.StartupLog.Mark("auto-update-started");
+        }
+        catch { }
     }
 
     private void OnContentNavigated(object sender, Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)

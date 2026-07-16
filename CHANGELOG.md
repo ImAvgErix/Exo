@@ -1,3 +1,8 @@
+## 3.0.2
+
+- **Launch harden**: freeze entrance motion until first pixel; defer SetTitleBar, home navigate, shortcut repair, and auto-update until after first frame / Activate (stops cold-boot flicker-close when previous session never painted)
+- Sticky safe-mode still keeps motion off for the whole session if the prior run died before first frame
+
 ## 3.0.1
 
 - **Discord login detect**: false "not logged in" fixed (Local Storage / userDataCache without old IndexedDB path)
