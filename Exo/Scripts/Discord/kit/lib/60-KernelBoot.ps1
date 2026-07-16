@@ -225,6 +225,35 @@ function Wait-DiscordHealthy {
     return $false
 }
 
+function Invoke-DiscordLaunchAsUser([string]$AppDir) {
+    # De-elevate via explorer so Discord is NOT admin (elevated Discord blacks out / dies).
+    $exe = Join-Path $AppDir 'Discord.exe'
+    if (-not (Test-Path -LiteralPath $exe)) { throw "Discord.exe missing under $AppDir" }
+    try {
+        Start-Process -FilePath 'explorer.exe' -ArgumentList "`"$exe`"" | Out-Null
+        return
+    } catch {
+        Write-Warn "explorer launch failed: $($_.Exception.Message) - falling back to direct start"
+    }
+    [void](Invoke-DiscordLaunch -AppDir $AppDir)
+}
+
+function Confirm-DiscordBootsAsUser([string]$AppDir, [int]$TimeoutSec = 40) {
+    # For elevated Exo Apply: prove Discord opens under a normal user token.
+    Write-Step "User-token boot check (explorer launch, ${TimeoutSec}s)..."
+    Stop-Discord
+    Start-Sleep -Milliseconds 400
+    Invoke-DiscordLaunchAsUser $AppDir
+    $ok = Wait-DiscordHealthy $TimeoutSec
+    Stop-Discord
+    if ($ok) {
+        Write-Ok 'User-token boot check passed (Discord opens from Start Menu path)'
+    } else {
+        Write-Warn 'User-token boot check failed (Discord did not stay open)'
+    }
+    return [bool]$ok
+}
+
 function Confirm-DiscordBootsAfterMods([string]$AppDir) {
     Write-Step 'Boot check: verifying Discord opens and fully loads...'
     Stop-Discord

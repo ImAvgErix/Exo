@@ -45,7 +45,7 @@ if ($env:EXO -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.3.52'
+$Script:DiscOptVersion = '1.3.53'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -707,19 +707,51 @@ if ($exoQuiet) {
     $asarOk = (Test-Path $asarPath) -and ((Get-Item $asarPath).Length -ge 64)
     $eqAsar = Join-Path $EquicordData 'equicord.asar'
     $eqOk = $SkipEquicord -or ((Test-Path $eqAsar) -and ((Get-Item $eqAsar).Length -gt 1000000))
+    $asarIsStub = $asarOk -and ((Get-Item $asarPath).Length -lt 4096)
     # Equicord stub without equicord.asar = Discord will not open.
-    if (-not $SkipEquicord -and $asarOk -and ((Get-Item $asarPath).Length -lt 4096) -and -not $eqOk) {
+    if (-not $SkipEquicord -and $asarIsStub -and -not $eqOk) {
         Write-Warn 'Equicord loader present but equicord.asar missing - restoring stock app.asar'
         try { Use-StockDiscordRuntime $app.FullName } catch { }
         $asarOk = (Test-Path $asarPath) -and ((Get-Item $asarPath).Length -ge 64)
+        $asarIsStub = $false
         $eqOk = $true
     }
     $modsOk = Test-DiscordModulesReady $app.FullName
     $kernelDisarmed = -not (Test-Path -LiteralPath $verDll)
+
+    # CRITICAL: disk presence is not enough. Equicord stubs can fail to start and
+    # leave Discord dead after Apply "success". Prove boot under a USER token via
+    # explorer (not elevated), and roll back to stock if it dies.
+    $bootOk = $false
     if ($exeOk -and $asarOk -and $eqOk -and $modsOk -and $kernelDisarmed) {
-        Write-Ok 'Quiet verify passed (loader + modules on disk; kernel disarmed for launch safety)'
-        Write-Ok 'Open Discord from the Start menu (not as admin) when ready'
-        Add-ExoReport 'boot-check' 'ok' 'elevated host disk verify (kernel off for launch safety)'
+        try {
+            if (Get-Command Confirm-DiscordBootsAsUser -ErrorAction SilentlyContinue) {
+                $bootOk = [bool](Confirm-DiscordBootsAsUser $app.FullName 45)
+            }
+        } catch {
+            Write-Warn "User-token boot check error: $($_.Exception.Message)"
+            $bootOk = $false
+        }
+        if (-not $bootOk) {
+            Write-Warn 'Discord did not stay open after Apply mods - restoring stock runtime so Start Menu works'
+            try { Use-StockDiscordRuntime $app.FullName } catch { }
+            try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
+            try {
+                $bootOk = [bool](Confirm-DiscordBootsAsUser $app.FullName 45)
+            } catch { $bootOk = $false }
+            if ($bootOk) {
+                Write-Ok 'Stock Discord boots - Equicord/kernel left off for launch safety'
+                Add-ExoReport 'equicord' 'ok' 'rolled back to stock loader (stub did not boot)'
+                Add-ExoReport 'boot-check' 'ok' 'stock Discord opens (user-token verified)'
+            } else {
+                Write-Warn 'Stock restore still failed boot - leave stock files; use Repair Discord if needed'
+                Add-ExoReport 'boot-check' 'fail' 'user-token boot failed even after stock restore'
+            }
+        } else {
+            Write-Ok 'Quiet verify + user-token boot passed (Discord opens)'
+            Write-Ok 'Open Discord from the Start menu (not as admin) when ready'
+            Add-ExoReport 'boot-check' 'ok' 'user-token boot verified (kernel off under elevated)'
+        }
     } else {
         Write-Warn "Quiet verify incomplete (exe=$exeOk asar=$asarOk eq=$eqOk mods=$modsOk kernelDisarmed=$kernelDisarmed)"
         if (-not $modsOk -or -not $asarOk) {

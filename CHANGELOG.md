@@ -1,3 +1,7 @@
+## 3.0.8
+
+- **Discord opens after Apply**: elevated Apply now user-token boot-checks via explorer; if Equicord stub dies, restores stock app.asar automatically so Start Menu works
+- **NVIDIA profiles**: NIP import already silent (exit 0); temp profile files deleted after import - do not open .nip in a browser (UTF-16 XML, not a document)
 ## 3.0.7
 
 - **NVIDIA Apply works**: StrictMode crash on missing RebootRequired fixed; MSI residual is soft; in-place tweaks continue into profiles/display instead of failing the whole pass
