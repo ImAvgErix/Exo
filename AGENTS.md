@@ -14,7 +14,7 @@ Aggressive must still be deterministic: scope actions to the selected applicatio
 - **Navigation** = top glass bar (`NavRail`): EXO left · modules centered · Settings right — **not** WinUI `NavigationView`, **not** a left sidebar
 - **Settings** = gear flyout under the top-bar gear (acrylic/frosted panel — not modal overlay, not a separate settings page)
 - **Home** = four-metric dashboard: **FPS gain · Frame time · RAM reclaimed · Latency** — top-bar EXO control hidden on home (page brand owns it); modules stay in the top bar; no Detect* probes on home; FPS/frame-time stay `—` until capture ships; RAM/latency read LocalAppData; cached so returns do not re-stagger
-- **Top bar** = equal end caps (56px); EXO optically centered when shown; Settings mirrored right
+- **Top bar** = liquid-glass **circles** floating on pure black (no bar plate): hairline rim (~0.5px feel), rim-lit gradient + dark center, soft shadow, hover = scale + sibling fade + label pill (preview) / wash (WinUI); equal 56px end caps; EXO hidden on home
 - **Modules** = one `ExoModulePlate` filling the stage (header + hairline feature list + action foot)
 - **Motion** = short XAML Storyboards only; never Composition Opacity = 0 (blanks UI); no spring bounce on content
 - **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)

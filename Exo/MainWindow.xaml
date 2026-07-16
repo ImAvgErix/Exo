@@ -19,24 +19,18 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
+        <!--
+          Liquid-glass circles floating on pure black (no bar plate) —
+          0.5px-feel hairline rim, dark center, soft drop shadow.
+        -->
         <Border x:Name="NavRail"
                 Grid.Row="0"
-                Background="{ThemeResource ExoRailGlassFillBrush}"
-                BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
-                BorderThickness="1"
-                CornerRadius="14"
-                Padding="8,6"
-                MinHeight="48"
+                Background="Transparent"
+                BorderThickness="0"
+                Padding="2,4"
+                MinHeight="52"
                 HorizontalAlignment="Stretch">
             <Grid>
-                <Border BorderBrush="{ThemeResource ExoSpecularStrokeBrush}"
-                        BorderThickness="0,1,0,0"
-                        CornerRadius="14"
-                        Margin="1,0,1,0"
-                        IsHitTestVisible="False"
-                        VerticalAlignment="Top"
-                        Height="16"
-                        Opacity="0.7" />
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="56" />
@@ -47,24 +41,22 @@
                     <!-- Equal end caps. EXO is hidden on home (page brand owns it). -->
                     <Grid x:Name="HomeEnd"
                           Width="56"
-                          Height="40"
+                          Height="48"
                           HorizontalAlignment="Left"
                           VerticalAlignment="Center">
                         <Button x:Name="NavHome"
-                                Style="{StaticResource ExoRailButton}"
+                                Style="{StaticResource ExoGlassCircle}"
                                 AutomationProperties.Name="Home"
                                 Click="NavHome_Click"
-                                Width="48"
-                                Height="40"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center">
                             <!-- CharacterSpacing trails right; slight left pad keeps EXO optically centered. -->
                             <TextBlock Text="EXO"
                                        FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       FontSize="12"
+                                       FontSize="11"
                                        FontWeight="Bold"
-                                       CharacterSpacing="120"
-                                       Margin="6,0,0,0"
+                                       CharacterSpacing="100"
+                                       Margin="5,0,0,0"
                                        Foreground="{ThemeResource ExoPrimaryTextBrush}"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center" />
@@ -73,16 +65,14 @@
 
                     <StackPanel Grid.Column="1"
                                 Orientation="Horizontal"
-                                Spacing="2"
+                                Spacing="10"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center">
                         <Button x:Name="NavDiscord"
-                                Style="{StaticResource ExoRailButton}"
+                                Style="{StaticResource ExoGlassCircle}"
                                 AutomationProperties.Name="Discord"
                                 Click="NavDiscord_Click"
-                                Tag="discord"
-                                Width="48"
-                                Height="40">
+                                Tag="discord">
                             <Image Source="ms-appx:///Assets/Logos/discord.png"
                                    Width="22" Height="22"
                                    Stretch="Uniform"
@@ -90,12 +80,10 @@
                                    AutomationProperties.AccessibilityView="Raw" />
                         </Button>
                         <Button x:Name="NavSteam"
-                                Style="{StaticResource ExoRailButton}"
+                                Style="{StaticResource ExoGlassCircle}"
                                 AutomationProperties.Name="Steam"
                                 Click="NavSteam_Click"
-                                Tag="steam"
-                                Width="48"
-                                Height="40">
+                                Tag="steam">
                             <Image Source="ms-appx:///Assets/Logos/steam.png"
                                    Width="22" Height="22"
                                    Stretch="Uniform"
@@ -103,12 +91,10 @@
                                    AutomationProperties.AccessibilityView="Raw" />
                         </Button>
                         <Button x:Name="NavInternet"
-                                Style="{StaticResource ExoRailButton}"
+                                Style="{StaticResource ExoGlassCircle}"
                                 AutomationProperties.Name="Internet"
                                 Click="NavInternet_Click"
-                                Tag="internet"
-                                Width="48"
-                                Height="40">
+                                Tag="internet">
                             <Image Source="ms-appx:///Assets/Logos/internet.png"
                                    Width="22" Height="22"
                                    Stretch="Uniform"
@@ -116,12 +102,10 @@
                                    AutomationProperties.AccessibilityView="Raw" />
                         </Button>
                         <Button x:Name="NavNvidia"
-                                Style="{StaticResource ExoRailButton}"
+                                Style="{StaticResource ExoGlassCircle}"
                                 AutomationProperties.Name="NVIDIA"
                                 Click="NavNvidia_Click"
-                                Tag="nvidia"
-                                Width="48"
-                                Height="40">
+                                Tag="nvidia">
                             <Image Source="ms-appx:///Assets/Logos/nvidia.png"
                                    Width="22" Height="22"
                                    Stretch="Uniform"
@@ -132,12 +116,10 @@
 
                     <Button x:Name="SettingsButton"
                             Grid.Column="2"
-                            Style="{StaticResource ExoRailButton}"
+                            Style="{StaticResource ExoGlassCircle}"
                             AutomationProperties.Name="Settings"
                             Click="SettingsButton_Click"
-                            Width="48"
-                            Height="40"
-                            HorizontalAlignment="Right"
+                            HorizontalAlignment="Center"
                             VerticalAlignment="Center">
                         <FontIcon x:Name="SettingsGearIcon"
                                   Glyph="&#xE713;"

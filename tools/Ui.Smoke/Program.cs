@@ -67,9 +67,10 @@ if (File.Exists(themeServiceCs))
 if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
-    // v2.6 top bar — full-width NavRail over content that fills the frame.
+    // v2.6 top bar — liquid-glass circles floating on black (no bar plate).
     Expect("nav rail", m.Contains("NavRail", StringComparison.Ordinal));
-    Expect("rail glass fill", m.Contains("ExoRailGlassFillBrush", StringComparison.Ordinal));
+    Expect("glass circle nav", m.Contains("ExoGlassCircle", StringComparison.Ordinal)
+        && !m.Contains("ExoRailGlassFillBrush", StringComparison.Ordinal));
     Expect("top bar workspace", m.Contains("Padding=\"12\"", StringComparison.Ordinal));
     Expect("top bar row layout",
         m.Contains("RowDefinitions", StringComparison.Ordinal)
@@ -251,6 +252,9 @@ if (File.Exists(theme))
 {
     var t = File.ReadAllText(theme);
     Expect("theme ExoPrimaryButton", t.Contains("ExoPrimaryButton", StringComparison.Ordinal));
+    Expect("theme ExoGlassCircle",
+        t.Contains("ExoGlassCircle", StringComparison.Ordinal)
+        && t.Contains("CornerRadius\" Value=\"22", StringComparison.Ordinal));
     Expect("theme ExoWhiteButton", t.Contains("ExoWhiteButton", StringComparison.Ordinal));
     Expect("theme ExoCardButton", t.Contains("ExoCardButton", StringComparison.Ordinal));
     Expect("theme ExoFeatureTile", t.Contains("ExoFeatureTile", StringComparison.Ordinal));

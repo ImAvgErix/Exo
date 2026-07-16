@@ -252,37 +252,24 @@ public sealed partial class MainWindow : Window
             _ => NavHome
         };
 
-        Brush? accentSoft = null;
-        Brush? accentRing = null;
-        try
-        {
-            if (Application.Current.Resources.TryGetValue("ExoAccentSoftBrush", out var soft) && soft is Brush softBrush)
-                accentSoft = softBrush;
-            if (Application.Current.Resources.TryGetValue("ExoAccentBrush", out var ring) && ring is Brush ringBrush)
-                accentRing = ringBrush;
-        }
-        catch { }
-
-        accentSoft ??= new SolidColorBrush(ColorHelper.FromArgb(0x20, 0xFF, 0xFF, 0xFF));
-        accentRing ??= new SolidColorBrush(ColorHelper.FromArgb(0x55, 0xF5, 0xF5, 0xF4));
+        // Glass circles keep their rim-lit gradient; selection = brighter hairline ring.
+        var ringOn = new SolidColorBrush(ColorHelper.FromArgb(0xD9, 0xFF, 0xFF, 0xFF));
+        var ringOff = new SolidColorBrush(ColorHelper.FromArgb(0x66, 0xFF, 0xFF, 0xFF));
 
         foreach (var btn in new[] { NavHome, NavDiscord, NavSteam, NavInternet, NavNvidia })
         {
             // Home control is collapsed on the dashboard — skip selection chrome there.
             if (ReferenceEquals(btn, NavHome) && mode == ShellMode.Home)
             {
-                btn.Background = new SolidColorBrush(Colors.Transparent);
-                btn.BorderBrush = new SolidColorBrush(Colors.Transparent);
-                btn.BorderThickness = new Thickness(0);
+                btn.BorderBrush = ringOff;
                 btn.Opacity = 1.0;
                 continue;
             }
 
             var on = ReferenceEquals(btn, selected);
-            btn.Opacity = on ? 1.0 : 0.52;
-            btn.Background = on ? accentSoft : new SolidColorBrush(Colors.Transparent);
-            btn.BorderBrush = on ? accentRing : new SolidColorBrush(Colors.Transparent);
-            btn.BorderThickness = on ? new Thickness(1) : new Thickness(0);
+            btn.Opacity = on ? 1.0 : 0.72;
+            btn.BorderBrush = on ? ringOn : ringOff;
+            btn.BorderThickness = new Thickness(1);
         }
     }
 
