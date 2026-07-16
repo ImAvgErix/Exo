@@ -65,7 +65,7 @@
                         CornerRadius="12"
                         Padding="18,16">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="FPS GAIN"
+                        <TextBlock Text="NVIDIA PACK"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
                                    FontSize="10"
                                    CharacterSpacing="100"
@@ -97,7 +97,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <TextBlock Text="FRAME TIME"
+                        <TextBlock Text="DISCORD"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
                                    FontSize="10"
                                    CharacterSpacing="100"
@@ -156,7 +156,7 @@
                         Padding="14,12"
                         MinHeight="84">
                     <StackPanel Spacing="4">
-                        <TextBlock Text="RAM RECLAIMED"
+                        <TextBlock Text="STEAM / RAM"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
                                    FontSize="10"
                                    CharacterSpacing="80"
@@ -170,6 +170,17 @@
                                    FontSize="12"
                                    Foreground="{ThemeResource ExoMutedTextBrush}"
                                    TextWrapping="WrapWholeWords" />
+                        <TextBlock Text="{x:Bind ViewModel.MemoryPrimary, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFont}"
+                                   FontSize="11"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}"
+                                   Opacity="0.85" />
+                        <TextBlock Text="{x:Bind ViewModel.MemorySecondary, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFont}"
+                                   FontSize="11"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}"
+                                   Opacity="0.75"
+                                   TextWrapping="WrapWholeWords" />
                     </StackPanel>
                 </Border>
 
@@ -181,7 +192,7 @@
                         Padding="14,12"
                         MinHeight="84">
                     <StackPanel Spacing="4">
-                        <TextBlock Text="LATENCY"
+                        <TextBlock Text="INTERNET"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
                                    FontSize="10"
                                    CharacterSpacing="80"

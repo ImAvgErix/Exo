@@ -96,27 +96,43 @@ public partial class DashboardViewModel : ObservableObject
 
     private void RefreshDashboard()
     {
-        // No PresentMon / FPS capture path yet — keep empty rather than inventing %.
-        FpsPrimary = "—";
-        FpsSecondary = "No capture yet";
-        FrameTimePrimary = "—";
-        FrameTimeSecondary = "No frame-time capture yet";
+        // Hero pair: NVIDIA pack path + Discord apply (honest file-backed, no fake FPS).
+        // FPS capture is not shipped — use pack/apply status so home is not all dashes.
         SparkBars.Clear();
 
         var nvidia = HomeDashboardReader.TryReadNvidiaPath();
         if (nvidia is null)
         {
             HasNvidiaPath = false;
+            FpsPrimary = "—";
+            FpsSecondary = "Apply NVIDIA to lock the pack";
             NvidiaPathPrimary = "—";
             NvidiaPathSecondary = "Apply NVIDIA to lock the frame path";
         }
         else
         {
             HasNvidiaPath = true;
+            FpsPrimary = nvidia.Gsync ? "G-SYNC" : "Max FPS";
+            FpsSecondary = string.IsNullOrWhiteSpace(nvidia.ProfileFile)
+                ? "Profile pack applied"
+                : nvidia.ProfileFile!;
             NvidiaPathPrimary = nvidia.Gsync ? "G-SYNC pack" : "Max FPS pack";
             NvidiaPathSecondary = string.IsNullOrWhiteSpace(nvidia.ProfileFile)
                 ? "Profile applied"
                 : nvidia.ProfileFile!;
+        }
+
+        // Frame-time slot: Discord apply status (real state file) until capture ships.
+        var discordApplied = HomeDashboardReader.TryReadDiscordApplied();
+        if (discordApplied)
+        {
+            FrameTimePrimary = "Applied";
+            FrameTimeSecondary = "Discord optimizer last apply OK";
+        }
+        else
+        {
+            FrameTimePrimary = "—";
+            FrameTimeSecondary = "Apply Discord · frame capture later";
         }
 
         var trim = HomeDashboardReader.TryReadTrimStats();
@@ -124,24 +140,53 @@ public partial class DashboardViewModel : ObservableObject
         {
             HasTrimStats = false;
             ReclaimedPrimary = "—";
-            ReclaimedSecondary = "Apply Steam to start reclaiming";
+            ReclaimedSecondary = "Apply Steam to reclaim RAM / cache";
         }
         else
         {
             HasTrimStats = true;
             var heroBytes = trim.Last24hBytes > 0 ? trim.Last24hBytes : trim.TotalBytes;
-            ReclaimedPrimary = HomeDashboardReader.FormatBytes(heroBytes);
-            ReclaimedSecondary = trim.Last24hBytes > 0
-                ? $"last 24 h · {HomeDashboardReader.FormatBytes(trim.TotalBytes)} total"
-                : "total reclaimed";
+            if (heroBytes > 0)
+            {
+                ReclaimedPrimary = HomeDashboardReader.FormatBytes(heroBytes);
+                ReclaimedSecondary = trim.Last24hBytes > 0
+                    ? $"last 24 h · {HomeDashboardReader.FormatBytes(trim.TotalBytes)} total"
+                    : (trim.Passes > 0 ? "from last Steam Apply (cache free)" : "total reclaimed");
+            }
+            else
+            {
+                ReclaimedPrimary = "Active";
+                ReclaimedSecondary = "Steam optimized · open Steam for live trim";
+            }
+
+            // Spark from hourly series when present.
+            if (trim.HourlyBytes.Count > 0)
+            {
+                var max = Math.Max(1L, trim.HourlyBytes.Max());
+                foreach (var b in trim.HourlyBytes)
+                {
+                    var h = 8 + (40.0 * b / max);
+                    SparkBars.Add(new HomeSparkBar { Height = h });
+                }
+            }
         }
 
         var latency = HomeDashboardReader.TryReadLatency(_services.Network);
         if (latency is null)
         {
-            HasLatency = false;
-            LatencyPrimary = "—";
-            LatencySecondary = "No Internet benchmark yet";
+            var netStatus = HomeDashboardReader.TryReadInternetStatus();
+            if (netStatus is not null)
+            {
+                HasLatency = true;
+                LatencyPrimary = "Applied";
+                LatencySecondary = $"Internet {netStatus} · run Apply again for ping delta";
+            }
+            else
+            {
+                HasLatency = false;
+                LatencyPrimary = "—";
+                LatencySecondary = "Apply Internet for ping before/after";
+            }
         }
         else
         {
@@ -149,7 +194,6 @@ public partial class DashboardViewModel : ObservableObject
             var delta = latency.AfterP50Ms - latency.BeforeP50Ms;
             var sign = delta > 0 ? "+" : "";
             LatencyPrimary = $"{sign}{delta:0.0} ms";
-            // Median ping — say "ping", not "p50" (users shouldn't need stats jargon).
             LatencySecondary =
                 $"ping {latency.BeforeP50Ms:0.0} → {latency.AfterP50Ms:0.0} ms";
         }

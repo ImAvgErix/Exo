@@ -261,16 +261,16 @@ public sealed partial class MainWindow : Window
 
     private void UpdateCaptionInset()
     {
-        // Leave a dead column under Windows min/close so Settings never sits under them.
+        // Dead zone under Windows min/close so left chrome never sits under them.
         try
         {
             var right = AppWindow.TitleBar.RightInset;
             if (right < 120) right = 146;
-            CaptionSpacer.Width = new GridLength(right);
+            CaptionSpacerHost.Width = right;
         }
         catch
         {
-            CaptionSpacer.Width = new GridLength(146);
+            CaptionSpacerHost.Width = 146;
         }
     }
 
@@ -310,11 +310,21 @@ public sealed partial class MainWindow : Window
     {
         _mode = mode;
 
-        // Settings always on the left (old EXO slot). Home pill when not on dashboard.
+        // Same left circle: Settings on home, Home when on a module card.
         SettingsButton.Visibility = Visibility.Visible;
-        NavHome.Visibility = mode == ShellMode.Home
-            ? Visibility.Collapsed
-            : Visibility.Visible;
+        var onHome = mode == ShellMode.Home;
+        try
+        {
+            SettingsGearIcon.Visibility = onHome ? Visibility.Visible : Visibility.Collapsed;
+            HomeChromeIcon.Visibility = onHome ? Visibility.Collapsed : Visibility.Visible;
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(
+                SettingsButton,
+                onHome ? "Settings" : "Home");
+        }
+        catch { }
+
+        // Legacy NavHome stays collapsed (left chrome owns Home now).
+        NavHome.Visibility = Visibility.Collapsed;
         // Secondary back only for Nvidia panel → optimizer.
         BackButton.Visibility = mode == ShellMode.NvidiaPanel
             ? Visibility.Visible
@@ -562,6 +572,14 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
+        // On a module page the same left circle is Home (not settings).
+        if (_mode != ShellMode.Home)
+        {
+            HideSettingsFlyout();
+            NavigateHome();
+            return;
+        }
+
         try
         {
             if (SettingsFlyout.IsOpen)
