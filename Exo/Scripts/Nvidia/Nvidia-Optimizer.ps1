@@ -4241,12 +4241,18 @@ try {
                 gameProfiles        = @($gameProfiles)
                 gameProfileCount    = @($gameProfiles).Count
                 gameProfileDeltas   = $true
+                # Informational note for detect/UI detail - not a fail-closed applyInProgress.
                 lastErrorStage      = 'display-policy'
                 lastError           = $partialDisplayError
                 lastErrorUtc        = (Get-Date).ToUniversalTime().ToString('o')
             }
             $Script:CompletedPartialDisplayPolicy = $true
-            throw $partialDisplayError
+            Write-Warn $partialDisplayError
+            Write-HubProgress 100 'Completed with partial display'
+            Write-Output ("DONE - PARTIAL NVIDIA {0}{1}: profiles+DRS verified; display NVAPI incomplete (use Display panel)" -f `
+                $seriesId, $(if ($useGsync) { ' G-SYNC' } else { ' max FPS / latency' }))
+            # Exit 0 so the shell reports success; state already records displayPrefs=false.
+            exit 0
         }
         throw 'The 3D profile was applied, but NVIDIA display preferences could not be verified. Check the log and Apply again.'
     }

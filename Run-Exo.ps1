@@ -18,15 +18,26 @@ $Root = $PSScriptRoot
 $Project = Join-Path $Root 'Exo\Exo.csproj'
 
 function Get-ExoExe {
-    $candidates = @(
-        (Join-Path $Root "Exo\bin\x64\$Configuration\net8.0-windows10.0.19041.0\win-x64\Exo.exe"),
-        (Join-Path $Root "Exo\bin\x64\$Configuration\net8.0-windows10.0.19041.0\Exo.exe"),
-        (Join-Path $Root "Exo\bin\$Configuration\net8.0-windows10.0.19041.0\win-x64\Exo.exe"),
-        (Join-Path $Root "Exo\bin\$Configuration\net8.0-windows10.0.19041.0\Exo.exe")
+    # Prefer net10 (current TFM); keep net8 path guesses for any leftover local builds.
+    $tfms = @(
+        'net10.0-windows10.0.26100.0',
+        'net10.0-windows10.0.19041.0',
+        'net8.0-windows10.0.19041.0'
     )
+    $candidates = foreach ($tfm in $tfms) {
+        Join-Path $Root "Exo\bin\x64\$Configuration\$tfm\win-x64\Exo.exe"
+        Join-Path $Root "Exo\bin\x64\$Configuration\$tfm\Exo.exe"
+        Join-Path $Root "Exo\bin\$Configuration\$tfm\win-x64\Exo.exe"
+        Join-Path $Root "Exo\bin\$Configuration\$tfm\Exo.exe"
+    }
     foreach ($c in $candidates) {
         if (Test-Path -LiteralPath $c) { return $c }
     }
+    # Last resort: newest Exo.exe under bin
+    $hit = Get-ChildItem -Path (Join-Path $Root 'Exo\bin') -Filter 'Exo.exe' -Recurse -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if ($hit) { return $hit.FullName }
     return $null
 }
 

@@ -1,3 +1,10 @@
+## 2.6.7
+
+- **Internet honesty**: detect/UI match fail-closed Apply — bindings only require QoS+IPv4/IPv6 on (no more permanent "Client/LLDP off" fail); PreferEthernet defaults false; "Wi‑Fi while Ethernet" never fails for Wi‑Fi staying up
+- **NVIDIA partial success**: profiles+DRS verified but display NVAPI incomplete → save honest partial state and **exit 0** (shell shows completed; display detail still surfaces) instead of fake full failure
+- **Docs / launcher**: INTERNET-GOLDEN-PATH path policy + bindings table corrected; `Run-Exo.ps1` finds net10 TFM outputs
+- **Stack**: build/run on **.NET 10** SDK (`net10.0-windows10.0.26100.0` + Windows App SDK 2.2)
+
 ## 2.6.6
 
 - **UI**: loader is pure XAML Storyboards only (no composition API) - crash-loop "safe mode" is no longer required for the spinner

@@ -16,7 +16,7 @@ function Get-NvDisplayExe {
         (Join-Path $Root 'tools\Exo.NvDisplay.exe'),
         (Join-Path $env:LOCALAPPDATA 'Exo\scripts\Nvidia\tools\Exo.NvDisplay.exe'),
         (Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\Nvidia\tools\Exo.NvDisplay.exe'),
-        'C:\Users\Erix\Exo\tools\Exo.NvDisplay\bin\Release\net8.0-windows\Exo.NvDisplay.exe'
+        'C:\Users\Erix\Exo\tools\Exo.NvDisplay\bin\Release\net10.0-windows\Exo.NvDisplay.exe'
     )) {
         if ($c -and (Test-Path -LiteralPath $c)) { return $c }
     }
