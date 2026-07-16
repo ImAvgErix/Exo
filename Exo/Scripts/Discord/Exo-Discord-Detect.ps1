@@ -248,7 +248,8 @@ if (-not (Test-Path $discordRoot)) {
                 Where-Object { $_.Name -ne 'en-US.pak' })
         }
         $stateMatchesApp = $false
-        if ($state -and $state.debloatVerified -eq $true) {
+        # Sparse failure/quick states lack debloatVerified - guard (StrictMode-safe).
+        if ($state -and ($state.PSObject.Properties.Name -contains 'debloatVerified') -and $state.debloatVerified -eq $true) {
             try {
                 $stateApp = [IO.Path]::GetFullPath([string]$state.appDir).TrimEnd('\')
                 $curApp = [IO.Path]::GetFullPath($app.FullName).TrimEnd('\')

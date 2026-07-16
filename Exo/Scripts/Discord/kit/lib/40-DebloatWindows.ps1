@@ -685,8 +685,11 @@ function Set-DiscordTrayIconHidden([string]$AppDir) {
 
     $hidden = 0
     Get-ChildItem $notifyKey -ErrorAction SilentlyContinue | ForEach-Object {
-        $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
-        $path = $props.ExecutablePath
+        # One key lacking ExecutablePath must not kill the sweep (StrictMode).
+        try {
+            $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+            $path = $props.ExecutablePath
+        } catch { return }
         if (-not $path) { return }
         foreach ($target in $targets) {
             if ($path -ieq $target -or $path -match [regex]::Escape('Discord')) {

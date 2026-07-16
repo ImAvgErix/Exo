@@ -616,22 +616,24 @@ function Resolve-LatestNpiRelease {
     }
     try {
         $rel = Invoke-RestMethod -Uri $Script:NpiRepoApi -Headers $headers -TimeoutSec 30
+        # A 200 with an unexpected shape (rate-limit interstitial, captive-proxy
+        # JSON) must not throw under StrictMode - degrade like a network failure.
+        if (-not $rel -or -not ($rel.PSObject.Properties.Name -contains 'tag_name') -or -not $rel.tag_name) { return $null }
+        $asset = @($rel.assets) | Where-Object {
+            [string]$_.name -eq $Script:NpiAssetName -or
+            [string]$_.browser_download_url -match '(?i)nvidiaProfileInspector\.zip'
+        } | Select-Object -First 1
+        if (-not $asset -or -not $asset.browser_download_url) {
+            Write-Warn 'Profile Inspector latest release has no zip asset'
+            return $null
+        }
+        $sha = $null
+        $digest = [string]$asset.digest
+        if ($digest -match '^sha256:([0-9a-fA-F]{64})$') { $sha = $Matches[1].ToUpperInvariant() }
     } catch {
         Write-Warn "Profile Inspector latest lookup failed: $($_.Exception.Message)"
         return $null
     }
-    if (-not $rel -or -not $rel.tag_name) { return $null }
-    $asset = @($rel.assets) | Where-Object {
-        [string]$_.name -eq $Script:NpiAssetName -or
-        [string]$_.browser_download_url -match '(?i)nvidiaProfileInspector\.zip'
-    } | Select-Object -First 1
-    if (-not $asset -or -not $asset.browser_download_url) {
-        Write-Warn 'Profile Inspector latest release has no zip asset'
-        return $null
-    }
-    $sha = $null
-    $digest = [string]$asset.digest
-    if ($digest -match '^sha256:([0-9a-fA-F]{64})$') { $sha = $Matches[1].ToUpperInvariant() }
     return @{
         Tag       = [string]$rel.tag_name
         ZipUrl    = [string]$asset.browser_download_url

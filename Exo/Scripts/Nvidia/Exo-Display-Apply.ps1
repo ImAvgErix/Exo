@@ -247,16 +247,22 @@ function Set-AllNvtweakDevices {
             $devPath = Join-Path $devicesRoot $name
             Set-OneNvtweakDevice -devPath $devPath
             $total++
-            $d = Get-ItemProperty -LiteralPath $devPath -ErrorAction SilentlyContinue
-            $c = Get-ItemProperty -LiteralPath (Join-Path $devPath 'Color') -ErrorAction SilentlyContinue
-            $v = Get-ItemProperty -LiteralPath (Join-Path $devPath 'Video') -ErrorAction SilentlyContinue
-            Write-DLog ("  {0}: Override={1} NoScale={2} ColorNvidia={3} Full={4} VideoNvidia={5}" -f `
-                $name,
-                ([int]$d.ScalingOverride -eq 1),
-                ([int]$d.ScalingMode -eq 2),
-                ([int]$c.NvCplUseColorSettings -eq 1),
-                ([int]$c.DynamicRange -eq 0),
-                ([int]$v.VideoColorSettingsSource -eq 1 -and [int]$v.VideoImageSettingsSource -eq 1))
+            # Stamped values may be absent (e.g. read-only HKLM ACL) - a missing
+            # value under StrictMode must not fail the whole display stage.
+            try {
+                $d = Get-ItemProperty -LiteralPath $devPath -ErrorAction SilentlyContinue
+                $c = Get-ItemProperty -LiteralPath (Join-Path $devPath 'Color') -ErrorAction SilentlyContinue
+                $v = Get-ItemProperty -LiteralPath (Join-Path $devPath 'Video') -ErrorAction SilentlyContinue
+                Write-DLog ("  {0}: Override={1} NoScale={2} ColorNvidia={3} Full={4} VideoNvidia={5}" -f `
+                    $name,
+                    ([int]$d.ScalingOverride -eq 1),
+                    ([int]$d.ScalingMode -eq 2),
+                    ([int]$c.NvCplUseColorSettings -eq 1),
+                    ([int]$c.DynamicRange -eq 0),
+                    ([int]$v.VideoColorSettingsSource -eq 1 -and [int]$v.VideoImageSettingsSource -eq 1))
+            } catch {
+                Write-DLog ("  {0}: verify log skipped ({1})" -f $name, $_.Exception.Message)
+            }
         }
     }
     Write-DLog "NVTweak stamped $total device path(s) (scaling override + desktop color Full + video NVIDIA)"
@@ -496,20 +502,28 @@ if ($deviceKeys.Count -eq 0) {
     Write-DLog 'VERIFY: no HKCU device keys (OK if NVAPI succeeded)'
 }
 $deviceKeys | ForEach-Object {
-    $d = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
-    $c = Get-ItemProperty (Join-Path $_.PSPath 'Color') -ErrorAction SilentlyContinue
-    $v = Get-ItemProperty (Join-Path $_.PSPath 'Video') -ErrorAction SilentlyContinue
-    $okScale = ($null -ne $d -and [int]$d.ScalingOverride -eq $wantOverride -and
-                [int]$d.PerformScalingOn -eq $wantGpu -and [int]$d.ScalingMode -eq $wantScaleMode)
-    $okColor = ($null -ne $c -and [int]$c.NvCplUseColorSettings -eq $wantUseNvidiaColor -and
-                [int]$c.DynamicRange -eq $wantFull)
-    $okVideo = ($null -ne $v -and [int]$v.VideoColorSettingsSource -eq $wantVidColor -and
-                [int]$v.VideoImageSettingsSource -eq $wantVidImage)
-    if (-not ($okScale -and $okColor -and $okVideo)) {
-        Write-DLog ("VERIFY FAIL {0} scale={1} color={2} video={3}" -f $_.PSChildName, $okScale, $okColor, $okVideo)
+    # Driver/CPL can recreate keys mid-apply with a value subset; a missing value
+    # under StrictMode throws - treat as verify failure, never crash the stage.
+    $devKey = $_
+    try {
+        $d = Get-ItemProperty $devKey.PSPath -ErrorAction SilentlyContinue
+        $c = Get-ItemProperty (Join-Path $devKey.PSPath 'Color') -ErrorAction SilentlyContinue
+        $v = Get-ItemProperty (Join-Path $devKey.PSPath 'Video') -ErrorAction SilentlyContinue
+        $okScale = ($null -ne $d -and [int]$d.ScalingOverride -eq $wantOverride -and
+                    [int]$d.PerformScalingOn -eq $wantGpu -and [int]$d.ScalingMode -eq $wantScaleMode)
+        $okColor = ($null -ne $c -and [int]$c.NvCplUseColorSettings -eq $wantUseNvidiaColor -and
+                    [int]$c.DynamicRange -eq $wantFull)
+        $okVideo = ($null -ne $v -and [int]$v.VideoColorSettingsSource -eq $wantVidColor -and
+                    [int]$v.VideoImageSettingsSource -eq $wantVidImage)
+        if (-not ($okScale -and $okColor -and $okVideo)) {
+            Write-DLog ("VERIFY FAIL {0} scale={1} color={2} video={3}" -f $devKey.PSChildName, $okScale, $okColor, $okVideo)
+            $registryOk = $false
+        } else {
+            Write-DLog "VERIFY OK $($devKey.PSChildName)"
+        }
+    } catch {
+        Write-DLog ("VERIFY FAIL {0} read error: {1}" -f $devKey.PSChildName, $_.Exception.Message)
         $registryOk = $false
-    } else {
-        Write-DLog "VERIFY OK $($_.PSChildName)"
     }
 }
 try {

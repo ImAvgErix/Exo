@@ -182,7 +182,9 @@ function Write-Step([string]$Msg) {
     Write-Host "[*] $Msg" -ForegroundColor Cyan
     Write-LogLine 'STEP' $Msg
     if ($env:EXO -eq '1') {
-        if ($null -eq $Script:HubStepPct) { $Script:HubStepPct = 28 }
+        # StrictMode: reading an unset variable throws even inside a $null
+        # comparison - probe with Get-Variable instead.
+        if (-not (Get-Variable -Name HubStepPct -Scope Script -ErrorAction SilentlyContinue)) { $Script:HubStepPct = 28 }
         $Script:HubStepPct = [Math]::Min(94, [int]$Script:HubStepPct + 4)
         Write-HubProgress $Script:HubStepPct $Msg
     }
@@ -202,7 +204,7 @@ function Write-Err([string]$Msg) {
 
 function Add-ExoReport([string]$Step, [string]$Status, [string]$Reason = '') {
     # Structured last-apply report line: EXO_REPORT:<step>|ok / |fail:<reason> / |skip:<reason>
-    if ($null -eq $Script:ExoApplyReport) {
+    if (-not (Get-Variable -Name ExoApplyReport -Scope Script -ErrorAction SilentlyContinue)) {
         $Script:ExoApplyReport = [Collections.Generic.List[string]]::new()
     }
     $entry = if ([string]::IsNullOrWhiteSpace($Reason)) { "$Step|$Status" } else { "$Step|$Status`:$Reason" }
@@ -213,7 +215,7 @@ function Add-ExoReport([string]$Step, [string]$Status, [string]$Reason = '') {
 }
 
 function Get-ExoReportEntries {
-    if ($null -eq $Script:ExoApplyReport) { return @() }
+    if (-not (Get-Variable -Name ExoApplyReport -Scope Script -ErrorAction SilentlyContinue)) { return @() }
     return @($Script:ExoApplyReport)
 }
 
