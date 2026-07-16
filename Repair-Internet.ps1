@@ -1,18 +1,44 @@
 # Repair-Internet.ps1 - public one-liner rescue for the Exo Internet optimizer.
 # Prefer the Exo in-app Repair button when available.
 #
+# ONLINE (phone hotspot OK if Wi-Fi/Ethernet is dead):
 #   irm "https://raw.githubusercontent.com/ImAvgErix/Exo/main/Repair-Internet.ps1" | iex
+#   # or hard nuclear (winsock + IP reset - reboot required):
+#   iex "& { $(irm 'https://raw.githubusercontent.com/ImAvgErix/Exo/main/Repair-Internet.ps1') } -Hard"
+#
+# OFFLINE (no download - paste into elevated PowerShell):
+#   Set-ExecutionPolicy Bypass -Scope Process -Force
+#   # If you have the repo / installed copy:
+#   & "$env:LOCALAPPDATA\Exo\app\..\..\..\.."  # (use the path where this file lives)
+#   # Or copy this whole script from a USB / phone and:
+#   powershell -NoProfile -ExecutionPolicy Bypass -File .\Repair-Internet.ps1 -Hard
+#
+# EMERGENCY (no Exo files at all - elevated PowerShell, then REBOOT):
+#   Get-NetAdapter -Physical | Where-Object Status -eq Disabled | Enable-NetAdapter -Confirm:$false
+#   Get-NetAdapter -Physical | ForEach-Object {
+#     Enable-NetAdapterBinding -Name $_.Name -ComponentID ms_tcpip -EA SilentlyContinue
+#     Enable-NetAdapterBinding -Name $_.Name -ComponentID ms_tcpip6 -EA SilentlyContinue
+#     Enable-NetAdapterBinding -Name $_.Name -ComponentID ms_pacer -EA SilentlyContinue
+#     Set-NetIPInterface -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -AutomaticMetric Enabled -EA SilentlyContinue
+#   }
+#   Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' NoActiveProbe -Force -EA SilentlyContinue
+#   netsh winsock reset
+#   netsh int ip reset
+#   netsh int ipv6 reset
+#   ipconfig /flushdns
+#   # REBOOT NOW
 #
 # What it does (self-elevating):
-#   1. TRUE RESTORE: if %LocalAppData%\Exo\network-snapshot.json exists (pristine
-#      pre-apply baseline), restores the exact recorded values: registry values
-#      (or removes ones that were absent), netsh/TCP globals, Set-NetTCPSetting
-#      fields, adapter advanced properties by RegistryKeyword, adapter bindings,
-#      interface metrics incl. AutomaticMetric, RSS config, powercfg indexes,
-#      dynamic port ranges, IPv6 prefix policies, and service start types.
-#   2. FALLBACK: without a snapshot, performs an approximate Windows stock reset.
-#   3. ALWAYS re-enables disabled physical network adapters and clears Exo
-#      network state files.
+#   1. TRUE RESTORE from %LocalAppData%\Exo\network-snapshot.json when present.
+#   2. FALLBACK stock reset without a snapshot.
+#   3. ALWAYS re-enables disabled physical adapters, force-enables IPv4/IPv6/QoS
+#      bindings, restarts NICs so advanced props actually apply, renews DHCP.
+#   4. If still offline (or -Hard): netsh winsock reset + int ip/ipv6 reset (reboot).
+
+[CmdletBinding()]
+param(
+    [switch]$Hard
+)
 
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
@@ -21,7 +47,44 @@ function Write-RepairStep([string]$Message, [string]$Color = 'Cyan') {
     Write-Host ('[*] ' + $Message) -ForegroundColor $Color
 }
 
+function Test-ExoRescueConnectivity {
+    foreach ($target in @('1.1.1.1', '8.8.8.8')) {
+        $client = $null
+        try {
+            $client = New-Object System.Net.Sockets.TcpClient
+            $iar = $client.BeginConnect($target, 443, $null, $null)
+            if ($iar.AsyncWaitHandle.WaitOne(3000, $false) -and $client.Connected) {
+                $client.EndConnect($iar)
+                $client.Close()
+                return $true
+            }
+            $client.Close()
+        } catch {
+            if ($client) { try { $client.Close() } catch {} }
+        }
+    }
+    try {
+        $r = Resolve-DnsName -Name 'www.msftconnecttest.com' -Type A -DnsOnly -ErrorAction Stop
+        return ($null -ne $r)
+    } catch { return $false }
+}
+
+function Invoke-ExoHardStackReset {
+    Write-RepairStep 'HARD RESET: netsh winsock reset + netsh int ip/ipv6 reset (reboot required)' 'Yellow'
+    try { $null = (netsh winsock reset 2>&1 | Out-String) } catch {}
+    try { $null = (netsh int ip reset 2>&1 | Out-String) } catch {}
+    try { $null = (netsh int ipv6 reset 2>&1 | Out-String) } catch {}
+    try {
+        Remove-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'NoActiveProbe' -Force -ErrorAction SilentlyContinue
+        Remove-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' -Name 'EnableMulticast' -Force -ErrorAction SilentlyContinue
+    } catch {}
+    try { ipconfig /flushdns | Out-Null } catch {}
+    Write-RepairStep 'Hard stack reset applied. REBOOT Windows now.' 'Yellow'
+}
+
 function Invoke-ExoInternetRepair {
+    param([switch]$Hard)
+
     $exoDir = Join-Path $env:LOCALAPPDATA 'Exo'
     $snapshotPath = Join-Path $exoDir 'network-snapshot.json'
     $applyStatePath = Join-Path $exoDir 'network-apply-state.json'
@@ -157,6 +220,7 @@ function Invoke-ExoInternetRepair {
         }
 
         Write-RepairStep 'Restoring adapter advanced properties (by RegistryKeyword)...'
+        $touchedAdv = New-Object 'System.Collections.Generic.HashSet[string]'
         foreach ($ap in @($snap.advancedProps)) {
             $target = Resolve-RepairAdapter ([string]$ap.adapter) ([string]$ap.ifDesc)
             if (-not $target) { continue }
@@ -164,8 +228,18 @@ function Invoke-ExoInternetRepair {
             if ($vals.Count -eq 0) { continue }
             try {
                 Set-NetAdapterAdvancedProperty -Name $target.Name -RegistryKeyword ([string]$ap.keyword) -RegistryValue $vals -NoRestart -ErrorAction SilentlyContinue
+                [void]$touchedAdv.Add([string]$target.Name)
             } catch { $failures++ }
         }
+        # -NoRestart does not apply driver settings until the NIC is bounced - this
+        # was the main reason in-app Repair looked like a no-op on broken links.
+        foreach ($n in @($touchedAdv)) {
+            try {
+                Restart-NetAdapter -Name $n -Confirm:$false -ErrorAction SilentlyContinue
+                Write-RepairStep ('Adapter restarted so advanced props apply: ' + $n) 'Green'
+            } catch {}
+        }
+        if ($touchedAdv.Count -gt 0) { Start-Sleep -Seconds 4 }
 
         Write-RepairStep 'Restoring adapter bindings (Properties checkboxes)...'
         foreach ($b in @($snap.bindings)) {
@@ -261,7 +335,6 @@ function Invoke-ExoInternetRepair {
         Set-RepairDword $mm 'NetworkThrottlingIndex' 10
         Remove-RepairProp 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit'
         try { Remove-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' -Recurse -Force -ErrorAction SilentlyContinue } catch {}
-        # DNS ServiceProvider priorities -> documented Windows defaults
         $sp = 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\ServiceProvider'
         Set-RepairDword $sp 'LocalPriority' 499
         Set-RepairDword $sp 'HostsPriority' 500
@@ -333,12 +406,13 @@ function Invoke-ExoInternetRepair {
             foreach ($af in @('IPv4', 'IPv6')) {
                 try { Set-NetIPInterface -InterfaceIndex $a.ifIndex -AddressFamily $af -AutomaticMetric Enabled -ErrorAction SilentlyContinue } catch {}
             }
+            try { Restart-NetAdapter -Name $a.Name -Confirm:$false -ErrorAction SilentlyContinue } catch {}
         }
         Write-RepairStep 'Stock reset complete.' 'Green'
     }
 
-    # ALWAYS: re-enable every disabled physical adapter (Wi-Fi Exo disabled and any other NIC).
-    Write-RepairStep 'Re-enabling any disabled physical network adapters...'
+    # ALWAYS: re-enable every disabled physical adapter + force critical bindings.
+    Write-RepairStep 'Re-enabling any disabled physical network adapters + forcing IPv4/IPv6/QoS bindings...'
     foreach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {
         try {
             if ([string]$a.Status -eq 'Disabled') {
@@ -346,16 +420,41 @@ function Invoke-ExoInternetRepair {
                 Write-RepairStep ('Adapter re-enabled: ' + $a.Name) 'Green'
             }
         } catch {}
+        foreach ($id in @('ms_tcpip', 'ms_tcpip6', 'ms_pacer')) {
+            try { Enable-NetAdapterBinding -Name $a.Name -ComponentID $id -ErrorAction SilentlyContinue } catch {}
+        }
     }
 
     # Clear Exo network state (apply marker + saved preset). Snapshot handled above.
     Remove-Item -LiteralPath $applyStatePath -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $optimizerStatePath -Force -ErrorAction SilentlyContinue
     try { Clear-DnsClientCache -ErrorAction SilentlyContinue } catch {}
+    try { ipconfig /renew | Out-Null } catch {}
 
-    Write-RepairStep 'Exo Internet repair finished.' 'Green'
-    if ($failures -gt 0) { return 1 }
-    return 0
+    if ($Hard) {
+        Invoke-ExoHardStackReset
+        Write-RepairStep 'Exo Internet HARD repair finished - REBOOT REQUIRED.' 'Yellow'
+        return 2
+    }
+
+    Write-RepairStep 'Probing connectivity after repair...'
+    $ok = $false
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    while (-not $ok -and $sw.Elapsed.TotalSeconds -lt 30) {
+        $ok = Test-ExoRescueConnectivity
+        if (-not $ok) { Start-Sleep -Seconds 2 }
+    }
+    $sw.Stop()
+    if ($ok) {
+        Write-RepairStep 'Exo Internet repair finished - connectivity OK.' 'Green'
+        if ($failures -gt 0) { return 1 }
+        return 0
+    }
+
+    Write-RepairStep 'Still offline after restore - applying hard winsock/IP reset.' 'Yellow'
+    Invoke-ExoHardStackReset
+    Write-RepairStep 'Exo Internet repair finished - REBOOT REQUIRED (still probe-failed).' 'Yellow'
+    return 2
 }
 
 # ---------------------------------------------------------------------------
@@ -366,7 +465,7 @@ $principal = New-Object Security.Principal.WindowsPrincipal $identity
 $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if ($isAdmin) {
-    $code = [int](@(Invoke-ExoInternetRepair) | Select-Object -Last 1)
+    $code = [int](@(Invoke-ExoInternetRepair -Hard:$Hard) | Select-Object -Last 1)
     exit $code
 }
 
@@ -390,16 +489,24 @@ try {
                 throw 'Downloaded repair script failed validation.'
             }
         } else {
-            Set-Content -LiteralPath $tmp -Value $selfText -Encoding ASCII
+            # ScriptBlock.ToString() sometimes drops the outer param() when piped via irm|iex.
+            $boot = $selfText
+            if ($boot -notmatch '(?m)^\s*param\s*\(') {
+                $boot = "param([switch]`$Hard)`r`n" + $boot
+            }
+            Set-Content -LiteralPath $tmp -Value $boot -Encoding ASCII
         }
         $selfPath = $tmp
     }
-    $proc = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList @(
+    $argList = @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $selfPath + '"')
     )
+    if ($Hard) { $argList += '-Hard' }
+    $proc = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList $argList
     $exitCode = [int]$proc.ExitCode
 } catch {
     Write-Host ('[-] Internet repair could not start: ' + $_.Exception.Message) -ForegroundColor Red
+    Write-Host '[-] If you have no internet, paste the EMERGENCY block from the top of this script into an elevated PowerShell, then reboot.' -ForegroundColor Yellow
     $exitCode = 1
 } finally {
     if ($tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }

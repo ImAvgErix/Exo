@@ -156,8 +156,16 @@ public sealed class NetworkOptimizerService
             using var p = Process.Start(psi);
             if (p is null) return (false, "Could not start elevated PowerShell.");
             await p.WaitForExitAsync(ct).ConfigureAwait(false);
+            // Exit 2 = hard winsock/ip reset applied; connectivity needs a reboot.
+            if (p.ExitCode == 2)
+            {
+                progress?.Report("Clearing Exo network preset...");
+                ClearSavedPreset();
+                return (false,
+                    "Repair applied a hard Winsock/IP reset because connectivity was still down. Reboot Windows now, then retry — if it is still broken, run Repair-Internet.ps1 -Hard from an admin PowerShell (or use a phone hotspot temporarily).");
+            }
             if (p.ExitCode != 0)
-                return (false, $"Repair exit {p.ExitCode}. Try again as Administrator.");
+                return (false, $"Repair exit {p.ExitCode}. Try again as Administrator, or run Repair-Internet.ps1 -Hard from an elevated PowerShell.");
 
             progress?.Report("Clearing Exo network preset...");
             ClearSavedPreset();
@@ -165,11 +173,11 @@ public sealed class NetworkOptimizerService
             if (hadSnapshot && HasRestoreSnapshot())
             {
                 // Snapshot kept = script recorded restore failures; be honest, allow retry.
-                return (true, "Repair ran, but some values could not be restored exactly — the snapshot was kept so you can retry Repair. Wi‑Fi was re-enabled if Exo disabled it.");
+                return (true, "Repair ran, but some values could not be restored exactly — the snapshot was kept so you can retry Repair. Adapters were re-enabled; reboot if the link stays down.");
             }
             return (true, hadSnapshot
-                ? "Network restored to the exact pre-Exo state from the snapshot. Wi‑Fi re-enabled if Exo disabled it; snapshot cleared."
-                : "Network stack repaired to stock-like defaults (no snapshot was available). Ethernet Properties bindings restored; Wi‑Fi re-enabled if Exo disabled it.");
+                ? "Network restored to the exact pre-Exo state from the snapshot. Adapters re-enabled; snapshot cleared."
+                : "Network stack repaired to stock-like defaults (no snapshot was available). Critical bindings restored; adapters re-enabled.");
         }
         catch (System.ComponentModel.Win32Exception)
         {
