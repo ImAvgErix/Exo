@@ -21,8 +21,13 @@ function Test-SteamTrimHelperText {
     if ($Text -notmatch 'Exo\.SteamWebHelper') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::High') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::BelowNormal') { return $false }
-    # EmptyWorkingSet on steamwebhelper freezes/kills CEF UI - reject thrashing helpers
-    if ($Text -match 'EmptyWorkingSet\(' -and $Text -notmatch 'Never EmptyWorkingSet') { return $false }
+    # EmptyWorkingSet on steamwebhelper freezes/kills CEF UI - reject thrashing helpers.
+    # Evaluate code lines only: a '# Never EmptyWorkingSet' comment must not exempt a real call.
+    foreach ($rawLine in ($Text -split "`n")) {
+        $line = $rawLine.TrimStart()
+        if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }
+        if ($line.Contains('EmptyWorkingSet(')) { return $false }
+    }
     if ($Text -match 'Start-Sleep\s+-Seconds\s+(\d+)') {
         $sec = [int]$Matches[1]
         if ($sec -ge 2 -and $sec -le 15) { return $true }

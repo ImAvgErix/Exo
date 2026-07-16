@@ -1771,9 +1771,9 @@ function Set-SteamGpuHighPerformance([string]$SteamPath) {
 }
 
 function Install-WebHelperTrimHelper([string]$SteamPath) {
-    # Maximum-performance helper: one instance, high client priority while idle,
-    # an in-game CPU yield, and a 3-second working-set trim with no suspension.
-    # Also re-enforces StartupMode=0 periodically so Steam cannot re-arm autostart.
+    # Maximum-performance companion: one instance, high steam.exe priority while idle,
+    # in-game CPU yield, and periodic StartupMode=0 re-enforcement so Steam cannot
+    # re-arm autostart. No working-set trims (v3.0.11: EmptyWorkingSet froze CEF).
     $helper = Join-Path $SteamPath 'Exo-SteamWebHelperTrim.ps1'
     $body = @'
 # Exo - Steam companion (NOT a killer). Never EmptyWorkingSet / Stop-Process steamwebhelper.
@@ -2374,11 +2374,18 @@ try {
     $helperOk = $false
     try {
         $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
+        # Ban EmptyWorkingSet calls in code lines only: a doc comment must not exempt a real call.
+        $helperThrash = $false
+        foreach ($rawLine in ($helperText -split "`n")) {
+            $line = $rawLine.TrimStart()
+            if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }
+            if ($line.Contains('EmptyWorkingSet(')) { $helperThrash = $true; break }
+        }
         $helperOk = $helperText -match 'Exo\.SteamWebHelper' -and
             $helperText -match 'ProcessPriorityClass\]::High' -and
             $helperText -match 'ProcessPriorityClass\]::BelowNormal' -and
             $helperText -notmatch '(?i)Stop-Process.*steamwebhelper' -and
-            ($helperText -notmatch 'EmptyWorkingSet' -or $helperText -match 'Never EmptyWorkingSet')
+            (-not $helperThrash)
     } catch { }
     $fullPassOk = -not [bool]$Quick
     # Core pack (always required for applied). VDF first-run skips are NOT essentials-

@@ -41,10 +41,14 @@ public static partial class SteamLogic
         if (!text.Contains("Exo.SteamWebHelper", StringComparison.Ordinal)) return false;
         if (!text.Contains("ProcessPriorityClass]::High", StringComparison.Ordinal)) return false;
         if (!text.Contains("ProcessPriorityClass]::BelowNormal", StringComparison.Ordinal)) return false;
-        // Hard fail if helper still thrashing CEF
-        if (text.Contains("EmptyWorkingSet(", StringComparison.Ordinal) &&
-            !text.Contains("Never EmptyWorkingSet", StringComparison.Ordinal))
-            return false;
+        // Hard fail if helper still thrashing CEF — evaluate code lines only:
+        // a "# Never EmptyWorkingSet" doc comment must not exempt a real call.
+        foreach (var rawLine in text.Split('\n'))
+        {
+            var line = rawLine.TrimStart();
+            if (line.StartsWith('#') || line.StartsWith("//", StringComparison.Ordinal)) continue;
+            if (line.Contains("EmptyWorkingSet(", StringComparison.Ordinal)) return false;
+        }
 
         var sec = SleepSecondsRegex().Match(text);
         if (sec.Success && int.TryParse(sec.Groups[1].Value, out var s) && s is >= 2 and <= 15)

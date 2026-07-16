@@ -169,12 +169,14 @@ Expect("preview host asserts removed",
     !blob.Contains("Assert-ExoPwshPreview", StringComparison.Ordinal) &&
     !blob.Contains("Test-ExoIsPwshPreviewHost", StringComparison.Ordinal));
 
-// --- Trim stats proof (steam-trim-stats.json) ---
-Expect("trim stats accumulation markers",
-    optimizerText.Contains("steam-trim-stats.json", StringComparison.Ordinal) &&
-    optimizerText.Contains("Read-TrimStats", StringComparison.Ordinal) &&
-    optimizerText.Contains("Save-TrimStats", StringComparison.Ordinal) &&
-    optimizerText.Contains("reclaimed", StringComparison.OrdinalIgnoreCase));
+// --- Trim stats (steam-trim-stats.json): intentionally NOT written while
+// working-set trims are disabled (v3.0.11 removed EmptyWorkingSet on
+// steamwebhelper - it froze/killed CEF). The C# dashboard reader treats a
+// missing file as "hide the stat" (HasTrimStats=false), so the UI degrades
+// honestly. If a safe trim mechanism ever returns, restore the writer AND
+// turn this assertion back into a presence check.
+Expect("no half-wired reclaim stats while trim disabled",
+    !optimizerText.Contains("Save-TrimStats", StringComparison.Ordinal));
 
 // --- EXO_REPORT structured apply report ---
 Expect("EXO_REPORT emitter + state persistence",
@@ -208,9 +210,18 @@ foreach (var f in steamScriptFiles)
 }
 Expect("no stale 5s messaging in Steam scripts", staleFiveSecond.Count == 0,
     string.Join(", ", staleFiveSecond));
-Expect("6s gentle trim present",
-    optimizerText.Contains("Start-Sleep -Seconds 6", StringComparison.Ordinal) &&
-    optimizerText.Contains("gentle", StringComparison.OrdinalIgnoreCase));
+// v3.0.11: working-set trims on steamwebhelper froze/killed CEF and were
+// removed; the companion is priority-yield + quiet only. The shipped helper
+// body must pass the shipped classifier (EmptyWorkingSet calls banned in
+// code lines - a comment cannot exempt a real call).
+var helperStart = optimizerText.IndexOf("function Install-WebHelperTrimHelper", StringComparison.Ordinal);
+var bodyStart = helperStart >= 0 ? optimizerText.IndexOf("$body = @'", helperStart, StringComparison.Ordinal) : -1;
+var bodyEnd = bodyStart >= 0 ? optimizerText.IndexOf("'@", bodyStart + 1, StringComparison.Ordinal) : -1;
+Expect("shipped helper body located", bodyStart > helperStart && bodyEnd > bodyStart);
+var helperBody = bodyEnd > bodyStart ? optimizerText.Substring(bodyStart, bodyEnd - bodyStart) : "";
+Expect("companion does no working-set trim + passes shipped classifier",
+    SteamLogic.IsTrimHelperText(helperBody) &&
+    optimizerText.Contains("no webhelper EmptyWorkingSet", StringComparison.OrdinalIgnoreCase));
 Expect("default CEF does not disable GPU",
     !System.Text.RegularExpressions.Regex.IsMatch(
         optimizerText,

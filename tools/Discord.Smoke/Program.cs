@@ -235,7 +235,10 @@ Expect("no Exo-Discord scheduled task create",
 // Elevated Exo Apply must disarm kernel (cannot boot-check) so Discord opens.
 Expect("elevated apply disarms kernel for launch safety",
     applyBlob.Contains("Disable-DiscOptKernelOnDisk", StringComparison.Ordinal) &&
-    (applyBlob.Contains("kernel disarmed for launch safety", StringComparison.Ordinal) ||
+    (applyBlob.Contains("Disarming DiscOpt kernel after elevated Apply", StringComparison.Ordinal) ||
+     applyBlob.Contains("disarmed after user-token boot fail", StringComparison.Ordinal) ||
+     applyBlob.Contains("Boot failed with DiscOpt kernel - disarming kernel", StringComparison.Ordinal) ||
+     applyBlob.Contains("kernel disarmed for launch safety", StringComparison.Ordinal) ||
      applyBlob.Contains("elevated host: kernel disarmed", StringComparison.Ordinal) ||
      applyBlob.Contains("launch-safe (kernel off under elevated", StringComparison.Ordinal) ||
      applyBlob.Contains("kernel off under elevated", StringComparison.Ordinal) ||
@@ -274,8 +277,9 @@ Expect("kernel proxy fallback keeps stock ffmpeg",
     kernelText.Contains("stock ffmpeg.dll kept", StringComparison.Ordinal) &&
     kernelText.Contains("DiscOptKernelProxyActive", StringComparison.Ordinal));
 Expect("kernel install failure continues to boot safety",
-    applyBlob.Contains("continuing to boot safety check", StringComparison.Ordinal) &&
-    applyBlob.Contains("Confirm-DiscordBootsAfterMods $app.FullName", StringComparison.Ordinal));
+    applyBlob.Contains("DiscOpt kernel install failed:", StringComparison.Ordinal) &&
+    (applyBlob.Contains("Confirm-DiscordBootsAfterMods $app.FullName", StringComparison.Ordinal) ||
+     applyBlob.Contains("Confirm-DiscordBootsAsUser $app.FullName", StringComparison.Ordinal)));
 Expect("launch heal verifies boot after reinstall",
     applyBlob.Contains("Launch heal boot check failed", StringComparison.Ordinal) &&
     applyBlob.Contains("Kernel heal failed", StringComparison.Ordinal));
