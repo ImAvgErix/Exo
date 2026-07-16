@@ -548,16 +548,24 @@ Tag: ____  SHA: ____  Date: ____
 
 ## 14. Definition of done (v3.0)
 
-- [ ] All four modules have contract tables + smokes  
-- [ ] No PS god-file > 80 KB without exception note  
-- [ ] SharedModulePlate on all optimizers  
-- [ ] Advisor v2 from detect + EXO_REPORT  
-- [ ] Release requires CI  
+- [x] All four modules have contract tables + smokes (`tools/Contracts.Smoke`)  
+- [x] No PS god-file > 80 KB without exception note (**exception:** `Steam-Optimizer.ps1` ~118 KB and `Nvidia-Optimizer.ps1` ~204 KB remain monoliths with thin `lib/*Bootstrap.ps1` stage entry points; full strangle deferred post-v3)  
+- [x] SharedModulePlate on all optimizers  
+- [x] Advisor v2 from detect + EXO_REPORT  
+- [x] Release requires CI  
 - [ ] Human checklist R1-R4 done once  
-- [ ] Zero Exo-* tasks after full Apply  
-- [ ] NVIDIA Reset wording audited  
-- [ ] .NET 10 throughout  
-- [ ] README/CHANGELOG honest  
+- [x] Zero Exo-* tasks after full Apply (smoke + purge)  
+- [x] NVIDIA Reset wording audited  
+- [x] .NET 10 throughout  
+- [x] README/CHANGELOG honest  
+
+### God-file size exception (Wave 3)
+
+| File | Size | Status |
+|------|-----:|--------|
+| `Exo/Scripts/Steam/Steam-Optimizer.ps1` | ~118 KB | **Exception** — thin `Steam/lib/Steam.Bootstrap.ps1` stage IDs; full extract next |
+| `Exo/Scripts/Nvidia/Nvidia-Optimizer.ps1` | ~204 KB | **Exception** — thin `Nvidia/lib/Nvidia.Bootstrap.ps1` stage IDs; full extract next |
+| `NetworkApplyScriptBuilder` | split | **Done** — `.Repair.cs` + `.Benchmark.cs` partials |
 
 ---
 

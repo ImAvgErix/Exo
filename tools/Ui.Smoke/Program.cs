@@ -297,6 +297,33 @@ if (File.Exists(converters))
     }
 }
 
+// v3 SharedModulePlate hosts loader + action bar + feature grid for optimizers.
+var sharedPlateXaml = Path.Combine(repo, "Exo", "Views", "Controls", "SharedModulePlate.xaml");
+var sharedPlateCs = Path.Combine(repo, "Exo", "Views", "Controls", "SharedModulePlate.xaml.cs");
+Expect("SharedModulePlate control", File.Exists(sharedPlateXaml) && File.Exists(sharedPlateCs));
+if (File.Exists(sharedPlateXaml))
+{
+    var plate = File.ReadAllText(sharedPlateXaml);
+    Expect("SharedModulePlate instrument chrome",
+        plate.Contains("ExoModulePlate", StringComparison.Ordinal)
+        && plate.Contains("ExoLoader", StringComparison.Ordinal)
+        && plate.Contains("ExoActionBar", StringComparison.Ordinal)
+        && plate.Contains("FeatureTileGrid", StringComparison.Ordinal));
+    Expect("SharedModulePlate compact footer",
+        plate.Contains("Padding=\"16,8,16,10\"", StringComparison.Ordinal)
+        && plate.Contains("Spacing=\"6\"", StringComparison.Ordinal));
+    Expect("SharedModulePlate advisor + report",
+        plate.Contains("GuidanceText", StringComparison.Ordinal)
+        && plate.Contains("ApplyReportRows", StringComparison.Ordinal));
+}
+if (File.Exists(sharedPlateCs))
+{
+    var plateCs = File.ReadAllText(sharedPlateCs);
+    Expect("SharedModulePlate FeatureTileGrid accessor",
+        plateCs.Contains("FeatureTileGrid", StringComparison.Ordinal)
+        && plateCs.Contains("FeatureGrid", StringComparison.Ordinal));
+}
+
 foreach (var page in new[]
          {
              "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml", "InternetOptimizerPage.xaml",
@@ -307,15 +334,16 @@ foreach (var page in new[]
     if (!File.Exists(p)) continue;
     var x = File.ReadAllText(p);
     Expect(page + " CTA", x.Contains("ExoPrimaryButton", StringComparison.Ordinal) || x.Contains("ExoQuietButton", StringComparison.Ordinal));
-    // Module chrome: instrument plate and/or legacy page width pad.
+    // Module chrome: SharedModulePlate (v3) or legacy plate / page pad.
     Expect(page + " page padding",
-        x.Contains("ExoModulePlate", StringComparison.Ordinal)
+        x.Contains("SharedModulePlate", StringComparison.Ordinal)
+        || x.Contains("ExoModulePlate", StringComparison.Ordinal)
         || x.Contains("ExoPagePadding", StringComparison.Ordinal)
         || x.Contains("ExoPageMaxWidth", StringComparison.Ordinal));
-    Expect(page + " unique loader", x.Contains("ExoLoader", StringComparison.Ordinal) && !x.Contains("<ProgressRing", StringComparison.Ordinal));
-    Expect(page + " action bar", x.Contains("ExoActionBar", StringComparison.Ordinal));
     if (page.Contains("NvidiaPanel", StringComparison.Ordinal))
     {
+        Expect(page + " unique loader", x.Contains("ExoLoader", StringComparison.Ordinal) && !x.Contains("<ProgressRing", StringComparison.Ordinal));
+        Expect(page + " action bar", x.Contains("ExoActionBar", StringComparison.Ordinal));
         Expect(page + " apply label", x.Contains("ApplyLabel", StringComparison.Ordinal) && x.Contains("ChangeHint", StringComparison.Ordinal));
         // Digital vibrance row: per-display slider, hidden when the driver DVC API is unavailable.
         Expect(page + " vibrance slider",
@@ -325,6 +353,12 @@ foreach (var page in new[]
         Expect(page + " control panel fallback",
             x.Contains("Open NVIDIA Control Panel", StringComparison.Ordinal)
             && x.Contains("HasControlPanel", StringComparison.Ordinal));
+    }
+    else
+    {
+        // Optimizer pages host chrome via SharedModulePlate (no duplicate loader/bar).
+        Expect(page + " uses SharedModulePlate", x.Contains("SharedModulePlate", StringComparison.Ordinal));
+        Expect(page + " no ProgressRing", !x.Contains("<ProgressRing", StringComparison.Ordinal));
     }
     if (page.StartsWith("Internet", StringComparison.Ordinal))
     {
@@ -389,13 +423,13 @@ foreach (var page in new[]
     var p = Path.Combine(repo, "Exo", "Views", page);
     if (!File.Exists(p)) continue;
     var x = File.ReadAllText(p);
-    Expect(page + " uses FeatureTileGrid",
-        (x.Contains("FeatureTileGrid", StringComparison.Ordinal)
-            || x.Contains("ViewerTileGrid", StringComparison.Ordinal))
+    // Features bind into SharedModulePlate.FeatureItems (grid lives in the plate).
+    Expect(page + " binds feature items to plate",
+        x.Contains("FeatureItems=", StringComparison.Ordinal)
+        && x.Contains("SharedModulePlate", StringComparison.Ordinal)
         && !x.Contains("x:Name=\"FeatureRepeater\"", StringComparison.Ordinal));
-    Expect(page + " compact action footer",
-        x.Contains("Padding=\"16,8,16,10\"", StringComparison.Ordinal)
-        && x.Contains("Spacing=\"6\"", StringComparison.Ordinal));
+    Expect(page + " plate motion host",
+        x.Contains("x:Name=\"Plate\"", StringComparison.Ordinal));
 }
 
 var internetDensityXaml = Path.Combine(repo, "Exo", "Views", "InternetOptimizerPage.xaml");
@@ -409,7 +443,8 @@ if (File.Exists(internetDensityXaml))
     Expect("internet compact honest messages",
         ix.Contains("RollbackNotice", StringComparison.Ordinal)
         && ix.Contains("Style=\"{StaticResource ExoMessageText}\"", StringComparison.Ordinal)
-        && ix.Contains("Style=\"{StaticResource ExoInfoMessageText}\"", StringComparison.Ordinal));
+        && (ix.Contains("HasMessage", StringComparison.Ordinal)
+            || ix.Contains("ExoInfoMessageText", StringComparison.Ordinal)));
 }
 
 // Friction-free apply/repair: no blocking ContentDialog confirmations on module pages
@@ -428,7 +463,8 @@ foreach (var page in new[]
         && !code.Contains("ConfirmAsync", StringComparison.Ordinal));
     Expect(page + " tile entrance",
         code.Contains("PlayListEnter", StringComparison.Ordinal)
-        && code.Contains("IsFeatureListVisible", StringComparison.Ordinal));
+        && code.Contains("IsFeatureListVisible", StringComparison.Ordinal)
+        && code.Contains("Plate.FeatureTileGrid", StringComparison.Ordinal));
 }
 foreach (var vmName in new[]
          {
@@ -606,9 +642,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.7.1", File.ReadAllText(versionFile).Trim() == "2.7.1");
+    Expect("VERSION is 3.0.0", File.ReadAllText(versionFile).Trim() == "3.0.0");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.7.1", File.ReadAllText(csproj).Contains("<Version>2.7.1</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 3.0.0", File.ReadAllText(csproj).Contains("<Version>3.0.0</Version>", StringComparison.Ordinal));
 
 // Live advisor (realtime next-step coach on every optimizer)
 var advisorPath = Path.Combine(repo, "Exo", "Services", "OptimizerAdvisor.cs");

@@ -4,15 +4,17 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>Network.Smoke</RootNamespace>
-    <AssemblyName>Network.Smoke</AssemblyName>
+    <RootNamespace>Contracts.Smoke</RootNamespace>
+    <AssemblyName>Contracts.Smoke</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Drive the real shipped sources (not a reimplementation). -->
     <Compile Include="..\..\Exo\Services\NetworkLogic.cs" Link="Shipped\NetworkLogic.cs" />
     <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.cs" Link="Shipped\NetworkApplyScriptBuilder.cs" />
     <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.Repair.cs" Link="Shipped\NetworkApplyScriptBuilder.Repair.cs" />
     <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.Benchmark.cs" Link="Shipped\NetworkApplyScriptBuilder.Benchmark.cs" />
     <Compile Include="..\..\Exo\Models\NetworkSnapshot.cs" Link="Shipped\NetworkSnapshot.cs" />
+    <Compile Include="..\..\Exo\Services\SteamLogic.cs" Link="Shipped\SteamLogic.cs" />
+    <Compile Include="..\..\Exo\Services\DiscordLogic.cs" Link="Shipped\DiscordLogic.cs" />
+    <Compile Include="..\..\Exo\Services\NvidiaDetectLogic.cs" Link="Shipped\NvidiaDetectLogic.cs" />
   </ItemGroup>
 </Project>

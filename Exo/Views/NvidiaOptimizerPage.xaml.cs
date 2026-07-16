@@ -34,7 +34,7 @@ public sealed partial class NvidiaOptimizerPage : Page
         if (e.PropertyName != nameof(ViewModel.IsFeatureListVisible) || !ViewModel.IsFeatureListVisible)
             return;
         _tilesEntered = true;
-        ExoMotion.PlayListEnter(FeatureGrid.TileRepeaterControl, ViewModel.Features.Count);
+        ExoMotion.PlayListEnter(Plate.FeatureTileGrid.TileRepeaterControl, ViewModel.Features.Count);
     }
 
     private void Run_Click(object sender, RoutedEventArgs e) =>

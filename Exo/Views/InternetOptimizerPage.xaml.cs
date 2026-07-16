@@ -34,7 +34,7 @@ public sealed partial class InternetOptimizerPage : Page
         if (e.PropertyName != nameof(ViewModel.IsFeatureListVisible) || !ViewModel.IsFeatureListVisible)
             return;
         _tilesEntered = true;
-        ExoMotion.PlayListEnter(FeatureGrid.TileRepeaterControl, ViewModel.Rows.Count);
+        ExoMotion.PlayListEnter(Plate.FeatureTileGrid.TileRepeaterControl, ViewModel.Rows.Count);
     }
 
     private void Latency_Click(object sender, RoutedEventArgs e) =>
@@ -48,4 +48,7 @@ public sealed partial class InternetOptimizerPage : Page
 
     private void Refresh_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RefreshCommand.Execute(null);
+
+    private void ToggleReport_Click(object sender, RoutedEventArgs e) =>
+        ViewModel.ToggleApplyReportCommand.Execute(null);
 }

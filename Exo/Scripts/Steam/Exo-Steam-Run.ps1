@@ -16,6 +16,10 @@ elseif ($PSVersionTable.PSEdition -ne 'Core' -or [int]$PSVersionTable.PSVersion.
     throw 'Exo-Steam-Run requires PowerShell 7. Install it with: winget install Microsoft.PowerShell'
 }
 if (Test-Path -LiteralPath $__exoNoBg) { . $__exoNoBg; [void](Unregister-ExoBackground -Quiet) }
+# Wave-3 thin stage vocabulary (Detect = Apply contracts).
+$__steamBoot = Join-Path $PSScriptRoot 'lib\Steam.Bootstrap.ps1'
+if (-not $PSScriptRoot) { $__steamBoot = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'lib\Steam.Bootstrap.ps1' }
+if (Test-Path -LiteralPath $__steamBoot) { . $__steamBoot }
 $env:EXO = '1'
 $env:DISCOPT_NONINTERACTIVE = '1'
 

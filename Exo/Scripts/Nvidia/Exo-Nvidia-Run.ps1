@@ -19,6 +19,10 @@ elseif ($PSVersionTable.PSEdition -ne 'Core' -or [int]$PSVersionTable.PSVersion.
 }
 if (Test-Path -LiteralPath $__exoNoBg) { . $__exoNoBg; [void](Unregister-ExoBackground -Quiet) }
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $PSScriptRoot) { $Root = Split-Path -Parent $MyInvocation.MyCommand.Path }
+# Wave-3 thin stage vocabulary (Detect = Apply contracts).
+$__nvBoot = Join-Path $Root 'lib\Nvidia.Bootstrap.ps1'
+if (Test-Path -LiteralPath $__nvBoot) { . $__nvBoot }
 $Optimizer = Join-Path $Root 'Nvidia-Optimizer.ps1'
 if (-not (Test-Path $Optimizer)) { throw "Missing Nvidia-Optimizer.ps1 in $Root" }
 

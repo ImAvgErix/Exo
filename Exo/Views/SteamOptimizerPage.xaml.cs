@@ -34,7 +34,7 @@ public sealed partial class SteamOptimizerPage : Page
         if (e.PropertyName != nameof(ViewModel.IsFeatureListVisible) || !ViewModel.IsFeatureListVisible)
             return;
         _tilesEntered = true;
-        ExoMotion.PlayListEnter(FeatureGrid.TileRepeaterControl, ViewModel.Features.Count);
+        ExoMotion.PlayListEnter(Plate.FeatureTileGrid.TileRepeaterControl, ViewModel.Features.Count);
     }
 
     private void Run_Click(object sender, RoutedEventArgs e) =>
@@ -45,4 +45,7 @@ public sealed partial class SteamOptimizerPage : Page
 
     private void Refresh_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RefreshCommand.Execute(null);
+
+    private void ToggleReport_Click(object sender, RoutedEventArgs e) =>
+        ViewModel.ToggleApplyReportCommand.Execute(null);
 }
