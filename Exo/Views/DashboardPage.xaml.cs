@@ -7,7 +7,7 @@ using Microsoft.UI.Xaml.Navigation;
 namespace Exo.Views;
 
 /// <summary>
-/// Brand-only home under the top bar. Soft hero entrance on first load;
+/// Home instrument plate under the top bar. Soft entrance on first load;
 /// cached so Back does not rebuild/re-stagger.
 /// </summary>
 public sealed partial class DashboardPage : Page
@@ -77,6 +77,10 @@ public sealed partial class DashboardPage : Page
                 ExoMotion.EnsureVisible(HeroBrand);
             if (HeroTagline is not null)
                 ExoMotion.EnsureVisible(HeroTagline);
+            if (PillarRow is not null)
+                ExoMotion.EnsureVisible(PillarRow);
+            if (ModuleDirectory is not null)
+                ExoMotion.EnsureVisible(ModuleDirectory);
             if (SoonRow is not null)
                 ExoMotion.EnsureVisible(SoonRow);
         }
@@ -95,10 +99,12 @@ public sealed partial class DashboardPage : Page
             _entrancePlayed = true;
 
             var sequence = new List<UIElement>();
-            if (HeroBrand is not null)
-                sequence.Add(HeroBrand);
-            if (HeroTagline is not null)
-                sequence.Add(HeroTagline);
+            if (HeroBlock is not null)
+                sequence.Add(HeroBlock);
+            if (PillarRow is not null)
+                sequence.Add(PillarRow);
+            if (ModuleDirectory is not null)
+                sequence.Add(ModuleDirectory);
             if (SoonRow is not null)
                 sequence.Add(SoonRow);
 

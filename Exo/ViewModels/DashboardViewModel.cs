@@ -26,12 +26,16 @@ public partial class DashboardViewModel : ObservableObject
         };
 
         foreach (var card in Cards)
+        {
             card.InitializePresentation();
+            card.OpenRequested = OpenOptimizer;
+        }
     }
 
     public IReadOnlyList<OptimizerCardViewModel> Cards { get; }
 
-    public IReadOnlyList<OptimizerCardViewModel> LiveCards =>
+    /// <summary>Text directory on home (titles only — logos stay in the top bar).</summary>
+    public IReadOnlyList<OptimizerCardViewModel> ReadyModules =>
         Cards.Where(c => !c.IsComingSoon).ToList();
 
     public IReadOnlyList<OptimizerCardViewModel> SoonCards =>
@@ -78,8 +82,17 @@ public partial class OptimizerCardViewModel : ObservableObject
 
     [ObservableProperty] private bool _isComingSoon;
 
+    public Action<string?>? OpenRequested { get; set; }
+
     public void InitializePresentation()
     {
         IsComingSoon = Definition.Status == OptimizerStatus.ComingSoon;
+    }
+
+    [RelayCommand]
+    private void Open()
+    {
+        if (IsComingSoon) return;
+        OpenRequested?.Invoke(Definition.Id);
     }
 }

@@ -110,7 +110,7 @@ if (File.Exists(mainCs))
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    // v2.6 brand-only home — live modules live in the top bar (no duplicate Discord/Steam strip).
+    // v2.6 home plate — brand + pillars + text module directory (logos stay in the top bar).
     Expect("hero brand",
         d.Contains("HeroBrand", StringComparison.Ordinal)
         && (d.Contains("FontSize=\"72\"", StringComparison.Ordinal)
@@ -119,13 +119,23 @@ if (File.Exists(dash))
     Expect("hero tagline",
         d.Contains("HeroTagline", StringComparison.Ordinal)
         && d.Contains("Maximum performance", StringComparison.Ordinal));
+    Expect("home instrument plate", d.Contains("ExoModulePlate", StringComparison.Ordinal));
+    Expect("home capability pillars",
+        d.Contains("PillarRow", StringComparison.Ordinal)
+        && d.Contains("Trim", StringComparison.Ordinal)
+        && d.Contains("Debloat", StringComparison.Ordinal)
+        && d.Contains("Latency", StringComparison.Ordinal));
+    Expect("home text module directory",
+        d.Contains("ReadyModules", StringComparison.Ordinal)
+        && d.Contains("MODULES", StringComparison.Ordinal));
     Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("no fixed product cards",
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)
         && !d.Contains("Width=\"250\"", StringComparison.Ordinal)
         && !d.Contains("Height=\"148\"", StringComparison.Ordinal));
-    Expect("no duplicate live module strip",
-        !d.Contains("BladeStrip", StringComparison.Ordinal)
+    Expect("no logo tiles on home",
+        !d.Contains("Assets/Logos", StringComparison.Ordinal)
+        && !d.Contains("BladeStrip", StringComparison.Ordinal)
         && !d.Contains("LiveCards", StringComparison.Ordinal)
         && !d.Contains("CardList", StringComparison.Ordinal));
     Expect("coming soon row",

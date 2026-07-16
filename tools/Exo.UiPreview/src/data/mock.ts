@@ -62,6 +62,14 @@ export const navItems: { id: ModuleId; label: string; logo: string }[] = [
   { id: 'nvidia', label: 'NVIDIA', logo: '/logos/nvidia.png' },
 ]
 
+/** Home directory labels — text rows, no logos (icons stay in the top bar only). */
+export const homeModules: { id: ModuleId; title: string }[] = [
+  { id: 'discord', title: 'Discord' },
+  { id: 'steam', title: 'Steam' },
+  { id: 'internet', title: 'Internet' },
+  { id: 'nvidia', title: 'NVIDIA' },
+]
+
 /* Status = rail + Applied/Not applied. */
 const discordFeatures: FeatureItem[] = [
   { id: 'equicord', title: 'Equicord', detail: 'Client strip + host', applied: false },
