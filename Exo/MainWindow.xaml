@@ -56,7 +56,7 @@
                                 Click="NavHome_Click"
                                 Width="48"
                                 Height="40"
-                                HorizontalAlignment="Left"
+                                HorizontalAlignment="Center"
                                 VerticalAlignment="Center">
                             <!-- CharacterSpacing trails right; slight left pad keeps EXO optically centered. -->
                             <TextBlock Text="EXO"

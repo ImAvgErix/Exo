@@ -51,12 +51,9 @@
   height: 40px;
 }
 
-.top-bar__end--left {
-  justify-content: flex-start;
-}
-
+.top-bar__end--left,
 .top-bar__end--right {
-  justify-content: flex-end;
+  justify-content: center;
 }
 
 .top-bar__modules {
