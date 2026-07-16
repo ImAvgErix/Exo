@@ -49,7 +49,12 @@ if (File.Exists(appXaml))
     Expect("cream light page unified", a.Contains("#F3EDE3", StringComparison.Ordinal)
         && !a.Contains("#F2EBE0", StringComparison.Ordinal)
         && !a.Contains("#F3EBE3", StringComparison.Ordinal));
-    Expect("dark card lift", a.Contains("#0C0C0C", StringComparison.Ordinal));
+    // v2.6 Liquid Glass — translucent lifted fill (ARGB), not opaque #0C0C0C slab
+    Expect("dark glass card lift",
+        a.Contains("#B30C0C0C", StringComparison.Ordinal)
+        || a.Contains("#0C0C0C", StringComparison.Ordinal));
+    Expect("liquid glass fill token", a.Contains("ExoGlassFillBrush", StringComparison.Ordinal));
+    Expect("settings acrylic", a.Contains("ExoSettingsAcrylicBrush", StringComparison.Ordinal));
 }
 var themeServiceCs = Path.Combine(repo, "Exo", "Services", "ThemeService.cs");
 if (File.Exists(themeServiceCs))
@@ -62,8 +67,17 @@ if (File.Exists(themeServiceCs))
 if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
-    // v2.5 left icon rail (custom — not NavigationView).
+    // v2.6 top bar — liquid-glass circles floating on black (no bar plate).
     Expect("nav rail", m.Contains("NavRail", StringComparison.Ordinal));
+    Expect("glass circle nav", m.Contains("ExoGlassCircle", StringComparison.Ordinal)
+        && !m.Contains("ExoRailGlassFillBrush", StringComparison.Ordinal));
+    Expect("top bar workspace", m.Contains("Padding=\"16\"", StringComparison.Ordinal));
+    Expect("top bar row layout",
+        m.Contains("RowDefinitions", StringComparison.Ordinal)
+        && m.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));
+    Expect("top bar equal end caps",
+        m.Contains("Width=\"56\"", StringComparison.Ordinal)
+        && m.Contains("HomeEnd", StringComparison.Ordinal));
     Expect("rail nav home", m.Contains("NavHome", StringComparison.Ordinal));
     Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
@@ -95,44 +109,59 @@ if (File.Exists(mainCs))
     Expect("settings always on rail",
         cs.Contains("SettingsButton.Visibility = Visibility.Visible", StringComparison.Ordinal)
         && !cs.Contains("SettingsButton.Visibility = Visibility.Collapsed", StringComparison.Ordinal));
+    Expect("home hides exo control",
+        cs.Contains("NavHome.Visibility = mode == ShellMode.Home", StringComparison.Ordinal));
     Expect("no titlebar settings text", !cs.Contains("AppTitleText.Text = \"Settings\"", StringComparison.Ordinal));
 }
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    // v2.5.1 brand-forward home: large Exo mark + italic performance tagline.
+    // v2.6 home dashboard — FPS/frame heroes + memory/latency/RAM/NVIDIA path.
     Expect("hero brand",
         d.Contains("HeroBrand", StringComparison.Ordinal)
-        || (d.Contains("Text=\"Exo\"", StringComparison.Ordinal)
-            && (d.Contains("FontSize=\"44\"", StringComparison.Ordinal)
-                || d.Contains("FontSize=\"48\"", StringComparison.Ordinal)
-                || d.Contains("FontSize=\"52\"", StringComparison.Ordinal))));
+        && (d.Contains("FontSize=\"72\"", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"64\"", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"56\"", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"40\"", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"36\"", StringComparison.Ordinal)));
     Expect("hero tagline",
         d.Contains("HeroTagline", StringComparison.Ordinal)
         && d.Contains("Maximum performance", StringComparison.Ordinal));
-    // Directory home: full-width rows — not the old wrap-grid product cards.
+    Expect("home instrument plate", d.Contains("ExoModulePlate", StringComparison.Ordinal));
+    Expect("home fps gain hero",
+        d.Contains("FPS GAIN", StringComparison.Ordinal)
+        && d.Contains("FpsPrimary", StringComparison.Ordinal));
+    Expect("home frame time hero",
+        d.Contains("FRAME TIME", StringComparison.Ordinal)
+        && d.Contains("FrameTimePrimary", StringComparison.Ordinal));
+    Expect("home latency tile",
+        d.Contains("LATENCY", StringComparison.Ordinal)
+        && d.Contains("LatencyPrimary", StringComparison.Ordinal));
+    Expect("home ram reclaim tile",
+        d.Contains("RAM RECLAIMED", StringComparison.Ordinal)
+        && d.Contains("ReclaimedPrimary", StringComparison.Ordinal));
+    Expect("home four-metric dashboard",
+        d.Contains("FPS GAIN", StringComparison.Ordinal)
+        && d.Contains("FRAME TIME", StringComparison.Ordinal)
+        && d.Contains("RAM RECLAIMED", StringComparison.Ordinal)
+        && d.Contains("LATENCY", StringComparison.Ordinal)
+        && !d.Contains("MEMORY", StringComparison.Ordinal)
+        && !d.Contains("FRAME PATH", StringComparison.Ordinal));
     Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("no fixed product cards",
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)
         && !d.Contains("Width=\"250\"", StringComparison.Ordinal)
         && !d.Contains("Height=\"148\"", StringComparison.Ordinal));
-    Expect("directory vertical stack",
-        d.Contains("ItemsStackPanel", StringComparison.Ordinal)
-        || d.Contains("Orientation=\"Vertical\"", StringComparison.Ordinal));
-    Expect("directory row style", d.Contains("ExoDirectoryRow", StringComparison.Ordinal)
-        || d.Contains("ExoCardButton", StringComparison.Ordinal));
-    Expect("directory stretch rows", d.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal));
-    Expect("stretch uniform logos", d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal));
-    Expect("directory title labels",
-        d.Contains("Text=\"{x:Bind Definition.Title", StringComparison.Ordinal)
-        && d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
-    Expect("hero tagline style",
-        d.Contains("ExoTagline", StringComparison.Ordinal)
-        || d.Contains("FontSize=\"36\"", StringComparison.Ordinal)
-        || d.Contains("FontSize=\"38\"", StringComparison.Ordinal)
-        || d.Contains("FontSize=\"40\"", StringComparison.Ordinal)
-        || d.Contains("FontSize=\"48\"", StringComparison.Ordinal));
-    // Home is nav only — no applied/checking chips (status lives on the module page).
+    Expect("no logo tiles on home",
+        !d.Contains("Assets/Logos", StringComparison.Ordinal)
+        && !d.Contains("BladeStrip", StringComparison.Ordinal)
+        && !d.Contains("LiveCards", StringComparison.Ordinal)
+        && !d.Contains("CardList", StringComparison.Ordinal)
+        && !d.Contains("ReadyModules", StringComparison.Ordinal));
+    Expect("coming soon row",
+        d.Contains("SoonCards", StringComparison.Ordinal)
+        || d.Contains("Coming soon", StringComparison.Ordinal));
+    Expect("hero tagline style", d.Contains("ExoTagline", StringComparison.Ordinal));
     Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
     Expect("no pick-a-target blurb", !d.Contains("Pick a target", StringComparison.Ordinal));
 }
@@ -223,6 +252,9 @@ if (File.Exists(theme))
 {
     var t = File.ReadAllText(theme);
     Expect("theme ExoPrimaryButton", t.Contains("ExoPrimaryButton", StringComparison.Ordinal));
+    Expect("theme ExoGlassCircle",
+        t.Contains("ExoGlassCircle", StringComparison.Ordinal)
+        && t.Contains("CornerRadius\" Value=\"22", StringComparison.Ordinal));
     Expect("theme ExoWhiteButton", t.Contains("ExoWhiteButton", StringComparison.Ordinal));
     Expect("theme ExoCardButton", t.Contains("ExoCardButton", StringComparison.Ordinal));
     Expect("theme ExoFeatureTile", t.Contains("ExoFeatureTile", StringComparison.Ordinal));
@@ -264,9 +296,10 @@ foreach (var page in new[]
     if (!File.Exists(p)) continue;
     var x = File.ReadAllText(p);
     Expect(page + " CTA", x.Contains("ExoPrimaryButton", StringComparison.Ordinal) || x.Contains("ExoQuietButton", StringComparison.Ordinal));
-    // Module chrome: ExoPagePadding resource and/or ExoPageMaxWidth + inline pad (v2.5 remodel).
+    // Module chrome: instrument plate and/or legacy page width pad.
     Expect(page + " page padding",
-        x.Contains("ExoPagePadding", StringComparison.Ordinal)
+        x.Contains("ExoModulePlate", StringComparison.Ordinal)
+        || x.Contains("ExoPagePadding", StringComparison.Ordinal)
         || x.Contains("ExoPageMaxWidth", StringComparison.Ordinal));
     Expect(page + " unique loader", x.Contains("ExoLoader", StringComparison.Ordinal) && !x.Contains("<ProgressRing", StringComparison.Ordinal));
     Expect(page + " action bar", x.Contains("ExoActionBar", StringComparison.Ordinal));
@@ -501,13 +534,12 @@ var dashCs = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs");
 if (File.Exists(dashCs))
 {
     var dc = File.ReadAllText(dashCs);
-    Expect("home card stagger entrance",
+    Expect("home hero stagger entrance",
         dc.Contains("PlayStagger", StringComparison.Ordinal)
         && dc.Contains("EnsureVisible", StringComparison.Ordinal)
         && !dc.Contains("PrimeHidden", StringComparison.Ordinal));
-    Expect("home card select pulse",
-        dc.Contains("PlaySelect", StringComparison.Ordinal)
-        && dc.Contains("CardButton_Click", StringComparison.Ordinal));
+    Expect("no home card select pulse",
+        !dc.Contains("CardButton_Click", StringComparison.Ordinal));
     Expect("dashboard cache for clean back",
         dc.Contains("NavigationCacheMode.Enabled", StringComparison.Ordinal)
         && dc.Contains("StabilizeHome", StringComparison.Ordinal));
@@ -530,9 +562,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.5.2", File.ReadAllText(versionFile).Trim() == "2.5.2");
+    Expect("VERSION is 2.6.0", File.ReadAllText(versionFile).Trim() == "2.6.0");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.5.2", File.ReadAllText(csproj).Contains("<Version>2.5.2</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.6.0", File.ReadAllText(csproj).Contains("<Version>2.6.0</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));
@@ -634,8 +666,32 @@ if (File.Exists(dashVm))
     Expect("home no discord probe", !dvm.Contains("DetectDiscordAsync", StringComparison.Ordinal));
     Expect("home no steam probe", !dvm.Contains("DetectSteamAsync", StringComparison.Ordinal));
     Expect("home no nvidia probe", !dvm.Contains("DetectNvidiaAsync", StringComparison.Ordinal));
+    Expect("home dashboard refresh", dvm.Contains("RefreshDashboard", StringComparison.Ordinal)
+        && dvm.Contains("HomeDashboardReader", StringComparison.Ordinal));
     Expect("windows coming soon card", dvm.Contains("Card(\"windows\"", StringComparison.Ordinal)
         && dvm.Contains("windows.png", StringComparison.Ordinal));
+}
+var homeDashReader = Path.Combine(repo, "Exo", "Services", "HomeDashboardReader.cs");
+if (File.Exists(homeDashReader))
+{
+    var hdr = File.ReadAllText(homeDashReader);
+    Expect("home trim stats file read",
+        hdr.Contains("steam-trim-stats.json", StringComparison.Ordinal)
+        && hdr.Contains("TryReadTrimStats", StringComparison.Ordinal));
+    Expect("home live memory api",
+        hdr.Contains("GlobalMemoryStatusEx", StringComparison.Ordinal)
+        && hdr.Contains("TryReadMemory", StringComparison.Ordinal));
+    Expect("home latency file read", hdr.Contains("TryReadLatency", StringComparison.Ordinal));
+    Expect("home nvidia path file read",
+        hdr.Contains("TryReadNvidiaPath", StringComparison.Ordinal)
+        && hdr.Contains("nvidia-optimizer.json", StringComparison.Ordinal));
+    Expect("home no invented fps capture",
+        !hdr.Contains("PresentMon", StringComparison.Ordinal)
+        && !hdr.Contains("fpsGain", StringComparison.OrdinalIgnoreCase));
+}
+else
+{
+    Expect("home dashboard reader exists", false);
 }
 if (File.Exists(Path.Combine(logosDir, "windows.png")))
     Expect("windows logo asset", true);

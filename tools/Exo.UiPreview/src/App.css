@@ -13,53 +13,77 @@
   width: 1180px;
   height: 760px;
   display: flex;
-  background: var(--exo-bg);
-  border: 1px solid var(--exo-stroke);
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
-}
-
-.exo-content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
   flex-direction: column;
   background: var(--exo-bg);
+  /* Concentric: shell 28 = plate 12 + workspace padding 16 (exo-ui-craft margin) */
+  border-radius: 28px;
+  overflow: hidden;
+  /* Shadow ring instead of border — dark mode single white ring */
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 24px 80px rgba(0, 0, 0, 0.75);
+}
+
+.exo-workspace {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* exo-ui-craft: 16px side margins, 12px gap — one gap value everywhere */
+  padding: 16px;
+  gap: 12px;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.exo-stage {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
 }
 
 .exo-titlebar {
-  height: 36px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  padding: 0 12px;
+  height: 32px;
+  margin-bottom: 4px;
 }
 
 .exo-back {
   width: 32px;
   height: 32px;
-  border: 0;
+  border: 1px solid var(--glass-rim-soft);
   border-radius: 8px;
-  background: transparent;
+  background: var(--glass-fill);
   color: var(--exo-text);
-  font-size: 22px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
-  transition: background-color 160ms ease-out;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
 
 .exo-back:hover {
-  background: var(--exo-wash);
-}
-
-.exo-back-spacer {
-  width: 32px;
-  height: 32px;
+  background: var(--glass-fill-strong);
 }
 
 .exo-main {
   flex: 1;
   min-height: 0;
+  width: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.theme-light .exo-shell {
+  box-shadow:
+    0 0 0 1px rgba(61, 52, 41, 0.12),
+    0 24px 80px rgba(61, 52, 41, 0.18);
 }

@@ -14,8 +14,8 @@ namespace Exo.Helpers;
 public static class ExoMotion
 {
     // Short, clean motion — no bouncy spring on content.
-    public const int EntranceMs = 220;
-    public const int FadeMs = 160;
+    public const int EntranceMs = 240;
+    public const int FadeMs = 180;
     public const int StaggerStepMs = 22;
     public const int SelectMs = 90;
     /// <summary>Feature-tile list entrance stagger (module pages).</summary>

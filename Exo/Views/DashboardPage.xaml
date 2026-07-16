@@ -5,111 +5,230 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:viewModels="using:Exo.ViewModels"
     Background="Transparent"
-    Loaded="Page_Loaded">
+    Loaded="Page_Loaded"
+    Unloaded="Page_Unloaded">
 
     <!--
-      Brand-forward home: Exo mark → italic tagline → module directory.
-      No support subtitle. No RenderTransform on italic type. No status chips.
+      Home dashboard — four metrics users care about most:
+      FPS gain · Frame time · RAM reclaimed · Network latency.
     -->
-    <Grid x:Name="PageRoot"
-          Padding="40,28,40,32"
-          HorizontalAlignment="Stretch"
-          VerticalAlignment="Stretch"
-          UseLayoutRounding="True">
-        <StackPanel x:Name="HomeStack"
-                    HorizontalAlignment="Stretch"
-                    VerticalAlignment="Center"
-                    MaxWidth="720"
-                    Spacing="0"
-                    UseLayoutRounding="True">
+    <Border x:Name="PageRoot"
+            Style="{StaticResource ExoModulePlate}"
+            Padding="24,20,24,16"
+            UseLayoutRounding="True">
+        <Grid RowSpacing="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-            <TextBlock x:Name="HeroBrand"
-                       Text="Exo"
-                       FontFamily="{StaticResource ExoUiFontSemiBold}"
-                       FontSize="44"
-                       FontWeight="SemiBold"
-                       CharacterSpacing="-28"
-                       LineHeight="48"
-                       Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                       TextAlignment="Left"
-                       HorizontalAlignment="Stretch"
-                       OpticalMarginAlignment="TrimSideBearings"
-                       UseLayoutRounding="True"
-                       Margin="0,0,0,6" />
+            <StackPanel x:Name="HeroBlock"
+                        Orientation="Horizontal"
+                        Spacing="14"
+                        VerticalAlignment="Center">
+                <TextBlock x:Name="HeroBrand"
+                           Text="Exo"
+                           FontFamily="{StaticResource ExoUiFontSemiBold}"
+                           FontSize="36"
+                           FontWeight="SemiBold"
+                           CharacterSpacing="-32"
+                           LineHeight="36"
+                           Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                           OpticalMarginAlignment="TrimSideBearings"
+                           VerticalAlignment="Center"
+                           UseLayoutRounding="True" />
+                <TextBlock x:Name="HeroTagline"
+                           Text="Maximum performance. No compromise."
+                           Style="{StaticResource ExoTagline}"
+                           FontSize="15"
+                           LineHeight="20"
+                           TextWrapping="WrapWholeWords"
+                           VerticalAlignment="Center"
+                           Opacity="0.9"
+                           UseLayoutRounding="True" />
+            </StackPanel>
 
-            <TextBlock x:Name="HeroTagline"
-                       Text="Maximum performance. No compromise."
-                       Style="{StaticResource ExoTagline}"
-                       FontSize="22"
-                       LineHeight="28"
-                       TextWrapping="WrapWholeWords"
-                       TextAlignment="Left"
-                       HorizontalAlignment="Stretch"
-                       Margin="0,0,0,28"
-                       UseLayoutRounding="True" />
+            <Grid x:Name="FrameHero"
+                  Grid.Row="1"
+                  ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
-            <ItemsControl x:Name="CardList"
-                          HorizontalAlignment="Stretch"
-                          ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <ItemsStackPanel Orientation="Vertical" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
-                        <Button Style="{StaticResource ExoCardButton}"
-                                HorizontalAlignment="Stretch"
-                                Margin="0,0,0,8"
-                                Click="CardButton_Click"
-                                Tag="{x:Bind Definition.Id}"
-                                AutomationProperties.Name="{x:Bind Definition.Title}"
-                                IsEnabled="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}">
-                            <Border Style="{StaticResource ExoDirectoryRow}"
-                                    Opacity="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
-                                <Grid ColumnSpacing="14" UseLayoutRounding="True">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <Image Width="44"
-                                           Height="44"
-                                           Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
-                                           VerticalAlignment="Center"
-                                           Stretch="Uniform"
-                                           UseLayoutRounding="True"
-                                           AutomationProperties.AccessibilityView="Raw" />
-                                    <StackPanel Grid.Column="1"
-                                                Spacing="2"
-                                                VerticalAlignment="Center">
-                                        <TextBlock Text="{x:Bind Definition.Title, Mode=OneWay}"
-                                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                                   FontSize="15"
-                                                   FontWeight="SemiBold"
-                                                   CharacterSpacing="-4"
-                                                   Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   MaxLines="1"
-                                                   UseLayoutRounding="True" />
-                                        <TextBlock Text="Coming soon"
-                                                   FontFamily="{StaticResource ExoUiFont}"
-                                                   FontSize="12"
-                                                   Foreground="{ThemeResource ExoMutedTextBrush}"
-                                                   Visibility="{x:Bind IsComingSoon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                    </StackPanel>
-                                    <FontIcon Grid.Column="2"
-                                              Glyph="&#xE76C;"
-                                              FontSize="14"
-                                              Foreground="{ThemeResource ExoSecondaryTextBrush}"
-                                              VerticalAlignment="Center"
-                                              Opacity="0.85" />
-                                </Grid>
-                            </Border>
-                        </Button>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </StackPanel>
-    </Grid>
+                <Border Grid.Column="0"
+                        Background="{ThemeResource ExoGlassFillBrush}"
+                        BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="18,16">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="FPS GAIN"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="10"
+                                   CharacterSpacing="100"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.FpsPrimary, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="44"
+                                   CharacterSpacing="-36"
+                                   LineHeight="48"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.FpsSecondary, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFont}"
+                                   FontSize="13"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}"
+                                   TextWrapping="WrapWholeWords" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1"
+                        Background="{ThemeResource ExoGlassFillBrush}"
+                        BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="18,16">
+                    <Grid RowSpacing="6">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="FRAME TIME"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="10"
+                                   CharacterSpacing="100"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}" />
+                        <TextBlock Grid.Row="1"
+                                   Text="{x:Bind ViewModel.FrameTimePrimary, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="44"
+                                   CharacterSpacing="-36"
+                                   LineHeight="48"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                        <TextBlock Grid.Row="2"
+                                   Text="{x:Bind ViewModel.FrameTimeSecondary, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFont}"
+                                   FontSize="13"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}"
+                                   TextWrapping="WrapWholeWords" />
+                        <ItemsControl Grid.Row="3"
+                                      ItemsSource="{x:Bind ViewModel.SparkBars, Mode=OneWay}"
+                                      VerticalAlignment="Bottom"
+                                      Margin="0,8,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="3"
+                                                VerticalAlignment="Bottom" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="viewModels:HomeSparkBar">
+                                    <Border Width="6"
+                                            Height="{x:Bind Height}"
+                                            CornerRadius="2"
+                                            VerticalAlignment="Bottom"
+                                            Background="{ThemeResource ExoAccentSoftBrush}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Grid x:Name="StatRow"
+                  Grid.Row="2"
+                  ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        Background="{ThemeResource ExoGlassFillBrush}"
+                        BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="14,12"
+                        MinHeight="84">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="RAM RECLAIMED"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="10"
+                                   CharacterSpacing="80"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.ReclaimedPrimary, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="22"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.ReclaimedSecondary, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFont}"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}"
+                                   TextWrapping="WrapWholeWords" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1"
+                        Background="{ThemeResource ExoGlassFillBrush}"
+                        BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="14,12"
+                        MinHeight="84">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="LATENCY"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="10"
+                                   CharacterSpacing="80"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.LatencyPrimary, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="22"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.LatencySecondary, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFont}"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}"
+                                   TextWrapping="WrapWholeWords" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border x:Name="SoonRow"
+                    Grid.Row="3"
+                    BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
+                    BorderThickness="0,1,0,0"
+                    Padding="0,10,0,0">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="Coming soon"
+                               FontFamily="{StaticResource ExoUiFontSemiBold}"
+                               FontSize="11"
+                               CharacterSpacing="60"
+                               Foreground="{ThemeResource ExoMutedTextBrush}"
+                               VerticalAlignment="Center" />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.SoonCards, Mode=OneWay}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="12" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
+                                <TextBlock Text="{x:Bind Definition.Title, Mode=OneWay}"
+                                           FontFamily="{StaticResource ExoUiFont}"
+                                           FontSize="12"
+                                           Foreground="{ThemeResource ExoMutedTextBrush}"
+                                           Opacity="0.75" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
 </Page>

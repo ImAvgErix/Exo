@@ -218,6 +218,10 @@ public sealed partial class MainWindow : Window
 
         // Rail shell: settings gear lives on the rail — always visible.
         SettingsButton.Visibility = Visibility.Visible;
+        // EXO home control is redundant on the home page (dashboard brand owns it).
+        NavHome.Visibility = mode == ShellMode.Home
+            ? Visibility.Collapsed
+            : Visibility.Visible;
         // Back only for Nvidia panel → Nvidia optimizer (rail covers other hops).
         BackButton.Visibility = mode == ShellMode.NvidiaPanel
             ? Visibility.Visible
@@ -233,7 +237,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Highlight the active rail button: full opacity + soft accent fill.
+    /// Highlight the active rail button: soft glass fill + accent selection ring.
     /// NvidiaPanel keeps NavNvidia selected (panel is under GPU).
     /// </summary>
     private void UpdateRailSelection(ShellMode mode)
@@ -248,23 +252,29 @@ public sealed partial class MainWindow : Window
             _ => NavHome
         };
 
-        Brush? accentSoft = null;
-        try
-        {
-            if (Application.Current.Resources.TryGetValue("ExoAccentSoftBrush", out var b) && b is Brush brush)
-                accentSoft = brush;
-        }
-        catch { }
-
-        accentSoft ??= new SolidColorBrush(ColorHelper.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
-
+        // Glass circles keep their rim-lit gradient; selection = brighter hairline ring.
         foreach (var btn in new[] { NavHome, NavDiscord, NavSteam, NavInternet, NavNvidia })
         {
+            // Home control is collapsed on the dashboard — skip selection chrome there.
+            if (ReferenceEquals(btn, NavHome) && mode == ShellMode.Home)
+            {
+                btn.BorderBrush = _ringOff;
+                btn.Opacity = 1.0;
+                continue;
+            }
+
             var on = ReferenceEquals(btn, selected);
-            btn.Opacity = on ? 1.0 : 0.55;
-            btn.Background = on ? accentSoft : new SolidColorBrush(Colors.Transparent);
+            btn.Opacity = on ? 1.0 : 0.72;
+            btn.BorderBrush = on ? _ringOn : _ringOff;
+            btn.BorderThickness = new Thickness(1);
         }
     }
+
+    // Cached ring brushes — UpdateRailSelection runs on every navigation.
+    private static readonly SolidColorBrush _ringOn =
+        new(ColorHelper.FromArgb(0xD9, 0xFF, 0xFF, 0xFF));
+    private static readonly SolidColorBrush _ringOff =
+        new(ColorHelper.FromArgb(0x66, 0xFF, 0xFF, 0xFF));
 
     private void NavHome_Click(object sender, RoutedEventArgs e) => NavigateHome();
 

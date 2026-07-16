@@ -11,14 +11,15 @@
       Module craft surface: header + G-SYNC/Display controls + feature list + sticky bar.
       Reset clears Exo status only — status clear, not a driver restore.
     -->
-    <Grid>
+    <Border Style="{StaticResource ExoModulePlate}">
+        <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Grid Padding="28,18,28,10">
-            <Grid MaxWidth="{StaticResource ExoPageMaxWidth}"
+        <Grid Padding="16,12,16,8">
+            <Grid
                   HorizontalAlignment="Stretch"
                   RowSpacing="14">
                 <Grid.RowDefinitions>
@@ -78,8 +79,8 @@
 
         <Border Grid.Row="1"
                 Style="{StaticResource ExoActionBar}"
-                Padding="28,12,28,14">
-            <StackPanel MaxWidth="{StaticResource ExoPageMaxWidth}"
+                Padding="16,10,16,12">
+            <StackPanel
                         HorizontalAlignment="Stretch"
                         Spacing="10">
                 <Border Style="{StaticResource ExoMessageBanner}"
@@ -135,4 +136,5 @@
             </StackPanel>
         </Border>
     </Grid>
+    </Border>
 </Page>

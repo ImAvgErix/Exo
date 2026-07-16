@@ -3,12 +3,13 @@ import './FeatureRow.css'
 
 interface FeatureRowProps {
   feature: FeatureItem
+  isLast?: boolean
 }
 
-export function FeatureRow({ feature }: FeatureRowProps) {
+export function FeatureRow({ feature, isLast }: FeatureRowProps) {
   return (
     <div
-      className={`feature-row ${feature.applied ? 'is-applied' : ''}`}
+      className={`feature-row stagger-child ${feature.applied ? 'is-applied' : ''} ${isLast ? 'is-last' : ''}`}
       data-testid={`feature-${feature.id}`}
     >
       <span
@@ -16,12 +17,11 @@ export function FeatureRow({ feature }: FeatureRowProps) {
         data-testid={`feature-rail-${feature.id}`}
         aria-hidden="true"
       />
-      <span className="feature-row__icon" aria-hidden="true">
-        {feature.icon}
-      </span>
       <div className="feature-row__text">
         <div className="feature-row__title">{feature.title}</div>
-        <div className="feature-row__detail">{feature.detail}</div>
+        <div className="feature-row__detail">
+          {feature.applied ? 'Applied' : 'Not applied'}
+        </div>
       </div>
     </div>
   )

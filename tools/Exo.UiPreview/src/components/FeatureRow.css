@@ -1,47 +1,41 @@
 .feature-row {
   display: grid;
-  grid-template-columns: auto auto 1fr;
+  grid-template-columns: 3px 1fr;
   align-items: center;
   column-gap: 12px;
-  min-height: 52px;
-  padding: 10px 12px;
-  background: var(--exo-card);
-  border: 1px solid var(--exo-stroke);
-  border-radius: 12px;
-  opacity: 0.72;
-  transition: background-color 160ms ease-out, box-shadow 160ms ease-out, opacity 160ms ease-out;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
 
-.feature-row.is-applied {
-  opacity: 1;
+.feature-row.is-last {
+  border-bottom: none;
 }
 
 .feature-row:hover {
-  background: color-mix(in srgb, var(--exo-card) 88%, #fff 4%);
-  box-shadow: inset 0 0 0 1px var(--exo-ring-soft);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.feature-row.is-applied {
+  background: rgba(52, 211, 153, 0.04);
 }
 
 .feature-row__rail {
-  width: 3px;
   align-self: stretch;
+  width: 3px;
+  min-height: 20px;
   border-radius: 1.5px;
-  background: var(--exo-success);
-  opacity: 0.28;
+  background: var(--exo-muted);
+  opacity: 0.35;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
 }
 
 .feature-row.is-applied .feature-row__rail {
+  background: var(--exo-success);
   opacity: 1;
-}
-
-.feature-row__icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  background: var(--exo-wash);
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  color: var(--exo-text);
 }
 
 .feature-row__title {
@@ -55,7 +49,19 @@
 .feature-row__detail {
   font-family: var(--font-ui);
   font-size: 11px;
-  line-height: 15px;
+  line-height: 14px;
   color: var(--exo-muted);
   margin-top: 1px;
+}
+
+.feature-row.is-applied .feature-row__detail {
+  color: rgba(167, 243, 208, 0.85);
+}
+
+.theme-light .feature-row {
+  border-bottom-color: rgba(61, 52, 41, 0.08);
+}
+
+.theme-light .feature-row:hover {
+  background: rgba(61, 52, 41, 0.03);
 }

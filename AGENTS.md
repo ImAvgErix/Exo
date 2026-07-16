@@ -6,18 +6,21 @@ Exo is a no-compromise Windows performance and debloat tool. Aggressive memory t
 
 Aggressive must still be deterministic: scope actions to the selected application or hardware, report partial failures honestly, avoid invented registry settings, preserve data needed to prevent corruption, and keep Discord/Steam repair paths working. Never describe NVIDIA Reset as rollback: it only clears Exo status, while NVIDIA recovery remains manual through NVIDIA settings or a driver reinstall.
 
-## Shell UI (current — v2.5 remodel)
+## Shell UI (current — v2.6 Exo Instrument)
 
 - **Fixed frame** 1180×760, no maximize / free resize
-- **Dark = AMOLED** pure black page (`#000000`) + lifted surfaces (`#0C0C0C`)
-- **Navigation** = permanent left icon rail (`NavRail`) with Home + modules + Settings gear — **not** WinUI `NavigationView`
-- **Settings** = gear flyout attached to the rail gear (not modal overlay, not a separate settings page)
-- **Home** = editorial module directory (full-width rows), not a wrap-grid of cards; cached so returns do not re-stagger
-- **Modules** = single-column feature rows + sticky bottom action bar
+- **Dark = AMOLED** pure black + edge-glass fills (hard top specular; WinUI cannot match CSS `backdrop-filter`)
+- **Workspace** = full-width **top bar** + content stage that fills the rest of the frame
+- **Navigation** = top glass bar (`NavRail`): EXO left · modules centered · Settings right — **not** WinUI `NavigationView`, **not** a left sidebar
+- **Settings** = gear flyout under the top-bar gear (acrylic/frosted panel — not modal overlay, not a separate settings page)
+- **Home** = four-metric dashboard: **FPS gain · Frame time · RAM reclaimed · Latency** — top-bar EXO control hidden on home (page brand owns it); modules stay in the top bar; no Detect* probes on home; FPS/frame-time stay `—` until capture ships; RAM/latency read LocalAppData; cached so returns do not re-stagger
+- **Top bar** = liquid-glass **circles** floating on pure black (no bar plate): hairline rim (~0.5px feel), rim-lit gradient + dark center, soft shadow, hover = scale + sibling fade + label pill (preview) / wash (WinUI); equal 56px end caps; EXO hidden on home
+- **Modules** = one `ExoModulePlate` filling the stage (header + hairline feature list + action foot)
 - **Motion** = short XAML Storyboards only; never Composition Opacity = 0 (blanks UI); no spring bounce on content
 - **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)
 - **Feature rows** = thin status rail + Applied/Not applied (live detect)
 - **Version** = `VERSION` file and `Exo/Exo.csproj` must match; Ui.Smoke gates both
+- **Agent preview** = `tools/Exo.UiPreview` for Linux click QA of this layout language — keep out of public README product marketing
 
 ## Team structure
 

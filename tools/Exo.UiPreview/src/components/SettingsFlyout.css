@@ -3,80 +3,58 @@
   inset: 0;
   z-index: 20;
   border: 0;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   cursor: default;
+  animation: backdrop-in 200ms var(--ease-out);
 }
 
-.settings-flyout {
+.settings-sheet {
   position: absolute;
-  left: 82px;
-  bottom: 14px;
+  /* Align under the gear inside the top-bar end cap (shell pad 10 + bar pad 6). */
+  top: 62px;
+  right: 16px;
   z-index: 30;
-  width: 292px;
-  background: var(--exo-card);
-  border: 1px solid var(--exo-stroke);
-  border-radius: 16px;
-  padding: 12px 14px;
+  width: 300px;
+  padding: 12px;
+  border-radius: 10px;
   box-sizing: border-box;
-  animation: flyout-in 180ms ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: sheet-in var(--dur) var(--ease-out);
+  transform-origin: top right;
 }
 
-@keyframes flyout-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.settings-sheet__group {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
-.settings-flyout__section {
-  margin: 0 0 6px;
+.settings-sheet__section {
+  margin: 0 0 8px;
+  padding: 0;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--exo-muted);
 }
 
-.settings-flyout__theme,
-.settings-flyout__actions {
+.settings-sheet__theme {
+  margin: 0;
+}
+
+.settings-sheet__actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 6px;
 }
 
-.settings-flyout__choice {
-  min-height: 34px;
-  border: 1px solid var(--exo-stroke);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--exo-text);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background-color 160ms ease-out, box-shadow 160ms ease-out;
-}
-
-.settings-flyout__choice:hover {
-  background: var(--exo-wash);
-}
-
-.settings-flyout__choice.is-active {
-  background: var(--exo-wash-strong);
-  box-shadow: inset 0 0 0 1px var(--exo-ring);
-}
-
-.settings-flyout__divider {
-  height: 1px;
-  margin: 12px 0;
-  background: var(--exo-stroke);
-  opacity: 0.5;
-}
-
-.settings-flyout__row {
+.settings-sheet__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -87,63 +65,73 @@
   color: var(--exo-text);
 }
 
-.settings-flyout__switch {
-  width: 40px;
-  height: 22px;
-  border: 0;
+.settings-sheet__switch {
+  width: 44px;
+  height: 26px;
+  border: 1px solid var(--glass-rim-soft);
   border-radius: 999px;
-  background: #3f3f46;
+  background: rgba(255, 255, 255, 0.08);
   padding: 2px;
   cursor: pointer;
-  position: relative;
-  transition: background-color 160ms ease-out;
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
 
-.settings-flyout__switch.is-on {
+.settings-sheet__switch.is-on {
   background: var(--exo-accent);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
-.settings-flyout__knob {
+.settings-sheet__knob {
   display: block;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: #fff;
-  transition: transform 160ms ease-out;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 
-.settings-flyout__switch.is-on .settings-flyout__knob {
+.settings-sheet__switch.is-on .settings-sheet__knob {
   transform: translateX(18px);
   background: #000;
 }
 
-.settings-flyout__check {
+.settings-sheet__check {
   width: 100%;
   min-height: 38px;
+  padding: 9px 20px;
 }
 
-.settings-flyout__status {
+.settings-sheet__status {
   margin: 6px 0 0;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--exo-muted);
   text-align: center;
 }
 
-.settings-flyout__actions {
-  margin-bottom: 10px;
-}
-
-.settings-flyout__version {
+.settings-sheet__version {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 4px 2px 0;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--exo-muted);
 }
 
-.settings-flyout__version strong {
+.settings-sheet__version strong {
   color: var(--exo-text);
   font-weight: 600;
+}
+
+.settings-sheet__actions .btn-ghost {
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+.theme-light .settings-sheet__group {
+  background: rgba(61, 52, 41, 0.03);
+  box-shadow: 0 0 0 1px rgba(61, 52, 41, 0.08);
 }

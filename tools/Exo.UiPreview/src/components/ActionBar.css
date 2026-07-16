@@ -1,43 +1,58 @@
-.action-bar {
+.action-foot {
   flex-shrink: 0;
-  background: var(--exo-card);
-  border-top: 1.5px solid var(--exo-stroke);
-  padding: 12px 28px 14px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
-.action-bar__message {
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--exo-wash);
+.action-foot__message {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--exo-text);
+  animation: rise-in var(--dur) var(--ease-out);
 }
 
-.action-bar__dual,
-.action-bar__secondary {
+.action-foot__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-foot__dual {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.action-bar__panel-row {
+.action-foot__secondary {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
 }
 
-.action-bar__refresh-sm {
-  min-width: 96px;
+.action-foot__grow {
+  width: 100%;
 }
 
-.action-bar__hint {
+.action-foot__hint {
   margin: 0;
   text-align: center;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--exo-muted);
+}
+
+.theme-light .action-foot {
+  border-top-color: rgba(61, 52, 41, 0.08);
+}
+
+.theme-light .action-foot__message {
+  background: rgba(61, 52, 41, 0.04);
+  border-color: rgba(61, 52, 41, 0.1);
 }

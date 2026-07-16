@@ -3,7 +3,6 @@
   --font-display: 'Cormorant Garamond', Georgia, serif;
 
   --exo-bg: #000000;
-  --exo-card: #0c0c0c;
   --exo-accent: #f5f5f4;
   --exo-on-accent: #000000;
   --exo-text: #fafaf9;
@@ -18,6 +17,50 @@
   --exo-warning: #fbbf24;
   --exo-error: #f87171;
 
+  /* Edge glass — instrument panel, not iOS blur */
+  --glass-fill: rgba(255, 255, 255, 0.04);
+  --glass-fill-mid: rgba(255, 255, 255, 0.06);
+  --glass-fill-strong: rgba(255, 255, 255, 0.08);
+  --glass-rim: rgba(255, 255, 255, 0.14);
+  --glass-rim-soft: rgba(255, 255, 255, 0.08);
+  --glass-specular: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.02) 18%,
+    rgba(255, 255, 255, 0) 40%
+  );
+  --glass-blur: blur(16px) saturate(1.1);
+  --glass-blur-sm: blur(12px) saturate(1.05);
+  --glass-edge-rim: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.06) 40%,
+    rgba(255, 255, 255, 0.02) 60%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  --glass-shadow:
+    1px 0 0 rgba(255, 255, 255, 0.1) inset,
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.4) inset,
+    0 12px 40px rgba(0, 0, 0, 0.55);
+  --glass-shadow-soft:
+    1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 1px 0 rgba(255, 255, 255, 0.1) inset,
+    0 8px 24px rgba(0, 0, 0, 0.45);
+
+  --radius-panel: 12px;
+  --radius-row: 10px;
+  --radius-chip: 8px;
+  --radius-pill: 999px;
+
+  /* Kinetics curves: glide (no overshoot) / spring pop / symmetric slide */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-slide: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 140ms;
+  --dur: 200ms;
+  --dur-page: 240ms;
+
   font-family: var(--font-ui);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -28,10 +71,9 @@
 }
 
 .theme-light {
-  --exo-bg: #f3ede3;
-  --exo-card: #fcfaf6;
-  --exo-accent: #3d3429;
-  --exo-on-accent: #fcfaf6;
+  --exo-bg: #ebe6de;
+  --exo-accent: #2c261f;
+  --exo-on-accent: #faf7f2;
   --exo-text: #1c1712;
   --exo-secondary: #4a4034;
   --exo-muted: #6b5f50;
@@ -40,6 +82,24 @@
   --exo-wash-strong: rgba(61, 52, 41, 0.12);
   --exo-ring: rgba(61, 52, 41, 0.28);
   --exo-ring-soft: rgba(61, 52, 41, 0.16);
+  --glass-fill: rgba(255, 255, 255, 0.48);
+  --glass-fill-mid: rgba(255, 255, 255, 0.62);
+  --glass-fill-strong: rgba(255, 255, 255, 0.78);
+  --glass-rim: rgba(61, 52, 41, 0.18);
+  --glass-rim-soft: rgba(61, 52, 41, 0.12);
+  --glass-specular: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0.18) 28%,
+    rgba(255, 255, 255, 0) 55%
+  );
+  --glass-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 12px 32px rgba(61, 52, 41, 0.14),
+    0 4px 10px rgba(61, 52, 41, 0.08);
+  --glass-shadow-soft:
+    0 1px 0 rgba(255, 255, 255, 0.55) inset,
+    0 6px 18px rgba(61, 52, 41, 0.1);
 }
 
 *,
@@ -69,31 +129,107 @@ img {
   max-width: 100%;
 }
 
-.btn {
+/* ── Edge glass surface ── */
+.glass {
   position: relative;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    box-shadow 160ms ease-out,
-    opacity 140ms ease-out;
+  background: var(--glass-fill);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  overflow: hidden;
 }
 
-.btn::before {
+/* Hard left + top specular rim */
+.glass::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  background: var(--glass-edge-rim);
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 160ms ease-out;
+  z-index: 2;
 }
 
-.btn:hover::before {
+/* Static top-edge highlight — no animated sheen */
+.glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--glass-specular);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.glass > * {
+  position: relative;
+  z-index: 3;
+}
+
+.glass--soft {
+  box-shadow: var(--glass-shadow-soft);
+  border-color: var(--glass-rim-soft);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  backdrop-filter: var(--glass-blur-sm);
+}
+
+.glass--strong {
+  background: var(--glass-fill-strong);
+}
+
+.glass--mid {
+  background: var(--glass-fill-mid);
+}
+
+/* ── Buttons ── */
+.btn {
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  overflow: hidden;
+  /* Release springs back (interruptible transition, not keyframes) */
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out),
+    transform 0.5s var(--ease-spring);
+}
+
+/* Press squish — down fast, up springy (asymmetric = physical). 0.96 floor. */
+.btn:active:not(:disabled) {
+  transform: scale(0.96);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out),
+    transform 0.08s ease-out;
+}
+
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at 50% 40%,
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms var(--ease-out);
+}
+
+.btn:active::after,
+.btn.is-pressing::after {
   opacity: 1;
 }
 
@@ -103,51 +239,172 @@ img {
 }
 
 .btn-primary {
-  min-height: 46px;
-  width: 100%;
-  padding: 13px 20px;
+  min-height: 40px;
+  padding: 10px 24px;
   background: var(--exo-accent);
   color: var(--exo-on-accent);
-}
-
-.btn-primary::before {
-  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 6px 20px rgba(0, 0, 0, 0.35);
 }
 
 .btn-primary:hover {
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.5) inset,
+    0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
-.btn-quiet {
-  min-height: 34px;
-  padding: 6px 12px;
-  background: var(--exo-card);
-  border-color: var(--exo-stroke);
+.btn-primary:active {
+  animation: apply-pulse 280ms var(--ease-out);
+}
+
+.btn-ghost {
+  min-height: 36px;
+  padding: 7px 16px;
+  background: var(--glass-fill);
+  border-color: var(--glass-rim);
   color: var(--exo-text);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  backdrop-filter: blur(16px) saturate(1.3);
+  box-shadow: var(--glass-shadow-soft);
 }
 
-.btn-quiet::before {
-  background: var(--exo-wash);
+.btn-ghost:hover {
+  background: var(--glass-fill-strong);
+  border-color: var(--exo-ring-soft);
 }
 
-.btn-quiet:hover {
-  box-shadow: inset 0 0 0 1px var(--exo-ring-soft);
+@keyframes apply-pulse {
+  0% {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.4) inset,
+      0 0 0 0 rgba(245, 245, 244, 0.35);
+  }
+  50% {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.55) inset,
+      0 0 0 8px rgba(245, 245, 244, 0);
+  }
+  100% {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.4) inset,
+      0 6px 20px rgba(0, 0, 0, 0.35);
+  }
 }
 
-.btn-white {
-  min-height: 46px;
-  padding: 13px 20px;
-  background: #ffffff;
-  border-color: #ffffff;
-  color: #0a0a0a;
+/* Page / stagger motion */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.btn-white::before {
-  background: rgba(0, 0, 0, 0.06);
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.btn-white:hover {
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.page-enter {
+  animation: page-enter var(--dur-page) var(--ease-out) both;
+}
+
+/* Prefer animation-only opacity — never leave a static opacity:0
+   (headless capture / interrupted animation would blank the UI). */
+.page-enter .stagger-child,
+.stagger-list > .stagger-child {
+  animation: rise-in var(--dur-page) var(--ease-out) both;
+}
+
+/* Semantic page chunks stagger ~90ms apart (kinetics list-reveal cadence). */
+.page-enter .stagger-child:nth-child(1) {
+  animation-delay: 40ms;
+}
+.page-enter .stagger-child:nth-child(2) {
+  animation-delay: 130ms;
+}
+.page-enter .stagger-child:nth-child(3) {
+  animation-delay: 220ms;
+}
+.page-enter .stagger-child:nth-child(4) {
+  animation-delay: 310ms;
+}
+
+/* Dense list rows keep a tighter 40ms cadence so long lists settle fast. */
+.stagger-list > .stagger-child:nth-child(1) {
+  animation-delay: 40ms;
+}
+.stagger-list > .stagger-child:nth-child(2) {
+  animation-delay: 80ms;
+}
+.stagger-list > .stagger-child:nth-child(3) {
+  animation-delay: 120ms;
+}
+.stagger-list > .stagger-child:nth-child(4) {
+  animation-delay: 160ms;
+}
+.stagger-list > .stagger-child:nth-child(5) {
+  animation-delay: 200ms;
+}
+.stagger-list > .stagger-child:nth-child(6) {
+  animation-delay: 240ms;
+}
+.stagger-list > .stagger-child:nth-child(7) {
+  animation-delay: 280ms;
+}
+.stagger-list > .stagger-child:nth-child(8) {
+  animation-delay: 320ms;
+}
+.stagger-list > .stagger-child:nth-child(9) {
+  animation-delay: 360ms;
+}
+
+/* Keyboard a11y — visible focus without polluting pointer interactions */
+:focus-visible {
+  outline: 2px solid var(--exo-ring);
+  outline-offset: 2px;
+}
+
+/* Respect user motion preference (web-design-guidelines) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 ::-webkit-scrollbar {

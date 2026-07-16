@@ -1,101 +1,121 @@
 .module-page {
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.module-page__body {
-  flex: 1;
-  min-height: 0;
-  padding: 18px 28px 10px;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  max-width: 980px;
   width: 100%;
-  box-sizing: border-box;
-  margin: 0 auto;
-}
-
-.module-page__header {
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
 }
 
-.module-page__section {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--exo-muted);
+.module-plate {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.module-page__status {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 32px;
-  color: var(--exo-text);
-}
-
-.module-page__nvidia-controls {
+.module-plate__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px;
-  background: var(--exo-card);
-  border: 1px solid var(--exo-stroke);
-  border-radius: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
 }
 
-.module-page__gsync {
+.module-plate__header-text {
   display: flex;
-  align-items: center;
-  gap: 14px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.module-plate__section {
+  margin: 0;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--exo-muted);
+}
+
+.module-plate__status {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
   color: var(--exo-text);
 }
 
-.module-page__switch {
-  width: 40px;
-  height: 22px;
-  border: 0;
+.module-plate__nvidia-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.module-plate__gsync {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--exo-text);
+}
+
+.module-plate__switch {
+  width: 44px;
+  height: 26px;
+  border: 1px solid var(--glass-rim-soft);
   border-radius: 999px;
-  background: #3f3f46;
+  background: rgba(255, 255, 255, 0.08);
   padding: 2px;
   cursor: pointer;
-  transition: background-color 160ms ease-out;
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
 
-.module-page__switch.is-on {
+.module-plate__switch.is-on {
   background: var(--exo-accent);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
-.module-page__knob {
+.module-plate__knob {
   display: block;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: #fff;
-  transition: transform 160ms ease-out;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  /* Toggle knob springs to its detent (interruptible) */
+  transition: transform 0.35s var(--ease-spring);
 }
 
-.module-page__switch.is-on .module-page__knob {
+.module-plate__switch.is-on .module-plate__knob {
   transform: translateX(18px);
   background: #000;
 }
 
-.module-page__features {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
+.module-plate__features {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.module-plate .action-foot {
+  margin-top: auto;
+}
+
+.theme-light .module-plate__header,
+.theme-light .module-plate__nvidia-controls {
+  border-bottom-color: rgba(61, 52, 41, 0.08);
 }

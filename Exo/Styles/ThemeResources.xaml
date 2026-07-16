@@ -9,10 +9,11 @@
     <FontFamily x:Key="ExoUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
     <FontFamily x:Key="ExoUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
-    <!-- Spacing scale: 8 / 12 / 16 / 20 / 28 — denser v2.5 directory chrome -->
-    <CornerRadius x:Key="ExoCardRadius">16</CornerRadius>
-    <CornerRadius x:Key="ExoTileRadius">12</CornerRadius>
-    <x:Double x:Key="ExoPageMaxWidth">980</x:Double>
+    <!-- Spacing scale: 8 / 12 / 16 / 20 / 28 — v2.6 Liquid Glass chrome -->
+    <CornerRadius x:Key="ExoCardRadius">22</CornerRadius>
+    <CornerRadius x:Key="ExoTileRadius">16</CornerRadius>
+    <CornerRadius x:Key="ExoGlassRadius">26</CornerRadius>
+    <x:Double x:Key="ExoPageMaxWidth">1120</x:Double>
     <Thickness x:Key="ExoPagePadding">24,16,28,16</Thickness>
 
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
@@ -91,37 +92,36 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <!-- Feature rows — denser professional chrome (matches FeatureTileGrid) -->
-    <Style x:Key="ExoFeatureTile" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="{StaticResource ExoTileRadius}" />
-        <Setter Property="Padding" Value="12,10" />
-        <Setter Property="MinHeight" Value="52" />
-        <Setter Property="HorizontalAlignment" Value="Stretch" />
-        <Setter Property="UseLayoutRounding" Value="True" />
-    </Style>
-
-    <!-- Home directory row chrome — premium ~60px rows, 44px logos -->
-    <Style x:Key="ExoDirectoryRow" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
+    <!-- Module instrument plate — one edge-glass surface for header + list + actions -->
+    <Style x:Key="ExoModulePlate" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="14" />
-        <Setter Property="Padding" Value="16,10" />
-        <Setter Property="MinHeight" Value="60" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="UseLayoutRounding" Value="True" />
+    </Style>
+
+    <!-- Feature rows — hairline list rows inside the plate (not separate pills) -->
+    <Style x:Key="ExoFeatureTile" TargetType="Border">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="MinHeight" Value="46" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
-    <!-- Sticky module action bar — clear top hairline + breathing room -->
+    <!-- Sticky module action bar — frosted glass strip with specular top edge -->
     <Style x:Key="ExoActionBar" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="0,1.5,0,0" />
+        <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoSpecularStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
         <Setter Property="CornerRadius" Value="0" />
-        <Setter Property="Padding" Value="20,14,20,16" />
+        <Setter Property="Padding" Value="16,12,16,14" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
@@ -137,8 +137,8 @@
 
     <Style x:Key="ExoMessageBanner" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource ExoAccentSoftBrush}" />
-        <Setter Property="BorderBrush" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoSpecularStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource ExoTileRadius}" />
         <Setter Property="Padding" Value="12,10" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -147,23 +147,23 @@
     <Style x:Key="ExoIconWell" TargetType="Border">
         <Setter Property="Width" Value="28" />
         <Setter Property="Height" Value="28" />
-        <Setter Property="CornerRadius" Value="7" />
+        <Setter Property="CornerRadius" Value="9" />
         <Setter Property="Background" Value="{ThemeResource ExoAccentSoftBrush}" />
-        <Setter Property="BorderBrush" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoSpecularStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style x:Key="ExoCard" TargetType="Border">
         <Setter Property="CornerRadius" Value="{StaticResource ExoCardRadius}" />
         <Setter Property="Padding" Value="16,14" />
-        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 
     <Style x:Key="ExoRiskCard" TargetType="Border">
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="14" />
         <Setter Property="Padding" Value="12,10" />
         <Setter Property="Background" Value="{ThemeResource ExoWarningSoftBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource ExoWarningBrush}" />
@@ -292,11 +292,11 @@
     -->
     <Style x:Key="ExoPrimaryButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
-        <Setter Property="Padding" Value="20,13" />
-        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="18,11" />
+        <Setter Property="CornerRadius" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="MinHeight" Value="46" />
+        <Setter Property="MinHeight" Value="40" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="Background" Value="{ThemeResource ExoAccentBrush}" />
@@ -377,10 +377,11 @@
         </Setter>
     </Style>
 
+    <!-- Secondary glass actions — Repair / Reset / Refresh / CPL (never solid white) -->
     <Style x:Key="ExoQuietButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFontMedium}" />
         <Setter Property="Padding" Value="14,9" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="MinHeight" Value="40" />
@@ -493,73 +494,8 @@
         <Setter Property="Margin" Value="0,4,0,0" />
     </Style>
 
-    <Style x:Key="ExoWhiteButton" TargetType="Button" BasedOn="{StaticResource ExoQuietButton}">
-        <Setter Property="Background" Value="#FFFFFF" />
-        <Setter Property="BorderBrush" Value="#FFFFFF" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Foreground" Value="#0A0A0A" />
-        <Setter Property="MinHeight" Value="46" />
-        <Setter Property="Padding" Value="20,13" />
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Grid x:Name="Root"
-                          UseLayoutRounding="True"
-                          Background="#FFFFFF"
-                          CornerRadius="{TemplateBinding CornerRadius}">
-                        <Border x:Name="HoverWash"
-                                Background="#000000"
-                                CornerRadius="{TemplateBinding CornerRadius}"
-                                Opacity="0"
-                                IsHitTestVisible="False" />
-                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                          Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          Padding="{TemplateBinding Padding}"
-                                          Foreground="{TemplateBinding Foreground}" />
-                        <VisualStateManager.VisualStateGroups>
-                            <VisualStateGroup x:Name="CommonStates">
-                                <VisualState x:Name="Normal">
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity"
-                                                         To="0" Duration="0:0:0.14">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                    </Storyboard>
-                                </VisualState>
-                                <VisualState x:Name="PointerOver">
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity"
-                                                         To="0.06" Duration="0:0:0.14">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                    </Storyboard>
-                                </VisualState>
-                                <VisualState x:Name="Pressed">
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity"
-                                                         To="0.12" Duration="0:0:0.08" />
-                                    </Storyboard>
-                                </VisualState>
-                                <VisualState x:Name="Disabled">
-                                    <VisualState.Setters>
-                                        <Setter Target="Root.Opacity" Value="0.45" />
-                                        <Setter Target="HoverWash.Opacity" Value="0" />
-                                    </VisualState.Setters>
-                                </VisualState>
-                            </VisualStateGroup>
-                        </VisualStateManager.VisualStateGroups>
-                    </Grid>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
+    <!-- Alias for Internet dual CTAs — identical role to ExoPrimaryButton -->
+    <Style x:Key="ExoWhiteButton" TargetType="Button" BasedOn="{StaticResource ExoPrimaryButton}" />
 
     <!--
       Home cards: logos/labels stay sharp (no scale).
@@ -743,15 +679,16 @@
     </Style>
 
     <!--
-      Left rail nav: square-ish 56×56, transparent base.
-      Product logos live here — hover/press = wash only, NEVER scale
-      (scale softens bitmaps). Selection fill applied from code via Background.
+      Left rail nav: glass pill items — logos stay sharp (no scale).
+      Selection ring applied from MainWindow code via BorderBrush/Thickness.
     -->
+    <!-- Top-bar nav chip — width set by caller (home / modules / gear) -->
     <Style x:Key="ExoRailButton" TargetType="Button">
-        <Setter Property="Width" Value="56" />
-        <Setter Property="Height" Value="56" />
+        <Setter Property="MinWidth" Value="44" />
+        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="Height" Value="44" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="CornerRadius" Value="10" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -767,8 +704,13 @@
                 <ControlTemplate TargetType="Button">
                     <Grid x:Name="Root"
                           UseLayoutRounding="True"
-                          Background="{TemplateBinding Background}"
                           CornerRadius="{TemplateBinding CornerRadius}">
+                        <Border x:Name="SelectionFill"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                IsHitTestVisible="False" />
                         <!-- Wash behind content so logos stay sharp on top -->
                         <Border x:Name="HoverWash"
                                 Background="{ThemeResource ExoAccentSoftBrush}"
@@ -823,6 +765,29 @@
                         </VisualStateManager.VisualStateGroups>
                     </Grid>
                 </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+      Liquid-glass circle nav button — floats on pure black.
+      Hairline rim + rim-lit gradient edge + dark center; wash on hover only.
+    -->
+    <Style x:Key="ExoGlassCircle" TargetType="Button" BasedOn="{StaticResource ExoRailButton}">
+        <Setter Property="Width" Value="44" />
+        <Setter Property="Height" Value="44" />
+        <Setter Property="MinWidth" Value="44" />
+        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="CornerRadius" Value="22" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="#66FFFFFF" />
+        <Setter Property="Background">
+            <Setter.Value>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#2BFFFFFF" Offset="0" />
+                    <GradientStop Color="#12FFFFFF" Offset="0.52" />
+                    <GradientStop Color="#1FFFFFFF" Offset="1" />
+                </LinearGradientBrush>
             </Setter.Value>
         </Setter>
     </Style>

@@ -1,3 +1,15 @@
+## 2.6.0
+
+- **UI — Exo Instrument**: full-width top bar (EXO · icon modules · Settings) with content filling the frame below; one edge-glass module plate
+- **UI — home dashboard**: four metrics — FPS gain, frame time, RAM reclaimed, latency (FPS empty until capture ships)
+- **UI — liquid-glass circle nav**: floating glass circles on pure black (hairline rim, dark center, soft shadow, hover sweep + sibling fade + label pill in preview); no bar plate
+- **UI — top bar polish**: equal end caps; EXO hidden on home; EXO text optically centered when shown; Settings alignment fixed
+- **UI — Steam mark**: keep the real Steam piston mark in the top bar (no custom glyph)
+- **UI — one system**: feature rows = status rail + Applied/Not applied only; primary = solid accent; secondary = quiet glass
+- **UI — denser chrome**: tighter top bar / plate / action foot; dropped unused preview chips/strips
+- **UI — motion polish**: short ease-out storyboards; rail selection = wash + accent ring (no logo scale)
+- **Preview — agent instrument mock**: `tools/Exo.UiPreview` tracks the same layout language for Linux click QA — not shipping Apply
+
 ## 2.5.2
 
 - **Detect / smoke hardening**: `Ui.Smoke` runs cleanly off-Windows (`net10.0`; logo ink measure stays Windows-only); `DiscordLogic.IsStableDiscordPathText` uses a backslash-normalized compare so Discord path checks are stable across hosts

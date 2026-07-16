@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react'
 import type { ModuleId, PageId } from './data/mock'
 import { modules } from './data/mock'
-import { NavRail } from './components/NavRail'
+import { TopBar } from './components/TopBar'
 import { SettingsFlyout } from './components/SettingsFlyout'
 import { HomePage } from './pages/HomePage'
 import { ModulePage } from './pages/ModulePage'
 import { NvidiaPanelPage } from './pages/NvidiaPanelPage'
 import './App.css'
 
-function railActive(page: PageId): ModuleId | 'home' | null {
+function barActive(page: PageId): ModuleId | 'home' | null {
   if (page === 'home') return 'home'
   if (page === 'nvidia-panel') return 'nvidia'
   return page
@@ -24,7 +24,7 @@ export default function App() {
 
   const content = useMemo(() => {
     if (page === 'home') {
-      return <HomePage onOpen={(id) => setPage(id)} />
+      return <HomePage />
     }
     if (page === 'nvidia-panel') {
       return <NvidiaPanelPage />
@@ -48,30 +48,30 @@ export default function App() {
   return (
     <div className={`app-page ${darkMode ? 'theme-dark' : 'theme-light'}`}>
       <div className="exo-shell" data-testid="exo-shell">
-        <NavRail
-          active={railActive(page)}
-          settingsOpen={settingsOpen}
-          onNavigate={navigate}
-          onToggleSettings={() => setSettingsOpen((v) => !v)}
-        />
+        <div className="exo-workspace">
+          <TopBar
+            active={barActive(page)}
+            settingsOpen={settingsOpen}
+            onNavigate={navigate}
+            onToggleSettings={() => setSettingsOpen((v) => !v)}
+          />
 
-        <div className="exo-content">
-          <div className="exo-titlebar">
+          <div className="exo-stage">
             {showBack ? (
-              <button
-                type="button"
-                className="exo-back"
-                data-testid="btn-back"
-                aria-label="Back"
-                onClick={() => setPage('nvidia')}
-              >
-                ‹
-              </button>
-            ) : (
-              <span className="exo-back-spacer" />
-            )}
+              <div className="exo-titlebar">
+                <button
+                  type="button"
+                  className="exo-back"
+                  data-testid="btn-back"
+                  aria-label="Back"
+                  onClick={() => setPage('nvidia')}
+                >
+                  ‹
+                </button>
+              </div>
+            ) : null}
+            <main className="exo-main">{content}</main>
           </div>
-          <main className="exo-main">{content}</main>
         </div>
 
         <SettingsFlyout
