@@ -88,9 +88,16 @@ function Get-StableDiscordTasks {
     foreach ($task in @(Get-ScheduledTask -ErrorAction Stop)) {
         $stable = $false
         foreach ($action in @($task.Actions)) {
-            if ((Test-StableDiscordText ([string]$action.Execute)) -or
-                (Test-StableDiscordText ([string]$action.Arguments)) -or
-                (Test-StableDiscordText ([string]$action.WorkingDirectory))) {
+            if ($null -eq $action) { continue }
+            # Tasks may use COM-handler/email/show-message actions, which have no
+            # Execute/Arguments/WorkingDirectory properties - StrictMode throws.
+            $ap = $action.PSObject.Properties.Name
+            $actExe = if ($ap -contains 'Execute') { [string]$action.Execute } else { '' }
+            $actArg = if ($ap -contains 'Arguments') { [string]$action.Arguments } else { '' }
+            $actDir = if ($ap -contains 'WorkingDirectory') { [string]$action.WorkingDirectory } else { '' }
+            if ((Test-StableDiscordText $actExe) -or
+                (Test-StableDiscordText $actArg) -or
+                (Test-StableDiscordText $actDir)) {
                 $stable = $true
                 break
             }

@@ -47,9 +47,15 @@ function Test-StableDiscordWindowsQuiet([string]$Root) {
             if ($task.TaskName -notmatch '(?i)Discord' -and $task.TaskPath -notmatch '(?i)Discord') { continue }
             $stable = $false
             foreach ($action in @($task.Actions)) {
-                if ((Test-DiscOptStablePathText ([string]$action.Execute) $Root) -or
-                    (Test-DiscOptStablePathText ([string]$action.Arguments) $Root) -or
-                    (Test-DiscOptStablePathText ([string]$action.WorkingDirectory) $Root)) {
+                if ($null -eq $action) { continue }
+                # Non-exec actions (COM-handler/email/show-message) lack these properties.
+                $ap = $action.PSObject.Properties.Name
+                $actExe = if ($ap -contains 'Execute') { [string]$action.Execute } else { '' }
+                $actArg = if ($ap -contains 'Arguments') { [string]$action.Arguments } else { '' }
+                $actDir = if ($ap -contains 'WorkingDirectory') { [string]$action.WorkingDirectory } else { '' }
+                if ((Test-DiscOptStablePathText $actExe $Root) -or
+                    (Test-DiscOptStablePathText $actArg $Root) -or
+                    (Test-DiscOptStablePathText $actDir $Root)) {
                     $stable = $true
                     break
                 }
