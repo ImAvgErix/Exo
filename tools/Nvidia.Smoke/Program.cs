@@ -204,11 +204,17 @@ Expect("Unregister tray tasks present",
 
 // --- DRS verification + NPI pin + strip + catalog markers ---
 var optimizerPath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Nvidia-Optimizer.ps1");
+var displayApplyPath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Display-Apply.ps1");
 var detectPath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-Detect.ps1");
 var corePath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "NvidiaDetectCore.ps1");
+var messagesPath = Path.Combine(repo, "Exo", "Helpers", "OptimizerMessages.cs");
+var nvidiaViewModelPath = Path.Combine(repo, "Exo", "ViewModels", "NvidiaOptimizerViewModel.cs");
 var optimizerSrc = File.Exists(optimizerPath) ? File.ReadAllText(optimizerPath) : "";
+var displayApplySrc = File.Exists(displayApplyPath) ? File.ReadAllText(displayApplyPath) : "";
 var detectSrc = File.Exists(detectPath) ? File.ReadAllText(detectPath) : "";
 var coreSrc = File.Exists(corePath) ? File.ReadAllText(corePath) : "";
+var messagesSrc = File.Exists(messagesPath) ? File.ReadAllText(messagesPath) : "";
+var nvidiaViewModelSrc = File.Exists(nvidiaViewModelPath) ? File.ReadAllText(nvidiaViewModelPath) : "";
 
 Expect("optimizer runs -exportCustomized", optimizerSrc.Contains("-exportCustomized", StringComparison.Ordinal));
 Expect("detect runs -exportCustomized", detectSrc.Contains("-exportCustomized", StringComparison.Ordinal));
@@ -217,6 +223,25 @@ Expect("optimizer records drsVerified", optimizerSrc.Contains("drsVerified", Str
 Expect("optimizer records drsVerifiedAt", optimizerSrc.Contains("drsVerifiedAt", StringComparison.Ordinal));
 Expect("optimizer records drsVerifiedSettingCount", optimizerSrc.Contains("drsVerifiedSettingCount", StringComparison.Ordinal));
 Expect("optimizer records drsMismatch", optimizerSrc.Contains("drsMismatch", StringComparison.Ordinal));
+Expect("display apply partial registry-only exit 2",
+    displayApplySrc.Contains("PARTIAL registry-ok nvapi-failed", StringComparison.Ordinal) &&
+    System.Text.RegularExpressions.Regex.IsMatch(displayApplySrc, @"exit\s+2"));
+Expect("display apply success requires registry and NVAPI",
+    displayApplySrc.Contains("[bool]$registryOk -and [bool]$nvApiOk", StringComparison.Ordinal));
+Expect("optimizer displayPrefs gates on NVAPI",
+    optimizerSrc.Contains("$displayPrefsOk = [bool]$dispResult.Success -and $displayNvApiOk", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("displayPrefs        = [bool]$displayPrefsOk", StringComparison.Ordinal));
+Expect("optimizer records registry display method honestly",
+    optimizerSrc.Contains("$displayMethod = if ($displayNvApiOk) { 'nvapi' } elseif ($displayRegistryOk) { 'registry' } else { $null }", StringComparison.Ordinal));
+Expect("optimizer tray clear passes NoTask",
+    optimizerSrc.Contains("'-NoTask', '-SettlePasses', '3'", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("(NoTask; no background task)", StringComparison.Ordinal));
+Expect("display apply tray clear passes NoTask",
+    displayApplySrc.Contains("-File $trayScript -NoTask -SettlePasses 3", StringComparison.Ordinal) &&
+    displayApplySrc.Contains("Tray clear script finished (no background task)", StringComparison.Ordinal));
+Expect("NVIDIA reset uses status-cleared copy",
+    messagesSrc.Contains("NvidiaStatusCleared = \"Status cleared. Driver and profiles unchanged.\"", StringComparison.Ordinal) &&
+    nvidiaViewModelSrc.Contains("OptimizerMessages.NvidiaStatusCleared", StringComparison.Ordinal));
 
 Expect("NPI pinned tag v3.0.1.11+", optimizerSrc.Contains("NpiPinnedTag = 'v3.0.1.11'", StringComparison.Ordinal));
 Expect("NPI pinned download URL",

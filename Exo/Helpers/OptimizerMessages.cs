@@ -5,6 +5,7 @@ public static class OptimizerMessages
 {
     public const string Done = "Done.";
     public const string RepairFinished = "Repaired.";
+    public const string NvidiaStatusCleared = "Status cleared. Driver and profiles unchanged.";
     public const string Cancelled = "Cancelled.";
     public const string StatusFailed = "Could not read status.";
     public const string RestartRequired = "Restart Windows, then Apply again.";

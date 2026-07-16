@@ -12,47 +12,91 @@
       so tiles stretch full-width inside ScrollViewer.
       v2.6: denser row chrome, 3px status rail, title + detail only.
     -->
-    <ScrollViewer x:Name="ScrollHost"
-                  VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Disabled"
-                  HorizontalScrollMode="Disabled"
-                  ZoomMode="Disabled"
-                  HorizontalAlignment="Stretch"
-                  VerticalAlignment="Stretch"
-                  SizeChanged="ScrollHost_SizeChanged">
-        <ItemsRepeater x:Name="TileRepeater"
-                       ItemsSource="{x:Bind ItemsSource, Mode=OneWay}"
-                       HorizontalAlignment="Stretch">
-            <ItemsRepeater.Layout>
-                <StackLayout Orientation="Vertical" Spacing="0" />
-            </ItemsRepeater.Layout>
-            <ItemsRepeater.ItemTemplate>
-                <DataTemplate x:DataType="vm:FeatureRowViewModel">
-                    <Border Style="{StaticResource ExoFeatureTile}"
-                            Opacity="{x:Bind Opacity}">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Border Style="{StaticResource ExoStatusRail}"
-                                    Width="3"
-                                    CornerRadius="1.5"
-                                    Opacity="{x:Bind RailOpacity}" />
-                            <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
-                                <TextBlock Text="{x:Bind Title}"
-                                           Style="{StaticResource ExoFeatureTitle}"
-                                           FontSize="13"
-                                           CharacterSpacing="-4" />
-                                <TextBlock Text="{x:Bind Detail}"
-                                           Style="{StaticResource ExoFeatureDetail}"
-                                           FontSize="11"
-                                           LineHeight="15" />
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </ItemsRepeater.ItemTemplate>
-        </ItemsRepeater>
-    </ScrollViewer>
+    <Grid>
+        <ScrollViewer x:Name="ScrollHost"
+                      VerticalScrollBarVisibility="Auto"
+                      VerticalScrollMode="Enabled"
+                      IsVerticalRailEnabled="True"
+                      HorizontalScrollBarVisibility="Disabled"
+                      HorizontalScrollMode="Disabled"
+                      ZoomMode="Disabled"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      SizeChanged="ScrollHost_SizeChanged">
+            <ScrollViewer.Resources>
+                <!--
+                  Keep WinUI's overlay/auto-hide indicator states, but remove the
+                  default acrylic track that reads as a permanent 1px edge line.
+                -->
+                <SolidColorBrush x:Key="ExoFeatureScrollTransparentBrush" Color="#00000000" />
+                <StaticResource x:Key="ScrollBarBackground" ResourceKey="ExoFeatureScrollTransparentBrush" />
+                <StaticResource x:Key="ScrollBarBackgroundPointerOver" ResourceKey="ExoFeatureScrollTransparentBrush" />
+                <StaticResource x:Key="ScrollBarBackgroundDisabled" ResourceKey="ExoFeatureScrollTransparentBrush" />
+                <StaticResource x:Key="ScrollBarBorderBrush" ResourceKey="ExoFeatureScrollTransparentBrush" />
+                <StaticResource x:Key="ScrollBarBorderBrushPointerOver" ResourceKey="ExoFeatureScrollTransparentBrush" />
+                <StaticResource x:Key="ScrollBarBorderBrushDisabled" ResourceKey="ExoFeatureScrollTransparentBrush" />
+                <StaticResource x:Key="ScrollBarTrackFill" ResourceKey="ExoFeatureScrollTransparentBrush" />
+                <StaticResource x:Key="ScrollBarTrackFillPointerOver" ResourceKey="ExoFeatureScrollTransparentBrush" />
+                <StaticResource x:Key="ScrollBarTrackFillDisabled" ResourceKey="ExoFeatureScrollTransparentBrush" />
+                <StaticResource x:Key="ScrollBarTrackStroke" ResourceKey="ExoFeatureScrollTransparentBrush" />
+                <StaticResource x:Key="ScrollBarTrackStrokePointerOver" ResourceKey="ExoFeatureScrollTransparentBrush" />
+                <StaticResource x:Key="ScrollBarTrackStrokeDisabled" ResourceKey="ExoFeatureScrollTransparentBrush" />
+                <SolidColorBrush x:Key="ScrollBarThumbFill"
+                                 Color="{ThemeResource SystemAccentColor}" Opacity="0.22" />
+                <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver"
+                                 Color="{ThemeResource SystemAccentColor}" Opacity="0.36" />
+                <SolidColorBrush x:Key="ScrollBarThumbFillPressed"
+                                 Color="{ThemeResource SystemAccentColor}" Opacity="0.52" />
+                <SolidColorBrush x:Key="ScrollBarThumbFillDisabled"
+                                 Color="{ThemeResource SystemAccentColor}" Opacity="0.12" />
+                <SolidColorBrush x:Key="ScrollBarThumbBackground"
+                                 Color="{ThemeResource SystemAccentColor}" Opacity="0.36" />
+                <SolidColorBrush x:Key="ScrollBarPanningThumbBackground"
+                                 Color="{ThemeResource SystemAccentColor}" Opacity="0.22" />
+                <SolidColorBrush x:Key="ScrollBarPanningThumbBackgroundDisabled"
+                                 Color="{ThemeResource SystemAccentColor}" Opacity="0.12" />
+                <Style TargetType="ScrollBar" BasedOn="{StaticResource DefaultScrollBarStyle}">
+                    <Setter Property="Width" Value="8" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderBrush" Value="Transparent" />
+                </Style>
+            </ScrollViewer.Resources>
+            <!-- Trailing scroll buffer keeps the final row clear of the plate edge. -->
+            <ItemsRepeater x:Name="TileRepeater"
+                           ItemsSource="{x:Bind ItemsSource, Mode=OneWay}"
+                           HorizontalAlignment="Stretch"
+                           Margin="0,0,0,16">
+                <ItemsRepeater.Layout>
+                    <StackLayout Orientation="Vertical" Spacing="0" />
+                </ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="vm:FeatureRowViewModel">
+                        <Border Style="{StaticResource ExoFeatureTile}"
+                                Opacity="{x:Bind Opacity}">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Style="{StaticResource ExoStatusRail}"
+                                        Width="3"
+                                        CornerRadius="1.5"
+                                        Opacity="{x:Bind RailOpacity}" />
+                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind Title}"
+                                               Style="{StaticResource ExoFeatureTitle}"
+                                               FontSize="13"
+                                               CharacterSpacing="-4" />
+                                    <TextBlock Text="{x:Bind Detail}"
+                                               Style="{StaticResource ExoFeatureDetail}"
+                                               FontSize="11"
+                                               LineHeight="15" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+        </ScrollViewer>
+    </Grid>
 </UserControl>

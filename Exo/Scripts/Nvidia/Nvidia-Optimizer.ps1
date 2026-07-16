@@ -94,6 +94,40 @@ function Assert-ExoPwsh7 {
 }
 Assert-ExoPwsh7
 
+function Test-ExoIsAdmin {
+    try {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        return ([Security.Principal.WindowsPrincipal]$identity).IsInRole(
+            [Security.Principal.WindowsBuiltInRole]::Administrator)
+    } catch { return $false }
+}
+
+# --- Stage tracking: every throw is attributed to the stage that was running so
+# --- the state json / detect / UI can say exactly where Apply failed.
+$Script:CurrentStage = 'init'
+function Set-ExoStage([string]$Name) {
+    $Script:CurrentStage = $Name
+}
+
+function Save-ExoFailureState([string]$Stage, [string]$Message) {
+    # Persist the failing stage + reason into nvidia-optimizer.json. Always keep
+    # applyInProgress=true (fail-closed) so a late post-verify throw after a
+    # premature Save-State cannot look like a successful Apply. Never throws.
+    try {
+        $existing = $null
+        if (Test-Path -LiteralPath $StatePath) {
+            try { $existing = Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json -AsHashtable } catch { $existing = $null }
+        }
+        if ($null -eq $existing -or $existing -isnot [hashtable]) { $existing = @{} }
+        $existing['lastErrorStage'] = $Stage
+        $existing['lastError'] = [string]$Message
+        $existing['lastErrorUtc'] = (Get-Date).ToUniversalTime().ToString('o')
+        $existing['applyInProgress'] = $true
+        if (-not $existing.ContainsKey('version')) { $existing['version'] = $Script:NvidiaOptVersion }
+        Save-State $existing
+    } catch { }
+}
+
 function Write-HubProgress([int]$Percent, [string]$Status) {
     $p = [Math]::Max(0, [Math]::Min(100, $Percent))
     $line = "EXO_PROGRESS:$p|$Status"
@@ -507,6 +541,7 @@ function Install-NpiFresh {
     # Pinned Profile Inspector release only ($Script:NpiPinnedTag). The managed copy is
     # reused when the stamp matches the pinned tag AND the exe hash still verifies;
     # stale/older copies are replaced so -exportCustomized (v3.0.1.11+) is available.
+    Set-ExoStage 'npi-install'
     Write-Step "Checking Exo managed NVIDIA Profile Inspector (pinned $Script:NpiPinnedTag)..."
     $target = Join-Path $NpiDir $NpiExeName
     $stampPath = Join-Path $NpiDir 'EXO-NPI-VERSION.txt'
@@ -910,9 +945,9 @@ function Clear-NvidiaTrayGhostIcons {
         try {
             $p = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
                 '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$trayScript`"",
-                '-SettlePasses', '3'
+                '-NoTask', '-SettlePasses', '3'
             ) -Wait -PassThru -WindowStyle Hidden
-            Write-Ok "Tray clear script exit $($p.ExitCode) (no background task)"
+            Write-Ok "Tray clear script exit $($p.ExitCode) (NoTask; no background task)"
             return 1
         } catch {
             Write-Warn "Tray script launch failed: $($_.Exception.Message)"
@@ -3670,11 +3705,18 @@ function Set-NvidiaDisplayPreferences {
     $applied = New-Object System.Collections.Generic.List[string]
     $success = $false
     $skipped = $false
+    $method = 'none'
+    $nvApiOk = $false
+    $registryOk = $false
 
     $live = Test-ExoNvidiaDisplayLive
     if ([bool]$live.Available -and [bool]$live.Ok) {
         Write-Ok "Display already matches ($($live.Detail)) - Display-Apply will skip re-touch"
         $skipped = $true
+        $success = $true
+        $method = 'nvapi'
+        $nvApiOk = $true
+        $registryOk = [bool]$live.RegistryOk
     } elseif ([bool]$live.Available) {
         Write-Ok "Display needs apply: $($live.Detail)"
     } else {
@@ -3703,13 +3745,27 @@ function Set-NvidiaDisplayPreferences {
             }
             $code = 0
             if ($null -ne $LASTEXITCODE) { $code = [int]$LASTEXITCODE }
-            if ($code -eq 0) {
-                $success = $true
-                [void]$applied.Add('Primary max Hz / secondary 60 Hz + Full RGB + Override + Video NVIDIA + advanced 3D')
-                Write-Ok 'Display + Control Panel registry applied'
-            } else {
-                [void]$applied.Add("Display apply exit $code")
-                Write-Warn "Display apply exit $code"
+            switch ($code) {
+                0 {
+                    $success = $true
+                    $method = 'nvapi'
+                    $nvApiOk = $true
+                    $registryOk = $true
+                    [void]$applied.Add('Primary max Hz / secondary 60 Hz + Full RGB + Override + Video NVIDIA + advanced 3D')
+                    Write-Ok 'Display + Control Panel registry applied'
+                }
+                2 {
+                    $success = $false
+                    $method = 'registry'
+                    $nvApiOk = $false
+                    $registryOk = $true
+                    [void]$applied.Add('Display apply partial: registry OK, NVAPI failed')
+                    Write-Warn 'Display apply partial: registry OK, NVAPI failed'
+                }
+                default {
+                    [void]$applied.Add("Display apply exit $code")
+                    Write-Warn "Display apply exit $code"
+                }
             }
         } catch {
             Write-Warn "Display apply failed: $($_.Exception.Message)"
@@ -3734,15 +3790,21 @@ function Set-NvidiaDisplayPreferences {
         skippedReapply      = [bool]$skipped
         liveDetail          = [string]$live.Detail
         success             = $success
+        method              = $method
+        nvApiOk             = [bool]$nvApiOk
+        registryOk          = [bool]$registryOk
     }
     [IO.File]::WriteAllText($pref, ($obj | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     [void]$applied.Add('Saved Exo display preference manifest')
 
     foreach ($a in $applied) { Write-Ok $a }
     return @{
-        Success = [bool]$success
-        Skipped = [bool]$skipped
-        Details = [string[]]@($applied.ToArray())
+        Success    = [bool]$success
+        Skipped    = [bool]$skipped
+        Method     = $method
+        NvApiOk    = [bool]$nvApiOk
+        RegistryOk = [bool]$registryOk
+        Details    = [string[]]@($applied.ToArray())
     }
 }
 
@@ -3772,6 +3834,12 @@ try {
         exit 0
     }
 
+    Set-ExoStage 'elevation-check'
+    if (-not (Test-ExoIsAdmin)) {
+        throw 'Administrator rights are required (driver install, DRS profile import, and system debloat all need elevation). Run Exo elevated and Apply again.'
+    }
+
+    Set-ExoStage 'gpu-detect'
     # Always wrap in @() so .Count is reliable for 0/1/N GPUs under PS7.
     $gpus = @(Get-NvidiaGpus)
     if ($gpus.Count -eq 0) {
@@ -3833,6 +3901,7 @@ try {
     #  3) Client stack: wipe App/CPL -> fresh App -> debloat -> NVAPI display
 
     # --- 1) Newest driver (Exo Clean Driver = clean install; continue when no restart is needed) ---
+    Set-ExoStage 'driver-update'
     $driverInfo = @{ Ran = $false; NeedsUpdate = $false; TweaksOk = $true; Method = 'none' }
     if (-not $SkipDriver) {
         Write-HubProgress 20 'Checking for newest Game Ready driver...'
@@ -3843,6 +3912,11 @@ try {
 
         $method = [string]$driverInfo.Method
         if ($method -in @('failed-clean', 'failed-no-url', 'failed-tweaks')) {
+            $driverFailReason = switch ($method) {
+                'failed-no-url' { 'No driver download URL could be resolved for this GPU series (NVIDIA lookup unreachable or blocked).' }
+                'failed-tweaks' { 'Driver installed but the MSI/privacy performance tweaks could not be verified.' }
+                default         { 'The clean driver install did not complete (check disk space, close games, and re-run).' }
+            }
             Save-State @{
                 version            = $Script:NvidiaOptVersion
                 appliedUtc         = (Get-Date).ToUniversalTime().ToString('o')
@@ -3857,6 +3931,9 @@ try {
                 debloatApplied     = $false
                 overlayDisabled    = $false
                 pendingAfterDriver = $false
+                lastErrorStage     = 'driver-update'
+                lastError          = "$driverFailReason ($method)"
+                lastErrorUtc       = (Get-Date).ToUniversalTime().ToString('o')
             }
             Write-Warn 'The NVIDIA driver/performance-tweak stage did not finish. Fix the issue above and Apply again.'
             Write-HubProgress 100 'Driver optimization failed'
@@ -3915,6 +3992,7 @@ try {
     $gameProfiles = @()
     $gameProfilesApplied = $false
     if (-not $SkipProfile) {
+        Set-ExoStage 'profile-pack-verify'
         if ([string]::IsNullOrWhiteSpace($profilePackVersion)) {
             throw 'NVIDIA profile pack version is missing; refusing an unverifiable import.'
         }
@@ -3935,6 +4013,7 @@ try {
             Write-Ok ("Game deltas: {0} competitive, {1} hybrid (sticky latency; FG off on comp when pack supports it)" -f $compCount, $hybridCount)
         }
 
+        Set-ExoStage 'profile-import'
         Write-HubProgress 40 'Profile Inspector (3D settings)...'
         Write-HubProgress 48 'Importing Base + per-game profiles (silent)...'
         try {
@@ -3952,6 +4031,7 @@ try {
 
         # Post-import DRS verification: read the live driver database back via
         # -exportCustomized and confirm the Base Profile pins actually landed.
+        Set-ExoStage 'drs-verify'
         Write-HubProgress 52 'Verifying imported pins against the live driver DRS...'
         $drsVerification = Test-ExoDrsImportVerified -NpiPath $npi -PackNipPath $nip
         switch ([string]$drsVerification.Verified) {
@@ -3972,6 +4052,7 @@ try {
 
     # --- 3) Client stack: DRIVER ONLY ---
     # Remove NVIDIA App/GFE + Control Panel. Exo panel is the only UI.
+    Set-ExoStage 'client-stack'
     $appInstalled = $false
     $cplOk = $false
     $clientWipe = $null
@@ -4025,6 +4106,7 @@ try {
 
     # Single ordered stage - no triple-pass of the same Enable/Disable work.
     # (Client wipe may still retry up to 3x only when App remains installed.)
+    Set-ExoStage 'debloat'
     Write-HubProgress 78 'Privacy / system debloat (telemetry once)...'
     Disable-NvidiaTelemetry
 
@@ -4051,19 +4133,31 @@ try {
         }
     }
 
+    Set-ExoStage 'display-policy'
     Write-HubProgress 90 'Display scaling/Hz/Full RGB (NVAPI + Control Panel)...'
     Write-Ok 'Applying display prefs via NVAPI (primary max Hz, secondary 60 Hz)'
     $dispResult = Coerce-Hashtable (Set-NvidiaDisplayPreferences)
     if (-not $dispResult) {
-        $dispResult = @{ Success = $false; Details = @('Display helper returned no result') }
+        $dispResult = @{
+            Success    = $false
+            Method     = 'none'
+            NvApiOk    = $false
+            RegistryOk = $false
+            Details    = @('Display helper returned no result')
+        }
     }
+    $displayNvApiOk = [bool]$dispResult.NvApiOk
+    $displayRegistryOk = [bool]$dispResult.RegistryOk
+    $displayPrefsOk = [bool]$dispResult.Success -and $displayNvApiOk
+    $displayMethod = if ($displayNvApiOk) { 'nvapi' } elseif ($displayRegistryOk) { 'registry' } else { $null }
     # One re-assert after display (NVAPI/DRS may touch profiles) - not a full second apply pass
     Write-HubProgress 92 'Re-assert DRS advanced 3D + developer after display...'
     $advanced3dOk = Enable-NvidiaAdvanced3dImageSettings
     [void](Enable-NvidiaControlPanelDeveloperSettings)
     $appInstalled = Test-NvidiaAppInstalled  # expect false
 
-    Write-HubProgress 94 'Saving status...'
+    Set-ExoStage 'finalize-checks'
+    Write-HubProgress 94 'Verifying driver/profile versions...'
     # Remember this driver version as tweak-OK so detect won't re-prompt until the version changes.
     $tweaksVer = $null
     $driverTweaksVerified = (-not [bool]$SkipDriver) -and [bool]$driverInfo.TweaksOk
@@ -4088,6 +4182,25 @@ try {
     if ($profileApplied -and [string]::IsNullOrWhiteSpace([string]$profileDriverVersion)) {
         throw 'The active driver version could not be recorded after profile import; refusing to mark the profile applied.'
     }
+
+    # Post-verify BEFORE writing a successful state. Saving applyInProgress=false
+    # first let late display/debloat throws look like a completed Apply.
+    Set-ExoStage 'post-verify'
+    if (Test-NvidiaAppInstalled) {
+        Write-Warn 'NVIDIA App is still present on this PC after wipe; Exo prefers Control Panel only.'
+    }
+    if (-not [bool]$displayPrefsOk) {
+        throw 'The 3D profile was applied, but NVIDIA display preferences could not be verified. Check the log and Apply again.'
+    }
+    if (-not [bool]$debloatResult.Ok) {
+        throw "The performance profile and display settings were applied, but NVIDIA background debloat verification failed: $($debloatResult.Issues -join '; ')"
+    }
+    if (-not [bool]$overlayResult.Ok) {
+        throw "The performance profile and display settings were applied, but NVIDIA overlay verification failed: $($overlayResult.Issues -join '; ')"
+    }
+
+    Set-ExoStage 'save-state'
+    Write-HubProgress 96 'Saving verified status...'
     Save-State @{
         version             = $Script:NvidiaOptVersion
         appliedUtc          = (Get-Date).ToUniversalTime().ToString('o')
@@ -4122,8 +4235,8 @@ try {
         exoPanel        = $true
         advanced3dImageSettings = [bool]$advanced3dOk
         displayClient       = 'exo-panel'
-        displayPrefs        = [bool]$dispResult.Success
-        displayMethod       = 'nvapi'
+        displayPrefs        = [bool]$displayPrefsOk
+        displayMethod       = $displayMethod
         displayDetails      = $dispResult.Details
         debloatApplied      = [bool]$debloatResult.Ok
         overlayDisabled     = [bool]$overlayResult.Ok
@@ -4136,19 +4249,9 @@ try {
         gameProfiles        = @($gameProfiles)
         gameProfileCount    = @($gameProfiles).Count
         gameProfileDeltas   = $true
-    }
-
-    if (Test-NvidiaAppInstalled) {
-        Write-Warn 'NVIDIA App is still present on this PC after wipe; Exo prefers Control Panel only.'
-    }
-    if (-not [bool]$dispResult.Success) {
-        throw 'The 3D profile was applied, but NVIDIA display preferences could not be verified. Check the log and Apply again.'
-    }
-    if (-not [bool]$debloatResult.Ok) {
-        throw "The performance profile and display settings were applied, but NVIDIA background debloat verification failed: $($debloatResult.Issues -join '; ')"
-    }
-    if (-not [bool]$overlayResult.Ok) {
-        throw "The performance profile and display settings were applied, but NVIDIA overlay verification failed: $($overlayResult.Issues -join '; ')"
+        lastErrorStage      = $null
+        lastError           = $null
+        lastErrorUtc        = $null
     }
 
     Write-Ok 'NVIDIA Optimizer finished'
@@ -4171,7 +4274,12 @@ try {
         $seriesId, $(if ($useGsync) { ' G-SYNC' } else { ' max FPS / latency' }), @($gameProfiles).Count)
     exit 0
 } catch {
-    Write-Err $_.Exception.Message
-    Write-HubProgress 100 'Failed'
+    $failStage = [string]$Script:CurrentStage
+    $failMessage = [string]$_.Exception.Message
+    # Persist the failing stage + reason so detect/UI can explain the failure
+    # after the run banner is gone (applyInProgress stays fail-closed).
+    Save-ExoFailureState -Stage $failStage -Message $failMessage
+    Write-Err ("Apply failed at stage '{0}': {1}" -f $failStage, $failMessage)
+    Write-HubProgress 100 ("Failed at {0}" -f $failStage)
     exit 1
 }

@@ -79,24 +79,24 @@
 
         <Border Grid.Row="1"
                 Style="{StaticResource ExoActionBar}"
-                Padding="16,10,16,12">
+                Padding="16,8,16,10">
             <StackPanel
                         HorizontalAlignment="Stretch"
-                        Spacing="10">
+                        Spacing="6">
                 <Border Style="{StaticResource ExoMessageBanner}"
                         Visibility="{x:Bind ViewModel.HasLastResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Grid ColumnSpacing="10">
+                    <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <FontIcon Glyph="{x:Bind ViewModel.LastResultGlyph, Mode=OneWay}" FontSize="14"
+                        <FontIcon Glyph="{x:Bind ViewModel.LastResultGlyph, Mode=OneWay}" FontSize="12"
                                   Foreground="{x:Bind ViewModel.LastResultBrush, Mode=OneWay}" VerticalAlignment="Top" />
                         <TextBlock Text="{x:Bind ViewModel.LastResult, Mode=OneWay}" Grid.Column="1"
-                                   Style="{StaticResource ExoBody}" TextWrapping="Wrap" />
+                                   Style="{StaticResource ExoMessageText}" TextWrapping="Wrap" />
                     </Grid>
                 </Border>
-                <StackPanel Spacing="6"
+                <StackPanel Spacing="4"
                             Visibility="{x:Bind ViewModel.IsProgressVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                     <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
                                  Height="3" CornerRadius="2" Foreground="{ThemeResource ExoAccentBrush}" />

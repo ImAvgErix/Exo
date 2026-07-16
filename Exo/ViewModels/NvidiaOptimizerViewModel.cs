@@ -178,7 +178,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                 workingDirectory: _services.Scripts.GetNvidiaRoot());
 
             SetResult(
-                result.Success ? Helpers.OptimizerMessages.RepairFinished : (result.ErrorMessage ?? result.Summary),
+                result.Success ? Helpers.OptimizerMessages.NvidiaStatusCleared : (result.ErrorMessage ?? result.Summary),
                 success: result.Success);
 
             await RefreshAfterRunAsync();

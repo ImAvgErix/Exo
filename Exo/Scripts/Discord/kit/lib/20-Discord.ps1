@@ -75,10 +75,18 @@ function Write-DiscordResourceBytes {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 
+    $bak = "$Path.exo-bak"
+    $tmp = "$Path.tmpwrite"
+
     for ($i = 1; $i -le $Attempts; $i++) {
         Stop-Discord
         Write-HubProgress 57 ("Rewriting Discord resources ($i/$Attempts)...")
+        $backupActive = $false
         try {
+            if ((Test-Path -LiteralPath $bak) -and -not (Test-Path -LiteralPath $Path)) {
+                Move-Item -LiteralPath $bak -Destination $Path -Force -ErrorAction Stop
+            }
+
             if (Test-Path -LiteralPath $Path) {
                 attrib -R -S -H "$Path" 2>$null
                 try { & takeown.exe /F "$Path" /A 2>$null | Out-Null } catch { }
@@ -88,17 +96,11 @@ function Write-DiscordResourceBytes {
                     if ($sid) { & icacls.exe "$Path" /grant "*$sid`:F" /C 2>$null | Out-Null }
                 } catch { }
 
-                $bak = "$Path.lockbak"
-                try {
-                    if (Test-Path -LiteralPath $bak) { Remove-Item -LiteralPath $bak -Force -ErrorAction SilentlyContinue }
-                    Move-Item -LiteralPath $Path -Destination $bak -Force -ErrorAction Stop
-                    Remove-Item -LiteralPath $bak -Force -ErrorAction SilentlyContinue
-                } catch {
-                    try { Remove-Item -LiteralPath $Path -Force -ErrorAction Stop } catch { }
-                }
+                if (Test-Path -LiteralPath $bak) { Remove-Item -LiteralPath $bak -Force -ErrorAction Stop }
+                Move-Item -LiteralPath $Path -Destination $bak -Force -ErrorAction Stop
+                $backupActive = $true
             }
 
-            $tmp = "$Path.tmpwrite"
             if (Test-Path -LiteralPath $tmp) {
                 Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
             }
@@ -118,13 +120,27 @@ function Write-DiscordResourceBytes {
             }
             Move-Item -LiteralPath $tmp -Destination $Path -Force
             if ((Test-Path -LiteralPath $Path) -and ((Get-Item -LiteralPath $Path).Length -eq $Bytes.Length)) {
+                if (Test-Path -LiteralPath $bak) { Remove-Item -LiteralPath $bak -Force -ErrorAction SilentlyContinue }
                 return
             }
             throw "Write verify failed for $Path"
         } catch {
-            try { Remove-Item -LiteralPath "$Path.tmpwrite" -Force -ErrorAction SilentlyContinue } catch { }
+            $writeError = $_
+            try { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue } catch { }
+            if ($backupActive -and (Test-Path -LiteralPath $bak)) {
+                try {
+                    if (Test-Path -LiteralPath $Path) {
+                        attrib -R -S -H "$Path" 2>$null
+                        Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+                    }
+                    Move-Item -LiteralPath $bak -Destination $Path -Force -ErrorAction Stop
+                    $backupActive = $false
+                } catch {
+                    throw "Write failed for $Path and backup restore failed; backup remains at $bak ($($_.Exception.Message))"
+                }
+            }
             if ($i -ge $Attempts) { throw }
-            Write-Warn ("Waiting for Discord to release file lock ($i/$Attempts): " + $_.Exception.Message)
+            Write-Warn ("Waiting for Discord to release file lock ($i/$Attempts): " + $writeError.Exception.Message)
             Start-Sleep -Milliseconds (400 * $i)
         }
     }

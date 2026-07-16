@@ -189,12 +189,13 @@
                 <Image x:Name="ContextLogo" Visibility="Collapsed" Width="0" Height="0" />
                 <TextBlock x:Name="AppTitleText" Visibility="Collapsed" Text="" />
 
+                <!-- Kept for BackButton layout; drag is NavRail (SetTitleBar). -->
                 <Grid x:Name="TitleBarDragRegion"
                       Grid.Column="1"
                       Background="Transparent"
                       HorizontalAlignment="Stretch"
                       VerticalAlignment="Stretch"
-                      MinHeight="8" />
+                      MinHeight="0" />
             </Grid>
 
             <Frame x:Name="ContentFrame"

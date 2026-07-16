@@ -1,3 +1,9 @@
+## 2.6.5
+
+- **Safety audit**: NVIDIA Apply now persists failing stage/reason, records displayPrefs only when NVAPI verifies (not registry-only), saves success state only after post-verify, and passes `-NoTask` so tray clear cannot register a logon task. Reset banner says status cleared only
+- **Discord**: ASAR/resource writes keep a verified `.exo-bak` until the replacement lands; Repair downloads+signature-verifies the installer before deleting Discord files
+- **UI**: crash-loop safe mode now covers `ExoLoader` (no composition when previous launch died before first frame); loader drops composition Scale/Opacity writes; window drag uses the full NavRail; feature-list overlay scrollbar stops right-edge clipping
+
 ## 2.6.4
 
 - **CRITICAL Internet rescue**: post-apply auto-rollback now does a **full snapshot restore** (registry, NIC advanced props, bindings, TCP, metrics) instead of Wi-Fi/metrics-only — the old path left host-stack tweaks applied and could leave the box offline

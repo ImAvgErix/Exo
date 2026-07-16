@@ -726,8 +726,12 @@ if ($state -and $currentNv -and $state.profileDriverVersion -and
     $driverChanged = $true
 }
 
+$lastErrorStage = if ($state -and $state.lastErrorStage) { [string]$state.lastErrorStage } else { '' }
+$lastError = if ($state -and $state.lastError) { [string]$state.lastError } else { '' }
+
 $statusText = if (-not $gpuOk) { 'No NVIDIA GPU' }
 elseif ($pendingAfterDriver) { 'Restart required' }
+elseif ($applyInProgress -and $lastErrorStage) { ("Failed at {0}" -f $lastErrorStage) }
 elseif (-not $currentNv) { 'Driver status unavailable' }
 elseif (-not $isNotebookGpu -and $needsUpdate) { 'Driver update available' }
 elseif (-not $isNotebookGpu -and $needsRetweak) { 'Driver tweaks available' }
@@ -745,6 +749,7 @@ else { 'Not applied' }
 
 $detail = if (-not $gpuOk) { 'Needs an NVIDIA GPU and current drivers.' }
 elseif ($pendingAfterDriver) { 'Restart Windows, then Apply once more to finish profile and display setup.' }
+elseif ($applyInProgress -and $lastError) { $lastError }
 elseif (-not $currentNv) { 'Could not read the NVIDIA driver version. Repair the driver, then refresh.' }
 elseif ($isNotebookGpu -and -not $isApplied) { 'Laptop GPU: desktop auto-update is skipped. Apply still imports 3D profiles and display policy when panels are NVIDIA-connected.' }
 elseif (-not $isNotebookGpu -and $needsUpdate) { 'Apply can install a clean display driver package, then continues with profiles and display prefs.' }

@@ -109,7 +109,7 @@ function Clear-RepairRendererState([string]$AppDataDiscord, [bool]$DoFullReset) 
     Write-RepOk "Renderer state purged ($removed item(s))"
 }
 
-function Install-RepairFreshDiscord([string]$DiscordRoot) {
+function Get-RepairVerifiedDiscordSetup {
     Write-RepStep 'Downloading official Discord installer...'
     $setup = Join-Path ([IO.Path]::GetTempPath()) 'DiscordSetup-exo-repair.exe'
     if (Test-Path -LiteralPath $setup) {
@@ -132,8 +132,20 @@ function Install-RepairFreshDiscord([string]$DiscordRoot) {
             throw "Discord installer signature is invalid ($($signature.Status))"
         }
 
+        return $setup
+    } catch {
+        Remove-Item -LiteralPath $setup -Force -ErrorAction SilentlyContinue
+        throw
+    }
+}
+
+function Install-RepairFreshDiscord([string]$DiscordRoot, [string]$Setup) {
+    if (-not (Test-Path -LiteralPath $Setup)) {
+        throw 'Discord installer is missing - download it from discord.com manually'
+    }
+    try {
         Write-RepStep 'Installing Discord (silent)...'
-        $p = Start-Process -FilePath $setup -ArgumentList '-s' -PassThru -WindowStyle Hidden
+        $p = Start-Process -FilePath $Setup -ArgumentList '-s' -PassThru -WindowStyle Hidden
         if ($null -eq $p) { throw 'Failed to start Discord installer' }
         if (-not $p.WaitForExit(300000)) {
             try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { }
@@ -149,7 +161,7 @@ function Install-RepairFreshDiscord([string]$DiscordRoot) {
         }
         throw 'Discord install did not complete - run the installer from discord.com manually'
     } finally {
-        Remove-Item -LiteralPath $setup -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $Setup -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -428,6 +440,7 @@ try {
     $doFull = $FullReset -or
         ([Environment]::GetEnvironmentVariable('EXO_REPAIR_FULL') -eq '1') -or
         ([Environment]::GetEnvironmentVariable('DISCOPT_REPAIR_FULL') -eq '1')
+    $repairSetup = $null
 
     Write-Host ''
     Write-Host '  Exo - Discord Clean Reset' -ForegroundColor Cyan
@@ -438,15 +451,19 @@ try {
     Write-RepStep 'Closing Discord...'
     Stop-RepairDiscord $discordRoot
 
-    Write-HubProgress 20 'Removing program files...'
+    Write-HubProgress 20 'Downloading Discord installer...'
+    $repairSetup = Get-RepairVerifiedDiscordSetup
+
+    Write-HubProgress 35 'Removing program files...'
     Remove-RepairProgramFiles $discordRoot
 
-    Write-HubProgress 40 'Clearing renderer state...'
+    Write-HubProgress 45 'Clearing renderer state...'
     Clear-RepairRendererState $appDataDiscord $doFull
     Remove-BrokenThemes $appData
 
     Write-HubProgress 55 'Installing fresh Discord...'
-    $app = Install-RepairFreshDiscord $discordRoot
+    $app = Install-RepairFreshDiscord $discordRoot $repairSetup
+    $repairSetup = $null
     Write-RepOk "Discord $($app.Name) installed clean"
 
     Write-HubProgress 82 'Restoring stock shortcuts...'
@@ -484,6 +501,9 @@ try {
     exit 0
 } catch {
     $failureRecord = $_
+    if ($repairSetup) {
+        try { Remove-Item -LiteralPath $repairSetup -Force -ErrorAction SilentlyContinue } catch { }
+    }
     try {
         $failedState = Read-RepairDiscordState
         if ($failedState) {

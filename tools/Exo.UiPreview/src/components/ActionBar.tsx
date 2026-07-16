@@ -68,7 +68,7 @@ export function ActionBar({
 
       <div className="action-foot__controls">
         {variant === 'internet' ? (
-          <div className="action-foot__dual">
+          <div className="action-foot__internet-grid">
             <button
               type="button"
               className="btn btn-primary"
@@ -84,6 +84,22 @@ export function ActionBar({
               onClick={onThroughput}
             >
               Highest download
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="btn-repair"
+              onClick={onRepair}
+            >
+              {repairLabel}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="btn-refresh"
+              onClick={onRefresh}
+            >
+              Refresh
             </button>
           </div>
         ) : variant === 'panel' ? (
@@ -116,7 +132,7 @@ export function ActionBar({
           </button>
         )}
 
-        {variant !== 'panel' ? (
+        {variant !== 'panel' && variant !== 'internet' ? (
           <RepairRefreshRow
             repairLabel={repairLabel}
             onRepair={onRepair}
