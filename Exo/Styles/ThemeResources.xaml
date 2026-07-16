@@ -109,20 +109,8 @@
         <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
         <Setter Property="BorderThickness" Value="0,0,0,1" />
         <Setter Property="CornerRadius" Value="0" />
-        <Setter Property="Padding" Value="14,12" />
-        <Setter Property="MinHeight" Value="52" />
-        <Setter Property="HorizontalAlignment" Value="Stretch" />
-        <Setter Property="UseLayoutRounding" Value="True" />
-    </Style>
-
-    <!-- Home directory row chrome — glass cards, 44px logos -->
-    <Style x:Key="ExoDirectoryRow" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="20" />
-        <Setter Property="Padding" Value="16,10" />
-        <Setter Property="MinHeight" Value="60" />
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="MinHeight" Value="46" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
@@ -133,7 +121,7 @@
         <Setter Property="BorderBrush" Value="{ThemeResource ExoSpecularStrokeBrush}" />
         <Setter Property="BorderThickness" Value="0,1,0,0" />
         <Setter Property="CornerRadius" Value="0" />
-        <Setter Property="Padding" Value="20,14,20,16" />
+        <Setter Property="Padding" Value="16,12,16,14" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
@@ -304,11 +292,11 @@
     -->
     <Style x:Key="ExoPrimaryButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
-        <Setter Property="Padding" Value="20,13" />
+        <Setter Property="Padding" Value="18,11" />
         <Setter Property="CornerRadius" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="MinHeight" Value="46" />
+        <Setter Property="MinHeight" Value="40" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="Background" Value="{ThemeResource ExoAccentBrush}" />

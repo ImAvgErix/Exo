@@ -58,9 +58,6 @@
   --dur: 200ms;
   --dur-page: 240ms;
 
-  --dock-size: 72px;
-  --dock-gap: 18px;
-
   font-family: var(--font-ui);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -226,8 +223,8 @@ img {
 }
 
 .btn-primary {
-  min-height: 44px;
-  padding: 11px 28px;
+  min-height: 40px;
+  padding: 10px 24px;
   background: var(--exo-accent);
   color: var(--exo-on-accent);
   border-color: rgba(255, 255, 255, 0.25);
@@ -247,8 +244,8 @@ img {
 }
 
 .btn-ghost {
-  min-height: 40px;
-  padding: 8px 18px;
+  min-height: 36px;
+  padding: 7px 16px;
   background: var(--glass-fill);
   border-color: var(--glass-rim);
   color: var(--exo-text);
@@ -260,45 +257,6 @@ img {
 .btn-ghost:hover {
   background: var(--glass-fill-strong);
   border-color: var(--exo-ring-soft);
-}
-
-.btn-quiet {
-  min-height: 36px;
-  padding: 6px 14px;
-  background: var(--glass-fill);
-  border-color: var(--glass-rim-soft);
-  color: var(--exo-text);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  border-radius: var(--radius-chip);
-}
-
-.btn-quiet:hover {
-  background: var(--glass-fill-strong);
-  box-shadow: inset 0 0 0 1px var(--exo-ring-soft);
-}
-
-.btn-white {
-  /* Alias of btn-primary — prefer btn-primary at call sites */
-  min-height: 44px;
-  padding: 11px 28px;
-  background: var(--exo-accent);
-  color: var(--exo-on-accent);
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.4) inset,
-    0 6px 20px rgba(0, 0, 0, 0.35);
-  border-radius: var(--radius-pill);
-}
-
-.btn-white:hover {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.5) inset,
-    0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-.btn-white:active {
-  animation: apply-pulse 280ms var(--ease-out);
 }
 
 @keyframes apply-pulse {

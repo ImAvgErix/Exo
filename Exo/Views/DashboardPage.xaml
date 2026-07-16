@@ -12,39 +12,40 @@
       Coming soon is a quiet centered line.
     -->
     <Grid x:Name="PageRoot"
-          Padding="8,8,8,12"
+          Padding="8,8,8,8"
           HorizontalAlignment="Stretch"
           VerticalAlignment="Stretch"
           UseLayoutRounding="True">
         <StackPanel x:Name="HomeStack"
                     HorizontalAlignment="Stretch"
-                    VerticalAlignment="Center"
+                    VerticalAlignment="Top"
+                    Margin="0,48,0,0"
                     Spacing="0"
                     UseLayoutRounding="True">
 
             <TextBlock x:Name="HeroBrand"
                        Text="Exo"
                        FontFamily="{StaticResource ExoUiFontSemiBold}"
-                       FontSize="72"
+                       FontSize="56"
                        FontWeight="SemiBold"
                        CharacterSpacing="-40"
-                       LineHeight="72"
+                       LineHeight="56"
                        Foreground="{ThemeResource ExoPrimaryTextBrush}"
                        TextAlignment="Center"
                        HorizontalAlignment="Stretch"
                        OpticalMarginAlignment="TrimSideBearings"
                        UseLayoutRounding="True"
-                       Margin="0,0,0,8" />
+                       Margin="0,0,0,6" />
 
             <TextBlock x:Name="HeroTagline"
                        Text="Maximum performance. No compromise."
                        Style="{StaticResource ExoTagline}"
-                       FontSize="24"
-                       LineHeight="30"
+                       FontSize="22"
+                       LineHeight="28"
                        TextWrapping="WrapWholeWords"
                        TextAlignment="Center"
                        HorizontalAlignment="Stretch"
-                       Margin="0,0,0,28"
+                       Margin="0,0,0,16"
                        UseLayoutRounding="True" />
 
             <StackPanel x:Name="SoonRow"

@@ -70,7 +70,7 @@ if (File.Exists(main))
     // v2.6 top bar — full-width NavRail over content that fills the frame.
     Expect("nav rail", m.Contains("NavRail", StringComparison.Ordinal));
     Expect("rail glass fill", m.Contains("ExoRailGlassFillBrush", StringComparison.Ordinal));
-    Expect("top bar workspace", m.Contains("Padding=\"16\"", StringComparison.Ordinal));
+    Expect("top bar workspace", m.Contains("Padding=\"12\"", StringComparison.Ordinal));
     Expect("top bar row layout",
         m.Contains("RowDefinitions", StringComparison.Ordinal)
         && m.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));

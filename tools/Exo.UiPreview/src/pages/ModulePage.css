@@ -21,7 +21,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 18px;
+  padding: 12px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   flex-shrink: 0;
 }
@@ -45,7 +45,7 @@
 .module-plate__status {
   margin: 0;
   font-family: var(--font-ui);
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1.15;
@@ -105,9 +105,13 @@
 }
 
 .module-plate__features {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+}
+
+.module-plate .action-foot {
+  margin-top: auto;
 }
 
 .theme-light .module-plate__header,

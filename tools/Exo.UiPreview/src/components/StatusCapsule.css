@@ -46,15 +46,4 @@
   background: var(--exo-success);
   opacity: 1;
   box-shadow: 0 0 8px rgba(52, 211, 153, 0.7);
-  animation: capsule-glow 2.4s ease-in-out infinite;
-}
-
-@keyframes capsule-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 6px rgba(52, 211, 153, 0.55);
-  }
-  50% {
-    box-shadow: 0 0 12px rgba(52, 211, 153, 0.9);
-  }
 }

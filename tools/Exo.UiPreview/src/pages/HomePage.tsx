@@ -1,9 +1,8 @@
-import type { ModuleId } from '../data/mock'
 import { directoryCards } from '../data/mock'
 import './HomePage.css'
 
 /** Live modules are opened from the top bar — home is brand + coming soon only. */
-export function HomePage(_props: { onOpen: (id: ModuleId) => void }) {
+export function HomePage() {
   const soon = directoryCards.filter((c) => c.comingSoon)
 
   return (

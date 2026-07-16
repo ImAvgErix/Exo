@@ -1,7 +1,8 @@
 ## 2.6.0
 
 - **UI — Exo Instrument**: full-width top bar (EXO · icon modules · Settings) with content filling the frame below; one edge-glass module plate; home is brand + coming soon only (no duplicate module buttons)
-- **UI — one system**: feature rows = status rail + icon + Applied/Not applied only; primary = solid accent; secondary = quiet glass
+- **UI — one system**: feature rows = status rail + Applied/Not applied only; primary = solid accent; secondary = quiet glass
+- **UI — denser chrome**: tighter top bar / plate / action foot; home top-aligned (less dead black); dropped unused preview chips/strips
 - **UI — motion polish**: short ease-out storyboards; rail selection = wash + accent ring (no logo scale)
 - **Preview — agent instrument mock**: `tools/Exo.UiPreview` tracks the same layout language for Linux click QA — not shipping Apply
 

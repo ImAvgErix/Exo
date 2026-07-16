@@ -18,7 +18,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Grid Padding="20,16,20,8">
+        <Grid Padding="16,12,16,8">
             <Grid
                   HorizontalAlignment="Stretch"
                   RowSpacing="12">
@@ -55,7 +55,7 @@
         <!-- Plate foot — primary Apply, quiet Repair/Refresh -->
         <Border Grid.Row="1"
                 Style="{StaticResource ExoActionBar}"
-                Padding="20,12,20,14">
+                Padding="16,10,16,12">
             <StackPanel
                         HorizontalAlignment="Stretch"
                         Spacing="10">

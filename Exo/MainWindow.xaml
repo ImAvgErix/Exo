@@ -12,10 +12,10 @@
     -->
     <Grid x:Name="RootGrid"
           Background="{ThemeResource ExoPageBackgroundBrush}"
-          Padding="16">
+          Padding="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="12" />
+            <RowDefinition Height="8" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -26,7 +26,7 @@
                 BorderThickness="1"
                 CornerRadius="14"
                 Padding="8,6"
-                MinHeight="56"
+                MinHeight="48"
                 HorizontalAlignment="Stretch">
             <Grid>
                 <Border BorderBrush="{ThemeResource ExoSpecularStrokeBrush}"
@@ -49,7 +49,7 @@
                             AutomationProperties.Name="Home"
                             Click="NavHome_Click"
                             Width="64"
-                            Height="44"
+                            Height="40"
                             HorizontalAlignment="Left">
                         <TextBlock Text="EXO"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
@@ -71,7 +71,7 @@
                                 Click="NavDiscord_Click"
                                 Tag="discord"
                                 Width="48"
-                                Height="44">
+                                Height="40">
                             <Image Source="ms-appx:///Assets/Logos/discord.png"
                                    Width="22" Height="22"
                                    Stretch="Uniform"
@@ -84,7 +84,7 @@
                                 Click="NavSteam_Click"
                                 Tag="steam"
                                 Width="48"
-                                Height="44">
+                                Height="40">
                             <Image Source="ms-appx:///Assets/Logos/steam.png"
                                    Width="22" Height="22"
                                    Stretch="Uniform"
@@ -97,7 +97,7 @@
                                 Click="NavInternet_Click"
                                 Tag="internet"
                                 Width="48"
-                                Height="44">
+                                Height="40">
                             <Image Source="ms-appx:///Assets/Logos/internet.png"
                                    Width="22" Height="22"
                                    Stretch="Uniform"
@@ -110,7 +110,7 @@
                                 Click="NavNvidia_Click"
                                 Tag="nvidia"
                                 Width="48"
-                                Height="44">
+                                Height="40">
                             <Image Source="ms-appx:///Assets/Logos/nvidia.png"
                                    Width="22" Height="22"
                                    Stretch="Uniform"
@@ -125,7 +125,7 @@
                             AutomationProperties.Name="Settings"
                             Click="SettingsButton_Click"
                             Width="48"
-                            Height="44"
+                            Height="40"
                             HorizontalAlignment="Right">
                         <FontIcon x:Name="SettingsGearIcon"
                                   Glyph="&#xE713;"

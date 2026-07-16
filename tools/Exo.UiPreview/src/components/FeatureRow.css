@@ -1,10 +1,10 @@
 .feature-row {
   display: grid;
-  grid-template-columns: 2px 28px 1fr;
+  grid-template-columns: 3px 1fr;
   align-items: center;
   column-gap: 12px;
-  min-height: 48px;
-  padding: 10px 18px;
+  min-height: 44px;
+  padding: 8px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   transition: background-color var(--dur-fast) var(--ease-out);
 }
@@ -23,9 +23,9 @@
 
 .feature-row__rail {
   align-self: stretch;
-  width: 2px;
-  min-height: 24px;
-  border-radius: 1px;
+  width: 3px;
+  min-height: 20px;
+  border-radius: 1.5px;
   background: var(--exo-muted);
   opacity: 0.35;
   transition:
@@ -36,18 +36,6 @@
 .feature-row.is-applied .feature-row__rail {
   background: var(--exo-success);
   opacity: 1;
-}
-
-.feature-row__icon {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  display: grid;
-  place-items: center;
-  font-size: 10px;
-  color: var(--exo-muted);
 }
 
 .feature-row__title {

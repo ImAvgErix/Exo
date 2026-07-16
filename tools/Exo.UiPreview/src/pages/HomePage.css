@@ -1,29 +1,29 @@
 .home-page {
   height: 100%;
   width: 100%;
-  padding: 8px 4px;
+  padding: 28px 12px 16px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
-  gap: 28px;
+  gap: 18px;
   overflow: hidden;
   text-align: center;
 }
 
 .home-page__hero {
   width: 100%;
-  max-width: 900px;
+  max-width: 720px;
 }
 
 .home-page__brand {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   font-family: var(--font-ui);
-  font-size: 96px;
+  font-size: 56px;
   font-weight: 700;
-  letter-spacing: -0.06em;
-  line-height: 0.9;
+  letter-spacing: -0.055em;
+  line-height: 0.95;
   color: var(--exo-text);
 }
 
@@ -31,7 +31,7 @@
   margin: 0;
   font-family: var(--font-display);
   font-style: italic;
-  font-size: 26px;
+  font-size: 22px;
   line-height: 1.25;
   font-weight: 400;
   color: var(--exo-secondary);
@@ -43,9 +43,9 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 10px 14px;
+  gap: 8px 12px;
   margin: 0;
-  max-width: 920px;
+  max-width: 720px;
 }
 
 .home-page__soon-label {
@@ -60,7 +60,7 @@
 .home-page__soon-items {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 10px 14px;
+  gap: 8px 12px;
 }
 
 .home-page__soon-item {

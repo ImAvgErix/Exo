@@ -14,6 +14,37 @@ interface ActionBarProps {
   message?: string | null
 }
 
+function RepairRefreshRow({
+  repairLabel,
+  onRepair,
+  onRefresh,
+}: {
+  repairLabel: string
+  onRepair?: () => void
+  onRefresh?: () => void
+}) {
+  return (
+    <div className="action-foot__secondary">
+      <button
+        type="button"
+        className="btn btn-ghost"
+        data-testid="btn-repair"
+        onClick={onRepair}
+      >
+        {repairLabel}
+      </button>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        data-testid="btn-refresh"
+        onClick={onRefresh}
+      >
+        Refresh
+      </button>
+    </div>
+  )
+}
+
 export function ActionBar({
   variant = 'standard',
   applyLabel = 'Apply',
@@ -85,46 +116,12 @@ export function ActionBar({
           </button>
         )}
 
-        {variant !== 'panel' && variant !== 'internet' ? (
-          <div className="action-foot__secondary">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              data-testid="btn-repair"
-              onClick={onRepair}
-            >
-              {repairLabel}
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              data-testid="btn-refresh"
-              onClick={onRefresh}
-            >
-              Refresh
-            </button>
-          </div>
-        ) : null}
-
-        {variant === 'internet' ? (
-          <div className="action-foot__secondary">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              data-testid="btn-repair"
-              onClick={onRepair}
-            >
-              {repairLabel}
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              data-testid="btn-refresh"
-              onClick={onRefresh}
-            >
-              Refresh
-            </button>
-          </div>
+        {variant !== 'panel' ? (
+          <RepairRefreshRow
+            repairLabel={repairLabel}
+            onRepair={onRepair}
+            onRefresh={onRefresh}
+          />
         ) : null}
       </div>
 
