@@ -7,10 +7,11 @@
     Title="Exo">
 
     <!--
-      v3.0.1 top bar:
-      Settings (left, where EXO used to live) · module icons · Home pill when away
-      RightInset padding keeps chrome clear of min/close caption buttons.
-      Entire NavRail is SetTitleBar — empty glass is draggable.
+      v3.0.3 shell (exo-ui-craft + better-ui hit targets):
+      - Left chrome: Settings on home, morphs to Home on module pages (same circle slot)
+      - Module icons optically centered in the full bar (not shoved by left/right chrome)
+      - CaptionSpacer clears Windows min/close
+      - Full circle is clickable (SelectionFill hit-test true)
     -->
     <Grid x:Name="RootGrid"
           Background="{ThemeResource ExoPageBackgroundBrush}"
@@ -29,36 +30,90 @@
                 MinHeight="52"
                 HorizontalAlignment="Stretch">
             <Grid x:Name="NavRailInner">
-                <Grid.ColumnDefinitions>
-                    <!-- Settings (always) -->
-                    <ColumnDefinition Width="Auto" />
-                    <!-- Home when not on dashboard -->
-                    <ColumnDefinition Width="Auto" />
-                    <!-- Drag + centered modules -->
-                    <ColumnDefinition Width="*" />
-                    <!-- Clear of Windows caption buttons -->
-                    <ColumnDefinition x:Name="CaptionSpacer" Width="138" />
-                </Grid.ColumnDefinitions>
+                <!-- Layer 1: module icons true-centered in the full bar width -->
+                <StackPanel x:Name="ModuleIcons"
+                            Orientation="Horizontal"
+                            Spacing="10"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                    <Button x:Name="NavDiscord"
+                            Style="{StaticResource ExoGlassCircle}"
+                            AutomationProperties.Name="Discord"
+                            Click="NavDiscord_Click"
+                            Tag="discord">
+                        <Image Source="ms-appx:///Assets/Logos/discord.png"
+                               Width="22" Height="22"
+                               Stretch="Uniform"
+                               UseLayoutRounding="True"
+                               IsHitTestVisible="False"
+                               AutomationProperties.AccessibilityView="Raw" />
+                    </Button>
+                    <Button x:Name="NavSteam"
+                            Style="{StaticResource ExoGlassCircle}"
+                            AutomationProperties.Name="Steam"
+                            Click="NavSteam_Click"
+                            Tag="steam">
+                        <Image Source="ms-appx:///Assets/Logos/steam.png"
+                               Width="22" Height="22"
+                               Stretch="Uniform"
+                               UseLayoutRounding="True"
+                               IsHitTestVisible="False"
+                               AutomationProperties.AccessibilityView="Raw" />
+                    </Button>
+                    <Button x:Name="NavInternet"
+                            Style="{StaticResource ExoGlassCircle}"
+                            AutomationProperties.Name="Internet"
+                            Click="NavInternet_Click"
+                            Tag="internet">
+                        <Image Source="ms-appx:///Assets/Logos/internet.png"
+                               Width="22" Height="22"
+                               Stretch="Uniform"
+                               UseLayoutRounding="True"
+                               IsHitTestVisible="False"
+                               AutomationProperties.AccessibilityView="Raw" />
+                    </Button>
+                    <Button x:Name="NavNvidia"
+                            Style="{StaticResource ExoGlassCircle}"
+                            AutomationProperties.Name="NVIDIA"
+                            Click="NavNvidia_Click"
+                            Tag="nvidia">
+                        <Image Source="ms-appx:///Assets/Logos/nvidia.png"
+                               Width="22" Height="22"
+                               Stretch="Uniform"
+                               UseLayoutRounding="True"
+                               IsHitTestVisible="False"
+                               AutomationProperties.AccessibilityView="Raw" />
+                    </Button>
+                </StackPanel>
 
-                <!-- Settings — left end (replaces EXO bubble position) -->
+                <!-- Layer 2: left chrome — Settings (home) or Home (module) same slot -->
                 <Button x:Name="SettingsButton"
-                        Grid.Column="0"
                         Style="{StaticResource ExoGlassCircle}"
                         AutomationProperties.Name="Settings"
                         Click="SettingsButton_Click"
-                        Margin="0,0,8,0"
                         HorizontalAlignment="Left"
-                        VerticalAlignment="Center">
-                    <FontIcon x:Name="SettingsGearIcon"
-                              Glyph="&#xE713;"
-                              FontSize="15"
-                              HorizontalAlignment="Center"
-                              VerticalAlignment="Center"
-                              RenderTransformOrigin="0.5,0.5">
-                        <FontIcon.RenderTransform>
-                            <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
-                        </FontIcon.RenderTransform>
-                    </FontIcon>
+                        VerticalAlignment="Center"
+                        Margin="0,0,0,0">
+                    <Grid>
+                        <FontIcon x:Name="SettingsGearIcon"
+                                  Glyph="&#xE713;"
+                                  FontSize="15"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  IsHitTestVisible="False"
+                                  RenderTransformOrigin="0.5,0.5">
+                            <FontIcon.RenderTransform>
+                                <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
+                            </FontIcon.RenderTransform>
+                        </FontIcon>
+                        <FontIcon x:Name="HomeChromeIcon"
+                                  Glyph="&#xE80F;"
+                                  FontSize="15"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Visibility="Collapsed"
+                                  IsHitTestVisible="False" />
+                    </Grid>
                     <FlyoutBase.AttachedFlyout>
                         <Flyout x:Name="SettingsFlyout"
                                 Placement="Bottom"
@@ -79,83 +134,20 @@
                     </FlyoutBase.AttachedFlyout>
                 </Button>
 
-                <!-- Home — clear pill (away from modules); goes to dashboard -->
+                <!-- Hidden legacy name kept for selection chrome code paths -->
                 <Button x:Name="NavHome"
-                        Grid.Column="1"
-                        Style="{StaticResource ExoQuietButton}"
-                        AutomationProperties.Name="Home"
-                        Click="NavHome_Click"
-                        MinWidth="88"
-                        MinHeight="36"
-                        Padding="14,6"
-                        Margin="0,0,8,0"
-                        VerticalAlignment="Center"
-                        Visibility="Collapsed">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon Glyph="&#xE80F;" FontSize="14" VerticalAlignment="Center" />
-                        <TextBlock Text="Home"
-                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                   FontSize="13"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
+                        Visibility="Collapsed"
+                        IsHitTestVisible="False"
+                        Width="0" Height="0"
+                        Click="NavHome_Click" />
 
-                <!-- Transparent drag field + centered module circles -->
-                <Grid Grid.Column="2" Background="Transparent" MinHeight="48">
-                    <StackPanel Orientation="Horizontal"
-                                Spacing="10"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center">
-                        <Button x:Name="NavDiscord"
-                                Style="{StaticResource ExoGlassCircle}"
-                                AutomationProperties.Name="Discord"
-                                Click="NavDiscord_Click"
-                                Tag="discord">
-                            <Image Source="ms-appx:///Assets/Logos/discord.png"
-                                   Width="22" Height="22"
-                                   Stretch="Uniform"
-                                   UseLayoutRounding="True"
-                                   AutomationProperties.AccessibilityView="Raw" />
-                        </Button>
-                        <Button x:Name="NavSteam"
-                                Style="{StaticResource ExoGlassCircle}"
-                                AutomationProperties.Name="Steam"
-                                Click="NavSteam_Click"
-                                Tag="steam">
-                            <Image Source="ms-appx:///Assets/Logos/steam.png"
-                                   Width="22" Height="22"
-                                   Stretch="Uniform"
-                                   UseLayoutRounding="True"
-                                   AutomationProperties.AccessibilityView="Raw" />
-                        </Button>
-                        <Button x:Name="NavInternet"
-                                Style="{StaticResource ExoGlassCircle}"
-                                AutomationProperties.Name="Internet"
-                                Click="NavInternet_Click"
-                                Tag="internet">
-                            <Image Source="ms-appx:///Assets/Logos/internet.png"
-                                   Width="22" Height="22"
-                                   Stretch="Uniform"
-                                   UseLayoutRounding="True"
-                                   AutomationProperties.AccessibilityView="Raw" />
-                        </Button>
-                        <Button x:Name="NavNvidia"
-                                Style="{StaticResource ExoGlassCircle}"
-                                AutomationProperties.Name="NVIDIA"
-                                Click="NavNvidia_Click"
-                                Tag="nvidia">
-                            <Image Source="ms-appx:///Assets/Logos/nvidia.png"
-                                   Width="22" Height="22"
-                                   Stretch="Uniform"
-                                   UseLayoutRounding="True"
-                                   AutomationProperties.AccessibilityView="Raw" />
-                        </Button>
-                    </StackPanel>
-                </Grid>
-
-                <!-- Empty column under caption buttons — not interactive chrome -->
-                <Border Grid.Column="3" Background="Transparent" />
+                <!-- Layer 3: dead zone under Windows caption buttons -->
+                <Border x:Name="CaptionSpacerHost"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Stretch"
+                        Background="Transparent"
+                        Width="146"
+                        IsHitTestVisible="False" />
             </Grid>
         </Border>
 
@@ -165,7 +157,6 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!-- Secondary back only for NVIDIA panel → optimizer -->
             <Grid x:Name="TitleBarHost"
                   Grid.Row="0"
                   Background="Transparent"
@@ -184,7 +175,7 @@
                         IsTabStop="True"
                         UseSystemFocusVisuals="True">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon Glyph="&#xE72B;" FontSize="12" VerticalAlignment="Center" />
+                        <FontIcon Glyph="&#xE72B;" FontSize="12" VerticalAlignment="Center" IsHitTestVisible="False" />
                         <TextBlock Text="NVIDIA"
                                    Style="{StaticResource ExoCaption}"
                                    VerticalAlignment="Center" />

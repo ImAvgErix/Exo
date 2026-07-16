@@ -80,14 +80,11 @@ if (File.Exists(main))
     Expect("top bar row layout",
         m.Contains("RowDefinitions", StringComparison.Ordinal)
         && m.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));
-    // v3.0.1 shell: Settings left, Home pill when away, CaptionSpacer clears min/close.
-    Expect("settings left rail",
-        m.Contains("SettingsButton", StringComparison.Ordinal)
-        && m.Contains("Grid.Column=\"0\"", StringComparison.Ordinal));
-    Expect("home pill control",
-        m.Contains("NavHome", StringComparison.Ordinal)
-        && m.Contains("Text=\"Home\"", StringComparison.Ordinal));
-    Expect("caption spacer on rail", m.Contains("CaptionSpacer", StringComparison.Ordinal));
+    // v3.0.3 shell: Settings morphs to Home; modules true-centered; caption clear.
+    Expect("settings left rail", m.Contains("SettingsButton", StringComparison.Ordinal));
+    Expect("home chrome icon", m.Contains("HomeChromeIcon", StringComparison.Ordinal));
+    Expect("modules centered layer", m.Contains("ModuleIcons", StringComparison.Ordinal));
+    Expect("caption spacer on rail", m.Contains("CaptionSpacerHost", StringComparison.Ordinal));
     Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
     Expect("rail nav internet", m.Contains("NavInternet", StringComparison.Ordinal));
@@ -116,8 +113,10 @@ if (File.Exists(mainCs))
     Expect("settings always on rail",
         cs.Contains("SettingsButton.Visibility = Visibility.Visible", StringComparison.Ordinal)
         && !cs.Contains("SettingsButton.Visibility = Visibility.Collapsed", StringComparison.Ordinal));
-    Expect("home pill when not dashboard",
-        cs.Contains("NavHome.Visibility = mode == ShellMode.Home", StringComparison.Ordinal));
+    Expect("settings morphs to home off dashboard",
+        cs.Contains("HomeChromeIcon", StringComparison.Ordinal)
+        && cs.Contains("NavigateHome()", StringComparison.Ordinal)
+        && cs.Contains("_mode != ShellMode.Home", StringComparison.Ordinal));
     Expect("no titlebar settings text", !cs.Contains("AppTitleText.Text = \"Settings\"", StringComparison.Ordinal));
 }
 if (File.Exists(dash))
@@ -135,25 +134,24 @@ if (File.Exists(dash))
         d.Contains("HeroTagline", StringComparison.Ordinal)
         && d.Contains("Maximum performance", StringComparison.Ordinal));
     Expect("home instrument plate", d.Contains("ExoModulePlate", StringComparison.Ordinal));
-    Expect("home fps gain hero",
-        d.Contains("FPS GAIN", StringComparison.Ordinal)
+    Expect("home nvidia pack hero",
+        d.Contains("NVIDIA PACK", StringComparison.Ordinal)
         && d.Contains("FpsPrimary", StringComparison.Ordinal));
-    Expect("home frame time hero",
-        d.Contains("FRAME TIME", StringComparison.Ordinal)
+    Expect("home discord hero",
+        d.Contains("DISCORD", StringComparison.Ordinal)
         && d.Contains("FrameTimePrimary", StringComparison.Ordinal));
-    Expect("home latency tile",
-        d.Contains("LATENCY", StringComparison.Ordinal)
+    Expect("home internet tile",
+        d.Contains("INTERNET", StringComparison.Ordinal)
         && d.Contains("LatencyPrimary", StringComparison.Ordinal));
-    Expect("home ram reclaim tile",
-        d.Contains("RAM RECLAIMED", StringComparison.Ordinal)
-        && d.Contains("ReclaimedPrimary", StringComparison.Ordinal));
+    Expect("home steam ram tile",
+        d.Contains("STEAM / RAM", StringComparison.Ordinal)
+        && d.Contains("ReclaimedPrimary", StringComparison.Ordinal)
+        && d.Contains("MemoryPrimary", StringComparison.Ordinal));
     Expect("home four-metric dashboard",
-        d.Contains("FPS GAIN", StringComparison.Ordinal)
-        && d.Contains("FRAME TIME", StringComparison.Ordinal)
-        && d.Contains("RAM RECLAIMED", StringComparison.Ordinal)
-        && d.Contains("LATENCY", StringComparison.Ordinal)
-        && !d.Contains("MEMORY", StringComparison.Ordinal)
-        && !d.Contains("FRAME PATH", StringComparison.Ordinal));
+        d.Contains("NVIDIA PACK", StringComparison.Ordinal)
+        && d.Contains("DISCORD", StringComparison.Ordinal)
+        && d.Contains("STEAM / RAM", StringComparison.Ordinal)
+        && d.Contains("INTERNET", StringComparison.Ordinal));
     Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("no fixed product cards",
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)
@@ -642,9 +640,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 3.0.2", File.ReadAllText(versionFile).Trim() == "3.0.2");
+    Expect("VERSION is 3.0.3", File.ReadAllText(versionFile).Trim() == "3.0.3");
 if (File.Exists(csproj))
-    Expect("csproj Version 3.0.2", File.ReadAllText(csproj).Contains("<Version>3.0.2</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 3.0.3", File.ReadAllText(csproj).Contains("<Version>3.0.3</Version>", StringComparison.Ordinal));
 
 // Live advisor (realtime next-step coach on every optimizer)
 var advisorPath = Path.Combine(repo, "Exo", "Services", "OptimizerAdvisor.cs");

@@ -713,7 +713,10 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
+                    <!-- Full plate is the hit target (better-ui min 44px). SelectionFill used to be
+                         IsHitTestVisible=False so only the logo pixels received clicks. -->
                     <Grid x:Name="Root"
+                          Background="Transparent"
                           UseLayoutRounding="True"
                           CornerRadius="{TemplateBinding CornerRadius}">
                         <Border x:Name="SelectionFill"
@@ -721,7 +724,7 @@
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="{TemplateBinding CornerRadius}"
-                                IsHitTestVisible="False" />
+                                IsHitTestVisible="True" />
                         <!-- Wash behind content so logos stay sharp on top -->
                         <Border x:Name="HoverWash"
                                 Background="{ThemeResource ExoAccentSoftBrush}"
@@ -732,7 +735,8 @@
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                           Content="{TemplateBinding Content}"
                                           ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          Foreground="{TemplateBinding Foreground}" />
+                                          Foreground="{TemplateBinding Foreground}"
+                                          IsHitTestVisible="False" />
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal">

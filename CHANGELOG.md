@@ -1,3 +1,8 @@
+## 3.0.3
+
+- **Shell**: left circle Settings on home / Home on module pages; module icons true-centered; full 44px circle hit target (SelectionFill)
+- **Dashboard metrics**: NVIDIA pack + Discord apply + Steam cache free + live system RAM + Internet status/benchmark; 2s memory refresh
+- **Skills**: expanded .agents/skills library (community + design packs) for craft guidance
 ## 3.0.2
 
 - **Launch harden**: freeze entrance motion until first pixel; defer SetTitleBar, home navigate, shortcut repair, and auto-update until after first frame / Activate (stops cold-boot flicker-close when previous session never painted)

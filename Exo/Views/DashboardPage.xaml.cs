@@ -28,13 +28,19 @@ public sealed partial class DashboardPage : Page
         DataContext = ViewModel;
     }
 
+    private DispatcherTimer? _memoryTimer;
+
     private void Page_Loaded(object sender, RoutedEventArgs e)
     {
         StabilizeHome();
         _ = TryPlayEntranceAsync();
+        StartMemoryTimer();
     }
 
-    private void Page_Unloaded(object sender, RoutedEventArgs e) { }
+    private void Page_Unloaded(object sender, RoutedEventArgs e)
+    {
+        StopMemoryTimer();
+    }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
@@ -45,6 +51,7 @@ public sealed partial class DashboardPage : Page
         _refreshCts?.Dispose();
         _refreshCts = new CancellationTokenSource();
         await ViewModel.RefreshStatesAsync(_refreshCts.Token);
+        StartMemoryTimer();
 
         if (!_entrancePlayed)
             _ = TryPlayEntranceAsync();
@@ -52,12 +59,31 @@ public sealed partial class DashboardPage : Page
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
+        StopMemoryTimer();
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
         _refreshCts = null;
         _entranceGen++;
         StabilizeHome();
         base.OnNavigatedFrom(e);
+    }
+
+    private void StartMemoryTimer()
+    {
+        StopMemoryTimer();
+        _memoryTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _memoryTimer.Tick += (_, _) =>
+        {
+            try { ViewModel.RefreshLiveMemory(); } catch { }
+        };
+        _memoryTimer.Start();
+    }
+
+    private void StopMemoryTimer()
+    {
+        if (_memoryTimer is null) return;
+        try { _memoryTimer.Stop(); } catch { }
+        _memoryTimer = null;
     }
 
     private void StabilizeHome()
