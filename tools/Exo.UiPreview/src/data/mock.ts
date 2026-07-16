@@ -62,18 +62,25 @@ export const navItems: { id: ModuleId; label: string; logo: string }[] = [
   { id: 'nvidia', label: 'NVIDIA', logo: '/logos/nvidia.png' },
 ]
 
-/** Preview-only seeded dashboard (WinUI reads real LocalAppData + live memory). */
+/**
+ * Preview-only seeded dashboard.
+ * WinUI keeps FPS/frame-time empty until a real capture path ships;
+ * it reads memory / trim / latency / NVIDIA pack from LocalAppData.
+ */
 export const homeDashboardSeed = {
+  fpsGainPercent: 18,
+  frameTimeMs: 6.2,
+  frameTimeOnePercentMs: 9.1,
+  frameTimeSeriesMs: [
+    7.4, 6.8, 6.1, 5.9, 6.3, 6.0, 5.8, 6.5, 7.1, 6.4, 5.9, 6.2, 6.8, 7.2, 6.6,
+    6.1, 5.9, 6.3, 6.7, 7.0, 6.4, 6.0, 5.8, 6.2,
+  ],
+  nvidiaPath: 'Max FPS pack',
+  nvidiaPathDetail: '40 Series.nip',
   trimTotalBytes: 1_480 * (1 << 20),
   trimLast24hBytes: 420 * (1 << 20),
-  trimPasses: 1842,
-  hourlyBytes: [
-    12, 18, 9, 22, 31, 28, 16, 11, 19, 27, 33, 24, 15, 21, 29, 36, 30, 18, 14,
-    20, 26, 32, 25, 17,
-  ].map((n) => n * (1 << 20)),
   memoryUsedBytes: 14.2 * (1 << 30),
   memoryTotalBytes: 32 * (1 << 30),
-  memoryLoadPercent: 44,
   latencyBeforeP50: 28.4,
   latencyAfterP50: 16.1,
 }

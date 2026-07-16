@@ -110,7 +110,7 @@ if (File.Exists(mainCs))
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    // v2.6 home dashboard — reclaim + live memory + latency; modules stay in the top bar.
+    // v2.6 home dashboard — FPS/frame heroes + memory/latency/RAM/NVIDIA path.
     Expect("hero brand",
         d.Contains("HeroBrand", StringComparison.Ordinal)
         && (d.Contains("FontSize=\"72\"", StringComparison.Ordinal)
@@ -121,19 +121,24 @@ if (File.Exists(dash))
         d.Contains("HeroTagline", StringComparison.Ordinal)
         && d.Contains("Maximum performance", StringComparison.Ordinal));
     Expect("home instrument plate", d.Contains("ExoModulePlate", StringComparison.Ordinal));
-    Expect("home ram reclaim hero",
-        d.Contains("RamHero", StringComparison.Ordinal)
-        && d.Contains("RAM RECLAIMED", StringComparison.Ordinal)
-        && d.Contains("ReclaimedPrimary", StringComparison.Ordinal));
+    Expect("home fps gain hero",
+        d.Contains("FPS GAIN", StringComparison.Ordinal)
+        && d.Contains("FpsPrimary", StringComparison.Ordinal));
+    Expect("home frame time hero",
+        d.Contains("FRAME TIME", StringComparison.Ordinal)
+        && d.Contains("FrameTimePrimary", StringComparison.Ordinal));
     Expect("home live memory tile",
         d.Contains("MEMORY", StringComparison.Ordinal)
         && d.Contains("MemoryPrimary", StringComparison.Ordinal));
     Expect("home latency tile",
         d.Contains("LATENCY", StringComparison.Ordinal)
         && d.Contains("LatencyPrimary", StringComparison.Ordinal));
-    Expect("home trim passes tile",
-        d.Contains("TRIM PASSES", StringComparison.Ordinal)
-        && d.Contains("TrimPassesText", StringComparison.Ordinal));
+    Expect("home ram reclaim tile",
+        d.Contains("RAM RECLAIMED", StringComparison.Ordinal)
+        && d.Contains("ReclaimedPrimary", StringComparison.Ordinal));
+    Expect("home frame path tile",
+        d.Contains("FRAME PATH", StringComparison.Ordinal)
+        && d.Contains("NvidiaPathPrimary", StringComparison.Ordinal));
     Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("no fixed product cards",
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)
@@ -666,6 +671,12 @@ if (File.Exists(homeDashReader))
         hdr.Contains("GlobalMemoryStatusEx", StringComparison.Ordinal)
         && hdr.Contains("TryReadMemory", StringComparison.Ordinal));
     Expect("home latency file read", hdr.Contains("TryReadLatency", StringComparison.Ordinal));
+    Expect("home nvidia path file read",
+        hdr.Contains("TryReadNvidiaPath", StringComparison.Ordinal)
+        && hdr.Contains("nvidia-optimizer.json", StringComparison.Ordinal));
+    Expect("home no invented fps capture",
+        !hdr.Contains("PresentMon", StringComparison.Ordinal)
+        && !hdr.Contains("fpsGain", StringComparison.OrdinalIgnoreCase));
 }
 else
 {

@@ -93,8 +93,8 @@ public sealed partial class DashboardPage : Page
                 ExoMotion.EnsureVisible(HeroBrand);
             if (HeroTagline is not null)
                 ExoMotion.EnsureVisible(HeroTagline);
-            if (RamHero is not null)
-                ExoMotion.EnsureVisible(RamHero);
+            if (FrameHero is not null)
+                ExoMotion.EnsureVisible(FrameHero);
             if (StatRow is not null)
                 ExoMotion.EnsureVisible(StatRow);
             if (SoonRow is not null)
@@ -117,8 +117,8 @@ public sealed partial class DashboardPage : Page
             var sequence = new List<UIElement>();
             if (HeroBlock is not null)
                 sequence.Add(HeroBlock);
-            if (RamHero is not null)
-                sequence.Add(RamHero);
+            if (FrameHero is not null)
+                sequence.Add(FrameHero);
             if (StatRow is not null)
                 sequence.Add(StatRow);
             if (SoonRow is not null)

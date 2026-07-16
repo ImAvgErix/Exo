@@ -7,11 +7,11 @@ test('Exo UI preview click navigation', async ({ page }) => {
   await expect(page.getByTestId('page-home')).toBeVisible()
   await expect(page.getByTestId('hero-brand')).toHaveText('Exo')
   await expect(page.getByTestId('hero-tagline')).toBeVisible()
-  // Home = stats dashboard (modules live in the top bar only).
-  await expect(page.getByTestId('home-ram')).toBeVisible()
-  await expect(page.getByTestId('home-ram-value')).toBeVisible()
+  await expect(page.getByTestId('home-frame')).toBeVisible()
+  await expect(page.getByTestId('home-fps')).toBeVisible()
+  await expect(page.getByTestId('home-frametime')).toBeVisible()
   await expect(page.getByTestId('home-stats')).toBeVisible()
-  await expect(page.getByTestId('home-stat-memory')).toBeVisible()
+  await expect(page.getByTestId('home-stat-path')).toBeVisible()
   await expect(page.getByTestId('card-windows')).toBeVisible()
 
   await page.getByTestId('nav-discord').click()
@@ -43,7 +43,7 @@ test('Exo UI preview click navigation', async ({ page }) => {
 
   await page.getByTestId('nav-home').click()
   await expect(page.getByTestId('page-home')).toBeVisible()
-  await expect(page.getByTestId('home-ram')).toBeVisible()
+  await expect(page.getByTestId('home-fps')).toBeVisible()
 
   await page.getByTestId('nav-settings').click()
   await expect(page.getByTestId('settings-flyout')).toBeVisible()

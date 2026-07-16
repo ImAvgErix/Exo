@@ -5,8 +5,9 @@ using Exo.Helpers;
 namespace Exo.Services;
 
 /// <summary>
-/// Defensive home-dashboard reads. File-backed reclaim/latency only — never invents
-/// totals. Live memory uses GlobalMemoryStatusEx on Windows; returns null elsewhere.
+/// Defensive home-dashboard reads. File-backed reclaim / latency / NVIDIA path only —
+/// never invents FPS or frame-time totals. Live memory uses GlobalMemoryStatusEx on
+/// Windows; returns null elsewhere.
 /// </summary>
 public static class HomeDashboardReader
 {
@@ -24,6 +25,11 @@ public static class HomeDashboardReader
     public sealed record LatencySnapshot(
         double BeforeP50Ms,
         double AfterP50Ms);
+
+    public sealed record NvidiaPathSnapshot(
+        bool ProfileApplied,
+        bool Gsync,
+        string? ProfileFile);
 
     public static TrimSnapshot? TryReadTrimStats()
     {
@@ -61,7 +67,6 @@ public static class HomeDashboardReader
             }
 
             hourly.Sort((a, b) => a.Utc.CompareTo(b.Utc));
-            // Last 24 buckets max for a compact sparkline.
             var series = hourly.TakeLast(24).Select(x => x.Bytes).ToList();
             return new TrimSnapshot(total, last24h, passes, series);
         }
@@ -98,6 +103,37 @@ public static class HomeDashboardReader
             if (before is not { Ok: true } || after is not { Ok: true }) return null;
             if (before.PingP50Ms < 0 || after.PingP50Ms < 0) return null;
             return new LatencySnapshot(before.PingP50Ms, after.PingP50Ms);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// NVIDIA pack status from state file only (no Detect probe).
+    /// FPS / frame-time capture is not shipped yet — UI keeps those as empty.
+    /// </summary>
+    public static NvidiaPathSnapshot? TryReadNvidiaPath()
+    {
+        try
+        {
+            var path = Path.Combine(PathHelper.AppDataDir, "nvidia-optimizer.json");
+            if (!File.Exists(path)) return null;
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var root = doc.RootElement;
+            var applied = root.TryGetProperty("profileApplied", out var pa)
+                && pa.ValueKind == JsonValueKind.True;
+            if (!applied) return null;
+
+            var gsync = root.TryGetProperty("gsync", out var gs)
+                && gs.ValueKind == JsonValueKind.True;
+            var profileFile = root.TryGetProperty("profileFile", out var pf)
+                && pf.ValueKind == JsonValueKind.String
+                    ? pf.GetString()
+                    : null;
+            return new NvidiaPathSnapshot(applied, gsync, profileFile);
         }
         catch
         {

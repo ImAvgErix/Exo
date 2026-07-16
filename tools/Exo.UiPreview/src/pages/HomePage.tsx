@@ -9,10 +9,10 @@ function formatBytes(bytes: number): string {
   return `${Math.max(0, bytes)} B`
 }
 
-function sparkHeights(hourly: number[]): number[] {
-  if (hourly.length === 0) return []
-  const max = Math.max(1, ...hourly)
-  return hourly.map((v) => 6 + (v / max) * 28)
+function sparkHeights(values: number[]): number[] {
+  if (values.length === 0) return []
+  const max = Math.max(1, ...values)
+  return values.map((v) => 6 + (v / max) * 28)
 }
 
 export function HomePage() {
@@ -22,7 +22,6 @@ export function HomePage() {
   const [memoryUsed, setMemoryUsed] = useState(seed.memoryUsedBytes)
   const memoryLoad = Math.round((memoryUsed / seed.memoryTotalBytes) * 100)
 
-  // Soft live tick — preview-only jitter around the seeded sample.
   useEffect(() => {
     const id = window.setInterval(() => {
       setMemoryUsed((prev) => {
@@ -40,7 +39,10 @@ export function HomePage() {
     seed.trimLast24hBytes > 0 ? seed.trimLast24hBytes : seed.trimTotalBytes
   const latencyDelta = seed.latencyAfterP50 - seed.latencyBeforeP50
   const latencySign = latencyDelta > 0 ? '+' : ''
-  const sparks = sparkHeights(seed.hourlyBytes)
+  // Invert frame times so lower (smoother) bars read taller.
+  const sparks = sparkHeights(
+    seed.frameTimeSeriesMs.map((ms) => 1 / Math.max(0.1, ms)),
+  )
 
   return (
     <div className="home-page page-enter" data-testid="page-home">
@@ -54,32 +56,40 @@ export function HomePage() {
           </p>
         </header>
 
-        <section
-          className="home-ram stagger-child"
-          data-testid="home-ram"
-          aria-label="RAM reclaimed"
-        >
-          <p className="home-plate__section">RAM reclaimed</p>
-          <div className="home-ram__value" data-testid="home-ram-value">
-            {formatBytes(heroBytes)}
-          </div>
-          <p className="home-ram__meta">
-            {seed.trimLast24hBytes > 0
-              ? `last 24 h · ${formatBytes(seed.trimTotalBytes)} total`
-              : 'total reclaimed (Steam webhelper working set)'}
-          </p>
-          {sparks.length > 0 ? (
-            <div className="home-spark" aria-hidden="true">
-              {sparks.map((h, i) => (
-                <span
-                  key={i}
-                  className="home-spark__bar"
-                  style={{ height: `${h}px` }}
-                />
-              ))}
+        <div className="home-frame stagger-child" data-testid="home-frame">
+          <section className="home-frame__card" data-testid="home-fps" aria-label="FPS gain">
+            <p className="home-plate__section">FPS gain</p>
+            <div className="home-frame__value" data-testid="home-fps-value">
+              +{seed.fpsGainPercent}%
             </div>
-          ) : null}
-        </section>
+            <p className="home-frame__meta">vs pre-apply baseline</p>
+          </section>
+
+          <section
+            className="home-frame__card"
+            data-testid="home-frametime"
+            aria-label="Frame time"
+          >
+            <p className="home-plate__section">Frame time</p>
+            <div className="home-frame__value" data-testid="home-frametime-value">
+              {seed.frameTimeMs.toFixed(1)} ms
+            </div>
+            <p className="home-frame__meta">
+              avg · 1% low {seed.frameTimeOnePercentMs.toFixed(1)} ms
+            </p>
+            {sparks.length > 0 ? (
+              <div className="home-spark" aria-hidden="true">
+                {sparks.map((h, i) => (
+                  <span
+                    key={i}
+                    className="home-spark__bar"
+                    style={{ height: `${h}px` }}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </section>
+        </div>
 
         <div className="home-stats stagger-child" data-testid="home-stats">
           <article className="home-stat" data-testid="home-stat-memory">
@@ -105,12 +115,20 @@ export function HomePage() {
             </p>
           </article>
 
-          <article className="home-stat" data-testid="home-stat-passes">
-            <p className="home-plate__section">Trim passes</p>
-            <div className="home-stat__value">
-              {seed.trimPasses.toLocaleString()}
-            </div>
-            <p className="home-stat__meta">Steam webhelper trim passes</p>
+          <article className="home-stat" data-testid="home-stat-ram">
+            <p className="home-plate__section">RAM reclaimed</p>
+            <div className="home-stat__value">{formatBytes(heroBytes)}</div>
+            <p className="home-stat__meta">
+              {seed.trimLast24hBytes > 0
+                ? `last 24 h · ${formatBytes(seed.trimTotalBytes)} total`
+                : 'total reclaimed'}
+            </p>
+          </article>
+
+          <article className="home-stat" data-testid="home-stat-path">
+            <p className="home-plate__section">Frame path</p>
+            <div className="home-stat__value">{seed.nvidiaPath}</div>
+            <p className="home-stat__meta">{seed.nvidiaPathDetail}</p>
           </article>
         </div>
 

@@ -38,11 +38,15 @@ public partial class DashboardViewModel : ObservableObject
 
     public ObservableCollection<HomeSparkBar> SparkBars { get; } = new();
 
+    // FPS / frame-time capture is not shipped — stay honest with empty until it is.
+    [ObservableProperty] private string _fpsPrimary = "—";
+    [ObservableProperty] private string _fpsSecondary = "No capture yet";
+    [ObservableProperty] private string _frameTimePrimary = "—";
+    [ObservableProperty] private string _frameTimeSecondary = "No frame-time capture yet";
+
     [ObservableProperty] private bool _hasTrimStats;
     [ObservableProperty] private string _reclaimedPrimary = "—";
-    [ObservableProperty] private string _reclaimedSecondary = "Apply Steam to start reclaiming working-set RAM";
-    [ObservableProperty] private string _trimPassesText = "—";
-    [ObservableProperty] private string _trimPassesDetail = "No trim loop data yet";
+    [ObservableProperty] private string _reclaimedSecondary = "Apply Steam to start reclaiming";
 
     [ObservableProperty] private bool _hasMemory;
     [ObservableProperty] private string _memoryPrimary = "—";
@@ -52,6 +56,10 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] private bool _hasLatency;
     [ObservableProperty] private string _latencyPrimary = "—";
     [ObservableProperty] private string _latencySecondary = "No Internet benchmark yet";
+
+    [ObservableProperty] private bool _hasNvidiaPath;
+    [ObservableProperty] private string _nvidiaPathPrimary = "—";
+    [ObservableProperty] private string _nvidiaPathSecondary = "Apply NVIDIA to lock the frame path";
 
     /// <summary>
     /// Refresh file-backed stats + live memory. No Detect* probes — those stay on module pages.
@@ -86,15 +94,35 @@ public partial class DashboardViewModel : ObservableObject
 
     private void RefreshDashboard()
     {
+        // No PresentMon / FPS capture path yet — keep empty rather than inventing %.
+        FpsPrimary = "—";
+        FpsSecondary = "No capture yet";
+        FrameTimePrimary = "—";
+        FrameTimeSecondary = "No frame-time capture yet";
+        SparkBars.Clear();
+
+        var nvidia = HomeDashboardReader.TryReadNvidiaPath();
+        if (nvidia is null)
+        {
+            HasNvidiaPath = false;
+            NvidiaPathPrimary = "—";
+            NvidiaPathSecondary = "Apply NVIDIA to lock the frame path";
+        }
+        else
+        {
+            HasNvidiaPath = true;
+            NvidiaPathPrimary = nvidia.Gsync ? "G-SYNC pack" : "Max FPS pack";
+            NvidiaPathSecondary = string.IsNullOrWhiteSpace(nvidia.ProfileFile)
+                ? "Profile applied"
+                : nvidia.ProfileFile!;
+        }
+
         var trim = HomeDashboardReader.TryReadTrimStats();
         if (trim is null)
         {
             HasTrimStats = false;
             ReclaimedPrimary = "—";
-            ReclaimedSecondary = "Apply Steam to start reclaiming working-set RAM";
-            TrimPassesText = "—";
-            TrimPassesDetail = "No trim loop data yet";
-            SparkBars.Clear();
+            ReclaimedSecondary = "Apply Steam to start reclaiming";
         }
         else
         {
@@ -103,12 +131,7 @@ public partial class DashboardViewModel : ObservableObject
             ReclaimedPrimary = HomeDashboardReader.FormatBytes(heroBytes);
             ReclaimedSecondary = trim.Last24hBytes > 0
                 ? $"last 24 h · {HomeDashboardReader.FormatBytes(trim.TotalBytes)} total"
-                : "total reclaimed (Steam webhelper working set)";
-            TrimPassesText = trim.Passes > 0 ? trim.Passes.ToString("N0") : "—";
-            TrimPassesDetail = trim.Passes > 0
-                ? "Steam webhelper trim passes"
-                : "No trim loop data yet";
-            RebuildSpark(trim.HourlyBytes);
+                : "total reclaimed";
         }
 
         var latency = HomeDashboardReader.TryReadLatency(_services.Network);
@@ -129,18 +152,6 @@ public partial class DashboardViewModel : ObservableObject
         }
 
         RefreshLiveMemory();
-    }
-
-    private void RebuildSpark(IReadOnlyList<long> hourly)
-    {
-        SparkBars.Clear();
-        if (hourly.Count == 0) return;
-        var max = Math.Max(1L, hourly.Max());
-        foreach (var bytes in hourly)
-        {
-            var t = bytes / (double)max;
-            SparkBars.Add(new HomeSparkBar { Height = 6 + t * 28 });
-        }
     }
 
     private static OptimizerCardViewModel Card(

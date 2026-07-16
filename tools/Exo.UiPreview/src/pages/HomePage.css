@@ -20,7 +20,7 @@
   overflow: hidden;
   padding: 22px 28px 16px;
   box-sizing: border-box;
-  gap: 16px;
+  gap: 14px;
 }
 
 .home-plate__hero {
@@ -62,27 +62,34 @@
   color: var(--exo-muted);
 }
 
-.home-ram {
+.home-frame {
   flex: 1;
   min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.home-frame__card {
   display: flex;
   flex-direction: column;
-  padding: 18px 20px;
+  min-height: 0;
+  padding: 16px 18px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.home-ram__value {
+.home-frame__value {
   font-family: var(--font-ui);
-  font-size: 48px;
+  font-size: 44px;
   font-weight: 700;
   letter-spacing: -0.045em;
   line-height: 1.05;
   color: var(--exo-text);
 }
 
-.home-ram__meta {
+.home-frame__meta {
   margin: 6px 0 0;
   font-family: var(--font-ui);
   font-size: 13px;
@@ -94,12 +101,12 @@
   align-items: flex-end;
   gap: 3px;
   margin-top: auto;
-  padding-top: 14px;
-  min-height: 40px;
+  padding-top: 12px;
+  min-height: 36px;
 }
 
 .home-spark__bar {
-  width: 7px;
+  width: 6px;
   border-radius: 2px;
   background: color-mix(in srgb, var(--exo-accent) 45%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--exo-accent) 25%, transparent);
@@ -108,13 +115,13 @@
 .home-stats {
   flex-shrink: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
 
 .home-stat {
-  min-height: 96px;
-  padding: 12px 14px;
+  min-height: 88px;
+  padding: 10px 12px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -124,12 +131,12 @@
 .home-stat__row {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
 }
 
 .home-stat__value {
   font-family: var(--font-ui);
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--exo-text);
@@ -138,15 +145,15 @@
 
 .home-stat__badge {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--exo-muted);
 }
 
 .home-stat__meta {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.35;
   color: var(--exo-muted);
 }
@@ -187,7 +194,7 @@
   padding: 0;
 }
 
-.theme-light .home-ram,
+.theme-light .home-frame__card,
 .theme-light .home-stat {
   background: rgba(61, 52, 41, 0.04);
   border-color: rgba(61, 52, 41, 0.1);
