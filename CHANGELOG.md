@@ -1,3 +1,12 @@
+## 3.0.0
+
+- **SharedModulePlate**: all four optimizer pages (Internet / Discord / Steam / NVIDIA) host chrome via one instrument plate (header, advisor, features, sticky foot, apply report)
+- **Network builder split**: `NetworkApplyScriptBuilder` partials — `.Repair.cs` + `.Benchmark.cs` (smoke-linked)
+- **Detect = Apply contracts**: `tools/Contracts.Smoke` gates required/forbidden markers + detect/apply concept pairs for all modules
+- **Thin Steam/NVIDIA stage libs**: `Steam/lib/Steam.Bootstrap.ps1` + `Nvidia/lib/Nvidia.Bootstrap.ps1` (stage IDs; god-scripts remain with documented size exception)
+- **CI / Release**: Contracts.Smoke in validate-before-publish
+- **Stack**: .NET 10 + Windows App SDK 2.2; Advisor v2 + no Exo background footprint retained from 2.7.x
+
 ## 2.7.1
 
 - **Shared script platform**: `Exo/Scripts/lib/Exo.Common.ps1` (PS7 assert, run logs) + `Exo.NoBackground.ps1` (purge Exo tasks/Run keys); wired into Discord/Steam/NVIDIA Run wrappers

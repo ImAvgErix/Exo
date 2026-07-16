@@ -49,7 +49,8 @@ jobs:
             'tools/Network.Smoke/Network.Smoke.csproj',
             'tools/Discord.Smoke/Discord.Smoke.csproj',
             'tools/Steam.Smoke/Steam.Smoke.csproj',
-            'tools/Nvidia.Smoke/Nvidia.Smoke.csproj'
+            'tools/Nvidia.Smoke/Nvidia.Smoke.csproj',
+            'tools/Contracts.Smoke/Contracts.Smoke.csproj'
           )
           foreach ($p in $projects) {
             Write-Host "=== $p ===" -ForegroundColor Cyan
