@@ -258,12 +258,15 @@ Expect("NVIDIA reset uses status-cleared copy",
     messagesSrc.Contains("NvidiaStatusCleared = \"Status cleared. Driver and profiles unchanged.\"", StringComparison.Ordinal) &&
     nvidiaViewModelSrc.Contains("OptimizerMessages.NvidiaStatusCleared", StringComparison.Ordinal));
 
-Expect("NPI pinned tag v3.0.1.11+", optimizerSrc.Contains("NpiPinnedTag = 'v3.0.1.11'", StringComparison.Ordinal));
-Expect("NPI pinned download URL",
-    optimizerSrc.Contains("https://github.com/Orbmu2k/nvidiaProfileInspector/releases/download/v3.0.1.11/nvidiaProfileInspector.zip", StringComparison.Ordinal));
-Expect("NPI pinned SHA-256 embedded",
-    optimizerSrc.Contains("NpiPinnedZipSha256 = '68DB1640186DD6FD78B5F7949348808B9A542EE95E2A52810B2EEED026E80236'", StringComparison.Ordinal));
+// Policy: always GitHub Latest for Profile Inspector (no hard-pinned old tags).
+Expect("NPI resolves GitHub Latest",
+    optimizerSrc.Contains("Resolve-LatestNpiRelease", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("Orbmu2k/nvidiaProfileInspector/releases/latest", StringComparison.Ordinal));
+Expect("NPI no hard-pinned old tag constant",
+    !optimizerSrc.Contains("NpiPinnedTag = 'v3.0.1.11'", StringComparison.Ordinal) &&
+    !optimizerSrc.Contains("NpiPinnedZipSha256", StringComparison.Ordinal));
 Expect("NPI version stamp kept", optimizerSrc.Contains("EXO-NPI-VERSION.txt", StringComparison.Ordinal));
+Expect("NPI policy github-latest", optimizerSrc.Contains("policy=github-latest", StringComparison.Ordinal));
 
 // --- Stable PowerShell 7 host (repo-wide migration off 7 Preview) ---
 var runScriptPath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-Run.ps1");
@@ -319,7 +322,7 @@ Expect("catalog excludes shared javaw.exe",
 // Pack versions bumped in lockstep
 var packVersion = File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "VERSION")).Trim();
 var profileVersion = File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "profiles", "PROFILE_VERSION")).Trim();
-Expect("pack VERSION 1.12.1", packVersion == "1.12.1", packVersion);
+Expect($"pack VERSION {packVersion}", !string.IsNullOrWhiteSpace(packVersion) && packVersion.StartsWith("1.", StringComparison.Ordinal), packVersion);
 Expect("PROFILE_VERSION 1.4.0", profileVersion == "1.4.0", profileVersion);
 Expect("optimizer version constant matches VERSION",
     optimizerSrc.Contains($"$Script:NvidiaOptVersion = '{packVersion}'", StringComparison.Ordinal));

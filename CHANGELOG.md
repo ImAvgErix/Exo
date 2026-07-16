@@ -1,3 +1,7 @@
+## 3.0.10
+
+- **Always-latest tools**: NVIDIA Profile Inspector is no longer hard-pinned - every Apply resolves Orbmu2k **GitHub Latest**, verifies the asset SHA when GitHub publishes it, and only reuses cache when tag matches Latest. Offline falls back to last good managed install.
+- NVIDIA App installer URL prefers the live product-page newest link (CDN pins are fallback only)
 ## 3.0.9
 
 - **NVIDIA Profile Inspector**: pin bumped **v3.0.1.11 -> v3.0.2.1** (current Orbmu2k release). Old managed NPI could flash WPF/XAML UI on import; silent import hardened + leftover .nip cleanup

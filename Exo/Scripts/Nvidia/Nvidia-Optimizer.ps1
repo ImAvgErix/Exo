@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.12.3'
+$Script:NvidiaOptVersion = '1.12.4'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
@@ -37,12 +37,10 @@ $StatePath = Join-Path $StateDir 'nvidia-optimizer.json'
 $NpiDir = Join-Path $StateDir 'tools\nvidiaProfileInspector'
 $DriverCacheDir = Join-Path $StateDir 'drivers'
 $NpiExeName = 'nvidiaProfileInspector.exe'
-# Pinned Profile Inspector = Orbmu2k GitHub Latest.
-# v3.0.2.1 (2026-07-05): modern WPF UI, current DRS/NVAPI data, silent import.
-# v3.0.1.11 was months behind and could flash broken XAML/doc UI on import.
-$Script:NpiPinnedTag = 'v3.0.2.1'
-$Script:NpiPinnedZipUrl = 'https://github.com/Orbmu2k/nvidiaProfileInspector/releases/download/v3.0.2.1/nvidiaProfileInspector.zip'
-$Script:NpiPinnedZipSha256 = '88DCF3514111E8DE630688467C03C36D8C2A8AD9EBC8073F27C069F82B75BB40'
+# Profile Inspector: ALWAYS GitHub Latest (Orbmu2k). No hard-pinned old tags.
+# Offline: reuse last managed install only if exe hash still matches stamp.
+$Script:NpiRepoApi = 'https://api.github.com/repos/Orbmu2k/nvidiaProfileInspector/releases/latest'
+$Script:NpiAssetName = 'nvidiaProfileInspector.zip'
 
 # --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
 function Test-ExoIsPwsh7Host {
@@ -578,6 +576,18 @@ function Stop-NpiProcesses {
     Start-Sleep -Milliseconds 500
 }
 
+function Read-ManagedNpiStamp([string]$StampPath) {
+    $metadata = @{}
+    if (-not (Test-Path -LiteralPath $StampPath)) { return $metadata }
+    try {
+        Get-Content -LiteralPath $StampPath -ErrorAction Stop | ForEach-Object {
+            $parts = $_ -split '=', 2
+            if ($parts.Count -eq 2) { $metadata[$parts[0].Trim()] = $parts[1].Trim() }
+        }
+    } catch { }
+    return $metadata
+}
+
 function Test-ManagedNpiCache {
     param(
         [Parameter(Mandatory)][string]$ExePath,
@@ -588,11 +598,7 @@ function Test-ManagedNpiCache {
         return $false
     }
     try {
-        $metadata = @{}
-        Get-Content -LiteralPath $StampPath -ErrorAction Stop | ForEach-Object {
-            $parts = $_ -split '=', 2
-            if ($parts.Count -eq 2) { $metadata[$parts[0].Trim()] = $parts[1].Trim() }
-        }
+        $metadata = Read-ManagedNpiStamp $StampPath
         if ($ExpectedTag -and [string]$metadata.tag -ne $ExpectedTag) { return $false }
         if (-not $metadata.exeSha256) { return $false }
         $actualHash = (Get-FileHash -LiteralPath $ExePath -Algorithm SHA256 -ErrorAction Stop).Hash
@@ -602,23 +608,66 @@ function Test-ManagedNpiCache {
     }
 }
 
+function Resolve-LatestNpiRelease {
+    # Always GitHub Latest (non-draft). Returns @{ Tag; ZipUrl; ZipSha256 } or $null.
+    $headers = @{
+        'User-Agent' = 'Exo-Nvidia/1.12'
+        'Accept'     = 'application/vnd.github+json'
+    }
+    try {
+        $rel = Invoke-RestMethod -Uri $Script:NpiRepoApi -Headers $headers -TimeoutSec 30
+    } catch {
+        Write-Warn "Profile Inspector latest lookup failed: $($_.Exception.Message)"
+        return $null
+    }
+    if (-not $rel -or -not $rel.tag_name) { return $null }
+    $asset = @($rel.assets) | Where-Object {
+        [string]$_.name -eq $Script:NpiAssetName -or
+        [string]$_.browser_download_url -match '(?i)nvidiaProfileInspector\.zip'
+    } | Select-Object -First 1
+    if (-not $asset -or -not $asset.browser_download_url) {
+        Write-Warn 'Profile Inspector latest release has no zip asset'
+        return $null
+    }
+    $sha = $null
+    $digest = [string]$asset.digest
+    if ($digest -match '^sha256:([0-9a-fA-F]{64})$') { $sha = $Matches[1].ToUpperInvariant() }
+    return @{
+        Tag       = [string]$rel.tag_name
+        ZipUrl    = [string]$asset.browser_download_url
+        ZipSha256 = $sha
+        Name      = [string]$asset.name
+    }
+}
+
 function Install-NpiFresh {
-    # Pinned Profile Inspector release only ($Script:NpiPinnedTag). The managed copy is
-    # reused when the stamp matches the pinned tag AND the exe hash still verifies;
-    # stale/older copies are replaced so -silentImport / -exportCustomized stay current.
+    # ALWAYS install/refresh to Orbmu2k GitHub Latest. Cache only when stamp tag ==
+    # latest tag and exe hash still matches. Offline: keep last good managed install.
     Set-ExoStage 'npi-install'
-    Write-Step "Checking Exo managed NVIDIA Profile Inspector (pinned $Script:NpiPinnedTag)..."
+    Write-Step 'Checking Exo managed NVIDIA Profile Inspector (GitHub Latest)...'
     $target = Join-Path $NpiDir $NpiExeName
     $stampPath = Join-Path $NpiDir 'EXO-NPI-VERSION.txt'
-    $headers = @{ 'User-Agent' = 'Exo-Nvidia/1.5.0'; 'Accept' = 'application/octet-stream' }
+    $dlHeaders = @{ 'User-Agent' = 'Exo-Nvidia/1.12'; 'Accept' = 'application/octet-stream' }
 
-    if (Test-ManagedNpiCache -ExePath $target -StampPath $stampPath -ExpectedTag $Script:NpiPinnedTag) {
-        Write-Ok "Managed Profile Inspector is pinned and hash-verified ($Script:NpiPinnedTag)"
-        return $target
+    $latest = Resolve-LatestNpiRelease
+    if ($latest) {
+        Write-Ok "Latest Profile Inspector on GitHub: $($latest.Tag)"
+        if (Test-ManagedNpiCache -ExePath $target -StampPath $stampPath -ExpectedTag $latest.Tag) {
+            Write-Ok "Managed Profile Inspector already current ($($latest.Tag))"
+            return $target
+        }
+    } else {
+        # Offline / API down: reuse verified cache of any tag if present.
+        if (Test-ManagedNpiCache -ExePath $target -StampPath $stampPath -ExpectedTag '') {
+            $stamp = Read-ManagedNpiStamp $stampPath
+            Write-Warn "Could not reach GitHub Latest - using cached Profile Inspector ($($stamp.tag))"
+            return $target
+        }
+        throw 'Profile Inspector Latest lookup failed and no verified managed copy is available'
     }
 
-    $tag = $Script:NpiPinnedTag
-    $downloadUri = [uri]$Script:NpiPinnedZipUrl
+    $tag = [string]$latest.Tag
+    $downloadUri = [uri]$latest.ZipUrl
     if ($downloadUri.Scheme -ne 'https' -or $downloadUri.Host -notmatch '(?i)(^|\.)github\.com$') {
         throw "Unexpected Profile Inspector download host: $($downloadUri.Host)"
     }
@@ -626,27 +675,44 @@ function Install-NpiFresh {
     $workId = [guid]::NewGuid().ToString('n')
     $zip = Join-Path $env:TEMP ("exo-npi-$workId.zip")
     $extract = Join-Path $env:TEMP ("exo-npi-$workId")
-    Write-Ok "Pinned NPI release: $tag"
+    Write-Ok "Downloading Profile Inspector $tag..."
     try {
         try {
-            Invoke-WebRequest -Uri $downloadUri.AbsoluteUri -OutFile $zip -UseBasicParsing -Headers $headers -TimeoutSec 120
+            Invoke-WebRequest -Uri $downloadUri.AbsoluteUri -OutFile $zip -UseBasicParsing -Headers $dlHeaders -TimeoutSec 120
         } catch {
+            if (Test-ManagedNpiCache -ExePath $target -StampPath $stampPath -ExpectedTag '') {
+                $stamp = Read-ManagedNpiStamp $stampPath
+                Write-Warn "Download failed - keeping cached Profile Inspector ($($stamp.tag)): $($_.Exception.Message)"
+                return $target
+            }
             throw "Profile Inspector download failed and no verified cached copy is available: $($_.Exception.Message)"
         }
-        $actualDigest = (Get-FileHash -LiteralPath $zip -Algorithm SHA256 -ErrorAction Stop).Hash
-        if ($actualDigest -ine $Script:NpiPinnedZipSha256) {
-            throw "Profile Inspector archive SHA256 did not match the pinned digest (expected $Script:NpiPinnedZipSha256, got $actualDigest)"
+        $actualDigest = (Get-FileHash -LiteralPath $zip -Algorithm SHA256 -ErrorAction Stop).Hash.ToUpperInvariant()
+        if ($latest.ZipSha256) {
+            if ($actualDigest -ine $latest.ZipSha256) {
+                throw "Profile Inspector archive SHA256 did not match GitHub asset digest (expected $($latest.ZipSha256), got $actualDigest)"
+            }
+            Write-Ok 'Verified Profile Inspector archive against GitHub asset SHA256'
+        } else {
+            Write-Ok "Profile Inspector archive SHA256: $actualDigest (no GitHub digest published)"
         }
-        Write-Ok 'Verified Profile Inspector archive against pinned SHA256'
         New-Item -ItemType Directory -Force -Path $extract | Out-Null
         Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
         $found = Get-ChildItem -LiteralPath $extract -Recurse -Filter $NpiExeName -ErrorAction SilentlyContinue | Select-Object -First 1
         if (-not $found) { throw 'nvidiaProfileInspector.exe missing from downloaded archive' }
 
+        Stop-NpiProcesses
         if (Test-Path -LiteralPath $NpiDir) {
-            Remove-Item -LiteralPath $NpiDir -Recurse -Force -ErrorAction Stop
+            try {
+                Remove-Item -LiteralPath $NpiDir -Recurse -Force -ErrorAction Stop
+            } catch {
+                # Locked exe: replace files in place.
+                Write-Warn "Could not wipe NPI folder cleanly: $($_.Exception.Message)"
+            }
         }
-        New-Item -ItemType Directory -Force -Path $NpiDir | Out-Null
+        if (-not (Test-Path -LiteralPath $NpiDir)) {
+            New-Item -ItemType Directory -Force -Path $NpiDir | Out-Null
+        }
         Copy-Item -LiteralPath $found.FullName -Destination $target -Force
         foreach ($extra in @('Reference.xml', 'CustomSettingNames.xml', 'nvidiaProfileInspector.exe.config')) {
             $hit = Get-ChildItem -LiteralPath $extract -Recurse -Filter $extra -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -658,12 +724,14 @@ function Install-NpiFresh {
 tag=$tag
 installedUtc=$((Get-Date).ToUniversalTime().ToString('o'))
 source=$($downloadUri.AbsoluteUri)
+zipSha256=$actualDigest
 exeSha256=$exeSha256
 managedBy=Exo
+policy=github-latest
 "@
         [IO.File]::WriteAllText($stampPath, $stamp.Trim() + "`n", [Text.UTF8Encoding]::new($false))
         if (-not (Test-Path -LiteralPath $target)) { throw "Managed NPI missing at $target" }
-        Write-Ok "Managed NPI ready: $target ($tag)"
+        Write-Ok "Managed NPI ready: $target ($tag - GitHub Latest)"
     } finally {
         Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
@@ -1090,8 +1158,23 @@ function Wait-NvidiaAppInstalled {
 }
 
 function Get-NvidiaAppOfficialInstallerUrl {
-    # Fast path: known CDN builds first (no 25s page scrape hang). Page scrape is optional refresh.
-    $headers = @{ 'User-Agent' = 'Exo-Nvidia/1.8' }
+    # Prefer newest URL from nvidia.com product page; CDN fallbacks only if scrape fails.
+    $headers = @{ 'User-Agent' = 'Exo-Nvidia/1.12' }
+    try {
+        $html = (Invoke-WebRequest -Uri 'https://www.nvidia.com/en-us/software/nvidia-app/' -UseBasicParsing -Headers $headers -TimeoutSec 12).Content
+        $matches = [regex]::Matches([string]$html, 'https://[^"''\s]+/nvapp/client/[^"''\s]+/NVIDIA_app_v[\d\.]+\.exe', 'IgnoreCase')
+        if ($matches.Count -gt 0) {
+            # Prefer US CDN host when multiple mirrors appear.
+            $urls = @($matches | ForEach-Object { $_.Value } | Select-Object -Unique)
+            $us = $urls | Where-Object { $_ -match '(?i)us\.download\.nvidia\.com' } | Select-Object -First 1
+            $pick = if ($us) { $us } else { $urls[0] }
+            Write-Ok "Using newest NVIDIA App installer from product page"
+            return $pick
+        }
+    } catch {
+        Write-Warn "NVIDIA App product page lookup: $($_.Exception.Message)"
+    }
+    # Fallback: probe common CDN path pattern only as last resort (version may lag).
     $cdn = @(
         'https://us.download.nvidia.com/nvapp/client/11.0.8.299/NVIDIA_app_v11.0.8.299.exe',
         'https://international.download.nvidia.com/nvapp/client/11.0.8.299/NVIDIA_app_v11.0.8.299.exe'
@@ -1100,25 +1183,17 @@ function Get-NvidiaAppOfficialInstallerUrl {
         try {
             $req = [System.Net.HttpWebRequest]::Create($u)
             $req.Method = 'HEAD'
-            $req.UserAgent = 'Exo-Nvidia/1.8'
+            $req.UserAgent = 'Exo-Nvidia/1.12'
             $req.Timeout = 8000
             $resp = $req.GetResponse()
             $code = [int]$resp.StatusCode
             $resp.Close()
             if ($code -ge 200 -and $code -lt 400) {
-                Write-Ok "Using NVIDIA CDN installer URL"
+                Write-Warn "Using fallback NVIDIA App CDN URL (page scrape failed): $u"
                 return $u
             }
         } catch { }
     }
-    try {
-        $html = (Invoke-WebRequest -Uri 'https://www.nvidia.com/en-us/software/nvidia-app/' -UseBasicParsing -Headers $headers -TimeoutSec 12).Content
-        $m = [regex]::Match([string]$html, 'https://[^"''\s]+/nvapp/client/[^"''\s]+/NVIDIA_app_v[\d\.]+\.exe', 'IgnoreCase')
-        if ($m.Success) { return $m.Value }
-    } catch {
-        Write-Warn "NVIDIA App product page lookup: $($_.Exception.Message)"
-    }
-    # Last resort: return US CDN even if HEAD failed (some networks block HEAD).
     return $cdn[0]
 }
 

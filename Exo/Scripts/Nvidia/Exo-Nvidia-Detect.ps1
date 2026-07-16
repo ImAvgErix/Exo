@@ -303,7 +303,7 @@ if (Test-Path $statePath) {
     try { $state = Get-Content $statePath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
 }
 
-# --- Live DRS verification (managed NPI v3.0.1.11+ -exportCustomized) ---
+# --- Live DRS verification (managed NPI GitHub Latest -exportCustomized) ---
 # Reads the live driver database back and compares the Base Profile pins against
 # the recorded pack. Classification is pure (NvidiaDetectCore.ps1); this block
 # only does the I/O. Non-elevated: the export lands next to the managed exe under
