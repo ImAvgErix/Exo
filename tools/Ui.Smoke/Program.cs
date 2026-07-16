@@ -80,29 +80,30 @@ if (File.Exists(main))
     Expect("top bar row layout",
         m.Contains("RowDefinitions", StringComparison.Ordinal)
         && m.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));
-    Expect("top bar equal end caps",
-        m.Contains("Width=\"56\"", StringComparison.Ordinal)
-        && m.Contains("HomeEnd", StringComparison.Ordinal));
-    Expect("rail nav home", m.Contains("NavHome", StringComparison.Ordinal));
+    // v3.0.1 shell: Settings left, Home pill when away, CaptionSpacer clears min/close.
+    Expect("settings left rail",
+        m.Contains("SettingsButton", StringComparison.Ordinal)
+        && m.Contains("Grid.Column=\"0\"", StringComparison.Ordinal));
+    Expect("home pill control",
+        m.Contains("NavHome", StringComparison.Ordinal)
+        && m.Contains("Text=\"Home\"", StringComparison.Ordinal));
+    Expect("caption spacer on rail", m.Contains("CaptionSpacer", StringComparison.Ordinal));
     Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
     Expect("rail nav internet", m.Contains("NavInternet", StringComparison.Ordinal));
     Expect("rail nav nvidia", m.Contains("NavNvidia", StringComparison.Ordinal));
-    // v2.5.1 — product logos on the rail (not glyph-only).
     Expect("rail logo discord", m.Contains("discord.png", StringComparison.Ordinal));
     Expect("rail logo steam", m.Contains("steam.png", StringComparison.Ordinal));
     Expect("rail logo internet", m.Contains("internet.png", StringComparison.Ordinal));
     Expect("rail logo nvidia", m.Contains("nvidia.png", StringComparison.Ordinal));
     Expect("settings gear", m.Contains("SettingsButton", StringComparison.Ordinal));
     Expect("back chrome", m.Contains("BackButton", StringComparison.Ordinal));
-    Expect("drag region separate", m.Contains("TitleBarDragRegion", StringComparison.Ordinal));
     Expect("no NavigationView", !m.Contains("<NavigationView", StringComparison.Ordinal));
     Expect("ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
     Expect("no tooltips in main", !m.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
 }
-// SetTitleBar targets the full NavRail (52px). WinUI still delivers pointer hits to
-// interactive children (EXO / module circles / Settings); the old 8px drag strip
-// made the fixed window feel undraggable.
+// SetTitleBar targets the full NavRail. Buttons still click; empty glass + caption
+// column is the drag surface. CaptionSpacer keeps Settings clear of min/close.
 var mainCs = Path.Combine(repo, "Exo", "MainWindow.xaml.cs");
 if (File.Exists(mainCs))
 {
@@ -112,11 +113,10 @@ if (File.Exists(mainCs))
     Expect("fixed shell no maximize", cs.Contains("IsMaximizable = false", StringComparison.Ordinal));
     Expect("fixed shell no resize", cs.Contains("IsResizable = false", StringComparison.Ordinal));
     Expect("rail selection helper", cs.Contains("UpdateRailSelection", StringComparison.Ordinal));
-    // Settings gear lives on the rail — ApplyChrome must keep it visible on modules.
     Expect("settings always on rail",
         cs.Contains("SettingsButton.Visibility = Visibility.Visible", StringComparison.Ordinal)
         && !cs.Contains("SettingsButton.Visibility = Visibility.Collapsed", StringComparison.Ordinal));
-    Expect("home hides exo control",
+    Expect("home pill when not dashboard",
         cs.Contains("NavHome.Visibility = mode == ShellMode.Home", StringComparison.Ordinal));
     Expect("no titlebar settings text", !cs.Contains("AppTitleText.Text = \"Settings\"", StringComparison.Ordinal));
 }
@@ -642,7 +642,7 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 3.0.1", File.ReadAllText(versionFile).Trim() == "3.0.0");
+    Expect("VERSION is 3.0.1", File.ReadAllText(versionFile).Trim() == "3.0.1");
 if (File.Exists(csproj))
     Expect("csproj Version 3.0.1", File.ReadAllText(csproj).Contains("<Version>3.0.1</Version>", StringComparison.Ordinal));
 

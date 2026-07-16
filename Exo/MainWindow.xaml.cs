@@ -55,9 +55,9 @@ public sealed partial class MainWindow : Window
         TrySetWindowIcon();
 
         ExtendsContentIntoTitleBar = true;
-        // Drag the whole top nav rail (52px). Interactive children (EXO / module
-        // circles / Settings) still receive pointer hits in WinUI custom title bars;
-        // the old 8px TitleBarDragRegion made the fixed window feel undraggable.
+        // Drag: whole NavRail is the title bar. Buttons still click; empty glass
+        // (center field + caption column) is the drag surface. CaptionSpacer keeps
+        // Settings/Home clear of min/close so they are not under system chrome.
         SetTitleBar(NavRail);
 
         AppWindow.Changed += (_, args) =>
@@ -71,6 +71,7 @@ public sealed partial class MainWindow : Window
         {
             UpdateCaptionInset();
             ApplyFixedWindowChrome();
+            SetTitleBar(NavRail);
             ClearChromeFocus();
         };
         RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
@@ -194,15 +195,16 @@ public sealed partial class MainWindow : Window
 
     private void UpdateCaptionInset()
     {
+        // Leave a dead column under Windows min/close so Settings never sits under them.
         try
         {
             var right = AppWindow.TitleBar.RightInset;
-            if (right < 100) right = 138;
+            if (right < 120) right = 146;
             CaptionSpacer.Width = new GridLength(right);
         }
         catch
         {
-            CaptionSpacer.Width = new GridLength(138);
+            CaptionSpacer.Width = new GridLength(146);
         }
     }
 
@@ -242,18 +244,16 @@ public sealed partial class MainWindow : Window
     {
         _mode = mode;
 
-        // Rail shell: settings gear lives on the rail — always visible.
+        // Settings always on the left (old EXO slot). Home pill when not on dashboard.
         SettingsButton.Visibility = Visibility.Visible;
-        // EXO home control is redundant on the home page (dashboard brand owns it).
         NavHome.Visibility = mode == ShellMode.Home
             ? Visibility.Collapsed
             : Visibility.Visible;
-        // Back only for Nvidia panel → Nvidia optimizer (rail covers other hops).
+        // Secondary back only for Nvidia panel → optimizer.
         BackButton.Visibility = mode == ShellMode.NvidiaPanel
             ? Visibility.Visible
             : Visibility.Collapsed;
 
-        // Legacy chrome names kept collapsed (pages own their headers).
         ContextLogoHost.Visibility = Visibility.Collapsed;
         ContextLogo.Source = null;
         AppTitleText.Text = string.Empty;
@@ -263,33 +263,23 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Highlight the active rail button: soft glass fill + accent selection ring.
+    /// Highlight the active module circle: soft glass fill + accent selection ring.
     /// NvidiaPanel keeps NavNvidia selected (panel is under GPU).
     /// </summary>
     private void UpdateRailSelection(ShellMode mode)
     {
         var selected = mode switch
         {
-            ShellMode.Home => NavHome,
             ShellMode.Discord => NavDiscord,
             ShellMode.Steam => NavSteam,
             ShellMode.Internet => NavInternet,
             ShellMode.Nvidia or ShellMode.NvidiaPanel => NavNvidia,
-            _ => NavHome
+            _ => null
         };
 
-        // Glass circles keep their rim-lit gradient; selection = brighter hairline ring.
-        foreach (var btn in new[] { NavHome, NavDiscord, NavSteam, NavInternet, NavNvidia })
+        foreach (var btn in new[] { NavDiscord, NavSteam, NavInternet, NavNvidia })
         {
-            // Home control is collapsed on the dashboard — skip selection chrome there.
-            if (ReferenceEquals(btn, NavHome) && mode == ShellMode.Home)
-            {
-                btn.BorderBrush = _ringOff;
-                btn.Opacity = 1.0;
-                continue;
-            }
-
-            var on = ReferenceEquals(btn, selected);
+            var on = selected is not null && ReferenceEquals(btn, selected);
             btn.Opacity = on ? 1.0 : 0.72;
             btn.BorderBrush = on ? _ringOn : _ringOff;
             btn.BorderThickness = new Thickness(1);

@@ -7,10 +7,11 @@
     Title="Exo">
 
     <!--
-      v2.6 top bar: EXO · icon modules (no text labels) · Settings.
-      Live modules are not duplicated on the home page.
+      v3.0.1 top bar:
+      Settings (left, where EXO used to live) · module icons · Home pill when away
+      RightInset padding keeps chrome clear of min/close caption buttons.
+      Entire NavRail is SetTitleBar — empty glass is draggable.
     -->
-    <!-- exo-ui-craft: 16px side margins, 12px gap between bar and stage -->
     <Grid x:Name="RootGrid"
           Background="{ThemeResource ExoPageBackgroundBrush}"
           Padding="16">
@@ -20,10 +21,6 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!--
-          Liquid-glass circles floating on pure black (no bar plate) —
-          0.5px-feel hairline rim, dark center, soft drop shadow.
-        -->
         <Border x:Name="NavRail"
                 Grid.Row="0"
                 Background="Transparent"
@@ -31,41 +28,82 @@
                 Padding="2,4"
                 MinHeight="52"
                 HorizontalAlignment="Stretch">
-            <Grid>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="56" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="56" />
-                    </Grid.ColumnDefinitions>
+            <Grid x:Name="NavRailInner">
+                <Grid.ColumnDefinitions>
+                    <!-- Settings (always) -->
+                    <ColumnDefinition Width="Auto" />
+                    <!-- Home when not on dashboard -->
+                    <ColumnDefinition Width="Auto" />
+                    <!-- Drag + centered modules -->
+                    <ColumnDefinition Width="*" />
+                    <!-- Clear of Windows caption buttons -->
+                    <ColumnDefinition x:Name="CaptionSpacer" Width="138" />
+                </Grid.ColumnDefinitions>
 
-                    <!-- Equal end caps. EXO is hidden on home (page brand owns it). -->
-                    <Grid x:Name="HomeEnd"
-                          Width="56"
-                          Height="48"
-                          HorizontalAlignment="Left"
-                          VerticalAlignment="Center">
-                        <Button x:Name="NavHome"
-                                Style="{StaticResource ExoGlassCircle}"
-                                AutomationProperties.Name="Home"
-                                Click="NavHome_Click"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center">
-                            <!-- CharacterSpacing trails right; slight left pad keeps EXO optically centered. -->
-                            <TextBlock Text="EXO"
-                                       FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       FontSize="11"
-                                       FontWeight="Bold"
-                                       CharacterSpacing="100"
-                                       Margin="5,0,0,0"
-                                       Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" />
-                        </Button>
-                    </Grid>
+                <!-- Settings — left end (replaces EXO bubble position) -->
+                <Button x:Name="SettingsButton"
+                        Grid.Column="0"
+                        Style="{StaticResource ExoGlassCircle}"
+                        AutomationProperties.Name="Settings"
+                        Click="SettingsButton_Click"
+                        Margin="0,0,8,0"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center">
+                    <FontIcon x:Name="SettingsGearIcon"
+                              Glyph="&#xE713;"
+                              FontSize="15"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              RenderTransformOrigin="0.5,0.5">
+                        <FontIcon.RenderTransform>
+                            <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
+                        </FontIcon.RenderTransform>
+                    </FontIcon>
+                    <FlyoutBase.AttachedFlyout>
+                        <Flyout x:Name="SettingsFlyout"
+                                Placement="Bottom"
+                                Opened="SettingsFlyout_Opened"
+                                Closing="SettingsFlyout_Closing"
+                                Closed="SettingsFlyout_Closed">
+                            <Flyout.FlyoutPresenterStyle>
+                                <Style TargetType="FlyoutPresenter">
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="BorderThickness" Value="0" />
+                                    <Setter Property="Background" Value="Transparent" />
+                                    <Setter Property="CornerRadius" Value="0" />
+                                    <Setter Property="MaxWidth" Value="360" />
+                                </Style>
+                            </Flyout.FlyoutPresenterStyle>
+                            <controls:SettingsSheet x:Name="SettingsSheetHost" />
+                        </Flyout>
+                    </FlyoutBase.AttachedFlyout>
+                </Button>
 
-                    <StackPanel Grid.Column="1"
-                                Orientation="Horizontal"
+                <!-- Home — clear pill (away from modules); goes to dashboard -->
+                <Button x:Name="NavHome"
+                        Grid.Column="1"
+                        Style="{StaticResource ExoQuietButton}"
+                        AutomationProperties.Name="Home"
+                        Click="NavHome_Click"
+                        MinWidth="88"
+                        MinHeight="36"
+                        Padding="14,6"
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Center"
+                        Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE80F;" FontSize="14" VerticalAlignment="Center" />
+                        <TextBlock Text="Home"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                <!-- Transparent drag field + centered module circles -->
+                <Grid Grid.Column="2" Background="Transparent" MinHeight="48">
+                    <StackPanel Orientation="Horizontal"
                                 Spacing="10"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center">
@@ -114,44 +152,10 @@
                                    AutomationProperties.AccessibilityView="Raw" />
                         </Button>
                     </StackPanel>
-
-                    <Button x:Name="SettingsButton"
-                            Grid.Column="2"
-                            Style="{StaticResource ExoGlassCircle}"
-                            AutomationProperties.Name="Settings"
-                            Click="SettingsButton_Click"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center">
-                        <FontIcon x:Name="SettingsGearIcon"
-                                  Glyph="&#xE713;"
-                                  FontSize="15"
-                                  HorizontalAlignment="Center"
-                                  VerticalAlignment="Center"
-                                  RenderTransformOrigin="0.5,0.5">
-                            <FontIcon.RenderTransform>
-                                <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
-                            </FontIcon.RenderTransform>
-                        </FontIcon>
-                        <FlyoutBase.AttachedFlyout>
-                            <Flyout x:Name="SettingsFlyout"
-                                    Placement="Bottom"
-                                    Opened="SettingsFlyout_Opened"
-                                    Closing="SettingsFlyout_Closing"
-                                    Closed="SettingsFlyout_Closed">
-                                <Flyout.FlyoutPresenterStyle>
-                                    <Style TargetType="FlyoutPresenter">
-                                        <Setter Property="Padding" Value="0" />
-                                        <Setter Property="BorderThickness" Value="0" />
-                                        <Setter Property="Background" Value="Transparent" />
-                                        <Setter Property="CornerRadius" Value="0" />
-                                        <Setter Property="MaxWidth" Value="360" />
-                                    </Style>
-                                </Flyout.FlyoutPresenterStyle>
-                                <controls:SettingsSheet x:Name="SettingsSheetHost" />
-                            </Flyout>
-                        </FlyoutBase.AttachedFlyout>
-                    </Button>
                 </Grid>
+
+                <!-- Empty column under caption buttons — not interactive chrome -->
+                <Border Grid.Column="3" Background="Transparent" />
             </Grid>
         </Border>
 
@@ -161,37 +165,36 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
+            <!-- Secondary back only for NVIDIA panel → optimizer -->
             <Grid x:Name="TitleBarHost"
                   Grid.Row="0"
                   Background="Transparent"
                   MinHeight="0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition x:Name="CaptionSpacer" Width="138" />
-                </Grid.ColumnDefinitions>
-
                 <Button x:Name="BackButton"
-                        Style="{StaticResource ExoIconButton}"
-                        AutomationProperties.Name="Back"
+                        Style="{StaticResource ExoQuietButton}"
+                        AutomationProperties.Name="Back to NVIDIA"
                         Click="BackButton_Click"
                         Visibility="Collapsed"
-                        Width="32" Height="32"
+                        MinHeight="32"
+                        Padding="12,4"
                         Margin="0,0,0,8"
+                        HorizontalAlignment="Left"
                         VerticalAlignment="Center"
                         AllowFocusOnInteraction="True"
                         IsTabStop="True"
                         UseSystemFocusVisuals="True">
-                    <FontIcon Glyph="&#xE72B;" FontSize="12" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE72B;" FontSize="12" VerticalAlignment="Center" />
+                        <TextBlock Text="NVIDIA"
+                                   Style="{StaticResource ExoCaption}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
                 </Button>
 
                 <Border x:Name="ContextLogoHost" Visibility="Collapsed" Width="0" Height="0" />
                 <Image x:Name="ContextLogo" Visibility="Collapsed" Width="0" Height="0" />
                 <TextBlock x:Name="AppTitleText" Visibility="Collapsed" Text="" />
-
-                <!-- Kept for BackButton layout; drag is NavRail (SetTitleBar). -->
                 <Grid x:Name="TitleBarDragRegion"
-                      Grid.Column="1"
                       Background="Transparent"
                       HorizontalAlignment="Stretch"
                       VerticalAlignment="Stretch"
