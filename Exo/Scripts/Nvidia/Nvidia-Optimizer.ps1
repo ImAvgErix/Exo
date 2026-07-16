@@ -37,11 +37,12 @@ $StatePath = Join-Path $StateDir 'nvidia-optimizer.json'
 $NpiDir = Join-Path $StateDir 'tools\nvidiaProfileInspector'
 $DriverCacheDir = Join-Path $StateDir 'drivers'
 $NpiExeName = 'nvidiaProfileInspector.exe'
-# Pinned Profile Inspector release. v3.0.1.11 (2026-04-16) added -exportCustomized,
-# which Exo uses for live DRS verification. SHA-256 computed from the release asset.
-$Script:NpiPinnedTag = 'v3.0.1.11'
-$Script:NpiPinnedZipUrl = 'https://github.com/Orbmu2k/nvidiaProfileInspector/releases/download/v3.0.1.11/nvidiaProfileInspector.zip'
-$Script:NpiPinnedZipSha256 = '68DB1640186DD6FD78B5F7949348808B9A542EE95E2A52810B2EEED026E80236'
+# Pinned Profile Inspector = Orbmu2k GitHub Latest.
+# v3.0.2.1 (2026-07-05): modern WPF UI, current DRS/NVAPI data, silent import.
+# v3.0.1.11 was months behind and could flash broken XAML/doc UI on import.
+$Script:NpiPinnedTag = 'v3.0.2.1'
+$Script:NpiPinnedZipUrl = 'https://github.com/Orbmu2k/nvidiaProfileInspector/releases/download/v3.0.2.1/nvidiaProfileInspector.zip'
+$Script:NpiPinnedZipSha256 = '88DCF3514111E8DE630688467C03C36D8C2A8AD9EBC8073F27C069F82B75BB40'
 
 # --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
 function Test-ExoIsPwsh7Host {
@@ -604,7 +605,7 @@ function Test-ManagedNpiCache {
 function Install-NpiFresh {
     # Pinned Profile Inspector release only ($Script:NpiPinnedTag). The managed copy is
     # reused when the stamp matches the pinned tag AND the exe hash still verifies;
-    # stale/older copies are replaced so -exportCustomized (v3.0.1.11+) is available.
+    # stale/older copies are replaced so -silentImport / -exportCustomized stay current.
     Set-ExoStage 'npi-install'
     Write-Step "Checking Exo managed NVIDIA Profile Inspector (pinned $Script:NpiPinnedTag)..."
     $target = Join-Path $NpiDir $NpiExeName
@@ -764,7 +765,7 @@ function Invoke-ExoNpiExportCustomized {
         [Parameter(Mandatory)][string]$NpiPath,
         [int]$TimeoutSec = 60
     )
-    # NPI v3.0.1.11+ CLI: -exportCustomized writes every customized profile into a
+    # NPI CLI: -exportCustomized writes every customized profile into a
     # timestamped .nip next to the exe, then exits. Older builds produce nothing;
     # the caller records drsVerified='unavailable' (non-fatal) in that case.
     if (-not (Test-Path -LiteralPath $NpiPath)) { return $null }
@@ -888,7 +889,7 @@ function Test-ExoDrsImportVerified {
             VerifiedAt   = $nowUtc
             SettingCount = 0
             Mismatches   = @()
-            Reason       = '-exportCustomized produced no export (Profile Inspector older than v3.0.1.11?)'
+            Reason       = '-exportCustomized produced no export (Profile Inspector too old or export failed)'
         }
     }
 
