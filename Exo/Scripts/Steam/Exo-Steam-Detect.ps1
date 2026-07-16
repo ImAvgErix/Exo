@@ -317,12 +317,16 @@ if (-not $steamOk) {
     Add-Feature 'RAM trim + priority' 'Webhelper reclaim loop + priority yield while gaming (2-15s interval).' $trimOk
 
     $debloatOk = Test-SteamCompleteClientDebloat $steam
-    $dlOk = [bool]($state -and $state.configVerified -and $state.downloadOptimized) -and
+    # Sparse intermediate states (applying/incomplete/repairing) lack these keys - guard.
+    $dlOk = [bool]($state -and ($state.PSObject.Properties.Name -contains 'configVerified') -and $state.configVerified -and
+        ($state.PSObject.Properties.Name -contains 'downloadOptimized') -and $state.downloadOptimized) -and
         (Test-SteamDownloadConfig $steam)
     $debloatCombined = $debloatOk -and $dlOk
     Add-Feature 'Complete client debloat' 'Caches, leftovers, crashpads cleaned; games preserved.' $debloatCombined
 
-    $snapOk = [bool]($state -and $state.clientTweaksVerified -and $state.snappyUi -and $state.overlayTweaks) -and
+    $snapOk = [bool]($state -and ($state.PSObject.Properties.Name -contains 'clientTweaksVerified') -and $state.clientTweaksVerified -and
+        ($state.PSObject.Properties.Name -contains 'snappyUi') -and $state.snappyUi -and
+        ($state.PSObject.Properties.Name -contains 'overlayTweaks') -and $state.overlayTweaks) -and
         (Test-SteamClientTweaks $steam)
     Add-Feature 'Library / overlay tweaks' 'Quieter overlay and lighter library web views.' $snapOk
 

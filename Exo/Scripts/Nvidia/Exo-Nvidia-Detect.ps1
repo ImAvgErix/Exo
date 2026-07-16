@@ -124,7 +124,10 @@ function Test-ExoDriverInstallTweaks([string]$CurrentNv, $State) {
     }
 
     $remembered = $false
-    if ($State -and $State.driverTweaksVerified -and $State.driverTweaksVersion -and $CurrentNv -and
+    # Sparse intermediate states (reboot-pending / driver-fail writes) lack these keys - guard.
+    if ($State -and ($State.PSObject.Properties.Name -contains 'driverTweaksVerified') -and
+        [bool]$State.driverTweaksVerified -and
+        ($State.PSObject.Properties.Name -contains 'driverTweaksVersion') -and $CurrentNv -and
         [string]$State.driverTweaksVersion -eq [string]$CurrentNv) {
         $remembered = $true
     }
@@ -480,8 +483,9 @@ $features.Add(@{
 
 # 3) 3D profile - fail closed on interrupted runs, driver changes, legacy
 # markers, missing pack metadata, or an asset hash mismatch.
-$pendingAfterDriver = [bool]($state -and $state.pendingAfterDriver)
-$applyInProgress = [bool]($state -and $state.applyInProgress)
+# Sparse / legacy (2.x) state files may lack these keys - guard every read.
+$pendingAfterDriver = [bool]($state -and ($state.PSObject.Properties.Name -contains 'pendingAfterDriver') -and [bool]$state.pendingAfterDriver)
+$applyInProgress = [bool]($state -and ($state.PSObject.Properties.Name -contains 'applyInProgress') -and [bool]$state.applyInProgress)
 $profileOk = $false
 if ($state -and -not $pendingAfterDriver -and -not $applyInProgress) {
     $requiredProfileFields = @('profileApplied', 'profileFile', 'profileVersion', 'profileSha256', 'profileDriverVersion')
@@ -549,7 +553,7 @@ if ($state -and $applied) {
     if ($state.PSObject.Properties.Name -contains 'gameProfileDeltas') {
         $deltas = [bool]$state.gameProfileDeltas
     }
-    $gameOk = [bool]$state.gameProfilesApplied -and $count -ge 10
+    $gameOk = [bool]($state -and ($state.PSObject.Properties.Name -contains 'gameProfilesApplied') -and [bool]$state.gameProfilesApplied) -and $count -ge 10
     if ($gameOk) {
         $sample = ($names | Select-Object -First 6) -join ', '
         $deltaNote = if ($deltas) { ' + competitive/hybrid deltas' } else { ' (reapply for tier deltas)' }
@@ -613,7 +617,7 @@ foreach ($cplPath in @(
     if (Test-Path -LiteralPath $cplPath) { $cplInstalled = $true; break }
 }
 $controlPanelOnly = [bool]($state -and $state.PSObject.Properties.Name -contains 'controlPanelOnly' -and [bool]$state.controlPanelOnly)
-$cplOk = $cplInstalled -or [bool]($state -and $state.nvidiaControlPanel) -or $controlPanelOnly
+$cplOk = $cplInstalled -or [bool]($state -and ($state.PSObject.Properties.Name -contains 'nvidiaControlPanel') -and [bool]$state.nvidiaControlPanel) -or $controlPanelOnly
 # Success = App gone (and preferably CPL gone). Display via Exo/NVAPI.
 $clientOk = -not $appInstalled
 if (-not $appInstalled -and $displayOk) { $clientOk = $true }
@@ -678,8 +682,11 @@ try {
     $appGhosts = 0
     if (Test-Path -LiteralPath $trayRoot) {
         foreach ($key in @(Get-ChildItem -LiteralPath $trayRoot -ErrorAction SilentlyContinue)) {
-            $item = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction SilentlyContinue
-            $exe = [string]$item.ExecutablePath
+            # One odd key (no ExecutablePath value) must not fail the whole inspection.
+            try {
+                $item = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction SilentlyContinue
+                $exe = [string]$item.ExecutablePath
+            } catch { continue }
             if (-not $exe) { continue }
             $isDisplay = if (Get-Command Test-ExoDisplayContainerExe -EA SilentlyContinue) {
                 Test-ExoDisplayContainerExe $exe
@@ -721,13 +728,14 @@ $isApplied = $gpuOk -and (-not $pendingAfterDriver) -and (-not $applyInProgress)
              $trayHideOk -and $driverStageOk
 
 $driverChanged = $false
-if ($state -and $currentNv -and $state.profileDriverVersion -and
+if ($state -and $currentNv -and ($state.PSObject.Properties.Name -contains 'profileDriverVersion') -and
+    $state.profileDriverVersion -and
     [string]$state.profileDriverVersion -ne [string]$currentNv) {
     $driverChanged = $true
 }
 
-$lastErrorStage = if ($state -and $state.lastErrorStage) { [string]$state.lastErrorStage } else { '' }
-$lastError = if ($state -and $state.lastError) { [string]$state.lastError } else { '' }
+$lastErrorStage = if ($state -and ($state.PSObject.Properties.Name -contains 'lastErrorStage') -and $state.lastErrorStage) { [string]$state.lastErrorStage } else { '' }
+$lastError = if ($state -and ($state.PSObject.Properties.Name -contains 'lastError') -and $state.lastError) { [string]$state.lastError } else { '' }
 
 $statusText = if (-not $gpuOk) { 'No NVIDIA GPU' }
 elseif ($pendingAfterDriver) { 'Restart required' }
@@ -735,7 +743,7 @@ elseif ($applyInProgress -and $lastErrorStage) { ("Failed at {0}" -f $lastErrorS
 elseif (-not $currentNv) { 'Driver status unavailable' }
 elseif (-not $isNotebookGpu -and $needsUpdate) { 'Driver update available' }
 elseif (-not $isNotebookGpu -and $needsRetweak) { 'Driver tweaks available' }
-elseif ($driverChanged -or (-not $profileOk -and $state -and $state.profileApplied)) { 'Driver changed - reapply' }
+elseif ($driverChanged -or (-not $profileOk -and $state -and ($state.PSObject.Properties.Name -contains 'profileApplied') -and $state.profileApplied)) { 'Driver changed - reapply' }
 elseif ($profileOk -and $drsLive -eq 'drifted') { 'Profile drifted - reapply' }
 elseif (-not $profileOk) { '3D profile incomplete' }
 elseif (-not $gameOk) { 'Game profiles incomplete' }
