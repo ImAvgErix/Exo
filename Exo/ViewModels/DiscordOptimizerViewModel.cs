@@ -25,6 +25,13 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     [ObservableProperty]
     private string _detailText = string.Empty;
 
+    /// <summary>Live next-step coach from detect (what to click / what's missing).</summary>
+    [ObservableProperty]
+    private string _guidanceText = "Detecting this PC...";
+
+    [ObservableProperty]
+    private bool _hasGuidance = true;
+
     public ObservableCollection<FeatureRowViewModel> Features { get; } = new();
 
     [ObservableProperty]
@@ -282,6 +289,18 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         if (!IsStatusLoading)
             IsFeatureListVisible = Features.Count > 0;
         LoadApplyReport();
+        UpdateGuidance();
+    }
+
+    private void UpdateGuidance()
+    {
+        GuidanceText = OptimizerAdvisor.Build(
+            "Discord",
+            IsApplied,
+            StatusText,
+            DetailText,
+            Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList());
+        HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
     }
 
     private void LoadApplyReport()

@@ -23,6 +23,8 @@ public partial class SteamOptimizerViewModel : ObservableObject
 
     [ObservableProperty] private string _statusText = "Checking status...";
     [ObservableProperty] private string _detailText = string.Empty;
+    [ObservableProperty] private string _guidanceText = "Detecting this PC...";
+    [ObservableProperty] private bool _hasGuidance = true;
     public ObservableCollection<FeatureRowViewModel> Features { get; } = new();
 
     [ObservableProperty] private string _runButtonLabel = "Run";
@@ -238,6 +240,13 @@ public partial class SteamOptimizerViewModel : ObservableObject
             IsFeatureListVisible = Features.Count > 0;
         LoadApplyReport();
         LoadTrimStats();
+        GuidanceText = OptimizerAdvisor.Build(
+            "Steam",
+            IsApplied,
+            StatusText,
+            DetailText,
+            Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList());
+        HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
     }
 
     private void LoadApplyReport()

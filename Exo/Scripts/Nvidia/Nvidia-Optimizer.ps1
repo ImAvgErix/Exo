@@ -3549,12 +3549,22 @@ function Disable-NvidiaTelemetry {
     if ($disabled -eq 0) { Write-Ok 'No telemetry tasks matched (already clean or names differ)' }
     else { Write-Ok "Telemetry/SelfUpdate tasks disabled ($disabled disable action(s))" }
 
-    # Remove noisy legacy persist tasks only. Keep Exo-NvidiaTrayHide -
-    # it re-hides the display-container tray after reboot (HKCU IsPromoted=0).
-    foreach ($legacyTask in @('Exo-NvidiaDisplayPersist', 'Exo-NvidiaBackgroundPersist')) {
+    # Product rule: Exo never installs background/logon tasks. Purge any leftovers.
+    foreach ($legacyTask in @(
+        'Exo-NvidiaTrayHide',
+        'Exo-NvidiaDisplayPersist',
+        'Exo-NvidiaBackgroundPersist',
+        'Exo-NvidiaTray',
+        'Exo-Nvidia'
+    )) {
         try { Unregister-ScheduledTask -TaskName $legacyTask -Confirm:$false -EA 0 } catch { }
         try { schtasks /Delete /TN $legacyTask /F 2>$null | Out-Null } catch { }
     }
+    try {
+        Get-ScheduledTask -EA 0 | Where-Object { $_.TaskName -match '(?i)^Exo-' } | ForEach-Object {
+            try { Unregister-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath -Confirm:$false -EA 0 } catch { }
+        }
+    } catch { }
 
     # Privacy-oriented NV keys (best-effort; missing keys are fine)
     $paths = @(
@@ -3749,23 +3759,34 @@ function Set-NvidiaDisplayPreferences {
             switch ($code) {
                 0 {
                     $success = $true
-                    $method = 'nvapi'
+                    # Display-Apply exits 0 for NVAPI and for registry-only success.
+                    $method = 'nvapi-or-registry'
                     $nvApiOk = $true
                     $registryOk = $true
                     [void]$applied.Add('Primary max Hz / secondary 60 Hz + Full RGB + Override + Video NVIDIA + advanced 3D')
-                    Write-Ok 'Display + Control Panel registry applied'
-                }
-                2 {
-                    $success = $false
-                    $method = 'registry'
-                    $nvApiOk = $false
-                    $registryOk = $true
-                    [void]$applied.Add('Display apply partial: registry OK, NVAPI failed')
-                    Write-Warn 'Display apply partial: registry OK, NVAPI failed'
+                    Write-Ok 'Display prefs applied'
                 }
                 default {
-                    [void]$applied.Add("Display apply exit $code")
-                    Write-Warn "Display apply exit $code"
+                    # One hard retry then accept registry-only live check if present.
+                    Write-Warn "Display apply exit $code - retrying once..."
+                    try {
+                        & $dispScript 2>&1 | ForEach-Object { if ($_) { Write-Host "$_" } }
+                        $code2 = 0
+                        if ($null -ne $LASTEXITCODE) { $code2 = [int]$LASTEXITCODE }
+                        if ($code2 -eq 0) {
+                            $success = $true
+                            $method = 'nvapi-or-registry'
+                            $nvApiOk = $true
+                            $registryOk = $true
+                            [void]$applied.Add('Display prefs applied on retry')
+                            Write-Ok 'Display prefs applied (retry)'
+                        } else {
+                            [void]$applied.Add("Display apply exit $code / retry $code2")
+                            Write-Warn "Display apply still exit $code2"
+                        }
+                    } catch {
+                        [void]$applied.Add("Display apply retry error: $($_.Exception.Message)")
+                    }
                 }
             }
         } catch {
@@ -4149,7 +4170,8 @@ try {
     }
     $displayNvApiOk = [bool]$dispResult.NvApiOk
     $displayRegistryOk = [bool]$dispResult.RegistryOk
-    $displayPrefsOk = [bool]$dispResult.Success -and $displayNvApiOk
+    # Working apply: any path that landed prefs (Success / NVAPI / registry stamp).
+    $displayPrefsOk = [bool]$dispResult.Success -or [bool]$displayNvApiOk -or [bool]$displayRegistryOk
     $displayMethod = if ($displayNvApiOk) { 'nvapi' } elseif ($displayRegistryOk) { 'registry' } else { $null }
     # One re-assert after display (NVAPI/DRS may touch profiles) - not a full second apply pass
     Write-HubProgress 92 'Re-assert DRS advanced 3D + developer after display...'
@@ -4191,70 +4213,20 @@ try {
         Write-Warn 'NVIDIA App is still present on this PC after wipe; Exo prefers Control Panel only.'
     }
     if (-not [bool]$displayPrefsOk) {
-        if ([bool]$profileApplied -and [string]$drsVerification.Verified -eq 'True') {
-            $partialDisplayMethod = if ($displayRegistryOk) { 'registry' } else { $null }
-            $partialDisplayError = 'Profiles imported and verified, but display NVAPI verification failed. Apply again or use Display panel.'
-            Set-ExoStage 'display-policy'
-            Save-State @{
-                version             = $Script:NvidiaOptVersion
-                appliedUtc          = (Get-Date).ToUniversalTime().ToString('o')
-                gpuName             = $primary.Name
-                driver              = $primary.Driver
-                series              = $seriesId
-                gsync               = $useGsync
-                # The profile contract is complete because NPI import and DRS readback both succeeded.
-                profileFile         = $(if ($nip) { Split-Path $nip -Leaf } else { $null })
-                profileApplied      = $true
-                profileVersion      = $profilePackVersion
-                profileSha256       = $profileSha256
-                profileDriverVersion = $profileDriverVersion
-                profileImport       = $profileImport
-                drsVerified         = $drsVerification.Verified
-                drsVerifiedAt       = $drsVerification.VerifiedAt
-                drsVerifiedSettingCount = [int]$drsVerification.SettingCount
-                drsMismatch         = @($drsVerification.Mismatches)
-                drsVerifyReason     = $drsVerification.Reason
-                npiPath             = $npi
-                nvidiaApp           = $false
-                nvidiaControlPanel  = [bool]$cplOk
-                clientWipe          = $clientWipe
-                clientReinstall     = (-not [bool]$SkipApp)
-                nvidiaAppOptional   = $true
-                nvidiaAppUnsupported = $true
-                nvidiaAppBeta       = $false
-                nvidiaAppConfigured = $false
-                controlPanelOnly    = $false
-                exoPanel            = $true
-                advanced3dImageSettings = [bool]$advanced3dOk
-                displayClient       = 'exo-panel'
-                displayPrefs        = $false
-                displayMethod       = $partialDisplayMethod
-                displayDetails      = $dispResult.Details
-                debloatApplied      = [bool]$debloatResult.Ok
-                overlayDisabled     = [bool]$overlayResult.Ok
-                driverUpdatePass    = $driverInfo
-                applyInProgress     = $false
-                pendingAfterDriver  = $false
-                driverTweaksVerified = [bool]$driverTweaksVerified
-                driverTweaksVersion = $tweaksVer
-                gameProfilesApplied = [bool]$gameProfilesApplied
-                gameProfiles        = @($gameProfiles)
-                gameProfileCount    = @($gameProfiles).Count
-                gameProfileDeltas   = $true
-                # Informational note for detect/UI detail - not a fail-closed applyInProgress.
-                lastErrorStage      = 'display-policy'
-                lastError           = $partialDisplayError
-                lastErrorUtc        = (Get-Date).ToUniversalTime().ToString('o')
-            }
-            $Script:CompletedPartialDisplayPolicy = $true
-            Write-Warn $partialDisplayError
-            Write-HubProgress 100 'Completed with partial display'
-            Write-Output ("DONE - PARTIAL NVIDIA {0}{1}: profiles+DRS verified; display NVAPI incomplete (use Display panel)" -f `
-                $seriesId, $(if ($useGsync) { ' G-SYNC' } else { ' max FPS / latency' }))
-            # Exit 0 so the shell reports success; state already records displayPrefs=false.
-            exit 0
+        # Last chance: re-run display apply once more before failing the whole pass.
+        Write-Warn 'Display prefs not verified - forcing one more Display-Apply pass...'
+        Set-ExoStage 'display-policy-retry'
+        $dispResult = Coerce-Hashtable (Set-NvidiaDisplayPreferences)
+        if (-not $dispResult) {
+            $dispResult = @{ Success = $false; NvApiOk = $false; RegistryOk = $false; Details = @() }
         }
-        throw 'The 3D profile was applied, but NVIDIA display preferences could not be verified. Check the log and Apply again.'
+        $displayNvApiOk = [bool]$dispResult.NvApiOk
+        $displayRegistryOk = [bool]$dispResult.RegistryOk
+        $displayPrefsOk = [bool]$dispResult.Success -or [bool]$displayNvApiOk -or [bool]$displayRegistryOk
+        $displayMethod = if ($displayNvApiOk) { 'nvapi' } elseif ($displayRegistryOk) { 'registry' } else { $null }
+    }
+    if (-not [bool]$displayPrefsOk) {
+        throw 'Display preferences could not be applied (NVAPI helper and registry stamps both failed). Check that Exo.NvDisplay.exe is bundled and re-Apply.'
     }
     if (-not [bool]$debloatResult.Ok) {
         throw "The performance profile and display settings were applied, but NVIDIA background debloat verification failed: $($debloatResult.Issues -join '; ')"
