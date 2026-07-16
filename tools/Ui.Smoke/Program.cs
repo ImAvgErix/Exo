@@ -54,7 +54,12 @@ if (File.Exists(appXaml))
         a.Contains("#B30C0C0C", StringComparison.Ordinal)
         || a.Contains("#0C0C0C", StringComparison.Ordinal));
     Expect("liquid glass fill token", a.Contains("ExoGlassFillBrush", StringComparison.Ordinal));
-    Expect("settings acrylic", a.Contains("ExoSettingsAcrylicBrush", StringComparison.Ordinal));
+    // Solid near-opaque sheet brush — real AcrylicBrush at startup dies with
+    // 0xC000027B (composition failure) on real GPUs; flyout content is parsed
+    // with MainWindow, so the app never launched (v2.6.0 regression).
+    Expect("settings sheet brush",
+        a.Contains("ExoSettingsAcrylicBrush", StringComparison.Ordinal)
+        && !a.Contains("<media:AcrylicBrush", StringComparison.Ordinal));
 }
 var themeServiceCs = Path.Combine(repo, "Exo", "Services", "ThemeService.cs");
 if (File.Exists(themeServiceCs))
@@ -562,9 +567,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.6.0", File.ReadAllText(versionFile).Trim() == "2.6.0");
+    Expect("VERSION is 2.6.1", File.ReadAllText(versionFile).Trim() == "2.6.1");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.6.0", File.ReadAllText(csproj).Contains("<Version>2.6.0</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.6.1", File.ReadAllText(csproj).Contains("<Version>2.6.1</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));

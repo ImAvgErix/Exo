@@ -10,7 +10,9 @@ public partial class App : Application
 
     public App()
     {
+        Helpers.StartupLog.Mark("app-ctor");
         InitializeComponent();
+        Helpers.StartupLog.Mark("app-resources-loaded");
         Services.Initialize();
         UnhandledException += (_, e) =>
         {
@@ -31,9 +33,12 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        Helpers.StartupLog.Mark("on-launched");
         _window = new MainWindow();
+        Helpers.StartupLog.Mark("main-window-created");
         Services.Theme.Attach(_window);
         _window.Activate();
+        Helpers.StartupLog.Mark("window-activated");
     }
 
     public static Window? MainAppWindow { get; set; }

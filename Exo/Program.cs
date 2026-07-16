@@ -19,11 +19,14 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        Helpers.StartupLog.Mark("main");
+
         // Must run before any HWND is created or taskbar uses a generic icon.
         try { SetCurrentProcessExplicitAppUserModelID(AppUserModelId); } catch { }
 
         XamlCheckProcessRequirements();
         ComWrappersSupport.InitializeComWrappers();
+        Helpers.StartupLog.Mark("xaml-runtime-ready");
         Application.Start(p =>
         {
             var context = new DispatcherQueueSynchronizationContext(
@@ -31,5 +34,6 @@ public static class Program
             SynchronizationContext.SetSynchronizationContext(context);
             new App();
         });
+        Helpers.StartupLog.Mark("application-exited");
     }
 }

@@ -1,3 +1,8 @@
+## 2.6.1
+
+- **CRITICAL launch fix**: v2.6.0 died at startup with `0xC000027B` (composition failure) on real GPUs — the settings-flyout `AcrylicBrush` is created while `MainWindow` parses, and the acrylic composition object can fail before first frame. Replaced with solid near-opaque sheet brushes (visually equivalent to the old tint + fallback)
+- **Startup breadcrumbs**: `%LocalAppData%\Exo\logs\startup.log` marks each launch phase (main → resources → window → home → activated) so silent native crashes are diagnosable
+
 ## 2.6.0
 
 - **UI — Exo Instrument**: full-width top bar (EXO · icon modules · Settings) with content filling the frame below; one edge-glass module plate

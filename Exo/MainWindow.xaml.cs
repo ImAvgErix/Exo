@@ -31,7 +31,9 @@ public sealed partial class MainWindow : Window
 
     public MainWindow()
     {
+        Helpers.StartupLog.Mark("main-window-ctor");
         InitializeComponent();
+        Helpers.StartupLog.Mark("main-window-xaml-loaded");
         App.MainAppWindow = this;
 
         // Fixed shell — no maximize / no edge-resize (UI is designed for this frame).
@@ -77,6 +79,7 @@ public sealed partial class MainWindow : Window
         Activated += OnFirstActivationReapplyIcon;
 
         NavigateHome(suppressTransition: true);
+        Helpers.StartupLog.Mark("home-navigated");
         ClearChromeFocus();
         TryRepairStartMenuShortcut();
         _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);

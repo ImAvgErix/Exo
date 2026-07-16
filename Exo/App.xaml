@@ -3,7 +3,7 @@
     x:Class="Exo.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:media="using:Microsoft.UI.Xaml.Media">
+>
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -33,10 +33,7 @@
                     <SolidColorBrush x:Key="ExoGlassStrokeBrush" Color="#45FFFFFF" />
                     <SolidColorBrush x:Key="ExoRailGlassFillBrush" Color="#78080808" />
                     <SolidColorBrush x:Key="ExoSpecularStrokeBrush" Color="#22FFFFFF" />
-                    <media:AcrylicBrush x:Key="ExoSettingsAcrylicBrush"
-                                        TintColor="#0A0A0A"
-                                        TintOpacity="0.78"
-                                        FallbackColor="#E60C0C0C" />
+                    <SolidColorBrush x:Key="ExoSettingsAcrylicBrush" Color="#F00C0C0C" />
                     <SolidColorBrush x:Key="ExoAccentBrush" Color="#F5F5F4" />
                     <SolidColorBrush x:Key="ExoOnAccentBrush" Color="#000000" />
                     <SolidColorBrush x:Key="ExoAccentSoftBrush" Color="#20FFFFFF" />
@@ -71,10 +68,7 @@
                     <SolidColorBrush x:Key="ExoGlassStrokeBrush" Color="#803D3429" />
                     <SolidColorBrush x:Key="ExoRailGlassFillBrush" Color="#D8F3EDE3" />
                     <SolidColorBrush x:Key="ExoSpecularStrokeBrush" Color="#403D3429" />
-                    <media:AcrylicBrush x:Key="ExoSettingsAcrylicBrush"
-                                        TintColor="#F3EDE3"
-                                        TintOpacity="0.82"
-                                        FallbackColor="#F5FCFAF6" />
+                    <SolidColorBrush x:Key="ExoSettingsAcrylicBrush" Color="#F8FCFAF6" />
                     <SolidColorBrush x:Key="ExoAccentBrush" Color="#3D3429" />
                     <SolidColorBrush x:Key="ExoOnAccentBrush" Color="#FCFAF6" />
                     <SolidColorBrush x:Key="ExoAccentSoftBrush" Color="#1A3D3429" />
@@ -98,10 +92,7 @@
                     <SolidColorBrush x:Key="ExoGlassStrokeBrush" Color="#45FFFFFF" />
                     <SolidColorBrush x:Key="ExoRailGlassFillBrush" Color="#78080808" />
                     <SolidColorBrush x:Key="ExoSpecularStrokeBrush" Color="#22FFFFFF" />
-                    <media:AcrylicBrush x:Key="ExoSettingsAcrylicBrush"
-                                        TintColor="#0A0A0A"
-                                        TintOpacity="0.78"
-                                        FallbackColor="#E60C0C0C" />
+                    <SolidColorBrush x:Key="ExoSettingsAcrylicBrush" Color="#F00C0C0C" />
                     <SolidColorBrush x:Key="ExoAccentBrush" Color="#F5F5F4" />
                     <SolidColorBrush x:Key="ExoOnAccentBrush" Color="#000000" />
                     <SolidColorBrush x:Key="ExoAccentSoftBrush" Color="#20FFFFFF" />
