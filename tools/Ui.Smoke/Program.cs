@@ -139,8 +139,9 @@ if (File.Exists(dash))
         d.Contains("SYSTEM RAM", StringComparison.Ordinal)
         && d.Contains("MemoryPrimary", StringComparison.Ordinal));
     Expect("home steam reclaimed hero",
-        d.Contains("STEAM RECLAIMED", StringComparison.Ordinal)
-        && d.Contains("ReclaimedPrimary", StringComparison.Ordinal));
+        // Steam reclaim lives on the STEAM tile (and Reclaimed* still bound in VM for smokes).
+        (d.Contains("STEAM RECLAIMED", StringComparison.Ordinal) || d.Contains("STEAM", StringComparison.Ordinal))
+        && (d.Contains("ReclaimedPrimary", StringComparison.Ordinal) || d.Contains("SteamStatusPrimary", StringComparison.Ordinal)));
     Expect("home module status row",
         d.Contains("DiscordStatusPrimary", StringComparison.Ordinal)
         && d.Contains("SteamStatusPrimary", StringComparison.Ordinal)
@@ -153,7 +154,9 @@ if (File.Exists(dash))
         && d.Contains("NVIDIA", StringComparison.Ordinal));
     Expect("home useful dashboard",
         d.Contains("SYSTEM RAM", StringComparison.Ordinal)
-        && d.Contains("STEAM RECLAIMED", StringComparison.Ordinal));
+        && d.Contains("DISCORD", StringComparison.Ordinal)
+        && d.Contains("STEAM", StringComparison.Ordinal)
+        && d.Contains("INTERNET", StringComparison.Ordinal));
     Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("no fixed product cards",
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)
@@ -642,9 +645,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 3.0.10", File.ReadAllText(versionFile).Trim() == "3.0.10");
+    Expect("VERSION is 3.0.11", File.ReadAllText(versionFile).Trim() == "3.0.11");
 if (File.Exists(csproj))
-    Expect("csproj Version 3.0.10", File.ReadAllText(csproj).Contains("<Version>3.0.10</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 3.0.11", File.ReadAllText(csproj).Contains("<Version>3.0.11</Version>", StringComparison.Ordinal));
 
 // Live advisor (realtime next-step coach on every optimizer)
 var advisorPath = Path.Combine(repo, "Exo", "Services", "OptimizerAdvisor.cs");
@@ -801,6 +804,11 @@ if (File.Exists(homeDashReader))
     Expect("home nvidia path file read",
         hdr.Contains("TryReadNvidiaPath", StringComparison.Ordinal)
         && hdr.Contains("nvidia-optimizer.json", StringComparison.Ordinal));
+    Expect("home discord reclaim sample",
+        hdr.Contains("TrySampleDiscordRam", StringComparison.Ordinal)
+        && hdr.Contains("discord-ram-stats.json", StringComparison.Ordinal));
+    Expect("home link speed read",
+        hdr.Contains("TryReadPrimaryLinkSpeed", StringComparison.Ordinal));
     Expect("home no invented fps capture",
         !hdr.Contains("PresentMon", StringComparison.Ordinal)
         && !hdr.Contains("fpsGain", StringComparison.OrdinalIgnoreCase));

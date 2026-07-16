@@ -414,8 +414,14 @@ function Install-Equicord([string]$AppDir) {
         return
     }
     Write-Warn 'Equicord loader missing - trying Equilotl then direct path'
-    $root = Split-Path -Parent (Split-Path -Parent $AppDir)
-    if ($root -and (Install-EquicordViaEquilotl $root)) {
+    # AppDir is ...\Discord\app-1.0.xxxx - Equilotl wants the Discord root (Update.exe parent), NOT LocalAppData.
+    $root = Split-Path -Parent $AppDir
+    if (-not (Test-Path -LiteralPath (Join-Path $root 'Update.exe'))) {
+        # Fallback: walk up one more only if this still looks like a Discord tree.
+        $maybe = Split-Path -Parent $root
+        if ($maybe -and (Test-Path -LiteralPath (Join-Path $maybe 'Update.exe'))) { $root = $maybe }
+    }
+    if ($root -and (Test-Path -LiteralPath (Join-Path $root 'Update.exe')) -and (Install-EquicordViaEquilotl $root)) {
         if (Test-EquicordLoaderPatched $AppDir) {
             Remove-LegacyOpenAsar $AppDir
             Install-ExoHost $AppDir

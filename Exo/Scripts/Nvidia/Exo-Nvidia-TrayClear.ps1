@@ -62,31 +62,36 @@ function Invoke-ExoNvidiaTrayPass {
             if (-not (Test-IsNvidiaTrayExe $exe)) { return }
 
             if (Test-IsDisplayContainerExe $exe) {
-                # Keep key (prevents re-create as promoted) - force overflow-hidden
+                # Keep key (prevents re-create as promoted) - only touch if still promoted
                 try {
+                    $cur = $null
+                    try { $cur = (Get-ItemProperty -LiteralPath $keyPath -EA 0).IsPromoted } catch { }
+                    if ([int]$cur -eq 0) { return } # already hidden - do not spam Apply logs
                     New-ItemProperty -LiteralPath $keyPath -Name 'IsPromoted' -Value 0 -PropertyType DWord -Force -EA 0 | Out-Null
                     Set-ItemProperty -LiteralPath $keyPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0
                     $hidden++
-                    Write-TLog "Hidden display tray: $exe"
+                    Write-TLog "Hidden display tray (was promoted): $exe"
                 } catch {
                     Write-TLog "Hide failed: $($_.Exception.Message)"
                 }
                 return
             }
 
-            # App / GFE / overlay ghosts - delete
-            if ($exe -match $patternApp -or $exe -match '(?i)\\nvcontainer\.exe' -or -not (Test-IsDisplayContainerExe $exe)) {
-                if (-not (Test-IsDisplayContainerExe $exe)) {
+            # App / GFE / overlay ghosts only - skip if path already gone from disk and key absent
+            if ($exe -match $patternApp -or $exe -match '(?i)\\nvcontainer\.exe') {
+                try {
+                    Remove-Item -LiteralPath $keyPath -Recurse -Force -EA Stop
+                    $removed++
+                    Write-TLog "Removed App/GFE tray key: $exe"
+                } catch {
                     try {
-                        Remove-Item -LiteralPath $keyPath -Recurse -Force -EA Stop
-                        $removed++
-                        Write-TLog "Removed tray key: $exe"
-                    } catch {
-                        try {
+                        $cur = $null
+                        try { $cur = (Get-ItemProperty -LiteralPath $keyPath -EA 0).IsPromoted } catch { }
+                        if ([int]$cur -ne 0) {
                             Set-ItemProperty -LiteralPath $keyPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0
                             $hidden++
-                        } catch { }
-                    }
+                        }
+                    } catch { }
                 }
             }
         }

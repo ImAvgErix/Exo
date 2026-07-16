@@ -141,12 +141,14 @@ else {
     }
 
     foreach ($marker in @(
-        'EmptyWorkingSet',
-        'Start-Sleep -Seconds 6',
         'ProcessPriorityClass]::High',
-        'ProcessPriorityClass]::BelowNormal'
+        'ProcessPriorityClass]::BelowNormal',
+        'Never EmptyWorkingSet'
     )) {
-        Assert-ContainsText $embeddedHelper $marker 'Steam webhelper helper'
+        Assert-ContainsText $embeddedHelper $marker 'Steam companion helper'
+    }
+    if ($embeddedHelper -match '(?i)EmptyWorkingSet\(' -and $embeddedHelper -notmatch 'Never EmptyWorkingSet') {
+        Add-Failure 'Steam helper must not EmptyWorkingSet steamwebhelper (kills CEF UI)'
     }
 }
 

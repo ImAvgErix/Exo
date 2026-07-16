@@ -335,6 +335,16 @@ if ($snap) {
     Remove-Prop 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' 'EnableMulticast'
     Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxCacheTtl'
     Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxNegativeCacheTtl'
+    # Undo folklore ServiceProvider priorities if present
+    try {
+      $sp = 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\ServiceProvider'
+      if (Test-Path $sp) {
+        Set-ItemProperty $sp -Name LocalPriority -Value 499 -Type DWord -Force -EA SilentlyContinue
+        Set-ItemProperty $sp -Name HostsPriority -Value 500 -Type DWord -Force -EA SilentlyContinue
+        Set-ItemProperty $sp -Name DnsPriority -Value 2000 -Type DWord -Force -EA SilentlyContinue
+        Set-ItemProperty $sp -Name NetbtPriority -Value 2001 -Type DWord -Force -EA SilentlyContinue
+      }
+    } catch {}
     Remove-Prop 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' 'AutoDetect'
   } catch {}
   # NetBIOS over TCP/IP — default (system / DHCP)

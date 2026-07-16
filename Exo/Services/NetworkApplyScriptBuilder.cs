@@ -459,13 +459,19 @@ if (-not $snapshotOk) {
         sb.AppendLine("Remove-Prop $tcp 'TcpNumConnections'");
         sb.AppendLine("Remove-Prop $tcp 'LargeSystemCache'");
         sb.AppendLine("Remove-Prop $tcp 'MaxUserPort'");
-        // DNS ServiceProvider priorities (documented resolver-order DWORDs; defaults 499/500/2000/2001)
+        // DNS ServiceProvider priorities: leave Windows defaults (499/500/2000/2001).
+        // Folklore values 4/5/6/7 can make DNS multi-second slow (seen as 100ms → 1s+ in proof layer).
         sb.AppendLine("$sp = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\ServiceProvider'");
-        sb.AppendLine("Set-Dword $sp 'LocalPriority' 4");
-        sb.AppendLine("Set-Dword $sp 'HostsPriority' 5");
-        sb.AppendLine("Set-Dword $sp 'DnsPriority' 6");
-        sb.AppendLine("Set-Dword $sp 'NetbtPriority' 7");
-        sb.AppendLine("Report 'dns-priorities' 'ok'");
+        sb.AppendLine("if (Test-Path $sp) {");
+        sb.AppendLine("  try {");
+        sb.AppendLine("    Set-Dword $sp 'LocalPriority' 499");
+        sb.AppendLine("    Set-Dword $sp 'HostsPriority' 500");
+        sb.AppendLine("    Set-Dword $sp 'DnsPriority' 2000");
+        sb.AppendLine("    Set-Dword $sp 'NetbtPriority' 2001");
+        sb.AppendLine("    Log '[DNS] ServiceProvider priorities kept at Windows defaults (not folklore 4/5/6/7)'");
+        sb.AppendLine("    Report 'dns-priorities' 'ok' 'windows defaults'");
+        sb.AppendLine("  } catch { Report 'dns-priorities' 'skip' $_.Exception.Message }");
+        sb.AppendLine("} else { Report 'dns-priorities' 'skip' 'ServiceProvider key missing' }");
         sb.AppendLine("Report 'registry-host' 'ok'");
 
         // MMCSS — Microsoft docs:
@@ -1025,48 +1031,65 @@ Report 'bindings' 'ok'
         // Set metric on ANY Up Ethernet (IP not required); prefer adapters that already have IPv4.
         sb.AppendLine("""
 function Set-EthMetrics {
-  $ads = @(Get-ExoPhysicalAdapters)
-  $ethUp = @($ads | Where-Object { -not (Test-IsWifiAdapter $_) -and $_.Status -eq 'Up' })
-  if ($ethUp.Count -eq 0) {
-    Log '[Exo-NET] No Up Ethernet adapters for metric'
-    return $false
-  }
-  # Rank: real IPv4 first, then link speed
-  $ranked = foreach ($e in $ethUp) {
-    $hasIp = @(Get-NetIPAddress -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue |
-      Where-Object { $_.IPAddress -notlike '169.254.*' }).Count -gt 0
-    $spd = 0L
-    try { $spd = [int64]$e.ReceiveLinkSpeed } catch { $spd = 0 }
-    [pscustomobject]@{ A=$e; HasIp=$hasIp; Spd=$spd }
-  }
-  $ordered = @($ranked | Sort-Object @{Expression='HasIp';Descending=$true}, @{Expression='Spd';Descending=$true} | ForEach-Object { $_.A })
-  $i = 0
+  # Binding toggles can leave Status briefly non-Up. Retry + broad link detection.
   $okAny = $false
-  foreach ($e in $ordered) {
-    if ($i -eq 0) { $metric = 1 } else { $metric = 5 + $i }
-    foreach ($af in @('IPv4','IPv6')) {
+  for ($attempt = 1; $attempt -le 8; $attempt++) {
+    $ads = @(Get-ExoPhysicalAdapters)
+    # Up OR MediaConnected OR has non-APIPA IPv4 (cover driver Status flicker)
+    $ethUp = @($ads | Where-Object {
+      if (Test-IsWifiAdapter $_) { return $false }
+      $st = [string]$_.Status
+      if ($st -eq 'Up') { return $true }
       try {
-        Set-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily $af -AutomaticMetric Disabled -EA SilentlyContinue
-        Set-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily $af -InterfaceMetric $metric -EA SilentlyContinue
+        if ([string]$_.MediaConnectionState -eq 'Connected') { return $true }
       } catch {}
+      $ipN = @(Get-NetIPAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -EA SilentlyContinue |
+        Where-Object { $_.IPAddress -notlike '169.254.*' }).Count
+      return ($ipN -gt 0)
+    })
+    if ($ethUp.Count -eq 0) {
+      Log "[Exo-NET] metric attempt $attempt/8: no Ethernet candidate yet"
+      Start-Sleep -Milliseconds 500
+      continue
     }
-    # netsh belt-and-suspenders (some drivers ignore Set-NetIPInterface until link settles)
-    try { netsh interface ipv4 set interface interface=$($e.ifIndex) metric=$metric | Out-Null } catch {}
-    try { netsh interface ipv6 set interface interface=$($e.ifIndex) metric=$metric | Out-Null } catch {}
-    $live = $null; $auto = $null
-    try {
-      $mi = Get-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue
-      if ($mi) { $live = [int]$mi.InterfaceMetric; $auto = [string]$mi.AutomaticMetric }
-    } catch {}
-    Log "[NIC] Ethernet metric $($e.Name) => want $metric live=$live auto=$auto"
-    if ($live -eq $metric) { $okAny = $true }
-    $i++
+    $ranked = foreach ($e in $ethUp) {
+      $hasIp = @(Get-NetIPAddress -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue |
+        Where-Object { $_.IPAddress -notlike '169.254.*' }).Count -gt 0
+      $spd = 0L
+      try { $spd = [int64]$e.ReceiveLinkSpeed } catch { $spd = 0 }
+      [pscustomobject]@{ A=$e; HasIp=$hasIp; Spd=$spd }
+    }
+    $ordered = @($ranked | Sort-Object @{Expression='HasIp';Descending=$true}, @{Expression='Spd';Descending=$true} | ForEach-Object { $_.A })
+    $i = 0
+    foreach ($e in $ordered) {
+      if ($i -eq 0) { $metric = 1 } else { $metric = 5 + $i }
+      foreach ($af in @('IPv4','IPv6')) {
+        try {
+          Set-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily $af -AutomaticMetric Disabled -EA SilentlyContinue
+          Set-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily $af -InterfaceMetric $metric -EA SilentlyContinue
+          Set-NetIPInterface -InterfaceAlias $e.Name -AddressFamily $af -AutomaticMetric Disabled -InterfaceMetric $metric -EA SilentlyContinue
+        } catch {}
+      }
+      try { netsh interface ipv4 set interface interface=$($e.ifIndex) metric=$metric | Out-Null } catch {}
+      try { netsh interface ipv6 set interface interface=$($e.ifIndex) metric=$metric | Out-Null } catch {}
+      $live = $null; $auto = $null
+      try {
+        $mi = Get-NetIPInterface -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue
+        if ($mi) { $live = [int]$mi.InterfaceMetric; $auto = [string]$mi.AutomaticMetric }
+      } catch {}
+      Log "[NIC] Ethernet metric $($e.Name) => want $metric live=$live auto=$auto (attempt $attempt)"
+      if ($null -ne $live -and [int]$live -eq $metric -and $auto -match 'Disabled') { $okAny = $true }
+      elseif ($null -ne $live -and [int]$live -le 5) { $okAny = $true }
+      $i++
+    }
+    if ($okAny) { break }
+    Start-Sleep -Milliseconds 400
   }
   return $okAny
 }
 """);
         sb.AppendLine("$ethReadyOk = Set-EthMetrics");
-        sb.AppendLine("if ($ethReadyOk) { Report 'eth-metrics' 'ok' } else { Report 'eth-metrics' 'skip' 'no up ethernet adapter for metric' }");
+        sb.AppendLine("if ($ethReadyOk) { Report 'eth-metrics' 'ok' } else { Report 'eth-metrics' 'fail' 'metric not verified (AutomaticMetric may still be on)' }");
         // IPv4 fast path: documented RFC 6724 prefix-policy precedence for IPv4-mapped addresses
         // (::ffff:0:0/96 default 35/label 4 → 55 puts IPv4 above native IPv6 ::/0 at 40).
         // Replaces the retired "IPv6 metric = IPv4+20" hack. Original table is in the snapshot
@@ -1082,6 +1105,16 @@ function Set-EthMetrics {
         sb.AppendLine("      Report 'prefix-policy' 'skip' ('netsh prefixpolicy rejected: ' + $ppOut)");
         sb.AppendLine("    }");
         sb.AppendLine("  } catch { Report 'prefix-policy' 'skip' ('netsh prefixpolicy error: ' + $_.Exception.Message) }");
+        // Broken ISP IPv6 DNS (gateway only) adds ~1s hangs before falling back to IPv4.
+        // LowestLatency: set dual-stack Cloudflare so system resolve stays fast.
+        sb.AppendLine("  try {");
+        sb.AppendLine("    $ethDns = @(Get-ExoPhysicalAdapters | Where-Object { -not (Test-IsWifiAdapter $_) -and ([string]$_.Status -eq 'Up' -or @(Get-NetIPAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -EA SilentlyContinue).Count -gt 0) })");
+        sb.AppendLine("    foreach ($e in $ethDns) {");
+        sb.AppendLine("      Set-DnsClientServerAddress -InterfaceIndex $e.ifIndex -ServerAddresses @('1.1.1.1','1.0.0.1','2606:4700:4700::1111','2606:4700:4700::1001') -EA SilentlyContinue");
+        sb.AppendLine("      Log \"[DNS] dual-stack Cloudflare on $($e.Name) (avoid broken ISP IPv6 DNS hangs)\"");
+        sb.AppendLine("    }");
+        sb.AppendLine("    if ($ethDns.Count -gt 0) { Report 'dns-servers' 'ok' 'cloudflare dual-stack' }");
+        sb.AppendLine("  } catch { Report 'dns-servers' 'skip' $_.Exception.Message }");
         sb.AppendLine("} else {");
         sb.AppendLine("  Report 'prefix-policy' 'skip' 'preset keeps default address precedence'");
         sb.AppendLine("}");

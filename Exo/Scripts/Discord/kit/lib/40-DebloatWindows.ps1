@@ -249,13 +249,33 @@ function Refresh-DiscordWindowsRecovery {
 function Complete-DiscordApplyState([string]$AppDir) {
     $state = Read-DiscordOptState
     $recovery = if ($state -and ($state.PSObject.Properties.Name -contains 'recovery')) { $state.recovery } else { $Script:DiscordWindowsRecovery }
+    # Honesty: never stamp applied=true when Equicord loader or DiscOpt kernel is missing.
+    # Launch-safe stock rollbacks must stay incomplete so the UI does not lie about plugins/kernel.
+    $loaderOk = $false
+    $kernelOk = $false
+    try { $loaderOk = [bool](Test-EquicordLoaderPatched $AppDir) } catch { }
+    try {
+        $ver = Join-Path $AppDir 'version.dll'
+        $ff = Join-Path $AppDir 'ffmpeg.dll'
+        $real = Join-Path $AppDir 'ffmpeg_real.dll'
+        $ini = Join-Path $AppDir 'config.ini'
+        $kernelOk = (Test-Path -LiteralPath $ver) -and (Test-Path -LiteralPath $ini) -and
+            (Test-Path -LiteralPath $real) -and (Test-Path -LiteralPath $ff) -and
+            ((Get-Item -LiteralPath $ff).Length -lt 500000) -and ((Get-Item -LiteralPath $ver).Length -ge 50000)
+    } catch { }
+    $fullOk = [bool]($loaderOk -and $kernelOk)
+    if (-not $fullOk) {
+        Write-Warn "Apply record incomplete (equicordLoader=$loaderOk kernel=$kernelOk) - not marking applied"
+    }
     Save-DiscordOptState @{
         version           = $Script:DiscOptVersion
-        applyStatus       = 'applied'
-        applied           = $true
-        fullApply         = $true
+        applyStatus       = $(if ($fullOk) { 'applied' } else { 'incomplete' })
+        applied           = [bool]$fullOk
+        fullApply         = [bool]$fullOk
         windowsVerified   = $true
         debloatVerified   = $true
+        equicordLoaderOk  = [bool]$loaderOk
+        kernelOk          = [bool]$kernelOk
         appDir            = $AppDir
         appliedUtc        = (Get-Date).ToUniversalTime().ToString('o')
         recovery          = $recovery

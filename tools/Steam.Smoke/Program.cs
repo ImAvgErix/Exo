@@ -25,7 +25,7 @@ Expect("CEF missing /HIGH fails", !SteamLogic.IsCefLauncherText(cefMissingHigh))
 
 var trim5 = """
 # Exo.SteamWebHelper
-EmptyWorkingSet
+# Never EmptyWorkingSet / Stop-Process steamwebhelper
 [System.Diagnostics.ProcessPriorityClass]::High
 [System.Diagnostics.ProcessPriorityClass]::BelowNormal
 Start-Sleep -Seconds 5
@@ -33,12 +33,12 @@ Start-Sleep -Seconds 5
 var trim4 = trim5.Replace("Seconds 5", "Seconds 4");
 var trimMs = trim5.Replace("Start-Sleep -Seconds 5", "Start-Sleep -Milliseconds 4000");
 var trimBad = trim5.Replace("Seconds 5", "Seconds 60");
+var trimThrash = trim5 + "\nEmptyWorkingSet(h)\n";
 Expect("trim 5s ok", SteamLogic.IsTrimHelperText(trim5));
 Expect("trim 4s ok (not hard-fail 5-only)", SteamLogic.IsTrimHelperText(trim4));
 Expect("trim 4000ms ok", SteamLogic.IsTrimHelperText(trimMs));
 Expect("trim 60s fail", !SteamLogic.IsTrimHelperText(trimBad));
-Expect("trim missing EmptyWorkingSet fail",
-    !SteamLogic.IsTrimHelperText(trim5.Replace("EmptyWorkingSet", "Nope")));
+Expect("trim thrashing EmptyWorkingSet fail", !SteamLogic.IsTrimHelperText(trimThrash));
 
 Expect("toasts intentional off",
     SteamLogic.AreToastsOff(new Dictionary<string, int?> { ["Steam"] = 0, ["Other"] = null }));
@@ -73,14 +73,14 @@ function E($n,$c){{ if($c){{'PASS  '+$n}} else {{$script:failed++; 'FAIL  '+$n}}
  (E 'ps cef' (Test-SteamCefLauncherText -Text 'start """" /HIGH steam.exe -nofriendsui -nointro')),
  (E 'ps trim 5' (Test-SteamTrimHelperText -Text @'
 Exo.SteamWebHelper
-EmptyWorkingSet
+Never EmptyWorkingSet
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
 Start-Sleep -Seconds 5
 '@)),
  (E 'ps trim 4' (Test-SteamTrimHelperText -Text @'
 Exo.SteamWebHelper
-EmptyWorkingSet
+Never EmptyWorkingSet
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
 Start-Sleep -Seconds 4

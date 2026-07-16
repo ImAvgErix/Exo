@@ -32,16 +32,19 @@ public static partial class SteamLogic
     }
 
     /// <summary>
-    /// WebHelper trim helper: marker + EmptyWorkingSet + priority classes + sleep 2–15s.
-    /// Accepts Seconds or Milliseconds; does not hardcode only "Seconds 5".
+    /// Steam companion helper: marker + priority yield + quiet re-enforce.
+    /// Must NOT EmptyWorkingSet/kill steamwebhelper (CEF freezes). Sleep 2–15s OK.
     /// </summary>
     public static bool IsTrimHelperText(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
         if (!text.Contains("Exo.SteamWebHelper", StringComparison.Ordinal)) return false;
-        if (!text.Contains("EmptyWorkingSet", StringComparison.Ordinal)) return false;
         if (!text.Contains("ProcessPriorityClass]::High", StringComparison.Ordinal)) return false;
         if (!text.Contains("ProcessPriorityClass]::BelowNormal", StringComparison.Ordinal)) return false;
+        // Hard fail if helper still thrashing CEF
+        if (text.Contains("EmptyWorkingSet(", StringComparison.Ordinal) &&
+            !text.Contains("Never EmptyWorkingSet", StringComparison.Ordinal))
+            return false;
 
         var sec = SleepSecondsRegex().Match(text);
         if (sec.Success && int.TryParse(sec.Groups[1].Value, out var s) && s is >= 2 and <= 15)
@@ -86,12 +89,10 @@ public static partial class SteamLogic
         "-cef-disable-gpu",
         "/HIGH",
         "IsPromoted",
-        "EmptyWorkingSet",
+        "Never EmptyWorkingSet",
         // Structured last-apply report persisted to steam-optimizer.json
         "EXO_REPORT:",
         "applyReport",
-        // Trim-proof stats accumulated by the webhelper helper
-        "steam-trim-stats.json",
         // VDF-aware injector (insert missing target keys, .exo-bak first)
         "Set-SteamVdfKeyAtPath",
         ".exo-bak",

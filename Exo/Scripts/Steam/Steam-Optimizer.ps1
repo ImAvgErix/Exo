@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.9.3'
+$Script:SteamOptVersion = '1.9.4'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
@@ -1776,79 +1776,13 @@ function Install-WebHelperTrimHelper([string]$SteamPath) {
     # Also re-enforces StartupMode=0 periodically so Steam cannot re-arm autostart.
     $helper = Join-Path $SteamPath 'Exo-SteamWebHelperTrim.ps1'
     $body = @'
-# Exo - gentle 6s steamwebhelper trim (large WS only) + in-game steam.exe yield + quiet re-enforce.
-# No process suspension (suspension can break Steam IPC and overlay behavior).
-# Reclaimed working-set bytes accumulate into %LocalAppData%\Exo\steam-trim-stats.json.
-# Do not EmptyWorkingSet tiny CEF helpers or force High priority on steamwebhelper (UI freezes).
+# Exo - Steam companion (NOT a killer). Never EmptyWorkingSet / Stop-Process steamwebhelper.
+# steamwebhelper is CEF - working-set thrash freezes or kills the library UI.
+# This helper only: (1) steam.exe priority yield in-game (2) keep StartupMode quiet.
 $ErrorActionPreference = 'SilentlyContinue'
 $created = $false
 $mutex = [Threading.Mutex]::new($true, 'Local\Exo.SteamWebHelper', [ref]$created)
 if (-not $created) { $mutex.Dispose(); exit 0 }
-Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public static class ExoWs {
-  [DllImport("psapi.dll")] public static extern bool EmptyWorkingSet(IntPtr hProcess);
-  [DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint a, bool b, int c);
-  [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
-  public const uint ACCESS = 0x0500;
-}
-"@
-
-$statsDir = Join-Path $env:LOCALAPPDATA 'Exo'
-$statsPath = Join-Path $statsDir 'steam-trim-stats.json'
-
-function Read-TrimStats {
-  try {
-    if (Test-Path -LiteralPath $statsPath) {
-      $obj = Get-Content -LiteralPath $statsPath -Raw | ConvertFrom-Json
-      $hourly = @{}
-      if ($obj.PSObject.Properties.Name -contains 'hourly' -and $obj.hourly) {
-        foreach ($p in $obj.hourly.PSObject.Properties) { $hourly[[string]$p.Name] = [long]$p.Value }
-      }
-      return @{
-        Total  = [long]$obj.totalReclaimedBytes
-        Passes = [long]$obj.totalTrimPasses
-        Hourly = $hourly
-      }
-    }
-  } catch {}
-  return @{ Total = [long]0; Passes = [long]0; Hourly = @{} }
-}
-
-function Save-TrimStats($Stats) {
-  try {
-    if (-not (Test-Path -LiteralPath $statsDir)) {
-      New-Item -ItemType Directory -Path $statsDir -Force | Out-Null
-    }
-    $now = (Get-Date).ToUniversalTime()
-    $cutoff = $now.AddHours(-24)
-    $pruned = @{}
-    [long]$last24 = 0
-    foreach ($k in @($Stats.Hourly.Keys)) {
-      $t = [DateTime]::MinValue
-      $parsed = [DateTime]::TryParseExact(
-        [string]$k, 'yyyy-MM-ddTHH',
-        [Globalization.CultureInfo]::InvariantCulture,
-        ([Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal),
-        [ref]$t)
-      if ($parsed -and $t -ge $cutoff.AddHours(-1)) {
-        $pruned[[string]$k] = [long]$Stats.Hourly[$k]
-        $last24 += [long]$Stats.Hourly[$k]
-      }
-    }
-    $Stats.Hourly = $pruned
-    $doc = [ordered]@{
-      version               = 1
-      updatedUtc            = $now.ToString('o')
-      totalReclaimedBytes   = [long]$Stats.Total
-      totalTrimPasses       = [long]$Stats.Passes
-      last24hReclaimedBytes = $last24
-      hourly                = $pruned
-    }
-    [IO.File]::WriteAllText($statsPath, ($doc | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))
-  } catch {}
-}
 
 function Test-SteamGameRunning {
   try {
@@ -1866,39 +1800,15 @@ function Test-SteamGameRunning {
   return $false
 }
 
-function Trim-WebHelpers {
-  # Returns reclaimed working-set bytes (sum of positive pre-post deltas).
-  # Skip small helpers (<180 MB) - thrashing CEF every few seconds breaks the UI.
-  [long]$reclaimed = 0
-  $minWs = 180MB
-  Get-Process steamwebhelper -ErrorAction SilentlyContinue | ForEach-Object {
-    try {
-      $before = [long]$_.WorkingSet64
-      if ($before -lt $minWs) { return }
-      $h = [ExoWs]::OpenProcess([ExoWs]::ACCESS, $false, $_.Id)
-      if ($h -eq [IntPtr]::Zero) { return }
-      try { [void][ExoWs]::EmptyWorkingSet($h) }
-      finally { [void][ExoWs]::CloseHandle($h) }
-      $_.Refresh()
-      $after = [long]$_.WorkingSet64
-      if ($before -gt $after) { $reclaimed += ($before - $after) }
-    } catch {}
-  }
-  return $reclaimed
-}
-
 function Set-SteamClientPriority([bool]$InGame) {
-  # steam.exe: High when idle (snappy UI), BelowNormal in-game.
-  # steamwebhelper: Normal always - High + EmptyWorkingSet thrashes CEF and freezes the library.
+  # steam.exe: High idle / BelowNormal in-game. steamwebhelper: always Normal - never touch WS.
   $steamCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
   } else {
     [System.Diagnostics.ProcessPriorityClass]::High
   }
   Get-Process -Name 'steam' -ErrorAction SilentlyContinue | ForEach-Object {
-    try {
-      if ($_.PriorityClass -ne $steamCls) { $_.PriorityClass = $steamCls }
-    } catch {}
+    try { if ($_.PriorityClass -ne $steamCls) { $_.PriorityClass = $steamCls } } catch {}
   }
   Get-Process -Name 'steamwebhelper' -ErrorAction SilentlyContinue | ForEach-Object {
     try {
@@ -1910,7 +1820,6 @@ function Set-SteamClientPriority([bool]$InGame) {
 }
 
 function Reinstate-SteamQuiet {
-  # Lightweight: keep Steam from re-arming Windows autostart while the client runs.
   try {
     $steamKey = 'HKCU:\Software\Valve\Steam'
     if (-not (Test-Path $steamKey)) { New-Item -Path $steamKey -Force | Out-Null }
@@ -1935,45 +1844,25 @@ function Reinstate-SteamQuiet {
 }
 
 try {
-  # The helper is started immediately before steam.exe; wait for the client so
-  # a scheduling race does not make the helper exit before Steam appears.
   $startupDeadline = (Get-Date).AddSeconds(30)
   while (-not (Get-Process steam -ErrorAction SilentlyContinue) -and (Get-Date) -lt $startupDeadline) {
     Start-Sleep -Milliseconds 250
   }
-
   Reinstate-SteamQuiet
-  $stats = Read-TrimStats
   $ticks = 0
   while (Get-Process steam -ErrorAction SilentlyContinue) {
-    $inGame = Test-SteamGameRunning
-    Set-SteamClientPriority -InGame:$inGame
-    $reclaimedBytes = [long](Trim-WebHelpers)
-    $stats.Passes = [long]$stats.Passes + 1
-    if ($reclaimedBytes -gt 0) {
-      $stats.Total = [long]$stats.Total + $reclaimedBytes
-      $bucket = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH')
-      if ($stats.Hourly.ContainsKey($bucket)) {
-        $stats.Hourly[$bucket] = [long]$stats.Hourly[$bucket] + $reclaimedBytes
-      } else {
-        $stats.Hourly[$bucket] = $reclaimedBytes
-      }
-    }
+    Set-SteamClientPriority -InGame:(Test-SteamGameRunning)
     $ticks++
-    # Flush proof stats every ~1 minute (writing on every 3s pass is wasteful).
-    if (($ticks % 10) -eq 0) { Save-TrimStats $stats }
-    # Every ~2 minutes while Steam is open, re-assert no autostart.
-    if (($ticks % 20) -eq 0) { Reinstate-SteamQuiet }
-    Start-Sleep -Seconds 6
+    if (($ticks % 12) -eq 0) { Reinstate-SteamQuiet }
+    Start-Sleep -Seconds 5
   }
 } finally {
-  Save-TrimStats $stats
   try { $mutex.ReleaseMutex() } catch {}
   $mutex.Dispose()
 }
 '@
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
-    Write-Ok 'WebHelper helper installed (6s gentle trim + quiet re-enforce + trim stats)'
+    Write-Ok 'Steam companion installed (priority yield + quiet only - no webhelper EmptyWorkingSet)'
     return $helper
 }
 
@@ -2486,10 +2375,10 @@ try {
     try {
         $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
         $helperOk = $helperText -match 'Exo\.SteamWebHelper' -and
-            $helperText -match 'EmptyWorkingSet' -and
-            $helperText -match 'Start-Sleep -Seconds (3|4|5|6|7|8)' -and
             $helperText -match 'ProcessPriorityClass\]::High' -and
-            $helperText -match 'ProcessPriorityClass\]::BelowNormal'
+            $helperText -match 'ProcessPriorityClass\]::BelowNormal' -and
+            $helperText -notmatch '(?i)Stop-Process.*steamwebhelper' -and
+            ($helperText -notmatch 'EmptyWorkingSet' -or $helperText -match 'Never EmptyWorkingSet')
     } catch { }
     $fullPassOk = -not [bool]$Quick
     # Core pack (always required for applied). VDF first-run skips are NOT essentials-

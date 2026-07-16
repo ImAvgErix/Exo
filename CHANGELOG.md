@@ -1,3 +1,10 @@
+## 3.0.11
+
+- **Dashboard**: full-width System RAM hero; Discord/Steam tiles show **RAM reclaimed** (Discord peak−live + Steam companion trim) with 2s background refresh; Internet shows real before→after **ping · jitter · DNS** plus live link speed; NVIDIA keeps Max FPS NIP
+- **Internet**: Ethernet metric retry (no more false skip when link flickers); DNS ServiceProvider restored to Windows defaults; LowestLatency sets dual-stack Cloudflare DNS (fixes ~1s ISP IPv6 DNS hangs)
+- **Discord**: Equilotl install path fixed (Discord root not LocalAppData); applied=true only when Equicord loader + kernel are really on disk
+- **Steam**: companion no longer EmptyWorkingSet on steamwebhelper (was freezing/killing CEF)
+- **NVIDIA**: tray hide skips already-hidden icons; display status StrictMode-safe; always-latest Profile Inspector from GitHub Latest
 ## 3.0.10
 
 - **Always-latest tools**: NVIDIA Profile Inspector is no longer hard-pinned - every Apply resolves Orbmu2k **GitHub Latest**, verifies the asset SHA when GitHub publishes it, and only reuses cache when tag matches Latest. Offline falls back to last good managed install.

@@ -19,10 +19,10 @@ function Test-SteamTrimHelperText {
     param([AllowNull()][string]$Text)
     if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
     if ($Text -notmatch 'Exo\.SteamWebHelper') { return $false }
-    if ($Text -notmatch 'EmptyWorkingSet') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::High') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::BelowNormal') { return $false }
-    # Valid range: 2-15s reclaim loop (kit uses 3; do not hard-fail other valid intervals)
+    # EmptyWorkingSet on steamwebhelper freezes/kills CEF UI - reject thrashing helpers
+    if ($Text -match 'EmptyWorkingSet\(' -and $Text -notmatch 'Never EmptyWorkingSet') { return $false }
     if ($Text -match 'Start-Sleep\s+-Seconds\s+(\d+)') {
         $sec = [int]$Matches[1]
         if ($sec -ge 2 -and $sec -le 15) { return $true }

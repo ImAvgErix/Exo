@@ -3894,7 +3894,13 @@ function Test-ExoNvidiaDisplayLive {
         $refreshOk = [bool]($checks -and $checks.refreshOk)
         $colorOk = [bool]($checks -and $checks.colorOk)
         $registryOk = [bool]($checks -and $checks.registryOk)
-        $detail = if ($status.skipped) { [string]$status.skipped } elseif ($checks) {
+        $skippedDetail = $null
+        try {
+            if ($status.PSObject.Properties.Name -contains 'skipped' -and $null -ne $status.skipped) {
+                $skippedDetail = [string]$status.skipped
+            }
+        } catch { }
+        $detail = if ($skippedDetail) { $skippedDetail } elseif ($checks) {
             "color=$colorOk, refresh=$refreshOk, scaling=$scalingOk, registry=$registryOk"
         } else { "exit=$($process.ExitCode)" }
         return [pscustomobject]@{
