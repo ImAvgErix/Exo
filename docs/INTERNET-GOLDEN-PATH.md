@@ -83,8 +83,8 @@
 | Ring buffers | Max if exposed | Max |
 | PnP power-off device | Disabled (24) | Disabled |
 | Interface metric | **1** primary usable; others 5+ | same |
-| Adapter bindings (Properties UI) | QoS+IPv4+IPv6 on; Client/File share/LLDP/LLTD off | same |
-| Restart after apply | When Ethernet present | same |
+| Adapter bindings (Properties UI) | QoS+IPv4+IPv6 **on** only (Client/LLDP left alone — never disable) | same |
+| Restart after apply | **Off by default** (user-confirmed Ethernet restart only) | same |
 
 ## Wi‑Fi NIC
 
@@ -108,10 +108,10 @@
 
 ## Path policy (gaming)
 
-1. If **any Ethernet is Up + real IPv4** → metric 1 on fastest usable eth, then **probe internet over that Ethernet endpoint (TCP 443)**; only on probe success **disable all Wi‑Fi adapters** (recorded in state).  
+1. If **any Ethernet is Up + real IPv4** → metric 1 on fastest usable eth; optionally raise Wi‑Fi interface metrics (prefer Ethernet). **Never `Disable-NetAdapter` on Wi‑Fi** (stranded users when cable/DHCP later failed).  
 2. Else if Wi‑Fi only → keep Wi‑Fi, apply band prefer from **live** client capability.  
-3. Cable linked without IP, or Ethernet probe fails → **do not** disable Wi‑Fi.
-4. End of apply → any-interface probe; on failure auto-rollback (re-enable Wi‑Fi, restore metrics from snapshot) and mark `rollback:true`.
+3. Cable linked without IP → keep Wi‑Fi; do not force Ethernet-only path.
+4. End of apply → any-interface probe; on failure **full snapshot restore** (registry, NIC props, bindings, TCP, metrics) and mark `rollback:true`.
 
 ## Adapter targeting (locale + hardware safe)
 

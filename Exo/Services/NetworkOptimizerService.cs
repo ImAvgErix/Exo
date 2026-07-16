@@ -88,19 +88,23 @@ public sealed class NetworkOptimizerService
             var state = LoadStateObject();
             state["preset"] = preset.ToString();
             state["appliedUtc"] = DateTime.UtcNow.ToString("o");
-            // Used by probe so "Wi‑Fi while Ethernet" only fails when we actually preferred eth-first
-            state["preferEthernetDisableWifi"] = options?.PreferEthernetDisableWifi ?? true;
+            // Metrics-only prefer-ethernet flag (Wi-Fi is never disabled as of 2.6.6+).
+            // Default false matches NetworkApplyOptions and InternetOptimizerViewModel.
+            state["preferEthernetDisableWifi"] = options?.PreferEthernetDisableWifi ?? false;
             SaveStateObject(state);
         }
         catch { }
     }
 
-    /// <summary>Last apply chose Ethernet-first (Wi‑Fi off when Ethernet has IP). Default true.</summary>
+    /// <summary>
+    /// Last apply chose Ethernet-first metrics (Wi-Fi stays enabled). Default false —
+    /// never treat missing state as "Wi-Fi should be down".
+    /// </summary>
     public bool LoadPreferEthernetDisableWifi()
     {
         try
         {
-            if (!File.Exists(StatePath)) return true;
+            if (!File.Exists(StatePath)) return false;
             using var doc = JsonDocument.Parse(File.ReadAllText(StatePath));
             if (doc.RootElement.TryGetProperty("preferEthernetDisableWifi", out var p))
             {
@@ -109,7 +113,7 @@ public sealed class NetworkOptimizerService
             }
         }
         catch { }
-        return true;
+        return false;
     }
 
     public void ClearSavedPreset()
@@ -533,8 +537,9 @@ public sealed class NetworkOptimizerService
             {
                 var presetApplied = LoadSavedPreset() is NetworkPreset.LowestLatency
                     or NetworkPreset.HighestThroughput;
+                // Apply only enables QoS+IPv4+IPv6 — never forces Client/LLDP off (fail-closed).
                 var bindStatus = mediaProfile.AdapterBindingsOk
-                    ? "Applied (QoS+IP on · Client/LLDP off)"
+                    ? "Applied (QoS + IPv4/IPv6 on)"
                     : mediaProfile.AdapterBindingsHint is ("—" or "")
                         ? "Needs apply"
                         : mediaProfile.AdapterBindingsHint;
@@ -556,20 +561,14 @@ public sealed class NetworkOptimizerService
                 features.Add(Row("Ethernet metric", metricStatus, metricOk));
                 if (mediaProfile.WifiAvailable)
                 {
-                    // Only hard-fail when last apply chose Ethernet-first. If user kept Wi‑Fi, show info OK.
+                    // Wi-Fi is never disabled. Prefer-ethernet only raises Wi-Fi metrics.
+                    // Always OK when Wi-Fi is up (fail-closed contract); label shows intent.
                     var preferEth = LoadPreferEthernetDisableWifi();
-                    if (preferEth)
-                    {
-                        features.Add(Row("Wi‑Fi while Ethernet",
-                            mediaProfile.WifiUp ? "Still up" : "Disabled / down",
-                            !mediaProfile.WifiUp));
-                    }
-                    else
-                    {
-                        features.Add(Row("Wi‑Fi while Ethernet",
-                            mediaProfile.WifiUp ? "Up (kept)" : "Down",
-                            true));
-                    }
+                    features.Add(Row("Wi‑Fi while Ethernet",
+                        mediaProfile.WifiUp
+                            ? (preferEth ? "Up (metrics prefer Ethernet)" : "Up (kept)")
+                            : "Down",
+                        true));
                 }
             }
             if (mediaProfile.WifiAvailable)
@@ -796,24 +795,20 @@ if ($primary) {
   }
 }
 # Ethernet Properties checkbox bindings (ComponentIDs)
-# Target: pacer+tcpip+tcpip6 ON; client/server/lldp/lltd/implat OFF
+# Target matches Apply: pacer+tcpip+tcpip6 ON only. Never require Client/LLDP off
+# (disabling those broke LAN recovery and lied as "not applied" after fail-closed Apply).
 $bindOk = 1
 $bindHint = '-'
 $bindProbe = if ($bestEth) { $bestEth } else { @($eth | Select-Object -First 1) }
 if ($bindProbe) {
   $wantOn = @('ms_pacer','ms_tcpip','ms_tcpip6')
-  $wantOff = @('ms_msclient','ms_server','ms_implat','ms_lldp','ms_lltdio','ms_rspndr')
   $gaps = @()
   $all = @(Get-NetAdapterBinding -Name $bindProbe.Name -EA SilentlyContinue)
   foreach ($id in $wantOn) {
     $row = $all | Where-Object { $_.ComponentID -eq $id } | Select-Object -First 1
     if ($row -and -not $row.Enabled) { $gaps += "$id off" }
   }
-  foreach ($id in $wantOff) {
-    $row = $all | Where-Object { $_.ComponentID -eq $id } | Select-Object -First 1
-    if ($row -and $row.Enabled) { $gaps += "$id on" }
-  }
-  if ($gaps.Count -gt 0) { $bindOk = 0; $bindHint = ($gaps -join ', ') } else { $bindHint = 'target bindings' }
+  if ($gaps.Count -gt 0) { $bindOk = 0; $bindHint = ($gaps -join ', ') } else { $bindHint = 'QoS+IPv4/IPv6 on' }
 }
 # Vendor / link / chassis for tailored apply
 $vendor = 'Unknown'

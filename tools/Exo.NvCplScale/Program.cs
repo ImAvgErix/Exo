@@ -242,7 +242,7 @@ static class Program
         {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 @"Exo\scripts\Nvidia\tools\Exo.NvDisplay.exe"),
-            @"C:\Users\Erix\Exo\tools\Exo.NvDisplay\bin\Release\net8.0-windows\Exo.NvDisplay.exe",
+            @"C:\Users\Erix\Exo\tools\Exo.NvDisplay\bin\Release\net10.0-windows\Exo.NvDisplay.exe",
         })
             if (File.Exists(c)) return c;
         return null;
