@@ -420,34 +420,35 @@ img {
   animation: page-enter var(--dur-page) var(--ease-out) both;
 }
 
-.page-enter > .stagger-child,
+/* Prefer animation-only opacity — never leave a static opacity:0
+   (headless capture / interrupted animation would blank the UI). */
+.page-enter .stagger-child,
 .stagger-list > .stagger-child {
-  opacity: 0;
   animation: rise-in var(--dur-page) var(--ease-out) both;
 }
 
 .stagger-list > .stagger-child:nth-child(1),
-.page-enter > .stagger-child:nth-child(1) {
+.page-enter .stagger-child:nth-child(1) {
   animation-delay: 40ms;
 }
 .stagger-list > .stagger-child:nth-child(2),
-.page-enter > .stagger-child:nth-child(2) {
+.page-enter .stagger-child:nth-child(2) {
   animation-delay: 80ms;
 }
 .stagger-list > .stagger-child:nth-child(3),
-.page-enter > .stagger-child:nth-child(3) {
+.page-enter .stagger-child:nth-child(3) {
   animation-delay: 120ms;
 }
 .stagger-list > .stagger-child:nth-child(4),
-.page-enter > .stagger-child:nth-child(4) {
+.page-enter .stagger-child:nth-child(4) {
   animation-delay: 160ms;
 }
 .stagger-list > .stagger-child:nth-child(5),
-.page-enter > .stagger-child:nth-child(5) {
+.page-enter .stagger-child:nth-child(5) {
   animation-delay: 200ms;
 }
 .stagger-list > .stagger-child:nth-child(6),
-.page-enter > .stagger-child:nth-child(6) {
+.page-enter .stagger-child:nth-child(6) {
   animation-delay: 240ms;
 }
 .stagger-list > .stagger-child:nth-child(7) {

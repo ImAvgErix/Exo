@@ -25,22 +25,41 @@ async function waitReady() {
   throw new Error('vite not ready')
 }
 
+async function settle(page, testId) {
+  await page.getByTestId(testId).waitFor({ state: 'visible' })
+  await sleep(450)
+}
+
 try {
   await waitReady()
   const browser = await chromium.launch()
   const page = await browser.newPage({ viewport: { width: 1280, height: 840 } })
   await page.goto('http://127.0.0.1:5173/', { waitUntil: 'networkidle' })
+  await settle(page, 'page-home')
   await page.screenshot({ path: `${out}/01-home.png` })
+
   await page.getByTestId('nav-discord').click()
+  await settle(page, 'page-discord')
+  await page.getByTestId('discord-features').waitFor({ state: 'visible' })
+  await sleep(200)
   await page.screenshot({ path: `${out}/02-discord.png` })
+
   await page.getByTestId('nav-internet').click()
+  await settle(page, 'page-internet')
   await page.screenshot({ path: `${out}/03-internet.png` })
+
   await page.getByTestId('nav-nvidia').click()
+  await settle(page, 'page-nvidia')
   await page.screenshot({ path: `${out}/04-nvidia.png` })
+
   await page.getByTestId('btn-display-panel').click()
+  await settle(page, 'page-nvidia-panel')
   await page.screenshot({ path: `${out}/05-nvidia-panel.png` })
+
   await page.getByTestId('nav-settings').click()
+  await settle(page, 'settings-flyout')
   await page.screenshot({ path: `${out}/06-settings.png` })
+
   await browser.close()
   console.log('screenshots written to', out)
 } finally {
