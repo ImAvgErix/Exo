@@ -1,3 +1,6 @@
+## 3.0.1
+
+- **Discord login detect**: session check no longer requires old IndexedDB path + Local Storage together (modern Discord often only has Local Storage / userDataCache) - fixes false "not logged in" hard fail
 ## 3.0.0
 
 - **SharedModulePlate**: all four optimizer pages (Internet / Discord / Steam / NVIDIA) host chrome via one instrument plate (header, advisor, features, sticky foot, apply report)

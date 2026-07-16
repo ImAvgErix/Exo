@@ -585,9 +585,20 @@ function Test-DiscordSessionStorage {
 }
 
 function Test-DiscordLoggedIn {
+    # Modern Discord often has a real session in Local Storage without the old
+    # IndexedDB\https_discord.com_0 path (Electron/Chromium layout drift).
+    # Requiring BOTH caused false "not logged in" on logged-in installs.
     $indexedDb = Join-Path $AppData 'IndexedDB\https_discord.com_0.indexeddb.leveldb'
     $localDb = Join-Path $AppData 'Local Storage\leveldb'
-    if ((Test-DiscordSessionStorage $indexedDb) -and (Test-DiscordSessionStorage $localDb)) {
+    $hasLocal = Test-DiscordSessionStorage $localDb
+    $hasIndexed = Test-DiscordSessionStorage $indexedDb
+    if ($hasLocal -or $hasIndexed) {
+        return $true
+    }
+
+    # Large userDataCache is a strong logged-in signal when leveldb paths move.
+    $userCache = Join-Path $AppData 'userDataCache.json'
+    if ((Test-Path -LiteralPath $userCache) -and ((Get-Item -LiteralPath $userCache).Length -ge 64KB)) {
         return $true
     }
 
