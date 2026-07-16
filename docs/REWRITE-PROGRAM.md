@@ -1,17 +1,78 @@
 # Exo Rebuild Program — Comprehensive Master Plan
 
-**Status:** ACTIVE — deep plan (v3.0 track)  
+**Status:** ACTIVE — **v2 dual-track plan** (pain-first + architecture)  
 **Baseline code:** v2.6.8 on `main`  
 **Research corpus:** `docs/rewrite/` (~2,500 lines of module inventories from 4 parallel audits)  
-**Last expanded:** 2026-07-16  
+**Last expanded:** 2026-07-16 (critique pass: dual-track is the recommended plan)
 
 > **Honest goal:** production-reliable aggressive optimizers on any *supported* Windows 10/11 x64 PC.  
 > Not magic "zero risk forever." Risk is driven down via contracts, retries, repair, CI gates, and real-machine sign-off.
 
 ---
 
+## 0. Plan critique — is this the best plan?
+
+### 0.1 What the first plan was good at
+
+- Correct **strangle** strategy (big-bang rewrite would brick you again)
+- Real **module inventories** (Internet / Discord / Steam / NVIDIA / shell)
+- Clear **laws**, PR DAG, hardware matrix, agent rules
+- Honest about NVIDIA (no true driver rollback)
+
+### 0.2 What was wrong for *your* pain
+
+| Gap in v1 plan | Why it matters |
+|----------------|----------------|
+| Architecture-first (Internet split → Steam → Discord…) | You feel pain **now**; 4 weeks of Internet refactor does not fix Discord boot or “applied but red” |
+| 14–16 week single track | Feels endless; no early “it just works” milestone |
+| Under-weighted **honesty bugs** | Steam soft-skip applied, Discord boot skip — **days of work**, huge trust gain |
+| UI polish in Phase 6 only | Advisor + detect lies are **trust**, not cosmetics — pull earlier |
+| No **agent freeze** | Cursor/Grok mega-PRs will re-break anything we rebuild |
+| No **kill switch** | Plan did not say when to abandon a WP or revert a release |
+| “Zero risk forever” aspirational language elsewhere | Impossible; plan must say **supported matrix only** |
+
+### 0.3 Alternatives considered
+
+| Approach | Verdict |
+|----------|---------|
+| **A. Greenfield rewrite (new repo, C# only)** | Cleanest long-term; **3–6+ months dark**; highest chance of never shipping. **Reject** while you need a product. |
+| **B. Architecture-only strangle (v1 plan)** | Safe; **too slow on user-visible pain**. Partial keep. |
+| **C. Hotfix forever / no structure** | How you got here. **Reject**. |
+| **D. Dual-track (pain blitz + architecture)** | **Adopt.** Stop bleeding in 1–2 weeks; rebuild structure in parallel behind flags/contracts. |
+
+### 0.4 Best plan (adopted): dual-track
+
+```
+TRACK P — PAIN (user-visible, max 2 weeks)
+  P0  Freeze random agent mega-PRs (only plan WPs)
+  P1  CI must pass before Release
+  P2  Detect ≡ Apply honesty (Internet strings, Steam soft-skip, Discord boot)
+  P3  No Exo background tasks (already mostly done; lock with smoke)
+  P4  Discord boot-safe + NVIDIA display retries (already started; finish hard)
+  P5  You run real Apply checklist on your PC once → ship v2.7.0 "trust"
+
+TRACK A — ARCHITECTURE (weeks 2–14, never blocks Track P hotfixes)
+  A1  Shared EXO_REPORT + contract tables
+  A2  Split Internet builder (template)
+  A3  Split Steam / Discord / NVIDIA god-scripts
+  A4  SharedModulePlate + Advisor v2
+  A5  v3.0 when contracts + plate + all modules extracted
+```
+
+**Rule:** Track P always wins scheduling if something bricks Internet/Discord boot.  
+**Rule:** Track A never ships a half-split god-script that fails smoke.
+
+### 0.5 Single success metric (weekly)
+
+> **“On a clean install of Latest, Apply Internet + Discord + Steam without losing network or a bootable client; UI does not lie; Task Scheduler has zero Exo-* tasks.”**
+
+If a week does not move that metric, the week was wasted architecture.
+
+---
+
 ## Table of contents
 
+0. [Plan critique — is this the best plan?](#0-plan-critique--is-this-the-best-plan)
 1. [Mission and pain](#1-mission-and-pain)
 2. [Non-negotiable laws](#2-non-negotiable-laws)
 3. [Current system map](#3-current-system-map)
@@ -342,26 +403,31 @@ Full inventory: **docs/rewrite/research-shell-ci.md**
 
 ---
 
-## 8. Week-by-week schedule
+## 8. Week-by-week schedule (dual-track)
+
+### Track P — stop the pain (weeks 0–2)
 
 | Week | Focus | Ship gate |
 |------|-------|-----------|
-| W0 | Plan+research on main; 2.6.8 release; human baseline | Program live |
-| W1 | C-1, C-2, NoBackground | Phase 1 start |
-| W2 | Internet contract table; builder split start | |
-| W3 | Internet I-1..I-4 | |
-| W4 | Internet fixtures+human | **v2.7.0** |
-| W5 | Steam split | |
-| W6 | Steam honesty | **v2.8.0** |
-| W7 | Discord boot-safe | |
-| W8 | Discord update path | **v2.8.1** |
-| W9-W10 | NVIDIA split | |
-| W11 | NVIDIA display | **v2.9.0** |
-| W12-W13 | Shared plate + advisor v2 | |
-| W14 | DPI, motion, home | **v3.0.0** |
-| W15+ | Stabilize only | bugfix |
+| **W0** | Plan live; freeze random multi-module agent PRs; confirm 2.6.8 release | Program + freeze |
+| **W1a** | **P1** Release requires CI | No more untested releases |
+| **W1b** | **P2** Honesty blitz: Steam soft-skip≠applied; Internet stale detect strings; Discord boot verify | Trust UI |
+| **W1c** | **P3–P4** Lock no Exo tasks; NVIDIA display retry path complete | No bg tasks / display works |
+| **W2** | **P5** You run full Apply checklist on your PC; ship **v2.7.0 “trust”** | **User-visible win** |
 
-~14-16 weeks continuous work to v3.0.
+### Track A — rebuild structure (weeks 2–14, parallel after W1)
+
+| Week | Focus | Ship gate |
+|------|-------|-----------|
+| W2–W3 | A1 contracts + A2 Internet builder split start | smokes only |
+| W4 | Internet fixtures + split finish | **v2.7.x** if needed |
+| W5–W6 | Steam god-script split | **v2.8.0** |
+| W7–W8 | Discord kit ownership + update heal | **v2.8.1** |
+| W9–W11 | NVIDIA split + display reliability | **v2.9.0** |
+| W12–W14 | SharedModulePlate + Advisor v2 + DPI | **v3.0.0** |
+| W15+ | Stabilize; no new modules | bugfix |
+
+~14 weeks to v3.0 structure; **first trust release at week 2**, not week 4.
 
 ---
 
@@ -512,17 +578,19 @@ Tag: ____  SHA: ____  Date: ____
 
 ---
 
-## 16. Immediate next actions
+## 16. Immediate next actions (best order)
 
-| # | Action | Owner |
-|---|--------|-------|
-| 1 | Land plan + research on main | coordinator (this PR) |
-| 2 | Ensure v2.6.8 release asset published | coordinator |
-| 3 | Start **PR-C1** (release waits for CI) | agent |
-| 4 | Start **PR-C2** (NoBackground + report schema) | agent |
-| 5 | Run section 11 checklist once on Latest | **you (Erix)** |
-| 6 | Then **PR-I1** Internet builder split | agent |
+| # | Track | Action | Owner |
+|---|-------|--------|-------|
+| 1 | — | Land plan critique (dual-track) on main | coordinator |
+| 2 | P | Ensure v2.6.8 **Exo.exe** release is live | coordinator |
+| 3 | P | **PR-C1** Release workflow requires CI green | agent |
+| 4 | P | **PR-P2** Honesty blitz (Steam applied, Internet detect, Discord boot) | agent |
+| 5 | P | You run §11 checklist once → **v2.7.0 trust** | **you** |
+| 6 | A | Only after P green: Internet builder split (I-1) | agent |
+
+**Do not start Internet god-file split before honesty blitz** — that optimizes the plan, not your pain.
 
 ---
 
-*Implementation begins at section 16 — not with another multi-module thrash PR.*
+*Best plan = dual-track. Implementation starts at section 16 Track P — not architecture tourism.*
