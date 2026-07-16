@@ -122,15 +122,35 @@ var applyFiles = new[]
     Path.Combine(repo, "Exo", "Scripts", "Steam", "Exo-Steam-Run.ps1"),
 };
 var blob = string.Join("\n", applyFiles.Where(File.Exists).Select(File.ReadAllText));
+var optimizerPath = applyFiles[0];
+var optimizerText = File.Exists(optimizerPath) ? File.ReadAllText(optimizerPath) : "";
 Expect("apply sources readable", blob.Length > 1000);
 var (ok, issues) = SteamLogic.AuditApplyScriptText(blob);
 Expect("apply audit", ok, string.Join("; ", issues));
 Expect("no Exo-Steam scheduled task create",
     blob.IndexOf("Register-ScheduledTask -TaskName 'Exo-Steam", StringComparison.OrdinalIgnoreCase) < 0);
+Expect("taskbar pins stay stock steam.exe",
+    optimizerText.Contains("Test-SteamTaskbarPinnedShortcut", StringComparison.Ordinal) &&
+    optimizerText.Contains("Taskbar pin kept on steam.exe", StringComparison.Ordinal) &&
+    optimizerText.Contains("taskbar pins stay stock steam.exe", StringComparison.Ordinal));
+Expect("steam.cfg merge preserves other keys",
+    optimizerText.Contains("function Merge-SteamCfgKey", StringComparison.Ordinal) &&
+    optimizerText.Contains("Merge-SteamCfgKey $existing 'BootStrapperInhibitAll' 'enable'", StringComparison.Ordinal) &&
+    optimizerText.Contains("Merge-SteamCfgKey $merged 'BootStrapperForceSelfUpdate' 'disable'", StringComparison.Ordinal));
+Expect("Steam optional VDF files soft skip",
+    optimizerText.Contains("config.vdf not present yet", StringComparison.Ordinal) &&
+    optimizerText.Contains("userdata not present yet", StringComparison.Ordinal) &&
+    optimizerText.Contains("localconfig.vdf not present yet", StringComparison.Ordinal) &&
+    optimizerText.Contains("clientTweaksSkipped", StringComparison.Ordinal) &&
+    optimizerText.Contains("configSkipped", StringComparison.Ordinal));
+Expect("Steam repair restores Windows integration",
+    optimizerText.Contains("Restore-SteamWindowsIntegration", StringComparison.Ordinal) &&
+    optimizerText.Contains("ScheduledTasks", StringComparison.Ordinal) &&
+    optimizerText.Contains("ShowInActionCenter", StringComparison.Ordinal) &&
+    optimizerText.Contains("TrayEntries", StringComparison.Ordinal) &&
+    optimizerText.Contains(@"App Paths\steam.exe", StringComparison.Ordinal));
 
 // --- Stable PowerShell 7 host (preview requirement removed) ---
-var optimizerPath = applyFiles[0];
-var optimizerText = File.Exists(optimizerPath) ? File.ReadAllText(optimizerPath) : "";
 Expect("stable pwsh host classifier present",
     optimizerText.Contains("function Test-ExoIsPwsh7Host", StringComparison.Ordinal) &&
     optimizerText.Contains("function Get-ExoPwsh", StringComparison.Ordinal) &&

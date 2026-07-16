@@ -156,16 +156,17 @@ public sealed class NetworkOptimizerService
             using var p = Process.Start(psi);
             if (p is null) return (false, "Could not start elevated PowerShell.");
             await p.WaitForExitAsync(ct).ConfigureAwait(false);
-            // Exit 2 = hard winsock/ip reset applied; connectivity needs a reboot.
+            // Exit 2 = explicit Repair-Internet.ps1 -Hard applied winsock/ip reset (reboot required).
+            // Normal in-app Repair never auto-runs that path anymore.
             if (p.ExitCode == 2)
             {
                 progress?.Report("Clearing Exo network preset...");
                 ClearSavedPreset();
                 return (false,
-                    "Repair applied a hard Winsock/IP reset because connectivity was still down. Reboot Windows now, then retry — if it is still broken, run Repair-Internet.ps1 -Hard from an admin PowerShell (or use a phone hotspot temporarily).");
+                    "Hard Winsock/IP reset was applied. Reboot Windows now, then retry.");
             }
             if (p.ExitCode != 0)
-                return (false, $"Repair exit {p.ExitCode}. Try again as Administrator, or run Repair-Internet.ps1 -Hard from an elevated PowerShell.");
+                return (false, $"Repair exit {p.ExitCode}. Snapshot restore finished but connectivity probe still failed. If you are offline, use a phone hotspot and run Repair-Internet.ps1 -Hard only if you explicitly want a winsock/ip reset.");
 
             progress?.Report("Clearing Exo network preset...");
             ClearSavedPreset();

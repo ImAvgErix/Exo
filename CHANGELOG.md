@@ -1,3 +1,11 @@
+## 2.6.6
+
+- **UI**: loader is pure XAML Storyboards only (no composition API) - crash-loop "safe mode" is no longer required for the spinner
+- **Internet fail-closed**: never disables Wi-Fi adapters; never disables Client/LLDP bindings; never writes NCSI/proxy AutoDetect; never forces Speed & Duplex; Apply defaults skip NIC restart; Repair no longer auto-runs winsock/ip reset (explicit `-Hard` only)
+- **NVIDIA**: when profiles import but display NVAPI fails, save honest partial state (profiles applied, display incomplete) instead of looking like a hard profile failure
+- **Discord**: Krisp/module CDN failures soft-skip; ffmpeg proxy keeps stock on mismatch; Launch heal verifies/rolls back kernel
+- **Steam**: fresh installs no longer fail Apply when config/userdata are absent; taskbar pins stay on steam.exe; steam.cfg merges; Repair restores quiet shell (tasks/toasts/tray/App Paths)
+
 ## 2.6.5
 
 - **Safety audit**: NVIDIA Apply now persists failing stage/reason, records displayPrefs only when NVAPI verifies (not registry-only), saves success state only after post-verify, and passes `-NoTask` so tray clear cannot register a logon task. Reset banner says status cleared only

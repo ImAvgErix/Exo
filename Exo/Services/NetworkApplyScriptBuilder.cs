@@ -731,10 +731,10 @@ try {
         sb.AppendLine("    try { Set-AdvDisplay $n 'Adaptive Inter-Frame Spacing' 'Disabled' | Out-Null } catch {}");
         sb.AppendLine("    try { Set-AdvDisplay $n 'Gigabit Lite' 'Disabled' | Out-Null } catch {}");
         sb.AppendLine("    try { Set-AdvDisplay $n 'Gigabit Master Slave Mode' 'Auto Detect' | Out-Null } catch {}");
-        // Speed & Duplex: standardized keyword (*SpeedDuplex 0 = auto negotiation), display fallback
-        sb.AppendLine("    Set-Adv $n '*SpeedDuplex' 0");
-        sb.AppendLine("    try { Set-AdvDisplay $n 'Speed & Duplex' 'Auto Negotiation' | Out-Null } catch {}");
-        sb.AppendLine("    try { Set-AdvDisplay $n 'Wait for Link' 'Auto Detect' | Out-Null } catch {}");
+        // Speed & Duplex / Wait for Link intentionally NOT written — forcing these
+        // on dock/USB/odd NICs has bricked links that snapshot restore could not
+        // always bring back before the user lost UI access.
+        sb.AppendLine("    Log '[Eth] Speed & Duplex left at driver default (never force)'");
         sb.AppendLine("    try { Set-AdvDisplay $n 'Log Link State Event' 'Disabled' | Out-Null } catch {}");
         // Vendor-tailored extras (only DisplayNames that exist are applied)
         sb.AppendLine("    $descLow = ([string]$a.InterfaceDescription).ToLowerInvariant()");
@@ -931,24 +931,17 @@ try {
         sb.AppendLine("if ($rssBaseCount -gt 0) { Report 'rss-base' 'ok' ('BaseProcessorNumber=2 on ' + $rssBaseCount + ' adapter(s)') }");
         sb.AppendLine("else { Report 'rss-base' 'skip' 'no ethernet adapter or fewer than 4 logical processors' }");
 
-        // --- Adapter bindings = the checkboxes in Ethernet Properties → Networking ---
-        // Target (gaming lean, matches common "best" host stack):
-        //   ON:  QoS Packet Scheduler, IPv4, IPv6
-        //   OFF: Client for Microsoft Networks, File and Printer Sharing,
-        //        Multiplexor, LLDP, LLTD Mapper, LLTD Responder
+        // --- Adapter bindings: ENABLE critical stack only. Never disable Client /
+        // File Sharing / LLDP — that "gaming lean" path broke LAN recovery and
+        // made Windows look bricked while Exo's TCP probe still passed.
         sb.AppendLine("""
 function Set-AdapterBindings {
   $ads = @(Get-ExoPhysicalAdapters)
-  # ComponentIDs from Get-NetAdapterBinding (same list as the Properties UI checkboxes)
   $enable = @('ms_pacer','ms_tcpip','ms_tcpip6')
-  $disable = @('ms_msclient','ms_server','ms_implat','ms_lldp','ms_lltdio','ms_rspndr')
   foreach ($a in $ads) {
     $n = $a.Name
     foreach ($id in $enable) {
       try { Enable-NetAdapterBinding -Name $n -ComponentID $id -EA SilentlyContinue } catch {}
-    }
-    foreach ($id in $disable) {
-      try { Disable-NetAdapterBinding -Name $n -ComponentID $id -EA SilentlyContinue } catch {}
     }
     $bits = @()
     try {
@@ -1003,19 +996,11 @@ try {
   }
   Log '[NetBIOS] NetbiosOptions=2 (disabled over TCP/IP)'
 } catch { Log '[NetBIOS] skipped' }
-# NCSI active probes off reduces background chatter (connectivity still works via passive)
-try {
-  New-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Force | Out-Null
-  Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' 'NoActiveProbe' 1
-  Log '[NCSI] NoActiveProbe=1'
-} catch {}
-# Internet card only — no Game Mode / HAGS / power-plan / CPU parking (those belong on Windows later)
-# LLMNR / mDNS discovery chatter off (reduces background name noise on LAN)
-try {
-  New-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' -Force | Out-Null
-  Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' 'EnableMulticast' 0
-  Log '[DNS] LLMNR multicast off'
-} catch {}
+# NCSI / LLMNR / proxy AutoDetect are intentionally NOT touched. Turning NCSI
+# NoActiveProbe or WinHTTP AutoDetect off made Windows report "No Internet"
+# while Exo's raw TCP probe still passed — users reinstalled Windows.
+Log '[NCSI] left system default (active probe untouched)'
+Log '[DNS] LLMNR left system default'
 try {
   New-Item 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' -Force | Out-Null
   # Larger DNS cache = fewer repeat lookups during gaming sessions
@@ -1031,16 +1016,8 @@ try {
     Log '[SMB] SMBv1 disabled'
   }
 } catch {}
-# WinHTTP / IE auto-proxy detect off (avoids WPAD stalls)
-try {
-  Set-Dword 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' 'AutoDetect' 0
-  Log '[proxy] AutoDetect=0'
-} catch {}
-# Network Location Awareness: keep service; cut Network List Manager periodic scan weight via policy when available
-try {
-  New-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Force | Out-Null
-  Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' 'DisablePassivePolling' 0
-} catch {}
+# Proxy AutoDetect / NCSI policy intentionally untouched (see NCSI note above).
+Log '[proxy] AutoDetect left system default'
 Set-AdapterBindings
 Report 'bindings' 'ok'
 """);
@@ -1122,61 +1099,26 @@ function Set-EthMetrics {
         sb.AppendLine("  } catch {}");
         sb.AppendLine("}");
         // ============================================================================
-        // VERIFIED ETHERNET GATE — Wi-Fi may only be disabled after a REAL internet
-        // probe bound to the Ethernet adapter's IPv4 succeeds (TCP 443 to 1.1.1.1 /
-        // 8.8.8.8). Also asserts an Ethernet adapter exists (Wi-Fi-only machines no-op).
+        // ETHERNET-FIRST = METRICS ONLY. Never Disable-NetAdapter on Wi-Fi.
+        // Disabling Wi-Fi after a brief Ethernet probe stranded users when the
+        // cable/DHCP path later failed — Repair was unreachable without internet.
         // ============================================================================
         sb.AppendLine("if (" + preferEth + " -eq 1) {");
         sb.AppendLine("  $ads = @(Get-ExoPhysicalAdapters)");
-        sb.AppendLine("  $ethAdapters = @($ads | Where-Object { -not (Test-IsWifiAdapter $_) })");
+        sb.AppendLine("  $ethAdapters = @($ads | Where-Object { -not (Test-IsWifiAdapter $_) -and $_.Status -eq 'Up' })");
         sb.AppendLine("  if ($ethAdapters.Count -eq 0) {");
-        sb.AppendLine("    Log '[Exo-NET] No Ethernet adapter present - keeping Wi-Fi (wifi-only machine)'");
-        sb.AppendLine("    Report 'wifi-disable' 'skip' 'no ethernet adapter on this machine'");
+        sb.AppendLine("    Report 'wifi-disable' 'skip' 'no up ethernet - wifi metrics unchanged'");
         sb.AppendLine("  } else {");
-        sb.AppendLine("    $ethIp = $null");
-        sb.AppendLine("    foreach ($e in @($ethAdapters | Where-Object { $_.Status -eq 'Up' })) {");
-        sb.AppendLine("      $ip = @(Get-NetIPAddress -InterfaceIndex $e.ifIndex -AddressFamily IPv4 -EA SilentlyContinue | Where-Object { $_.IPAddress -notlike '169.254.*' })");
-        sb.AppendLine("      if ($ip.Count -gt 0) { $ethIp = [string]$ip[0].IPAddress; break }");
+        sb.AppendLine("    foreach ($w in @($ads | Where-Object { Test-IsWifiAdapter $_ })) {");
+        sb.AppendLine("      try {");
+        sb.AppendLine("        Set-NetIPInterface -InterfaceIndex $w.ifIndex -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric 75 -EA SilentlyContinue");
+        sb.AppendLine("        Log ('[NIC] Wi-Fi metric raised (adapter STAYS ENABLED): ' + $w.Name)");
+        sb.AppendLine("      } catch {}");
         sb.AppendLine("    }");
-        sb.AppendLine("    if (-not $ethIp) {");
-        sb.AppendLine("      Log '[Exo-NET] Ethernet has no usable IPv4 yet - not disabling Wi-Fi'");
-        sb.AppendLine("      Report 'wifi-disable' 'skip' 'ethernet has no usable ipv4'");
-        sb.AppendLine("    } else {");
-        sb.AppendLine("      Log \"[Exo-NET] Probing real internet over Ethernet ($ethIp) before touching Wi-Fi...\"");
-        // Short retry window: binding/advanced-property writes just above can bounce the
-        // link for a few seconds; a single instant probe would false-skip the eth path.
-        sb.AppendLine("      $ethGateSw = [System.Diagnostics.Stopwatch]::StartNew()");
-        sb.AppendLine("      $ethGateAttempts = 0");
-        sb.AppendLine("      $ethProbeOk = $false");
-        sb.AppendLine("      while (-not $ethProbeOk -and $ethGateSw.Elapsed.TotalSeconds -lt 20) {");
-        sb.AppendLine("        $ethGateAttempts++");
-        sb.AppendLine("        $ethProbeOk = Test-ExoConnectivity -BindIp $ethIp");
-        sb.AppendLine("        if (-not $ethProbeOk) { Start-Sleep -Seconds 2 }");
-        sb.AppendLine("      }");
-        sb.AppendLine("      $ethGateSw.Stop()");
-        sb.AppendLine("      if ($ethProbeOk) { if (Test-ExoDnsResolve) { Log '[probe] DNS resolve OK' } else { Log '[probe] DNS resolve failed (TCP probe passed - continuing)' } }");
-        sb.AppendLine("      if (-not $ethProbeOk) {");
-        sb.AppendLine("        Log '[Exo-NET] Ethernet internet probe FAILED - Wi-Fi stays enabled'");
-        sb.AppendLine("        Report 'wifi-disable' 'skip' ('ethernet internet probe failed (tcp 443, ' + $ethGateAttempts + ' attempts over ' + [int]$ethGateSw.Elapsed.TotalSeconds + 's)')");
-        sb.AppendLine("      } else {");
-        sb.AppendLine("        Log '[Exo-NET] Ethernet verified (TCP 443) - preferring Ethernet (lowest latency)'");
-        sb.AppendLine("        foreach ($w in @($ads | Where-Object { Test-IsWifiAdapter $_ })) {");
-        sb.AppendLine("          try {");
-        sb.AppendLine("            if ($w.Status -ne 'Disabled') {");
-        sb.AppendLine("              try { Set-NetIPInterface -InterfaceIndex $w.ifIndex -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric 75 -EA SilentlyContinue } catch {}");
-        sb.AppendLine("              Disable-NetAdapter -Name $w.Name -Confirm:$false -EA SilentlyContinue");
-        sb.AppendLine("              $ExoWifiDisabled += $w.Name");
-        sb.AppendLine("              Log \"[NIC] Wi-Fi disabled: $($w.Name)\"");
-        sb.AppendLine("            }");
-        sb.AppendLine("          } catch { Log \"[NIC] could not disable $($w.Name)\" }");
-        sb.AppendLine("        }");
-        sb.AppendLine("        if (@($ExoWifiDisabled).Count -gt 0) { Report 'wifi-disable' 'ok' ('disabled after verified probe: ' + ($ExoWifiDisabled -join ', ')) }");
-        sb.AppendLine("        else { Report 'wifi-disable' 'skip' 'no enabled wifi adapters to disable' }");
-        sb.AppendLine("      }");
-        sb.AppendLine("    }");
+        sb.AppendLine("    Report 'wifi-disable' 'skip' 'metrics-only prefer-ethernet (never disable wifi adapters)'");
         sb.AppendLine("  }");
         sb.AppendLine("} else {");
-        sb.AppendLine("  Report 'wifi-disable' 'skip' 'user kept wifi (prefer-ethernet option off)'");
+        sb.AppendLine("  Report 'wifi-disable' 'skip' 'prefer-ethernet option off'");
         sb.AppendLine("}");
 
         sb.AppendLine("try { Clear-DnsClientCache -EA SilentlyContinue } catch {}");
@@ -1814,22 +1756,14 @@ if ($repairProbe) {
   Log '[Exo-NET-REPAIR] DONE'
   exit 0
 }
-# Nuclear fallback: snapshot/stock restore still left the box offline. Reset
-# Winsock + TCP/IP stack catalog (requires reboot) and clear remaining Exo state.
-Report 'post-probe' 'fail' 'no tcp 443 / dns reachability after repair - applying hard winsock/ip reset'
-Log '[Exo-NET-REPAIR] HARD RESET: netsh winsock reset + netsh int ip reset (reboot required)'
-try { $null = (netsh winsock reset 2>&1 | Out-String) } catch {}
-try { $null = (netsh int ip reset 2>&1 | Out-String) } catch {}
-try { $null = (netsh int ipv6 reset 2>&1 | Out-String) } catch {}
-try {
-  Remove-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'NoActiveProbe' -Force -EA SilentlyContinue
-  Remove-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' -Name 'EnableMulticast' -Force -EA SilentlyContinue
-} catch {}
+# Do NOT auto-run winsock/ip reset. That path is not snapshot-undoable and made
+# bad situations worse. Explicit Repair-Internet.ps1 -Hard remains available.
+Report 'post-probe' 'fail' 'no tcp 443 / dns after repair - run Repair-Internet.ps1 -Hard then reboot'
+Report 'hard-reset' 'skip' 'not automatic - use Repair-Internet.ps1 -Hard explicitly'
 Remove-Item -LiteralPath $ExoApplyStatePath -Force -EA SilentlyContinue
 Remove-Item -LiteralPath (Join-Path $ExoDir 'network-optimizer.json') -Force -EA SilentlyContinue
-Report 'hard-reset' 'ok' 'winsock+ip reset applied - REBOOT REQUIRED'
-Log '[Exo-NET-REPAIR] DONE - REBOOT REQUIRED (exit 2)'
-exit 2
+Log '[Exo-NET-REPAIR] DONE - still offline; hard reset NOT applied automatically (exit 1)'
+exit 1
 """);
         return sb.ToString();
     }

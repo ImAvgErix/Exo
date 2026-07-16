@@ -389,9 +389,10 @@ public static partial class NetworkLogic
 
         if (ethInUse)
         {
-            disableWifi = wifiAvailable;
+            // Never disable Wi-Fi adapters — metrics-only prefer Ethernet.
+            disableWifi = false;
             policy = wifiAvailable
-                ? "Ethernet ready → prefer Ethernet 100%, disable Wi‑Fi"
+                ? "Ethernet ready → prefer Ethernet (Wi-Fi stays enabled, higher metric)"
                 : "Ethernet ready → Ethernet only";
         }
         else if (ethUp && !ethInUse)
@@ -414,9 +415,12 @@ public static partial class NetworkLogic
         return new PathDecision(policy, bandTarget, disableWifi, keepWifiNoIp);
     }
 
-    /// <summary>Should path policy disable Wi‑Fi given prefer-eth option?</summary>
+    /// <summary>
+    /// Wi-Fi adapters are never disabled — Ethernet preference is metrics-only.
+    /// Kept for API compatibility; always returns false.
+    /// </summary>
     public static bool ShouldDisableWifi(bool preferEthernetOption, bool ethInUse, bool wifiAvailable) =>
-        preferEthernetOption && ethInUse && wifiAvailable;
+        false;
 
     /// <summary>True when IPv4 is real (not empty, not APIPA).</summary>
     public static bool IsUsableIpv4(string? ip)
@@ -471,10 +475,11 @@ public static partial class NetworkLogic
         "congestionprovider=cubic",
         "wantBand6Live",
         "Select-BandDisplayValue",
-        "EnableMulticast",
         "BufferStrategy",
         "RssQueueBudget",
-        // Safety layer: pristine pre-apply snapshot + verified Ethernet gate + rollback + report
+        // Safety layer: pristine pre-apply snapshot + connectivity probe + rollback + report.
+        // Wi-Fi adapters must never be disabled (metrics-only prefer-ethernet).
+        "never disable wifi adapters",
         "network-snapshot.json",
         "Save-ExoNetworkSnapshot",
         "Test-ExoConnectivity",
@@ -495,9 +500,9 @@ public static partial class NetworkLogic
         "DoSvc",
         "EnableBITSMaxBandwidth",
         // RSS off core 0 + keyword-first adapter writes
+        // (*SpeedDuplex intentionally omitted — never force link speed)
         "BaseProcessorNumber 2",
         "'*FlowControl'",
-        "'*SpeedDuplex'",
         "'*JumboPacket'",
         "'*PriorityVLANTag'",
         // IPv4 fast path via documented prefix policy (not metric hack)

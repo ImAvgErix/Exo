@@ -94,8 +94,11 @@ public sealed class NetworkApplyOptions
     /// <summary>When true, Restart-NetAdapter on Ethernet after props (user-confirmed).</summary>
     public bool RestartEthernet { get; init; }
 
-    /// <summary>When Ethernet is up, disable Wi‑Fi adapters (default true).</summary>
-    public bool PreferEthernetDisableWifi { get; init; } = true;
+    /// <summary>
+    /// Prefer Ethernet via metrics only. Never disables Wi-Fi adapters
+    /// (default false — disabling Wi-Fi stranded users when Ethernet later dropped).
+    /// </summary>
+    public bool PreferEthernetDisableWifi { get; init; } = false;
 }
 
 /// <summary>

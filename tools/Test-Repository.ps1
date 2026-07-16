@@ -195,17 +195,22 @@ if ($steamInvalidation -lt 0 -or $steamMutation -lt 0 -or $steamInvalidation -gt
 $steamTokens = $null
 $steamErrors = $null
 $steamAst = [Management.Automation.Language.Parser]::ParseInput($steamOptimizer, [ref]$steamTokens, [ref]$steamErrors)
-$mergeSteamDefinition = @($steamAst.FindAll({
-    param($node)
-    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Merge-SteamStartupRecovery'
-}, $true)) | Select-Object -First 1
-if (-not $mergeSteamDefinition) {
-    Add-Failure 'Steam recovery merge function is missing.'
-} else {
-    Invoke-Expression $mergeSteamDefinition.Extent.Text
+foreach ($helperName in @('Get-SteamObjectProperty', 'Merge-SteamRecoveryItems', 'Merge-SteamStartupRecovery')) {
+    $def = @($steamAst.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $helperName
+    }, $true)) | Select-Object -First 1
+    if (-not $def) {
+        Add-Failure ("Steam recovery helper missing: " + $helperName)
+    } else {
+        Invoke-Expression $def.Extent.Text
+    }
+}
+if (Get-Command Merge-SteamStartupRecovery -ErrorAction SilentlyContinue) {
     $priorRecovery = @{
         StartupEntries = @(@{ Key = 'HKCU:\Run'; Name = 'Steam'; Value = 'original'; Kind = 'String' })
         StartupModeCaptured = $true; HadStartupMode = $true; PreviousStartupMode = 2; PreviousStartupModeKind = 'DWord'
+        ScheduledTasks = @(); Notifications = @(); TrayEntries = @(); AppPath = $null
     }
     $currentRecovery = @{
         StartupEntries = @(
@@ -213,6 +218,7 @@ if (-not $mergeSteamDefinition) {
             @{ Key = 'HKLM:\Run'; Name = 'SteamNew'; Value = 'new'; Kind = 'String' }
         )
         StartupModeCaptured = $true; HadStartupMode = $true; PreviousStartupMode = 0; PreviousStartupModeKind = 'DWord'
+        ScheduledTasks = @(); Notifications = @(); TrayEntries = @(); AppPath = $null
     }
     $mergedRecovery = Merge-SteamStartupRecovery $priorRecovery $currentRecovery
     if (@($mergedRecovery.StartupEntries).Count -ne 2 -or
@@ -220,7 +226,9 @@ if (-not $mergeSteamDefinition) {
         [int]$mergedRecovery.PreviousStartupMode -ne 2) {
         Add-Failure 'Steam reapply recovery merge no longer preserves original values.'
     }
-    Remove-Item Function:\Merge-SteamStartupRecovery -ErrorAction SilentlyContinue
+}
+foreach ($helperName in @('Merge-SteamStartupRecovery', 'Merge-SteamRecoveryItems', 'Get-SteamObjectProperty')) {
+    Remove-Item ("Function:\" + $helperName) -ErrorAction SilentlyContinue
 }
 
 foreach ($marker in @(

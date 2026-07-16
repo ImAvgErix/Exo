@@ -30,18 +30,84 @@ function Copy-KernelFileWithRetry {
     }
 }
 
+function Get-DiscOptKernelFileSummary([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return 'missing' }
+    $item = Get-Item -LiteralPath $Path
+    $version = ''
+    try {
+        $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($Path)
+        if ($info.FileVersion) { $version = " version=$($info.FileVersion)" }
+    } catch { }
+    return "len=$($item.Length)$version"
+}
+
+function Test-DiscOptStockFfmpegCompatible([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    $item = Get-Item -LiteralPath $Path
+    if ($item.Length -lt 500000) { return $false }
+
+    try {
+        $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($Path)
+        $labels = @($info.FileDescription, $info.ProductName, $info.OriginalFilename) |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }
+        if ($labels.Count -gt 0 -and (($labels -join ' ') -notmatch '(?i)ffmpeg')) {
+            return $false
+        }
+    } catch { }
+
+    return $true
+}
+
+function Test-DiscOptProxyFfmpegCompatible([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    $len = (Get-Item -LiteralPath $Path).Length
+    return ($len -ge 10000 -and $len -lt 500000)
+}
+
+function Restore-DiscOptStockFfmpeg([string]$AppDir, [string]$Reason) {
+    $real = Join-Path $AppDir 'ffmpeg_real.dll'
+    $current = Join-Path $AppDir 'ffmpeg.dll'
+
+    if (Test-DiscOptStockFfmpegCompatible $real) {
+        try {
+            Copy-KernelFileWithRetry -Source $real -Destination $current
+            Write-Warn "$Reason - stock ffmpeg.dll restored"
+            return $true
+        } catch {
+            Write-Warn "$Reason - could not restore stock ffmpeg.dll: $($_.Exception.Message)"
+            return $false
+        }
+    }
+
+    if (Test-DiscOptStockFfmpegCompatible $current) {
+        Write-Warn "$Reason - stock ffmpeg.dll kept"
+        return $true
+    }
+
+    Write-Warn "$Reason - no compatible stock ffmpeg.dll available"
+    return $false
+}
+
 function Install-DiscOptKernel([string]$AppDir) {
     Write-Step 'Installing DiscOpt kernel (memory trim, priority, raw input)...'
     Write-HubProgress 78 'Installing DiscOpt kernel...'
+    $Script:DiscOptKernelProxyActive = $false
 
     $proxy = Join-Path $KitDir 'ffmpeg.dll'
     $dll = Join-Path $KitDir 'version.dll'
     $ini = Join-Path $KitDir 'config.ini'
-    foreach ($file in @($proxy, $dll, $ini)) {
+    foreach ($file in @($dll, $ini)) {
         if (-not (Test-Path $file)) { throw "Missing kernel file: $file" }
     }
-    if ((Get-Item $proxy).Length -lt 10000) { throw 'Bundled ffmpeg proxy looks invalid' }
     if ((Get-Item $dll).Length -lt 50000) { throw 'Bundled version.dll looks invalid' }
+    $proxyReady = $true
+    if (-not (Test-Path -LiteralPath $proxy)) {
+        Write-Warn "Bundled ffmpeg proxy missing ($proxy) - keeping stock ffmpeg.dll"
+        $proxyReady = $false
+    } elseif (-not (Test-DiscOptProxyFfmpegCompatible $proxy)) {
+        Write-Warn "Bundled ffmpeg proxy looks invalid ($(Get-DiscOptKernelFileSummary $proxy)) - keeping stock ffmpeg.dll"
+        $proxyReady = $false
+    }
 
     Stop-Discord
 
@@ -56,32 +122,68 @@ function Install-DiscOptKernel([string]$AppDir) {
 
     $real = Join-Path $AppDir 'ffmpeg_real.dll'
     $current = Join-Path $AppDir 'ffmpeg.dll'
-    if (-not (Test-Path $real)) {
-        if (-not (Test-Path $current)) { throw 'Stock ffmpeg.dll missing' }
-        if ((Get-Item $current).Length -lt 500000) {
-            throw 'ffmpeg_real.dll missing - reinstall Discord (stock ffmpeg not found)'
+    $canReplaceFfmpeg = $proxyReady
+    $hasStockFfmpeg = $false
+    if (Test-DiscOptStockFfmpegCompatible $real) {
+        $hasStockFfmpeg = $true
+    } elseif (Test-DiscOptStockFfmpegCompatible $current) {
+        $hasStockFfmpeg = $true
+        try {
+            Copy-KernelFileWithRetry -Source $current -Destination $real
+            Write-Ok 'Saved stock ffmpeg.dll backup (ffmpeg_real.dll)'
+        } catch {
+            Write-Warn "Could not save ffmpeg_real.dll backup: $($_.Exception.Message)"
+            Write-Warn 'Keeping stock ffmpeg.dll and skipping proxy replacement'
+            $canReplaceFfmpeg = $false
         }
-        Copy-KernelFileWithRetry -Source $current -Destination $real
-        Write-Ok 'Saved stock ffmpeg.dll backup (ffmpeg_real.dll)'
-    } elseif ((Get-Item $real).Length -lt 500000) {
-        throw 'ffmpeg_real.dll is corrupt - reinstall Discord'
+    } elseif (Test-Path -LiteralPath $current) {
+        Write-Warn "Stock ffmpeg.dll looks incompatible ($(Get-DiscOptKernelFileSummary $current)) - keeping it and skipping proxy replacement"
+        $canReplaceFfmpeg = $false
+    } else {
+        throw 'Stock ffmpeg.dll missing'
     }
 
-    # Order matters: version.dll + config.ini first, proxy last (proxy loads version.dll).
+    # Order matters: version.dll + config.ini first, ffmpeg.dll last.
     $verDest = Join-Path $AppDir 'version.dll'
     if (Test-Path $verDest) { attrib -R $verDest 2>$null }
     Copy-KernelFileWithRetry -Source $dll -Destination $verDest
     Copy-KernelFileWithRetry -Source $ini -Destination (Join-Path $AppDir 'config.ini')
-    Copy-KernelFileWithRetry -Source $proxy -Destination $current
+
+    if (-not $canReplaceFfmpeg) {
+        if (Test-DiscOptStockFfmpegCompatible $real) {
+            [void](Restore-DiscOptStockFfmpeg $AppDir 'DiscOpt ffmpeg proxy skipped')
+            Write-Warn 'DiscOpt ffmpeg proxy skipped; stock ffmpeg.dll kept with version.dll + config.ini installed'
+        } else {
+            Write-Warn 'DiscOpt ffmpeg proxy skipped; existing ffmpeg.dll kept with version.dll + config.ini installed'
+        }
+        return
+    }
+
+    try {
+        Copy-KernelFileWithRetry -Source $proxy -Destination $current
+    } catch {
+        [void](Restore-DiscOptStockFfmpeg $AppDir "DiscOpt ffmpeg proxy copy failed: $($_.Exception.Message)")
+        Write-Warn 'DiscOpt ffmpeg proxy skipped; version.dll + config.ini remain installed'
+        return
+    }
 
     # Sanity: proxy small, real large, version present.
     $proxyLen = (Get-Item $current).Length
     $realLen = (Get-Item $real).Length
     $verLen = (Get-Item $verDest).Length
-    if ($proxyLen -ge 500000) { throw "Kernel install failed: ffmpeg.dll still stock ($proxyLen bytes)" }
-    if ($realLen -lt 500000) { throw "Kernel install failed: ffmpeg_real.dll too small ($realLen bytes)" }
+    if ($proxyLen -ge 500000 -or $proxyLen -lt 10000) {
+        [void](Restore-DiscOptStockFfmpeg $AppDir "DiscOpt ffmpeg proxy verify failed (ffmpeg.dll $proxyLen bytes)")
+        Write-Warn 'DiscOpt ffmpeg proxy skipped; version.dll + config.ini remain installed'
+        return
+    }
+    if ($hasStockFfmpeg -and $realLen -lt 500000) {
+        [void](Restore-DiscOptStockFfmpeg $AppDir "DiscOpt ffmpeg backup verify failed (ffmpeg_real.dll $realLen bytes)")
+        Write-Warn 'DiscOpt ffmpeg proxy skipped; version.dll + config.ini remain installed'
+        return
+    }
     if ($verLen -lt 50000) { throw "Kernel install failed: version.dll too small ($verLen bytes)" }
 
+    $Script:DiscOptKernelProxyActive = $true
     Write-Ok "DiscOpt kernel active (proxy $([math]::Round($proxyLen/1KB,0)) KB + version.dll + config.ini)"
     Write-Ok 'Features: idle RAM trim, process priority, raw input'
 }

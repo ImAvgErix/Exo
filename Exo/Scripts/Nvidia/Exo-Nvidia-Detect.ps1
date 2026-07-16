@@ -758,7 +758,7 @@ elseif ($driverChanged) { "Driver is now $currentNv but last verified $($state.p
 elseif ($profileOk -and $drsLive -eq 'drifted') { "The driver DRS no longer matches the imported Exo pack ($($drsMismatch.Count) pin(s) drifted). Apply again to re-import." }
 elseif (-not $profileOk) { $(if ($applyInProgress) { 'Previous Apply was interrupted. Apply again.' } else { '3D profile not fully verified. Apply again.' }) }
 elseif (-not $gameOk) { 'Base profile is present but per-game catalog is incomplete. Apply again.' }
-elseif (-not $displayOk) { 'Display policy incomplete (resolution/refresh/color/scaling). Apply again or use Display panel.' }
+elseif (-not $displayOk) { $(if ($lastErrorStage -eq 'display-policy' -and $lastError) { $lastError } else { 'Display policy incomplete (resolution/refresh/color/scaling). Apply again or use Display panel.' }) }
 elseif (-not $clientOk) { 'NVIDIA App is still installed. Apply removes it; Exo uses the driver directly.' }
 elseif (-not $advanced3dOk) { '3D profiles not fully verified. Apply imports them at driver level.' }
 elseif (-not $backgroundOk) { "Background settings need another pass ($($backgroundIssues -join '; '))." }

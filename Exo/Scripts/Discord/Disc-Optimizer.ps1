@@ -492,6 +492,8 @@ if ($Launch) {
         if (-not $openAsarOk -or -not $kernelOk -or -not $equicordOk) {
             Write-Host '[*] Discord client changed - restoring Exo mods...'
             Stop-Discord
+            $healAttempted = $true
+            $kernelInstallFailed = $false
             if (-not $openAsarOk -or -not $equicordOk) {
                 try { Install-Equicord $app.FullName } catch {
                     try { Install-OpenAsar $app.FullName } catch { }
@@ -499,9 +501,28 @@ if ($Launch) {
                 }
             }
             if (-not $kernelOk) {
-                try { Install-DiscOptKernel $app.FullName } catch { }
+                try {
+                    Install-DiscOptKernel $app.FullName
+                    $kernelOk = [bool]$Script:DiscOptKernelProxyActive
+                } catch {
+                    $kernelInstallFailed = $true
+                    Write-Warn "Kernel heal failed: $($_.Exception.Message)"
+                    try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
+                }
             }
             try { Restore-StartMenu } catch { }
+            if ($healAttempted) {
+                if ($kernelInstallFailed) {
+                    try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
+                } else {
+                    try {
+                        Confirm-DiscordBootsAfterMods $app.FullName
+                    } catch {
+                        Write-Warn "Launch heal boot check failed: $($_.Exception.Message)"
+                        try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
+                    }
+                }
+            }
         }
     } catch { }
     Start-Discord $app.FullName
@@ -629,10 +650,16 @@ if (-not $SkipEquicord) {
 if (-not $SkipKernel) {
     try {
         Install-DiscOptKernel $app.FullName
-        Add-ExoReport 'kernel' 'ok'
+        if ($Script:DiscOptKernelProxyActive) {
+            Add-ExoReport 'kernel' 'ok'
+        } else {
+            Add-ExoReport 'kernel' 'skip' 'ffmpeg proxy skipped; stock ffmpeg kept'
+        }
     } catch {
         Add-ExoReport 'kernel' 'fail' $_.Exception.Message
-        throw
+        Write-Warn "DiscOpt kernel install failed: $($_.Exception.Message)"
+        Write-Warn 'Leaving Discord stock-safe and continuing to boot safety check'
+        try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
     }
 } else {
     Write-Warn 'Skipped DiscOpt kernel (-SkipKernel) - aggressive trim / raw input not installed'
@@ -670,7 +697,10 @@ if ($exoQuiet) {
             Use-StockDiscordRuntime $app.FullName
         } elseif (-not $kernelOk -and -not $SkipKernel) {
             Write-Warn 'Kernel files incomplete - reinstalling kernel...'
-            try { Install-DiscOptKernel $app.FullName } catch { Write-Warn $_.Exception.Message }
+            try { Install-DiscOptKernel $app.FullName } catch {
+                Write-Warn $_.Exception.Message
+                try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
+            }
         }
     }
 } elseif ($Quick) {

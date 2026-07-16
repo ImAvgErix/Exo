@@ -233,6 +233,21 @@ Expect("optimizer displayPrefs gates on NVAPI",
     optimizerSrc.Contains("displayPrefs        = [bool]$displayPrefsOk", StringComparison.Ordinal));
 Expect("optimizer records registry display method honestly",
     optimizerSrc.Contains("$displayMethod = if ($displayNvApiOk) { 'nvapi' } elseif ($displayRegistryOk) { 'registry' } else { $null }", StringComparison.Ordinal));
+Expect("optimizer saves completed display partial",
+    optimizerSrc.Contains("$Script:CompletedPartialDisplayPolicy = $false", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("$Script:CompletedPartialDisplayPolicy = $true", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("applyInProgress     = $false", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("lastErrorStage      = 'display-policy'", StringComparison.Ordinal));
+Expect("optimizer partial keeps profiles and display honest",
+    optimizerSrc.Contains("profileApplied      = $true", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("displayPrefs        = $false", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("$partialDisplayMethod = if ($displayRegistryOk) { 'registry' } else { $null }", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("Profiles imported and verified, but display NVAPI verification failed. Apply again or use Display panel.", StringComparison.Ordinal));
+Expect("optimizer catch preserves display partial",
+    optimizerSrc.Contains("if (-not [bool]$Script:CompletedPartialDisplayPolicy)", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("Save-ExoFailureState -Stage $failStage -Message $failMessage", StringComparison.Ordinal));
+Expect("detect surfaces display partial detail",
+    detectSrc.Contains("$lastErrorStage -eq 'display-policy' -and $lastError", StringComparison.Ordinal));
 Expect("optimizer tray clear passes NoTask",
     optimizerSrc.Contains("'-NoTask', '-SettlePasses', '3'", StringComparison.Ordinal) &&
     optimizerSrc.Contains("(NoTask; no background task)", StringComparison.Ordinal));
