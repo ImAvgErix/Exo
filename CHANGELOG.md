@@ -1,3 +1,7 @@
+## 3.0.4
+
+- **NVIDIA Apply**: MSI High no longer hard-fails when PCI nodes lack Class under StrictMode; successful clean driver continues into profiles/display (soft MSI skip)
+- **NVIDIA UI**: stabilize shell after elevate/driver work; panel open failures no longer blank the chrome; safer feature-list entrance after Apply
 ## 3.0.3
 
 - **Shell**: left circle Settings on home / Home on module pages; module icons true-centered; full 44px circle hit target (SelectionFill)

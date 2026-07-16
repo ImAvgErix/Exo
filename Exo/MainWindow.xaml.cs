@@ -549,11 +549,79 @@ public sealed partial class MainWindow : Window
     public void NavigateToInternet() =>
         Navigate(ShellMode.Internet, typeof(InternetOptimizerPage), Slide());
 
-    public void NavigateToNvidia() =>
-        Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), Slide());
+    public void NavigateToNvidia()
+    {
+        try
+        {
+            // Driver Apply / UAC can leave WinUI chrome half-invalid; re-pin size + titlebar.
+            StabilizeShellAfterExternalWork();
+            Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), Slide());
+            StabilizeShellAfterExternalWork();
+        }
+        catch (Exception ex)
+        {
+            Helpers.StartupLog.Mark("nav-nvidia-failed:" + ex.GetType().Name);
+            try
+            {
+                ExoMotion.MotionDisabled = true;
+                StabilizeShellAfterExternalWork();
+                Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), null);
+            }
+            catch
+            {
+                Helpers.StartupLog.Mark("nav-nvidia-hard-failed");
+            }
+        }
+    }
 
-    public void NavigateToNvidiaPanel() =>
-        Navigate(ShellMode.NvidiaPanel, typeof(NvidiaPanelPage), Slide());
+    public void NavigateToNvidiaPanel()
+    {
+        try
+        {
+            StabilizeShellAfterExternalWork();
+            Navigate(ShellMode.NvidiaPanel, typeof(NvidiaPanelPage), Slide());
+            StabilizeShellAfterExternalWork();
+        }
+        catch (Exception ex)
+        {
+            Helpers.StartupLog.Mark("nav-nvidia-panel-failed:" + ex.GetType().Name);
+            try
+            {
+                ExoMotion.MotionDisabled = true;
+                Navigate(ShellMode.NvidiaPanel, typeof(NvidiaPanelPage), null);
+            }
+            catch
+            {
+                Helpers.StartupLog.Mark("nav-nvidia-panel-hard-failed");
+            }
+        }
+    }
+
+    /// <summary>
+    /// After elevated NVIDIA driver work the display stack can flicker and leave
+    /// the fixed shell with a broken size/titlebar. Re-assert calm chrome.
+    /// </summary>
+    public void StabilizeShellAfterExternalWork()
+    {
+        try
+        {
+            ApplyFixedWindowChrome();
+            UpdateCaptionInset();
+            if (_firstFrameMarked)
+            {
+                try { SetTitleBar(NavRail); } catch { }
+            }
+            try
+            {
+                if (ContentFrame is not null)
+                    ExoMotion.EnsureVisible(ContentFrame);
+                if (RootGrid is not null)
+                    ExoMotion.EnsureVisible(RootGrid);
+            }
+            catch { }
+        }
+        catch { }
+    }
 
     private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
     {

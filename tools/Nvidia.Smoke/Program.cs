@@ -319,7 +319,7 @@ Expect("catalog excludes shared javaw.exe",
 // Pack versions bumped in lockstep
 var packVersion = File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "VERSION")).Trim();
 var profileVersion = File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "profiles", "PROFILE_VERSION")).Trim();
-Expect("pack VERSION 1.12.0", packVersion == "1.12.0", packVersion);
+Expect("pack VERSION 1.12.1", packVersion == "1.12.1", packVersion);
 Expect("PROFILE_VERSION 1.4.0", profileVersion == "1.4.0", profileVersion);
 Expect("optimizer version constant matches VERSION",
     optimizerSrc.Contains($"$Script:NvidiaOptVersion = '{packVersion}'", StringComparison.Ordinal));

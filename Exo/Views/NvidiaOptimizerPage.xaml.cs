@@ -24,6 +24,13 @@ public sealed partial class NvidiaOptimizerPage : Page
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        try
+        {
+            if (App.MainAppWindow is MainWindow main)
+                main.StabilizeShellAfterExternalWork();
+        }
+        catch { }
+        try { ExoMotion.EnsureVisible(this); } catch { }
         await ViewModel.InitializeAsync();
     }
 
@@ -34,7 +41,20 @@ public sealed partial class NvidiaOptimizerPage : Page
         if (e.PropertyName != nameof(ViewModel.IsFeatureListVisible) || !ViewModel.IsFeatureListVisible)
             return;
         _tilesEntered = true;
-        ExoMotion.PlayListEnter(Plate.FeatureTileGrid.TileRepeaterControl, ViewModel.Features.Count);
+        try
+        {
+            // After a heavy driver Apply, skip stagger if motion was freeze-killed.
+            if (ExoMotion.MotionDisabled)
+            {
+                ExoMotion.EnsureVisible(Plate);
+                return;
+            }
+            ExoMotion.PlayListEnter(Plate.FeatureTileGrid.TileRepeaterControl, ViewModel.Features.Count);
+        }
+        catch
+        {
+            try { ExoMotion.EnsureVisible(Plate); } catch { }
+        }
     }
 
     private void Run_Click(object sender, RoutedEventArgs e) =>

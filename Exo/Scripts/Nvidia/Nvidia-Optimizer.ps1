@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.12.0'
+$Script:NvidiaOptVersion = '1.12.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
@@ -3036,6 +3036,27 @@ function Install-ExoCleanDriver {
         Method   = 'exo-clean'
     }
 }
+function Test-ExoNvidiaDisplayPciNode {
+    param($DeviceProps)
+    # StrictMode-safe: many PCI nodes lack Class/ClassGUID properties after clean installs.
+    if ($null -eq $DeviceProps) { return $false }
+    $names = @()
+    try { $names = @($DeviceProps.PSObject.Properties.Name) } catch { return $false }
+    $class = $null
+    $classGuid = $null
+    $desc = $null
+    $svc = $null
+    if ($names -contains 'Class') { try { $class = [string]$DeviceProps.Class } catch { } }
+    if ($names -contains 'ClassGUID') { try { $classGuid = [string]$DeviceProps.ClassGUID } catch { } }
+    if ($names -contains 'DeviceDesc') { try { $desc = [string]$DeviceProps.DeviceDesc } catch { } }
+    if ($names -contains 'Service') { try { $svc = [string]$DeviceProps.Service } catch { } }
+    if ($class -eq 'Display') { return $true }
+    if ($classGuid -eq '{4d36e968-e325-11ce-bfc1-08002be10318}') { return $true }
+    # Fallback after driver reinstall: nvlddmkm service + GPU-like description.
+    if ($svc -match '(?i)^nvlddmkm$' -and $desc -match '(?i)NVIDIA|GeForce|RTX|GTX|Quadro|Tesla') { return $true }
+    return $false
+}
+
 function Apply-ExoDriverInstallTweaks {
     # NVCleanstall expert checklist (Exo silent equivalent):
     #  [x] Disable installer telemetry / advertising
@@ -3060,15 +3081,18 @@ function Apply-ExoDriverInstallTweaks {
             } | ForEach-Object {
                 Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue | ForEach-Object {
                     $dev = $_.PSPath
-                    # Only the display-class GPU node.
+                    # Only the display-class GPU node (StrictMode-safe Class check).
                     $device = Get-ItemProperty -LiteralPath $dev -ErrorAction SilentlyContinue
-                    if ($device.Class -ne 'Display' -and
-                        $device.ClassGUID -ne '{4d36e968-e325-11ce-bfc1-08002be10318}') {
-                        return
-                    }
+                    if (-not (Test-ExoNvidiaDisplayPciNode $device)) { return }
                     $msiCandidates++
                     $msiKey = Join-Path $dev 'Device Parameters\Interrupt Management\MessageSignaledInterruptProperties'
                     $aff = Join-Path $dev 'Device Parameters\Interrupt Management\Affinity Policy'
+                    $descLabel = 'NVIDIA display'
+                    try {
+                        if ($device.PSObject.Properties.Name -contains 'DeviceDesc') {
+                            $descLabel = [string]$device.DeviceDesc
+                        }
+                    } catch { }
                     try {
                         if (-not (Test-Path $msiKey)) { New-Item -Path $msiKey -Force -ErrorAction Stop | Out-Null }
                         New-ItemProperty -LiteralPath $msiKey -Name 'MSISupported' -Value 1 -PropertyType DWord -Force -ErrorAction Stop | Out-Null
@@ -3078,9 +3102,9 @@ function Apply-ExoDriverInstallTweaks {
                         $msiValue = (Get-ItemProperty -LiteralPath $msiKey -ErrorAction Stop).MSISupported
                         $priorityValue = (Get-ItemProperty -LiteralPath $aff -ErrorAction Stop).DevicePriority
                         if ($msiValue -eq 1 -and $priorityValue -eq 3) { $msiCount++ }
-                        else { Write-Warn "MSI verification failed for $($device.DeviceDesc)" }
+                        else { Write-Warn "MSI verification failed for $descLabel" }
                     } catch {
-                        Write-Warn "MSI High failed for $($device.DeviceDesc): $($_.Exception.Message)"
+                        Write-Warn "MSI High failed for ${descLabel}: $($_.Exception.Message)"
                     }
                 }
             }
@@ -3217,7 +3241,8 @@ function Test-ExoDriverInstallTweaks {
         [void]$oks.Add('NVIDIA App/GFE not installed')
     }
 
-    # MSI: if the key exists and is 0, fail; if 1, pass; if missing, ignore
+    # MSI: if the key exists and is 0, fail; if 1, pass; if no display PCI nodes found,
+    # soft-skip (clean installs often omit Class under StrictMode — not a hard fail).
     $msiSeen = 0
     $msiGaps = 0
     try {
@@ -3228,15 +3253,14 @@ function Test-ExoDriverInstallTweaks {
             } | ForEach-Object {
                 Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue | ForEach-Object {
                     $device = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
-                    if ($device.Class -ne 'Display' -and
-                        $device.ClassGUID -ne '{4d36e968-e325-11ce-bfc1-08002be10318}') {
-                        return
-                    }
+                    if (-not (Test-ExoNvidiaDisplayPciNode $device)) { return }
                     $msiSeen++
                     $msiKey = Join-Path $_.PSPath 'Device Parameters\Interrupt Management\MessageSignaledInterruptProperties'
                     $aff = Join-Path $_.PSPath 'Device Parameters\Interrupt Management\Affinity Policy'
-                    $v = (Get-ItemProperty -LiteralPath $msiKey -ErrorAction SilentlyContinue).MSISupported
-                    $priority = (Get-ItemProperty -LiteralPath $aff -ErrorAction SilentlyContinue).DevicePriority
+                    $v = $null
+                    $priority = $null
+                    try { $v = (Get-ItemProperty -LiteralPath $msiKey -ErrorAction SilentlyContinue).MSISupported } catch { }
+                    try { $priority = (Get-ItemProperty -LiteralPath $aff -ErrorAction SilentlyContinue).DevicePriority } catch { }
                     if ($v -ne 1 -or $priority -ne 3) { $msiGaps++ }
                 }
             }
@@ -3246,7 +3270,8 @@ function Test-ExoDriverInstallTweaks {
         if ($msiGaps -eq 0) { [void]$oks.Add("MSI High verified on $msiSeen NVIDIA display device(s)") }
         else { [void]$issues.Add("MSI High missing on $msiGaps of $msiSeen NVIDIA display device(s)") }
     } else {
-        [void]$issues.Add('NVIDIA display-class PCI device was not found for MSI verification')
+        # Soft skip — do not brick the whole Apply after a successful clean driver install.
+        [void]$oks.Add('MSI High skipped (no display PCI Class nodes visible yet — reboot may help)')
     }
 
     # Exo remembered this exact driver version as tweaked
@@ -3425,13 +3450,30 @@ function Start-DriverUpdateIfNeeded {
             Write-Warn "Post-install tweaks: $($_.Exception.Message)"
         }
         if (-not $postTweaks -or -not $postTweaks.Ok) {
-            $gaps = if ($postTweaks) { $postTweaks.Issues -join '; ' } else { 'verification did not run' }
-            Write-Warn "Driver installed, but maximum-performance tweak verification failed: $gaps"
+            $gaps = if ($postTweaks) { @($postTweaks.Issues) -join '; ' } else { 'verification did not run' }
+            # Driver package is already on disk. Soft gaps (MSI Class enum) must not
+            # abort profile import / display prefs — that left users with "failed"
+            # after a successful clean install and a broken-looking UI mid-pipeline.
+            Write-Warn "Driver installed; some performance tweaks not fully verified: $gaps"
+            Write-Warn 'Continuing pipeline (profiles + display). Reboot then Reapply if MSI still soft-skips.'
+            $postWindowsVersion = Get-WindowsDriverVersionString
+            $postNvidiaVersion = Convert-WindowsDriverToNvidia $postWindowsVersion
+            $rebootRequired = [bool]$install.RebootRequired
             return @{
-                Ran = $true; NeedsUpdate = $false; NeedsRetweak = $true; TweaksOk = $false
-                Reason = $reason; CurrentVersion = $currentNv; LatestVersion = $latestVer
-                WindowsVersion = $winVer; DownloadUrl = $dl; Method = 'failed-tweaks'
-                Install = $install; Tweaks = $postTweaks; ContinuePipeline = $false
+                Ran              = $true
+                NeedsUpdate      = $false
+                NeedsRetweak     = $true
+                TweaksOk         = $false
+                Reason           = $reason
+                CurrentVersion   = $(if ($postNvidiaVersion) { $postNvidiaVersion } else { $currentNv })
+                LatestVersion    = $latestVer
+                WindowsVersion   = $(if ($postWindowsVersion) { $postWindowsVersion } else { $winVer })
+                DownloadUrl      = $dl
+                Method           = 'exo-clean-partial-tweaks'
+                Install          = $install
+                Tweaks           = $postTweaks
+                RebootRequired   = $rebootRequired
+                ContinuePipeline = (-not $rebootRequired)
             }
         }
         $postWindowsVersion = Get-WindowsDriverVersionString
@@ -3933,6 +3975,7 @@ try {
         if (-not $driverInfo) { $driverInfo = @{ Ran = $false; NeedsUpdate = $false; TweaksOk = $true; Method = 'none' } }
 
         $method = [string]$driverInfo.Method
+        # exo-clean-partial-tweaks continues (soft MSI gaps after successful install).
         if ($method -in @('failed-clean', 'failed-no-url', 'failed-tweaks')) {
             $driverFailReason = switch ($method) {
                 'failed-no-url' { 'No driver download URL could be resolved for this GPU series (NVIDIA lookup unreachable or blocked).' }
