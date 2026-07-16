@@ -1,269 +1,528 @@
-# Exo Rebuild Program
+# Exo Rebuild Program — Comprehensive Master Plan
 
-**Status:** Active plan (v3.0 track)  
-**Starts from:** v2.6.8 on `main`  
-**Owner:** coordinator agent + human (Erix) for real-machine Apply sign-off  
-**Honest goal:** *production-reliable* aggressive optimizers on any supported PC — not magical “zero risk forever” (impossible), but **no brick, no Exo background footprint, Apply completes, Repair works, UI tells the truth**.
+**Status:** ACTIVE — deep plan (v3.0 track)  
+**Baseline code:** v2.6.8 on `main`  
+**Research corpus:** `docs/rewrite/` (~2,500 lines of module inventories from 4 parallel audits)  
+**Last expanded:** 2026-07-16  
 
----
-
-## 1. Why this plan exists
-
-Recent releases fixed real bricks and honesty bugs, but the product still suffers from:
-
-| Problem | Symptom |
-|---------|---------|
-| God-scripts | `Nvidia-Optimizer.ps1` ~200 KB, Steam ~114 KB — hard to reason about, easy to re-break |
-| Dual truth | Detect vs Apply contracts drift (bindings, Wi‑Fi, display partial) |
-| Soft-skip culture | “Honest fail” and soft-skip can look like the product worked when it didn’t |
-| Verification gap | Smokes prove **script shape + pure logic**, not elevated Apply on real hardware |
-| Agent thrash | Parallel Cursor/Grok PRs ship without a single module contract |
-
-This program **stops thrash**: one architecture, one module at a time, freeze rules, real-PC gate before each release.
+> **Honest goal:** production-reliable aggressive optimizers on any *supported* Windows 10/11 x64 PC.  
+> Not magic "zero risk forever." Risk is driven down via contracts, retries, repair, CI gates, and real-machine sign-off.
 
 ---
 
-## 2. Non-negotiable product rules (ship blockers)
+## Table of contents
 
-1. **Aggressive by design** — do not water down tweaks into “safe mode product” (see `AGENTS.md` / `TWEAK-AUDIT.md`).
-2. **No Exo background footprint** — no Exo scheduled tasks, logon tasks, Run keys, or Exo-named services. Purge leftovers on Apply/Repair.
-3. **Apply must work** — retry, alternate path, then fail loud only if nothing landed. Prefer success over partial theater.
-4. **Deterministic scope** — only the selected app/hardware; no invented registry folklore.
-5. **Repair is real** where we mutate (Internet snapshot; Discord/Steam repair). NVIDIA Reset = status clear only (honest copy forever).
-6. **Detect ≡ Apply contract** — if Apply doesn’t do X, detect must not require X for “applied”.
-7. **Motion** — XAML Storyboards only; never hand-off composition visuals.
-8. **Stack** — .NET 10 + Windows App SDK current; self-contained publish.
+1. [Mission and pain](#1-mission-and-pain)
+2. [Non-negotiable laws](#2-non-negotiable-laws)
+3. [Current system map](#3-current-system-map)
+4. [Target architecture](#4-target-architecture)
+5. [Cross-cutting contracts](#5-cross-cutting-contracts)
+6. [Module deep plans](#6-module-deep-plans)
+7. [Shell and CI deep plan](#7-shell-and-ci-deep-plan)
+8. [Week-by-week schedule](#8-week-by-week-schedule)
+9. [Full PR DAG](#9-full-pr-dag)
+10. [Test and hardware matrix](#10-test-and-hardware-matrix)
+11. [Human sign-off checklist](#11-human-sign-off-checklist)
+12. [Risk register](#12-risk-register)
+13. [Agent working rules](#13-agent-working-rules)
+14. [Definition of done (v3.0)](#14-definition-of-done-v30)
+15. [Research index](#15-research-index)
+16. [Immediate next actions](#16-immediate-next-actions)
 
 ---
 
-## 3. Target architecture (end state)
+## 1. Mission and pain
+
+### 1.1 Product mission
+
+Exo is a **free, no-compromise Windows performance hub**: Internet latency/throughput, Discord, Steam, NVIDIA profiles/display — aggressive, deterministic, local-only (no telemetry).
+
+Users should click **Apply** and get:
+
+- Real tweaks applied (not folklore)
+- App/client still boots
+- Internet still works
+- UI status matches reality
+- **No Exo background tasks/services/startup**
+- Repair when we promise repair
+
+### 1.2 Why users feel pain (mapped to root causes)
+
+| Pain | Root cause (from deep research) |
+|------|----------------------------------|
+| Bricked Internet | Historical Wi-Fi disable / NCSI / winsock; largely fixed 2.6.4-2.6.6; residual NIC advanced-prop risk |
+| "Applied" but red UI | Detect/Apply contract drift (bindings, Wi-Fi, Steam soft-skip, Discord kernel) |
+| Discord will not open | Kernel/ffmpeg/asar after client update |
+| NVIDIA "failed" | Display NVAPI flaky; god-script; Reset is not rollback |
+| Random regressions | 200 KB PS god-files + parallel agents without contracts |
+| CI theater | Smokes = shape/logic; Release can ship without CI green; no GPU Apply |
+
+### 1.3 Strategy: strangle, not big-bang
+
+1. Extract pure C# cores (like NetworkLogic today).  
+2. Split god-scripts into stage libraries.  
+3. One module per PR stack.  
+4. Ship weekly on main.  
+5. Human Apply checklist before releases that touch optimizers.
+
+**Why not rewrite every line in one shot:** that is how you get multi-week dark periods and worse bricks. This plan rewrites *everything that matters*, in order, with proof at each step.
+
+---
+
+## 2. Non-negotiable laws
+
+Ship blockers — any PR that violates is rejected.
+
+| # | Law | Enforcement |
+|---|-----|-------------|
+| L1 | Aggressive by design — no silent safe-mode product | AGENTS.md, TWEAK-AUDIT.md |
+| L2 | No Exo background footprint (tasks/Run/services Exo-*) | Smoke forbids create; purge on Apply |
+| L3 | Apply must work (retry, alternate path, loud fail only if nothing landed) | Module acceptance |
+| L4 | Detect equals Apply contract | Contract smoke tables |
+| L5 | No invented registry folklore | Forbidden marker lists |
+| L6 | Internet: never disable Wi-Fi; never auto winsock; snapshot+rollback | Network.Smoke + golden path |
+| L7 | Discord/Steam: Repair restores bootable client | E2E + human |
+| L8 | NVIDIA Reset = status clear only | UI copy + smoke |
+| L9 | Motion: XAML Storyboards only | Ui.Smoke |
+| L10 | Stack: .NET 10 + WinUI + self-contained | csproj + CI |
+| L11 | Release after CI green + checklist for touched modules | workflow + human |
+| L12 | PowerShell 7+ only for optimizers | Run wrappers |
+
+---
+
+## 3. Current system map
+
+### 3.1 Scale at v2.6.8
+
+| Surface | Approx |
+|---------|--------|
+| C# under Exo/ | ~24k lines, ~80 files |
+| PowerShell Scripts | ~36 scripts, ~700 KB |
+| Largest scripts | Nvidia-Optimizer ~200 KB; Steam-Optimizer ~114 KB |
+| XAML | ~25 views/styles |
+| Smokes | Network, Discord, Steam, Nvidia, Ui |
+| CI | ci.yml build/format/smokes/D-S-Net E2E; release.yml tag push **without CI gate** |
+
+### 3.2 Shared host pipeline
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  WinUI shell (Exo Instrument)                           │
-│  Home · Module plate · Live advisor · Panel (NVIDIA)    │
-└───────────────────────────┬─────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────┐
-│  C# contracts (pure, unit-tested)                       │
-│  *DetectLogic / *ApplyPlan / OptimizerAdvisor           │
-│  Feature rows, path policy, forbidden folklore lists    │
-└───────────────────────────┬─────────────────────────────┘
-                            │ elevates once
-┌───────────────────────────▼─────────────────────────────┐
-│  Thin PS runners (one entry per module)                 │
-│  Invoke plan steps → report EXO_REPORT JSONL            │
-│  No god-files; shared lib: Snapshot, Report, Elevate    │
-└───────────────────────────┬─────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────┐
-│  Proof layer                                            │
-│  Smokes (shape) · Fixture matrix · Optional HW Apply CI │
-│  Human sign-off checklist per release                   │
-└─────────────────────────────────────────────────────────┘
+WinUI Page -> ViewModel
+  |- Refresh -> OptimizerStateService / Network.Probe
+  |     |- C# heuristic (Logic)
+  |     +- PS Detect -> JSON features
+  |- Apply -> PowerShellRunner (UAC) -> Exo-*-Run -> Optimizer
+  |     +- EXO_PROGRESS / EXO_REPORT -> UI
+  +- Repair -> Exo-*-Repair
 ```
 
-**Migration rule:** extract pure logic into C# first (like NetworkLogic today); PS becomes dumb executor. New code never grows the god-scripts.
+### 3.3 Module maturity scorecard
+
+| Module | Maturity | God-file | Brick risk | Honesty risk | Repair |
+|--------|----------|----------|------------|--------------|--------|
+| Internet | Highest | High (builder) | Low post-2.6.6 | Medium (stale strings) | High snapshot |
+| Steam | High | High | Low | High soft-skip applied | High |
+| Discord | Medium | Medium-high | Medium kernel | High | High reinstall |
+| NVIDIA | Medium | Extreme | Medium display | Medium | **None** (status clear) |
+| Shell | Medium | Page dup | Low motion fixed | Advisor v1 thin | n/a |
 
 ---
 
-## 4. Phases (multi-week, sequential)
+## 4. Target architecture
 
-### Phase 0 — Freeze & baseline (1–2 days) ✅ partially done
-
-- [x] Product rules in AGENTS (no bg tasks, Apply must work)
-- [x] Live advisor v1 (`OptimizerAdvisor`)
-- [x] Internet fail-closed defaults (no Wi‑Fi kill, no auto-winsock)
-- [ ] Publish **v2.6.8** release asset green on GitHub
-- [ ] Tag program start; open tracking issue / milestone **v3.0**
-- [ ] Human baseline: one clean PC checklist (see §6) run on current Latest
-
-**Exit:** Latest release = known baseline; program doc on `main`.
-
----
-
-### Phase 1 — Shared engine + contracts (3–5 days)
-
-**PR-1.1 Shared Apply report / snapshot lib (PS + C#)**  
-- Single `EXO_REPORT` schema, single snapshot helpers for Internet (template for others).  
-- Forbidden: Register-ScheduledTask Exo-*, schtasks /Create Exo-*.
-
-**PR-1.2 Module contract tests**  
-- For each module: table of (feature id → detect predicate → apply step → repair step).  
-- Smoke fails if detect requires what apply never writes.
-
-**PR-1.3 CI gate**  
-- Release workflow **requires** CI success (or document manual hold).  
-- `Test-Repository` + all smokes on every PR.
-
-**Exit:** No module can ship detect/apply drift without CI red.
-
----
-
-### Phase 2 — Internet rebuild (template module) (4–7 days)
-
-Internet is already the best-structured (NetworkLogic + script builder). Make it the gold standard.
-
-**PR-2.1** Split `NetworkApplyScriptBuilder` into named step modules (snapshot, host stack, adapters, bindings, probe, rollback, repair).  
-**PR-2.2** Hardware matrix fixtures: Intel/Realtek/Killer Ethernet; Wi‑Fi-only; dual-NIC; VPN present (exclude list).  
-**PR-2.3** Real-machine gate: Apply latency + throughput + Repair on at least 1 Ethernet PC + 1 Wi‑Fi-only PC.  
-**PR-2.4** UI: Internet advisor + live probe metrics polish; no false “Client/LLDP off”.
-
-**Exit:** Internet Apply never disables Wi‑Fi; Repair restores connectivity; smokes + human checklist green.
-
----
-
-### Phase 3 — Steam rebuild (3–5 days)
-
-Steam is already the most reliable optimizer; extract god-script.
-
-**PR-3.1** Pure `SteamLogic` expansion for every detect row.  
-**PR-3.2** Apply steps: startup quiet, launch path, VDF merge, webhelper trim — each with soft-skip only when path **absent**, hard-retry when path **present but write failed**.  
-**PR-3.3** Repair restores stock launch + quiet shell without Exo tasks.  
-**PR-3.4** Real-machine: fresh Steam + existing library PC.
-
-**Exit:** Fresh install Apply succeeds; Repair launches stock Steam.
-
----
-
-### Phase 4 — Discord rebuild (5–8 days)
-
-Highest residual risk (client updates, kernel/ffmpeg).
-
-**PR-4.1** Split kit: Host / Equicord / Kernel / Windows quiet / QoS — separate scripts, one orchestrator.  
-**PR-4.2** Kernel: never leave unbootable Discord — verify boot or auto-disable kernel.  
-**PR-4.3** Repair: signed installer verify before delete (keep).  
-**PR-4.4** Real-machine: Stable install, Apply, Discord update simulation, Repair.
-
-**Exit:** Discord opens after Apply; Repair returns bootable stock.
-
----
-
-### Phase 5 — NVIDIA rebuild (7–12 days)
-
-Hardest: driver surface + no true Repair.
-
-**PR-5.1** Split: profiles (NPI+DRS), display (NvDisplay), debloat, tray, detect.  
-**PR-5.2** Display: retry NVAPI; ensure helper always bundled; multi-monitor matrix.  
-**PR-5.3** UI: NVIDIA Panel remains; optimizer never promises driver rollback.  
-**PR-5.4** Real-machine: desktop + laptop (if available); profile verify + max Hz.
-
-**Exit:** Profiles import + DRS verify; display prefs land or clear error only after retries; no Exo tasks.
-
----
-
-### Phase 6 — Shell UI craft pass (5–8 days)
-
-Not “rewrite every pixel for fun” — **usable, modern, consistent**.
-
-**PR-6.1** Design tokens audit (AMOLED, spacing from `exo-ui-craft`).  
-**PR-6.2** Shared module plate component (header, advisor, features, foot) — kill four copy-pasted pages drift.  
-**PR-6.3** Live advisor v2: step list, progress mapped to EXO_REPORT, “what this PC needs”.  
-**PR-6.4** DPI / fixed-frame strategy decision (scale content vs allow snap sizes).  
-**PR-6.5** Motion: storyboard-only audit; kill remaining `EnableDependentAnimation` risks if any composition creeps back.
-
-**Exit:** One module plate; advisor driven by detect; Ui.Smoke + optional UiPreview click QA.
-
----
-
-### Phase 7 — Hardware Apply matrix & release discipline (ongoing)
-
-| Profile | Internet | Discord | Steam | NVIDIA |
-|---------|----------|---------|-------|--------|
-| Desktop Ethernet + Wi‑Fi | required | required | required | if GPU |
-| Laptop Wi‑Fi only | required | required | optional | notebook path |
-| Dual display NVIDIA | — | — | — | required |
-| Fresh Discord/Steam install | — | required | required | — |
-
-**Release rule:**  
-1. CI green  
-2. All smokes failed=0  
-3. Human checklist §6 signed for changed modules  
-4. Then tag + Release  
-
-**Versioning:**  
-- v2.7.x = Phase 1–2 shippable slices  
-- v2.8.x = Steam/Discord  
-- v2.9.x = NVIDIA  
-- **v3.0.0** = shell craft + all modules on new contracts  
-
----
-
-## 5. What we will *not* do
-
-- Rewrite everything in one PR (guarantees bricks).  
-- Invent registry folklore “for performance”.  
-- Install Exo background tasks “to keep tray clean”.  
-- Call NVIDIA Reset a driver rollback.  
-- Claim zero risk on every PC forever (unsupported hardware always exists).  
-
----
-
-## 6. Human real-machine checklist (every release)
-
-Print / copy for each ship:
+### 4.1 End state layers
 
 ```
-[ ] Install Latest Exo.exe from GitHub (SHA if published)
-[ ] App opens; no flash-close; window draggable
-[ ] Task Scheduler: no Exo-* tasks after Apply
-[ ] Internet: Apply latency → still online; Wi-Fi still works if cable unplugged
-[ ] Internet: Repair restores connectivity
-[ ] Discord: Apply → Discord launches and can log in
-[ ] Discord: Repair → stock Discord launches
-[ ] Steam: Apply → Steam launches
-[ ] Steam: Repair → stock path
-[ ] NVIDIA (if present): Apply → profiles verified in detect; display Hz/color OK or Panel works
-[ ] Live advisor text matches reality (no "Client/LLDP off" lies)
+SHELL (WinUI 3 / .NET 10 / fixed frame)
+  Home | SharedModulePlate | AdvisorV2 | NVIDIA Panel
+           |
+CONTRACTS (pure C#, Linux CI unit tests)
+  FeatureId | DetectResult | ApplyPlan | Forbidden[]
+  NetworkLogic | DiscordLogic | SteamLogic | NvidiaLogic
+           |
+EXECUTORS (thin PS7 + small helpers)
+  one Run.ps1 per module | lib/Step-*.ps1 | no god-files
+  shared: Exo.Report | Exo.Snapshot | Exo.NoTasks
+           |
+PROOF
+  Smokes | Contract tables | Fixture matrix | HW Apply gate
+  Release = CI green + human checklist
+```
+
+### 4.2 Shared libraries to create
+
+| Library | Lang | Responsibility |
+|---------|------|----------------|
+| Exo.Contracts | C# | FeatureId, DetectResult, ApplyPlan, ReportStep |
+| Exo.Report | C#+PS | EXO_REPORT emit/parse, UI rows |
+| Exo.NoBackground | C#+PS | Purge Exo-* tasks/Run; forbidden patterns |
+| Exo.Elevate | C# | Single elevation, progress log, cancel |
+| Scripts/lib/Exo.Common.ps1 | PS | Logging, paths, AppData, PS7 assert |
+
+### 4.3 Target module folder shape
+
+```
+Exo/Modules/<Name>/
+  <Name>Logic.cs
+  <Name>Detect (C# and/or PS)
+  <Name>Apply steps (PS lib)
+  <Name>Repair
+  ViewModel + Page (via SharedModulePlate)
+```
+
+Migrate by adding files first; delete god-script last.
+
+---
+
+## 5. Cross-cutting contracts
+
+### 5.1 EXO_REPORT canonical
+
+```
+EXO_REPORT:<stepId>|<status>|<optional reason>
+status in { ok, fail, skip }
+```
+
+Every Apply step emits a line. Last apply UI uses one schema for all modules.
+
+### 5.2 EXO_PROGRESS
+
+```
+EXO_PROGRESS:<0-100>|<human status>
+```
+
+### 5.3 Feature contract table (per module, checked by smoke)
+
+| featureId | detect predicate | apply stepId(s) | repair stepId(s) | soft-skip when absent? |
+|-----------|------------------|-----------------|------------------|------------------------|
+| (filled per module in research docs) | | | | |
+
+### 5.4 Soft-skip policy
+
+| Situation | Behavior |
+|-----------|----------|
+| Resource absent | skip OK; do **not** mark that feature applied |
+| Resource present, write fails | retry 2-3x then fail feature |
+| Optional enhancement | skip OK if core works; detect must not require optional |
+
+### 5.5 AppData state files
+
+| File | Owner |
+|------|-------|
+| network-snapshot.json | Internet pristine baseline |
+| network-apply-state.json | rollback |
+| network-optimizer.json | preset, report, benchmark |
+| discord-optimizer.json | Discord |
+| steam-optimizer.json | Steam |
+| steam-trim-stats.json | optional |
+| nvidia-optimizer.json | NVIDIA marker/DRS |
+| nvidia-panel-settings.json | Panel |
+| nvidia-display-prefs.json | last display method |
+
+### 5.6 Forbidden (repo-wide smoke)
+
+- Register-ScheduledTask Exo (not Unregister)
+- schtasks /Create Exo
+- Run key to Exo path
+- New-Service Exo*
+- ElementCompositionPreview in motion paths
+- Folklore markers (NetworkLogic.Forbidden + module lists)
+
+---
+
+## 6. Module deep plans
+
+### 6.1 Internet (Phase 2) — TEMPLATE
+
+Full inventory: **docs/rewrite/research-internet.md** (~720 lines)
+
+**Strengths:** fail-closed path; snapshot; NetworkLogic; dense smoke.  
+**Weak:** NetworkApplyScriptBuilder god-file; repair triplicated; detect subset of apply; stale strings; MMCSS snapshot gap.
+
+| WP | Work | Days |
+|----|------|------|
+| I-1 | Split builder: Snapshot, HostStack, Adapters, Bindings, Metrics, Probe, Rollback, Repair, Benchmark | 3-4 |
+| I-2 | RegistryTargets sync all mutations | 1 |
+| I-3 | Detect rows for every user-visible apply class | 2 |
+| I-4 | Kill stale UI strings | 0.5 |
+| I-5 | Fixtures eth/wifi/dual/vpn | 2 |
+| I-6 | Single source Repair-Internet vs BuildRepair | 2 |
+| I-7 | Real-machine R1+R2 | 1 |
+
+**Acceptance:** no Wi-Fi disable; rollback works; Repair no auto winsock; contract 100%; smoke+human green.
+
+---
+
+### 6.2 Steam (Phase 3)
+
+Full inventory: **docs/rewrite/research-discord-steam.md**
+
+**Critical bug:** soft-skip missing config can still set applyStatus=applied while detect incomplete.
+
+| WP | Work | Days |
+|----|------|------|
+| S-1 | Split god-script into Recovery, Startup, Launch, VDF, Debloat, Shader, Trim, Repair | 3-4 |
+| S-2 | Soft-skip != overall applied | 1-2 |
+| S-3 | Expand SteamLogic all rows | 2 |
+| S-4 | Multi-library fixtures | 1 |
+| S-5 | Real-machine fresh + multi-lib | 1 |
+
+**Acceptance:** fresh Apply honest; pins stay steam.exe; Repair stock; no Exo tasks.
+
+---
+
+### 6.3 Discord (Phase 4)
+
+Full inventory: **docs/rewrite/research-discord-steam.md**
+
+**Critical risks:** EXO_SKIP_BOOT_FLASH; kernel soft-skip vs detect; client updates.
+
+| WP | Work | Days |
+|----|------|------|
+| D-1 | Orchestrator only; kit libs own stages | 2 |
+| D-2 | Boot verify always (or disable kernel) | 2 |
+| D-3 | Detect optional proxy vs required version.dll | 1 |
+| D-4 | Update-heal harden | 2 |
+| D-5 | Keep signed installer-before-delete Repair | keep |
+| D-6 | Real-machine update simulation | 1-2 |
+
+**Acceptance:** launches after Apply; never unbootable; Repair stock; smoke+E2E green.
+
+---
+
+### 6.4 NVIDIA (Phase 5)
+
+Full inventory: **docs/rewrite/research-nvidia.md**
+
+**Truth:** Reset clears status only. No Exo logon tasks. Profiles+DRS+display with retries.
+
+| WP | Work | Days |
+|----|------|------|
+| N-1 | Split god-script into stage libs | 5-7 |
+| N-2 | Single DRS classifier | 2 |
+| N-3 | Display bundle+retry+multi-mon | 3 |
+| N-4 | Laptop/Optimus paths | 2 |
+| N-5 | Panel + advisor | 2 |
+| N-6 | Real-machine dual mon | 2 |
+
+**Never automatic:** DDU, full driver reinstall, tray logon task, Reset-as-rollback.
+
+---
+
+### 6.5 Placeholders
+
+Epic / Riot / Brave / Windows — **frozen until v3.0 core modules done.**
+
+---
+
+## 7. Shell and CI deep plan
+
+Full inventory: **docs/rewrite/research-shell-ci.md**
+
+### 7.1 Shell (Phase 6)
+
+| WP | Work | Days |
+|----|------|------|
+| U-1 | Token audit vs exo-ui-craft | 1-2 |
+| U-2 | SharedModulePlate control | 3-4 |
+| U-3 | Migrate 4 pages to plate | 2-3 |
+| U-4 | Advisor v2 from EXO_REPORT | 2-3 |
+| U-5 | DPI strategy | 2-3 |
+| U-6 | Motion + reduced-motion | 1-2 |
+| U-7 | Home metrics honesty | 2 |
+| U-8 | a11y pass | 1-2 |
+
+### 7.2 CI/release (Phase 1)
+
+| WP | Work | Days |
+|----|------|------|
+| C-1 | Release requires CI on same SHA | 0.5-1 |
+| C-2 | Shared contract-table runner | 2 |
+| C-3 | Document NVIDIA HW as manual | 1 |
+| C-4 | Self-hosted GPU runner | backlog |
+
+---
+
+## 8. Week-by-week schedule
+
+| Week | Focus | Ship gate |
+|------|-------|-----------|
+| W0 | Plan+research on main; 2.6.8 release; human baseline | Program live |
+| W1 | C-1, C-2, NoBackground | Phase 1 start |
+| W2 | Internet contract table; builder split start | |
+| W3 | Internet I-1..I-4 | |
+| W4 | Internet fixtures+human | **v2.7.0** |
+| W5 | Steam split | |
+| W6 | Steam honesty | **v2.8.0** |
+| W7 | Discord boot-safe | |
+| W8 | Discord update path | **v2.8.1** |
+| W9-W10 | NVIDIA split | |
+| W11 | NVIDIA display | **v2.9.0** |
+| W12-W13 | Shared plate + advisor v2 | |
+| W14 | DPI, motion, home | **v3.0.0** |
+| W15+ | Stabilize only | bugfix |
+
+~14-16 weeks continuous work to v3.0.
+
+---
+
+## 9. Full PR DAG
+
+```
+PR-D0  docs research + this plan
+  ->
+PR-C1  release requires CI
+  ->
+PR-C2  NoBackground + EXO_REPORT schema
+  ->
+PR-I1  internet builder split
+  ->
+PR-I2  internet contracts + fixtures
+  ->
+PR-I3  internet repair dedupe -> v2.7.0
+  ->
+PR-S1  steam split
+  ->
+PR-S2  steam honesty -> v2.8.0
+  ->
+PR-D1  discord boot-safe
+  ->
+PR-D2  discord detect optional kernel -> v2.8.1
+  ->
+PR-N1  nvidia split
+  ->
+PR-N2  nvidia display reliability -> v2.9.0
+  ->
+PR-U1  SharedModulePlate migrate
+  ->
+PR-U2  advisor v2 + DPI + motion -> v3.0.0
+```
+
+Optional parallel after C2: SharedModulePlate scaffold only (no module behavior).
+
+---
+
+## 10. Test and hardware matrix
+
+### 10.1 Every PR
+
+Test-Repository, Network/Discord/Steam/Nvidia/Ui smokes, CI E2E D/S/Net.
+
+### 10.2 Fixture IDs
+
+F-NET-ETH-INTEL, F-NET-WIFI-ONLY, F-NET-VPN, F-NET-DUAL,  
+F-STM-FRESH, F-STM-MULTI-LIB,  
+F-DSC-STABLE, F-DSC-UPDATE,  
+F-NV-DESKTOP, F-NV-LAPTOP, F-NV-NO-HELPER
+
+### 10.3 Real-machine
+
+| ID | Machine | Modules |
+|----|---------|---------|
+| R1 | Desktop eth+wifi | Internet, NVIDIA |
+| R2 | Laptop wifi-only | Internet |
+| R3 | Discord daily | Discord |
+| R4 | Steam library | Steam |
+| R5 | Dual display NVIDIA | NVIDIA |
+
+---
+
+## 11. Human sign-off checklist
+
+```
+Tag: ____  SHA: ____  Date: ____
+
+[ ] CI green on SHA
+[ ] Smokes failed=0
+[ ] Install Exo.exe; version matches
+[ ] Opens; drag works; no flash-close
+[ ] Task Scheduler: ZERO Exo-* after Apply
+[ ] Internet Apply online; unplug eth, Wi-Fi works
+[ ] Internet Repair works
+[ ] Discord Apply launches; Repair stock
+[ ] Steam Apply launches; Repair stock
+[ ] NVIDIA Apply profiles+display (if GPU)
+[ ] NVIDIA Reset copy = status only
+[ ] Advisor matches missing features
+[ ] Signer: ____
 ```
 
 ---
 
-## 7. Working agreement (agents + human)
+## 12. Risk register
 
-1. **One module (or shared lib) per PR stack** — no mega multi-module thrash.  
-2. **Coordinator** merges/releases only after smokes + checklist.  
-3. **Cursor/Grok** implement against this doc; if conflict with AGENTS, AGENTS wins.  
-4. **Pain stop:** if a release bricks Internet or Discord boot, hotfix within 24h or revert tag.  
+| ID | Risk | Sev | Mitigation |
+|----|------|-----|------------|
+| R-01 | Split re-break | High | Strangle; tests every PR |
+| R-02 | False Internet rollback | Med | DNS anchor; docs |
+| R-03 | Discord kernel brick | High | Boot verify D-2 |
+| R-04 | Steam applied lie | High | S-2 |
+| R-05 | NVIDIA no repair | Acc | Honest UI |
+| R-06 | Release w/o CI | High | C-1 |
+| R-07 | Agent thrash | High | This plan only |
+| R-08 | DPI UI | Med | U-5 |
+| R-09 | Missing NvDisplay | High | Publish verify |
+| R-10 | Enterprise netsh block | Med | skip+reason |
+| R-11 | Parallel random PRs | High | Freeze to DAG |
+| R-12 | Scope creep modules | Med | Freeze placeholders |
 
 ---
 
-## 8. Immediate next actions (this week)
+## 13. Agent working rules
+
+1. Read research-*.md for that module before coding.  
+2. One PR stack = one module or core.  
+3. Update research when architecture changes.  
+4. Never Register-ScheduledTask Exo.  
+5. Executors do not push/release unless authorized.  
+6. Coordinator runs smokes + VERSION/CHANGELOG.  
+7. Internet/Discord boot regression: hotfix or revert 24h.  
+8. Prefer retry-to-success over failure theater.
+
+---
+
+## 14. Definition of done (v3.0)
+
+- [ ] All four modules have contract tables + smokes  
+- [ ] No PS god-file > 80 KB without exception note  
+- [ ] SharedModulePlate on all optimizers  
+- [ ] Advisor v2 from detect + EXO_REPORT  
+- [ ] Release requires CI  
+- [ ] Human checklist R1-R4 done once  
+- [ ] Zero Exo-* tasks after full Apply  
+- [ ] NVIDIA Reset wording audited  
+- [ ] .NET 10 throughout  
+- [ ] README/CHANGELOG honest  
+
+---
+
+## 15. Research index
+
+| Document | Lines | Scope |
+|----------|------:|-------|
+| [rewrite/README.md](rewrite/README.md) | index | Library map |
+| [rewrite/research-internet.md](rewrite/research-internet.md) | ~720 | Mutations, safety, split, fixtures |
+| [rewrite/research-discord-steam.md](rewrite/research-discord-steam.md) | ~620 | Call graphs, soft-skip, repair |
+| [rewrite/research-nvidia.md](rewrite/research-nvidia.md) | ~580 | Stages, NPI/DRS, display, never-auto |
+| [rewrite/research-shell-ci.md](rewrite/research-shell-ci.md) | ~610 | Tokens, motion, CI gaps, plate |
+| [TWEAK-AUDIT.md](TWEAK-AUDIT.md) | — | Tweak keep/exclude |
+| [INTERNET-GOLDEN-PATH.md](INTERNET-GOLDEN-PATH.md) | — | Internet safety narrative |
+| [../AGENTS.md](../AGENTS.md) | — | Product + agent laws |
+
+**Total research + plan:** ~3,000+ lines of rebuild guidance.
+
+---
+
+## 16. Immediate next actions
 
 | # | Action | Owner |
-|---|--------|--------|
-| 1 | Land this doc on `main` | agent |
-| 2 | Finish/fix v2.6.8 GitHub Release if still missing | agent |
-| 3 | Phase 1.1 — shared EXO_REPORT + no-task audit smoke | agent |
-| 4 | Phase 1.2 — Internet detect/apply contract table + tests | agent |
-| 5 | Run §6 checklist on your PC once on Latest | **you** |
+|---|--------|-------|
+| 1 | Land plan + research on main | coordinator (this PR) |
+| 2 | Ensure v2.6.8 release asset published | coordinator |
+| 3 | Start **PR-C1** (release waits for CI) | agent |
+| 4 | Start **PR-C2** (NoBackground + report schema) | agent |
+| 5 | Run section 11 checklist once on Latest | **you (Erix)** |
+| 6 | Then **PR-I1** Internet builder split | agent |
 
 ---
 
-## 9. Key decisions
-
-| Decision | Choice | Why |
-|----------|--------|-----|
-| Full rewrite strategy | **Strangle / extract**, not big-bang rewrite | Keeps app shippable every week |
-| Source of truth for logic | **C# pure cores** + thin PS | Testable on Linux CI; less god-script |
-| Success metric | Apply works + Repair + no Exo bg + detect match | User pain is bricks and lies, not scores |
-| NVIDIA Repair | **Never** claim full rollback | Driver reality; honesty without failure theater |
-| UI rewrite | Shared plate + advisor first | Biggest UX win per line changed |
-
----
-
-## 10. PR Plan (ordered)
-
-1. **docs: REWRITE-PROGRAM** — this file (no behavior change).  
-2. **ci: release waits for CI / harden gates**.  
-3. **core: EXO_REPORT schema + forbidden Exo-task smoke**.  
-4. **internet: split builder + contract tests** (Phase 2 start).  
-5. **internet: fixture matrix + human checklist green → v2.7.0**.  
-6. **steam: extract + retry-on-present** → v2.8.0.  
-7. **discord: split kit + boot verify** → v2.8.x.  
-8. **nvidia: split + display reliability** → v2.9.0.  
-9. **ui: shared module plate + advisor v2** → **v3.0.0**.  
-
----
-
-*Last updated: 2026-07-16 · Track: Exo v3.0 rebuild*
+*Implementation begins at section 16 — not with another multi-module thrash PR.*
