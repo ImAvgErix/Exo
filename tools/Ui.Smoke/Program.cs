@@ -606,9 +606,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.7.0", File.ReadAllText(versionFile).Trim() == "2.7.0");
+    Expect("VERSION is 2.7.1", File.ReadAllText(versionFile).Trim() == "2.7.1");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.7.0", File.ReadAllText(csproj).Contains("<Version>2.7.0</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.7.1", File.ReadAllText(csproj).Contains("<Version>2.7.1</Version>", StringComparison.Ordinal));
 
 // Live advisor (realtime next-step coach on every optimizer)
 var advisorPath = Path.Combine(repo, "Exo", "Services", "OptimizerAdvisor.cs");
@@ -616,6 +616,9 @@ Expect("OptimizerAdvisor exists", File.Exists(advisorPath));
 if (File.Exists(advisorPath))
 {
     var adv = File.ReadAllText(advisorPath);
+    Expect("OptimizerAdvisor v2 BuildV2 present",
+        adv.Contains("BuildV2", StringComparison.Ordinal) &&
+        adv.Contains("CTA:", StringComparison.Ordinal));
     Expect("OptimizerAdvisor no background tasks message",
         adv.Contains("No Exo background tasks", StringComparison.Ordinal));
     Expect("OptimizerAdvisor covers all modules",
@@ -624,6 +627,15 @@ if (File.Exists(advisorPath))
         && adv.Contains("\"Steam\"", StringComparison.Ordinal)
         && adv.Contains("\"NVIDIA\"", StringComparison.Ordinal));
 }
+// Wave-2 shared script libs
+Expect("Exo.Common.ps1 shared lib",
+    File.Exists(Path.Combine(repo, "Exo", "Scripts", "lib", "Exo.Common.ps1")));
+Expect("Exo.NoBackground.ps1 shared lib",
+    File.Exists(Path.Combine(repo, "Exo", "Scripts", "lib", "Exo.NoBackground.ps1")));
+var steamRun = File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Steam", "Exo-Steam-Run.ps1"));
+Expect("Steam Run wires shared libs",
+    steamRun.Contains("Exo.Common.ps1", StringComparison.Ordinal) &&
+    steamRun.Contains("Unregister-ExoBackground", StringComparison.Ordinal));
 foreach (var page in new[] { "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml", "NvidiaOptimizerPage.xaml", "InternetOptimizerPage.xaml" })
 {
     var p = Path.Combine(repo, "Exo", "Views", page);

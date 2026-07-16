@@ -240,12 +240,19 @@ public partial class SteamOptimizerViewModel : ObservableObject
             IsFeatureListVisible = Features.Count > 0;
         LoadApplyReport();
         LoadTrimStats();
-        GuidanceText = OptimizerAdvisor.Build(
+        var failSteps = ApplyReportRows
+            .Where(r => r.Status == "fail")
+            .Select(r => r.Text.Split('·')[0].Trim())
+            .Where(s => s.Length > 0)
+            .Take(4)
+            .ToList();
+        GuidanceText = OptimizerAdvisor.BuildV2(
             "Steam",
             IsApplied,
             StatusText,
             DetailText,
-            Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList());
+            Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList(),
+            failSteps);
         HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
     }
 

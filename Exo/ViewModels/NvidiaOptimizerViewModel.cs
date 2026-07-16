@@ -237,12 +237,13 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         }
         RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
         IsFeatureListVisible = Features.Count > 0;
-        GuidanceText = OptimizerAdvisor.Build(
+        GuidanceText = OptimizerAdvisor.BuildV2(
             "NVIDIA",
             IsApplied,
             StatusText,
             DetailText,
-            Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList());
+            Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList(),
+            reportFailSteps: null);
         HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
     }
 

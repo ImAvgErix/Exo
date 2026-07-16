@@ -294,12 +294,19 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
     private void UpdateGuidance()
     {
-        GuidanceText = OptimizerAdvisor.Build(
+        var failSteps = ApplyReportRows
+            .Where(r => r.Status == "fail")
+            .Select(r => r.Text.Split('·')[0].Trim())
+            .Where(s => s.Length > 0)
+            .Take(4)
+            .ToList();
+        GuidanceText = OptimizerAdvisor.BuildV2(
             "Discord",
             IsApplied,
             StatusText,
             DetailText,
-            Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList());
+            Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList(),
+            failSteps);
         HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
     }
 
