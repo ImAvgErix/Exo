@@ -40,7 +40,7 @@ export function HomePage() {
       id: 'latency',
       label: 'Latency',
       value: `${latencySign}${latencyDelta.toFixed(1)} ms`,
-      meta: `ping p50 ${seed.latencyBeforeP50.toFixed(1)} → ${seed.latencyAfterP50.toFixed(1)} ms`,
+      meta: `ping ${seed.latencyBeforeP50.toFixed(1)} → ${seed.latencyAfterP50.toFixed(1)} ms`,
     },
   ]
 

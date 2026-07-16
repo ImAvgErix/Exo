@@ -149,8 +149,9 @@ public partial class DashboardViewModel : ObservableObject
             var delta = latency.AfterP50Ms - latency.BeforeP50Ms;
             var sign = delta > 0 ? "+" : "";
             LatencyPrimary = $"{sign}{delta:0.0} ms";
+            // Median ping — say "ping", not "p50" (users shouldn't need stats jargon).
             LatencySecondary =
-                $"ping p50 {latency.BeforeP50Ms:0.0} → {latency.AfterP50Ms:0.0} ms";
+                $"ping {latency.BeforeP50Ms:0.0} → {latency.AfterP50Ms:0.0} ms";
         }
 
         RefreshLiveMemory();
