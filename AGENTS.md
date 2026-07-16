@@ -13,7 +13,8 @@ Aggressive must still be deterministic: scope actions to the selected applicatio
 - **Workspace** = full-width **top bar** + content stage that fills the rest of the frame
 - **Navigation** = top glass bar (`NavRail`): EXO left · modules centered · Settings right — **not** WinUI `NavigationView`, **not** a left sidebar
 - **Settings** = gear flyout under the top-bar gear (acrylic/frosted panel — not modal overlay, not a separate settings page)
-- **Home** = instrument plate dashboard: compact Exo mark + tagline + **FPS gain / frame time** heroes + memory + latency + RAM reclaimed + NVIDIA frame path — modules stay in the top bar only; no Detect* probes on home; FPS/frame-time stay `—` until a real capture path ships (do not invent %); other tiles read LocalAppData / live memory; cached so returns do not re-stagger
+- **Home** = four-metric dashboard: **FPS gain · Frame time · RAM reclaimed · Latency** — top-bar EXO control hidden on home (page brand owns it); modules stay in the top bar; no Detect* probes on home; FPS/frame-time stay `—` until capture ships; RAM/latency read LocalAppData; cached so returns do not re-stagger
+- **Top bar** = equal end caps (56px); EXO optically centered when shown; Settings mirrored right
 - **Modules** = one `ExoModulePlate` filling the stage (header + hairline feature list + action foot)
 - **Motion** = short XAML Storyboards only; never Composition Opacity = 0 (blanks UI); no spring bounce on content
 - **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)

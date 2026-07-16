@@ -12,7 +12,8 @@
 
 .settings-sheet {
   position: absolute;
-  top: 84px;
+  /* Align under the gear inside the top-bar end cap (shell pad 10 + bar pad 6). */
+  top: 62px;
   right: 16px;
   z-index: 30;
   width: 300px;

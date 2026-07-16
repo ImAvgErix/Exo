@@ -7,20 +7,21 @@
 .top-bar__pill {
   position: relative;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  /* Equal end caps keep modules truly centered and settings mirrored. */
+  grid-template-columns: 56px 1fr 56px;
   align-items: center;
-  gap: 8px;
   width: 100%;
   min-height: 48px;
-  padding: 6px 8px;
+  padding: 4px 6px;
   border-radius: 14px;
   box-sizing: border-box;
+  column-gap: 0;
 }
 
 .top-bar__liquid {
   position: absolute;
-  top: 6px;
-  width: var(--liquid-w, 52px);
+  top: 4px;
+  width: var(--liquid-w, 48px);
   height: 40px;
   border-radius: 10px;
   pointer-events: none;
@@ -29,10 +30,33 @@
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.14),
     0 1px 0 rgba(255, 255, 255, 0.12) inset;
-  transform: translateX(var(--liquid-x, 8px));
+  transform: translateX(var(--liquid-x, 6px));
   transition:
     transform 280ms var(--ease-out),
-    width 280ms var(--ease-out);
+    width 280ms var(--ease-out),
+    opacity 160ms var(--ease-out);
+}
+
+.top-bar__liquid.is-hidden {
+  opacity: 0;
+}
+
+.top-bar__end {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 40px;
+}
+
+.top-bar__end--left {
+  justify-content: flex-start;
+}
+
+.top-bar__end--right {
+  justify-content: flex-end;
 }
 
 .top-bar__modules {
@@ -41,7 +65,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -84,10 +108,15 @@
 .top-bar__exo {
   position: relative;
   z-index: 1;
+  display: block;
   font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  /* Letter-spacing adds trailing space — nudge so the word sits optically centered. */
+  letter-spacing: 0.12em;
+  padding-left: 0.12em;
+  line-height: 1;
+  text-align: center;
 }
 
 .top-bar__logo {
@@ -99,13 +128,10 @@
   display: block;
 }
 
-.top-bar__gear-btn {
-  width: 44px;
-}
-
 .top-bar__gear {
   position: relative;
   z-index: 1;
+  display: block;
   transition: transform var(--dur) var(--ease-out);
 }
 

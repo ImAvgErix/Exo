@@ -218,6 +218,10 @@ public sealed partial class MainWindow : Window
 
         // Rail shell: settings gear lives on the rail — always visible.
         SettingsButton.Visibility = Visibility.Visible;
+        // EXO home control is redundant on the home page (dashboard brand owns it).
+        NavHome.Visibility = mode == ShellMode.Home
+            ? Visibility.Collapsed
+            : Visibility.Visible;
         // Back only for Nvidia panel → Nvidia optimizer (rail covers other hops).
         BackButton.Visibility = mode == ShellMode.NvidiaPanel
             ? Visibility.Visible
@@ -264,6 +268,16 @@ public sealed partial class MainWindow : Window
 
         foreach (var btn in new[] { NavHome, NavDiscord, NavSteam, NavInternet, NavNvidia })
         {
+            // Home control is collapsed on the dashboard — skip selection chrome there.
+            if (ReferenceEquals(btn, NavHome) && mode == ShellMode.Home)
+            {
+                btn.Background = new SolidColorBrush(Colors.Transparent);
+                btn.BorderBrush = new SolidColorBrush(Colors.Transparent);
+                btn.BorderThickness = new Thickness(0);
+                btn.Opacity = 1.0;
+                continue;
+            }
+
             var on = ReferenceEquals(btn, selected);
             btn.Opacity = on ? 1.0 : 0.52;
             btn.Background = on ? accentSoft : new SolidColorBrush(Colors.Transparent);

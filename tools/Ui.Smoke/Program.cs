@@ -74,6 +74,9 @@ if (File.Exists(main))
     Expect("top bar row layout",
         m.Contains("RowDefinitions", StringComparison.Ordinal)
         && m.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));
+    Expect("top bar equal end caps",
+        m.Contains("Width=\"56\"", StringComparison.Ordinal)
+        && m.Contains("HomeEnd", StringComparison.Ordinal));
     Expect("rail nav home", m.Contains("NavHome", StringComparison.Ordinal));
     Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
@@ -105,6 +108,8 @@ if (File.Exists(mainCs))
     Expect("settings always on rail",
         cs.Contains("SettingsButton.Visibility = Visibility.Visible", StringComparison.Ordinal)
         && !cs.Contains("SettingsButton.Visibility = Visibility.Collapsed", StringComparison.Ordinal));
+    Expect("home hides exo control",
+        cs.Contains("NavHome.Visibility = mode == ShellMode.Home", StringComparison.Ordinal));
     Expect("no titlebar settings text", !cs.Contains("AppTitleText.Text = \"Settings\"", StringComparison.Ordinal));
 }
 if (File.Exists(dash))
@@ -116,7 +121,8 @@ if (File.Exists(dash))
         && (d.Contains("FontSize=\"72\"", StringComparison.Ordinal)
             || d.Contains("FontSize=\"64\"", StringComparison.Ordinal)
             || d.Contains("FontSize=\"56\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"40\"", StringComparison.Ordinal)));
+            || d.Contains("FontSize=\"40\"", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"36\"", StringComparison.Ordinal)));
     Expect("hero tagline",
         d.Contains("HeroTagline", StringComparison.Ordinal)
         && d.Contains("Maximum performance", StringComparison.Ordinal));
@@ -127,18 +133,19 @@ if (File.Exists(dash))
     Expect("home frame time hero",
         d.Contains("FRAME TIME", StringComparison.Ordinal)
         && d.Contains("FrameTimePrimary", StringComparison.Ordinal));
-    Expect("home live memory tile",
-        d.Contains("MEMORY", StringComparison.Ordinal)
-        && d.Contains("MemoryPrimary", StringComparison.Ordinal));
     Expect("home latency tile",
         d.Contains("LATENCY", StringComparison.Ordinal)
         && d.Contains("LatencyPrimary", StringComparison.Ordinal));
     Expect("home ram reclaim tile",
         d.Contains("RAM RECLAIMED", StringComparison.Ordinal)
         && d.Contains("ReclaimedPrimary", StringComparison.Ordinal));
-    Expect("home frame path tile",
-        d.Contains("FRAME PATH", StringComparison.Ordinal)
-        && d.Contains("NvidiaPathPrimary", StringComparison.Ordinal));
+    Expect("home four-metric dashboard",
+        d.Contains("FPS GAIN", StringComparison.Ordinal)
+        && d.Contains("FRAME TIME", StringComparison.Ordinal)
+        && d.Contains("RAM RECLAIMED", StringComparison.Ordinal)
+        && d.Contains("LATENCY", StringComparison.Ordinal)
+        && !d.Contains("MEMORY", StringComparison.Ordinal)
+        && !d.Contains("FRAME PATH", StringComparison.Ordinal));
     Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("no fixed product cards",
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)

@@ -8,12 +8,11 @@ namespace Exo.Views;
 
 /// <summary>
 /// Home performance dashboard under the top bar. Soft entrance on first load;
-/// cached so Back does not rebuild/re-stagger. Live memory ticks while visible.
+/// cached so Back does not rebuild/re-stagger.
 /// </summary>
 public sealed partial class DashboardPage : Page
 {
     private CancellationTokenSource? _refreshCts;
-    private DispatcherTimer? _memoryTimer;
     private bool _entrancePlayed;
     private bool _entranceRunning;
     private int _entranceGen;
@@ -32,17 +31,15 @@ public sealed partial class DashboardPage : Page
     private void Page_Loaded(object sender, RoutedEventArgs e)
     {
         StabilizeHome();
-        StartMemoryTimer();
         _ = TryPlayEntranceAsync();
     }
 
-    private void Page_Unloaded(object sender, RoutedEventArgs e) => StopMemoryTimer();
+    private void Page_Unloaded(object sender, RoutedEventArgs e) { }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         StabilizeHome();
-        StartMemoryTimer();
 
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
@@ -55,32 +52,12 @@ public sealed partial class DashboardPage : Page
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
-        StopMemoryTimer();
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
         _refreshCts = null;
         _entranceGen++;
         StabilizeHome();
         base.OnNavigatedFrom(e);
-    }
-
-    private void StartMemoryTimer()
-    {
-        if (_memoryTimer is not null) return;
-        _memoryTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-        _memoryTimer.Tick += (_, _) =>
-        {
-            try { ViewModel.RefreshLiveMemory(); }
-            catch { }
-        };
-        _memoryTimer.Start();
-    }
-
-    private void StopMemoryTimer()
-    {
-        if (_memoryTimer is null) return;
-        _memoryTimer.Stop();
-        _memoryTimer = null;
     }
 
     private void StabilizeHome()

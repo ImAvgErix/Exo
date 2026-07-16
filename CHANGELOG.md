@@ -1,7 +1,8 @@
 ## 2.6.0
 
 - **UI — Exo Instrument**: full-width top bar (EXO · icon modules · Settings) with content filling the frame below; one edge-glass module plate
-- **UI — home dashboard**: FPS gain + frame-time heroes (empty until capture ships) + memory + latency + RAM reclaimed + NVIDIA frame path; modules stay in the top bar
+- **UI — home dashboard**: four metrics — FPS gain, frame time, RAM reclaimed, latency (FPS empty until capture ships)
+- **UI — top bar polish**: equal end caps; EXO hidden on home; EXO text optically centered when shown; Settings alignment fixed
 - **UI — Steam mark**: keep the real Steam piston mark in the top bar (no custom glyph)
 - **UI — one system**: feature rows = status rail + Applied/Not applied only; primary = solid accent; secondary = quiet glass
 - **UI — denser chrome**: tighter top bar / plate / action foot; dropped unused preview chips/strips

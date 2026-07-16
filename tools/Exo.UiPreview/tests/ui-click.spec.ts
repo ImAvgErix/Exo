@@ -7,15 +7,18 @@ test('Exo UI preview click navigation', async ({ page }) => {
   await expect(page.getByTestId('page-home')).toBeVisible()
   await expect(page.getByTestId('hero-brand')).toHaveText('Exo')
   await expect(page.getByTestId('hero-tagline')).toBeVisible()
+  // On home the top-bar EXO control is hidden (page brand owns it).
+  await expect(page.getByTestId('nav-home')).toHaveCount(0)
   await expect(page.getByTestId('home-frame')).toBeVisible()
   await expect(page.getByTestId('home-fps')).toBeVisible()
   await expect(page.getByTestId('home-frametime')).toBeVisible()
-  await expect(page.getByTestId('home-stats')).toBeVisible()
-  await expect(page.getByTestId('home-stat-path')).toBeVisible()
+  await expect(page.getByTestId('home-stat-ram')).toBeVisible()
+  await expect(page.getByTestId('home-stat-latency')).toBeVisible()
   await expect(page.getByTestId('card-windows')).toBeVisible()
 
   await page.getByTestId('nav-discord').click()
   await expect(page.getByTestId('page-discord')).toBeVisible()
+  await expect(page.getByTestId('nav-home')).toBeVisible()
   await expect(page.getByTestId('btn-apply')).toBeVisible()
   await page.getByTestId('btn-apply').click()
   await expect(page.getByTestId('action-message')).toBeVisible()
@@ -43,6 +46,7 @@ test('Exo UI preview click navigation', async ({ page }) => {
 
   await page.getByTestId('nav-home').click()
   await expect(page.getByTestId('page-home')).toBeVisible()
+  await expect(page.getByTestId('nav-home')).toHaveCount(0)
   await expect(page.getByTestId('home-fps')).toBeVisible()
 
   await page.getByTestId('nav-settings').click()

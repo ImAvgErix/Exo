@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { directoryCards, homeDashboardSeed } from '../data/mock'
 import './HomePage.css'
 
@@ -19,27 +18,10 @@ export function HomePage() {
   const soon = directoryCards.filter((c) => c.comingSoon)
   const seed = homeDashboardSeed
 
-  const [memoryUsed, setMemoryUsed] = useState(seed.memoryUsedBytes)
-  const memoryLoad = Math.round((memoryUsed / seed.memoryTotalBytes) * 100)
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setMemoryUsed((prev) => {
-        const drift = (Math.random() - 0.5) * (24 << 20)
-        return Math.max(
-          seed.memoryTotalBytes * 0.35,
-          Math.min(seed.memoryTotalBytes * 0.92, prev + drift),
-        )
-      })
-    }, 2000)
-    return () => window.clearInterval(id)
-  }, [seed.memoryTotalBytes])
-
   const heroBytes =
     seed.trimLast24hBytes > 0 ? seed.trimLast24hBytes : seed.trimTotalBytes
   const latencyDelta = seed.latencyAfterP50 - seed.latencyBeforeP50
   const latencySign = latencyDelta > 0 ? '+' : ''
-  // Invert frame times so lower (smoother) bars read taller.
   const sparks = sparkHeights(
     seed.frameTimeSeriesMs.map((ms) => 1 / Math.max(0.1, ms)),
   )
@@ -92,14 +74,13 @@ export function HomePage() {
         </div>
 
         <div className="home-stats stagger-child" data-testid="home-stats">
-          <article className="home-stat" data-testid="home-stat-memory">
-            <p className="home-plate__section">Memory</p>
-            <div className="home-stat__row">
-              <span className="home-stat__value">{formatBytes(memoryUsed)}</span>
-              <span className="home-stat__badge">{memoryLoad}%</span>
-            </div>
+          <article className="home-stat" data-testid="home-stat-ram">
+            <p className="home-plate__section">RAM reclaimed</p>
+            <div className="home-stat__value">{formatBytes(heroBytes)}</div>
             <p className="home-stat__meta">
-              in use · {formatBytes(seed.memoryTotalBytes)} total
+              {seed.trimLast24hBytes > 0
+                ? `last 24 h · ${formatBytes(seed.trimTotalBytes)} total`
+                : 'total reclaimed'}
             </p>
           </article>
 
@@ -113,22 +94,6 @@ export function HomePage() {
               ping p50 {seed.latencyBeforeP50.toFixed(1)} →{' '}
               {seed.latencyAfterP50.toFixed(1)} ms
             </p>
-          </article>
-
-          <article className="home-stat" data-testid="home-stat-ram">
-            <p className="home-plate__section">RAM reclaimed</p>
-            <div className="home-stat__value">{formatBytes(heroBytes)}</div>
-            <p className="home-stat__meta">
-              {seed.trimLast24hBytes > 0
-                ? `last 24 h · ${formatBytes(seed.trimTotalBytes)} total`
-                : 'total reclaimed'}
-            </p>
-          </article>
-
-          <article className="home-stat" data-testid="home-stat-path">
-            <p className="home-plate__section">Frame path</p>
-            <div className="home-stat__value">{seed.nvidiaPath}</div>
-            <p className="home-stat__meta">{seed.nvidiaPathDetail}</p>
           </article>
         </div>
 

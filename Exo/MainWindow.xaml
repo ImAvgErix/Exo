@@ -37,32 +37,43 @@
                         VerticalAlignment="Top"
                         Height="16"
                         Opacity="0.7" />
-                <Grid ColumnSpacing="8">
+                <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="56" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="56" />
                     </Grid.ColumnDefinitions>
 
-                    <Button x:Name="NavHome"
-                            Style="{StaticResource ExoRailButton}"
-                            AutomationProperties.Name="Home"
-                            Click="NavHome_Click"
-                            Width="64"
-                            Height="40"
-                            HorizontalAlignment="Left">
-                        <TextBlock Text="EXO"
-                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                   FontSize="12"
-                                   FontWeight="Bold"
-                                   CharacterSpacing="120"
-                                   Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                                   HorizontalAlignment="Center" />
-                    </Button>
+                    <!-- Equal end caps. EXO is hidden on home (page brand owns it). -->
+                    <Grid x:Name="HomeEnd"
+                          Width="56"
+                          Height="40"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Center">
+                        <Button x:Name="NavHome"
+                                Style="{StaticResource ExoRailButton}"
+                                AutomationProperties.Name="Home"
+                                Click="NavHome_Click"
+                                Width="48"
+                                Height="40"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center">
+                            <!-- CharacterSpacing trails right; slight left pad keeps EXO optically centered. -->
+                            <TextBlock Text="EXO"
+                                       FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                       FontSize="12"
+                                       FontWeight="Bold"
+                                       CharacterSpacing="120"
+                                       Margin="6,0,0,0"
+                                       Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
 
                     <StackPanel Grid.Column="1"
                                 Orientation="Horizontal"
-                                Spacing="4"
+                                Spacing="2"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center">
                         <Button x:Name="NavDiscord"
@@ -126,10 +137,13 @@
                             Click="SettingsButton_Click"
                             Width="48"
                             Height="40"
-                            HorizontalAlignment="Right">
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center">
                         <FontIcon x:Name="SettingsGearIcon"
                                   Glyph="&#xE713;"
                                   FontSize="15"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
                                   RenderTransformOrigin="0.5,0.5">
                             <FontIcon.RenderTransform>
                                 <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
