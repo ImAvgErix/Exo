@@ -1,14 +1,15 @@
 .feature-row {
   display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: 3px 28px 1fr;
   align-items: center;
-  column-gap: 10px;
-  min-height: 50px;
-  padding: 9px 12px;
+  column-gap: 12px;
+  min-height: 52px;
+  padding: 10px 14px;
   border-radius: 14px;
   transition:
     background-color var(--dur) var(--ease-out),
-    box-shadow var(--dur) var(--ease-out);
+    box-shadow var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
 }
 
 .feature-row:hover {
@@ -17,35 +18,26 @@
 
 .feature-row.is-applied {
   background: rgba(52, 211, 153, 0.07);
+  border-color: rgba(52, 211, 153, 0.22);
 }
 
-.feature-row__check {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--exo-success);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--glass-rim-soft);
+.feature-row__rail {
+  align-self: stretch;
+  width: 3px;
+  min-height: 28px;
+  border-radius: 999px;
+  background: var(--exo-muted);
+  opacity: 0.35;
   transition:
     background-color var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out),
+    opacity var(--dur) var(--ease-out),
     box-shadow var(--dur) var(--ease-out);
 }
 
-.feature-row.is-applied .feature-row__check {
-  background: rgba(52, 211, 153, 0.16);
-  border-color: rgba(52, 211, 153, 0.4);
-  box-shadow: 0 0 12px rgba(52, 211, 153, 0.2);
-}
-
-.feature-row__ring {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  border: 1.5px solid var(--exo-muted);
-  opacity: 0.5;
+.feature-row.is-applied .feature-row__rail {
+  background: var(--exo-success);
+  opacity: 1;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.45);
 }
 
 .feature-row__icon {
@@ -75,4 +67,8 @@
   line-height: 14px;
   color: var(--exo-muted);
   margin-top: 1px;
+}
+
+.feature-row.is-applied .feature-row__detail {
+  color: rgba(167, 243, 208, 0.85);
 }

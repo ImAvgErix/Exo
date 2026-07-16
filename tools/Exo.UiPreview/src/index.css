@@ -332,19 +332,22 @@ img {
 }
 
 .btn-white {
-  min-height: 46px;
-  padding: 12px 22px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #0a0a0a;
-  border-color: rgba(255, 255, 255, 0.35);
+  /* Alias of btn-primary — prefer btn-primary at call sites */
+  min-height: 44px;
+  padding: 11px 28px;
+  background: var(--exo-accent);
+  color: var(--exo-on-accent);
+  border-color: rgba(255, 255, 255, 0.25);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.55) inset,
-    0 6px 18px rgba(0, 0, 0, 0.3);
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 6px 20px rgba(0, 0, 0, 0.35);
   border-radius: var(--radius-pill);
 }
 
 .btn-white:hover {
-  background: #fff;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.5) inset,
+    0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .btn-white:active {

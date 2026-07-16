@@ -59,8 +59,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 12px;
-  border-radius: 16px;
+  min-height: 50px;
+  padding: 9px 12px;
+  border-radius: 14px;
   flex-shrink: 0;
 }
 
@@ -108,7 +109,7 @@
 .module-page__features {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 10px;
   flex: 1;
   padding-bottom: 4px;
 }

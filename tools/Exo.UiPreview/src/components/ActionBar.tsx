@@ -40,7 +40,7 @@ export function ActionBar({
           <div className="action-island__dual">
             <button
               type="button"
-              className="btn btn-white"
+              className="btn btn-primary"
               data-testid="btn-low-latency"
               onClick={onLatency}
             >
@@ -48,7 +48,7 @@ export function ActionBar({
             </button>
             <button
               type="button"
-              className="btn btn-white"
+              className="btn btn-primary"
               data-testid="btn-highest-download"
               onClick={onThroughput}
             >
@@ -56,10 +56,10 @@ export function ActionBar({
             </button>
           </div>
         ) : variant === 'panel' ? (
-          <div className="action-island__panel-row">
+          <div className="action-island__secondary">
             <button
               type="button"
-              className="btn btn-ghost action-island__grow"
+              className="btn btn-ghost"
               data-testid="btn-open-cpl"
               onClick={onOpenCpl}
             >

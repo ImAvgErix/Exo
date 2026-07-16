@@ -63,36 +63,37 @@ export const navItems: { id: ModuleId; label: string; logo: string }[] = [
   { id: 'nvidia', label: 'GPU', logo: '/logos/nvidia.png' },
 ]
 
+/* Icon wells are decorative only — never ✓/status glyphs. Status = rail + Applied/Not applied. */
 const discordFeatures: FeatureItem[] = [
-  { id: 'equicord', title: 'Equicord', detail: 'Not applied', applied: false, icon: '◈' },
-  { id: 'exohost', title: 'Exo Host', detail: 'Not applied', applied: false, icon: '◈' },
-  { id: 'kernel', title: 'RAM / latency kernel', detail: 'Not applied', applied: false, icon: '◈' },
-  { id: 'debloat', title: 'Client debloat', detail: 'Applied', applied: true, icon: '✓' },
-  { id: 'amoled', title: 'AMOLED theme', detail: 'Not applied', applied: false, icon: '◈' },
-  { id: 'quiet', title: 'Windows quiet', detail: 'Applied', applied: true, icon: '✓' },
+  { id: 'equicord', title: 'Equicord', detail: 'Client strip + host', applied: false, icon: '◈' },
+  { id: 'exohost', title: 'Exo Host', detail: 'Overlay host process', applied: false, icon: '◈' },
+  { id: 'kernel', title: 'RAM / latency kernel', detail: 'Working set trim', applied: false, icon: '◈' },
+  { id: 'debloat', title: 'Client debloat', detail: 'Telemetry + bloat', applied: true, icon: '◈' },
+  { id: 'amoled', title: 'AMOLED theme', detail: 'Pure black client', applied: false, icon: '◈' },
+  { id: 'quiet', title: 'Windows quiet', detail: 'Background hush', applied: true, icon: '◈' },
 ]
 
 const steamFeatures: FeatureItem[] = [
-  { id: 'startup', title: 'Startup quiet', detail: 'Applied', applied: true, icon: '✓' },
-  { id: 'cef', title: 'CEF launcher', detail: 'Not applied', applied: false, icon: '◈' },
-  { id: 'cache', title: 'Cache / download', detail: 'Not applied', applied: false, icon: '◈' },
-  { id: 'client', title: 'Client tweaks', detail: 'Applied', applied: true, icon: '✓' },
-  { id: 'webhelper', title: 'WebHelper trim', detail: 'Not applied', applied: false, icon: '◈' },
+  { id: 'startup', title: 'Startup quiet', detail: 'Boot services', applied: true, icon: '◈' },
+  { id: 'cef', title: 'CEF launcher', detail: 'Chromium flags', applied: false, icon: '◈' },
+  { id: 'cache', title: 'Cache / download', detail: 'Shader + depot', applied: false, icon: '◈' },
+  { id: 'client', title: 'Client tweaks', detail: 'UI + overlay', applied: true, icon: '◈' },
+  { id: 'webhelper', title: 'WebHelper trim', detail: 'Helper process', applied: false, icon: '◈' },
 ]
 
 const internetFeatures: FeatureItem[] = [
-  { id: 'tcp', title: 'TCP stack', detail: 'Not applied', applied: false, icon: '◈' },
-  { id: 'nagle', title: 'Nagle / delayed ACK', detail: 'Not applied', applied: false, icon: '◈' },
-  { id: 'qos', title: 'QoS / priority', detail: 'Applied', applied: true, icon: '✓' },
-  { id: 'dns', title: 'DNS cache', detail: 'Not applied', applied: false, icon: '◈' },
-  { id: 'adapter', title: 'Adapter power', detail: 'Applied', applied: true, icon: '✓' },
+  { id: 'tcp', title: 'TCP stack', detail: 'Window + autotune', applied: false, icon: '◈' },
+  { id: 'nagle', title: 'Nagle / delayed ACK', detail: 'Latency stack', applied: false, icon: '◈' },
+  { id: 'qos', title: 'QoS / priority', detail: 'DSCP + throttle', applied: true, icon: '◈' },
+  { id: 'dns', title: 'DNS cache', detail: 'Resolver flush', applied: false, icon: '◈' },
+  { id: 'adapter', title: 'Adapter power', detail: 'NIC power save', applied: true, icon: '◈' },
 ]
 
 const nvidiaFeatures: FeatureItem[] = [
-  { id: 'msi', title: 'Driver / MSI', detail: 'Not applied', applied: false, icon: '◈' },
-  { id: 'profiles', title: '3D profiles', detail: 'Not applied', applied: false, icon: '◈' },
-  { id: 'debloat', title: 'Debloat', detail: 'Applied', applied: true, icon: '✓' },
-  { id: 'display', title: 'Display prefs', detail: 'Not applied', applied: false, icon: '◈' },
+  { id: 'msi', title: 'Driver / MSI', detail: 'Interrupt mode', applied: false, icon: '◈' },
+  { id: 'profiles', title: '3D profiles', detail: 'Global + per-game', applied: false, icon: '◈' },
+  { id: 'debloat', title: 'Debloat', detail: 'Telemetry strip', applied: true, icon: '◈' },
+  { id: 'display', title: 'Display prefs', detail: 'Color + scaling', applied: false, icon: '◈' },
 ]
 
 export const modules: Record<ModuleId, ModuleData> = {

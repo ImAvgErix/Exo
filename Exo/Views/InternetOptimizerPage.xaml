@@ -9,7 +9,7 @@
 
     <!--
       Module craft surface: header zone + feature list + sticky instrument bar.
-      Dual ExoWhiteButton CTAs (Low latency / Highest download); proof layer binds preserved.
+      Dual primary CTAs (Low latency / Highest download) via ExoWhiteButton→ExoPrimaryButton; quiet secondaries.
     -->
     <Grid>
         <Grid.RowDefinitions>
@@ -137,7 +137,7 @@
                     </ScrollViewer>
                 </StackPanel>
 
-                <!-- Dual primary white CTAs -->
+                <!-- Dual primary CTAs (same role as Apply elsewhere) -->
                 <Grid ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />

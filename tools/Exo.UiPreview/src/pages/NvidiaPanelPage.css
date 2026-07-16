@@ -12,7 +12,7 @@
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   max-width: 920px;
   width: 100%;
   box-sizing: border-box;

@@ -378,10 +378,11 @@
         </Setter>
     </Style>
 
+    <!-- Secondary glass actions — Repair / Reset / Refresh / CPL (never solid white) -->
     <Style x:Key="ExoQuietButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFontMedium}" />
         <Setter Property="Padding" Value="14,9" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="MinHeight" Value="40" />
@@ -494,73 +495,8 @@
         <Setter Property="Margin" Value="0,4,0,0" />
     </Style>
 
-    <Style x:Key="ExoWhiteButton" TargetType="Button" BasedOn="{StaticResource ExoQuietButton}">
-        <Setter Property="Background" Value="#FFFFFF" />
-        <Setter Property="BorderBrush" Value="#FFFFFF" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Foreground" Value="#0A0A0A" />
-        <Setter Property="MinHeight" Value="46" />
-        <Setter Property="Padding" Value="20,13" />
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Grid x:Name="Root"
-                          UseLayoutRounding="True"
-                          Background="#FFFFFF"
-                          CornerRadius="{TemplateBinding CornerRadius}">
-                        <Border x:Name="HoverWash"
-                                Background="#000000"
-                                CornerRadius="{TemplateBinding CornerRadius}"
-                                Opacity="0"
-                                IsHitTestVisible="False" />
-                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                          Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          Padding="{TemplateBinding Padding}"
-                                          Foreground="{TemplateBinding Foreground}" />
-                        <VisualStateManager.VisualStateGroups>
-                            <VisualStateGroup x:Name="CommonStates">
-                                <VisualState x:Name="Normal">
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity"
-                                                         To="0" Duration="0:0:0.14">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                    </Storyboard>
-                                </VisualState>
-                                <VisualState x:Name="PointerOver">
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity"
-                                                         To="0.06" Duration="0:0:0.14">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                    </Storyboard>
-                                </VisualState>
-                                <VisualState x:Name="Pressed">
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity"
-                                                         To="0.12" Duration="0:0:0.08" />
-                                    </Storyboard>
-                                </VisualState>
-                                <VisualState x:Name="Disabled">
-                                    <VisualState.Setters>
-                                        <Setter Target="Root.Opacity" Value="0.45" />
-                                        <Setter Target="HoverWash.Opacity" Value="0" />
-                                    </VisualState.Setters>
-                                </VisualState>
-                            </VisualStateGroup>
-                        </VisualStateManager.VisualStateGroups>
-                    </Grid>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
+    <!-- Alias for Internet dual CTAs — identical role to ExoPrimaryButton -->
+    <Style x:Key="ExoWhiteButton" TargetType="Button" BasedOn="{StaticResource ExoPrimaryButton}" />
 
     <!--
       Home cards: logos/labels stay sharp (no scale).

@@ -59,8 +59,8 @@
 }
 
 .floating-dock__liquid.is-gear {
-  height: 48px;
-  border-radius: 16px;
+  height: 52px;
+  border-radius: 18px;
 }
 
 .floating-dock__blob {
@@ -162,7 +162,7 @@
 }
 
 .floating-dock__gear-btn {
-  height: 48px;
+  height: 52px;
 }
 
 .floating-dock__gear {

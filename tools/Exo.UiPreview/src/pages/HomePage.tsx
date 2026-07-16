@@ -37,7 +37,7 @@ export function HomePage({ onOpen }: HomePageProps) {
           <button
             key={card.id}
             type="button"
-            className="home-orb glass glass--mid"
+            className="home-orb glass glass--soft"
             data-testid={`card-${card.id}`}
             role="listitem"
             onClick={() => handleCard(card)}
@@ -54,7 +54,6 @@ export function HomePage({ onOpen }: HomePageProps) {
               />
             </span>
             <span className="home-orb__title">{card.title}</span>
-            <span className="home-orb__hint">Open</span>
           </button>
         ))}
       </div>

@@ -157,7 +157,7 @@
 
 .home-orb {
   flex: 0 0 164px;
-  height: 188px;
+  height: 172px;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
@@ -232,17 +232,6 @@
   letter-spacing: -0.02em;
 }
 
-.home-orb__hint {
-  position: relative;
-  z-index: 1;
-  font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--exo-muted);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
 .home-page__soon {
   display: flex;
   flex-direction: column;
@@ -292,9 +281,4 @@
 
 .theme-light .home-page__brand {
   text-shadow: none;
-}
-
-.theme-light .home-orb__icon {
-  background: rgba(255, 255, 255, 0.55);
-  border-color: rgba(61, 52, 41, 0.14);
 }

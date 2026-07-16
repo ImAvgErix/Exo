@@ -6,7 +6,7 @@ interface StatusCapsuleProps {
 }
 
 export function StatusCapsule({ applied, label }: StatusCapsuleProps) {
-  const text = label ?? (applied ? 'Applied' : 'Open')
+  const text = label ?? (applied ? 'Applied' : 'Not applied')
   return (
     <span
       className={`status-capsule ${applied ? 'is-applied' : ''}`}

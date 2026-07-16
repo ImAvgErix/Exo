@@ -36,9 +36,9 @@ export function ModulePage({ module, onOpenDisplayPanel }: ModulePageProps) {
           <StatusCapsule
             applied={allApplied || statusTitle === 'Applied'}
             label={
-              statusTitle === 'Applied'
+              allApplied || statusTitle === 'Applied'
                 ? 'Applied'
-                : `${appliedCount}/${module.features.length}`
+                : `${appliedCount}/${module.features.length} applied`
             }
           />
         </header>
