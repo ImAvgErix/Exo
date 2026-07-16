@@ -51,10 +51,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-width: 52px;
+  width: 48px;
   height: 44px;
-  padding: 0 14px;
+  padding: 0;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -100,23 +99,8 @@
   display: block;
 }
 
-.top-bar__label {
-  position: relative;
-  z-index: 1;
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--exo-secondary);
-}
-
-.top-bar__blob.is-active .top-bar__label {
-  color: var(--exo-text);
-}
-
 .top-bar__gear-btn {
-  min-width: 44px;
-  padding: 0 12px;
+  width: 44px;
 }
 
 .top-bar__gear {

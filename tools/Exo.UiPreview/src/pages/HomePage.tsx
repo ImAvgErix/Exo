@@ -1,18 +1,9 @@
-import type { DirectoryCard, ModuleId } from '../data/mock'
+import type { ModuleId } from '../data/mock'
 import { directoryCards } from '../data/mock'
 import './HomePage.css'
 
-interface HomePageProps {
-  onOpen: (id: ModuleId) => void
-}
-
-export function HomePage({ onOpen }: HomePageProps) {
-  const handleCard = (card: DirectoryCard) => {
-    if (card.comingSoon) return
-    onOpen(card.id as ModuleId)
-  }
-
-  const live = directoryCards.filter((c) => !c.comingSoon)
+/** Live modules are opened from the top bar — home is brand + coming soon only. */
+export function HomePage(_props: { onOpen: (id: ModuleId) => void }) {
   const soon = directoryCards.filter((c) => c.comingSoon)
 
   return (
@@ -25,31 +16,6 @@ export function HomePage({ onOpen }: HomePageProps) {
           Maximum performance. No compromise.
         </p>
       </header>
-
-      <div className="home-page__rack stagger-child" role="list">
-        <div className="home-blade glass">
-          {live.map((card, index) => (
-            <button
-              key={card.id}
-              type="button"
-              className={`home-blade__seg ${index > 0 ? 'has-divider' : ''}`}
-              data-testid={`card-${card.id}`}
-              role="listitem"
-              onClick={() => handleCard(card)}
-            >
-              <img
-                src={card.logo}
-                alt=""
-                width={28}
-                height={28}
-                className="home-blade__logo"
-                draggable={false}
-              />
-              <span className="home-blade__title">{card.title}</span>
-            </button>
-          ))}
-        </div>
-      </div>
 
       <p className="home-page__soon stagger-child">
         <span className="home-page__soon-label">Coming soon</span>

@@ -110,7 +110,7 @@ if (File.Exists(mainCs))
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    // v2.6 instrument home: huge Exo mark + blade strip (not App Library orbs / directory stack).
+    // v2.6 brand-only home — live modules live in the top bar (no duplicate Discord/Steam strip).
     Expect("hero brand",
         d.Contains("HeroBrand", StringComparison.Ordinal)
         && (d.Contains("FontSize=\"72\"", StringComparison.Ordinal)
@@ -124,15 +124,13 @@ if (File.Exists(dash))
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)
         && !d.Contains("Width=\"250\"", StringComparison.Ordinal)
         && !d.Contains("Height=\"148\"", StringComparison.Ordinal));
-    Expect("blade strip home",
-        d.Contains("BladeStrip", StringComparison.Ordinal)
-        || d.Contains("LiveCards", StringComparison.Ordinal)
-        || d.Contains("UniformGrid", StringComparison.Ordinal));
-    Expect("blade uses card buttons", d.Contains("ExoCardButton", StringComparison.Ordinal));
-    Expect("stretch uniform logos", d.Contains("Stretch=\"Uniform\"", StringComparison.Ordinal));
-    Expect("directory title labels",
-        d.Contains("Text=\"{x:Bind Definition.Title", StringComparison.Ordinal)
-        && d.Contains("AutomationProperties.Name=\"{x:Bind Definition.Title}", StringComparison.Ordinal));
+    Expect("no duplicate live module strip",
+        !d.Contains("BladeStrip", StringComparison.Ordinal)
+        && !d.Contains("LiveCards", StringComparison.Ordinal)
+        && !d.Contains("CardList", StringComparison.Ordinal));
+    Expect("coming soon row",
+        d.Contains("SoonCards", StringComparison.Ordinal)
+        || d.Contains("Coming soon", StringComparison.Ordinal));
     Expect("hero tagline style", d.Contains("ExoTagline", StringComparison.Ordinal));
     Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
     Expect("no pick-a-target blurb", !d.Contains("Pick a target", StringComparison.Ordinal));
@@ -265,9 +263,10 @@ foreach (var page in new[]
     if (!File.Exists(p)) continue;
     var x = File.ReadAllText(p);
     Expect(page + " CTA", x.Contains("ExoPrimaryButton", StringComparison.Ordinal) || x.Contains("ExoQuietButton", StringComparison.Ordinal));
-    // Module chrome: ExoPagePadding resource and/or ExoPageMaxWidth + inline pad (v2.5 remodel).
+    // Module chrome: instrument plate and/or legacy page width pad.
     Expect(page + " page padding",
-        x.Contains("ExoPagePadding", StringComparison.Ordinal)
+        x.Contains("ExoModulePlate", StringComparison.Ordinal)
+        || x.Contains("ExoPagePadding", StringComparison.Ordinal)
         || x.Contains("ExoPageMaxWidth", StringComparison.Ordinal));
     Expect(page + " unique loader", x.Contains("ExoLoader", StringComparison.Ordinal) && !x.Contains("<ProgressRing", StringComparison.Ordinal));
     Expect(page + " action bar", x.Contains("ExoActionBar", StringComparison.Ordinal));
@@ -502,13 +501,12 @@ var dashCs = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs");
 if (File.Exists(dashCs))
 {
     var dc = File.ReadAllText(dashCs);
-    Expect("home card stagger entrance",
+    Expect("home hero stagger entrance",
         dc.Contains("PlayStagger", StringComparison.Ordinal)
         && dc.Contains("EnsureVisible", StringComparison.Ordinal)
         && !dc.Contains("PrimeHidden", StringComparison.Ordinal));
-    Expect("home card select pulse",
-        dc.Contains("PlaySelect", StringComparison.Ordinal)
-        && dc.Contains("CardButton_Click", StringComparison.Ordinal));
+    Expect("no home card select pulse",
+        !dc.Contains("CardButton_Click", StringComparison.Ordinal));
     Expect("dashboard cache for clean back",
         dc.Contains("NavigationCacheMode.Enabled", StringComparison.Ordinal)
         && dc.Contains("StabilizeHome", StringComparison.Ordinal));

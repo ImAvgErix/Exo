@@ -102,7 +102,6 @@ export function TopBar({
                 className="top-bar__logo"
                 draggable={false}
               />
-              <span className="top-bar__label">{item.label}</span>
             </button>
           ))}
         </div>

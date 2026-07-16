@@ -13,7 +13,7 @@ Aggressive must still be deterministic: scope actions to the selected applicatio
 - **Workspace** = full-width **top bar** + content stage that fills the rest of the frame
 - **Navigation** = top glass bar (`NavRail`): EXO left · modules centered · Settings right — **not** WinUI `NavigationView`, **not** a left sidebar
 - **Settings** = gear flyout under the top-bar gear (acrylic/frosted panel — not modal overlay, not a separate settings page)
-- **Home** = centered huge Exo mark + italic tagline + full-width blade strip; coming soon as a quiet line; cached so returns do not re-stagger
+- **Home** = centered huge Exo mark + italic tagline + coming-soon line only — **no** duplicate Discord/Steam/Internet/NVIDIA strip (those live once in the top bar); cached so returns do not re-stagger
 - **Modules** = one `ExoModulePlate` filling the stage (header + hairline feature list + action foot)
 - **Motion** = short XAML Storyboards only; never Composition Opacity = 0 (blanks UI); no spring bounce on content
 - **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)

@@ -8,8 +8,8 @@
     Loaded="Page_Loaded">
 
     <!--
-      Centered instrument home under the top bar — fills the stage.
-      Blade strip spans width; coming soon is a quiet centered line.
+      Brand-only home — live modules live in the top bar (no duplicate Discord/Steam/… strip).
+      Coming soon is a quiet centered line.
     -->
     <Grid x:Name="PageRoot"
           Padding="8,8,8,12"
@@ -47,61 +47,8 @@
                        Margin="0,0,0,28"
                        UseLayoutRounding="True" />
 
-            <Border x:Name="BladeStrip"
-                    Background="{ThemeResource ExoGlassFillBrush}"
-                    BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
-                    BorderThickness="1"
-                    CornerRadius="14"
-                    Padding="4"
-                    Margin="0,0,0,16"
-                    HorizontalAlignment="Stretch"
-                    MaxWidth="920">
-                <ItemsControl x:Name="CardList"
-                              HorizontalAlignment="Stretch"
-                              ItemsSource="{x:Bind ViewModel.LiveCards, Mode=OneWay}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <UniformGrid Columns="4" Rows="1" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="viewModels:OptimizerCardViewModel">
-                            <Button Style="{StaticResource ExoCardButton}"
-                                    HorizontalAlignment="Stretch"
-                                    VerticalAlignment="Stretch"
-                                    Margin="2"
-                                    MinHeight="104"
-                                    Click="CardButton_Click"
-                                    Tag="{x:Bind Definition.Id}"
-                                    AutomationProperties.Name="{x:Bind Definition.Title}">
-                                <StackPanel Spacing="8"
-                                            HorizontalAlignment="Center"
-                                            VerticalAlignment="Center"
-                                            Padding="8,14">
-                                    <Image Width="30"
-                                           Height="30"
-                                           Source="{x:Bind Definition.LogoPath, Mode=OneWay, Converter={StaticResource AssetPathToImageSourceConverter}}"
-                                           Stretch="Uniform"
-                                           UseLayoutRounding="True"
-                                           HorizontalAlignment="Center"
-                                           AutomationProperties.AccessibilityView="Raw" />
-                                    <TextBlock Text="{x:Bind Definition.Title, Mode=OneWay}"
-                                               FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                               FontSize="13"
-                                               FontWeight="SemiBold"
-                                               CharacterSpacing="-4"
-                                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                                               HorizontalAlignment="Center"
-                                               TextAlignment="Center"
-                                               UseLayoutRounding="True" />
-                                </StackPanel>
-                            </Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Border>
-
-            <StackPanel Orientation="Horizontal"
+            <StackPanel x:Name="SoonRow"
+                        Orientation="Horizontal"
                         Spacing="10"
                         HorizontalAlignment="Center">
                 <TextBlock Text="Coming soon"
@@ -110,7 +57,8 @@
                            CharacterSpacing="60"
                            Foreground="{ThemeResource ExoMutedTextBrush}"
                            VerticalAlignment="Center" />
-                <ItemsControl ItemsSource="{x:Bind ViewModel.SoonCards, Mode=OneWay}">
+                <ItemsControl x:Name="SoonList"
+                              ItemsSource="{x:Bind ViewModel.SoonCards, Mode=OneWay}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal" Spacing="12" />

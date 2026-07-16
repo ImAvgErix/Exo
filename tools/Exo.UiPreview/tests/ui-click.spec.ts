@@ -7,7 +7,9 @@ test('Exo UI preview click navigation', async ({ page }) => {
   await expect(page.getByTestId('page-home')).toBeVisible()
   await expect(page.getByTestId('hero-brand')).toHaveText('Exo')
   await expect(page.getByTestId('hero-tagline')).toBeVisible()
-  await expect(page.getByTestId('card-discord')).toBeVisible()
+  // Live modules live only in the top bar — home must not duplicate those cards.
+  await expect(page.getByTestId('card-discord')).toHaveCount(0)
+  await expect(page.getByTestId('card-windows')).toBeVisible()
 
   await page.getByTestId('nav-discord').click()
   await expect(page.getByTestId('page-discord')).toBeVisible()
