@@ -450,7 +450,7 @@ public static partial class NetworkLogic
             band5 = true;
     }
 
-    /// <summary>Folklore assignments that must never appear as applied values in apply script.</summary>
+    /// <summary>Folklore / brick-risk assignments that must never appear as applied values.</summary>
     public static readonly string[] ForbiddenApplyPatterns =
     {
         "Set-Dword $tcp 'MaxUserPort'",

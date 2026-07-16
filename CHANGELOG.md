@@ -1,3 +1,11 @@
+## 3.0.1
+
+- **Discord login detect**: false "not logged in" fixed (Local Storage / userDataCache without old IndexedDB path)
+- **Shell chrome**: Settings on the **left** (old EXO slot); **Home** pill when away from dashboard; CaptionSpacer keeps chrome clear of Windows min/close; NavRail is `SetTitleBar` for drag
+- **Internet safety**: still fail-closed (no Wi-Fi disable, no Client/LLDP kill, no auto winsock); **removes** MaxUserPort/static RWIN/chimney/LargeSystemCache if present; never writes folklore brick keys
+- **Steam thin libs**: `Steam.Paths.ps1` + Bootstrap stage IDs only (no new aggressive god-script stages)
+- **Repair**: `Repair-Internet.ps1` also under Documents\\Exo for offline rescue
+
 ## 3.0.0
 
 - **SharedModulePlate**: all four optimizer pages (Internet / Discord / Steam / NVIDIA) host chrome via one instrument plate (header, advisor, features, sticky foot, apply report)

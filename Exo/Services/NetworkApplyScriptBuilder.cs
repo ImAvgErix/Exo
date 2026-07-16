@@ -449,7 +449,8 @@ if (-not $snapshotOk) {
         sb.AppendLine("$tcp = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters'");
         sb.AppendLine("Set-Dword $tcp 'DisableTaskOffload' 0");
         sb.AppendLine("Set-Dword $tcp 'EnablePMTUDiscovery' 1");
-        // Clear obsolete static RWIN if present (auto-tuning owns window size)
+        // Clear obsolete static RWIN / chimney / server-era keys (auto-tuning owns window size).
+        // Never write MaxUserPort / static TcpWindowSize / LargeSystemCache=1 / Chimney=1.
         sb.AppendLine("Remove-Prop $tcp 'GlobalMaxTcpWindowSize'");
         sb.AppendLine("Remove-Prop $tcp 'TcpWindowSize'");
         sb.AppendLine("Remove-Prop $tcp 'EnableTCPChimney'");
@@ -457,6 +458,7 @@ if (-not $snapshotOk) {
         sb.AppendLine("Remove-Prop $tcp 'EnableDCA'");
         sb.AppendLine("Remove-Prop $tcp 'TcpNumConnections'");
         sb.AppendLine("Remove-Prop $tcp 'LargeSystemCache'");
+        sb.AppendLine("Remove-Prop $tcp 'MaxUserPort'");
         // DNS ServiceProvider priorities (documented resolver-order DWORDs; defaults 499/500/2000/2001)
         sb.AppendLine("$sp = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\ServiceProvider'");
         sb.AppendLine("Set-Dword $sp 'LocalPriority' 4");

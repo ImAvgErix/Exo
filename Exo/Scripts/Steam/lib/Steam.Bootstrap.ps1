@@ -5,6 +5,10 @@
 
 Set-StrictMode -Version Latest
 
+# Path helpers (thin split - god script remains the apply engine).
+$__steamPaths = Join-Path $PSScriptRoot 'Steam.Paths.ps1'
+if (Test-Path -LiteralPath $__steamPaths) { . $__steamPaths }
+
 # Stage IDs written via EXO_REPORT / durable state - keep aligned with
 # SteamDetectCore.ps1 + SteamLogic.RequiredApplyMarkers + Contracts.Smoke.
 $script:ExoSteamStageIds = @(
