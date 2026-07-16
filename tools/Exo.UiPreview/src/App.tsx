@@ -24,7 +24,7 @@ export default function App() {
 
   const content = useMemo(() => {
     if (page === 'home') {
-      return <HomePage onOpen={(id) => setPage(id)} />
+      return <HomePage />
     }
     if (page === 'nvidia-panel') {
       return <NvidiaPanelPage />

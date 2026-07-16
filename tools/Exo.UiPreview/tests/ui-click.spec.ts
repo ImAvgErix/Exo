@@ -7,14 +7,14 @@ test('Exo UI preview click navigation', async ({ page }) => {
   await expect(page.getByTestId('page-home')).toBeVisible()
   await expect(page.getByTestId('hero-brand')).toHaveText('Exo')
   await expect(page.getByTestId('hero-tagline')).toBeVisible()
-  // Text directory on home (no logos) — icons stay in the top bar only.
-  await expect(page.getByTestId('card-discord')).toBeVisible()
+  // Home = stats dashboard (modules live in the top bar only).
+  await expect(page.getByTestId('home-ram')).toBeVisible()
+  await expect(page.getByTestId('home-ram-value')).toBeVisible()
+  await expect(page.getByTestId('home-stats')).toBeVisible()
+  await expect(page.getByTestId('home-stat-memory')).toBeVisible()
   await expect(page.getByTestId('card-windows')).toBeVisible()
-  await expect(page.getByText('Trim')).toBeVisible()
-  await expect(page.getByText('Debloat')).toBeVisible()
-  await expect(page.getByText('Latency')).toBeVisible()
 
-  await page.getByTestId('card-discord').click()
+  await page.getByTestId('nav-discord').click()
   await expect(page.getByTestId('page-discord')).toBeVisible()
   await expect(page.getByTestId('btn-apply')).toBeVisible()
   await page.getByTestId('btn-apply').click()
@@ -43,6 +43,7 @@ test('Exo UI preview click navigation', async ({ page }) => {
 
   await page.getByTestId('nav-home').click()
   await expect(page.getByTestId('page-home')).toBeVisible()
+  await expect(page.getByTestId('home-ram')).toBeVisible()
 
   await page.getByTestId('nav-settings').click()
   await expect(page.getByTestId('settings-flyout')).toBeVisible()

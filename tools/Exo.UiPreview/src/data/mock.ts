@@ -62,13 +62,21 @@ export const navItems: { id: ModuleId; label: string; logo: string }[] = [
   { id: 'nvidia', label: 'NVIDIA', logo: '/logos/nvidia.png' },
 ]
 
-/** Home directory labels — text rows, no logos (icons stay in the top bar only). */
-export const homeModules: { id: ModuleId; title: string }[] = [
-  { id: 'discord', title: 'Discord' },
-  { id: 'steam', title: 'Steam' },
-  { id: 'internet', title: 'Internet' },
-  { id: 'nvidia', title: 'NVIDIA' },
-]
+/** Preview-only seeded dashboard (WinUI reads real LocalAppData + live memory). */
+export const homeDashboardSeed = {
+  trimTotalBytes: 1_480 * (1 << 20),
+  trimLast24hBytes: 420 * (1 << 20),
+  trimPasses: 1842,
+  hourlyBytes: [
+    12, 18, 9, 22, 31, 28, 16, 11, 19, 27, 33, 24, 15, 21, 29, 36, 30, 18, 14,
+    20, 26, 32, 25, 17,
+  ].map((n) => n * (1 << 20)),
+  memoryUsedBytes: 14.2 * (1 << 30),
+  memoryTotalBytes: 32 * (1 << 30),
+  memoryLoadPercent: 44,
+  latencyBeforeP50: 28.4,
+  latencyAfterP50: 16.1,
+}
 
 /* Status = rail + Applied/Not applied. */
 const discordFeatures: FeatureItem[] = [

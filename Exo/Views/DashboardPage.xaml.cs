@@ -7,12 +7,13 @@ using Microsoft.UI.Xaml.Navigation;
 namespace Exo.Views;
 
 /// <summary>
-/// Home instrument plate under the top bar. Soft entrance on first load;
-/// cached so Back does not rebuild/re-stagger.
+/// Home performance dashboard under the top bar. Soft entrance on first load;
+/// cached so Back does not rebuild/re-stagger. Live memory ticks while visible.
 /// </summary>
 public sealed partial class DashboardPage : Page
 {
     private CancellationTokenSource? _refreshCts;
+    private DispatcherTimer? _memoryTimer;
     private bool _entrancePlayed;
     private bool _entranceRunning;
     private int _entranceGen;
@@ -26,27 +27,22 @@ public sealed partial class DashboardPage : Page
         ViewModel = new DashboardViewModel(App.Services);
         InitializeComponent();
         DataContext = ViewModel;
-
-        ViewModel.NavigateToOptimizer += (_, id) =>
-        {
-            if (App.MainAppWindow is not MainWindow mw) return;
-            if (id == "discord") mw.NavigateToDiscord();
-            else if (id == "steam") mw.NavigateToSteam();
-            else if (id == "internet") mw.NavigateToInternet();
-            else if (id == "nvidia") mw.NavigateToNvidia();
-        };
     }
 
     private void Page_Loaded(object sender, RoutedEventArgs e)
     {
         StabilizeHome();
+        StartMemoryTimer();
         _ = TryPlayEntranceAsync();
     }
+
+    private void Page_Unloaded(object sender, RoutedEventArgs e) => StopMemoryTimer();
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         StabilizeHome();
+        StartMemoryTimer();
 
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
@@ -59,12 +55,32 @@ public sealed partial class DashboardPage : Page
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
+        StopMemoryTimer();
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
         _refreshCts = null;
         _entranceGen++;
         StabilizeHome();
         base.OnNavigatedFrom(e);
+    }
+
+    private void StartMemoryTimer()
+    {
+        if (_memoryTimer is not null) return;
+        _memoryTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _memoryTimer.Tick += (_, _) =>
+        {
+            try { ViewModel.RefreshLiveMemory(); }
+            catch { }
+        };
+        _memoryTimer.Start();
+    }
+
+    private void StopMemoryTimer()
+    {
+        if (_memoryTimer is null) return;
+        _memoryTimer.Stop();
+        _memoryTimer = null;
     }
 
     private void StabilizeHome()
@@ -77,10 +93,10 @@ public sealed partial class DashboardPage : Page
                 ExoMotion.EnsureVisible(HeroBrand);
             if (HeroTagline is not null)
                 ExoMotion.EnsureVisible(HeroTagline);
-            if (PillarRow is not null)
-                ExoMotion.EnsureVisible(PillarRow);
-            if (ModuleDirectory is not null)
-                ExoMotion.EnsureVisible(ModuleDirectory);
+            if (RamHero is not null)
+                ExoMotion.EnsureVisible(RamHero);
+            if (StatRow is not null)
+                ExoMotion.EnsureVisible(StatRow);
             if (SoonRow is not null)
                 ExoMotion.EnsureVisible(SoonRow);
         }
@@ -101,10 +117,10 @@ public sealed partial class DashboardPage : Page
             var sequence = new List<UIElement>();
             if (HeroBlock is not null)
                 sequence.Add(HeroBlock);
-            if (PillarRow is not null)
-                sequence.Add(PillarRow);
-            if (ModuleDirectory is not null)
-                sequence.Add(ModuleDirectory);
+            if (RamHero is not null)
+                sequence.Add(RamHero);
+            if (StatRow is not null)
+                sequence.Add(StatRow);
             if (SoonRow is not null)
                 sequence.Add(SoonRow);
 

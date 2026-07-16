@@ -13,7 +13,7 @@ Aggressive must still be deterministic: scope actions to the selected applicatio
 - **Workspace** = full-width **top bar** + content stage that fills the rest of the frame
 - **Navigation** = top glass bar (`NavRail`): EXO left · modules centered · Settings right — **not** WinUI `NavigationView`, **not** a left sidebar
 - **Settings** = gear flyout under the top-bar gear (acrylic/frosted panel — not modal overlay, not a separate settings page)
-- **Home** = instrument plate: huge Exo mark + italic tagline + Trim/Debloat/Latency pillars + **text** module directory (title / Ready / ›) + coming-soon line — logos stay in the top bar only (no second logo strip); cached so returns do not re-stagger
+- **Home** = instrument plate dashboard: compact Exo mark + tagline + **RAM reclaimed** hero (from `steam-trim-stats.json`) + live memory + latency delta + trim passes — modules stay in the top bar only; no Detect* probes on home; empty states stay honest (—) when files are missing; cached so returns do not re-stagger
 - **Modules** = one `ExoModulePlate` filling the stage (header + hairline feature list + action foot)
 - **Motion** = short XAML Storyboards only; never Composition Opacity = 0 (blanks UI); no spring bounce on content
 - **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)

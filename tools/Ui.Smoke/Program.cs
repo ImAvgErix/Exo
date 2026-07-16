@@ -110,24 +110,30 @@ if (File.Exists(mainCs))
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    // v2.6 home plate — brand + pillars + text module directory (logos stay in the top bar).
+    // v2.6 home dashboard — reclaim + live memory + latency; modules stay in the top bar.
     Expect("hero brand",
         d.Contains("HeroBrand", StringComparison.Ordinal)
         && (d.Contains("FontSize=\"72\"", StringComparison.Ordinal)
             || d.Contains("FontSize=\"64\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"56\"", StringComparison.Ordinal)));
+            || d.Contains("FontSize=\"56\"", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"40\"", StringComparison.Ordinal)));
     Expect("hero tagline",
         d.Contains("HeroTagline", StringComparison.Ordinal)
         && d.Contains("Maximum performance", StringComparison.Ordinal));
     Expect("home instrument plate", d.Contains("ExoModulePlate", StringComparison.Ordinal));
-    Expect("home capability pillars",
-        d.Contains("PillarRow", StringComparison.Ordinal)
-        && d.Contains("Trim", StringComparison.Ordinal)
-        && d.Contains("Debloat", StringComparison.Ordinal)
-        && d.Contains("Latency", StringComparison.Ordinal));
-    Expect("home text module directory",
-        d.Contains("ReadyModules", StringComparison.Ordinal)
-        && d.Contains("MODULES", StringComparison.Ordinal));
+    Expect("home ram reclaim hero",
+        d.Contains("RamHero", StringComparison.Ordinal)
+        && d.Contains("RAM RECLAIMED", StringComparison.Ordinal)
+        && d.Contains("ReclaimedPrimary", StringComparison.Ordinal));
+    Expect("home live memory tile",
+        d.Contains("MEMORY", StringComparison.Ordinal)
+        && d.Contains("MemoryPrimary", StringComparison.Ordinal));
+    Expect("home latency tile",
+        d.Contains("LATENCY", StringComparison.Ordinal)
+        && d.Contains("LatencyPrimary", StringComparison.Ordinal));
+    Expect("home trim passes tile",
+        d.Contains("TRIM PASSES", StringComparison.Ordinal)
+        && d.Contains("TrimPassesText", StringComparison.Ordinal));
     Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("no fixed product cards",
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)
@@ -137,7 +143,8 @@ if (File.Exists(dash))
         !d.Contains("Assets/Logos", StringComparison.Ordinal)
         && !d.Contains("BladeStrip", StringComparison.Ordinal)
         && !d.Contains("LiveCards", StringComparison.Ordinal)
-        && !d.Contains("CardList", StringComparison.Ordinal));
+        && !d.Contains("CardList", StringComparison.Ordinal)
+        && !d.Contains("ReadyModules", StringComparison.Ordinal));
     Expect("coming soon row",
         d.Contains("SoonCards", StringComparison.Ordinal)
         || d.Contains("Coming soon", StringComparison.Ordinal));
@@ -643,8 +650,26 @@ if (File.Exists(dashVm))
     Expect("home no discord probe", !dvm.Contains("DetectDiscordAsync", StringComparison.Ordinal));
     Expect("home no steam probe", !dvm.Contains("DetectSteamAsync", StringComparison.Ordinal));
     Expect("home no nvidia probe", !dvm.Contains("DetectNvidiaAsync", StringComparison.Ordinal));
+    Expect("home dashboard refresh", dvm.Contains("RefreshDashboard", StringComparison.Ordinal)
+        && dvm.Contains("HomeDashboardReader", StringComparison.Ordinal));
     Expect("windows coming soon card", dvm.Contains("Card(\"windows\"", StringComparison.Ordinal)
         && dvm.Contains("windows.png", StringComparison.Ordinal));
+}
+var homeDashReader = Path.Combine(repo, "Exo", "Services", "HomeDashboardReader.cs");
+if (File.Exists(homeDashReader))
+{
+    var hdr = File.ReadAllText(homeDashReader);
+    Expect("home trim stats file read",
+        hdr.Contains("steam-trim-stats.json", StringComparison.Ordinal)
+        && hdr.Contains("TryReadTrimStats", StringComparison.Ordinal));
+    Expect("home live memory api",
+        hdr.Contains("GlobalMemoryStatusEx", StringComparison.Ordinal)
+        && hdr.Contains("TryReadMemory", StringComparison.Ordinal));
+    Expect("home latency file read", hdr.Contains("TryReadLatency", StringComparison.Ordinal));
+}
+else
+{
+    Expect("home dashboard reader exists", false);
 }
 if (File.Exists(Path.Combine(logosDir, "windows.png")))
     Expect("windows logo asset", true);

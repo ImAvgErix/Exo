@@ -1,5 +1,5 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using Exo.Models;
 using Exo.Services;
 
@@ -26,40 +26,121 @@ public partial class DashboardViewModel : ObservableObject
         };
 
         foreach (var card in Cards)
-        {
             card.InitializePresentation();
-            card.OpenRequested = OpenOptimizer;
-        }
+
+        RefreshDashboard();
     }
 
     public IReadOnlyList<OptimizerCardViewModel> Cards { get; }
 
-    /// <summary>Text directory on home (titles only — logos stay in the top bar).</summary>
-    public IReadOnlyList<OptimizerCardViewModel> ReadyModules =>
-        Cards.Where(c => !c.IsComingSoon).ToList();
-
     public IReadOnlyList<OptimizerCardViewModel> SoonCards =>
         Cards.Where(c => c.IsComingSoon).ToList();
 
-    public event EventHandler<string>? NavigateToOptimizer;
+    public ObservableCollection<HomeSparkBar> SparkBars { get; } = new();
 
-    [RelayCommand]
-    private void OpenOptimizer(string? id)
-    {
-        if (string.IsNullOrWhiteSpace(id)) return;
-        var card = Cards.FirstOrDefault(c => c.Definition.Id == id);
-        if (card is null || card.Definition.Status == OptimizerStatus.ComingSoon) return;
-        NavigateToOptimizer?.Invoke(this, id);
-    }
+    [ObservableProperty] private bool _hasTrimStats;
+    [ObservableProperty] private string _reclaimedPrimary = "—";
+    [ObservableProperty] private string _reclaimedSecondary = "Apply Steam to start reclaiming working-set RAM";
+    [ObservableProperty] private string _trimPassesText = "—";
+    [ObservableProperty] private string _trimPassesDetail = "No trim loop data yet";
+
+    [ObservableProperty] private bool _hasMemory;
+    [ObservableProperty] private string _memoryPrimary = "—";
+    [ObservableProperty] private string _memorySecondary = "Live memory unavailable";
+    [ObservableProperty] private string _memoryLoadText = "";
+
+    [ObservableProperty] private bool _hasLatency;
+    [ObservableProperty] private string _latencyPrimary = "—";
+    [ObservableProperty] private string _latencySecondary = "No Internet benchmark yet";
 
     /// <summary>
-    /// Home cards do not probe status — that runs when you open a module.
-    /// Avoids double work and false "Not applied" on the hub.
+    /// Refresh file-backed stats + live memory. No Detect* probes — those stay on module pages.
     /// </summary>
     public Task RefreshStatesAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        RefreshDashboard();
         return Task.CompletedTask;
+    }
+
+    public void RefreshLiveMemory()
+    {
+        var mem = HomeDashboardReader.TryReadMemory();
+        if (mem is null)
+        {
+            HasMemory = false;
+            MemoryPrimary = "—";
+            MemorySecondary = "Live memory unavailable";
+            MemoryLoadText = "";
+            return;
+        }
+
+        var used = mem.TotalBytes > mem.AvailableBytes
+            ? mem.TotalBytes - mem.AvailableBytes
+            : 0UL;
+        HasMemory = true;
+        MemoryLoadText = $"{mem.LoadPercent}%";
+        MemoryPrimary = HomeDashboardReader.FormatBytes(used);
+        MemorySecondary = $"in use · {HomeDashboardReader.FormatBytes(mem.TotalBytes)} total";
+    }
+
+    private void RefreshDashboard()
+    {
+        var trim = HomeDashboardReader.TryReadTrimStats();
+        if (trim is null)
+        {
+            HasTrimStats = false;
+            ReclaimedPrimary = "—";
+            ReclaimedSecondary = "Apply Steam to start reclaiming working-set RAM";
+            TrimPassesText = "—";
+            TrimPassesDetail = "No trim loop data yet";
+            SparkBars.Clear();
+        }
+        else
+        {
+            HasTrimStats = true;
+            var heroBytes = trim.Last24hBytes > 0 ? trim.Last24hBytes : trim.TotalBytes;
+            ReclaimedPrimary = HomeDashboardReader.FormatBytes(heroBytes);
+            ReclaimedSecondary = trim.Last24hBytes > 0
+                ? $"last 24 h · {HomeDashboardReader.FormatBytes(trim.TotalBytes)} total"
+                : "total reclaimed (Steam webhelper working set)";
+            TrimPassesText = trim.Passes > 0 ? trim.Passes.ToString("N0") : "—";
+            TrimPassesDetail = trim.Passes > 0
+                ? "Steam webhelper trim passes"
+                : "No trim loop data yet";
+            RebuildSpark(trim.HourlyBytes);
+        }
+
+        var latency = HomeDashboardReader.TryReadLatency(_services.Network);
+        if (latency is null)
+        {
+            HasLatency = false;
+            LatencyPrimary = "—";
+            LatencySecondary = "No Internet benchmark yet";
+        }
+        else
+        {
+            HasLatency = true;
+            var delta = latency.AfterP50Ms - latency.BeforeP50Ms;
+            var sign = delta > 0 ? "+" : "";
+            LatencyPrimary = $"{sign}{delta:0.0} ms";
+            LatencySecondary =
+                $"ping p50 {latency.BeforeP50Ms:0.0} → {latency.AfterP50Ms:0.0} ms";
+        }
+
+        RefreshLiveMemory();
+    }
+
+    private void RebuildSpark(IReadOnlyList<long> hourly)
+    {
+        SparkBars.Clear();
+        if (hourly.Count == 0) return;
+        var max = Math.Max(1L, hourly.Max());
+        foreach (var bytes in hourly)
+        {
+            var t = bytes / (double)max;
+            SparkBars.Add(new HomeSparkBar { Height = 6 + t * 28 });
+        }
     }
 
     private static OptimizerCardViewModel Card(
@@ -76,23 +157,19 @@ public partial class DashboardViewModel : ObservableObject
         };
 }
 
+public sealed class HomeSparkBar
+{
+    public double Height { get; init; }
+}
+
 public partial class OptimizerCardViewModel : ObservableObject
 {
     public required OptimizerDefinition Definition { get; init; }
 
     [ObservableProperty] private bool _isComingSoon;
 
-    public Action<string?>? OpenRequested { get; set; }
-
     public void InitializePresentation()
     {
         IsComingSoon = Definition.Status == OptimizerStatus.ComingSoon;
-    }
-
-    [RelayCommand]
-    private void Open()
-    {
-        if (IsComingSoon) return;
-        OpenRequested?.Invoke(Definition.Id);
     }
 }

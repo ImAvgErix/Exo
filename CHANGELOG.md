@@ -1,7 +1,8 @@
 ## 2.6.0
 
 - **UI — Exo Instrument**: full-width top bar (EXO · icon modules · Settings) with content filling the frame below; one edge-glass module plate
-- **UI — home plate**: brand + Trim/Debloat/Latency pillars + text module directory (no logo duplicates of the top bar) + coming soon
+- **UI — home dashboard**: RAM reclaimed (Steam trim stats) + live memory + Internet latency delta + trim passes; modules stay in the top bar (no redundant directory)
+- **UI — Steam mark**: lighter hollow glyph so it matches Discord / Internet / NVIDIA weight in the top bar
 - **UI — one system**: feature rows = status rail + Applied/Not applied only; primary = solid accent; secondary = quiet glass
 - **UI — denser chrome**: tighter top bar / plate / action foot; dropped unused preview chips/strips
 - **UI — motion polish**: short ease-out storyboards; rail selection = wash + accent ring (no logo scale)
