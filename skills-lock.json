@@ -19,6 +19,24 @@
       "skillPath": "skills/apple-design/SKILL.md",
       "computedHash": "8b94db67cb9edaad5f1501010804caa610131f1d2dfda0a27664b2e858deade3"
     },
+    "better-colors": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "skillPath": "skills/better-colors/SKILL.md",
+      "computedHash": "018f47015d71a146963d05aa592ded3f885917b11d021b981d8b0148422f953e"
+    },
+    "better-typography": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "skillPath": "skills/better-typography/SKILL.md",
+      "computedHash": "84642a2f7ad030fdcef18bf654c3cbf9e63347259a2229bc3b2e6bd9540eca27"
+    },
+    "better-ui": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "skillPath": "skills/better-ui/SKILL.md",
+      "computedHash": "cb08e0fc63bdd829277770815d645979e0661ae5717dfb01e39a921138b684da"
+    },
     "emil-design-eng": {
       "source": "emilkowalski/skill",
       "sourceType": "github",
