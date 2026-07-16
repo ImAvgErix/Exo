@@ -37,6 +37,22 @@
                                    FontSize="26"
                                    LineHeight="32"
                                    CharacterSpacing="-24" />
+                        <Border Style="{StaticResource ExoMessageBanner}"
+                                Visibility="{x:Bind ViewModel.HasGuidance, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Glyph="&#xE946;" FontSize="12"
+                                          Foreground="{ThemeResource ExoAccentBrush}"
+                                          VerticalAlignment="Top" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{x:Bind ViewModel.GuidanceText, Mode=OneWay}"
+                                           Style="{StaticResource ExoMessageText}"
+                                           TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
                     </StackPanel>
                     <Border Style="{StaticResource ExoCard}" Padding="14,10">
                         <Grid ColumnSpacing="12">

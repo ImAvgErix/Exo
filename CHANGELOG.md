@@ -1,3 +1,10 @@
+## 2.6.8
+
+- **No Exo background footprint**: never register logon/scheduled tasks (removed `Exo-NvidiaTrayHide`); purge all leftover `Exo-*` tasks on Apply/tray clear; no Exo Run-key startup or Exo services
+- **NVIDIA display works**: NVAPI apply retries 3x; registry success counts as applied; Display-Apply no longer exits "partial fail"; optimizer retries display before failing
+- **Live advisor UI**: every optimizer page shows real-time next-step guidance from detect (what is missing + what to click) via `OptimizerAdvisor`
+- **Product rule** (AGENTS): Apply must work — not report honest failure as the feature; never install Exo background tasks
+
 ## 2.6.7
 
 - **Internet honesty**: detect/UI match fail-closed Apply — bindings only require QoS+IPv4/IPv6 on (no more permanent "Client/LLDP off" fail); PreferEthernet defaults false; "Wi‑Fi while Ethernet" never fails for Wi‑Fi staying up

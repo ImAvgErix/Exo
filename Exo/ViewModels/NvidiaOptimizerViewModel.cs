@@ -21,6 +21,8 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
 
     [ObservableProperty] private string _statusText = "Checking status...";
     [ObservableProperty] private string _detailText = string.Empty;
+    [ObservableProperty] private string _guidanceText = "Detecting this PC...";
+    [ObservableProperty] private bool _hasGuidance = true;
     public ObservableCollection<FeatureRowViewModel> Features { get; } = new();
 
     [ObservableProperty] private string _runButtonLabel = "Apply profile";
@@ -235,6 +237,13 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         }
         RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
         IsFeatureListVisible = Features.Count > 0;
+        GuidanceText = OptimizerAdvisor.Build(
+            "NVIDIA",
+            IsApplied,
+            StatusText,
+            DetailText,
+            Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList());
+        HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
     }
 
     private void SetResult(string message, bool success)

@@ -25,6 +25,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
     public ObservableCollection<FeatureRowViewModel> Rows { get; } = new();
 
     [ObservableProperty] private string _headerStatus = "Checking...";
+    [ObservableProperty] private string _guidanceText = "Detecting this PC...";
+    [ObservableProperty] private bool _hasGuidance = true;
     [ObservableProperty] private bool _isLoading = true;
     [ObservableProperty] private bool _isFeatureListVisible;
     [ObservableProperty] private bool _isBusy;
@@ -180,6 +182,15 @@ public partial class InternetOptimizerViewModel : ObservableObject
             SetMessage(snap.Detail, success: false);
         else if (!preserveSuccessMessage)
             ClearMessage();
+
+        var applied = Rows.Count > 0 && Rows.All(r => r.IsActive);
+        GuidanceText = OptimizerAdvisor.Build(
+            "Internet",
+            applied,
+            HeaderStatus,
+            snap.Detail,
+            Rows.Select(r => (r.Title, r.IsActive, r.Detail)).ToList());
+        HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
     }
 
     [RelayCommand]

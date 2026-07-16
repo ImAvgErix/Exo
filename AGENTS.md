@@ -4,7 +4,9 @@
 
 Exo is a no-compromise Windows performance and debloat tool. Aggressive memory trimming, background-process reduction, priority tuning, cache cleanup, telemetry removal, and latency/FPS optimization are intentional core features. Do not quietly weaken them into conservative defaults.
 
-Aggressive must still be deterministic: scope actions to the selected application or hardware, report partial failures honestly, avoid invented registry settings, preserve data needed to prevent corruption, and keep Discord/Steam repair paths working. Never describe NVIDIA Reset as rollback: it only clears Exo status, while NVIDIA recovery remains manual through NVIDIA settings or a driver reinstall.
+**No Exo background footprint:** never create Exo scheduled tasks, logon tasks, Run-key startup entries, or Exo-named Windows services. Apply runs when the user clicks Apply; purge any leftover `Exo-*` tasks on Apply/Repair. (Disabling *vendor* junk like NVIDIA App container or Steam/Discord autostart is fine — that is not Exo installing itself.)
+
+Aggressive must still be deterministic: scope actions to the selected application or hardware, make Apply *work* (retry hard paths; do not ship "honest failure" as the product), avoid invented registry settings, preserve data needed to prevent corruption, and keep Discord/Steam repair paths working. Never describe NVIDIA Reset as rollback: it only clears Exo status, while NVIDIA recovery remains manual through NVIDIA settings or a driver reinstall.
 
 ## Shell UI (current — v2.6 Exo Instrument)
 

@@ -606,9 +606,33 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.6.7", File.ReadAllText(versionFile).Trim() == "2.6.7");
+    Expect("VERSION is 2.6.8", File.ReadAllText(versionFile).Trim() == "2.6.8");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.6.7", File.ReadAllText(csproj).Contains("<Version>2.6.7</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.6.8", File.ReadAllText(csproj).Contains("<Version>2.6.8</Version>", StringComparison.Ordinal));
+
+// Live advisor (realtime next-step coach on every optimizer)
+var advisorPath = Path.Combine(repo, "Exo", "Services", "OptimizerAdvisor.cs");
+Expect("OptimizerAdvisor exists", File.Exists(advisorPath));
+if (File.Exists(advisorPath))
+{
+    var adv = File.ReadAllText(advisorPath);
+    Expect("OptimizerAdvisor no background tasks message",
+        adv.Contains("No Exo background tasks", StringComparison.Ordinal));
+    Expect("OptimizerAdvisor covers all modules",
+        adv.Contains("\"Internet\"", StringComparison.Ordinal)
+        && adv.Contains("\"Discord\"", StringComparison.Ordinal)
+        && adv.Contains("\"Steam\"", StringComparison.Ordinal)
+        && adv.Contains("\"NVIDIA\"", StringComparison.Ordinal));
+}
+foreach (var page in new[] { "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml", "NvidiaOptimizerPage.xaml", "InternetOptimizerPage.xaml" })
+{
+    var p = Path.Combine(repo, "Exo", "Views", page);
+    if (!File.Exists(p)) continue;
+    var xaml = File.ReadAllText(p);
+    Expect($"live guidance on {page}",
+        xaml.Contains("GuidanceText", StringComparison.Ordinal)
+        && xaml.Contains("HasGuidance", StringComparison.Ordinal));
+}
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));

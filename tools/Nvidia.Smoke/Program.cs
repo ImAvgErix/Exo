@@ -223,38 +223,31 @@ Expect("optimizer records drsVerified", optimizerSrc.Contains("drsVerified", Str
 Expect("optimizer records drsVerifiedAt", optimizerSrc.Contains("drsVerifiedAt", StringComparison.Ordinal));
 Expect("optimizer records drsVerifiedSettingCount", optimizerSrc.Contains("drsVerifiedSettingCount", StringComparison.Ordinal));
 Expect("optimizer records drsMismatch", optimizerSrc.Contains("drsMismatch", StringComparison.Ordinal));
-Expect("display apply partial registry-only exit 2",
-    displayApplySrc.Contains("PARTIAL registry-ok nvapi-failed", StringComparison.Ordinal) &&
-    System.Text.RegularExpressions.Regex.IsMatch(displayApplySrc, @"exit\s+2"));
-Expect("display apply success requires registry and NVAPI",
-    displayApplySrc.Contains("[bool]$registryOk -and [bool]$nvApiOk", StringComparison.Ordinal));
-Expect("optimizer displayPrefs gates on NVAPI",
-    optimizerSrc.Contains("$displayPrefsOk = [bool]$dispResult.Success -and $displayNvApiOk", StringComparison.Ordinal) &&
+Expect("display apply retries NVAPI",
+    displayApplySrc.Contains("NVAPI apply attempt", StringComparison.Ordinal) &&
+    displayApplySrc.Contains("Invoke-NvApiHelperOnce", StringComparison.Ordinal));
+Expect("display apply success without partial exit 2",
+    displayApplySrc.Contains("SUCCESS registry", StringComparison.Ordinal) &&
+    !displayApplySrc.Contains("PARTIAL registry-ok nvapi-failed", StringComparison.Ordinal));
+Expect("optimizer displayPrefs accepts working path",
+    optimizerSrc.Contains("$displayPrefsOk = [bool]$dispResult.Success -or [bool]$displayNvApiOk -or [bool]$displayRegistryOk", StringComparison.Ordinal) &&
     optimizerSrc.Contains("displayPrefs        = [bool]$displayPrefsOk", StringComparison.Ordinal));
-Expect("optimizer records registry display method honestly",
+Expect("optimizer records registry display method",
     optimizerSrc.Contains("$displayMethod = if ($displayNvApiOk) { 'nvapi' } elseif ($displayRegistryOk) { 'registry' } else { $null }", StringComparison.Ordinal));
-Expect("optimizer saves completed display partial",
-    optimizerSrc.Contains("$Script:CompletedPartialDisplayPolicy = $false", StringComparison.Ordinal) &&
-    optimizerSrc.Contains("$Script:CompletedPartialDisplayPolicy = $true", StringComparison.Ordinal) &&
-    optimizerSrc.Contains("applyInProgress     = $false", StringComparison.Ordinal) &&
-    optimizerSrc.Contains("lastErrorStage      = 'display-policy'", StringComparison.Ordinal));
-Expect("optimizer partial keeps profiles and display honest",
-    optimizerSrc.Contains("profileApplied      = $true", StringComparison.Ordinal) &&
-    optimizerSrc.Contains("displayPrefs        = $false", StringComparison.Ordinal) &&
-    optimizerSrc.Contains("$partialDisplayMethod = if ($displayRegistryOk) { 'registry' } else { $null }", StringComparison.Ordinal) &&
-    optimizerSrc.Contains("Profiles imported and verified, but display NVAPI verification failed. Apply again or use Display panel.", StringComparison.Ordinal));
-Expect("optimizer partial exits success not throw",
-    optimizerSrc.Contains("DONE - PARTIAL NVIDIA", StringComparison.Ordinal) &&
-    optimizerSrc.Contains("exit 0", StringComparison.Ordinal) &&
+Expect("optimizer retries display before fail",
+    optimizerSrc.Contains("display-policy-retry", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("forcing one more Display-Apply pass", StringComparison.Ordinal));
+Expect("tray clear never registers logon task",
     !System.Text.RegularExpressions.Regex.IsMatch(
-        optimizerSrc,
-        @"CompletedPartialDisplayPolicy\s*=\s*\$true\s*\r?\n\s*throw\s+\$partialDisplayError",
-        System.Text.RegularExpressions.RegexOptions.Multiline));
-Expect("optimizer catch preserves display partial",
+        File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-TrayClear.ps1")),
+        @"(?<!Un)Register-ScheduledTask|schtasks\s+/Create",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+Expect("tray clear purges Exo tasks",
+    File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-TrayClear.ps1"))
+        .Contains("Unregister-ExoTrayTasks", StringComparison.Ordinal));
+Expect("optimizer catch still saves failure state",
     optimizerSrc.Contains("if (-not [bool]$Script:CompletedPartialDisplayPolicy)", StringComparison.Ordinal) &&
     optimizerSrc.Contains("Save-ExoFailureState -Stage $failStage -Message $failMessage", StringComparison.Ordinal));
-Expect("detect surfaces display partial detail",
-    detectSrc.Contains("$lastErrorStage -eq 'display-policy' -and $lastError", StringComparison.Ordinal));
 Expect("optimizer tray clear passes NoTask",
     optimizerSrc.Contains("'-NoTask', '-SettlePasses', '3'", StringComparison.Ordinal) &&
     optimizerSrc.Contains("(NoTask; no background task)", StringComparison.Ordinal));

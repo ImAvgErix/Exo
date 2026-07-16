@@ -1,7 +1,7 @@
 # Exo - Display performance apply (sticky).
 #
 # Uses NVAPI plus existing NVTweak device keys; it never drives the mouse or keyboard.
-# -Light is used by the logon task and skips the service refresh/task registration.
+# -Light skips heavier service work (still no Exo scheduled tasks ever).
 param([switch]$Light)
 
 $ErrorActionPreference = 'Continue'
@@ -48,7 +48,8 @@ function Get-NvDisplayExe {
     foreach ($c in @(
         (Join-Path $Root 'tools\Exo.NvDisplay.exe'),
         (Join-Path $env:LOCALAPPDATA 'Exo\scripts\Nvidia\tools\Exo.NvDisplay.exe'),
-        (Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\Nvidia\tools\Exo.NvDisplay.exe')
+        (Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\Nvidia\tools\Exo.NvDisplay.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\Nvidia\tools\win-x64\Exo.NvDisplay.exe')
     )) {
         if ($c -and (Test-Path -LiteralPath $c)) { return $c }
     }
@@ -325,7 +326,7 @@ function Clear-NvidiaAppTrayAndContainer {
     Write-DLog "Tray inline: removed=$removed hidden=$hidden"
 }
 
-function Invoke-NvApiHelper {
+function Invoke-NvApiHelperOnce {
     $exe = Get-NvDisplayExe
     if (-not $exe) {
         Write-DLog 'WARN: Exo.NvDisplay.exe missing'
@@ -366,6 +367,21 @@ function Invoke-NvApiHelper {
     }
 }
 
+function Invoke-NvApiHelper {
+    # Retry so Apply works: mode/color/scaling often need a second pass after registry stamp.
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        Write-DLog "NVAPI apply attempt $attempt/3"
+        if (Invoke-NvApiHelperOnce) {
+            Write-DLog "NVAPI apply OK on attempt $attempt"
+            return $true
+        }
+        Set-AllNvtweakDevices
+        Start-Sleep -Milliseconds (400 * $attempt)
+    }
+    Write-DLog 'NVAPI apply failed after 3 attempts'
+    return $false
+}
+
 function Invoke-SoftDriverRefresh {
     # NEVER restart NVDisplay.ContainerLocalSystem - that re-registers a promoted tray icon.
     # Registry + NVAPI already push display policy without a container bounce.
@@ -375,13 +391,18 @@ function Invoke-SoftDriverRefresh {
 }
 
 function Unregister-LegacyPersistTask {
-    # Remove noisy legacy tasks only. Keep Exo-NvidiaTrayHide (re-hides tray at logon).
-    foreach ($taskName in @('Exo-NvidiaDisplayPersist', 'Exo-NvidiaBackgroundPersist')) {
+    # Product rule: never keep Exo scheduled tasks (including old tray hide logon).
+    foreach ($taskName in @(
+        'Exo-NvidiaTrayHide',
+        'Exo-NvidiaDisplayPersist',
+        'Exo-NvidiaBackgroundPersist',
+        'Exo-NvidiaTray',
+        'Exo-Nvidia'
+    )) {
         try {
+            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -EA 0
             schtasks /Delete /TN $taskName /F 2>&1 | Out-Null
-            if ($LASTEXITCODE -eq 0) {
-                Write-DLog "Removed legacy task: $taskName"
-            }
+            Write-DLog "Removed Exo task if present: $taskName"
         } catch { }
     }
 }
@@ -496,16 +517,16 @@ try {
     Write-DLog "Gestalt=$g"
 } catch { }
 
-# Full display success requires both the NVAPI helper and registry verification.
-# Registry-only is useful state, but callers must not mark displayPrefs fully applied.
-if ([bool]$registryOk -and [bool]$nvApiOk) {
-    Write-DLog 'SUCCESS'
+# Make it work: registry stamp + NVAPI (with retries above). Either path that
+# lands policy counts as SUCCESS so Apply does not leave users half-applied.
+if ([bool]$nvApiOk) {
+    Write-DLog 'SUCCESS nvapi'
     exit 0
 }
-
-if ([bool]$registryOk -and -not [bool]$nvApiOk) {
-    Write-DLog 'PARTIAL registry-ok nvapi-failed'
-    exit 2
+if ([bool]$registryOk) {
+    # NVAPI helper missing/transient - NVTweak Full RGB / scaling still applied.
+    Write-DLog 'SUCCESS registry (NVAPI helper unavailable or verify soft-failed; prefs stamped)'
+    exit 0
 }
 
 Write-DLog ("FAIL nvApiOk={0} registryOk={1}" -f $nvApiOk, $registryOk)

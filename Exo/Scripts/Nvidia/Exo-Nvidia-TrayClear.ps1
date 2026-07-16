@@ -4,15 +4,16 @@
 #   NVDisplay.ContainerLocalSystem re-registers a tray key on soft-refresh / logon.
 #   Deleting that key makes Windows recreate it as promoted (worse).
 #
-# Strategy (original working approach from v1.9.23):
+# Strategy:
 #   1) Kill App-stack (NvContainerLocalSystem) permanently disabled
 #   2) DELETE App/GFE/ShadowPlay tray keys
 #   3) HIDE display-container tray (IsPromoted=0) - leave the key
 #   4) Multi-pass settle after container restart
-#   5) Lightweight HKCU logon task re-hides after reboot (no elevation)
+#   5) NEVER create Exo scheduled tasks / Run keys / background services
+#      (product rule: Apply-only; purge any leftover Exo-* tasks)
 #
 param(
-    [switch]$NoTask,
+    [switch]$NoTask,  # kept for callers; tasks are never registered either way
     [int]$SettlePasses = 2
 )
 $ErrorActionPreference = 'Continue'
@@ -151,7 +152,7 @@ function Clear-NvidiaAppLeftovers {
             $props = Get-ItemProperty -LiteralPath $run -EA 0
             if (-not $props) { continue }
             $props.PSObject.Properties | Where-Object {
-                $_.Name -notmatch '^PS' -and ([string]$_.Value -match '(?i)NVIDIA|GeForce|nvapp|ShadowPlay')
+                $_.Name -notmatch '^PS' -and ([string]$_.Value -match '(?i)NVIDIA|GeForce|nvapp|ShadowPlay|\\Exo\\')
             } | ForEach-Object {
                 try {
                     Remove-ItemProperty -LiteralPath $run -Name $_.Name -Force -EA 0
@@ -162,51 +163,35 @@ function Clear-NvidiaAppLeftovers {
     }
 }
 
-function Register-ExoTrayHideTask {
-    # Lightweight: at logon re-hide NVIDIA tray (HKCU). No elevation required for IsPromoted.
-    $taskName = 'Exo-NvidiaTrayHide'
-    $scriptPath = $PSCommandPath
-    if ([string]::IsNullOrWhiteSpace($scriptPath) -or -not (Test-Path -LiteralPath $scriptPath)) {
-        $scriptPath = Join-Path $PSScriptRoot 'Exo-Nvidia-TrayClear.ps1'
+function Unregister-ExoTrayTasks {
+    # Product rule: Exo never installs logon/background tasks. Purge leftovers.
+    $names = @(
+        'Exo-NvidiaTrayHide',
+        'Exo-NvidiaDisplayPersist',
+        'Exo-NvidiaBackgroundPersist',
+        'Exo-NvidiaTray',
+        'Exo-Nvidia'
+    )
+    foreach ($taskName in $names) {
+        try { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -EA 0 } catch { }
+        try { schtasks /Delete /TN $taskName /F 2>$null | Out-Null } catch { }
     }
-    if (-not (Test-Path -LiteralPath $scriptPath)) {
-        Write-TLog 'Skip task: tray script path missing'
-        return
-    }
-
-    $arg = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$scriptPath`" -NoTask -SettlePasses 2"
     try {
-        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -EA 0
-    } catch { }
-
-    try {
-        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg
-        $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-        $settings = New-ScheduledTaskSettingsSet `
-            -AllowStartIfOnBatteries `
-            -DontStopIfGoingOnBatteries `
-            -StartWhenAvailable `
-            -ExecutionTimeLimit (New-TimeSpan -Minutes 3) `
-            -MultipleInstances IgnoreNew
-        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
-        Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
-            -Settings $settings -Principal $principal -Force -EA Stop | Out-Null
-        Write-TLog "Registered logon task: $taskName (re-hides tray after reboot)"
-    } catch {
-        try {
-            $cmd = "powershell.exe $arg"
-            schtasks /Create /TN $taskName /TR $cmd /SC ONLOGON /RL LIMITED /F 2>$null | Out-Null
-            Write-TLog "Registered logon task via schtasks: $taskName"
-        } catch {
-            Write-TLog "Could not register tray task: $($_.Exception.Message)"
+        Get-ScheduledTask -EA 0 | Where-Object { $_.TaskName -match '(?i)^Exo-' } | ForEach-Object {
+            try {
+                Unregister-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath -Confirm:$false -EA 0
+                Write-TLog "Removed leftover task: $($_.TaskPath)$($_.TaskName)"
+            } catch { }
         }
-    }
+    } catch { }
+    Write-TLog 'Exo scheduled tasks purged (none registered)'
 }
 
 # ---- main ----
 Write-TLog 'Clearing / hiding NVIDIA tray icons...'
 Disable-NvidiaAppContainer
 Clear-NvidiaAppLeftovers
+Unregister-ExoTrayTasks
 
 $passes = [Math]::Max(1, $SettlePasses)
 $totalRemoved = 0
@@ -225,10 +210,7 @@ $totalRemoved += [int]$r2.Removed
 $totalHidden += [int]$r2.Hidden
 
 Write-TLog "Done. Removed=$totalRemoved Hidden(display)=$totalHidden"
-
-if (-not $NoTask) {
-    Register-ExoTrayHideTask
-}
+Write-TLog 'No Exo background services, startup entries, or scheduled tasks created'
 
 Write-Output 'EXO_PROGRESS:100|Tray cleared'
 exit 0
