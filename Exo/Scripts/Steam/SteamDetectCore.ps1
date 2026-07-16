@@ -7,11 +7,12 @@ Set-StrictMode -Version Latest
 function Test-SteamCefLauncherText {
     param([AllowNull()][string]$Text)
     if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
+    # Must not require -cef-disable-gpu (breaks modern CEF/steamwebhelper UI).
     return ($Text -match '(?i)steam\.exe') -and
-        ($Text -match '-cef-disable-gpu') -and
         ($Text -match '-nofriendsui') -and
         ($Text -match '-nointro') -and
-        ($Text -match '(?i)start\s+""\s+/HIGH')
+        ($Text -match '(?i)start\s+""\s+/HIGH') -and
+        ($Text -notmatch '-cef-disable-gpu')
 }
 
 function Test-SteamTrimHelperText {

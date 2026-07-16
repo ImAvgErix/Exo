@@ -45,7 +45,7 @@ if ($env:EXO -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.3.49'
+$Script:DiscOptVersion = '1.3.50'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -646,23 +646,42 @@ if (-not $SkipEquicord) {
     Add-ExoReport 'equicord' 'skip' 'SkipEquicord switch'
 }
 
-# 5) DiscOpt kernel - core feature (aggressive trim + raw input + Above Normal priority)
+# 5) DiscOpt kernel - memory trim / priority / raw input.
+# Elevated Exo cannot boot-check Discord (admin flash = black screen). Leaving
+# version.dll + ffmpeg proxy active without a real boot check bricks launch on
+# many builds. Skip/disarm kernel under elevated Exo unless EXO_FORCE_KERNEL=1.
+$elevatedExoQuiet = ($env:EXO -eq '1' -and $NoLaunch) -or ($env:EXO_SKIP_BOOT_FLASH -eq '1')
 if (-not $SkipKernel) {
-    try {
-        Install-DiscOptKernel $app.FullName
-        if ($Script:DiscOptKernelProxyActive) {
-            Add-ExoReport 'kernel' 'ok'
-        } else {
-            Add-ExoReport 'kernel' 'skip' 'ffmpeg proxy skipped; stock ffmpeg kept'
-        }
-    } catch {
-        Add-ExoReport 'kernel' 'fail' $_.Exception.Message
-        Write-Warn "DiscOpt kernel install failed: $($_.Exception.Message)"
-        Write-Warn 'Leaving Discord stock-safe and continuing to boot safety check'
+    if ($elevatedExoQuiet -and $env:EXO_FORCE_KERNEL -ne '1') {
+        Write-Warn 'Skipping DiscOpt kernel under elevated Exo Apply (cannot boot-check; Discord stays openable)'
         try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
+        Add-ExoReport 'kernel' 'skip' 'elevated host: kernel disarmed for launch safety'
+        $Script:DiscOptKernelProxyActive = $false
+    } else {
+        try {
+            if ((Get-Command Test-KernelOnDisk -ErrorAction SilentlyContinue) -and
+                (Test-KernelOnDisk $app.FullName)) {
+                Write-Ok 'DiscOpt kernel already on disk - skip reinstall'
+                Add-ExoReport 'kernel' 'skip' 'already verified on disk'
+                $Script:DiscOptKernelProxyActive = $true
+            } else {
+                Install-DiscOptKernel $app.FullName
+                if ($Script:DiscOptKernelProxyActive) {
+                    Add-ExoReport 'kernel' 'ok'
+                } else {
+                    Add-ExoReport 'kernel' 'skip' 'ffmpeg proxy skipped; stock ffmpeg kept'
+                }
+            }
+        } catch {
+            Add-ExoReport 'kernel' 'fail' $_.Exception.Message
+            Write-Warn "DiscOpt kernel install failed: $($_.Exception.Message)"
+            Write-Warn 'Leaving Discord stock-safe and continuing to boot safety check'
+            try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
+        }
     }
 } else {
     Write-Warn 'Skipped DiscOpt kernel (-SkipKernel) - aggressive trim / raw input not installed'
+    try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
     Add-ExoReport 'kernel' 'skip' 'SkipKernel switch'
 }
 
@@ -672,49 +691,41 @@ if (-not $SkipKernel) {
 # flash whenever Exo asked for quiet mode and only verify files on disk.
 $exoQuiet = ($env:EXO -eq '1' -and $NoLaunch) -or ($env:EXO_SKIP_BOOT_FLASH -eq '1')
 if ($exoQuiet) {
-    # Elevated Exo cannot flash-launch Discord (black screen / false fails). Disk verify only,
-    # but NEVER leave a half-installed kernel that can prevent non-admin launch.
+    # Elevated Exo cannot flash-launch Discord. Disk verify only.
+    # ALWAYS ensure no version.dll is left active - full kernel still bricks
+    # some Discord builds and we cannot prove boot from an elevated host.
     Write-HubProgress 90 'Verifying files on disk...'
     Write-Step 'Quiet verify (no Discord window flash from elevated host)...'
+    $verDll = Join-Path $app.FullName 'version.dll'
+    if (Test-Path -LiteralPath $verDll) {
+        Write-Warn 'Disarming DiscOpt kernel after elevated Apply (boot-check impossible from admin host)'
+        try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
+    }
     $exeOk = Test-Path (Join-Path $app.FullName 'Discord.exe')
     $asarPath = Join-Path $app.FullName 'resources\app.asar'
     $asarOk = (Test-Path $asarPath) -and ((Get-Item $asarPath).Length -ge 64)
     $eqAsar = Join-Path $EquicordData 'equicord.asar'
     $eqOk = $SkipEquicord -or ((Test-Path $eqAsar) -and ((Get-Item $eqAsar).Length -gt 1000000))
-    $modsOk = Test-DiscordModulesReady $app.FullName
-    $verDll = Join-Path $app.FullName 'version.dll'
-    $ffmpegDll = Join-Path $app.FullName 'ffmpeg.dll'
-    $proxyActive = (Test-Path $ffmpegDll) -and ((Get-Item $ffmpegDll).Length -lt 500000) -and
-        (Test-Path (Join-Path $app.FullName 'ffmpeg_real.dll'))
-    $kernelComplete = $SkipKernel -or (
-        (Test-Path $verDll) -and
-        (Test-Path (Join-Path $app.FullName 'config.ini')) -and
-        $proxyActive
-    )
-    # version.dll without a valid proxy is the unbootable half-kernel case - always disarm.
-    if (-not $SkipKernel -and (Test-Path $verDll) -and -not $proxyActive) {
-        Write-Warn 'Kernel half-state (version.dll without valid ffmpeg proxy) - disabling kernel for stock-safe launch'
-        try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
-        $kernelComplete = $true  # stock-safe after disable
-        Add-ExoReport 'boot-check' 'skip' 'elevated host; half-kernel disarmed for stock-safe launch'
-        $script:ExoBootCheckReported = $true
+    # Equicord stub without equicord.asar = Discord will not open.
+    if (-not $SkipEquicord -and $asarOk -and ((Get-Item $asarPath).Length -lt 4096) -and -not $eqOk) {
+        Write-Warn 'Equicord loader present but equicord.asar missing - restoring stock app.asar'
+        try { Use-StockDiscordRuntime $app.FullName } catch { }
+        $asarOk = (Test-Path $asarPath) -and ((Get-Item $asarPath).Length -ge 64)
+        $eqOk = $true
     }
-    if ($exeOk -and $asarOk -and $eqOk -and $modsOk -and ($kernelComplete -or $SkipKernel)) {
-        Write-Ok 'Quiet verify passed (loader + modules on disk; kernel complete or stock-safe)'
+    $modsOk = Test-DiscordModulesReady $app.FullName
+    $kernelDisarmed = -not (Test-Path -LiteralPath $verDll)
+    if ($exeOk -and $asarOk -and $eqOk -and $modsOk -and $kernelDisarmed) {
+        Write-Ok 'Quiet verify passed (loader + modules on disk; kernel disarmed for launch safety)'
         Write-Ok 'Open Discord from the Start menu (not as admin) when ready'
-        if (-not $script:ExoBootCheckReported) {
-            Add-ExoReport 'boot-check' 'skip' 'elevated host cannot flash-launch; disk verified stock-safe'
-        }
+        Add-ExoReport 'boot-check' 'skip' 'elevated host; kernel disarmed so Discord opens'
     } else {
-        Write-Warn "Quiet verify incomplete (exe=$exeOk asar=$asarOk eq=$eqOk mods=$modsOk kernelComplete=$kernelComplete)"
-        if (-not $modsOk) {
-            Write-Warn 'Modules incomplete - leaving runtime stock-safe'
-            Use-StockDiscordRuntime $app.FullName
+        Write-Warn "Quiet verify incomplete (exe=$exeOk asar=$asarOk eq=$eqOk mods=$modsOk kernelDisarmed=$kernelDisarmed)"
+        if (-not $modsOk -or -not $asarOk) {
+            Write-Warn 'Modules/loader incomplete - restoring stock runtime'
+            try { Use-StockDiscordRuntime $app.FullName } catch { }
         }
-        if (-not $kernelComplete -and -not $SkipKernel) {
-            Write-Warn 'Kernel incomplete - disabling kernel for stock-safe launch'
-            try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
-        }
+        try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
         Add-ExoReport 'boot-check' 'fail' 'quiet disk verify incomplete after stock-safe cleanup'
     }
 } elseif ($Quick) {

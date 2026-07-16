@@ -1,3 +1,9 @@
+## 3.0.5
+
+- **Discord launch fix**: elevated Exo Apply no longer leaves DiscOpt kernel (version.dll + ffmpeg proxy) active without a boot check — kernel is skipped/disarmed so Discord opens from Start Menu; Equicord stub without asar restored to stock
+- **Steam webhelper**: removed -cef-disable-gpu flags that blank modern CEF; gentler 6s trim only on large working sets; steamwebhelper stays Normal priority
+- **Skip-if-verified**: Steam debloat/startup/quiet skip when already live-true; Discord kernel skip when on disk (non-elevated); NVIDIA profile re-import skip when same pack DRS-verified
+- **Dashboard**: System RAM + Steam reclaim heroes; Discord/Steam/Internet/NVIDIA status tiles with real Apply state
 ## 3.0.4
 
 - **NVIDIA Apply**: MSI High no longer hard-fails when PCI nodes lack Class under StrictMode; successful clean driver continues into profiles/display (soft MSI skip)

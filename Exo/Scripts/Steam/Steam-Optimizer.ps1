@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.9.0'
+$Script:SteamOptVersion = '1.9.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
@@ -69,24 +69,17 @@ function Assert-ExoPwsh7 {
 }
 Assert-ExoPwsh7
 
-# Default Steam launch flags (formerly "aggressive" - this is the only tier).
-# Tuned for faster cold start + lower CEF cost. Avoid sandbox/single-process
-# flags - those crash on some PCs.
+# Default Steam launch flags (quiet cold start).
+# NEVER use -cef-disable-gpu / -cef-disable-gpu-compositing — modern Steam's
+# steamwebhelper goes blank or freezes on many GPUs (2024+ CEF).
+# Also forbidden: occlusion / renderer-accessibility disables, -silent on Start Menu.
 $Script:DefaultCefArgs = @(
-    # Safe multi-PC CEF set only. The occlusion and renderer-accessibility CEF
-    # disable flags are FORBIDDEN - they blank or hang Steam on some GPUs.
-    # -silent was evaluated and excluded: this launcher backs explicit Start
-    # Menu launches, and starting minimized-to-tray there confuses users.
-    '-cef-disable-gpu',
-    '-cef-disable-gpu-compositing',
     '-nofriendsui',
     '-nointro',
     '-nobigpicture',
     '-vrdisable',
-    '-no-dwrite',
     '-cef-disable-breakpad',
-    '-cef-disable-spell-checking',
-    '-cef-disable-extensions'
+    '-cef-disable-spell-checking'
 )
 
 function Write-HubProgress([int]$Percent, [string]$Status) {
@@ -1635,7 +1628,7 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
     $wsh = New-Object -ComObject WScript.Shell
     $patched = 0
     $seen = @{}
-    $desc = 'Steam (Exo - quiet CEF + aggressive 3s webhelper trim)'
+    $desc = 'Steam (Exo - quiet CEF + gentle webhelper trim)'
 
     foreach ($root in (Get-SteamShortcutSearchRoots)) {
         $lnks = @(Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse -Force -ErrorAction SilentlyContinue)
@@ -1783,9 +1776,10 @@ function Install-WebHelperTrimHelper([string]$SteamPath) {
     # Also re-enforces StartupMode=0 periodically so Steam cannot re-arm autostart.
     $helper = Join-Path $SteamPath 'Exo-SteamWebHelperTrim.ps1'
     $body = @'
-# Exo - aggressive 3s steamwebhelper trim + in-game priority yield + quiet re-enforce.
+# Exo - gentle 6s steamwebhelper trim (large WS only) + in-game steam.exe yield + quiet re-enforce.
 # No process suspension (suspension can break Steam IPC and overlay behavior).
 # Reclaimed working-set bytes accumulate into %LocalAppData%\Exo\steam-trim-stats.json.
+# Do not EmptyWorkingSet tiny CEF helpers or force High priority on steamwebhelper (UI freezes).
 $ErrorActionPreference = 'SilentlyContinue'
 $created = $false
 $mutex = [Threading.Mutex]::new($true, 'Local\Exo.SteamWebHelper', [ref]$created)
@@ -1874,10 +1868,13 @@ function Test-SteamGameRunning {
 
 function Trim-WebHelpers {
   # Returns reclaimed working-set bytes (sum of positive pre-post deltas).
+  # Skip small helpers (<180 MB) — thrashing CEF every few seconds breaks the UI.
   [long]$reclaimed = 0
+  $minWs = 180MB
   Get-Process steamwebhelper -ErrorAction SilentlyContinue | ForEach-Object {
     try {
       $before = [long]$_.WorkingSet64
+      if ($before -lt $minWs) { return }
       $h = [ExoWs]::OpenProcess([ExoWs]::ACCESS, $false, $_.Id)
       if ($h -eq [IntPtr]::Zero) { return }
       try { [void][ExoWs]::EmptyWorkingSet($h) }
@@ -1891,17 +1888,24 @@ function Trim-WebHelpers {
 }
 
 function Set-SteamClientPriority([bool]$InGame) {
-  $cls = if ($InGame) {
+  # steam.exe: High when idle (snappy UI), BelowNormal in-game.
+  # steamwebhelper: Normal always — High + EmptyWorkingSet thrashes CEF and freezes the library.
+  $steamCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
   } else {
     [System.Diagnostics.ProcessPriorityClass]::High
   }
-  foreach ($name in @('steam', 'steamwebhelper')) {
-    Get-Process -Name $name -ErrorAction SilentlyContinue | ForEach-Object {
-      try {
-        if ($_.PriorityClass -ne $cls) { $_.PriorityClass = $cls }
-      } catch {}
-    }
+  Get-Process -Name 'steam' -ErrorAction SilentlyContinue | ForEach-Object {
+    try {
+      if ($_.PriorityClass -ne $steamCls) { $_.PriorityClass = $steamCls }
+    } catch {}
+  }
+  Get-Process -Name 'steamwebhelper' -ErrorAction SilentlyContinue | ForEach-Object {
+    try {
+      if ($_.PriorityClass -ne [System.Diagnostics.ProcessPriorityClass]::Normal) {
+        $_.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Normal
+      }
+    } catch {}
   }
 }
 
@@ -1957,10 +1961,10 @@ try {
     }
     $ticks++
     # Flush proof stats every ~1 minute (writing on every 3s pass is wasteful).
-    if (($ticks % 20) -eq 0) { Save-TrimStats $stats }
+    if (($ticks % 10) -eq 0) { Save-TrimStats $stats }
     # Every ~2 minutes while Steam is open, re-assert no autostart.
-    if (($ticks % 40) -eq 0) { Reinstate-SteamQuiet }
-    Start-Sleep -Seconds 3
+    if (($ticks % 20) -eq 0) { Reinstate-SteamQuiet }
+    Start-Sleep -Seconds 6
   }
 } finally {
   Save-TrimStats $stats
@@ -1969,7 +1973,7 @@ try {
 }
 '@
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
-    Write-Ok 'WebHelper helper installed (3s trim + priority + quiet re-enforce + trim stats)'
+    Write-Ok 'WebHelper helper installed (6s gentle trim + quiet re-enforce + trim stats)'
     return $helper
 }
 
@@ -2362,21 +2366,38 @@ try {
         recovery        = $recovery
     }
 
+    # Skip stages that live-verify already correct (user asked: do not re-run proven tweaks).
     Write-HubProgress 24 'Complete client debloat...'
-    $debloatResult = Invoke-SteamCompleteClientDebloat $steam
-    Add-ExoReport 'client-debloat' 'ok'
+    $debloatResult = @{ Freed = 0L }
+    if (Test-SteamCompleteClientDebloat $steam) {
+        Write-Ok 'Client debloat already verified - skip'
+        Add-ExoReport 'client-debloat' 'skip' 'already verified'
+    } else {
+        $debloatResult = Invoke-SteamCompleteClientDebloat $steam
+        Add-ExoReport 'client-debloat' 'ok'
+    }
 
     Write-HubProgress 30 'Disabling Windows startup...'
-    $startupResult = Disable-SteamWindowsStartup $currentRecovery
-    if (-not $startupResult.Success -or -not (Test-SteamWindowsStartupDisabled)) {
-        Add-ExoReport 'startup-quiet' 'fail' 'startup suppression could not be verified'
-        throw 'Steam startup suppression could not be fully verified; recovery state was kept'
+    if (Test-SteamWindowsStartupDisabled) {
+        Write-Ok 'Windows startup already quiet - skip'
+        Add-ExoReport 'startup-quiet' 'skip' 'already verified'
+    } else {
+        $startupResult = Disable-SteamWindowsStartup $currentRecovery
+        if (-not $startupResult.Success -or -not (Test-SteamWindowsStartupDisabled)) {
+            Add-ExoReport 'startup-quiet' 'fail' 'startup suppression could not be verified'
+            throw 'Steam startup suppression could not be fully verified; recovery state was kept'
+        }
+        Add-ExoReport 'startup-quiet' 'ok'
     }
-    Add-ExoReport 'startup-quiet' 'ok'
 
     Write-HubProgress 34 'Windows quiet shell (toasts / tray / tasks)...'
-    Apply-SteamWindowsQuiet $steam
-    Add-ExoReport 'windows-quiet' 'ok'
+    if (Test-SteamWindowsQuiet $steam) {
+        Write-Ok 'Windows quiet shell already verified - skip'
+        Add-ExoReport 'windows-quiet' 'skip' 'already verified'
+    } else {
+        Apply-SteamWindowsQuiet $steam
+        Add-ExoReport 'windows-quiet' 'ok'
+    }
     Write-HubProgress 36 'GPU preference (discrete when present)...'
     Set-SteamGpuHighPerformance $steam
     Add-ExoReport 'gpu-preference' 'ok'
@@ -2403,13 +2424,15 @@ try {
         Write-Ok 'Deep cache/shader clean skipped (-Quick) - still applying CEF lean + helpers'
         Add-ExoReport 'cache-clean' 'skip' 'quick pass requested'
         Add-ExoReport 'shader-orphans' 'skip' 'quick pass requested'
+        $shaderInventoryVerified = $true
     }
     Write-Ok ("Cache cleanup freed ~{0:N1} MB" -f ($freed / 1MB))
 
-    Write-HubProgress 58 'Installing aggressive webhelper helper...'
+    Write-HubProgress 58 'Installing webhelper helper...'
     $helper = Install-WebHelperTrimHelper $steam
     Add-ExoReport 'webhelper-trim' 'ok'
     Write-HubProgress 68 'Writing quiet CEF launcher...'
+    # Always rewrite launcher so CEF flags stay current (e.g. drop broken gpu-disable).
     $launch = Install-LeanSteamLauncher $steam $helper
     Add-ExoReport 'cef-launcher' 'ok'
 
@@ -2420,6 +2443,7 @@ try {
     $loginOk = Set-SteamFastLoginHints $steam
     if ($loginOk) { Add-ExoReport 'fast-login' 'ok' }
     else { Add-ExoReport 'fast-login' 'skip' 'loginusers.vdf not writable yet' }
+    # Note: Set-Steam* helpers already no-op / report when keys are already correct.
 
     Write-HubProgress 78 'Download speed / config.vdf...'
     $cfg = Set-SteamLibraryConfigHints $steam
@@ -2445,16 +2469,19 @@ try {
     $launcherOk = $false
     try {
         $launcherText = Get-Content -LiteralPath $launch.Cmd -Raw -ErrorAction Stop
+        # Must NOT require -cef-disable-gpu (breaks modern steamwebhelper UI).
         $launcherOk = $launcherText -match '(?i)steam\.exe' -and
-            $launcherText -match '(?i)-cef-disable-gpu' -and
-            $launcherText -match '(?i)start\s+""\s+/HIGH'
+            $launcherText -match '(?i)-nofriendsui' -and
+            $launcherText -match '(?i)-nointro' -and
+            $launcherText -match '(?i)start\s+""\s+/HIGH' -and
+            $launcherText -notmatch '(?i)-cef-disable-gpu'
     } catch { }
     $helperOk = $false
     try {
         $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
         $helperOk = $helperText -match 'Exo\.SteamWebHelper' -and
             $helperText -match 'EmptyWorkingSet' -and
-            $helperText -match 'Start-Sleep -Seconds (3|4|5)' -and
+            $helperText -match 'Start-Sleep -Seconds (3|4|5|6|7|8)' -and
             $helperText -match 'ProcessPriorityClass\]::High' -and
             $helperText -match 'ProcessPriorityClass\]::BelowNormal'
     } catch { }

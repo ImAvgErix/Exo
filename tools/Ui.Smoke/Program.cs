@@ -132,26 +132,28 @@ if (File.Exists(dash))
             || d.Contains("FontSize=\"36\"", StringComparison.Ordinal)));
     Expect("hero tagline",
         d.Contains("HeroTagline", StringComparison.Ordinal)
-        && d.Contains("Maximum performance", StringComparison.Ordinal));
+        && (d.Contains("Maximum performance", StringComparison.Ordinal)
+            || d.Contains("HeroSummary", StringComparison.Ordinal)));
     Expect("home instrument plate", d.Contains("ExoModulePlate", StringComparison.Ordinal));
-    Expect("home nvidia pack hero",
-        d.Contains("NVIDIA PACK", StringComparison.Ordinal)
-        && d.Contains("FpsPrimary", StringComparison.Ordinal));
-    Expect("home discord hero",
-        d.Contains("DISCORD", StringComparison.Ordinal)
-        && d.Contains("FrameTimePrimary", StringComparison.Ordinal));
-    Expect("home internet tile",
-        d.Contains("INTERNET", StringComparison.Ordinal)
-        && d.Contains("LatencyPrimary", StringComparison.Ordinal));
-    Expect("home steam ram tile",
-        d.Contains("STEAM / RAM", StringComparison.Ordinal)
-        && d.Contains("ReclaimedPrimary", StringComparison.Ordinal)
+    Expect("home system ram hero",
+        d.Contains("SYSTEM RAM", StringComparison.Ordinal)
         && d.Contains("MemoryPrimary", StringComparison.Ordinal));
-    Expect("home four-metric dashboard",
-        d.Contains("NVIDIA PACK", StringComparison.Ordinal)
-        && d.Contains("DISCORD", StringComparison.Ordinal)
-        && d.Contains("STEAM / RAM", StringComparison.Ordinal)
-        && d.Contains("INTERNET", StringComparison.Ordinal));
+    Expect("home steam reclaimed hero",
+        d.Contains("STEAM RECLAIMED", StringComparison.Ordinal)
+        && d.Contains("ReclaimedPrimary", StringComparison.Ordinal));
+    Expect("home module status row",
+        d.Contains("DiscordStatusPrimary", StringComparison.Ordinal)
+        && d.Contains("SteamStatusPrimary", StringComparison.Ordinal)
+        && d.Contains("NvidiaPathPrimary", StringComparison.Ordinal)
+        && d.Contains("LatencyPrimary", StringComparison.Ordinal));
+    Expect("home four module tiles",
+        d.Contains("DISCORD", StringComparison.Ordinal)
+        && d.Contains("STEAM", StringComparison.Ordinal)
+        && d.Contains("INTERNET", StringComparison.Ordinal)
+        && d.Contains("NVIDIA", StringComparison.Ordinal));
+    Expect("home useful dashboard",
+        d.Contains("SYSTEM RAM", StringComparison.Ordinal)
+        && d.Contains("STEAM RECLAIMED", StringComparison.Ordinal));
     Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("no fixed product cards",
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)
@@ -640,9 +642,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 3.0.4", File.ReadAllText(versionFile).Trim() == "3.0.4");
+    Expect("VERSION is 3.0.5", File.ReadAllText(versionFile).Trim() == "3.0.5");
 if (File.Exists(csproj))
-    Expect("csproj Version 3.0.4", File.ReadAllText(csproj).Contains("<Version>3.0.4</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 3.0.5", File.ReadAllText(csproj).Contains("<Version>3.0.5</Version>", StringComparison.Ordinal));
 
 // Live advisor (realtime next-step coach on every optimizer)
 var advisorPath = Path.Combine(repo, "Exo", "Services", "OptimizerAdvisor.cs");

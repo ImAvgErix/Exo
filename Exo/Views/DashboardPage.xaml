@@ -9,14 +9,14 @@
     Unloaded="Page_Unloaded">
 
     <!--
-      Home dashboard — four metrics users care about most:
-      FPS gain · Frame time · RAM reclaimed · Network latency.
+      Home — useful at a glance:
+      System RAM (live) · Steam reclaim · module status strip · Internet ping/status
     -->
     <Border x:Name="PageRoot"
             Style="{StaticResource ExoModulePlate}"
             Padding="24,20,24,16"
             UseLayoutRounding="True">
-        <Grid RowSpacing="12">
+        <Grid RowSpacing="14">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -40,7 +40,7 @@
                            VerticalAlignment="Center"
                            UseLayoutRounding="True" />
                 <TextBlock x:Name="HeroTagline"
-                           Text="Maximum performance. No compromise."
+                           Text="{x:Bind ViewModel.HeroSummary, Mode=OneWay}"
                            Style="{StaticResource ExoTagline}"
                            FontSize="15"
                            LineHeight="20"
@@ -58,6 +58,7 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
+                <!-- Live system RAM — always useful -->
                 <Border Grid.Column="0"
                         Background="{ThemeResource ExoGlassFillBrush}"
                         BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
@@ -65,25 +66,30 @@
                         CornerRadius="12"
                         Padding="18,16">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="NVIDIA PACK"
+                        <TextBlock Text="SYSTEM RAM"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
                                    FontSize="10"
                                    CharacterSpacing="100"
                                    Foreground="{ThemeResource ExoMutedTextBrush}" />
-                        <TextBlock Text="{x:Bind ViewModel.FpsPrimary, Mode=OneWay}"
+                        <TextBlock Text="{x:Bind ViewModel.MemoryPrimary, Mode=OneWay}"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
                                    FontSize="44"
                                    CharacterSpacing="-36"
                                    LineHeight="48"
                                    Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                        <TextBlock Text="{x:Bind ViewModel.FpsSecondary, Mode=OneWay}"
+                        <TextBlock Text="{x:Bind ViewModel.MemorySecondary, Mode=OneWay}"
                                    FontFamily="{StaticResource ExoUiFont}"
                                    FontSize="13"
                                    Foreground="{ThemeResource ExoMutedTextBrush}"
                                    TextWrapping="WrapWholeWords" />
+                        <TextBlock Text="{x:Bind ViewModel.MemoryLoadText, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="14"
+                                   Foreground="{ThemeResource ExoAccentBrush}" />
                     </StackPanel>
                 </Border>
 
+                <!-- Steam reclaim + helper status -->
                 <Border Grid.Column="1"
                         Background="{ThemeResource ExoGlassFillBrush}"
                         BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
@@ -97,20 +103,20 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <TextBlock Text="DISCORD"
+                        <TextBlock Text="STEAM RECLAIMED"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
                                    FontSize="10"
                                    CharacterSpacing="100"
                                    Foreground="{ThemeResource ExoMutedTextBrush}" />
                         <TextBlock Grid.Row="1"
-                                   Text="{x:Bind ViewModel.FrameTimePrimary, Mode=OneWay}"
+                                   Text="{x:Bind ViewModel.ReclaimedPrimary, Mode=OneWay}"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
                                    FontSize="44"
                                    CharacterSpacing="-36"
                                    LineHeight="48"
                                    Foreground="{ThemeResource ExoPrimaryTextBrush}" />
                         <TextBlock Grid.Row="2"
-                                   Text="{x:Bind ViewModel.FrameTimeSecondary, Mode=OneWay}"
+                                   Text="{x:Bind ViewModel.ReclaimedSecondary, Mode=OneWay}"
                                    FontFamily="{StaticResource ExoUiFont}"
                                    FontSize="13"
                                    Foreground="{ThemeResource ExoMutedTextBrush}"
@@ -140,72 +146,67 @@
                 </Border>
             </Grid>
 
+            <!-- Module status row — what is optimized -->
             <Grid x:Name="StatRow"
                   Grid.Row="2"
-                  ColumnSpacing="12">
+                  ColumnSpacing="10">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0"
-                        Background="{ThemeResource ExoGlassFillBrush}"
-                        BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
-                        BorderThickness="1"
-                        CornerRadius="10"
-                        Padding="14,12"
-                        MinHeight="84">
+                <Border Grid.Column="0" Style="{StaticResource ExoCard}" Padding="12,10" MinHeight="88">
                     <StackPanel Spacing="4">
-                        <TextBlock Text="STEAM / RAM"
+                        <TextBlock Text="DISCORD" FontSize="10" CharacterSpacing="80"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                   FontSize="10"
-                                   CharacterSpacing="80"
                                    Foreground="{ThemeResource ExoMutedTextBrush}" />
-                        <TextBlock Text="{x:Bind ViewModel.ReclaimedPrimary, Mode=OneWay}"
-                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                   FontSize="22"
+                        <TextBlock Text="{x:Bind ViewModel.DiscordStatusPrimary, Mode=OneWay}"
+                                   FontSize="18" FontFamily="{StaticResource ExoUiFontSemiBold}"
                                    Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                        <TextBlock Text="{x:Bind ViewModel.ReclaimedSecondary, Mode=OneWay}"
-                                   FontFamily="{StaticResource ExoUiFont}"
-                                   FontSize="12"
-                                   Foreground="{ThemeResource ExoMutedTextBrush}"
-                                   TextWrapping="WrapWholeWords" />
-                        <TextBlock Text="{x:Bind ViewModel.MemoryPrimary, Mode=OneWay}"
-                                   FontFamily="{StaticResource ExoUiFont}"
-                                   FontSize="11"
-                                   Foreground="{ThemeResource ExoMutedTextBrush}"
-                                   Opacity="0.85" />
-                        <TextBlock Text="{x:Bind ViewModel.MemorySecondary, Mode=OneWay}"
-                                   FontFamily="{StaticResource ExoUiFont}"
-                                   FontSize="11"
-                                   Foreground="{ThemeResource ExoMutedTextBrush}"
-                                   Opacity="0.75"
-                                   TextWrapping="WrapWholeWords" />
+                        <TextBlock Text="{x:Bind ViewModel.DiscordStatusSecondary, Mode=OneWay}"
+                                   FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}" />
                     </StackPanel>
                 </Border>
-
-                <Border Grid.Column="1"
-                        Background="{ThemeResource ExoGlassFillBrush}"
-                        BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
-                        BorderThickness="1"
-                        CornerRadius="10"
-                        Padding="14,12"
-                        MinHeight="84">
+                <Border Grid.Column="1" Style="{StaticResource ExoCard}" Padding="12,10" MinHeight="88">
                     <StackPanel Spacing="4">
-                        <TextBlock Text="INTERNET"
+                        <TextBlock Text="STEAM" FontSize="10" CharacterSpacing="80"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                   FontSize="10"
-                                   CharacterSpacing="80"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.SteamStatusPrimary, Mode=OneWay}"
+                                   FontSize="18" FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.SteamStatusSecondary, Mode=OneWay}"
+                                   FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Style="{StaticResource ExoCard}" Padding="12,10" MinHeight="88">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="INTERNET" FontSize="10" CharacterSpacing="80"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
                                    Foreground="{ThemeResource ExoMutedTextBrush}" />
                         <TextBlock Text="{x:Bind ViewModel.LatencyPrimary, Mode=OneWay}"
-                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                   FontSize="22"
+                                   FontSize="18" FontFamily="{StaticResource ExoUiFontSemiBold}"
                                    Foreground="{ThemeResource ExoPrimaryTextBrush}" />
                         <TextBlock Text="{x:Bind ViewModel.LatencySecondary, Mode=OneWay}"
-                                   FontFamily="{StaticResource ExoUiFont}"
-                                   FontSize="12"
-                                   Foreground="{ThemeResource ExoMutedTextBrush}"
-                                   TextWrapping="WrapWholeWords" />
+                                   FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="3" Style="{StaticResource ExoCard}" Padding="12,10" MinHeight="88">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="NVIDIA" FontSize="10" CharacterSpacing="80"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.NvidiaPathPrimary, Mode=OneWay}"
+                                   FontSize="18" FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.NvidiaPathSecondary, Mode=OneWay}"
+                                   FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}" />
                     </StackPanel>
                 </Border>
             </Grid>

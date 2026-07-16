@@ -22,8 +22,10 @@ public static partial class SteamLogic
     public static bool IsCefLauncherText(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
+        // GPU-disable CEF flags blank modern steamwebhelper — treat as invalid.
+        if (text.Contains("-cef-disable-gpu", StringComparison.OrdinalIgnoreCase))
+            return false;
         return SteamExeRegex().IsMatch(text) &&
-               text.Contains("-cef-disable-gpu", StringComparison.OrdinalIgnoreCase) &&
                text.Contains("-nofriendsui", StringComparison.OrdinalIgnoreCase) &&
                text.Contains("-nointro", StringComparison.OrdinalIgnoreCase) &&
                HighPriorityStartRegex().IsMatch(text);
