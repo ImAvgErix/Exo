@@ -500,6 +500,28 @@ if (Test-Path -LiteralPath $equicordManifest) {
     }
 }
 
+# Wave-1 trust: product Scripts must never CREATE Exo-* scheduled tasks (Unregister/Delete OK).
+# Scan only Exo\Scripts (not tools/ which may mention patterns in comments).
+$exoScriptRoot = Join-Path $Root 'Exo\Scripts'
+$exoTaskCreateHits = [System.Collections.Generic.List[string]]::new()
+if (Test-Path -LiteralPath $exoScriptRoot) {
+    Get-ChildItem -LiteralPath $exoScriptRoot -Recurse -Filter *.ps1 -File | ForEach-Object {
+        $rel = $_.FullName.Substring($Root.Length).TrimStart('\', '/')
+        $raw = Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue
+        if ([string]::IsNullOrEmpty($raw)) { return }
+        # Match Register-ScheduledTask but not Unregister-ScheduledTask
+        if ($raw -match '(?i)(?<!Un)Register-ScheduledTask[^\r\n]{0,200}Exo-') {
+            [void]$exoTaskCreateHits.Add("$rel : Register-ScheduledTask Exo-*")
+        }
+        if ($raw -match '(?i)schtasks\s+/Create[^\r\n]{0,200}Exo-') {
+            [void]$exoTaskCreateHits.Add("$rel : schtasks /Create Exo-*")
+        }
+    }
+}
+if ($exoTaskCreateHits.Count -gt 0) {
+    Add-Failure ("Exo must not create scheduled tasks (found {0}): {1}" -f $exoTaskCreateHits.Count, ($exoTaskCreateHits -join '; '))
+}
+
 if ($failures.Count -gt 0) {
     throw "Repository integrity checks failed ($($failures.Count) issue(s))."
 }

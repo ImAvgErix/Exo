@@ -2459,9 +2459,12 @@ try {
             $helperText -match 'ProcessPriorityClass\]::BelowNormal'
     } catch { }
     $fullPassOk = -not [bool]$Quick
-    $essentialOk = $startupOk -and $windowsQuietOk -and $debloatOk -and $runtimeOk -and
-        $launchPathOk -and $launcherOk -and $helperOk -and [bool]$cfgOk -and
-        $clientTweaksOk -and $fullPassOk -and $shaderInventoryVerified
+    # Core pack (always required for applied). VDF first-run skips are NOT essentials-
+    # satisfied: detect requires downloadOptimized/snappyUi true, so applied must match.
+    $coreOk = $startupOk -and $windowsQuietOk -and $debloatOk -and $runtimeOk -and
+        $launchPathOk -and $launcherOk -and $helperOk -and $fullPassOk -and $shaderInventoryVerified
+    $vdfReady = [bool]$cfgOk -and -not $cfgSkipped -and [bool]$clientTweaksOk -and -not $clientTweaksSkipped
+    $essentialOk = $coreOk -and $vdfReady
     $state = @{
         version              = $Script:SteamOptVersion
         applyStatus          = if ($essentialOk) { 'applied' } else { 'incomplete' }
@@ -2524,8 +2527,22 @@ try {
         if (-not $launcherOk) { $missing += 'cef-launcher' }
         if (-not $helperOk) { $missing += 'webhelper-trim' }
         if (-not $cfgOk) { $missing += 'download-config' }
+        elseif ($cfgSkipped) { $missing += 'download-config-open-steam-once' }
         if (-not $clientTweaksOk) { $missing += 'client-tweaks' }
+        elseif ($clientTweaksSkipped) { $missing += 'localconfig-open-steam-once' }
         if (-not $shaderInventoryVerified) { $missing += 'shader-inventory' }
+        # First-run only: core pack OK but VDF absent - incomplete (not full applied), exit 0 so UI is not "Failed".
+        $firstRunVdfOnly = $coreOk -and (-not $vdfReady) -and (
+            ($cfgSkipped -or $clientTweaksSkipped) -and
+            ([bool]$cfgOk -or $cfgSkipped) -and
+            ([bool]$clientTweaksOk -or $clientTweaksSkipped)
+        )
+        if ($firstRunVdfOnly) {
+            Write-Warn ("Steam core pack applied; open Steam once then Reapply for VDF tweaks: {0}" -f ($missing -join ', '))
+            Write-HubProgress 100 'Core complete - open Steam once, then Reapply'
+            Write-Output 'DONE - Steam core optimized; open Steam once then Reapply for download/library VDF keys'
+            exit 0
+        }
         throw ("Steam apply finished with incomplete verification: {0}" -f ($missing -join ', '))
     }
 

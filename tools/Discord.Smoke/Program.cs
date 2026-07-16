@@ -232,6 +232,13 @@ var (auditOk, auditIssues) = DiscordLogic.AuditApplyScriptText(applyBlob);
 Expect("apply audit", auditOk, string.Join("; ", auditIssues));
 Expect("no Exo-Discord scheduled task create",
     applyBlob.IndexOf("Register-ScheduledTask -TaskName 'Exo-Discord", StringComparison.OrdinalIgnoreCase) < 0);
+// Wave-1 trust: elevated quiet path must disarm half-kernel, not claim full boot
+Expect("quiet verify disarms half-kernel",
+    applyBlob.Contains("half-kernel disarmed", StringComparison.Ordinal) ||
+    applyBlob.Contains("half-state (version.dll without valid ffmpeg proxy)", StringComparison.Ordinal));
+Expect("elevated host boot-check skip not fake ok",
+    applyBlob.Contains("elevated host cannot flash-launch", StringComparison.Ordinal) &&
+    applyBlob.Contains("Disable-DiscOptKernelOnDisk", StringComparison.Ordinal));
 Expect("Install-DiscOptKernel present",
     applyBlob.Contains("Install-DiscOptKernel", StringComparison.Ordinal));
 Expect("Apply-WindowsTweaks present",

@@ -560,6 +560,21 @@ if (repoRoot is null)
 var rescuePath = repoRoot is null ? null : Path.Combine(repoRoot, "Repair-Internet.ps1");
 Expect("Repair-Internet.ps1 exists at repo root", rescuePath is not null && File.Exists(rescuePath),
     $"repoRoot={repoRoot}");
+// Wave-1: UI service must not use brick-era success copy
+if (repoRoot is not null)
+{
+    var netSvcPath = Path.Combine(repoRoot, "Exo", "Services", "NetworkOptimizerService.cs");
+    if (File.Exists(netSvcPath))
+    {
+        var netSvc = File.ReadAllText(netSvcPath);
+        Expect("bindings success label is QoS+IP not Client/LLDP off",
+            netSvc.Contains("Applied (QoS + IPv4/IPv6 on)", StringComparison.Ordinal) &&
+            !netSvc.Contains("Client/LLDP off)", StringComparison.Ordinal));
+        Expect("Wi-Fi while Ethernet never hard-fails for Still up",
+            netSvc.Contains("Up (metrics prefer Ethernet)", StringComparison.Ordinal) ||
+            netSvc.Contains("Up (kept)", StringComparison.Ordinal));
+    }
+}
 if (rescuePath is not null && File.Exists(rescuePath))
 {
     var rescue = File.ReadAllText(rescuePath);
