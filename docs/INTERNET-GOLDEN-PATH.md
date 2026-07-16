@@ -58,7 +58,7 @@
 | InitialRtoMs / MinRtoMs | **1000 / 300** | untouched | Faster retransmit on loss (latency) |
 | MaxSynRetransmissions | 2 | 2 | Faster connect failure |
 | NonSackRttResiliency | Disabled | Disabled | Default-off resiliency stays off |
-| DNS ServiceProvider priorities | 4/5/6/7 | same | Documented Local/Hosts/Dns/Netbt order |
+| DNS ServiceProvider priorities | defaults 499/500/2000/2001 | same | 4/5/6/7 retired as folklore (v3.0.11): measured DNS 100ms → 1s+ |
 | RSS BaseProcessorNumber | **2** on Ethernet when ≥ 4 logical CPUs | same | Keeps NIC interrupts off core 0 |
 | IPv4 fast path | prefixpolicy `::ffff:0:0/96` 55 4 | same | Documented precedence, replaces old "IPv6 metric = IPv4+20" hack |
 | Delivery Optimization | DODownloadMode 0 + DoSvc Manual | same | Background download quiet |

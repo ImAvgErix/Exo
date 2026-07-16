@@ -34,7 +34,7 @@ without the app. See `docs/INTERNET-GOLDEN-PATH.md`.
 | ECN per preset | **Implemented (v2.4.0)** | disabled (latency) / enabled (throughput) |
 | `InitialRtoMs 1000` / `MinRtoMs 300` | **Implemented (v2.4.0, latency)** | Documented `Set-NetTCPSetting` |
 | `MaxSynRetransmissions 2` / `NonSackRttResiliency Disabled` | **Implemented (v2.4.0, both)** | Documented |
-| DNS ServiceProvider priorities 4/5/6/7 | **Implemented (v2.4.0)** | Documented resolver ordering |
+| DNS ServiceProvider priorities | **Corrected (v3.0.11)** | 4/5/6/7 retired as folklore (measured DNS 100ms → 1s+); apply/repair pin documented defaults 499/500/2000/2001 |
 | IPv4-first prefix policy (`::ffff:0:0/96` 55 4) | **Implemented (v2.4.0)** | Replaces the metric+20 hack; snapshot-restorable |
 | DoSvc Manual + `DODownloadMode 0` + BITS throttle policy removal | **Implemented (v2.4.0)** | Background download quiet, all snapshotted |
 | ULP / SIPS / Advanced EEE / Green Ethernet off | **Implemented (v2.4.0, keyword sweep)** | Driver-exposed power knobs only |
