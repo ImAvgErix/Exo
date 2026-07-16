@@ -1,6 +1,4 @@
-using System.Numerics;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 
@@ -8,7 +6,10 @@ namespace Exo.Helpers;
 
 /// <summary>
 /// Safe open animations (XAML Storyboards only).
-/// - Never animates Composition Opacity (blanks UI).
+/// - NEVER touches hand-off composition visuals: writing Offset/Scale there
+///   detaches elements from XAML layout — they pile at the parent origin —
+///   and pre-first-frame pokes can fail fast with 0xC000027B on real GPUs
+///   (the v2.6.0 black-flash launch crash).
 /// - Cards / feature tiles: fade + light rise; select: quick press pulse before navigate.
 /// </summary>
 public static class ExoMotion
@@ -49,21 +50,6 @@ public static class ExoMotion
 
     public static void ResetVisual(UIElement el, bool show = true)
     {
-        try
-        {
-            var visual = ElementCompositionPreview.GetElementVisual(el);
-            visual.StopAnimation("Opacity");
-            visual.StopAnimation("Offset");
-            visual.StopAnimation("Scale");
-            visual.StopAnimation("Scale.X");
-            visual.StopAnimation("Scale.Y");
-            visual.Opacity = 1f;
-            visual.Offset = Vector3.Zero;
-            visual.Scale = Vector3.One;
-            visual.CenterPoint = Vector3.Zero;
-        }
-        catch { }
-
         el.Opacity = show ? 1 : 0;
         el.IsHitTestVisible = show;
         el.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
@@ -103,7 +89,6 @@ public static class ExoMotion
 
         try
         {
-            ForceCompositionIdentity(el);
             var tf = EnsureTransform(el);
             tf.TranslateX = 0;
             tf.TranslateY = rise;
@@ -126,7 +111,6 @@ public static class ExoMotion
                     el.IsHitTestVisible = enableHit;
                     // Drop transform so layout owns pixels (no residual matrix blur).
                     el.RenderTransform = null;
-                    ForceCompositionIdentity(el);
                 }
                 catch { }
             };
@@ -221,7 +205,6 @@ public static class ExoMotion
 
         try
         {
-            ForceCompositionIdentity(el);
             el.RenderTransform = null;
             el.Opacity = 1;
             el.IsHitTestVisible = true;
@@ -240,7 +223,6 @@ public static class ExoMotion
                 {
                     el.Opacity = 1;
                     el.RenderTransform = null;
-                    ForceCompositionIdentity(el);
                 }
                 catch { }
                 onDone?.Invoke();
@@ -268,7 +250,6 @@ public static class ExoMotion
             return;
         }
 
-        ForceCompositionIdentity(root);
         ClearTransform(root);
         try
         {
@@ -311,22 +292,6 @@ public static class ExoMotion
             {
                 el.RenderTransform = null;
             }
-        }
-        catch { }
-    }
-
-    private static void ForceCompositionIdentity(UIElement el)
-    {
-        try
-        {
-            var visual = ElementCompositionPreview.GetElementVisual(el);
-            visual.StopAnimation("Opacity");
-            visual.StopAnimation("Offset");
-            visual.StopAnimation("Scale");
-            visual.Opacity = 1f;
-            visual.Offset = Vector3.Zero;
-            visual.Scale = Vector3.One;
-            visual.CenterPoint = Vector3.Zero;
         }
         catch { }
     }

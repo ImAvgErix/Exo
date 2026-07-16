@@ -16,7 +16,7 @@ Aggressive must still be deterministic: scope actions to the selected applicatio
 - **Home** = four-metric dashboard: **FPS gain · Frame time · RAM reclaimed · Latency** — top-bar EXO control hidden on home (page brand owns it); modules stay in the top bar; no Detect* probes on home; FPS/frame-time stay `—` until capture ships; RAM/latency read LocalAppData; cached so returns do not re-stagger
 - **Top bar** = liquid-glass **circles** floating on pure black (no bar plate): hairline rim (~0.5px feel), rim-lit gradient + dark center, soft shadow, hover = scale + sibling fade + label pill (preview) / wash (WinUI); equal 56px end caps; EXO hidden on home
 - **Modules** = one `ExoModulePlate` filling the stage (header + hairline feature list + action foot)
-- **Motion** = short XAML Storyboards only; never Composition Opacity = 0 (blanks UI); no spring bounce on content
+- **Motion** = short XAML Storyboards only; **never write hand-off composition visuals** (`ElementCompositionPreview` `Visual.Offset`/`Scale`/`Opacity`) — it detaches elements from XAML layout (everything piles at the origin) and pre-first-frame pokes crash real GPUs with `0xC000027B` (v2.6.0 launch regression); no spring bounce on content
 - **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)
 - **Feature rows** = thin status rail + Applied/Not applied (live detect)
 - **Version** = `VERSION` file and `Exo/Exo.csproj` must match; Ui.Smoke gates both

@@ -470,11 +470,14 @@ if (File.Exists(motionCs))
         && !m.Contains("ClearCompositionOnly", StringComparison.Ordinal)
         && !m.Contains("Spring()", StringComparison.Ordinal));
     Expect("ExoMotion list enter", m.Contains("PlayListEnter", StringComparison.Ordinal));
-    // Composition visual opacity must stay at 1 (never blank UI via composition).
-    Expect("ExoMotion never zeros composition opacity",
-        m.Contains("visual.Opacity = 1f", StringComparison.Ordinal)
-        && !m.Contains("visual.Opacity = 0", StringComparison.Ordinal)
-        && !m.Contains("visual.Opacity = 0f", StringComparison.Ordinal));
+    // Hand-off composition visuals must never be touched: writing Visual.Offset/
+    // Scale detaches elements from XAML layout (everything piles at the origin)
+    // and pre-first-frame pokes crash real GPUs with 0xC000027B (v2.6.0 launch bug).
+    Expect("ExoMotion no composition visual writes",
+        !m.Contains("ElementCompositionPreview", StringComparison.Ordinal)
+        && !m.Contains("visual.Offset", StringComparison.Ordinal)
+        && !m.Contains("visual.Opacity", StringComparison.Ordinal)
+        && !m.Contains("Microsoft.UI.Xaml.Hosting", StringComparison.Ordinal));
     // XAML storyboards only — no composition StartAnimation for shell motion.
     Expect("ExoMotion uses XAML storyboards",
         m.Contains("Storyboard", StringComparison.Ordinal)
@@ -567,9 +570,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.6.2", File.ReadAllText(versionFile).Trim() == "2.6.2");
+    Expect("VERSION is 2.6.3", File.ReadAllText(versionFile).Trim() == "2.6.3");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.6.2", File.ReadAllText(csproj).Contains("<Version>2.6.2</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.6.3", File.ReadAllText(csproj).Contains("<Version>2.6.3</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));

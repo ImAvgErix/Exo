@@ -1,3 +1,8 @@
+## 2.6.3
+
+- **Launch crash root cause fixed**: `ExoMotion` wrote hand-off composition visual properties (`Visual.Offset`/`Scale`) around every entrance — that detaches elements from XAML layout (v2.6.2 safe mode piled the whole home page at the top-left) and poking those visuals before first frame fails fast with `0xC000027B` on real GPUs (the v2.6.0/2.6.1 flash-and-close). All composition-visual writes removed; XAML layout owns positions, storyboards own motion. Window drag region works again
+- `Ui.Smoke` now gates that `ExoMotion` never touches composition visuals
+
 ## 2.6.2
 
 - **Crash-loop safe mode**: when a launch dies before presenting a frame (v2.6.0/2.6.1 black-flash regression), the next launch automatically disables all entrance motion — composition-animation failures can no longer brick startup twice in a row
