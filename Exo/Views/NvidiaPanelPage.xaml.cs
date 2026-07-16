@@ -19,7 +19,24 @@ public sealed partial class NvidiaPanelPage : Page
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        await ViewModel.RefreshAsync();
+        try
+        {
+            if (App.MainAppWindow is MainWindow main)
+                main.StabilizeShellAfterExternalWork();
+        }
+        catch { }
+        try { Helpers.ExoMotion.EnsureVisible(this); } catch { }
+        try
+        {
+            await ViewModel.RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            // Display helper missing / NVAPI down must not blank the shell.
+            ViewModel.HeaderStatus = "Display panel unavailable";
+            ViewModel.HeaderDetail = ex.Message;
+            ViewModel.IsLoading = false;
+        }
     }
 
     private void ApplyDisplay_Click(object sender, RoutedEventArgs e)

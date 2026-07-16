@@ -101,6 +101,14 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                 cancellationToken: _runCts.Token,
                 workingDirectory: _services.Scripts.GetNvidiaRoot());
 
+            // Driver elevate can thrash the desktop; re-pin shell chrome.
+            try
+            {
+                if (App.MainAppWindow is MainWindow mw)
+                    mw.StabilizeShellAfterExternalWork();
+            }
+            catch { }
+
             if (result.Success)
             {
                 ProgressPercent = 100;
