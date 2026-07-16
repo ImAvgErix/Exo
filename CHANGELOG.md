@@ -1,3 +1,6 @@
+## 3.0.9
+
+- **NVIDIA Profile Inspector**: pin bumped **v3.0.1.11 -> v3.0.2.1** (current Orbmu2k release). Old managed NPI could flash WPF/XAML UI on import; silent import hardened + leftover .nip cleanup
 ## 3.0.8
 
 - **Discord opens after Apply**: elevated Apply now user-token boot-checks via explorer; if Equicord stub dies, restores stock app.asar automatically so Start Menu works

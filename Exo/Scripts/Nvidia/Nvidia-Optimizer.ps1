@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.12.2'
+$Script:NvidiaOptVersion = '1.12.3'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
@@ -698,14 +698,16 @@ function Import-ExoNipProfile {
     try {
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = $npi
-        # Use the PS5-compatible Arguments property. The profile path is generated
-        # by Exo and quoted for user profiles whose TEMP path contains spaces.
-        $quotedNip = '"' + $safeNip.Replace('"', '\"') + '"'
+        # Official CLI: -silentImport "path.nip" (or -silent). Never pass bare .nip
+        # first - that opens the WPF UI and can flash XAML/doc windows.
+        $quotedNip = '"' + $safeNip.Replace('"', '') + '"'
         $psi.Arguments = "-silentImport $quotedNip"
         $psi.WorkingDirectory = $npiWorkDir
         $psi.UseShellExecute = $false
         $psi.CreateNoWindow = $true
         $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
         $proc = [Diagnostics.Process]::Start($psi)
         if (-not $proc) { throw 'Failed to start Profile Inspector' }
 
@@ -716,10 +718,18 @@ function Import-ExoNipProfile {
         }
         $exitCode = [int]$proc.ExitCode
         Write-Ok "NPI silent import exit code: $exitCode"
+        # Kill any leftover WPF windows even after a "successful" exit.
+        Stop-NpiProcesses
     } finally {
         Stop-NpiProcesses
         if ($proc) { try { $proc.Dispose() } catch { } }
         try { Remove-Item -LiteralPath $safeNip -Force -ErrorAction SilentlyContinue } catch { }
+        # Never leave .nip next to NPI or in TEMP for Explorer/Edge to open as a document.
+        try {
+            Get-ChildItem -LiteralPath $npiWorkDir -Filter '*.nip' -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -like 'exo-*' -or $_.LastWriteTime -gt (Get-Date).AddMinutes(-5) } |
+                Remove-Item -Force -ErrorAction SilentlyContinue
+        } catch { }
     }
 
     if ($exitCode -ne 0) {
