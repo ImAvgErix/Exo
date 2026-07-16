@@ -77,7 +77,8 @@
   padding: 16px 18px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  /* Shadow ring instead of border (dark mode = single white ring) */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .home-frame__value {
@@ -87,6 +88,8 @@
   letter-spacing: -0.045em;
   line-height: 1.05;
   color: var(--exo-text);
+  /* Live values must not shift layout as digits change */
+  font-variant-numeric: tabular-nums;
 }
 
 .home-frame__meta {
@@ -124,7 +127,7 @@
   padding: 12px 14px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
   box-sizing: border-box;
 }
 
@@ -141,6 +144,7 @@
   letter-spacing: -0.03em;
   color: var(--exo-text);
   line-height: 1.15;
+  font-variant-numeric: tabular-nums;
 }
 
 .home-stat__badge {
@@ -197,7 +201,10 @@
 .theme-light .home-frame__card,
 .theme-light .home-stat {
   background: rgba(61, 52, 41, 0.04);
-  border-color: rgba(61, 52, 41, 0.1);
+  box-shadow:
+    0 0 0 1px rgba(61, 52, 41, 0.08),
+    0 1px 2px rgba(61, 52, 41, 0.05),
+    0 2px 4px rgba(61, 52, 41, 0.04);
 }
 
 .theme-light .home-plate__foot {

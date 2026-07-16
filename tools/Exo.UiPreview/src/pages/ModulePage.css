@@ -96,7 +96,8 @@
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-  transition: transform var(--dur-fast) var(--ease-out);
+  /* Toggle knob springs to its detent (interruptible) */
+  transition: transform 0.35s var(--ease-spring);
 }
 
 .module-plate__switch.is-on .module-plate__knob {

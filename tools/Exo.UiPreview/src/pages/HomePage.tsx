@@ -26,6 +26,24 @@ export function HomePage() {
     seed.frameTimeSeriesMs.map((ms) => 1 / Math.max(0.1, ms)),
   )
 
+  const stats = [
+    {
+      id: 'ram',
+      label: 'RAM reclaimed',
+      value: formatBytes(heroBytes),
+      meta:
+        seed.trimLast24hBytes > 0
+          ? `last 24 h · ${formatBytes(seed.trimTotalBytes)} total`
+          : 'total reclaimed',
+    },
+    {
+      id: 'latency',
+      label: 'Latency',
+      value: `${latencySign}${latencyDelta.toFixed(1)} ms`,
+      meta: `ping p50 ${seed.latencyBeforeP50.toFixed(1)} → ${seed.latencyAfterP50.toFixed(1)} ms`,
+    },
+  ]
+
   return (
     <div className="home-page page-enter" data-testid="page-home">
       <div className="home-plate glass">
@@ -74,27 +92,17 @@ export function HomePage() {
         </div>
 
         <div className="home-stats stagger-child" data-testid="home-stats">
-          <article className="home-stat" data-testid="home-stat-ram">
-            <p className="home-plate__section">RAM reclaimed</p>
-            <div className="home-stat__value">{formatBytes(heroBytes)}</div>
-            <p className="home-stat__meta">
-              {seed.trimLast24hBytes > 0
-                ? `last 24 h · ${formatBytes(seed.trimTotalBytes)} total`
-                : 'total reclaimed'}
-            </p>
-          </article>
-
-          <article className="home-stat" data-testid="home-stat-latency">
-            <p className="home-plate__section">Latency</p>
-            <div className="home-stat__value">
-              {latencySign}
-              {latencyDelta.toFixed(1)} ms
-            </div>
-            <p className="home-stat__meta">
-              ping p50 {seed.latencyBeforeP50.toFixed(1)} →{' '}
-              {seed.latencyAfterP50.toFixed(1)} ms
-            </p>
-          </article>
+          {stats.map((stat) => (
+            <article
+              key={stat.id}
+              className="home-stat"
+              data-testid={`home-stat-${stat.id}`}
+            >
+              <p className="home-plate__section">{stat.label}</p>
+              <div className="home-stat__value">{stat.value}</div>
+              <p className="home-stat__meta">{stat.meta}</p>
+            </article>
+          ))}
         </div>
 
         <footer className="home-plate__foot stagger-child">

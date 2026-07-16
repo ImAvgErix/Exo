@@ -101,8 +101,9 @@ public sealed partial class DashboardPage : Page
             if (SoonRow is not null)
                 sequence.Add(SoonRow);
 
+            // Semantic page chunks stagger ~90ms apart (matches preview cadence).
             if (sequence.Count > 0)
-                ExoMotion.PlayStagger(sequence, baseDelayMs: 24, stepMs: 42, fromY: 10f, fromScale: 1f);
+                ExoMotion.PlayStagger(sequence, baseDelayMs: 40, stepMs: 90, fromY: 10f, fromScale: 1f);
 
             await Task.Delay(420);
             if (gen != _entranceGen) return;
