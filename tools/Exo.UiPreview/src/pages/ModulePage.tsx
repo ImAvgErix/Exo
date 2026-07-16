@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ModuleData } from '../data/mock'
 import { ActionBar } from '../components/ActionBar'
 import { FeatureRow } from '../components/FeatureRow'
+import { StatusCapsule } from '../components/StatusCapsule'
 import './ModulePage.css'
 
 interface ModulePageProps {
@@ -14,23 +15,39 @@ export function ModulePage({ module, onOpenDisplayPanel }: ModulePageProps) {
   const [gsync, setGsync] = useState(true)
   const [statusTitle, setStatusTitle] = useState(module.statusTitle)
 
+  const appliedCount = module.features.filter((f) => f.applied).length
+  const allApplied = appliedCount === module.features.length
+
   const flash = (text: string) => {
     setMessage(text)
     window.setTimeout(() => setMessage(null), 2200)
   }
 
   return (
-    <div className="module-page" data-testid={`page-${module.id}`}>
+    <div className="module-page page-enter" data-testid={`page-${module.id}`}>
       <div className="module-page__body">
-        <header className="module-page__header">
-          <p className="module-page__section">{module.section}</p>
-          <h2 className="module-page__status" data-testid={`${module.id}-status`}>
-            {statusTitle}
-          </h2>
+        <header className="module-page__header glass glass--mid stagger-child">
+          <div className="module-page__header-text">
+            <p className="module-page__section">{module.section}</p>
+            <h2 className="module-page__status" data-testid={`${module.id}-status`}>
+              {statusTitle}
+            </h2>
+          </div>
+          <StatusCapsule
+            applied={allApplied || statusTitle === 'Applied'}
+            label={
+              statusTitle === 'Applied'
+                ? 'Applied'
+                : `${appliedCount}/${module.features.length}`
+            }
+          />
         </header>
 
         {module.variant === 'nvidia' ? (
-          <div className="module-page__nvidia-controls" data-testid="nvidia-controls">
+          <div
+            className="module-page__nvidia-controls glass glass--soft stagger-child"
+            data-testid="nvidia-controls"
+          >
             <label className="module-page__gsync">
               <span>G-SYNC</span>
               <button
@@ -46,7 +63,7 @@ export function ModulePage({ module, onOpenDisplayPanel }: ModulePageProps) {
             </label>
             <button
               type="button"
-              className="btn btn-quiet"
+              className="btn btn-ghost"
               data-testid="btn-display-panel"
               onClick={onOpenDisplayPanel}
             >
@@ -55,7 +72,10 @@ export function ModulePage({ module, onOpenDisplayPanel }: ModulePageProps) {
           </div>
         ) : null}
 
-        <div className="module-page__features" data-testid={`${module.id}-features`}>
+        <div
+          className="module-page__features stagger-list"
+          data-testid={`${module.id}-features`}
+        >
           {module.features.map((feature) => (
             <FeatureRow key={feature.id} feature={feature} />
           ))}

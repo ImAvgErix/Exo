@@ -28,84 +28,107 @@ export function ActionBar({
   message,
 }: ActionBarProps) {
   return (
-    <footer className="action-bar" data-testid="action-bar">
+    <footer className="action-island" data-testid="action-bar">
       {message ? (
-        <div className="action-bar__message" data-testid="action-message">
+        <div className="action-island__message glass glass--soft" data-testid="action-message">
           {message}
         </div>
       ) : null}
 
-      {variant === 'internet' ? (
-        <div className="action-bar__dual">
+      <div className="action-island__bar glass glass--strong">
+        {variant === 'internet' ? (
+          <div className="action-island__dual">
+            <button
+              type="button"
+              className="btn btn-white"
+              data-testid="btn-low-latency"
+              onClick={onLatency}
+            >
+              Low latency
+            </button>
+            <button
+              type="button"
+              className="btn btn-white"
+              data-testid="btn-highest-download"
+              onClick={onThroughput}
+            >
+              Highest download
+            </button>
+          </div>
+        ) : variant === 'panel' ? (
+          <div className="action-island__panel-row">
+            <button
+              type="button"
+              className="btn btn-ghost action-island__grow"
+              data-testid="btn-open-cpl"
+              onClick={onOpenCpl}
+            >
+              Open NVIDIA Control Panel
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="btn-refresh"
+              onClick={onRefresh}
+            >
+              Refresh
+            </button>
+          </div>
+        ) : (
           <button
             type="button"
-            className="btn btn-white"
-            data-testid="btn-low-latency"
-            onClick={onLatency}
+            className="btn btn-primary action-island__grow"
+            data-testid="btn-apply"
+            onClick={onApply}
           >
-            Low latency
+            {applyLabel}
           </button>
-          <button
-            type="button"
-            className="btn btn-white"
-            data-testid="btn-highest-download"
-            onClick={onThroughput}
-          >
-            Highest download
-          </button>
-        </div>
-      ) : variant === 'panel' ? (
-        <div className="action-bar__panel-row">
-          <button
-            type="button"
-            className="btn btn-quiet"
-            data-testid="btn-open-cpl"
-            onClick={onOpenCpl}
-          >
-            Open NVIDIA Control Panel
-          </button>
-          <button
-            type="button"
-            className="btn btn-quiet action-bar__refresh-sm"
-            data-testid="btn-refresh"
-            onClick={onRefresh}
-          >
-            Refresh
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          className="btn btn-primary"
-          data-testid="btn-apply"
-          onClick={onApply}
-        >
-          {applyLabel}
-        </button>
-      )}
+        )}
 
-      {variant !== 'panel' ? (
-        <div className="action-bar__secondary">
-          <button
-            type="button"
-            className="btn btn-quiet"
-            data-testid="btn-repair"
-            onClick={onRepair}
-          >
-            {repairLabel}
-          </button>
-          <button
-            type="button"
-            className="btn btn-quiet"
-            data-testid="btn-refresh"
-            onClick={onRefresh}
-          >
-            Refresh
-          </button>
-        </div>
-      ) : null}
+        {variant !== 'panel' && variant !== 'internet' ? (
+          <div className="action-island__secondary">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="btn-repair"
+              onClick={onRepair}
+            >
+              {repairLabel}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="btn-refresh"
+              onClick={onRefresh}
+            >
+              Refresh
+            </button>
+          </div>
+        ) : null}
 
-      {hint ? <p className="action-bar__hint">{hint}</p> : null}
+        {variant === 'internet' ? (
+          <div className="action-island__secondary">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="btn-repair"
+              onClick={onRepair}
+            >
+              {repairLabel}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="btn-refresh"
+              onClick={onRefresh}
+            >
+              Refresh
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {hint ? <p className="action-island__hint">{hint}</p> : null}
     </footer>
   )
 }

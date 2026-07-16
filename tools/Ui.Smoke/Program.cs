@@ -49,7 +49,12 @@ if (File.Exists(appXaml))
     Expect("cream light page unified", a.Contains("#F3EDE3", StringComparison.Ordinal)
         && !a.Contains("#F2EBE0", StringComparison.Ordinal)
         && !a.Contains("#F3EBE3", StringComparison.Ordinal));
-    Expect("dark card lift", a.Contains("#0C0C0C", StringComparison.Ordinal));
+    // v2.6 Liquid Glass — translucent lifted fill (ARGB), not opaque #0C0C0C slab
+    Expect("dark glass card lift",
+        a.Contains("#B30C0C0C", StringComparison.Ordinal)
+        || a.Contains("#0C0C0C", StringComparison.Ordinal));
+    Expect("liquid glass fill token", a.Contains("ExoGlassFillBrush", StringComparison.Ordinal));
+    Expect("settings acrylic", a.Contains("ExoSettingsAcrylicBrush", StringComparison.Ordinal));
 }
 var themeServiceCs = Path.Combine(repo, "Exo", "Services", "ThemeService.cs");
 if (File.Exists(themeServiceCs))
@@ -62,8 +67,9 @@ if (File.Exists(themeServiceCs))
 if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
-    // v2.5 left icon rail (custom — not NavigationView).
+    // v2.6 floating glass nav pill (custom — not NavigationView).
     Expect("nav rail", m.Contains("NavRail", StringComparison.Ordinal));
+    Expect("rail glass fill", m.Contains("ExoRailGlassFillBrush", StringComparison.Ordinal));
     Expect("rail nav home", m.Contains("NavHome", StringComparison.Ordinal));
     Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
@@ -530,9 +536,9 @@ if (File.Exists(theme))
 var versionFile = Path.Combine(repo, "VERSION");
 var csproj = Path.Combine(repo, "Exo", "Exo.csproj");
 if (File.Exists(versionFile))
-    Expect("VERSION is 2.5.2", File.ReadAllText(versionFile).Trim() == "2.5.2");
+    Expect("VERSION is 2.6.0", File.ReadAllText(versionFile).Trim() == "2.6.0");
 if (File.Exists(csproj))
-    Expect("csproj Version 2.5.2", File.ReadAllText(csproj).Contains("<Version>2.5.2</Version>", StringComparison.Ordinal));
+    Expect("csproj Version 2.6.0", File.ReadAllText(csproj).Contains("<Version>2.6.0</Version>", StringComparison.Ordinal));
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));

@@ -1,4 +1,5 @@
 import { APP_VERSION } from '../data/mock'
+import { SegmentedControl } from './SegmentedControl'
 import './SettingsFlyout.css'
 
 interface SettingsFlyoutProps {
@@ -30,68 +31,60 @@ export function SettingsFlyout({
         onClick={onClose}
       />
       <aside
-        className="settings-flyout"
+        className="settings-sheet glass glass--strong"
         data-testid="settings-flyout"
         role="dialog"
         aria-label="Settings"
       >
-        <p className="settings-flyout__section">APPEARANCE</p>
-        <div className="settings-flyout__theme">
-          <button
-            type="button"
-            className={`settings-flyout__choice ${darkMode ? 'is-active' : ''}`}
-            data-testid="settings-theme-dark"
-            onClick={() => onDarkMode(true)}
-          >
-            Dark
-          </button>
-          <button
-            type="button"
-            className={`settings-flyout__choice ${!darkMode ? 'is-active' : ''}`}
-            data-testid="settings-theme-light"
-            onClick={() => onDarkMode(false)}
-          >
-            Light
-          </button>
+        <div className="settings-sheet__group glass glass--soft">
+          <p className="settings-sheet__section">APPEARANCE</p>
+          <div className="settings-sheet__theme">
+            <SegmentedControl
+              options={[
+                { id: 'dark', label: 'Dark', testId: 'settings-theme-dark' },
+                { id: 'light', label: 'Light', testId: 'settings-theme-light' },
+              ]}
+              activeId={darkMode ? 'dark' : 'light'}
+              onChange={(id) => onDarkMode(id === 'dark')}
+            />
+          </div>
         </div>
 
-        <div className="settings-flyout__divider" />
-
-        <p className="settings-flyout__section">UPDATES</p>
-        <div className="settings-flyout__row">
-          <span>Check on launch</span>
+        <div className="settings-sheet__group glass glass--soft">
+          <p className="settings-sheet__section">UPDATES</p>
+          <div className="settings-sheet__row">
+            <span>Check on launch</span>
+            <button
+              type="button"
+              className={`settings-sheet__switch ${autoUpdate ? 'is-on' : ''}`}
+              data-testid="settings-auto-update"
+              role="switch"
+              aria-checked={autoUpdate}
+              onClick={() => onAutoUpdate(!autoUpdate)}
+            >
+              <span className="settings-sheet__knob" />
+            </button>
+          </div>
           <button
             type="button"
-            className={`settings-flyout__switch ${autoUpdate ? 'is-on' : ''}`}
-            data-testid="settings-auto-update"
-            role="switch"
-            aria-checked={autoUpdate}
-            onClick={() => onAutoUpdate(!autoUpdate)}
+            className="btn btn-primary settings-sheet__check"
+            data-testid="settings-check-updates"
           >
-            <span className="settings-flyout__knob" />
+            Check for updates
           </button>
+          <p className="settings-sheet__status">Up to date</p>
         </div>
-        <button
-          type="button"
-          className="btn btn-primary settings-flyout__check"
-          data-testid="settings-check-updates"
-        >
-          Check for updates
-        </button>
-        <p className="settings-flyout__status">Up to date</p>
 
-        <div className="settings-flyout__divider" />
-
-        <div className="settings-flyout__actions">
-          <button type="button" className="btn btn-quiet" data-testid="settings-report">
+        <div className="settings-sheet__actions">
+          <button type="button" className="btn btn-ghost" data-testid="settings-report">
             Report issue
           </button>
-          <button type="button" className="btn btn-quiet" data-testid="settings-logs">
+          <button type="button" className="btn btn-ghost" data-testid="settings-logs">
             Open logs
           </button>
         </div>
 
-        <div className="settings-flyout__version">
+        <div className="settings-sheet__version">
           <span>App version</span>
           <strong data-testid="settings-version">{APP_VERSION}</strong>
         </div>

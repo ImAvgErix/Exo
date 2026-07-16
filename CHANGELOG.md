@@ -1,3 +1,9 @@
+## 2.6.0
+
+- **UI — black Liquid Glass**: floating glass nav pill over AMOLED black; translucent glass fills + specular rims on cards, feature rows, and action bars; acrylic-backed Settings flyout; denser Control Center–like grouping
+- **UI — motion polish**: shorter entrance/fade timings; rail selection = soft fill + accent ring (no logo scale)
+- **Preview — agent Liquid Glass mock**: `tools/Exo.UiPreview` tracks the glass language (animated sheen, liquid dock indicator, orb home, spring sheet) for Linux click QA — not shipping Apply
+
 ## 2.5.2
 
 - **Detect / smoke hardening**: `Ui.Smoke` runs cleanly off-Windows (`net10.0`; logo ink measure stays Windows-only); `DiscordLogic.IsStableDiscordPathText` uses a backslash-normalized compare so Discord path checks are stable across hosts

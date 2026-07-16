@@ -7,24 +7,35 @@
     Title="Exo">
 
     <!--
-      v2.5 remodel shell:
-      left icon rail (custom — not NavigationView) + content column.
+      v2.6 Liquid Glass shell:
+      floating glass pill nav over AMOLED black + content column.
       Settings gear stays a flyout on the rail.
     -->
     <Grid x:Name="RootGrid" Background="{ThemeResource ExoPageBackgroundBrush}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="76" />
+            <ColumnDefinition Width="84" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- ===== LEFT RAIL ===== -->
-        <Border x:Name="NavRail"
-                Grid.Column="0"
-                Background="#050505"
-                BorderBrush="{ThemeResource ExoCardStrokeBrush}"
-                BorderThickness="0,0,1,0"
-                Padding="10,12,10,14">
-            <Grid>
+        <!-- ===== FLOATING GLASS NAV PILL ===== -->
+        <Grid Grid.Column="0" Background="Transparent">
+            <Border x:Name="NavRail"
+                    Margin="12,16,8,16"
+                    Background="{ThemeResource ExoRailGlassFillBrush}"
+                    BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource ExoGlassRadius}"
+                    Padding="8,12,8,12">
+                <Grid>
+                    <Border BorderBrush="{ThemeResource ExoSpecularStrokeBrush}"
+                            BorderThickness="0,1,0,0"
+                            CornerRadius="{StaticResource ExoGlassRadius}"
+                            Margin="1,0,1,0"
+                            IsHitTestVisible="False"
+                            VerticalAlignment="Top"
+                            Height="18"
+                            Opacity="0.85" />
+                    <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -139,8 +150,10 @@
                         </Flyout>
                     </FlyoutBase.AttachedFlyout>
                 </Button>
-            </Grid>
-        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
 
         <!-- ===== CONTENT COLUMN ===== -->
         <Grid Grid.Column="1">

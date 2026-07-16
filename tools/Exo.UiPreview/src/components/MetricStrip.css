@@ -1,0 +1,48 @@
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-radius: 16px;
+  min-height: 64px;
+  padding: 4px;
+}
+
+.metric-strip__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+}
+
+.metric-strip__divider {
+  position: absolute;
+  left: 0;
+  top: 16px;
+  bottom: 16px;
+  width: 1px;
+  background: var(--glass-rim-soft);
+}
+
+.metric-strip__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.metric-strip__value {
+  font-family: var(--font-ui);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--exo-text);
+}
+
+.metric-strip__label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--exo-muted);
+}

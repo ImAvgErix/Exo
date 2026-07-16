@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react'
 import type { ModuleId, PageId } from './data/mock'
 import { modules } from './data/mock'
-import { NavRail } from './components/NavRail'
+import { FloatingDock } from './components/FloatingDock'
 import { SettingsFlyout } from './components/SettingsFlyout'
 import { HomePage } from './pages/HomePage'
 import { ModulePage } from './pages/ModulePage'
 import { NvidiaPanelPage } from './pages/NvidiaPanelPage'
 import './App.css'
 
-function railActive(page: PageId): ModuleId | 'home' | null {
+function dockActive(page: PageId): ModuleId | 'home' | null {
   if (page === 'home') return 'home'
   if (page === 'nvidia-panel') return 'nvidia'
   return page
@@ -48,14 +48,14 @@ export default function App() {
   return (
     <div className={`app-page ${darkMode ? 'theme-dark' : 'theme-light'}`}>
       <div className="exo-shell" data-testid="exo-shell">
-        <NavRail
-          active={railActive(page)}
+        <FloatingDock
+          active={dockActive(page)}
           settingsOpen={settingsOpen}
           onNavigate={navigate}
           onToggleSettings={() => setSettingsOpen((v) => !v)}
         />
 
-        <div className="exo-content">
+        <div className="exo-stage">
           <div className="exo-titlebar">
             {showBack ? (
               <button

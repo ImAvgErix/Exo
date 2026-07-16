@@ -1,47 +1,64 @@
 .feature-row {
   display: grid;
-  grid-template-columns: auto auto 1fr;
+  grid-template-columns: auto auto 1fr auto;
   align-items: center;
-  column-gap: 12px;
-  min-height: 52px;
-  padding: 10px 12px;
-  background: var(--exo-card);
-  border: 1px solid var(--exo-stroke);
-  border-radius: 12px;
-  opacity: 0.72;
-  transition: background-color 160ms ease-out, box-shadow 160ms ease-out, opacity 160ms ease-out;
-}
-
-.feature-row.is-applied {
-  opacity: 1;
+  column-gap: 10px;
+  min-height: 50px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  transition:
+    background-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
 }
 
 .feature-row:hover {
-  background: color-mix(in srgb, var(--exo-card) 88%, #fff 4%);
-  box-shadow: inset 0 0 0 1px var(--exo-ring-soft);
+  background: var(--glass-fill-mid);
 }
 
-.feature-row__rail {
-  width: 3px;
-  align-self: stretch;
-  border-radius: 1.5px;
-  background: var(--exo-success);
-  opacity: 0.28;
+.feature-row.is-applied {
+  background: rgba(52, 211, 153, 0.07);
 }
 
-.feature-row.is-applied .feature-row__rail {
-  opacity: 1;
+.feature-row__check {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--exo-success);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-rim-soft);
+  transition:
+    background-color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+
+.feature-row.is-applied .feature-row__check {
+  background: rgba(52, 211, 153, 0.16);
+  border-color: rgba(52, 211, 153, 0.4);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.2);
+}
+
+.feature-row__ring {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--exo-muted);
+  opacity: 0.5;
 }
 
 .feature-row__icon {
   width: 28px;
   height: 28px;
-  border-radius: 7px;
-  background: var(--exo-wash);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-rim-soft);
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--exo-text);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
 }
 
 .feature-row__title {
@@ -55,7 +72,7 @@
 .feature-row__detail {
   font-family: var(--font-ui);
   font-size: 11px;
-  line-height: 15px;
+  line-height: 14px;
   color: var(--exo-muted);
   margin-top: 1px;
 }

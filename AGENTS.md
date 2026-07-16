@@ -6,18 +6,19 @@ Exo is a no-compromise Windows performance and debloat tool. Aggressive memory t
 
 Aggressive must still be deterministic: scope actions to the selected application or hardware, report partial failures honestly, avoid invented registry settings, preserve data needed to prevent corruption, and keep Discord/Steam repair paths working. Never describe NVIDIA Reset as rollback: it only clears Exo status, while NVIDIA recovery remains manual through NVIDIA settings or a driver reinstall.
 
-## Shell UI (current — v2.5 remodel)
+## Shell UI (current — v2.6 Liquid Glass)
 
 - **Fixed frame** 1180×760, no maximize / free resize
-- **Dark = AMOLED** pure black page (`#000000`) + lifted surfaces (`#0C0C0C`)
-- **Navigation** = permanent left icon rail (`NavRail`) with Home + modules + Settings gear — **not** WinUI `NavigationView`
-- **Settings** = gear flyout attached to the rail gear (not modal overlay, not a separate settings page)
-- **Home** = editorial module directory (full-width rows), not a wrap-grid of cards; cached so returns do not re-stagger
-- **Modules** = single-column feature rows + sticky bottom action bar
+- **Dark = AMOLED** pure black page (`#000000`) + translucent glass fills (approx. Liquid Glass; WinUI cannot match CSS `backdrop-filter`)
+- **Navigation** = floating glass pill (`NavRail`) with Home + modules + Settings gear — **not** WinUI `NavigationView`
+- **Settings** = gear flyout attached to the rail gear (acrylic/frosted panel — not modal overlay, not a separate settings page)
+- **Home** = brand-forward Exo mark + italic tagline + module directory; cached so returns do not re-stagger
+- **Modules** = single-column glass feature rows + sticky bottom glass action bar
 - **Motion** = short XAML Storyboards only; never Composition Opacity = 0 (blanks UI); no spring bounce on content
 - **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)
 - **Feature rows** = thin status rail + Applied/Not applied (live detect)
 - **Version** = `VERSION` file and `Exo/Exo.csproj` must match; Ui.Smoke gates both
+- **Agent preview** = `tools/Exo.UiPreview` (React) for Linux click QA of the glass language — keep out of public README product marketing
 
 ## Team structure
 

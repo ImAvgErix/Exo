@@ -10,10 +10,10 @@ namespace Exo.Views.Controls;
 public sealed partial class SettingsSheet : UserControl
 {
     /// <summary>Matches gear crank so spin + menu read as one open motion.</summary>
-    public const int OpenMs = 220;
+    public const int OpenMs = 240;
 
     /// <summary>Mirrors OpenMs so the gear counter-crank + menu rise read as one close motion.</summary>
-    public const int CloseMs = 220;
+    public const int CloseMs = 240;
 
     private Storyboard? _openSb;
     private bool _openFinished;

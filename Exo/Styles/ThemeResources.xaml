@@ -9,9 +9,10 @@
     <FontFamily x:Key="ExoUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
     <FontFamily x:Key="ExoUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
 
-    <!-- Spacing scale: 8 / 12 / 16 / 20 / 28 — denser v2.5 directory chrome -->
-    <CornerRadius x:Key="ExoCardRadius">16</CornerRadius>
-    <CornerRadius x:Key="ExoTileRadius">12</CornerRadius>
+    <!-- Spacing scale: 8 / 12 / 16 / 20 / 28 — v2.6 Liquid Glass chrome -->
+    <CornerRadius x:Key="ExoCardRadius">22</CornerRadius>
+    <CornerRadius x:Key="ExoTileRadius">16</CornerRadius>
+    <CornerRadius x:Key="ExoGlassRadius">26</CornerRadius>
     <x:Double x:Key="ExoPageMaxWidth">980</x:Double>
     <Thickness x:Key="ExoPagePadding">24,16,28,16</Thickness>
 
@@ -91,10 +92,10 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <!-- Feature rows — denser professional chrome (matches FeatureTileGrid) -->
+    <!-- Feature rows — glass tiles with thin status rail -->
     <Style x:Key="ExoFeatureTile" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource ExoTileRadius}" />
         <Setter Property="Padding" Value="12,10" />
@@ -103,23 +104,23 @@
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
-    <!-- Home directory row chrome — premium ~60px rows, 44px logos -->
+    <!-- Home directory row chrome — glass cards, 44px logos -->
     <Style x:Key="ExoDirectoryRow" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="CornerRadius" Value="20" />
         <Setter Property="Padding" Value="16,10" />
         <Setter Property="MinHeight" Value="60" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
-    <!-- Sticky module action bar — clear top hairline + breathing room -->
+    <!-- Sticky module action bar — frosted glass strip with specular top edge -->
     <Style x:Key="ExoActionBar" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="0,1.5,0,0" />
+        <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoSpecularStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
         <Setter Property="CornerRadius" Value="0" />
         <Setter Property="Padding" Value="20,14,20,16" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -137,8 +138,8 @@
 
     <Style x:Key="ExoMessageBanner" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource ExoAccentSoftBrush}" />
-        <Setter Property="BorderBrush" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoSpecularStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource ExoTileRadius}" />
         <Setter Property="Padding" Value="12,10" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -147,23 +148,23 @@
     <Style x:Key="ExoIconWell" TargetType="Border">
         <Setter Property="Width" Value="28" />
         <Setter Property="Height" Value="28" />
-        <Setter Property="CornerRadius" Value="7" />
+        <Setter Property="CornerRadius" Value="9" />
         <Setter Property="Background" Value="{ThemeResource ExoAccentSoftBrush}" />
-        <Setter Property="BorderBrush" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoSpecularStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style x:Key="ExoCard" TargetType="Border">
         <Setter Property="CornerRadius" Value="{StaticResource ExoCardRadius}" />
         <Setter Property="Padding" Value="16,14" />
-        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 
     <Style x:Key="ExoRiskCard" TargetType="Border">
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="14" />
         <Setter Property="Padding" Value="12,10" />
         <Setter Property="Background" Value="{ThemeResource ExoWarningSoftBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource ExoWarningBrush}" />
@@ -293,7 +294,7 @@
     <Style x:Key="ExoPrimaryButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
         <Setter Property="Padding" Value="20,13" />
-        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="CornerRadius" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="MinHeight" Value="46" />
@@ -743,15 +744,14 @@
     </Style>
 
     <!--
-      Left rail nav: square-ish 56×56, transparent base.
-      Product logos live here — hover/press = wash only, NEVER scale
-      (scale softens bitmaps). Selection fill applied from code via Background.
+      Left rail nav: glass pill items — logos stay sharp (no scale).
+      Selection ring applied from MainWindow code via BorderBrush/Thickness.
     -->
     <Style x:Key="ExoRailButton" TargetType="Button">
         <Setter Property="Width" Value="56" />
         <Setter Property="Height" Value="56" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="CornerRadius" Value="14" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -767,8 +767,13 @@
                 <ControlTemplate TargetType="Button">
                     <Grid x:Name="Root"
                           UseLayoutRounding="True"
-                          Background="{TemplateBinding Background}"
                           CornerRadius="{TemplateBinding CornerRadius}">
+                        <Border x:Name="SelectionFill"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                IsHitTestVisible="False" />
                         <!-- Wash behind content so logos stay sharp on top -->
                         <Border x:Name="HoverWash"
                                 Background="{ThemeResource ExoAccentSoftBrush}"

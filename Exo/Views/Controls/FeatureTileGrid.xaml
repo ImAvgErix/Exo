@@ -48,7 +48,7 @@
                                     Style="{StaticResource ExoIconWell}"
                                     Width="28"
                                     Height="28"
-                                    CornerRadius="7">
+                                    CornerRadius="9">
                                 <FontIcon Glyph="{x:Bind Glyph}"
                                           FontSize="12"
                                           Foreground="{ThemeResource ExoPrimaryTextBrush}"

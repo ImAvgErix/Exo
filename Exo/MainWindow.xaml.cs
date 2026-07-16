@@ -233,7 +233,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Highlight the active rail button: full opacity + soft accent fill.
+    /// Highlight the active rail button: soft glass fill + accent selection ring.
     /// NvidiaPanel keeps NavNvidia selected (panel is under GPU).
     /// </summary>
     private void UpdateRailSelection(ShellMode mode)
@@ -249,20 +249,26 @@ public sealed partial class MainWindow : Window
         };
 
         Brush? accentSoft = null;
+        Brush? accentRing = null;
         try
         {
-            if (Application.Current.Resources.TryGetValue("ExoAccentSoftBrush", out var b) && b is Brush brush)
-                accentSoft = brush;
+            if (Application.Current.Resources.TryGetValue("ExoAccentSoftBrush", out var soft) && soft is Brush softBrush)
+                accentSoft = softBrush;
+            if (Application.Current.Resources.TryGetValue("ExoAccentBrush", out var ring) && ring is Brush ringBrush)
+                accentRing = ringBrush;
         }
         catch { }
 
-        accentSoft ??= new SolidColorBrush(ColorHelper.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
+        accentSoft ??= new SolidColorBrush(ColorHelper.FromArgb(0x20, 0xFF, 0xFF, 0xFF));
+        accentRing ??= new SolidColorBrush(ColorHelper.FromArgb(0x55, 0xF5, 0xF5, 0xF4));
 
         foreach (var btn in new[] { NavHome, NavDiscord, NavSteam, NavInternet, NavNvidia })
         {
             var on = ReferenceEquals(btn, selected);
-            btn.Opacity = on ? 1.0 : 0.55;
+            btn.Opacity = on ? 1.0 : 0.52;
             btn.Background = on ? accentSoft : new SolidColorBrush(Colors.Transparent);
+            btn.BorderBrush = on ? accentRing : new SolidColorBrush(Colors.Transparent);
+            btn.BorderThickness = on ? new Thickness(1) : new Thickness(0);
         }
     }
 
