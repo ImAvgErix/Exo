@@ -12,7 +12,6 @@ $script:ExoNvidiaStageIds = @(
     'game-profile-deltas'
     'display-apply'
     'overlay-disable'
-    'tray-clear'
     'debloat'
 )
 

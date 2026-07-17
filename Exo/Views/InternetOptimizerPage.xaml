@@ -8,8 +8,8 @@
     Background="Transparent">
 
     <!--
-      SharedModulePlate (v3): dual primary CTAs + custom foot proof layer.
-      Secondary row disabled — Repair/Refresh live in the single-row action grid.
+      One adaptive action: measure first, then apply one verified link policy.
+      Repair/Refresh stay quiet and separate from optimization.
     -->
     <controls:SharedModulePlate
         x:Name="Plate"
@@ -69,34 +69,17 @@
         <controls:SharedModulePlate.PrimaryActions>
             <StackPanel Spacing="6">
                 <Button Style="{StaticResource ExoPrimaryButton}"
-                        Content="Analyze connection &amp; apply"
+                        Content="Analyze &amp; Apply"
                         Command="{x:Bind ViewModel.AnalyzeAndApplyCommand}"
                         HorizontalAlignment="Stretch"
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                        AutomationProperties.Name="Run connection quality test and apply recommended network profile" />
-                <!-- Manual presets remain available for users who know which tradeoff they want. -->
+                        AutomationProperties.Name="Analyze this connection and apply the best measured settings" />
                 <Grid x:Name="ExoInternetActionGrid" ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="3*" />
-                        <ColumnDefinition Width="3*" />
-                        <ColumnDefinition Width="2*" />
-                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource ExoWhiteButton}"
-                            Content="Low latency"
-                            Click="Latency_Click"
-                            HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                            AutomationProperties.Name="Apply lowest latency network stack" />
-                    <Button Grid.Column="1"
-                            Style="{StaticResource ExoWhiteButton}"
-                            Content="Highest download"
-                            Click="Throughput_Click"
-                            HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                            AutomationProperties.Name="Apply highest download network stack" />
-                    <Button Grid.Column="2"
-                            Style="{StaticResource ExoQuietButton}"
+                    <Button Style="{StaticResource ExoQuietButton}"
                             Content="Repair"
                             Click="Repair_Click"
                             MinHeight="40"
@@ -104,7 +87,7 @@
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                             AutomationProperties.Name="Repair internet stack" />
-                    <Button Grid.Column="3"
+                    <Button Grid.Column="1"
                             Style="{StaticResource ExoQuietButton}"
                             Content="Refresh"
                             Click="Refresh_Click"
@@ -113,17 +96,12 @@
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                 </Grid>
-                <TextBlock Text="Connection lab uses the Cloudflare edge, transfers only test bytes, and sends no results to Exo. Data use scales with link speed."
+                <TextBlock Text="Sustained parallel test · measures the Cloudflare route, loaded latency, loss, and three encrypted DNS providers. Exo receives no results."
                            Style="{StaticResource ExoCaption}"
                            TextAlignment="Center" />
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                    <ToggleSwitch IsOn="{x:Bind ViewModel.PrivateDnsEnabled, Mode=TwoWay}"
-                                  IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                                  AutomationProperties.Name="Private DNS, encrypted DNS over HTTPS" />
-                    <TextBlock Text="Private DNS — encrypt lookups via Cloudflare DoH (Win11 22H2+)"
-                               Style="{StaticResource ExoCaption}"
-                               VerticalAlignment="Center" />
-                </StackPanel>
+                <TextBlock Text="Analyze applies the fastest healthy DNS and enables automatic encryption when Windows supports it. Repair restores the previous DNS exactly."
+                           Style="{StaticResource ExoCaption}"
+                           TextAlignment="Center" />
                 <TextBlock Text="{x:Bind ViewModel.RepairHint, Mode=OneWay}"
                            Style="{StaticResource ExoCaption}"
                            TextAlignment="Center" />

@@ -38,6 +38,7 @@ public partial class DashboardViewModel : ObservableObject
     public IReadOnlyList<OptimizerCardViewModel> SoonCards { get; }
 
     [ObservableProperty] public partial string HeroSummary { get; set; } = "Maximum performance. No compromise.";
+    [ObservableProperty] public partial string OverviewPrimary { get; set; } = "0 / 4 verified";
 
     [ObservableProperty] public partial string MemoryPrimary { get; set; } = "—";
     [ObservableProperty] public partial string MemorySecondary { get; set; } = "Reading system memory...";
@@ -47,16 +48,24 @@ public partial class DashboardViewModel : ObservableObject
 
     [ObservableProperty] public partial string DiscordStatusPrimary { get; set; } = "—";
     [ObservableProperty] public partial string DiscordStatusSecondary { get; set; } = "Not optimized yet";
+    [ObservableProperty] public partial string DiscordStatusTag { get; set; } = "NOT APPLIED";
+    [ObservableProperty] public partial string DiscordLiveMetric { get; set; } = "No live process sample";
     [ObservableProperty] public partial string SteamStatusPrimary { get; set; } = "—";
     [ObservableProperty] public partial string SteamStatusSecondary { get; set; } = "Not optimized yet";
+    [ObservableProperty] public partial string SteamStatusTag { get; set; } = "NOT APPLIED";
+    [ObservableProperty] public partial string SteamLiveMetric { get; set; } = "No live process sample";
 
     [ObservableProperty] public partial bool HasLatency { get; set; }
     [ObservableProperty] public partial string LatencyPrimary { get; set; } = "—";
     [ObservableProperty] public partial string LatencySecondary { get; set; } = "Apply Internet to measure the current connection";
+    [ObservableProperty] public partial string InternetStatusTag { get; set; } = "NOT APPLIED";
+    [ObservableProperty] public partial string InternetLiveMetric { get; set; } = "No current route sample";
 
     [ObservableProperty] public partial bool HasNvidiaPath { get; set; }
     [ObservableProperty] public partial string NvidiaPathPrimary { get; set; } = "—";
     [ObservableProperty] public partial string NvidiaPathSecondary { get; set; } = "Apply NVIDIA profiles";
+    [ObservableProperty] public partial string NvidiaStatusTag { get; set; } = "NOT APPLIED";
+    [ObservableProperty] public partial string NvidiaLiveMetric { get; set; } = "No verified driver profile";
 
     [ObservableProperty] public partial string FpsPrimary { get; set; } = "—";
     [ObservableProperty] public partial string FpsSecondary { get; set; } = "";
@@ -103,55 +112,62 @@ public partial class DashboardViewModel : ObservableObject
     private void RefreshInternetTile(ref int appliedCount)
     {
         RefreshInternetTile();
-        if (HasLatency) appliedCount++;
+        if (string.Equals(InternetStatusTag, "VERIFIED", StringComparison.Ordinal)) appliedCount++;
     }
 
     private void RefreshInternetTile()
     {
         var latency = HomeDashboardReader.TryReadLatency(_services.Network);
+        var quality = _services.Network.LoadQualityBenchmark();
         var link = HomeDashboardReader.TryReadPrimaryLinkSpeed();
         var linkBit = link is not null && link.BitsPerSecond > 0
             ? $"{link.Label} {link.MediaKind}"
             : null;
         var preset = HomeDashboardReader.TryReadInternetStatus();
-
-        if (latency is not null)
-        {
-            HasLatency = true;
-            // A short network sample is not proof that a system tweak caused a
-            // gain or regression. Show the latest reading without causal arrows.
-            LatencyPrimary = $"{latency.AfterP50Ms:0.0} ms";
-
-            var parts = new List<string>
-            {
-                $"Latest · jitter {latency.AfterJitterMs:0.0} ms",
-                $"DNS {FormatDns(latency.AfterDnsMs)}"
-            };
-            if (linkBit is not null) parts.Add(linkBit);
-            if (!string.IsNullOrWhiteSpace(preset) &&
-                !string.Equals(preset, "Applied", StringComparison.OrdinalIgnoreCase))
-                parts.Add(preset);
-            LatencySecondary = string.Join(" · ", parts);
-            return;
-        }
+        var dnsApply = HomeDashboardReader.TryReadInternetDnsStatus();
 
         if (!string.IsNullOrWhiteSpace(preset))
         {
             HasLatency = true;
-            LatencyPrimary = link is not null && link.BitsPerSecond > 0
-                ? link.Label
-                : (preset.Length > 14 ? preset[..14] : preset);
-            LatencySecondary = linkBit is not null
-                ? $"{preset} · {linkBit} · run Apply for a current sample"
-                : $"{preset} · run Apply to measure ping, jitter, and DNS";
+            InternetStatusTag = "VERIFIED";
+            LatencyPrimary = linkBit ?? "Connection optimized";
+            var dns = !string.IsNullOrWhiteSpace(dnsApply)
+                ? dnsApply
+                : quality is { Ok: true, IsQualityTest: true } && !string.IsNullOrWhiteSpace(quality.DnsProvider)
+                    ? quality.DnsProvider + " DNS selected"
+                    : "automatic DNS selection";
+            LatencySecondary = $"Adaptive stack applied · {dns}";
+            InternetLiveMetric = quality is { Ok: true, IsQualityTest: true }
+                ? BuildInternetLiveMetric(quality, latency)
+                : latency is not null
+                    ? $"{latency.AfterP50Ms:0.#} ms idle · {latency.AfterJitterMs:0.#} ms jitter"
+                    : "Run Analyze & Apply to refresh the route sample";
+            return;
+        }
+
+        if (latency is not null)
+        {
+            HasLatency = true;
+            InternetStatusTag = "MEASURED";
+            LatencyPrimary = linkBit ?? "Route measured";
+            LatencySecondary = "Current route sample available · settings not verified";
+            InternetLiveMetric = $"{latency.AfterP50Ms:0.#} ms idle · {latency.AfterJitterMs:0.#} ms jitter";
             return;
         }
 
         HasLatency = false;
-        LatencyPrimary = "—";
-        LatencySecondary = linkBit is not null
-            ? $"{linkBit} · Apply Internet for a current sample"
-            : "Apply Internet to measure ping, jitter, and DNS";
+        InternetStatusTag = "NOT APPLIED";
+        LatencyPrimary = linkBit ?? "Connection ready";
+        LatencySecondary = "Analyze the live path, tune the stack, and select the fastest healthy DNS";
+        InternetLiveMetric = "No current route sample";
+    }
+
+    private static string BuildInternetLiveMetric(NetworkBenchmarkResult quality, HomeDashboardReader.LatencySnapshot? latency)
+    {
+        var currentIdle = latency?.AfterP50Ms ?? quality.PingP50Ms;
+        var downLoaded = Math.Max(0, quality.DownloadLoadedMs - quality.PingP50Ms);
+        var upLoaded = Math.Max(0, quality.UploadLoadedMs - quality.PingP50Ms);
+        return $"{currentIdle:0.#} ms now · load +{downLoaded:0.#}↓ +{upLoaded:0.#}↑ · {quality.PacketLossPercent:0.##}% loss";
     }
 
     private void RefreshDiscordRamTile()
@@ -165,37 +181,36 @@ public partial class DashboardViewModel : ObservableObject
         // Prefer RAM reclaimed (peak − live) when DiscOpt/kernel has trimmed idle pages.
         if (reclaimed >= 8L << 20) // ≥ 8 MB so we don't flash noise
         {
-            DiscordStatusPrimary = HomeDashboardReader.FormatBytes(reclaimed);
-            DiscordStatusSecondary = live > 0
-                ? $"reclaimed · live {HomeDashboardReader.FormatBytes(live)}" +
-                  (kernel ? " · kernel on" : applied ? " · applied" : "")
-                : kernel
-                    ? "reclaimed this session · kernel on"
-                    : "reclaimed this session · open Discord to refresh";
+            DiscordLiveMetric = live > 0
+                ? $"{HomeDashboardReader.FormatBytes(live)} live · {HomeDashboardReader.FormatBytes(reclaimed)} reclaimed this session"
+                : $"{HomeDashboardReader.FormatBytes(reclaimed)} reclaimed this session";
         }
         else if (live > 0)
         {
-            DiscordStatusPrimary = HomeDashboardReader.FormatBytes(live);
-            DiscordStatusSecondary = kernel
-                ? "live process RAM · DiscOpt trim watching"
-                : applied
-                    ? "live process RAM · kernel off (stock-safe)"
-                    : "live process RAM · Apply for full pack";
-        }
-        else if (kernel)
-        {
-            DiscordStatusPrimary = "Kernel on";
-            DiscordStatusSecondary = "Open Discord — reclaim updates in background";
-        }
-        else if (applied)
-        {
-            DiscordStatusPrimary = "Partial";
-            DiscordStatusSecondary = "Apply record incomplete · open Discord module";
+            DiscordLiveMetric = $"{HomeDashboardReader.FormatBytes(live)} live process memory";
         }
         else
         {
-            DiscordStatusPrimary = "—";
-            DiscordStatusSecondary = "Apply Discord · leave open for background reclaim";
+            DiscordLiveMetric = "Open Discord for a live memory sample";
+        }
+
+        if (kernel)
+        {
+            DiscordStatusTag = "VERIFIED";
+            DiscordStatusPrimary = "Lean client active";
+            DiscordStatusSecondary = "Privacy patch · voice QoS · idle memory guard";
+        }
+        else if (applied)
+        {
+            DiscordStatusTag = "APPLIED";
+            DiscordStatusPrimary = "Stock-safe mode";
+            DiscordStatusSecondary = "Voice QoS and privacy settings applied · custom kernel skipped";
+        }
+        else
+        {
+            DiscordStatusTag = "NOT APPLIED";
+            DiscordStatusPrimary = "Discord ready";
+            DiscordStatusSecondary = "Apply privacy, voice, launch, and background-memory policy";
         }
     }
 
@@ -203,23 +218,30 @@ public partial class DashboardViewModel : ObservableObject
     {
         var ws = HomeDashboardReader.TryReadProcessWorkingSetBytes("steam", "steamwebhelper");
         var steam = ReadModuleState("steam-optimizer.json");
+        var guardRunning = HomeDashboardReader.TryReadSteamMemoryGuardRunning();
 
         if (ws > 0)
         {
-            SteamStatusPrimary = HomeDashboardReader.FormatBytes(ws);
-            SteamStatusSecondary = steam.Applied
-                ? "live client RAM · lean library + game yield"
-                : "live client RAM · Apply Steam for quiet CEF";
-        }
-        else if (steam.Applied)
-        {
-            SteamStatusPrimary = "Ready";
-            SteamStatusSecondary = "Optimized · lean library + contention guard";
+            SteamLiveMetric = $"{HomeDashboardReader.FormatBytes(ws)} live client memory";
         }
         else
         {
-            SteamStatusPrimary = "—";
-            SteamStatusSecondary = "Apply Steam · quiet CEF + in-game CPU yield";
+            SteamLiveMetric = "Open Steam for a live memory sample";
+        }
+
+        if (steam.Applied)
+        {
+            SteamStatusTag = "VERIFIED";
+            SteamStatusPrimary = guardRunning ? "Memory guard active" : "Memory guard installed";
+            SteamStatusSecondary = guardRunning
+                ? "Background web pages reclaim first · games keep CPU priority"
+                : "Starts with the optimized Steam launcher · safe priority policy ready";
+        }
+        else
+        {
+            SteamStatusTag = "NOT APPLIED";
+            SteamStatusPrimary = "Steam ready";
+            SteamStatusSecondary = "Apply lean library, background-memory, and in-game CPU policy";
         }
     }
 
@@ -244,10 +266,19 @@ public partial class DashboardViewModel : ObservableObject
         {
             appliedCount++;
             HasNvidiaPath = true;
-            NvidiaPathPrimary = nvidia.Gsync ? "G-SYNC" : "Max FPS";
-            NvidiaPathSecondary = string.IsNullOrWhiteSpace(nvidia.ProfileFile)
-                ? "3D Base Profile applied"
-                : nvidia.ProfileFile!;
+            NvidiaStatusTag = "VERIFIED";
+            NvidiaPathPrimary = !string.IsNullOrWhiteSpace(nvidia.GpuName)
+                ? nvidia.GpuName!
+                : !string.IsNullOrWhiteSpace(nvidia.Series) ? nvidia.Series! : "NVIDIA profile active";
+            NvidiaPathSecondary = nvidia.Gsync
+                ? "Low-latency base profile · G-SYNC path · per-game overrides"
+                : "Low-latency base profile · max-performance path · per-game overrides";
+            var proof = new List<string>();
+            if (nvidia.VerifiedSettingCount > 0) proof.Add($"{nvidia.VerifiedSettingCount} driver pins");
+            if (nvidia.GameProfileCount > 0) proof.Add($"{nvidia.GameProfileCount} game profiles");
+            NvidiaLiveMetric = proof.Count > 0
+                ? string.Join(" · ", proof) + " verified"
+                : "Driver profile import verified";
         }
         else
         {
@@ -255,13 +286,17 @@ public partial class DashboardViewModel : ObservableObject
             HasNvidiaPath = false;
             if (!string.IsNullOrWhiteSpace(nvState.Detail))
             {
+                NvidiaStatusTag = "NEEDS ATTENTION";
                 NvidiaPathPrimary = "Needs work";
                 NvidiaPathSecondary = nvState.Detail!;
+                NvidiaLiveMetric = "Open NVIDIA to review the failed stage";
             }
             else
             {
-                NvidiaPathPrimary = "—";
-                NvidiaPathSecondary = "Apply NVIDIA for max-FPS NIP";
+                NvidiaStatusTag = "NOT APPLIED";
+                NvidiaPathPrimary = "GPU ready";
+                NvidiaPathSecondary = "Apply a verified driver profile and per-game overrides";
+                NvidiaLiveMetric = "No verified driver profile";
             }
         }
 
@@ -270,19 +305,17 @@ public partial class DashboardViewModel : ObservableObject
         FrameTimePrimary = DiscordStatusPrimary;
         FrameTimeSecondary = DiscordStatusSecondary;
 
+        OverviewPrimary = $"{appliedCount} / 4 verified";
         HeroSummary = appliedCount switch
         {
-            0 => "Apply optimizers — home fills with live RAM and real proof.",
-            1 => "1 module active. Keep going.",
-            4 => "All four modules reporting.",
-            _ => $"{appliedCount} modules active."
+            0 => "No optimizer has a verified apply record yet.",
+            1 => "One optimizer is verified; three are ready to configure.",
+            4 => "Every optimizer has a verified apply record.",
+            _ => $"{appliedCount} optimizers are verified; {4 - appliedCount} still need attention."
         };
 
         RefreshLiveMemory();
     }
-
-    private static string FormatDns(double ms) =>
-        ms < 0 ? "—" : ms >= 1000 ? $"{ms / 1000:0.0}s" : $"{ms:0} ms";
 
     private static (bool Applied, string? Detail) ReadModuleState(string fileName)
     {

@@ -28,19 +28,6 @@ Expect("profile name matches",
 Expect("profile name mismatch",
     !NvidiaDetectLogic.ProfileNameMatchesSeries("40 Series.nip", "30", false));
 
-Expect("display container exe",
-    NvidiaDetectLogic.IsDisplayContainerExe(@"C:\Windows\System32\DriverStore\...\NVDisplay.Container.exe"));
-Expect("app tray exe",
-    NvidiaDetectLogic.IsNvidiaAppTrayExe(@"C:\Program Files\NVIDIA Corporation\NVIDIA App\NVIDIA App.exe"));
-Expect("display not app tray",
-    !NvidiaDetectLogic.IsNvidiaAppTrayExe(@"...\NVDisplay.Container.exe"));
-
-Expect("tray hidden IsPromoted=0", NvidiaDetectLogic.IsDisplayContainerTrayHidden(true, 0));
-Expect("tray not hidden IsPromoted=1", !NvidiaDetectLogic.IsDisplayContainerTrayHidden(true, 1));
-Expect("tray missing key ok", NvidiaDetectLogic.IsDisplayContainerTrayHidden(false, null));
-Expect("app ghost gone", NvidiaDetectLogic.IsAppTrayGhostGone(false));
-Expect("app ghost present fail", !NvidiaDetectLogic.IsAppTrayGhostGone(true));
-
 // Display status gate: orphan registry must not fail when color+scale live OK
 Expect("display status: refresh+registry",
     NvidiaDetectLogic.IsDisplayStatusOk(true, true, false, false));
@@ -117,9 +104,7 @@ Expect("drs live states", NvidiaDetectLogic.DrsLiveStates.SequenceEqual(new[] { 
 
 // Fully applied fixture intentional actives
 var full = NvidiaDetectLogic.IsDisplayStatusOk(true, false, true, true) &&
-           NvidiaDetectLogic.IsDisplayContainerTrayHidden(true, 0) &&
-           NvidiaDetectLogic.ProfileNameMatchesSeries("30 Series.nip", "30", false) &&
-           NvidiaDetectLogic.IsAppTrayGhostGone(false);
+           NvidiaDetectLogic.ProfileNameMatchesSeries("30 Series.nip", "30", false);
 Expect("fully applied fixture false_fail_count=0", full);
 
 var repo = FindRepoRoot();
@@ -149,8 +134,6 @@ $rEmpty = Get-ExoDrsVerificationResult -Expected $exp -Exported @{{}} -RequiredI
  (E 'ps profile max' ((Get-ExoExpectedProfileFileName -SeriesId '40' -Gsync $false) -eq '40 Series.nip')),
  (E 'ps profile gsync' ((Get-ExoExpectedProfileFileName -SeriesId '40' -Gsync $true) -eq '40 Series G-SYNC.nip')),
  (E 'ps display status orphan reg' (Test-ExoDisplayStatusOk -RefreshOk $true -RegistryOk $false -ColorOk $true -PathScalingOk $true)),
- (E 'ps tray hidden' (Test-ExoDisplayTrayHidden -KeyExists $true -IsPromoted 0)),
- (E 'ps tray not hidden' (-not (Test-ExoDisplayTrayHidden -KeyExists $true -IsPromoted 1))),
  (E 'ps drs verified' ($rVerified.Status -eq 'verified' -and $rVerified.ComparedCount -eq 5)),
  (E 'ps drs drifted mismatch' ($rDrift.Status -eq 'drifted' -and @($rDrift.Mismatches).Count -eq 1)),
  (E 'ps drs unavailable null export' ($rUnavail.Status -eq 'unavailable')),
@@ -189,19 +172,19 @@ $rEmpty = Get-ExoDrsVerificationResult -Expected $exp -Exported @{{}} -RequiredI
 var applyFiles = new[]
 {
     Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Nvidia-Optimizer.ps1"),
-    Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-TrayClear.ps1"),
     Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Display-Apply.ps1"),
 };
 var blob = string.Join("\n", applyFiles.Where(File.Exists).Select(File.ReadAllText));
 Expect("apply sources readable", blob.Length > 5000);
 var (ok, issues) = NvidiaDetectLogic.AuditApplyScriptText(blob);
 Expect("apply audit", ok, string.Join("; ", issues));
-Expect("no tray logon task create",
+Expect("no NVIDIA scheduled task create",
     !System.Text.RegularExpressions.Regex.IsMatch(blob, @"Register-ScheduledTask[^\r\n]*Exo-Nvidia",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase));
-Expect("Unregister tray tasks present",
-    blob.Contains("Unregister-ExoTrayTasks", StringComparison.OrdinalIgnoreCase) ||
-    blob.Contains("Exo-NvidiaTrayHide", StringComparison.OrdinalIgnoreCase));
+Expect("retired tray manipulation absent",
+    !File.Exists(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-TrayClear.ps1")) &&
+    !blob.Contains("Exo-Nvidia-TrayClear", StringComparison.OrdinalIgnoreCase) &&
+    !blob.Contains("IsPromoted", StringComparison.OrdinalIgnoreCase));
 
 // --- DRS verification + NPI pin + strip + catalog markers ---
 var optimizerPath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Nvidia-Optimizer.ps1");
@@ -238,23 +221,13 @@ Expect("optimizer records registry display method",
 Expect("optimizer retries display before fail",
     optimizerSrc.Contains("display-policy-retry", StringComparison.Ordinal) &&
     optimizerSrc.Contains("forcing one more Display-Apply pass", StringComparison.Ordinal));
-Expect("tray clear never registers logon task",
-    !System.Text.RegularExpressions.Regex.IsMatch(
-        File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-TrayClear.ps1")),
-        @"(?<!Un)Register-ScheduledTask|schtasks\s+/Create",
-        System.Text.RegularExpressions.RegexOptions.IgnoreCase));
-Expect("tray clear purges Exo tasks",
-    File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-TrayClear.ps1"))
-        .Contains("Unregister-ExoTrayTasks", StringComparison.Ordinal));
 Expect("optimizer catch still saves failure state",
     optimizerSrc.Contains("if (-not [bool]$Script:CompletedPartialDisplayPolicy)", StringComparison.Ordinal) &&
     optimizerSrc.Contains("Save-ExoFailureState -Stage $failStage -Message $failMessage", StringComparison.Ordinal));
-Expect("optimizer tray clear passes NoTask",
-    optimizerSrc.Contains("'-NoTask', '-SettlePasses', '3'", StringComparison.Ordinal) &&
-    optimizerSrc.Contains("(NoTask; no background task)", StringComparison.Ordinal));
-Expect("display apply tray clear passes NoTask",
-    displayApplySrc.Contains("-File $trayScript -NoTask -SettlePasses 3", StringComparison.Ordinal) &&
-    displayApplySrc.Contains("Tray clear script finished (no background task)", StringComparison.Ordinal));
+Expect("optimizer audio stage runs once",
+    CountOf(optimizerSrc, "[void](Remove-NvidiaAudioComponents)") == 1);
+Expect("optimizer bloat stage runs once",
+    CountOf(optimizerSrc, "[void](Remove-NvidiaBloatComponents)") == 1);
 Expect("NVIDIA reset uses status-cleared copy",
     messagesSrc.Contains("NvidiaStatusCleared = \"Status cleared. Driver and profiles unchanged.\"", StringComparison.Ordinal) &&
     nvidiaViewModelSrc.Contains("OptimizerMessages.NvidiaStatusCleared", StringComparison.Ordinal));
@@ -452,6 +425,18 @@ Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
 File.WriteAllLines(logPath, lines);
 Console.WriteLine("Wrote " + logPath);
 Environment.Exit(failed == 0 ? 0 : 1);
+
+static int CountOf(string text, string value)
+{
+    var count = 0;
+    var start = 0;
+    while ((start = text.IndexOf(value, start, StringComparison.Ordinal)) >= 0)
+    {
+        count++;
+        start += value.Length;
+    }
+    return count;
+}
 
 static string FindRepoRoot()
 {

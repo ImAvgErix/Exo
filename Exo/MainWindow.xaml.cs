@@ -21,8 +21,7 @@ public sealed partial class MainWindow : Window
         Discord,
         Steam,
         Internet,
-        Nvidia,
-        NvidiaPanel
+        Nvidia
     }
 
     private ShellMode _mode = ShellMode.Home;
@@ -319,10 +318,7 @@ public sealed partial class MainWindow : Window
 
         // Legacy NavHome stays collapsed (left chrome owns Home now).
         NavHome.Visibility = Visibility.Collapsed;
-        // Secondary back only for Nvidia panel → optimizer.
-        BackButton.Visibility = mode == ShellMode.NvidiaPanel
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        BackButton.Visibility = Visibility.Collapsed;
 
         ContextLogoHost.Visibility = Visibility.Collapsed;
         ContextLogo.Source = null;
@@ -334,7 +330,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Highlight the active module circle: soft glass fill + accent selection ring.
-    /// NvidiaPanel keeps NavNvidia selected (panel is under GPU).
+    /// The active module keeps its rail item selected.
     /// </summary>
     private void UpdateRailSelection(ShellMode mode)
     {
@@ -343,7 +339,7 @@ public sealed partial class MainWindow : Window
             ShellMode.Discord => NavDiscord,
             ShellMode.Steam => NavSteam,
             ShellMode.Internet => NavInternet,
-            ShellMode.Nvidia or ShellMode.NvidiaPanel => NavNvidia,
+            ShellMode.Nvidia => NavNvidia,
             _ => null
         };
 
@@ -489,29 +485,6 @@ public sealed partial class MainWindow : Window
             catch
             {
                 Helpers.StartupLog.Mark("nav-nvidia-hard-failed");
-            }
-        }
-    }
-
-    public void NavigateToNvidiaPanel()
-    {
-        try
-        {
-            StabilizeShellAfterExternalWork();
-            Navigate(ShellMode.NvidiaPanel, typeof(NvidiaPanelPage), Slide());
-            StabilizeShellAfterExternalWork();
-        }
-        catch (Exception ex)
-        {
-            Helpers.StartupLog.Mark("nav-nvidia-panel-failed:" + ex.GetType().Name);
-            try
-            {
-                ExoMotion.MotionDisabled = true;
-                Navigate(ShellMode.NvidiaPanel, typeof(NvidiaPanelPage), null);
-            }
-            catch
-            {
-                Helpers.StartupLog.Mark("nav-nvidia-panel-hard-failed");
             }
         }
     }
@@ -729,10 +702,7 @@ public sealed partial class MainWindow : Window
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
         HideSettingsFlyout();
-        if (_mode == ShellMode.NvidiaPanel)
-            NavigateToNvidia();
-        else
-            NavigateHome();
+        NavigateHome();
     }
 
     private async Task MaybeAutoUpdateAsync(CancellationToken ct)

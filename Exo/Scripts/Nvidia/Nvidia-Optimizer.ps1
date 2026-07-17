@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.12.4'
+$Script:NvidiaOptVersion = '1.12.5'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
@@ -1109,74 +1109,6 @@ function Remove-NvidiaAppDesktopShortcuts {
     return $removed
 }
 
-function Clear-NvidiaTrayGhostIcons {
-    # NVDisplay.Container re-registers on soft-refresh/logon. Deleting its key makes it
-    # come back promoted - hide IsPromoted=0 instead. Delete App/GFE ghosts only.
-    Write-Step 'Clearing / hiding NVIDIA tray icons (display hide + App delete)...'
-    $trayScript = Join-Path $PSScriptRoot 'Exo-Nvidia-TrayClear.ps1'
-    if (Test-Path -LiteralPath $trayScript) {
-        try {
-            $p = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
-                '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$trayScript`"",
-                '-NoTask', '-SettlePasses', '3'
-            ) -Wait -PassThru -WindowStyle Hidden
-            Write-Ok "Tray clear script exit $($p.ExitCode) (NoTask; no background task)"
-            return 1
-        } catch {
-            Write-Warn "Tray script launch failed: $($_.Exception.Message)"
-        }
-    }
-
-    $removed = 0
-    $hidden = 0
-    $roots = @('HKCU:\Control Panel\NotifyIconSettings')
-    $nvidiaTrayPattern = '(?i)NVIDIA|nvcontainer|NVDisplay|GeForce|ShadowPlay|nvsphelper|nvapp|NvBackend'
-    foreach ($root in $roots) {
-        if (-not (Test-Path -LiteralPath $root)) { continue }
-        Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue | ForEach-Object {
-            $exe = $null
-            try { $exe = [string](Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).ExecutablePath } catch { }
-            if ([string]::IsNullOrWhiteSpace($exe)) { return }
-            if ($exe -notmatch $nvidiaTrayPattern) { return }
-            if ($exe -match '(?i)NVDisplay\.Container|Display\.NvContainer|nv_dispi\.inf') {
-                try {
-                    Set-ItemProperty -LiteralPath $_.PSPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0
-                    $hidden++
-                } catch { }
-                return
-            }
-            try {
-                Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
-                $removed++
-                Write-Ok "Removed tray icon: $exe"
-            } catch {
-                try { Set-ItemProperty -LiteralPath $_.PSPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0; $hidden++ } catch { }
-            }
-        }
-    }
-
-    try {
-        $svc = Get-Service -Name 'NvContainerLocalSystem' -ErrorAction SilentlyContinue
-        if ($svc) {
-            if ($svc.Status -ne 'Stopped') {
-                Stop-Service -Name 'NvContainerLocalSystem' -Force -ErrorAction SilentlyContinue
-            }
-            Set-Service -Name 'NvContainerLocalSystem' -StartupType Disabled -ErrorAction SilentlyContinue
-            Write-Ok 'NvContainerLocalSystem disabled (App stack)'
-        }
-    } catch { }
-
-    $pd = Join-Path $env:ProgramData 'NVIDIA Corporation\NVIDIA App'
-    if (Test-Path -LiteralPath $pd) {
-        if (Remove-ExoTreeForce -Path $pd) {
-            Write-Ok "Removed leftover $pd"
-        }
-    }
-
-    Write-Ok "Tray: removed=$removed hidden(display)=$hidden"
-    return ($removed + $hidden)
-}
-
 function Wait-NvidiaAppInstalled {
     param([int]$Seconds = 90)
     $deadline = (Get-Date).AddSeconds([Math]::Max(5, $Seconds))
@@ -2150,20 +2082,12 @@ function Remove-NvidiaClientTraces {
 
     Remove-NvidiaAppArpLeftovers
     Remove-NvidiaAppDesktopShortcuts | Out-Null
-    $audioCleared = Remove-NvidiaAudioComponents
-    $trayCleared = Clear-NvidiaTrayGhostIcons
-
-    # Do NOT restart NvContainerLocalSystem - that is App-stack and re-registers tray icons.
-    # Display driver uses NVDisplay.ContainerLocalSystem (left alone).
-
     $appGone = -not (Test-NvidiaAppInstalled)
     $cplOk = Test-NvidiaControlPanelInstalled
     if ($appGone) { Write-Ok 'NVIDIA App / GFE traces cleared' } else { Write-Warn 'NVIDIA App still detected after wipe' }
     if ($cplOk) { Write-Ok 'Classic Control Panel kept' } else { Write-Ok 'Classic Control Panel not present yet (will install next)' }
     return [pscustomobject]@{
         AppCleared = [bool]$appGone
-        AudioCleared = [bool]$audioCleared
-        TrayGhostsCleared = [int]$trayCleared
         ControlPanelPresent = [bool]$cplOk
         PackagesTried = @($toRemove)
     }
@@ -3178,10 +3102,6 @@ function Install-ExoCleanDriver {
     $okCodes = @(0, 1)
     if ($okCodes -contains $exitCode) {
         Start-Sleep -Seconds 2
-        # Clean install can leave prior Virtual Audio; strip every time after driver setup
-        [void](Remove-NvidiaAudioComponents)
-        # Same pass for ShadowPlay/NvBackend/NodeJS/telemetry sub-packages
-        [void](Remove-NvidiaBloatComponents)
         $installedVersion = Convert-WindowsDriverToNvidia (Get-WindowsDriverVersionString)
         if ($exitCode -eq 0 -and $installedVersion -and
             (Compare-NvidiaVersion $installedVersion $Version) -lt 0) {
@@ -3379,9 +3299,7 @@ function Apply-ExoDriverInstallTweaks {
     } catch { }
 
     Disable-NvidiaTelemetry
-    [void](Remove-NvidiaAudioComponents)
-    [void](Remove-NvidiaBloatComponents)
-    Write-Ok 'Expert tweaks done (MSI High, telemetry off, Ansel off, HDCP off; audio + bloat stripped)'
+    Write-Ok 'Expert tweaks done (MSI High, telemetry off, Ansel off, HDCP off)'
 }
 
 function Test-ExoDriverInstallTweaks {
@@ -4396,10 +4314,9 @@ try {
         Write-Ok "App=$(if ($appInstalled) { 'present' } else { 'absent' }) CPL=$(if ($cplOk) { 'present' } else { 'absent' })"
     }
 
-    Write-HubProgress 70 'Stripping NVIDIA audio + bloat packages + tray ghosts...'
+    Write-HubProgress 70 'Removing NVIDIA audio and unused driver packages...'
     [void](Remove-NvidiaAudioComponents)
     [void](Remove-NvidiaBloatComponents)
-    [void](Clear-NvidiaTrayGhostIcons)
 
     $displayClient = @{
         Client       = 'exo-panel'

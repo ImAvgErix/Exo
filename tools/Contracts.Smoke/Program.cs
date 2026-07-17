@@ -96,7 +96,7 @@ foreach (var f in SteamLogic.ForbiddenApplyPatterns)
 foreach (var pair in new (string Detect, string Apply)[]
 {
     ("Test-SteamCefLauncher", "Steam-Exo.cmd"),
-    ("Test-SteamTrimHelper", "Exo-SteamWebHelperTrim"),
+    ("Test-SteamMemoryGuard", "Exo-SteamMemoryGuard"),
     ("applyStatus", "applyStatus"),
     ("-cef-disable-gpu", "-cef-disable-gpu"),
 })

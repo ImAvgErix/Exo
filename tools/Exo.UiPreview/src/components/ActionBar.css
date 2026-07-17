@@ -27,9 +27,11 @@
 
 .action-foot__internet-grid {
   display: grid;
-  grid-template-columns: 3fr 3fr 2fr 2fr;
+  grid-template-columns: 5fr 2fr 2fr;
   gap: 8px;
 }
+
+.action-foot__analyze { min-width: 0; }
 
 .action-foot__internet-grid .btn {
   min-width: 0;

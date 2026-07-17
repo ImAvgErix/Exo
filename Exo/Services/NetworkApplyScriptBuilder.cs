@@ -11,6 +11,8 @@ namespace Exo.Services;
 /// </summary>
 public static partial class NetworkApplyScriptBuilder
 {
+    private static string PsQuote(string value) => "'" + (value ?? string.Empty).Replace("'", "''") + "'";
+
     /// <summary>
     /// Every static registry value the apply script writes or removes.
     /// Kept next to the writes so the snapshot block always covers the mutation set.
@@ -171,7 +173,10 @@ function Test-ExoDnsResolve {
         sb.AppendLine("$PreferIpv4First = " + preferIpv4);
         sb.AppendLine("$VendorHint = '" + vendorHint.Replace("'", "") + "'");
         sb.AppendLine("$IsLaptopHint = " + (media.IsLikelyLaptop ? "1" : "0"));
-        sb.AppendLine("$ExoPrivateDns = " + (options.PrivateDns ? "1" : "0"));
+        sb.AppendLine("$ExoDnsProvider = " + PsQuote(options.DnsProvider));
+        sb.AppendLine("$ExoDnsV4 = @(" + PsQuote(options.DnsPrimary) + "," + PsQuote(options.DnsSecondary) + ")");
+        sb.AppendLine("$ExoDnsV6 = @(" + PsQuote(options.DnsPrimaryV6) + "," + PsQuote(options.DnsSecondaryV6) + ")");
+        sb.AppendLine("$ExoDnsDohTemplate = " + PsQuote(options.DnsOverHttpsTemplate));
         sb.AppendLine("$ExoWifiDisabled = @()");
         sb.AppendLine("Log \"[Exo-NET] net-only BufferStrategy=$BufferStrategy RssQueues<=$RssQueueBudget PreferIpv4=$PreferIpv4First Vendor=$VendorHint\"");
         sb.AppendLine(CommonSafetyFunctions);
@@ -1166,47 +1171,43 @@ function Set-EthMetrics {
         sb.AppendLine("      Report 'prefix-policy' 'skip' ('netsh prefixpolicy rejected: ' + $ppOut)");
         sb.AppendLine("    }");
         sb.AppendLine("  } catch { Report 'prefix-policy' 'skip' ('netsh prefixpolicy error: ' + $_.Exception.Message) }");
-        // Broken ISP IPv6 DNS (gateway only) adds ~1s hangs before falling back to IPv4.
-        // LowestLatency: set dual-stack Cloudflare so system resolve stays fast.
-        sb.AppendLine("  try {");
-        sb.AppendLine("    $ethDns = @(Get-ExoPhysicalAdapters | Where-Object { -not (Test-IsWifiAdapter $_) -and ([string]$_.Status -eq 'Up' -or @(Get-NetIPAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -EA SilentlyContinue).Count -gt 0) })");
-        sb.AppendLine("    foreach ($e in $ethDns) {");
-        sb.AppendLine("      Set-DnsClientServerAddress -InterfaceIndex $e.ifIndex -ServerAddresses @('1.1.1.1','1.0.0.1','2606:4700:4700::1111','2606:4700:4700::1001') -EA SilentlyContinue");
-        sb.AppendLine("      Log \"[DNS] dual-stack Cloudflare on $($e.Name) (avoid broken ISP IPv6 DNS hangs)\"");
-        sb.AppendLine("    }");
-        sb.AppendLine("    if ($ethDns.Count -gt 0) { Report 'dns-servers' 'ok' 'cloudflare dual-stack' }");
-        sb.AppendLine("  } catch { Report 'dns-servers' 'skip' $_.Exception.Message }");
         sb.AppendLine("} else {");
         sb.AppendLine("  Report 'prefix-policy' 'skip' 'preset keeps default address precedence'");
         sb.AppendLine("}");
-        // Private DNS (opt-in): Cloudflare servers + DoH encryption registration (Win11 22H2+).
-        // Runs for BOTH presets — it sits outside the PreferIpv4First branch on purpose.
-        sb.AppendLine("if ($ExoPrivateDns -eq 1) {");
-        sb.AppendLine("  if ([Environment]::OSVersion.Version.Build -lt 22621) {");
-        sb.AppendLine("    Report 'private-dns' 'skip' 'needs Windows 11 22H2+ for encrypted DNS'");
-        sb.AppendLine("  } else {");
-        sb.AppendLine("    try {");
-        sb.AppendLine("      $pdTargets = @(Get-ExoPhysicalAdapters | Where-Object { [string]$_.Status -eq 'Up' -or @(Get-NetIPAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -EA SilentlyContinue).Count -gt 0 })");
-        sb.AppendLine("      foreach ($t in $pdTargets) { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -ServerAddresses @('1.1.1.1','1.0.0.1','2606:4700:4700::1111','2606:4700:4700::1001') -EA SilentlyContinue }");
-        sb.AppendLine("      $dohFail = @()");
-        sb.AppendLine("      foreach ($svr in @('1.1.1.1','1.0.0.1','2606:4700:4700::1111','2606:4700:4700::1001')) {");
-        sb.AppendLine("        # Idempotent and verified: update a known resolver, add an absent one,");
-        sb.AppendLine("        # then trust the live table rather than netsh's exit code alone.");
-        sb.AppendLine("        $beforeDoh = (netsh dns show encryption server=$svr 2>&1 | Out-String)");
-        sb.AppendLine("        if ($beforeDoh -match '(?i)Encryption settings for') {");
-        sb.AppendLine("          $setDoh = (netsh dns set encryption server=$svr dohtemplate=https://cloudflare-dns.com/dns-query autoupgrade=yes udpfallback=yes 2>&1 | Out-String)");
-        sb.AppendLine("        } else {");
-        sb.AppendLine("          $setDoh = (netsh dns add encryption server=$svr dohtemplate=https://cloudflare-dns.com/dns-query autoupgrade=yes udpfallback=yes 2>&1 | Out-String)");
-        sb.AppendLine("        }");
-        sb.AppendLine("        $liveDoh = (netsh dns show encryption server=$svr 2>&1 | Out-String)");
-        sb.AppendLine("        $dohOk = $liveDoh -match '(?i)https://cloudflare-dns\\.com/dns-query' -and $liveDoh -match '(?im)^Auto-upgrade\\s*:\\s*yes\\s*$'");
-        sb.AppendLine("        if (-not $dohOk) { $dohFail += $svr; Log \"[DoH] $svr verification failed: $($setDoh.Trim())\" }");
+        // Analyze always chooses a healthy public resolver on this exact route.
+        // Apply it to active physical adapters and register the matching encrypted
+        // template when Windows supports automatic DoH. Repair restores the snapshot.
+        sb.AppendLine("try {");
+        sb.AppendLine("  $dnsTargets = @(Get-ExoPhysicalAdapters | Where-Object { [string]$_.Status -eq 'Up' -or @(Get-NetIPAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -EA SilentlyContinue).Count -gt 0 })");
+        sb.AppendLine("  $dnsServers = @($ExoDnsV4 + $ExoDnsV6 | Where-Object { $_ })");
+        sb.AppendLine("  foreach ($t in $dnsTargets) { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -ServerAddresses $dnsServers -EA Stop }");
+        sb.AppendLine("  $dohStatus = 'plain DNS (Windows build lacks automatic DoH)'");
+        sb.AppendLine("  if ([Environment]::OSVersion.Version.Build -ge 22621 -and $ExoDnsDohTemplate) {");
+        sb.AppendLine("    $dohFail = @()");
+        sb.AppendLine("    $dohErrors = @()");
+        sb.AppendLine("    foreach ($svr in $dnsServers) {");
+        sb.AppendLine("      $beforeDoh = (netsh dns show encryption server=$svr 2>&1 | Out-String)");
+        sb.AppendLine("      if ($beforeDoh -match '(?i)Encryption settings for') {");
+        sb.AppendLine("        $setDoh = (netsh dns set encryption server=$svr dohtemplate=$ExoDnsDohTemplate autoupgrade=yes udpfallback=yes 2>&1 | Out-String)");
+        sb.AppendLine("      } else {");
+        sb.AppendLine("        $setDoh = (netsh dns add encryption server=$svr dohtemplate=$ExoDnsDohTemplate autoupgrade=yes udpfallback=yes 2>&1 | Out-String)");
         sb.AppendLine("      }");
-        sb.AppendLine("      if ($dohFail.Count -eq 0) { Report 'private-dns' 'ok' 'cloudflare DoH (auto-upgrade, UDP fallback)' }");
-        sb.AppendLine("      else { Report 'private-dns' 'fail' ('registration failed: ' + ($dohFail -join ',')) }");
-        sb.AppendLine("    } catch { Report 'private-dns' 'fail' $_.Exception.Message }");
+        sb.AppendLine("      $liveDoh = (netsh dns show encryption server=$svr 2>&1 | Out-String)");
+        sb.AppendLine("      if ($liveDoh -notmatch [regex]::Escape($ExoDnsDohTemplate) -or $liveDoh -notmatch '(?im)^Auto-upgrade\\s*:\\s*yes\\s*$') {");
+        sb.AppendLine("        $dohFail += $svr");
+        sb.AppendLine("        $detail = (($setDoh + ' ' + $liveDoh) -replace '\\s+',' ').Trim()");
+        sb.AppendLine("        if ($detail) { $dohErrors += ($svr + ': ' + $detail) }");
+        sb.AppendLine("      }");
+        sb.AppendLine("    }");
+        sb.AppendLine("    if ($dohFail.Count -gt 0) {");
+        sb.AppendLine("      $dohStatus = 'fastest DNS active; Windows rejected automatic DoH'");
+        sb.AppendLine("      Log ('[DNS] automatic DoH unavailable for ' + ($dohFail -join ', ') + $(if ($dohErrors.Count) { ' — ' + ($dohErrors -join ' | ') } else { '' }))");
+        sb.AppendLine("    } else { $dohStatus = 'automatic DoH' }");
         sb.AppendLine("  }");
-        sb.AppendLine("}");
+        sb.AppendLine("  Clear-DnsClientCache -EA SilentlyContinue");
+        sb.AppendLine("  Report 'dns-auto' 'ok' ($ExoDnsProvider + ' · ' + $dohStatus)");
+        sb.AppendLine("  Log ('[DNS] ' + $ExoDnsProvider + ' selected by Analyze: ' + ($dnsServers -join ', '))");
+        sb.AppendLine("} catch { Report 'dns-auto' 'fail' $_.Exception.Message }");
         // Laptop: keep AC path max; do not force DC min-CPU 100% (battery). Only re-stamp wireless max on DC.
         sb.AppendLine("if ($IsLaptopHint -eq 1) {");
         sb.AppendLine("  try {");

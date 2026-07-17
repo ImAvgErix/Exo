@@ -6,8 +6,6 @@ interface ActionBarProps {
   repairLabel?: string
   hint?: string
   onApply?: () => void
-  onLatency?: () => void
-  onThroughput?: () => void
   onRepair?: () => void
   onRefresh?: () => void
   onOpenCpl?: () => void
@@ -51,8 +49,6 @@ export function ActionBar({
   repairLabel = 'Repair',
   hint,
   onApply,
-  onLatency,
-  onThroughput,
   onRepair,
   onRefresh,
   onOpenCpl,
@@ -71,19 +67,11 @@ export function ActionBar({
           <div className="action-foot__internet-grid">
             <button
               type="button"
-              className="btn btn-primary"
-              data-testid="btn-low-latency"
-              onClick={onLatency}
+              className="btn btn-primary action-foot__analyze"
+              data-testid="btn-analyze-apply"
+              onClick={onApply}
             >
-              Low latency
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              data-testid="btn-highest-download"
-              onClick={onThroughput}
-            >
-              Highest download
+              Analyze &amp; Apply
             </button>
             <button
               type="button"

@@ -32,13 +32,17 @@ public static partial class SteamLogic
     }
 
     /// <summary>
-    /// Steam companion helper: marker + priority yield + quiet re-enforce.
-    /// Must NOT EmptyWorkingSet/kill steamwebhelper (CEF freezes). Sleep 2–15s OK.
+    /// Steam memory guard: low memory priority for background renderers, normal
+    /// foreground behavior, in-game CPU yield, and quiet-start re-enforcement.
+    /// It must never force-trim, suspend, cap, or kill Chromium processes.
     /// </summary>
-    public static bool IsTrimHelperText(string? text)
+    public static bool IsMemoryGuardText(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
-        if (!text.Contains("Exo.SteamWebHelper", StringComparison.Ordinal)) return false;
+        if (!text.Contains("Exo.SteamMemoryGuard", StringComparison.Ordinal)) return false;
+        if (!text.Contains("SetProcessInformation", StringComparison.Ordinal)) return false;
+        if (!text.Contains("SetMemoryPriority", StringComparison.Ordinal)) return false;
+        if (!text.Contains("ForegroundPid", StringComparison.Ordinal)) return false;
         if (!text.Contains("ProcessPriorityClass]::Normal", StringComparison.Ordinal)) return false;
         if (!text.Contains("ProcessPriorityClass]::BelowNormal", StringComparison.Ordinal)) return false;
         if (!text.Contains("$steamCls = if ($InGame)", StringComparison.Ordinal)) return false;
@@ -51,6 +55,10 @@ public static partial class SteamLogic
             var line = rawLine.TrimStart();
             if (line.StartsWith('#') || line.StartsWith("//", StringComparison.Ordinal)) continue;
             if (line.Contains("EmptyWorkingSet(", StringComparison.Ordinal)) return false;
+            if (line.Contains("SetProcessWorkingSetSize", StringComparison.Ordinal)) return false;
+            if (line.Contains("Stop-Process", StringComparison.OrdinalIgnoreCase) &&
+                line.Contains("steamwebhelper", StringComparison.OrdinalIgnoreCase)) return false;
+            if (line.Contains("Suspend-Process", StringComparison.OrdinalIgnoreCase)) return false;
         }
 
         var sec = SleepSecondsRegex().Match(text);
@@ -92,11 +100,13 @@ public static partial class SteamLogic
     public static readonly string[] RequiredApplyMarkers =
     {
         "Steam-Exo.cmd",
-        "Exo-SteamWebHelperTrim",
+        "Exo-SteamMemoryGuard",
+        "SetProcessInformation",
+        "SetMemoryPriority",
+        "ForegroundPid",
         "-cef-disable-gpu",
         "/HIGH",
         "IsPromoted",
-        "Never EmptyWorkingSet",
         // Structured last-apply report persisted to steam-optimizer.json
         "EXO_REPORT:",
         "applyReport",

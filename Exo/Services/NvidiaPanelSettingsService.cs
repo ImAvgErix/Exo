@@ -176,22 +176,11 @@ public sealed class NvidiaPanelSettingsService
         });
 
         var appGone = !ProbeNvidiaAppPresent();
-        var cplGone = !ProbeNvidiaControlPanelPresent();
         items.Add(new NvidiaPolicyProbeItem
         {
             Id = "clients",
-            Title = "No NVIDIA App / Control Panel",
-            IsApplied = appGone && cplGone,
-            Detail = string.Empty,
-            CanApplyFromPanel = true
-        });
-
-        var trayClean = ProbeTrayClean();
-        items.Add(new NvidiaPolicyProbeItem
-        {
-            Id = "tray",
-            Title = "No NVIDIA tray icon",
-            IsApplied = trayClean,
+            Title = "NVIDIA App background stack removed",
+            IsApplied = appGone,
             Detail = string.Empty,
             CanApplyFromPanel = true
         });
@@ -228,9 +217,6 @@ public sealed class NvidiaPanelSettingsService
             workingDirectory: _scripts.GetNvidiaRoot(),
             ensureRuntime: true).ConfigureAwait(false);
 
-        // Always clear tray after display apply (service soft-refresh re-registers icons)
-        await ClearTrayIconsAsync(ct).ConfigureAwait(false);
-
         if (result.Success)
             return (true, "Applied.");
 
@@ -238,38 +224,6 @@ public sealed class NvidiaPanelSettingsService
         if (err.Length > 450)
             err = err[..450] + "…";
         return (false, err);
-    }
-
-    public async Task<(bool Success, string Message)> ClearTrayIconsAsync(CancellationToken ct = default)
-    {
-        try
-        {
-            // Prefer elevated script for thorough wipe; also do user-level wipe inline
-            ClearTrayIconsLocal();
-
-            var script = Path.Combine(_scripts.GetNvidiaRoot(), "Exo-Nvidia-TrayClear.ps1");
-            if (File.Exists(script))
-            {
-                var result = await _powerShell.RunAsync(
-                    script,
-                    elevate: true,
-                    cancellationToken: ct,
-                    workingDirectory: _scripts.GetNvidiaRoot(),
-                    ensureRuntime: true).ConfigureAwait(false);
-                if (result.Success)
-                    return (true, "NVIDIA tray icons cleared. Open the overflow once if Windows still caches a name.");
-                // Local clear may still have helped
-            }
-
-            var clean = ProbeTrayClean();
-            return clean
-                ? (true, "NVIDIA tray icon entries removed.")
-                : (false, "Some NVIDIA tray entries remain (often NVDisplay.Container). Cleared what we could.");
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message);
-        }
     }
 
     public async Task<string> GetLiveStatusSummaryAsync(CancellationToken ct = default)
@@ -532,59 +486,6 @@ public sealed class NvidiaPanelSettingsService
         }
     }
 
-    private static void ClearTrayIconsLocal()
-    {
-        try
-        {
-            using var root = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                @"Control Panel\NotifyIconSettings", writable: true);
-            if (root is null) return;
-            foreach (var name in root.GetSubKeyNames().ToArray())
-            {
-                try
-                {
-                    using var key = root.OpenSubKey(name, writable: true);
-                    var exe = key?.GetValue("ExecutablePath") as string ?? "";
-                    var isNvidia =
-                        exe.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
-                        exe.Contains("nvcontainer", StringComparison.OrdinalIgnoreCase) ||
-                        exe.Contains("NVDisplay", StringComparison.OrdinalIgnoreCase) ||
-                        exe.Contains("GeForce", StringComparison.OrdinalIgnoreCase) ||
-                        exe.Contains("ShadowPlay", StringComparison.OrdinalIgnoreCase) ||
-                        exe.Contains("nv_dispi", StringComparison.OrdinalIgnoreCase);
-                    if (!isNvidia) continue;
-
-                    // Display container re-registers if deleted — hide instead.
-                    var isDisplay =
-                        exe.Contains("NVDisplay", StringComparison.OrdinalIgnoreCase) ||
-                        exe.Contains("Display.NvContainer", StringComparison.OrdinalIgnoreCase) ||
-                        exe.Contains("nv_dispi", StringComparison.OrdinalIgnoreCase);
-                    if (isDisplay)
-                    {
-                        key?.SetValue("IsPromoted", 0, Microsoft.Win32.RegistryValueKind.DWord);
-                        continue;
-                    }
-
-                    root.DeleteSubKeyTree(name, throwOnMissingSubKey: false);
-                }
-                catch { }
-            }
-        }
-        catch { }
-
-        try
-        {
-            var pd = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                @"NVIDIA Corporation\NVIDIA App");
-            if (Directory.Exists(pd))
-            {
-                try { Directory.Delete(pd, recursive: true); } catch { }
-            }
-        }
-        catch { }
-    }
-
     private async Task<(bool Ok, bool ColorOk, bool RefreshOk, bool ScalingOk, bool RegistryOk, string Detail)> ReadNvDisplayStatusAsync(
         CancellationToken ct)
     {
@@ -789,46 +690,6 @@ public sealed class NvidiaPanelSettingsService
         }
         catch { }
         return false;
-    }
-
-    private static bool ProbeTrayClean()
-    {
-        try
-        {
-            using var root = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                @"Control Panel\NotifyIconSettings");
-            if (root is null) return true;
-            foreach (var name in root.GetSubKeyNames())
-            {
-                using var key = root.OpenSubKey(name);
-                var exe = key?.GetValue("ExecutablePath") as string ?? "";
-                var isNvidia =
-                    exe.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
-                    exe.Contains("nvcontainer", StringComparison.OrdinalIgnoreCase) ||
-                    exe.Contains("NVDisplay", StringComparison.OrdinalIgnoreCase) ||
-                    exe.Contains("GeForce", StringComparison.OrdinalIgnoreCase) ||
-                    exe.Contains("nv_dispi", StringComparison.OrdinalIgnoreCase);
-                if (!isNvidia) continue;
-
-                // Display container left with IsPromoted=0 is considered clean (must not delete).
-                var isDisplay =
-                    exe.Contains("NVDisplay", StringComparison.OrdinalIgnoreCase) ||
-                    exe.Contains("Display.NvContainer", StringComparison.OrdinalIgnoreCase) ||
-                    exe.Contains("nv_dispi", StringComparison.OrdinalIgnoreCase);
-                if (isDisplay)
-                {
-                    var promoted = key?.GetValue("IsPromoted");
-                    if (promoted is int i && i == 0) continue;
-                    // Missing IsPromoted often still shows — treat as dirty
-                    return false;
-                }
-
-                // Any App/GFE/overlay entry is dirty
-                return false;
-            }
-        }
-        catch { }
-        return true;
     }
 
     private static bool Probe3dProfileApplied()

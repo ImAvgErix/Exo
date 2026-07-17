@@ -97,15 +97,9 @@ export function ModulePage({ module }: ModulePageProps) {
           message={message}
           onApply={() => {
             setStatusTitle('Applied')
-            flash('Apply complete (mock).')
-          }}
-          onLatency={() => {
-            setStatusTitle('Low latency profile')
-            flash('Low latency stack applied (mock).')
-          }}
-          onThroughput={() => {
-            setStatusTitle('Highest download profile')
-            flash('Highest download stack applied (mock).')
+            flash(module.variant === 'internet'
+              ? 'Connection analyzed, tuned, and encrypted DNS selected (mock).'
+              : 'Apply complete (mock).')
           }}
           onRepair={() => {
             setStatusTitle(

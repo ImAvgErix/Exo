@@ -1,3 +1,12 @@
+## 3.4.0
+
+- **Accurate connection analysis**: replaces the small PowerShell byte-array test with a sustained native streaming test that scales to 12 parallel streams, samples idle and loaded latency, reports endpoint-limited results honestly, and includes the negotiated link rate for multi-gig Ethernet.
+- **Automatic encrypted DNS**: removes the DNS toggle and benchmarks Cloudflare, Google, and Quad9 directly on the current route. Analyze & Apply selects the fastest healthy resolver, registers its Windows DoH template, verifies the result, and leaves Repair able to restore the exact prior DNS state.
+- **One network decision**: removes the Low latency / Highest download choice. Exo now analyzes stability, loss, loaded latency, media, and link capacity, then applies one combined policy suited to the measured connection.
+- **Steam memory guard**: background `steamwebhelper` processes receive low Windows memory priority so their pages are reclaimed first under pressure, while foreground Steam remains normal and games keep CPU priority. Unsafe working-set trims, hard caps, suspension, and process killing remain prohibited.
+- **NVIDIA cleanup**: audio removal and driver-package debloat each run once. The obsolete tray-icon manipulation, duplicate stages, and unreachable custom display panel are removed; the optimizer opens NVIDIA Control Panel directly.
+- **Outcome dashboard**: replaces raw-stat tiles with modern cards that state what each optimizer changed, whether its apply record is verified, and one clearly separated live signal. Network samples and process memory are no longer presented as causal performance gains.
+
 ## 3.3.0
 
 - **Connection Lab**: an explicit adaptive Cloudflare-edge test ramps download and upload sizes and measures idle/loaded latency, jitter, DNS, and sampled packet loss before choosing the low-latency or throughput profile. It reports data use and flags router-side bufferbloat instead of claiming Windows can fix it.

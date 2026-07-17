@@ -664,6 +664,18 @@ public static partial class NetworkLogic
                 PacketLossPercent = D("packetLossPercent"),
                 DataUsedMb = D("dataUsedMb"),
                 Endpoint = S("endpoint"),
+                ParallelStreams = (int)D("parallelStreams"),
+                TransferSeconds = D("transferSeconds"),
+                LinkSpeedMbps = D("linkSpeedMbps"),
+                DownloadEndpointLimited = root.TryGetProperty("downloadEndpointLimited", out var dl) && dl.ValueKind == System.Text.Json.JsonValueKind.True,
+                UploadEndpointLimited = root.TryGetProperty("uploadEndpointLimited", out var ul) && ul.ValueKind == System.Text.Json.JsonValueKind.True,
+                DnsProvider = S("dnsProvider"),
+                DnsPrimary = S("dnsPrimary"),
+                DnsSecondary = S("dnsSecondary"),
+                DnsPrimaryV6 = S("dnsPrimaryV6"),
+                DnsSecondaryV6 = S("dnsSecondaryV6"),
+                DnsOverHttpsTemplate = S("dnsOverHttpsTemplate"),
+                DnsMedianMs = D("dnsMedianMs"),
                 RecommendedPreset = S("recommendedPreset"),
                 RecommendationReason = S("recommendationReason"),
                 TimestampUtc = root.TryGetProperty("timestampUtc", out var ts) && ts.ValueKind == System.Text.Json.JsonValueKind.String
@@ -686,7 +698,10 @@ public static partial class NetworkLogic
         if (unstable || media.WifiUp && !media.EthernetInUse)
             return NetworkPreset.LowestLatency;
 
-        return result.DownloadMbps >= 300 && media.PrimaryLinkSpeedBps >= 1_000_000_000
+        // A short-lived public endpoint must never downgrade a verified multi-gig
+        // Ethernet link. Endpoint saturation is recorded separately in the UI.
+        return media.EthernetInUse && media.PrimaryLinkSpeedBps >= 1_000_000_000 ||
+               result.DownloadMbps >= 300 && media.PrimaryLinkSpeedBps >= 1_000_000_000
             ? NetworkPreset.HighestThroughput
             : NetworkPreset.LowestLatency;
     }

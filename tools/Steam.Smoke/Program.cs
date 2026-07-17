@@ -23,9 +23,12 @@ start "" "C:\Steam\steam.exe" -nofriendsui -nointro
 Expect("CEF launcher", SteamLogic.IsCefLauncherText(cefGood));
 Expect("CEF missing /HIGH fails", !SteamLogic.IsCefLauncherText(cefMissingHigh));
 
-var trim5 = """
-# Exo.SteamWebHelper
+var guard5 = """
+# Exo.SteamMemoryGuard
 # Never EmptyWorkingSet / Stop-Process steamwebhelper
+SetProcessInformation
+SetMemoryPriority
+ForegroundPid
 [System.Diagnostics.ProcessPriorityClass]::High
 [System.Diagnostics.ProcessPriorityClass]::BelowNormal
 $steamCls = if ($InGame) {
@@ -41,15 +44,15 @@ $webCls = if ($InGame) {
 $_.PriorityClass = $webCls
 Start-Sleep -Seconds 5
 """;
-var trim4 = trim5.Replace("Seconds 5", "Seconds 4");
-var trimMs = trim5.Replace("Start-Sleep -Seconds 5", "Start-Sleep -Milliseconds 4000");
-var trimBad = trim5.Replace("Seconds 5", "Seconds 60");
-var trimThrash = trim5 + "\nEmptyWorkingSet(h)\n";
-Expect("trim 5s ok", SteamLogic.IsTrimHelperText(trim5));
-Expect("trim 4s ok (not hard-fail 5-only)", SteamLogic.IsTrimHelperText(trim4));
-Expect("trim 4000ms ok", SteamLogic.IsTrimHelperText(trimMs));
-Expect("trim 60s fail", !SteamLogic.IsTrimHelperText(trimBad));
-Expect("trim thrashing EmptyWorkingSet fail", !SteamLogic.IsTrimHelperText(trimThrash));
+var guard4 = guard5.Replace("Seconds 5", "Seconds 4");
+var guardMs = guard5.Replace("Start-Sleep -Seconds 5", "Start-Sleep -Milliseconds 4000");
+var guardBad = guard5.Replace("Seconds 5", "Seconds 60");
+var guardThrash = guard5 + "\nEmptyWorkingSet(h)\n";
+Expect("memory guard 5s ok", SteamLogic.IsMemoryGuardText(guard5));
+Expect("memory guard 4s ok", SteamLogic.IsMemoryGuardText(guard4));
+Expect("memory guard 4000ms ok", SteamLogic.IsMemoryGuardText(guardMs));
+Expect("memory guard 60s fail", !SteamLogic.IsMemoryGuardText(guardBad));
+Expect("memory guard rejects EmptyWorkingSet", !SteamLogic.IsMemoryGuardText(guardThrash));
 
 Expect("toasts intentional off",
     SteamLogic.AreToastsOff(new Dictionary<string, int?> { ["Steam"] = 0, ["Other"] = null }));
@@ -62,9 +65,9 @@ Expect("legacy aggressive present fail",
 
 // Fully-applied fixture
 var fullCef = SteamLogic.IsCefLauncherText(cefGood);
-var fullTrim = SteamLogic.IsTrimHelperText(trim5);
+var fullGuard = SteamLogic.IsMemoryGuardText(guard5);
 var fullToast = SteamLogic.AreToastsOff(new Dictionary<string, int?> { ["Steam"] = 0 });
-Expect("fully applied fixture false_fail_count=0", fullCef && fullTrim && fullToast);
+Expect("fully applied fixture false_fail_count=0", fullCef && fullGuard && fullToast);
 
 var repo = FindRepoRoot();
 var core = Path.Combine(repo, "Exo", "Scripts", "Steam", "SteamDetectCore.ps1");
@@ -82,9 +85,12 @@ $failed=0
 function E($n,$c){{ if($c){{'PASS  '+$n}} else {{$script:failed++; 'FAIL  '+$n}} }}
 @(
  (E 'ps cef' (Test-SteamCefLauncherText -Text 'start """" /HIGH steam.exe -nofriendsui -nointro')),
- (E 'ps trim 5' (Test-SteamTrimHelperText -Text @'
-Exo.SteamWebHelper
+ (E 'ps guard 5' (Test-SteamMemoryGuardText -Text @'
+Exo.SteamMemoryGuard
 Never EmptyWorkingSet
+SetProcessInformation
+SetMemoryPriority
+ForegroundPid
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
 $steamCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
@@ -92,9 +98,12 @@ $webCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessP
 $_.PriorityClass = $webCls
 Start-Sleep -Seconds 5
 '@)),
- (E 'ps trim 4' (Test-SteamTrimHelperText -Text @'
-Exo.SteamWebHelper
+ (E 'ps guard 4' (Test-SteamMemoryGuardText -Text @'
+Exo.SteamMemoryGuard
 Never EmptyWorkingSet
+SetProcessInformation
+SetMemoryPriority
+ForegroundPid
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
 $steamCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
@@ -230,7 +239,7 @@ Expect("first-run VDF incomplete exits 0 not full applied",
     optimizerText.Contains("open-steam-once", StringComparison.Ordinal) &&
     optimizerText.Contains("DONE - Steam core optimized", StringComparison.Ordinal));
 
-// --- gentle trim interval (6s) ---
+// --- memory guard interval ---
 var steamScriptFiles = Directory.GetFiles(Path.Combine(repo, "Exo", "Scripts", "Steam"))
     .Where(f => f.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase) ||
                 f.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
@@ -248,14 +257,15 @@ Expect("no stale 5s messaging in Steam scripts", staleFiveSecond.Count == 0,
 // removed; the companion is normal-idle priority + in-game yield. The shipped helper
 // body must pass the shipped classifier (EmptyWorkingSet calls banned in
 // code lines - a comment cannot exempt a real call).
-var helperStart = optimizerText.IndexOf("function Install-WebHelperTrimHelper", StringComparison.Ordinal);
+var helperStart = optimizerText.IndexOf("function Install-WebHelperMemoryGuard", StringComparison.Ordinal);
 var bodyStart = helperStart >= 0 ? optimizerText.IndexOf("$body = @'", helperStart, StringComparison.Ordinal) : -1;
 var bodyEnd = bodyStart >= 0 ? optimizerText.IndexOf("'@", bodyStart + 1, StringComparison.Ordinal) : -1;
 Expect("shipped helper body located", bodyStart > helperStart && bodyEnd > bodyStart);
 var helperBody = bodyEnd > bodyStart ? optimizerText.Substring(bodyStart, bodyEnd - bodyStart) : "";
-Expect("companion does no working-set trim + passes shipped classifier",
-    SteamLogic.IsTrimHelperText(helperBody) &&
-    optimizerText.Contains("no unsafe webhelper trims", StringComparison.OrdinalIgnoreCase));
+Expect("memory guard uses Windows priority and passes shipped classifier",
+    SteamLogic.IsMemoryGuardText(helperBody) &&
+    helperBody.Contains("SetProcessInformation", StringComparison.Ordinal) &&
+    !helperBody.Contains("EmptyWorkingSet(", StringComparison.Ordinal));
 Expect("apply verifier ignores safety documentation but audits executable lines",
     optimizerText.Contains("if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }", StringComparison.Ordinal) &&
     optimizerText.Contains("$line -match '(?i)Stop-Process.*steamwebhelper'", StringComparison.Ordinal) &&

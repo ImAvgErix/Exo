@@ -100,12 +100,13 @@ public sealed class NetworkApplyOptions
     /// </summary>
     public bool PreferEthernetDisableWifi { get; init; } = false;
 
-    /// <summary>
-    /// Opt-in privacy feature: point active adapters at Cloudflare DNS and register
-    /// DNS-over-HTTPS encryption (Win11 22H2+). Original DNS servers are snapshotted
-    /// first, so Repair restores them exactly.
-    /// </summary>
-    public bool PrivateDns { get; init; } = false;
+    /// <summary>Fastest verified resolver selected by Analyze. Cloudflare is the safe fallback.</summary>
+    public string DnsProvider { get; init; } = "Cloudflare";
+    public string DnsPrimary { get; init; } = "1.1.1.1";
+    public string DnsSecondary { get; init; } = "1.0.0.1";
+    public string DnsPrimaryV6 { get; init; } = "2606:4700:4700::1111";
+    public string DnsSecondaryV6 { get; init; } = "2606:4700:4700::1001";
+    public string DnsOverHttpsTemplate { get; init; } = "https://cloudflare-dns.com/dns-query";
 }
 
 /// <summary>
@@ -144,6 +145,18 @@ public sealed class NetworkBenchmarkResult
     public double PacketLossPercent { get; init; }
     public double DataUsedMb { get; init; }
     public string Endpoint { get; init; } = string.Empty;
+    public int ParallelStreams { get; init; }
+    public double TransferSeconds { get; init; }
+    public double LinkSpeedMbps { get; init; }
+    public bool DownloadEndpointLimited { get; init; }
+    public bool UploadEndpointLimited { get; init; }
+    public string DnsProvider { get; init; } = string.Empty;
+    public string DnsPrimary { get; init; } = string.Empty;
+    public string DnsSecondary { get; init; } = string.Empty;
+    public string DnsPrimaryV6 { get; init; } = string.Empty;
+    public string DnsSecondaryV6 { get; init; } = string.Empty;
+    public string DnsOverHttpsTemplate { get; init; } = string.Empty;
+    public double DnsMedianMs { get; init; }
     /// <summary>lowest-latency | highest-throughput</summary>
     public string RecommendedPreset { get; init; } = string.Empty;
     public string RecommendationReason { get; init; } = string.Empty;

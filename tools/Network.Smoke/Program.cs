@@ -172,7 +172,6 @@ var repairScript = NetworkApplyScriptBuilder.BuildRepair();
 Expect("repair script restores stock bindings fallback", repairScript.Contains("ms_msclient", StringComparison.OrdinalIgnoreCase));
 Expect("repair script automatic metric", repairScript.Contains("AutomaticMetric Enabled", StringComparison.OrdinalIgnoreCase));
 var benchScript = NetworkApplyScriptBuilder.BuildBenchmark();
-var qualityScript = NetworkApplyScriptBuilder.BuildQualityBenchmark();
 Expect("eth DMA coalescing off", latScript.Contains("DMACoalescing", StringComparison.OrdinalIgnoreCase)
     || latScript.Contains("DMA Coalescing", StringComparison.OrdinalIgnoreCase));
 Expect("wifi transmit power", latScript.Contains("Transmit Power", StringComparison.OrdinalIgnoreCase));
@@ -182,26 +181,32 @@ Expect("no wifi Restart-NetAdapter force",
     !System.Text.RegularExpressions.Regex.IsMatch(latScript, @"Restart-NetAdapter.*Wi-?Fi",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase));
 
-// --- Private DNS (DoH) feature contract ---
+// --- Analyze-selected encrypted DNS contract ---
 var dohScript = NetworkApplyScriptBuilder.Build(NetworkPreset.LowestLatency,
-    new NetworkApplyOptions { PreferEthernetDisableWifi = true, RestartEthernet = false, PrivateDns = true }, media);
-Expect("DoH bake flag on", dohScript.Contains("$ExoPrivateDns = 1", StringComparison.Ordinal));
+    new NetworkApplyOptions
+    {
+        DnsProvider = "Google",
+        DnsPrimary = "8.8.8.8",
+        DnsSecondary = "8.8.4.4",
+        DnsPrimaryV6 = "2001:4860:4860::8888",
+        DnsSecondaryV6 = "2001:4860:4860::8844",
+        DnsOverHttpsTemplate = "https://dns.google/dns-query"
+    }, media);
+Expect("selected DNS provider baked", dohScript.Contains("$ExoDnsProvider = 'Google'", StringComparison.Ordinal));
 Expect("DoH registers encryption", dohScript.Contains("dns add encryption", StringComparison.OrdinalIgnoreCase));
 Expect("DoH updates existing registrations", dohScript.Contains("dns set encryption", StringComparison.OrdinalIgnoreCase));
 Expect("DoH verifies live registration", dohScript.Contains("dns show encryption", StringComparison.OrdinalIgnoreCase)
     && dohScript.Contains("Auto-upgrade", StringComparison.OrdinalIgnoreCase));
-Expect("DoH uses Cloudflare template", dohScript.Contains("cloudflare-dns.com/dns-query", StringComparison.OrdinalIgnoreCase));
-Expect("DoH pins Cloudflare resolvers", dohScript.Contains("1.1.1.1", StringComparison.Ordinal)
-    && dohScript.Contains("2606:4700:4700::1111", StringComparison.Ordinal));
+Expect("DoH uses analyzed template", dohScript.Contains("dns.google/dns-query", StringComparison.OrdinalIgnoreCase));
+Expect("DoH pins analyzed resolvers", dohScript.Contains("8.8.8.8", StringComparison.Ordinal)
+    && dohScript.Contains("2001:4860:4860::8888", StringComparison.Ordinal));
 Expect("DoH gated to Win11 22H2+", dohScript.Contains("22621", StringComparison.Ordinal));
-Expect("DoH reports step", dohScript.Contains("private-dns", StringComparison.Ordinal));
-var dohThrScript = NetworkApplyScriptBuilder.Build(NetworkPreset.HighestThroughput,
-    new NetworkApplyOptions { PreferEthernetDisableWifi = true, RestartEthernet = false, PrivateDns = true }, media);
-Expect("DoH applies under throughput preset too", dohThrScript.Contains("dns add encryption", StringComparison.OrdinalIgnoreCase)
-    && dohThrScript.Contains("$ExoPrivateDns = 1", StringComparison.Ordinal));
-// Section text is always emitted but runtime-gated by the baked flag (default off).
-Expect("default apply bakes DoH flag off", latScript.Contains("$ExoPrivateDns = 0", StringComparison.Ordinal)
-    && thrScript.Contains("$ExoPrivateDns = 0", StringComparison.Ordinal));
+Expect("DoH reports automatic selection", dohScript.Contains("dns-auto", StringComparison.Ordinal));
+Expect("DoH provider failure keeps fastest DNS active and truthful",
+    dohScript.Contains("Windows rejected automatic DoH", StringComparison.Ordinal) &&
+    !dohScript.Contains("throw ('DoH registration failed", StringComparison.Ordinal));
+Expect("default apply always has safe resolver", latScript.Contains("$ExoDnsProvider = 'Cloudflare'", StringComparison.Ordinal)
+    && latScript.Contains("dns-auto", StringComparison.Ordinal));
 // Snapshot must capture per-adapter DNS + existing DoH so Repair can truly restore.
 Expect("apply snapshot captures adapter DNS", latScript.Contains("$snap.dnsServers", StringComparison.Ordinal));
 Expect("apply snapshot captures DoH registrations", latScript.Contains("$snap.dohRaw", StringComparison.Ordinal));
@@ -539,12 +544,6 @@ Expect("benchmark parser values",
     Math.Abs(benchParsed.DnsMs - 22.7) < 0.001,
     benchParsed is null ? "null" : $"p50={benchParsed.PingP50Ms}");
 Expect("benchmark parser rejects garbage", NetworkLogic.TryParseBenchmark("no marker here") is null);
-Expect("quality benchmark is explicit ramped transfer",
-    qualityScript.Contains("speed.cloudflare.com", StringComparison.Ordinal) &&
-    qualityScript.Contains("Invoke-ExoDownloadStage", StringComparison.Ordinal) &&
-    qualityScript.Contains("Invoke-ExoUploadStage", StringComparison.Ordinal) &&
-    qualityScript.Contains("downloadLoadedMs", StringComparison.Ordinal) &&
-    qualityScript.Contains("packetLossPercent", StringComparison.Ordinal));
 var qualityParsed = NetworkLogic.TryParseBenchmark(
     "EXO_BENCH:{\"ok\":true,\"isQualityTest\":true,\"pingP50Ms\":12,\"jitterMs\":2,\"downloadMbps\":500,\"uploadMbps\":80,\"downloadLoadedMs\":18,\"uploadLoadedMs\":25,\"downloadLoadedJitterMs\":3,\"uploadLoadedJitterMs\":4,\"packetLossPercent\":0,\"dataUsedMb\":100,\"endpoint\":\"Cloudflare edge\",\"recommendedPreset\":\"highest-throughput\",\"recommendationReason\":\"stable\"}");
 Expect("quality benchmark parser values",
@@ -647,9 +646,17 @@ if (repoRoot is not null)
         var qualityBlock = qualityMethod >= 0 && qualityEnd > qualityMethod
             ? netSvc[qualityMethod..qualityEnd]
             : string.Empty;
-        Expect("quality benchmark runs under PowerShell 7 HttpClient host",
-            qualityBlock.Contains("PowerShellRunnerService.ResolvePowerShell()", StringComparison.Ordinal) &&
-            !qualityBlock.Contains("\"powershell\"", StringComparison.Ordinal));
+        Expect("quality benchmark uses sustained native parallel streams",
+            qualityBlock.Contains("SocketsHttpHandler", StringComparison.Ordinal) &&
+            qualityBlock.Contains("MeasureDownloadAsync", StringComparison.Ordinal) &&
+            qualityBlock.Contains("MeasureUploadAsync", StringComparison.Ordinal) &&
+            qualityBlock.Contains("ParallelStreams", StringComparison.Ordinal));
+        Expect("quality benchmark measures loaded latency and DNS candidates",
+            qualityBlock.Contains("SampleLoadedLatencyAsync", StringComparison.Ordinal) &&
+            qualityBlock.Contains("SelectFastestDnsAsync", StringComparison.Ordinal) &&
+            qualityBlock.Contains("UdpClient", StringComparison.Ordinal));
+        Expect("quality benchmark no PowerShell transfer host",
+            !qualityBlock.Contains("PowerShellRunnerService.ResolvePowerShell()", StringComparison.Ordinal));
     }
 }
 if (rescuePath is not null && File.Exists(rescuePath))

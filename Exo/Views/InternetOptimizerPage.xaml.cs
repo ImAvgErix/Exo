@@ -37,12 +37,6 @@ public sealed partial class InternetOptimizerPage : Page
         ExoMotion.PlayListEnter(Plate.FeatureTileGrid.TileRepeaterControl, ViewModel.Rows.Count);
     }
 
-    private void Latency_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.ApplyLatencyCommand.Execute(null);
-
-    private void Throughput_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.ApplyThroughputCommand.Execute(null);
-
     private void Repair_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RepairCommand.Execute(null);
 

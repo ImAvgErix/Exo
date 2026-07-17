@@ -47,10 +47,6 @@ public partial class InternetOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial string QualitySummary { get; set; } = string.Empty;
     [ObservableProperty] public partial string QualityDetail { get; set; } = string.Empty;
 
-    // Opt-in privacy feature: Cloudflare DNS + DNS-over-HTTPS (Win11 22H2+).
-    // Original DNS servers are snapshotted before any change; Repair restores them.
-    [ObservableProperty] public partial bool PrivateDnsEnabled { get; set; }
-
     // Compact expandable "Last apply" report (EXO_REPORT structured steps).
     public ObservableCollection<ApplyReportRowViewModel> ApplyReportRows { get; } = new();
     [ObservableProperty] public partial bool HasApplyReport { get; set; }
@@ -130,9 +126,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
             if (bench.Before is { Ok: true } && bench.After is { Ok: true } after)
             {
                 BenchmarkSummary =
-                    $"Latest sample: ping {FormatMs(after.PingP50Ms)} ms" +
-                    $" · jitter {FormatMs(after.JitterMs)} ms" +
-                    $" · DNS {FormatDns(after.DnsMs)} · network conditions vary";
+                    $"Verification sample · {FormatMs(after.PingP50Ms)} ms path latency" +
+                    $" · {FormatMs(after.JitterMs)} ms jitter · conditions vary";
                 BenchmarkBrush = ResolveBrush(
                     "ExoMutedTextBrush",
                     Color.FromArgb(255, 95, 95, 105));
@@ -149,12 +144,10 @@ public partial class InternetOptimizerViewModel : ObservableObject
             ApplyReportRows.Clear();
             foreach (var step in report)
                 ApplyReportRows.Add(ApplyReportPresentation.Row(step.Name, step.Status, step.Reason));
-            var privateDnsStep = report.LastOrDefault(step =>
-                step.Name.Equals("private-dns", StringComparison.OrdinalIgnoreCase));
-            if (privateDnsStep is not null)
-                PrivateDnsEnabled = privateDnsStep.Status.Equals("ok", StringComparison.OrdinalIgnoreCase);
             HasApplyReport = ApplyReportRows.Count > 0;
             ApplyReportSummary = ApplyReportPresentation.Summarize(ApplyReportRows.ToList());
+            if (_lastSnap is not null)
+                RefreshGuidance(_lastSnap);
         }
         catch
         {
@@ -164,9 +157,6 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
     private static string FormatMs(double value) =>
         value < 0 ? "—" : value.ToString(value >= 100 ? "0" : "0.0");
-
-    private static string FormatDns(double value) =>
-        value < 0 ? "fail" : value.ToString(value >= 100 ? "0" : "0.0") + " ms";
 
     private void ApplyQualityResult(NetworkBenchmarkResult? result)
     {
@@ -180,8 +170,18 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
         var downPenalty = Math.Max(0, result.DownloadLoadedMs - result.PingP50Ms);
         var upPenalty = Math.Max(0, result.UploadLoadedMs - result.PingP50Ms);
-        QualitySummary = $"{result.DownloadMbps:0.#} Mbps down · {result.UploadMbps:0.#} Mbps up · {result.PingP50Ms:0.#} ms idle";
-        QualityDetail = $"loaded +{downPenalty:0.#}/+{upPenalty:0.#} ms · jitter {result.JitterMs:0.#} ms · loss {result.PacketLossPercent:0.##}% · {result.DataUsedMb:0.#} MB";
+        var downLabel = result.DownloadMbps <= 0
+            ? "n/a"
+            : result.DownloadEndpointLimited ? $"≥{result.DownloadMbps:0.#}" : $"{result.DownloadMbps:0.#}";
+        var upLabel = result.UploadMbps <= 0
+            ? "n/a"
+            : result.UploadEndpointLimited ? $"≥{result.UploadMbps:0.#}" : $"{result.UploadMbps:0.#}";
+        var link = result.LinkSpeedMbps >= 1000
+            ? $"{result.LinkSpeedMbps / 1000:0.#} Gb Ethernet"
+            : result.LinkSpeedMbps > 0 ? $"{result.LinkSpeedMbps:0} Mbps link" : "Current link";
+        QualitySummary = $"{link} · edge {downLabel}/{upLabel} Mbps · {result.PingP50Ms:0.#} ms";
+        var limitNote = result.DownloadEndpointLimited || result.UploadEndpointLimited ? " · endpoint floor, not plan speed" : string.Empty;
+        QualityDetail = $"loaded +{downPenalty:0.#}/+{upPenalty:0.#} ms · jitter {result.JitterMs:0.#} ms · loss {result.PacketLossPercent:0.##}% · {result.DnsProvider} DNS {result.DnsMedianMs:0.#} ms{limitNote}";
         HasQualityResult = true;
     }
 
@@ -213,6 +213,11 @@ public partial class InternetOptimizerViewModel : ObservableObject
         else if (!preserveSuccessMessage)
             ClearMessage();
 
+        RefreshGuidance(snap);
+    }
+
+    private void RefreshGuidance(NetworkSnapshot snap)
+    {
         var applied = Rows.Count > 0 && Rows.All(r => r.IsActive);
         var failSteps = ApplyReportRows
             .Where(r => r.Status == "fail")
@@ -231,24 +236,19 @@ public partial class InternetOptimizerViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task ApplyLatencyAsync() => await ApplyPresetAsync(NetworkPreset.LowestLatency);
-
-    [RelayCommand]
-    private async Task ApplyThroughputAsync() => await ApplyPresetAsync(NetworkPreset.HighestThroughput);
-
-    [RelayCommand]
     private async Task AnalyzeAndApplyAsync()
     {
         if (IsBusy) return;
         IsBusy = true;
         HasMessage = false;
-        ProgressStatus = "Connection lab · testing idle and loaded latency...";
+        ProgressStatus = "Starting sustained connection analysis...";
         NetworkBenchmarkResult? result = null;
         NetworkPreset preset = NetworkPreset.LowestLatency;
         try
         {
             var snap = _lastSnap ?? await _services.Network.ProbeAsync();
-            result = await _services.Network.RunQualityBenchmarkAsync();
+            var testProgress = new Progress<string>(s => ProgressStatus = s);
+            result = await _services.Network.RunQualityBenchmarkAsync(snap.Media, testProgress);
             if (result is not { Ok: true, IsQualityTest: true })
             {
                 SetMessage("Connection test could not finish. No settings were changed.", success: false);
@@ -258,9 +258,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
             preset = NetworkLogic.RecommendPreset(result, snap.Media);
             _services.Network.PersistQualityBenchmark(result);
             ApplyQualityResult(result);
-            ProgressStatus = preset == NetworkPreset.HighestThroughput
-                ? "Stable fast link · applying throughput profile..."
-                : "Latency-sensitive link · applying low-latency profile...";
+            ProgressStatus = "Applying the best verified settings for this link...";
         }
         catch (Exception ex)
         {
@@ -273,20 +271,19 @@ public partial class InternetOptimizerViewModel : ObservableObject
             if (result is null) ProgressStatus = string.Empty;
         }
 
-        var applied = await ApplyPresetAsync(preset);
+        var applied = await ApplyPresetAsync(preset, result);
         if (result is not null && applied)
         {
-            var label = preset == NetworkPreset.HighestThroughput ? "Highest download" : "Low latency";
             var bufferbloat = Math.Max(result.DownloadLoadedMs, result.UploadLoadedMs) - result.PingP50Ms;
             var note = bufferbloat >= 25
                 ? " Loaded latency is high; router SQM/CAKE can help more than Windows tuning."
                 : string.Empty;
-            SetMessage($"{label} selected from the connection test: {result.RecommendationReason}.{note}", success: true);
+            SetMessage($"Optimized this link and selected {result.DnsProvider} as its fastest healthy DNS. Windows uses automatic encryption when the installed build supports it. {result.RecommendationReason}.{note}", success: true);
         }
     }
 
     /// <summary>Apply chosen stack immediately, then refresh header + feature rows in place.</summary>
-    private async Task<bool> ApplyPresetAsync(NetworkPreset preset)
+    private async Task<bool> ApplyPresetAsync(NetworkPreset preset, NetworkBenchmarkResult result)
     {
         if (IsBusy) return false;
 
@@ -306,7 +303,12 @@ public partial class InternetOptimizerViewModel : ObservableObject
             {
                 PreferEthernetDisableWifi = false,
                 RestartEthernet = false,
-                PrivateDns = PrivateDnsEnabled
+                DnsProvider = string.IsNullOrWhiteSpace(result.DnsProvider) ? "Cloudflare" : result.DnsProvider,
+                DnsPrimary = string.IsNullOrWhiteSpace(result.DnsPrimary) ? "1.1.1.1" : result.DnsPrimary,
+                DnsSecondary = string.IsNullOrWhiteSpace(result.DnsSecondary) ? "1.0.0.1" : result.DnsSecondary,
+                DnsPrimaryV6 = string.IsNullOrWhiteSpace(result.DnsPrimaryV6) ? "2606:4700:4700::1111" : result.DnsPrimaryV6,
+                DnsSecondaryV6 = string.IsNullOrWhiteSpace(result.DnsSecondaryV6) ? "2606:4700:4700::1001" : result.DnsSecondaryV6,
+                DnsOverHttpsTemplate = string.IsNullOrWhiteSpace(result.DnsOverHttpsTemplate) ? "https://cloudflare-dns.com/dns-query" : result.DnsOverHttpsTemplate
             };
 
             ProgressStatus = snap.Media.EthernetInUse
@@ -320,7 +322,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
             // Same finish banner as Discord / Steam / NVIDIA.
             SetMessage(ok ? Helpers.OptimizerMessages.Done : msg, ok);
 
-            // In-place refresh so header shows Lowest latency / Highest download without leaving the page.
+            // In-place refresh so the verified unified state appears without leaving the page.
             ProgressStatus = "Refreshing...";
             try
             {
@@ -362,8 +364,6 @@ public partial class InternetOptimizerViewModel : ObservableObject
         {
             var progress = new Progress<string>(s => ProgressStatus = s);
             var (success, msg) = await _services.Network.RepairAsync(progress);
-            if (success)
-                PrivateDnsEnabled = false;
             SetMessage(success ? Helpers.OptimizerMessages.RepairFinished : msg, success);
             ProgressStatus = "Refreshing...";
             try
@@ -398,18 +398,11 @@ public partial class InternetOptimizerViewModel : ObservableObject
                     ? $"Wi‑Fi · {snap.Media.PreferredBandTarget}"
                     : snap.ConnectionType;
 
-        var preset = snap.ActivePreset switch
-        {
-            NetworkPreset.LowestLatency => "Lowest latency",
-            NetworkPreset.HighestThroughput => "Highest download",
-            _ => null
-        };
-
-        if (preset is null)
+        if (snap.ActivePreset == NetworkPreset.Balanced)
             return $"{media} · {snap.LinkSpeed}";
 
         var allOk = snap.Features.Count > 0 && snap.Features.All(f => f.IsOk);
-        return allOk ? $"{preset} · {media}" : $"{preset} · check rows";
+        return allOk ? $"Optimized · {media}" : "Optimized · check rows";
     }
 
     private void ClearMessage()

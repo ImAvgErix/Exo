@@ -3,50 +3,57 @@
     x:Class="Exo.Views.DashboardPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:viewModels="using:Exo.ViewModels"
     Background="Transparent"
     Loaded="Page_Loaded"
     Unloaded="Page_Unloaded">
 
-    <!--
-      Home:
-      Calm instrument panel: live system memory + four optimizer signals.
-    -->
+    <!-- Outcome dashboard: verified state, what changed, then one honest live signal. -->
     <Border x:Name="PageRoot"
             Style="{StaticResource ExoModulePlate}"
             Padding="26,22,26,20"
             UseLayoutRounding="True">
-        <Grid RowSpacing="14">
+        <Grid RowSpacing="12">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <Grid x:Name="HeroBlock" ColumnSpacing="16">
+            <Grid x:Name="HeroBlock" ColumnSpacing="18">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+
                 <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                    <Border Width="3" Height="30" CornerRadius="1.5"
+                    <Border Width="3" Height="42" CornerRadius="1.5"
                             Background="{ThemeResource ExoAccentBrush}" />
-                    <TextBlock x:Name="HeroBrand" Text="EXO"
-                               FontFamily="{StaticResource ExoUiFontSemiBold}"
-                               FontSize="30" FontWeight="SemiBold"
-                               CharacterSpacing="120" LineHeight="32"
-                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                               OpticalMarginAlignment="TrimSideBearings"
-                               UseLayoutRounding="True" />
+                    <StackPanel Spacing="2">
+                        <TextBlock x:Name="HeroBrand" Text="SYSTEM STATUS"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="10" CharacterSpacing="120"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}" />
+                        <TextBlock Text="{x:Bind ViewModel.OverviewPrimary, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="25" CharacterSpacing="-20"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                    </StackPanel>
                 </StackPanel>
+
                 <TextBlock x:Name="HeroTagline" Grid.Column="1"
                            Text="{x:Bind ViewModel.HeroSummary, Mode=OneWay}"
-                           Style="{StaticResource ExoTagline}"
-                           FontSize="13" TextWrapping="WrapWholeWords"
-                           VerticalAlignment="Center" UseLayoutRounding="True" />
-                <Border Grid.Column="2" Style="{StaticResource ExoCard}"
-                        CornerRadius="14" Padding="12,7" VerticalAlignment="Center">
+                           FontFamily="{StaticResource ExoUiFont}"
+                           FontSize="12" LineHeight="17"
+                           Foreground="{ThemeResource ExoMutedTextBrush}"
+                           TextWrapping="WrapWholeWords"
+                           VerticalAlignment="Center" />
+
+                <Border Grid.Column="2"
+                        Background="{ThemeResource ExoAccentSoftBrush}"
+                        BorderBrush="{ThemeResource ExoSpecularStrokeBrush}"
+                        BorderThickness="1" CornerRadius="12" Padding="11,7"
+                        VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal" Spacing="7">
                         <Ellipse Width="6" Height="6" Fill="{ThemeResource ExoSuccessBrush}"
                                  VerticalAlignment="Center" />
@@ -57,64 +64,43 @@
                 </Border>
             </Grid>
 
-            <!-- Full-width system RAM -->
-            <Border x:Name="FrameHero"
-                    Grid.Row="1"
+            <Border x:Name="FrameHero" Grid.Row="1"
                     Background="{ThemeResource ExoSurfaceSunkenBrush}"
                     BorderBrush="{ThemeResource ExoDividerBrush}"
-                    BorderThickness="1"
-                    CornerRadius="16"
-                    Padding="20,15"
-                    MinHeight="104">
+                    BorderThickness="1" CornerRadius="14" Padding="16,11">
                 <Grid ColumnSpacing="16">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <StackPanel Spacing="4" VerticalAlignment="Center">
-                        <TextBlock Text="SYSTEM RAM"
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="SYSTEM MEMORY" FontSize="9" CharacterSpacing="110"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                   FontSize="11"
-                                   CharacterSpacing="100"
                                    Foreground="{ThemeResource ExoMutedTextBrush}" />
                         <TextBlock Text="{x:Bind ViewModel.MemoryPrimary, Mode=OneWay}"
+                                   FontSize="21" CharacterSpacing="-20"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                   FontSize="38"
-                                   CharacterSpacing="-28"
-                                   LineHeight="42"
                                    Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                        <TextBlock Text="{x:Bind ViewModel.MemorySecondary, Mode=OneWay}"
-                                   FontFamily="{StaticResource ExoUiFont}"
-                                   FontSize="13"
-                                   Foreground="{ThemeResource ExoMutedTextBrush}"
-                                   TextWrapping="WrapWholeWords" />
                     </StackPanel>
-                    <TextBlock Grid.Column="1"
+                    <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="{x:Bind ViewModel.MemorySecondary, Mode=OneWay}"
+                                   FontSize="11" Foreground="{ThemeResource ExoMutedTextBrush}" />
+                        <ProgressBar Minimum="0" Maximum="100"
+                                     Value="{x:Bind ViewModel.MemoryLoadPercent, Mode=OneWay}"
+                                     Height="3" CornerRadius="2"
+                                     Background="{ThemeResource ExoAccentSoftBrush}"
+                                     Foreground="{ThemeResource ExoAccentBrush}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2"
                                Text="{x:Bind ViewModel.MemoryLoadText, Mode=OneWay}"
-                               FontFamily="{StaticResource ExoUiFontSemiBold}"
-                               FontSize="22"
-                               VerticalAlignment="Center"
-                               Foreground="{ThemeResource ExoAccentBrush}" />
-                    <ProgressBar Grid.Row="1" Grid.ColumnSpan="2"
-                                 Minimum="0" Maximum="100"
-                                 Value="{x:Bind ViewModel.MemoryLoadPercent, Mode=OneWay}"
-                                 Height="4"
-                                 Margin="0,14,0,0"
-                                 CornerRadius="2"
-                                 Background="{ThemeResource ExoAccentSoftBrush}"
-                                 Foreground="{ThemeResource ExoAccentBrush}" />
+                               FontSize="12" FontFamily="{StaticResource ExoUiFontSemiBold}"
+                               Foreground="{ThemeResource ExoSecondaryTextBrush}"
+                               VerticalAlignment="Center" />
                 </Grid>
             </Border>
 
-            <!-- Four even module tiles -->
-            <Grid x:Name="StatRow"
-                  Grid.Row="2"
-                  ColumnSpacing="10"
-                  RowSpacing="10">
+            <Grid x:Name="StatRow" Grid.Row="2" ColumnSpacing="10" RowSpacing="10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
@@ -124,95 +110,94 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <!-- Discord: RAM reclaimed (peak−live) + live WS -->
-                <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource ExoCard}" Padding="14,12" MinHeight="110">
+                <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource ExoCard}" Padding="15,13">
                     <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Border Width="3" CornerRadius="1.5" Background="{ThemeResource ExoDiscordBrush}" />
-                        <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBlock Text="DISCORD" FontSize="10" CharacterSpacing="100"
-                                       FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       Foreground="{ThemeResource ExoMutedTextBrush}" />
-                            <TextBlock Text="{x:Bind ViewModel.DiscordStatusPrimary, Mode=OneWay}"
-                                       FontSize="28" FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       CharacterSpacing="-20"
-                                       Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                            <TextBlock Text="{x:Bind ViewModel.DiscordStatusSecondary, Mode=OneWay}"
-                                       Style="{StaticResource ExoCaption}" />
-                        </StackPanel>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="3" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <Border CornerRadius="1.5" Background="{ThemeResource ExoDiscordBrush}" />
+                        <Grid Grid.Column="1" RowSpacing="4">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <Grid>
+                                <TextBlock Text="DISCORD" FontSize="10" CharacterSpacing="105" FontFamily="{StaticResource ExoUiFontSemiBold}" Foreground="{ThemeResource ExoMutedTextBrush}" />
+                                <Border HorizontalAlignment="Right" Background="{ThemeResource ExoAccentSoftBrush}" CornerRadius="9" Padding="8,4">
+                                    <TextBlock Text="{x:Bind ViewModel.DiscordStatusTag, Mode=OneWay}" FontSize="9" CharacterSpacing="70" FontFamily="{StaticResource ExoUiFontSemiBold}" Foreground="{ThemeResource ExoSecondaryTextBrush}" />
+                                </Border>
+                            </Grid>
+                            <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.DiscordStatusPrimary, Mode=OneWay}" FontSize="21" CharacterSpacing="-18" FontFamily="{StaticResource ExoUiFontSemiBold}" Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                            <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.DiscordStatusSecondary, Mode=OneWay}" FontSize="11" LineHeight="16" TextWrapping="WrapWholeWords" Foreground="{ThemeResource ExoMutedTextBrush}" />
+                            <StackPanel Grid.Row="3" Spacing="6">
+                                <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
+                                <TextBlock Text="{x:Bind ViewModel.DiscordLiveMetric, Mode=OneWay}" FontSize="10" Foreground="{ThemeResource ExoSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
                     </Grid>
                 </Border>
 
-                <!-- Steam: live client RAM + contention-guard state -->
-                <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource ExoCard}" Padding="14,12" MinHeight="110">
+                <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource ExoCard}" Padding="15,13">
                     <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Border Width="3" CornerRadius="1.5" Background="{ThemeResource ExoSteamBrush}" />
-                        <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBlock Text="STEAM" FontSize="10" CharacterSpacing="100"
-                                       FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       Foreground="{ThemeResource ExoMutedTextBrush}" />
-                            <TextBlock Text="{x:Bind ViewModel.SteamStatusPrimary, Mode=OneWay}"
-                                       FontSize="28" FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       CharacterSpacing="-20"
-                                       Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                            <TextBlock Text="{x:Bind ViewModel.SteamStatusSecondary, Mode=OneWay}"
-                                       Style="{StaticResource ExoCaption}" />
-                        </StackPanel>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="3" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <Border CornerRadius="1.5" Background="{ThemeResource ExoSteamBrush}" />
+                        <Grid Grid.Column="1" RowSpacing="4">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <Grid>
+                                <TextBlock Text="STEAM" FontSize="10" CharacterSpacing="105" FontFamily="{StaticResource ExoUiFontSemiBold}" Foreground="{ThemeResource ExoMutedTextBrush}" />
+                                <Border HorizontalAlignment="Right" Background="{ThemeResource ExoAccentSoftBrush}" CornerRadius="9" Padding="8,4">
+                                    <TextBlock Text="{x:Bind ViewModel.SteamStatusTag, Mode=OneWay}" FontSize="9" CharacterSpacing="70" FontFamily="{StaticResource ExoUiFontSemiBold}" Foreground="{ThemeResource ExoSecondaryTextBrush}" />
+                                </Border>
+                            </Grid>
+                            <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.SteamStatusPrimary, Mode=OneWay}" FontSize="21" CharacterSpacing="-18" FontFamily="{StaticResource ExoUiFontSemiBold}" Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                            <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.SteamStatusSecondary, Mode=OneWay}" FontSize="11" LineHeight="16" TextWrapping="WrapWholeWords" Foreground="{ThemeResource ExoMutedTextBrush}" />
+                            <StackPanel Grid.Row="3" Spacing="6">
+                                <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
+                                <TextBlock Text="{x:Bind ViewModel.SteamLiveMetric, Mode=OneWay}" FontSize="10" Foreground="{ThemeResource ExoSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
                     </Grid>
                 </Border>
 
-                <!-- Internet: latest ping / jitter / DNS sample + live link speed -->
-                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ExoCard}" Padding="14,12" MinHeight="110">
+                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ExoCard}" Padding="15,13">
                     <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Border Width="3" CornerRadius="1.5" Background="{ThemeResource ExoInternetBrush}" />
-                        <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBlock Text="CONNECTION" FontSize="10" CharacterSpacing="100"
-                                       FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       Foreground="{ThemeResource ExoMutedTextBrush}" />
-                            <TextBlock Text="{x:Bind ViewModel.LatencyPrimary, Mode=OneWay}"
-                                       FontSize="28" FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       CharacterSpacing="-20"
-                                       Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                            <TextBlock Text="{x:Bind ViewModel.LatencySecondary, Mode=OneWay}"
-                                       Style="{StaticResource ExoCaption}" />
-                        </StackPanel>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="3" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <Border CornerRadius="1.5" Background="{ThemeResource ExoInternetBrush}" />
+                        <Grid Grid.Column="1" RowSpacing="4">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <Grid>
+                                <TextBlock Text="INTERNET" FontSize="10" CharacterSpacing="105" FontFamily="{StaticResource ExoUiFontSemiBold}" Foreground="{ThemeResource ExoMutedTextBrush}" />
+                                <Border HorizontalAlignment="Right" Background="{ThemeResource ExoAccentSoftBrush}" CornerRadius="9" Padding="8,4">
+                                    <TextBlock Text="{x:Bind ViewModel.InternetStatusTag, Mode=OneWay}" FontSize="9" CharacterSpacing="70" FontFamily="{StaticResource ExoUiFontSemiBold}" Foreground="{ThemeResource ExoSecondaryTextBrush}" />
+                                </Border>
+                            </Grid>
+                            <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.LatencyPrimary, Mode=OneWay}" FontSize="21" CharacterSpacing="-18" FontFamily="{StaticResource ExoUiFontSemiBold}" Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                            <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.LatencySecondary, Mode=OneWay}" FontSize="11" LineHeight="16" TextWrapping="WrapWholeWords" Foreground="{ThemeResource ExoMutedTextBrush}" />
+                            <StackPanel Grid.Row="3" Spacing="6">
+                                <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
+                                <TextBlock Text="{x:Bind ViewModel.InternetLiveMetric, Mode=OneWay}" FontSize="10" Foreground="{ThemeResource ExoSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
                     </Grid>
                 </Border>
 
-                <!-- NVIDIA: Max FPS NIP -->
-                <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource ExoCard}" Padding="14,12" MinHeight="110">
+                <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource ExoCard}" Padding="15,13">
                     <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Border Width="3" CornerRadius="1.5" Background="{ThemeResource ExoNvidiaBrush}" />
-                        <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBlock Text="GPU PROFILE" FontSize="10" CharacterSpacing="100"
-                                       FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       Foreground="{ThemeResource ExoMutedTextBrush}" />
-                            <TextBlock Text="{x:Bind ViewModel.NvidiaPathPrimary, Mode=OneWay}"
-                                       FontSize="28" FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       CharacterSpacing="-20"
-                                       Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                            <TextBlock Text="{x:Bind ViewModel.NvidiaPathSecondary, Mode=OneWay}"
-                                       Style="{StaticResource ExoCaption}" />
-                        </StackPanel>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="3" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <Border CornerRadius="1.5" Background="{ThemeResource ExoNvidiaBrush}" />
+                        <Grid Grid.Column="1" RowSpacing="4">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <Grid>
+                                <TextBlock Text="NVIDIA" FontSize="10" CharacterSpacing="105" FontFamily="{StaticResource ExoUiFontSemiBold}" Foreground="{ThemeResource ExoMutedTextBrush}" />
+                                <Border HorizontalAlignment="Right" Background="{ThemeResource ExoAccentSoftBrush}" CornerRadius="9" Padding="8,4">
+                                    <TextBlock Text="{x:Bind ViewModel.NvidiaStatusTag, Mode=OneWay}" FontSize="9" CharacterSpacing="70" FontFamily="{StaticResource ExoUiFontSemiBold}" Foreground="{ThemeResource ExoSecondaryTextBrush}" />
+                                </Border>
+                            </Grid>
+                            <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.NvidiaPathPrimary, Mode=OneWay}" FontSize="21" CharacterSpacing="-18" FontFamily="{StaticResource ExoUiFontSemiBold}" Foreground="{ThemeResource ExoPrimaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.NvidiaPathSecondary, Mode=OneWay}" FontSize="11" LineHeight="16" TextWrapping="WrapWholeWords" Foreground="{ThemeResource ExoMutedTextBrush}" />
+                            <StackPanel Grid.Row="3" Spacing="6">
+                                <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
+                                <TextBlock Text="{x:Bind ViewModel.NvidiaLiveMetric, Mode=OneWay}" FontSize="10" Foreground="{ThemeResource ExoSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
                     </Grid>
                 </Border>
             </Grid>
-
         </Grid>
     </Border>
 </Page>

@@ -160,22 +160,18 @@ if (File.Exists(mainCs))
 if (File.Exists(dash))
 {
     var d = File.ReadAllText(dash);
-    // v2.6 home dashboard — FPS/frame heroes + memory/latency/RAM/NVIDIA path.
-    Expect("hero brand",
+    // Outcome dashboard — verified state, applied policy, and honest live signals.
+    Expect("hero status identity",
         d.Contains("HeroBrand", StringComparison.Ordinal)
-        && (d.Contains("FontSize=\"72\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"64\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"56\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"40\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"36\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"30\"", StringComparison.Ordinal)));
+        && d.Contains("OverviewPrimary", StringComparison.Ordinal)
+        && d.Contains("SYSTEM STATUS", StringComparison.Ordinal));
     Expect("hero tagline",
         d.Contains("HeroTagline", StringComparison.Ordinal)
         && (d.Contains("Maximum performance", StringComparison.Ordinal)
             || d.Contains("HeroSummary", StringComparison.Ordinal)));
     Expect("home instrument plate", d.Contains("ExoModulePlate", StringComparison.Ordinal));
-    Expect("home system ram hero",
-        d.Contains("SYSTEM RAM", StringComparison.Ordinal)
+    Expect("home compact system memory",
+        d.Contains("SYSTEM MEMORY", StringComparison.Ordinal)
         && d.Contains("MemoryPrimary", StringComparison.Ordinal));
     Expect("home memory load meter",
         d.Contains("MemoryLoadPercent", StringComparison.Ordinal)
@@ -194,16 +190,19 @@ if (File.Exists(dash))
         && d.Contains("SteamStatusPrimary", StringComparison.Ordinal)
         && d.Contains("NvidiaPathPrimary", StringComparison.Ordinal)
         && d.Contains("LatencyPrimary", StringComparison.Ordinal));
-    Expect("home four module tiles",
+    Expect("home four outcome cards",
         d.Contains("DISCORD", StringComparison.Ordinal)
         && d.Contains("STEAM", StringComparison.Ordinal)
-        && d.Contains("CONNECTION", StringComparison.Ordinal)
-        && d.Contains("GPU PROFILE", StringComparison.Ordinal));
-    Expect("home useful dashboard",
-        d.Contains("SYSTEM RAM", StringComparison.Ordinal)
+        && d.Contains("INTERNET", StringComparison.Ordinal)
+        && d.Contains("NVIDIA", StringComparison.Ordinal)
+        && d.Contains("StatusTag", StringComparison.Ordinal)
+        && d.Contains("LiveMetric", StringComparison.Ordinal));
+    Expect("home explains optimizer outcomes",
+        d.Contains("SYSTEM STATUS", StringComparison.Ordinal)
+        && d.Contains("OverviewPrimary", StringComparison.Ordinal)
         && d.Contains("DISCORD", StringComparison.Ordinal)
         && d.Contains("STEAM", StringComparison.Ordinal)
-        && d.Contains("CONNECTION", StringComparison.Ordinal));
+        && d.Contains("INTERNET", StringComparison.Ordinal));
     Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("no fixed product cards",
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)
@@ -218,8 +217,7 @@ if (File.Exists(dash))
     Expect("home decluttered",
         !d.Contains("SoonCards", StringComparison.Ordinal)
         && !d.Contains("Coming soon", StringComparison.Ordinal));
-    Expect("hero tagline style", d.Contains("ExoTagline", StringComparison.Ordinal));
-    Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
+    Expect("home has verified status tags", d.Contains("StatusTag", StringComparison.Ordinal));
     Expect("no pick-a-target blurb", !d.Contains("Pick a target", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
@@ -386,7 +384,7 @@ if (File.Exists(sharedPlateCs))
 foreach (var page in new[]
          {
              "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml", "InternetOptimizerPage.xaml",
-             "NvidiaOptimizerPage.xaml", "NvidiaPanelPage.xaml"
+             "NvidiaOptimizerPage.xaml"
          })
 {
     var p = Path.Combine(repo, "Exo", "Views", page);
@@ -399,32 +397,17 @@ foreach (var page in new[]
         || x.Contains("ExoModulePlate", StringComparison.Ordinal)
         || x.Contains("ExoPagePadding", StringComparison.Ordinal)
         || x.Contains("ExoPageMaxWidth", StringComparison.Ordinal));
-    if (page.Contains("NvidiaPanel", StringComparison.Ordinal))
-    {
-        Expect(page + " unique loader", x.Contains("ExoLoader", StringComparison.Ordinal) && !x.Contains("<ProgressRing", StringComparison.Ordinal));
-        Expect(page + " action bar", x.Contains("ExoActionBar", StringComparison.Ordinal));
-        Expect(page + " apply label", x.Contains("ApplyLabel", StringComparison.Ordinal) && x.Contains("ChangeHint", StringComparison.Ordinal));
-        // Digital vibrance row: per-display slider, hidden when the driver DVC API is unavailable.
-        Expect(page + " vibrance slider",
-            x.Contains("Digital vibrance", StringComparison.Ordinal)
-            && x.Contains("SelectedVibrance", StringComparison.Ordinal)
-            && x.Contains("VibranceSupported", StringComparison.Ordinal));
-        Expect(page + " control panel fallback",
-            x.Contains("Open NVIDIA Control Panel", StringComparison.Ordinal)
-            && x.Contains("HasControlPanel", StringComparison.Ordinal));
-    }
-    else
-    {
-        // Optimizer pages host chrome via SharedModulePlate (no duplicate loader/bar).
-        Expect(page + " uses SharedModulePlate", x.Contains("SharedModulePlate", StringComparison.Ordinal));
-        Expect(page + " no ProgressRing", !x.Contains("<ProgressRing", StringComparison.Ordinal));
-    }
+    Expect(page + " uses SharedModulePlate", x.Contains("SharedModulePlate", StringComparison.Ordinal));
+    Expect(page + " no ProgressRing", !x.Contains("<ProgressRing", StringComparison.Ordinal));
     if (page.StartsWith("Internet", StringComparison.Ordinal))
     {
-        Expect("internet dual white CTAs",
-            x.Contains("Low latency", StringComparison.Ordinal)
-            && x.Contains("Highest download", StringComparison.Ordinal)
-            && x.Contains("ExoWhiteButton", StringComparison.Ordinal));
+        Expect("internet unified analyze apply",
+            x.Contains("Analyze &amp; Apply", StringComparison.Ordinal)
+            && !x.Contains("Low latency", StringComparison.Ordinal)
+            && !x.Contains("Highest download", StringComparison.Ordinal));
+        Expect("internet DNS is automatic",
+            !x.Contains("Private DNS", StringComparison.Ordinal)
+            && x.Contains("encrypted DNS", StringComparison.OrdinalIgnoreCase));
         Expect("internet Repair button", x.Contains("Content=\"Repair\"", StringComparison.Ordinal));
         // Proof layer: benchmark delta, rollback banner, honest Repair caption.
         Expect("internet proof layer",
@@ -495,10 +478,11 @@ var internetDensityXaml = Path.Combine(repo, "Exo", "Views", "InternetOptimizerP
 if (File.Exists(internetDensityXaml))
 {
     var ix = File.ReadAllText(internetDensityXaml);
-    Expect("internet single-row action density",
+    Expect("internet decluttered action density",
         ix.Contains("ExoInternetActionGrid", StringComparison.Ordinal)
-        && ix.Contains("<ColumnDefinition Width=\"3*\"", StringComparison.Ordinal)
-        && ix.Contains("Grid.Column=\"3\"", StringComparison.Ordinal));
+        && ix.Contains("Content=\"Analyze &amp; Apply\"", StringComparison.Ordinal)
+        && ix.Contains("Grid.Column=\"1\"", StringComparison.Ordinal)
+        && !ix.Contains("Grid.Column=\"3\"", StringComparison.Ordinal));
     Expect("internet compact honest messages",
         ix.Contains("RollbackNotice", StringComparison.Ordinal)
         && ix.Contains("Style=\"{StaticResource ExoMessageText}\"", StringComparison.Ordinal)
@@ -852,7 +836,8 @@ if (File.Exists(dashVm))
     Expect("home dashboard refresh", dvm.Contains("RefreshDashboard", StringComparison.Ordinal)
         && dvm.Contains("HomeDashboardReader", StringComparison.Ordinal));
     Expect("home internet metrics are current samples, not causal deltas",
-        dvm.Contains("Latest · jitter", StringComparison.Ordinal)
+        dvm.Contains("ms idle", StringComparison.Ordinal)
+        && dvm.Contains("ms jitter", StringComparison.Ordinal)
         && !dvm.Contains("BeforeP50Ms:0.0}→", StringComparison.Ordinal)
         && !dvm.Contains("vs before", StringComparison.Ordinal));
     Expect("windows coming soon card", dvm.Contains("Card(\"windows\"", StringComparison.Ordinal)
@@ -890,17 +875,9 @@ if (File.Exists(Path.Combine(logosDir, "windows.png")))
 else
     Expect("windows logo asset", false, "missing Assets/Logos/windows.png");
 
-var panelVm = Path.Combine(repo, "Exo", "ViewModels", "NvidiaPanelViewModel.cs");
-if (File.Exists(panelVm))
-{
-    var pv = File.ReadAllText(panelVm);
-    Expect("panel force refresh", pv.Contains("RefreshCoreAsync(force: true", StringComparison.Ordinal));
-    // Vibrance is loaded with the display list and applied through the same dirty-diff Apply.
-    Expect("panel vibrance wired",
-        pv.Contains("ListVibranceAsync", StringComparison.Ordinal)
-        && pv.Contains("SetVibranceAsync", StringComparison.Ordinal)
-        && pv.Contains("IsVibranceDirty", StringComparison.Ordinal));
-}
+Expect("retired custom NVIDIA panel removed",
+    !File.Exists(Path.Combine(repo, "Exo", "ViewModels", "NvidiaPanelViewModel.cs")) &&
+    !File.Exists(Path.Combine(repo, "Exo", "Views", "NvidiaPanelPage.xaml")));
 
 var nv = Path.Combine(repo, "tools", "Exo.NvDisplay", "Program.cs");
 if (File.Exists(nv))

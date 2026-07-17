@@ -9,41 +9,47 @@ function formatBytes(bytes: number): string {
 export function HomePage() {
   const seed = homeDashboardSeed
   const usedPercent = Math.round((seed.memoryUsedBytes / seed.memoryTotalBytes) * 100)
-  const stats = [
-    { id: 'discord', label: 'Discord', value: '170 MB', meta: 'live process RAM · kernel on', tone: 'discord' },
-    { id: 'steam', label: 'Steam', value: '836 MB', meta: 'lean library · game yield armed', tone: 'steam' },
-    { id: 'connection', label: 'Connection', value: '49.5 ms', meta: '437 down · 291 up · zero loss', tone: 'internet' },
-    { id: 'gpu', label: 'GPU profile', value: seed.nvidiaPath, meta: seed.nvidiaPathDetail, tone: 'nvidia' },
+  const outcomes = [
+    { id: 'discord', label: 'Discord', tag: 'Verified', title: 'Lean client active', change: 'Privacy patch · voice QoS · idle memory guard', live: '170 MB live · 412 MB reclaimed this session', tone: 'discord' },
+    { id: 'steam', label: 'Steam', tag: 'Verified', title: 'Memory guard active', change: 'Background web pages reclaim first · games keep CPU priority', live: '836 MB live client memory', tone: 'steam' },
+    { id: 'internet', label: 'Internet', tag: 'Verified', title: '2.5G Ethernet', change: 'Adaptive stack applied · Cloudflare encrypted DNS', live: '8.4 ms idle · 0.8 ms jitter · 0% loss', tone: 'internet' },
+    { id: 'nvidia', label: 'NVIDIA', tag: 'Verified', title: 'GeForce RTX 4070', change: 'Low-latency base profile · per-game overrides', live: '62 driver pins · 29 game profiles verified', tone: 'nvidia' },
   ]
 
   return (
     <div className="home-page page-enter" data-testid="page-home">
       <div className="home-plate glass">
-        <header className="home-head stagger-child">
-          <span className="home-head__rail" aria-hidden="true" />
-          <h1 className="home-head__brand" data-testid="hero-brand">EXO</h1>
-          <p className="home-head__summary" data-testid="hero-tagline">All four modules reporting.</p>
-          <span className="home-head__live"><i /> LIVE · 5 SEC</span>
+        <header className="status-head stagger-child">
+          <span className="status-head__rail" aria-hidden="true" />
+          <div>
+            <p className="eyebrow">System status</p>
+            <h1 data-testid="hero-brand">4 / 4 verified</h1>
+          </div>
+          <p className="status-head__summary" data-testid="hero-tagline">Every optimizer has a verified apply record.</p>
+          <span className="status-head__live"><i /> LIVE · 5 SEC</span>
         </header>
 
-        <section className="memory-card stagger-child" data-testid="home-memory">
+        <section className="memory-strip stagger-child" data-testid="home-memory">
           <div>
-            <p className="eyebrow">System RAM</p>
+            <p className="eyebrow">System memory</p>
             <strong>{formatBytes(seed.memoryUsedBytes)}</strong>
-            <p>{formatBytes(seed.memoryTotalBytes - seed.memoryUsedBytes)} free · {formatBytes(seed.memoryTotalBytes)} total</p>
           </div>
-          <span className="memory-card__percent">{usedPercent}% in use</span>
-          <span className="memory-card__track"><i style={{ width: `${usedPercent}%` }} /></span>
+          <div className="memory-strip__meter">
+            <p>{formatBytes(seed.memoryTotalBytes - seed.memoryUsedBytes)} free · {formatBytes(seed.memoryTotalBytes)} total</p>
+            <span><i style={{ width: `${usedPercent}%` }} /></span>
+          </div>
+          <b>{usedPercent}% in use</b>
         </section>
 
-        <section className="signal-grid stagger-child" data-testid="home-signals">
-          {stats.map((stat) => (
-            <article className={`signal-card signal-card--${stat.tone}`} key={stat.id} data-testid={`home-stat-${stat.id}`}>
-              <span className="signal-card__rail" aria-hidden="true" />
-              <div>
-                <p className="eyebrow">{stat.label}</p>
-                <strong>{stat.value}</strong>
-                <p>{stat.meta}</p>
+        <section className="outcome-grid stagger-child" data-testid="home-signals">
+          {outcomes.map((item) => (
+            <article className={`outcome-card outcome-card--${item.tone}`} key={item.id} data-testid={`home-stat-${item.id}`}>
+              <span className="outcome-card__rail" aria-hidden="true" />
+              <div className="outcome-card__body">
+                <header><p className="eyebrow">{item.label}</p><span>{item.tag}</span></header>
+                <strong>{item.title}</strong>
+                <p className="outcome-card__change">{item.change}</p>
+                <p className="outcome-card__live">{item.live}</p>
               </div>
             </article>
           ))}
