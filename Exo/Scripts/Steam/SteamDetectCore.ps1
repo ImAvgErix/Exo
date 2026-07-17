@@ -22,9 +22,11 @@ function Test-SteamMemoryGuardText {
     if ($Text -notmatch 'SetProcessInformation') { return $false }
     if ($Text -notmatch 'SetMemoryPriority') { return $false }
     if ($Text -notmatch 'ForegroundPid') { return $false }
+    if ($Text -notmatch 'ProcessPriorityClass\]::Normal') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::BelowNormal') { return $false }
     if ($Text -notmatch '(?s)\$steamCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal') { return $false }
-    if ($Text -notmatch '(?s)\$webCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal') { return $false }
+    if ($Text -notmatch '(?s)\$backgroundWebCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal') { return $false }
+    if ($Text -notmatch '(?s)\$webCls\s*=\s*if\s*\(\$_\.Id\s*-eq\s*\$foregroundPid\).*?Normal.*?\$backgroundWebCls') { return $false }
     if ($Text -notmatch '\$_\.PriorityClass\s*=\s*\$webCls') { return $false }
     # EmptyWorkingSet on steamwebhelper freezes/kills CEF UI - reject thrashing helpers.
     # Evaluate code lines only: a '# Never EmptyWorkingSet' comment must not exempt a real call.

@@ -98,7 +98,9 @@ ForegroundPid
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
 $steamCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
-$webCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
+$backgroundWebCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
+$foregroundPid = ForegroundPid
+$webCls = if ($_.Id -eq $foregroundPid) {{ ProcessPriorityClass]::Normal }} else {{ $backgroundWebCls }}
 $_.PriorityClass = $webCls
 Start-Sleep -Seconds 5
 '@)),
@@ -111,10 +113,24 @@ ForegroundPid
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
 $steamCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
-$webCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
+$backgroundWebCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
+$foregroundPid = ForegroundPid
+$webCls = if ($_.Id -eq $foregroundPid) {{ ProcessPriorityClass]::Normal }} else {{ $backgroundWebCls }}
 $_.PriorityClass = $webCls
 Start-Sleep -Seconds 4
 '@)),
+ (E 'ps guard rejects legacy all-background policy' (-not (Test-SteamMemoryGuardText -Text @'
+Exo.SteamMemoryGuard
+SetProcessInformation
+SetMemoryPriority
+ForegroundPid
+ProcessPriorityClass]::Normal
+ProcessPriorityClass]::BelowNormal
+$steamCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
+$webCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
+$_.PriorityClass = $webCls
+Start-Sleep -Seconds 5
+'@))),
  (E 'ps toast' (Test-SteamToastsOffFromMap -Map @{{ Steam = 0 }})),
  (E 'ps toast missing' (-not (Test-SteamToastsOffFromMap -Map @{{ Steam = $null }})))
 ) | % {{ $_ }}
