@@ -104,11 +104,11 @@ public static partial class NvidiaDetectLogic
 
     /// <summary>
     /// Pins every Exo pack customizes; a correct import must export them.
-    /// Power management mode, ULL CPL state, ULL enabled, frame limiter off, G-SYNC global.
+    /// Power management, ULL state, frame limiter, G-SYNC global, and VSync policy.
     /// </summary>
     public static readonly string[] DrsRequiredPinIds =
     {
-        "274197361", "390467", "277041152", "277041154", "294973784",
+        "274197361", "390467", "277041152", "277041154", "294973784", "11041231",
     };
 
     /// <summary>

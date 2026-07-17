@@ -36,19 +36,14 @@ public partial class DashboardViewModel : ObservableObject
 
     public IReadOnlyList<OptimizerCardViewModel> Cards { get; }
     public IReadOnlyList<OptimizerCardViewModel> SoonCards { get; }
-    public ObservableCollection<HomeSparkBar> SparkBars { get; } = new();
 
     [ObservableProperty] public partial string HeroSummary { get; set; } = "Maximum performance. No compromise.";
 
     [ObservableProperty] public partial string MemoryPrimary { get; set; } = "—";
     [ObservableProperty] public partial string MemorySecondary { get; set; } = "Reading system memory...";
     [ObservableProperty] public partial string MemoryLoadText { get; set; } = "";
+    [ObservableProperty] public partial double MemoryLoadPercent { get; set; }
     [ObservableProperty] public partial bool HasMemory { get; set; }
-
-    // Kept for smokes / leftover bindings that still reference reclaim hero fields.
-    [ObservableProperty] public partial bool HasTrimStats { get; set; }
-    [ObservableProperty] public partial string ReclaimedPrimary { get; set; } = "—";
-    [ObservableProperty] public partial string ReclaimedSecondary { get; set; } = "Apply Steam to reclaim cache";
 
     [ObservableProperty] public partial string DiscordStatusPrimary { get; set; } = "—";
     [ObservableProperty] public partial string DiscordStatusSecondary { get; set; } = "Not optimized yet";
@@ -57,7 +52,7 @@ public partial class DashboardViewModel : ObservableObject
 
     [ObservableProperty] public partial bool HasLatency { get; set; }
     [ObservableProperty] public partial string LatencyPrimary { get; set; } = "—";
-    [ObservableProperty] public partial string LatencySecondary { get; set; } = "Apply Internet for ping";
+    [ObservableProperty] public partial string LatencySecondary { get; set; } = "Apply Internet to measure the current connection";
 
     [ObservableProperty] public partial bool HasNvidiaPath { get; set; }
     [ObservableProperty] public partial string NvidiaPathPrimary { get; set; } = "—";
@@ -84,6 +79,7 @@ public partial class DashboardViewModel : ObservableObject
             MemoryPrimary = "—";
             MemorySecondary = "Live memory unavailable";
             MemoryLoadText = "";
+            MemoryLoadPercent = 0;
         }
         else
         {
@@ -92,6 +88,7 @@ public partial class DashboardViewModel : ObservableObject
                 : 0UL;
             HasMemory = true;
             MemoryLoadText = $"{mem.LoadPercent}% in use";
+            MemoryLoadPercent = mem.LoadPercent;
             MemoryPrimary = HomeDashboardReader.FormatBytes(used);
             MemorySecondary =
                 $"{HomeDashboardReader.FormatBytes(mem.AvailableBytes)} free · {HomeDashboardReader.FormatBytes(mem.TotalBytes)} total";
@@ -121,30 +118,19 @@ public partial class DashboardViewModel : ObservableObject
         if (latency is not null)
         {
             HasLatency = true;
-            var dPing = latency.AfterP50Ms - latency.BeforeP50Ms;
-            var dJit = latency.AfterJitterMs - latency.BeforeJitterMs;
-            var dDns = latency.AfterDnsMs - latency.BeforeDnsMs;
-            var better = dPing < -0.5;
-            // Hero: show improvement when real; otherwise live after-ping.
-            LatencyPrimary = better
-                ? $"{dPing:0.0} ms"
-                : $"{latency.AfterP50Ms:0.0} ms";
+            // A short network sample is not proof that a system tweak caused a
+            // gain or regression. Show the latest reading without causal arrows.
+            LatencyPrimary = $"{latency.AfterP50Ms:0.0} ms";
 
             var parts = new List<string>
             {
-                $"ping {latency.BeforeP50Ms:0.0}→{latency.AfterP50Ms:0.0}",
-                $"jit {latency.BeforeJitterMs:0.0}→{latency.AfterJitterMs:0.0}",
-                $"DNS {FormatDns(latency.BeforeDnsMs)}→{FormatDns(latency.AfterDnsMs)}"
+                $"Latest · jitter {latency.AfterJitterMs:0.0} ms",
+                $"DNS {FormatDns(latency.AfterDnsMs)}"
             };
             if (linkBit is not null) parts.Add(linkBit);
             if (!string.IsNullOrWhiteSpace(preset) &&
                 !string.Equals(preset, "Applied", StringComparison.OrdinalIgnoreCase))
                 parts.Add(preset);
-            if (dPing > 0.5)
-                parts.Add($"+{dPing:0.0} ms vs before");
-            if (dJit > 1.0 || (latency.AfterDnsMs > 0 && dDns > 200))
-                parts.Add("reapply if DNS still high");
-
             LatencySecondary = string.Join(" · ", parts);
             return;
         }
@@ -156,16 +142,16 @@ public partial class DashboardViewModel : ObservableObject
                 ? link.Label
                 : (preset.Length > 14 ? preset[..14] : preset);
             LatencySecondary = linkBit is not null
-                ? $"{preset} · {linkBit} · re-run Apply for fresh ping proof"
-                : $"{preset} · re-run Apply for before/after ping · jitter · DNS";
+                ? $"{preset} · {linkBit} · run Apply for a current sample"
+                : $"{preset} · run Apply to measure ping, jitter, and DNS";
             return;
         }
 
         HasLatency = false;
         LatencyPrimary = "—";
         LatencySecondary = linkBit is not null
-            ? $"{linkBit} · Apply Internet for ping proof"
-            : "Apply Internet for before/after ping · jitter · DNS";
+            ? $"{linkBit} · Apply Internet for a current sample"
+            : "Apply Internet to measure ping, jitter, and DNS";
     }
 
     private void RefreshDiscordRamTile()
@@ -216,53 +202,29 @@ public partial class DashboardViewModel : ObservableObject
     private void RefreshSteamRamTile()
     {
         var ws = HomeDashboardReader.TryReadProcessWorkingSetBytes("steam", "steamwebhelper");
-        var trim = HomeDashboardReader.TryReadTrimStats();
         var steam = ReadModuleState("steam-optimizer.json");
 
-        if (trim is not null && (trim.TotalBytes > 0 || trim.Last24hBytes > 0))
+        if (ws > 0)
         {
-            var hero = trim.Last24hBytes > 0 ? trim.Last24hBytes : trim.TotalBytes;
-            ReclaimedPrimary = HomeDashboardReader.FormatBytes(hero);
-            ReclaimedSecondary = trim.Last24hBytes > 0
-                ? $"last 24h · {HomeDashboardReader.FormatBytes(trim.TotalBytes)} total · {trim.Passes} passes"
-                : $"total reclaimed · {trim.Passes} passes";
-            HasTrimStats = true;
-            SteamStatusPrimary = HomeDashboardReader.FormatBytes(hero);
-            SteamStatusSecondary = ws > 0
-                ? $"reclaimed · live client {HomeDashboardReader.FormatBytes(ws)}"
-                : ReclaimedSecondary;
-        }
-        else if (ws > 0)
-        {
-            HasTrimStats = false;
             SteamStatusPrimary = HomeDashboardReader.FormatBytes(ws);
             SteamStatusSecondary = steam.Applied
-                ? "live client RAM · companion (no CEF thrash)"
+                ? "live client RAM · in-game CPU yield armed"
                 : "live client RAM · Apply Steam for quiet CEF";
-            ReclaimedPrimary = HomeDashboardReader.FormatBytes(ws);
-            ReclaimedSecondary = "live Steam + webhelper working set";
         }
         else if (steam.Applied)
         {
-            HasTrimStats = false;
             SteamStatusPrimary = "Ready";
-            SteamStatusSecondary = "Optimized · open Steam for background reclaim";
-            ReclaimedPrimary = "Ready";
-            ReclaimedSecondary = "Open Steam for live client RAM";
+            SteamStatusSecondary = "Optimized · in-game contention guard armed";
         }
         else
         {
-            HasTrimStats = false;
             SteamStatusPrimary = "—";
-            SteamStatusSecondary = "Apply Steam · background reclaim + quiet CEF";
-            ReclaimedPrimary = "—";
-            ReclaimedSecondary = "Apply Steam to free cache / quiet CEF";
+            SteamStatusSecondary = "Apply Steam · quiet CEF + in-game CPU yield";
         }
     }
 
     private void RefreshDashboard()
     {
-        SparkBars.Clear();
         var appliedCount = 0;
 
         // Discord / Steam tiles filled by live RAM helpers (and on timer)
@@ -272,14 +234,6 @@ public partial class DashboardViewModel : ObservableObject
             appliedCount++;
         if (ReadModuleState("steam-optimizer.json").Applied)
             appliedCount++;
-
-        var trim = HomeDashboardReader.TryReadTrimStats();
-        if (trim is not null && trim.HourlyBytes.Count > 0)
-        {
-            var max = Math.Max(1L, trim.HourlyBytes.Max());
-            foreach (var b in trim.HourlyBytes)
-                SparkBars.Add(new HomeSparkBar { Height = 8 + (40.0 * b / max) });
-        }
 
         // Internet — real before/after ping + live link speed
         RefreshInternetTile(ref appliedCount);
@@ -376,11 +330,6 @@ public partial class DashboardViewModel : ObservableObject
                 Status = status
             }
         };
-}
-
-public sealed class HomeSparkBar
-{
-    public double Height { get; init; }
 }
 
 public partial class OptimizerCardViewModel : ObservableObject

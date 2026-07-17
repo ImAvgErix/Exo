@@ -62,13 +62,14 @@ var drsExpected = new Dictionary<string, string>
     ["277041152"] = "1",  // ULL enabled
     ["277041154"] = "0",  // frame limiter off
     ["294973784"] = "0",  // G-SYNC global (max-FPS pack)
+    ["11041231"] = "138504007", // VSync force off (max-FPS pack)
     ["549528094"] = "1",  // threaded optimization
 };
 var drsRequired = NvidiaDetectLogic.DrsRequiredPinIds;
-Expect("drs required pins cover PM/ULL/FRL/G-SYNC",
+Expect("drs required pins cover PM/ULL/FRL/G-SYNC/VSync",
     drsRequired.Contains("274197361") && drsRequired.Contains("390467") &&
     drsRequired.Contains("277041152") && drsRequired.Contains("277041154") &&
-    drsRequired.Contains("294973784"));
+    drsRequired.Contains("294973784") && drsRequired.Contains("11041231"));
 
 var drsMatch = new Dictionary<string, string>(drsExpected);
 var (vStatus, vCount, vMism) = NvidiaDetectLogic.ClassifyDrsVerification(drsExpected, drsMatch, drsRequired);
@@ -323,7 +324,7 @@ Expect("catalog excludes shared javaw.exe",
 var packVersion = File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "VERSION")).Trim();
 var profileVersion = File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "profiles", "PROFILE_VERSION")).Trim();
 Expect($"pack VERSION {packVersion}", !string.IsNullOrWhiteSpace(packVersion) && packVersion.StartsWith("1.", StringComparison.Ordinal), packVersion);
-Expect("PROFILE_VERSION 1.4.0", profileVersion == "1.4.0", profileVersion);
+Expect("PROFILE_VERSION 1.5.0", profileVersion == "1.5.0", profileVersion);
 Expect("optimizer version constant matches VERSION",
     optimizerSrc.Contains($"$Script:NvidiaOptVersion = '{packVersion}'", StringComparison.Ordinal));
 

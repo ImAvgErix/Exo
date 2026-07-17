@@ -82,15 +82,12 @@
                                         Width="3"
                                         CornerRadius="1.5"
                                         Opacity="{x:Bind RailOpacity}" />
-                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                                     <TextBlock Text="{x:Bind Title}"
                                                Style="{StaticResource ExoFeatureTitle}"
-                                               FontSize="13"
                                                CharacterSpacing="-4" />
                                     <TextBlock Text="{x:Bind Detail}"
-                                               Style="{StaticResource ExoFeatureDetail}"
-                                               FontSize="11"
-                                               LineHeight="15" />
+                                               Style="{StaticResource ExoFeatureDetail}" />
                                 </StackPanel>
                             </Grid>
                         </Border>

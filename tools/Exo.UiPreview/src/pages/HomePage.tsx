@@ -20,8 +20,6 @@ export function HomePage() {
 
   const heroBytes =
     seed.trimLast24hBytes > 0 ? seed.trimLast24hBytes : seed.trimTotalBytes
-  const latencyDelta = seed.latencyAfterP50 - seed.latencyBeforeP50
-  const latencySign = latencyDelta > 0 ? '+' : ''
   const sparks = sparkHeights(
     seed.frameTimeSeriesMs.map((ms) => 1 / Math.max(0.1, ms)),
   )
@@ -39,8 +37,8 @@ export function HomePage() {
     {
       id: 'latency',
       label: 'Latency',
-      value: `${latencySign}${latencyDelta.toFixed(1)} ms`,
-      meta: `ping ${seed.latencyBeforeP50.toFixed(1)} → ${seed.latencyAfterP50.toFixed(1)} ms`,
+      value: `${seed.latencyAfterP50.toFixed(1)} ms`,
+      meta: `Latest · jitter ${seed.latencyJitter.toFixed(1)} ms · DNS ${seed.latencyDns.toFixed(0)} ms`,
     },
   ]
 

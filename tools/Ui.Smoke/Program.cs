@@ -82,29 +82,30 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("amoled black", a.Contains("#000000", StringComparison.Ordinal));
     Expect("stone white accent", a.Contains("#F5F5F4", StringComparison.Ordinal));
-    // Single cream everywhere: #F3EDE3 (matches ThemeService.SoftStone); old #F2EBE0 must stay gone.
-    Expect("cream light page unified", a.Contains("#F3EDE3", StringComparison.Ordinal)
-        && !a.Contains("#F2EBE0", StringComparison.Ordinal)
-        && !a.Contains("#F3EBE3", StringComparison.Ordinal));
-    // v2.6 Liquid Glass — translucent lifted fill (ARGB), not opaque #0C0C0C slab
-    Expect("dark glass card lift",
-        a.Contains("#B30C0C0C", StringComparison.Ordinal)
-        || a.Contains("#0C0C0C", StringComparison.Ordinal));
+    Expect("neutral light page unified", a.Contains("#F4F4F5", StringComparison.Ordinal)
+        && a.Contains("#FFFFFFFF", StringComparison.Ordinal)
+        && !a.Contains("#F3EDE3", StringComparison.Ordinal));
+    // v3.2 cohesive surfaces: true black shell with opaque lifted cards avoids
+    // ghosted text and inconsistent transparency at mixed DPI.
+    Expect("dark solid card lift",
+        a.Contains("#FF0E0E11", StringComparison.Ordinal)
+        && a.Contains("#FF08080A", StringComparison.Ordinal));
     Expect("liquid glass fill token", a.Contains("ExoGlassFillBrush", StringComparison.Ordinal));
-    // Solid near-opaque sheet brush — real AcrylicBrush at startup dies with
-    // 0xC000027B (composition failure) on real GPUs; flyout content is parsed
-    // with MainWindow, so the app never launched (v2.6.0 regression).
-    Expect("settings sheet brush",
-        a.Contains("ExoSettingsAcrylicBrush", StringComparison.Ordinal)
+    // Settings uses the same solid dark material as the app; no isolated
+    // translucent flyout and no GPU-fragile AcrylicBrush.
+    Expect("settings solid surface brush",
+        a.Contains("ExoSettingsSurfaceBrush", StringComparison.Ordinal)
+        && a.Contains("#FF09090B", StringComparison.Ordinal)
+        && !a.Contains("ExoSettingsAcrylicBrush", StringComparison.Ordinal)
         && !a.Contains("<media:AcrylicBrush", StringComparison.Ordinal));
 }
 var themeServiceCs = Path.Combine(repo, "Exo", "Services", "ThemeService.cs");
 if (File.Exists(themeServiceCs))
 {
     var ts = File.ReadAllText(themeServiceCs);
-    Expect("theme service cream matches app.xaml",
-        ts.Contains("243, 237, 227", StringComparison.Ordinal)
-        && ts.Contains("#F3EDE3", StringComparison.Ordinal));
+    Expect("theme service neutral light matches app.xaml",
+        ts.Contains("244, 244, 245", StringComparison.Ordinal)
+        && ts.Contains("#F4F4F5", StringComparison.Ordinal));
 }
 if (File.Exists(main))
 {
@@ -175,10 +176,18 @@ if (File.Exists(dash))
     Expect("home system ram hero",
         d.Contains("SYSTEM RAM", StringComparison.Ordinal)
         && d.Contains("MemoryPrimary", StringComparison.Ordinal));
-    Expect("home steam reclaimed hero",
-        // Steam reclaim lives on the STEAM tile (and Reclaimed* still bound in VM for smokes).
-        (d.Contains("STEAM RECLAIMED", StringComparison.Ordinal) || d.Contains("STEAM", StringComparison.Ordinal))
-        && (d.Contains("ReclaimedPrimary", StringComparison.Ordinal) || d.Contains("SteamStatusPrimary", StringComparison.Ordinal)));
+    Expect("home memory load meter",
+        d.Contains("MemoryLoadPercent", StringComparison.Ordinal)
+        && d.Contains("<ProgressBar", StringComparison.Ordinal));
+    Expect("home module identity rails",
+        d.Contains("ExoDiscordBrush", StringComparison.Ordinal)
+        && d.Contains("ExoSteamBrush", StringComparison.Ordinal)
+        && d.Contains("ExoInternetBrush", StringComparison.Ordinal)
+        && d.Contains("ExoNvidiaBrush", StringComparison.Ordinal));
+    Expect("home steam live ram tile",
+        d.Contains("STEAM RAM", StringComparison.Ordinal)
+        && d.Contains("SteamStatusPrimary", StringComparison.Ordinal)
+        && !d.Contains("STEAM RECLAIMED", StringComparison.Ordinal));
     Expect("home module status row",
         d.Contains("DiscordStatusPrimary", StringComparison.Ordinal)
         && d.Contains("SteamStatusPrimary", StringComparison.Ordinal)
@@ -240,7 +249,12 @@ if (File.Exists(settings))
     Expect("settings exo chrome",
         s.Contains("ExoQuietButton", StringComparison.Ordinal)
         && s.Contains("ExoPrimaryButton", StringComparison.Ordinal));
-    Expect("settings no modal title", !s.Contains("Text=\"Settings\"", StringComparison.Ordinal));
+    Expect("settings compact flat hierarchy",
+        s.Contains("Text=\"Settings\"", StringComparison.Ordinal)
+        && s.Contains("Text=\"Appearance\"", StringComparison.Ordinal)
+        && !s.Contains("SYSTEM CONTROL", StringComparison.Ordinal)
+        && !s.Contains("No translucent layers", StringComparison.Ordinal)
+        && !s.Contains("Content=\"AMOLED\"", StringComparison.Ordinal));
     Expect("settings quiet support buttons",
         s.Contains("ExoQuietButton", StringComparison.Ordinal)
         && s.Contains("Report issue", StringComparison.Ordinal)
@@ -301,7 +315,11 @@ if (File.Exists(theme))
     Expect("theme ExoPrimaryButton", t.Contains("ExoPrimaryButton", StringComparison.Ordinal));
     Expect("theme ExoGlassCircle",
         t.Contains("ExoGlassCircle", StringComparison.Ordinal)
-        && t.Contains("CornerRadius\" Value=\"22", StringComparison.Ordinal));
+        && t.Contains("CornerRadius\" Value=\"23", StringComparison.Ordinal));
+    Expect("native variable UI typography",
+        t.Contains("Segoe UI Variable Text", StringComparison.Ordinal)
+        && t.Contains("Segoe UI Variable Display", StringComparison.Ordinal)
+        && !t.Contains("PlusJakartaSans.ttf", StringComparison.Ordinal));
     Expect("theme ExoWhiteButton", t.Contains("ExoWhiteButton", StringComparison.Ordinal));
     Expect("theme ExoCardButton", t.Contains("ExoCardButton", StringComparison.Ordinal));
     Expect("theme ExoFeatureTile", t.Contains("ExoFeatureTile", StringComparison.Ordinal));
@@ -533,9 +551,9 @@ var steamXamlPath = Path.Combine(repo, "Exo", "Views", "SteamOptimizerPage.xaml"
 if (File.Exists(steamXamlPath))
 {
     var sx = File.ReadAllText(steamXamlPath);
-    Expect("steam trim stats row",
-        sx.Contains("TrimStatsText", StringComparison.Ordinal)
-        && sx.Contains("HasTrimStats", StringComparison.Ordinal));
+    Expect("steam retired trim stats row removed",
+        !sx.Contains("TrimStatsText", StringComparison.Ordinal)
+        && !sx.Contains("HasTrimStats", StringComparison.Ordinal));
 }
 var nvidiaXamlPath = Path.Combine(repo, "Exo", "Views", "NvidiaOptimizerPage.xaml");
 if (File.Exists(nvidiaXamlPath))
@@ -832,6 +850,10 @@ if (File.Exists(dashVm))
     Expect("home no nvidia probe", !dvm.Contains("DetectNvidiaAsync", StringComparison.Ordinal));
     Expect("home dashboard refresh", dvm.Contains("RefreshDashboard", StringComparison.Ordinal)
         && dvm.Contains("HomeDashboardReader", StringComparison.Ordinal));
+    Expect("home internet metrics are current samples, not causal deltas",
+        dvm.Contains("Latest · jitter", StringComparison.Ordinal)
+        && !dvm.Contains("BeforeP50Ms:0.0}→", StringComparison.Ordinal)
+        && !dvm.Contains("vs before", StringComparison.Ordinal));
     Expect("windows coming soon card", dvm.Contains("Card(\"windows\"", StringComparison.Ordinal)
         && dvm.Contains("windows.png", StringComparison.Ordinal));
 }
@@ -839,9 +861,9 @@ var homeDashReader = Path.Combine(repo, "Exo", "Services", "HomeDashboardReader.
 if (File.Exists(homeDashReader))
 {
     var hdr = File.ReadAllText(homeDashReader);
-    Expect("home trim stats file read",
-        hdr.Contains("steam-trim-stats.json", StringComparison.Ordinal)
-        && hdr.Contains("TryReadTrimStats", StringComparison.Ordinal));
+    Expect("home does not surface retired Steam trim stats",
+        !hdr.Contains("steam-trim-stats.json", StringComparison.Ordinal)
+        && !hdr.Contains("TryReadTrimStats", StringComparison.Ordinal));
     Expect("home live memory api",
         hdr.Contains("GlobalMemoryStatusEx", StringComparison.Ordinal)
         && hdr.Contains("TryReadMemory", StringComparison.Ordinal));
@@ -910,6 +932,13 @@ if (File.Exists(nvHeuristic))
     Expect("heuristic notebook not hard fail",
         !h.Contains("!notebookGpu && driverTweaksApplied", StringComparison.Ordinal) &&
         h.Contains("notebookGpu || driverTweaksApplied", StringComparison.Ordinal));
+    Expect("optimizer card parser preserves detector detail",
+        h.Contains("string.IsNullOrWhiteSpace(detail)", StringComparison.Ordinal));
+    var optimizerViewModels = new[] { "DiscordOptimizerViewModel.cs", "SteamOptimizerViewModel.cs", "NvidiaOptimizerViewModel.cs" }
+        .Select(name => Path.Combine(repo, "Exo", "ViewModels", name));
+    Expect("optimizer cards render detector detail",
+        optimizerViewModels.All(File.Exists) &&
+        optimizerViewModels.All(path => File.ReadAllText(path).Contains("Detail = feature.Detail", StringComparison.Ordinal)));
 }
 
 Log($"=== SUMMARY failed={failed} ===");

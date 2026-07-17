@@ -60,7 +60,7 @@ $parsed = $null
 try { $parsed = Get-Content -LiteralPath $snapshotFile -Raw | ConvertFrom-Json } catch {}
 Assert 'snapshot-exec JSON parses' ($null -ne $parsed)
 if ($null -ne $parsed) {
-  Assert 'snapshot-exec version + timestamp' ($parsed.snapshotVersion -eq 1 -and [string]$parsed.timestampUtc)
+  Assert 'snapshot-exec version + timestamp' ($parsed.snapshotVersion -eq 2 -and [string]$parsed.timestampUtc)
 
   function Find-Reg([string]$name) { @($parsed.regValues) | Where-Object { [string]$_.name -eq $name } | Select-Object -First 1 }
   $multi = Find-Reg 'TcpWindowSize'

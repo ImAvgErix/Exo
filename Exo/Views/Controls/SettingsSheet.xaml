@@ -4,38 +4,36 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Loaded="UserControl_Loaded"
-    Width="304">
+    Width="336">
 
-    <!--
-      Frosted glass gear flyout (opens Right of gear).
-      SheetRoot is the open-animation target (fade + soft drop from the gear).
-      v2.6: acrylic-backed panel, denser grouping, specular rim.
-    -->
     <Border x:Name="SheetRoot"
-            Background="{ThemeResource ExoSettingsAcrylicBrush}"
+            Background="{ThemeResource ExoSettingsSurfaceBrush}"
             BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
             BorderThickness="1"
-            CornerRadius="{StaticResource ExoGlassRadius}"
-            Padding="16,14,16,14"
-            RenderTransformOrigin="0.5,0">
+            CornerRadius="18"
+            Padding="16"
+            RenderTransformOrigin="0.5,0"
+            UseLayoutRounding="True">
         <Border.RenderTransform>
             <CompositeTransform x:Name="SheetTransform" />
         </Border.RenderTransform>
-        <Grid>
-            <Border BorderBrush="{ThemeResource ExoSpecularStrokeBrush}"
-                    BorderThickness="0,1,0,0"
-                    CornerRadius="{StaticResource ExoGlassRadius}"
-                    Margin="1,0,1,0"
-                    IsHitTestVisible="False"
-                    VerticalAlignment="Top"
-                    Height="20"
-                    Opacity="0.9" />
-            <StackPanel Spacing="0">
 
-                <TextBlock Text="APPEARANCE"
-                           Style="{StaticResource ExoSectionTitle}"
-                           Margin="0,0,0,8" />
-                <Grid ColumnSpacing="8" Margin="0,0,0,4">
+        <StackPanel Spacing="14">
+            <TextBlock Text="Settings"
+                       Style="{StaticResource ExoPageTitle}"
+                       FontSize="24"
+                       LineHeight="28"
+                       CharacterSpacing="-18" />
+
+            <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
+
+            <StackPanel Spacing="9">
+                <TextBlock Text="Appearance"
+                           FontFamily="{StaticResource ExoUiFontSemiBold}"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                <Grid ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
@@ -45,8 +43,7 @@
                                  Style="{StaticResource ExoThemeChoice}"
                                  Content="Dark"
                                  GroupName="ExoTheme"
-                                 MinHeight="36"
-                                 Padding="8,7"
+                                 MinHeight="40"
                                  IsChecked="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}"
                                  Click="DarkMode_Click"
                                  AutomationProperties.Name="Dark mode" />
@@ -55,24 +52,26 @@
                                  Style="{StaticResource ExoThemeChoice}"
                                  Content="Light"
                                  GroupName="ExoTheme"
-                                 MinHeight="36"
-                                 Padding="8,7"
+                                 MinHeight="40"
                                  IsChecked="{x:Bind ViewModel.IsLightMode, Mode=TwoWay}"
                                  Click="LightMode_Click"
                                  AutomationProperties.Name="Light mode" />
                 </Grid>
+            </StackPanel>
 
-                <Rectangle Height="1" Margin="0,14" Fill="{ThemeResource ExoSpecularStrokeBrush}" />
+            <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
 
-                <TextBlock Text="UPDATES"
-                           Style="{StaticResource ExoSectionTitle}"
-                           Margin="0,0,0,8" />
-                <Grid Margin="0,0,0,10" MinHeight="28">
-                    <TextBlock Text="Check on launch"
-                               FontFamily="{StaticResource ExoUiFont}"
-                               FontSize="13"
-                               VerticalAlignment="Center"
-                               Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+            <StackPanel Spacing="10">
+                <Grid ColumnSpacing="12" MinHeight="36">
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="Updates"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                        <TextBlock Text="Check when Exo opens"
+                                   Style="{StaticResource ExoCaption}" />
+                    </StackPanel>
                     <ToggleSwitch Style="{StaticResource ExoCompactSwitch}"
                                   HorizontalAlignment="Right"
                                   VerticalAlignment="Center"
@@ -89,8 +88,8 @@
                         AutomationProperties.Name="Check for Exo app updates"
                         Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
                         IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                <Grid MinHeight="34" Margin="0,8,0,0">
-                    <StackPanel Spacing="6"
+                <Grid MinHeight="24">
+                    <StackPanel Spacing="5"
                                 VerticalAlignment="Center"
                                 Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                         <TextBlock Text="{x:Bind ViewModel.UpdateProgressLabel, Mode=OneWay}"
@@ -116,47 +115,45 @@
                                Visibility="{x:Bind ViewModel.ShowIdleUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                AutomationProperties.LiveSetting="Polite" />
                 </Grid>
-
-                <Rectangle Height="1" Margin="0,14" Fill="{ThemeResource ExoSpecularStrokeBrush}" />
-
-                <Grid ColumnSpacing="8" Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Button Grid.Column="0"
-                            Style="{StaticResource ExoQuietButton}"
-                            Content="Report issue"
-                            MinHeight="36"
-                            Padding="10,7"
-                            HorizontalAlignment="Stretch"
-                            AutomationProperties.Name="Report Exo issue on GitHub"
-                            Command="{x:Bind ViewModel.ReportIssueCommand}" />
-                    <Button Grid.Column="1"
-                            Style="{StaticResource ExoQuietButton}"
-                            Content="Open logs"
-                            MinHeight="36"
-                            Padding="10,7"
-                            HorizontalAlignment="Stretch"
-                            AutomationProperties.Name="Open Exo logs folder"
-                            Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
-                </Grid>
-
-                <Grid>
-                    <TextBlock Text="App version"
-                               FontFamily="{StaticResource ExoUiFont}"
-                               FontSize="12"
-                               VerticalAlignment="Center"
-                               Foreground="{ThemeResource ExoMutedTextBrush}" />
-                    <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
-                               FontFamily="{StaticResource ExoUiFontSemiBold}"
-                               FontSize="12"
-                               FontWeight="SemiBold"
-                               HorizontalAlignment="Right"
-                               VerticalAlignment="Center"
-                               Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                </Grid>
             </StackPanel>
-        </Grid>
+
+            <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
+
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0"
+                        Style="{StaticResource ExoQuietButton}"
+                        Content="Report issue"
+                        MinHeight="38"
+                        Padding="10,7"
+                        HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="Report Exo issue on GitHub"
+                        Command="{x:Bind ViewModel.ReportIssueCommand}" />
+                <Button Grid.Column="1"
+                        Style="{StaticResource ExoQuietButton}"
+                        Content="Open logs"
+                        MinHeight="38"
+                        Padding="10,7"
+                        HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="Open Exo logs folder"
+                        Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
+            </Grid>
+
+            <Grid>
+                <TextBlock Text="App version"
+                           Style="{StaticResource ExoCaption}"
+                           VerticalAlignment="Center" />
+                <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
+                           FontFamily="{StaticResource ExoUiFontSemiBold}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center"
+                           Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+            </Grid>
+        </StackPanel>
     </Border>
 </UserControl>

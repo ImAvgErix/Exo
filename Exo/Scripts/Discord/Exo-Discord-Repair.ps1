@@ -63,10 +63,33 @@ function Get-RepairActiveApp([string]$DiscordRoot) {
         Select-Object -First 1
 }
 
+function Test-RepairStockExecutableOnly([string]$DiscordRoot) {
+    # Windows can briefly keep a terminated executable image mapped in PID 4.
+    # In that state every mutable Discord file is already gone, but deleting the
+    # final official Discord.exe fails until the system releases the image. It is
+    # safe to let the signed installer repair around that one immutable stock file.
+    $remainingFiles = @(Get-ChildItem -LiteralPath $DiscordRoot -File -Recurse -Force -ErrorAction SilentlyContinue)
+    if ($remainingFiles.Count -ne 1) { return $false }
+
+    $exe = $remainingFiles[0]
+    if ($exe.Name -ine 'Discord.exe' -or $exe.Directory.Name -notmatch '^app-[0-9]+(?:\.[0-9]+)+$') {
+        return $false
+    }
+
+    try {
+        $signature = Get-AuthenticodeSignature -LiteralPath $exe.FullName -ErrorAction Stop
+        return $signature.Status -eq [System.Management.Automation.SignatureStatus]::Valid -and
+            $signature.SignerCertificate -and
+            $signature.SignerCertificate.Subject -match '(?:^|,\s*)O=Discord Inc\.(?:,|$)'
+    } catch {
+        return $false
+    }
+}
+
 function Remove-RepairProgramFiles([string]$DiscordRoot) {
     if (-not (Test-Path -LiteralPath $DiscordRoot)) {
         Write-RepOk 'No old program files to remove'
-        return
+        return $false
     }
     $expectedRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Discord'
     if ([IO.Path]::GetFullPath($DiscordRoot).TrimEnd('\') -ine [IO.Path]::GetFullPath($expectedRoot).TrimEnd('\')) {
@@ -80,9 +103,14 @@ function Remove-RepairProgramFiles([string]$DiscordRoot) {
         Start-Sleep -Seconds 2
     }
     if (Test-Path -LiteralPath $DiscordRoot) {
+        if (Test-RepairStockExecutableOnly $DiscordRoot) {
+            Write-RepWarn 'Windows is still releasing the signed Discord executable; reusing it after cleaning every mutable file'
+            return $true
+        }
         throw "Could not delete $DiscordRoot - close Discord in Task Manager and retry"
     }
     Write-RepOk 'Old program files removed'
+    return $false
 }
 
 function Clear-RepairRendererState([string]$AppDataDiscord, [bool]$DoFullReset) {
@@ -139,6 +167,155 @@ function Get-RepairVerifiedDiscordSetup {
     }
 }
 
+function Expand-RepairDiscordFromSignedSetup([string]$DiscordRoot, [string]$Setup) {
+    # DiscordSetup is an Authenticode-verified PE with a ZIP payload resource.
+    # Extract the official full nupkg directly when Windows keeps Discord.exe
+    # mapped in PID 4 and Squirrel cannot replace that one file in-place.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $work = Join-Path ([IO.Path]::GetTempPath()) ('exo-discord-repair-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $work -Force | Out-Null
+    try {
+        $payloadZip = Join-Path $work 'payload.zip'
+        $input = [IO.File]::OpenRead($Setup)
+        try {
+            $tailSize = [int][Math]::Min($input.Length, 4MB)
+            $tail = New-Object byte[] $tailSize
+            [void]$input.Seek(-$tailSize, [IO.SeekOrigin]::End)
+            $read = 0
+            while ($read -lt $tailSize) {
+                $n = $input.Read($tail, $read, $tailSize - $read)
+                if ($n -le 0) { throw 'Unexpected end of Discord installer while locating its package' }
+                $read += $n
+            }
+
+            $eocdIndex = -1
+            for ($i = $tailSize - 22; $i -ge 0; $i--) {
+                if ($tail[$i] -eq 0x50 -and $tail[$i + 1] -eq 0x4b -and
+                    $tail[$i + 2] -eq 0x05 -and $tail[$i + 3] -eq 0x06) {
+                    $eocdIndex = $i
+                    break
+                }
+            }
+            if ($eocdIndex -lt 0) { throw 'Official Discord installer package was not found' }
+
+            $eocd = $input.Length - $tailSize + $eocdIndex
+            $centralSize = [BitConverter]::ToUInt32($tail, $eocdIndex + 12)
+            $centralOffset = [BitConverter]::ToUInt32($tail, $eocdIndex + 16)
+            $commentLength = [BitConverter]::ToUInt16($tail, $eocdIndex + 20)
+            $zipStart = $eocd - [long]$centralSize - [long]$centralOffset
+            $zipEnd = $eocd + 22 + $commentLength
+            if ($zipStart -lt 0 -or $zipEnd -gt $input.Length -or $zipEnd -le $zipStart) {
+                throw 'Official Discord installer package bounds are invalid'
+            }
+
+            [void]$input.Seek($zipStart, [IO.SeekOrigin]::Begin)
+            $header = New-Object byte[] 4
+            if ($input.Read($header, 0, 4) -ne 4 -or $header[0] -ne 0x50 -or
+                $header[1] -ne 0x4b -or $header[2] -ne 0x03 -or $header[3] -ne 0x04) {
+                throw 'Official Discord installer package header is invalid'
+            }
+
+            [void]$input.Seek($zipStart, [IO.SeekOrigin]::Begin)
+            $output = [IO.File]::Create($payloadZip)
+            try {
+                $remaining = $zipEnd - $zipStart
+                $buffer = New-Object byte[] 1048576
+                while ($remaining -gt 0) {
+                    $want = [int][Math]::Min($buffer.Length, $remaining)
+                    $n = $input.Read($buffer, 0, $want)
+                    if ($n -le 0) { throw 'Unexpected end of official Discord package' }
+                    $output.Write($buffer, 0, $n)
+                    $remaining -= $n
+                }
+            } finally {
+                $output.Dispose()
+            }
+        } finally {
+            $input.Dispose()
+        }
+
+        $outer = [IO.Compression.ZipFile]::OpenRead($payloadZip)
+        try {
+            $packageEntry = $outer.Entries | Where-Object {
+                $_.FullName -match '^Discord-(?<version>[0-9]+(?:\.[0-9]+)+)-full\.nupkg$'
+            } | Select-Object -First 1
+            $updateEntry = $outer.GetEntry('Update.exe')
+            $releasesEntry = $outer.GetEntry('RELEASES')
+            if (-not $packageEntry -or -not $updateEntry -or -not $releasesEntry) {
+                throw 'Official Discord installer is missing required package entries'
+            }
+            if ($packageEntry.FullName -notmatch '^Discord-(?<version>[0-9]+(?:\.[0-9]+)+)-full\.nupkg$') {
+                throw 'Official Discord package version is invalid'
+            }
+            $version = $Matches.version
+            $packagePath = Join-Path $work $packageEntry.Name
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($packageEntry, $packagePath, $true)
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($updateEntry, (Join-Path $DiscordRoot 'Update.exe'), $true)
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($releasesEntry, (Join-Path $DiscordRoot 'RELEASES'), $true)
+        } finally {
+            $outer.Dispose()
+        }
+
+        $appDir = Join-Path $DiscordRoot "app-$version"
+        New-Item -ItemType Directory -Path $appDir -Force | Out-Null
+        $appPrefix = [IO.Path]::GetFullPath($appDir).TrimEnd('\') + '\'
+        $package = [IO.Compression.ZipFile]::OpenRead($packagePath)
+        try {
+            foreach ($entry in $package.Entries) {
+                if (-not $entry.FullName.StartsWith('lib/net45/', [StringComparison]::OrdinalIgnoreCase)) { continue }
+                $relative = $entry.FullName.Substring(10)
+                if ([string]::IsNullOrWhiteSpace($relative) -or $relative.EndsWith('/')) { continue }
+                $target = [IO.Path]::GetFullPath((Join-Path $appDir ($relative.Replace('/', '\'))))
+                if (-not $target.StartsWith($appPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                    throw "Unsafe path in official Discord package: $relative"
+                }
+                $parent = Split-Path -Parent $target
+                if (-not (Test-Path -LiteralPath $parent)) {
+                    New-Item -ItemType Directory -Path $parent -Force | Out-Null
+                }
+                if ($relative -ieq 'Discord.exe' -and (Test-Path -LiteralPath $target)) {
+                    $existingSignature = Get-AuthenticodeSignature -LiteralPath $target -ErrorAction Stop
+                    if ($existingSignature.Status -ne [System.Management.Automation.SignatureStatus]::Valid -or
+                        -not $existingSignature.SignerCertificate -or
+                        $existingSignature.SignerCertificate.Subject -notmatch '(?:^|,\s*)O=Discord Inc\.(?:,|$)') {
+                        throw 'Locked Discord executable is not signed by Discord Inc.'
+                    }
+                    continue
+                }
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $true)
+            }
+        } finally {
+            $package.Dispose()
+        }
+
+        $packagesDir = Join-Path $DiscordRoot 'packages'
+        New-Item -ItemType Directory -Path $packagesDir -Force | Out-Null
+        Copy-Item -LiteralPath $packagePath -Destination (Join-Path $packagesDir $packageEntry.Name) -Force
+        Copy-Item -LiteralPath (Join-Path $DiscordRoot 'RELEASES') -Destination (Join-Path $packagesDir 'RELEASES') -Force
+        Copy-Item -LiteralPath (Join-Path $appDir 'installer.db') -Destination (Join-Path $DiscordRoot 'installer.db') -Force
+
+        foreach ($required in @('Discord.exe', 'icudtl.dat', 'resources.pak', 'installer.db', 'resources\app.asar')) {
+            $requiredPath = Join-Path $appDir $required
+            if (-not (Test-Path -LiteralPath $requiredPath) -or (Get-Item -LiteralPath $requiredPath).Length -le 0) {
+                throw "Staged Discord repair is missing $required"
+            }
+        }
+        $restoredSignature = Get-AuthenticodeSignature -LiteralPath (Join-Path $appDir 'Discord.exe') -ErrorAction Stop
+        if ($restoredSignature.Status -ne [System.Management.Automation.SignatureStatus]::Valid -or
+            -not $restoredSignature.SignerCertificate -or
+            $restoredSignature.SignerCertificate.Subject -notmatch '(?:^|,\s*)O=Discord Inc\.(?:,|$)') {
+            throw 'Restored Discord executable signature is invalid'
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $packagesDir 'RELEASES')) -or
+            (Get-Item -LiteralPath (Join-Path $DiscordRoot 'installer.db')).Length -lt 4096) {
+            throw 'Staged Discord repair did not restore Squirrel package state'
+        }
+        return (Get-Item -LiteralPath $appDir)
+    } finally {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Install-RepairFreshDiscord([string]$DiscordRoot, [string]$Setup) {
     if (-not (Test-Path -LiteralPath $Setup)) {
         throw 'Discord installer is missing - download it from discord.com manually'
@@ -180,6 +357,27 @@ function Start-RepairDiscord([string]$DiscordRoot, [string]$AppDir) {
     if (Test-Path -LiteralPath $updateExe) {
         Start-Process -FilePath $updateExe -ArgumentList '--processStart', 'Discord.exe' -WorkingDirectory $DiscordRoot | Out-Null
     }
+}
+
+function Confirm-RepairDiscordBoot([string]$DiscordRoot) {
+    $rootPrefix = [IO.Path]::GetFullPath($DiscordRoot).TrimEnd('\') + '\'
+    $deadline = (Get-Date).AddSeconds(30)
+    $stableSeconds = 0
+    while ((Get-Date) -lt $deadline) {
+        $running = @(Get-Process -Name @('Discord', 'Discord.bin') -ErrorAction SilentlyContinue | Where-Object {
+            try {
+                $_.Path -and [IO.Path]::GetFullPath($_.Path).StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)
+            } catch { $false }
+        })
+        if ($running.Count -gt 0) {
+            $stableSeconds++
+            if ($stableSeconds -ge 3) { return $true }
+        } else {
+            $stableSeconds = 0
+        }
+        Start-Sleep -Seconds 1
+    }
+    return $false
 }
 
 function Restore-RepairDiscordShortcuts([string]$AppDir) {
@@ -455,16 +653,23 @@ try {
     $repairSetup = Get-RepairVerifiedDiscordSetup
 
     Write-HubProgress 35 'Removing program files...'
-    Remove-RepairProgramFiles $discordRoot
+    $reuseSignedStockExecutable = [bool](Remove-RepairProgramFiles $discordRoot)
 
     Write-HubProgress 45 'Clearing renderer state...'
     Clear-RepairRendererState $appDataDiscord $doFull
     Remove-BrokenThemes $appData
 
-    Write-HubProgress 55 'Installing fresh Discord...'
-    $app = Install-RepairFreshDiscord $discordRoot $repairSetup
-    $repairSetup = $null
-    Write-RepOk "Discord $($app.Name) installed clean"
+    Write-HubProgress 55 'Restoring stock Discord...'
+    if ($reuseSignedStockExecutable) {
+        $app = Expand-RepairDiscordFromSignedSetup $discordRoot $repairSetup
+        Remove-Item -LiteralPath $repairSetup -Force -ErrorAction SilentlyContinue
+        $repairSetup = $null
+        Write-RepOk "Discord $($app.Name) stock runtime restored from the signed installer"
+    } else {
+        $app = Install-RepairFreshDiscord $discordRoot $repairSetup
+        $repairSetup = $null
+        Write-RepOk "Discord $($app.Name) installed clean"
+    }
 
     Write-HubProgress 82 'Restoring stock shortcuts...'
     Restore-RepairDiscordShortcuts $app.FullName
@@ -488,6 +693,9 @@ try {
     Write-HubProgress 85 'Starting Discord...'
     Write-RepStep 'Starting Discord...'
     Start-RepairDiscord $discordRoot $app.FullName
+    if ($reuseSignedStockExecutable -and -not (Confirm-RepairDiscordBoot $discordRoot)) {
+        throw 'Discord did not stay running after the staged stock repair'
+    }
 
     $statePath = Get-RepairDiscordStatePath
     if (Test-Path -LiteralPath $statePath) {

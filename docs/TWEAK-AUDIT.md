@@ -1,6 +1,6 @@
 # Exo tweak audit (evidence-based)
 
-Last pass: v2.4.0. Goal: the **ceiling** of real OS/driver/client performance for every module —
+Last pass: v3.2.0. Goal: an evidence-based ceiling of real OS/driver/client performance for every module —
 every known tweak in the landscape is either implemented or listed here with a concrete exclusion
 reason. Nothing is silently skipped, and nothing invented (no dead registry folklore).
 
@@ -22,6 +22,9 @@ without the app. See `docs/INTERNET-GOLDEN-PATH.md`.
 | Heuristics disabled | **Keep** | Prevents Windows from restricting autotune |
 | RSS on | **Keep** | Documented multi-queue receive |
 | RSS `BaseProcessorNumber 2` (Ethernet, ≥4 CPUs) | **Implemented (v2.4.0)** | Keeps NIC interrupts off core 0; supported `Set-NetAdapterRss` path |
+| Adaptive RSS profile + processor/queue budget | **Implemented (v3.2.0)** | Lowest latency uses `ClosestProcessor`; throughput uses `NUMAStatic`; `MaxProcessors` and `NumberOfReceiveQueues` are set only when the installed cmdlet exposes them |
+| D0 packet coalescing off | **Implemented (v3.2.0, capability-gated)** | Supported `Set-NetAdapterPowerManagement` parameter; unsupported drivers are reported as N/A |
+| Adapter power + extended RSS snapshot/restore | **Implemented (v3.2.0)** | Snapshot v2 captures supported power values, RSS profile, base CPU, processor budget, and queue count for exact Repair |
 | RSC on/off by preset | **Keep** | Real coalescing latency vs throughput tradeoff |
 | LSO on/off by preset | **Keep** | Real driver offload tradeoff |
 | CUBIC | **Keep** | Current Windows default path |
@@ -46,7 +49,7 @@ without the app. See `docs/INTERNET-GOLDEN-PATH.md`.
 | IdleRestriction on (latency, Intel) | **Keep** | Blocks NIC low-power idle on I225/I226-class |
 | NIC EEE / selective suspend off | **Keep** | Real link power renegotiation source |
 | powercfg wireless max / PCIe ASPM off | **Keep** | Documented power plan settings |
-| Interface metric 1 on verified eth | **Keep (probe-gated v2.4.0)** | Wi‑Fi disabled only after eth-bound internet probe succeeds |
+| Interface metric 1 on verified eth | **Keep (probe-gated v2.4.0)** | Wi‑Fi remains enabled; metrics prefer Ethernet only after an eth-bound internet probe succeeds |
 | PnPCapabilities 24 | **Keep** | Stops "turn off this device to save power" |
 | Dynamic ports via netsh | **Keep** | Modern replacement for MaxUserPort |
 | Advanced-property writes by `RegistryKeyword` | **Implemented (v2.4.0)** | Locale-independent (`*FlowControl` etc.); English DisplayName fuzzy match kept only for vendor-specific knobs |
@@ -76,7 +79,7 @@ without the app. See `docs/INTERNET-GOLDEN-PATH.md`.
 | Wi‑Fi power-save / uAPSD / MIMO PS | n/a | **Off** |
 | Preferred band | n/a | Prefer 6 GHz, else 5 GHz (**never** force-only) |
 | Restart adapter after apply | **Yes** (Up Ethernet) | **No** (would drop association) |
-| Ethernet verified online (bound probe) | **Prefer Ethernet 100%** (metric 1, disable Wi‑Fi, recorded for restore) | n/a |
+| Ethernet verified online (bound probe) | **Prefer Ethernet** (metric 1; Wi‑Fi stays available) | n/a |
 | Ethernet has IP but probe fails | Wi‑Fi **stays enabled** | n/a |
 | Wi‑Fi-only machine | n/a | Path policy no-ops (`wifi-disable\|skip`) |
 | VPN / virtual adapters | **Excluded from NIC sweep** (interface type + hardware check) | Same |
@@ -101,6 +104,7 @@ Reset stays status-clear only — never a rollback.
 | Background app max frame rate 30 | **Implemented (v2.4.0)** | Pack pin `277041158=30` |
 | Resizable BAR (30/40/50) / shader cache unlimited / LOD clamp / threaded opt | **Keep** | Already pinned in packs |
 | Per-game catalog | **Expanded to 29 titles (v2.4.0)** | Comp deltas: PRF=1, max perf, ULL per pack, frame-gen off |
+| G-SYNC latency/sync policy | **Corrected (v3.2.0)** | G-SYNC + driver VSync on + Ultra Low Latency for non-Reflex DX9/DX11; NVIDIA Reflex overrides driver ULL when supported; VSync is now a required live DRS verification pin |
 | Minecraft `javaw.exe` profile | **Excluded** | Shared Java host — would force max-perf pins on every Java app |
 | CPL: resolution / refresh / scaling / color range / depth | **Keep** | Exo.NvDisplay (NvAPI) |
 | CPL: digital vibrance (DVC) | **Implemented (v2.4.0; panel slider v2.4.1)** | get/set/status with readback verify; per-display slider in the Exo NVIDIA Panel |
@@ -122,6 +126,7 @@ Reset stays status-clear only — never a rollback.
 | `disable-hang-monitor` | **Implemented (v2.4.0)** | Real switch; disables the unresponsive-page watchdog dialog only |
 | `disable-renderer-backgrounding` / occluded-windows | **Keep** | Verified real |
 | PTB / Canary variants (QoS + quiet pass) | **Implemented (v2.4.0)** | All installed variants optimized; detect requires all |
+| Equicord plugin budget | **Implemented (v3.2.0)** | Curated privacy/minimalism set plus manifest-required transitive dependencies; all other optional plugins disabled, max budget enforced and detected live |
 | PTB/Canary Equicord + kernel install | **Excluded** | Test channels churn; module layout not guaranteed |
 | `single-process`, `disable-gpu`, `in-process-gpu`, etc. | **Excluded (forbidden)** | Documented client blanking (changelog) |
 | Zoom/locale payload removal inside modules | **Excluded** | No deterministic target; unknown-file deletion broke 1.0.92xx boots |
@@ -138,7 +143,8 @@ Reset stays status-clear only — never a rollback.
 | Friends notifications + sounds fully quiet | **Implemented (v2.4.0)** | Verified `friends` section |
 | config.vdf: `DownloadThrottleKbps=0`, `AllowDownloadsDuringGameplay=0`, `AutoUpdateWindowEnabled=0` | **Implemented (v2.4.0)** | Verified `InstallConfigStore` path |
 | `H264HWAccel` / `GPUAccelWebViews*` etc. | **Rewrite-existing-only** | Modern section path unverifiable — never invented at a guessed path |
-| Webhelper trim + reclaimed-RAM stats | **Implemented (v2.4.0)** | `steam-trim-stats.json`, surfaced in UI |
+| In-game client/CEF contention guard | **Implemented (v3.2.0)** | Steam and steamwebhelper switch to BelowNormal only while a game runs, then return to responsive idle priorities; no working-set trim or process kill |
+| Webhelper working-set trim / reclaimed-RAM claims | **Removed (v3.0.11; UI retired v3.2.0)** | `EmptyWorkingSet` froze modern CEF; stale `steam-trim-stats.json` is no longer surfaced as current optimization data |
 | Download cache ceiling | **Excluded** | No verifiable config.vdf key |
 | Auto-update window hour pinning | **Excluded** | Redundant with the two implemented keys |
 | `-silent` launcher flag | **Excluded** | Launcher backs explicit launches; minimized start confuses users |

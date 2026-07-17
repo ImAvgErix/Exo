@@ -69,7 +69,7 @@ function Get-ProgressForLine([string]$Line, [int]$Current) {
         'cache'                           = @{ P = 48; S = 'Cleaning cache...' }
         'Equicord'                        = @{ P = 58; S = 'Applying Equicord...' }
         'Exo Host'                        = @{ P = 68; S = 'Installing Exo Host...' }
-        'AMOLED'                          = @{ P = 72; S = 'Applying AMOLED theme...' }
+        'AMOLED'                          = @{ P = 72; S = 'Applying dark mode...' }
         'kernel'                          = @{ P = 78; S = 'Installing DiscOpt kernel...' }
         'Boot check'                      = @{ P = 86; S = 'Verifying Discord still boots...' }
         'Quick boot'                      = @{ P = 86; S = 'Quick verify (no Discord flash)...' }

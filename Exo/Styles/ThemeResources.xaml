@@ -4,15 +4,16 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:helpers="using:Exo.Helpers">
 
-    <FontFamily x:Key="ExoDisplayFontItalic">ms-appx:///Assets/Fonts/CormorantGaramond-Italic.ttf#Cormorant Garamond</FontFamily>
-    <FontFamily x:Key="ExoUiFont">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
-    <FontFamily x:Key="ExoUiFontMedium">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
-    <FontFamily x:Key="ExoUiFontSemiBold">ms-appx:///Assets/Fonts/PlusJakartaSans.ttf#Plus Jakarta Sans</FontFamily>
+    <!-- Native variable fonts render more cleanly than small bundled glyphs at 100–175% DPI. -->
+    <FontFamily x:Key="ExoDisplayFontItalic">Segoe UI Variable Display</FontFamily>
+    <FontFamily x:Key="ExoUiFont">Segoe UI Variable Text</FontFamily>
+    <FontFamily x:Key="ExoUiFontMedium">Segoe UI Variable Text</FontFamily>
+    <FontFamily x:Key="ExoUiFontSemiBold">Segoe UI Variable Display</FontFamily>
 
     <!-- Spacing scale: 8 / 12 / 16 / 20 / 28 — v2.6 Liquid Glass chrome -->
-    <CornerRadius x:Key="ExoCardRadius">22</CornerRadius>
-    <CornerRadius x:Key="ExoTileRadius">16</CornerRadius>
-    <CornerRadius x:Key="ExoGlassRadius">26</CornerRadius>
+    <CornerRadius x:Key="ExoCardRadius">18</CornerRadius>
+    <CornerRadius x:Key="ExoTileRadius">12</CornerRadius>
+    <CornerRadius x:Key="ExoGlassRadius">20</CornerRadius>
     <x:Double x:Key="ExoPageMaxWidth">1120</x:Double>
     <Thickness x:Key="ExoPagePadding">24,16,28,16</Thickness>
 
@@ -24,16 +25,16 @@
     <helpers:BoolToShowOpacityConverter x:Key="BoolToShowOpacityConverter" />
     <helpers:AssetPathToImageSourceConverter x:Key="AssetPathToImageSourceConverter" />
 
-    <!-- Home subhead under brand — slightly smaller italic, not competing with HeroBrand -->
+    <!-- Home status under brand — native text rendering, no synthetic italics. -->
     <Style x:Key="ExoTagline" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource ExoDisplayFontItalic}" />
-        <Setter Property="FontSize" Value="22" />
-        <Setter Property="FontStyle" Value="Italic" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontStyle" Value="Normal" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="-4" />
+        <Setter Property="CharacterSpacing" Value="0" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
         <Setter Property="TextAlignment" Value="Left" />
-        <Setter Property="LineHeight" Value="28" />
+        <Setter Property="LineHeight" Value="20" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
         <Setter Property="UseLayoutRounding" Value="True" />
         <Setter Property="Foreground" Value="{ThemeResource ExoSecondaryTextBrush}" />
@@ -41,9 +42,9 @@
 
     <Style x:Key="ExoSectionTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontSize" Value="12" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="90" />
+        <Setter Property="CharacterSpacing" Value="120" />
         <Setter Property="Margin" Value="0,0,0,8" />
         <Setter Property="Foreground" Value="{ThemeResource ExoMutedTextBrush}" />
     </Style>
@@ -59,8 +60,8 @@
 
     <Style x:Key="ExoCaption" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFont}" />
-        <Setter Property="FontSize" Value="12" />
-        <Setter Property="LineHeight" Value="16" />
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="LineHeight" Value="17" />
         <Setter Property="Foreground" Value="{ThemeResource ExoMutedTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
@@ -86,8 +87,8 @@
 
     <Style x:Key="ExoFeatureDetail" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFont}" />
-        <Setter Property="FontSize" Value="12" />
-        <Setter Property="LineHeight" Value="16" />
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="LineHeight" Value="17" />
         <Setter Property="Foreground" Value="{ThemeResource ExoMutedTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
@@ -97,7 +98,7 @@
         <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="CornerRadius" Value="18" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
@@ -106,19 +107,19 @@
     <!-- Feature rows — hairline list rows inside the plate (not separate pills) -->
     <Style x:Key="ExoFeatureTile" TargetType="Border">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoDividerBrush}" />
         <Setter Property="BorderThickness" Value="0,0,0,1" />
         <Setter Property="CornerRadius" Value="0" />
-        <Setter Property="Padding" Value="12,10" />
-        <Setter Property="MinHeight" Value="46" />
+        <Setter Property="Padding" Value="14,11" />
+        <Setter Property="MinHeight" Value="52" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
     <!-- Sticky module action bar — frosted glass strip with specular top edge -->
     <Style x:Key="ExoActionBar" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoSpecularStrokeBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoSurfaceSunkenBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoDividerBrush}" />
         <Setter Property="BorderThickness" Value="0,1,0,0" />
         <Setter Property="CornerRadius" Value="0" />
         <Setter Property="Padding" Value="16,8,16,10" />
@@ -139,7 +140,7 @@
         <Setter Property="Background" Value="{ThemeResource ExoAccentSoftBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource ExoSpecularStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="12" />
         <Setter Property="Padding" Value="10,6" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
@@ -150,8 +151,8 @@
     </Style>
 
     <Style x:Key="ExoInfoMessageText" TargetType="TextBlock" BasedOn="{StaticResource ExoMessageText}">
-        <Setter Property="FontSize" Value="11" />
-        <Setter Property="LineHeight" Value="15" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="LineHeight" Value="16" />
         <Setter Property="Foreground" Value="{ThemeResource ExoMutedTextBrush}" />
     </Style>
 
@@ -168,8 +169,8 @@
     <Style x:Key="ExoCard" TargetType="Border">
         <Setter Property="CornerRadius" Value="{StaticResource ExoCardRadius}" />
         <Setter Property="Padding" Value="16,14" />
-        <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoSurfaceRaisedBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoDividerBrush}" />
         <Setter Property="BorderThickness" Value="1" />
     </Style>
 
@@ -223,8 +224,8 @@
                                 Opacity="0"
                                 IsHitTestVisible="False" />
                         <Border x:Name="CheckedFill"
-                                Background="#FFFFFF"
-                                BorderBrush="#FFFFFF"
+                                Background="{ThemeResource ExoAccentBrush}"
+                                BorderBrush="{ThemeResource ExoAccentBrush}"
                                 BorderThickness="1"
                                 CornerRadius="{StaticResource ExoTileRadius}"
                                 Opacity="0"
@@ -267,7 +268,7 @@
                                 <VisualState x:Name="Checked">
                                     <VisualState.Setters>
                                         <Setter Target="CheckedFill.Opacity" Value="1" />
-                                        <Setter Target="Label.Foreground" Value="#0A0A0A" />
+                                        <Setter Target="Label.Foreground" Value="{ThemeResource ExoOnAccentBrush}" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Unchecked">
@@ -399,7 +400,7 @@
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
         <Setter Property="Background" Value="{ThemeResource ExoQuietButtonFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoCardStrokeBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoDividerBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -784,24 +785,22 @@
         </Setter>
     </Style>
 
-    <!--
-      Liquid-glass circle nav button — floats on pure black.
-      Hairline rim + rim-lit gradient edge + dark center; wash on hover only.
-    -->
+    <!-- Dark instrument wells keep white/brand PNG marks legible in both themes. -->
     <Style x:Key="ExoGlassCircle" TargetType="Button" BasedOn="{StaticResource ExoRailButton}">
-        <Setter Property="Width" Value="44" />
-        <Setter Property="Height" Value="44" />
-        <Setter Property="MinWidth" Value="44" />
-        <Setter Property="MinHeight" Value="44" />
-        <Setter Property="CornerRadius" Value="22" />
+        <Setter Property="Width" Value="46" />
+        <Setter Property="Height" Value="46" />
+        <Setter Property="MinWidth" Value="46" />
+        <Setter Property="MinHeight" Value="46" />
+        <Setter Property="CornerRadius" Value="23" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="BorderBrush" Value="#66FFFFFF" />
+        <Setter Property="BorderBrush" Value="#3AFFFFFF" />
+        <Setter Property="Foreground" Value="#F5F5F4" />
         <Setter Property="Background">
             <Setter.Value>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#2BFFFFFF" Offset="0" />
-                    <GradientStop Color="#12FFFFFF" Offset="0.52" />
-                    <GradientStop Color="#1FFFFFFF" Offset="1" />
+                    <GradientStop Color="#FF202024" Offset="0" />
+                    <GradientStop Color="#FF111114" Offset="0.52" />
+                    <GradientStop Color="#FF09090B" Offset="1" />
                 </LinearGradientBrush>
             </Setter.Value>
         </Setter>

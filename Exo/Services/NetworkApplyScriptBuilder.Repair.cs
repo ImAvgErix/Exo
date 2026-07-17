@@ -226,18 +226,40 @@ if ($snap) {
     } catch {}
   }
   Report 'restore-metrics' 'ok'
-  # --- 8) RSS config (Enabled + BaseProcessorNumber + Profile) ---
+  # --- 8) Adapter power management (exact supported values) ---
+  $powerRestoreFailures = 0
+  foreach ($pm in @($snap.powerManagement)) {
+    try {
+      $command = Get-Command Set-NetAdapterPowerManagement -EA SilentlyContinue
+      if (-not $command) { continue }
+      $args = @{ Name = [string]$pm.adapter; NoRestart = $true; ErrorAction = 'SilentlyContinue' }
+      foreach ($property in @('D0PacketCoalescing','ArpOffload','DeviceSleepOnDisconnect','NSOffload','RsnRekeyOffload','SelectiveSuspend','WakeOnMagicPacket','WakeOnPattern')) {
+        $value = $pm.$property
+        if ($command.Parameters.ContainsKey($property) -and [string]$value -in @('Enabled','Disabled')) {
+          $args[$property] = [string]$value
+        }
+      }
+      Set-NetAdapterPowerManagement @args
+    } catch { $powerRestoreFailures++; $restoreFailures++ }
+  }
+  Report 'restore-adapter-power' $(if ($powerRestoreFailures -eq 0) { 'ok' } else { 'fail' }) $(if ($powerRestoreFailures) { "$powerRestoreFailures adapter(s) failed" } else { '' })
+  # --- 9) RSS config (Enabled + placement + queue budget) ---
+  $rssRestoreFailures = 0
   foreach ($r in @($snap.rss)) {
     try {
-      Set-NetAdapterRss -Name ([string]$r.adapter) -Enabled ([bool]$r.enabled) -EA SilentlyContinue
+      $command = Get-Command Set-NetAdapterRss -EA SilentlyContinue
+      $args = @{ Name = [string]$r.adapter; Enabled = [bool]$r.enabled; ErrorAction = 'SilentlyContinue' }
       if ([bool]$r.enabled) {
-        Set-NetAdapterRss -Name ([string]$r.adapter) -BaseProcessorNumber ([int]$r.baseProcessorNumber) -EA SilentlyContinue
-        if ($r.profile) { Set-NetAdapterRss -Name ([string]$r.adapter) -Profile ([string]$r.profile) -EA SilentlyContinue }
+        if ($command.Parameters.ContainsKey('BaseProcessorNumber')) { $args.BaseProcessorNumber = [int]$r.baseProcessorNumber }
+        if ($r.profile -and $command.Parameters.ContainsKey('Profile')) { $args.Profile = [string]$r.profile }
+        if ($r.maxProcessors -and $command.Parameters.ContainsKey('MaxProcessors')) { $args.MaxProcessors = [int]$r.maxProcessors }
+        if ($r.receiveQueues -and $command.Parameters.ContainsKey('NumberOfReceiveQueues')) { $args.NumberOfReceiveQueues = [int]$r.receiveQueues }
       }
-    } catch {}
+      Set-NetAdapterRss @args
+    } catch { $rssRestoreFailures++; $restoreFailures++ }
   }
-  Report 'restore-rss' 'ok'
-  # --- 9) powercfg values (AC/DC indexes exactly as recorded) ---
+  Report 'restore-rss' $(if ($rssRestoreFailures -eq 0) { 'ok' } else { 'fail' }) $(if ($rssRestoreFailures) { "$rssRestoreFailures adapter(s) failed" } else { '' })
+  # --- 10) powercfg values (AC/DC indexes exactly as recorded) ---
   foreach ($p in @($snap.powercfg)) {
     try {
       if ($p.ac) {

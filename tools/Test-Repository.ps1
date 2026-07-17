@@ -468,9 +468,10 @@ foreach ($profile in $profiles) {
             '11306135'  = '4294967295'
             '277041154' = '0'
             '553505273' = '0'
-            '390467'    = $(if ($gsyncProfile) { '0' } else { '2' })
-            '277041152' = $(if ($gsyncProfile) { '0' } else { '1' })
+            '390467'    = '2'
+            '277041152' = '1'
             '294973784' = $(if ($gsyncProfile) { '1' } else { '0' })
+            '11041231'  = $(if ($gsyncProfile) { '1199655232' } else { '138504007' })
         }
         foreach ($id in $expected.Keys) {
             if (-not $actual.ContainsKey($id) -or $actual[$id] -ne $expected[$id]) {

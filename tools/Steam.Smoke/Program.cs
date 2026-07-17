@@ -28,6 +28,12 @@ var trim5 = """
 # Never EmptyWorkingSet / Stop-Process steamwebhelper
 [System.Diagnostics.ProcessPriorityClass]::High
 [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+$webCls = if ($InGame) {
+  [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+} else {
+  [System.Diagnostics.ProcessPriorityClass]::Normal
+}
+$_.PriorityClass = $webCls
 Start-Sleep -Seconds 5
 """;
 var trim4 = trim5.Replace("Seconds 5", "Seconds 4");
@@ -76,6 +82,8 @@ Exo.SteamWebHelper
 Never EmptyWorkingSet
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
+$webCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
+$_.PriorityClass = $webCls
 Start-Sleep -Seconds 5
 '@)),
  (E 'ps trim 4' (Test-SteamTrimHelperText -Text @'
@@ -83,6 +91,8 @@ Exo.SteamWebHelper
 Never EmptyWorkingSet
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
+$webCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
+$_.PriorityClass = $webCls
 Start-Sleep -Seconds 4
 '@)),
  (E 'ps toast' (Test-SteamToastsOffFromMap -Map @{{ Steam = 0 }})),
@@ -124,6 +134,8 @@ var applyFiles = new[]
 var blob = string.Join("\n", applyFiles.Where(File.Exists).Select(File.ReadAllText));
 var optimizerPath = applyFiles[0];
 var optimizerText = File.Exists(optimizerPath) ? File.ReadAllText(optimizerPath) : "";
+var detectorPath = Path.Combine(repo, "Exo", "Scripts", "Steam", "Exo-Steam-Detect.ps1");
+var detectorText = File.Exists(detectorPath) ? File.ReadAllText(detectorPath) : "";
 Expect("apply sources readable", blob.Length > 1000);
 var (ok, issues) = SteamLogic.AuditApplyScriptText(blob);
 Expect("apply audit", ok, string.Join("; ", issues));
@@ -177,6 +189,12 @@ Expect("preview host asserts removed",
 // turn this assertion back into a presence check.
 Expect("no half-wired reclaim stats while trim disabled",
     !optimizerText.Contains("Save-TrimStats", StringComparison.Ordinal));
+Expect("current Steam copy describes contention guard, not retired trim",
+    detectorText.Contains("in-game CPU yield", StringComparison.OrdinalIgnoreCase) &&
+    detectorText.Contains("contention guard", StringComparison.OrdinalIgnoreCase) &&
+    !detectorText.Contains("RAM trim", StringComparison.OrdinalIgnoreCase) &&
+    !optimizerText.Contains("aggressive webhelper trim", StringComparison.OrdinalIgnoreCase) &&
+    !optimizerText.Contains("gentle webhelper trim", StringComparison.OrdinalIgnoreCase));
 
 // --- EXO_REPORT structured apply report ---
 Expect("EXO_REPORT emitter + state persistence",

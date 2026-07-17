@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Exo.Helpers;
@@ -39,10 +38,6 @@ public partial class SteamOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial bool HasLastResult { get; set; }
     [ObservableProperty] public partial string LastResultGlyph { get; set; } = "\uE73E";
     [ObservableProperty] public partial Brush LastResultBrush { get; set; }
-
-    // RAM reclaimed by the resident trim loop (steam-trim-stats.json — may not exist).
-    [ObservableProperty] public partial bool HasTrimStats { get; set; }
-    [ObservableProperty] public partial string TrimStatsText { get; set; } = string.Empty;
 
     // Compact expandable "Last apply" report (state-file applyReport array).
     public ObservableCollection<ApplyReportRowViewModel> ApplyReportRows { get; } = new();
@@ -230,7 +225,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
             Features.Add(new FeatureRowViewModel
             {
                 Title = feature.Title,
-                Detail = feature.IsActive ? "Applied" : "Not applied",
+                Detail = feature.Detail,
                 Glyph = Helpers.UiStatusPresentation.FeatureGlyph(feature.IsActive),
                 Opacity = Helpers.UiStatusPresentation.FeatureOpacity(feature.IsActive),
                 IsActive = feature.IsActive,
@@ -241,7 +236,6 @@ public partial class SteamOptimizerViewModel : ObservableObject
         if (!IsStatusLoading)
             IsFeatureListVisible = Features.Count > 0;
         LoadApplyReport();
-        LoadTrimStats();
         var failSteps = ApplyReportRows
             .Where(r => r.Status == "fail")
             .Select(r => r.Text.Split('·')[0].Trim())
@@ -267,51 +261,6 @@ public partial class SteamOptimizerViewModel : ObservableObject
             ApplyReportRows.Add(row);
         HasApplyReport = ApplyReportRows.Count > 0;
         ApplyReportSummary = ApplyReportPresentation.Summarize(rows);
-    }
-
-    /// <summary>Read %LocalAppData%\Exo\steam-trim-stats.json defensively (may not exist).</summary>
-    private void LoadTrimStats()
-    {
-        try
-        {
-            var path = Path.Combine(PathHelper.AppDataDir, "steam-trim-stats.json");
-            if (!File.Exists(path))
-            {
-                HasTrimStats = false;
-                return;
-            }
-
-            using var doc = JsonDocument.Parse(File.ReadAllText(path));
-            var root = doc.RootElement;
-            var total = ReadInt64(root, "totalReclaimedBytes");
-            var last24h = ReadInt64(root, "last24hReclaimedBytes");
-            if (total <= 0 && last24h <= 0)
-            {
-                HasTrimStats = false;
-                return;
-            }
-
-            TrimStatsText = $"RAM reclaimed · {FormatBytes(last24h)} last 24 h · {FormatBytes(total)} total";
-            HasTrimStats = true;
-        }
-        catch
-        {
-            HasTrimStats = false;
-        }
-    }
-
-    private static long ReadInt64(JsonElement root, string name) =>
-        root.TryGetProperty(name, out var el) &&
-        el.ValueKind == JsonValueKind.Number &&
-        el.TryGetInt64(out var value)
-            ? value
-            : 0;
-
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes >= 1L << 30)
-            return $"{bytes / (double)(1L << 30):0.0} GB";
-        return $"{Math.Max(0, bytes) / (double)(1L << 20):0} MB";
     }
 
     private void SetResult(string message, bool success)

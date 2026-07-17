@@ -1,7 +1,7 @@
-# Steam Optimizer - multi-PC safe tweaks focused on steamwebhelper RAM/CPU.
+# Steam Optimizer - multi-PC safe tweaks focused on Steam/CEF responsiveness and CPU contention.
 # Steam is CEF/Chromium (not Electron) so Discord-style asar/kernel inject does
 # not apply. Instead we use Valve CEF flags, interface settings, cache cleanup,
-# startup quieting, and optional working-set trim for webhelper.
+# startup quieting, and an in-game CPU contention guard for webhelper.
 #
 #   Steam-Optimizer.ps1
 #   Steam-Optimizer.ps1 -Quick
@@ -1516,12 +1516,12 @@ function Write-SteamLaunchCmd([string]$CmdPath, [string]$SteamPath, [string]$Hel
     $cmdExe = $exe.Replace('%', '%%')
     $cmdHelper = $HelperPath.Replace('%', '%%')
     $cmdPs = $ps.Replace('%', '%%')
-    # Start Steam first (HIGH) so the UI appears ASAP; kick the trim helper right
+    # Start Steam first (HIGH) so the UI appears ASAP; kick the contention guard right
     # after without waiting for it. Helper self-limits with a mutex.
     # Helpers are hosted by stable PowerShell 7 (resolved via Get-ExoPwsh).
     $cmd = @(
         '@echo off'
-        ("rem Exo {0} - fast quiet CEF + aggressive webhelper trim (PowerShell 7)" -f $Label)
+        ("rem Exo {0} - fast quiet CEF + in-game contention guard (PowerShell 7)" -f $Label)
         ('start "" /HIGH /D "{0}" "{1}" {2} %*' -f $cmdSteamPath, $cmdExe, $args)
         ('start "" /MIN "{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $cmdPs, $cmdHelper)
     ) -join "`r`n"
@@ -1628,7 +1628,7 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
     $wsh = New-Object -ComObject WScript.Shell
     $patched = 0
     $seen = @{}
-    $desc = 'Steam (Exo - quiet CEF + gentle webhelper trim)'
+    $desc = 'Steam (Exo - quiet CEF + in-game contention guard)'
 
     foreach ($root in (Get-SteamShortcutSearchRoots)) {
         $lnks = @(Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse -Force -ErrorAction SilentlyContinue)
@@ -1778,7 +1778,7 @@ function Install-WebHelperTrimHelper([string]$SteamPath) {
     $body = @'
 # Exo - Steam companion (NOT a killer). Never EmptyWorkingSet / Stop-Process steamwebhelper.
 # steamwebhelper is CEF - working-set thrash freezes or kills the library UI.
-# This helper only: (1) steam.exe priority yield in-game (2) keep StartupMode quiet.
+# This helper only: (1) Steam/CEF priority yield in-game (2) keep StartupMode quiet.
 $ErrorActionPreference = 'SilentlyContinue'
 $created = $false
 $mutex = [Threading.Mutex]::new($true, 'Local\Exo.SteamWebHelper', [ref]$created)
@@ -1801,19 +1801,25 @@ function Test-SteamGameRunning {
 }
 
 function Set-SteamClientPriority([bool]$InGame) {
-  # steam.exe: High idle / BelowNormal in-game. steamwebhelper: always Normal - never touch WS.
+  # Client UI stays responsive while idle; both client and CEF yield CPU to the game in-session.
+  # Never touch working sets: priority is reversible and does not freeze Chromium.
   $steamCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
   } else {
     [System.Diagnostics.ProcessPriorityClass]::High
+  }
+  $webCls = if ($InGame) {
+    [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+  } else {
+    [System.Diagnostics.ProcessPriorityClass]::Normal
   }
   Get-Process -Name 'steam' -ErrorAction SilentlyContinue | ForEach-Object {
     try { if ($_.PriorityClass -ne $steamCls) { $_.PriorityClass = $steamCls } } catch {}
   }
   Get-Process -Name 'steamwebhelper' -ErrorAction SilentlyContinue | ForEach-Object {
     try {
-      if ($_.PriorityClass -ne [System.Diagnostics.ProcessPriorityClass]::Normal) {
-        $_.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Normal
+      if ($_.PriorityClass -ne $webCls) {
+        $_.PriorityClass = $webCls
       }
     } catch {}
   }
@@ -2388,6 +2394,8 @@ try {
         $helperOk = $helperText -match 'Exo\.SteamWebHelper' -and
             $helperText -match 'ProcessPriorityClass\]::High' -and
             $helperText -match 'ProcessPriorityClass\]::BelowNormal' -and
+            $helperText -match '(?s)\$webCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
+            $helperText -match '\$_\.PriorityClass\s*=\s*\$webCls' -and
             (-not $helperUnsafe)
     } catch { }
     $fullPassOk = -not [bool]$Quick
@@ -2432,6 +2440,7 @@ try {
         leanCmd              = $launch.Cmd
         webHelperTrim        = $helperOk
         aggressiveTrim       = $helperOk
+        inGameContentionGuard = $helperOk
         inGamePriorityYield  = $helperOk
         highPriority         = $helperOk
         downloadOptimized    = ([bool]$cfgOk -and -not $cfgSkipped)
@@ -2478,10 +2487,10 @@ try {
         throw ("Steam apply finished with incomplete verification: {0}" -f ($missing -join ', '))
     }
 
-    Write-Ok 'Steam Optimizer finished (CEF quiet, full debloat, Windows quiet, 3s trim, priority yield)'
+    Write-Ok 'Steam Optimizer finished (CEF quiet, full debloat, Windows quiet, in-game priority yield)'
     Write-Ok 'Start Steam from Start Menu for Exo launcher; taskbar pins stay stock steam.exe.'
     Write-HubProgress 100 'Completed successfully'
-    Write-Output 'DONE - Steam optimized (debloat + Windows quiet + CEF + aggressive trim)'
+    Write-Output 'DONE - Steam optimized (debloat + Windows quiet + CEF + in-game contention guard)'
     exit 0
 } catch {
     $failureRecord = $_

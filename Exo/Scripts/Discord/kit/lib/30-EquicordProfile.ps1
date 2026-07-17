@@ -148,6 +148,45 @@ function Build-FullEquicordSettings {
     return $settings
 }
 
+function Get-EquicordLeanPolicy {
+    $policyPath = Join-Path $Profiles 'lean-plugin-policy.json'
+    if (-not (Test-Path -LiteralPath $policyPath)) { throw 'Missing lean-plugin-policy.json (kit incomplete)' }
+    $policy = Get-Content -LiteralPath $policyPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not $policy.enabled -or [int]$policy.maximumEnabled -lt 1) { throw 'Lean plugin policy is invalid' }
+    return $policy
+}
+
+function Get-EquicordLeanAllowedNames {
+    param([Parameter(Mandatory)]$Policy)
+
+    $eq = Get-Content (Join-Path $Profiles 'equicordplugins.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $vc = Get-Content (Join-Path $Profiles 'vencordplugins.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $manifest = @($eq) + @($vc)
+    $byName = @{}
+    foreach ($plugin in $manifest) { $byName[[string]$plugin.name] = $plugin }
+
+    $allowed = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($name in @($Policy.enabled)) { [void]$allowed.Add([string]$name) }
+    foreach ($plugin in $manifest) {
+        if ($plugin.required -eq $true) { [void]$allowed.Add([string]$plugin.name) }
+    }
+
+    # Dependencies are executable plugins too. Resolve transitively so a future
+    # manifest refresh cannot leave an approved privacy/minimalism plugin half-loaded.
+    do {
+        $changed = $false
+        foreach ($name in @($allowed)) {
+            if (-not $byName.ContainsKey($name)) { continue }
+            if ($byName[$name].PSObject.Properties.Name -notcontains 'dependencies') { continue }
+            foreach ($dependency in @($byName[$name].dependencies)) {
+                if ($dependency -and $allowed.Add([string]$dependency)) { $changed = $true }
+            }
+        }
+    } while ($changed)
+
+    return ,$allowed
+}
+
 function ConvertTo-HashtableDeep($InputObject) {
     if ($null -eq $InputObject) { return $null }
     if ($InputObject -is [string]) { return $InputObject }

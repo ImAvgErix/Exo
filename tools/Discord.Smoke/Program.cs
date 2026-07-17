@@ -193,6 +193,9 @@ PriorityClass=3
   (E 'ps variant not optimized without qos' (-not (Test-DiscOptVariantOptimized -SettingsFlagsOk $true -AutostartQuiet $true -QosOk $false))),
   (E 'ps toast intentional' (Test-DiscOptToastsOffFromMap -Map @{{ Discord = 0; Other = $null }})),
   (E 'ps toast missing all' (-not (Test-DiscOptToastsOffFromMap -Map @{{ Discord = $null }}))),
+  (E 'ps lean plugin policy exact' (Test-DiscOptLeanPluginNames -EnabledNames @('NoTrack','Settings') -AllowedNames @('NoTrack','Settings') -RequiredNames @('NoTrack','Settings') -MaximumEnabled 4)),
+  (E 'ps lean plugin policy rejects extra' (-not (Test-DiscOptLeanPluginNames -EnabledNames @('NoTrack','Settings','HeavyPlugin') -AllowedNames @('NoTrack','Settings') -RequiredNames @('NoTrack','Settings') -MaximumEnabled 4))),
+  (E 'ps lean plugin policy requires curated' (-not (Test-DiscOptLeanPluginNames -EnabledNames @('NoTrack') -AllowedNames @('NoTrack','Settings') -RequiredNames @('NoTrack','Settings') -MaximumEnabled 4))),
   (E 'ps kernel applied' (Test-DiscOptKernelApplied -FfmpegProxyBytes 24000 -FfmpegRealBytes 2000000 -VersionDllBytes 120000 -ConfigText @'
 EnableTrim=1
 TrimIntervalMs=4000
@@ -282,6 +285,14 @@ Expect("structured apply report emitted",
     applyBlob.Contains("applyReport", StringComparison.Ordinal));
 var debloatText = File.ReadAllText(applyFiles[3]);
 var kernelText = File.ReadAllText(applyFiles[4]);
+Expect("CI boot probe requires both runner gates",
+    kernelText.Contains("Test-DiscordCiBootProbeEnabled", StringComparison.Ordinal) &&
+    kernelText.Contains("$env:GITHUB_ACTIONS -eq 'true'", StringComparison.Ordinal) &&
+    kernelText.Contains("$env:EXO_CI_BOOT_PROBE -eq '1'", StringComparison.Ordinal) &&
+    kernelText.Contains("-and", StringComparison.Ordinal));
+Expect("production boot probe still requires logged-in Discord",
+    kernelText.Contains("if ($state -eq 'logged_in') { return $true }", StringComparison.Ordinal) &&
+    kernelText.Contains("$ciProbe -and $state -eq 'loading'", StringComparison.Ordinal));
 Expect("Krisp CDN failure soft-skips",
     debloatText.Contains("Krisp module skipped", StringComparison.Ordinal) &&
     debloatText.Contains("Add-DiscordModuleSkipReport 'krisp'", StringComparison.Ordinal));
@@ -330,6 +341,16 @@ var repairPath = Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Exo-Discor
 var repairText = File.Exists(repairPath) ? File.ReadAllText(repairPath) : "";
 Expect("repair removes Exo QoS policies",
     repairText.Contains("Remove-ExoDiscordQosPolicies", StringComparison.Ordinal));
+Expect("repair tolerates only a locked signed stock executable",
+    repairText.Contains("Test-RepairStockExecutableOnly", StringComparison.Ordinal) &&
+    repairText.Contains("SignatureStatus]::Valid", StringComparison.Ordinal) &&
+    repairText.Contains("O=Discord Inc", StringComparison.Ordinal) &&
+    repairText.Contains("Expand-RepairDiscordFromSignedSetup", StringComparison.Ordinal) &&
+    repairText.Contains("System.IO.Compression.FileSystem", StringComparison.Ordinal) &&
+    repairText.Contains("packagesDir 'RELEASES'", StringComparison.Ordinal) &&
+    repairText.Contains("Staged Discord repair did not restore Squirrel package state", StringComparison.Ordinal) &&
+    repairText.Contains("Confirm-RepairDiscordBoot", StringComparison.Ordinal) &&
+    repairText.Contains("staged stock repair", StringComparison.Ordinal));
 Expect("repair restores variant settings",
     repairText.Contains("Restore-ExoDiscordVariantSettings", StringComparison.Ordinal));
 
