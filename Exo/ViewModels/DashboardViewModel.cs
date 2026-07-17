@@ -42,6 +42,7 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] public partial string MemoryPrimary { get; set; } = "—";
     [ObservableProperty] public partial string MemorySecondary { get; set; } = "Reading system memory...";
     [ObservableProperty] public partial string MemoryLoadText { get; set; } = "";
+    [ObservableProperty] public partial double MemoryLoadPercent { get; set; }
     [ObservableProperty] public partial bool HasMemory { get; set; }
 
     [ObservableProperty] public partial string DiscordStatusPrimary { get; set; } = "—";
@@ -78,6 +79,7 @@ public partial class DashboardViewModel : ObservableObject
             MemoryPrimary = "—";
             MemorySecondary = "Live memory unavailable";
             MemoryLoadText = "";
+            MemoryLoadPercent = 0;
         }
         else
         {
@@ -86,6 +88,7 @@ public partial class DashboardViewModel : ObservableObject
                 : 0UL;
             HasMemory = true;
             MemoryLoadText = $"{mem.LoadPercent}% in use";
+            MemoryLoadPercent = mem.LoadPercent;
             MemoryPrimary = HomeDashboardReader.FormatBytes(used);
             MemorySecondary =
                 $"{HomeDashboardReader.FormatBytes(mem.AvailableBytes)} free · {HomeDashboardReader.FormatBytes(mem.TotalBytes)} total";

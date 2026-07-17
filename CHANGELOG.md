@@ -5,6 +5,7 @@
 - **Discord minimalism**: Apply enforces a dependency-aware Equicord plugin budget instead of preserving an unlimited old profile; the card reports the live enabled count and rejects optional-plugin drift.
 - **Steam contention guard**: Steam and its CEF helpers yield CPU priority while a game is active and restore responsive idle priorities afterward, without unsafe working-set trimming or process kills.
 - **Honest optimizer cards**: detector explanations now survive the shared state parser, so cards show the actual policy, hardware gate, and drift detail instead of replacing everything with “Applied.” Retired Steam reclaim statistics and stale background-reclaim claims are no longer shown.
+- **Cohesive AMOLED frontend**: native Segoe Variable typography, opaque layered surfaces, quieter dividers, readable feature rows, branded dashboard rails, a live memory meter, and a structured solid settings control panel replace the tiny translucent mixed-material UI.
 
 ## 3.1.0
 
