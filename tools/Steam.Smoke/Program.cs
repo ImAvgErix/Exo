@@ -222,6 +222,10 @@ var helperBody = bodyEnd > bodyStart ? optimizerText.Substring(bodyStart, bodyEn
 Expect("companion does no working-set trim + passes shipped classifier",
     SteamLogic.IsTrimHelperText(helperBody) &&
     optimizerText.Contains("no webhelper EmptyWorkingSet", StringComparison.OrdinalIgnoreCase));
+Expect("apply verifier ignores safety documentation but audits executable lines",
+    optimizerText.Contains("if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }", StringComparison.Ordinal) &&
+    optimizerText.Contains("$line -match '(?i)Stop-Process.*steamwebhelper'", StringComparison.Ordinal) &&
+    !optimizerText.Contains("$helperText -notmatch '(?i)Stop-Process.*steamwebhelper'", StringComparison.Ordinal));
 Expect("default CEF does not disable GPU",
     !System.Text.RegularExpressions.Regex.IsMatch(
         optimizerText,

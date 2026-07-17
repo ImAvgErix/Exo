@@ -2374,18 +2374,21 @@ try {
     $helperOk = $false
     try {
         $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
-        # Ban EmptyWorkingSet calls in code lines only: a doc comment must not exempt a real call.
-        $helperThrash = $false
+        # Audit executable lines only: documentation names the operations this
+        # helper forbids and must not make a safe generated helper fail verification.
+        $helperUnsafe = $false
         foreach ($rawLine in ($helperText -split "`n")) {
             $line = $rawLine.TrimStart()
             if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }
-            if ($line.Contains('EmptyWorkingSet(')) { $helperThrash = $true; break }
+            if ($line.Contains('EmptyWorkingSet(') -or $line -match '(?i)Stop-Process.*steamwebhelper') {
+                $helperUnsafe = $true
+                break
+            }
         }
         $helperOk = $helperText -match 'Exo\.SteamWebHelper' -and
             $helperText -match 'ProcessPriorityClass\]::High' -and
             $helperText -match 'ProcessPriorityClass\]::BelowNormal' -and
-            $helperText -notmatch '(?i)Stop-Process.*steamwebhelper' -and
-            (-not $helperThrash)
+            (-not $helperUnsafe)
     } catch { }
     $fullPassOk = -not [bool]$Quick
     # Core pack (always required for applied). VDF first-run skips are NOT essentials-

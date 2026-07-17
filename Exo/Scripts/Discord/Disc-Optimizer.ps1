@@ -679,21 +679,16 @@ if (-not $SkipKernel) {
 }
 
 # 5b) Boot safety
-# Exo runs elevated. Launching Discord from an elevated host makes Discord
-# elevated too (black screens / window-state never detected). Skip the open/close
-# flash whenever Exo asked for quiet mode and only verify files on disk.
+# Exo runs elevated, so launch Discord through Explorer for a normal user-token
+# boot check. Keep the complete kernel when that succeeds; disarm it and retry
+# only after an actual boot failure.
 $exoQuiet = ($env:EXO -eq '1' -and $NoLaunch) -or ($env:EXO_SKIP_BOOT_FLASH -eq '1')
 if ($exoQuiet) {
-    # Elevated Exo cannot flash-launch Discord. Disk verify only.
-    # ALWAYS ensure no version.dll is left active - full kernel still bricks
-    # some Discord builds and we cannot prove boot from an elevated host.
+    # Never launch Discord directly from this elevated host. The user-token check
+    # below proves the complete optimized runtime without elevating Discord.
     Write-HubProgress 90 'Verifying files on disk...'
     Write-Step 'Quiet verify (no Discord window flash from elevated host)...'
     $verDll = Join-Path $app.FullName 'version.dll'
-    if (Test-Path -LiteralPath $verDll) {
-        Write-Warn 'Disarming DiscOpt kernel after elevated Apply (boot-check impossible from admin host)'
-        try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
-    }
     $exeOk = Test-Path (Join-Path $app.FullName 'Discord.exe')
     $asarPath = Join-Path $app.FullName 'resources\app.asar'
     $asarOk = (Test-Path $asarPath) -and ((Get-Item $asarPath).Length -ge 64)

@@ -22,6 +22,7 @@ jobs:
         run: |
           dotnet build Exo.sln -c Release -p:Platform=x64
           dotnet build tools/Exo.NvDisplay/Exo.NvDisplay.csproj -c Release
+          dotnet build tools/NetScriptDump/NetScriptDump.csproj -c Release
 
       # Informational Native AOT probe: the source now passes local trim/AOT
       # analysis without warnings, but shipping stays ReadyToRun until the native

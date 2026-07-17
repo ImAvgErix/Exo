@@ -252,18 +252,15 @@ var (auditOk, auditIssues) = DiscordLogic.AuditApplyScriptText(applyBlob);
 Expect("apply audit", auditOk, string.Join("; ", auditIssues));
 Expect("no Exo-Discord scheduled task create",
     applyBlob.IndexOf("Register-ScheduledTask -TaskName 'Exo-Discord", StringComparison.OrdinalIgnoreCase) < 0);
-// Elevated Exo Apply must disarm kernel (cannot boot-check) so Discord opens.
-Expect("elevated apply disarms kernel for launch safety",
+// Elevated Exo Apply must prove the complete kernel through a user-token launch;
+// rollback is reserved for a real boot failure.
+Expect("elevated apply keeps kernel pending user-token verification",
+    applyBlob.Contains("Keep the complete kernel when that succeeds", StringComparison.Ordinal) &&
+    !applyBlob.Contains("Disarming DiscOpt kernel after elevated Apply", StringComparison.Ordinal));
+Expect("elevated apply rolls kernel back only after boot failure",
     applyBlob.Contains("Disable-DiscOptKernelOnDisk", StringComparison.Ordinal) &&
-    (applyBlob.Contains("Disarming DiscOpt kernel after elevated Apply", StringComparison.Ordinal) ||
-     applyBlob.Contains("disarmed after user-token boot fail", StringComparison.Ordinal) ||
-     applyBlob.Contains("Boot failed with DiscOpt kernel - disarming kernel", StringComparison.Ordinal) ||
-     applyBlob.Contains("kernel disarmed for launch safety", StringComparison.Ordinal) ||
-     applyBlob.Contains("elevated host: kernel disarmed", StringComparison.Ordinal) ||
-     applyBlob.Contains("launch-safe (kernel off under elevated", StringComparison.Ordinal) ||
-     applyBlob.Contains("kernel off under elevated", StringComparison.Ordinal) ||
-     applyBlob.Contains("half-kernel disarmed", StringComparison.Ordinal) ||
-     applyBlob.Contains("half-state (version.dll without valid ffmpeg proxy)", StringComparison.Ordinal)));
+    applyBlob.Contains("Boot failed with DiscOpt kernel - disarming kernel", StringComparison.Ordinal) &&
+    applyBlob.Contains("disarmed after user-token boot fail", StringComparison.Ordinal));
 Expect("elevated host boot-check honest",
     applyBlob.Contains("Disable-DiscOptKernelOnDisk", StringComparison.Ordinal) &&
     (applyBlob.Contains("user-token boot", StringComparison.Ordinal) ||
