@@ -15,6 +15,7 @@
 
 param(
     [switch]$Gsync,
+    [switch]$RawLatency,
     [ValidateSet('', '10', '20', '30', '40', '50')]
     [string]$Series = '',
     [switch]$Repair,
@@ -28,7 +29,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.13.0'
+$Script:NvidiaOptVersion = '1.13.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
@@ -437,7 +438,7 @@ function Apply-ExoGameProfileDeltas {
             '277041152' = '1'          # ULL enabled
             '294973784' = '0'          # GSYNC global off
             '278196727' = '0'          # GSYNC app state off
-            '11041279'  = '1'          # OS VRR override on (helps non-G-SYNC path)
+            '11041279'  = '0'          # OS VRR override off (toggle off means every VRR path off)
             '11041231'  = '138504007'  # VSync force off (Exo max-FPS packs)
         }
         foreach ($id in $fpsPins.Keys) {
@@ -555,8 +556,13 @@ function Get-NvidiaHardwarePolicy {
         [Parameter(Mandatory)]$Gpu,
         [Parameter(Mandatory)][string]$SeriesId,
         [Parameter(Mandatory)][bool]$IsNotebook,
-        [Parameter(Mandatory)][bool]$ForceGsync
+        [Parameter(Mandatory)][bool]$ForceGsync,
+        [Parameter(Mandatory)][bool]$ForceRawLatency
     )
+
+    if ($ForceGsync -and $ForceRawLatency) {
+        throw 'Choose either G-SYNC / VRR or raw latency, not both.'
+    }
 
     $result = [ordered]@{
         gpuName             = [string]$Gpu.Name
@@ -570,7 +576,7 @@ function Get-NvidiaHardwarePolicy {
         adaptiveSyncSignal  = $false
         adaptiveSyncEvidence = 'none'
         gsync               = [bool]$ForceGsync
-        selectionSource     = $(if ($ForceGsync) { 'explicit-cli' } else { 'safe-fallback' })
+        selectionSource     = $(if ($ForceGsync) { 'explicit-gsync' } elseif ($ForceRawLatency) { 'explicit-raw-latency' } else { 'safe-default-raw-latency' })
         displayPolicy       = 'primary-max-hz; secondary-keep; full-rgb; gpu-no-scaling'
     }
 
@@ -594,13 +600,6 @@ function Get-NvidiaHardwarePolicy {
             $result.adaptiveSyncEvidence = [string]$primaryDisplay.adaptiveSyncEvidence
         }
 
-        if (-not $ForceGsync -and [bool]$result.adaptiveSyncSignal) {
-            $result.gsync = $true
-            $result.selectionSource = 'display-hardware-auto'
-        } elseif (-not $ForceGsync) {
-            $result.gsync = $false
-            $result.selectionSource = 'display-hardware-auto'
-        }
     } catch {
         Write-Warn "Display hardware inventory unavailable: $($_.Exception.Message)"
     }
@@ -636,6 +635,7 @@ function Assert-ExoNipProfile {
         '390467'    = '2'
         '277041152' = '1'
         '294973784' = $(if ($UseGsync) { '1' } else { '0' })
+        '11041279'  = '0'
         '11041231'  = $(if ($UseGsync) { '1199655232' } else { '138504007' })
     }
     foreach ($id in $expected.Keys) {
@@ -1015,7 +1015,7 @@ function Get-ExoDrsVerificationResult {
 
 # Pins that every Exo pack customizes and a correct import must therefore export:
 # power management mode, ULL (CPL state + enabled), frame limiter off, G-SYNC global.
-$Script:DrsRequiredPinIds = @('274197361', '390467', '277041152', '277041154', '294973784', '11041231')
+$Script:DrsRequiredPinIds = @('274197361', '390467', '277041152', '277041154', '294973784', '11041279', '11041231')
 
 function Test-ExoDrsImportVerified {
     # Post-import verification: export live DRS with the managed NPI and compare the
@@ -4111,7 +4111,8 @@ try {
         -Gpu $primary `
         -SeriesId $seriesId `
         -IsNotebook $isNotebookGpu `
-        -ForceGsync:([bool]$Gsync)
+        -ForceGsync:([bool]$Gsync) `
+        -ForceRawLatency:([bool]$RawLatency)
     $useGsync = [bool]$hardwarePolicy.gsync
     Write-Ok ("Hardware: {0} display(s); primary {1} via {2}; max {3} Hz" -f `
         $hardwarePolicy.displayCount, $hardwarePolicy.primaryMode, `

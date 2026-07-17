@@ -118,6 +118,13 @@ Expect("APIPA not usable", !NetworkLogic.IsUsableIpv4("169.254.1.2"));
 Expect("private usable", NetworkLogic.IsUsableIpv4("192.168.1.10"));
 Expect("empty not usable", !NetworkLogic.IsUsableIpv4(""));
 
+// Loss is an idle-path metric. Missed ICMP while the benchmark deliberately
+// saturates download/upload must never be folded into the connection-loss label.
+Expect("idle loss clean", NetworkLogic.CalculateIdlePacketLossPercent(24, 24) == 0);
+Expect("idle loss one miss", Math.Abs(NetworkLogic.CalculateIdlePacketLossPercent(24, 23) - (100d / 24d)) < 0.001);
+Expect("idle loss bounds successes", NetworkLogic.CalculateIdlePacketLossPercent(24, 30) == 0);
+Expect("idle loss no attempts", NetworkLogic.CalculateIdlePacketLossPercent(0, 0) == 100);
+
 // Band infer
 bool b5 = false, b6 = false, ax = false, be = false;
 NetworkLogic.InferBandSupport("Prefer 6GHz band 802.11be", ref b5, ref b6, ref ax, ref be);
@@ -193,27 +200,35 @@ var dohScript = NetworkApplyScriptBuilder.Build(NetworkPreset.LowestLatency,
         DnsOverHttpsTemplate = "https://dns.google/dns-query"
     }, media);
 Expect("selected DNS provider baked", dohScript.Contains("$ExoDnsProvider = 'Google'", StringComparison.Ordinal));
-Expect("DoH registers encryption", dohScript.Contains("dns add encryption", StringComparison.OrdinalIgnoreCase));
-Expect("DoH updates existing registrations", dohScript.Contains("dns set encryption", StringComparison.OrdinalIgnoreCase));
-Expect("DoH verifies live registration", dohScript.Contains("dns show encryption", StringComparison.OrdinalIgnoreCase)
-    && dohScript.Contains("Auto-upgrade", StringComparison.OrdinalIgnoreCase));
+Expect("DoH registers encryption", dohScript.Contains("Add-DnsClientDohServerAddress", StringComparison.Ordinal));
+Expect("DoH updates existing registrations", dohScript.Contains("Set-DnsClientDohServerAddress", StringComparison.Ordinal));
+Expect("DoH verifies live registration", dohScript.Contains("Get-DnsClientDohServerAddress", StringComparison.Ordinal)
+    && dohScript.Contains("AutoUpgrade", StringComparison.Ordinal));
 Expect("DoH uses analyzed template", dohScript.Contains("dns.google/dns-query", StringComparison.OrdinalIgnoreCase));
 Expect("DoH pins analyzed resolvers", dohScript.Contains("8.8.8.8", StringComparison.Ordinal)
     && dohScript.Contains("2001:4860:4860::8888", StringComparison.Ordinal));
-Expect("DoH gated to Win11 22H2+", dohScript.Contains("22621", StringComparison.Ordinal));
+Expect("DoH capability gated by shipped cmdlets", dohScript.Contains("Get-Command Get-DnsClientDohServerAddress", StringComparison.Ordinal));
+Expect("DoH falls back to correct netsh dnsclient context",
+    dohScript.Contains("netsh dnsclient add encryption", StringComparison.OrdinalIgnoreCase) &&
+    dohScript.Contains("netsh dnsclient show encryption", StringComparison.OrdinalIgnoreCase) &&
+    !dohScript.Contains("netsh dns add encryption", StringComparison.OrdinalIgnoreCase));
 Expect("DoH reports automatic selection", dohScript.Contains("dns-auto", StringComparison.Ordinal));
 Expect("DoH provider failure keeps fastest DNS active and truthful",
-    dohScript.Contains("Windows rejected automatic DoH", StringComparison.Ordinal) &&
+    dohScript.Contains("encrypted DNS unavailable on this Windows build", StringComparison.Ordinal) &&
+    !dohScript.Contains("Windows rejected automatic DoH", StringComparison.Ordinal) &&
     !dohScript.Contains("throw ('DoH registration failed", StringComparison.Ordinal));
 Expect("default apply always has safe resolver", latScript.Contains("$ExoDnsProvider = 'Cloudflare'", StringComparison.Ordinal)
     && latScript.Contains("dns-auto", StringComparison.Ordinal));
 // Snapshot must capture per-adapter DNS + existing DoH so Repair can truly restore.
 Expect("apply snapshot captures adapter DNS", latScript.Contains("$snap.dnsServers", StringComparison.Ordinal));
-Expect("apply snapshot captures DoH registrations", latScript.Contains("$snap.dohRaw", StringComparison.Ordinal));
+Expect("apply snapshot captures typed DoH registrations", latScript.Contains("$snap.dohServers", StringComparison.Ordinal)
+    && latScript.Contains("$snap.exoDohServers", StringComparison.Ordinal)
+    && latScript.Contains("netsh dnsclient show encryption", StringComparison.OrdinalIgnoreCase));
 Expect("repair restores DNS from snapshot", repairScript.Contains("restore-dns", StringComparison.Ordinal)
     && repairScript.Contains("snap.dnsServers", StringComparison.Ordinal));
-Expect("repair prunes only Exo-added DoH", repairScript.Contains("snap.dohRaw", StringComparison.Ordinal)
-    && repairScript.Contains("dns delete encryption", StringComparison.OrdinalIgnoreCase));
+Expect("repair prunes only Exo-added DoH", repairScript.Contains("snap.exoDohServers", StringComparison.Ordinal)
+    && repairScript.Contains("Remove-DnsClientDohServerAddress", StringComparison.Ordinal)
+    && repairScript.Contains("netsh dnsclient delete encryption", StringComparison.OrdinalIgnoreCase));
 
 // --- NIC helpers (network-only; no Windows Game Mode markers) ---
 ExpectEq("vendor Intel I226",

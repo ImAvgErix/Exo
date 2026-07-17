@@ -13,6 +13,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
 {
     private readonly AppServices _services;
     private NetworkSnapshot? _lastSnap;
+    private NetworkBenchmarkResult? _lastQuality;
+    private IReadOnlyList<NetworkApplyReportStep> _lastApplyReport = Array.Empty<NetworkApplyReportStep>();
 
     public InternetOptimizerViewModel(AppServices services)
     {
@@ -139,6 +141,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
             }
 
             ApplyQualityResult(quality);
+            _lastQuality = quality;
+            _lastApplyReport = report;
 
             ApplyReportRows.Clear();
             foreach (var step in report)
@@ -146,7 +150,10 @@ public partial class InternetOptimizerViewModel : ObservableObject
             HasApplyReport = ApplyReportRows.Count > 0;
             ApplyReportSummary = ApplyReportPresentation.Summarize(ApplyReportRows.ToList());
             if (_lastSnap is not null)
+            {
+                RefreshInfoCards(_lastSnap);
                 RefreshGuidance(_lastSnap);
+            }
         }
         catch
         {
@@ -168,7 +175,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
         var downPenalty = Math.Max(0, result.DownloadLoadedMs - result.PingP50Ms);
         var upPenalty = Math.Max(0, result.UploadLoadedMs - result.PingP50Ms);
-        QualitySummary = $"{result.PingP50Ms:0.#} ms idle · +{downPenalty:0.#}/+{upPenalty:0.#} ms loaded · {result.PacketLossPercent:0.##}% loss · {result.DnsProvider} DNS";
+        QualitySummary = $"{result.PingP50Ms:0.#} ms idle · full-load +{downPenalty:0.#} ms download / +{upPenalty:0.#} ms upload · {result.PacketLossPercent:0.##}% idle loss · {result.DnsProvider} DNS";
         HasQualityResult = true;
     }
 
@@ -177,19 +184,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
         _lastSnap = snap;
         HeaderStatus = BuildStatus(snap);
 
-        Rows.Clear();
-        foreach (var f in snap.Features)
-        {
-            Rows.Add(new FeatureRowViewModel
-            {
-                Title = f.Title,
-                Detail = f.Status,
-                Glyph = UiStatusPresentation.FeatureGlyph(f.IsOk),
-                Opacity = UiStatusPresentation.FeatureOpacity(f.IsOk),
-                IsActive = f.IsOk,
-                RailOpacity = UiStatusPresentation.FeatureRailOpacity(f.IsOk)
-            });
-        }
+        RefreshInfoCards(snap);
 
         if (!IsLoading)
             IsFeatureListVisible = Rows.Count > 0;
@@ -205,7 +200,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
     private void RefreshGuidance(NetworkSnapshot snap)
     {
-        var applied = Rows.Count > 0 && Rows.All(r => r.IsActive);
+        var applied = snap.Features.Count > 0 && snap.Features.All(r => r.IsOk);
         var failSteps = ApplyReportRows
             .Where(r => r.Status == "fail")
             .Select(r => r.Text.Split('·')[0].Trim())
@@ -217,10 +212,73 @@ public partial class InternetOptimizerViewModel : ObservableObject
             applied,
             HeaderStatus,
             snap.Detail,
-            Rows.Select(r => (r.Title, r.IsActive, r.Detail)).ToList(),
+            snap.Features.Select(r => (r.Title, r.IsOk, r.Status)).ToList(),
             failSteps);
         HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
     }
+
+    /// <summary>
+    /// Four plain-language cards explain outcomes instead of exposing a wall of
+    /// registry/driver implementation details. Deep verification stays internal.
+    /// </summary>
+    private void RefreshInfoCards(NetworkSnapshot snap)
+    {
+        Rows.Clear();
+        var applied = snap.ActivePreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput;
+
+        var path = snap.Media.EthernetInUse
+            ? $"{snap.LinkSpeed} Ethernet gets the lowest route metric; Wi-Fi is never disabled."
+            : snap.Media.WifiUp
+                ? $"Wi-Fi stays enabled and prefers {snap.Media.PreferredBandTarget} when the adapter supports it."
+                : "Keeps every adapter recoverable and changes route priority only when a healthy path exists.";
+        AddInfoCard("Connection path", path, snap.ProbeOk);
+
+        var policy = _lastQuality is { Ok: true, IsQualityTest: true } quality
+            ? $"Measured idle latency, full-load queueing, and throughput; applied {PresetLabel(snap.ActivePreset)} policy."
+            : "Measures idle latency, full-load queueing, and throughput before choosing one combined policy.";
+        AddInfoCard("Adaptive tuning", policy, applied);
+
+        var dnsStep = _lastApplyReport.LastOrDefault(r =>
+            string.Equals(r.Name, "dns-auto", StringComparison.OrdinalIgnoreCase));
+        var dnsDetail = dnsStep is not null && !string.IsNullOrWhiteSpace(dnsStep.Reason)
+            ? dnsStep.Reason.Replace(
+                "Windows rejected automatic DoH",
+                "automatic DoH needs a 3.5.1 re-apply",
+                StringComparison.OrdinalIgnoreCase)
+            : _lastQuality is { Ok: true, IsQualityTest: true } dnsQuality && !string.IsNullOrWhiteSpace(dnsQuality.DnsProvider)
+                ? $"{dnsQuality.DnsProvider} won the live resolver test; Apply also registers its encrypted DNS template."
+                : "Tests Cloudflare, Google, and Quad9 on this route, selects the fastest healthy resolver, and requests automatic DoH when Windows supports it.";
+        AddInfoCard("DNS privacy", dnsDetail, dnsStep?.Status == "ok" || !applied);
+
+        AddInfoCard(
+            "Safe repair",
+            NetworkOptimizerService.HasRestoreSnapshot()
+                ? "A pre-Exo snapshot is ready; Repair restores DNS, DoH, routes, TCP, and NIC settings."
+                : "Apply takes a pre-change snapshot; Repair can return the Windows network stack to stock defaults.",
+            true);
+
+        IsFeatureListVisible = Rows.Count > 0;
+    }
+
+    private void AddInfoCard(string title, string detail, bool active)
+    {
+        Rows.Add(new FeatureRowViewModel
+        {
+            Title = title,
+            Detail = detail,
+            Glyph = UiStatusPresentation.FeatureGlyph(active),
+            Opacity = 1,
+            IsActive = active,
+            RailOpacity = UiStatusPresentation.FeatureRailOpacity(active)
+        });
+    }
+
+    private static string PresetLabel(NetworkPreset preset) => preset switch
+    {
+        NetworkPreset.HighestThroughput => "multi-gig throughput + latency",
+        NetworkPreset.LowestLatency => "latency-safe",
+        _ => "balanced"
+    };
 
     [RelayCommand]
     private async Task AnalyzeAndApplyAsync()

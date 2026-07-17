@@ -291,9 +291,16 @@ public static class HomeDashboardReader
                 if (!step.TryGetProperty("name", out var name) ||
                     !string.Equals(name.GetString(), "dns-auto", StringComparison.OrdinalIgnoreCase))
                     continue;
-                return step.TryGetProperty("reason", out var reason) && reason.ValueKind == JsonValueKind.String
-                    ? reason.GetString()
-                    : null;
+                if (!step.TryGetProperty("reason", out var reason) || reason.ValueKind != JsonValueKind.String)
+                    return null;
+                var detail = reason.GetString();
+                if (string.IsNullOrWhiteSpace(detail)) return null;
+                var provider = detail.Split('·', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(provider)) return null;
+                return detail.Contains("automatic DoH active", StringComparison.OrdinalIgnoreCase)
+                    ? provider + " DNS + automatic DoH"
+                    : provider + " DNS selected";
             }
             return null;
         }

@@ -49,6 +49,7 @@ var drsExpected = new Dictionary<string, string>
     ["277041152"] = "1",  // ULL enabled
     ["277041154"] = "0",  // frame limiter off
     ["294973784"] = "0",  // G-SYNC global (max-FPS pack)
+    ["11041279"] = "0",   // OS VRR override off (explicit toggle owns VRR)
     ["11041231"] = "138504007", // VSync force off (max-FPS pack)
     ["549528094"] = "1",  // threaded optimization
 };
@@ -56,7 +57,8 @@ var drsRequired = NvidiaDetectLogic.DrsRequiredPinIds;
 Expect("drs required pins cover PM/ULL/FRL/G-SYNC/VSync",
     drsRequired.Contains("274197361") && drsRequired.Contains("390467") &&
     drsRequired.Contains("277041152") && drsRequired.Contains("277041154") &&
-    drsRequired.Contains("294973784") && drsRequired.Contains("11041231"));
+    drsRequired.Contains("294973784") && drsRequired.Contains("11041279") &&
+    drsRequired.Contains("11041231"));
 
 var drsMatch = new Dictionary<string, string>(drsExpected);
 var (vStatus, vCount, vMism) = NvidiaDetectLogic.ClassifyDrsVerification(drsExpected, drsMatch, drsRequired);
@@ -235,6 +237,19 @@ Expect("optimizer selects policy from hardware inventory",
     optimizerSrc.Contains("--list-displays", StringComparison.Ordinal) &&
     optimizerSrc.Contains("adaptiveSyncSignal", StringComparison.Ordinal) &&
     optimizerSrc.Contains("hardwarePolicy", StringComparison.Ordinal));
+Expect("G-SYNC requires explicit user selection",
+    optimizerSrc.Contains("explicit-gsync", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("safe-default-raw-latency", StringComparison.Ordinal) &&
+    !optimizerSrc.Contains("display-hardware-auto", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("[switch]$RawLatency", StringComparison.Ordinal));
+Expect("raw-latency disables every VRR path",
+    optimizerSrc.Contains("'11041279'  = '0'", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("'294973784' = '0'", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("'278196727' = '0'", StringComparison.Ordinal));
+Expect("global ULL Ultra remains authoritative fallback",
+    optimizerSrc.Contains("'390467'    = '2'", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("'277041152' = '1'", StringComparison.Ordinal) &&
+    detectSrc.Contains("Reflex takes priority automatically", StringComparison.Ordinal));
 Expect("display helper detects refresh and EDID evidence",
     nvDisplaySrc.Contains("maxHz", StringComparison.Ordinal) &&
     nvDisplaySrc.Contains("ReadMonitorVerticalRange", StringComparison.Ordinal) &&
@@ -312,7 +327,7 @@ Expect("catalog excludes shared javaw.exe",
 var packVersion = File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "VERSION")).Trim();
 var profileVersion = File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "profiles", "PROFILE_VERSION")).Trim();
 Expect($"pack VERSION {packVersion}", !string.IsNullOrWhiteSpace(packVersion) && packVersion.StartsWith("1.", StringComparison.Ordinal), packVersion);
-Expect("PROFILE_VERSION 1.5.0", profileVersion == "1.5.0", profileVersion);
+Expect("PROFILE_VERSION 1.5.1", profileVersion == "1.5.1", profileVersion);
 Expect("optimizer version constant matches VERSION",
     optimizerSrc.Contains($"$Script:NvidiaOptVersion = '{packVersion}'", StringComparison.Ordinal));
 

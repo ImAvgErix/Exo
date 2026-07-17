@@ -381,7 +381,22 @@ function Save-ExoNetworkSnapshot {
         }
       } catch {}
     })
-    $snap.dohRaw = ((netsh dns show encryption 2>$null | Out-String)).Trim()
+    $snap.dohServers = @(
+      if (Get-Command Get-DnsClientDohServerAddress -EA SilentlyContinue) {
+        Get-DnsClientDohServerAddress -EA SilentlyContinue | ForEach-Object {
+          [pscustomobject]@{
+            serverAddress      = [string]$_.ServerAddress
+            dohTemplate        = [string]$_.DohTemplate
+            allowFallbackToUdp = [bool]$_.AllowFallbackToUdp
+            autoUpgrade        = [bool]$_.AutoUpgrade
+          }
+        }
+      }
+    )
+    # Record exactly which resolver registrations this apply may add so Repair
+    # can remove only Exo's additions and restore any pre-existing definitions.
+    $snap.exoDohServers = @($ExoDnsV4 + $ExoDnsV6 | Where-Object { $_ })
+    $snap.dohRaw = ((netsh dnsclient show encryption 2>$null | Out-String)).Trim()
     $snap.adapterStates = @(Get-NetAdapter -Physical -EA SilentlyContinue | ForEach-Object {
       [pscustomobject]@{
         name    = [string]$_.Name
@@ -1181,28 +1196,48 @@ function Set-EthMetrics {
         sb.AppendLine("  $dnsTargets = @(Get-ExoPhysicalAdapters | Where-Object { [string]$_.Status -eq 'Up' -or @(Get-NetIPAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -EA SilentlyContinue).Count -gt 0 })");
         sb.AppendLine("  $dnsServers = @($ExoDnsV4 + $ExoDnsV6 | Where-Object { $_ })");
         sb.AppendLine("  foreach ($t in $dnsTargets) { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -ServerAddresses $dnsServers -EA Stop }");
-        sb.AppendLine("  $dohStatus = 'plain DNS (Windows build lacks automatic DoH)'");
-        sb.AppendLine("  if ([Environment]::OSVersion.Version.Build -ge 22621 -and $ExoDnsDohTemplate) {");
+        sb.AppendLine("  $dohStatus = 'plain DNS (automatic DoH unavailable)'");
+        sb.AppendLine("  if ($ExoDnsDohTemplate) {");
         sb.AppendLine("    $dohFail = @()");
         sb.AppendLine("    $dohErrors = @()");
         sb.AppendLine("    foreach ($svr in $dnsServers) {");
-        sb.AppendLine("      $beforeDoh = (netsh dns show encryption server=$svr 2>&1 | Out-String)");
-        sb.AppendLine("      if ($beforeDoh -match '(?i)Encryption settings for') {");
-        sb.AppendLine("        $setDoh = (netsh dns set encryption server=$svr dohtemplate=$ExoDnsDohTemplate autoupgrade=yes udpfallback=yes 2>&1 | Out-String)");
-        sb.AppendLine("      } else {");
-        sb.AppendLine("        $setDoh = (netsh dns add encryption server=$svr dohtemplate=$ExoDnsDohTemplate autoupgrade=yes udpfallback=yes 2>&1 | Out-String)");
+        sb.AppendLine("      $setDoh = ''");
+        sb.AppendLine("      $dohVerified = $false");
+        sb.AppendLine("      try {");
+        sb.AppendLine("        if ((Get-Command Get-DnsClientDohServerAddress -EA SilentlyContinue) -and (Get-Command Add-DnsClientDohServerAddress -EA SilentlyContinue)) {");
+        sb.AppendLine("          $beforeDoh = @(Get-DnsClientDohServerAddress -ServerAddress $svr -EA SilentlyContinue)");
+        sb.AppendLine("          if ($beforeDoh.Count -gt 0 -and (Get-Command Set-DnsClientDohServerAddress -EA SilentlyContinue)) {");
+        sb.AppendLine("            Set-DnsClientDohServerAddress -ServerAddress $svr -DohTemplate $ExoDnsDohTemplate -AutoUpgrade $true -AllowFallbackToUdp $true -EA Stop | Out-Null");
+        sb.AppendLine("          } else {");
+        sb.AppendLine("            Add-DnsClientDohServerAddress -ServerAddress $svr -DohTemplate $ExoDnsDohTemplate -AutoUpgrade $true -AllowFallbackToUdp $true -EA Stop | Out-Null");
+        sb.AppendLine("          }");
+        sb.AppendLine("          $liveDoh = @(Get-DnsClientDohServerAddress -ServerAddress $svr -EA SilentlyContinue | Select-Object -First 1)");
+        sb.AppendLine("          $dohVerified = $liveDoh.Count -gt 0 -and [string]$liveDoh[0].DohTemplate -eq $ExoDnsDohTemplate -and [bool]$liveDoh[0].AutoUpgrade");
+        sb.AppendLine("        }");
+        sb.AppendLine("      } catch { $setDoh = $_.Exception.Message }");
+        sb.AppendLine("      if (-not $dohVerified) {");
+        sb.AppendLine("        try {");
+        sb.AppendLine("          $beforeText = (netsh dnsclient show encryption server=$svr 2>&1 | Out-String)");
+        sb.AppendLine("          if ($beforeText -match '(?i)Encryption settings for') {");
+        sb.AppendLine("            $netshDoh = (netsh dnsclient set encryption server=$svr dohtemplate=$ExoDnsDohTemplate autoupgrade=yes udpfallback=yes 2>&1 | Out-String)");
+        sb.AppendLine("          } else {");
+        sb.AppendLine("            $netshDoh = (netsh dnsclient add encryption server=$svr dohtemplate=$ExoDnsDohTemplate autoupgrade=yes udpfallback=yes 2>&1 | Out-String)");
+        sb.AppendLine("          }");
+        sb.AppendLine("          $liveText = (netsh dnsclient show encryption server=$svr 2>&1 | Out-String)");
+        sb.AppendLine("          $dohVerified = $liveText -match [regex]::Escape($ExoDnsDohTemplate) -and $liveText -match '(?im)^Auto-upgrade\\s*:\\s*yes\\s*$'");
+        sb.AppendLine("          if (-not $dohVerified -and -not $setDoh) { $setDoh = (($netshDoh + ' ' + $liveText) -replace '\\s+',' ').Trim() }");
+        sb.AppendLine("        } catch { if (-not $setDoh) { $setDoh = $_.Exception.Message } }");
         sb.AppendLine("      }");
-        sb.AppendLine("      $liveDoh = (netsh dns show encryption server=$svr 2>&1 | Out-String)");
-        sb.AppendLine("      if ($liveDoh -notmatch [regex]::Escape($ExoDnsDohTemplate) -or $liveDoh -notmatch '(?im)^Auto-upgrade\\s*:\\s*yes\\s*$') {");
+        sb.AppendLine("      if (-not $dohVerified) {");
         sb.AppendLine("        $dohFail += $svr");
-        sb.AppendLine("        $detail = (($setDoh + ' ' + $liveDoh) -replace '\\s+',' ').Trim()");
+        sb.AppendLine("        $detail = ([string]$setDoh -replace '\\s+',' ').Trim()");
         sb.AppendLine("        if ($detail) { $dohErrors += ($svr + ': ' + $detail) }");
         sb.AppendLine("      }");
         sb.AppendLine("    }");
         sb.AppendLine("    if ($dohFail.Count -gt 0) {");
-        sb.AppendLine("      $dohStatus = 'fastest DNS active; Windows rejected automatic DoH'");
+        sb.AppendLine("      $dohStatus = 'selected by live test; encrypted DNS unavailable on this Windows build'");
         sb.AppendLine("      Log ('[DNS] automatic DoH unavailable for ' + ($dohFail -join ', ') + $(if ($dohErrors.Count) { ' — ' + ($dohErrors -join ' | ') } else { '' }))");
-        sb.AppendLine("    } else { $dohStatus = 'automatic DoH' }");
+        sb.AppendLine("    } else { $dohStatus = 'selected by live test; automatic DoH active' }");
         sb.AppendLine("  }");
         sb.AppendLine("  Clear-DnsClientCache -EA SilentlyContinue");
         sb.AppendLine("  Report 'dns-auto' 'ok' ($ExoDnsProvider + ' · ' + $dohStatus)");

@@ -204,12 +204,34 @@ if ($snap) {
   } else {
     Report 'restore-dns' 'skip' 'snapshot predates dns capture'
   }
-  # DoH: remove only registrations that were absent before apply (leave user's own intact)
+  # DoH: remove only registrations Exo added, then restore any pre-existing
+  # definition exactly. New snapshots use typed DnsClient objects; dohRaw keeps
+  # backward compatibility with snapshots written before 3.5.1.
   try {
-    $priorDoh = [string]$snap.dohRaw
-    foreach ($svr in @('1.1.1.1','1.0.0.1','2606:4700:4700::1111','2606:4700:4700::1001')) {
-      if ($priorDoh -notmatch [regex]::Escape($svr)) {
-        netsh dns delete encryption server=$svr 2>&1 | Out-Null
+    $hasTypedDoh = $snap.PSObject.Properties.Name -contains 'dohServers'
+    $priorDoh = @($snap.dohServers)
+    $exoDoh = @($snap.exoDohServers | Where-Object { $_ })
+    if ($exoDoh.Count -eq 0) {
+      $exoDoh = @(
+        '1.1.1.1','1.0.0.1','2606:4700:4700::1111','2606:4700:4700::1001',
+        '8.8.8.8','8.8.4.4','2001:4860:4860::8888','2001:4860:4860::8844',
+        '9.9.9.9','149.112.112.112','2620:fe::fe','2620:fe::9'
+      )
+    }
+    foreach ($svr in $exoDoh) {
+      $prior = @($priorDoh | Where-Object { [string]$_.serverAddress -eq [string]$svr } | Select-Object -First 1)
+      if ($hasTypedDoh -and $prior.Count -gt 0) {
+        $p = $prior[0]
+        $live = @(Get-DnsClientDohServerAddress -ServerAddress $svr -EA SilentlyContinue)
+        if ($live.Count -gt 0) {
+          Set-DnsClientDohServerAddress -ServerAddress $svr -DohTemplate ([string]$p.dohTemplate) -AllowFallbackToUdp ([bool]$p.allowFallbackToUdp) -AutoUpgrade ([bool]$p.autoUpgrade) -EA SilentlyContinue | Out-Null
+        } else {
+          Add-DnsClientDohServerAddress -ServerAddress $svr -DohTemplate ([string]$p.dohTemplate) -AllowFallbackToUdp ([bool]$p.allowFallbackToUdp) -AutoUpgrade ([bool]$p.autoUpgrade) -EA SilentlyContinue | Out-Null
+        }
+      } elseif ($hasTypedDoh) {
+        Remove-DnsClientDohServerAddress -ServerAddress $svr -Confirm:$false -EA SilentlyContinue | Out-Null
+      } elseif ([string]$snap.dohRaw -notmatch [regex]::Escape($svr)) {
+        netsh dnsclient delete encryption server=$svr 2>&1 | Out-Null
       }
     }
   } catch {}

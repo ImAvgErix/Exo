@@ -142,6 +142,7 @@ public sealed class NetworkBenchmarkResult
     public double UploadLoadedMs { get; init; }
     public double DownloadLoadedJitterMs { get; init; }
     public double UploadLoadedJitterMs { get; init; }
+    /// <summary>Idle-path ICMP loss only; loaded ICMP misses are excluded.</summary>
     public double PacketLossPercent { get; init; }
     public double DataUsedMb { get; init; }
     public string Endpoint { get; init; } = string.Empty;
