@@ -134,6 +134,8 @@ var applyFiles = new[]
 var blob = string.Join("\n", applyFiles.Where(File.Exists).Select(File.ReadAllText));
 var optimizerPath = applyFiles[0];
 var optimizerText = File.Exists(optimizerPath) ? File.ReadAllText(optimizerPath) : "";
+var detectorPath = Path.Combine(repo, "Exo", "Scripts", "Steam", "Exo-Steam-Detect.ps1");
+var detectorText = File.Exists(detectorPath) ? File.ReadAllText(detectorPath) : "";
 Expect("apply sources readable", blob.Length > 1000);
 var (ok, issues) = SteamLogic.AuditApplyScriptText(blob);
 Expect("apply audit", ok, string.Join("; ", issues));
@@ -187,6 +189,12 @@ Expect("preview host asserts removed",
 // turn this assertion back into a presence check.
 Expect("no half-wired reclaim stats while trim disabled",
     !optimizerText.Contains("Save-TrimStats", StringComparison.Ordinal));
+Expect("current Steam copy describes contention guard, not retired trim",
+    detectorText.Contains("in-game CPU yield", StringComparison.OrdinalIgnoreCase) &&
+    detectorText.Contains("contention guard", StringComparison.OrdinalIgnoreCase) &&
+    !detectorText.Contains("RAM trim", StringComparison.OrdinalIgnoreCase) &&
+    !optimizerText.Contains("aggressive webhelper trim", StringComparison.OrdinalIgnoreCase) &&
+    !optimizerText.Contains("gentle webhelper trim", StringComparison.OrdinalIgnoreCase));
 
 // --- EXO_REPORT structured apply report ---
 Expect("EXO_REPORT emitter + state persistence",

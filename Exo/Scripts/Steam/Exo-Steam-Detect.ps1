@@ -303,7 +303,7 @@ if (-not $steamOk) {
             $cefOk = Test-SteamCefLauncherText -Text $launcherText
         } catch { }
     }
-    Add-Feature 'Quiet CEF launcher' 'Fast quiet CEF flags + High priority Steam start (Steam launches before the trim helper).' $cefOk
+    Add-Feature 'Quiet CEF launcher' 'Fast quiet CEF flags + High priority Steam start (Steam launches before the contention guard).' $cefOk
 
     # Reversible client/CEF priority policy (2-15s control interval accepted).
     $trimOk = $false
@@ -361,9 +361,9 @@ if (-not $steamOk) {
     elseif (-not $windowsQuietOk) { 'Windows quiet incomplete' }
     else { 'Ready to optimize' }
     $detail = if ($isApplied) {
-        'Quiet CEF, debloat, Windows quiet, 3s RAM trim, and autostart re-enforce are active.'
+        'Quiet CEF, debloat, Windows quiet, in-game CPU yield, and autostart re-enforce are active.'
     } elseif (-not $cefOk -or -not $trimOk) {
-        'Steam launcher or trim helper is missing. Run to restore the Exo launch path.'
+        'Steam launcher or contention guard is missing. Run to restore the Exo launch path.'
     } else {
         'Some pieces are missing. Run to finish the checklist below.'
     }
