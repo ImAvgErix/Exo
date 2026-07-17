@@ -204,7 +204,32 @@ function Apply-EquicordProfile {
     $settings.cloud.url = 'https://cloud.equicord.org/'
     $settings.enabledThemes = @($EnabledTheme)
 
+    # Enforce a measured plugin budget instead of preserving an arbitrarily heavy
+    # old profile. Required plugins and transitive dependencies are added from the
+    # bundled manifests; everything else is disabled but its options are retained.
+    $leanPolicy = Get-EquicordLeanPolicy
+    $leanAllowed = Get-EquicordLeanAllowedNames -Policy $leanPolicy
+    foreach ($name in @($settings.plugins.Keys)) {
+        if (-not $leanAllowed.Contains([string]$name)) { $settings.plugins[$name].enabled = $false }
+    }
+    $overridesPath = Join-Path $Profiles 'equicord-overrides.json'
+    $overridePlugins = @{}
+    if (Test-Path -LiteralPath $overridesPath) {
+        $overrideRoot = ConvertTo-HashtableDeep (Get-Content -LiteralPath $overridesPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+        if ($overrideRoot.plugins) { $overridePlugins = $overrideRoot.plugins }
+    }
+    foreach ($name in @($leanAllowed)) {
+        if (-not ($settings.plugins.Keys -contains $name)) { $settings.plugins[$name] = @{} }
+        if ($overridePlugins.ContainsKey($name)) {
+            foreach ($option in @($overridePlugins[$name].Keys)) {
+                $settings.plugins[$name][$option] = ConvertTo-HashtableDeep $overridePlugins[$name][$option]
+            }
+        }
+        $settings.plugins[$name].enabled = $true
+    }
+
     foreach ($name in $ForceDisabledPlugins) {
+        if ($leanAllowed.Contains([string]$name)) { continue }
         if (-not ($settings.plugins.Keys -contains $name)) { $settings.plugins[$name] = @{} }
         $settings.plugins[$name].enabled = $false
     }
@@ -242,6 +267,9 @@ function Apply-EquicordProfile {
 
     $enabled = @($settings.plugins.Values | Where-Object { $_.enabled -eq $true }).Count
     $total = @($settings.plugins.Keys).Count
+    if ($enabled -gt [int]$leanPolicy.maximumEnabled) {
+        throw "Lean plugin budget exceeded ($enabled > $($leanPolicy.maximumEnabled))"
+    }
     Write-Ok "Universal profile written: $enabled / $total plugins enabled, AMOLED on"
     Write-Ok "Themes: $($settings.enabledThemes -join ', ')"
     Write-Ok "Settings: $destPath"

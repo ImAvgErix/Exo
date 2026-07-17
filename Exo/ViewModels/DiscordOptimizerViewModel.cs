@@ -280,7 +280,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
             Features.Add(new FeatureRowViewModel
             {
                 Title = feature.Title,
-                Detail = feature.IsActive ? "Applied" : "Not applied",
+                Detail = feature.Detail,
                 Glyph = Helpers.UiStatusPresentation.FeatureGlyph(feature.IsActive),
                 Opacity = Helpers.UiStatusPresentation.FeatureOpacity(feature.IsActive),
                 IsActive = feature.IsActive,

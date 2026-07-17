@@ -139,6 +139,7 @@ function Test-ExoDnsResolve {
         var logicalCpus = media.LogicalProcessors > 0 ? media.LogicalProcessors : Environment.ProcessorCount;
         var rssBudget = NetworkLogic.RssQueueBudget(preset, coreBudget);
         var bufferStrategy = NetworkLogic.BufferStrategy(preset);
+        var rssProfile = latency ? "ClosestProcessor" : "NUMAStatic";
         var preferIpv4 = NetworkLogic.PreferIpv4First(preset, media.EthernetInUse) ? "1" : "0";
         var vendorHint = string.IsNullOrWhiteSpace(media.NicVendor) ? "Unknown" : media.NicVendor;
         // Nagle keys only for latency (TCP games); throughput clears them
@@ -239,7 +240,7 @@ function Save-ExoNetworkSnapshot {
   try {
     New-Item -ItemType Directory -Path $ExoDir -Force | Out-Null
     $snap = [ordered]@{
-      snapshotVersion = 1
+      snapshotVersion = 2
       timestampUtc    = (Get-Date).ToUniversalTime().ToString('o')
     }
     # --- netsh raw dumps (restore parses value tokens; raw kept for support/debug) ---
@@ -328,6 +329,7 @@ function Save-ExoNetworkSnapshot {
     $phys = Get-ExoPhysicalAdapters
     $advList = [System.Collections.Generic.List[object]]::new()
     $bindList = [System.Collections.Generic.List[object]]::new()
+    $powerList = [System.Collections.Generic.List[object]]::new()
     foreach ($a in $phys) {
       foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -EA SilentlyContinue)) {
         if (-not $p.RegistryKeyword) { continue }
@@ -346,9 +348,20 @@ function Save-ExoNetworkSnapshot {
           enabled     = [bool]$b.Enabled
         })
       }
+      try {
+        $pm = Get-NetAdapterPowerManagement -Name $a.Name -EA SilentlyContinue
+        if ($pm) {
+          $entry = [ordered]@{ adapter = [string]$a.Name }
+          foreach ($property in @('D0PacketCoalescing','ArpOffload','DeviceSleepOnDisconnect','NSOffload','RsnRekeyOffload','SelectiveSuspend','WakeOnMagicPacket','WakeOnPattern')) {
+            if ($pm.PSObject.Properties.Name -contains $property) { $entry[$property] = [string]$pm.$property }
+          }
+          [void]$powerList.Add([pscustomobject]$entry)
+        }
+      } catch {}
     }
     $snap.advancedProps = $advList.ToArray()
     $snap.bindings = $bindList.ToArray()
+    $snap.powerManagement = $powerList.ToArray()
     # --- per-adapter DNS servers + DoH registrations (privacy feature + repair) ---
     $snap.dnsServers = @($phys | ForEach-Object {
       try {
@@ -390,6 +403,8 @@ function Save-ExoNetworkSnapshot {
           enabled             = [bool]$r.Enabled
           baseProcessorNumber = [int]$r.BaseProcessorNumber
           profile             = [string]$r.Profile
+          maxProcessors       = [int]$r.MaxProcessors
+          receiveQueues       = [int]$r.NumberOfReceiveQueues
         })
       }
     }
@@ -674,6 +689,8 @@ try {
         sb.AppendLine("if (-not $wantBand6Live -and " + prefer6Hint + " -eq 1) { $wantBand6Live = $true }");
         sb.AppendLine("Log \"[band] want6Live=$wantBand6Live\"");
         sb.AppendLine("$rssBaseCount = 0");
+        sb.AppendLine("$rssPolicyCount = 0");
+        sb.AppendLine("$packetCoalescingCount = 0");
         sb.AppendLine("$adapters = @(Get-ExoPhysicalAdapters | Where-Object { $_.Status -eq 'Up' -or $_.Status -eq 'Disconnected' })");
         sb.AppendLine("if ($adapters.Count -eq 0) { $adapters = @(Get-ExoPhysicalAdapters) }");
         sb.AppendLine("foreach ($a in $adapters) {");
@@ -709,14 +726,20 @@ try {
         sb.AppendLine("  Set-Adv $n '*IdleRestriction' " + idleRestrict);
         sb.AppendLine("  if (" + idleRestrict + " -eq 1) { try { Set-AdvDisplay $n 'Idle power down restriction' 'Enabled' | Out-Null } catch {} }");
         sb.AppendLine("  try {");
-        sb.AppendLine("    Set-NetAdapterPowerManagement -Name $n -SelectiveSuspend Disabled -WakeOnMagicPacket Disabled -WakeOnPattern Disabled -DeviceSleepOnDisconnect Disabled -ArpOffload Disabled -NSOffload Disabled -NoRestart -EA SilentlyContinue");
-        sb.AppendLine("  } catch {");
-        sb.AppendLine("    try { Set-NetAdapterPowerManagement -Name $n -SelectiveSuspend Disabled -NoRestart -EA SilentlyContinue } catch {}");
-        sb.AppendLine("  }");
+        sb.AppendLine("    $pmCommand = Get-Command Set-NetAdapterPowerManagement -EA SilentlyContinue");
+        sb.AppendLine("    if ($pmCommand) {");
+        sb.AppendLine("      $pmArgs = @{ Name=$n; NoRestart=$true; ErrorAction='SilentlyContinue' }");
+        sb.AppendLine("      $pmWanted = @{ SelectiveSuspend='Disabled'; WakeOnMagicPacket='Disabled'; WakeOnPattern='Disabled'; DeviceSleepOnDisconnect='Disabled'; ArpOffload='Disabled'; NSOffload='Disabled'; D0PacketCoalescing='Disabled' }");
+        sb.AppendLine("      foreach ($property in $pmWanted.Keys) { if ($pmCommand.Parameters.ContainsKey($property)) { $pmArgs[$property] = $pmWanted[$property] } }");
+        sb.AppendLine("      Set-NetAdapterPowerManagement @pmArgs");
+        sb.AppendLine("      if ($pmArgs.ContainsKey('D0PacketCoalescing')) { $packetCoalescingCount++; Log \"[Power] $n D0 packet coalescing disabled\" }");
+        sb.AppendLine("    }");
+        sb.AppendLine("  } catch { Log \"[Power] $n power-management tuning skipped: $($_.Exception.Message)\" }");
         // RSS: Microsoft — many wireless NICs do not support RSS
         sb.AppendLine("  if (-not $isWifi) {");
         sb.AppendLine("    Set-Adv $n '*RSS' 1");
         sb.AppendLine("    try { Set-NetAdapterRss -Name $n -Enabled $true -EA SilentlyContinue } catch {}");
+        sb.AppendLine("    $rssQueueTarget = $null");
         // RSS queues: cap by tailored budget (latency uses fewer cores; download uses max available)
         sb.AppendLine("    try {");
         sb.AppendLine("      $q = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*NumRssQueues' -EA SilentlyContinue");
@@ -729,6 +752,7 @@ try {
         sb.AppendLine("        $pick = ($sorted | Where-Object { $_ -le $wantQ } | Select-Object -Last 1)");
         sb.AppendLine("        if (-not $pick) { $pick = $sorted[0] }");
         sb.AppendLine("        Set-Adv $n '*NumRssQueues' ([int]$pick)");
+        sb.AppendLine("        $rssQueueTarget = [int]$pick");
         sb.AppendLine("        Log \"[RSS] queues => $pick (budget=$RssQueueBudget max=$maxQ)\"");
         sb.AppendLine("      }");
         sb.AppendLine("    } catch {}");
@@ -816,9 +840,19 @@ try {
         sb.AppendLine("        }");
         sb.AppendLine("      }");
         sb.AppendLine("    } catch {}");
-        sb.AppendLine("    # RSS profile — best-effort");
-        sb.AppendLine("    try { Set-NetAdapterRss -Name $n -Profile NUMAStatic -EA SilentlyContinue } catch {}");
-        sb.AppendLine("    try { Set-NetAdapterRss -Name $n -Profile ClosestProcessor -EA SilentlyContinue } catch {}");
+        sb.AppendLine("    # RSS placement and processor budget via supported Microsoft cmdlet parameters.");
+        sb.AppendLine("    try {");
+        sb.AppendLine("      $rssCommand = Get-Command Set-NetAdapterRss -EA Stop");
+        sb.AppendLine("      $rssArgs = @{ Name=$n; Enabled=$true; Profile='" + rssProfile + "'; ErrorAction='Stop' }");
+        sb.AppendLine("      if ($LogicalCpuCount -ge 4 -and $rssCommand.Parameters.ContainsKey('BaseProcessorNumber')) { $rssArgs.BaseProcessorNumber = 2 }");
+        sb.AppendLine("      if ($rssCommand.Parameters.ContainsKey('MaxProcessors')) { $rssArgs.MaxProcessors = [Math]::Max(1, [Math]::Min([int]$RssQueueBudget, [int]$LogicalCpuCount - 2)) }");
+        sb.AppendLine("      if ($rssQueueTarget -and $rssCommand.Parameters.ContainsKey('NumberOfReceiveQueues')) { $rssArgs.NumberOfReceiveQueues = [int]$rssQueueTarget }");
+        sb.AppendLine("      Set-NetAdapterRss @rssArgs");
+        sb.AppendLine("      $rssPolicyCount++; Log \"[RSS] $n profile=" + rssProfile + " processors=$($rssArgs.MaxProcessors) queues=$rssQueueTarget\"");
+        sb.AppendLine("    } catch {");
+        sb.AppendLine("      try { Set-NetAdapterRss -Name $n -Profile ClosestProcessor -EA SilentlyContinue } catch {}");
+        sb.AppendLine("      Log \"[RSS] $n adaptive placement fallback: $($_.Exception.Message)\"");
+        sb.AppendLine("    }");
         sb.AppendLine("  }");
         // Ring buffers: download = max; latency = mid-high (absolute max can add jitter on some NICs)
         sb.AppendLine("  foreach ($kw in @('*ReceiveBuffers','*TransmitBuffers','ReceiveBuffers','TransmitBuffers')) {");
@@ -947,6 +981,10 @@ try {
         sb.AppendLine("Report 'adapters' 'ok' ('tuned ' + $adapters.Count + ' physical adapter(s)')");
         sb.AppendLine("if ($rssBaseCount -gt 0) { Report 'rss-base' 'ok' ('BaseProcessorNumber=2 on ' + $rssBaseCount + ' adapter(s)') }");
         sb.AppendLine("else { Report 'rss-base' 'skip' 'no ethernet adapter or fewer than 4 logical processors' }");
+        sb.AppendLine("if ($rssPolicyCount -gt 0) { Report 'rss-policy' 'ok' ('adaptive RSS placement on ' + $rssPolicyCount + ' adapter(s)') }");
+        sb.AppendLine("else { Report 'rss-policy' 'skip' 'RSS policy unsupported or no Ethernet adapter' }");
+        sb.AppendLine("if ($packetCoalescingCount -gt 0) { Report 'packet-coalescing' 'ok' 'D0 packet coalescing disabled on supported adapters' }");
+        sb.AppendLine("else { Report 'packet-coalescing' 'skip' 'driver does not expose D0 packet coalescing' }");
 
         // --- Adapter bindings: ENABLE critical stack only. Never disable Client /
         // File Sharing / LLDP — that "gaming lean" path broke LAN recovery and

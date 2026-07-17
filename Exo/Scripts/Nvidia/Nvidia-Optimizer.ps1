@@ -353,7 +353,7 @@ function Apply-ExoGameProfileDeltas {
         [Parameter(Mandatory)][string]$Tier
     )
     # Detect pack policy from the cloned Base (works for all 10 series packs).
-    $isGsyncPack = ($BaseMap['294973784'] -eq '1') -or ($BaseMap['277041152'] -eq '0' -and $BaseMap['390467'] -eq '0')
+    $isGsyncPack = ($BaseMap['294973784'] -eq '1')
     $changed = 0
     $notes = [System.Collections.Generic.List[string]]::new()
 
@@ -389,8 +389,8 @@ function Apply-ExoGameProfileDeltas {
     # Re-pin pack-specific sync / latency policy (do not invent G-SYNC on max-FPS packs).
     if ($isGsyncPack) {
         $gsyncPins = @{
-            '390467'    = '0'   # ULL CPL off (avoids fighting VRR)
-            '277041152' = '0'   # ULL enabled off
+            '390467'    = '2'   # ULL CPL = Ultra (Reflex overrides this in supported games)
+            '277041152' = '1'   # ULL enabled for non-Reflex DX9/DX11 titles
             '294973784' = '1'   # GSYNC global mode on
             '278196727' = '1'   # GSYNC application state on
             '279476687' = '1'   # GSYNC application mode on
@@ -549,9 +549,10 @@ function Assert-ExoNipProfile {
         '11306135'  = '4294967295' # Unlimited shader cache
         '277041154' = '0'          # Frame limiter disabled
         '553505273' = '0'          # Triple buffering off
-        '390467'    = $(if ($UseGsync) { '0' } else { '2' })
-        '277041152' = $(if ($UseGsync) { '0' } else { '1' })
+        '390467'    = '2'
+        '277041152' = '1'
         '294973784' = $(if ($UseGsync) { '1' } else { '0' })
+        '11041231'  = $(if ($UseGsync) { '1199655232' } else { '138504007' })
     }
     foreach ($id in $expected.Keys) {
         if (-not $actual.ContainsKey($id) -or $actual[$id] -ne $expected[$id]) {
@@ -930,7 +931,7 @@ function Get-ExoDrsVerificationResult {
 
 # Pins that every Exo pack customizes and a correct import must therefore export:
 # power management mode, ULL (CPL state + enabled), frame limiter off, G-SYNC global.
-$Script:DrsRequiredPinIds = @('274197361', '390467', '277041152', '277041154', '294973784')
+$Script:DrsRequiredPinIds = @('274197361', '390467', '277041152', '277041154', '294973784', '11041231')
 
 function Test-ExoDrsImportVerified {
     # Post-import verification: export live DRS with the managed NPI and compare the

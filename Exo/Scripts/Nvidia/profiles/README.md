@@ -27,7 +27,7 @@ driver version. An interrupted or failed import must be applied again.
 | File | Use when |
 |------|----------|
 | `XX Series.nip` | Max FPS / lowest latency (**Ultra** Low Latency, G-SYNC off, VSync force off) |
-| `XX Series G-SYNC.nip` | Adaptive sync monitors (G-SYNC on, Ultra Low Latency **off**) |
+| `XX Series G-SYNC.nip` | Adaptive sync monitors (G-SYNC + driver VSync on, Ultra Low Latency **Ultra**; Reflex overrides ULL in supported games) |
 
 ## Shared (all packs)
 
@@ -55,6 +55,7 @@ driver version. An interrupted or failed import must be applied again.
 - Ultra Low Latency: **Off** (avoids conflict with adaptive sync)
 - VSync / VRR: G-SYNC-friendly values
 - G-SYNC global / application: **On**
+- Ultra Low Latency: **Ultra** for non-Reflex DX9/DX11 games; Reflex remains authoritative when supported
 
 ## Series-specific
 

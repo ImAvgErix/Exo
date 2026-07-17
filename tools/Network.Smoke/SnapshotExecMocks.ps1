@@ -255,10 +255,18 @@ function Set-NetIPInterface { [CmdletBinding()] param($InterfaceIndex, [string]$
   Add-ExoCapture ("METRIC|" + $InterfaceIndex + "|" + $InterfaceAlias + "|" + $AddressFamily + "|" + $AutomaticMetric + "|" + $InterfaceMetric) }
 function Get-NetAdapterRss {
   [CmdletBinding()] param([string]$Name)
-  [pscustomobject]@{ Enabled = $true; BaseProcessorNumber = [uint16]0; Profile = 'NUMAStatic' }
+  [pscustomobject]@{ Enabled = $true; BaseProcessorNumber = [uint16]0; Profile = 'NUMAStatic'; MaxProcessors = [uint32]4; NumberOfReceiveQueues = [uint32]2 }
 }
-function Set-NetAdapterRss { [CmdletBinding()] param([string]$Name, $Enabled, $BaseProcessorNumber, [string]$Profile)
+function Set-NetAdapterRss { [CmdletBinding()] param([string]$Name, $Enabled, $BaseProcessorNumber, [string]$Profile, $MaxProcessors, $NumberOfReceiveQueues)
   Add-ExoCapture ("RSS|" + $Name + "|" + $Enabled + "|" + $BaseProcessorNumber + "|" + $Profile) }
+function Get-NetAdapterPowerManagement {
+  [CmdletBinding()] param([string]$Name)
+  [pscustomobject]@{ D0PacketCoalescing = 'Enabled'; ArpOffload = 'Enabled'; DeviceSleepOnDisconnect = 'Disabled'; NSOffload = 'Enabled'; RsnRekeyOffload = 'Enabled'; SelectiveSuspend = 'Enabled'; WakeOnMagicPacket = 'Enabled'; WakeOnPattern = 'Enabled' }
+}
+function Set-NetAdapterPowerManagement {
+  [CmdletBinding()] param([string]$Name, $D0PacketCoalescing, $ArpOffload, $DeviceSleepOnDisconnect, $NSOffload, $RsnRekeyOffload, $SelectiveSuspend, $WakeOnMagicPacket, $WakeOnPattern, [switch]$NoRestart)
+  Add-ExoCapture ("NICPOWER|" + $Name + "|d0=" + $D0PacketCoalescing + "|selective=" + $SelectiveSuspend)
+}
 function Get-Service {
   [CmdletBinding()] param([string]$Name)
   if ($Name -eq 'DoSvc') { return [pscustomobject]@{ Name = 'DoSvc'; StartType = 'Automatic'; Status = 'Running' } }

@@ -7,9 +7,7 @@
     xmlns:controls="using:Exo.Views.Controls"
     Background="Transparent">
 
-    <!--
-      SharedModulePlate (v3): Steam instrument plate + trim stats foot extra.
-    -->
+    <!-- SharedModulePlate (v3): Steam instrument plate. -->
     <controls:SharedModulePlate
         x:Name="Plate"
         ModuleTitle="STEAM"
@@ -37,13 +35,6 @@
         ToggleReportClick="ToggleReport_Click"
         SecondaryLeftClick="Repair_Click"
         SecondaryRightClick="Refresh_Click">
-        <controls:SharedModulePlate.FootExtra>
-            <TextBlock Text="{x:Bind ViewModel.TrimStatsText, Mode=OneWay}"
-                       Style="{StaticResource ExoCaption}"
-                       Foreground="{ThemeResource ExoSuccessBrush}"
-                       TextAlignment="Center"
-                       Visibility="{x:Bind ViewModel.HasTrimStats, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-        </controls:SharedModulePlate.FootExtra>
         <controls:SharedModulePlate.PrimaryActions>
             <Button Style="{StaticResource ExoPrimaryButton}"
                     Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"

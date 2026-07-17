@@ -142,12 +142,14 @@ public sealed class OptimizerStateService
         return features;
     }
 
-    /// <summary>Panel-style row: short title + Applied / Not applied.</summary>
+    /// <summary>Panel-style row. Preserve detector detail when it explains the live policy.</summary>
     private static OptimizerFeatureInfo MakeFeature(string title, string detail, bool active) =>
         new()
         {
             Title = title,
-            Detail = active ? "Applied" : "Not applied",
+            Detail = string.IsNullOrWhiteSpace(detail)
+                ? (active ? "Applied" : "Not applied")
+                : detail,
             IsActive = active,
             Glyph = active ? "\uE73E" : "\uE711"
         };
@@ -761,7 +763,7 @@ public sealed class OptimizerStateService
                     MakeFeature("CEF launcher", "", false),
                     MakeFeature("Cache / download", "", false),
                     MakeFeature("Client tweaks", "", false),
-                    MakeFeature("WebHelper trim", "", false)
+                    MakeFeature("In-game contention guard", "", false)
                 }
             };
         }
@@ -797,7 +799,7 @@ public sealed class OptimizerStateService
             }
             catch { /* ignore */ }
         }
-        features.Add(MakeFeature("WebHelper trim", "", aggressiveTrimOk));
+        features.Add(MakeFeature("In-game contention guard", "", aggressiveTrimOk));
 
         var applied = markerOk && startupOk && cefLauncherOk && aggressiveTrimOk &&
                       downloadOptimized && clientTweaksApplied;

@@ -21,6 +21,8 @@ function Test-SteamTrimHelperText {
     if ($Text -notmatch 'Exo\.SteamWebHelper') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::High') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::BelowNormal') { return $false }
+    if ($Text -notmatch '(?s)\$webCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal') { return $false }
+    if ($Text -notmatch '\$_\.PriorityClass\s*=\s*\$webCls') { return $false }
     # EmptyWorkingSet on steamwebhelper freezes/kills CEF UI - reject thrashing helpers.
     # Evaluate code lines only: a '# Never EmptyWorkingSet' comment must not exempt a real call.
     foreach ($rawLine in ($Text -split "`n")) {

@@ -10,7 +10,7 @@
 
     <!--
       Home:
-      System RAM (full-width hero) · Discord/Steam RAM reclaimed (background) · Internet ping+link · NVIDIA Max FPS NIP
+      System RAM (full-width hero) · live Discord/Steam RAM · Internet ping+link · NVIDIA profile policy
     -->
     <Border x:Name="PageRoot"
             Style="{StaticResource ExoModulePlate}"
@@ -121,10 +121,10 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Steam: companion reclaim total + live client RAM -->
+                <!-- Steam: live client RAM + contention-guard state -->
                 <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource ExoCard}" Padding="14,12" MinHeight="110">
                     <StackPanel Spacing="4">
-                        <TextBlock Text="STEAM RECLAIMED" FontSize="10" CharacterSpacing="80"
+                        <TextBlock Text="STEAM RAM" FontSize="10" CharacterSpacing="80"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
                                    Foreground="{ThemeResource ExoMutedTextBrush}" />
                         <TextBlock Text="{x:Bind ViewModel.SteamStatusPrimary, Mode=OneWay}"

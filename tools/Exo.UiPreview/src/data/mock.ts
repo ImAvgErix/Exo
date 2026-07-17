@@ -100,7 +100,7 @@ const steamFeatures: FeatureItem[] = [
   { id: 'cef', title: 'CEF launcher', detail: 'Chromium flags', applied: false },
   { id: 'cache', title: 'Cache / download', detail: 'Shader + depot', applied: false },
   { id: 'client', title: 'Client tweaks', detail: 'UI + overlay', applied: true },
-  { id: 'webhelper', title: 'WebHelper trim', detail: 'Helper process', applied: false },
+  { id: 'webhelper', title: 'In-game contention guard', detail: 'Dynamic CPU policy', applied: false },
 ]
 
 const internetFeatures: FeatureItem[] = [

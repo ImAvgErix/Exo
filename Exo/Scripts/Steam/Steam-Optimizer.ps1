@@ -1778,7 +1778,7 @@ function Install-WebHelperTrimHelper([string]$SteamPath) {
     $body = @'
 # Exo - Steam companion (NOT a killer). Never EmptyWorkingSet / Stop-Process steamwebhelper.
 # steamwebhelper is CEF - working-set thrash freezes or kills the library UI.
-# This helper only: (1) steam.exe priority yield in-game (2) keep StartupMode quiet.
+# This helper only: (1) Steam/CEF priority yield in-game (2) keep StartupMode quiet.
 $ErrorActionPreference = 'SilentlyContinue'
 $created = $false
 $mutex = [Threading.Mutex]::new($true, 'Local\Exo.SteamWebHelper', [ref]$created)
@@ -1801,19 +1801,25 @@ function Test-SteamGameRunning {
 }
 
 function Set-SteamClientPriority([bool]$InGame) {
-  # steam.exe: High idle / BelowNormal in-game. steamwebhelper: always Normal - never touch WS.
+  # Client UI stays responsive while idle; both client and CEF yield CPU to the game in-session.
+  # Never touch working sets: priority is reversible and does not freeze Chromium.
   $steamCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
   } else {
     [System.Diagnostics.ProcessPriorityClass]::High
+  }
+  $webCls = if ($InGame) {
+    [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+  } else {
+    [System.Diagnostics.ProcessPriorityClass]::Normal
   }
   Get-Process -Name 'steam' -ErrorAction SilentlyContinue | ForEach-Object {
     try { if ($_.PriorityClass -ne $steamCls) { $_.PriorityClass = $steamCls } } catch {}
   }
   Get-Process -Name 'steamwebhelper' -ErrorAction SilentlyContinue | ForEach-Object {
     try {
-      if ($_.PriorityClass -ne [System.Diagnostics.ProcessPriorityClass]::Normal) {
-        $_.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Normal
+      if ($_.PriorityClass -ne $webCls) {
+        $_.PriorityClass = $webCls
       }
     } catch {}
   }
@@ -2388,6 +2394,8 @@ try {
         $helperOk = $helperText -match 'Exo\.SteamWebHelper' -and
             $helperText -match 'ProcessPriorityClass\]::High' -and
             $helperText -match 'ProcessPriorityClass\]::BelowNormal' -and
+            $helperText -match '(?s)\$webCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
+            $helperText -match '\$_\.PriorityClass\s*=\s*\$webCls' -and
             (-not $helperUnsafe)
     } catch { }
     $fullPassOk = -not [bool]$Quick
@@ -2432,6 +2440,7 @@ try {
         leanCmd              = $launch.Cmd
         webHelperTrim        = $helperOk
         aggressiveTrim       = $helperOk
+        inGameContentionGuard = $helperOk
         inGamePriorityYield  = $helperOk
         highPriority         = $helperOk
         downloadOptimized    = ([bool]$cfgOk -and -not $cfgSkipped)

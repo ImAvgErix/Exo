@@ -395,7 +395,7 @@ if ($state -and [bool]$state.profileApplied -and $state.profileFile -and
         try { $drsExportedMap = Get-ExoDrsExportBaseMap $drsExportPath }
         finally { Remove-Item -LiteralPath $drsExportPath -Force -ErrorAction SilentlyContinue }
     }
-    $drsRequiredPins = @('274197361', '390467', '277041152', '277041154', '294973784')
+    $drsRequiredPins = @('274197361', '390467', '277041152', '277041154', '294973784', '11041231')
     $drsResult = Get-ExoDrsVerificationResult -Expected $drsExpectedMap -Exported $drsExportedMap -RequiredIds $drsRequiredPins
     $drsLive = [string]$drsResult.Status
     $drsMismatch = @($drsResult.Mismatches)
@@ -536,6 +536,21 @@ $features.Add(@{
     active = $applied
     drsLive = $drsLive
     drsLiveText = $drsLiveText
+})
+
+$gsyncPolicy = [bool]($state -and $state.gsync)
+$latencyPolicyOk = $profileOk -and ($drsLive -ne 'drifted') -and $drsExpectedMap -and
+    [string]$drsExpectedMap['390467'] -eq '2' -and
+    [string]$drsExpectedMap['277041152'] -eq '1' -and
+    [string]$drsExpectedMap['11041231'] -eq $(if ($gsyncPolicy) { '1199655232' } else { '138504007' })
+$features.Add(@{
+    title  = 'Latency / sync policy'
+    detail = $(if ($gsyncPolicy) {
+        'G-SYNC + driver VSync on + Ultra Low Latency; NVIDIA Reflex overrides ULL in supported games.'
+    } else {
+        'Max-FPS path: VSync off + Ultra Low Latency; Reflex overrides ULL in supported games.'
+    })
+    active = [bool]$latencyPolicyOk
 })
 
 $gameOk = $false
@@ -725,7 +740,7 @@ $driverStageOk = if ($isNotebookGpu) { [bool]$currentNv } else { (-not $needsDri
 
 $isApplied = $gpuOk -and (-not $pendingAfterDriver) -and (-not $applyInProgress) -and
              $applied -and $gameOk -and $displayOk -and $backgroundOk -and $clientOk -and $advanced3dOk -and
-             $trayHideOk -and $driverStageOk
+             $trayHideOk -and $driverStageOk -and $latencyPolicyOk
 
 $driverChanged = $false
 if ($state -and $currentNv -and ($state.PSObject.Properties.Name -contains 'profileDriverVersion') -and

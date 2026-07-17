@@ -305,7 +305,7 @@ if (-not $steamOk) {
     }
     Add-Feature 'Quiet CEF launcher' 'Fast quiet CEF flags + High priority Steam start (Steam launches before the trim helper).' $cefOk
 
-    # WebHelper trim + priority (2-15s reclaim interval accepted)
+    # Reversible client/CEF priority policy (2-15s control interval accepted).
     $trimOk = $false
     $helper = Join-Path $steam 'Exo-SteamWebHelperTrim.ps1'
     if (Test-Path -LiteralPath $helper) {
@@ -314,7 +314,7 @@ if (-not $steamOk) {
             $trimOk = Test-SteamTrimHelperText -Text $helperText
         } catch { }
     }
-    Add-Feature 'RAM trim + priority' 'Webhelper reclaim loop + priority yield while gaming (2-15s interval).' $trimOk
+    Add-Feature 'In-game contention guard' 'Steam and CEF yield CPU while a game runs, then return to responsive idle priorities; no working-set thrash.' $trimOk
 
     $debloatOk = Test-SteamCompleteClientDebloat $steam
     # Sparse intermediate states (applying/incomplete/repairing) lack these keys - guard.

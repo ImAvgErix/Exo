@@ -36,7 +36,6 @@ public partial class DashboardViewModel : ObservableObject
 
     public IReadOnlyList<OptimizerCardViewModel> Cards { get; }
     public IReadOnlyList<OptimizerCardViewModel> SoonCards { get; }
-    public ObservableCollection<HomeSparkBar> SparkBars { get; } = new();
 
     [ObservableProperty] public partial string HeroSummary { get; set; } = "Maximum performance. No compromise.";
 
@@ -44,11 +43,6 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] public partial string MemorySecondary { get; set; } = "Reading system memory...";
     [ObservableProperty] public partial string MemoryLoadText { get; set; } = "";
     [ObservableProperty] public partial bool HasMemory { get; set; }
-
-    // Kept for smokes / leftover bindings that still reference reclaim hero fields.
-    [ObservableProperty] public partial bool HasTrimStats { get; set; }
-    [ObservableProperty] public partial string ReclaimedPrimary { get; set; } = "—";
-    [ObservableProperty] public partial string ReclaimedSecondary { get; set; } = "Apply Steam to reclaim cache";
 
     [ObservableProperty] public partial string DiscordStatusPrimary { get; set; } = "—";
     [ObservableProperty] public partial string DiscordStatusSecondary { get; set; } = "Not optimized yet";
@@ -216,53 +210,29 @@ public partial class DashboardViewModel : ObservableObject
     private void RefreshSteamRamTile()
     {
         var ws = HomeDashboardReader.TryReadProcessWorkingSetBytes("steam", "steamwebhelper");
-        var trim = HomeDashboardReader.TryReadTrimStats();
         var steam = ReadModuleState("steam-optimizer.json");
 
-        if (trim is not null && (trim.TotalBytes > 0 || trim.Last24hBytes > 0))
+        if (ws > 0)
         {
-            var hero = trim.Last24hBytes > 0 ? trim.Last24hBytes : trim.TotalBytes;
-            ReclaimedPrimary = HomeDashboardReader.FormatBytes(hero);
-            ReclaimedSecondary = trim.Last24hBytes > 0
-                ? $"last 24h · {HomeDashboardReader.FormatBytes(trim.TotalBytes)} total · {trim.Passes} passes"
-                : $"total reclaimed · {trim.Passes} passes";
-            HasTrimStats = true;
-            SteamStatusPrimary = HomeDashboardReader.FormatBytes(hero);
-            SteamStatusSecondary = ws > 0
-                ? $"reclaimed · live client {HomeDashboardReader.FormatBytes(ws)}"
-                : ReclaimedSecondary;
-        }
-        else if (ws > 0)
-        {
-            HasTrimStats = false;
             SteamStatusPrimary = HomeDashboardReader.FormatBytes(ws);
             SteamStatusSecondary = steam.Applied
-                ? "live client RAM · companion (no CEF thrash)"
+                ? "live client RAM · in-game CPU yield armed"
                 : "live client RAM · Apply Steam for quiet CEF";
-            ReclaimedPrimary = HomeDashboardReader.FormatBytes(ws);
-            ReclaimedSecondary = "live Steam + webhelper working set";
         }
         else if (steam.Applied)
         {
-            HasTrimStats = false;
             SteamStatusPrimary = "Ready";
-            SteamStatusSecondary = "Optimized · open Steam for background reclaim";
-            ReclaimedPrimary = "Ready";
-            ReclaimedSecondary = "Open Steam for live client RAM";
+            SteamStatusSecondary = "Optimized · in-game contention guard armed";
         }
         else
         {
-            HasTrimStats = false;
             SteamStatusPrimary = "—";
-            SteamStatusSecondary = "Apply Steam · background reclaim + quiet CEF";
-            ReclaimedPrimary = "—";
-            ReclaimedSecondary = "Apply Steam to free cache / quiet CEF";
+            SteamStatusSecondary = "Apply Steam · quiet CEF + in-game CPU yield";
         }
     }
 
     private void RefreshDashboard()
     {
-        SparkBars.Clear();
         var appliedCount = 0;
 
         // Discord / Steam tiles filled by live RAM helpers (and on timer)
@@ -272,14 +242,6 @@ public partial class DashboardViewModel : ObservableObject
             appliedCount++;
         if (ReadModuleState("steam-optimizer.json").Applied)
             appliedCount++;
-
-        var trim = HomeDashboardReader.TryReadTrimStats();
-        if (trim is not null && trim.HourlyBytes.Count > 0)
-        {
-            var max = Math.Max(1L, trim.HourlyBytes.Max());
-            foreach (var b in trim.HourlyBytes)
-                SparkBars.Add(new HomeSparkBar { Height = 8 + (40.0 * b / max) });
-        }
 
         // Internet — real before/after ping + live link speed
         RefreshInternetTile(ref appliedCount);
@@ -376,11 +338,6 @@ public partial class DashboardViewModel : ObservableObject
                 Status = status
             }
         };
-}
-
-public sealed class HomeSparkBar
-{
-    public double Height { get; init; }
 }
 
 public partial class OptimizerCardViewModel : ObservableObject

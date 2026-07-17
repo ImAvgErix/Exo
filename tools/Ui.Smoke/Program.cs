@@ -175,10 +175,10 @@ if (File.Exists(dash))
     Expect("home system ram hero",
         d.Contains("SYSTEM RAM", StringComparison.Ordinal)
         && d.Contains("MemoryPrimary", StringComparison.Ordinal));
-    Expect("home steam reclaimed hero",
-        // Steam reclaim lives on the STEAM tile (and Reclaimed* still bound in VM for smokes).
-        (d.Contains("STEAM RECLAIMED", StringComparison.Ordinal) || d.Contains("STEAM", StringComparison.Ordinal))
-        && (d.Contains("ReclaimedPrimary", StringComparison.Ordinal) || d.Contains("SteamStatusPrimary", StringComparison.Ordinal)));
+    Expect("home steam live ram tile",
+        d.Contains("STEAM RAM", StringComparison.Ordinal)
+        && d.Contains("SteamStatusPrimary", StringComparison.Ordinal)
+        && !d.Contains("STEAM RECLAIMED", StringComparison.Ordinal));
     Expect("home module status row",
         d.Contains("DiscordStatusPrimary", StringComparison.Ordinal)
         && d.Contains("SteamStatusPrimary", StringComparison.Ordinal)
@@ -533,9 +533,9 @@ var steamXamlPath = Path.Combine(repo, "Exo", "Views", "SteamOptimizerPage.xaml"
 if (File.Exists(steamXamlPath))
 {
     var sx = File.ReadAllText(steamXamlPath);
-    Expect("steam trim stats row",
-        sx.Contains("TrimStatsText", StringComparison.Ordinal)
-        && sx.Contains("HasTrimStats", StringComparison.Ordinal));
+    Expect("steam retired trim stats row removed",
+        !sx.Contains("TrimStatsText", StringComparison.Ordinal)
+        && !sx.Contains("HasTrimStats", StringComparison.Ordinal));
 }
 var nvidiaXamlPath = Path.Combine(repo, "Exo", "Views", "NvidiaOptimizerPage.xaml");
 if (File.Exists(nvidiaXamlPath))
@@ -839,9 +839,9 @@ var homeDashReader = Path.Combine(repo, "Exo", "Services", "HomeDashboardReader.
 if (File.Exists(homeDashReader))
 {
     var hdr = File.ReadAllText(homeDashReader);
-    Expect("home trim stats file read",
-        hdr.Contains("steam-trim-stats.json", StringComparison.Ordinal)
-        && hdr.Contains("TryReadTrimStats", StringComparison.Ordinal));
+    Expect("home does not surface retired Steam trim stats",
+        !hdr.Contains("steam-trim-stats.json", StringComparison.Ordinal)
+        && !hdr.Contains("TryReadTrimStats", StringComparison.Ordinal));
     Expect("home live memory api",
         hdr.Contains("GlobalMemoryStatusEx", StringComparison.Ordinal)
         && hdr.Contains("TryReadMemory", StringComparison.Ordinal));
@@ -910,6 +910,13 @@ if (File.Exists(nvHeuristic))
     Expect("heuristic notebook not hard fail",
         !h.Contains("!notebookGpu && driverTweaksApplied", StringComparison.Ordinal) &&
         h.Contains("notebookGpu || driverTweaksApplied", StringComparison.Ordinal));
+    Expect("optimizer card parser preserves detector detail",
+        h.Contains("string.IsNullOrWhiteSpace(detail)", StringComparison.Ordinal));
+    var optimizerViewModels = new[] { "DiscordOptimizerViewModel.cs", "SteamOptimizerViewModel.cs", "NvidiaOptimizerViewModel.cs" }
+        .Select(name => Path.Combine(repo, "Exo", "ViewModels", name));
+    Expect("optimizer cards render detector detail",
+        optimizerViewModels.All(File.Exists) &&
+        optimizerViewModels.All(path => File.ReadAllText(path).Contains("Detail = feature.Detail", StringComparison.Ordinal)));
 }
 
 Log($"=== SUMMARY failed={failed} ===");

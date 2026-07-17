@@ -28,6 +28,12 @@ var trim5 = """
 # Never EmptyWorkingSet / Stop-Process steamwebhelper
 [System.Diagnostics.ProcessPriorityClass]::High
 [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+$webCls = if ($InGame) {
+  [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+} else {
+  [System.Diagnostics.ProcessPriorityClass]::Normal
+}
+$_.PriorityClass = $webCls
 Start-Sleep -Seconds 5
 """;
 var trim4 = trim5.Replace("Seconds 5", "Seconds 4");
@@ -76,6 +82,8 @@ Exo.SteamWebHelper
 Never EmptyWorkingSet
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
+$webCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
+$_.PriorityClass = $webCls
 Start-Sleep -Seconds 5
 '@)),
  (E 'ps trim 4' (Test-SteamTrimHelperText -Text @'
@@ -83,6 +91,8 @@ Exo.SteamWebHelper
 Never EmptyWorkingSet
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
+$webCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
+$_.PriorityClass = $webCls
 Start-Sleep -Seconds 4
 '@)),
  (E 'ps toast' (Test-SteamToastsOffFromMap -Map @{{ Steam = 0 }})),

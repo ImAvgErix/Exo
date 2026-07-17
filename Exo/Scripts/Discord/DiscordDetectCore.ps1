@@ -217,6 +217,24 @@ function Test-DiscOptApplyRecord {
     } catch { return $false }
 }
 
+function Test-DiscOptLeanPluginNames {
+    param(
+        [string[]]$EnabledNames,
+        [string[]]$AllowedNames,
+        [string[]]$RequiredNames,
+        [int]$MaximumEnabled
+    )
+    if ($MaximumEnabled -lt 1 -or $AllowedNames.Count -eq 0) { return $false }
+    $enabled = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($name in @($EnabledNames)) { if ($name) { [void]$enabled.Add($name) } }
+    if ($enabled.Count -gt $MaximumEnabled) { return $false }
+    $allowed = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($name in @($AllowedNames)) { if ($name) { [void]$allowed.Add($name) } }
+    foreach ($name in @($enabled)) { if (-not $allowed.Contains($name)) { return $false } }
+    foreach ($name in @($RequiredNames)) { if ($name -and -not $enabled.Contains($name)) { return $false } }
+    return $true
+}
+
 function Test-DiscOptModuleDirHasPayload {
     param([AllowNull()][string]$ModuleDir)
     if ([string]::IsNullOrWhiteSpace($ModuleDir)) { return $false }

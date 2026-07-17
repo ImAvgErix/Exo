@@ -1,3 +1,11 @@
+## 3.2.0
+
+- **Internet NIC policy**: adaptive, preset-specific RSS placement now applies supported processor and queue budgets; D0 packet coalescing is disabled when the driver exposes it. Snapshot v2 captures adapter power and extended RSS state for exact Repair.
+- **NVIDIA latency policy**: G-SYNC packs now combine driver VSync with Ultra Low Latency for non-Reflex DX9/DX11 games, while NVIDIA Reflex remains authoritative in supported titles. VSync joins the required live DRS drift pins.
+- **Discord minimalism**: Apply enforces a dependency-aware Equicord plugin budget instead of preserving an unlimited old profile; the card reports the live enabled count and rejects optional-plugin drift.
+- **Steam contention guard**: Steam and its CEF helpers yield CPU priority while a game is active and restore responsive idle priorities afterward, without unsafe working-set trimming or process kills.
+- **Honest optimizer cards**: detector explanations now survive the shared state parser, so cards show the actual policy, hardware gate, and drift detail instead of replacing everything with “Applied.” Retired Steam reclaim statistics and stale background-reclaim claims are no longer shown.
+
 ## 3.1.0
 
 - **Lean current runtime**: moved from the full Windows App SDK bundle to the released WinUI/runtime components, removing unused AI/ML, ONNX, DirectML, Widgets, and DWrite payloads; the local installer fell from **134.0 MB to 113.6 MB** (about 15%) while retaining faster ReadyToRun startup.

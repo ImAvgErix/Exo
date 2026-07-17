@@ -193,6 +193,9 @@ PriorityClass=3
   (E 'ps variant not optimized without qos' (-not (Test-DiscOptVariantOptimized -SettingsFlagsOk $true -AutostartQuiet $true -QosOk $false))),
   (E 'ps toast intentional' (Test-DiscOptToastsOffFromMap -Map @{{ Discord = 0; Other = $null }})),
   (E 'ps toast missing all' (-not (Test-DiscOptToastsOffFromMap -Map @{{ Discord = $null }}))),
+  (E 'ps lean plugin policy exact' (Test-DiscOptLeanPluginNames -EnabledNames @('NoTrack','Settings') -AllowedNames @('NoTrack','Settings') -RequiredNames @('NoTrack','Settings') -MaximumEnabled 4)),
+  (E 'ps lean plugin policy rejects extra' (-not (Test-DiscOptLeanPluginNames -EnabledNames @('NoTrack','Settings','HeavyPlugin') -AllowedNames @('NoTrack','Settings') -RequiredNames @('NoTrack','Settings') -MaximumEnabled 4))),
+  (E 'ps lean plugin policy requires curated' (-not (Test-DiscOptLeanPluginNames -EnabledNames @('NoTrack') -AllowedNames @('NoTrack','Settings') -RequiredNames @('NoTrack','Settings') -MaximumEnabled 4))),
   (E 'ps kernel applied' (Test-DiscOptKernelApplied -FfmpegProxyBytes 24000 -FfmpegRealBytes 2000000 -VersionDllBytes 120000 -ConfigText @'
 EnableTrim=1
 TrimIntervalMs=4000

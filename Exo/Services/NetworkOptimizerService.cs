@@ -356,6 +356,9 @@ public sealed class NetworkOptimizerService
         string ipv4 = "—", gateway = "—", dns = "—", mtu = "—";
         bool? taskOffloadDisabled = null, lso = null, rsc = null;
         string autoTuning = "—", congestion = "—";
+        string rssPolicy = "Not applicable", packetCoalescing = "Unsupported";
+        var rssPolicyOk = true;
+        var packetCoalescingOk = true;
         int? gwPing = null, netPing = null;
         string publicIp = "—", provider = "—", area = "—";
         var detail = string.Empty;
@@ -416,6 +419,37 @@ public sealed class NetworkOptimizerService
                 taskOffloadDisabled = dto is int i && i != 0;
             }
             catch { }
+
+            // Live NIC policy: only gate applied Ethernet presets. Unsupported
+            // driver properties are honest N/A, not a false failure.
+            if (connType == "Ethernet" && activePreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput)
+            {
+                try
+                {
+                    var nicPolicy = await RunCaptureAsync(
+                        "powershell",
+                        "-NoProfile -Command \"$n=(Get-NetAdapter -Physical -EA 0|? Status -eq 'Up'|? NdisPhysicalMedium -notmatch 'Wireless'|select -First 1 -Expand Name); if($n){$r=Get-NetAdapterRss -Name $n -EA 0;$p=Get-NetAdapterPowerManagement -Name $n -EA 0;'rss='+$r.Enabled+';profile='+$r.Profile+';base='+$r.BaseProcessorNumber+';max='+$r.MaxProcessors+';queues='+$r.NumberOfReceiveQueues+';d0='+$p.D0PacketCoalescing}\"",
+                        ct).ConfigureAwait(false);
+                    var enabled = Match(nicPolicy, @"rss=([^;]+)") ?? "False";
+                    var profile = Match(nicPolicy, @"profile=([^;]+)") ?? "—";
+                    var baseProcessor = Match(nicPolicy, @"base=([^;]+)") ?? "—";
+                    var maxProcessors = Match(nicPolicy, @"max=([^;]+)") ?? "—";
+                    var queues = Match(nicPolicy, @"queues=([^;]+)") ?? "—";
+                    packetCoalescing = Match(nicPolicy, @"d0=([^;\r\n]+)") ?? "Unsupported";
+                    var expectedProfile = latency ? "ClosestProcessor" : "NUMAStatic";
+                    rssPolicyOk = enabled.Equals("True", StringComparison.OrdinalIgnoreCase) &&
+                                  profile.Equals(expectedProfile, StringComparison.OrdinalIgnoreCase) &&
+                                  (Environment.ProcessorCount < 4 || baseProcessor == "2");
+                    rssPolicy = $"{profile} · base {baseProcessor} · {maxProcessors} CPU / {queues} queue";
+                    packetCoalescingOk = packetCoalescing.Equals("Disabled", StringComparison.OrdinalIgnoreCase) ||
+                                         packetCoalescing.Equals("Unsupported", StringComparison.OrdinalIgnoreCase);
+                }
+                catch
+                {
+                    rssPolicy = "Needs apply";
+                    rssPolicyOk = false;
+                }
+            }
 
             var tcpGlobal = await RunCaptureAsync("netsh", "int tcp show global", ct).ConfigureAwait(false);
             autoTuning = Match(tcpGlobal, @"Receive Window Auto-Tuning Level\s*:\s*(\S+)") ?? "—";
@@ -510,6 +544,8 @@ public sealed class NetworkOptimizerService
                 autoOk ? autoTuning : $"{autoTuning} (want {NetworkLogic.KnobsFor(activePreset).AutotuneNetsh})",
                 autoOk));
             features.Add(Row("Congestion", congestion, true));
+            features.Add(Row("RSS placement", rssPolicy, rssPolicyOk));
+            features.Add(Row("Packet coalescing", packetCoalescing, packetCoalescingOk));
             features.Add(Row("Nagle / ACK",
                 nagleOff == true ? "Off (latency)" : nagleOff == false ? "Default" : "—",
                 nagleOk));

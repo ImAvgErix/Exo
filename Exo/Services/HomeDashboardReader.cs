@@ -13,12 +13,6 @@ namespace Exo.Services;
 /// </summary>
 public static class HomeDashboardReader
 {
-    public sealed record TrimSnapshot(
-        long TotalBytes,
-        long Last24hBytes,
-        long Passes,
-        IReadOnlyList<long> HourlyBytes);
-
     public sealed record MemorySnapshot(
         ulong TotalBytes,
         ulong AvailableBytes,
@@ -51,63 +45,6 @@ public static class HomeDashboardReader
         string Label,
         long BitsPerSecond,
         string MediaKind);
-
-    public static TrimSnapshot? TryReadTrimStats()
-    {
-        try
-        {
-            var path = Path.Combine(PathHelper.AppDataDir, "steam-trim-stats.json");
-            if (File.Exists(path))
-            {
-                using var doc = JsonDocument.Parse(File.ReadAllText(path));
-                var root = doc.RootElement;
-                var total = ReadInt64(root, "totalReclaimedBytes");
-                var last24h = ReadInt64(root, "last24hReclaimedBytes");
-                var passes = ReadInt64(root, "totalTrimPasses");
-                if (total > 0 || last24h > 0 || passes > 0)
-                {
-                    var hourly = new List<(DateTime Utc, long Bytes)>();
-                    if (root.TryGetProperty("hourly", out var h) && h.ValueKind == JsonValueKind.Object)
-                    {
-                        foreach (var prop in h.EnumerateObject())
-                        {
-                            if (!DateTime.TryParseExact(
-                                    prop.Name,
-                                    "yyyy-MM-ddTHH",
-                                    System.Globalization.CultureInfo.InvariantCulture,
-                                    System.Globalization.DateTimeStyles.AssumeUniversal
-                                    | System.Globalization.DateTimeStyles.AdjustToUniversal,
-                                    out var t))
-                                continue;
-                            var bytes = prop.Value.ValueKind == JsonValueKind.Number
-                                && prop.Value.TryGetInt64(out var v)
-                                    ? v
-                                    : 0L;
-                            if (bytes > 0) hourly.Add((t, bytes));
-                        }
-                    }
-
-                    hourly.Sort((a, b) => a.Utc.CompareTo(b.Utc));
-                    var series = hourly.TakeLast(24).Select(x => x.Bytes).ToList();
-                    return new TrimSnapshot(total, last24h, passes, series);
-                }
-            }
-
-            var steamPath = Path.Combine(PathHelper.AppDataDir, "steam-optimizer.json");
-            if (!File.Exists(steamPath)) return null;
-            using var steamDoc = JsonDocument.Parse(File.ReadAllText(steamPath));
-            var steam = steamDoc.RootElement;
-            var freed = ReadInt64(steam, "cacheFreedBytes");
-            if (freed <= 0) freed = ReadInt64(steam, "shaderCacheFreedBytes");
-            var applied = steam.TryGetProperty("applied", out var ap) && ap.ValueKind == JsonValueKind.True;
-            if (freed <= 0 && !applied) return null;
-            return new TrimSnapshot(Math.Max(0, freed), 0, applied ? 1 : 0, Array.Empty<long>());
-        }
-        catch
-        {
-            return null;
-        }
-    }
 
     /// <summary>Sum WorkingSet64 for all processes matching any of the names (case-insensitive).</summary>
     public static long TryReadProcessWorkingSetBytes(params string[] processNames)

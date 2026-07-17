@@ -32,6 +32,43 @@ function Add-Feature([string]$Title, [string]$Detail, [bool]$Active) {
     })
 }
 
+function Get-LeanPluginStatus($Settings) {
+    try {
+        $profiles = Join-Path $PSScriptRoot 'kit\profiles'
+        $policy = Get-Content (Join-Path $profiles 'lean-plugin-policy.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $manifest = @()
+        $manifest += @(Get-Content (Join-Path $profiles 'equicordplugins.json') -Raw -Encoding UTF8 | ConvertFrom-Json)
+        $manifest += @(Get-Content (Join-Path $profiles 'vencordplugins.json') -Raw -Encoding UTF8 | ConvertFrom-Json)
+        $byName = @{}
+        foreach ($plugin in $manifest) { $byName[[string]$plugin.name] = $plugin }
+        $allowed = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        $required = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($name in @($policy.enabled)) { [void]$allowed.Add([string]$name); [void]$required.Add([string]$name) }
+        foreach ($plugin in $manifest) {
+            if ($plugin.required -eq $true) {
+                [void]$allowed.Add([string]$plugin.name)
+                [void]$required.Add([string]$plugin.name)
+            }
+        }
+        do {
+            $changed = $false
+            foreach ($name in @($allowed)) {
+                if (-not $byName.ContainsKey($name)) { continue }
+                if ($byName[$name].PSObject.Properties.Name -notcontains 'dependencies') { continue }
+                foreach ($dependency in @($byName[$name].dependencies)) {
+                    if ($dependency -and $allowed.Add([string]$dependency)) { $changed = $true }
+                }
+            }
+        } while ($changed)
+        foreach ($name in @($allowed)) { [void]$required.Add([string]$name) }
+        $enabled = @($Settings.plugins.PSObject.Properties | Where-Object { $_.Value.enabled -eq $true } | ForEach-Object Name)
+        $ok = Test-DiscOptLeanPluginNames -EnabledNames $enabled -AllowedNames @($allowed) -RequiredNames @($required) -MaximumEnabled ([int]$policy.maximumEnabled)
+        return [pscustomobject]@{ Ok = $ok; Enabled = $enabled.Count; Maximum = [int]$policy.maximumEnabled; Error = '' }
+    } catch {
+        return [pscustomobject]@{ Ok = $false; Enabled = 0; Maximum = 0; Error = $_.Exception.Message }
+    }
+}
+
 function Test-StableDiscordWindowsQuiet([string]$Root) {
     # Policy (matches Apply-WindowsTweaks): no autostart/tasks; tray hidden when entries exist.
     try {
@@ -277,6 +314,8 @@ if (-not (Test-Path $discordRoot)) {
         Add-Feature 'Discord runtime integrity' 'Required desktop, utility, voice, and media modules remain installed.' $runtimeOk
 
         $amoledOk = $false
+        $leanPluginsOk = $false
+        $leanPluginDetail = 'Lean plugin policy missing or unreadable.'
         $startupOk = $false
         $settingsPath = Join-Path $appData 'discord\settings.json'
         if (Test-Path -LiteralPath $settingsPath) {
@@ -295,6 +334,13 @@ if (-not (Test-Path $discordRoot)) {
                 $eqSj = Get-Content $eqSettings -Raw -Encoding UTF8 | ConvertFrom-Json
                 $enabled = @($eqSj.enabledThemes)
                 if ($enabled | Where-Object { "$_" -match '(?i)amoled' }) { $amoledOk = $true }
+                $leanStatus = Get-LeanPluginStatus $eqSj
+                $leanPluginsOk = [bool]$leanStatus.Ok
+                $leanPluginDetail = if ($leanStatus.Error) {
+                    "Plugin policy check unavailable: $($leanStatus.Error)"
+                } else {
+                    "$($leanStatus.Enabled) enabled / budget $($leanStatus.Maximum) / required dependencies gated"
+                }
             } catch {
                 if (Test-Path -LiteralPath $eqThemeFile) { $amoledOk = $true }
             }
@@ -302,6 +348,7 @@ if (-not (Test-Path $discordRoot)) {
             $amoledOk = $true
         }
         Add-Feature 'True black AMOLED theme' 'Equicord amoled-cord theme (not forced OpenAsar CSS).' $amoledOk
+        Add-Feature 'Lean plugin budget' $leanPluginDetail $leanPluginsOk
 
         $notificationsOk = Test-DiscordToastsOff
         $windowsQuietOk = $startupOk -and $notificationsOk -and
@@ -367,7 +414,7 @@ if (-not (Test-Path $discordRoot)) {
 
         $isApplied = [bool]($markerOk -and $equicordOk -and $exoHostOk -and $kernelOk -and
             $debloatOk -and $windowsQuietOk -and $amoledOk -and $runtimeOk -and $launchOk -and
-            $qosOk -and $variantsOk)
+            $qosOk -and $variantsOk -and $leanPluginsOk)
         if ($isApplied) {
             $statusText = 'Already optimized'
             $detail = 'No-compromise pack active: Equicord, Exo Host, aggressive trim, full debloat, AMOLED.'
