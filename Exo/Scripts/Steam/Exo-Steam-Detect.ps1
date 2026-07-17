@@ -162,10 +162,12 @@ function Test-SteamClientTweaks([string]$SteamPath) {
         })
         if ($files.Count -eq 0) { return $false }
         $expectations = @(
-            @{ K = 'H264HWAccel'; V = '0' },
-            @{ K = 'GPUAccelWebViews'; V = '0' },
-            @{ K = 'GPUAccelWebViews2'; V = '0' },
-            @{ K = 'GPUAccelWebViewsD3D11'; V = '0' },
+            @{ K = 'H264HWAccel'; V = '1' },
+            @{ K = 'GPUAccelWebViews'; V = '1' },
+            @{ K = 'GPUAccelWebViews2'; V = '1' },
+            @{ K = 'GPUAccelWebViewsD3D11'; V = '1' },
+            @{ K = 'LibraryLowBandwidthMode'; V = '1' },
+            @{ K = 'LibraryLowPerfMode'; V = '1' },
             @{ K = 'SmoothScrollWebViews'; V = '0' },
             @{ K = 'LibraryDisableCommunityContent'; V = '1' },
             @{ K = 'InGameOverlayScreenshotNotification'; V = '0' },
@@ -190,6 +192,19 @@ function Test-SteamClientTweaks([string]$SteamPath) {
         # Soft-pass: modern Steam often has none of these keys; CEF launcher still optimizes UI.
         if (-not $anyExpectationKeyPresent) { return $true }
         return $observedAnywhere
+    } catch { return $false }
+}
+
+function Test-SteamClientHardwareAcceleration {
+    $key = 'HKCU:\Software\Valve\Steam'
+    if (-not (Test-Path $key)) { return $false }
+    try {
+        $item = Get-Item -Path $key -ErrorAction Stop
+        foreach ($name in @('H264HWAccel', 'GPUAccelWebViews', 'GPUAccelWebViewsV3')) {
+            if ($item.GetValueNames() -notcontains $name) { return $false }
+            if ([int]$item.GetValue($name, 0) -ne 1) { return $false }
+        }
+        return $true
     } catch { return $false }
 }
 
@@ -330,6 +345,10 @@ if (-not $steamOk) {
         (Test-SteamClientTweaks $steam)
     Add-Feature 'Library / overlay tweaks' 'Quieter overlay and lighter library web views.' $snapOk
 
+    $hardwareOk = [bool]($state -and ($state.PSObject.Properties.Name -contains 'clientHardwareAcceleration') -and
+        $state.clientHardwareAcceleration) -and (Test-SteamClientHardwareAcceleration)
+    Add-Feature 'Hardware-accelerated client' 'Steam CEF uses the GPU instead of costly software rendering.' $hardwareOk
+
     $windowsQuietOk = Test-SteamWindowsQuiet $steam
     Add-Feature 'Windows quiet shell' 'No autostart; toasts off; tray not promoted.' $windowsQuietOk
 
@@ -354,14 +373,14 @@ if (-not $steamOk) {
     Add-Feature 'Verified apply' 'Full apply recorded with durable quiet + runtime intact.' ($markerOk -and $runtimeOk)
 
     $isApplied = $steamOk -and $markerOk -and $cefOk -and $trimOk -and $debloatOk -and
-        $runtimeOk -and $dlOk -and $snapOk -and $windowsQuietOk -and $launchOk
+        $runtimeOk -and $dlOk -and $snapOk -and $hardwareOk -and $windowsQuietOk -and $launchOk
 
     $statusText = if ($isApplied) { 'Already optimized' }
     elseif (-not $cefOk -or -not $trimOk -or -not $launchOk) { 'Launcher needs restore' }
     elseif (-not $windowsQuietOk) { 'Windows quiet incomplete' }
     else { 'Ready to optimize' }
     $detail = if ($isApplied) {
-        'Quiet CEF, debloat, Windows quiet, in-game CPU yield, and autostart re-enforce are active.'
+        'Hardware-accelerated CEF, debloat, Windows quiet, in-game CPU yield, and autostart re-enforce are active.'
     } elseif (-not $cefOk -or -not $trimOk) {
         'Steam launcher or contention guard is missing. Run to restore the Exo launch path.'
     } else {

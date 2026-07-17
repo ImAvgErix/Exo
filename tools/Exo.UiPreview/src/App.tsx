@@ -5,12 +5,10 @@ import { TopBar } from './components/TopBar'
 import { SettingsFlyout } from './components/SettingsFlyout'
 import { HomePage } from './pages/HomePage'
 import { ModulePage } from './pages/ModulePage'
-import { NvidiaPanelPage } from './pages/NvidiaPanelPage'
 import './App.css'
 
 function barActive(page: PageId): ModuleId | 'home' | null {
   if (page === 'home') return 'home'
-  if (page === 'nvidia-panel') return 'nvidia'
   return page
 }
 
@@ -20,24 +18,11 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(true)
   const [autoUpdate, setAutoUpdate] = useState(true)
 
-  const showBack = page === 'nvidia-panel'
-
   const content = useMemo(() => {
     if (page === 'home') {
       return <HomePage />
     }
-    if (page === 'nvidia-panel') {
-      return <NvidiaPanelPage />
-    }
-    return (
-      <ModulePage
-        key={page}
-        module={modules[page]}
-        onOpenDisplayPanel={
-          page === 'nvidia' ? () => setPage('nvidia-panel') : undefined
-        }
-      />
-    )
+    return <ModulePage key={page} module={modules[page]} />
   }, [page])
 
   const navigate = (id: ModuleId | 'home') => {
@@ -57,19 +42,6 @@ export default function App() {
           />
 
           <div className="exo-stage">
-            {showBack ? (
-              <div className="exo-titlebar">
-                <button
-                  type="button"
-                  className="exo-back"
-                  data-testid="btn-back"
-                  aria-label="Back"
-                  onClick={() => setPage('nvidia')}
-                >
-                  ‹
-                </button>
-              </div>
-            ) : null}
             <main className="exo-main">{content}</main>
           </div>
         </div>

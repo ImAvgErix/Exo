@@ -643,6 +643,9 @@ public static partial class NetworkLogic
             double D(string n) =>
                 root.TryGetProperty(n, out var e) && e.ValueKind == System.Text.Json.JsonValueKind.Number
                     ? e.GetDouble() : 0;
+            string S(string n) =>
+                root.TryGetProperty(n, out var e) && e.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? e.GetString() ?? string.Empty : string.Empty;
             return new NetworkBenchmarkResult
             {
                 Ok = root.TryGetProperty("ok", out var ok) && ok.ValueKind == System.Text.Json.JsonValueKind.True,
@@ -651,10 +654,40 @@ public static partial class NetworkLogic
                 JitterMs = D("jitterMs"),
                 DnsMs = D("dnsMs"),
                 Samples = (int)D("samples"),
+                IsQualityTest = root.TryGetProperty("isQualityTest", out var qt) && qt.ValueKind == System.Text.Json.JsonValueKind.True,
+                DownloadMbps = D("downloadMbps"),
+                UploadMbps = D("uploadMbps"),
+                DownloadLoadedMs = D("downloadLoadedMs"),
+                UploadLoadedMs = D("uploadLoadedMs"),
+                DownloadLoadedJitterMs = D("downloadLoadedJitterMs"),
+                UploadLoadedJitterMs = D("uploadLoadedJitterMs"),
+                PacketLossPercent = D("packetLossPercent"),
+                DataUsedMb = D("dataUsedMb"),
+                Endpoint = S("endpoint"),
+                RecommendedPreset = S("recommendedPreset"),
+                RecommendationReason = S("recommendationReason"),
                 TimestampUtc = root.TryGetProperty("timestampUtc", out var ts) && ts.ValueKind == System.Text.Json.JsonValueKind.String
                     ? ts.GetString() ?? string.Empty : string.Empty
             };
         }
         catch { return null; }
+    }
+
+    public static NetworkPreset RecommendPreset(NetworkBenchmarkResult result, NetworkMediaProfile media)
+    {
+        if (!result.Ok || !result.IsQualityTest)
+            return NetworkPreset.LowestLatency;
+
+        var downPenalty = Math.Max(0, result.DownloadLoadedMs - result.PingP50Ms);
+        var upPenalty = Math.Max(0, result.UploadLoadedMs - result.PingP50Ms);
+        var unstable = result.PacketLossPercent >= 0.5 || result.JitterMs >= 8 ||
+                       result.DownloadLoadedJitterMs >= 15 || result.UploadLoadedJitterMs >= 15 ||
+                       downPenalty >= 25 || upPenalty >= 35;
+        if (unstable || media.WifiUp && !media.EthernetInUse)
+            return NetworkPreset.LowestLatency;
+
+        return result.DownloadMbps >= 300 && media.PrimaryLinkSpeedBps >= 1_000_000_000
+            ? NetworkPreset.HighestThroughput
+            : NetworkPreset.LowestLatency;
     }
 }

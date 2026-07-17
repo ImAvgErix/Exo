@@ -4,7 +4,6 @@ export type PageId =
   | 'steam'
   | 'internet'
   | 'nvidia'
-  | 'nvidia-panel'
 
 export type ModuleId = 'discord' | 'steam' | 'internet' | 'nvidia'
 
@@ -182,4 +181,4 @@ export const fakeDisplays: FakeDisplay[] = [
   },
 ]
 
-export const APP_VERSION = '2.6.3'
+export const APP_VERSION = '3.3.0'

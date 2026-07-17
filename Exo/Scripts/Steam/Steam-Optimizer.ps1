@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.9.4'
+$Script:SteamOptVersion = '1.9.5'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
@@ -246,7 +246,8 @@ function Get-SteamRecoveryFromState($State) {
         ($names -contains 'scheduledTasks') -or
         ($names -contains 'notifications') -or
         ($names -contains 'trayEntries') -or
-        ($names -contains 'appPath')
+        ($names -contains 'appPath') -or
+        ($names -contains 'clientPerformance')
     if (-not $hasWindowsRecovery) { return $null }
 
     return @{
@@ -261,6 +262,7 @@ function Get-SteamRecoveryFromState($State) {
         Notifications          = @(Get-SteamObjectProperty $source 'notifications' @() | Where-Object { $_ })
         TrayEntries            = @(Get-SteamObjectProperty $source 'trayEntries' @() | Where-Object { $_ })
         AppPath                = Get-SteamObjectProperty $source 'appPath' $null
+        ClientPerformance      = @(Get-SteamObjectProperty $source 'clientPerformance' @() | Where-Object { $_ })
     }
 }
 
@@ -296,6 +298,47 @@ function Restore-SteamRegistryValue($Entry) {
         (($actual | ConvertTo-Json -Compress -Depth 4) -ne ($value | ConvertTo-Json -Compress -Depth 4))) {
         throw 'registry value verification failed'
     }
+}
+
+function Get-SteamClientPerformanceSnapshot {
+    $key = 'HKCU:\Software\Valve\Steam'
+    $entries = [Collections.Generic.List[hashtable]]::new()
+    foreach ($name in @('H264HWAccel', 'GPUAccelWebViews', 'GPUAccelWebViewsV3')) {
+        $snapshot = Get-SteamRegistryValueSnapshot $key $name
+        $entries.Add(@{
+            Key     = $key
+            Name    = $name
+            Existed = [bool]$snapshot
+            Value   = if ($snapshot) { $snapshot.Value } else { $null }
+            Kind    = if ($snapshot) { [string]$snapshot.Kind } else { 'DWord' }
+        })
+    }
+    return @($entries)
+}
+
+function Test-SteamClientHardwareAcceleration {
+    $key = 'HKCU:\Software\Valve\Steam'
+    if (-not (Test-Path $key)) { return $false }
+    try {
+        $item = Get-Item -Path $key -ErrorAction Stop
+        foreach ($name in @('H264HWAccel', 'GPUAccelWebViews', 'GPUAccelWebViewsV3')) {
+            if ($item.GetValueNames() -notcontains $name) { return $false }
+            if ([int]$item.GetValue($name, 0) -ne 1) { return $false }
+        }
+        return $true
+    } catch { return $false }
+}
+
+function Set-SteamClientHardwareAcceleration {
+    $key = 'HKCU:\Software\Valve\Steam'
+    if (-not (Test-Path $key)) { New-Item -Path $key -Force -ErrorAction Stop | Out-Null }
+    foreach ($name in @('H264HWAccel', 'GPUAccelWebViews', 'GPUAccelWebViewsV3')) {
+        New-ItemProperty -Path $key -Name $name -Value 1 -PropertyType DWord -Force -ErrorAction Stop | Out-Null
+    }
+    if (-not (Test-SteamClientHardwareAcceleration)) {
+        throw 'Steam hardware-accelerated web views could not be verified'
+    }
+    Write-Ok 'Steam CEF hardware acceleration enabled'
 }
 
 function Get-SteamWindowsStartupSnapshot {
@@ -500,6 +543,7 @@ function Get-SteamWindowsRecoverySnapshot([string]$SteamPath) {
         Notifications           = @(Get-SteamNotificationSnapshot)
         TrayEntries             = @(Get-SteamTraySnapshot $SteamPath)
         AppPath                 = Get-SteamAppPathSnapshot
+        ClientPerformance       = @(Get-SteamClientPerformanceSnapshot)
     }
 }
 
@@ -547,6 +591,7 @@ function Merge-SteamStartupRecovery($Prior, [hashtable]$Current) {
         Notifications           = @(Merge-SteamRecoveryItems (Get-SteamObjectProperty $Prior 'Notifications' @()) (Get-SteamObjectProperty $Current 'Notifications' @()) @('Id'))
         TrayEntries             = @(Merge-SteamRecoveryItems (Get-SteamObjectProperty $Prior 'TrayEntries' @()) (Get-SteamObjectProperty $Current 'TrayEntries' @()) @('Key'))
         AppPath                 = if (Get-SteamObjectProperty $Prior 'AppPath' $null) { Get-SteamObjectProperty $Prior 'AppPath' $null } else { Get-SteamObjectProperty $Current 'AppPath' $null }
+        ClientPerformance       = @(Merge-SteamRecoveryItems (Get-SteamObjectProperty $Prior 'ClientPerformance' @()) (Get-SteamObjectProperty $Current 'ClientPerformance' @()) @('Key', 'Name'))
     }
 }
 
@@ -1216,8 +1261,8 @@ function Set-SteamLocalConfigTweaks {
     # inserted at the exact path; present keys are rewritten in place.
     $injectSet = @(
         # Library quiet / low-churn (documented direct UserLocalConfigStore keys)
-        @{ Path = @('UserLocalConfigStore'); K = 'LibraryLowBandwidthMode'; V = '0'; Kind = 'snappy' },
-        @{ Path = @('UserLocalConfigStore'); K = 'LibraryLowPerfMode'; V = '0'; Kind = 'snappy' },
+        @{ Path = @('UserLocalConfigStore'); K = 'LibraryLowBandwidthMode'; V = '1'; Kind = 'lean' },
+        @{ Path = @('UserLocalConfigStore'); K = 'LibraryLowPerfMode'; V = '1'; Kind = 'lean' },
         @{ Path = @('UserLocalConfigStore'); K = 'LibraryDisableCommunityContent'; V = '1'; Kind = 'snappy' },
         # Friends notification set fully quieted (UserLocalConfigStore\friends)
         @{ Path = @('UserLocalConfigStore', 'friends'); K = 'PersonaStateDesired'; V = '1'; Kind = 'snappy' },
@@ -1265,7 +1310,7 @@ function Set-SteamLocalConfigTweaks {
 
     $expectations = @()
     foreach ($entry in $injectSet) { $expectations += @{ K = $entry.K; V = $entry.V } }
-    foreach ($k in $rewriteGpu) { $expectations += @{ K = $k; V = '0' } }
+    foreach ($k in $rewriteGpu) { $expectations += @{ K = $k; V = '1' } }
     foreach ($pair in ($rewriteSnappy + $rewriteQuiet)) { $expectations += @{ K = $pair.K; V = $pair.V } }
 
     foreach ($file in $files) {
@@ -1274,10 +1319,11 @@ function Set-SteamLocalConfigTweaks {
             $raw = [IO.File]::ReadAllText($file.FullName)
             $orig = $raw
 
-            # Webhelper / CEF load (GPU decode of web UI is a common RAM+GPU hog)
+            # Keep modern CEF on hardware acceleration. Forcing software rendering creates
+            # a SwiftShader GPU process and can inflate the main renderer working set.
             foreach ($k in $rewriteGpu) {
                 $before = $raw
-                $raw = Set-SteamVdfKey $raw $k '0'
+                $raw = Set-SteamVdfKey $raw $k '1'
                 if ($raw -ne $before) { $anyGpu = $true }
             }
 
@@ -1285,7 +1331,7 @@ function Set-SteamLocalConfigTweaks {
             foreach ($entry in $injectSet) {
                 $before = $raw
                 $raw = Set-SteamVdfKeyAtPath $raw ([string[]]$entry.Path) ([string]$entry.K) ([string]$entry.V)
-                if ($raw -ne $before -and [string]$entry.Kind -eq 'snappy') { $anySnappy = $true }
+                if ($raw -ne $before -and [string]$entry.Kind -in @('snappy','lean')) { $anySnappy = $true }
             }
 
             # Rewrite-existing-only extras (older client keys)
@@ -1771,7 +1817,7 @@ function Set-SteamGpuHighPerformance([string]$SteamPath) {
 }
 
 function Install-WebHelperTrimHelper([string]$SteamPath) {
-    # Maximum-performance companion: one instance, high steam.exe priority while idle,
+    # Maximum-performance companion: one instance, normal priority while idle,
     # in-game CPU yield, and periodic StartupMode=0 re-enforcement so Steam cannot
     # re-arm autostart. No working-set trims (v3.0.11: EmptyWorkingSet froze CEF).
     $helper = Join-Path $SteamPath 'Exo-SteamWebHelperTrim.ps1'
@@ -1806,7 +1852,7 @@ function Set-SteamClientPriority([bool]$InGame) {
   $steamCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
   } else {
-    [System.Diagnostics.ProcessPriorityClass]::High
+    [System.Diagnostics.ProcessPriorityClass]::Normal
   }
   $webCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
@@ -1868,7 +1914,7 @@ try {
 }
 '@
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
-    Write-Ok 'Steam companion installed (priority yield + quiet only - no webhelper EmptyWorkingSet)'
+    Write-Ok 'Steam companion installed (normal idle priority, in-game yield, no unsafe webhelper trims)'
     return $helper
 }
 
@@ -1982,6 +2028,16 @@ function Restore-SteamWindowsIntegration([string]$SteamPath, $Recovery, [ref]$Fa
             Write-Ok "Restored tray state: $($entry.ExecutablePath)"
         } catch {
             $Failures.Value.Add("Tray $($entry.ExecutablePath): $($_.Exception.Message)")
+        }
+    }
+
+    foreach ($entry in @(Get-SteamObjectProperty $Recovery 'ClientPerformance' @())) {
+        try {
+            Restore-SteamOptionalRegistryValue ([string]$entry.Key) ([string]$entry.Name) `
+                ([bool]$entry.Existed) $entry.Value ([string]$entry.Kind)
+            Write-Ok "Restored Steam client setting: $($entry.Name)"
+        } catch {
+            $Failures.Value.Add("Steam client setting $($entry.Name): $($_.Exception.Message)")
         }
     }
 
@@ -2303,6 +2359,15 @@ try {
     Set-SteamGpuHighPerformance $steam
     Add-ExoReport 'gpu-preference' 'ok'
 
+    Write-HubProgress 38 'Hardware-accelerated Steam web views...'
+    Set-SteamClientHardwareAcceleration
+    $clientHardwareOk = Test-SteamClientHardwareAcceleration
+    if ($clientHardwareOk) { Add-ExoReport 'cef-hardware' 'ok' }
+    else {
+        Add-ExoReport 'cef-hardware' 'fail' 'Steam registry did not retain hardware acceleration'
+        throw 'Steam hardware-accelerated web views could not be enabled'
+    }
+
     Write-HubProgress 40 'Cleaning webhelper / CEF caches...'
     $freed = [long]$debloatResult.Freed
     $shaderFreed = 0L
@@ -2392,8 +2457,8 @@ try {
             }
         }
         $helperOk = $helperText -match 'Exo\.SteamWebHelper' -and
-            $helperText -match 'ProcessPriorityClass\]::High' -and
             $helperText -match 'ProcessPriorityClass\]::BelowNormal' -and
+            $helperText -match '(?s)\$steamCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
             $helperText -match '(?s)\$webCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
             $helperText -match '\$_\.PriorityClass\s*=\s*\$webCls' -and
             (-not $helperUnsafe)
@@ -2401,7 +2466,7 @@ try {
     $fullPassOk = -not [bool]$Quick
     # Core pack (always required for applied). VDF first-run skips are NOT essentials-
     # satisfied: detect requires downloadOptimized/snappyUi true, so applied must match.
-    $coreOk = $startupOk -and $windowsQuietOk -and $debloatOk -and $runtimeOk -and
+    $coreOk = $startupOk -and $windowsQuietOk -and $debloatOk -and $runtimeOk -and $clientHardwareOk -and
         $launchPathOk -and $launcherOk -and $helperOk -and $fullPassOk -and $shaderInventoryVerified
     $vdfReady = [bool]$cfgOk -and -not $cfgSkipped -and [bool]$clientTweaksOk -and -not $clientTweaksSkipped
     $essentialOk = $coreOk -and $vdfReady
@@ -2432,6 +2497,7 @@ try {
         configSkipped        = $cfgSkipped
         clientTweaksVerified = $clientTweaksOk
         clientTweaksSkipped  = $clientTweaksSkipped
+        clientHardwareAcceleration = $clientHardwareOk
         webGpuReduced        = ($clientTweaksOk -and -not $clientTweaksSkipped)
         snappyUi             = ($clientTweaksOk -and -not $clientTweaksSkipped)
         overlayTweaks        = ($clientTweaksOk -and -not $clientTweaksSkipped)
@@ -2464,6 +2530,7 @@ try {
         if (-not $windowsQuietOk) { $missing += 'windows-quiet' }
         if (-not $debloatOk) { $missing += 'debloat' }
         if (-not $runtimeOk) { $missing += 'runtime' }
+        if (-not $clientHardwareOk) { $missing += 'cef-hardware' }
         if (-not $launchPathOk) { $missing += 'launch-path' }
         if (-not $launcherOk) { $missing += 'cef-launcher' }
         if (-not $helperOk) { $missing += 'webhelper-trim' }

@@ -130,7 +130,8 @@ var media = new NetworkMediaProfile
     ClientSupports6Ghz = true,
     ClientSupports5Ghz = true,
     EthernetInUse = true,
-    WifiAvailable = true
+    WifiAvailable = true,
+    PrimaryLinkSpeedBps = 1_000_000_000
 };
 var opts = new NetworkApplyOptions { PreferEthernetDisableWifi = true, RestartEthernet = false };
 
@@ -171,6 +172,7 @@ var repairScript = NetworkApplyScriptBuilder.BuildRepair();
 Expect("repair script restores stock bindings fallback", repairScript.Contains("ms_msclient", StringComparison.OrdinalIgnoreCase));
 Expect("repair script automatic metric", repairScript.Contains("AutomaticMetric Enabled", StringComparison.OrdinalIgnoreCase));
 var benchScript = NetworkApplyScriptBuilder.BuildBenchmark();
+var qualityScript = NetworkApplyScriptBuilder.BuildQualityBenchmark();
 Expect("eth DMA coalescing off", latScript.Contains("DMACoalescing", StringComparison.OrdinalIgnoreCase)
     || latScript.Contains("DMA Coalescing", StringComparison.OrdinalIgnoreCase));
 Expect("wifi transmit power", latScript.Contains("Transmit Power", StringComparison.OrdinalIgnoreCase));
@@ -537,6 +539,24 @@ Expect("benchmark parser values",
     Math.Abs(benchParsed.DnsMs - 22.7) < 0.001,
     benchParsed is null ? "null" : $"p50={benchParsed.PingP50Ms}");
 Expect("benchmark parser rejects garbage", NetworkLogic.TryParseBenchmark("no marker here") is null);
+Expect("quality benchmark is explicit ramped transfer",
+    qualityScript.Contains("speed.cloudflare.com", StringComparison.Ordinal) &&
+    qualityScript.Contains("Invoke-ExoDownloadStage", StringComparison.Ordinal) &&
+    qualityScript.Contains("Invoke-ExoUploadStage", StringComparison.Ordinal) &&
+    qualityScript.Contains("downloadLoadedMs", StringComparison.Ordinal) &&
+    qualityScript.Contains("packetLossPercent", StringComparison.Ordinal));
+var qualityParsed = NetworkLogic.TryParseBenchmark(
+    "EXO_BENCH:{\"ok\":true,\"isQualityTest\":true,\"pingP50Ms\":12,\"jitterMs\":2,\"downloadMbps\":500,\"uploadMbps\":80,\"downloadLoadedMs\":18,\"uploadLoadedMs\":25,\"downloadLoadedJitterMs\":3,\"uploadLoadedJitterMs\":4,\"packetLossPercent\":0,\"dataUsedMb\":100,\"endpoint\":\"Cloudflare edge\",\"recommendedPreset\":\"highest-throughput\",\"recommendationReason\":\"stable\"}");
+Expect("quality benchmark parser values",
+    qualityParsed is { Ok: true, IsQualityTest: true } &&
+    Math.Abs(qualityParsed.DownloadMbps - 500) < 0.001 &&
+    qualityParsed.Endpoint == "Cloudflare edge");
+Expect("adaptive preset stable fast ethernet",
+    qualityParsed is not null && NetworkLogic.RecommendPreset(qualityParsed, media) == NetworkPreset.HighestThroughput);
+var unstableQuality = NetworkLogic.TryParseBenchmark(
+    "EXO_BENCH:{\"ok\":true,\"isQualityTest\":true,\"pingP50Ms\":12,\"jitterMs\":2,\"downloadMbps\":500,\"downloadLoadedMs\":18,\"uploadLoadedMs\":25,\"downloadLoadedJitterMs\":25,\"uploadLoadedJitterMs\":4,\"packetLossPercent\":0}");
+Expect("adaptive preset loaded jitter chooses latency",
+    unstableQuality is not null && NetworkLogic.RecommendPreset(unstableQuality, media) == NetworkPreset.LowestLatency);
 
 // (c) BuildRepair: snapshot-driven true restore + fallback stock reset
 Expect("repair reads snapshot json",
@@ -620,6 +640,16 @@ if (repoRoot is not null)
         Expect("Wi-Fi while Ethernet never hard-fails for Still up",
             netSvc.Contains("Up (metrics prefer Ethernet)", StringComparison.Ordinal) ||
             netSvc.Contains("Up (kept)", StringComparison.Ordinal));
+        var qualityMethod = netSvc.IndexOf("RunQualityBenchmarkAsync", StringComparison.Ordinal);
+        var qualityEnd = qualityMethod >= 0
+            ? netSvc.IndexOf("LoadQualityBenchmark", qualityMethod, StringComparison.Ordinal)
+            : -1;
+        var qualityBlock = qualityMethod >= 0 && qualityEnd > qualityMethod
+            ? netSvc[qualityMethod..qualityEnd]
+            : string.Empty;
+        Expect("quality benchmark runs under PowerShell 7 HttpClient host",
+            qualityBlock.Contains("PowerShellRunnerService.ResolvePowerShell()", StringComparison.Ordinal) &&
+            !qualityBlock.Contains("\"powershell\"", StringComparison.Ordinal));
     }
 }
 if (rescuePath is not null && File.Exists(rescuePath))

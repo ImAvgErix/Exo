@@ -167,7 +167,8 @@ if (File.Exists(dash))
             || d.Contains("FontSize=\"64\"", StringComparison.Ordinal)
             || d.Contains("FontSize=\"56\"", StringComparison.Ordinal)
             || d.Contains("FontSize=\"40\"", StringComparison.Ordinal)
-            || d.Contains("FontSize=\"36\"", StringComparison.Ordinal)));
+            || d.Contains("FontSize=\"36\"", StringComparison.Ordinal)
+            || d.Contains("FontSize=\"30\"", StringComparison.Ordinal)));
     Expect("hero tagline",
         d.Contains("HeroTagline", StringComparison.Ordinal)
         && (d.Contains("Maximum performance", StringComparison.Ordinal)
@@ -185,7 +186,7 @@ if (File.Exists(dash))
         && d.Contains("ExoInternetBrush", StringComparison.Ordinal)
         && d.Contains("ExoNvidiaBrush", StringComparison.Ordinal));
     Expect("home steam live ram tile",
-        d.Contains("STEAM RAM", StringComparison.Ordinal)
+        d.Contains("Text=\"STEAM\"", StringComparison.Ordinal)
         && d.Contains("SteamStatusPrimary", StringComparison.Ordinal)
         && !d.Contains("STEAM RECLAIMED", StringComparison.Ordinal));
     Expect("home module status row",
@@ -196,13 +197,13 @@ if (File.Exists(dash))
     Expect("home four module tiles",
         d.Contains("DISCORD", StringComparison.Ordinal)
         && d.Contains("STEAM", StringComparison.Ordinal)
-        && d.Contains("INTERNET", StringComparison.Ordinal)
-        && d.Contains("NVIDIA", StringComparison.Ordinal));
+        && d.Contains("CONNECTION", StringComparison.Ordinal)
+        && d.Contains("GPU PROFILE", StringComparison.Ordinal));
     Expect("home useful dashboard",
         d.Contains("SYSTEM RAM", StringComparison.Ordinal)
         && d.Contains("DISCORD", StringComparison.Ordinal)
         && d.Contains("STEAM", StringComparison.Ordinal)
-        && d.Contains("INTERNET", StringComparison.Ordinal));
+        && d.Contains("CONNECTION", StringComparison.Ordinal));
     Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("no fixed product cards",
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)
@@ -214,9 +215,9 @@ if (File.Exists(dash))
         && !d.Contains("LiveCards", StringComparison.Ordinal)
         && !d.Contains("CardList", StringComparison.Ordinal)
         && !d.Contains("ReadyModules", StringComparison.Ordinal));
-    Expect("coming soon row",
-        d.Contains("SoonCards", StringComparison.Ordinal)
-        || d.Contains("Coming soon", StringComparison.Ordinal));
+    Expect("home decluttered",
+        !d.Contains("SoonCards", StringComparison.Ordinal)
+        && !d.Contains("Coming soon", StringComparison.Ordinal));
     Expect("hero tagline style", d.Contains("ExoTagline", StringComparison.Ordinal));
     Expect("no home status chips", !d.Contains("StatusLabel", StringComparison.Ordinal));
     Expect("no pick-a-target blurb", !d.Contains("Pick a target", StringComparison.Ordinal));

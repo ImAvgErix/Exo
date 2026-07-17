@@ -39,8 +39,9 @@ public static partial class SteamLogic
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
         if (!text.Contains("Exo.SteamWebHelper", StringComparison.Ordinal)) return false;
-        if (!text.Contains("ProcessPriorityClass]::High", StringComparison.Ordinal)) return false;
+        if (!text.Contains("ProcessPriorityClass]::Normal", StringComparison.Ordinal)) return false;
         if (!text.Contains("ProcessPriorityClass]::BelowNormal", StringComparison.Ordinal)) return false;
+        if (!text.Contains("$steamCls = if ($InGame)", StringComparison.Ordinal)) return false;
         if (!text.Contains("$webCls = if ($InGame)", StringComparison.Ordinal)) return false;
         if (!text.Contains("$_.PriorityClass = $webCls", StringComparison.Ordinal)) return false;
         // Hard fail if helper still thrashing CEF — evaluate code lines only:

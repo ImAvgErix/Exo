@@ -223,6 +223,55 @@ public sealed class NetworkOptimizerService
         }
     }
 
+    /// <summary>
+    /// User-triggered ramped test: throughput plus idle/loaded latency, jitter and loss.
+    /// This is intentionally separate from the tiny Apply proof probe because it can
+    /// transfer hundreds of megabytes on a very fast connection.
+    /// </summary>
+    public async Task<NetworkBenchmarkResult?> RunQualityBenchmarkAsync(CancellationToken ct = default)
+    {
+        var script = NetworkApplyScriptBuilder.BuildQualityBenchmark();
+        var path = Path.Combine(Path.GetTempPath(), $"exo-net-quality-{Guid.NewGuid():N}.ps1");
+        try
+        {
+            await File.WriteAllTextAsync(path, script, ct).ConfigureAwait(false);
+            var stdout = await RunCaptureAsync(
+                PowerShellRunnerService.ResolvePowerShell(),
+                $"-NoProfile -ExecutionPolicy Bypass -File \"{path}\"",
+                ct).ConfigureAwait(false);
+            return NetworkLogic.TryParseBenchmark(stdout);
+        }
+        catch { return null; }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    public NetworkBenchmarkResult? LoadQualityBenchmark()
+    {
+        try
+        {
+            var state = LoadStateObject();
+            return state["qualityBenchmark"] is JsonObject o
+                ? JsonSerializer.Deserialize(o.ToJsonString(), ExoJsonContext.Default.NetworkBenchmarkResult)
+                : null;
+        }
+        catch { return null; }
+    }
+
+    public void PersistQualityBenchmark(NetworkBenchmarkResult result)
+    {
+        try
+        {
+            var state = LoadStateObject();
+            state["qualityBenchmark"] = JsonSerializer.SerializeToNode(
+                result, ExoJsonContext.Default.NetworkBenchmarkResult);
+            SaveStateObject(state);
+        }
+        catch { }
+    }
+
     /// <summary>Persisted before/after benchmark pair (state JSON: benchmark.before / benchmark.after).</summary>
     public (NetworkBenchmarkResult? Before, NetworkBenchmarkResult? After) LoadBenchmark()
     {
@@ -1238,6 +1287,8 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
 
     /// <summary>Expose benchmark script generation for audit/smokes (same path as RunBenchmarkAsync).</summary>
     public static string BuildBenchmarkScript() => NetworkApplyScriptBuilder.BuildBenchmark();
+
+    public static string BuildQualityBenchmarkScript() => NetworkApplyScriptBuilder.BuildQualityBenchmark();
 
     // BuildFullApplyScript removed — see NetworkApplyScriptBuilder
     private static NetworkFeatureRow Row(string title, string status, bool ok, string? note = null) => new()

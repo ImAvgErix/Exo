@@ -66,9 +66,4 @@ public sealed partial class NvidiaOptimizerPage : Page
     private void Refresh_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RefreshCommand.Execute(null);
 
-    private void Panel_Click(object sender, RoutedEventArgs e)
-    {
-        if (App.MainAppWindow is MainWindow main)
-            main.NavigateToNvidiaPanel();
-    }
 }

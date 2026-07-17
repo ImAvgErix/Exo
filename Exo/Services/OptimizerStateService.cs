@@ -714,6 +714,7 @@ public sealed class OptimizerStateService
         var markerOk = false;
         var downloadMarkerOk = false;
         var clientMarkerOk = false;
+        var clientHardwareMarkerOk = false;
 
         if (File.Exists(statePath))
         {
@@ -733,6 +734,7 @@ public sealed class OptimizerStateService
                 downloadMarkerOk = IsTrue(root, "configVerified") && IsTrue(root, "downloadOptimized");
                 clientMarkerOk = IsTrue(root, "clientTweaksVerified") &&
                                  IsTrue(root, "snappyUi") && IsTrue(root, "overlayTweaks");
+                clientHardwareMarkerOk = IsTrue(root, "clientHardwareAcceleration");
                 // Do not pin exact kit version — 1.7.3+ was falsely marked incomplete.
                 _ = markerVersion;
                 markerOk = string.Equals(applyStatus, "applied", StringComparison.Ordinal) &&
@@ -788,6 +790,9 @@ public sealed class OptimizerStateService
         features.Add(MakeFeature("Cache / download", "", downloadOptimized));
         features.Add(MakeFeature("Client tweaks", "", clientTweaksApplied));
 
+        var clientHardwareOk = clientHardwareMarkerOk && IsSteamClientHardwareAccelerationEnabled();
+        features.Add(MakeFeature("Hardware-accelerated client", "", clientHardwareOk));
+
         var helperPath = Path.Combine(steam, "Exo-SteamWebHelperTrim.ps1");
         var aggressiveTrimOk = false;
         if (File.Exists(helperPath))
@@ -802,7 +807,7 @@ public sealed class OptimizerStateService
         features.Add(MakeFeature("In-game contention guard", "", aggressiveTrimOk));
 
         var applied = markerOk && startupOk && cefLauncherOk && aggressiveTrimOk &&
-                      downloadOptimized && clientTweaksApplied;
+                      downloadOptimized && clientTweaksApplied && clientHardwareOk;
         return new OptimizerStateInfo
         {
             IsApplied = applied,
@@ -892,10 +897,12 @@ public sealed class OptimizerStateService
         if (!Directory.Exists(userdata)) return false;
         var expectations = new[]
         {
-            ("H264HWAccel", "0"),
-            ("GPUAccelWebViews", "0"),
-            ("GPUAccelWebViews2", "0"),
-            ("GPUAccelWebViewsD3D11", "0"),
+            ("H264HWAccel", "1"),
+            ("GPUAccelWebViews", "1"),
+            ("GPUAccelWebViews2", "1"),
+            ("GPUAccelWebViewsD3D11", "1"),
+            ("LibraryLowBandwidthMode", "1"),
+            ("LibraryLowPerfMode", "1"),
             ("SmoothScrollWebViews", "0"),
             ("LibraryDisableCommunityContent", "1"),
             ("InGameOverlayScreenshotNotification", "0"),
@@ -917,6 +924,22 @@ public sealed class OptimizerStateService
                 observed += result.Observed;
             }
             return observed > 0;
+        }
+        catch { return false; }
+    }
+
+    private static bool IsSteamClientHardwareAccelerationEnabled()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
+            if (key is null) return false;
+            foreach (var name in new[] { "H264HWAccel", "GPUAccelWebViews", "GPUAccelWebViewsV3" })
+            {
+                if (!key.GetValueNames().Contains(name, StringComparer.OrdinalIgnoreCase)) return false;
+                if (Convert.ToInt32(key.GetValue(name, 0)) != 1) return false;
+            }
+            return true;
         }
         catch { return false; }
     }

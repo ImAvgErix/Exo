@@ -102,8 +102,6 @@ public sealed partial class DashboardPage : Page
                 ExoMotion.EnsureVisible(FrameHero);
             if (StatRow is not null)
                 ExoMotion.EnsureVisible(StatRow);
-            if (SoonRow is not null)
-                ExoMotion.EnsureVisible(SoonRow);
         }
         catch { }
     }
@@ -126,12 +124,10 @@ public sealed partial class DashboardPage : Page
                 sequence.Add(FrameHero);
             if (StatRow is not null)
                 sequence.Add(StatRow);
-            if (SoonRow is not null)
-                sequence.Add(SoonRow);
 
-            // Semantic page chunks stagger ~90ms apart (matches preview cadence).
+            // Direct, quiet reveal: enough separation to show hierarchy without a parade.
             if (sequence.Count > 0)
-                ExoMotion.PlayStagger(sequence, baseDelayMs: 40, stepMs: 90, fromY: 10f, fromScale: 1f);
+                ExoMotion.PlayStagger(sequence, baseDelayMs: 24, stepMs: 55, fromY: 8f, fromScale: 1f);
 
             await Task.Delay(420);
             if (gen != _entranceGen) return;

@@ -664,7 +664,7 @@ $features.Add(@{
 })
 
 $features.Add(@{
-    title  = 'Driver only (no App / CPL)'
+    title  = 'Driver + classic Control Panel'
     detail = $(if (-not $appInstalled -and $cplInstalled) {
         'NVIDIA App removed; classic Control Panel kept for display UI. Exo panel + NVAPI apply policy.'
     } elseif (-not $appInstalled -and -not $cplInstalled) {

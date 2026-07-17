@@ -5,12 +5,9 @@ import { FeatureRow } from '../components/FeatureRow'
 import { StatusCapsule } from '../components/StatusCapsule'
 import './ModulePage.css'
 
-interface ModulePageProps {
-  module: ModuleData
-  onOpenDisplayPanel?: () => void
-}
+interface ModulePageProps { module: ModuleData }
 
-export function ModulePage({ module, onOpenDisplayPanel }: ModulePageProps) {
+export function ModulePage({ module }: ModulePageProps) {
   const [message, setMessage] = useState<string | null>(null)
   const [gsync, setGsync] = useState(true)
   const [statusTitle, setStatusTitle] = useState(module.statusTitle)
@@ -65,10 +62,10 @@ export function ModulePage({ module, onOpenDisplayPanel }: ModulePageProps) {
             <button
               type="button"
               className="btn btn-ghost"
-              data-testid="btn-display-panel"
-              onClick={onOpenDisplayPanel}
+              data-testid="btn-open-nvidia-cpl"
+              onClick={() => flash('Opened NVIDIA Control Panel (mock).')}
             >
-              Display panel
+              Open NVIDIA Control Panel
             </button>
           </div>
         ) : null}
