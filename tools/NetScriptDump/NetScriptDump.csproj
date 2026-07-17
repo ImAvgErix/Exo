@@ -11,6 +11,8 @@
     <!-- Drive the real shipped sources (not a reimplementation). -->
     <Compile Include="..\..\Exo\Services\NetworkLogic.cs" Link="Shipped\NetworkLogic.cs" />
     <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.cs" Link="Shipped\NetworkApplyScriptBuilder.cs" />
+    <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.Repair.cs" Link="Shipped\NetworkApplyScriptBuilder.Repair.cs" />
+    <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.Benchmark.cs" Link="Shipped\NetworkApplyScriptBuilder.Benchmark.cs" />
     <Compile Include="..\..\Exo\Models\NetworkSnapshot.cs" Link="Shipped\NetworkSnapshot.cs" />
   </ItemGroup>
 </Project>
