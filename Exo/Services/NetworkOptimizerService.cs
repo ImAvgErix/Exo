@@ -233,7 +233,20 @@ public sealed class NetworkOptimizerService
         string SecondaryV6,
         string DohTemplate);
 
-    private sealed record TransferResult(double Mbps, IReadOnlyList<double> LoadedLatency, long Bytes);
+    private sealed record PingSeries(IReadOnlyList<double> Successful, int Attempts)
+    {
+        public double LossPercent => Attempts == 0
+            ? 100d
+            : Math.Max(0, Attempts - Successful.Count) * 100d / Attempts;
+    }
+
+    private sealed record TransferResult(
+        double Mbps,
+        IReadOnlyList<double> LoadedLatency,
+        int LoadedLatencyAttempts,
+        long Bytes);
+
+    private static readonly string[] LatencyTargets = { "1.1.1.1", "8.8.8.8", "9.9.9.9" };
 
     private static readonly DnsCandidate[] DnsCandidates =
     {
@@ -253,7 +266,6 @@ public sealed class NetworkOptimizerService
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
-        const string endpoint = "Cloudflare edge";
         var linkMbps = media.PrimaryLinkSpeedBps > 0 ? media.PrimaryLinkSpeedBps / 1_000_000d : 0d;
         var streams = linkMbps >= 2_000 ? 12 : linkMbps >= 1_000 ? 8 : linkMbps >= 300 ? 6 : 4;
         var transferDuration = linkMbps >= 1_000 ? TimeSpan.FromSeconds(8) : TimeSpan.FromSeconds(6);
@@ -271,30 +283,27 @@ public sealed class NetworkOptimizerService
 
         try
         {
-            progress?.Report("Warming the nearest test edge...");
-            _ = await MeasureEdgeLatencyAsync(client, ct).ConfigureAwait(false);
+            progress?.Report("Selecting a stable latency path...");
+            var latencyTarget = await SelectLatencyTargetAsync(ct).ConfigureAwait(false);
+            if (latencyTarget is null) return null;
 
-            progress?.Report("Measuring idle latency...");
-            var idle = new List<double>(16);
-            for (var i = 0; i < 16; i++)
-            {
-                try { idle.Add(await MeasureEdgeLatencyAsync(client, ct).ConfigureAwait(false)); }
-                catch when (!ct.IsCancellationRequested) { }
-            }
-            if (idle.Count < 8) return null;
+            progress?.Report($"Measuring idle latency to {latencyTarget}...");
+            var idleSeries = await SamplePingSeriesAsync(latencyTarget, 24, TimeSpan.FromMilliseconds(75), ct)
+                .ConfigureAwait(false);
+            var idle = idleSeries.Successful;
+            if (idle.Count < 12) return null;
 
             progress?.Report($"Saturating download with {streams} parallel streams...");
-            var down = await MeasureDownloadAsync(client, streams, transferDuration, ct).ConfigureAwait(false);
+            var down = await MeasureDownloadAsync(client, latencyTarget, streams, transferDuration, ct).ConfigureAwait(false);
 
             progress?.Report($"Saturating upload with {streams} parallel streams...");
-            var up = await MeasureUploadAsync(client, streams, transferDuration, ct).ConfigureAwait(false);
+            var up = await MeasureUploadAsync(client, latencyTarget, streams, transferDuration, ct).ConfigureAwait(false);
 
-            progress?.Report("Testing packet stability and encrypted DNS routes...");
-            var lossTask = MeasurePacketLossAsync(ct);
-            var dnsTask = SelectFastestDnsAsync(ct);
-            await Task.WhenAll(lossTask, dnsTask).ConfigureAwait(false);
-            var packetLoss = lossTask.Result;
-            var (dns, dnsMedianMs) = dnsTask.Result;
+            progress?.Report("Testing encrypted DNS routes...");
+            var (dns, dnsMedianMs) = await SelectFastestDnsAsync(ct).ConfigureAwait(false);
+            var allAttempts = idleSeries.Attempts + down.LoadedLatencyAttempts + up.LoadedLatencyAttempts;
+            var allSuccessful = idle.Count + down.LoadedLatency.Count + up.LoadedLatency.Count;
+            var packetLoss = allAttempts == 0 ? 100d : (allAttempts - allSuccessful) * 100d / allAttempts;
 
             var p50 = Percentile(idle, 0.5);
             var p95 = Percentile(idle, 0.95);
@@ -327,7 +336,7 @@ public sealed class NetworkOptimizerService
                 JitterMs = Math.Round(Jitter(idle), 2),
                 DnsMs = Math.Round(dnsMedianMs, 2),
                 DnsMedianMs = Math.Round(dnsMedianMs, 2),
-                Samples = idle.Count,
+                Samples = idleSeries.Attempts,
                 DownloadMbps = Math.Round(down.Mbps, 2),
                 UploadMbps = Math.Round(up.Mbps, 2),
                 DownloadLoadedMs = Math.Round(downLoaded, 2),
@@ -336,7 +345,7 @@ public sealed class NetworkOptimizerService
                 UploadLoadedJitterMs = Math.Round(upJitter, 2),
                 PacketLossPercent = Math.Round(packetLoss, 2),
                 DataUsedMb = Math.Round((down.Bytes + up.Bytes) / 1024d / 1024d, 1),
-                Endpoint = endpoint,
+                Endpoint = $"Cloudflare throughput · {latencyTarget} latency",
                 ParallelStreams = streams,
                 TransferSeconds = transferDuration.TotalSeconds,
                 LinkSpeedMbps = Math.Round(linkMbps, 0),
@@ -357,19 +366,55 @@ public sealed class NetworkOptimizerService
         catch { return null; }
     }
 
-    private static async Task<double> MeasureEdgeLatencyAsync(HttpClient client, CancellationToken ct)
+    private static async Task<string?> SelectLatencyTargetAsync(CancellationToken ct)
     {
-        var uri = $"https://speed.cloudflare.com/__down?bytes=0&exo={Guid.NewGuid():N}";
-        var sw = Stopwatch.StartNew();
-        using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        await response.Content.CopyToAsync(Stream.Null, ct).ConfigureAwait(false);
-        sw.Stop();
-        return sw.Elapsed.TotalMilliseconds;
+        var candidates = new List<(string Target, double Median)>();
+        foreach (var target in LatencyTargets)
+        {
+            var series = await SamplePingSeriesAsync(target, 4, TimeSpan.FromMilliseconds(40), ct)
+                .ConfigureAwait(false);
+            if (series.Successful.Count >= 3)
+                candidates.Add((target, Percentile(series.Successful, 0.5)));
+        }
+        return candidates.OrderBy(x => x.Median).Select(x => x.Target).FirstOrDefault();
+    }
+
+    private static async Task<PingSeries> SamplePingSeriesAsync(
+        string target,
+        int attempts,
+        TimeSpan spacing,
+        CancellationToken ct)
+    {
+        var samples = new List<double>(attempts);
+        for (var i = 0; i < attempts; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            using var ping = new Ping();
+            try
+            {
+                var sw = Stopwatch.StartNew();
+                var reply = await ping.SendPingAsync(
+                    target,
+                    TimeSpan.FromMilliseconds(1200),
+                    Array.Empty<byte>(),
+                    new PingOptions(64, true),
+                    ct).ConfigureAwait(false);
+                sw.Stop();
+                if (reply.Status == IPStatus.Success)
+                    samples.Add(Math.Max(0.1, sw.Elapsed.TotalMilliseconds));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch { }
+
+            if (i + 1 < attempts)
+                await Task.Delay(spacing, ct).ConfigureAwait(false);
+        }
+        return new PingSeries(samples, attempts);
     }
 
     private static async Task<TransferResult> MeasureDownloadAsync(
         HttpClient client,
+        string latencyTarget,
         int streams,
         TimeSpan duration,
         CancellationToken ct)
@@ -377,9 +422,7 @@ public sealed class NetworkOptimizerService
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
         stop.CancelAfter(duration);
         long bytes = 0;
-        var loaded = new List<double>();
-        var gate = new object();
-        var latencyTask = SampleLoadedLatencyAsync(client, loaded, gate, stop.Token);
+        var latencyTask = SampleLoadedLatencyAsync(latencyTarget, stop.Token);
         var sw = Stopwatch.StartNew();
         var workers = Enumerable.Range(0, streams).Select(async _ =>
         {
@@ -408,15 +451,20 @@ public sealed class NetworkOptimizerService
             }
         }).ToArray();
         try { await Task.WhenAll(workers).ConfigureAwait(false); } catch (OperationCanceledException) { }
-        try { await latencyTask.ConfigureAwait(false); } catch (OperationCanceledException) { }
+        PingSeries loaded;
+        try { loaded = await latencyTask.ConfigureAwait(false); }
+        catch (OperationCanceledException) { loaded = new PingSeries(Array.Empty<double>(), 0); }
         sw.Stop();
-        IReadOnlyList<double> copy;
-        lock (gate) copy = loaded.ToArray();
-        return new TransferResult(bytes * 8d / Math.Max(0.001, sw.Elapsed.TotalSeconds) / 1_000_000d, copy, bytes);
+        return new TransferResult(
+            bytes * 8d / Math.Max(0.001, sw.Elapsed.TotalSeconds) / 1_000_000d,
+            loaded.Successful,
+            loaded.Attempts,
+            bytes);
     }
 
     private static async Task<TransferResult> MeasureUploadAsync(
         HttpClient client,
+        string latencyTarget,
         int streams,
         TimeSpan duration,
         CancellationToken ct)
@@ -426,9 +474,7 @@ public sealed class NetworkOptimizerService
         var payload = new byte[8 * 1024 * 1024];
         Random.Shared.NextBytes(payload);
         long bytes = 0;
-        var loaded = new List<double>();
-        var gate = new object();
-        var latencyTask = SampleLoadedLatencyAsync(client, loaded, gate, stop.Token);
+        var latencyTask = SampleLoadedLatencyAsync(latencyTarget, stop.Token);
         var sw = Stopwatch.StartNew();
         var workers = Enumerable.Range(0, streams).Select(async _ =>
         {
@@ -447,48 +493,44 @@ public sealed class NetworkOptimizerService
             }
         }).ToArray();
         try { await Task.WhenAll(workers).ConfigureAwait(false); } catch (OperationCanceledException) { }
-        try { await latencyTask.ConfigureAwait(false); } catch (OperationCanceledException) { }
+        PingSeries loaded;
+        try { loaded = await latencyTask.ConfigureAwait(false); }
+        catch (OperationCanceledException) { loaded = new PingSeries(Array.Empty<double>(), 0); }
         sw.Stop();
-        IReadOnlyList<double> copy;
-        lock (gate) copy = loaded.ToArray();
-        return new TransferResult(bytes * 8d / Math.Max(0.001, sw.Elapsed.TotalSeconds) / 1_000_000d, copy, bytes);
+        return new TransferResult(
+            bytes * 8d / Math.Max(0.001, sw.Elapsed.TotalSeconds) / 1_000_000d,
+            loaded.Successful,
+            loaded.Attempts,
+            bytes);
     }
 
-    private static async Task SampleLoadedLatencyAsync(
-        HttpClient client,
-        List<double> samples,
-        object gate,
-        CancellationToken ct)
+    private static async Task<PingSeries> SampleLoadedLatencyAsync(string target, CancellationToken ct)
     {
+        var samples = new List<double>();
+        var attempts = 0;
         while (!ct.IsCancellationRequested)
         {
-            try
-            {
-                var value = await MeasureEdgeLatencyAsync(client, ct).ConfigureAwait(false);
-                lock (gate) samples.Add(value);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
-            catch { }
-            try { await Task.Delay(120, ct).ConfigureAwait(false); }
-            catch (OperationCanceledException) { break; }
-        }
-    }
-
-    private static async Task<double> MeasurePacketLossAsync(CancellationToken ct)
-    {
-        var attempts = Enumerable.Range(0, 20).Select(async i =>
-        {
+            attempts++;
             using var ping = new Ping();
             try
             {
-                var target = i % 2 == 0 ? "1.1.1.1" : "8.8.8.8";
-                var reply = await ping.SendPingAsync(target, TimeSpan.FromMilliseconds(1200), Array.Empty<byte>(), new PingOptions(), ct).ConfigureAwait(false);
-                return reply.Status == IPStatus.Success;
+                var sw = Stopwatch.StartNew();
+                var reply = await ping.SendPingAsync(
+                    target,
+                    TimeSpan.FromMilliseconds(1200),
+                    Array.Empty<byte>(),
+                    new PingOptions(64, true),
+                    ct).ConfigureAwait(false);
+                sw.Stop();
+                if (reply.Status == IPStatus.Success)
+                    samples.Add(Math.Max(0.1, sw.Elapsed.TotalMilliseconds));
             }
-            catch { return false; }
-        });
-        var results = await Task.WhenAll(attempts).ConfigureAwait(false);
-        return results.Length == 0 ? 100 : results.Count(ok => !ok) * 100d / results.Length;
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch { }
+            try { await Task.Delay(100, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { break; }
+        }
+        return new PingSeries(samples, attempts);
     }
 
     private static async Task<(DnsCandidate Candidate, double MedianMs)> SelectFastestDnsAsync(CancellationToken ct)

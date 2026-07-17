@@ -181,4 +181,4 @@ export const fakeDisplays: FakeDisplay[] = [
   },
 ]
 
-export const APP_VERSION = '3.4.0'
+export const APP_VERSION = '3.5.0'

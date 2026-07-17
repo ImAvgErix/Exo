@@ -141,30 +141,15 @@
 
                     <ContentPresenter Content="{x:Bind PrimaryActions, Mode=OneWay}" />
 
-                    <Grid ColumnSpacing="8"
-                          Visibility="{x:Bind ShowSecondaryActions, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Button Style="{StaticResource ExoQuietButton}"
-                                Content="{x:Bind SecondaryLeftLabel, Mode=OneWay}"
-                                Click="SecondaryLeft_Click"
-                                MinHeight="34"
-                                Padding="12,6"
-                                HorizontalAlignment="Stretch"
-                                IsEnabled="{x:Bind SecondaryActionsEnabled, Mode=OneWay}"
-                                AutomationProperties.Name="{x:Bind SecondaryLeftLabel, Mode=OneWay}" />
-                        <Button Grid.Column="1"
-                                Style="{StaticResource ExoQuietButton}"
-                                Content="{x:Bind SecondaryRightLabel, Mode=OneWay}"
-                                Click="SecondaryRight_Click"
-                                MinHeight="34"
-                                Padding="12,6"
-                                HorizontalAlignment="Stretch"
-                                IsEnabled="{x:Bind SecondaryActionsEnabled, Mode=OneWay}"
-                                AutomationProperties.Name="{x:Bind SecondaryRightLabel, Mode=OneWay}" />
-                    </Grid>
+                    <Button Style="{StaticResource ExoQuietButton}"
+                            Content="{x:Bind SecondaryLeftLabel, Mode=OneWay}"
+                            Click="SecondaryLeft_Click"
+                            MinHeight="34"
+                            Padding="12,6"
+                            HorizontalAlignment="Stretch"
+                            IsEnabled="{x:Bind SecondaryActionsEnabled, Mode=OneWay}"
+                            Visibility="{x:Bind ShowSecondaryActions, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                            AutomationProperties.Name="{x:Bind SecondaryLeftLabel, Mode=OneWay}" />
                 </StackPanel>
             </Border>
         </Grid>

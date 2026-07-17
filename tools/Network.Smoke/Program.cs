@@ -655,6 +655,15 @@ if (repoRoot is not null)
             qualityBlock.Contains("SampleLoadedLatencyAsync", StringComparison.Ordinal) &&
             qualityBlock.Contains("SelectFastestDnsAsync", StringComparison.Ordinal) &&
             qualityBlock.Contains("UdpClient", StringComparison.Ordinal));
+        Expect("quality latency is independent sequential ICMP",
+            qualityBlock.Contains("SelectLatencyTargetAsync", StringComparison.Ordinal) &&
+            qualityBlock.Contains("SamplePingSeriesAsync", StringComparison.Ordinal) &&
+            qualityBlock.Contains("SendPingAsync", StringComparison.Ordinal) &&
+            !qualityBlock.Contains("MeasureEdgeLatencyAsync", StringComparison.Ordinal) &&
+            !qualityBlock.Contains("MeasurePacketLossAsync", StringComparison.Ordinal));
+        Expect("quality uses one selected target for idle and load",
+            qualityBlock.Contains("MeasureDownloadAsync(client, latencyTarget", StringComparison.Ordinal) &&
+            qualityBlock.Contains("MeasureUploadAsync(client, latencyTarget", StringComparison.Ordinal));
         Expect("quality benchmark no PowerShell transfer host",
             !qualityBlock.Contains("PowerShellRunnerService.ResolvePowerShell()", StringComparison.Ordinal));
     }

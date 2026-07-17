@@ -25,10 +25,10 @@ var busy = UiStatusPresentation.FromFlags(isBusy: true, hasError: false, hasSucc
 Expect("busy", busy == UiStatusPresentation.Tone.Busy);
 Expect("success", UiStatusPresentation.FromFlags(false, false, true) == UiStatusPresentation.Tone.Success);
 
-// Drive real AppSettings clone path (theme + update check preference).
-var settingsA = new AppSettings { Theme = AppSettings.DarkTheme, CheckForUpdatesOnLaunch = true };
+// Drive real AppSettings clone path (single dark theme; update preference remains).
+var settingsA = new AppSettings { CheckForUpdatesOnLaunch = true };
 var settingsB = settingsA.Clone();
-Expect("AppSettings clone theme", settingsB.Theme == AppSettings.DarkTheme && settingsB.CheckForUpdatesOnLaunch);
+Expect("AppSettings clone", settingsB.CheckForUpdatesOnLaunch);
 
 var repo = FindRepoRoot();
 var appXaml = Path.Combine(repo, "Exo", "App.xaml");
@@ -82,9 +82,8 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("amoled black", a.Contains("#000000", StringComparison.Ordinal));
     Expect("stone white accent", a.Contains("#F5F5F4", StringComparison.Ordinal));
-    Expect("neutral light page unified", a.Contains("#F4F4F5", StringComparison.Ordinal)
-        && a.Contains("#FFFFFFFF", StringComparison.Ordinal)
-        && !a.Contains("#F3EDE3", StringComparison.Ordinal));
+    Expect("light theme removed", !a.Contains("x:Key=\"Light\"", StringComparison.Ordinal)
+        && !a.Contains("#F4F4F5", StringComparison.Ordinal));
     // v3.2 cohesive surfaces: true black shell with opaque lifted cards avoids
     // ghosted text and inconsistent transparency at mixed DPI.
     Expect("dark solid card lift",
@@ -103,9 +102,9 @@ var themeServiceCs = Path.Combine(repo, "Exo", "Services", "ThemeService.cs");
 if (File.Exists(themeServiceCs))
 {
     var ts = File.ReadAllText(themeServiceCs);
-    Expect("theme service neutral light matches app.xaml",
-        ts.Contains("244, 244, 245", StringComparison.Ordinal)
-        && ts.Contains("#F4F4F5", StringComparison.Ordinal));
+    Expect("theme service dark only",
+        ts.Contains("ElementTheme.Dark", StringComparison.Ordinal)
+        && !ts.Contains("ElementTheme.Light", StringComparison.Ordinal));
 }
 if (File.Exists(main))
 {
@@ -230,27 +229,22 @@ if (File.Exists(theme))
 if (File.Exists(settings))
 {
     var s = File.ReadAllText(settings);
-    Expect("settings appearance", s.Contains("APPEARANCE", StringComparison.Ordinal) || s.Contains("Appearance", StringComparison.Ordinal));
+    Expect("settings appearance removed", !s.Contains("Appearance", StringComparison.Ordinal));
     Expect("settings updates", s.Contains("UPDATES", StringComparison.Ordinal) || s.Contains("Updates", StringComparison.Ordinal));
     Expect("settings app version", s.Contains("App version", StringComparison.Ordinal)
         && s.Contains("AppVersion", StringComparison.Ordinal)
         && !s.Contains("KitVersion", StringComparison.Ordinal));
-    Expect("settings dark light buttons",
-        s.Contains("DarkMode_Click", StringComparison.Ordinal)
-        && s.Contains("LightMode_Click", StringComparison.Ordinal)
-        && (s.Contains("Content=\"Dark\"", StringComparison.Ordinal)
-            || s.Contains("Content=\"AMOLED\"", StringComparison.Ordinal))
-        && s.Contains("Content=\"Light\"", StringComparison.Ordinal));
-    Expect("settings theme choice selected state",
-        s.Contains("ExoThemeChoice", StringComparison.Ordinal)
-        && s.Contains("IsDarkMode", StringComparison.Ordinal)
-        && s.Contains("IsLightMode", StringComparison.Ordinal));
+    Expect("settings no theme controls",
+        !s.Contains("DarkMode_Click", StringComparison.Ordinal)
+        && !s.Contains("LightMode_Click", StringComparison.Ordinal)
+        && !s.Contains("IsDarkMode", StringComparison.Ordinal)
+        && !s.Contains("IsLightMode", StringComparison.Ordinal));
     Expect("settings exo chrome",
         s.Contains("ExoQuietButton", StringComparison.Ordinal)
-        && s.Contains("ExoPrimaryButton", StringComparison.Ordinal));
+        && !s.Contains("ExoPrimaryButton", StringComparison.Ordinal));
     Expect("settings compact flat hierarchy",
         s.Contains("Text=\"Settings\"", StringComparison.Ordinal)
-        && s.Contains("Text=\"Appearance\"", StringComparison.Ordinal)
+        && !s.Contains("Text=\"Appearance\"", StringComparison.Ordinal)
         && !s.Contains("SYSTEM CONTROL", StringComparison.Ordinal)
         && !s.Contains("No translucent layers", StringComparison.Ordinal)
         && !s.Contains("Content=\"AMOLED\"", StringComparison.Ordinal));
@@ -329,7 +323,7 @@ if (File.Exists(theme))
         && t.Contains("Property=\"Padding\" Value=\"10,6\"", StringComparison.Ordinal));
     Expect("theme ExoIconWell", t.Contains("ExoIconWell", StringComparison.Ordinal));
     Expect("theme ExoPagePadding", t.Contains("ExoPagePadding", StringComparison.Ordinal));
-    Expect("theme ExoThemeChoice", t.Contains("ExoThemeChoice", StringComparison.Ordinal));
+    Expect("theme choice style removed", !t.Contains("ExoThemeChoice", StringComparison.Ordinal));
     Expect("display italic", t.Contains("ExoDisplayFontItalic", StringComparison.Ordinal));
     // Opti* theme keys must stay gone (Exo* rename).
     Expect("theme no Opti keys",
@@ -407,11 +401,12 @@ foreach (var page in new[]
             && !x.Contains("Highest download", StringComparison.Ordinal));
         Expect("internet DNS is automatic",
             !x.Contains("Private DNS", StringComparison.Ordinal)
-            && x.Contains("encrypted DNS", StringComparison.OrdinalIgnoreCase));
+            && !x.Contains("DNS toggle", StringComparison.OrdinalIgnoreCase));
         Expect("internet Repair button", x.Contains("Content=\"Repair\"", StringComparison.Ordinal));
         // Proof layer: benchmark delta, rollback banner, honest Repair caption.
         Expect("internet proof layer",
-            x.Contains("BenchmarkSummary", StringComparison.Ordinal)
+            !x.Contains("BenchmarkSummary", StringComparison.Ordinal)
+            && x.Contains("QualitySummary", StringComparison.Ordinal)
             && x.Contains("RollbackNotice", StringComparison.Ordinal)
             && x.Contains("RepairHint", StringComparison.Ordinal));
         var ics = Path.Combine(repo, "Exo", "Views", "InternetOptimizerPage.xaml.cs");
@@ -459,7 +454,7 @@ if (File.Exists(featureGridCs))
 foreach (var page in new[]
          {
              "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml",
-             "InternetOptimizerPage.xaml", "NvidiaOptimizerPage.xaml"
+             "NvidiaOptimizerPage.xaml"
          })
 {
     var p = Path.Combine(repo, "Exo", "Views", page);
@@ -479,10 +474,13 @@ if (File.Exists(internetDensityXaml))
 {
     var ix = File.ReadAllText(internetDensityXaml);
     Expect("internet decluttered action density",
-        ix.Contains("ExoInternetActionGrid", StringComparison.Ordinal)
-        && ix.Contains("Content=\"Analyze &amp; Apply\"", StringComparison.Ordinal)
-        && ix.Contains("Grid.Column=\"1\"", StringComparison.Ordinal)
-        && !ix.Contains("Grid.Column=\"3\"", StringComparison.Ordinal));
+        ix.Contains("Content=\"Analyze &amp; Apply\"", StringComparison.Ordinal)
+        && ix.Contains("Content=\"Repair\"", StringComparison.Ordinal)
+        && !ix.Contains("Content=\"Refresh\"", StringComparison.Ordinal)
+        && ix.Contains("IsFeatureListVisible=\"False\"", StringComparison.Ordinal)
+        && ix.Contains("HasApplyReport=\"False\"", StringComparison.Ordinal)
+        && !ix.Contains("FeatureItems=", StringComparison.Ordinal)
+        && !ix.Contains("ExoInternetActionGrid", StringComparison.Ordinal));
     Expect("internet compact honest messages",
         ix.Contains("RollbackNotice", StringComparison.Ordinal)
         && ix.Contains("Style=\"{StaticResource ExoMessageText}\"", StringComparison.Ordinal)
@@ -495,7 +493,7 @@ if (File.Exists(internetDensityXaml))
 // staggered feature-tile entrance on its first loading → loaded transition.
 foreach (var page in new[]
          {
-             "DiscordOptimizerPage", "SteamOptimizerPage", "InternetOptimizerPage", "NvidiaOptimizerPage"
+             "DiscordOptimizerPage", "SteamOptimizerPage", "NvidiaOptimizerPage"
          })
 {
     var cs = Path.Combine(repo, "Exo", "Views", page + ".xaml.cs");
@@ -521,9 +519,9 @@ foreach (var vmName in new[]
     Expect(vmName + " no confirm gate", !vmCode.Contains("ConfirmAsync", StringComparison.Ordinal));
 }
 
-// Last-apply step report is surfaced on Internet / Discord / Steam (NVIDIA has no
-// applyReport data — intentionally omitted, never faked).
-foreach (var page in new[] { "DiscordOptimizerPage", "SteamOptimizerPage", "InternetOptimizerPage" })
+// Detailed last-apply reports stay on Discord / Steam. Internet is intentionally
+// reduced to its quality result plus Apply / Repair; NVIDIA never fakes report data.
+foreach (var page in new[] { "DiscordOptimizerPage", "SteamOptimizerPage" })
 {
     var px = Path.Combine(repo, "Exo", "Views", page + ".xaml");
     if (!File.Exists(px)) continue;
@@ -544,10 +542,10 @@ var nvidiaXamlPath = Path.Combine(repo, "Exo", "Views", "NvidiaOptimizerPage.xam
 if (File.Exists(nvidiaXamlPath))
 {
     var nx = File.ReadAllText(nvidiaXamlPath);
-    // NVIDIA Reset is status-clear only — honest caption, no rollback wording.
-    Expect("nvidia reset honest caption",
-        nx.Contains("Reset clears Exo status only", StringComparison.Ordinal)
-        && !nx.Contains("rollback", StringComparison.OrdinalIgnoreCase));
+    // NVIDIA Repair is status-clear only — honest caption, no rollback claim.
+    Expect("nvidia repair honest caption",
+        nx.Contains("Repair clears Exo's status marker", StringComparison.Ordinal)
+        && nx.Contains("does not roll back", StringComparison.OrdinalIgnoreCase));
 }
 
 var loaderCs = Path.Combine(repo, "Exo", "Views", "Controls", "ExoLoader.xaml.cs");
@@ -775,7 +773,9 @@ if (File.Exists(settingsVm))
     Expect("VM no dead settings leftovers",
         !svm.Contains("KitVersion", StringComparison.Ordinal)
         && !svm.Contains("CurrentThemeLabel", StringComparison.Ordinal)
-        && !svm.Contains("ThemeSwitchHint", StringComparison.Ordinal));
+        && !svm.Contains("ThemeSwitchHint", StringComparison.Ordinal)
+        && !svm.Contains("IsLightMode", StringComparison.Ordinal)
+        && !svm.Contains("IsDarkMode", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
 {

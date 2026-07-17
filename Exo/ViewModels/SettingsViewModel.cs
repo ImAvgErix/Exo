@@ -8,7 +8,6 @@ namespace Exo.ViewModels;
 public partial class SettingsViewModel : ObservableObject
 {
     private readonly AppServices _services;
-    private bool _suppressThemeSync;
     private bool _suppressSettingsSync;
 
     public SettingsViewModel(AppServices services)
@@ -17,8 +16,6 @@ public partial class SettingsViewModel : ObservableObject
         LoadFromSettings();
     }
 
-    [ObservableProperty] public partial bool IsDarkMode { get; set; } = true;
-    [ObservableProperty] public partial bool IsLightMode { get; set; }
     [ObservableProperty] public partial bool CheckForUpdatesOnLaunch { get; set; }
 
     [ObservableProperty] public partial string AppVersion { get; set; } = "-";
@@ -101,51 +98,6 @@ public partial class SettingsViewModel : ObservableObject
         {
             UpdateStatus = "Could not open GitHub: " + ex.Message;
         }
-    }
-
-    partial void OnIsDarkModeChanged(bool value)
-    {
-        if (_suppressThemeSync) return;
-        if (value)
-        {
-            _suppressThemeSync = true;
-            IsLightMode = false;
-            _suppressThemeSync = false;
-            _services.Theme.SetTheme(AppSettings.DarkTheme);
-        }
-        else if (!IsLightMode)
-        {
-            _suppressThemeSync = true;
-            IsLightMode = true;
-            _suppressThemeSync = false;
-            _services.Theme.SetTheme(AppSettings.LightTheme);
-        }
-    }
-
-    partial void OnIsLightModeChanged(bool value)
-    {
-        if (_suppressThemeSync) return;
-        if (value)
-        {
-            _suppressThemeSync = true;
-            IsDarkMode = false;
-            _suppressThemeSync = false;
-            _services.Theme.SetTheme(AppSettings.LightTheme);
-        }
-        else if (!IsDarkMode)
-        {
-            _suppressThemeSync = true;
-            IsDarkMode = true;
-            _suppressThemeSync = false;
-            _services.Theme.SetTheme(AppSettings.DarkTheme);
-        }
-    }
-
-    [RelayCommand]
-    private void ToggleTheme()
-    {
-        // Flip: dark → light, light → dark
-        IsDarkMode = !IsDarkMode;
     }
 
     partial void OnCheckForUpdatesOnLaunchChanged(bool value)
@@ -253,18 +205,13 @@ public partial class SettingsViewModel : ObservableObject
     private void LoadFromSettings()
     {
         var s = _services.Settings.Current;
-        var dark = !string.Equals(s.Theme, AppSettings.LightTheme, StringComparison.OrdinalIgnoreCase);
         _suppressSettingsSync = true;
-        _suppressThemeSync = true;
         try
         {
-            IsDarkMode = dark;
-            IsLightMode = !dark;
             CheckForUpdatesOnLaunch = s.CheckForUpdatesOnLaunch;
         }
         finally
         {
-            _suppressThemeSync = false;
             _suppressSettingsSync = false;
         }
 

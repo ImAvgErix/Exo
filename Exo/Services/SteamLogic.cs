@@ -32,7 +32,7 @@ public static partial class SteamLogic
     }
 
     /// <summary>
-    /// Steam memory guard: low memory priority for background renderers, normal
+    /// Steam background policy: low memory priority for background renderers, normal
     /// foreground behavior, in-game CPU yield, and quiet-start re-enforcement.
     /// It must never force-trim, suspend, cap, or kill Chromium processes.
     /// </summary>
@@ -46,7 +46,8 @@ public static partial class SteamLogic
         if (!text.Contains("ProcessPriorityClass]::Normal", StringComparison.Ordinal)) return false;
         if (!text.Contains("ProcessPriorityClass]::BelowNormal", StringComparison.Ordinal)) return false;
         if (!text.Contains("$steamCls = if ($InGame)", StringComparison.Ordinal)) return false;
-        if (!text.Contains("$webCls = if ($InGame)", StringComparison.Ordinal)) return false;
+        if (!text.Contains("$backgroundWebCls = if ($InGame)", StringComparison.Ordinal)) return false;
+        if (!text.Contains("$webCls = if ($_.Id -eq $foregroundPid)", StringComparison.Ordinal)) return false;
         if (!text.Contains("$_.PriorityClass = $webCls", StringComparison.Ordinal)) return false;
         // Hard fail if helper still thrashing CEF — evaluate code lines only:
         // a "# Never EmptyWorkingSet" doc comment must not exempt a real call.

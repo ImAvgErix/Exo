@@ -36,11 +36,15 @@ $steamCls = if ($InGame) {
 } else {
   [System.Diagnostics.ProcessPriorityClass]::Normal
 }
-$webCls = if ($InGame) {
+$backgroundWebCls = if ($InGame) {
   [System.Diagnostics.ProcessPriorityClass]::BelowNormal
 } else {
   [System.Diagnostics.ProcessPriorityClass]::Normal
 }
+$foregroundPid = ForegroundPid
+$webCls = if ($_.Id -eq $foregroundPid) {
+  [System.Diagnostics.ProcessPriorityClass]::Normal
+} else { $backgroundWebCls }
 $_.PriorityClass = $webCls
 Start-Sleep -Seconds 5
 """;

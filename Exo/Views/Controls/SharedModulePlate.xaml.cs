@@ -17,16 +17,12 @@ public sealed partial class SharedModulePlate : UserControl
 
     public event RoutedEventHandler? ToggleReportClick;
     public event RoutedEventHandler? SecondaryLeftClick;
-    public event RoutedEventHandler? SecondaryRightClick;
 
     private void ToggleReport_Click(object sender, RoutedEventArgs e) =>
         ToggleReportClick?.Invoke(sender, e);
 
     private void SecondaryLeft_Click(object sender, RoutedEventArgs e) =>
         SecondaryLeftClick?.Invoke(sender, e);
-
-    private void SecondaryRight_Click(object sender, RoutedEventArgs e) =>
-        SecondaryRightClick?.Invoke(sender, e);
 
     public static readonly DependencyProperty ModuleTitleProperty =
         DependencyProperty.Register(nameof(ModuleTitle), typeof(string), typeof(SharedModulePlate), new PropertyMetadata("MODULE"));
@@ -123,10 +119,6 @@ public sealed partial class SharedModulePlate : UserControl
     public static readonly DependencyProperty SecondaryLeftLabelProperty =
         DependencyProperty.Register(nameof(SecondaryLeftLabel), typeof(string), typeof(SharedModulePlate), new PropertyMetadata("Repair"));
     public string SecondaryLeftLabel { get => (string)GetValue(SecondaryLeftLabelProperty); set => SetValue(SecondaryLeftLabelProperty, value); }
-
-    public static readonly DependencyProperty SecondaryRightLabelProperty =
-        DependencyProperty.Register(nameof(SecondaryRightLabel), typeof(string), typeof(SharedModulePlate), new PropertyMetadata("Refresh"));
-    public string SecondaryRightLabel { get => (string)GetValue(SecondaryRightLabelProperty); set => SetValue(SecondaryRightLabelProperty, value); }
 
     public static readonly DependencyProperty SecondaryActionsEnabledProperty =
         DependencyProperty.Register(nameof(SecondaryActionsEnabled), typeof(bool), typeof(SharedModulePlate), new PropertyMetadata(true));

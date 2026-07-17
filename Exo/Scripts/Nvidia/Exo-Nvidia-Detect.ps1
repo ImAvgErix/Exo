@@ -520,6 +520,21 @@ if ($state -and -not $pendingAfterDriver -and -not $applyInProgress) {
 # Profile stage applied = durable state record AND live DRS not drifted.
 $applied = $profileOk -and ($drsLive -ne 'drifted')
 $gsyncDetail = if ($state -and $state.gsync) { 'G-SYNC pack' } else { 'Max FPS / latency pack' }
+$hardwarePolicy = if ($state -and ($state.PSObject.Properties.Name -contains 'hardwarePolicy')) { $state.hardwarePolicy } else { $null }
+$hardwareSummary = if ($hardwarePolicy) {
+    $gpuLabel = if ($primary) { [string]$primary.Name } else { [string]$state.gpuName }
+    $modeLabel = if ($hardwarePolicy.primaryMode) { [string]$hardwarePolicy.primaryMode } else { 'display mode unknown' }
+    $connectionLabel = if ($hardwarePolicy.primaryConnection) { [string]$hardwarePolicy.primaryConnection } else { 'connection unknown' }
+    $policyLabel = if ([bool]$state.gsync) { 'adaptive sync' } else { 'raw latency' }
+    "$gpuLabel - $modeLabel $connectionLabel - $policyLabel"
+} elseif ($primary) {
+    "$($primary.Name) - hardware policy will be selected on Apply"
+} else { 'Hardware inventory unavailable' }
+$features.Add(@{
+    title  = 'Hardware-matched policy'
+    detail = $hardwareSummary
+    active = [bool]$hardwarePolicy
+})
 $features.Add(@{
     title  = '3D Base Profile'
     detail = $(if ($profileOk -and $drsLive -eq 'drifted') {
@@ -604,7 +619,7 @@ $features.Add(@{
     detail = $(if ($displaySkippedNoPanels) {
         'No active NVIDIA-connected panels (common on Optimus). Display step not required; 3D profiles still apply.'
     } elseif ($displayLive.Available) {
-        "Live NVAPI: $($displayLive.Detail) | primary=max Hz, secondary=60 Hz, Full RGB, GPU no-scaling"
+        "Live NVAPI: $($displayLive.Detail) | primary=max Hz, secondary unchanged, Full RGB, GPU no-scaling"
     } else {
         'Live NVAPI helper unavailable; display state cannot be verified.'
     })
@@ -747,6 +762,10 @@ else { 'Apply to set profiles and display policy for this GPU.' }
     gpuName            = $(if ($primary) { $primary.Name } else { $null })
     series             = $series
     gsync              = [bool]($state -and $state.gsync)
+    hardwareSummary    = $hardwareSummary
+    policySource       = $(if ($hardwarePolicy -and $hardwarePolicy.selectionSource) { [string]$hardwarePolicy.selectionSource } else { '' })
+    primaryRefreshHz   = $(if ($hardwarePolicy) { [int]$hardwarePolicy.primaryCurrentHz } else { 0 })
+    primaryMaxRefreshHz = $(if ($hardwarePolicy) { [int]$hardwarePolicy.primaryMaxHz } else { 0 })
     currentDriver      = $currentNv
     latestDriver       = $latestNv
     notebookGpu        = $isNotebookGpu

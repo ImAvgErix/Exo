@@ -67,13 +67,6 @@ public sealed class SettingsService
     private static bool MigrateLegacySettings(AppSettings settings)
     {
         var changed = false;
-        if (!string.Equals(settings.Theme, AppSettings.DarkTheme, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(settings.Theme, AppSettings.LightTheme, StringComparison.OrdinalIgnoreCase))
-        {
-            settings.Theme = AppSettings.DarkTheme;
-            changed = true;
-        }
-
         if (string.IsNullOrWhiteSpace(settings.DiscordKitVersion))
         {
             settings.DiscordKitVersion = "1.3.54";

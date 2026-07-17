@@ -27,40 +27,6 @@
 
             <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
 
-            <StackPanel Spacing="9">
-                <TextBlock Text="Appearance"
-                           FontFamily="{StaticResource ExoUiFontSemiBold}"
-                           FontSize="14"
-                           FontWeight="SemiBold"
-                           Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <RadioButton x:Name="DarkModeRadio"
-                                 Grid.Column="0"
-                                 Style="{StaticResource ExoThemeChoice}"
-                                 Content="Dark"
-                                 GroupName="ExoTheme"
-                                 MinHeight="40"
-                                 IsChecked="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}"
-                                 Click="DarkMode_Click"
-                                 AutomationProperties.Name="Dark mode" />
-                    <RadioButton x:Name="LightModeRadio"
-                                 Grid.Column="1"
-                                 Style="{StaticResource ExoThemeChoice}"
-                                 Content="Light"
-                                 GroupName="ExoTheme"
-                                 MinHeight="40"
-                                 IsChecked="{x:Bind ViewModel.IsLightMode, Mode=TwoWay}"
-                                 Click="LightMode_Click"
-                                 AutomationProperties.Name="Light mode" />
-                </Grid>
-            </StackPanel>
-
-            <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
-
             <StackPanel Spacing="10">
                 <Grid ColumnSpacing="12" MinHeight="36">
                     <StackPanel Spacing="2" VerticalAlignment="Center">
@@ -80,7 +46,8 @@
                                   OnContent=""
                                   OffContent="" />
                 </Grid>
-                <Button Style="{StaticResource ExoPrimaryButton}"
+                <Button Style="{StaticResource ExoQuietButton}"
+                        BorderBrush="{ThemeResource ExoAccentBrush}"
                         Content="Check for updates"
                         MinHeight="40"
                         Padding="14,9"
