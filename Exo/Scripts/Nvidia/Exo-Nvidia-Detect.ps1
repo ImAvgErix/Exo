@@ -395,7 +395,7 @@ if ($state -and [bool]$state.profileApplied -and $state.profileFile -and
         try { $drsExportedMap = Get-ExoDrsExportBaseMap $drsExportPath }
         finally { Remove-Item -LiteralPath $drsExportPath -Force -ErrorAction SilentlyContinue }
     }
-    $drsRequiredPins = @('274197361', '390467', '277041152', '277041154', '294973784', '11041231')
+    $drsRequiredPins = @('274197361', '390467', '277041152', '277041154', '294973784', '11041279', '11041231')
     $drsResult = Get-ExoDrsVerificationResult -Expected $drsExpectedMap -Exported $drsExportedMap -RequiredIds $drsRequiredPins
     $drsLive = [string]$drsResult.Status
     $drsMismatch = @($drsResult.Mismatches)
@@ -557,13 +557,14 @@ $gsyncPolicy = [bool]($state -and $state.gsync)
 $latencyPolicyOk = $profileOk -and ($drsLive -ne 'drifted') -and $drsExpectedMap -and
     [string]$drsExpectedMap['390467'] -eq '2' -and
     [string]$drsExpectedMap['277041152'] -eq '1' -and
+    [string]$drsExpectedMap['11041279'] -eq '0' -and
     [string]$drsExpectedMap['11041231'] -eq $(if ($gsyncPolicy) { '1199655232' } else { '138504007' })
 $features.Add(@{
     title  = 'Latency / sync policy'
     detail = $(if ($gsyncPolicy) {
-        'G-SYNC + driver VSync on + Ultra Low Latency; NVIDIA Reflex overrides ULL in supported games.'
+        'G-SYNC + driver VSync on + Ultra Low Latency; NVIDIA Reflex takes priority automatically in supported games.'
     } else {
-        'Max-FPS path: VSync off + Ultra Low Latency; Reflex overrides ULL in supported games.'
+        'Raw-latency path: G-SYNC/VRR and VSync off + Ultra Low Latency; Reflex takes priority automatically in supported games.'
     })
     active = [bool]$latencyPolicyOk
 })

@@ -214,10 +214,10 @@
         <Setter Property="MinHeight" Value="40" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
-        <Setter Property="Background" Value="{ThemeResource ExoPrimaryButtonFillBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource ExoPrimaryButtonStrokeBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoAccentBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoAccentBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoOnAccentBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
@@ -232,7 +232,7 @@
                           BorderBrush="{TemplateBinding BorderBrush}"
                           BorderThickness="{TemplateBinding BorderThickness}">
                         <Border x:Name="HoverWash"
-                                Background="{ThemeResource ExoAccentSoftBrush}"
+                                Background="{ThemeResource ExoOnAccentBrush}"
                                 CornerRadius="{TemplateBinding CornerRadius}"
                                 Opacity="0"
                                 IsHitTestVisible="False" />

@@ -301,9 +301,13 @@ public sealed class NetworkOptimizerService
 
             progress?.Report("Testing encrypted DNS routes...");
             var (dns, dnsMedianMs) = await SelectFastestDnsAsync(ct).ConfigureAwait(false);
-            var allAttempts = idleSeries.Attempts + down.LoadedLatencyAttempts + up.LoadedLatencyAttempts;
-            var allSuccessful = idle.Count + down.LoadedLatency.Count + up.LoadedLatency.Count;
-            var packetLoss = allAttempts == 0 ? 100d : (allAttempts - allSuccessful) * 100d / allAttempts;
+            // Connection loss must describe the unsaturated path. Routers and public
+            // targets commonly deprioritize ICMP while the upload/download workers are
+            // intentionally filling the link; counting those missed replies as packet
+            // loss produced alarming numbers that were not baseline connection loss.
+            var packetLoss = NetworkLogic.CalculateIdlePacketLossPercent(
+                idleSeries.Attempts,
+                idle.Count);
 
             var p50 = Percentile(idle, 0.5);
             var p95 = Percentile(idle, 0.95);

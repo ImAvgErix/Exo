@@ -475,6 +475,7 @@ foreach ($profile in $profiles) {
             '390467'    = '2'
             '277041152' = '1'
             '294973784' = $(if ($gsyncProfile) { '1' } else { '0' })
+            '11041279'  = '0'
             '11041231'  = $(if ($gsyncProfile) { '1199655232' } else { '138504007' })
         }
         foreach ($id in $expected.Keys) {

@@ -705,4 +705,16 @@ public static partial class NetworkLogic
             ? NetworkPreset.HighestThroughput
             : NetworkPreset.LowestLatency;
     }
+
+    /// <summary>
+    /// Baseline packet loss from the idle series only. Loaded ICMP misses are not
+    /// connection loss: the quality test deliberately saturates the path and many
+    /// routers/targets deprioritize ping replies under that load.
+    /// </summary>
+    public static double CalculateIdlePacketLossPercent(int attempts, int successful)
+    {
+        if (attempts <= 0) return 100d;
+        var boundedSuccessful = Math.Clamp(successful, 0, attempts);
+        return (attempts - boundedSuccessful) * 100d / attempts;
+    }
 }

@@ -41,8 +41,6 @@
                     <SolidColorBrush x:Key="ExoOnAccentBrush" Color="#000000" />
                     <SolidColorBrush x:Key="ExoAccentSoftBrush" Color="#16FFFFFF" />
                     <SolidColorBrush x:Key="ExoQuietButtonFillBrush" Color="#FF111114" />
-                    <SolidColorBrush x:Key="ExoPrimaryButtonFillBrush" Color="#FF151820" />
-                    <SolidColorBrush x:Key="ExoPrimaryButtonStrokeBrush" Color="#FF34435A" />
                     <SolidColorBrush x:Key="ExoPrimaryTextBrush" Color="#FAFAF9" />
                     <SolidColorBrush x:Key="ExoSecondaryTextBrush" Color="#D6D3D1" />
                     <SolidColorBrush x:Key="ExoMutedTextBrush" Color="#9898A3" />

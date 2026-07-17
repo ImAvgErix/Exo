@@ -3,6 +3,11 @@
 - **DNS cache TTL folklore removed**: Apply no longer writes `Dnscache MaxCacheTtl=86400` (records pinned up to 24h → stale DNS). Any leftover override is removed on Apply and never restored by Repair.
 - **Offline rescue restores DNS**: [`Repair-Internet.ps1`](Repair-Internet.ps1) now restores per-adapter DNS servers from the snapshot (matching in-app Repair) instead of leaving pinned resolvers behind.
 - **Repo gate green**: UiPreview tsconfigs are strict JSON again (integrity check passes with 0 issues).
+- **Explicit G-SYNC / VRR control**: restores an NVIDIA-only toggle and defaults to the raw-latency profile when it is off. High-refresh DisplayPort and EDID range remain useful capability hints, but Exo no longer assumes the monitor's physical adaptive-sync setting is enabled.
+- **Verified NVIDIA latency policy**: keeps global Ultra Low Latency for non-Reflex games because NVIDIA Reflex takes priority automatically when a supported game enables it. Toggle-off now disables driver G-SYNC, VSync, and the OS VRR override; all required pins are verified from the live driver export.
+- **Truthful Internet loss**: packet loss now comes only from the idle 24-sample series. Missed ICMP replies while Exo intentionally saturates download/upload are excluded, and full-load download versus upload latency is labeled explicitly.
+- **DNS status repair**: uses Microsoft's supported DNS client APIs with the correct `netsh dnsclient` fallback, verifies automatic DoH before claiming it is active, and keeps the dashboard concise when the current Windows build cannot register encrypted DNS.
+- **Internet UI clarity**: restores four concise explanation cards for connection routing, adaptive tuning, DNS privacy, and exact-state Repair. Primary Apply buttons are white again while Settings remains dark-only.
 
 ## 3.5.0
 

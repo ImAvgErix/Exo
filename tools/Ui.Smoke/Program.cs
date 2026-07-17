@@ -306,6 +306,10 @@ if (File.Exists(theme))
 {
     var t = File.ReadAllText(theme);
     Expect("theme ExoPrimaryButton", t.Contains("ExoPrimaryButton", StringComparison.Ordinal));
+    Expect("primary Apply button is white with dark text",
+        t.Contains("Property=\"Background\" Value=\"{ThemeResource ExoAccentBrush}\"", StringComparison.Ordinal)
+        && t.Contains("Property=\"Foreground\" Value=\"{ThemeResource ExoOnAccentBrush}\"", StringComparison.Ordinal)
+        && !t.Contains("ExoPrimaryButtonFillBrush", StringComparison.Ordinal));
     Expect("theme ExoGlassCircle",
         t.Contains("ExoGlassCircle", StringComparison.Ordinal)
         && t.Contains("CornerRadius\" Value=\"23", StringComparison.Ordinal));
@@ -477,9 +481,9 @@ if (File.Exists(internetDensityXaml))
         ix.Contains("Content=\"Analyze &amp; Apply\"", StringComparison.Ordinal)
         && ix.Contains("Content=\"Repair\"", StringComparison.Ordinal)
         && !ix.Contains("Content=\"Refresh\"", StringComparison.Ordinal)
-        && ix.Contains("IsFeatureListVisible=\"False\"", StringComparison.Ordinal)
+        && ix.Contains("IsFeatureListVisible=\"{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay}\"", StringComparison.Ordinal)
         && ix.Contains("HasApplyReport=\"False\"", StringComparison.Ordinal)
-        && !ix.Contains("FeatureItems=", StringComparison.Ordinal)
+        && ix.Contains("FeatureItems=\"{x:Bind ViewModel.Rows, Mode=OneWay}\"", StringComparison.Ordinal)
         && !ix.Contains("ExoInternetActionGrid", StringComparison.Ordinal));
     Expect("internet compact honest messages",
         ix.Contains("RollbackNotice", StringComparison.Ordinal)
@@ -835,6 +839,10 @@ if (File.Exists(dashVm))
     Expect("home no nvidia probe", !dvm.Contains("DetectNvidiaAsync", StringComparison.Ordinal));
     Expect("home dashboard refresh", dvm.Contains("RefreshDashboard", StringComparison.Ordinal)
         && dvm.Contains("HomeDashboardReader", StringComparison.Ordinal));
+    Expect("home NVIDIA policy is explicitly named",
+        dvm.Contains("Raw-latency profile", StringComparison.Ordinal)
+        && dvm.Contains("G-SYNC/VRR profile", StringComparison.Ordinal)
+        && !dvm.Contains("Auto raw-latency path", StringComparison.Ordinal));
     Expect("home internet metrics are current samples, not causal deltas",
         dvm.Contains("ms idle", StringComparison.Ordinal)
         && dvm.Contains("ms jitter", StringComparison.Ordinal)

@@ -38,6 +38,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial string LastResultGlyph { get; set; } = "\uE73E";
     [ObservableProperty] public partial Brush LastResultBrush { get; set; }
     [ObservableProperty] public partial string HardwarePolicyText { get; set; } = "Detecting GPU and displays...";
+    [ObservableProperty] public partial bool UseGsync { get; set; }
 
     [RelayCommand]
     private async Task RefreshAsync()
@@ -89,7 +90,9 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                     ProgressStatus = p.Status;
             });
 
-            var args = new[] { "-NonInteractive" };
+            var args = UseGsync
+                ? new[] { "-NonInteractive", "-Gsync" }
+                : new[] { "-NonInteractive", "-RawLatency" };
 
             var result = await _services.PowerShell.RunAsync(
                 _services.Scripts.NvidiaOptimizerScript,
@@ -240,6 +243,9 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             !string.IsNullOrWhiteSpace(hardware)
                 ? hardware
                 : "Apply detects the GPU, display path, refresh range, and laptop/desktop policy automatically.";
+        UseGsync = state.Extra is { Count: > 0 } &&
+            state.Extra.TryGetValue("gsync", out var gsync) &&
+            string.Equals(gsync, "true", StringComparison.OrdinalIgnoreCase);
 
         Features.Clear();
         foreach (var feature in state.Features)

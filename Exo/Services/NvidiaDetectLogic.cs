@@ -83,7 +83,7 @@ public static partial class NvidiaDetectLogic
     /// </summary>
     public static readonly string[] DrsRequiredPinIds =
     {
-        "274197361", "390467", "277041152", "277041154", "294973784", "11041231",
+        "274197361", "390467", "277041152", "277041154", "294973784", "11041279", "11041231",
     };
 
     /// <summary>

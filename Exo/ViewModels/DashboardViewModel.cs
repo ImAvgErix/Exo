@@ -166,7 +166,7 @@ public partial class DashboardViewModel : ObservableObject
     {
         var downLoaded = Math.Max(0, quality.DownloadLoadedMs - quality.PingP50Ms);
         var upLoaded = Math.Max(0, quality.UploadLoadedMs - quality.PingP50Ms);
-        return $"{quality.PingP50Ms:0.#} ms idle · +{downLoaded:0.#}/+{upLoaded:0.#} ms loaded · {quality.PacketLossPercent:0.##}% loss";
+        return $"{quality.PingP50Ms:0.#} ms idle · full-load +{downLoaded:0.#} down / +{upLoaded:0.#} up · {quality.PacketLossPercent:0.##}% idle loss";
     }
 
     private void RefreshDiscordRamTile()
@@ -273,8 +273,8 @@ public partial class DashboardViewModel : ObservableObject
                 ? $" · {nvidia.PrimaryMode} {nvidia.PrimaryConnection}".TrimEnd()
                 : string.Empty;
             NvidiaPathSecondary = nvidia.Gsync
-                ? $"Auto G-SYNC/VRR latency path{display}"
-                : $"Auto raw-latency path{display}";
+                ? $"G-SYNC/VRR profile{display}"
+                : $"Raw-latency profile{display}";
             var proof = new List<string>();
             if (nvidia.VerifiedSettingCount > 0) proof.Add($"{nvidia.VerifiedSettingCount} driver pins");
             if (nvidia.GameProfileCount > 0) proof.Add($"{nvidia.GameProfileCount} game profiles");
