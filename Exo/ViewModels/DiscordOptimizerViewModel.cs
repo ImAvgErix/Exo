@@ -154,7 +154,8 @@ public partial class DiscordOptimizerViewModel : ObservableObject
                 elevate: true,
                 progress: progress,
                 cancellationToken: _runCts.Token,
-                workingDirectory: _services.Scripts.GetDiscordRoot());
+                workingDirectory: _services.Scripts.GetDiscordRoot(),
+                ensureRuntime: true);
 
             if (result.Success)
             {
@@ -226,7 +227,8 @@ public partial class DiscordOptimizerViewModel : ObservableObject
                 elevate: true,
                 progress: progress,
                 cancellationToken: _runCts.Token,
-                workingDirectory: _services.Scripts.GetDiscordRoot());
+                workingDirectory: _services.Scripts.GetDiscordRoot(),
+                ensureRuntime: true);
 
             SetResult(
                 result.Success

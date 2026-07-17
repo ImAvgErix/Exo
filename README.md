@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0f766e?style=flat-square)](https://github.com/ImAvgErix/Exo/releases/latest)
 
-<!-- hero: docs/exo-shell.png — capture on Windows QA pass -->
+![Exo's AMOLED WinUI dashboard](docs/exo-shell.png)
 
 Exo is a focused Windows performance hub. Each optimizer is **aggressive by design**, **deterministic**, and **honest about what it applied**. Live status checklists track real state — not marketing checkmarks. Internet shows **before/after ping, jitter, and DNS numbers** measured on your machine; NVIDIA reads the driver's actual profile database back and shows **"Verified in driver"** — or tells you it drifted.
 
@@ -21,7 +21,7 @@ Grab the latest **double-click installer** from [Releases](https://github.com/Im
 |-------|------------|
 | `Exo.exe` | Self-extracting installer (recommended) |
 
-**Requirements:** Windows 10/11 **x64**, admin elevation when applying optimizers, NVIDIA GPU for the NVIDIA path. PowerShell 7 is installed automatically by the app — no manual runtime setup.
+**Requirements:** Windows 10/11 **x64**, admin elevation only when applying optimizers, and an NVIDIA GPU for the NVIDIA path. If PowerShell 7 is missing, Exo prepares it only after you click **Apply** or **Repair** — never at startup.
 
 One-liner (PowerShell):
 
@@ -131,7 +131,7 @@ Optimizers change application files, launchers, driver profiles, display prefs, 
 Exo itself ships **no telemetry, no analytics, no accounts**. Everything runs and stays local:
 
 - Settings, logs, optimizer state, and the network snapshot live in `%LocalAppData%\Exo` — nothing leaves your machine
-- Network calls happen only when you ask: GitHub for app/script updates, and vendor downloads the optimizers need (Equicord, NVIDIA Profile Inspector, PowerShell 7 runtime)
+- Network calls happen only when you explicitly check/apply, or when you opt into launch-time app update checks. Optimizer kits ship with the app; Exo never refreshes scripts or installs dependencies merely because it opened.
 - The optimizers *remove* telemetry from their targets (Discord client tracking, NVIDIA telemetry services and tasks) — that's the point
 
 ---
@@ -148,7 +148,7 @@ Only when applying an optimizer — services, scheduled tasks, and driver profil
 `%LocalAppData%\Exo\app`, per-user, no system folders touched. Uninstall = delete that folder and the Start Menu shortcut.
 
 **How do updates work?**
-The app checks GitHub Releases, downloads `Exo.exe`, verifies size + SHA-256 + version stamp, then stage-swaps itself and relaunches. Script kits update separately from the repo's `main`. A dependency doctor runs at install/update: it installs stable PowerShell 7 if missing (winget, MSI fallback), removes the old Preview channels, and prunes stale tool/driver/staging caches.
+The app checks GitHub Releases, downloads `Exo.exe`, verifies size + SHA-256 + version stamp, then stage-swaps itself and relaunches. Every app release contains its matching optimizer kits. Missing PowerShell is prepared on demand after **Apply** or **Repair**, with progress shown in the UI.
 
 **An optimizer broke something — how do I get back?**
 Internet: Repair restores the exact pre-apply snapshot (and auto-rollback already fires if connectivity breaks right after apply); offline, run [`Repair-Internet.ps1`](Repair-Internet.ps1). Discord/Steam: use **Repair** in the app or [`Repair-Discord.ps1`](Repair-Discord.ps1). NVIDIA: Reset clears Exo status only — restore driver settings through NVIDIA tools or a clean driver install.

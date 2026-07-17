@@ -10,16 +10,17 @@ or in any script.
 |---|---|---|---|
 | `api.github.com/repos/ImAvgErix/Exo/releases/latest` | Only when you click **Check for updates** (and on launch if you enable it) | App update check | Nothing beyond a plain HTTPS GET (GitHub sees your IP/UA, like any download) |
 | `github.com/.../releases/latest/download/Exo.exe` | Only after you confirm an update | App download | — |
-| `raw.githubusercontent.com` + `codeload.github.com` | Script-kit updates (toggleable: Settings → **Auto-update scripts**) | Optimizer scripts ship separately so fixes land without an app update | — |
 | `api.github.com/repos/Orbmu2k/nvidiaProfileInspector/releases/latest` | NVIDIA apply, only when a profile pack needs the tool | Fetch NVIDIA Profile Inspector | — |
 | `gfwsl.geforce.com` (NVIDIA AjaxDriverService) | NVIDIA detect/apply | Look up the latest driver version for your GPU model | GPU model only (required by NVIDIA's API) |
 | `us/international.download.nvidia.com` | NVIDIA apply, only if the NVIDIA app is missing and you opt in | Official NVIDIA installer | — |
 | `discord.com/api/downloads/...` | Discord apply, only if Discord is missing and you opt in | Official Discord installer | — |
-| `api.github.com/repos/PowerShell/PowerShell/releases` | Setup / dependency doctor, only if pwsh is missing | PowerShell 7 bootstrap | — |
+| `api.github.com/repos/PowerShell/PowerShell/releases` | Only after you start Apply/Repair and PowerShell 7 is missing | PowerShell 7 bootstrap (the UI shows **Preparing PowerShell 7…**) | — |
 
 Everything is plain HTTPS GET. **No POST of personal data anywhere. No cookies. No identifiers.**
-If you disable update checks and script auto-update, Exo makes **zero** network requests until
-you run an optimizer that needs to download a tool — and it tells you before it does.
+If you disable update checks, Exo makes **zero** network requests until you run an optimizer
+that needs to download a tool. Optimizer kits ship with each app release. Exo never installs
+PowerShell or copies optimizer kits merely because the app opened; dependency work begins
+only after your Apply/Repair action.
 
 ## What stays on your PC (all under `%LocalAppData%\Exo`)
 

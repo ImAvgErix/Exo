@@ -1,4 +1,5 @@
 #if EXO_HAS_DRAWING
+#pragma warning disable CA1416 // System.Drawing is compiled and run only on Windows.
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
@@ -24,10 +25,10 @@ var busy = UiStatusPresentation.FromFlags(isBusy: true, hasError: false, hasSucc
 Expect("busy", busy == UiStatusPresentation.Tone.Busy);
 Expect("success", UiStatusPresentation.FromFlags(false, false, true) == UiStatusPresentation.Tone.Success);
 
-// Drive real AppSettings clone path (theme + auto-update).
-var settingsA = new AppSettings { Theme = AppSettings.DarkTheme, AutoUpdateScripts = true };
+// Drive real AppSettings clone path (theme + update check preference).
+var settingsA = new AppSettings { Theme = AppSettings.DarkTheme, CheckForUpdatesOnLaunch = true };
 var settingsB = settingsA.Clone();
-Expect("AppSettings clone theme", settingsB.Theme == AppSettings.DarkTheme && settingsB.AutoUpdateScripts);
+Expect("AppSettings clone theme", settingsB.Theme == AppSettings.DarkTheme && settingsB.CheckForUpdatesOnLaunch);
 
 var repo = FindRepoRoot();
 var appXaml = Path.Combine(repo, "Exo", "App.xaml");
@@ -38,8 +39,44 @@ var mainXaml = Path.Combine(repo, "Exo", "MainWindow.xaml");
 var theme = Path.Combine(repo, "Exo", "Styles", "ThemeResources.xaml");
 var converters = Path.Combine(repo, "Exo", "Helpers", "ValueConverters.cs");
 var logosDir = Path.Combine(repo, "Exo", "Assets", "Logos");
+var appServicesCs = Path.Combine(repo, "Exo", "Services", "AppServices.cs");
+var powerShellRunnerCs = Path.Combine(repo, "Exo", "Services", "PowerShellRunnerService.cs");
+var updateServiceCs = Path.Combine(repo, "Exo", "Services", "GitHubUpdateService.cs");
+var installerPs1 = Path.Combine(repo, "Install-Exo.ps1");
 
 Expect("files", File.Exists(appXaml) && File.Exists(main) && File.Exists(dash));
+if (File.Exists(appServicesCs) && File.Exists(powerShellRunnerCs))
+{
+    var servicesSource = File.ReadAllText(appServicesCs);
+    var runnerSource = File.ReadAllText(powerShellRunnerCs);
+    Expect("startup performs no dependency bootstrap",
+        !servicesSource.Contains("EnsurePowerShellRuntimeAsync", StringComparison.Ordinal)
+        && !servicesSource.Contains("Task.Run", StringComparison.Ordinal));
+    Expect("PowerShell bootstrap requires explicit run opt-in",
+        runnerSource.Contains("bool ensureRuntime = false", StringComparison.Ordinal)
+        && runnerSource.Contains("if (ensureRuntime)", StringComparison.Ordinal)
+        && runnerSource.Contains("Preparing PowerShell 7", StringComparison.Ordinal));
+
+    var actionSources = new[]
+    {
+        Path.Combine(repo, "Exo", "ViewModels", "DiscordOptimizerViewModel.cs"),
+        Path.Combine(repo, "Exo", "ViewModels", "SteamOptimizerViewModel.cs"),
+        Path.Combine(repo, "Exo", "ViewModels", "NvidiaOptimizerViewModel.cs"),
+        Path.Combine(repo, "Exo", "Services", "NvidiaPanelSettingsService.cs")
+    };
+    Expect("Apply and Repair opt in to dependency preparation",
+        actionSources.All(File.Exists)
+        && actionSources.All(path => File.ReadAllText(path).Contains("ensureRuntime: true", StringComparison.Ordinal)));
+
+    var updateSource = File.Exists(updateServiceCs) ? File.ReadAllText(updateServiceCs) : string.Empty;
+    var installerSource = File.Exists(installerPs1) ? File.ReadAllText(installerPs1) : string.Empty;
+    Expect("install and app update do not bootstrap dependencies",
+        !updateSource.Contains("TryRunDependencyDoctor", StringComparison.Ordinal)
+        && !installerSource.Contains("Exo-DependencyDoctor", StringComparison.Ordinal));
+    Expect("app updater does not fetch script kits",
+        !updateSource.Contains("raw.githubusercontent.com", StringComparison.Ordinal)
+        && !updateSource.Contains("codeload.github.com", StringComparison.Ordinal));
+}
 if (File.Exists(appXaml))
 {
     var a = File.ReadAllText(appXaml);
@@ -590,8 +627,10 @@ if (File.Exists(mainCsPath))
         && mc.Contains("SettingsSheet.CloseMs", StringComparison.Ordinal));
     Expect("taskbar icon win32 set",
         mc.Contains("SendMessage", StringComparison.Ordinal) && mc.Contains("LoadImage", StringComparison.Ordinal)
-        && mc.Contains("TrySetWindowIcon", StringComparison.Ordinal)
-        && mc.Contains("TryRepairStartMenuShortcut", StringComparison.Ordinal));
+        && mc.Contains("TrySetWindowIcon", StringComparison.Ordinal));
+    Expect("startup does not rewrite Start Menu shortcut",
+        !mc.Contains("TryRepairStartMenuShortcut", StringComparison.Ordinal)
+        && !mc.Contains("WScript.Shell", StringComparison.Ordinal));
     Expect("navigate ensures page visible",
         mc.Contains("OnContentNavigated", StringComparison.Ordinal)
         && mc.Contains("EnsureVisible", StringComparison.Ordinal));
@@ -610,7 +649,8 @@ if (File.Exists(sfxCs))
     var sx = File.ReadAllText(sfxCs);
     Expect("SFX stable icon path",
         sx.Contains("Never use versioned names", StringComparison.Ordinal)
-        && sx.Contains("Exo.ico", StringComparison.Ordinal));
+        && sx.Contains("Exo.ico", StringComparison.Ordinal)
+        && sx.Contains("CreateStartMenuShortcut", StringComparison.Ordinal));
 }
 
 var dashCs = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs");
@@ -935,4 +975,5 @@ static InkMetrics MeasureInkFill(string path)
 }
 
 readonly record struct InkMetrics(double FillW, double FillH, double MaxFill);
+#pragma warning restore CA1416
 #endif

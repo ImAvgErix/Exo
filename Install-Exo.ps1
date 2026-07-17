@@ -1,7 +1,7 @@
 # Exo bootstrap installer.
 # Downloads the latest release Exo.exe from GitHub (verified: size + SHA-256 +
-# version stamp), runs it (installs to %LocalAppData%\Exo\app), then runs the
-# dependency doctor so stable PowerShell 7 is ready before first use.
+# version stamp), then runs it (installs to %LocalAppData%\Exo\app).
+# Optimizer dependencies are prepared only after an explicit Apply/Repair.
 # Prefer the double-click asset from Releases when you already have it.
 # One-liner stays supported: irm <raw Install-Exo.ps1 url> | iex
 
@@ -10,7 +10,6 @@ if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Window
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $Repo = 'ImAvgErix/Exo'
-$Branch = 'main'
 Write-Host ''
 Write-Host '  Exo - downloading Exo.exe...' -ForegroundColor Cyan
 Write-Host ''
@@ -72,28 +71,6 @@ if ($parsedReleaseVersion -ge [version]'1.5.0' -and $versionMismatch) {
 Write-Host '[*] Launching installer...' -ForegroundColor DarkGray
 Start-Process -FilePath $sfx
 Write-Host '[+] Installer launched - complete any SmartScreen prompt, then Exo should open.' -ForegroundColor Green
-
-# Dependency doctor: ensure stable PowerShell 7 (winget/MSI), retire the old
-# preview-channel requirements, prune stale Exo caches. Best effort - a doctor
-# problem never blocks the app install that already launched.
-Write-Host '[*] Running the Exo dependency doctor (stable PowerShell 7)...' -ForegroundColor DarkGray
-try {
-    $doctorUrl = "https://raw.githubusercontent.com/$Repo/$Branch/Exo/Scripts/Setup/Exo-DependencyDoctor.ps1"
-    $doctorDir = Join-Path $env:LOCALAPPDATA 'Exo\setup'
-    if (-not (Test-Path -LiteralPath $doctorDir)) {
-        New-Item -ItemType Directory -Path $doctorDir -Force | Out-Null
-    }
-    $doctorPath = Join-Path $doctorDir 'Exo-DependencyDoctor.ps1'
-    Invoke-WebRequest -Uri $doctorUrl -OutFile $doctorPath -UseBasicParsing `
-        -Headers @{ 'User-Agent' = 'Exo-Installer/2.0' } -TimeoutSec 120
-    & $doctorPath -Reason 'install'
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host '[!] Dependency doctor reported problems - Exo will retry on startup.' -ForegroundColor Yellow
-    }
-} catch {
-    Write-Host "[!] Dependency doctor could not run: $($_.Exception.Message)" -ForegroundColor Yellow
-    Write-Host '    Exo installs stable PowerShell 7 automatically on first start.' -ForegroundColor Yellow
-}
 
 Write-Host '[+] Done.' -ForegroundColor Green
 Write-Host ''

@@ -19,7 +19,7 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] public partial bool IsDarkMode { get; set; } = true;
     [ObservableProperty] public partial bool IsLightMode { get; set; }
-    [ObservableProperty] public partial bool AutoUpdateScripts { get; set; }
+    [ObservableProperty] public partial bool CheckForUpdatesOnLaunch { get; set; }
 
     [ObservableProperty] public partial string AppVersion { get; set; } = "-";
     [ObservableProperty] public partial string UpdateStatus { get; set; } = string.Empty;
@@ -148,10 +148,10 @@ public partial class SettingsViewModel : ObservableObject
         IsDarkMode = !IsDarkMode;
     }
 
-    partial void OnAutoUpdateScriptsChanged(bool value)
+    partial void OnCheckForUpdatesOnLaunchChanged(bool value)
     {
         if (!_suppressSettingsSync)
-            _services.Settings.Update(s => s.AutoUpdateScripts = value);
+            _services.Settings.Update(s => s.CheckForUpdatesOnLaunch = value);
     }
 
     /// <summary>
@@ -250,13 +250,6 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
-    // Back-compat command names (XAML / callers that still bind old names).
-    [RelayCommand]
-    private Task CheckAppUpdatesAsync() => CheckForUpdatesAsync();
-
-    [RelayCommand]
-    private Task CheckScriptUpdatesAsync() => CheckForUpdatesAsync();
-
     private void LoadFromSettings()
     {
         var s = _services.Settings.Current;
@@ -267,7 +260,7 @@ public partial class SettingsViewModel : ObservableObject
         {
             IsDarkMode = dark;
             IsLightMode = !dark;
-            AutoUpdateScripts = s.AutoUpdateScripts;
+            CheckForUpdatesOnLaunch = s.CheckForUpdatesOnLaunch;
         }
         finally
         {

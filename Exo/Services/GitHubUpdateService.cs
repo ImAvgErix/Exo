@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -11,16 +10,7 @@ namespace Exo.Services;
 
 public sealed class GitHubUpdateService
 {
-    private readonly SettingsService _settings;
-    private readonly ScriptBundleService _scripts;
-    private readonly SemaphoreSlim _scriptUpdateGate = new(1, 1);
     private static readonly HttpClient Http = CreateClient();
-
-    public GitHubUpdateService(SettingsService settings, ScriptBundleService scripts)
-    {
-        _settings = settings;
-        _scripts = scripts;
-    }
 
     private static HttpClient CreateClient()
     {
@@ -36,207 +26,6 @@ public sealed class GitHubUpdateService
         c.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Exo", productVersion));
         c.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         return c;
-    }
-
-    /// <summary>
-    /// Back-compat entry point — updates Discord, Steam, and NVIDIA kits from GitHub.
-    /// </summary>
-    public Task<ScriptUpdateResult> CheckAndUpdateDiscordScriptsAsync(
-        bool force = false,
-        IProgress<string>? status = null,
-        CancellationToken ct = default) =>
-        CheckAndUpdateAllScriptsAsync(force, status, ct);
-
-    public async Task<ScriptUpdateResult> CheckAndUpdateAllScriptsAsync(
-        bool force = false,
-        IProgress<string>? status = null,
-        CancellationToken ct = default)
-    {
-        await _scriptUpdateGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            return await CheckAndUpdateAllScriptsCoreAsync(force, status, ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            _scriptUpdateGate.Release();
-        }
-    }
-
-    private async Task<ScriptUpdateResult> CheckAndUpdateAllScriptsCoreAsync(
-        bool force,
-        IProgress<string>? status,
-        CancellationToken ct)
-    {
-        var settings = _settings.Current;
-        var repo = settings.DiscordScriptsRepo;
-        var branch = settings.DiscordScriptsBranch;
-        var localDiscord = _scripts.GetWorkingKitVersion("Discord");
-        var localSteam = _scripts.GetWorkingKitVersion("Steam");
-        var localNvidia = _scripts.GetWorkingKitVersion("Nvidia");
-        var localSummary = $"D{localDiscord}/S{localSteam}/N{localNvidia}";
-
-        status?.Report("Checking remote script kit versions...");
-
-        string remoteDiscord;
-        string remoteSteam;
-        string remoteNvidia;
-        try
-        {
-            remoteDiscord = (await TryGetRemoteTextAsync(
-                $"https://raw.githubusercontent.com/{repo}/{branch}/Exo/Scripts/Discord/VERSION", ct)
-                ?? await TryGetRemoteTextAsync(
-                    $"https://raw.githubusercontent.com/{repo}/{branch}/VERSION", ct)
-                ?? throw new InvalidOperationException("Remote Discord VERSION not found.")).Trim();
-            remoteSteam = (await TryGetRemoteTextAsync(
-                $"https://raw.githubusercontent.com/{repo}/{branch}/Exo/Scripts/Steam/VERSION", ct)
-                ?? remoteDiscord).Trim();
-            remoteNvidia = (await TryGetRemoteTextAsync(
-                $"https://raw.githubusercontent.com/{repo}/{branch}/Exo/Scripts/Nvidia/VERSION", ct)
-                ?? remoteDiscord).Trim();
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return new ScriptUpdateResult
-            {
-                Updated = false,
-                AlreadyLatest = false,
-                LocalVersion = localSummary,
-                RemoteVersion = "?",
-                Message = $"Could not reach GitHub: {ex.Message}"
-            };
-        }
-
-        var remoteSummary = $"D{remoteDiscord}/S{remoteSteam}/N{remoteNvidia}";
-        var needDiscord = force || !VersionsEqualOrLocalNewer(localDiscord, remoteDiscord);
-        var needSteam = force || !VersionsEqualOrLocalNewer(localSteam, remoteSteam);
-        var needNvidia = force || !VersionsEqualOrLocalNewer(localNvidia, remoteNvidia);
-
-        if (!needDiscord && !needSteam && !needNvidia)
-        {
-            return new ScriptUpdateResult
-            {
-                Updated = false,
-                AlreadyLatest = true,
-                LocalVersion = localSummary,
-                RemoteVersion = remoteSummary,
-                Message = $"Scripts are up to date (Discord {localDiscord}, Steam {localSteam}, NVIDIA {localNvidia})."
-            };
-        }
-
-        status?.Report("Downloading latest optimizer scripts from GitHub...");
-
-        var work = Path.Combine(PathHelper.AppDataDir, "updates", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(work);
-        var zipPath = Path.Combine(work, "source.zip");
-
-        try
-        {
-            var zipUrl = $"https://codeload.github.com/{repo}/zip/refs/heads/{Uri.EscapeDataString(branch)}";
-            await using (var fs = File.Create(zipPath))
-            {
-                await using var stream = await Http.GetStreamAsync(zipUrl, ct);
-                await stream.CopyToAsync(fs, ct);
-            }
-
-            status?.Report("Extracting...");
-            var extract = Path.Combine(work, "extract");
-            ZipFile.ExtractToDirectory(zipPath, extract, overwriteFiles: true);
-
-            var updated = new List<string>();
-            var skipped = new List<string>();
-
-            if (needDiscord)
-            {
-                var discordRoot = FindScriptsKitRoot(extract, "Discord", "Disc-Optimizer.ps1", "Exo-Discord-Run.ps1");
-                if (discordRoot is null)
-                    throw new InvalidOperationException("Downloaded archive did not contain Discord optimizer scripts.");
-                EnsureVersionFile(discordRoot, remoteDiscord);
-                status?.Report($"Installing Discord scripts v{remoteDiscord}...");
-                _scripts.ReplaceDiscordScriptsFrom(discordRoot);
-                _settings.Update(s => s.DiscordKitVersion = remoteDiscord);
-                updated.Add($"Discord {remoteDiscord}");
-            }
-            else
-            {
-                skipped.Add($"Discord {localDiscord}");
-            }
-
-            if (needSteam)
-            {
-                var steamRoot = FindScriptsKitRoot(extract, "Steam", "Steam-Optimizer.ps1", "Exo-Steam-Run.ps1");
-                if (steamRoot is null)
-                    throw new InvalidOperationException("Downloaded archive did not contain Steam optimizer scripts.");
-                EnsureVersionFile(steamRoot, remoteSteam);
-                status?.Report($"Installing Steam scripts v{remoteSteam}...");
-                _scripts.ReplaceSteamScriptsFrom(steamRoot);
-                updated.Add($"Steam {remoteSteam}");
-            }
-            else
-            {
-                skipped.Add($"Steam {localSteam}");
-            }
-
-            if (needNvidia)
-            {
-                var nvidiaRoot = FindScriptsKitRoot(extract, "Nvidia", "Nvidia-Optimizer.ps1", "Exo-Nvidia-Run.ps1");
-                if (nvidiaRoot is null)
-                    throw new InvalidOperationException("Downloaded archive did not contain NVIDIA optimizer scripts.");
-                EnsureVersionFile(nvidiaRoot, remoteNvidia);
-                status?.Report($"Installing NVIDIA scripts v{remoteNvidia}...");
-                _scripts.ReplaceNvidiaScriptsFrom(nvidiaRoot);
-                updated.Add($"NVIDIA {remoteNvidia}");
-            }
-            else
-            {
-                skipped.Add($"NVIDIA {localNvidia}");
-            }
-
-            var newLocal = $"D{_scripts.GetWorkingKitVersion("Discord")}/S{_scripts.GetWorkingKitVersion("Steam")}/N{_scripts.GetWorkingKitVersion("Nvidia")}";
-            var msg = updated.Count > 0
-                ? $"Updated: {string.Join(", ", updated)}."
-                : "No script kits needed an update.";
-            if (skipped.Count > 0)
-                msg += $" Already current: {string.Join(", ", skipped)}.";
-
-            return new ScriptUpdateResult
-            {
-                Updated = updated.Count > 0,
-                AlreadyLatest = updated.Count == 0,
-                LocalVersion = newLocal,
-                RemoteVersion = remoteSummary,
-                Message = msg
-            };
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return new ScriptUpdateResult
-            {
-                Updated = false,
-                LocalVersion = localSummary,
-                RemoteVersion = remoteSummary,
-                Message = $"Update failed: {ex.Message}"
-            };
-        }
-        finally
-        {
-            try { Directory.Delete(work, recursive: true); } catch { }
-        }
-    }
-
-    private static void EnsureVersionFile(string kitRoot, string version)
-    {
-        var verFile = Path.Combine(kitRoot, "VERSION");
-        if (!File.Exists(verFile))
-            File.WriteAllText(verFile, version);
     }
 
     public async Task<AppUpdateResult> CheckAppUpdateAsync(
@@ -591,11 +380,6 @@ public sealed class GitHubUpdateService
                 };
             }
 
-            // Post-update hook: migrate the machine to stable PowerShell 7, remove the
-            // preview channels Exo used to require, and prune stale update leftovers.
-            // Detached + copied out of the app dir so the stage-swap cannot break it.
-            TryRunDependencyDoctorDetached("post-app-update");
-
             Report(status, progress, $"Restarting into v{check.RemoteVersion}…", percent: 100);
             return new AppUpdateResult
             {
@@ -625,61 +409,6 @@ public sealed class GitHubUpdateService
         }
     }
 
-    /// <summary>
-    /// Launches Scripts\Setup\Exo-DependencyDoctor.ps1 detached, hidden and
-    /// best-effort. The script is copied to %LocalAppData%\Exo\setup first so the
-    /// installer's stage-swap of the app folder cannot pull it out from under the
-    /// running doctor. Hosted by stable pwsh when available, else Windows
-    /// PowerShell 5.1 (always present) so bootstrap works when pwsh 7 is missing.
-    /// </summary>
-    public static void TryRunDependencyDoctorDetached(string reason)
-    {
-        try
-        {
-            var source = Path.Combine(PathHelper.ScriptsRoot, "Setup", "Exo-DependencyDoctor.ps1");
-            if (!File.Exists(source))
-                return;
-
-            var setupDir = Path.Combine(PathHelper.AppDataDir, "setup");
-            Directory.CreateDirectory(setupDir);
-            var copy = Path.Combine(setupDir, "Exo-DependencyDoctor.ps1");
-            File.Copy(source, copy, overwrite: true);
-
-            var logPath = Path.Combine(
-                PathHelper.LogsDir,
-                $"dependency-doctor-{DateTime.Now:yyyyMMddHHmmss}.log");
-
-            var host = PowerShellRunnerService.TryGetPowerShellPath()
-                       ?? Path.Combine(
-                           Environment.GetFolderPath(Environment.SpecialFolder.System),
-                           "WindowsPowerShell", "v1.0", "powershell.exe");
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = host,
-                WorkingDirectory = setupDir,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
-            psi.ArgumentList.Add("-NoProfile");
-            psi.ArgumentList.Add("-ExecutionPolicy");
-            psi.ArgumentList.Add("Bypass");
-            psi.ArgumentList.Add("-File");
-            psi.ArgumentList.Add(copy);
-            psi.ArgumentList.Add("-Reason");
-            psi.ArgumentList.Add(reason);
-            psi.ArgumentList.Add("-LogPath");
-            psi.ArgumentList.Add(logPath);
-
-            using var p = Process.Start(psi);
-        }
-        catch
-        {
-            // The doctor is a hygiene pass, never a reason to fail an update.
-        }
-    }
-
     private static void Report(
         IProgress<string>? status,
         IProgress<AppUpdateProgress>? progress,
@@ -688,24 +417,6 @@ public sealed class GitHubUpdateService
     {
         status?.Report(message);
         progress?.Report(new AppUpdateProgress { Status = message, Percent = percent });
-    }
-
-    private static async Task<string?> TryGetRemoteTextAsync(string url, CancellationToken ct)
-    {
-        try
-        {
-            using var response = await Http.GetAsync(url, ct);
-            if (!response.IsSuccessStatusCode) return null;
-            return await response.Content.ReadAsStringAsync(ct);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     private static async Task<string> ComputeFileSha256Async(string path, CancellationToken ct)
@@ -737,29 +448,6 @@ public sealed class GitHubUpdateService
     private static void TryDelete(string path)
     {
         try { File.Delete(path); } catch { /* best-effort cleanup */ }
-    }
-
-    private static string? FindDiscordScriptsRoot(string extractRoot) =>
-        FindScriptsKitRoot(extractRoot, "Discord", "Disc-Optimizer.ps1", "Exo-Discord-Run.ps1")
-        ?? Directory.GetDirectories(extractRoot, "Disc Optimizer", SearchOption.AllDirectories)
-            .FirstOrDefault(d => File.Exists(Path.Combine(d, "Disc-Optimizer.ps1")));
-
-    private static string? FindScriptsKitRoot(
-        string extractRoot,
-        string kitFolderName,
-        string primaryMarker,
-        string secondaryMarker)
-    {
-        var modern = Directory.GetDirectories(extractRoot, kitFolderName, SearchOption.AllDirectories)
-            .FirstOrDefault(d =>
-                File.Exists(Path.Combine(d, primaryMarker)) &&
-                File.Exists(Path.Combine(d, secondaryMarker)) &&
-                d.Contains($"{Path.DirectorySeparatorChar}Scripts{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase));
-        if (modern is not null) return modern;
-
-        return Directory.GetFiles(extractRoot, primaryMarker, SearchOption.AllDirectories)
-            .Select(Path.GetDirectoryName)
-            .FirstOrDefault(d => d is not null && File.Exists(Path.Combine(d!, secondaryMarker)));
     }
 
     private static bool VersionsEqualOrLocalNewer(string local, string remote)

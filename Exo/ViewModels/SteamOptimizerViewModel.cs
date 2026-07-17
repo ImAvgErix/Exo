@@ -115,7 +115,8 @@ public partial class SteamOptimizerViewModel : ObservableObject
                 elevate: true,
                 progress: progress,
                 cancellationToken: _runCts.Token,
-                workingDirectory: _services.Scripts.GetSteamRoot());
+                workingDirectory: _services.Scripts.GetSteamRoot(),
+                ensureRuntime: true);
 
             if (result.Success)
             {
@@ -179,7 +180,8 @@ public partial class SteamOptimizerViewModel : ObservableObject
                 elevate: true,
                 progress: progress,
                 cancellationToken: _runCts.Token,
-                workingDirectory: _services.Scripts.GetSteamRoot());
+                workingDirectory: _services.Scripts.GetSteamRoot(),
+                ensureRuntime: true);
 
             SetResult(
                 result.Success ? Helpers.OptimizerMessages.RepairFinished : (result.ErrorMessage ?? result.Summary),

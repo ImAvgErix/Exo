@@ -13,7 +13,7 @@ public static class OptimizerAdvisor
         bool isApplied,
         string? statusText,
         string? detailText,
-        IReadOnlyList<(string Name, bool Applied, string? Status)> features)
+        IReadOnlyList<(string Name, bool Applied, string Status)> features)
         => BuildV2(module, isApplied, statusText, detailText, features, reportFailSteps: null);
 
     /// <summary>
@@ -24,7 +24,7 @@ public static class OptimizerAdvisor
         bool isApplied,
         string? statusText,
         string? detailText,
-        IReadOnlyList<(string Name, bool Applied, string? Status)> features,
+        IReadOnlyList<(string Name, bool Applied, string Status)> features,
         IReadOnlyList<string>? reportFailSteps)
     {
         var missing = features

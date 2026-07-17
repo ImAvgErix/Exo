@@ -120,10 +120,9 @@ public static class ExoMotion
             {
                 var captured = el;
                 var d = delayMs + 70;
-                _ = Task.Run(async () =>
+                ScheduleOnUi(captured, d, () =>
                 {
-                    await Task.Delay(d);
-                    try { captured.DispatcherQueue?.TryEnqueue(() => captured.IsHitTestVisible = true); }
+                    try { captured.IsHitTestVisible = true; }
                     catch { }
                 });
             }
@@ -229,10 +228,7 @@ public static class ExoMotion
             }
             sb.Completed += (_, _) => Once();
             sb.Begin();
-            _ = Task.Delay(SelectMs + 50).ContinueWith(_ =>
-            {
-                try { el.DispatcherQueue?.TryEnqueue(Once); } catch { try { Once(); } catch { } }
-            });
+            ScheduleOnUi(el, SelectMs + 50, Once);
         }
         catch
         {
@@ -298,26 +294,50 @@ public static class ExoMotion
 
     private static void ScheduleEnsureVisible(UIElement el, int delayMs, double settleOpacity = 1.0)
     {
-        var captured = el;
         var opacity = Math.Clamp(settleOpacity, 0.1, 1.0);
-        _ = Task.Run(async () =>
+        ScheduleOnUi(el, delayMs, () =>
         {
             try
             {
-                await Task.Delay(Math.Max(0, delayMs));
-                captured.DispatcherQueue?.TryEnqueue(() =>
-                {
-                    try
-                    {
-                        EnsureVisible(captured);
-                        if (opacity < 1.0)
-                            captured.Opacity = opacity;
-                    }
-                    catch { }
-                });
+                EnsureVisible(el);
+                if (opacity < 1.0)
+                    el.Opacity = opacity;
             }
             catch { }
         });
+    }
+
+    /// <summary>
+    /// Single-shot UI-queue fallback for storyboard completion. This avoids
+    /// creating thread-pool work just to wait for a visual transition.
+    /// </summary>
+    private static void ScheduleOnUi(UIElement el, int delayMs, Action action)
+    {
+        try
+        {
+            var queue = el.DispatcherQueue;
+            if (queue is null) return;
+
+            Microsoft.UI.Dispatching.DispatcherQueueTimer? timer = null;
+            timer = queue.CreateTimer();
+            timer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, delayMs));
+            timer.IsRepeating = false;
+            timer.Tick += (_, _) =>
+            {
+                try
+                {
+                    timer?.Stop();
+                    action();
+                }
+                catch { }
+                finally
+                {
+                    timer = null;
+                }
+            };
+            timer.Start();
+        }
+        catch { }
     }
 
     private static DoubleAnimation Fade(UIElement target, double from, double to, int ms, int delayMs)

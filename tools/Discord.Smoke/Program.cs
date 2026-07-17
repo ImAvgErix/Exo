@@ -139,6 +139,7 @@ Expect("DiscordDetectCore.ps1 exists", File.Exists(corePs1), corePs1);
 if (File.Exists(corePs1))
 {
     var debloatPs1 = Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "kit", "lib", "40-DebloatWindows.ps1");
+    var loggingPs1 = Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "kit", "lib", "10-Logging.ps1");
     var fixtureDir = Path.Combine(Path.GetTempPath(), "exo-discord-smoke-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(fixtureDir);
     try
@@ -147,14 +148,26 @@ if (File.Exists(corePs1))
         var ps = $@"
 . '{corePs1.Replace("'", "''")}'
 . '{debloatPs1.Replace("'", "''")}'
+. '{loggingPs1.Replace("'", "''")}'
 $failed = 0
 function E($n,$c) {{ if ($c) {{ 'PASS  ' + $n }} else {{ $script:failed++; 'FAIL  ' + $n }} }}
 function Test-ScheduledTaskSweepSafe {{
     if (-not (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue)) {{ return $true }}
     try {{ $null = Get-StableDiscordTasks; return $true }} catch {{ return $false }}
 }}
+function Test-NullApplyReportSafe {{
+    $Script:ExoApplyReport = $null
+    try {{
+        Add-ExoReport 'fixture-null' 'ok' | Out-Null
+        $entries = @(Get-ExoReportEntries)
+        return $entries.Count -eq 1 -and $entries[0] -eq 'fixture-null|ok'
+    }} catch {{
+        return $false
+    }}
+}}
 @(
   (E 'ps scheduled-task action sweep survives strictmode' (Test-ScheduledTaskSweepSafe)),
+  (E 'ps null apply report initializes safely' (Test-NullApplyReportSafe)),
   (E 'ps kit config' (Test-DiscOptKernelConfigText -ConfigText @'
 EnableTrim=1
 TrimIntervalMs=4000

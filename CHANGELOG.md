@@ -1,3 +1,12 @@
+## 3.1.0
+
+- **Lean current runtime**: moved from the full Windows App SDK bundle to the released WinUI/runtime components, removing unused AI/ML, ONNX, DirectML, Widgets, and DWrite payloads; the local installer fell from **134.0 MB to 113.6 MB** (about 15%) while retaining faster ReadyToRun startup.
+- **Private, quiet startup**: opening Exo no longer copies optimizer kits, installs PowerShell, rewrites Start Menu shortcuts, or starts a dependency doctor. PowerShell preparation begins only after an explicit **Apply** or **Repair**.
+- **Lower background use**: dashboard counters refresh every 5 seconds only while visible, and storyboard fallbacks use the UI dispatcher instead of thread-pool sleepers.
+- **AOT-ready persistence**: source-generated JSON metadata, WinRT-compatible converter declarations, reflection-free task inspection, and warning-clean Native AOT analysis (shipping remains on the verified self-contained WinUI path).
+- **Discord reliability**: fixed null apply-report initialization that broke the GitHub Actions Discord end-to-end Apply path, with a dedicated regression smoke fixture.
+- **GitHub polish**: current product screenshot, clearer install/privacy documentation, and versioned optimizer kits that ship with the app instead of silently refreshing from source.
+
 ## 3.0.11
 
 - **Dashboard**: full-width System RAM hero; Discord/Steam tiles show **RAM reclaimed** (Discord peak−live + Steam companion trim) with 2s background refresh; Internet shows real before→after **ping · jitter · DNS** plus live link speed; NVIDIA keeps Max FPS NIP

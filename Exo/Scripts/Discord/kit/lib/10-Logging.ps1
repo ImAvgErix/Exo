@@ -204,8 +204,15 @@ function Write-Err([string]$Msg) {
 
 function Add-ExoReport([string]$Step, [string]$Status, [string]$Reason = '') {
     # Structured last-apply report line: EXO_REPORT:<step>|ok / |fail:<reason> / |skip:<reason>
-    if (-not (Get-Variable -Name ExoApplyReport -Scope Script -ErrorAction SilentlyContinue)) {
-        $Script:ExoApplyReport = [Collections.Generic.List[string]]::new()
+    $reportVariable = Get-Variable -Name ExoApplyReport -Scope Script -ErrorAction SilentlyContinue
+    if (-not $reportVariable -or -not ($reportVariable.Value -is [Collections.Generic.List[string]])) {
+        $report = [Collections.Generic.List[string]]::new()
+        if ($reportVariable -and $reportVariable.Value) {
+            foreach ($existingEntry in @($reportVariable.Value)) {
+                $report.Add([string]$existingEntry)
+            }
+        }
+        $Script:ExoApplyReport = $report
     }
     $entry = if ([string]::IsNullOrWhiteSpace($Reason)) { "$Step|$Status" } else { "$Step|$Status`:$Reason" }
     $Script:ExoApplyReport.Add($entry)
@@ -215,8 +222,9 @@ function Add-ExoReport([string]$Step, [string]$Status, [string]$Reason = '') {
 }
 
 function Get-ExoReportEntries {
-    if (-not (Get-Variable -Name ExoApplyReport -Scope Script -ErrorAction SilentlyContinue)) { return @() }
-    return @($Script:ExoApplyReport)
+    $reportVariable = Get-Variable -Name ExoApplyReport -Scope Script -ErrorAction SilentlyContinue
+    if (-not $reportVariable -or $null -eq $reportVariable.Value) { return @() }
+    return @($reportVariable.Value)
 }
 
 function Initialize-Network {

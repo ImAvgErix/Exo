@@ -8,8 +8,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using WinRT.Interop;
 using Windows.Graphics;
+using WinRT.Interop;
 
 namespace Exo;
 
@@ -161,12 +161,6 @@ public sealed partial class MainWindow : Window
     {
         if (_postFirstFrameWorkStarted) return;
         _postFirstFrameWorkStarted = true;
-        try
-        {
-            TryRepairStartMenuShortcut();
-            Helpers.StartupLog.Mark("shortcut-repair-done");
-        }
-        catch { }
         try
         {
             _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
@@ -439,81 +433,6 @@ public sealed partial class MainWindow : Window
         return File.Exists(assets) ? assets : null;
     }
 
-    /// <summary>
-    /// Fix Start Menu shortcut that pointed at deleted versioned icons
-    /// (e.g. Exo-2-0-2-0.ico) which made the taskbar/start tile blank paper.
-    /// </summary>
-    private static void TryRepairStartMenuShortcut()
-    {
-        try
-        {
-            var icoPath = ResolveAppIconPath();
-            var targetExe = Path.Combine(AppContext.BaseDirectory, "Exo.exe");
-            if (!File.Exists(targetExe))
-                targetExe = Environment.ProcessPath ?? targetExe;
-            if (!File.Exists(targetExe)) return;
-
-            var lnk = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
-                "Programs",
-                "Exo.lnk");
-
-            var shellType = Type.GetTypeFromProgID("WScript.Shell");
-            if (shellType is null) return;
-            var shell = Activator.CreateInstance(shellType);
-            if (shell is null) return;
-
-            // Always rewrite so IconLocation cannot stay on a missing file.
-            var shortcut = shellType.InvokeMember(
-                "CreateShortcut",
-                System.Reflection.BindingFlags.InvokeMethod,
-                null,
-                shell,
-                new object[] { lnk });
-            if (shortcut is null) return;
-            var scType = shortcut.GetType();
-            scType.InvokeMember("TargetPath", System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { targetExe });
-            scType.InvokeMember("WorkingDirectory", System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { AppContext.BaseDirectory.TrimEnd('\\') });
-            scType.InvokeMember("Description", System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { "Exo — max performance hub" });
-            var icon = icoPath is not null && File.Exists(icoPath)
-                ? icoPath + ",0"
-                : targetExe + ",0";
-            scType.InvokeMember("IconLocation", System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { icon });
-            scType.InvokeMember("Save", System.Reflection.BindingFlags.InvokeMethod, null, shortcut, null);
-
-            // Associate AUMID with the shortcut so taskbar grouping uses our icon.
-            try
-            {
-                SetShortcutAppUserModelId(lnk, Program.AppUserModelId);
-            }
-            catch { }
-        }
-        catch { }
-    }
-
-    private static void SetShortcutAppUserModelId(string lnkPath, string aumid)
-    {
-        // IShellLinkW + IPropertyStore via shell COM is heavy; use PowerShell-free
-        // PropVariant path through Shell32 if available. Best-effort only.
-        try
-        {
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "powershell.exe",
-                Arguments =
-                    "-NoProfile -Command \"" +
-                    "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('" + lnkPath.Replace("'", "''") + "');" +
-                    // Property store for AUMID via shell application (Win10+)
-                    "\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            // Skip PS round-trip; AUMID is already set on process.
-            _ = psi;
-        }
-        catch { }
-    }
-
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr LoadImage(IntPtr hInst, string name, uint type, int cx, int cy, int fuLoad);
 
@@ -623,7 +542,7 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo transition)
+    private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo? transition)
     {
         HideSettingsFlyout();
 
@@ -820,7 +739,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            if (!App.Services.Settings.Current.AutoUpdateScripts) return;
+            if (!App.Services.Settings.Current.CheckForUpdatesOnLaunch) return;
 
             await Task.Delay(1200, ct);
             for (var i = 0; i < 10 && RootGrid.XamlRoot is null; i++)
