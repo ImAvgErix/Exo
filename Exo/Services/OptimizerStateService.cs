@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Xml.Linq;
 using Exo.Helpers;
 using Exo.Models;
 
@@ -595,55 +596,51 @@ public sealed class OptimizerStateService
 
     private static bool AreStableDiscordScheduledTasksDisabled(string discordRoot)
     {
-        object? serviceObject = null;
         try
         {
-            var serviceType = Type.GetTypeFromProgID("Schedule.Service");
-            if (serviceType is null) return false;
-            serviceObject = Activator.CreateInstance(serviceType);
-            if (serviceObject is null) return false;
-            dynamic service = serviceObject;
-            service.Connect();
+            var tasksRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                "System32",
+                "Tasks");
+            if (!Directory.Exists(tasksRoot)) return true;
 
-            bool InspectFolder(dynamic folder)
+            foreach (var taskPath in Directory.EnumerateFiles(tasksRoot, "*", SearchOption.AllDirectories))
             {
-                dynamic tasks = folder.GetTasks(0);
-                for (var taskIndex = 1; taskIndex <= (int)tasks.Count; taskIndex++)
+                string xml;
+                try
                 {
-                    dynamic task = tasks[taskIndex];
-                    var stable = false;
-                    dynamic actions = task.Definition.Actions;
-                    for (var actionIndex = 1; actionIndex <= (int)actions.Count; actionIndex++)
-                    {
-                        dynamic action = actions[actionIndex];
-                        if ((int)action.Type != 0) continue;
-                        stable = IsTextScopedToRoot(Convert.ToString(action.Path), discordRoot) ||
-                                 IsTextScopedToRoot(Convert.ToString(action.Arguments), discordRoot) ||
-                                 IsTextScopedToRoot(Convert.ToString(action.WorkingDirectory), discordRoot);
-                        if (stable) break;
-                    }
-                    if (stable && (bool)task.Enabled) return false;
+                    xml = File.ReadAllText(taskPath);
                 }
+                catch (IOException) { continue; }
+                catch (UnauthorizedAccessException) { continue; }
 
-                dynamic subfolders = folder.GetFolders(0);
-                for (var folderIndex = 1; folderIndex <= (int)subfolders.Count; folderIndex++)
+                // Avoid XML allocation for the overwhelming majority of tasks.
+                if (!IsTextScopedToRoot(xml, discordRoot)) continue;
+
+                XDocument document;
+                try { document = XDocument.Parse(xml, LoadOptions.None); }
+                catch { continue; }
+
+                var scopedExec = document.Descendants()
+                    .Where(element => element.Name.LocalName == "Exec")
+                    .Any(exec => exec.Elements().Any(value =>
+                        (value.Name.LocalName is "Command" or "Arguments" or "WorkingDirectory") &&
+                        IsTextScopedToRoot(value.Value, discordRoot)));
+                if (!scopedExec) continue;
+
+                var enabledText = document.Descendants()
+                    .FirstOrDefault(element => element.Name.LocalName == "Enabled")
+                    ?.Value;
+                var enabled = !bool.TryParse(enabledText, out var parsedEnabled) || parsedEnabled;
+                if (enabled)
                 {
-                    if (!InspectFolder(subfolders[folderIndex])) return false;
+                    return false;
                 }
-                return true;
             }
 
-            return InspectFolder(service.GetFolder("\\"));
+            return true;
         }
         catch { return false; }
-        finally
-        {
-            if (serviceObject is not null && System.Runtime.InteropServices.Marshal.IsComObject(serviceObject))
-            {
-                try { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(serviceObject); }
-                catch { /* best-effort COM cleanup */ }
-            }
-        }
     }
 
     public async Task<OptimizerStateInfo> DetectSteamAsync(

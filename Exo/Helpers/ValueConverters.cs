@@ -5,7 +5,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace Exo.Helpers;
 
-public sealed class InverseBoolConverter : IValueConverter
+public sealed partial class InverseBoolConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -20,7 +20,7 @@ public sealed class InverseBoolConverter : IValueConverter
     }
 }
 
-public sealed class BoolToVisibilityConverter : IValueConverter
+public sealed partial class BoolToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -34,7 +34,7 @@ public sealed class BoolToVisibilityConverter : IValueConverter
 }
 
 /// <summary>true → Collapsed, false → Visible (for hiding content while loading).</summary>
-public sealed class InverseBoolToVisibilityConverter : IValueConverter
+public sealed partial class InverseBoolToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
         => value is true ? Visibility.Collapsed : Visibility.Visible;
@@ -44,7 +44,7 @@ public sealed class InverseBoolToVisibilityConverter : IValueConverter
 }
 
 /// <summary>Non-empty string → Visible; empty/null → Collapsed.</summary>
-public sealed class StringToVisibilityConverter : IValueConverter
+public sealed partial class StringToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -57,7 +57,7 @@ public sealed class StringToVisibilityConverter : IValueConverter
 }
 
 /// <summary>Coming-soon cards render slightly dimmed (kept high enough that B&W marks stay readable).</summary>
-public sealed class BoolToOpacityConverter : IValueConverter
+public sealed partial class BoolToOpacityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -73,7 +73,7 @@ public sealed class BoolToOpacityConverter : IValueConverter
 /// true → 1 opacity, false → 0. Keeps layout space (unlike Collapsed) so status/progress
 /// can update without shifting buttons and lists.
 /// </summary>
-public sealed class BoolToShowOpacityConverter : IValueConverter
+public sealed partial class BoolToShowOpacityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
         => value is true ? 1.0 : 0.0;
@@ -83,7 +83,7 @@ public sealed class BoolToShowOpacityConverter : IValueConverter
 }
 
 /// <summary>true (coming soon) → "Coming soon", false → "Ready".</summary>
-public sealed class ComingSoonLabelConverter : IValueConverter
+public sealed partial class ComingSoonLabelConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
         => value is true ? "Coming soon" : "Ready";
@@ -93,7 +93,7 @@ public sealed class ComingSoonLabelConverter : IValueConverter
 }
 
 /// <summary>Resolves bundled asset paths (e.g. Assets/Logos/discord.png) to BitmapImage.</summary>
-public sealed class AssetPathToImageSourceConverter : IValueConverter
+public sealed partial class AssetPathToImageSourceConverter : IValueConverter
 {
     private static readonly ConcurrentDictionary<string, BitmapImage> ImageCache =
         new(StringComparer.OrdinalIgnoreCase);

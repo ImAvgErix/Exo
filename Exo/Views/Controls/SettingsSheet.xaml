@@ -77,7 +77,7 @@
                                   HorizontalAlignment="Right"
                                   VerticalAlignment="Center"
                                   AutomationProperties.Name="Check for updates on launch"
-                                  IsOn="{x:Bind ViewModel.AutoUpdateScripts, Mode=TwoWay}"
+                                  IsOn="{x:Bind ViewModel.CheckForUpdatesOnLaunch, Mode=TwoWay}"
                                   OnContent=""
                                   OffContent="" />
                 </Grid>

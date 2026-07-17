@@ -1,17 +1,12 @@
 using System.Text.Json;
 using Exo.Helpers;
 using Exo.Models;
+using Exo.Serialization;
 
 namespace Exo.Services;
 
 public sealed class SettingsService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
     private AppSettings _settings = new();
     private readonly object _lock = new();
     private readonly object _saveLock = new();
@@ -37,7 +32,9 @@ public sealed class SettingsService
                 if (File.Exists(PathHelper.SettingsPath))
                 {
                     var json = File.ReadAllText(PathHelper.SettingsPath);
-                    _settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
+                    _settings = System.Text.Json.JsonSerializer.Deserialize(
+                        json,
+                        ExoJsonContext.Default.AppSettings) ?? new AppSettings();
                 }
                 else
                 {
@@ -70,22 +67,6 @@ public sealed class SettingsService
     private static bool MigrateLegacySettings(AppSettings settings)
     {
         var changed = false;
-        var repo = (settings.DiscordScriptsRepo ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(repo) ||
-            repo.Contains("DiscOpti", StringComparison.OrdinalIgnoreCase) ||
-            repo.Contains("OptiHub", StringComparison.OrdinalIgnoreCase) ||
-            repo.Contains("UhhErix", StringComparison.OrdinalIgnoreCase))
-        {
-            settings.DiscordScriptsRepo = "ImAvgErix/Exo";
-            changed = true;
-        }
-
-        if (string.IsNullOrWhiteSpace(settings.DiscordScriptsBranch))
-        {
-            settings.DiscordScriptsBranch = "main";
-            changed = true;
-        }
-
         if (!string.Equals(settings.Theme, AppSettings.DarkTheme, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(settings.Theme, AppSettings.LightTheme, StringComparison.OrdinalIgnoreCase))
         {
@@ -203,7 +184,9 @@ public sealed class SettingsService
         try
         {
             Directory.CreateDirectory(directory);
-            var json = JsonSerializer.Serialize(_settings, JsonOptions);
+            var json = System.Text.Json.JsonSerializer.Serialize(
+                _settings,
+                ExoJsonContext.Default.AppSettings);
             File.WriteAllText(tempPath, json);
             File.Move(tempPath, settingsPath, overwrite: true);
             return true;

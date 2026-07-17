@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Exo.Models;
+using Exo.Serialization;
 using Microsoft.Win32;
 
 namespace Exo.Services;
@@ -231,7 +232,7 @@ public sealed class NetworkOptimizerService
             if (state["benchmark"] is not JsonObject bench) return (null, null);
             NetworkBenchmarkResult? Read(string key) =>
                 bench[key] is JsonObject o
-                    ? JsonSerializer.Deserialize<NetworkBenchmarkResult>(o.ToJsonString(), BenchJson)
+                    ? JsonSerializer.Deserialize(o.ToJsonString(), ExoJsonContext.Default.NetworkBenchmarkResult)
                     : null;
             return (Read("before"), Read("after"));
         }
@@ -297,11 +298,6 @@ public sealed class NetworkOptimizerService
         catch { return null; }
     }
 
-    private static readonly JsonSerializerOptions BenchJson = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
     private void PersistBenchmark(NetworkBenchmarkResult? before, NetworkBenchmarkResult? after)
     {
         try
@@ -309,9 +305,9 @@ public sealed class NetworkOptimizerService
             var state = LoadStateObject();
             var bench = state["benchmark"] as JsonObject ?? new JsonObject();
             if (before is not null)
-                bench["before"] = JsonSerializer.SerializeToNode(before, BenchJson);
+                bench["before"] = JsonSerializer.SerializeToNode(before, ExoJsonContext.Default.NetworkBenchmarkResult);
             if (after is not null)
-                bench["after"] = JsonSerializer.SerializeToNode(after, BenchJson);
+                bench["after"] = JsonSerializer.SerializeToNode(after, ExoJsonContext.Default.NetworkBenchmarkResult);
             state["benchmark"] = bench;
             SaveStateObject(state);
         }
@@ -326,7 +322,7 @@ public sealed class NetworkOptimizerService
             var arr = new JsonArray();
             foreach (var step in report)
             {
-                arr.Add(new JsonObject
+                arr.Add((JsonNode)new JsonObject
                 {
                     ["name"] = step.Name,
                     ["status"] = step.Status,
@@ -337,7 +333,8 @@ public sealed class NetworkOptimizerService
             if (rollback is not null)
             {
                 var wifi = new JsonArray();
-                foreach (var w in rollback.WifiDisabled) wifi.Add(w);
+                foreach (var w in rollback.WifiDisabled)
+                    wifi.Add((JsonNode?)JsonValue.Create(w));
                 state["rollback"] = new JsonObject
                 {
                     ["rolledBack"] = rollback.RolledBack,

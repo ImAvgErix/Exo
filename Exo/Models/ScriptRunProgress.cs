@@ -34,15 +34,6 @@ public sealed class OptimizerStateInfo
     public IReadOnlyDictionary<string, string>? Extra { get; init; }
 }
 
-public sealed class ScriptUpdateResult
-{
-    public bool Updated { get; init; }
-    public bool AlreadyLatest { get; init; }
-    public string LocalVersion { get; init; } = string.Empty;
-    public string RemoteVersion { get; init; } = string.Empty;
-    public string Message { get; init; } = string.Empty;
-}
-
 public sealed class AppUpdateResult
 {
     public bool UpdateAvailable { get; init; }

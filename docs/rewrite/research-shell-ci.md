@@ -430,7 +430,7 @@ EXO_REPORT:<step>|skip:<reason>
 | **Release asset** | GitHub Releases: only **`Exo.exe`** SFX (double-click) |
 | `Install-Exo.ps1` | Fetch latest release `Exo.exe`, size + **SHA-256 digest** + version stamp check → launch SFX → dependency doctor (stable PS7) |
 | SFX (`tools/ExoSfx.cs` via `Publish-Exo.ps1`) | Extract to `%LocalAppData%\Exo\app`, launch app |
-| Start menu | `MainWindow.TryRepairStartMenuShortcut` rewrites `Programs\Exo.lnk` icon/target |
+| Start menu | The SFX installer rewrites `Programs\Exo.lnk` once during install/update; app startup performs no shortcut COM work |
 
 ### 6.2 Local publish / release scripts
 

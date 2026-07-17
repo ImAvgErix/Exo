@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Exo.Models;
+using Exo.Serialization;
 
 namespace Exo.Services;
 
@@ -64,13 +65,6 @@ public sealed class NvidiaDisplayInfo
 
 public sealed class NvidiaPanelSettingsService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
-    };
-
     private readonly ScriptBundleService _scripts;
     private readonly PowerShellRunnerService _powerShell;
 
@@ -93,7 +87,9 @@ public sealed class NvidiaPanelSettingsService
             if (!File.Exists(SettingsPath))
                 return NvidiaPanelSettings.CreateDefaults();
             var json = File.ReadAllText(SettingsPath);
-            return JsonSerializer.Deserialize<NvidiaPanelSettings>(json, JsonOptions)
+            return System.Text.Json.JsonSerializer.Deserialize(
+                       json,
+                       ExoJsonContext.Default.NvidiaPanelSettings)
                    ?? NvidiaPanelSettings.CreateDefaults();
         }
         catch
@@ -110,7 +106,11 @@ public sealed class NvidiaPanelSettingsService
         // Always enforce fixed refresh policy
         settings.PrimaryRefresh = "max";
         settings.SecondaryRefresh = "60";
-        File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
+        File.WriteAllText(
+            SettingsPath,
+            System.Text.Json.JsonSerializer.Serialize(
+                settings,
+                ExoJsonContext.Default.NvidiaPanelSettings));
     }
 
     public async Task<IReadOnlyList<NvidiaPolicyProbeItem>> ProbePolicyAsync(CancellationToken ct = default)
@@ -225,7 +225,8 @@ public sealed class NvidiaPanelSettingsService
             elevate: true,
             progress: progress,
             cancellationToken: ct,
-            workingDirectory: _scripts.GetNvidiaRoot()).ConfigureAwait(false);
+            workingDirectory: _scripts.GetNvidiaRoot(),
+            ensureRuntime: true).ConfigureAwait(false);
 
         // Always clear tray after display apply (service soft-refresh re-registers icons)
         await ClearTrayIconsAsync(ct).ConfigureAwait(false);
@@ -253,7 +254,8 @@ public sealed class NvidiaPanelSettingsService
                     script,
                     elevate: true,
                     cancellationToken: ct,
-                    workingDirectory: _scripts.GetNvidiaRoot()).ConfigureAwait(false);
+                    workingDirectory: _scripts.GetNvidiaRoot(),
+                    ensureRuntime: true).ConfigureAwait(false);
                 if (result.Success)
                     return (true, "NVIDIA tray icons cleared. Open the overflow once if Windows still caches a name.");
                 // Local clear may still have helped

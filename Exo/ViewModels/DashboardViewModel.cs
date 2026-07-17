@@ -97,7 +97,7 @@ public partial class DashboardViewModel : ObservableObject
                 $"{HomeDashboardReader.FormatBytes(mem.AvailableBytes)} free · {HomeDashboardReader.FormatBytes(mem.TotalBytes)} total";
         }
 
-        // Background refresh: Discord/Steam reclaim + Internet proof (file + live link)
+        // Visible-dashboard refresh: Discord/Steam reclaim + Internet proof.
         RefreshDiscordRamTile();
         RefreshSteamRamTile();
         RefreshInternetTile();

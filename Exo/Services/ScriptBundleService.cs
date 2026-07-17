@@ -4,7 +4,7 @@ using Exo.Helpers;
 namespace Exo.Services;
 
 /// <summary>
-/// Materializes optimizer kits under LocalAppData for runs and GitHub refreshes.
+/// Materializes the optimizer kits bundled with this app under LocalAppData.
 /// Policy: each Exo app version owns a complete kit set. When the app version
 /// changes, working kits are fully replaced from the bundled Scripts tree — never
 /// merged with leftovers from an older install.
@@ -39,9 +39,9 @@ public sealed class ScriptBundleService
         Path.Combine(PathHelper.WorkingScriptsDir, ".app-kit-stamp");
 
     /// <summary>
-    /// Call once at startup. If this Exo build differs from the stamp left by
-    /// the previous run/install, wipe and reinstall Discord/Steam/NVIDIA kits from
-    /// the app bundle so the UI and scripts always match.
+    /// If this Exo build differs from the stamp left by the previous run/install,
+    /// wipe and reinstall Discord/Steam/NVIDIA kits from the app bundle so the UI
+    /// and scripts always match. Called lazily when an optimizer is first opened.
     /// </summary>
     public void EnsureKitsMatchThisApp()
     {
@@ -387,7 +387,7 @@ public sealed class ScriptBundleService
             !File.ReadAllText(marker).Contains("Install-EquicordDirect", StringComparison.Ordinal) ||
             !File.ReadAllText(marker).Contains("Write-DiscordResourceBytes", StringComparison.Ordinal);
 
-        // Mid-version GitHub kit may be newer than this app's bundle — keep it intact.
+        // Preserve a newer legacy/custom working kit until an app upgrade resets it.
         if (IsVersionNewer(workingVersion, bundledVersion) && !workingBroken)
         {
             RememberDiscordSync(bundledVersion, workingVersion);
@@ -413,98 +413,6 @@ public sealed class ScriptBundleService
         _lastSyncedBundledVersion = bundledVersion;
         _lastSyncedWorkingVersion = workingVersion;
         _discordSyncDone = true;
-    }
-
-    public void ReplaceDiscordScriptsFrom(string sourceDir) =>
-        ReplaceKitScriptsFrom(
-            sourceDir,
-            kitName: "Discord",
-            requiredFiles: ["Disc-Optimizer.ps1", "Exo-Discord-Run.ps1"],
-            resetCache: ResetDiscordCache);
-
-    public void ReplaceSteamScriptsFrom(string sourceDir) =>
-        ReplaceKitScriptsFrom(
-            sourceDir,
-            kitName: "Steam",
-            requiredFiles: ["Steam-Optimizer.ps1", "Exo-Steam-Run.ps1", "Exo-Steam-Detect.ps1"],
-            resetCache: () => _steamSyncDone = false);
-
-    public void ReplaceNvidiaScriptsFrom(string sourceDir) =>
-        ReplaceKitScriptsFrom(
-            sourceDir,
-            kitName: "Nvidia",
-            requiredFiles: ["Nvidia-Optimizer.ps1", "Exo-Nvidia-Run.ps1", "Exo-Nvidia-Detect.ps1"],
-            resetCache: () => _nvidiaSyncDone = false);
-
-    public string GetWorkingKitVersion(string kitName)
-    {
-        lock (_syncLock)
-        {
-            var versionFile = Path.Combine(PathHelper.WorkingScriptsDir, kitName, "VERSION");
-            if (File.Exists(versionFile))
-                return File.ReadAllText(versionFile).Trim();
-            var bundled = Path.Combine(PathHelper.ScriptsRoot, kitName, "VERSION");
-            return File.Exists(bundled) ? File.ReadAllText(bundled).Trim() : "0";
-        }
-    }
-
-    private void ReplaceKitScriptsFrom(
-        string sourceDir,
-        string kitName,
-        string[] requiredFiles,
-        Action resetCache)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(sourceDir);
-        ArgumentException.ThrowIfNullOrWhiteSpace(kitName);
-
-        lock (_syncLock)
-        {
-            var working = Path.Combine(PathHelper.WorkingScriptsDir, kitName);
-            var staging = Path.Combine(PathHelper.WorkingScriptsDir, $"{kitName}.update-{Guid.NewGuid():N}");
-            var backup = Path.Combine(PathHelper.WorkingScriptsDir, $"{kitName}.backup-{Guid.NewGuid():N}");
-            var movedCurrent = false;
-
-            try
-            {
-                CopyDirectory(sourceDir, staging);
-                foreach (var required in requiredFiles)
-                {
-                    if (!File.Exists(Path.Combine(staging, required)))
-                        throw new InvalidDataException($"Updated {kitName} script bundle is incomplete (missing {required}).");
-                }
-
-                if (Directory.Exists(working))
-                {
-                    Directory.Move(working, backup);
-                    movedCurrent = true;
-                }
-
-                Directory.Move(staging, working);
-                resetCache();
-            }
-            catch
-            {
-                if (movedCurrent && !Directory.Exists(working) && Directory.Exists(backup))
-                {
-                    try { Directory.Move(backup, working); } catch { /* preserve original exception */ }
-                }
-                throw;
-            }
-            finally
-            {
-                TryDeleteDirectory(staging);
-                if (Directory.Exists(working))
-                    TryDeleteDirectory(backup);
-            }
-        }
-    }
-
-    private void ResetDiscordCache()
-    {
-        _cachedBundledVersion = null;
-        _discordSyncDone = false;
-        _lastSyncedBundledVersion = null;
-        _lastSyncedWorkingVersion = null;
     }
 
     private static string? ReadVersionFile(string path)

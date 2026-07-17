@@ -12,25 +12,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # App and tools target .NET 10 LTS; 8.0.x kept as a transitional fallback.
+      # App and tools target .NET 10 LTS.
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: 10.0.x
 
       - name: Build Exo and NVIDIA display helper
         run: |
           dotnet build Exo.sln -c Release -p:Platform=x64
           dotnet build tools/Exo.NvDisplay/Exo.NvDisplay.csproj -c Release
 
-      # Informational Native AOT probe (Workstream 10): shipping publish stays
-      # ReadyToRun because the app's state serialization (SettingsService /
-      # NetworkOptimizerService / NvidiaPanelSettingsService) uses reflection-based
-      # System.Text.Json, which AOT cannot guarantee without a source-generation
-      # migration + on-hardware QA. This step records whether the toolchain-level
-      # AOT compile even succeeds; it never gates the build.
+      # Informational Native AOT probe: the source now passes local trim/AOT
+      # analysis without warnings, but shipping stays ReadyToRun until the native
+      # artifact has received the same on-hardware WinUI QA as the normal publish.
       - name: Native AOT publish probe (informational)
         continue-on-error: true
         timeout-minutes: 25
@@ -103,9 +98,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: 10.0.x
 
       # winget is not guaranteed on the windows-latest (Server) image, so
       # each install tries winget first and falls back to the vendor's

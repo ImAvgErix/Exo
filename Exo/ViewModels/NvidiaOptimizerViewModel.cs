@@ -99,7 +99,8 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                 elevate: true,
                 progress: progress,
                 cancellationToken: _runCts.Token,
-                workingDirectory: _services.Scripts.GetNvidiaRoot());
+                workingDirectory: _services.Scripts.GetNvidiaRoot(),
+                ensureRuntime: true);
 
             // Driver elevate can thrash the desktop; re-pin shell chrome.
             try
@@ -185,7 +186,8 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                 elevate: false,
                 progress: progress,
                 cancellationToken: _runCts.Token,
-                workingDirectory: _services.Scripts.GetNvidiaRoot());
+                workingDirectory: _services.Scripts.GetNvidiaRoot(),
+                ensureRuntime: true);
 
             SetResult(
                 result.Success ? Helpers.OptimizerMessages.NvidiaStatusCleared : (result.ErrorMessage ?? result.Summary),

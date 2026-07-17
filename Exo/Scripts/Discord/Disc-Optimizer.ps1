@@ -409,7 +409,7 @@ $Script:KernelRolledBack = $false
 $Script:ModsRolledBack = $false
 $Script:DiscordVariantResults = @()
 $Script:DiscordQosResults = @()
-$Script:ExoApplyReport = $null
+$Script:ExoApplyReport = [Collections.Generic.List[string]]::new()
 
 $Protected = @(
     'version.dll', 'config.ini', 'Discord.exe', 'ffmpeg.dll', 'ffmpeg_real.dll',

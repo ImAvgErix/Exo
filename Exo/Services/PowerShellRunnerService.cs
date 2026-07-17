@@ -24,7 +24,8 @@ public sealed class PowerShellRunnerService
         bool elevate = false,
         IProgress<ScriptRunProgress>? progress = null,
         CancellationToken cancellationToken = default,
-        string? workingDirectory = null)
+        string? workingDirectory = null,
+        bool ensureRuntime = false)
     {
         if (!File.Exists(scriptPath))
         {
@@ -44,6 +45,22 @@ public sealed class PowerShellRunnerService
 
         try
         {
+            if (ensureRuntime)
+            {
+                progress?.Report(new ScriptRunProgress { Percent = 1, Status = "Preparing PowerShell 7..." });
+                var runtime = await EnsurePowerShellRuntimeAsync(cancellationToken).ConfigureAwait(false);
+                if (!runtime.Ok)
+                {
+                    return new ScriptRunResult
+                    {
+                        Success = false,
+                        ExitCode = -1,
+                        Summary = "PowerShell 7 unavailable",
+                        ErrorMessage = runtime.Message
+                    };
+                }
+            }
+
             await _runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {

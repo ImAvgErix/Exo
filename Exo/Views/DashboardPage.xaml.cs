@@ -71,7 +71,9 @@ public sealed partial class DashboardPage : Page
     private void StartMemoryTimer()
     {
         StopMemoryTimer();
-        _memoryTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        // The dashboard reads local state files and system counters only while
+        // visible. Five seconds keeps it live without needless wakeups.
+        _memoryTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _memoryTimer.Tick += (_, _) =>
         {
             try { ViewModel.RefreshLiveMemory(); } catch { }

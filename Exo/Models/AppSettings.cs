@@ -11,16 +11,11 @@ public sealed class AppSettings
     public string Theme { get; set; } = DarkTheme;
 
     /// <summary>
-    /// When true, on launch: prompt if a newer Exo.exe is on GitHub, and
-    /// silently refresh the Discord script kit when newer.
+    /// When true, check GitHub Releases for a newer Exo app on launch.
+    /// The legacy JSON name keeps existing user settings compatible.
     /// </summary>
-    public bool AutoUpdateScripts { get; set; }
-
-    /// <summary>GitHub repo for Discord optimizer scripts (owner/name).</summary>
-    public string DiscordScriptsRepo { get; set; } = "ImAvgErix/Exo";
-
-    /// <summary>Branch to pull script updates from.</summary>
-    public string DiscordScriptsBranch { get; set; } = "main";
+    [JsonPropertyName("autoUpdateScripts")]
+    public bool CheckForUpdatesOnLaunch { get; set; }
 
     /// <summary>Optional custom scripts root; empty = app-bundled Scripts folder.</summary>
     public string CustomScriptsPath { get; set; } = string.Empty;
@@ -34,9 +29,7 @@ public sealed class AppSettings
     public AppSettings Clone() => new()
     {
         Theme = Theme,
-        AutoUpdateScripts = AutoUpdateScripts,
-        DiscordScriptsRepo = DiscordScriptsRepo,
-        DiscordScriptsBranch = DiscordScriptsBranch,
+        CheckForUpdatesOnLaunch = CheckForUpdatesOnLaunch,
         CustomScriptsPath = CustomScriptsPath,
         LastDiscordRunUtc = LastDiscordRunUtc,
         DiscordKitVersion = DiscordKitVersion
