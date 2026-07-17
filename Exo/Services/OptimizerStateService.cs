@@ -168,7 +168,7 @@ public sealed class OptimizerStateService
         if (lower.Contains("debloat") || lower.Contains("game sdk") || lower.Contains("locale"))
             return MakeFeature("Client debloat", "", active);
         if (lower.Contains("amoled"))
-            return MakeFeature("AMOLED theme", "", active);
+            return MakeFeature("Dark mode", "", active);
         if (lower.Contains("startup") || lower.Contains("toast") || lower.Contains("tray"))
             return MakeFeature("Windows quiet", "", active);
 
@@ -404,7 +404,7 @@ public sealed class OptimizerStateService
         }
         catch { /* ignore */ }
 
-        features.Add(MakeFeature("AMOLED theme", "", amoledOk));
+        features.Add(MakeFeature("Dark mode", "", amoledOk));
 
         var notificationIds = new[]
         {

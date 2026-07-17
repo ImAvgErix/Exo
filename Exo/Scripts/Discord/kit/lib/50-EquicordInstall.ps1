@@ -262,7 +262,7 @@ function Apply-EquicordProfile {
     if (Test-Path $themeSrc) {
         Copy-Item $themeSrc (Join-Path $themesDir $EnabledTheme) -Force
     } else {
-        Write-Warn "AMOLED theme missing from kit: $EnabledTheme"
+        Write-Warn "Dark theme missing from kit: $EnabledTheme"
     }
 
     $enabled = @($settings.plugins.Values | Where-Object { $_.enabled -eq $true }).Count
@@ -270,7 +270,7 @@ function Apply-EquicordProfile {
     if ($enabled -gt [int]$leanPolicy.maximumEnabled) {
         throw "Lean plugin budget exceeded ($enabled > $($leanPolicy.maximumEnabled))"
     }
-    Write-Ok "Universal profile written: $enabled / $total plugins enabled, AMOLED on"
+    Write-Ok "Universal profile written: $enabled / $total plugins enabled, dark mode on"
     Write-Ok "Themes: $($settings.enabledThemes -join ', ')"
     Write-Ok "Settings: $destPath"
 }

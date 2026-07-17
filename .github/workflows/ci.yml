@@ -201,16 +201,25 @@ jobs:
           $deadline = (Get-Date).AddMinutes(8)
           $modulesReady = $false
           while ((Get-Date) -lt $deadline) {
-            $core = Get-ChildItem -Path (Join-Path $env:APPDATA 'discord') -Directory -Filter 'discord_desktop_core*' -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
-            $voice = Get-ChildItem -Path (Join-Path $env:APPDATA 'discord') -Directory -Filter 'discord_voice*' -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($core -and $voice) { $modulesReady = $true; break }
+            $app = Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA 'Discord') -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+            $modulesRoot = if ($app) { Join-Path $app.FullName 'modules' } else { $null }
+            $core = if ($modulesRoot -and (Test-Path -LiteralPath $modulesRoot)) {
+              Get-ChildItem -LiteralPath $modulesRoot -Directory -Filter 'discord_desktop_core*' -ErrorAction SilentlyContinue | Select-Object -First 1
+            }
+            $voice = if ($modulesRoot -and (Test-Path -LiteralPath $modulesRoot)) {
+              Get-ChildItem -LiteralPath $modulesRoot -Directory -Filter 'discord_voice*' -ErrorAction SilentlyContinue | Select-Object -First 1
+            }
+            $corePayload = if ($core) { Get-ChildItem -LiteralPath $core.FullName -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
+            $voicePayload = if ($voice) { Get-ChildItem -LiteralPath $voice.FullName -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
+            if ($corePayload -and $voicePayload) { $modulesReady = $true; break }
             Start-Sleep -Seconds 10
           }
           if ($modulesReady) {
             Write-Host 'Discord modules installed; letting first run settle...'
             Start-Sleep -Seconds 30
           } else {
-            Write-Host '::warning::Discord modules did not finish installing within 8 minutes; continuing anyway'
+            throw 'Discord modules did not finish installing under %LOCALAPPDATA%\Discord\app-*\modules within 8 minutes'
           }
           Get-Process -Name Discord -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force }
           Start-Sleep -Seconds 5
@@ -231,6 +240,8 @@ jobs:
 
       - name: Discord E2E (apply, detect, repair)
         shell: pwsh
+        env:
+          EXO_CI_BOOT_PROBE: '1'
         run: |
           function Get-DiscordDetect {
             $raw = pwsh -NoProfile -File Exo/Scripts/Discord/Exo-Discord-Detect.ps1

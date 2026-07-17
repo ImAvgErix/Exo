@@ -96,7 +96,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Persisted proof layer: before/after benchmark, honest rollback marker,
+    /// Persisted verification layer: latest benchmark, honest rollback marker,
     /// last-apply step report and restore capability. All reads are defensive.
     /// </summary>
     private async Task LoadProofLayerAsync()
@@ -123,16 +123,15 @@ public partial class InternetOptimizerViewModel : ObservableObject
                     : rollback.Reason)
                 : string.Empty;
 
-            if (bench.Before is { Ok: true } before && bench.After is { Ok: true } after)
+            if (bench.Before is { Ok: true } && bench.After is { Ok: true } after)
             {
-                var improved = after.PingP50Ms < before.PingP50Ms;
                 BenchmarkSummary =
-                    $"Ping p50 {FormatMs(before.PingP50Ms)} → {FormatMs(after.PingP50Ms)} ms" +
-                    $" · jitter {FormatMs(before.JitterMs)} → {FormatMs(after.JitterMs)} ms" +
-                    $" · DNS {FormatDns(before.DnsMs)} → {FormatDns(after.DnsMs)}";
+                    $"Latest sample: ping {FormatMs(after.PingP50Ms)} ms" +
+                    $" · jitter {FormatMs(after.JitterMs)} ms" +
+                    $" · DNS {FormatDns(after.DnsMs)} · network conditions vary";
                 BenchmarkBrush = ResolveBrush(
-                    improved ? "ExoSuccessBrush" : "ExoMutedTextBrush",
-                    improved ? Color.FromArgb(255, 34, 197, 94) : Color.FromArgb(255, 161, 161, 170));
+                    "ExoMutedTextBrush",
+                    Color.FromArgb(255, 95, 95, 105));
                 HasBenchmark = true;
             }
             else

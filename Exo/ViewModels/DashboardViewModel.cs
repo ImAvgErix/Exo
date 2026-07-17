@@ -52,7 +52,7 @@ public partial class DashboardViewModel : ObservableObject
 
     [ObservableProperty] public partial bool HasLatency { get; set; }
     [ObservableProperty] public partial string LatencyPrimary { get; set; } = "—";
-    [ObservableProperty] public partial string LatencySecondary { get; set; } = "Apply Internet for ping";
+    [ObservableProperty] public partial string LatencySecondary { get; set; } = "Apply Internet to measure the current connection";
 
     [ObservableProperty] public partial bool HasNvidiaPath { get; set; }
     [ObservableProperty] public partial string NvidiaPathPrimary { get; set; } = "—";
@@ -118,30 +118,19 @@ public partial class DashboardViewModel : ObservableObject
         if (latency is not null)
         {
             HasLatency = true;
-            var dPing = latency.AfterP50Ms - latency.BeforeP50Ms;
-            var dJit = latency.AfterJitterMs - latency.BeforeJitterMs;
-            var dDns = latency.AfterDnsMs - latency.BeforeDnsMs;
-            var better = dPing < -0.5;
-            // Hero: show improvement when real; otherwise live after-ping.
-            LatencyPrimary = better
-                ? $"{dPing:0.0} ms"
-                : $"{latency.AfterP50Ms:0.0} ms";
+            // A short network sample is not proof that a system tweak caused a
+            // gain or regression. Show the latest reading without causal arrows.
+            LatencyPrimary = $"{latency.AfterP50Ms:0.0} ms";
 
             var parts = new List<string>
             {
-                $"ping {latency.BeforeP50Ms:0.0}→{latency.AfterP50Ms:0.0}",
-                $"jit {latency.BeforeJitterMs:0.0}→{latency.AfterJitterMs:0.0}",
-                $"DNS {FormatDns(latency.BeforeDnsMs)}→{FormatDns(latency.AfterDnsMs)}"
+                $"Latest · jitter {latency.AfterJitterMs:0.0} ms",
+                $"DNS {FormatDns(latency.AfterDnsMs)}"
             };
             if (linkBit is not null) parts.Add(linkBit);
             if (!string.IsNullOrWhiteSpace(preset) &&
                 !string.Equals(preset, "Applied", StringComparison.OrdinalIgnoreCase))
                 parts.Add(preset);
-            if (dPing > 0.5)
-                parts.Add($"+{dPing:0.0} ms vs before");
-            if (dJit > 1.0 || (latency.AfterDnsMs > 0 && dDns > 200))
-                parts.Add("reapply if DNS still high");
-
             LatencySecondary = string.Join(" · ", parts);
             return;
         }
@@ -153,16 +142,16 @@ public partial class DashboardViewModel : ObservableObject
                 ? link.Label
                 : (preset.Length > 14 ? preset[..14] : preset);
             LatencySecondary = linkBit is not null
-                ? $"{preset} · {linkBit} · re-run Apply for fresh ping proof"
-                : $"{preset} · re-run Apply for before/after ping · jitter · DNS";
+                ? $"{preset} · {linkBit} · run Apply for a current sample"
+                : $"{preset} · run Apply to measure ping, jitter, and DNS";
             return;
         }
 
         HasLatency = false;
         LatencyPrimary = "—";
         LatencySecondary = linkBit is not null
-            ? $"{linkBit} · Apply Internet for ping proof"
-            : "Apply Internet for before/after ping · jitter · DNS";
+            ? $"{linkBit} · Apply Internet for a current sample"
+            : "Apply Internet to measure ping, jitter, and DNS";
     }
 
     private void RefreshDiscordRamTile()

@@ -46,7 +46,7 @@
                 <TextBlock x:Name="HeroTagline"
                            Text="{x:Bind ViewModel.HeroSummary, Mode=OneWay}"
                            Style="{StaticResource ExoTagline}"
-                           FontSize="15"
+                           FontSize="14"
                            LineHeight="20"
                            TextWrapping="WrapWholeWords"
                            VerticalAlignment="Center"
@@ -75,7 +75,7 @@
                     <StackPanel Spacing="4" VerticalAlignment="Center">
                         <TextBlock Text="SYSTEM RAM"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                   FontSize="10"
+                                   FontSize="11"
                                    CharacterSpacing="100"
                                    Foreground="{ThemeResource ExoMutedTextBrush}" />
                         <TextBlock Text="{x:Bind ViewModel.MemoryPrimary, Mode=OneWay}"
@@ -130,7 +130,7 @@
                         </Grid.ColumnDefinitions>
                         <Border Width="3" CornerRadius="1.5" Background="{ThemeResource ExoDiscordBrush}" />
                         <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBlock Text="DISCORD RAM" FontSize="10" CharacterSpacing="100"
+                            <TextBlock Text="DISCORD RAM" FontSize="11" CharacterSpacing="80"
                                        FontFamily="{StaticResource ExoUiFontSemiBold}"
                                        Foreground="{ThemeResource ExoMutedTextBrush}" />
                             <TextBlock Text="{x:Bind ViewModel.DiscordStatusPrimary, Mode=OneWay}"
@@ -152,7 +152,7 @@
                         </Grid.ColumnDefinitions>
                         <Border Width="3" CornerRadius="1.5" Background="{ThemeResource ExoSteamBrush}" />
                         <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBlock Text="STEAM RAM" FontSize="10" CharacterSpacing="100"
+                            <TextBlock Text="STEAM RAM" FontSize="11" CharacterSpacing="80"
                                        FontFamily="{StaticResource ExoUiFontSemiBold}"
                                        Foreground="{ThemeResource ExoMutedTextBrush}" />
                             <TextBlock Text="{x:Bind ViewModel.SteamStatusPrimary, Mode=OneWay}"
@@ -165,7 +165,7 @@
                     </Grid>
                 </Border>
 
-                <!-- Internet: before→after ping / jitter / DNS + live link speed -->
+                <!-- Internet: latest ping / jitter / DNS sample + live link speed -->
                 <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ExoCard}" Padding="14,12" MinHeight="110">
                     <Grid ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
@@ -174,7 +174,7 @@
                         </Grid.ColumnDefinitions>
                         <Border Width="3" CornerRadius="1.5" Background="{ThemeResource ExoInternetBrush}" />
                         <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBlock Text="INTERNET" FontSize="10" CharacterSpacing="100"
+                            <TextBlock Text="INTERNET" FontSize="11" CharacterSpacing="80"
                                        FontFamily="{StaticResource ExoUiFontSemiBold}"
                                        Foreground="{ThemeResource ExoMutedTextBrush}" />
                             <TextBlock Text="{x:Bind ViewModel.LatencyPrimary, Mode=OneWay}"
@@ -196,7 +196,7 @@
                         </Grid.ColumnDefinitions>
                         <Border Width="3" CornerRadius="1.5" Background="{ThemeResource ExoNvidiaBrush}" />
                         <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBlock Text="NVIDIA" FontSize="10" CharacterSpacing="100"
+                            <TextBlock Text="NVIDIA" FontSize="11" CharacterSpacing="80"
                                        FontFamily="{StaticResource ExoUiFontSemiBold}"
                                        Foreground="{ThemeResource ExoMutedTextBrush}" />
                             <TextBlock Text="{x:Bind ViewModel.NvidiaPathPrimary, Mode=OneWay}"
@@ -218,7 +218,7 @@
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <TextBlock Text="Coming soon"
                                FontFamily="{StaticResource ExoUiFontSemiBold}"
-                               FontSize="11"
+                               FontSize="12"
                                CharacterSpacing="60"
                                Foreground="{ThemeResource ExoMutedTextBrush}"
                                VerticalAlignment="Center" />

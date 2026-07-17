@@ -347,7 +347,7 @@ if (-not (Test-Path $discordRoot)) {
         } elseif (Test-Path -LiteralPath $eqThemeFile) {
             $amoledOk = $true
         }
-        Add-Feature 'True black AMOLED theme' 'Equicord amoled-cord theme (not forced OpenAsar CSS).' $amoledOk
+        Add-Feature 'Dark mode' 'True-black Equicord theme without a forced overlay.' $amoledOk
         Add-Feature 'Lean plugin budget' $leanPluginDetail $leanPluginsOk
 
         $notificationsOk = Test-DiscordToastsOff
@@ -417,7 +417,7 @@ if (-not (Test-Path $discordRoot)) {
             $qosOk -and $variantsOk -and $leanPluginsOk)
         if ($isApplied) {
             $statusText = 'Already optimized'
-            $detail = 'No-compromise pack active: Equicord, Exo Host, aggressive trim, full debloat, AMOLED.'
+            $detail = 'No-compromise pack active: Equicord, Exo Host, aggressive trim, full debloat, dark mode.'
         } elseif ($state -and $state.applied -eq $true -and -not $markerOk) {
             $statusText = 'Discord updated - reapply'
             $detail = 'Discord installed a new build. Run Apply again to restore Equicord, Exo Host, kernel, and Windows quiet.'

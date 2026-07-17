@@ -12,10 +12,10 @@ public sealed class ThemeService
     private readonly SettingsService _settings;
     private Window? _window;
 
-    // AMOLED pure black (dark) / warm cream beige (light)
+    // Dark black / neutral soft gray.
     public static readonly Color CozyBlack = Color.FromArgb(255, 0, 0, 0);
-    public static readonly Color SoftStone = Color.FromArgb(255, 243, 237, 227); // #F3EDE3
-    public static readonly Color DarkAccent = Color.FromArgb(255, 61, 52, 41);   // #3D3429
+    public static readonly Color SoftGray = Color.FromArgb(255, 244, 244, 245); // #F4F4F5
+    public static readonly Color Graphite = Color.FromArgb(255, 24, 24, 27);    // #18181B
 
     public ThemeService(SettingsService settings)
     {
@@ -47,12 +47,12 @@ public sealed class ThemeService
         if (root is Panel panel)
         {
             panel.Background = new SolidColorBrush(
-                root.ActualTheme == ElementTheme.Light ? SoftStone : CozyBlack);
+                root.ActualTheme == ElementTheme.Light ? SoftGray : CozyBlack);
         }
         else if (root is Border border)
         {
             border.Background = new SolidColorBrush(
-                root.ActualTheme == ElementTheme.Light ? SoftStone : CozyBlack);
+                root.ActualTheme == ElementTheme.Light ? SoftGray : CozyBlack);
         }
 
         TrySetTitleBarColors(root.ActualTheme == ElementTheme.Light);
@@ -82,19 +82,18 @@ public sealed class ThemeService
 
             if (light)
             {
-                // Cream title-bar chrome
-                titleBar.ForegroundColor = DarkAccent;
-                titleBar.InactiveForegroundColor = Color.FromArgb(255, 107, 95, 80);
-                titleBar.ButtonForegroundColor = DarkAccent;
-                titleBar.ButtonInactiveForegroundColor = Color.FromArgb(255, 107, 95, 80);
-                titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 232, 222, 208);
-                titleBar.ButtonHoverForegroundColor = DarkAccent;
-                titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 218, 206, 190);
-                titleBar.ButtonPressedForegroundColor = DarkAccent;
+                titleBar.ForegroundColor = Graphite;
+                titleBar.InactiveForegroundColor = Color.FromArgb(255, 95, 95, 105);
+                titleBar.ButtonForegroundColor = Graphite;
+                titleBar.ButtonInactiveForegroundColor = Color.FromArgb(255, 95, 95, 105);
+                titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 228, 228, 231);
+                titleBar.ButtonHoverForegroundColor = Graphite;
+                titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 212, 212, 216);
+                titleBar.ButtonPressedForegroundColor = Graphite;
             }
             else
             {
-                // AMOLED: pure black hover plates stay near-black
+                // Dark hover plates stay near-black.
                 titleBar.ForegroundColor = Colors.White;
                 titleBar.InactiveForegroundColor = Color.FromArgb(255, 168, 162, 158);
                 titleBar.ButtonForegroundColor = Color.FromArgb(255, 245, 245, 244);

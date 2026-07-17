@@ -204,6 +204,13 @@ function Disable-DiscOptKernelOnDisk([string]$AppDir) {
     }
 }
 
+function Test-DiscordCiBootProbeEnabled {
+    # This weaker probe is only valid on GitHub's disposable runner, which has
+    # no real Discord login. Both gates are required so production can never
+    # mistake a permanently loading client for a healthy one.
+    return (($env:GITHUB_ACTIONS -eq 'true') -and ($env:EXO_CI_BOOT_PROBE -eq '1'))
+}
+
 function Wait-DiscordHealthy {
     param([int]$TimeoutSec = 120)
 
@@ -211,10 +218,23 @@ function Wait-DiscordHealthy {
     # logged-in client reaches a real title ('Friends - Discord', '#chan - Discord').
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     $sawWindow = $false
+    $ciProbe = Test-DiscordCiBootProbeEnabled
+    $loadingSince = $null
     while ((Get-Date) -lt $deadline) {
         $state = Get-DiscordWindowState
         if ($state -eq 'logged_in') { return $true }
-        if ($state -ne 'none') { $sawWindow = $true }
+        if ($state -ne 'none') {
+            $sawWindow = $true
+        }
+        if ($ciProbe -and $state -eq 'loading') {
+            if ($null -eq $loadingSince) { $loadingSince = Get-Date }
+            if (((Get-Date) - $loadingSince).TotalSeconds -ge 12) {
+                Write-LogLine 'OK' 'CI boot probe: Discord process and loading window stayed stable for 12 seconds'
+                return $true
+            }
+        } else {
+            $loadingSince = $null
+        }
         Start-Sleep -Seconds 2
     }
     if ($sawWindow) {

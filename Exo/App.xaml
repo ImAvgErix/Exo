@@ -12,7 +12,7 @@
             </ResourceDictionary.MergedDictionaries>
 
             <ResourceDictionary.ThemeDictionaries>
-                <!-- AMOLED pure black shell + lifted glass cards (v2.6 Liquid Glass language) -->
+                <!-- Dark shell + opaque lifted surfaces for crisp mixed-DPI rendering. -->
                 <ResourceDictionary x:Key="Dark">
                     <Color x:Key="SystemAccentColor">#F5F5F4</Color>
                     <Color x:Key="SystemAccentColorLight1">#FAFAF9</Color>
@@ -49,39 +49,38 @@
                     <SolidColorBrush x:Key="ExoWarningSoftBrush" Color="#22F59E0B" />
                     <SolidColorBrush x:Key="ExoErrorBrush" Color="#F87171" />
                 </ResourceDictionary>
-                <!-- Warm cream / beige light mode for easier long-session reading -->
+                <!-- Neutral high-contrast light mode. -->
                 <ResourceDictionary x:Key="Light">
-                    <Color x:Key="SystemAccentColor">#3D3429</Color>
-                    <Color x:Key="SystemAccentColorLight1">#4A4034</Color>
-                    <Color x:Key="SystemAccentColorLight2">#5C5144</Color>
-                    <Color x:Key="SystemAccentColorLight3">#6B5F50</Color>
-                    <Color x:Key="SystemAccentColorDark1">#2A231C</Color>
-                    <Color x:Key="SystemAccentColorDark2">#1C1712</Color>
-                    <Color x:Key="SystemAccentColorDark3">#14100C</Color>
-                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#3D3429" />
-                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#4A4034" />
-                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#5C5144" />
-                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#2A231C" />
-                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#5C5144" />
-                    <!-- Cream page — single source of truth with ThemeService.SoftStone (#F3EDE3) -->
-                    <SolidColorBrush x:Key="ExoPageBackgroundBrush" Color="#F3EDE3" />
-                    <SolidColorBrush x:Key="ExoCardFillBrush" Color="#FFFCFAF6" />
-                    <SolidColorBrush x:Key="ExoCardStrokeBrush" Color="#403D3429" />
-                    <SolidColorBrush x:Key="ExoGlassFillBrush" Color="#FFF8F3EB" />
-                    <SolidColorBrush x:Key="ExoGlassStrokeBrush" Color="#503D3429" />
-                    <SolidColorBrush x:Key="ExoRailGlassFillBrush" Color="#FFF8F3EB" />
-                    <SolidColorBrush x:Key="ExoSpecularStrokeBrush" Color="#303D3429" />
-                    <SolidColorBrush x:Key="ExoSettingsSurfaceBrush" Color="#FFFCFAF6" />
-                    <SolidColorBrush x:Key="ExoSurfaceRaisedBrush" Color="#FFFFFDF9" />
-                    <SolidColorBrush x:Key="ExoSurfaceSunkenBrush" Color="#FFEDE5D9" />
-                    <SolidColorBrush x:Key="ExoDividerBrush" Color="#303D3429" />
-                    <SolidColorBrush x:Key="ExoAccentBrush" Color="#3D3429" />
-                    <SolidColorBrush x:Key="ExoOnAccentBrush" Color="#FCFAF6" />
-                    <SolidColorBrush x:Key="ExoAccentSoftBrush" Color="#1A3D3429" />
-                    <SolidColorBrush x:Key="ExoQuietButtonFillBrush" Color="#FCFAF6" />
-                    <SolidColorBrush x:Key="ExoPrimaryTextBrush" Color="#1C1712" />
-                    <SolidColorBrush x:Key="ExoSecondaryTextBrush" Color="#3D3429" />
-                    <SolidColorBrush x:Key="ExoMutedTextBrush" Color="#6B5F50" />
+                    <Color x:Key="SystemAccentColor">#18181B</Color>
+                    <Color x:Key="SystemAccentColorLight1">#27272A</Color>
+                    <Color x:Key="SystemAccentColorLight2">#3F3F46</Color>
+                    <Color x:Key="SystemAccentColorLight3">#52525B</Color>
+                    <Color x:Key="SystemAccentColorDark1">#09090B</Color>
+                    <Color x:Key="SystemAccentColorDark2">#000000</Color>
+                    <Color x:Key="SystemAccentColorDark3">#000000</Color>
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#18181B" />
+                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#27272A" />
+                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#3F3F46" />
+                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#18181B" />
+                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#52525B" />
+                    <SolidColorBrush x:Key="ExoPageBackgroundBrush" Color="#F4F4F5" />
+                    <SolidColorBrush x:Key="ExoCardFillBrush" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="ExoCardStrokeBrush" Color="#24000000" />
+                    <SolidColorBrush x:Key="ExoGlassFillBrush" Color="#FFF9F9FA" />
+                    <SolidColorBrush x:Key="ExoGlassStrokeBrush" Color="#32000000" />
+                    <SolidColorBrush x:Key="ExoRailGlassFillBrush" Color="#FFF9F9FA" />
+                    <SolidColorBrush x:Key="ExoSpecularStrokeBrush" Color="#1C000000" />
+                    <SolidColorBrush x:Key="ExoSettingsSurfaceBrush" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="ExoSurfaceRaisedBrush" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="ExoSurfaceSunkenBrush" Color="#FFE9E9EC" />
+                    <SolidColorBrush x:Key="ExoDividerBrush" Color="#22000000" />
+                    <SolidColorBrush x:Key="ExoAccentBrush" Color="#18181B" />
+                    <SolidColorBrush x:Key="ExoOnAccentBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="ExoAccentSoftBrush" Color="#1618181B" />
+                    <SolidColorBrush x:Key="ExoQuietButtonFillBrush" Color="#FFF4F4F5" />
+                    <SolidColorBrush x:Key="ExoPrimaryTextBrush" Color="#18181B" />
+                    <SolidColorBrush x:Key="ExoSecondaryTextBrush" Color="#3F3F46" />
+                    <SolidColorBrush x:Key="ExoMutedTextBrush" Color="#5F5F69" />
                     <SolidColorBrush x:Key="ExoSuccessBrush" Color="#15803D" />
                     <SolidColorBrush x:Key="ExoWarningBrush" Color="#B45309" />
                     <SolidColorBrush x:Key="ExoWarningSoftBrush" Color="#18B45309" />

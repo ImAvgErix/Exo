@@ -285,6 +285,14 @@ Expect("structured apply report emitted",
     applyBlob.Contains("applyReport", StringComparison.Ordinal));
 var debloatText = File.ReadAllText(applyFiles[3]);
 var kernelText = File.ReadAllText(applyFiles[4]);
+Expect("CI boot probe requires both runner gates",
+    kernelText.Contains("Test-DiscordCiBootProbeEnabled", StringComparison.Ordinal) &&
+    kernelText.Contains("$env:GITHUB_ACTIONS -eq 'true'", StringComparison.Ordinal) &&
+    kernelText.Contains("$env:EXO_CI_BOOT_PROBE -eq '1'", StringComparison.Ordinal) &&
+    kernelText.Contains("-and", StringComparison.Ordinal));
+Expect("production boot probe still requires logged-in Discord",
+    kernelText.Contains("if ($state -eq 'logged_in') { return $true }", StringComparison.Ordinal) &&
+    kernelText.Contains("$ciProbe -and $state -eq 'loading'", StringComparison.Ordinal));
 Expect("Krisp CDN failure soft-skips",
     debloatText.Contains("Krisp module skipped", StringComparison.Ordinal) &&
     debloatText.Contains("Add-DiscordModuleSkipReport 'krisp'", StringComparison.Ordinal));

@@ -42,7 +42,7 @@
                             Click="NavDiscord_Click"
                             Tag="discord">
                         <Image Source="ms-appx:///Assets/Logos/discord.png"
-                               Width="22" Height="22"
+                               Width="24" Height="24"
                                Stretch="Uniform"
                                UseLayoutRounding="True"
                                IsHitTestVisible="False"
@@ -54,7 +54,7 @@
                             Click="NavSteam_Click"
                             Tag="steam">
                         <Image Source="ms-appx:///Assets/Logos/steam.png"
-                               Width="22" Height="22"
+                               Width="24" Height="24"
                                Stretch="Uniform"
                                UseLayoutRounding="True"
                                IsHitTestVisible="False"
@@ -66,7 +66,7 @@
                             Click="NavInternet_Click"
                             Tag="internet">
                         <Image Source="ms-appx:///Assets/Logos/internet.png"
-                               Width="22" Height="22"
+                               Width="24" Height="24"
                                Stretch="Uniform"
                                UseLayoutRounding="True"
                                IsHitTestVisible="False"
@@ -78,7 +78,7 @@
                             Click="NavNvidia_Click"
                             Tag="nvidia">
                         <Image Source="ms-appx:///Assets/Logos/nvidia.png"
-                               Width="22" Height="22"
+                               Width="24" Height="24"
                                Stretch="Uniform"
                                UseLayoutRounding="True"
                                IsHitTestVisible="False"

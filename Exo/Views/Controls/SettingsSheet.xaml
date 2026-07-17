@@ -4,155 +4,120 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Loaded="UserControl_Loaded"
-    Width="360">
+    Width="336">
 
-    <!-- Solid AMOLED control panel: same surfaces and dividers as the rest of Exo. -->
     <Border x:Name="SheetRoot"
             Background="{ThemeResource ExoSettingsSurfaceBrush}"
             BorderBrush="{ThemeResource ExoGlassStrokeBrush}"
             BorderThickness="1"
-            CornerRadius="{StaticResource ExoGlassRadius}"
-            Padding="18"
+            CornerRadius="18"
+            Padding="16"
             RenderTransformOrigin="0.5,0"
             UseLayoutRounding="True">
         <Border.RenderTransform>
             <CompositeTransform x:Name="SheetTransform" />
         </Border.RenderTransform>
 
-        <StackPanel Spacing="12">
-            <Grid ColumnSpacing="12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Spacing="2">
-                    <TextBlock Text="Settings"
-                               Style="{StaticResource ExoPageTitle}"
-                               FontSize="24"
-                               LineHeight="28"
-                               CharacterSpacing="-18" />
-                    <TextBlock Text="SYSTEM CONTROL"
-                               Style="{StaticResource ExoSectionTitle}"
-                               Margin="0" />
-                </StackPanel>
-                <Border Grid.Column="1"
-                        Background="{ThemeResource ExoSurfaceRaisedBrush}"
-                        BorderBrush="{ThemeResource ExoDividerBrush}"
-                        BorderThickness="1"
-                        CornerRadius="9"
-                        Padding="9,5"
-                        VerticalAlignment="Center">
-                    <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
-                               FontFamily="{StaticResource ExoUiFontSemiBold}"
-                               FontSize="12"
-                               FontWeight="SemiBold"
-                               Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                </Border>
-            </Grid>
+        <StackPanel Spacing="14">
+            <TextBlock Text="Settings"
+                       Style="{StaticResource ExoPageTitle}"
+                       FontSize="24"
+                       LineHeight="28"
+                       CharacterSpacing="-18" />
 
-            <Border Style="{StaticResource ExoCard}"
-                    CornerRadius="14"
-                    Padding="14">
-                <StackPanel Spacing="10">
-                    <StackPanel Spacing="2">
-                        <TextBlock Text="APPEARANCE"
-                                   Style="{StaticResource ExoSectionTitle}"
-                                   Margin="0" />
-                        <TextBlock Text="AMOLED black or warm paper. No translucent layers."
+            <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
+
+            <StackPanel Spacing="9">
+                <TextBlock Text="Appearance"
+                           FontFamily="{StaticResource ExoUiFontSemiBold}"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <RadioButton x:Name="DarkModeRadio"
+                                 Grid.Column="0"
+                                 Style="{StaticResource ExoThemeChoice}"
+                                 Content="Dark"
+                                 GroupName="ExoTheme"
+                                 MinHeight="40"
+                                 IsChecked="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}"
+                                 Click="DarkMode_Click"
+                                 AutomationProperties.Name="Dark mode" />
+                    <RadioButton x:Name="LightModeRadio"
+                                 Grid.Column="1"
+                                 Style="{StaticResource ExoThemeChoice}"
+                                 Content="Light"
+                                 GroupName="ExoTheme"
+                                 MinHeight="40"
+                                 IsChecked="{x:Bind ViewModel.IsLightMode, Mode=TwoWay}"
+                                 Click="LightMode_Click"
+                                 AutomationProperties.Name="Light mode" />
+                </Grid>
+            </StackPanel>
+
+            <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
+
+            <StackPanel Spacing="10">
+                <Grid ColumnSpacing="12" MinHeight="36">
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="Updates"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                        <TextBlock Text="Check when Exo opens"
                                    Style="{StaticResource ExoCaption}" />
                     </StackPanel>
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <RadioButton x:Name="DarkModeRadio"
-                                     Grid.Column="0"
-                                     Style="{StaticResource ExoThemeChoice}"
-                                     Content="AMOLED"
-                                     GroupName="ExoTheme"
-                                     MinHeight="38"
-                                     Padding="8,8"
-                                     IsChecked="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}"
-                                     Click="DarkMode_Click"
-                                     AutomationProperties.Name="Dark mode" />
-                        <RadioButton x:Name="LightModeRadio"
-                                     Grid.Column="1"
-                                     Style="{StaticResource ExoThemeChoice}"
-                                     Content="Light"
-                                     GroupName="ExoTheme"
-                                     MinHeight="38"
-                                     Padding="8,8"
-                                     IsChecked="{x:Bind ViewModel.IsLightMode, Mode=TwoWay}"
-                                     Click="LightMode_Click"
-                                     AutomationProperties.Name="Light mode" />
-                    </Grid>
-                </StackPanel>
-            </Border>
+                    <ToggleSwitch Style="{StaticResource ExoCompactSwitch}"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center"
+                                  AutomationProperties.Name="Check for updates on launch"
+                                  IsOn="{x:Bind ViewModel.CheckForUpdatesOnLaunch, Mode=TwoWay}"
+                                  OnContent=""
+                                  OffContent="" />
+                </Grid>
+                <Button Style="{StaticResource ExoPrimaryButton}"
+                        Content="Check for updates"
+                        MinHeight="40"
+                        Padding="14,9"
+                        HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="Check for Exo app updates"
+                        Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
+                        IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                <Grid MinHeight="24">
+                    <StackPanel Spacing="5"
+                                VerticalAlignment="Center"
+                                Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBlock Text="{x:Bind ViewModel.UpdateProgressLabel, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                        <ProgressBar Minimum="0"
+                                     Maximum="100"
+                                     Value="{x:Bind ViewModel.UpdateProgressPercent, Mode=OneWay}"
+                                     IsIndeterminate="{x:Bind ViewModel.IsUpdateProgressIndeterminate, Mode=OneWay}"
+                                     Height="3"
+                                     CornerRadius="2"
+                                     Foreground="{ThemeResource ExoAccentBrush}" />
+                    </StackPanel>
+                    <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               TextWrapping="WrapWholeWords"
+                               MaxLines="2"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
+                               Visibility="{x:Bind ViewModel.ShowIdleUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                               AutomationProperties.LiveSetting="Polite" />
+                </Grid>
+            </StackPanel>
 
-            <Border Style="{StaticResource ExoCard}"
-                    CornerRadius="14"
-                    Padding="14">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="UPDATES"
-                               Style="{StaticResource ExoSectionTitle}"
-                               Margin="0" />
-                    <Grid MinHeight="30">
-                        <StackPanel Spacing="1" VerticalAlignment="Center">
-                            <TextBlock Text="Check on launch"
-                                       FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       FontSize="13"
-                                       FontWeight="SemiBold"
-                                       Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                            <TextBlock Text="Stay current without a background agent"
-                                       Style="{StaticResource ExoCaption}"
-                                       FontSize="11.5" />
-                        </StackPanel>
-                        <ToggleSwitch Style="{StaticResource ExoCompactSwitch}"
-                                      HorizontalAlignment="Right"
-                                      VerticalAlignment="Center"
-                                      AutomationProperties.Name="Check for updates on launch"
-                                      IsOn="{x:Bind ViewModel.CheckForUpdatesOnLaunch, Mode=TwoWay}"
-                                      OnContent=""
-                                      OffContent="" />
-                    </Grid>
-                    <Button Style="{StaticResource ExoPrimaryButton}"
-                            Content="Check for updates"
-                            MinHeight="40"
-                            Padding="14,9"
-                            HorizontalAlignment="Stretch"
-                            AutomationProperties.Name="Check for Exo app updates"
-                            Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
-                            IsEnabled="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                    <Grid MinHeight="28">
-                        <StackPanel Spacing="5"
-                                    VerticalAlignment="Center"
-                                    Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <TextBlock Text="{x:Bind ViewModel.UpdateProgressLabel, Mode=OneWay}"
-                                       FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       FontSize="12"
-                                       FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"
-                                       Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                            <ProgressBar Minimum="0"
-                                         Maximum="100"
-                                         Value="{x:Bind ViewModel.UpdateProgressPercent, Mode=OneWay}"
-                                         IsIndeterminate="{x:Bind ViewModel.IsUpdateProgressIndeterminate, Mode=OneWay}"
-                                         Height="3"
-                                         CornerRadius="2"
-                                         Foreground="{ThemeResource ExoAccentBrush}" />
-                        </StackPanel>
-                        <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}"
-                                   Style="{StaticResource ExoCaption}"
-                                   TextWrapping="WrapWholeWords"
-                                   MaxLines="2"
-                                   TextTrimming="CharacterEllipsis"
-                                   VerticalAlignment="Center"
-                                   Visibility="{x:Bind ViewModel.ShowIdleUpdateStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                   AutomationProperties.LiveSetting="Polite" />
-                    </Grid>
-                </StackPanel>
-            </Border>
+            <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
 
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions>

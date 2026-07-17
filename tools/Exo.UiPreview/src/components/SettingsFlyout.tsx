@@ -36,8 +36,10 @@ export function SettingsFlyout({
         role="dialog"
         aria-label="Settings"
       >
+        <h2 className="settings-sheet__title">Settings</h2>
+
         <div className="settings-sheet__group">
-          <p className="settings-sheet__section">APPEARANCE</p>
+          <p className="settings-sheet__section">Appearance</p>
           <div className="settings-sheet__theme">
             <SegmentedControl
               options={[
@@ -51,9 +53,9 @@ export function SettingsFlyout({
         </div>
 
         <div className="settings-sheet__group">
-          <p className="settings-sheet__section">UPDATES</p>
+          <p className="settings-sheet__section">Updates</p>
           <div className="settings-sheet__row">
-            <span>Check on launch</span>
+            <span>Check when Exo opens</span>
             <button
               type="button"
               className={`settings-sheet__switch ${autoUpdate ? 'is-on' : ''}`}

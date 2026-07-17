@@ -83,6 +83,8 @@ export const homeDashboardSeed = {
   memoryTotalBytes: 32 * (1 << 30),
   latencyBeforeP50: 28.4,
   latencyAfterP50: 16.1,
+  latencyJitter: 1.8,
+  latencyDns: 24,
 }
 
 /* Status = rail + Applied/Not applied. */
@@ -91,7 +93,7 @@ const discordFeatures: FeatureItem[] = [
   { id: 'exohost', title: 'Exo Host', detail: 'Overlay host process', applied: false },
   { id: 'kernel', title: 'RAM / latency kernel', detail: 'Working set trim', applied: false },
   { id: 'debloat', title: 'Client debloat', detail: 'Telemetry + bloat', applied: true },
-  { id: 'amoled', title: 'AMOLED theme', detail: 'Pure black client', applied: false },
+  { id: 'amoled', title: 'Dark mode', detail: 'True-black client', applied: false },
   { id: 'quiet', title: 'Windows quiet', detail: 'Background hush', applied: true },
 ]
 

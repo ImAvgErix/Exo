@@ -13,7 +13,7 @@ function Write-Banner {
     if ($pre) { $psLabel += " [$pre]" }
     Write-Host ''
     Write-Host "  Disc Optimizer v$Script:DiscOptVersion" -ForegroundColor Magenta
-    Write-Host '  AMOLED | privacy | perf | cache trim | raw input' -ForegroundColor DarkGray
+    Write-Host '  dark mode | privacy | perf | cache trim | raw input' -ForegroundColor DarkGray
     Write-Host "  $psLabel  -  requires PowerShell 7" -ForegroundColor Cyan
     if ($env:DISCOPT_ELEVATED -eq '1') {
         Write-Host '  (running as Administrator)' -ForegroundColor DarkGray

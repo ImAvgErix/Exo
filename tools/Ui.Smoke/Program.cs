@@ -82,17 +82,16 @@ if (File.Exists(appXaml))
     var a = File.ReadAllText(appXaml);
     Expect("amoled black", a.Contains("#000000", StringComparison.Ordinal));
     Expect("stone white accent", a.Contains("#F5F5F4", StringComparison.Ordinal));
-    // Single cream everywhere: #F3EDE3 (matches ThemeService.SoftStone); old #F2EBE0 must stay gone.
-    Expect("cream light page unified", a.Contains("#F3EDE3", StringComparison.Ordinal)
-        && !a.Contains("#F2EBE0", StringComparison.Ordinal)
-        && !a.Contains("#F3EBE3", StringComparison.Ordinal));
+    Expect("neutral light page unified", a.Contains("#F4F4F5", StringComparison.Ordinal)
+        && a.Contains("#FFFFFFFF", StringComparison.Ordinal)
+        && !a.Contains("#F3EDE3", StringComparison.Ordinal));
     // v3.2 cohesive surfaces: true black shell with opaque lifted cards avoids
     // ghosted text and inconsistent transparency at mixed DPI.
     Expect("dark solid card lift",
         a.Contains("#FF0E0E11", StringComparison.Ordinal)
         && a.Contains("#FF08080A", StringComparison.Ordinal));
     Expect("liquid glass fill token", a.Contains("ExoGlassFillBrush", StringComparison.Ordinal));
-    // Settings uses the same solid AMOLED material as the app; no isolated
+    // Settings uses the same solid dark material as the app; no isolated
     // translucent flyout and no GPU-fragile AcrylicBrush.
     Expect("settings solid surface brush",
         a.Contains("ExoSettingsSurfaceBrush", StringComparison.Ordinal)
@@ -104,9 +103,9 @@ var themeServiceCs = Path.Combine(repo, "Exo", "Services", "ThemeService.cs");
 if (File.Exists(themeServiceCs))
 {
     var ts = File.ReadAllText(themeServiceCs);
-    Expect("theme service cream matches app.xaml",
-        ts.Contains("243, 237, 227", StringComparison.Ordinal)
-        && ts.Contains("#F3EDE3", StringComparison.Ordinal));
+    Expect("theme service neutral light matches app.xaml",
+        ts.Contains("244, 244, 245", StringComparison.Ordinal)
+        && ts.Contains("#F4F4F5", StringComparison.Ordinal));
 }
 if (File.Exists(main))
 {
@@ -250,10 +249,12 @@ if (File.Exists(settings))
     Expect("settings exo chrome",
         s.Contains("ExoQuietButton", StringComparison.Ordinal)
         && s.Contains("ExoPrimaryButton", StringComparison.Ordinal));
-    Expect("settings control-panel hierarchy",
+    Expect("settings compact flat hierarchy",
         s.Contains("Text=\"Settings\"", StringComparison.Ordinal)
-        && s.Contains("SYSTEM CONTROL", StringComparison.Ordinal)
-        && s.Contains("No translucent layers", StringComparison.Ordinal));
+        && s.Contains("Text=\"Appearance\"", StringComparison.Ordinal)
+        && !s.Contains("SYSTEM CONTROL", StringComparison.Ordinal)
+        && !s.Contains("No translucent layers", StringComparison.Ordinal)
+        && !s.Contains("Content=\"AMOLED\"", StringComparison.Ordinal));
     Expect("settings quiet support buttons",
         s.Contains("ExoQuietButton", StringComparison.Ordinal)
         && s.Contains("Report issue", StringComparison.Ordinal)
@@ -849,6 +850,10 @@ if (File.Exists(dashVm))
     Expect("home no nvidia probe", !dvm.Contains("DetectNvidiaAsync", StringComparison.Ordinal));
     Expect("home dashboard refresh", dvm.Contains("RefreshDashboard", StringComparison.Ordinal)
         && dvm.Contains("HomeDashboardReader", StringComparison.Ordinal));
+    Expect("home internet metrics are current samples, not causal deltas",
+        dvm.Contains("Latest · jitter", StringComparison.Ordinal)
+        && !dvm.Contains("BeforeP50Ms:0.0}→", StringComparison.Ordinal)
+        && !dvm.Contains("vs before", StringComparison.Ordinal));
     Expect("windows coming soon card", dvm.Contains("Card(\"windows\"", StringComparison.Ordinal)
         && dvm.Contains("windows.png", StringComparison.Ordinal));
 }
