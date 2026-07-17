@@ -39,7 +39,7 @@ public sealed partial class SettingsSheet : UserControl
     }
 
     /// <summary>
-    /// Menu entrance timed with the gear crank: soft drop from the gear + fade.
+    /// Menu entrance timed with the gear crank: a short drop from the gear.
     /// XAML storyboards only — ends at identity (no leftover transforms).
     /// </summary>
     public void PlayOpenAnimation()
@@ -52,8 +52,8 @@ public sealed partial class SettingsSheet : UserControl
 
             if (SheetRoot is null) return;
 
-            // Soft drop from gear (integer px) + fade; settle to identity (no soft matrix left).
-            SheetRoot.Opacity = 0;
+            // Keep the material opaque for the entire motion; only its position moves.
+            SheetRoot.Opacity = 1;
             SheetRoot.IsHitTestVisible = false;
             if (SheetTransform is not null)
             {
@@ -66,18 +66,6 @@ public sealed partial class SettingsSheet : UserControl
 
             var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
             var sb = new Storyboard();
-
-            var fade = new DoubleAnimation
-            {
-                From = 0,
-                To = 1,
-                Duration = TimeSpan.FromMilliseconds(OpenMs),
-                EasingFunction = ease,
-                EnableDependentAnimation = true
-            };
-            Storyboard.SetTarget(fade, SheetRoot);
-            Storyboard.SetTargetProperty(fade, "Opacity");
-            sb.Children.Add(fade);
 
             if (SheetTransform is not null)
             {
@@ -146,7 +134,7 @@ public sealed partial class SettingsSheet : UserControl
     }
 
     /// <summary>
-    /// Mirrored close: fade out + rise back toward the gear, then onDone (the caller
+    /// Mirrored close: rise back toward the gear, then onDone (the caller
     /// hides the flyout). Storyboard-only; onDone fires exactly once — Completed or
     /// the safety delay — so the flyout always actually closes. ResetOpenVisual runs
     /// after the hide, so a reopened sheet is never left at opacity 0.
@@ -179,18 +167,6 @@ public sealed partial class SettingsSheet : UserControl
 
             var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
             var sb = new Storyboard();
-
-            var fade = new DoubleAnimation
-            {
-                From = Math.Clamp(SheetRoot.Opacity, 0, 1),
-                To = 0,
-                Duration = TimeSpan.FromMilliseconds(CloseMs),
-                EasingFunction = ease,
-                EnableDependentAnimation = true
-            };
-            Storyboard.SetTarget(fade, SheetRoot);
-            Storyboard.SetTargetProperty(fade, "Opacity");
-            sb.Children.Add(fade);
 
             if (SheetTransform is not null)
             {

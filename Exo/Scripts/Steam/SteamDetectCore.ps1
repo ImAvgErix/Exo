@@ -15,10 +15,13 @@ function Test-SteamCefLauncherText {
         ($Text -notmatch '-cef-disable-gpu')
 }
 
-function Test-SteamTrimHelperText {
+function Test-SteamMemoryGuardText {
     param([AllowNull()][string]$Text)
     if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
-    if ($Text -notmatch 'Exo\.SteamWebHelper') { return $false }
+    if ($Text -notmatch 'Exo\.SteamMemoryGuard') { return $false }
+    if ($Text -notmatch 'SetProcessInformation') { return $false }
+    if ($Text -notmatch 'SetMemoryPriority') { return $false }
+    if ($Text -notmatch 'ForegroundPid') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::BelowNormal') { return $false }
     if ($Text -notmatch '(?s)\$steamCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal') { return $false }
     if ($Text -notmatch '(?s)\$webCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal') { return $false }
@@ -29,6 +32,8 @@ function Test-SteamTrimHelperText {
         $line = $rawLine.TrimStart()
         if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }
         if ($line.Contains('EmptyWorkingSet(')) { return $false }
+        if ($line.Contains('SetProcessWorkingSetSize')) { return $false }
+        if ($line -match '(?i)Stop-Process.*steamwebhelper|Suspend-Process') { return $false }
     }
     if ($Text -match 'Start-Sleep\s+-Seconds\s+(\d+)') {
         $sec = [int]$Matches[1]

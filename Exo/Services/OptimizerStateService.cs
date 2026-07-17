@@ -793,20 +793,20 @@ public sealed class OptimizerStateService
         var clientHardwareOk = clientHardwareMarkerOk && IsSteamClientHardwareAccelerationEnabled();
         features.Add(MakeFeature("Hardware-accelerated client", "", clientHardwareOk));
 
-        var helperPath = Path.Combine(steam, "Exo-SteamWebHelperTrim.ps1");
-        var aggressiveTrimOk = false;
+        var helperPath = Path.Combine(steam, "Exo-SteamMemoryGuard.ps1");
+        var memoryGuardOk = false;
         if (File.Exists(helperPath))
         {
             try
             {
                 // Target: 2–15s reclaim (not hard-coded Seconds 5 only)
-                aggressiveTrimOk = SteamLogic.IsTrimHelperText(File.ReadAllText(helperPath));
+                memoryGuardOk = SteamLogic.IsMemoryGuardText(File.ReadAllText(helperPath));
             }
             catch { /* ignore */ }
         }
-        features.Add(MakeFeature("In-game contention guard", "", aggressiveTrimOk));
+        features.Add(MakeFeature("Adaptive memory guard", "", memoryGuardOk));
 
-        var applied = markerOk && startupOk && cefLauncherOk && aggressiveTrimOk &&
+        var applied = markerOk && startupOk && cefLauncherOk && memoryGuardOk &&
                       downloadOptimized && clientTweaksApplied && clientHardwareOk;
         return new OptimizerStateInfo
         {

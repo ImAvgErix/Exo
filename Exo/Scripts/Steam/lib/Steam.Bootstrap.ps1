@@ -13,7 +13,7 @@ if (Test-Path -LiteralPath $__steamPaths) { . $__steamPaths }
 # SteamDetectCore.ps1 + SteamLogic.RequiredApplyMarkers + Contracts.Smoke.
 $script:ExoSteamStageIds = @(
     'cef-launcher'
-    'webhelper-trim'
+    'memory-guard'
     'download-config'
     'client-tweaks'
     'windows-quiet'

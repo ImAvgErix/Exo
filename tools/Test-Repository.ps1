@@ -141,15 +141,18 @@ else {
     }
 
     foreach ($marker in @(
+        'Exo.SteamMemoryGuard',
+        'SetProcessInformation',
+        'SetMemoryPriority',
+        'ForegroundPid',
         'ProcessPriorityClass]::Normal',
         'ProcessPriorityClass]::BelowNormal',
-        '$steamCls = if ($InGame)',
-        'Never EmptyWorkingSet'
+        '$steamCls = if ($InGame)'
     )) {
         Assert-ContainsText $embeddedHelper $marker 'Steam companion helper'
     }
-    if ($embeddedHelper -match '(?i)EmptyWorkingSet\(' -and $embeddedHelper -notmatch 'Never EmptyWorkingSet') {
-        Add-Failure 'Steam helper must not EmptyWorkingSet steamwebhelper (kills CEF UI)'
+    if ($embeddedHelper -match '(?im)^\s*(?!#|//).*(EmptyWorkingSet\(|SetProcessWorkingSetSize|Stop-Process.*steamwebhelper|Suspend-Process)') {
+        Add-Failure 'Steam memory guard contains an unsafe trim, suspend, or kill operation'
     }
 }
 

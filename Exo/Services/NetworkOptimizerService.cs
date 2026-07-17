@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Net;
 using System.Net.Http;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -223,29 +225,344 @@ public sealed class NetworkOptimizerService
         }
     }
 
-    /// <summary>
-    /// User-triggered ramped test: throughput plus idle/loaded latency, jitter and loss.
-    /// This is intentionally separate from the tiny Apply proof probe because it can
-    /// transfer hundreds of megabytes on a very fast connection.
-    /// </summary>
-    public async Task<NetworkBenchmarkResult?> RunQualityBenchmarkAsync(CancellationToken ct = default)
+    private sealed record DnsCandidate(
+        string Name,
+        string Primary,
+        string Secondary,
+        string PrimaryV6,
+        string SecondaryV6,
+        string DohTemplate);
+
+    private sealed record TransferResult(double Mbps, IReadOnlyList<double> LoadedLatency, long Bytes);
+
+    private static readonly DnsCandidate[] DnsCandidates =
     {
-        var script = NetworkApplyScriptBuilder.BuildQualityBenchmark();
-        var path = Path.Combine(Path.GetTempPath(), $"exo-net-quality-{Guid.NewGuid():N}.ps1");
+        new("Cloudflare", "1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001", "https://cloudflare-dns.com/dns-query"),
+        new("Google", "8.8.8.8", "8.8.4.4", "2001:4860:4860::8888", "2001:4860:4860::8844", "https://dns.google/dns-query"),
+        new("Quad9", "9.9.9.9", "149.112.112.112", "2620:fe::fe", "2620:fe::9", "https://dns.quad9.net/dns-query")
+    };
+
+    /// <summary>
+    /// User-triggered native connection test. Sustained streaming avoids the old
+    /// short PowerShell byte-array ramp, which substantially under-drove multi-gig links.
+    /// DNS candidates are tested directly on this network and the fastest healthy
+    /// resolver plus its DoH template is returned for the same transaction.
+    /// </summary>
+    public async Task<NetworkBenchmarkResult?> RunQualityBenchmarkAsync(
+        NetworkMediaProfile media,
+        IProgress<string>? progress = null,
+        CancellationToken ct = default)
+    {
+        const string endpoint = "Cloudflare edge";
+        var linkMbps = media.PrimaryLinkSpeedBps > 0 ? media.PrimaryLinkSpeedBps / 1_000_000d : 0d;
+        var streams = linkMbps >= 2_000 ? 12 : linkMbps >= 1_000 ? 8 : linkMbps >= 300 ? 6 : 4;
+        var transferDuration = linkMbps >= 1_000 ? TimeSpan.FromSeconds(8) : TimeSpan.FromSeconds(6);
+
+        using var handler = new SocketsHttpHandler
+        {
+            AutomaticDecompression = DecompressionMethods.None,
+            MaxConnectionsPerServer = 32,
+            EnableMultipleHttp2Connections = true,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            ConnectTimeout = TimeSpan.FromSeconds(5)
+        };
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Exo-Connection-Lab/2.0");
+
         try
         {
-            await File.WriteAllTextAsync(path, script, ct).ConfigureAwait(false);
-            var stdout = await RunCaptureAsync(
-                PowerShellRunnerService.ResolvePowerShell(),
-                $"-NoProfile -ExecutionPolicy Bypass -File \"{path}\"",
-                ct).ConfigureAwait(false);
-            return NetworkLogic.TryParseBenchmark(stdout);
+            progress?.Report("Warming the nearest test edge...");
+            _ = await MeasureEdgeLatencyAsync(client, ct).ConfigureAwait(false);
+
+            progress?.Report("Measuring idle latency...");
+            var idle = new List<double>(16);
+            for (var i = 0; i < 16; i++)
+            {
+                try { idle.Add(await MeasureEdgeLatencyAsync(client, ct).ConfigureAwait(false)); }
+                catch when (!ct.IsCancellationRequested) { }
+            }
+            if (idle.Count < 8) return null;
+
+            progress?.Report($"Saturating download with {streams} parallel streams...");
+            var down = await MeasureDownloadAsync(client, streams, transferDuration, ct).ConfigureAwait(false);
+
+            progress?.Report($"Saturating upload with {streams} parallel streams...");
+            var up = await MeasureUploadAsync(client, streams, transferDuration, ct).ConfigureAwait(false);
+
+            progress?.Report("Testing packet stability and encrypted DNS routes...");
+            var lossTask = MeasurePacketLossAsync(ct);
+            var dnsTask = SelectFastestDnsAsync(ct);
+            await Task.WhenAll(lossTask, dnsTask).ConfigureAwait(false);
+            var packetLoss = lossTask.Result;
+            var (dns, dnsMedianMs) = dnsTask.Result;
+
+            var p50 = Percentile(idle, 0.5);
+            var p95 = Percentile(idle, 0.95);
+            var downLoaded = down.LoadedLatency.Count > 0 ? Percentile(down.LoadedLatency, 0.5) : p50;
+            var upLoaded = up.LoadedLatency.Count > 0 ? Percentile(up.LoadedLatency, 0.5) : p50;
+            var downJitter = Jitter(down.LoadedLatency);
+            var upJitter = Jitter(up.LoadedLatency);
+            var downloadLimited = linkMbps >= 1_000 && down.Mbps < linkMbps * 0.35;
+            var uploadLimited = linkMbps >= 1_000 && up.Mbps < linkMbps * 0.08;
+            var downPenalty = Math.Max(0, downLoaded - p50);
+            var upPenalty = Math.Max(0, upLoaded - p50);
+            var unstable = packetLoss >= 0.5 || Jitter(idle) >= 8 ||
+                           downJitter >= 15 || upJitter >= 15 ||
+                           downPenalty >= 25 || upPenalty >= 35;
+            var useThroughput = media.EthernetInUse && linkMbps >= 1_000 && !unstable ||
+                                !unstable && down.Mbps >= 300;
+            var recommended = useThroughput ? "highest-throughput" : "lowest-latency";
+            var reason = unstable
+                ? "loaded latency or packet stability needs latency-safe buffering"
+                : media.EthernetInUse && linkMbps >= 1_000
+                    ? "multi-gig Ethernet gets full RSS and offload throughput without latency folklore"
+                    : "the measured path is stable enough for balanced throughput and latency tuning";
+
+            return new NetworkBenchmarkResult
+            {
+                Ok = true,
+                IsQualityTest = true,
+                PingP50Ms = Math.Round(p50, 2),
+                PingP95Ms = Math.Round(p95, 2),
+                JitterMs = Math.Round(Jitter(idle), 2),
+                DnsMs = Math.Round(dnsMedianMs, 2),
+                DnsMedianMs = Math.Round(dnsMedianMs, 2),
+                Samples = idle.Count,
+                DownloadMbps = Math.Round(down.Mbps, 2),
+                UploadMbps = Math.Round(up.Mbps, 2),
+                DownloadLoadedMs = Math.Round(downLoaded, 2),
+                UploadLoadedMs = Math.Round(upLoaded, 2),
+                DownloadLoadedJitterMs = Math.Round(downJitter, 2),
+                UploadLoadedJitterMs = Math.Round(upJitter, 2),
+                PacketLossPercent = Math.Round(packetLoss, 2),
+                DataUsedMb = Math.Round((down.Bytes + up.Bytes) / 1024d / 1024d, 1),
+                Endpoint = endpoint,
+                ParallelStreams = streams,
+                TransferSeconds = transferDuration.TotalSeconds,
+                LinkSpeedMbps = Math.Round(linkMbps, 0),
+                DownloadEndpointLimited = downloadLimited,
+                UploadEndpointLimited = uploadLimited,
+                DnsProvider = dns.Name,
+                DnsPrimary = dns.Primary,
+                DnsSecondary = dns.Secondary,
+                DnsPrimaryV6 = dns.PrimaryV6,
+                DnsSecondaryV6 = dns.SecondaryV6,
+                DnsOverHttpsTemplate = dns.DohTemplate,
+                RecommendedPreset = recommended,
+                RecommendationReason = reason,
+                TimestampUtc = DateTime.UtcNow.ToString("o")
+            };
         }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return null; }
         catch { return null; }
-        finally
+    }
+
+    private static async Task<double> MeasureEdgeLatencyAsync(HttpClient client, CancellationToken ct)
+    {
+        var uri = $"https://speed.cloudflare.com/__down?bytes=0&exo={Guid.NewGuid():N}";
+        var sw = Stopwatch.StartNew();
+        using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await response.Content.CopyToAsync(Stream.Null, ct).ConfigureAwait(false);
+        sw.Stop();
+        return sw.Elapsed.TotalMilliseconds;
+    }
+
+    private static async Task<TransferResult> MeasureDownloadAsync(
+        HttpClient client,
+        int streams,
+        TimeSpan duration,
+        CancellationToken ct)
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        stop.CancelAfter(duration);
+        long bytes = 0;
+        var loaded = new List<double>();
+        var gate = new object();
+        var latencyTask = SampleLoadedLatencyAsync(client, loaded, gate, stop.Token);
+        var sw = Stopwatch.StartNew();
+        var workers = Enumerable.Range(0, streams).Select(async _ =>
         {
-            try { File.Delete(path); } catch { }
+            var buffer = new byte[256 * 1024];
+            while (!stop.IsCancellationRequested)
+            {
+                try
+                {
+                    // Cloudflare's public measurement endpoint currently rejects
+                    // requests at 100 MB and above with HTTP 403. Looping 50 MB
+                    // responses keeps every stream busy for the full test window
+                    // without silently turning a multi-gig download result into 0.
+                    var uri = $"https://speed.cloudflare.com/__down?bytes=50000000&exo={Guid.NewGuid():N}";
+                    using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, stop.Token).ConfigureAwait(false);
+                    response.EnsureSuccessStatusCode();
+                    await using var stream = await response.Content.ReadAsStreamAsync(stop.Token).ConfigureAwait(false);
+                    while (!stop.IsCancellationRequested)
+                    {
+                        var read = await stream.ReadAsync(buffer, stop.Token).ConfigureAwait(false);
+                        if (read == 0) break;
+                        Interlocked.Add(ref bytes, read);
+                    }
+                }
+                catch (OperationCanceledException) when (stop.IsCancellationRequested) { break; }
+                catch when (!ct.IsCancellationRequested) { }
+            }
+        }).ToArray();
+        try { await Task.WhenAll(workers).ConfigureAwait(false); } catch (OperationCanceledException) { }
+        try { await latencyTask.ConfigureAwait(false); } catch (OperationCanceledException) { }
+        sw.Stop();
+        IReadOnlyList<double> copy;
+        lock (gate) copy = loaded.ToArray();
+        return new TransferResult(bytes * 8d / Math.Max(0.001, sw.Elapsed.TotalSeconds) / 1_000_000d, copy, bytes);
+    }
+
+    private static async Task<TransferResult> MeasureUploadAsync(
+        HttpClient client,
+        int streams,
+        TimeSpan duration,
+        CancellationToken ct)
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        stop.CancelAfter(duration);
+        var payload = new byte[8 * 1024 * 1024];
+        Random.Shared.NextBytes(payload);
+        long bytes = 0;
+        var loaded = new List<double>();
+        var gate = new object();
+        var latencyTask = SampleLoadedLatencyAsync(client, loaded, gate, stop.Token);
+        var sw = Stopwatch.StartNew();
+        var workers = Enumerable.Range(0, streams).Select(async _ =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                try
+                {
+                    using var content = new ByteArrayContent(payload);
+                    using var response = await client.PostAsync(
+                        $"https://speed.cloudflare.com/__up?exo={Guid.NewGuid():N}", content, stop.Token).ConfigureAwait(false);
+                    response.EnsureSuccessStatusCode();
+                    Interlocked.Add(ref bytes, payload.Length);
+                }
+                catch (OperationCanceledException) when (stop.IsCancellationRequested) { break; }
+                catch when (!ct.IsCancellationRequested) { }
+            }
+        }).ToArray();
+        try { await Task.WhenAll(workers).ConfigureAwait(false); } catch (OperationCanceledException) { }
+        try { await latencyTask.ConfigureAwait(false); } catch (OperationCanceledException) { }
+        sw.Stop();
+        IReadOnlyList<double> copy;
+        lock (gate) copy = loaded.ToArray();
+        return new TransferResult(bytes * 8d / Math.Max(0.001, sw.Elapsed.TotalSeconds) / 1_000_000d, copy, bytes);
+    }
+
+    private static async Task SampleLoadedLatencyAsync(
+        HttpClient client,
+        List<double> samples,
+        object gate,
+        CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var value = await MeasureEdgeLatencyAsync(client, ct).ConfigureAwait(false);
+                lock (gate) samples.Add(value);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch { }
+            try { await Task.Delay(120, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { break; }
         }
+    }
+
+    private static async Task<double> MeasurePacketLossAsync(CancellationToken ct)
+    {
+        var attempts = Enumerable.Range(0, 20).Select(async i =>
+        {
+            using var ping = new Ping();
+            try
+            {
+                var target = i % 2 == 0 ? "1.1.1.1" : "8.8.8.8";
+                var reply = await ping.SendPingAsync(target, TimeSpan.FromMilliseconds(1200), Array.Empty<byte>(), new PingOptions(), ct).ConfigureAwait(false);
+                return reply.Status == IPStatus.Success;
+            }
+            catch { return false; }
+        });
+        var results = await Task.WhenAll(attempts).ConfigureAwait(false);
+        return results.Length == 0 ? 100 : results.Count(ok => !ok) * 100d / results.Length;
+    }
+
+    private static async Task<(DnsCandidate Candidate, double MedianMs)> SelectFastestDnsAsync(CancellationToken ct)
+    {
+        var tests = DnsCandidates.Select(async candidate =>
+        {
+            var samples = new List<double>();
+            foreach (var host in new[] { "cloudflare.com", "microsoft.com", "github.com", "steamcommunity.com", "discord.com", "nvidia.com" })
+            {
+                var sample = await MeasureDnsQueryAsync(candidate.Primary, host, ct).ConfigureAwait(false);
+                if (sample >= 0) samples.Add(sample);
+            }
+            return (Candidate: candidate, Samples: samples);
+        });
+        var results = await Task.WhenAll(tests).ConfigureAwait(false);
+        var best = results
+            .Where(x => x.Samples.Count >= 4)
+            .Select(x => (x.Candidate, Median: Percentile(x.Samples, 0.5)))
+            .OrderBy(x => x.Median)
+            .FirstOrDefault();
+        return best.Candidate is null ? (DnsCandidates[0], -1d) : (best.Candidate, best.Median);
+    }
+
+    private static async Task<double> MeasureDnsQueryAsync(string server, string host, CancellationToken ct)
+    {
+        try
+        {
+            var id = (ushort)Random.Shared.Next(1, ushort.MaxValue);
+            var query = BuildDnsQuery(id, host);
+            using var udp = new UdpClient(AddressFamily.InterNetwork);
+            udp.Connect(IPAddress.Parse(server), 53);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromMilliseconds(900));
+            var sw = Stopwatch.StartNew();
+            await udp.SendAsync(query, timeout.Token).ConfigureAwait(false);
+            var response = await udp.ReceiveAsync(timeout.Token).ConfigureAwait(false);
+            sw.Stop();
+            if (response.Buffer.Length < 12 || response.Buffer[0] != query[0] || response.Buffer[1] != query[1]) return -1;
+            return sw.Elapsed.TotalMilliseconds;
+        }
+        catch { return -1; }
+    }
+
+    private static byte[] BuildDnsQuery(ushort id, string host)
+    {
+        using var ms = new MemoryStream();
+        ms.WriteByte((byte)(id >> 8)); ms.WriteByte((byte)id);
+        ms.WriteByte(0x01); ms.WriteByte(0x00); // recursion desired
+        ms.WriteByte(0x00); ms.WriteByte(0x01); // one question
+        ms.Write(new byte[6]);
+        foreach (var label in host.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var encoded = Encoding.ASCII.GetBytes(label);
+            ms.WriteByte((byte)encoded.Length);
+            ms.Write(encoded);
+        }
+        ms.WriteByte(0x00);
+        ms.WriteByte(0x00); ms.WriteByte(0x01); // A
+        ms.WriteByte(0x00); ms.WriteByte(0x01); // IN
+        return ms.ToArray();
+    }
+
+    private static double Percentile(IEnumerable<double> values, double percentile)
+    {
+        var sorted = values.OrderBy(x => x).ToArray();
+        if (sorted.Length == 0) return 0;
+        return sorted[(int)Math.Floor((sorted.Length - 1) * percentile)];
+    }
+
+    private static double Jitter(IEnumerable<double> values)
+    {
+        var samples = values.ToArray();
+        if (samples.Length < 2) return 0;
+        return samples.Zip(samples.Skip(1), (a, b) => Math.Abs(b - a)).Average();
     }
 
     public NetworkBenchmarkResult? LoadQualityBenchmark()
@@ -1154,12 +1471,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         var path = Path.Combine(Path.GetTempPath(), $"exo-net-{Guid.NewGuid():N}.ps1");
         await File.WriteAllTextAsync(path, script, ct).ConfigureAwait(false);
 
-        progress?.Report(preset switch
-        {
-            NetworkPreset.LowestLatency => "Applying lowest-latency stack (elevated)...",
-            NetworkPreset.HighestThroughput => "Applying highest-throughput stack (elevated)...",
-            _ => "Applying balanced stack (elevated)..."
-        });
+        progress?.Report("Applying the analyzed network stack (elevated)...");
 
         try
         {
@@ -1231,12 +1543,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
 
             if (matched)
             {
-                var baseMsg = preset switch
-                {
-                    NetworkPreset.LowestLatency => "Lowest latency applied and verified.",
-                    NetworkPreset.HighestThroughput => "Highest download applied and verified.",
-                    _ => "Stack applied and verified."
-                };
+                const string baseMsg = "Optimized settings applied and verified.";
                 var restartNote = options.RestartEthernet
                     ? " Ethernet was restarted."
                     : " Adapter restart skipped (toggle link or re-apply with restart if a prop looks stale).";
@@ -1287,8 +1594,6 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
 
     /// <summary>Expose benchmark script generation for audit/smokes (same path as RunBenchmarkAsync).</summary>
     public static string BuildBenchmarkScript() => NetworkApplyScriptBuilder.BuildBenchmark();
-
-    public static string BuildQualityBenchmarkScript() => NetworkApplyScriptBuilder.BuildQualityBenchmark();
 
     // BuildFullApplyScript removed — see NetworkApplyScriptBuilder
     private static NetworkFeatureRow Row(string title, string status, bool ok, string? note = null) => new()

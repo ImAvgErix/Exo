@@ -29,7 +29,11 @@ public static class HomeDashboardReader
     public sealed record NvidiaPathSnapshot(
         bool ProfileApplied,
         bool Gsync,
-        string? ProfileFile);
+        string? ProfileFile,
+        string? GpuName,
+        string? Series,
+        int GameProfileCount,
+        int VerifiedSettingCount);
 
     /// <summary>
     /// Discord live WS + session peak. "Reclaimed" = peak − live when DiscOpt/kernel
@@ -72,6 +76,18 @@ public static class HomeDashboardReader
         }
         catch { /* ignore */ }
         return total;
+    }
+
+    /// <summary>True only while the optimized Steam launcher memory guard is running.</summary>
+    public static bool TryReadSteamMemoryGuardRunning()
+    {
+        try
+        {
+            using var mutex = Mutex.OpenExisting(@"Local\Exo.SteamMemoryGuard");
+            return mutex is not null;
+        }
+        catch (WaitHandleCannotBeOpenedException) { return false; }
+        catch { return false; }
     }
 
     /// <summary>
@@ -195,6 +211,16 @@ public static class HomeDashboardReader
             if (!File.Exists(path)) return null;
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
             var root = doc.RootElement;
+            if (root.TryGetProperty("lastApplyReport", out var report) && report.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var step in report.EnumerateArray())
+                {
+                    if (step.TryGetProperty("status", out var status) &&
+                        status.ValueKind == JsonValueKind.String &&
+                        string.Equals(status.GetString(), "fail", StringComparison.OrdinalIgnoreCase))
+                        return null;
+                }
+            }
             if (root.TryGetProperty("preset", out var p) && p.ValueKind == JsonValueKind.String)
             {
                 var preset = p.GetString();
@@ -209,6 +235,32 @@ public static class HomeDashboardReader
             }
             if (root.TryGetProperty("applied", out var a) && a.ValueKind == JsonValueKind.True)
                 return "Applied";
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static string? TryReadInternetDnsStatus()
+    {
+        try
+        {
+            var path = Path.Combine(PathHelper.AppDataDir, "network-optimizer.json");
+            if (!File.Exists(path)) return null;
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            if (!doc.RootElement.TryGetProperty("lastApplyReport", out var report) || report.ValueKind != JsonValueKind.Array)
+                return null;
+            foreach (var step in report.EnumerateArray())
+            {
+                if (!step.TryGetProperty("name", out var name) ||
+                    !string.Equals(name.GetString(), "dns-auto", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                return step.TryGetProperty("reason", out var reason) && reason.ValueKind == JsonValueKind.String
+                    ? reason.GetString()
+                    : null;
+            }
             return null;
         }
         catch
@@ -321,7 +373,22 @@ public static class HomeDashboardReader
                 && pf.ValueKind == JsonValueKind.String
                     ? pf.GetString()
                     : null;
-            return new NvidiaPathSnapshot(applied, gsync, profileFile);
+            var gpuName = root.TryGetProperty("gpuName", out var gn)
+                && gn.ValueKind == JsonValueKind.String ? gn.GetString() : null;
+            var series = root.TryGetProperty("series", out var se)
+                && se.ValueKind == JsonValueKind.String ? se.GetString() : null;
+            var gameProfileCount = root.TryGetProperty("gameProfileCount", out var gc)
+                && gc.TryGetInt32(out var gameCount) ? gameCount : 0;
+            var verifiedSettingCount = root.TryGetProperty("drsVerifiedSettingCount", out var vc)
+                && vc.TryGetInt32(out var verifiedCount) ? verifiedCount : 0;
+            return new NvidiaPathSnapshot(
+                applied,
+                gsync,
+                profileFile,
+                gpuName,
+                series,
+                gameProfileCount,
+                verifiedSettingCount);
         }
         catch
         {

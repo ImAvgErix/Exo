@@ -282,56 +282,6 @@ function Set-AllNvtweakDevices {
     }
 }
 
-function Clear-NvidiaAppTrayAndContainer {
-    # Soft refresh restarts NVDisplay.Container -> re-registers tray.
-    # Hide display-container (IsPromoted=0); delete App/GFE ghosts only.
-    try {
-        $svc = Get-Service -Name 'NvContainerLocalSystem' -ErrorAction SilentlyContinue
-        if ($svc) {
-            if ($svc.Status -ne 'Stopped') { Stop-Service -Name 'NvContainerLocalSystem' -Force -ErrorAction SilentlyContinue }
-            Set-Service -Name 'NvContainerLocalSystem' -StartupType Disabled -ErrorAction SilentlyContinue
-            Write-DLog 'NvContainerLocalSystem forced Stopped/Disabled (App stack)'
-        }
-    } catch { }
-
-    $trayScript = Join-Path $PSScriptRoot 'Exo-Nvidia-TrayClear.ps1'
-    if (Test-Path -LiteralPath $trayScript) {
-        try {
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $trayScript -NoTask -SettlePasses 3 2>&1 |
-                ForEach-Object { Write-DLog "$_" }
-            Write-DLog 'Tray clear script finished (no background task)'
-            return
-        } catch {
-            Write-DLog "Tray script failed: $($_.Exception.Message) - inline fallback"
-        }
-    }
-
-    $notify = 'HKCU:\Control Panel\NotifyIconSettings'
-    if (-not (Test-Path -LiteralPath $notify)) { return }
-    $removed = 0
-    $hidden = 0
-    Get-ChildItem -LiteralPath $notify -ErrorAction SilentlyContinue | ForEach-Object {
-        $exe = $null
-        try { $exe = [string](Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).ExecutablePath } catch { }
-        if ([string]::IsNullOrWhiteSpace($exe)) { return }
-        if ($exe -notmatch '(?i)NVIDIA|nvcontainer|NVDisplay|GeForce|ShadowPlay|nvsphelper|nvapp') { return }
-        if ($exe -match '(?i)NVDisplay\.Container|Display\.NvContainer|nv_dispi\.inf') {
-            try {
-                Set-ItemProperty -LiteralPath $_.PSPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0
-                $hidden++
-            } catch { }
-            return
-        }
-        try {
-            Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction Stop
-            $removed++
-        } catch {
-            try { Set-ItemProperty -LiteralPath $_.PSPath -Name 'IsPromoted' -Value 0 -Type DWord -Force -EA 0; $hidden++ } catch { }
-        }
-    }
-    Write-DLog "Tray inline: removed=$removed hidden=$hidden"
-}
-
 function Invoke-NvApiHelperOnce {
     $exe = Get-NvDisplayExe
     if (-not $exe) {
@@ -389,15 +339,14 @@ function Invoke-NvApiHelper {
 }
 
 function Invoke-SoftDriverRefresh {
-    # NEVER restart NVDisplay.ContainerLocalSystem - that re-registers a promoted tray icon.
-    # Registry + NVAPI already push display policy without a container bounce.
-    Write-DLog 'Soft refresh skipped (no NVDisplay.Container restart - keeps tray hidden)'
+    # Registry + NVAPI already push display policy without bouncing a driver service.
+    Write-DLog 'Soft refresh skipped; NVAPI and registry paths are already applied'
     Get-Process nvcplui, nvcpl -EA 0 | Stop-Process -Force -EA 0
     return $false
 }
 
 function Unregister-LegacyPersistTask {
-    # Product rule: never keep Exo scheduled tasks (including old tray hide logon).
+    # One-time migration cleanup: current Exo never creates persistence tasks.
     foreach ($taskName in @(
         'Exo-NvidiaTrayHide',
         'Exo-NvidiaDisplayPersist',
@@ -471,9 +420,7 @@ if (-not $light) {
 }
 
 Set-AllNvtweakDevices
-Clear-NvidiaAppTrayAndContainer
 
-# No NVDisplay.Container restart (that re-promotes the tray icon).
 if (-not $light) {
     [void](Invoke-SoftDriverRefresh)
     Set-AllNvtweakDevices
@@ -481,13 +428,9 @@ if (-not $light) {
 
 $nvApiOk = Invoke-NvApiHelper
 Set-AllNvtweakDevices
-Clear-NvidiaAppTrayAndContainer
 Set-NvtweakRootPrefs
 try { [void](Set-NvidiaStoreCplVirtualHive) } catch { Write-DLog "Store hive stamp skipped: $($_.Exception.Message)" }
 Get-Process nvcplui, nvcpl -EA 0 | Stop-Process -Force -EA 0
-# Final multi-pass hide after NVAPI (container may still late-register on some drivers)
-Clear-NvidiaAppTrayAndContainer
-
 $wantOverride = if ([bool]$Script:PanelSettings.scalingOverride) { 1 } else { 0 }
 $wantGpu = if ([bool]$Script:PanelSettings.gpuNoScaling) { 0 } else { 1 }
 $wantScaleMode = if ([bool]$Script:PanelSettings.gpuNoScaling) { 2 } else { 1 }

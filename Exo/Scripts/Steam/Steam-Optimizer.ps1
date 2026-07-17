@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.9.5'
+$Script:SteamOptVersion = '1.9.6'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
@@ -1816,19 +1816,37 @@ function Set-SteamGpuHighPerformance([string]$SteamPath) {
     }
 }
 
-function Install-WebHelperTrimHelper([string]$SteamPath) {
-    # Maximum-performance companion: one instance, normal priority while idle,
-    # in-game CPU yield, and periodic StartupMode=0 re-enforcement so Steam cannot
-    # re-arm autostart. No working-set trims (v3.0.11: EmptyWorkingSet froze CEF).
-    $helper = Join-Path $SteamPath 'Exo-SteamWebHelperTrim.ps1'
+function Install-WebHelperMemoryGuard([string]$SteamPath) {
+    # One reversible companion. Background CEF pages receive low Windows memory
+    # priority so the OS reclaims them first under pressure; the foreground Steam UI
+    # returns to normal. This avoids EmptyWorkingSet, hard caps, suspension, and kills.
+    $helper = Join-Path $SteamPath 'Exo-SteamMemoryGuard.ps1'
     $body = @'
-# Exo - Steam companion (NOT a killer). Never EmptyWorkingSet / Stop-Process steamwebhelper.
-# steamwebhelper is CEF - working-set thrash freezes or kills the library UI.
-# This helper only: (1) Steam/CEF priority yield in-game (2) keep StartupMode quiet.
+# Exo - Steam memory + contention guard. No EmptyWorkingSet, hard cap, suspend, or kill.
 $ErrorActionPreference = 'SilentlyContinue'
 $created = $false
-$mutex = [Threading.Mutex]::new($true, 'Local\Exo.SteamWebHelper', [ref]$created)
+$mutex = [Threading.Mutex]::new($true, 'Local\Exo.SteamMemoryGuard', [ref]$created)
 if (-not $created) { $mutex.Dispose(); exit 0 }
+
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class ExoSteamMemory {
+  [StructLayout(LayoutKind.Sequential)] struct MEMORY_PRIORITY_INFORMATION { public uint MemoryPriority; }
+  [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool SetProcessInformation(IntPtr process, int infoClass, ref MEMORY_PRIORITY_INFORMATION info, uint size);
+  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+  [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
+  public static int ForegroundPid() { uint pid; GetWindowThreadProcessId(GetForegroundWindow(), out pid); return (int)pid; }
+  public static bool SetMemoryPriority(int pid, uint priority) {
+    IntPtr handle = OpenProcess(0x0200u | 0x1000u, false, pid);
+    if (handle == IntPtr.Zero) return false;
+    try { var info = new MEMORY_PRIORITY_INFORMATION { MemoryPriority = priority }; return SetProcessInformation(handle, 0, ref info, 4); }
+    finally { CloseHandle(handle); }
+  }
+}
+"@
 
 function Test-SteamGameRunning {
   try {
@@ -1847,8 +1865,9 @@ function Test-SteamGameRunning {
 }
 
 function Set-SteamClientPriority([bool]$InGame) {
-  # Client UI stays responsive while idle; both client and CEF yield CPU to the game in-session.
-  # Never touch working sets: priority is reversible and does not freeze Chromium.
+  # Foreground Steam stays fully responsive. Background renderers get low memory
+  # priority (not a destructive trim); Windows may reclaim their pages first.
+  $foregroundPid = [ExoSteamMemory]::ForegroundPid()
   $steamCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
   } else {
@@ -1867,6 +1886,8 @@ function Set-SteamClientPriority([bool]$InGame) {
       if ($_.PriorityClass -ne $webCls) {
         $_.PriorityClass = $webCls
       }
+      $memoryPriority = if ($InGame) { 1 } elseif ($_.Id -eq $foregroundPid) { 5 } else { 2 }
+      [void][ExoSteamMemory]::SetMemoryPriority($_.Id, [uint32]$memoryPriority)
     } catch {}
   }
 }
@@ -1914,7 +1935,9 @@ try {
 }
 '@
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
-    Write-Ok 'Steam companion installed (normal idle priority, in-game yield, no unsafe webhelper trims)'
+    $oldHelper = Join-Path $SteamPath 'Exo-SteamWebHelperTrim.ps1'
+    if (Test-Path -LiteralPath $oldHelper) { Remove-Item -LiteralPath $oldHelper -Force -ErrorAction SilentlyContinue }
+    Write-Ok 'Steam memory guard installed (foreground responsive; background CEF reclaimed first under pressure)'
     return $helper
 }
 
@@ -2150,7 +2173,7 @@ function Invoke-SteamRepair([string]$SteamPath) {
         }
     }
 
-    foreach ($f in @('Steam-Exo.cmd', 'Steam-Exo-Aggressive.cmd', 'Exo-SteamWebHelperTrim.ps1')) {
+    foreach ($f in @('Steam-Exo.cmd', 'Steam-Exo-Aggressive.cmd', 'Exo-SteamMemoryGuard.ps1', 'Exo-SteamWebHelperTrim.ps1')) {
         $p = Join-Path $SteamPath $f
         if (Test-Path $p) {
             try {
@@ -2394,9 +2417,9 @@ try {
     }
     Write-Ok ("Cache cleanup freed ~{0:N1} MB" -f ($freed / 1MB))
 
-    Write-HubProgress 58 'Installing webhelper helper...'
-    $helper = Install-WebHelperTrimHelper $steam
-    Add-ExoReport 'webhelper-trim' 'ok'
+    Write-HubProgress 58 'Installing adaptive Steam memory guard...'
+    $helper = Install-WebHelperMemoryGuard $steam
+    Add-ExoReport 'memory-guard' 'ok'
     Write-HubProgress 68 'Writing quiet CEF launcher...'
     # Always rewrite launcher so CEF flags stay current (e.g. drop broken gpu-disable).
     $launch = Install-LeanSteamLauncher $steam $helper
@@ -2456,7 +2479,10 @@ try {
                 break
             }
         }
-        $helperOk = $helperText -match 'Exo\.SteamWebHelper' -and
+        $helperOk = $helperText -match 'Exo\.SteamMemoryGuard' -and
+            $helperText -match 'SetProcessInformation' -and
+            $helperText -match 'SetMemoryPriority' -and
+            $helperText -match 'ForegroundPid' -and
             $helperText -match 'ProcessPriorityClass\]::BelowNormal' -and
             $helperText -match '(?s)\$steamCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
             $helperText -match '(?s)\$webCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
@@ -2504,8 +2530,7 @@ try {
         cefLeanLaunch        = $launcherOk
         cefArgs              = ($Script:DefaultCefArgs -join ' ')
         leanCmd              = $launch.Cmd
-        webHelperTrim        = $helperOk
-        aggressiveTrim       = $helperOk
+        memoryGuard          = $helperOk
         inGameContentionGuard = $helperOk
         inGamePriorityYield  = $helperOk
         highPriority         = $helperOk
@@ -2533,7 +2558,7 @@ try {
         if (-not $clientHardwareOk) { $missing += 'cef-hardware' }
         if (-not $launchPathOk) { $missing += 'launch-path' }
         if (-not $launcherOk) { $missing += 'cef-launcher' }
-        if (-not $helperOk) { $missing += 'webhelper-trim' }
+        if (-not $helperOk) { $missing += 'memory-guard' }
         if (-not $cfgOk) { $missing += 'download-config' }
         elseif ($cfgSkipped) { $missing += 'download-config-open-steam-once' }
         if (-not $clientTweaksOk) { $missing += 'client-tweaks' }

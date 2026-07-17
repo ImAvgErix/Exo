@@ -19,17 +19,8 @@ public static partial class NvidiaDetectLogic
     [GeneratedRegex(@"(?i)\b(?:Laptop GPU|Notebook|Mobile|Max-Q)\b|\bMX\d+\b|\b\d{3,4}M\b")]
     private static partial Regex NotebookGpuRegex();
 
-    [GeneratedRegex(@"(?i)NVDisplay\.Container|Display\.NvContainer|nv_dispi\.inf")]
-    private static partial Regex DisplayContainerExeRegex();
-
-    [GeneratedRegex(@"(?i)NVIDIA App|GFExperience|NvBackend|NvNode|ShadowPlay|nvsphelper|nvapp")]
-    private static partial Regex AppTrayExeRegex();
-
     [GeneratedRegex(@"^[a-fA-F0-9]{64}$")]
     private static partial Regex Sha256HexRegex();
-
-    [GeneratedRegex(@"Register-ScheduledTask[^\r\n]*Exo-Nvidia", RegexOptions.IgnoreCase)]
-    private static partial Regex TrayTaskCreateRegex();
 
     /// <summary>Map GPU name to series id used for NIP packs (10/20/30/40/50).</summary>
     public static string? GetGpuSeriesFromName(string? name)
@@ -52,22 +43,6 @@ public static partial class NvidiaDetectLogic
         if (string.IsNullOrWhiteSpace(name)) return false;
         return NotebookGpuRegex().IsMatch(name);
     }
-
-    /// <summary>Display container tray should be hidden (IsPromoted=0), not deleted.</summary>
-    public static bool IsDisplayContainerTrayHidden(bool keyExists, int? isPromoted) =>
-        !keyExists || isPromoted is 0;
-
-    /// <summary>App/GFE tray ghosts should be gone (no key).</summary>
-    public static bool IsAppTrayGhostGone(bool keyExists) => !keyExists;
-
-    public static bool IsDisplayContainerExe(string? exe) =>
-        !string.IsNullOrWhiteSpace(exe) &&
-        DisplayContainerExeRegex().IsMatch(exe);
-
-    public static bool IsNvidiaAppTrayExe(string? exe) =>
-        !string.IsNullOrWhiteSpace(exe) &&
-        AppTrayExeRegex().IsMatch(exe) &&
-        !IsDisplayContainerExe(exe);
 
     /// <summary>
     /// Live display status JSON gate: refresh + (registry active-keys OR color+scaling live).
@@ -161,8 +136,6 @@ public static partial class NvidiaDetectLogic
         "Import-ExoNipProfile",
         "Apply-ExoGameProfileDeltas",
         "Exo-Display-Apply",
-        "Exo-Nvidia-TrayClear",
-        "IsPromoted",
         "silentImport",
     };
 
@@ -193,9 +166,6 @@ public static partial class NvidiaDetectLogic
             if (script.IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0)
                 issues.Add("forbidden: " + f);
         }
-        // Must not re-create logon tray tasks (unregister only is OK)
-        if (TrayTaskCreateRegex().IsMatch(script))
-            issues.Add("forbidden: Register-ScheduledTask Exo-Nvidia*");
         return (issues.Count == 0, issues);
     }
 }

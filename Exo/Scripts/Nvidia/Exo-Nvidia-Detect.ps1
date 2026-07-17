@@ -687,60 +687,12 @@ $features.Add(@{
     active = $backgroundOk
 })
 
-# Tray: hide NVDisplay container (IsPromoted=0); App ghosts should be gone - no logon tasks.
-$trayHideOk = $true
-$trayDetail = 'No NVIDIA tray keys found (or display container demoted).'
-try {
-    $trayRoot = 'HKCU:\Control Panel\NotifyIconSettings'
-    $displayKeys = 0
-    $displayHidden = 0
-    $appGhosts = 0
-    if (Test-Path -LiteralPath $trayRoot) {
-        foreach ($key in @(Get-ChildItem -LiteralPath $trayRoot -ErrorAction SilentlyContinue)) {
-            # One odd key (no ExecutablePath value) must not fail the whole inspection.
-            try {
-                $item = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction SilentlyContinue
-                $exe = [string]$item.ExecutablePath
-            } catch { continue }
-            if (-not $exe) { continue }
-            $isDisplay = if (Get-Command Test-ExoDisplayContainerExe -EA SilentlyContinue) {
-                Test-ExoDisplayContainerExe $exe
-            } else { $exe -match '(?i)NVDisplay\.Container|Display\.NvContainer' }
-            $isApp = if (Get-Command Test-ExoNvidiaAppTrayExe -EA SilentlyContinue) {
-                Test-ExoNvidiaAppTrayExe $exe
-            } else { $exe -match '(?i)NVIDIA App|GFExperience|ShadowPlay' }
-            if ($isDisplay) {
-                $displayKeys++
-                $prom = $null
-                try { $prom = [int]$item.IsPromoted } catch { }
-                if ($prom -eq 0) { $displayHidden++ } else { $trayHideOk = $false }
-            } elseif ($isApp) {
-                $appGhosts++
-                $trayHideOk = $false
-            }
-        }
-    }
-    if ($displayKeys -gt 0) {
-        $trayDetail = "Display container tray IsPromoted=0 on $displayHidden/$displayKeys; App ghosts=$appGhosts."
-    } elseif ($appGhosts -gt 0) {
-        $trayDetail = "App/GFE tray ghosts still present ($appGhosts)."
-    }
-} catch {
-    $trayHideOk = $false
-    $trayDetail = 'Tray inspection failed.'
-}
-$features.Add(@{
-    title  = 'Taskbar tray (display hide / App gone)'
-    detail = $trayDetail
-    active = $trayHideOk
-})
-
 # Driver stage for isApplied: notebooks only need a readable driver; desktop needs tweaks/update gate.
 $driverStageOk = if ($isNotebookGpu) { [bool]$currentNv } else { (-not $needsDriverAction) -and [bool]$currentNv }
 
 $isApplied = $gpuOk -and (-not $pendingAfterDriver) -and (-not $applyInProgress) -and
              $applied -and $gameOk -and $displayOk -and $backgroundOk -and $clientOk -and $advanced3dOk -and
-             $trayHideOk -and $driverStageOk -and $latencyPolicyOk
+             $driverStageOk -and $latencyPolicyOk
 
 $driverChanged = $false
 if ($state -and $currentNv -and ($state.PSObject.Properties.Name -contains 'profileDriverVersion') -and
@@ -766,7 +718,6 @@ elseif (-not $displayOk) { 'Display policy incomplete' }
 elseif (-not $clientOk) { 'NVIDIA App still present' }
 elseif (-not $advanced3dOk) { '3D profile incomplete' }
 elseif (-not $backgroundOk) { 'Background re-armed - reapply' }
-elseif (-not $trayHideOk) { 'Tray needs hide pass' }
 elseif ($isApplied) { 'All applied' }
 else { 'Not applied' }
 

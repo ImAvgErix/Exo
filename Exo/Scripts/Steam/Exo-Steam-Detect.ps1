@@ -320,16 +320,16 @@ if (-not $steamOk) {
     }
     Add-Feature 'Quiet CEF launcher' 'Fast quiet CEF flags + High priority Steam start (Steam launches before the contention guard).' $cefOk
 
-    # Reversible client/CEF priority policy (2-15s control interval accepted).
-    $trimOk = $false
-    $helper = Join-Path $steam 'Exo-SteamWebHelperTrim.ps1'
+    # Reversible background memory priority + in-game CPU yield policy.
+    $memoryGuardOk = $false
+    $helper = Join-Path $steam 'Exo-SteamMemoryGuard.ps1'
     if (Test-Path -LiteralPath $helper) {
         try {
             $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
-            $trimOk = Test-SteamTrimHelperText -Text $helperText
+            $memoryGuardOk = Test-SteamMemoryGuardText -Text $helperText
         } catch { }
     }
-    Add-Feature 'In-game contention guard' 'Steam and CEF yield CPU while a game runs, then return to responsive idle priorities; no working-set thrash.' $trimOk
+    Add-Feature 'Adaptive memory guard installed' 'The optimized launcher gives background CEF pages low Windows memory priority; foreground Steam stays responsive and games get CPU priority.' $memoryGuardOk
 
     $debloatOk = Test-SteamCompleteClientDebloat $steam
     # Sparse intermediate states (applying/incomplete/repairing) lack these keys - guard.
@@ -362,7 +362,7 @@ if (-not $steamOk) {
     if ($markerOk -and $helper -and (Test-Path -LiteralPath $helper)) {
         try {
             $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
-            if (-not (Test-SteamTrimHelperText -Text $helperText) -and
+            if (-not (Test-SteamMemoryGuardText -Text $helperText) -and
                 $helperText -notmatch 'Reinstate-SteamQuiet') {
                 $markerOk = $false
             }
@@ -372,16 +372,16 @@ if (-not $steamOk) {
     }
     Add-Feature 'Verified apply' 'Full apply recorded with durable quiet + runtime intact.' ($markerOk -and $runtimeOk)
 
-    $isApplied = $steamOk -and $markerOk -and $cefOk -and $trimOk -and $debloatOk -and
+    $isApplied = $steamOk -and $markerOk -and $cefOk -and $memoryGuardOk -and $debloatOk -and
         $runtimeOk -and $dlOk -and $snapOk -and $hardwareOk -and $windowsQuietOk -and $launchOk
 
     $statusText = if ($isApplied) { 'Already optimized' }
-    elseif (-not $cefOk -or -not $trimOk -or -not $launchOk) { 'Launcher needs restore' }
+    elseif (-not $cefOk -or -not $memoryGuardOk -or -not $launchOk) { 'Launcher needs restore' }
     elseif (-not $windowsQuietOk) { 'Windows quiet incomplete' }
     else { 'Ready to optimize' }
     $detail = if ($isApplied) {
         'Hardware-accelerated CEF, debloat, Windows quiet, in-game CPU yield, and autostart re-enforce are active.'
-    } elseif (-not $cefOk -or -not $trimOk) {
+    } elseif (-not $cefOk -or -not $memoryGuardOk) {
         'Steam launcher or contention guard is missing. Run to restore the Exo launch path.'
     } else {
         'Some pieces are missing. Run to finish the checklist below.'

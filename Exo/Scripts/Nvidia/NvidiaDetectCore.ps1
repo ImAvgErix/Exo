@@ -19,24 +19,6 @@ function Get-ExoExpectedProfileFileName {
     return "$SeriesId Series.nip"
 }
 
-function Test-ExoDisplayContainerExe {
-    param([AllowNull()][string]$Exe)
-    return [bool]($Exe -match '(?i)NVDisplay\.Container|Display\.NvContainer|nv_dispi\.inf')
-}
-
-function Test-ExoNvidiaAppTrayExe {
-    param([AllowNull()][string]$Exe)
-    if ([string]::IsNullOrWhiteSpace($Exe)) { return $false }
-    if (Test-ExoDisplayContainerExe $Exe) { return $false }
-    return [bool]($Exe -match '(?i)NVIDIA App|GFExperience|NvBackend|NvNode|ShadowPlay|nvsphelper|nvapp')
-}
-
-function Test-ExoDisplayTrayHidden {
-    param([bool]$KeyExists, [AllowNull()]$IsPromoted)
-    if (-not $KeyExists) { return $true }
-    try { return ([int]$IsPromoted -eq 0) } catch { return $false }
-}
-
 function Test-ExoDisplayStatusOk {
     param([bool]$RefreshOk, [bool]$RegistryOk, [bool]$ColorOk, [bool]$PathScalingOk)
     return [bool]($RefreshOk -and ($RegistryOk -or ($ColorOk -and $PathScalingOk)))
