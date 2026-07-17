@@ -8,7 +8,7 @@
     Background="Transparent">
 
     <!--
-      SharedModulePlate (v3): NVIDIA plate + G-SYNC header + Reset status-clear only.
+      SharedModulePlate (v3): NVIDIA plate + detected hardware policy.
     -->
     <controls:SharedModulePlate
         x:Name="Plate"
@@ -27,11 +27,9 @@
         ProgressPercent="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
         ProgressStatus="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}"
         ShowSecondaryActions="True"
-        SecondaryLeftLabel="Reset"
-        SecondaryRightLabel="Refresh"
+        SecondaryLeftLabel="Repair"
         SecondaryActionsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-        SecondaryLeftClick="Repair_Click"
-        SecondaryRightClick="Refresh_Click">
+        SecondaryLeftClick="Repair_Click">
         <controls:SharedModulePlate.HeaderExtra>
             <Border Style="{StaticResource ExoCard}" Padding="14,10">
                 <Grid ColumnSpacing="12">
@@ -39,12 +37,13 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <ToggleSwitch Header="G-SYNC"
-                                  IsOn="{x:Bind ViewModel.UseGsync, Mode=TwoWay}"
-                                  OnContent="On" OffContent="Off"
-                                  VerticalAlignment="Center"
-                                  IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                                  AutomationProperties.Name="G-SYNC" />
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="AUTOMATIC HARDWARE POLICY"
+                                   Style="{StaticResource ExoSectionTitle}" />
+                        <TextBlock Text="{x:Bind ViewModel.HardwarePolicyText, Mode=OneWay}"
+                                   Style="{StaticResource ExoCaption}"
+                                   TextWrapping="WrapWholeWords" />
+                    </StackPanel>
                     <Button Grid.Column="1"
                             Style="{StaticResource ExoQuietButton}"
                             Content="Open NVIDIA Control Panel"
@@ -66,7 +65,7 @@
                         HorizontalAlignment="Stretch"
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                         AutomationProperties.Name="Apply NVIDIA" />
-                <TextBlock Text="Reset clears Exo status only — NVIDIA driver and profiles stay."
+                <TextBlock Text="Repair clears Exo's status marker; it does not roll back the NVIDIA driver."
                            Style="{StaticResource ExoCaption}"
                            TextAlignment="Center" />
             </StackPanel>

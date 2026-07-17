@@ -45,7 +45,6 @@ public partial class InternetOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial string RepairHint { get; set; } = "Repair: reset to stock defaults";
     [ObservableProperty] public partial bool HasQualityResult { get; set; }
     [ObservableProperty] public partial string QualitySummary { get; set; } = string.Empty;
-    [ObservableProperty] public partial string QualityDetail { get; set; } = string.Empty;
 
     // Compact expandable "Last apply" report (EXO_REPORT structured steps).
     public ObservableCollection<ApplyReportRowViewModel> ApplyReportRows { get; } = new();
@@ -164,24 +163,12 @@ public partial class InternetOptimizerViewModel : ObservableObject
         {
             HasQualityResult = false;
             QualitySummary = string.Empty;
-            QualityDetail = string.Empty;
             return;
         }
 
         var downPenalty = Math.Max(0, result.DownloadLoadedMs - result.PingP50Ms);
         var upPenalty = Math.Max(0, result.UploadLoadedMs - result.PingP50Ms);
-        var downLabel = result.DownloadMbps <= 0
-            ? "n/a"
-            : result.DownloadEndpointLimited ? $"≥{result.DownloadMbps:0.#}" : $"{result.DownloadMbps:0.#}";
-        var upLabel = result.UploadMbps <= 0
-            ? "n/a"
-            : result.UploadEndpointLimited ? $"≥{result.UploadMbps:0.#}" : $"{result.UploadMbps:0.#}";
-        var link = result.LinkSpeedMbps >= 1000
-            ? $"{result.LinkSpeedMbps / 1000:0.#} Gb Ethernet"
-            : result.LinkSpeedMbps > 0 ? $"{result.LinkSpeedMbps:0} Mbps link" : "Current link";
-        QualitySummary = $"{link} · edge {downLabel}/{upLabel} Mbps · {result.PingP50Ms:0.#} ms";
-        var limitNote = result.DownloadEndpointLimited || result.UploadEndpointLimited ? " · endpoint floor, not plan speed" : string.Empty;
-        QualityDetail = $"loaded +{downPenalty:0.#}/+{upPenalty:0.#} ms · jitter {result.JitterMs:0.#} ms · loss {result.PacketLossPercent:0.##}% · {result.DnsProvider} DNS {result.DnsMedianMs:0.#} ms{limitNote}";
+        QualitySummary = $"{result.PingP50Ms:0.#} ms idle · +{downPenalty:0.#}/+{upPenalty:0.#} ms loaded · {result.PacketLossPercent:0.##}% loss · {result.DnsProvider} DNS";
         HasQualityResult = true;
     }
 
@@ -278,7 +265,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
             var note = bufferbloat >= 25
                 ? " Loaded latency is high; router SQM/CAKE can help more than Windows tuning."
                 : string.Empty;
-            SetMessage($"Optimized this link and selected {result.DnsProvider} as its fastest healthy DNS. Windows uses automatic encryption when the installed build supports it. {result.RecommendationReason}.{note}", success: true);
+            SetMessage($"Optimized · {result.DnsProvider} DNS selected.{note}", success: true);
         }
     }
 

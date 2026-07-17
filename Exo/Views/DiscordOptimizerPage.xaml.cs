@@ -43,9 +43,6 @@ public sealed partial class DiscordOptimizerPage : Page
     private void Repair_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RepairCommand.Execute(null);
 
-    private void Refresh_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.RefreshCommand.Execute(null);
-
     private void ToggleReport_Click(object sender, RoutedEventArgs e) =>
         ViewModel.ToggleApplyReportCommand.Execute(null);
 }

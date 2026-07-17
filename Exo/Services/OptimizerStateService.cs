@@ -804,7 +804,7 @@ public sealed class OptimizerStateService
             }
             catch { /* ignore */ }
         }
-        features.Add(MakeFeature("Adaptive memory guard", "", memoryGuardOk));
+        features.Add(MakeFeature("Background priority policy", "No forced working-set trim", memoryGuardOk));
 
         var applied = markerOk && startupOk && cefLauncherOk && memoryGuardOk &&
                       downloadOptimized && clientTweaksApplied && clientHardwareOk;
@@ -1062,6 +1062,14 @@ public sealed class OptimizerStateService
                 extra["notebookGpu"] = nb.ValueKind == JsonValueKind.True ? "true"
                     : nb.ValueKind == JsonValueKind.False ? "false"
                     : nb.ToString();
+            if (root.TryGetProperty("hardwareSummary", out var hs) && hs.ValueKind == JsonValueKind.String)
+                extra["hardwareSummary"] = hs.GetString() ?? "";
+            if (root.TryGetProperty("policySource", out var ps) && ps.ValueKind == JsonValueKind.String)
+                extra["policySource"] = ps.GetString() ?? "";
+            if (root.TryGetProperty("primaryRefreshHz", out var pr))
+                extra["primaryRefreshHz"] = pr.ToString();
+            if (root.TryGetProperty("primaryMaxRefreshHz", out var pm))
+                extra["primaryMaxRefreshHz"] = pm.ToString();
 
             return new OptimizerStateInfo
             {

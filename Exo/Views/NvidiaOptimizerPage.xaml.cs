@@ -63,7 +63,4 @@ public sealed partial class NvidiaOptimizerPage : Page
     private void Repair_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RepairCommand.Execute(null);
 
-    private void Refresh_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.RefreshCommand.Execute(null);
-
 }

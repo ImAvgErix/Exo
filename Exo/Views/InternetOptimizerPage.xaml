@@ -9,7 +9,7 @@
 
     <!--
       One adaptive action: measure first, then apply one verified link policy.
-      Repair/Refresh stay quiet and separate from optimization.
+      Repair stays separate from optimization.
     -->
     <controls:SharedModulePlate
         x:Name="Plate"
@@ -17,20 +17,14 @@
         StatusText="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}"
         GuidanceText="{x:Bind ViewModel.GuidanceText, Mode=OneWay}"
         HasGuidance="{x:Bind ViewModel.HasGuidance, Mode=OneWay}"
-        FeatureItems="{x:Bind ViewModel.Rows, Mode=OneWay}"
         IsLoading="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
-        IsFeatureListVisible="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay}"
+        IsFeatureListVisible="False"
         HasLastResult="{x:Bind ViewModel.HasMessage, Mode=OneWay}"
         LastResult="{x:Bind ViewModel.Message, Mode=OneWay}"
         LastResultGlyph="{x:Bind ViewModel.MessageGlyph, Mode=OneWay}"
         LastResultBrush="{x:Bind ViewModel.MessageBrush, Mode=OneWay}"
-        HasApplyReport="{x:Bind ViewModel.HasApplyReport, Mode=OneWay}"
-        IsApplyReportOpen="{x:Bind ViewModel.IsApplyReportOpen, Mode=OneWay}"
-        ApplyReportSummary="{x:Bind ViewModel.ApplyReportSummary, Mode=OneWay}"
-        ApplyReportChevron="{x:Bind ViewModel.ApplyReportChevron, Mode=OneWay}"
-        ApplyReportRows="{x:Bind ViewModel.ApplyReportRows, Mode=OneWay}"
-        ShowSecondaryActions="False"
-        ToggleReportClick="ToggleReport_Click">
+        HasApplyReport="False"
+        ShowSecondaryActions="False">
         <controls:SharedModulePlate.FootExtra>
             <StackPanel Spacing="6">
                 <Border Style="{StaticResource ExoMessageBanner}"
@@ -46,21 +40,11 @@
                                    Style="{StaticResource ExoMessageText}" TextWrapping="Wrap" />
                     </Grid>
                 </Border>
-                <TextBlock Text="{x:Bind ViewModel.BenchmarkSummary, Mode=OneWay}"
+                <TextBlock Text="{x:Bind ViewModel.QualitySummary, Mode=OneWay}"
                            Style="{StaticResource ExoCaption}"
-                           Foreground="{x:Bind ViewModel.BenchmarkBrush, Mode=OneWay}"
+                           FontFamily="{StaticResource ExoUiFontSemiBold}"
                            TextAlignment="Center"
-                           Visibility="{x:Bind ViewModel.HasBenchmark, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <StackPanel Spacing="1"
-                            Visibility="{x:Bind ViewModel.HasQualityResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBlock Text="{x:Bind ViewModel.QualitySummary, Mode=OneWay}"
-                               Style="{StaticResource ExoCaption}"
-                               FontFamily="{StaticResource ExoUiFontSemiBold}"
-                               TextAlignment="Center" />
-                    <TextBlock Text="{x:Bind ViewModel.QualityDetail, Mode=OneWay}"
-                               Style="{StaticResource ExoCaption}"
-                               TextAlignment="Center" />
-                </StackPanel>
+                           Visibility="{x:Bind ViewModel.HasQualityResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                 <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource ExoCaption}"
                            TextAlignment="Center"
                            Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
@@ -74,34 +58,14 @@
                         HorizontalAlignment="Stretch"
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                         AutomationProperties.Name="Analyze this connection and apply the best measured settings" />
-                <Grid x:Name="ExoInternetActionGrid" ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource ExoQuietButton}"
-                            Content="Repair"
-                            Click="Repair_Click"
-                            MinHeight="40"
-                            Padding="12,6"
-                            HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                            AutomationProperties.Name="Repair internet stack" />
-                    <Button Grid.Column="1"
-                            Style="{StaticResource ExoQuietButton}"
-                            Content="Refresh"
-                            Click="Refresh_Click"
-                            MinHeight="40"
-                            Padding="12,6"
-                            HorizontalAlignment="Stretch"
-                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
-                </Grid>
-                <TextBlock Text="Sustained parallel test · measures the Cloudflare route, loaded latency, loss, and three encrypted DNS providers. Exo receives no results."
-                           Style="{StaticResource ExoCaption}"
-                           TextAlignment="Center" />
-                <TextBlock Text="Analyze applies the fastest healthy DNS and enables automatic encryption when Windows supports it. Repair restores the previous DNS exactly."
-                           Style="{StaticResource ExoCaption}"
-                           TextAlignment="Center" />
+                <Button Style="{StaticResource ExoQuietButton}"
+                        Content="Repair"
+                        Click="Repair_Click"
+                        MinHeight="40"
+                        Padding="12,6"
+                        HorizontalAlignment="Stretch"
+                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                        AutomationProperties.Name="Repair internet stack" />
                 <TextBlock Text="{x:Bind ViewModel.RepairHint, Mode=OneWay}"
                            Style="{StaticResource ExoCaption}"
                            TextAlignment="Center" />

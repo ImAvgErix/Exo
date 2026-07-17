@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.9.6'
+$Script:SteamOptVersion = '1.10.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
@@ -1873,7 +1873,7 @@ function Set-SteamClientPriority([bool]$InGame) {
   } else {
     [System.Diagnostics.ProcessPriorityClass]::Normal
   }
-  $webCls = if ($InGame) {
+  $backgroundWebCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
   } else {
     [System.Diagnostics.ProcessPriorityClass]::Normal
@@ -1883,6 +1883,11 @@ function Set-SteamClientPriority([bool]$InGame) {
   }
   Get-Process -Name 'steamwebhelper' -ErrorAction SilentlyContinue | ForEach-Object {
     try {
+      # The CEF process owning the foreground Steam window stays Normal even
+      # while a game runs; only background renderers yield CPU time.
+      $webCls = if ($_.Id -eq $foregroundPid) {
+        [System.Diagnostics.ProcessPriorityClass]::Normal
+      } else { $backgroundWebCls }
       if ($_.PriorityClass -ne $webCls) {
         $_.PriorityClass = $webCls
       }
@@ -1937,7 +1942,7 @@ try {
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
     $oldHelper = Join-Path $SteamPath 'Exo-SteamWebHelperTrim.ps1'
     if (Test-Path -LiteralPath $oldHelper) { Remove-Item -LiteralPath $oldHelper -Force -ErrorAction SilentlyContinue }
-    Write-Ok 'Steam memory guard installed (foreground responsive; background CEF reclaimed first under pressure)'
+    Write-Ok 'Steam background priority policy installed (no forced memory trimming)'
     return $helper
 }
 
@@ -2417,9 +2422,9 @@ try {
     }
     Write-Ok ("Cache cleanup freed ~{0:N1} MB" -f ($freed / 1MB))
 
-    Write-HubProgress 58 'Installing adaptive Steam memory guard...'
+    Write-HubProgress 58 'Installing Steam background priority policy...'
     $helper = Install-WebHelperMemoryGuard $steam
-    Add-ExoReport 'memory-guard' 'ok'
+    Add-ExoReport 'background-priority' 'ok'
     Write-HubProgress 68 'Writing quiet CEF launcher...'
     # Always rewrite launcher so CEF flags stay current (e.g. drop broken gpu-disable).
     $launch = Install-LeanSteamLauncher $steam $helper
@@ -2485,7 +2490,8 @@ try {
             $helperText -match 'ForegroundPid' -and
             $helperText -match 'ProcessPriorityClass\]::BelowNormal' -and
             $helperText -match '(?s)\$steamCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
-            $helperText -match '(?s)\$webCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
+            $helperText -match '(?s)\$backgroundWebCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
+            $helperText -match '(?s)\$webCls\s*=\s*if\s*\(\$_\.Id\s*-eq\s*\$foregroundPid\).*?Normal.*?\$backgroundWebCls' -and
             $helperText -match '\$_\.PriorityClass\s*=\s*\$webCls' -and
             (-not $helperUnsafe)
     } catch { }
@@ -2530,7 +2536,8 @@ try {
         cefLeanLaunch        = $launcherOk
         cefArgs              = ($Script:DefaultCefArgs -join ' ')
         leanCmd              = $launch.Cmd
-        memoryGuard          = $helperOk
+        memoryGuard          = $helperOk # legacy state key for older Exo builds
+        backgroundPriorityPolicy = $helperOk
         inGameContentionGuard = $helperOk
         inGamePriorityYield  = $helperOk
         highPriority         = $helperOk
@@ -2558,7 +2565,7 @@ try {
         if (-not $clientHardwareOk) { $missing += 'cef-hardware' }
         if (-not $launchPathOk) { $missing += 'launch-path' }
         if (-not $launcherOk) { $missing += 'cef-launcher' }
-        if (-not $helperOk) { $missing += 'memory-guard' }
+        if (-not $helperOk) { $missing += 'background-priority' }
         if (-not $cfgOk) { $missing += 'download-config' }
         elseif ($cfgSkipped) { $missing += 'download-config-open-steam-once' }
         if (-not $clientTweaksOk) { $missing += 'client-tweaks' }

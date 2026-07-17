@@ -216,15 +216,4 @@ public sealed partial class SettingsSheet : UserControl
         ResetOpenVisual();
     }
 
-    private void DarkMode_Click(object sender, RoutedEventArgs e)
-    {
-        if (!ViewModel.IsDarkMode)
-            ViewModel.IsDarkMode = true;
-    }
-
-    private void LightMode_Click(object sender, RoutedEventArgs e)
-    {
-        if (!ViewModel.IsLightMode)
-            ViewModel.IsLightMode = true;
-    }
 }

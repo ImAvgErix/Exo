@@ -193,12 +193,14 @@ var detectPath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-Dete
 var corePath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "NvidiaDetectCore.ps1");
 var messagesPath = Path.Combine(repo, "Exo", "Helpers", "OptimizerMessages.cs");
 var nvidiaViewModelPath = Path.Combine(repo, "Exo", "ViewModels", "NvidiaOptimizerViewModel.cs");
+var nvDisplaySourcePath = Path.Combine(repo, "tools", "Exo.NvDisplay", "Program.cs");
 var optimizerSrc = File.Exists(optimizerPath) ? File.ReadAllText(optimizerPath) : "";
 var displayApplySrc = File.Exists(displayApplyPath) ? File.ReadAllText(displayApplyPath) : "";
 var detectSrc = File.Exists(detectPath) ? File.ReadAllText(detectPath) : "";
 var coreSrc = File.Exists(corePath) ? File.ReadAllText(corePath) : "";
 var messagesSrc = File.Exists(messagesPath) ? File.ReadAllText(messagesPath) : "";
 var nvidiaViewModelSrc = File.Exists(nvidiaViewModelPath) ? File.ReadAllText(nvidiaViewModelPath) : "";
+var nvDisplaySrc = File.Exists(nvDisplaySourcePath) ? File.ReadAllText(nvDisplaySourcePath) : "";
 
 Expect("optimizer runs -exportCustomized", optimizerSrc.Contains("-exportCustomized", StringComparison.Ordinal));
 Expect("detect runs -exportCustomized", detectSrc.Contains("-exportCustomized", StringComparison.Ordinal));
@@ -228,6 +230,19 @@ Expect("optimizer audio stage runs once",
     CountOf(optimizerSrc, "[void](Remove-NvidiaAudioComponents)") == 1);
 Expect("optimizer bloat stage runs once",
     CountOf(optimizerSrc, "[void](Remove-NvidiaBloatComponents)") == 1);
+Expect("optimizer selects policy from hardware inventory",
+    optimizerSrc.Contains("function Get-NvidiaHardwarePolicy", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("--list-displays", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("adaptiveSyncSignal", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("hardwarePolicy", StringComparison.Ordinal));
+Expect("display helper detects refresh and EDID evidence",
+    nvDisplaySrc.Contains("maxHz", StringComparison.Ordinal) &&
+    nvDisplaySrc.Contains("ReadMonitorVerticalRange", StringComparison.Ordinal) &&
+    nvDisplaySrc.Contains("adaptiveSyncCandidate", StringComparison.Ordinal));
+Expect("secondary display refresh stays unchanged",
+    nvDisplaySrc.Contains("EXO_SECONDARY_REFRESH", StringComparison.Ordinal) &&
+    nvDisplaySrc.Contains("?? \"keep\"", StringComparison.Ordinal) &&
+    !nvDisplaySrc.Contains("?? \"60\"", StringComparison.Ordinal));
 Expect("NVIDIA reset uses status-cleared copy",
     messagesSrc.Contains("NvidiaStatusCleared = \"Status cleared. Driver and profiles unchanged.\"", StringComparison.Ordinal) &&
     nvidiaViewModelSrc.Contains("OptimizerMessages.NvidiaStatusCleared", StringComparison.Ordinal));

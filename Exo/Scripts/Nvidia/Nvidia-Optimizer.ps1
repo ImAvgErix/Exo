@@ -5,7 +5,7 @@
 # - Series + G-SYNC Base Profile via Profile Inspector (-silentImport)
 # - Accept CPL EULA; set "Use the advanced 3D image settings" (NVTweak Gestalt=2)
 # - Overlay/Windows toasts off
-# - Display (Full RGB / primary max Hz / secondary 60 Hz / GPU no-scaling) through NVAPI
+# - Hardware-aware display policy (Full RGB / primary max Hz / secondary unchanged / GPU no-scaling)
 #
 #   Nvidia-Optimizer.ps1
 #   Nvidia-Optimizer.ps1 -Gsync
@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.12.5'
+$Script:NvidiaOptVersion = '1.13.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
@@ -548,6 +548,63 @@ function New-ExoCombinedProfileNip {
 function Test-IsNotebookGpuName([string]$Name) {
     if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
     return [bool]($Name -match '(?i)\b(?:Laptop GPU|Notebook|Mobile|Max-Q)\b|\bMX\d+\b|\b\d{3,4}M\b')
+}
+
+function Get-NvidiaHardwarePolicy {
+    param(
+        [Parameter(Mandatory)]$Gpu,
+        [Parameter(Mandatory)][string]$SeriesId,
+        [Parameter(Mandatory)][bool]$IsNotebook,
+        [Parameter(Mandatory)][bool]$ForceGsync
+    )
+
+    $result = [ordered]@{
+        gpuName             = [string]$Gpu.Name
+        series              = $SeriesId
+        notebook            = $IsNotebook
+        displayCount        = 0
+        primaryMode         = 'unknown'
+        primaryConnection   = 'unknown'
+        primaryCurrentHz    = 0
+        primaryMaxHz        = 0
+        adaptiveSyncSignal  = $false
+        adaptiveSyncEvidence = 'none'
+        gsync               = [bool]$ForceGsync
+        selectionSource     = $(if ($ForceGsync) { 'explicit-cli' } else { 'safe-fallback' })
+        displayPolicy       = 'primary-max-hz; secondary-keep; full-rgb; gpu-no-scaling'
+    }
+
+    $helper = Join-Path $Root 'tools\Exo.NvDisplay.exe'
+    if (-not (Test-Path -LiteralPath $helper)) { return $result }
+    try {
+        $lines = @(& $helper --list-displays 2>$null)
+        $jsonLine = @($lines | Where-Object { "$_" -like 'EXO_NVDISPLAY_JSON:*' }) | Select-Object -Last 1
+        if (-not $jsonLine) { return $result }
+        $inventory = ([string]$jsonLine).Substring('EXO_NVDISPLAY_JSON:'.Length) | ConvertFrom-Json
+        $displays = @($inventory.displays)
+        $result.displayCount = $displays.Count
+        $primaryDisplay = @($displays | Where-Object { [bool]$_.isPrimary }) | Select-Object -First 1
+        if (-not $primaryDisplay) { $primaryDisplay = $displays | Select-Object -First 1 }
+        if ($primaryDisplay) {
+            $result.primaryMode = [string]$primaryDisplay.currentMode
+            $result.primaryConnection = [string]$primaryDisplay.connection
+            $result.primaryCurrentHz = [int]$primaryDisplay.currentHz
+            $result.primaryMaxHz = [int]$primaryDisplay.maxHz
+            $result.adaptiveSyncSignal = [bool]$primaryDisplay.adaptiveSyncCandidate
+            $result.adaptiveSyncEvidence = [string]$primaryDisplay.adaptiveSyncEvidence
+        }
+
+        if (-not $ForceGsync -and [bool]$result.adaptiveSyncSignal) {
+            $result.gsync = $true
+            $result.selectionSource = 'display-hardware-auto'
+        } elseif (-not $ForceGsync) {
+            $result.gsync = $false
+            $result.selectionSource = 'display-hardware-auto'
+        }
+    } catch {
+        Write-Warn "Display hardware inventory unavailable: $($_.Exception.Message)"
+    }
+    return $result
 }
 
 function Assert-ExoNipProfile {
@@ -3873,7 +3930,7 @@ function Test-ExoNvidiaDisplayLive {
 function Set-NvidiaDisplayPreferences {
     # Display path via Exo-Display-Apply (skips when live NVAPI status already matches).
     # - NVTweak: override scaling, Full RGB, video NVIDIA, Gestalt=2
-    # - NVAPI: primary max Hz; secondary 60 Hz; Full RGB; GPU no-scaling
+    # - NVAPI: primary max Hz; secondary unchanged; Full RGB; GPU no-scaling
     Write-Step 'Display prefs...'
     $applied = New-Object System.Collections.Generic.List[string]
     $success = $false
@@ -3925,7 +3982,7 @@ function Set-NvidiaDisplayPreferences {
                     $method = 'nvapi-or-registry'
                     $nvApiOk = $true
                     $registryOk = $true
-                    [void]$applied.Add('Primary max Hz / secondary 60 Hz + Full RGB + Override + Video NVIDIA + advanced 3D')
+                    [void]$applied.Add('Primary max Hz / secondary unchanged + Full RGB + Override + Video NVIDIA + advanced 3D')
                     Write-Ok 'Display prefs applied'
                 }
                 default {
@@ -3966,7 +4023,7 @@ function Set-NvidiaDisplayPreferences {
         outputColorFormat   = 'RGB'
         outputDynamicRange  = 'Full'
         outputColorDepth    = 'highest supported per display'
-        resolutionRefresh   = 'current resolution; primary max Hz; secondary 60 Hz'
+        resolutionRefresh   = 'current resolution; primary max Hz; secondary unchanged'
         performScalingOn    = 'GPU'
         scalingMode         = 'No scaling'
         overrideGameScaling = $true
@@ -4050,8 +4107,18 @@ try {
         throw 'Could not map GPU to series 10/20/30/40/50. Pass -Series 30 (example).'
     }
     Write-Ok "Series: $seriesId"
-    $useGsync = [bool]$Gsync
-    Write-Ok ("G-SYNC profile: {0}" -f $(if ($useGsync) { 'Enabled' } else { 'Disabled (max FPS / latency)' }))
+    $hardwarePolicy = Get-NvidiaHardwarePolicy `
+        -Gpu $primary `
+        -SeriesId $seriesId `
+        -IsNotebook $isNotebookGpu `
+        -ForceGsync:([bool]$Gsync)
+    $useGsync = [bool]$hardwarePolicy.gsync
+    Write-Ok ("Hardware: {0} display(s); primary {1} via {2}; max {3} Hz" -f `
+        $hardwarePolicy.displayCount, $hardwarePolicy.primaryMode, `
+        $hardwarePolicy.primaryConnection, $hardwarePolicy.primaryMaxHz)
+    Write-Ok ("Adaptive policy: {0} ({1}; {2})" -f `
+        $(if ($useGsync) { 'G-SYNC / VRR latency path' } else { 'raw max-FPS latency path' }), `
+        $hardwarePolicy.selectionSource, $hardwarePolicy.adaptiveSyncEvidence)
     Write-HubProgress 15 "Series $seriesId"
 
     # Fail closed before anything can mutate the driver, profile, overlay, or
@@ -4064,6 +4131,7 @@ try {
         driver                = $primary.Driver
         series                = $seriesId
         gsync                 = $useGsync
+        hardwarePolicy        = $hardwarePolicy
         applyInProgress       = $true
         pendingAfterDriver    = $false
         driverTweaksVerified  = $false
@@ -4108,6 +4176,7 @@ try {
                 driver             = $primary.Driver
                 series             = $seriesId
                 gsync              = $useGsync
+                hardwarePolicy     = $hardwarePolicy
                 driverUpdatePass   = $driverInfo
                 applyInProgress    = $false
                 profileApplied     = $false
@@ -4133,6 +4202,7 @@ try {
                 driver             = (Get-ExoHashString $driverInfo 'WindowsVersion' $primary.Driver)
                 series             = $seriesId
                 gsync              = $useGsync
+                hardwarePolicy     = $hardwarePolicy
                 driverUpdatePass   = $driverInfo
                 applyInProgress    = $false
                 profileApplied     = $false
@@ -4354,7 +4424,7 @@ try {
 
     Set-ExoStage 'display-policy'
     Write-HubProgress 90 'Display scaling/Hz/Full RGB (NVAPI + Control Panel)...'
-    Write-Ok 'Applying display prefs via NVAPI (primary max Hz, secondary 60 Hz)'
+    Write-Ok 'Applying display prefs via NVAPI (primary max Hz, secondary refresh unchanged)'
     $dispResult = Coerce-Hashtable (Set-NvidiaDisplayPreferences)
     if (-not $dispResult) {
         $dispResult = @{
@@ -4447,6 +4517,7 @@ try {
         driver              = $primary.Driver
         series              = $seriesId
         gsync               = $useGsync
+        hardwarePolicy      = $hardwarePolicy
         # Only record profile when silent import actually succeeded (no fake "installed")
         profileFile         = $(if ($profileApplied -and $nip) { Split-Path $nip -Leaf } else { $null })
         profileApplied      = [bool]$profileApplied
@@ -4504,7 +4575,7 @@ try {
     if ($advanced3dOk) {
         Write-Ok 'Control Panel: Use the advanced 3D image settings is ON (Manage 3D / .nip profiles active).'
     }
-    Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling; primary max Hz; secondary 60 Hz). Control Panel is the minimal UI.'
+    Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling; primary max Hz; secondary unchanged). Control Panel is the minimal UI.'
     $doneMethod = Get-ExoHashString $driverInfo 'Method' 'none'
     if ($doneMethod -in @('exo-clean', 'exo-clean-partial-tweaks', 'in-place-tweaks')) {
         Write-Ok "Driver stage ($doneMethod) completed with 3D + Control Panel + NVAPI display."

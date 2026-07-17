@@ -190,103 +190,6 @@
         <Setter Property="Foreground" Value="{ThemeResource ExoWarningBrush}" />
     </Style>
 
-    <!--
-      Dark / Light tiles. MUST use layered fills:
-      PointerOver + Checked both apply in WinUI — if hover sets Background it wipes
-      the white selected fill and black label “disappears” on dark shell.
-    -->
-    <Style x:Key="ExoThemeChoice" TargetType="RadioButton">
-        <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="13" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="MinHeight" Value="40" />
-        <Setter Property="Padding" Value="12,10" />
-        <Setter Property="HorizontalAlignment" Value="Stretch" />
-        <Setter Property="HorizontalContentAlignment" Value="Center" />
-        <Setter Property="VerticalContentAlignment" Value="Center" />
-        <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
-        <Setter Property="UseSystemFocusVisuals" Value="True" />
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="RadioButton">
-                    <Grid x:Name="Root"
-                          MinHeight="{TemplateBinding MinHeight}"
-                          HorizontalAlignment="Stretch">
-                        <Border x:Name="Base"
-                                Background="{ThemeResource ExoPageBackgroundBrush}"
-                                BorderBrush="{ThemeResource ExoCardStrokeBrush}"
-                                BorderThickness="1"
-                                CornerRadius="{StaticResource ExoTileRadius}" />
-                        <Border x:Name="HoverFill"
-                                Background="{ThemeResource ExoAccentSoftBrush}"
-                                CornerRadius="{StaticResource ExoTileRadius}"
-                                Margin="1"
-                                Opacity="0"
-                                IsHitTestVisible="False" />
-                        <Border x:Name="CheckedFill"
-                                Background="{ThemeResource ExoAccentBrush}"
-                                BorderBrush="{ThemeResource ExoAccentBrush}"
-                                BorderThickness="1"
-                                CornerRadius="{StaticResource ExoTileRadius}"
-                                Opacity="0"
-                                IsHitTestVisible="False" />
-                        <TextBlock x:Name="Label"
-                                   Text="{TemplateBinding Content}"
-                                   FontFamily="{TemplateBinding FontFamily}"
-                                   FontSize="{TemplateBinding FontSize}"
-                                   FontWeight="{TemplateBinding FontWeight}"
-                                   Foreground="{TemplateBinding Foreground}"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Margin="{TemplateBinding Padding}" />
-                        <VisualStateManager.VisualStateGroups>
-                            <VisualStateGroup x:Name="CommonStates">
-                                <VisualState x:Name="Normal">
-                                    <VisualState.Setters>
-                                        <Setter Target="HoverFill.Opacity" Value="0" />
-                                        <Setter Target="Root.Opacity" Value="1" />
-                                    </VisualState.Setters>
-                                </VisualState>
-                                <VisualState x:Name="PointerOver">
-                                    <VisualState.Setters>
-                                        <Setter Target="HoverFill.Opacity" Value="1" />
-                                        <Setter Target="Root.Opacity" Value="1" />
-                                    </VisualState.Setters>
-                                </VisualState>
-                                <VisualState x:Name="Pressed">
-                                    <VisualState.Setters>
-                                        <Setter Target="Root.Opacity" Value="0.92" />
-                                    </VisualState.Setters>
-                                </VisualState>
-                                <VisualState x:Name="Disabled">
-                                    <VisualState.Setters>
-                                        <Setter Target="Root.Opacity" Value="0.45" />
-                                    </VisualState.Setters>
-                                </VisualState>
-                            </VisualStateGroup>
-                            <VisualStateGroup x:Name="CheckStates">
-                                <VisualState x:Name="Checked">
-                                    <VisualState.Setters>
-                                        <Setter Target="CheckedFill.Opacity" Value="1" />
-                                        <Setter Target="Label.Foreground" Value="{ThemeResource ExoOnAccentBrush}" />
-                                    </VisualState.Setters>
-                                </VisualState>
-                                <VisualState x:Name="Unchecked">
-                                    <VisualState.Setters>
-                                        <Setter Target="CheckedFill.Opacity" Value="0" />
-                                    </VisualState.Setters>
-                                </VisualState>
-                                <VisualState x:Name="Indeterminate" />
-                            </VisualStateGroup>
-                        </VisualStateManager.VisualStateGroups>
-                    </Grid>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
-    <Style x:Key="ExoThemeRadio" TargetType="RadioButton" BasedOn="{StaticResource ExoThemeChoice}" />
-
     <Style x:Key="ExoCompactSwitch" TargetType="ToggleSwitch">
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="OnContent" Value="" />
@@ -311,8 +214,10 @@
         <Setter Property="MinHeight" Value="40" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
-        <Setter Property="Background" Value="{ThemeResource ExoAccentBrush}" />
-        <Setter Property="Foreground" Value="{ThemeResource ExoOnAccentBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoPrimaryButtonFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoPrimaryButtonStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
@@ -327,7 +232,7 @@
                           BorderBrush="{TemplateBinding BorderBrush}"
                           BorderThickness="{TemplateBinding BorderThickness}">
                         <Border x:Name="HoverWash"
-                                Background="{ThemeResource ExoOnAccentBrush}"
+                                Background="{ThemeResource ExoAccentSoftBrush}"
                                 CornerRadius="{TemplateBinding CornerRadius}"
                                 Opacity="0"
                                 IsHitTestVisible="False" />

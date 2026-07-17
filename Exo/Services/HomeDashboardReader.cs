@@ -32,6 +32,9 @@ public static class HomeDashboardReader
         string? ProfileFile,
         string? GpuName,
         string? Series,
+        string? PrimaryMode,
+        string? PrimaryConnection,
+        string? PolicySource,
         int GameProfileCount,
         int VerifiedSettingCount);
 
@@ -43,6 +46,11 @@ public static class HomeDashboardReader
         long LiveBytes,
         long PeakBytes,
         long ReclaimedBytes);
+
+    public sealed record ProcessMemorySnapshot(
+        int ProcessCount,
+        long PrivateBytes,
+        long WorkingSetBytes);
 
     /// <summary>Primary up NIC link speed for the Internet tile.</summary>
     public sealed record LinkSpeedSnapshot(
@@ -78,7 +86,33 @@ public static class HomeDashboardReader
         return total;
     }
 
-    /// <summary>True only while the optimized Steam launcher memory guard is running.</summary>
+    public static ProcessMemorySnapshot TryReadProcessMemory(params string[] processNames)
+    {
+        var count = 0;
+        long privateBytes = 0;
+        long workingSetBytes = 0;
+        foreach (var name in processNames.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            Process[] processes;
+            try { processes = Process.GetProcessesByName(name); }
+            catch { continue; }
+            foreach (var process in processes)
+            {
+                try
+                {
+                    count++;
+                    privateBytes += Math.Max(0, process.PrivateMemorySize64);
+                    workingSetBytes += Math.Max(0, process.WorkingSet64);
+                }
+                catch { }
+                finally { process.Dispose(); }
+            }
+        }
+        return new ProcessMemorySnapshot(count, privateBytes, workingSetBytes);
+    }
+
+    /// <summary>True only while the optimized Steam background policy is running.</summary>
     public static bool TryReadSteamMemoryGuardRunning()
     {
         try
@@ -381,12 +415,27 @@ public static class HomeDashboardReader
                 && gc.TryGetInt32(out var gameCount) ? gameCount : 0;
             var verifiedSettingCount = root.TryGetProperty("drsVerifiedSettingCount", out var vc)
                 && vc.TryGetInt32(out var verifiedCount) ? verifiedCount : 0;
+            string? primaryMode = null;
+            string? primaryConnection = null;
+            string? policySource = null;
+            if (root.TryGetProperty("hardwarePolicy", out var hp) && hp.ValueKind == JsonValueKind.Object)
+            {
+                primaryMode = hp.TryGetProperty("primaryMode", out var pm) && pm.ValueKind == JsonValueKind.String
+                    ? pm.GetString() : null;
+                primaryConnection = hp.TryGetProperty("primaryConnection", out var pc) && pc.ValueKind == JsonValueKind.String
+                    ? pc.GetString() : null;
+                policySource = hp.TryGetProperty("selectionSource", out var ps) && ps.ValueKind == JsonValueKind.String
+                    ? ps.GetString() : null;
+            }
             return new NvidiaPathSnapshot(
                 applied,
                 gsync,
                 profileFile,
                 gpuName,
                 series,
+                primaryMode,
+                primaryConnection,
+                policySource,
                 gameProfileCount,
                 verifiedSettingCount);
         }

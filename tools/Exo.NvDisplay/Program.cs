@@ -102,7 +102,7 @@ static class Program
         if (normalizedArgs.Any(a => a is "--help" or "-h" or "/?"))
         {
             Console.WriteLine("Exo.NvDisplay - NVAPI + NVTweak display performance settings");
-            Console.WriteLine("  --apply              Apply: Full RGB, primary max-Hz / secondary 60Hz, GPU no-scaling");
+            Console.WriteLine("  --apply              Apply: Full RGB, primary max-Hz / secondary unchanged, GPU no-scaling");
             Console.WriteLine("  --status             Verify display policy");
             Console.WriteLine("  --list-displays      List displays: modes, depth, scaling, color (Panel)");
             Console.WriteLine("  --list-color         List color bit depths only");
@@ -479,7 +479,7 @@ static class Program
                             colorUnsupported = colorUnsupportedCount,
                             pathScalingOk
                         },
-                        refreshPolicy = "primary-max-hz, secondary-60hz",
+                        refreshPolicy = "primary-max-hz, secondary-keep",
                         note = "color/path NVAPI best-effort; registry + refresh are required"
                     });
                     Console.WriteLine("EXO_NVDISPLAY_JSON:" + json);
@@ -537,7 +537,7 @@ static class Program
                             pathScalingOk
                         },
                         vibrance = ListVibrance(devices, null),
-                        refreshPolicy = "primary-max-hz, secondary-60hz"
+                        refreshPolicy = "primary-max-hz, secondary-keep"
                     });
                     Console.WriteLine("EXO_NVDISPLAY_JSON:" + json);
                 }
@@ -824,6 +824,25 @@ static class Program
 
             var scaling = ReadScalingLabelForDisplay(dev.DisplayId);
             var isPrimary = !string.IsNullOrWhiteSpace(gdi) && IsPrimaryDisplayDevice(gdi);
+            var maxHz = modes
+                .Select(mode =>
+                {
+                    TryParseModeString(mode, out var width, out var height, out var hz);
+                    return (width, height, hz);
+                })
+                .Where(mode => mode.width == curW && mode.height == curH)
+                .Select(mode => mode.hz)
+                .DefaultIfEmpty(curHz)
+                .Max();
+            var refreshRange = ReadMonitorVerticalRange(gdi);
+            // This is intentionally evidence, not a claim that G-SYNC is certified.
+            // A wide EDID range on a high-refresh DisplayPort primary is the best
+            // capability signal available without relying on Control Panel UI state.
+            var adaptiveSyncCandidate = isPrimary &&
+                dev.ConnectionType == MonitorConnectionType.DisplayPort &&
+                maxHz >= 100 &&
+                refreshRange.MinHz is <= 60 and > 0 &&
+                refreshRange.MaxHz >= maxHz - 5;
 
             list.Add(new
             {
@@ -834,7 +853,12 @@ static class Program
                 currentWidth = curW,
                 currentHeight = curH,
                 currentHz = curHz,
+                maxHz,
                 currentMode = curW > 0 ? $"{curW}x{curH}@{curHz}" : null,
+                edidMinVerticalHz = refreshRange.MinHz,
+                edidMaxVerticalHz = refreshRange.MaxHz,
+                adaptiveSyncCandidate,
+                adaptiveSyncEvidence = adaptiveSyncCandidate ? "displayport-high-refresh-wide-edid-range" : "none",
                 modes,
                 currentDepth,
                 currentRange = currentRange is "VESA" or "Full" ? "full" :
@@ -847,6 +871,49 @@ static class Program
             });
         }
         return list;
+    }
+
+    static (int? MinHz, int? MaxHz) ReadMonitorVerticalRange(string gdi)
+    {
+        if (string.IsNullOrWhiteSpace(gdi)) return (null, null);
+        try
+        {
+            var monitor = new Win32.DISPLAY_DEVICE { cb = Marshal.SizeOf<Win32.DISPLAY_DEVICE>() };
+            if (!Win32.EnumDisplayDevices(gdi, 0, ref monitor, 0) ||
+                string.IsNullOrWhiteSpace(monitor.DeviceID))
+                return (null, null);
+
+            // EnumDisplayDevices returns MONITOR\AUS24AC\{class-guid}\0003, while
+            // the physical EDID lives under Enum\DISPLAY\AUS24AC\<instance>.
+            var parts = monitor.DeviceID.Split('\\', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2) return (null, null);
+            using var modelKey = Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Enum\DISPLAY\" + parts[1]);
+            if (modelKey is null) return (null, null);
+            byte[]? edid = null;
+            foreach (var instance in modelKey.GetSubKeyNames())
+            {
+                using var key = modelKey.OpenSubKey(instance + @"\Device Parameters");
+                if (key?.GetValue("EDID") is byte[] candidate && candidate.Length >= 128 &&
+                    (edid is null || candidate.Length > edid.Length))
+                    edid = candidate;
+            }
+            if (edid is null)
+                return (null, null);
+
+            // EDID base-block monitor range descriptor: 00 00 00 FD 00 minV maxV ...
+            for (var offset = 54; offset + 17 < 126; offset += 18)
+            {
+                if (edid[offset] != 0 || edid[offset + 1] != 0 ||
+                    edid[offset + 2] != 0 || edid[offset + 3] != 0xFD)
+                    continue;
+                var min = (int)edid[offset + 5];
+                var max = (int)edid[offset + 6];
+                return min > 0 && max >= min ? (min, max) : (null, null);
+            }
+        }
+        catch { }
+        return (null, null);
     }
 
     /// <summary>
@@ -1449,7 +1516,7 @@ static class Program
             if (target != null)
             {
                 map[device] = target;
-                var role = primary ? "PRIMARY max-Hz" : "SECONDARY 60Hz";
+                var role = primary ? "PRIMARY max-Hz" : "SECONDARY keep";
                 Console.WriteLine($"[MODE] {device}: {role} candidate {target}");
             }
         }
@@ -1496,10 +1563,10 @@ static class Program
         }
 
         // Policy from Exo panel: EXO_PRIMARY_REFRESH / EXO_SECONDARY_REFRESH
-        // Values: max | 60 | keep  (defaults: primary=max, secondary=60)
+        // Values: max | 60 | keep  (defaults: primary=max, secondary=keep)
         var policyRaw = primary
             ? (Environment.GetEnvironmentVariable("EXO_PRIMARY_REFRESH") ?? "max")
-            : (Environment.GetEnvironmentVariable("EXO_SECONDARY_REFRESH") ?? "60");
+            : (Environment.GetEnvironmentVariable("EXO_SECONDARY_REFRESH") ?? "keep");
         var policy = policyRaw.Trim().ToLowerInvariant();
 
         BestMode PickMax() =>
@@ -1532,7 +1599,7 @@ static class Program
             "keep" or "current" => PickKeep(),
             "60" or "60hz" => Pick60(),
             "max" or "highest" => PickMax(),
-            _ => primary ? PickMax() : Pick60()
+            _ => primary ? PickMax() : PickKeep()
         };
     }
 
@@ -1544,7 +1611,7 @@ static class Program
         if (allowedDevices.Count == 0)
             return new ModeApplyResult { Success = true };
 
-        Console.WriteLine("[MODE] Primary = max Hz; secondary = 60 Hz (current resolution kept)...");
+        Console.WriteLine("[MODE] Primary = max Hz; secondary = keep current Hz (current resolution kept)...");
         var targets = EnumerateTargetModes(allowedDevices);
         if (targets.Count != allowedDevices.Count)
         {

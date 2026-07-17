@@ -32,11 +32,9 @@
         ApplyReportChevron="{x:Bind ViewModel.ApplyReportChevron, Mode=OneWay}"
         ApplyReportRows="{x:Bind ViewModel.ApplyReportRows, Mode=OneWay}"
         SecondaryLeftLabel="Repair"
-        SecondaryRightLabel="Refresh"
         SecondaryActionsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
         ToggleReportClick="ToggleReport_Click"
-        SecondaryLeftClick="Repair_Click"
-        SecondaryRightClick="Refresh_Click">
+        SecondaryLeftClick="Repair_Click">
         <controls:SharedModulePlate.PrimaryActions>
             <Button Style="{StaticResource ExoPrimaryButton}"
                     Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"

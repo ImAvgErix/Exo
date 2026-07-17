@@ -37,7 +37,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial bool HasLastResult { get; set; }
     [ObservableProperty] public partial string LastResultGlyph { get; set; } = "\uE73E";
     [ObservableProperty] public partial Brush LastResultBrush { get; set; }
-    [ObservableProperty] public partial bool UseGsync { get; set; }
+    [ObservableProperty] public partial string HardwarePolicyText { get; set; } = "Detecting GPU and displays...";
 
     [RelayCommand]
     private async Task RefreshAsync()
@@ -89,13 +89,11 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                     ProgressStatus = p.Status;
             });
 
-            var args = new List<string> { "-NonInteractive" };
-            if (UseGsync)
-                args.Add("-Gsync");
+            var args = new[] { "-NonInteractive" };
 
             var result = await _services.PowerShell.RunAsync(
                 _services.Scripts.NvidiaOptimizerScript,
-                arguments: args.ToArray(),
+                arguments: args,
                 elevate: true,
                 progress: progress,
                 cancellationToken: _runCts.Token,
@@ -237,9 +235,11 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
         IsApplied = state.IsApplied;
         StatusText = state.StatusText;
         DetailText = string.Empty;
-        if (state.Extra is { Count: > 0 } && state.Extra.TryGetValue("gsync", out var g) &&
-            bool.TryParse(g, out var gsyncApplied) && IsApplied)
-            UseGsync = gsyncApplied;
+        HardwarePolicyText = state.Extra is { Count: > 0 } &&
+            state.Extra.TryGetValue("hardwareSummary", out var hardware) &&
+            !string.IsNullOrWhiteSpace(hardware)
+                ? hardware
+                : "Apply detects the GPU, display path, refresh range, and laptop/desktop policy automatically.";
 
         Features.Clear();
         foreach (var feature in state.Features)

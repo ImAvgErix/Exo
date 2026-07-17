@@ -329,7 +329,7 @@ if (-not $steamOk) {
             $memoryGuardOk = Test-SteamMemoryGuardText -Text $helperText
         } catch { }
     }
-    Add-Feature 'Adaptive memory guard installed' 'The optimized launcher gives background CEF pages low Windows memory priority; foreground Steam stays responsive and games get CPU priority.' $memoryGuardOk
+    Add-Feature 'Background priority policy' 'Background CEF pages get low memory priority and yield CPU while gaming; the foreground Steam window stays responsive. This does not fake a RAM reduction.' $memoryGuardOk
 
     $debloatOk = Test-SteamCompleteClientDebloat $steam
     # Sparse intermediate states (applying/incomplete/repairing) lack these keys - guard.

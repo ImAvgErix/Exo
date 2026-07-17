@@ -4,12 +4,6 @@ namespace Exo.Models;
 
 public sealed class AppSettings
 {
-    public const string DarkTheme = "Dark";
-    public const string LightTheme = "Light";
-
-    /// <summary>Dark | Light</summary>
-    public string Theme { get; set; } = DarkTheme;
-
     /// <summary>
     /// When true, check GitHub Releases for a newer Exo app on launch.
     /// The legacy JSON name keeps existing user settings compatible.
@@ -28,7 +22,6 @@ public sealed class AppSettings
 
     public AppSettings Clone() => new()
     {
-        Theme = Theme,
         CheckForUpdatesOnLaunch = CheckForUpdatesOnLaunch,
         CustomScriptsPath = CustomScriptsPath,
         LastDiscordRunUtc = LastDiscordRunUtc,

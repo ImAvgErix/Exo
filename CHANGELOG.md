@@ -1,3 +1,11 @@
+## 3.5.0
+
+- **Reliable connection quality**: latency, jitter, and loss now come from sequential ICMP samples to one automatically selected healthy target. Loaded latency runs independently from the Cloudflare throughput streams, so client/server scheduling is no longer misreported as internet jitter.
+- **Adaptive NVIDIA hardware policy**: detects GPU series, desktop/laptop path, active NVIDIA displays, primary connection, current/max refresh, and EDID refresh range before selecting the raw-latency or G-SYNC/VRR pack. The primary uses its highest refresh while secondary displays keep their current mode.
+- **Truthful Steam background policy**: foreground Steam CEF remains Normal priority while only background renderers yield during games. The dashboard reports private bytes and process count instead of implying the safe priority policy forcibly removed RAM.
+- **Dark-only interface**: removes the light palette, theme setting, toggle logic, and dead theme-choice style. The settings sheet and shell now use one consistent black, opaque, mixed-DPI-safe visual system.
+- **Decluttered module controls**: optimizer pages expose Apply and Repair only; Refresh remains an internal post-action operation. Internet results collapse to one useful quality line, and NVIDIA shows its detected hardware policy instead of a manual G-SYNC switch.
+
 ## 3.4.0
 
 - **Accurate connection analysis**: replaces the small PowerShell byte-array test with a sustained native streaming test that scales to 12 parallel streams, samples idle and loaded latency, reports endpoint-limited results honestly, and includes the negotiated link rate for multi-gig Ethernet.

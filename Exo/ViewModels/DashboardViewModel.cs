@@ -164,10 +164,9 @@ public partial class DashboardViewModel : ObservableObject
 
     private static string BuildInternetLiveMetric(NetworkBenchmarkResult quality, HomeDashboardReader.LatencySnapshot? latency)
     {
-        var currentIdle = latency?.AfterP50Ms ?? quality.PingP50Ms;
         var downLoaded = Math.Max(0, quality.DownloadLoadedMs - quality.PingP50Ms);
         var upLoaded = Math.Max(0, quality.UploadLoadedMs - quality.PingP50Ms);
-        return $"{currentIdle:0.#} ms now · load +{downLoaded:0.#}↓ +{upLoaded:0.#}↑ · {quality.PacketLossPercent:0.##}% loss";
+        return $"{quality.PingP50Ms:0.#} ms idle · +{downLoaded:0.#}/+{upLoaded:0.#} ms loaded · {quality.PacketLossPercent:0.##}% loss";
     }
 
     private void RefreshDiscordRamTile()
@@ -216,13 +215,13 @@ public partial class DashboardViewModel : ObservableObject
 
     private void RefreshSteamRamTile()
     {
-        var ws = HomeDashboardReader.TryReadProcessWorkingSetBytes("steam", "steamwebhelper");
+        var memory = HomeDashboardReader.TryReadProcessMemory("steam", "steamwebhelper");
         var steam = ReadModuleState("steam-optimizer.json");
         var guardRunning = HomeDashboardReader.TryReadSteamMemoryGuardRunning();
 
-        if (ws > 0)
+        if (memory.ProcessCount > 0)
         {
-            SteamLiveMetric = $"{HomeDashboardReader.FormatBytes(ws)} live client memory";
+            SteamLiveMetric = $"{HomeDashboardReader.FormatBytes(memory.PrivateBytes)} private · {memory.ProcessCount} processes";
         }
         else
         {
@@ -232,10 +231,10 @@ public partial class DashboardViewModel : ObservableObject
         if (steam.Applied)
         {
             SteamStatusTag = "VERIFIED";
-            SteamStatusPrimary = guardRunning ? "Memory guard active" : "Memory guard installed";
+            SteamStatusPrimary = guardRunning ? "Background policy active" : "Background policy ready";
             SteamStatusSecondary = guardRunning
-                ? "Background web pages reclaim first · games keep CPU priority"
-                : "Starts with the optimized Steam launcher · safe priority policy ready";
+                ? "Foreground stays responsive · background CEF yields while gaming"
+                : "Starts with the optimized launcher · no unsafe RAM purges";
         }
         else
         {
@@ -270,9 +269,12 @@ public partial class DashboardViewModel : ObservableObject
             NvidiaPathPrimary = !string.IsNullOrWhiteSpace(nvidia.GpuName)
                 ? nvidia.GpuName!
                 : !string.IsNullOrWhiteSpace(nvidia.Series) ? nvidia.Series! : "NVIDIA profile active";
+            var display = !string.IsNullOrWhiteSpace(nvidia.PrimaryMode)
+                ? $" · {nvidia.PrimaryMode} {nvidia.PrimaryConnection}".TrimEnd()
+                : string.Empty;
             NvidiaPathSecondary = nvidia.Gsync
-                ? "Low-latency base profile · G-SYNC path · per-game overrides"
-                : "Low-latency base profile · max-performance path · per-game overrides";
+                ? $"Auto G-SYNC/VRR latency path{display}"
+                : $"Auto raw-latency path{display}";
             var proof = new List<string>();
             if (nvidia.VerifiedSettingCount > 0) proof.Add($"{nvidia.VerifiedSettingCount} driver pins");
             if (nvidia.GameProfileCount > 0) proof.Add($"{nvidia.GameProfileCount} game profiles");
