@@ -428,16 +428,21 @@ public sealed class NetworkOptimizerService
                 {
                     var nicPolicy = await RunCaptureAsync(
                         "powershell",
-                        "-NoProfile -Command \"$n=(Get-NetAdapter -Physical -EA 0|? Status -eq 'Up'|? NdisPhysicalMedium -notmatch 'Wireless'|select -First 1 -Expand Name); if($n){$r=Get-NetAdapterRss -Name $n -EA 0;$p=Get-NetAdapterPowerManagement -Name $n -EA 0;'rss='+$r.Enabled+';profile='+$r.Profile+';base='+$r.BaseProcessorNumber+';max='+$r.MaxProcessors+';queues='+$r.NumberOfReceiveQueues+';d0='+$p.D0PacketCoalescing}\"",
+                        "-NoProfile -Command \"$n=(Get-NetAdapter -Physical -EA 0|? Status -eq 'Up'|? NdisPhysicalMedium -notmatch 'Wireless'|select -First 1 -Expand Name); if($n){$r=Get-NetAdapterRss -Name $n -EA 0;$p=Get-NetAdapterPowerManagement -Name $n -EA 0;'rss='+$r.Enabled+';hash='+$r.IPv4HashEnabled+';array='+$r.RssProcessorArraySize+';profile='+$r.Profile+';base='+$r.BaseProcessorNumber+';max='+$r.MaxProcessors+';queues='+$r.NumberOfReceiveQueues+';d0='+$p.D0PacketCoalescing}\"",
                         ct).ConfigureAwait(false);
                     var enabled = Match(nicPolicy, @"rss=([^;]+)") ?? "False";
+                    var hashEnabled = Match(nicPolicy, @"hash=([^;]+)") ?? "False";
+                    var processorArray = Match(nicPolicy, @"array=([^;]+)") ?? "0";
                     var profile = Match(nicPolicy, @"profile=([^;]+)") ?? "—";
                     var baseProcessor = Match(nicPolicy, @"base=([^;]+)") ?? "—";
                     var maxProcessors = Match(nicPolicy, @"max=([^;]+)") ?? "—";
                     var queues = Match(nicPolicy, @"queues=([^;]+)") ?? "—";
                     packetCoalescing = Match(nicPolicy, @"d0=([^;\r\n]+)") ?? "Unsupported";
-                    var expectedProfile = latency ? "ClosestProcessor" : "NUMAStatic";
-                    rssPolicyOk = enabled.Equals("True", StringComparison.OrdinalIgnoreCase) &&
+                    var expectedProfile = latency ? "Closest" : "NUMAStatic";
+                    var rssEffective = enabled.Equals("True", StringComparison.OrdinalIgnoreCase) ||
+                                       hashEnabled.Equals("True", StringComparison.OrdinalIgnoreCase) ||
+                                       (int.TryParse(processorArray, out var arraySize) && arraySize > 0);
+                    rssPolicyOk = rssEffective &&
                                   profile.Equals(expectedProfile, StringComparison.OrdinalIgnoreCase) &&
                                   (Environment.ProcessorCount < 4 || baseProcessor == "2");
                     rssPolicy = $"{profile} · base {baseProcessor} · {maxProcessors} CPU / {queues} queue";
@@ -1140,6 +1145,10 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             var rollback = LoadRollbackStatus();
             PersistApplyOutcome(report, rollback);
 
+            var reportFailures = report
+                .Where(step => step.Status.Equals("fail", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
             if (rollback is { RolledBack: true })
             {
                 // Aggressive but deterministic: the script already re-enabled Wi‑Fi and
@@ -1182,11 +1191,25 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                 var restartNote = options.RestartEthernet
                     ? " Ethernet was restarted."
                     : " Adapter restart skipped (toggle link or re-apply with restart if a prop looks stale).";
+                if (reportFailures.Count > 0)
+                {
+                    var failed = string.Join(", ", reportFailures.Select(step => step.Name).Take(4));
+                    return (false,
+                        $"Core network tuning applied, but verification failed for: {failed}. " +
+                        "Open Last apply for the exact reason, then retry or turn off the unsupported option.");
+                }
                 return (true, $"{baseMsg} {policy}{restartNote}");
             }
 
             var fails = snap.Features.Where(f => !f.IsOk).Select(f => f.Title).Take(4).ToList();
             var hint = fails.Count > 0 ? string.Join(", ", fails) : "some NIC properties";
+            if (reportFailures.Count > 0)
+            {
+                var failed = string.Join(", ", reportFailures.Select(step => step.Name).Take(4));
+                return (false,
+                    $"Core network tuning applied, but verification failed for: {failed}. " +
+                    $"Live verification is also incomplete ({hint}). Open Last apply for details.");
+            }
             return (true, $"Applied ({policy}). Verify incomplete ({hint}). Refresh after a moment.");
         }
         catch (System.ComponentModel.Win32Exception)

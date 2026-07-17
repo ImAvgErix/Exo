@@ -341,6 +341,16 @@ var repairPath = Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Exo-Discor
 var repairText = File.Exists(repairPath) ? File.ReadAllText(repairPath) : "";
 Expect("repair removes Exo QoS policies",
     repairText.Contains("Remove-ExoDiscordQosPolicies", StringComparison.Ordinal));
+Expect("repair tolerates only a locked signed stock executable",
+    repairText.Contains("Test-RepairStockExecutableOnly", StringComparison.Ordinal) &&
+    repairText.Contains("SignatureStatus]::Valid", StringComparison.Ordinal) &&
+    repairText.Contains("O=Discord Inc", StringComparison.Ordinal) &&
+    repairText.Contains("Expand-RepairDiscordFromSignedSetup", StringComparison.Ordinal) &&
+    repairText.Contains("System.IO.Compression.FileSystem", StringComparison.Ordinal) &&
+    repairText.Contains("packagesDir 'RELEASES'", StringComparison.Ordinal) &&
+    repairText.Contains("Staged Discord repair did not restore Squirrel package state", StringComparison.Ordinal) &&
+    repairText.Contains("Confirm-RepairDiscordBoot", StringComparison.Ordinal) &&
+    repairText.Contains("staged stock repair", StringComparison.Ordinal));
 Expect("repair restores variant settings",
     repairText.Contains("Restore-ExoDiscordVariantSettings", StringComparison.Ordinal));
 

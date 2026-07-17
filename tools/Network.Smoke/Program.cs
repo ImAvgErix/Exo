@@ -185,6 +185,9 @@ var dohScript = NetworkApplyScriptBuilder.Build(NetworkPreset.LowestLatency,
     new NetworkApplyOptions { PreferEthernetDisableWifi = true, RestartEthernet = false, PrivateDns = true }, media);
 Expect("DoH bake flag on", dohScript.Contains("$ExoPrivateDns = 1", StringComparison.Ordinal));
 Expect("DoH registers encryption", dohScript.Contains("dns add encryption", StringComparison.OrdinalIgnoreCase));
+Expect("DoH updates existing registrations", dohScript.Contains("dns set encryption", StringComparison.OrdinalIgnoreCase));
+Expect("DoH verifies live registration", dohScript.Contains("dns show encryption", StringComparison.OrdinalIgnoreCase)
+    && dohScript.Contains("Auto-upgrade", StringComparison.OrdinalIgnoreCase));
 Expect("DoH uses Cloudflare template", dohScript.Contains("cloudflare-dns.com/dns-query", StringComparison.OrdinalIgnoreCase));
 Expect("DoH pins Cloudflare resolvers", dohScript.Contains("1.1.1.1", StringComparison.Ordinal)
     && dohScript.Contains("2606:4700:4700::1111", StringComparison.Ordinal));
@@ -447,8 +450,12 @@ Expect("BITS throttle policy removed only if present",
 Expect("RSS BaseProcessorNumber 2 gated on >=4 CPUs",
     latScript.Contains("BaseProcessorNumber 2", StringComparison.Ordinal) &&
     latScript.Contains("$LogicalCpuCount -ge 4", StringComparison.Ordinal));
+Expect("RSS null Enabled handled by live hash state",
+    latScript.Contains("IPv4HashEnabled", StringComparison.Ordinal) &&
+    latScript.Contains("RssProcessorArraySize", StringComparison.Ordinal) &&
+    !latScript.Contains("Enabled=$true; Profile", StringComparison.Ordinal));
 Expect("adaptive RSS profile diverges by preset",
-    latScript.Contains("Profile='ClosestProcessor'", StringComparison.Ordinal) &&
+    latScript.Contains("Profile='Closest'", StringComparison.Ordinal) &&
     thrScript.Contains("Profile='NUMAStatic'", StringComparison.Ordinal) &&
     latScript.Contains("MaxProcessors", StringComparison.Ordinal) &&
     latScript.Contains("NumberOfReceiveQueues", StringComparison.Ordinal));

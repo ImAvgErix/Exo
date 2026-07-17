@@ -143,6 +143,10 @@ public partial class InternetOptimizerViewModel : ObservableObject
             ApplyReportRows.Clear();
             foreach (var step in report)
                 ApplyReportRows.Add(ApplyReportPresentation.Row(step.Name, step.Status, step.Reason));
+            var privateDnsStep = report.LastOrDefault(step =>
+                step.Name.Equals("private-dns", StringComparison.OrdinalIgnoreCase));
+            if (privateDnsStep is not null)
+                PrivateDnsEnabled = privateDnsStep.Status.Equals("ok", StringComparison.OrdinalIgnoreCase);
             HasApplyReport = ApplyReportRows.Count > 0;
             ApplyReportSummary = ApplyReportPresentation.Summarize(ApplyReportRows.ToList());
         }
@@ -283,6 +287,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
         {
             var progress = new Progress<string>(s => ProgressStatus = s);
             var (success, msg) = await _services.Network.RepairAsync(progress);
+            if (success)
+                PrivateDnsEnabled = false;
             SetMessage(success ? Helpers.OptimizerMessages.RepairFinished : msg, success);
             ProgressStatus = "Refreshing...";
             try

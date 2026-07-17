@@ -139,7 +139,10 @@ function Test-ExoDnsResolve {
         var logicalCpus = media.LogicalProcessors > 0 ? media.LogicalProcessors : Environment.ProcessorCount;
         var rssBudget = NetworkLogic.RssQueueBudget(preset, coreBudget);
         var bufferStrategy = NetworkLogic.BufferStrategy(preset);
-        var rssProfile = latency ? "ClosestProcessor" : "NUMAStatic";
+        // Set-NetAdapterRss exposes the enum name "Closest" on supported Windows
+        // builds. "ClosestProcessor" is not a valid Profile value and silently
+        // left latency applies on the previous (usually NUMAStatic) policy.
+        var rssProfile = latency ? "Closest" : "NUMAStatic";
         var preferIpv4 = NetworkLogic.PreferIpv4First(preset, media.EthernetInUse) ? "1" : "0";
         var vendorHint = string.IsNullOrWhiteSpace(media.NicVendor) ? "Unknown" : media.NicVendor;
         // Nagle keys only for latency (TCP games); throughput clears them
@@ -843,14 +846,21 @@ try {
         sb.AppendLine("    # RSS placement and processor budget via supported Microsoft cmdlet parameters.");
         sb.AppendLine("    try {");
         sb.AppendLine("      $rssCommand = Get-Command Set-NetAdapterRss -EA Stop");
-        sb.AppendLine("      $rssArgs = @{ Name=$n; Enabled=$true; Profile='" + rssProfile + "'; ErrorAction='Stop' }");
+        sb.AppendLine("      # Some current Intel/Windows builds expose Enabled as null and reject");
+        sb.AppendLine("      # Set-NetAdapterRss -Enabled even while RSS hashing is live. Enable via");
+        sb.AppendLine("      # the dedicated cmdlet, then set only supported placement fields.");
+        sb.AppendLine("      try { Enable-NetAdapterRss -Name $n -NoRestart -EA SilentlyContinue } catch {}");
+        sb.AppendLine("      $rssArgs = @{ Name=$n; Profile='" + rssProfile + "'; ErrorAction='Stop' }");
         sb.AppendLine("      if ($LogicalCpuCount -ge 4 -and $rssCommand.Parameters.ContainsKey('BaseProcessorNumber')) { $rssArgs.BaseProcessorNumber = 2 }");
         sb.AppendLine("      if ($rssCommand.Parameters.ContainsKey('MaxProcessors')) { $rssArgs.MaxProcessors = [Math]::Max(1, [Math]::Min([int]$RssQueueBudget, [int]$LogicalCpuCount - 2)) }");
         sb.AppendLine("      if ($rssQueueTarget -and $rssCommand.Parameters.ContainsKey('NumberOfReceiveQueues')) { $rssArgs.NumberOfReceiveQueues = [int]$rssQueueTarget }");
         sb.AppendLine("      Set-NetAdapterRss @rssArgs");
+        sb.AppendLine("      $rssLive = Get-NetAdapterRss -Name $n -EA SilentlyContinue");
+        sb.AppendLine("      $rssLiveOn = $rssLive -and ($rssLive.Enabled -eq $true -or $rssLive.IPv4HashEnabled -eq $true -or [int]$rssLive.RssProcessorArraySize -gt 0)");
+        sb.AppendLine("      if (-not $rssLiveOn -or [string]$rssLive.Profile -ne '" + rssProfile + "') { throw 'RSS placement did not verify' }");
         sb.AppendLine("      $rssPolicyCount++; Log \"[RSS] $n profile=" + rssProfile + " processors=$($rssArgs.MaxProcessors) queues=$rssQueueTarget\"");
         sb.AppendLine("    } catch {");
-        sb.AppendLine("      try { Set-NetAdapterRss -Name $n -Profile ClosestProcessor -EA SilentlyContinue } catch {}");
+        sb.AppendLine("      try { Set-NetAdapterRss -Name $n -Profile Closest -EA SilentlyContinue } catch {}");
         sb.AppendLine("      Log \"[RSS] $n adaptive placement fallback: $($_.Exception.Message)\"");
         sb.AppendLine("    }");
         sb.AppendLine("  }");
@@ -1180,8 +1190,17 @@ function Set-EthMetrics {
         sb.AppendLine("      foreach ($t in $pdTargets) { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -ServerAddresses @('1.1.1.1','1.0.0.1','2606:4700:4700::1111','2606:4700:4700::1001') -EA SilentlyContinue }");
         sb.AppendLine("      $dohFail = @()");
         sb.AppendLine("      foreach ($svr in @('1.1.1.1','1.0.0.1','2606:4700:4700::1111','2606:4700:4700::1001')) {");
-        sb.AppendLine("        netsh dns add encryption server=$svr dohtemplate=https://cloudflare-dns.com/dns-query autoupgrade=yes udpfallback=yes 2>&1 | Out-Null");
-        sb.AppendLine("        if ($LASTEXITCODE -ne 0) { $dohFail += $svr }");
+        sb.AppendLine("        # Idempotent and verified: update a known resolver, add an absent one,");
+        sb.AppendLine("        # then trust the live table rather than netsh's exit code alone.");
+        sb.AppendLine("        $beforeDoh = (netsh dns show encryption server=$svr 2>&1 | Out-String)");
+        sb.AppendLine("        if ($beforeDoh -match '(?i)Encryption settings for') {");
+        sb.AppendLine("          $setDoh = (netsh dns set encryption server=$svr dohtemplate=https://cloudflare-dns.com/dns-query autoupgrade=yes udpfallback=yes 2>&1 | Out-String)");
+        sb.AppendLine("        } else {");
+        sb.AppendLine("          $setDoh = (netsh dns add encryption server=$svr dohtemplate=https://cloudflare-dns.com/dns-query autoupgrade=yes udpfallback=yes 2>&1 | Out-String)");
+        sb.AppendLine("        }");
+        sb.AppendLine("        $liveDoh = (netsh dns show encryption server=$svr 2>&1 | Out-String)");
+        sb.AppendLine("        $dohOk = $liveDoh -match '(?i)https://cloudflare-dns\\.com/dns-query' -and $liveDoh -match '(?im)^Auto-upgrade\\s*:\\s*yes\\s*$'");
+        sb.AppendLine("        if (-not $dohOk) { $dohFail += $svr; Log \"[DoH] $svr verification failed: $($setDoh.Trim())\" }");
         sb.AppendLine("      }");
         sb.AppendLine("      if ($dohFail.Count -eq 0) { Report 'private-dns' 'ok' 'cloudflare DoH (auto-upgrade, UDP fallback)' }");
         sb.AppendLine("      else { Report 'private-dns' 'fail' ('registration failed: ' + ($dohFail -join ',')) }");
