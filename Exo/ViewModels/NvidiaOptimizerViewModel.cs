@@ -159,6 +159,15 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void OpenControlPanel()
+    {
+        if (_services.NvidiaPanel.TryLaunchControlPanel(out var error))
+            SetResult("Opened NVIDIA Control Panel.", success: true);
+        else
+            SetResult(error ?? "NVIDIA Control Panel is not installed yet. Run Apply first.", success: false);
+    }
+
+    [RelayCommand]
     private async Task RepairAsync()
     {
         if (IsBusy) return;

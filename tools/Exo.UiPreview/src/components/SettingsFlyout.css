@@ -3,9 +3,7 @@
   inset: 0;
   z-index: 20;
   border: 0;
-  background: rgba(0, 0, 0, 0.6);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  background: transparent;
   cursor: default;
   animation: backdrop-in 200ms var(--ease-out);
 }
@@ -25,7 +23,11 @@
   gap: 14px;
   animation: sheet-in var(--dur) var(--ease-out);
   transform-origin: top left;
+  background: #09090b;
+  box-shadow: 0 18px 52px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.1);
 }
+
+.theme-light .settings-sheet { background:#fff; box-shadow:0 18px 52px rgba(24,24,27,.14),0 0 0 1px rgba(24,24,27,.1); }
 
 .settings-sheet__title {
   margin: 0;

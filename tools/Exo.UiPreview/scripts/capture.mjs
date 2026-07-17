@@ -6,10 +6,10 @@ import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-const out = process.argv[2] || '/opt/cursor/artifacts/ui-preview'
+const out = process.argv[2] || path.join(root, 'artifacts', 'ui-preview')
 fs.mkdirSync(out, { recursive: true })
 
-const vite = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '5173'], {
+const vite = spawn(process.execPath, ['./node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5173'], {
   cwd: root,
   stdio: ['ignore', 'pipe', 'pipe'],
 })
@@ -52,13 +52,9 @@ try {
   await settle(page, 'page-nvidia')
   await page.screenshot({ path: `${out}/04-nvidia.png` })
 
-  await page.getByTestId('btn-display-panel').click()
-  await settle(page, 'page-nvidia-panel')
-  await page.screenshot({ path: `${out}/05-nvidia-panel.png` })
-
   await page.getByTestId('nav-settings').click()
   await settle(page, 'settings-flyout')
-  await page.screenshot({ path: `${out}/06-settings.png` })
+  await page.screenshot({ path: `${out}/05-settings.png` })
 
   await browser.close()
   console.log('screenshots written to', out)

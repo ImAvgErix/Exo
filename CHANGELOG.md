@@ -1,3 +1,11 @@
+## 3.3.0
+
+- **Connection Lab**: an explicit adaptive Cloudflare-edge test ramps download and upload sizes and measures idle/loaded latency, jitter, DNS, and sampled packet loss before choosing the low-latency or throughput profile. It reports data use and flags router-side bufferbloat instead of claiming Windows can fix it.
+- **Steam background memory**: enables Steam's low-performance/low-bandwidth library modes, restores Chromium hardware acceleration, and uses Normal idle priority with Below Normal in-game yield. Unsafe working-set trimming and helper killing remain prohibited.
+- **NVIDIA profiles**: Control Panel opens directly from the optimizer; hidden global rBAR, DLSS/Frame Generation, RT, CUDA-memory, and Vulkan-present overrides are pruned because their optimum is game/driver-specific. Documented performance, sync, refresh, queue, and per-game controls remain verified.
+- **Dashboard and motion**: decluttered live instrument layout, four consistent signal cards, crisp fixed-scale content, opaque Settings, and quicker direct Fluent-style reveals. The stale display panel and coming-soon strip are removed from the active UI.
+- **Validation**: expanded Network/Steam/UI contract tests, a live 437/291 Mbps Connection Lab run, production WinUI build, and updated browser preview click/capture coverage.
+
 ## 3.2.0
 
 - **Internet NIC policy**: adaptive, preset-specific RSS placement now applies supported processor and queue budgets; D0 packet coalescing is disabled when the driver exposes it. Snapshot v2 captures adapter power and extended RSS state for exact Repair.
@@ -5,7 +13,7 @@
 - **Discord minimalism**: Apply enforces a dependency-aware Equicord plugin budget instead of preserving an unlimited old profile; the card reports the live enabled count and rejects optional-plugin drift.
 - **Steam contention guard**: Steam and its CEF helpers yield CPU priority while a game is active and restore responsive idle priorities afterward, without unsafe working-set trimming or process kills.
 - **Honest optimizer cards**: detector explanations now survive the shared state parser, so cards show the actual policy, hardware gate, and drift detail instead of replacing everything with “Applied.” Retired Steam reclaim statistics and stale background-reclaim claims are no longer shown.
-- **Cohesive AMOLED frontend**: native Segoe Variable typography, opaque layered surfaces, quieter dividers, readable feature rows, branded dashboard rails, a live memory meter, and a structured solid settings control panel replace the tiny translucent mixed-material UI.
+- **Cohesive dark-mode frontend**: native Segoe Variable typography, opaque layered surfaces, quieter dividers, readable feature rows, branded dashboard rails, a live memory meter, and a structured solid settings control panel replace the tiny translucent mixed-material UI.
 
 ## 3.1.0
 

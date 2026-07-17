@@ -15,10 +15,12 @@ Each game then gets **tier deltas** on top of that clone:
 | **comp** | Val, CS2, Rivals, R6, Fortnite, Apex, LoL, OW2, RL, CoD, PUBG, Tarkov, Finals, Delta Force | Sticky latency stack (PRF=1, no driver FPS cap, no triple buffer, FXAA/AO/Ansel off) + re-pin max-FPS or G-SYNC pack policy + **Frame Gen override off** when the series pack has DLSS-FG |
 | **hybrid** | Destiny 2 | Same sticky latency / pack pins; **leaves Frame Gen** as the series pack (more PvE-friendly) |
 
-These packs intentionally favor FPS and latency over idle power, background
-features, and driver-default image-quality choices. Exo validates the
-performance-critical settings and records the exact profile SHA-256 before
-marking an import complete.
+These packs intentionally favor FPS and latency over idle power and background
+features. At combined-profile generation time Exo removes hidden global rBAR,
+DLSS/Frame Generation, ray-tracing, CUDA-memory, and Vulkan-present overrides:
+those are game/engine/driver-specific and forcing them globally can regress a
+different title. Documented latency/performance controls remain pinned and Exo
+validates them after import.
 
 Apply state is fail-closed: Exo invalidates its previous success marker
 before driver/profile work begins and ties a successful import to the active
@@ -63,9 +65,7 @@ driver version. An interrupted or failed import must be applied again.
 |--------|--------|
 | **10** | No rBAR; RT forced off |
 | **GTX 16** | Uses the 10-series pack so unsupported RT/DLSS/rBAR flags are not imported |
-| **20** | rBAR on; DLSS DLL override + preset |
-| **30** | rBAR full; DLSS + DLSS-RR overrides |
-| **40 / 50** | rBAR + DLSS + Frame Gen + RR overrides |
+| **20 / 30 / 40 / 50** | Series pack selection stays explicit; driver allowlists decide rBAR and each game decides DLSS/Frame Generation/RT |
 
 Laptop/Notebook GPU names still select the matching profile series, but the
 automatic clean-driver stage is intentionally blocked until Exo has an

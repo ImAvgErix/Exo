@@ -43,6 +43,9 @@ public partial class InternetOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial bool HasRollback { get; set; }
     [ObservableProperty] public partial string RollbackNotice { get; set; } = string.Empty;
     [ObservableProperty] public partial string RepairHint { get; set; } = "Repair: reset to stock defaults";
+    [ObservableProperty] public partial bool HasQualityResult { get; set; }
+    [ObservableProperty] public partial string QualitySummary { get; set; } = string.Empty;
+    [ObservableProperty] public partial string QualityDetail { get; set; } = string.Empty;
 
     // Opt-in privacy feature: Cloudflare DNS + DNS-over-HTTPS (Win11 22H2+).
     // Original DNS servers are snapshotted before any change; Repair restores them.
@@ -103,13 +106,14 @@ public partial class InternetOptimizerViewModel : ObservableObject
     {
         try
         {
-            var (report, bench, rollback, hasSnapshot) = await Task.Run(() =>
+            var (report, bench, rollback, hasSnapshot, quality) = await Task.Run(() =>
             {
                 var r = _services.Network.LoadLastApplyReport();
                 var b = _services.Network.LoadBenchmark();
                 var rb = _services.Network.LoadRollbackStatus();
                 var hs = NetworkOptimizerService.HasRestoreSnapshot();
-                return (r, b, rb, hs);
+                var qb = _services.Network.LoadQualityBenchmark();
+                return (r, b, rb, hs, qb);
             });
 
             RepairHint = hasSnapshot
@@ -140,6 +144,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
                 BenchmarkSummary = string.Empty;
             }
 
+            ApplyQualityResult(quality);
+
             ApplyReportRows.Clear();
             foreach (var step in report)
                 ApplyReportRows.Add(ApplyReportPresentation.Row(step.Name, step.Status, step.Reason));
@@ -161,6 +167,23 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
     private static string FormatDns(double value) =>
         value < 0 ? "fail" : value.ToString(value >= 100 ? "0" : "0.0") + " ms";
+
+    private void ApplyQualityResult(NetworkBenchmarkResult? result)
+    {
+        if (result is not { Ok: true, IsQualityTest: true })
+        {
+            HasQualityResult = false;
+            QualitySummary = string.Empty;
+            QualityDetail = string.Empty;
+            return;
+        }
+
+        var downPenalty = Math.Max(0, result.DownloadLoadedMs - result.PingP50Ms);
+        var upPenalty = Math.Max(0, result.UploadLoadedMs - result.PingP50Ms);
+        QualitySummary = $"{result.DownloadMbps:0.#} Mbps down · {result.UploadMbps:0.#} Mbps up · {result.PingP50Ms:0.#} ms idle";
+        QualityDetail = $"loaded +{downPenalty:0.#}/+{upPenalty:0.#} ms · jitter {result.JitterMs:0.#} ms · loss {result.PacketLossPercent:0.##}% · {result.DataUsedMb:0.#} MB";
+        HasQualityResult = true;
+    }
 
     private void ApplySnapshotToUi(NetworkSnapshot snap, bool preserveSuccessMessage)
     {
@@ -208,19 +231,69 @@ public partial class InternetOptimizerViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private Task ApplyLatencyAsync() => ApplyPresetAsync(NetworkPreset.LowestLatency);
+    private async Task ApplyLatencyAsync() => await ApplyPresetAsync(NetworkPreset.LowestLatency);
 
     [RelayCommand]
-    private Task ApplyThroughputAsync() => ApplyPresetAsync(NetworkPreset.HighestThroughput);
+    private async Task ApplyThroughputAsync() => await ApplyPresetAsync(NetworkPreset.HighestThroughput);
 
-    /// <summary>Apply chosen stack immediately, then refresh header + feature rows in place.</summary>
-    private async Task ApplyPresetAsync(NetworkPreset preset)
+    [RelayCommand]
+    private async Task AnalyzeAndApplyAsync()
     {
         if (IsBusy) return;
+        IsBusy = true;
+        HasMessage = false;
+        ProgressStatus = "Connection lab · testing idle and loaded latency...";
+        NetworkBenchmarkResult? result = null;
+        NetworkPreset preset = NetworkPreset.LowestLatency;
+        try
+        {
+            var snap = _lastSnap ?? await _services.Network.ProbeAsync();
+            result = await _services.Network.RunQualityBenchmarkAsync();
+            if (result is not { Ok: true, IsQualityTest: true })
+            {
+                SetMessage("Connection test could not finish. No settings were changed.", success: false);
+                return;
+            }
+
+            preset = NetworkLogic.RecommendPreset(result, snap.Media);
+            _services.Network.PersistQualityBenchmark(result);
+            ApplyQualityResult(result);
+            ProgressStatus = preset == NetworkPreset.HighestThroughput
+                ? "Stable fast link · applying throughput profile..."
+                : "Latency-sensitive link · applying low-latency profile...";
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, success: false);
+            return;
+        }
+        finally
+        {
+            IsBusy = false;
+            if (result is null) ProgressStatus = string.Empty;
+        }
+
+        var applied = await ApplyPresetAsync(preset);
+        if (result is not null && applied)
+        {
+            var label = preset == NetworkPreset.HighestThroughput ? "Highest download" : "Low latency";
+            var bufferbloat = Math.Max(result.DownloadLoadedMs, result.UploadLoadedMs) - result.PingP50Ms;
+            var note = bufferbloat >= 25
+                ? " Loaded latency is high; router SQM/CAKE can help more than Windows tuning."
+                : string.Empty;
+            SetMessage($"{label} selected from the connection test: {result.RecommendationReason}.{note}", success: true);
+        }
+    }
+
+    /// <summary>Apply chosen stack immediately, then refresh header + feature rows in place.</summary>
+    private async Task<bool> ApplyPresetAsync(NetworkPreset preset)
+    {
+        if (IsBusy) return false;
 
         IsBusy = true;
         HasMessage = false;
         ProgressStatus = "Detecting path...";
+        var succeeded = false;
         try
         {
             var snap = await _services.Network.ProbeAsync();
@@ -243,6 +316,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
                     : "Applying...";
             var progress = new Progress<string>(s => ProgressStatus = s);
             var (ok, msg) = await _services.Network.ApplyPresetAsync(preset, options, progress);
+            succeeded = ok;
             // Same finish banner as Discord / Steam / NVIDIA.
             SetMessage(ok ? Helpers.OptimizerMessages.Done : msg, ok);
 
@@ -269,6 +343,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
             IsBusy = false;
             ProgressStatus = string.Empty;
         }
+        return succeeded;
     }
 
     public Task InitializeAsync() => LoadSnapshotAsync(showFullPageLoading: true);

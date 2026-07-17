@@ -141,8 +141,9 @@ else {
     }
 
     foreach ($marker in @(
-        'ProcessPriorityClass]::High',
+        'ProcessPriorityClass]::Normal',
         'ProcessPriorityClass]::BelowNormal',
+        '$steamCls = if ($InGame)',
         'Never EmptyWorkingSet'
     )) {
         Assert-ContainsText $embeddedHelper $marker 'Steam companion helper'

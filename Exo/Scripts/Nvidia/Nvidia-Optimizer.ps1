@@ -346,6 +346,31 @@ function Set-ExoNipSettingValue {
     return $true
 }
 
+function Remove-ExoRiskyGlobalOverrides {
+    param([Parameter(Mandatory)][System.Xml.XmlNode]$ProfileNode)
+    # These are hidden/undocumented Inspector controls whose best value is game,
+    # engine, driver and firmware specific. Forcing them globally is not a valid
+    # max-performance policy: rBAR is driver-allowlisted, games own RT/DLSS, and
+    # present/memory/CUDA internals can regress or break unrelated applications.
+    # Leave them at the current Game Ready driver profile value instead.
+    $ids = @(
+        '983226','983227','983295',                     # forced rBAR
+        '6505105','283385329','283385331','283385335', # forced DLSS presets
+        '283385345','283385346','283385347',           # DLL overrides / Frame Gen
+        '14566042','549198379',                        # force RT off
+        '11434076','269573260','283962569','286335539',
+        '550867192','550932728','1343646814','1350011281'
+    )
+    $removed = 0
+    foreach ($id in $ids) {
+        foreach ($node in @($ProfileNode.SelectNodes("Settings/ProfileSetting[SettingID='$id']"))) {
+            [void]$node.ParentNode.RemoveChild($node)
+            $removed++
+        }
+    }
+    return $removed
+}
+
 function Apply-ExoGameProfileDeltas {
     param(
         [Parameter(Mandatory)][System.Xml.XmlNode]$ProfileNode,
@@ -464,6 +489,7 @@ function New-ExoCombinedProfileNip {
         throw 'Base NIP must start with a Base Profile entry'
     }
 
+    $prunedOverrides = Remove-ExoRiskyGlobalOverrides -ProfileNode $base
     $baseMap = Get-ExoNipSettingMap -ProfileNode $base
     $games = @(Get-ExoGameProfileCatalog)
     $deltaSummary = @()
@@ -515,6 +541,7 @@ function New-ExoCombinedProfileNip {
         Games         = @($games | ForEach-Object { [string]$_.Name })
         DeltaSummary  = $deltaSummary
         GameDeltas    = $true
+        PrunedOverrides = $prunedOverrides
     }
 }
 

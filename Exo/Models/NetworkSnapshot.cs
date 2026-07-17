@@ -133,6 +133,20 @@ public sealed class NetworkBenchmarkResult
     /// <summary>Average DNS resolve time in ms (-1 when resolution failed).</summary>
     public double DnsMs { get; init; }
     public int Samples { get; init; }
+    /// <summary>True for the explicit ramped connection-quality test.</summary>
+    public bool IsQualityTest { get; init; }
+    public double DownloadMbps { get; init; }
+    public double UploadMbps { get; init; }
+    public double DownloadLoadedMs { get; init; }
+    public double UploadLoadedMs { get; init; }
+    public double DownloadLoadedJitterMs { get; init; }
+    public double UploadLoadedJitterMs { get; init; }
+    public double PacketLossPercent { get; init; }
+    public double DataUsedMb { get; init; }
+    public string Endpoint { get; init; } = string.Empty;
+    /// <summary>lowest-latency | highest-throughput</summary>
+    public string RecommendedPreset { get; init; } = string.Empty;
+    public string RecommendationReason { get; init; } = string.Empty;
     public string TimestampUtc { get; init; } = string.Empty;
 }
 

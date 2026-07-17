@@ -28,6 +28,11 @@ var trim5 = """
 # Never EmptyWorkingSet / Stop-Process steamwebhelper
 [System.Diagnostics.ProcessPriorityClass]::High
 [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+$steamCls = if ($InGame) {
+  [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+} else {
+  [System.Diagnostics.ProcessPriorityClass]::Normal
+}
 $webCls = if ($InGame) {
   [System.Diagnostics.ProcessPriorityClass]::BelowNormal
 } else {
@@ -82,6 +87,7 @@ Exo.SteamWebHelper
 Never EmptyWorkingSet
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
+$steamCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
 $webCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
 $_.PriorityClass = $webCls
 Start-Sleep -Seconds 5
@@ -91,6 +97,7 @@ Exo.SteamWebHelper
 Never EmptyWorkingSet
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
+$steamCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
 $webCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {{ ProcessPriorityClass]::Normal }}
 $_.PriorityClass = $webCls
 Start-Sleep -Seconds 4
@@ -161,6 +168,15 @@ Expect("Steam repair restores Windows integration",
     optimizerText.Contains("ShowInActionCenter", StringComparison.Ordinal) &&
     optimizerText.Contains("TrayEntries", StringComparison.Ordinal) &&
     optimizerText.Contains(@"App Paths\steam.exe", StringComparison.Ordinal));
+Expect("Steam CEF hardware acceleration is verified and reversible",
+    optimizerText.Contains("function Set-SteamClientHardwareAcceleration", StringComparison.Ordinal) &&
+    optimizerText.Contains("function Test-SteamClientHardwareAcceleration", StringComparison.Ordinal) &&
+    optimizerText.Contains("GPUAccelWebViewsV3", StringComparison.Ordinal) &&
+    optimizerText.Contains("Get-SteamClientPerformanceSnapshot", StringComparison.Ordinal) &&
+    optimizerText.Contains("ClientPerformance", StringComparison.Ordinal) &&
+    optimizerText.Contains("Restore-SteamOptionalRegistryValue ([string]$entry.Key) ([string]$entry.Name)", StringComparison.Ordinal) &&
+    optimizerText.Contains("clientHardwareAcceleration = $clientHardwareOk", StringComparison.Ordinal) &&
+    detectorText.Contains("Hardware-accelerated client", StringComparison.Ordinal));
 
 // --- Stable PowerShell 7 host (preview requirement removed) ---
 Expect("stable pwsh host classifier present",
@@ -229,7 +245,7 @@ foreach (var f in steamScriptFiles)
 Expect("no stale 5s messaging in Steam scripts", staleFiveSecond.Count == 0,
     string.Join(", ", staleFiveSecond));
 // v3.0.11: working-set trims on steamwebhelper froze/killed CEF and were
-// removed; the companion is priority-yield + quiet only. The shipped helper
+// removed; the companion is normal-idle priority + in-game yield. The shipped helper
 // body must pass the shipped classifier (EmptyWorkingSet calls banned in
 // code lines - a comment cannot exempt a real call).
 var helperStart = optimizerText.IndexOf("function Install-WebHelperTrimHelper", StringComparison.Ordinal);
@@ -239,7 +255,7 @@ Expect("shipped helper body located", bodyStart > helperStart && bodyEnd > bodyS
 var helperBody = bodyEnd > bodyStart ? optimizerText.Substring(bodyStart, bodyEnd - bodyStart) : "";
 Expect("companion does no working-set trim + passes shipped classifier",
     SteamLogic.IsTrimHelperText(helperBody) &&
-    optimizerText.Contains("no webhelper EmptyWorkingSet", StringComparison.OrdinalIgnoreCase));
+    optimizerText.Contains("no unsafe webhelper trims", StringComparison.OrdinalIgnoreCase));
 Expect("apply verifier ignores safety documentation but audits executable lines",
     optimizerText.Contains("if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }", StringComparison.Ordinal) &&
     optimizerText.Contains("$line -match '(?i)Stop-Process.*steamwebhelper'", StringComparison.Ordinal) &&

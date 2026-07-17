@@ -51,6 +51,16 @@
                            Foreground="{x:Bind ViewModel.BenchmarkBrush, Mode=OneWay}"
                            TextAlignment="Center"
                            Visibility="{x:Bind ViewModel.HasBenchmark, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <StackPanel Spacing="1"
+                            Visibility="{x:Bind ViewModel.HasQualityResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Text="{x:Bind ViewModel.QualitySummary, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               FontFamily="{StaticResource ExoUiFontSemiBold}"
+                               TextAlignment="Center" />
+                    <TextBlock Text="{x:Bind ViewModel.QualityDetail, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               TextAlignment="Center" />
+                </StackPanel>
                 <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource ExoCaption}"
                            TextAlignment="Center"
                            Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
@@ -58,7 +68,13 @@
         </controls:SharedModulePlate.FootExtra>
         <controls:SharedModulePlate.PrimaryActions>
             <StackPanel Spacing="6">
-                <!-- Wide plate: keep all four actions on one row so results do not squeeze the feature list. -->
+                <Button Style="{StaticResource ExoPrimaryButton}"
+                        Content="Analyze connection &amp; apply"
+                        Command="{x:Bind ViewModel.AnalyzeAndApplyCommand}"
+                        HorizontalAlignment="Stretch"
+                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                        AutomationProperties.Name="Run connection quality test and apply recommended network profile" />
+                <!-- Manual presets remain available for users who know which tradeoff they want. -->
                 <Grid x:Name="ExoInternetActionGrid" ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="3*" />
@@ -97,6 +113,9 @@
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
                 </Grid>
+                <TextBlock Text="Connection lab uses the Cloudflare edge, transfers only test bytes, and sends no results to Exo. Data use scales with link speed."
+                           Style="{StaticResource ExoCaption}"
+                           TextAlignment="Center" />
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <ToggleSwitch IsOn="{x:Bind ViewModel.PrivateDnsEnabled, Mode=TwoWay}"
                                   IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"

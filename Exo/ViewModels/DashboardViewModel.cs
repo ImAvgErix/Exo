@@ -208,13 +208,13 @@ public partial class DashboardViewModel : ObservableObject
         {
             SteamStatusPrimary = HomeDashboardReader.FormatBytes(ws);
             SteamStatusSecondary = steam.Applied
-                ? "live client RAM · in-game CPU yield armed"
+                ? "live client RAM · lean library + game yield"
                 : "live client RAM · Apply Steam for quiet CEF";
         }
         else if (steam.Applied)
         {
             SteamStatusPrimary = "Ready";
-            SteamStatusSecondary = "Optimized · in-game contention guard armed";
+            SteamStatusSecondary = "Optimized · lean library + contention guard";
         }
         else
         {

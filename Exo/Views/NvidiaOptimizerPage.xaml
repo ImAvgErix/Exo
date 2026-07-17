@@ -47,14 +47,14 @@
                                   AutomationProperties.Name="G-SYNC" />
                     <Button Grid.Column="1"
                             Style="{StaticResource ExoQuietButton}"
-                            Content="Display panel"
-                            Click="Panel_Click"
-                            MinWidth="120"
+                            Content="Open NVIDIA Control Panel"
+                            Command="{x:Bind ViewModel.OpenControlPanelCommand}"
+                            MinWidth="188"
                             MinHeight="34"
                             Padding="12,8"
                             VerticalAlignment="Center"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                            AutomationProperties.Name="Open NVIDIA Panel" />
+                            AutomationProperties.Name="Open NVIDIA Control Panel" />
                 </Grid>
             </Border>
         </controls:SharedModulePlate.HeaderExtra>
