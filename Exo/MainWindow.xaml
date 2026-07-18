@@ -84,6 +84,26 @@
                                IsHitTestVisible="False"
                                AutomationProperties.AccessibilityView="Raw" />
                     </Button>
+                    <Button x:Name="NavRiot"
+                            Style="{StaticResource ExoGlassCircle}"
+                            AutomationProperties.Name="Riot"
+                            Click="NavRiot_Click"
+                            Tag="riot">
+                        <Image Source="ms-appx:///Assets/Logos/riot.png"
+                               Width="24" Height="24" Stretch="Uniform"
+                               UseLayoutRounding="True" IsHitTestVisible="False"
+                               AutomationProperties.AccessibilityView="Raw" />
+                    </Button>
+                    <Button x:Name="NavEpic"
+                            Style="{StaticResource ExoGlassCircle}"
+                            AutomationProperties.Name="Epic"
+                            Click="NavEpic_Click"
+                            Tag="epic">
+                        <Image Source="ms-appx:///Assets/Logos/epic.png"
+                               Width="24" Height="24" Stretch="Uniform"
+                               UseLayoutRounding="True" IsHitTestVisible="False"
+                               AutomationProperties.AccessibilityView="Raw" />
+                    </Button>
                 </StackPanel>
 
                 <!-- Layer 2: left chrome — Settings (home) or Home (module) same slot -->

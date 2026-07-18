@@ -31,7 +31,9 @@ public sealed partial class MainWindow : Window
         Discord,
         Steam,
         Internet,
-        Nvidia
+        Nvidia,
+        Riot,
+        Epic
     }
 
     private ShellMode _mode = ShellMode.Home;
@@ -334,10 +336,12 @@ public sealed partial class MainWindow : Window
             ShellMode.Steam => NavSteam,
             ShellMode.Internet => NavInternet,
             ShellMode.Nvidia => NavNvidia,
+            ShellMode.Riot => NavRiot,
+            ShellMode.Epic => NavEpic,
             _ => null
         };
 
-        foreach (var btn in new[] { NavDiscord, NavSteam, NavInternet, NavNvidia })
+        foreach (var btn in new[] { NavDiscord, NavSteam, NavInternet, NavNvidia, NavRiot, NavEpic })
         {
             var on = selected is not null && ReferenceEquals(btn, selected);
             btn.Opacity = on ? 1.0 : 0.72;
@@ -361,6 +365,10 @@ public sealed partial class MainWindow : Window
     private void NavInternet_Click(object sender, RoutedEventArgs e) => NavigateToInternet();
 
     private void NavNvidia_Click(object sender, RoutedEventArgs e) => NavigateToNvidia();
+
+    private void NavRiot_Click(object sender, RoutedEventArgs e) => NavigateToRiot();
+
+    private void NavEpic_Click(object sender, RoutedEventArgs e) => NavigateToEpic();
 
     private void TrySetWindowIcon()
     {
@@ -477,6 +485,12 @@ public sealed partial class MainWindow : Window
             }
         }
     }
+
+    public void NavigateToRiot() =>
+        Navigate(ShellMode.Riot, typeof(RiotOptimizerPage), Slide());
+
+    public void NavigateToEpic() =>
+        Navigate(ShellMode.Epic, typeof(EpicOptimizerPage), Slide());
 
     /// <summary>
     /// After elevated NVIDIA driver work the display stack can flicker. Re-assert

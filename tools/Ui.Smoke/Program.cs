@@ -226,6 +226,8 @@ if (File.Exists(main))
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
     Expect("rail nav internet", m.Contains("NavInternet", StringComparison.Ordinal));
     Expect("rail nav nvidia", m.Contains("NavNvidia", StringComparison.Ordinal));
+    Expect("rail nav riot", m.Contains("NavRiot", StringComparison.Ordinal));
+    Expect("rail nav epic", m.Contains("NavEpic", StringComparison.Ordinal));
     Expect("rail logo discord", m.Contains("discord.png", StringComparison.Ordinal));
     Expect("rail logo steam", m.Contains("steam.png", StringComparison.Ordinal));
     Expect("rail logo internet", m.Contains("internet.png", StringComparison.Ordinal));
@@ -320,6 +322,11 @@ if (File.Exists(dash))
     Expect("home decluttered",
         !d.Contains("SoonCards", StringComparison.Ordinal)
         && !d.Contains("Coming soon", StringComparison.Ordinal));
+    Expect("Riot and Epic are live dashboard modules",
+        d.Contains("RiotCard_Click", StringComparison.Ordinal) &&
+        d.Contains("EpicCard_Click", StringComparison.Ordinal) &&
+        d.Contains("RiotStatusTag", StringComparison.Ordinal) &&
+        d.Contains("EpicStatusTag", StringComparison.Ordinal));
     Expect("home has verified status tags", d.Contains("StatusTag", StringComparison.Ordinal));
     Expect("no pick-a-target blurb", !d.Contains("Pick a target", StringComparison.Ordinal));
 }
@@ -490,7 +497,7 @@ if (File.Exists(sharedPlateCs))
 foreach (var page in new[]
          {
              "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml", "InternetOptimizerPage.xaml",
-             "NvidiaOptimizerPage.xaml"
+             "NvidiaOptimizerPage.xaml", "RiotOptimizerPage.xaml", "EpicOptimizerPage.xaml"
          })
 {
     var p = Path.Combine(repo, "Exo", "Views", page);
@@ -566,7 +573,7 @@ if (File.Exists(featureGridCs))
 foreach (var page in new[]
          {
              "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml",
-             "NvidiaOptimizerPage.xaml"
+             "NvidiaOptimizerPage.xaml", "RiotOptimizerPage.xaml", "EpicOptimizerPage.xaml"
          })
 {
     var p = Path.Combine(repo, "Exo", "Views", page);
@@ -605,7 +612,8 @@ if (File.Exists(internetDensityXaml))
 // staggered feature-tile entrance on its first loading → loaded transition.
 foreach (var page in new[]
          {
-             "DiscordOptimizerPage", "SteamOptimizerPage", "NvidiaOptimizerPage"
+             "DiscordOptimizerPage", "SteamOptimizerPage", "NvidiaOptimizerPage",
+             "RiotOptimizerPage", "EpicOptimizerPage"
          })
 {
     var cs = Path.Combine(repo, "Exo", "Views", page + ".xaml.cs");
@@ -630,10 +638,21 @@ foreach (var vmName in new[]
     var vmCode = File.ReadAllText(vmPath);
     Expect(vmName + " no confirm gate", !vmCode.Contains("ConfirmAsync", StringComparison.Ordinal));
 }
+var launcherVmPath = Path.Combine(repo, "Exo", "ViewModels", "GameLauncherOptimizerViewModel.cs");
+if (File.Exists(launcherVmPath))
+{
+    var launcherVm = File.ReadAllText(launcherVmPath);
+    Expect("Riot/Epic shared VM has no confirm gate", !launcherVm.Contains("ConfirmAsync", StringComparison.Ordinal));
+    Expect("Riot/Epic shared VM wires Apply and exact Repair",
+        launcherVm.Contains("RiotOptimizerScript", StringComparison.Ordinal) &&
+        launcherVm.Contains("EpicOptimizerScript", StringComparison.Ordinal) &&
+        launcherVm.Contains("RiotRepairScript", StringComparison.Ordinal) &&
+        launcherVm.Contains("EpicRepairScript", StringComparison.Ordinal));
+}
 
 // Detailed last-apply reports stay on Discord / Steam. Internet is intentionally
 // reduced to its quality result plus Apply / Repair; NVIDIA never fakes report data.
-foreach (var page in new[] { "DiscordOptimizerPage", "SteamOptimizerPage" })
+foreach (var page in new[] { "DiscordOptimizerPage", "SteamOptimizerPage", "RiotOptimizerPage", "EpicOptimizerPage" })
 {
     var px = Path.Combine(repo, "Exo", "Views", page + ".xaml");
     if (!File.Exists(px)) continue;

@@ -20,6 +20,8 @@ public static class PathHelper
 
     public static string NvidiaScriptsDir => Path.Combine(ScriptsRoot, "Nvidia");
 
+    public static string GameLauncherScriptsDir => Path.Combine(ScriptsRoot, "GameLaunchers");
+
     public static string AppDataDir
     {
         get

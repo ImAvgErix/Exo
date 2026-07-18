@@ -108,6 +108,16 @@ public sealed partial class DashboardPage : Page
         if (App.MainAppWindow is MainWindow main) main.NavigateToNvidia();
     }
 
+    private void RiotCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.MainAppWindow is MainWindow main) main.NavigateToRiot();
+    }
+
+    private void EpicCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.MainAppWindow is MainWindow main) main.NavigateToEpic();
+    }
+
     private void StabilizeHome()
     {
         try

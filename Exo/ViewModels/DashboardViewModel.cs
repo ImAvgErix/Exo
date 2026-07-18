@@ -23,8 +23,8 @@ public partial class DashboardViewModel : ObservableObject
             Card("windows", "Windows", "Assets/Logos/windows.png", OptimizerStatus.ComingSoon),
             Card("amd", "AMD", "Assets/Logos/amd.png", OptimizerStatus.ComingSoon),
             Card("brave", "Brave", "Assets/Logos/brave.png", OptimizerStatus.ComingSoon),
-            Card("riot", "Riot", "Assets/Logos/riot.png", OptimizerStatus.ComingSoon),
-            Card("epic", "Epic", "Assets/Logos/epic.png", OptimizerStatus.ComingSoon),
+            Card("riot", "Riot", "Assets/Logos/riot.png", OptimizerStatus.Available),
+            Card("epic", "Epic", "Assets/Logos/epic.png", OptimizerStatus.Available),
         };
 
         foreach (var card in Cards)
@@ -38,7 +38,7 @@ public partial class DashboardViewModel : ObservableObject
     public IReadOnlyList<OptimizerCardViewModel> SoonCards { get; }
 
     [ObservableProperty] public partial string HeroSummary { get; set; } = "Maximum performance. No compromise.";
-    [ObservableProperty] public partial string OverviewPrimary { get; set; } = "0 / 4 verified";
+    [ObservableProperty] public partial string OverviewPrimary { get; set; } = "0 / 6 verified";
 
     [ObservableProperty] public partial string MemoryPrimary { get; set; } = "—";
     [ObservableProperty] public partial string MemorySecondary { get; set; } = "Reading system memory...";
@@ -66,6 +66,15 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] public partial string NvidiaPathSecondary { get; set; } = "Apply NVIDIA profiles";
     [ObservableProperty] public partial string NvidiaStatusTag { get; set; } = "NOT APPLIED";
     [ObservableProperty] public partial string NvidiaLiveMetric { get; set; } = "No verified driver profile";
+
+    [ObservableProperty] public partial string RiotStatusPrimary { get; set; } = "Riot ready";
+    [ObservableProperty] public partial string RiotStatusSecondary { get; set; } = "Apply reversible per-game hardware policy";
+    [ObservableProperty] public partial string RiotStatusTag { get; set; } = "NOT APPLIED";
+    [ObservableProperty] public partial string RiotLiveMetric { get; set; } = "Client and anti-cheat stay untouched";
+    [ObservableProperty] public partial string EpicStatusPrimary { get; set; } = "Epic ready";
+    [ObservableProperty] public partial string EpicStatusSecondary { get; set; } = "Apply policy to games discovered from manifests";
+    [ObservableProperty] public partial string EpicStatusTag { get; set; } = "NOT APPLIED";
+    [ObservableProperty] public partial string EpicLiveMetric { get; set; } = "Launcher files and updates stay untouched";
 
     [ObservableProperty] public partial string FpsPrimary { get; set; } = "—";
     [ObservableProperty] public partial string FpsSecondary { get; set; } = "";
@@ -302,22 +311,59 @@ public partial class DashboardViewModel : ObservableObject
             }
         }
 
+        RefreshLauncherTile("riot", ref appliedCount);
+        RefreshLauncherTile("epic", ref appliedCount);
+
         FpsPrimary = NvidiaPathPrimary;
         FpsSecondary = NvidiaPathSecondary;
         FrameTimePrimary = DiscordStatusPrimary;
         FrameTimeSecondary = DiscordStatusSecondary;
 
-        OverviewPrimary = $"{appliedCount} / 4 verified";
+        OverviewPrimary = $"{appliedCount} / 6 verified";
         HeroSummary = appliedCount switch
         {
             0 => "No optimizer has a verified apply record yet.",
-            1 => "One optimizer is verified; three are ready to configure.",
-            4 => "Every optimizer has a verified apply record.",
-            _ => $"{appliedCount} optimizers are verified; {4 - appliedCount} still " +
-                 ((4 - appliedCount) == 1 ? "needs" : "need") + " attention."
+            1 => "One optimizer is verified; five are ready to configure.",
+            6 => "Every optimizer has a verified apply record.",
+            _ => $"{appliedCount} optimizers are verified; {6 - appliedCount} still " +
+                 ((6 - appliedCount) == 1 ? "needs" : "need") + " attention."
         };
 
         RefreshLiveMemory();
+    }
+
+    private void RefreshLauncherTile(string module, ref int appliedCount)
+    {
+        var state = ReadModuleState($"{module}-optimizer.json");
+        var targetCount = 0;
+        try
+        {
+            var path = Path.Combine(PathHelper.AppDataDir, $"{module}-optimizer.json");
+            if (File.Exists(path))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                if (doc.RootElement.TryGetProperty("targetCount", out var count) && count.TryGetInt32(out var parsed))
+                    targetCount = parsed;
+            }
+        }
+        catch { }
+        if (state.Applied) appliedCount++;
+        var tag = state.Applied ? "VERIFIED" : !string.IsNullOrWhiteSpace(state.Detail) ? "NEEDS ATTENTION" : "NOT APPLIED";
+        var primary = state.Applied ? "Game policy active" : module == "riot" ? "Riot ready" : "Epic ready";
+        var secondary = state.Applied
+            ? "High-performance GPU · Above Normal CPU · startup quiet"
+            : module == "riot" ? "Detect VALORANT and League automatically" : "Discover installed games from Epic manifests";
+        var metric = state.Applied
+            ? $"{targetCount} game executable(s) verified · exact Repair ready"
+            : module == "riot" ? "Anti-cheat and Riot services stay untouched" : "Launcher files, caches, and updates stay untouched";
+        if (module == "riot")
+        {
+            RiotStatusTag = tag; RiotStatusPrimary = primary; RiotStatusSecondary = secondary; RiotLiveMetric = metric;
+        }
+        else
+        {
+            EpicStatusTag = tag; EpicStatusPrimary = primary; EpicStatusSecondary = secondary; EpicLiveMetric = metric;
+        }
     }
 
     private static (bool Applied, string? Detail) ReadModuleState(string fileName)

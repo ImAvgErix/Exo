@@ -34,6 +34,8 @@
             <Color x:Key="ExoColorSteam">#5AA9FF</Color>
             <Color x:Key="ExoColorInternet">#22D3EE</Color>
             <Color x:Key="ExoColorNvidia">#76B900</Color>
+            <Color x:Key="ExoColorRiot">#FFD737</Color>
+            <Color x:Key="ExoColorEpic">#F3F3F3</Color>
             <Color x:Key="ExoColorRailTop">#202024</Color>
             <Color x:Key="ExoColorRailBottom">#09090B</Color>
 
@@ -79,6 +81,8 @@
             <SolidColorBrush x:Key="ExoSteamBrush" Color="{StaticResource ExoColorSteam}" />
             <SolidColorBrush x:Key="ExoInternetBrush" Color="{StaticResource ExoColorInternet}" />
             <SolidColorBrush x:Key="ExoNvidiaBrush" Color="{StaticResource ExoColorNvidia}" />
+            <SolidColorBrush x:Key="ExoRiotBrush" Color="{StaticResource ExoColorRiot}" />
+            <SolidColorBrush x:Key="ExoEpicBrush" Color="{StaticResource ExoColorEpic}" />
             <LinearGradientBrush x:Key="ExoGlassCircleFillBrush" StartPoint="0,0" EndPoint="0,1">
                 <GradientStop Color="{StaticResource ExoColorRailTop}" Offset="0" />
                 <GradientStop Color="{StaticResource ExoColorRaised}" Offset="0.52" />
@@ -121,6 +125,8 @@
             <StaticResource x:Key="ExoSteamBrush" ResourceKey="SystemColorHighlightBrush" />
             <StaticResource x:Key="ExoInternetBrush" ResourceKey="SystemColorHighlightBrush" />
             <StaticResource x:Key="ExoNvidiaBrush" ResourceKey="SystemColorHighlightBrush" />
+            <StaticResource x:Key="ExoRiotBrush" ResourceKey="SystemColorHighlightBrush" />
+            <StaticResource x:Key="ExoEpicBrush" ResourceKey="SystemColorHighlightBrush" />
             <StaticResource x:Key="ExoGlassCircleFillBrush" ResourceKey="SystemColorWindowBrush" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
