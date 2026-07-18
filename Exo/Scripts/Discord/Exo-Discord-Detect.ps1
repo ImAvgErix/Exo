@@ -422,6 +422,8 @@ if (-not (Test-Path $discordRoot)) {
         $isApplied = [bool]($markerOk -and $equicordOk -and $exoHostOk -and $kernelOk -and
             $debloatOk -and $windowsQuietOk -and $amoledOk -and $runtimeOk -and $launchOk -and
             $qosOk -and $variantsOk -and $leanPluginsOk)
+        # Never claim applied without a live app-* build (stale markers / leftover Equicord).
+        if (-not $app) { $isApplied = $false }
         if ($isApplied) {
             $statusText = 'Already optimized'
             $detail = 'Verified Discord policy active: lean client, background policy, privacy settings, and dark mode.'

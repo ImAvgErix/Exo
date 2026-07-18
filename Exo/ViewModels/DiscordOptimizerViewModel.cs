@@ -271,9 +271,6 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
     private void ApplyState(OptimizerStateInfo state)
     {
-        IsApplied = state.IsApplied;
-        StatusText = state.StatusText;
-        DetailText = string.Empty;
         Features.Clear();
         foreach (var feature in state.Features)
         {
@@ -287,7 +284,29 @@ public partial class DiscordOptimizerViewModel : ObservableObject
                 RailOpacity = Helpers.UiStatusPresentation.FeatureRailOpacity(feature.IsActive)
             });
         }
-        RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
+
+        // Honesty: never show "Already optimized" when Discord is not present.
+        // CUA GUI QA (docs/cua-qa) caught Status=Already optimized + banner "not installed".
+        var installMissing = Features.Any(f =>
+            f.Title.Contains("install", StringComparison.OrdinalIgnoreCase) && !f.IsActive);
+        var statusLooksMissing = (state.StatusText ?? string.Empty)
+            .Contains("not installed", StringComparison.OrdinalIgnoreCase);
+
+        if (installMissing || statusLooksMissing)
+        {
+            IsApplied = false;
+            StatusText = "Not installed";
+            DetailText = string.Empty;
+            RunButtonLabel = "Apply";
+        }
+        else
+        {
+            IsApplied = state.IsApplied;
+            StatusText = state.StatusText ?? "Ready";
+            DetailText = string.Empty;
+            RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
+        }
+
         if (!IsStatusLoading)
             IsFeatureListVisible = Features.Count > 0;
         LoadApplyReport();

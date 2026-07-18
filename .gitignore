@@ -54,3 +54,8 @@ Exo/Assets/Logos/*.tmp.png
 docs/exo-live.png
 
 
+
+# Cua live GUI captures (regenerate via tools/Cua.Qa)
+docs/cua-qa/*.png
+docs/cua-qa/*-state.json
+

@@ -29,16 +29,31 @@ public static class OptimizerAdvisor
         var detail = (detailText ?? string.Empty).Trim();
         var state = $"{status} {detail} {string.Join(' ', features.Select(f => f.Status))}".ToLowerInvariant();
 
+        // Install-presence checks ALWAYS win over isApplied / "Already optimized".
+        // Stale markers or leftover Equicord state must not claim success without the host app.
+        var discordInstallMissing = module == "Discord" && features.Any(f =>
+            f.Name.Contains("install", StringComparison.OrdinalIgnoreCase) && !f.Applied);
+        var steamInstallMissing = module == "Steam" && features.Any(f =>
+            f.Name.Contains("install", StringComparison.OrdinalIgnoreCase) && !f.Applied);
+
         if (module == "NVIDIA" && (state.Contains("no nvidia") || state.Contains("needs an nvidia")))
             return "No supported NVIDIA GPU was detected on this PC.";
-        if (module == "Discord" && (state.Contains("not installed") || state.Contains("no discord")))
+        if (module == "Discord" && (discordInstallMissing
+            || state.Contains("not installed")
+            || state.Contains("no discord")))
             return "Discord Stable is not installed. Install it, then refresh this page.";
-        if (module == "Steam" && (state.Contains("not installed") || state.Contains("no steam")))
+        if (module == "Steam" && (steamInstallMissing
+            || state.Contains("not installed")
+            || state.Contains("no steam")))
             return "Steam is not installed. Install and open it once, then refresh this page.";
         if (module == "Internet" && state.Contains("no physical"))
             return "No active physical connection was detected. Connect Ethernet or Wi-Fi, then refresh.";
         if (module == "Steam" && state.Contains("open steam once"))
             return "Open Steam once so its account configuration exists, then apply again.";
+
+        // Never claim verified/applied when the install feature is missing (stale apply marker).
+        if (discordInstallMissing || steamInstallMissing)
+            isApplied = false;
 
         if (isApplied && missingCount == 0 && !hasFailure)
         {
