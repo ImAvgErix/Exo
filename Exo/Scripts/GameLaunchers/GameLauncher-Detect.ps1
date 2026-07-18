@@ -15,6 +15,7 @@ $installed = if ($Module -eq 'Riot') {
     (Test-Path (Join-Path ${env:SystemDrive} 'Riot Games')) -or
     (Test-Path (Join-Path ${env:ProgramFiles} 'Riot Vanguard'))
 } else {
+    (Test-Path (Join-Path ${env:ProgramFiles} 'Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe')) -or
     (Test-Path (Join-Path ${env:ProgramFiles(x86)} 'Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe')) -or
     (Test-Path (Join-Path $env:ProgramData 'Epic\EpicGamesLauncher\Data\Manifests'))
 }

@@ -1,0 +1,606 @@
+{
+  "_note": "Prefer `elements` ΓÇö `tree_markdown` will continue to work but new fields will only be added to the structured side. Issue #22865: use `max_elements` / `max_depth` to bound the UIA walk on apps with very large trees.",
+  "element_count": 45,
+  "elements": [
+    {
+      "depth": 2,
+      "element_index": 0,
+      "element_token": "s00d6:0",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1404,
+        "y": 160
+      },
+      "label": "Minimize",
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 1,
+      "element_token": "s00d6:1",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1450,
+        "y": 160
+      },
+      "label": "Maximize",
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 2,
+      "element_token": "s00d6:2",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1496,
+        "y": 160
+      },
+      "label": "Close",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 3,
+      "element_token": "s00d6:3",
+      "frame": {
+        "h": 313,
+        "w": 376,
+        "x": 1138,
+        "y": 211
+      },
+      "label": "SettingsFlyout",
+      "role": "Pane"
+    },
+    {
+      "depth": 5,
+      "element_index": 4,
+      "element_token": "s00d6:4",
+      "frame": {
+        "h": 26,
+        "w": 338,
+        "x": 1157,
+        "y": 230
+      },
+      "label": "Settings",
+      "parent_index": 3,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 5,
+      "element_token": "s00d6:5",
+      "frame": {
+        "h": 16,
+        "w": 338,
+        "x": 1157,
+        "y": 258
+      },
+      "label": "App behavior and support",
+      "parent_index": 3,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 6,
+      "element_token": "s00d6:6",
+      "frame": {
+        "h": 14,
+        "w": 21,
+        "x": 1463,
+        "y": 245
+      },
+      "label": "3.6.1",
+      "parent_index": 3,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 7,
+      "element_token": "s00d6:7",
+      "frame": {
+        "h": 17,
+        "w": 142,
+        "x": 1172,
+        "y": 306
+      },
+      "label": "Automatic updates",
+      "parent_index": 3,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 8,
+      "element_token": "s00d6:8",
+      "frame": {
+        "h": 16,
+        "w": 142,
+        "x": 1172,
+        "y": 325
+      },
+      "label": "Check when Exo opens",
+      "parent_index": 3,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 9,
+      "element_token": "s00d6:9",
+      "frame": {
+        "h": 40,
+        "w": 56,
+        "x": 1326,
+        "y": 303
+      },
+      "label": "Check for updates on launch",
+      "parent_index": 3,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 10,
+      "element_token": "s00d6:10",
+      "frame": {
+        "h": 40,
+        "w": 308,
+        "x": 1172,
+        "y": 368
+      },
+      "label": "Check for Exo app updates",
+      "parent_index": 3,
+      "role": "Button"
+    },
+    {
+      "depth": 6,
+      "element_index": 11,
+      "element_token": "s00d6:11",
+      "frame": {
+        "h": 16,
+        "w": 107,
+        "x": 1273,
+        "y": 380
+      },
+      "label": "Check for updates",
+      "parent_index": 10,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 12,
+      "element_token": "s00d6:12",
+      "frame": {
+        "h": 40,
+        "w": 165,
+        "x": 1157,
+        "y": 465
+      },
+      "label": "Report Exo issue on GitHub",
+      "parent_index": 3,
+      "role": "Button"
+    },
+    {
+      "depth": 6,
+      "element_index": 13,
+      "element_token": "s00d6:13",
+      "frame": {
+        "h": 16,
+        "w": 73,
+        "x": 1203,
+        "y": 477
+      },
+      "label": "Report issue",
+      "parent_index": 12,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 14,
+      "element_token": "s00d6:14",
+      "frame": {
+        "h": 40,
+        "w": 165,
+        "x": 1330,
+        "y": 465
+      },
+      "label": "Open Exo logs folder",
+      "parent_index": 3,
+      "role": "Button"
+    },
+    {
+      "depth": 6,
+      "element_index": 15,
+      "element_token": "s00d6:15",
+      "frame": {
+        "h": 16,
+        "w": 61,
+        "x": 1382,
+        "y": 477
+      },
+      "label": "Open logs",
+      "parent_index": 14,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 16,
+      "element_token": "s00d6:16",
+      "frame": {
+        "h": 751,
+        "w": 1164,
+        "x": 378,
+        "y": 161
+      },
+      "label": "Close",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 17,
+      "element_token": "s00d6:17",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 386,
+        "y": 167
+      },
+      "label": "Open system overview",
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 18,
+      "element_token": "s00d6:18",
+      "frame": {
+        "h": 16,
+        "w": 26,
+        "x": 418,
+        "y": 179
+      },
+      "label": "EXO",
+      "parent_index": 17,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 19,
+      "element_token": "s00d6:19",
+      "frame": {
+        "h": 40,
+        "w": 44,
+        "x": 1304,
+        "y": 167
+      },
+      "label": "Settings",
+      "role": "Button"
+    },
+    {
+      "depth": 3,
+      "element_index": 20,
+      "element_token": "s00d6:20",
+      "frame": {
+        "h": 40,
+        "w": 86,
+        "x": 707,
+        "y": 167
+      },
+      "label": "Discord",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 21,
+      "element_token": "s00d6:21",
+      "frame": {
+        "h": 15,
+        "w": 41,
+        "x": 742,
+        "y": 180
+      },
+      "label": "Discord",
+      "parent_index": 20,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 22,
+      "element_token": "s00d6:22",
+      "frame": {
+        "h": 40,
+        "w": 78,
+        "x": 797,
+        "y": 167
+      },
+      "label": "Steam",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 23,
+      "element_token": "s00d6:23",
+      "frame": {
+        "h": 15,
+        "w": 33,
+        "x": 832,
+        "y": 180
+      },
+      "label": "Steam",
+      "parent_index": 22,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 24,
+      "element_token": "s00d6:24",
+      "frame": {
+        "h": 40,
+        "w": 87,
+        "x": 879,
+        "y": 167
+      },
+      "label": "Internet",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 25,
+      "element_token": "s00d6:25",
+      "frame": {
+        "h": 15,
+        "w": 42,
+        "x": 914,
+        "y": 180
+      },
+      "label": "Internet",
+      "parent_index": 24,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 26,
+      "element_token": "s00d6:26",
+      "frame": {
+        "h": 40,
+        "w": 84,
+        "x": 970,
+        "y": 167
+      },
+      "label": "NVIDIA",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 27,
+      "element_token": "s00d6:27",
+      "frame": {
+        "h": 15,
+        "w": 39,
+        "x": 1005,
+        "y": 180
+      },
+      "label": "NVIDIA",
+      "parent_index": 26,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 28,
+      "element_token": "s00d6:28",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 1058,
+        "y": 167
+      },
+      "label": "Riot",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 29,
+      "element_token": "s00d6:29",
+      "frame": {
+        "h": 15,
+        "w": 22,
+        "x": 1098,
+        "y": 180
+      },
+      "label": "Riot",
+      "parent_index": 28,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 30,
+      "element_token": "s00d6:30",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 1138,
+        "y": 167
+      },
+      "label": "Epic",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 31,
+      "element_token": "s00d6:31",
+      "frame": {
+        "h": 15,
+        "w": 22,
+        "x": 1178,
+        "y": 180
+      },
+      "label": "Epic",
+      "parent_index": 30,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 32,
+      "element_token": "s00d6:32",
+      "frame": {
+        "h": 691,
+        "w": 1120,
+        "x": 400,
+        "y": 221
+      },
+      "role": "Pane"
+    },
+    {
+      "depth": 4,
+      "element_index": 33,
+      "element_token": "s00d6:33",
+      "frame": {
+        "h": 15,
+        "w": 1026,
+        "x": 457,
+        "y": 250
+      },
+      "label": "INTERNET",
+      "parent_index": 32,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 34,
+      "element_token": "s00d6:34",
+      "frame": {
+        "h": 36,
+        "w": 1026,
+        "x": 457,
+        "y": 270
+      },
+      "label": "Checking...",
+      "parent_index": 32,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 35,
+      "element_token": "s00d6:35",
+      "frame": {
+        "h": 16,
+        "w": 997,
+        "x": 473,
+        "y": 337
+      },
+      "label": "Detecting this PC...",
+      "parent_index": 32,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 36,
+      "element_token": "s00d6:36",
+      "frame": {
+        "h": 15,
+        "w": 1046,
+        "x": 437,
+        "y": 405
+      },
+      "label": "WHAT EXO WILL CHANGE",
+      "parent_index": 32,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 37,
+      "element_token": "s00d6:37",
+      "frame": {
+        "h": 16,
+        "w": 144,
+        "x": 1339,
+        "y": 404
+      },
+      "label": "Hardware-aware, reversible",
+      "parent_index": 32,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 38,
+      "element_token": "s00d6:38",
+      "frame": {
+        "h": 16,
+        "w": 91,
+        "x": 915,
+        "y": 499
+      },
+      "label": "Reading this PC...",
+      "parent_index": 32,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 39,
+      "element_token": "s00d6:39",
+      "frame": {
+        "h": 16,
+        "w": 1046,
+        "x": 437,
+        "y": 567
+      },
+      "label": "Actions unlock when detection finishes.",
+      "parent_index": 32,
+      "role": "Text"
+    },
+    {
+      "depth": 1,
+      "element_index": 40,
+      "element_token": "s00d6:40",
+      "label": "Exo",
+      "role": "TitleBar",
+      "value": "Exo"
+    },
+    {
+      "depth": 3,
+      "element_index": 41,
+      "element_token": "s00d6:41",
+      "frame": {
+        "h": 22,
+        "w": 22,
+        "x": 378,
+        "y": 168
+      },
+      "label": "System",
+      "parent_index": 40,
+      "role": "MenuItem"
+    },
+    {
+      "depth": 2,
+      "element_index": 42,
+      "element_token": "s00d6:42",
+      "label": "Minimize",
+      "parent_index": 40,
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 43,
+      "element_token": "s00d6:43",
+      "label": "Maximize",
+      "parent_index": 40,
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 44,
+      "element_token": "s00d6:44",
+      "label": "Close",
+      "parent_index": 40,
+      "role": "Button"
+    }
+  ],
+  "pid": 8724,
+  "screenshot_file_path": "C:\\Users\\Erix\\Exo\\docs\\cua-qa\\stress\\r1-settings.png",
+  "screenshot_height": 753,
+  "screenshot_mime_type": "image/png",
+  "screenshot_width": 1166,
+  "snapshot_id": "s00d6",
+  "tree_markdown": "- Window \"Exo\"\n  - Pane \"Non Client Input Sink Window\"\n  - Pane \"AppWindow Custom Title Bar\"\n    - [0] Button \"Minimize\" [id=Minimize actions=[invoke]]\n    - [1] Button \"Maximize\" [id=Maximize actions=[invoke]]\n    - [2] Button \"Close\" [id=Close actions=[invoke]]\n      - Window \"Popup\"\n        - [3] Pane [id=SettingsFlyout actions=[invoke]]\n          - [4] Text \"Settings\" [actions=[text]]\n          - [5] Text \"App behavior and support\" [actions=[text]]\n          - [6] Text \"3.6.1\" [actions=[text]]\n          - [7] Text \"Automatic updates\" [actions=[text]]\n          - [8] Text \"Check when Exo opens\" [actions=[text]]\n          - [9] Button \"Check for updates on launch\" [actions=[toggle]]\n          - [10] Button \"Check for Exo app updates\" [actions=[invoke]]\n            - [11] Text \"Check for updates\" [actions=[text]]\n          - [12] Button \"Report Exo issue on GitHub\" [actions=[invoke]]\n            - [13] Text \"Report issue\" [actions=[text]]\n          - [14] Button \"Open Exo logs folder\" [actions=[invoke]]\n            - [15] Text \"Open logs\" [actions=[text]]\n      - [16] Button \"Close\" [id=Light Dismiss actions=[invoke]]\n        - [17] Button \"Open system overview\" [id=NavHome actions=[invoke]]\n          - [18] Text \"EXO\" [actions=[text]]\n        - [19] Button \"Settings\" [id=SettingsButton actions=[invoke]]\n      - [20] Button \"Discord\" [id=NavDiscord actions=[invoke]]\n        - [21] Text \"Discord\" [actions=[text]]\n      - [22] Button \"Steam\" [id=NavSteam actions=[invoke]]\n        - [23] Text \"Steam\" [actions=[text]]\n      - [24] Button \"Internet\" [id=NavInternet actions=[invoke]]\n        - [25] Text \"Internet\" [actions=[text]]\n      - [26] Button \"NVIDIA\" [id=NavNvidia actions=[invoke]]\n        - [27] Text \"NVIDIA\" [actions=[text]]\n      - [28] Button \"Riot\" [id=NavRiot actions=[invoke]]\n        - [29] Text \"Riot\" [actions=[text]]\n      - [30] Button \"Epic\" [id=NavEpic actions=[invoke]]\n        - [31] Text \"Epic\" [actions=[text]]\n      - [32] Pane [actions=[scroll]]\n        - [33] Text \"INTERNET\" [actions=[text]]\n        - [34] Text \"Checking...\" [actions=[text]]\n        - [35] Text \"Detecting this PC...\" [actions=[text]]\n        - [36] Text \"WHAT EXO WILL CHANGE\" [actions=[text]]\n        - [37] Text \"Hardware-aware, reversible\" [actions=[text]]\n        - [38] Text \"Reading this PC...\" [actions=[text]]\n        - [39] Text \"Actions unlock when detection finishes.\" [actions=[text]]\n  - [40] TitleBar [value=\"Exo\" actions=[set_value]]\n    - MenuBar \"System\"\n      - [41] MenuItem \"System\" [actions=[invoke,expand]]\n    - [42] Button \"Minimize\" [actions=[invoke]]\n    - [43] Button \"Maximize\" [actions=[invoke]]\n    - [44] Button \"Close\" [actions=[invoke]]\n",
+  "window_id": 42074252
+}
+

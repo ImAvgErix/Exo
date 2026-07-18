@@ -1,0 +1,558 @@
+{
+  "_note": "Prefer `elements` ΓÇö `tree_markdown` will continue to work but new fields will only be added to the structured side. Issue #22865: use `max_elements` / `max_depth` to bound the UIA walk on apps with very large trees.",
+  "element_count": 41,
+  "elements": [
+    {
+      "depth": 2,
+      "element_index": 0,
+      "element_token": "s0104:0",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1782,
+        "y": 0
+      },
+      "label": "Minimize",
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 1,
+      "element_token": "s0104:1",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1828,
+        "y": 0
+      },
+      "label": "Restore",
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 2,
+      "element_token": "s0104:2",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1874,
+        "y": 0
+      },
+      "label": "Close",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 3,
+      "element_token": "s0104:3",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 8,
+        "y": 6
+      },
+      "label": "Open system overview",
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 4,
+      "element_token": "s0104:4",
+      "frame": {
+        "h": 16,
+        "w": 26,
+        "x": 40,
+        "y": 18
+      },
+      "label": "EXO",
+      "parent_index": 3,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 5,
+      "element_token": "s0104:5",
+      "frame": {
+        "h": 40,
+        "w": 44,
+        "x": 1682,
+        "y": 6
+      },
+      "label": "Settings",
+      "role": "Button"
+    },
+    {
+      "depth": 3,
+      "element_index": 6,
+      "element_token": "s0104:6",
+      "frame": {
+        "h": 40,
+        "w": 86,
+        "x": 707,
+        "y": 6
+      },
+      "label": "Discord",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 7,
+      "element_token": "s0104:7",
+      "frame": {
+        "h": 15,
+        "w": 41,
+        "x": 742,
+        "y": 19
+      },
+      "label": "Discord",
+      "parent_index": 6,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 8,
+      "element_token": "s0104:8",
+      "frame": {
+        "h": 40,
+        "w": 78,
+        "x": 797,
+        "y": 6
+      },
+      "label": "Steam",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 9,
+      "element_token": "s0104:9",
+      "frame": {
+        "h": 15,
+        "w": 33,
+        "x": 832,
+        "y": 19
+      },
+      "label": "Steam",
+      "parent_index": 8,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 10,
+      "element_token": "s0104:10",
+      "frame": {
+        "h": 40,
+        "w": 87,
+        "x": 879,
+        "y": 6
+      },
+      "label": "Internet",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 11,
+      "element_token": "s0104:11",
+      "frame": {
+        "h": 15,
+        "w": 42,
+        "x": 914,
+        "y": 19
+      },
+      "label": "Internet",
+      "parent_index": 10,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 12,
+      "element_token": "s0104:12",
+      "frame": {
+        "h": 40,
+        "w": 84,
+        "x": 970,
+        "y": 6
+      },
+      "label": "NVIDIA",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 13,
+      "element_token": "s0104:13",
+      "frame": {
+        "h": 15,
+        "w": 39,
+        "x": 1005,
+        "y": 19
+      },
+      "label": "NVIDIA",
+      "parent_index": 12,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 14,
+      "element_token": "s0104:14",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 1058,
+        "y": 6
+      },
+      "label": "Riot",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 15,
+      "element_token": "s0104:15",
+      "frame": {
+        "h": 15,
+        "w": 22,
+        "x": 1098,
+        "y": 19
+      },
+      "label": "Riot",
+      "parent_index": 14,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 16,
+      "element_token": "s0104:16",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 1138,
+        "y": 6
+      },
+      "label": "Epic",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 17,
+      "element_token": "s0104:17",
+      "frame": {
+        "h": 15,
+        "w": 22,
+        "x": 1178,
+        "y": 19
+      },
+      "label": "Epic",
+      "parent_index": 16,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 18,
+      "element_token": "s0104:18",
+      "frame": {
+        "h": 1020,
+        "w": 1120,
+        "x": 400,
+        "y": 60
+      },
+      "role": "Pane"
+    },
+    {
+      "depth": 4,
+      "element_index": 19,
+      "element_token": "s0104:19",
+      "frame": {
+        "h": 15,
+        "w": 1026,
+        "x": 457,
+        "y": 89
+      },
+      "label": "INTERNET",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 20,
+      "element_token": "s0104:20",
+      "frame": {
+        "h": 36,
+        "w": 1026,
+        "x": 457,
+        "y": 109
+      },
+      "label": "Ethernet path - 2.5 Gbps",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 21,
+      "element_token": "s0104:21",
+      "frame": {
+        "h": 32,
+        "w": 997,
+        "x": 473,
+        "y": 176
+      },
+      "label": "Ready to measure this connection and apply one balanced policy. Safety: Wi-Fi is never disabled. Apply snapshots first and auto-rolls back if connectivity fails. Repair restores the pre-Exo snapshot.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 22,
+      "element_token": "s0104:22",
+      "frame": {
+        "h": 15,
+        "w": 1046,
+        "x": 437,
+        "y": 260
+      },
+      "label": "WHAT EXO WILL CHANGE",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 23,
+      "element_token": "s0104:23",
+      "frame": {
+        "h": 16,
+        "w": 144,
+        "x": 1339,
+        "y": 259
+      },
+      "label": "Hardware-aware, reversible",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 24,
+      "element_token": "s0104:24",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 467,
+        "y": 309
+      },
+      "label": "Connection path",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 25,
+      "element_token": "s0104:25",
+      "frame": {
+        "h": 16,
+        "w": 472,
+        "x": 467,
+        "y": 329
+      },
+      "label": "2.5 Gbps Ethernet gets the lowest route metric; Wi-Fi is never disabled.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 26,
+      "element_token": "s0104:26",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 996,
+        "y": 301
+      },
+      "label": "Adaptive tuning",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 27,
+      "element_token": "s0104:27",
+      "frame": {
+        "h": 32,
+        "w": 472,
+        "x": 996,
+        "y": 321
+      },
+      "label": "Measures idle latency, full-load queueing, and throughput before choosing one combined policy.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 28,
+      "element_token": "s0104:28",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 467,
+        "y": 397
+      },
+      "label": "DNS privacy",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 29,
+      "element_token": "s0104:29",
+      "frame": {
+        "h": 32,
+        "w": 472,
+        "x": 467,
+        "y": 417
+      },
+      "label": "Tests Cloudflare, Google, and Quad9 on this route, selects the fastest healthy resolver, and requests automatic DoH when Windows supports it.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 30,
+      "element_token": "s0104:30",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 996,
+        "y": 397
+      },
+      "label": "Safe repair",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 31,
+      "element_token": "s0104:31",
+      "frame": {
+        "h": 32,
+        "w": 472,
+        "x": 996,
+        "y": 417
+      },
+      "label": "Apply takes a pre-change snapshot; Repair can return the Windows network stack to stock defaults.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 32,
+      "element_token": "s0104:32",
+      "frame": {
+        "h": 16,
+        "w": 1046,
+        "x": 437,
+        "y": 506
+      },
+      "label": "Measuring idle latency to 8.8.8.8...",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 33,
+      "element_token": "s0104:33",
+      "frame": {
+        "h": 17,
+        "w": 104,
+        "x": 908,
+        "y": 542
+      },
+      "label": "Analyze & Apply",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 34,
+      "element_token": "s0104:34",
+      "frame": {
+        "h": 16,
+        "w": 38,
+        "x": 941,
+        "y": 588
+      },
+      "label": "Repair",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 35,
+      "element_token": "s0104:35",
+      "frame": {
+        "h": 16,
+        "w": 1046,
+        "x": 437,
+        "y": 622
+      },
+      "label": "Repair: reset to stock defaults",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 1,
+      "element_index": 36,
+      "element_token": "s0104:36",
+      "frame": {
+        "h": 5,
+        "w": 1920,
+        "x": 0,
+        "y": -5
+      },
+      "label": "Exo",
+      "role": "TitleBar",
+      "value": "Exo"
+    },
+    {
+      "depth": 3,
+      "element_index": 37,
+      "element_token": "s0104:37",
+      "frame": {
+        "h": 22,
+        "w": 22,
+        "x": 0,
+        "y": 0
+      },
+      "label": "System",
+      "parent_index": 36,
+      "role": "MenuItem"
+    },
+    {
+      "depth": 2,
+      "element_index": 38,
+      "element_token": "s0104:38",
+      "label": "Minimize",
+      "parent_index": 36,
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 39,
+      "element_token": "s0104:39",
+      "label": "Restore",
+      "parent_index": 36,
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 40,
+      "element_token": "s0104:40",
+      "label": "Close",
+      "parent_index": 36,
+      "role": "Button"
+    }
+  ],
+  "pid": 8724,
+  "screenshot_file_path": "C:\\Users\\Erix\\Exo\\docs\\cua-qa\\stress\\apply-done-internet.png",
+  "screenshot_height": 882,
+  "screenshot_mime_type": "image/png",
+  "screenshot_width": 1568,
+  "snapshot_id": "s0104",
+  "tree_markdown": "- Window \"Exo\"\n  - Pane \"Non Client Input Sink Window\"\n  - Pane \"AppWindow Custom Title Bar\"\n    - [0] Button \"Minimize\" [id=Minimize actions=[invoke]]\n    - [1] Button \"Restore\" [id=Restore actions=[invoke]]\n    - [2] Button \"Close\" [id=Close actions=[invoke]]\n        - [3] Button \"Open system overview\" [id=NavHome actions=[invoke]]\n          - [4] Text \"EXO\" [actions=[text]]\n        - [5] Button \"Settings\" [id=SettingsButton actions=[invoke]]\n      - [6] Button \"Discord\" [id=NavDiscord actions=[invoke]]\n        - [7] Text \"Discord\" [actions=[text]]\n      - [8] Button \"Steam\" [id=NavSteam actions=[invoke]]\n        - [9] Text \"Steam\" [actions=[text]]\n      - [10] Button \"Internet\" [id=NavInternet actions=[invoke]]\n        - [11] Text \"Internet\" [actions=[text]]\n      - [12] Button \"NVIDIA\" [id=NavNvidia actions=[invoke]]\n        - [13] Text \"NVIDIA\" [actions=[text]]\n      - [14] Button \"Riot\" [id=NavRiot actions=[invoke]]\n        - [15] Text \"Riot\" [actions=[text]]\n      - [16] Button \"Epic\" [id=NavEpic actions=[invoke]]\n        - [17] Text \"Epic\" [actions=[text]]\n      - [18] Pane [actions=[scroll]]\n        - [19] Text \"INTERNET\" [actions=[text]]\n        - [20] Text \"Ethernet path - 2.5 Gbps\" [actions=[text]]\n        - [21] Text \"Ready to measure this connection and apply one balanced policy. Safety: Wi-Fi is never disabled. Apply snapshots first and auto-rolls back if connectivity fails. Repair restores the pre-Exo snapshot.\" [actions=[text]]\n        - [22] Text \"WHAT EXO WILL CHANGE\" [actions=[text]]\n        - [23] Text \"Hardware-aware, reversible\" [actions=[text]]\n        - [24] Text \"Connection path\" [actions=[text]]\n        - [25] Text \"2.5 Gbps Ethernet gets the lowest route metric; Wi-Fi is never disabled.\" [actions=[text]]\n        - [26] Text \"Adaptive tuning\" [actions=[text]]\n        - [27] Text \"Measures idle latency, full-load queueing, and throughput before choosing one combined policy.\" [actions=[text]]\n        - [28] Text \"DNS privacy\" [actions=[text]]\n        - [29] Text \"Tests Cloudflare, Google, and Quad9 on this route, selects the fastest healthy resolver, and requests automatic DoH when Windows supports it.\" [actions=[text]]\n        - [30] Text \"Safe repair\" [actions=[text]]\n        - [31] Text \"Apply takes a pre-change snapshot; Repair can return the Windows network stack to stock defaults.\" [actions=[text]]\n        - [32] Text \"Measuring idle latency to 8.8.8.8...\" [actions=[text]]\n        - Button \"Analyze this connection and apply the best measured settings\"\n          - [33] Text \"Analyze & Apply\" [actions=[text]]\n        - Button \"Repair internet stack\"\n          - [34] Text \"Repair\" [actions=[text]]\n        - [35] Text \"Repair: reset to stock defaults\" [actions=[text]]\n  - [36] TitleBar [value=\"Exo\" actions=[set_value]]\n    - MenuBar \"System\"\n      - [37] MenuItem \"System\" [actions=[invoke,expand]]\n    - [38] Button \"Minimize\" [actions=[invoke]]\n    - [39] Button \"Restore\" [actions=[invoke]]\n    - [40] Button \"Close\" [actions=[invoke]]\n",
+  "window_id": 42074252
+}
+

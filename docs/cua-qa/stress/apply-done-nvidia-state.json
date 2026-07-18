@@ -1,0 +1,768 @@
+{
+  "_note": "Prefer `elements` ΓÇö `tree_markdown` will continue to work but new fields will only be added to the structured side. Issue #22865: use `max_elements` / `max_depth` to bound the UIA walk on apps with very large trees.",
+  "element_count": 56,
+  "elements": [
+    {
+      "depth": 2,
+      "element_index": 0,
+      "element_token": "s00f9:0",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1782,
+        "y": 0
+      },
+      "label": "Minimize",
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 1,
+      "element_token": "s00f9:1",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1828,
+        "y": 0
+      },
+      "label": "Restore",
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 2,
+      "element_token": "s00f9:2",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1874,
+        "y": 0
+      },
+      "label": "Close",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 3,
+      "element_token": "s00f9:3",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 8,
+        "y": 6
+      },
+      "label": "Open system overview",
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 4,
+      "element_token": "s00f9:4",
+      "frame": {
+        "h": 16,
+        "w": 26,
+        "x": 40,
+        "y": 18
+      },
+      "label": "EXO",
+      "parent_index": 3,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 5,
+      "element_token": "s00f9:5",
+      "frame": {
+        "h": 40,
+        "w": 44,
+        "x": 1682,
+        "y": 6
+      },
+      "label": "Settings",
+      "role": "Button"
+    },
+    {
+      "depth": 3,
+      "element_index": 6,
+      "element_token": "s00f9:6",
+      "frame": {
+        "h": 40,
+        "w": 86,
+        "x": 707,
+        "y": 6
+      },
+      "label": "Discord",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 7,
+      "element_token": "s00f9:7",
+      "frame": {
+        "h": 15,
+        "w": 41,
+        "x": 742,
+        "y": 19
+      },
+      "label": "Discord",
+      "parent_index": 6,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 8,
+      "element_token": "s00f9:8",
+      "frame": {
+        "h": 40,
+        "w": 78,
+        "x": 797,
+        "y": 6
+      },
+      "label": "Steam",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 9,
+      "element_token": "s00f9:9",
+      "frame": {
+        "h": 15,
+        "w": 33,
+        "x": 832,
+        "y": 19
+      },
+      "label": "Steam",
+      "parent_index": 8,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 10,
+      "element_token": "s00f9:10",
+      "frame": {
+        "h": 40,
+        "w": 87,
+        "x": 879,
+        "y": 6
+      },
+      "label": "Internet",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 11,
+      "element_token": "s00f9:11",
+      "frame": {
+        "h": 15,
+        "w": 42,
+        "x": 914,
+        "y": 19
+      },
+      "label": "Internet",
+      "parent_index": 10,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 12,
+      "element_token": "s00f9:12",
+      "frame": {
+        "h": 40,
+        "w": 84,
+        "x": 970,
+        "y": 6
+      },
+      "label": "NVIDIA",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 13,
+      "element_token": "s00f9:13",
+      "frame": {
+        "h": 15,
+        "w": 39,
+        "x": 1005,
+        "y": 19
+      },
+      "label": "NVIDIA",
+      "parent_index": 12,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 14,
+      "element_token": "s00f9:14",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 1058,
+        "y": 6
+      },
+      "label": "Riot",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 15,
+      "element_token": "s00f9:15",
+      "frame": {
+        "h": 15,
+        "w": 22,
+        "x": 1098,
+        "y": 19
+      },
+      "label": "Riot",
+      "parent_index": 14,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 16,
+      "element_token": "s00f9:16",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 1138,
+        "y": 6
+      },
+      "label": "Epic",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 17,
+      "element_token": "s00f9:17",
+      "frame": {
+        "h": 15,
+        "w": 22,
+        "x": 1178,
+        "y": 19
+      },
+      "label": "Epic",
+      "parent_index": 16,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 18,
+      "element_token": "s00f9:18",
+      "frame": {
+        "h": 1020,
+        "w": 1120,
+        "x": 400,
+        "y": 60
+      },
+      "role": "Pane"
+    },
+    {
+      "depth": 4,
+      "element_index": 19,
+      "element_token": "s00f9:19",
+      "frame": {
+        "h": 15,
+        "w": 1026,
+        "x": 457,
+        "y": 89
+      },
+      "label": "NVIDIA",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 20,
+      "element_token": "s00f9:20",
+      "frame": {
+        "h": 36,
+        "w": 1026,
+        "x": 457,
+        "y": 109
+      },
+      "label": "Failed at drs-snapshot",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 21,
+      "element_token": "s00f9:21",
+      "frame": {
+        "h": 16,
+        "w": 997,
+        "x": 473,
+        "y": 176
+      },
+      "label": "3 settings are ready for the detected GPU and display path. Raw latency = VSync off + Ultra Low Latency Ultra. Enable G-SYNC only when Adaptive-Sync is on in the monitor menu.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 22,
+      "element_token": "s00f9:22",
+      "frame": {
+        "h": 15,
+        "w": 815,
+        "x": 452,
+        "y": 234
+      },
+      "label": "DETECTED HARDWARE",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 23,
+      "element_token": "s00f9:23",
+      "frame": {
+        "h": 16,
+        "w": 815,
+        "x": 452,
+        "y": 259
+      },
+      "label": "NVIDIA GeForce RTX 3070 - 1920x1080@165 DisplayPort - raw latency",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 24,
+      "element_token": "s00f9:24",
+      "frame": {
+        "h": 16,
+        "w": 649,
+        "x": 452,
+        "y": 283
+      },
+      "label": "Use G-SYNC / VRR",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 25,
+      "element_token": "s00f9:25",
+      "frame": {
+        "h": 16,
+        "w": 649,
+        "x": 452,
+        "y": 300
+      },
+      "label": "Enable only when Adaptive-Sync, FreeSync, or G-SYNC is enabled in the monitor's physical menu.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 26,
+      "element_token": "s00f9:26",
+      "frame": {
+        "h": 40,
+        "w": 56,
+        "x": 1113,
+        "y": 283
+      },
+      "label": "Use G-SYNC or VRR profile",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 27,
+      "element_token": "s00f9:27",
+      "frame": {
+        "h": 34,
+        "w": 189,
+        "x": 1279,
+        "y": 262
+      },
+      "label": "Open NVIDIA Control Panel",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 28,
+      "element_token": "s00f9:28",
+      "frame": {
+        "h": 16,
+        "w": 163,
+        "x": 1292,
+        "y": 271
+      },
+      "label": "Open NVIDIA Control Panel",
+      "parent_index": 27,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 29,
+      "element_token": "s00f9:29",
+      "frame": {
+        "h": 15,
+        "w": 1046,
+        "x": 437,
+        "y": 355
+      },
+      "label": "WHAT EXO WILL CHANGE",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 30,
+      "element_token": "s00f9:30",
+      "frame": {
+        "h": 16,
+        "w": 144,
+        "x": 1339,
+        "y": 354
+      },
+      "label": "Hardware-aware, reversible",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 31,
+      "element_token": "s00f9:31",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 467,
+        "y": 404
+      },
+      "label": "NVIDIA GPU",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 32,
+      "element_token": "s00f9:32",
+      "frame": {
+        "h": 16,
+        "w": 472,
+        "x": 467,
+        "y": 424
+      },
+      "label": "NVIDIA GeForce RTX 3070",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 33,
+      "element_token": "s00f9:33",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 996,
+        "y": 396
+      },
+      "label": "Installed driver",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 34,
+      "element_token": "s00f9:34",
+      "frame": {
+        "h": 32,
+        "w": 472,
+        "x": 996,
+        "y": 416
+      },
+      "label": "Driver 610.74 detected. Exo leaves driver installation and MSI/service policy unchanged; update through NVIDIA when you choose.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 35,
+      "element_token": "s00f9:35",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 467,
+        "y": 500
+      },
+      "label": "Hardware-matched policy",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 36,
+      "element_token": "s00f9:36",
+      "frame": {
+        "h": 16,
+        "w": 472,
+        "x": 467,
+        "y": 520
+      },
+      "label": "NVIDIA GeForce RTX 3070 - 1920x1080@165 DisplayPort - raw latency",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 37,
+      "element_token": "s00f9:37",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 996,
+        "y": 500
+      },
+      "label": "3D Base Profile",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 38,
+      "element_token": "s00f9:38",
+      "frame": {
+        "h": 16,
+        "w": 472,
+        "x": 996,
+        "y": 520
+      },
+      "label": "Not applied yet. Apply runs Profile Inspector -silentImport (no GUI / replace click).",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 39,
+      "element_token": "s00f9:39",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 467,
+        "y": 588
+      },
+      "label": "Latency / sync policy",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 40,
+      "element_token": "s00f9:40",
+      "frame": {
+        "h": 32,
+        "w": 472,
+        "x": 467,
+        "y": 608
+      },
+      "label": "Raw-latency path: G-SYNC/VRR and VSync off + Ultra Low Latency; Reflex takes priority automatically in supported games.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 41,
+      "element_token": "s00f9:41",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 996,
+        "y": 588
+      },
+      "label": "Per-game profiles",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 42,
+      "element_token": "s00f9:42",
+      "frame": {
+        "h": 32,
+        "w": 472,
+        "x": 996,
+        "y": 608
+      },
+      "label": "Per-game profiles not recorded. Apply to import Base + Val/CS2/R6/Rivals and other big titles.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 43,
+      "element_token": "s00f9:43",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 467,
+        "y": 684
+      },
+      "label": "NVIDIA Control Panel",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 44,
+      "element_token": "s00f9:44",
+      "frame": {
+        "h": 32,
+        "w": 472,
+        "x": 467,
+        "y": 704
+      },
+      "label": "Available from Exo. NVIDIA App, overlays, services, and driver packages are left under your control.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 45,
+      "element_token": "s00f9:45",
+      "frame": {
+        "h": 80,
+        "w": 1004,
+        "x": 468,
+        "y": 808
+      },
+      "label": "[-] Apply failed at stage 'drs-snapshot': NVIDIA DRS backup failed (exit 64): Unknown argument: --drs-backup\r\nEXO_PROGRESS:100|Failed at drs-snapshot\r\n[-] Apply failed at stage 'drs-snapshot': NVIDIA DRS backup failed (exit 64): Unknown argument: --drs-backup\r\nEXO_PROGRESS:100|Failed at drs-snapshot\r\nExo log: C:\\ProgramData\\Exo\\Transactions\\834e0652bcd94d3ea555f7e593b3c1b7\\run.log",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 46,
+      "element_token": "s00f9:46",
+      "frame": {
+        "h": 40,
+        "w": 1046,
+        "x": 437,
+        "y": 903
+      },
+      "label": "Apply NVIDIA",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 47,
+      "element_token": "s00f9:47",
+      "frame": {
+        "h": 17,
+        "w": 38,
+        "x": 941,
+        "y": 915
+      },
+      "label": "Apply",
+      "parent_index": 46,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 48,
+      "element_token": "s00f9:48",
+      "frame": {
+        "h": 16,
+        "w": 1046,
+        "x": 437,
+        "y": 949
+      },
+      "label": "Repair restores the complete NVIDIA profile database saved before Apply. Drivers and display settings stay untouched.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 49,
+      "element_token": "s00f9:49",
+      "frame": {
+        "h": 40,
+        "w": 1046,
+        "x": 437,
+        "y": 973
+      },
+      "label": "Repair",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 50,
+      "element_token": "s00f9:50",
+      "frame": {
+        "h": 16,
+        "w": 38,
+        "x": 941,
+        "y": 985
+      },
+      "label": "Repair",
+      "parent_index": 49,
+      "role": "Text"
+    },
+    {
+      "depth": 1,
+      "element_index": 51,
+      "element_token": "s00f9:51",
+      "frame": {
+        "h": 5,
+        "w": 1920,
+        "x": 0,
+        "y": -5
+      },
+      "label": "Exo",
+      "role": "TitleBar",
+      "value": "Exo"
+    },
+    {
+      "depth": 3,
+      "element_index": 52,
+      "element_token": "s00f9:52",
+      "frame": {
+        "h": 22,
+        "w": 22,
+        "x": 0,
+        "y": 0
+      },
+      "label": "System",
+      "parent_index": 51,
+      "role": "MenuItem"
+    },
+    {
+      "depth": 2,
+      "element_index": 53,
+      "element_token": "s00f9:53",
+      "label": "Minimize",
+      "parent_index": 51,
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 54,
+      "element_token": "s00f9:54",
+      "label": "Restore",
+      "parent_index": 51,
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 55,
+      "element_token": "s00f9:55",
+      "label": "Close",
+      "parent_index": 51,
+      "role": "Button"
+    }
+  ],
+  "pid": 8724,
+  "screenshot_file_path": "C:\\Users\\Erix\\Exo\\docs\\cua-qa\\stress\\apply-done-nvidia.png",
+  "screenshot_height": 882,
+  "screenshot_mime_type": "image/png",
+  "screenshot_width": 1568,
+  "snapshot_id": "s00f9",
+  "tree_markdown": "- Window \"Exo\"\n  - Pane \"Non Client Input Sink Window\"\n  - Pane \"AppWindow Custom Title Bar\"\n    - [0] Button \"Minimize\" [id=Minimize actions=[invoke]]\n    - [1] Button \"Restore\" [id=Restore actions=[invoke]]\n    - [2] Button \"Close\" [id=Close actions=[invoke]]\n        - [3] Button \"Open system overview\" [id=NavHome actions=[invoke]]\n          - [4] Text \"EXO\" [actions=[text]]\n        - [5] Button \"Settings\" [id=SettingsButton actions=[invoke]]\n      - [6] Button \"Discord\" [id=NavDiscord actions=[invoke]]\n        - [7] Text \"Discord\" [actions=[text]]\n      - [8] Button \"Steam\" [id=NavSteam actions=[invoke]]\n        - [9] Text \"Steam\" [actions=[text]]\n      - [10] Button \"Internet\" [id=NavInternet actions=[invoke]]\n        - [11] Text \"Internet\" [actions=[text]]\n      - [12] Button \"NVIDIA\" [id=NavNvidia actions=[invoke]]\n        - [13] Text \"NVIDIA\" [actions=[text]]\n      - [14] Button \"Riot\" [id=NavRiot actions=[invoke]]\n        - [15] Text \"Riot\" [actions=[text]]\n      - [16] Button \"Epic\" [id=NavEpic actions=[invoke]]\n        - [17] Text \"Epic\" [actions=[text]]\n      - [18] Pane [actions=[scroll]]\n        - [19] Text \"NVIDIA\" [actions=[text]]\n        - [20] Text \"Failed at drs-snapshot\" [actions=[text]]\n        - [21] Text \"3 settings are ready for the detected GPU and display path. Raw latency = VSync off + Ultra Low Latency Ultra. Enable G-SYNC only when Adaptive-Sync is on in the monitor menu.\" [actions=[text]]\n        - [22] Text \"DETECTED HARDWARE\" [actions=[text]]\n        - [23] Text \"NVIDIA GeForce RTX 3070 - 1920x1080@165 DisplayPort - raw latency\" [actions=[text]]\n        - [24] Text \"Use G-SYNC / VRR\" [actions=[text]]\n        - [25] Text \"Enable only when Adaptive-Sync, FreeSync, or G-SYNC is enabled in the monitor's physical menu.\" [actions=[text]]\n        - [26] Button \"Use G-SYNC or VRR profile\" [actions=[toggle]]\n        - [27] Button \"Open NVIDIA Control Panel\" [actions=[invoke]]\n          - [28] Text \"Open NVIDIA Control Panel\" [actions=[text]]\n        - [29] Text \"WHAT EXO WILL CHANGE\" [actions=[text]]\n        - [30] Text \"Hardware-aware, reversible\" [actions=[text]]\n        - [31] Text \"NVIDIA GPU\" [actions=[text]]\n        - [32] Text \"NVIDIA GeForce RTX 3070\" [actions=[text]]\n        - [33] Text \"Installed driver\" [actions=[text]]\n        - [34] Text \"Driver 610.74 detected. Exo leaves driver installation and MSI/service policy unchanged; update through NVIDIA when you choose.\" [actions=[text]]\n        - [35] Text \"Hardware-matched policy\" [actions=[text]]\n        - [36] Text \"NVIDIA GeForce RTX 3070 - 1920x1080@165 DisplayPort - raw latency\" [actions=[text]]\n        - [37] Text \"3D Base Profile\" [actions=[text]]\n        - [38] Text \"Not applied yet. Apply runs Profile Inspector -silentImport (no GUI / replace click).\" [actions=[text]]\n        - [39] Text \"Latency / sync policy\" [actions=[text]]\n        - [40] Text \"Raw-latency path: G-SYNC/VRR and VSync off + Ultra Low Latency; Reflex takes priority automatically in supported games.\" [actions=[text]]\n        - [41] Text \"Per-game profiles\" [actions=[text]]\n        - [42] Text \"Per-game profiles not recorded. Apply to import Base + Val/CS2/R6/Rivals and other big titles.\" [actions=[text]]\n        - [43] Text \"NVIDIA Control Panel\" [actions=[text]]\n        - [44] Text \"Available from Exo. NVIDIA App, overlays, services, and driver packages are left under your control.\" [actions=[text]]\n        - [45] Text \"[-] Apply failed at stage 'drs-snapshot': NVIDIA DRS backup failed (exit 64): Unknown argument: --drs-backup\r\nEXO_PROGRESS:100|Failed at drs-snapshot\r\n[-] Apply failed at stage 'drs-snapshot': NVIDIA DRS backup failed (exit 64): Unknown argument: --drs-backup\r\nEXO_PROGRESS:100|Failed at drs-snapshot\r\nExo log: C:\\ProgramData\\Exo\\Transactions\\834e0652bcd94d3ea555f7e593b3c1b7\\run.log\" [actions=[text]]\n        - [46] Button \"Apply NVIDIA\" [actions=[invoke]]\n          - [47] Text \"Apply\" [actions=[text]]\n        - [48] Text \"Repair restores the complete NVIDIA profile database saved before Apply. Drivers and display settings stay untouched.\" [actions=[text]]\n        - [49] Button \"Repair\" [actions=[invoke]]\n          - [50] Text \"Repair\" [actions=[text]]\n  - [51] TitleBar [value=\"Exo\" actions=[set_value]]\n    - MenuBar \"System\"\n      - [52] MenuItem \"System\" [actions=[invoke,expand]]\n    - [53] Button \"Minimize\" [actions=[invoke]]\n    - [54] Button \"Restore\" [actions=[invoke]]\n    - [55] Button \"Close\" [actions=[invoke]]\n",
+  "window_id": 42074252
+}
+

@@ -127,9 +127,21 @@ function Get-LauncherTargets {
             (Join-Path ${env:SystemDrive} 'Riot Games\Riot Client\RiotClientUxRender.exe')
         )) { Add-Target $targets $path 'riot-launcher' }
     } else {
-        $root = Join-Path ${env:ProgramFiles(x86)} 'Epic Games\Launcher\Portal\Binaries\Win64'
-        foreach ($name in @('EpicGamesLauncher.exe','EpicWebHelper.exe')) {
-            Add-Target $targets (Join-Path $root $name) 'epic-launcher'
+        # Epic ships under Program Files or Program Files (x86) depending on install age.
+        foreach ($root in @(
+            (Join-Path ${env:ProgramFiles} 'Epic Games\Launcher\Portal\Binaries\Win64'),
+            (Join-Path ${env:ProgramFiles(x86)} 'Epic Games\Launcher\Portal\Binaries\Win64')
+        )) {
+            if (-not (Test-Path -LiteralPath $root -PathType Container)) { continue }
+            foreach ($name in @('EpicGamesLauncher.exe','EpicWebHelper.exe')) {
+                Add-Target $targets (Join-Path $root $name) 'epic-launcher'
+            }
+        }
+        # Fallback: discover from running processes / known leaf name.
+        if ($targets.Count -eq 0) {
+            Get-Process -Name 'EpicGamesLauncher','EpicWebHelper' -ErrorAction SilentlyContinue | ForEach-Object {
+                try { Add-Target $targets ([string]$_.Path) 'epic-running' } catch { }
+            }
         }
     }
     return @($targets)
@@ -149,8 +161,12 @@ function Test-Installed {
         if (Test-Path -LiteralPath (Join-Path ${env:ProgramFiles} 'Riot Vanguard') -PathType Container) { return $true }
         if (Test-Path -LiteralPath (Join-Path ${env:SystemDrive} 'Riot Games') -PathType Container) { return $true }
     } else {
-        $epic = Join-Path ${env:ProgramFiles(x86)} 'Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe'
-        if (Test-Path -LiteralPath $epic -PathType Leaf) { return $true }
+        foreach ($epic in @(
+            (Join-Path ${env:ProgramFiles} 'Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe'),
+            (Join-Path ${env:ProgramFiles(x86)} 'Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe')
+        )) {
+            if (Test-Path -LiteralPath $epic -PathType Leaf) { return $true }
+        }
     }
     return @((Get-UninstallEntries) | Where-Object { "$( $_.DisplayName ) $( $_.Publisher )" -match "(?i)$Module" }).Count -gt 0
 }

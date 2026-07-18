@@ -1,7 +1,7 @@
-# Exo Cua QA - 2026-07-18T14:52:59.6929038-05:00
+# Exo Cua QA - 2026-07-18T15:16:40.7278895-05:00
 
-- pid: 7568
-- window_id: 22872122
+- pid: 6708
+- window_id: 18088670
 - exe: C:\Users\Erix\AppData\Local\Exo\app\Exo.exe
 
 ## Discord
@@ -76,8 +76,8 @@
 [17] Text: Epic
 [18] Pane: 
 [19] Text: STEAM
-[20] Text: 1 setting needs Apply (contention guard)
-[21] Text: One launcher setting is out of policy. Apply restores it without touching games.
+[20] Text: Already optimized
+[21] Text: Verified on this installation. Apply again after Steam changes its launcher configuration.
 [22] Text: WHAT EXO WILL CHANGE
 [23] Text: Hardware-aware, reversible
 [24] Text: Steam install
@@ -85,7 +85,7 @@
 [26] Text: Quiet CEF launcher
 [27] Text: Fast quiet CEF flags and High priority Steam start before the in-game contention guard attaches.
 [28] Text: In-game contention guard
-[29] Text: Background CEF helpers drop to low memory priority plus EcoQoS while a game runs; the foreground Steam window stays Normal.
+[29] Text: While a game runs: background steamwebhelper gets very-low memory priority, EcoQoS, and soft page reclaim; the foreground Steam window stays Normal. EmptyWorkingSet is never used (it freezes CEF).
 [30] Text: Complete client debloat
 [31] Text: Caches, leftovers, and crashpads cleaned; installed games and shader caches stay preserved.
 [32] Text: Library / overlay tweaks
@@ -101,7 +101,7 @@
 ## Internet
 
 - screenshot: `docs/cua-qa/internet.png`
-- elements: 42
+- elements: 43
 ```
 [0] Button: Minimize
 [1] Button: Maximize
@@ -123,26 +123,26 @@
 [17] Text: Epic
 [18] Pane: 
 [19] Text: INTERNET
-[20] Text: Ethernet path - 2.5 Gbps
-[21] Text: Ready to measure this connection and apply one balanced policy.
+[20] Text: Optimized - check rows
+[21] Text: One network setting is open. Analyze & Apply measures this path first. Safety: Wi-Fi is never disabled. Apply snapshots first and auto-rolls back if connectivity fails. Repair restores the pre-Exo snapshot.
 [22] Text: WHAT EXO WILL CHANGE
 [23] Text: Hardware-aware, reversible
 [24] Text: Connection path
 [25] Text: 2.5 Gbps Ethernet gets the lowest route metric; Wi-Fi is never disabled.
 [26] Text: Adaptive tuning
-[27] Text: Measures idle latency, full-load queueing, and throughput before choosing one combined policy.
+[27] Text: Measured idle latency, full-load queueing, and throughput; applied multi-gig throughput + latency policy.
 [28] Text: DNS privacy
-[29] Text: Tests Cloudflare, Google, and Quad9 on this route, selects the fastest healthy resolver, and requests automatic DoH when Windows supports it.
+[29] Text: Google ┬╖ selected by live test; automatic DoH active
 [30] Text: Safe repair
-[31] Text: Apply takes a pre-change snapshot; Repair can return the Windows network stack to stock defaults.
-[32] Button: Analyze this connection and apply the best measured settings
-[33] Text: Analyze & Apply
-[34] Button: Repair internet stack
-[35] Text: Repair
-[36] Text: Repair: reset to stock defaults
-[37] TitleBar: Exo
-[38] MenuItem: System
-[39] Button: Minimize
+[31] Text: A pre-Exo snapshot is ready; Repair restores DNS, DoH, routes, TCP, and NIC settings.
+[32] Text: 12.3 ms idle ┬╖ full-load +0.5 ms download / +1.2 ms upload ┬╖ 0% idle loss ┬╖ Google DNS
+[33] Button: Analyze this connection and apply the best measured settings
+[34] Text: Analyze & Apply
+[35] Button: Repair internet stack
+[36] Text: Repair
+[37] Text: Repair: restore exact pre-Exo state
+[38] TitleBar: Exo
+[39] MenuItem: System
 ```
 
 ## NVIDIA
@@ -170,8 +170,8 @@
 [17] Text: Epic
 [18] Pane: 
 [19] Text: NVIDIA
-[20] Text: Driver changed - reapply
-[21] Text: 3 settings are ready for the detected GPU and display path.
+[20] Text: All applied
+[21] Text: Verified raw-latency pack: VSync off, Ultra Low Latency Ultra, low prerender queue. Reflex preferred in supported games. Reapply after a driver update.
 [22] Text: DETECTED HARDWARE
 [23] Text: NVIDIA GeForce RTX 3070 - 1920x1080@165 DisplayPort - raw latency
 [24] Text: Use G-SYNC / VRR
@@ -188,14 +188,14 @@
 [35] Text: Hardware-matched policy
 [36] Text: NVIDIA GeForce RTX 3070 - 1920x1080@165 DisplayPort - raw latency
 [37] Text: 3D Base Profile
-[38] Text: Not applied yet. Apply runs Profile Inspector -silentImport (no GUI / replace click).
+[38] Text: Max FPS / latency pack - 30 Series.nip (Verified in driver)
 [39] Text: Latency / sync policy
 ```
 
 ## Riot
 
 - screenshot: `docs/cua-qa/riot.png`
-- elements: 52
+- elements: 56
 ```
 [0] Button: Minimize
 [1] Button: Maximize
@@ -217,32 +217,32 @@
 [17] Text: Epic
 [18] Pane: 
 [19] Text: RIOT
-[20] Text: Already optimized
-[21] Text: Verified Windows policy only. Riot client files, services, anti-cheat, updates, and game settings stay untouched.
+[20] Text: 1 setting needs Apply (yield guard)
+[21] Text: One launcher setting is out of policy. Apply restores it without touching games.
 [22] Text: WHAT EXO WILL CHANGE
 [23] Text: Hardware-aware, reversible
 [24] Text: Riot install
 [25] Text: Found: League of Legends, VALORANT.
 [26] Text: Game discovery
-[27] Text: 3 executable(s) ready for GPU policy.
+[27] Text: 3 executable(s) ready for GPU + FSO policy.
 [28] Text: Startup quiet
-[29] Text: Launcher is removed from Windows Run so it does not autostart with the session.
+[29] Text: Launcher brand is removed from Windows Run; Exo yield companion may remain as Exo-* only.
 [30] Text: High-performance GPU
 [31] Text: All 3 detected game executable(s) use the high-performance GPU.
-[32] Text: Hybrid GPU split
-[33] Text: Single-GPU PC: games use the only adapter; no launcher override is needed.
-[34] Text: Anti-cheat boundary
-[35] Text: Vanguard, Riot Client services, game files, and updates are never modified.
-[36] Text: Exact Repair snapshot
-[37] Text: Pre-Exo registry values are saved so Repair can restore startup and GPU prefs exactly.
-[38] Text: Verified optimizer record
-[39] Text: A completed full apply is recorded for this Riot installation.
+[32] Text: Fullscreen Optimizations off
+[33] Text: Fullscreen Optimizations off on all 3 game executable(s) (less DWM lag).
+[34] Text: Launcher yield while gaming
+[35] Text: Apply installs a reversible Exo yield companion for the launcher UI only.
+[36] Text: Hybrid GPU split
+[37] Text: Single-GPU PC: games use the only adapter; no launcher override is needed.
+[38] Text: Anti-cheat boundary
+[39] Text: Vanguard, Riot Client services, game files, and updates are never modified.
 ```
 
 ## Epic
 
 - screenshot: `docs/cua-qa/epic.png`
-- elements: 52
+- elements: 56
 ```
 [0] Button: Minimize
 [1] Button: Maximize
@@ -264,32 +264,32 @@
 [17] Text: Epic
 [18] Pane: 
 [19] Text: EPIC
-[20] Text: Already optimized
-[21] Text: Verified Windows policy only. Epic client files, services, anti-cheat, updates, and game settings stay untouched.
+[20] Text: 1 setting needs Apply (yield guard)
+[21] Text: One launcher setting is out of policy. Apply restores it without touching games.
 [22] Text: WHAT EXO WILL CHANGE
 [23] Text: Hardware-aware, reversible
 [24] Text: Epic install
 [25] Text: Found: Launcher.
 [26] Text: Game discovery
-[27] Text: 1 executable(s) ready for GPU policy.
+[27] Text: 1 executable(s) ready for GPU + FSO policy.
 [28] Text: Startup quiet
-[29] Text: Launcher is removed from Windows Run so it does not autostart with the session.
+[29] Text: Launcher brand is removed from Windows Run; Exo yield companion may remain as Exo-* only.
 [30] Text: High-performance GPU
 [31] Text: All 1 detected game executable(s) use the high-performance GPU.
-[32] Text: Hybrid GPU split
-[33] Text: Single-GPU PC: games use the only adapter; no launcher override is needed.
-[34] Text: Anti-cheat boundary
-[35] Text: Epic Online Services, launcher files, caches, and updates are never modified.
-[36] Text: Exact Repair snapshot
-[37] Text: Pre-Exo registry values are saved so Repair can restore startup and GPU prefs exactly.
-[38] Text: Verified optimizer record
-[39] Text: A completed full apply is recorded for this Epic installation.
+[32] Text: Fullscreen Optimizations off
+[33] Text: Fullscreen Optimizations off on all 1 game executable(s) (less DWM lag).
+[34] Text: Launcher yield while gaming
+[35] Text: Apply installs a reversible Exo yield companion for the launcher UI only.
+[36] Text: Hybrid GPU split
+[37] Text: Single-GPU PC: games use the only adapter; no launcher override is needed.
+[38] Text: Anti-cheat boundary
+[39] Text: Epic Online Services, launcher files, caches, and updates are never modified.
 ```
 
 ## ShellHome
 
 - screenshot: `docs/cua-qa/shellhome.png`
-- elements: 74
+- elements: 70
 ```
 [0] Button: Minimize
 [1] Button: Maximize
@@ -312,24 +312,24 @@
 [18] Pane: 
 [19] Text: SYSTEM
 [20] Text: Optimization status
-[21] Text: 5 verified - next: open Internet.
+[21] Text: Every optimizer has a verified apply record.
 [22] Text: LIVE SYSTEM READ
-[23] Text: 5 / 6 verified
+[23] Text: 6 / 6 verified
 [24] Text: Every module detects this PC first, applies only supported changes, and keeps a repair path.
 [25] Text: SYSTEM MEMORY
-[26] Text: 4.2 GB
-[27] Text: 11.7 GB free ┬╖ 15.9 GB total
+[26] Text: 4.4 GB
+[27] Text: 11.6 GB free ┬╖ 15.9 GB total
 [28] ProgressBar: 
-[29] Text: RECOMMENDED NEXT
-[30] Text: Analyze the live path, tune the stack, and select the fastest healthy DNS
-[31] Button: Open recommended next optimizer
-[32] Text: Open Internet
-[33] Button: Open Discord optimizer
-[34] Text: Discord
-[35] Text: VERIFIED
-[36] Text: Lean client active
-[37] Text: Privacy patch ┬╖ voice QoS ┬╖ idle memory guard
-[38] Text: 1.1 GB below session peak
-[39] Button: Open Steam optimizer
+[29] Button: Open Discord optimizer
+[30] Text: Discord
+[31] Text: VERIFIED
+[32] Text: Lean client active
+[33] Text: Privacy patch ┬╖ voice QoS ┬╖ idle memory guard
+[34] Text: 1.1 GB below session peak
+[35] Button: Open Steam optimizer
+[36] Text: Steam
+[37] Text: VERIFIED
+[38] Text: Background policy ready
+[39] Text: Starts with the optimized launcher ┬╖ no unsafe RAM purges
 ```
 

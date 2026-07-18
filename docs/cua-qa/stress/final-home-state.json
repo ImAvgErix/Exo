@@ -1,0 +1,1019 @@
+{
+  "_note": "Prefer `elements` ΓÇö `tree_markdown` will continue to work but new fields will only be added to the structured side. Issue #22865: use `max_elements` / `max_depth` to bound the UIA walk on apps with very large trees.",
+  "element_count": 74,
+  "elements": [
+    {
+      "depth": 2,
+      "element_index": 0,
+      "element_token": "s014c:0",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1782,
+        "y": 0
+      },
+      "label": "Minimize",
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 1,
+      "element_token": "s014c:1",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1828,
+        "y": 0
+      },
+      "label": "Restore",
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 2,
+      "element_token": "s014c:2",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1874,
+        "y": 0
+      },
+      "label": "Close",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 3,
+      "element_token": "s014c:3",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 8,
+        "y": 6
+      },
+      "label": "Open system overview",
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 4,
+      "element_token": "s014c:4",
+      "frame": {
+        "h": 16,
+        "w": 26,
+        "x": 40,
+        "y": 18
+      },
+      "label": "EXO",
+      "parent_index": 3,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 5,
+      "element_token": "s014c:5",
+      "frame": {
+        "h": 40,
+        "w": 44,
+        "x": 1682,
+        "y": 6
+      },
+      "label": "Settings",
+      "role": "Button"
+    },
+    {
+      "depth": 3,
+      "element_index": 6,
+      "element_token": "s014c:6",
+      "frame": {
+        "h": 40,
+        "w": 86,
+        "x": 707,
+        "y": 6
+      },
+      "label": "Discord",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 7,
+      "element_token": "s014c:7",
+      "frame": {
+        "h": 15,
+        "w": 41,
+        "x": 742,
+        "y": 19
+      },
+      "label": "Discord",
+      "parent_index": 6,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 8,
+      "element_token": "s014c:8",
+      "frame": {
+        "h": 40,
+        "w": 78,
+        "x": 797,
+        "y": 6
+      },
+      "label": "Steam",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 9,
+      "element_token": "s014c:9",
+      "frame": {
+        "h": 15,
+        "w": 33,
+        "x": 832,
+        "y": 19
+      },
+      "label": "Steam",
+      "parent_index": 8,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 10,
+      "element_token": "s014c:10",
+      "frame": {
+        "h": 40,
+        "w": 87,
+        "x": 879,
+        "y": 6
+      },
+      "label": "Internet",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 11,
+      "element_token": "s014c:11",
+      "frame": {
+        "h": 15,
+        "w": 42,
+        "x": 914,
+        "y": 19
+      },
+      "label": "Internet",
+      "parent_index": 10,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 12,
+      "element_token": "s014c:12",
+      "frame": {
+        "h": 40,
+        "w": 84,
+        "x": 970,
+        "y": 6
+      },
+      "label": "NVIDIA",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 13,
+      "element_token": "s014c:13",
+      "frame": {
+        "h": 15,
+        "w": 39,
+        "x": 1005,
+        "y": 19
+      },
+      "label": "NVIDIA",
+      "parent_index": 12,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 14,
+      "element_token": "s014c:14",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 1058,
+        "y": 6
+      },
+      "label": "Riot",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 15,
+      "element_token": "s014c:15",
+      "frame": {
+        "h": 15,
+        "w": 22,
+        "x": 1098,
+        "y": 19
+      },
+      "label": "Riot",
+      "parent_index": 14,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 16,
+      "element_token": "s014c:16",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 1138,
+        "y": 6
+      },
+      "label": "Epic",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 17,
+      "element_token": "s014c:17",
+      "frame": {
+        "h": 15,
+        "w": 22,
+        "x": 1178,
+        "y": 19
+      },
+      "label": "Epic",
+      "parent_index": 16,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 18,
+      "element_token": "s014c:18",
+      "frame": {
+        "h": 1020,
+        "w": 1120,
+        "x": 400,
+        "y": 60
+      },
+      "role": "Pane"
+    },
+    {
+      "depth": 4,
+      "element_index": 19,
+      "element_token": "s014c:19",
+      "frame": {
+        "h": 15,
+        "w": 1088,
+        "x": 416,
+        "y": 76
+      },
+      "label": "SYSTEM",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 20,
+      "element_token": "s014c:20",
+      "frame": {
+        "h": 36,
+        "w": 1088,
+        "x": 416,
+        "y": 95
+      },
+      "label": "Optimization status",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 21,
+      "element_token": "s014c:21",
+      "frame": {
+        "h": 20,
+        "w": 191,
+        "x": 416,
+        "y": 135
+      },
+      "label": "5 verified - next: open NVIDIA.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 22,
+      "element_token": "s014c:22",
+      "frame": {
+        "h": 15,
+        "w": 742,
+        "x": 437,
+        "y": 201
+      },
+      "label": "LIVE SYSTEM READ",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 23,
+      "element_token": "s014c:23",
+      "frame": {
+        "h": 36,
+        "w": 742,
+        "x": 437,
+        "y": 220
+      },
+      "label": "5 / 6 verified",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 24,
+      "element_token": "s014c:24",
+      "frame": {
+        "h": 16,
+        "w": 484,
+        "x": 437,
+        "y": 260
+      },
+      "label": "Every module detects this PC first, applies only supported changes, and keeps a repair path.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 25,
+      "element_token": "s014c:25",
+      "frame": {
+        "h": 15,
+        "w": 246,
+        "x": 1220,
+        "y": 199
+      },
+      "label": "SYSTEM MEMORY",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 26,
+      "element_token": "s014c:26",
+      "frame": {
+        "h": 28,
+        "w": 246,
+        "x": 1220,
+        "y": 218
+      },
+      "label": "4.4 GB",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 27,
+      "element_token": "s014c:27",
+      "frame": {
+        "h": 16,
+        "w": 246,
+        "x": 1220,
+        "y": 250
+      },
+      "label": "11.5 GB free ┬╖ 15.9 GB total",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 28,
+      "element_token": "s014c:28",
+      "frame": {
+        "h": 4,
+        "w": 246,
+        "x": 1220,
+        "y": 274
+      },
+      "parent_index": 18,
+      "role": "ProgressBar"
+    },
+    {
+      "depth": 4,
+      "element_index": 29,
+      "element_token": "s014c:29",
+      "frame": {
+        "h": 15,
+        "w": 854,
+        "x": 476,
+        "y": 316
+      },
+      "label": "RECOMMENDED NEXT",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 30,
+      "element_token": "s014c:30",
+      "frame": {
+        "h": 32,
+        "w": 854,
+        "x": 476,
+        "y": 333
+      },
+      "label": "NVIDIA DRS backup failed (exit 64): Unknown argument: --drs-backup\r\n",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 31,
+      "element_token": "s014c:31",
+      "frame": {
+        "h": 40,
+        "w": 128,
+        "x": 1342,
+        "y": 321
+      },
+      "label": "Open recommended next optimizer",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 32,
+      "element_token": "s014c:32",
+      "frame": {
+        "h": 17,
+        "w": 68,
+        "x": 1372,
+        "y": 333
+      },
+      "label": "Fix NVIDIA",
+      "parent_index": 31,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 33,
+      "element_token": "s014c:33",
+      "frame": {
+        "h": 150,
+        "w": 355,
+        "x": 416,
+        "y": 407
+      },
+      "label": "Open Discord optimizer",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 34,
+      "element_token": "s014c:34",
+      "frame": {
+        "h": 17,
+        "w": 254,
+        "x": 444,
+        "y": 424
+      },
+      "label": "Discord",
+      "parent_index": 33,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 35,
+      "element_token": "s014c:35",
+      "frame": {
+        "h": 17,
+        "w": 48,
+        "x": 706,
+        "y": 424
+      },
+      "label": "VERIFIED",
+      "parent_index": 33,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 36,
+      "element_token": "s014c:36",
+      "frame": {
+        "h": 20,
+        "w": 321,
+        "x": 433,
+        "y": 448
+      },
+      "label": "Lean client active",
+      "parent_index": 33,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 37,
+      "element_token": "s014c:37",
+      "frame": {
+        "h": 42,
+        "w": 321,
+        "x": 433,
+        "y": 475
+      },
+      "label": "Privacy patch ┬╖ voice QoS ┬╖ idle memory guard",
+      "parent_index": 33,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 38,
+      "element_token": "s014c:38",
+      "frame": {
+        "h": 16,
+        "w": 321,
+        "x": 433,
+        "y": 524
+      },
+      "label": "1.1 GB below session peak",
+      "parent_index": 33,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 39,
+      "element_token": "s014c:39",
+      "frame": {
+        "h": 150,
+        "w": 355,
+        "x": 783,
+        "y": 407
+      },
+      "label": "Open Steam optimizer",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 40,
+      "element_token": "s014c:40",
+      "frame": {
+        "h": 17,
+        "w": 254,
+        "x": 811,
+        "y": 424
+      },
+      "label": "Steam",
+      "parent_index": 39,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 41,
+      "element_token": "s014c:41",
+      "frame": {
+        "h": 17,
+        "w": 48,
+        "x": 1073,
+        "y": 424
+      },
+      "label": "VERIFIED",
+      "parent_index": 39,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 42,
+      "element_token": "s014c:42",
+      "frame": {
+        "h": 20,
+        "w": 321,
+        "x": 800,
+        "y": 448
+      },
+      "label": "Background policy ready",
+      "parent_index": 39,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 43,
+      "element_token": "s014c:43",
+      "frame": {
+        "h": 42,
+        "w": 321,
+        "x": 800,
+        "y": 475
+      },
+      "label": "Starts with the optimized launcher ┬╖ no unsafe RAM purges",
+      "parent_index": 39,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 44,
+      "element_token": "s014c:44",
+      "frame": {
+        "h": 16,
+        "w": 321,
+        "x": 800,
+        "y": 524
+      },
+      "label": "Open Steam for a live memory sample",
+      "parent_index": 39,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 45,
+      "element_token": "s014c:45",
+      "frame": {
+        "h": 150,
+        "w": 354,
+        "x": 1150,
+        "y": 407
+      },
+      "label": "Open Internet optimizer",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 46,
+      "element_token": "s014c:46",
+      "frame": {
+        "h": 17,
+        "w": 253,
+        "x": 1178,
+        "y": 424
+      },
+      "label": "Internet",
+      "parent_index": 45,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 47,
+      "element_token": "s014c:47",
+      "frame": {
+        "h": 17,
+        "w": 48,
+        "x": 1439,
+        "y": 424
+      },
+      "label": "VERIFIED",
+      "parent_index": 45,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 48,
+      "element_token": "s014c:48",
+      "frame": {
+        "h": 20,
+        "w": 320,
+        "x": 1167,
+        "y": 448
+      },
+      "label": "2.5G Ethernet",
+      "parent_index": 45,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 49,
+      "element_token": "s014c:49",
+      "frame": {
+        "h": 42,
+        "w": 320,
+        "x": 1167,
+        "y": 475
+      },
+      "label": "Adaptive stack applied ┬╖ Google DNS + automatic DoH",
+      "parent_index": 45,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 50,
+      "element_token": "s014c:50",
+      "frame": {
+        "h": 16,
+        "w": 320,
+        "x": 1167,
+        "y": 524
+      },
+      "label": "12.3 ms idle ┬╖ full-load +0.5 down / +1.2 up ┬╖ 0% idle loss",
+      "parent_index": 45,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 51,
+      "element_token": "s014c:51",
+      "frame": {
+        "h": 156,
+        "w": 355,
+        "x": 416,
+        "y": 569
+      },
+      "label": "Open NVIDIA optimizer",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 52,
+      "element_token": "s014c:52",
+      "frame": {
+        "h": 17,
+        "w": 200,
+        "x": 444,
+        "y": 586
+      },
+      "label": "NVIDIA",
+      "parent_index": 51,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 53,
+      "element_token": "s014c:53",
+      "frame": {
+        "h": 17,
+        "w": 102,
+        "x": 652,
+        "y": 586
+      },
+      "label": "NEEDS ATTENTION",
+      "parent_index": 51,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 54,
+      "element_token": "s014c:54",
+      "frame": {
+        "h": 20,
+        "w": 321,
+        "x": 433,
+        "y": 610
+      },
+      "label": "Needs work",
+      "parent_index": 51,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 55,
+      "element_token": "s014c:55",
+      "frame": {
+        "h": 48,
+        "w": 321,
+        "x": 433,
+        "y": 637
+      },
+      "label": "NVIDIA DRS backup failed (exit 64): Unknown argument: --drs-backup\r\n",
+      "parent_index": 51,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 56,
+      "element_token": "s014c:56",
+      "frame": {
+        "h": 16,
+        "w": 321,
+        "x": 433,
+        "y": 692
+      },
+      "label": "Open NVIDIA to review the failed stage",
+      "parent_index": 51,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 57,
+      "element_token": "s014c:57",
+      "frame": {
+        "h": 156,
+        "w": 355,
+        "x": 783,
+        "y": 569
+      },
+      "label": "Open Riot optimizer",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 58,
+      "element_token": "s014c:58",
+      "frame": {
+        "h": 17,
+        "w": 254,
+        "x": 811,
+        "y": 586
+      },
+      "label": "Riot",
+      "parent_index": 57,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 59,
+      "element_token": "s014c:59",
+      "frame": {
+        "h": 17,
+        "w": 48,
+        "x": 1073,
+        "y": 586
+      },
+      "label": "VERIFIED",
+      "parent_index": 57,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 60,
+      "element_token": "s014c:60",
+      "frame": {
+        "h": 20,
+        "w": 321,
+        "x": 800,
+        "y": 610
+      },
+      "label": "Game policy active",
+      "parent_index": 57,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 61,
+      "element_token": "s014c:61",
+      "frame": {
+        "h": 48,
+        "w": 321,
+        "x": 800,
+        "y": 637
+      },
+      "label": "GPU routing - FSO off - launcher yield while gaming",
+      "parent_index": 57,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 62,
+      "element_token": "s014c:62",
+      "frame": {
+        "h": 16,
+        "w": 321,
+        "x": 800,
+        "y": 692
+      },
+      "label": "3 game executable(s) verified - anti-cheat untouched",
+      "parent_index": 57,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 63,
+      "element_token": "s014c:63",
+      "frame": {
+        "h": 156,
+        "w": 354,
+        "x": 1150,
+        "y": 569
+      },
+      "label": "Open Epic optimizer",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 64,
+      "element_token": "s014c:64",
+      "frame": {
+        "h": 17,
+        "w": 253,
+        "x": 1178,
+        "y": 586
+      },
+      "label": "Epic",
+      "parent_index": 63,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 65,
+      "element_token": "s014c:65",
+      "frame": {
+        "h": 17,
+        "w": 48,
+        "x": 1439,
+        "y": 586
+      },
+      "label": "VERIFIED",
+      "parent_index": 63,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 66,
+      "element_token": "s014c:66",
+      "frame": {
+        "h": 20,
+        "w": 320,
+        "x": 1167,
+        "y": 610
+      },
+      "label": "Game policy active",
+      "parent_index": 63,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 67,
+      "element_token": "s014c:67",
+      "frame": {
+        "h": 48,
+        "w": 320,
+        "x": 1167,
+        "y": 637
+      },
+      "label": "GPU routing - FSO off - launcher yield while gaming",
+      "parent_index": 63,
+      "role": "Text"
+    },
+    {
+      "depth": 5,
+      "element_index": 68,
+      "element_token": "s014c:68",
+      "frame": {
+        "h": 16,
+        "w": 320,
+        "x": 1167,
+        "y": 692
+      },
+      "label": "1 game executable(s) verified - anti-cheat untouched",
+      "parent_index": 63,
+      "role": "Text"
+    },
+    {
+      "depth": 1,
+      "element_index": 69,
+      "element_token": "s014c:69",
+      "frame": {
+        "h": 5,
+        "w": 1920,
+        "x": 0,
+        "y": -5
+      },
+      "label": "Exo",
+      "role": "TitleBar",
+      "value": "Exo"
+    },
+    {
+      "depth": 3,
+      "element_index": 70,
+      "element_token": "s014c:70",
+      "frame": {
+        "h": 22,
+        "w": 22,
+        "x": 0,
+        "y": 0
+      },
+      "label": "System",
+      "parent_index": 69,
+      "role": "MenuItem"
+    },
+    {
+      "depth": 2,
+      "element_index": 71,
+      "element_token": "s014c:71",
+      "label": "Minimize",
+      "parent_index": 69,
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 72,
+      "element_token": "s014c:72",
+      "label": "Restore",
+      "parent_index": 69,
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 73,
+      "element_token": "s014c:73",
+      "label": "Close",
+      "parent_index": 69,
+      "role": "Button"
+    }
+  ],
+  "pid": 8724,
+  "screenshot_file_path": "C:\\Users\\Erix\\Exo\\docs\\cua-qa\\stress\\final-home.png",
+  "screenshot_height": 882,
+  "screenshot_mime_type": "image/png",
+  "screenshot_width": 1568,
+  "snapshot_id": "s014c",
+  "tree_markdown": "- Window \"Exo\"\n  - Pane \"Non Client Input Sink Window\"\n  - Pane \"AppWindow Custom Title Bar\"\n    - [0] Button \"Minimize\" [id=Minimize actions=[invoke]]\n    - [1] Button \"Restore\" [id=Restore actions=[invoke]]\n    - [2] Button \"Close\" [id=Close actions=[invoke]]\n        - [3] Button \"Open system overview\" [id=NavHome actions=[invoke]]\n          - [4] Text \"EXO\" [actions=[text]]\n        - [5] Button \"Settings\" [id=SettingsButton actions=[invoke]]\n      - [6] Button \"Discord\" [id=NavDiscord actions=[invoke]]\n        - [7] Text \"Discord\" [actions=[text]]\n      - [8] Button \"Steam\" [id=NavSteam actions=[invoke]]\n        - [9] Text \"Steam\" [actions=[text]]\n      - [10] Button \"Internet\" [id=NavInternet actions=[invoke]]\n        - [11] Text \"Internet\" [actions=[text]]\n      - [12] Button \"NVIDIA\" [id=NavNvidia actions=[invoke]]\n        - [13] Text \"NVIDIA\" [actions=[text]]\n      - [14] Button \"Riot\" [id=NavRiot actions=[invoke]]\n        - [15] Text \"Riot\" [actions=[text]]\n      - [16] Button \"Epic\" [id=NavEpic actions=[invoke]]\n        - [17] Text \"Epic\" [actions=[text]]\n      - [18] Pane [actions=[scroll]]\n        - [19] Text \"SYSTEM\" [actions=[text]]\n        - [20] Text \"Optimization status\" [id=HeroBrand actions=[text]]\n        - [21] Text \"5 verified - next: open NVIDIA.\" [id=HeroTagline actions=[text]]\n        - [22] Text \"LIVE SYSTEM READ\" [actions=[text]]\n        - [23] Text \"5 / 6 verified\" [actions=[text]]\n        - [24] Text \"Every module detects this PC first, applies only supported changes, and keeps a repair path.\" [actions=[text]]\n        - [25] Text \"SYSTEM MEMORY\" [actions=[text]]\n        - [26] Text \"4.4 GB\" [actions=[text]]\n        - [27] Text \"11.5 GB free ┬╖ 15.9 GB total\" [actions=[text]]\n        - [28] ProgressBar [actions=[set_value]]\n        - [29] Text \"RECOMMENDED NEXT\" [actions=[text]]\n        - [30] Text \"NVIDIA DRS backup failed (exit 64): Unknown argument: --drs-backup\r\n\" [actions=[text]]\n        - [31] Button \"Open recommended next optimizer\" [actions=[invoke]]\n          - [32] Text \"Fix NVIDIA\" [actions=[text]]\n        - [33] Button \"Open Discord optimizer\" [actions=[invoke]]\n          - [34] Text \"Discord\" [actions=[text]]\n          - [35] Text \"VERIFIED\" [actions=[text]]\n          - [36] Text \"Lean client active\" [actions=[text]]\n          - [37] Text \"Privacy patch ┬╖ voice QoS ┬╖ idle memory guard\" [actions=[text]]\n          - [38] Text \"1.1 GB below session peak\" [actions=[text]]\n        - [39] Button \"Open Steam optimizer\" [actions=[invoke]]\n          - [40] Text \"Steam\" [actions=[text]]\n          - [41] Text \"VERIFIED\" [actions=[text]]\n          - [42] Text \"Background policy ready\" [actions=[text]]\n          - [43] Text \"Starts with the optimized launcher ┬╖ no unsafe RAM purges\" [actions=[text]]\n          - [44] Text \"Open Steam for a live memory sample\" [actions=[text]]\n        - [45] Button \"Open Internet optimizer\" [actions=[invoke]]\n          - [46] Text \"Internet\" [actions=[text]]\n          - [47] Text \"VERIFIED\" [actions=[text]]\n          - [48] Text \"2.5G Ethernet\" [actions=[text]]\n          - [49] Text \"Adaptive stack applied ┬╖ Google DNS + automatic DoH\" [actions=[text]]\n          - [50] Text \"12.3 ms idle ┬╖ full-load +0.5 down / +1.2 up ┬╖ 0% idle loss\" [actions=[text]]\n        - [51] Button \"Open NVIDIA optimizer\" [actions=[invoke]]\n          - [52] Text \"NVIDIA\" [actions=[text]]\n          - [53] Text \"NEEDS ATTENTION\" [actions=[text]]\n          - [54] Text \"Needs work\" [actions=[text]]\n          - [55] Text \"NVIDIA DRS backup failed (exit 64): Unknown argument: --drs-backup\r\n\" [actions=[text]]\n          - [56] Text \"Open NVIDIA to review the failed stage\" [actions=[text]]\n        - [57] Button \"Open Riot optimizer\" [actions=[invoke]]\n          - [58] Text \"Riot\" [actions=[text]]\n          - [59] Text \"VERIFIED\" [actions=[text]]\n          - [60] Text \"Game policy active\" [actions=[text]]\n          - [61] Text \"GPU routing - FSO off - launcher yield while gaming\" [actions=[text]]\n          - [62] Text \"3 game executable(s) verified - anti-cheat untouched\" [actions=[text]]\n        - [63] Button \"Open Epic optimizer\" [actions=[invoke]]\n          - [64] Text \"Epic\" [actions=[text]]\n          - [65] Text \"VERIFIED\" [actions=[text]]\n          - [66] Text \"Game policy active\" [actions=[text]]\n          - [67] Text \"GPU routing - FSO off - launcher yield while gaming\" [actions=[text]]\n          - [68] Text \"1 game executable(s) verified - anti-cheat untouched\" [actions=[text]]\n  - [69] TitleBar [value=\"Exo\" actions=[set_value]]\n    - MenuBar \"System\"\n      - [70] MenuItem \"System\" [actions=[invoke,expand]]\n    - [71] Button \"Minimize\" [actions=[invoke]]\n    - [72] Button \"Restore\" [actions=[invoke]]\n    - [73] Button \"Close\" [actions=[invoke]]\n",
+  "window_id": 42074252
+}
+

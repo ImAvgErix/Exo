@@ -1,0 +1,586 @@
+{
+  "_note": "Prefer `elements` ΓÇö `tree_markdown` will continue to work but new fields will only be added to the structured side. Issue #22865: use `max_elements` / `max_depth` to bound the UIA walk on apps with very large trees.",
+  "element_count": 43,
+  "elements": [
+    {
+      "depth": 2,
+      "element_index": 0,
+      "element_token": "s0139:0",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1782,
+        "y": 0
+      },
+      "label": "Minimize",
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 1,
+      "element_token": "s0139:1",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1828,
+        "y": 0
+      },
+      "label": "Restore",
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 2,
+      "element_token": "s0139:2",
+      "frame": {
+        "h": 32,
+        "w": 46,
+        "x": 1874,
+        "y": 0
+      },
+      "label": "Close",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 3,
+      "element_token": "s0139:3",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 8,
+        "y": 6
+      },
+      "label": "Open system overview",
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 4,
+      "element_token": "s0139:4",
+      "frame": {
+        "h": 16,
+        "w": 26,
+        "x": 40,
+        "y": 18
+      },
+      "label": "EXO",
+      "parent_index": 3,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 5,
+      "element_token": "s0139:5",
+      "frame": {
+        "h": 40,
+        "w": 44,
+        "x": 1682,
+        "y": 6
+      },
+      "label": "Settings",
+      "role": "Button"
+    },
+    {
+      "depth": 3,
+      "element_index": 6,
+      "element_token": "s0139:6",
+      "frame": {
+        "h": 40,
+        "w": 86,
+        "x": 707,
+        "y": 6
+      },
+      "label": "Discord",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 7,
+      "element_token": "s0139:7",
+      "frame": {
+        "h": 15,
+        "w": 41,
+        "x": 742,
+        "y": 19
+      },
+      "label": "Discord",
+      "parent_index": 6,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 8,
+      "element_token": "s0139:8",
+      "frame": {
+        "h": 40,
+        "w": 78,
+        "x": 797,
+        "y": 6
+      },
+      "label": "Steam",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 9,
+      "element_token": "s0139:9",
+      "frame": {
+        "h": 15,
+        "w": 33,
+        "x": 832,
+        "y": 19
+      },
+      "label": "Steam",
+      "parent_index": 8,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 10,
+      "element_token": "s0139:10",
+      "frame": {
+        "h": 40,
+        "w": 87,
+        "x": 879,
+        "y": 6
+      },
+      "label": "Internet",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 11,
+      "element_token": "s0139:11",
+      "frame": {
+        "h": 15,
+        "w": 42,
+        "x": 914,
+        "y": 19
+      },
+      "label": "Internet",
+      "parent_index": 10,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 12,
+      "element_token": "s0139:12",
+      "frame": {
+        "h": 40,
+        "w": 84,
+        "x": 970,
+        "y": 6
+      },
+      "label": "NVIDIA",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 13,
+      "element_token": "s0139:13",
+      "frame": {
+        "h": 15,
+        "w": 39,
+        "x": 1005,
+        "y": 19
+      },
+      "label": "NVIDIA",
+      "parent_index": 12,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 14,
+      "element_token": "s0139:14",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 1058,
+        "y": 6
+      },
+      "label": "Riot",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 15,
+      "element_token": "s0139:15",
+      "frame": {
+        "h": 15,
+        "w": 22,
+        "x": 1098,
+        "y": 19
+      },
+      "label": "Riot",
+      "parent_index": 14,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 16,
+      "element_token": "s0139:16",
+      "frame": {
+        "h": 40,
+        "w": 76,
+        "x": 1138,
+        "y": 6
+      },
+      "label": "Epic",
+      "role": "Button"
+    },
+    {
+      "depth": 4,
+      "element_index": 17,
+      "element_token": "s0139:17",
+      "frame": {
+        "h": 15,
+        "w": 22,
+        "x": 1178,
+        "y": 19
+      },
+      "label": "Epic",
+      "parent_index": 16,
+      "role": "Text"
+    },
+    {
+      "depth": 3,
+      "element_index": 18,
+      "element_token": "s0139:18",
+      "frame": {
+        "h": 1020,
+        "w": 1120,
+        "x": 400,
+        "y": 60
+      },
+      "role": "Pane"
+    },
+    {
+      "depth": 4,
+      "element_index": 19,
+      "element_token": "s0139:19",
+      "frame": {
+        "h": 15,
+        "w": 1026,
+        "x": 457,
+        "y": 89
+      },
+      "label": "INTERNET",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 20,
+      "element_token": "s0139:20",
+      "frame": {
+        "h": 36,
+        "w": 1026,
+        "x": 457,
+        "y": 109
+      },
+      "label": "Optimized - check rows",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 21,
+      "element_token": "s0139:21",
+      "frame": {
+        "h": 32,
+        "w": 997,
+        "x": 473,
+        "y": 176
+      },
+      "label": "One network setting is open. Analyze & Apply measures this path first. Safety: Wi-Fi is never disabled. Apply snapshots first and auto-rolls back if connectivity fails. Repair restores the pre-Exo snapshot.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 22,
+      "element_token": "s0139:22",
+      "frame": {
+        "h": 15,
+        "w": 1046,
+        "x": 437,
+        "y": 260
+      },
+      "label": "WHAT EXO WILL CHANGE",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 23,
+      "element_token": "s0139:23",
+      "frame": {
+        "h": 16,
+        "w": 144,
+        "x": 1339,
+        "y": 259
+      },
+      "label": "Hardware-aware, reversible",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 24,
+      "element_token": "s0139:24",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 467,
+        "y": 309
+      },
+      "label": "Connection path",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 25,
+      "element_token": "s0139:25",
+      "frame": {
+        "h": 16,
+        "w": 472,
+        "x": 467,
+        "y": 329
+      },
+      "label": "2.5 Gbps Ethernet gets the lowest route metric; Wi-Fi is never disabled.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 26,
+      "element_token": "s0139:26",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 996,
+        "y": 301
+      },
+      "label": "Adaptive tuning",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 27,
+      "element_token": "s0139:27",
+      "frame": {
+        "h": 32,
+        "w": 472,
+        "x": 996,
+        "y": 321
+      },
+      "label": "Measured idle latency, full-load queueing, and throughput; applied multi-gig throughput + latency policy.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 28,
+      "element_token": "s0139:28",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 467,
+        "y": 405
+      },
+      "label": "DNS privacy",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 29,
+      "element_token": "s0139:29",
+      "frame": {
+        "h": 16,
+        "w": 472,
+        "x": 467,
+        "y": 425
+      },
+      "label": "Google ┬╖ selected by live test; automatic DoH active",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 30,
+      "element_token": "s0139:30",
+      "frame": {
+        "h": 17,
+        "w": 472,
+        "x": 996,
+        "y": 405
+      },
+      "label": "Safe repair",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 31,
+      "element_token": "s0139:31",
+      "frame": {
+        "h": 16,
+        "w": 472,
+        "x": 996,
+        "y": 425
+      },
+      "label": "A pre-Exo snapshot is ready; Repair restores DNS, DoH, routes, TCP, and NIC settings.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 32,
+      "element_token": "s0139:32",
+      "frame": {
+        "h": 16,
+        "w": 1046,
+        "x": 437,
+        "y": 506
+      },
+      "label": "12.3 ms idle ┬╖ full-load +0.5 ms download / +1.2 ms upload ┬╖ 0% idle loss ┬╖ Google DNS",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 33,
+      "element_token": "s0139:33",
+      "frame": {
+        "h": 40,
+        "w": 1046,
+        "x": 437,
+        "y": 530
+      },
+      "label": "Analyze this connection and apply the best measured settings",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 34,
+      "element_token": "s0139:34",
+      "frame": {
+        "h": 17,
+        "w": 104,
+        "x": 908,
+        "y": 542
+      },
+      "label": "Analyze & Apply",
+      "parent_index": 33,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 35,
+      "element_token": "s0139:35",
+      "frame": {
+        "h": 40,
+        "w": 1046,
+        "x": 437,
+        "y": 576
+      },
+      "label": "Repair internet stack",
+      "parent_index": 18,
+      "role": "Button"
+    },
+    {
+      "depth": 5,
+      "element_index": 36,
+      "element_token": "s0139:36",
+      "frame": {
+        "h": 16,
+        "w": 38,
+        "x": 941,
+        "y": 588
+      },
+      "label": "Repair",
+      "parent_index": 35,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 37,
+      "element_token": "s0139:37",
+      "frame": {
+        "h": 16,
+        "w": 1046,
+        "x": 437,
+        "y": 622
+      },
+      "label": "Repair: restore exact pre-Exo state",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 1,
+      "element_index": 38,
+      "element_token": "s0139:38",
+      "frame": {
+        "h": 5,
+        "w": 1920,
+        "x": 0,
+        "y": -5
+      },
+      "label": "Exo",
+      "role": "TitleBar",
+      "value": "Exo"
+    },
+    {
+      "depth": 3,
+      "element_index": 39,
+      "element_token": "s0139:39",
+      "frame": {
+        "h": 22,
+        "w": 22,
+        "x": 0,
+        "y": 0
+      },
+      "label": "System",
+      "parent_index": 38,
+      "role": "MenuItem"
+    },
+    {
+      "depth": 2,
+      "element_index": 40,
+      "element_token": "s0139:40",
+      "label": "Minimize",
+      "parent_index": 38,
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 41,
+      "element_token": "s0139:41",
+      "label": "Restore",
+      "parent_index": 38,
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 42,
+      "element_token": "s0139:42",
+      "label": "Close",
+      "parent_index": 38,
+      "role": "Button"
+    }
+  ],
+  "pid": 8724,
+  "screenshot_file_path": "C:\\Users\\Erix\\Exo\\docs\\cua-qa\\stress\\final-internet.png",
+  "screenshot_height": 882,
+  "screenshot_mime_type": "image/png",
+  "screenshot_width": 1568,
+  "snapshot_id": "s0139",
+  "tree_markdown": "- Window \"Exo\"\n  - Pane \"Non Client Input Sink Window\"\n  - Pane \"AppWindow Custom Title Bar\"\n    - [0] Button \"Minimize\" [id=Minimize actions=[invoke]]\n    - [1] Button \"Restore\" [id=Restore actions=[invoke]]\n    - [2] Button \"Close\" [id=Close actions=[invoke]]\n        - [3] Button \"Open system overview\" [id=NavHome actions=[invoke]]\n          - [4] Text \"EXO\" [actions=[text]]\n        - [5] Button \"Settings\" [id=SettingsButton actions=[invoke]]\n      - [6] Button \"Discord\" [id=NavDiscord actions=[invoke]]\n        - [7] Text \"Discord\" [actions=[text]]\n      - [8] Button \"Steam\" [id=NavSteam actions=[invoke]]\n        - [9] Text \"Steam\" [actions=[text]]\n      - [10] Button \"Internet\" [id=NavInternet actions=[invoke]]\n        - [11] Text \"Internet\" [actions=[text]]\n      - [12] Button \"NVIDIA\" [id=NavNvidia actions=[invoke]]\n        - [13] Text \"NVIDIA\" [actions=[text]]\n      - [14] Button \"Riot\" [id=NavRiot actions=[invoke]]\n        - [15] Text \"Riot\" [actions=[text]]\n      - [16] Button \"Epic\" [id=NavEpic actions=[invoke]]\n        - [17] Text \"Epic\" [actions=[text]]\n      - [18] Pane [actions=[scroll]]\n        - [19] Text \"INTERNET\" [actions=[text]]\n        - [20] Text \"Optimized - check rows\" [actions=[text]]\n        - [21] Text \"One network setting is open. Analyze & Apply measures this path first. Safety: Wi-Fi is never disabled. Apply snapshots first and auto-rolls back if connectivity fails. Repair restores the pre-Exo snapshot.\" [actions=[text]]\n        - [22] Text \"WHAT EXO WILL CHANGE\" [actions=[text]]\n        - [23] Text \"Hardware-aware, reversible\" [actions=[text]]\n        - [24] Text \"Connection path\" [actions=[text]]\n        - [25] Text \"2.5 Gbps Ethernet gets the lowest route metric; Wi-Fi is never disabled.\" [actions=[text]]\n        - [26] Text \"Adaptive tuning\" [actions=[text]]\n        - [27] Text \"Measured idle latency, full-load queueing, and throughput; applied multi-gig throughput + latency policy.\" [actions=[text]]\n        - [28] Text \"DNS privacy\" [actions=[text]]\n        - [29] Text \"Google ┬╖ selected by live test; automatic DoH active\" [actions=[text]]\n        - [30] Text \"Safe repair\" [actions=[text]]\n        - [31] Text \"A pre-Exo snapshot is ready; Repair restores DNS, DoH, routes, TCP, and NIC settings.\" [actions=[text]]\n        - [32] Text \"12.3 ms idle ┬╖ full-load +0.5 ms download / +1.2 ms upload ┬╖ 0% idle loss ┬╖ Google DNS\" [actions=[text]]\n        - [33] Button \"Analyze this connection and apply the best measured settings\" [actions=[invoke]]\n          - [34] Text \"Analyze & Apply\" [actions=[text]]\n        - [35] Button \"Repair internet stack\" [actions=[invoke]]\n          - [36] Text \"Repair\" [actions=[text]]\n        - [37] Text \"Repair: restore exact pre-Exo state\" [actions=[text]]\n  - [38] TitleBar [value=\"Exo\" actions=[set_value]]\n    - MenuBar \"System\"\n      - [39] MenuItem \"System\" [actions=[invoke,expand]]\n    - [40] Button \"Minimize\" [actions=[invoke]]\n    - [41] Button \"Restore\" [actions=[invoke]]\n    - [42] Button \"Close\" [actions=[invoke]]\n",
+  "window_id": 42074252
+}
+
