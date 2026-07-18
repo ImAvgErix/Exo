@@ -1,7 +1,7 @@
-# Exo Cua QA - 2026-07-18T16:38:48.1328807-05:00
+# Exo Cua QA - 2026-07-18T17:35:02.4861151-05:00
 
-- pid: 8048
-- window_id: 2688494
+- pid: 7076
+- window_id: 3081154
 - exe: C:\Users\Erix\AppData\Local\Exo\app\Exo.exe
 
 ## Discord
@@ -318,7 +318,7 @@
 [24] Text: Every module detects this PC first, applies only supported changes, and keeps a repair path.
 [25] Text: SYSTEM MEMORY
 [26] Text: 4.2 GB
-[27] Text: 11.7 GB free - 15.9 GB total
+[27] Text: 11.8 GB free - 15.9 GB total
 [28] ProgressBar: 
 [29] Button: Open Discord optimizer
 [30] Text: Discord

@@ -30,11 +30,12 @@ function Test-SteamMemoryGuardText {
     if ($Text -notmatch '(?s)\$webCls\s*=\s*if\s*\(\$_\.Id\s*-eq\s*\$foregroundPid\).*?Normal.*?\$backgroundWebCls') { return $false }
     if ($Text -notmatch '\$_\.PriorityClass\s*=\s*\$webCls') { return $false }
     if ($Text -notmatch '(?s)\$memoryPriority\s*=\s*if\s*\(\$_\.Id\s*-eq\s*\$foregroundPid\).*?5.*?elseif\s*\(\$InGame\).*?1.*?else\s*\{\s*2\s*\}') { return $false }
-    if ($Text -notmatch 'SetPowerThrottled\(\$_\.Id, \(\$InGame -and \$_\.Id -ne \$foregroundPid\)\)') { return $false }
-    # EmptyWorkingSet freezes CEF - always banned. SoftReclaimWorkingSet (gated
-    # SetProcessWorkingSetSize) is allowed only when InGame + not-foreground.
+    if ($Text -notmatch 'SetPowerThrottled\(\$_\.Id, \(\$_\.Id -ne \$foregroundPid\)\)' -and
+        $Text -notmatch 'SetPowerThrottled\(\$_\.Id, \(\$InGame -and \$_\.Id -ne \$foregroundPid\)\)') { return $false }
+    # EmptyWorkingSet freezes CEF - always banned. SoftReclaimWorkingSet allowed
+    # when gated on non-foreground CEF (library + in-game).
     $allowsSoftReclaim = ($Text -match 'SoftReclaimWorkingSet') -and
-        ($Text -match '\$InGame -and \$_\.Id -ne \$foregroundPid')
+        ($Text -match '\$_\.Id -ne \$foregroundPid')
     foreach ($rawLine in ($Text -split "`n")) {
         $line = $rawLine.TrimStart()
         if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }

@@ -52,12 +52,14 @@ public static partial class SteamLogic
         if (!text.Contains("$_.PriorityClass = $webCls", StringComparison.Ordinal)) return false;
         if (!Regex.IsMatch(text,
             @"(?s)\$memoryPriority\s*=\s*if\s*\(\$_.Id\s*-eq\s*\$foregroundPid\).*?5.*?elseif\s*\(\$InGame\).*?1.*?else\s*\{\s*2\s*\}")) return false;
-        if (!text.Contains("SetPowerThrottled($_.Id, ($InGame -and $_.Id -ne $foregroundPid))", StringComparison.Ordinal)) return false;
+        // EcoQoS / soft reclaim gated on non-foreground (v3: library + in-game).
+        if (!text.Contains("SetPowerThrottled($_.Id, ($_.Id -ne $foregroundPid))", StringComparison.Ordinal) &&
+            !text.Contains("SetPowerThrottled($_.Id, ($InGame -and $_.Id -ne $foregroundPid))", StringComparison.Ordinal))
+            return false;
         // EmptyWorkingSet always thrashing CEF — banned in any code line.
-        // SoftReclaimWorkingSet (gated SetProcessWorkingSetSize) is allowed only when
-        // the helper defines that method and gates soft reclaim with InGame + foreground.
+        // SoftReclaimWorkingSet allowed when gated on non-foreground CEF.
         var allowsSoftReclaim = text.Contains("SoftReclaimWorkingSet", StringComparison.Ordinal)
-            && text.Contains("$InGame -and $_.Id -ne $foregroundPid", StringComparison.Ordinal);
+            && text.Contains("$_.Id -ne $foregroundPid", StringComparison.Ordinal);
         foreach (var rawLine in text.Split('\n'))
         {
             var line = rawLine.TrimStart();

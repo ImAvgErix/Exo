@@ -1845,14 +1845,15 @@ function Set-SteamGpuRouting([string]$SteamPath) {
 }
 
 function Install-WebHelperMemoryGuard([string]$SteamPath) {
-    # Reversible companion: OS memory priority + EcoQoS + in-game soft reclaim for
-    # BACKGROUND steamwebhelper only. EmptyWorkingSet is banned (freezes CEF).
-    # Soft reclaim uses SetProcessWorkingSetSize(-1,-1) only when a game is running
-    # and the process is not the foreground Steam window.
+    # Reversible companion v3: aggressive RAM/CPU policy for Steam host processes only.
+    # EmptyWorkingSet is banned (freezes CEF). Soft reclaim (SetProcessWorkingSetSize -1,-1)
+    # runs on every NON-FOREGROUND steamwebhelper (library + in-game). EcoQoS/very-low
+    # memory priority still tighten harder while a game runs. Never touches game processes.
     $helper = Join-Path $SteamPath 'Exo-SteamMemoryGuard.ps1'
     $body = @'
-# Exo - Steam memory + contention guard (v2).
-# Never EmptyWorkingSet, hard cap, suspend, or kill. Soft reclaim is in-game + background only.
+# Exo - Steam memory + contention guard (v3).
+# Never EmptyWorkingSet, hard cap, suspend, or kill.
+# SoftReclaimWorkingSet on non-foreground CEF always; EcoQoS harder while InGame.
 $ErrorActionPreference = 'SilentlyContinue'
 $created = $false
 $mutex = [Threading.Mutex]::new($true, 'Local\Exo.SteamMemoryGuard', [ref]$created)
@@ -1885,9 +1886,9 @@ public static class ExoSteamMemory {
       return SetProcessInformation(handle, 4, ref info, 12);
     } finally { CloseHandle(handle); }
   }
-  // SoftReclaimWorkingSet: ask OS to drop idle pages. Gated by caller (InGame + not foreground).
+  // SoftReclaimWorkingSet: drop idle pages. Caller must gate: $_.Id -ne $foregroundPid
   public static bool SoftReclaimWorkingSet(int pid) {
-    IntPtr handle = OpenProcess(0x0100u | 0x0200u, false, pid); // PROCESS_SET_QUOTA | PROCESS_QUERY_INFORMATION
+    IntPtr handle = OpenProcess(0x0100u | 0x0200u, false, pid);
     if (handle == IntPtr.Zero) return false;
     try { return SetProcessWorkingSetSize(handle, new IntPtr(-1), new IntPtr(-1)); }
     finally { CloseHandle(handle); }
@@ -1912,8 +1913,7 @@ function Test-SteamGameRunning {
 }
 
 function Set-SteamClientPriority([bool]$InGame) {
-  # Foreground Steam stays fully responsive. Background renderers get low memory
-  # priority; while a game runs, background CEF also soft-reclaims idle pages.
+  # Foreground Steam/CEF stays responsive. Everything else yields RAM/CPU.
   $foregroundPid = [ExoSteamMemory]::ForegroundPid()
   $steamCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
@@ -1923,42 +1923,46 @@ function Set-SteamClientPriority([bool]$InGame) {
   $backgroundWebCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
   } else {
-    [System.Diagnostics.ProcessPriorityClass]::Normal
+    [System.Diagnostics.ProcessPriorityClass]::BelowNormal
   }
   Get-Process -Name 'steam' -ErrorAction SilentlyContinue | ForEach-Object {
-    try { if ($_.PriorityClass -ne $steamCls) { $_.PriorityClass = $steamCls } } catch {}
+    try {
+      $cls = if ($_.Id -eq $foregroundPid) {
+        [System.Diagnostics.ProcessPriorityClass]::Normal
+      } else { $steamCls }
+      if ($_.PriorityClass -ne $cls) { $_.PriorityClass = $cls }
+      if ($_.Id -ne $foregroundPid) {
+        $steamMem = if ($InGame) { 1 } else { 2 }
+        [void][ExoSteamMemory]::SetMemoryPriority($_.Id, [uint32]$steamMem)
+        if ($InGame) { [void][ExoSteamMemory]::SoftReclaimWorkingSet($_.Id) }
+      }
+    } catch {}
   }
-  # Non-UI helpers can go idle while gaming - never touch game processes.
-  if ($InGame) {
-    Get-Process -Name 'steamerrorreporter','steamerrorreporter64','streaming_client','steam_monitor' -ErrorAction SilentlyContinue | ForEach-Object {
-      try {
-        if ($_.PriorityClass -ne [System.Diagnostics.ProcessPriorityClass]::Idle) {
-          $_.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Idle
-        }
-        [void][ExoSteamMemory]::SetMemoryPriority($_.Id, 1)
-        [void][ExoSteamMemory]::SetPowerThrottled($_.Id, $true)
-        [void][ExoSteamMemory]::SoftReclaimWorkingSet($_.Id)
-      } catch {}
-    }
+  # Non-UI helpers: always demote + soft reclaim (never game processes).
+  Get-Process -Name 'steamerrorreporter','steamerrorreporter64','streaming_client','steam_monitor' -ErrorAction SilentlyContinue | ForEach-Object {
+    try {
+      if ($_.PriorityClass -ne [System.Diagnostics.ProcessPriorityClass]::Idle) {
+        $_.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Idle
+      }
+      [void][ExoSteamMemory]::SetMemoryPriority($_.Id, 1)
+      [void][ExoSteamMemory]::SetPowerThrottled($_.Id, $true)
+      [void][ExoSteamMemory]::SoftReclaimWorkingSet($_.Id)
+    } catch {}
   }
   Get-Process -Name 'steamwebhelper' -ErrorAction SilentlyContinue | ForEach-Object {
     try {
-      # The CEF process owning the foreground Steam window stays Normal even
-      # while a game runs; only background renderers yield CPU time.
       $webCls = if ($_.Id -eq $foregroundPid) {
         [System.Diagnostics.ProcessPriorityClass]::Normal
       } else { $backgroundWebCls }
       if ($_.PriorityClass -ne $webCls) {
         $_.PriorityClass = $webCls
       }
-      # Foreground ordering matters: never demote the renderer the user is using.
       $memoryPriority = if ($_.Id -eq $foregroundPid) { 5 } elseif ($InGame) { 1 } else { 2 }
       [void][ExoSteamMemory]::SetMemoryPriority($_.Id, [uint32]$memoryPriority)
-      # EcoQoS is gameplay-only and background-only. StateMask=0 explicitly
-      # returns every renderer to HighQoS when the condition ends.
-      [void][ExoSteamMemory]::SetPowerThrottled($_.Id, ($InGame -and $_.Id -ne $foregroundPid))
-      # SoftReclaimWorkingSet: in-game + background only (Discord-like lower idle footprint without EmptyWorkingSet).
-      if ($InGame -and $_.Id -ne $foregroundPid) {
+      # EcoQoS on every non-foreground CEF page (library + in-game).
+      [void][ExoSteamMemory]::SetPowerThrottled($_.Id, ($_.Id -ne $foregroundPid))
+      # Soft reclaim every non-foreground CEF renderer (library + in-game).
+      if ($_.Id -ne $foregroundPid) {
         [void][ExoSteamMemory]::SoftReclaimWorkingSet($_.Id)
       }
     } catch {}
@@ -1981,6 +1985,7 @@ function Reinstate-SteamQuiet {
       $item = Get-Item -Path $key -ErrorAction Stop
       foreach ($name in @($item.GetValueNames())) {
         $val = [string]$item.GetValue($name)
+        if ($name -match '(?i)^Exo-') { continue }
         if ($val -match '(?i)steam\.exe' -or $name -match '(?i)^steam') {
           Remove-ItemProperty -Path $key -Name $name -Force -ErrorAction SilentlyContinue
         }
@@ -2000,9 +2005,9 @@ try {
     $inGame = Test-SteamGameRunning
     Set-SteamClientPriority -InGame:$inGame
     $ticks++
-    if (($ticks % 12) -eq 0) { Reinstate-SteamQuiet }
-    # Faster loop while gaming so soft reclaim + EcoQoS stay tight.
-    if ($inGame) { Start-Sleep -Seconds 3 } else { Start-Sleep -Seconds 5 }
+    if (($ticks % 15) -eq 0) { Reinstate-SteamQuiet }
+    # Tight loop: 2s in-game, 3s library (soft reclaim stays active either way).
+    if ($inGame) { Start-Sleep -Seconds 2 } else { Start-Sleep -Seconds 3 }
   }
 } finally {
   Get-Process -Name 'steamwebhelper' -ErrorAction SilentlyContinue | ForEach-Object {
@@ -2018,7 +2023,7 @@ try {
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
     $oldHelper = Join-Path $SteamPath 'Exo-SteamWebHelperTrim.ps1'
     if (Test-Path -LiteralPath $oldHelper) { Remove-Item -LiteralPath $oldHelper -Force -ErrorAction SilentlyContinue }
-    Write-Ok 'Steam memory + contention guard installed (in-game soft reclaim for background CEF only)'
+    Write-Ok 'Steam memory + contention guard v3 (soft reclaim non-foreground CEF always; EcoQoS harder in-game)'
     return $helper
 }
 

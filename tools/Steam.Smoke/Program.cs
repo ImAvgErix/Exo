@@ -295,7 +295,7 @@ Expect("memory guard uses Windows priority and passes shipped classifier",
     SteamLogic.IsMemoryGuardText(helperBody) &&
     helperBody.Contains("SetProcessInformation", StringComparison.Ordinal) &&
     helperBody.Contains("SoftReclaimWorkingSet", StringComparison.Ordinal) &&
-    helperBody.Contains("$InGame -and $_.Id -ne $foregroundPid", StringComparison.Ordinal) &&
+    helperBody.Contains("$_.Id -ne $foregroundPid", StringComparison.Ordinal) &&
     !helperBody.Contains("EmptyWorkingSet(", StringComparison.Ordinal));
 Expect("apply verifier ignores safety documentation but audits executable lines",
     optimizerText.Contains("if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }", StringComparison.Ordinal) &&

@@ -2,11 +2,19 @@
 
 ## Product direction
 
-Exo is a no-compromise Windows performance and debloat tool. Aggressive memory trimming, background-process reduction, priority tuning, cache cleanup, telemetry removal, and latency/FPS optimization are intentional core features. Do not quietly weaken them into conservative defaults.
+Exo is a no-compromise Windows performance and debloat tool. **Dual-scope:** the same bar applies to **Exo itself** and to **every target** it optimizes (Discord, Steam, Internet, NVIDIA, Riot, Epic, …). Vendor apps are treated as bloated by default — cut RAM, background CPU, autostart, telemetry, and clutter. Do not quietly weaken policies into conservative “leave the host alone” defaults.
 
-**No Exo background footprint:** never create Exo scheduled tasks, logon tasks, Run-key startup entries, or Exo-named Windows services. Apply runs when the user clicks Apply; purge any leftover `Exo-*` tasks on Apply/Repair. (Disabling *vendor* junk like NVIDIA App container or Steam/Discord autostart is fine — that is not Exo installing itself.)
+**Goals (app + targets):** performance/speed, less RAM / soft-reclaimed idle pages, debloat, privacy, black/uncluttered UI, reversible Apply/Repair.
 
-Aggressive must still be deterministic: scope actions to the selected application or hardware, make Apply *work* (retry hard paths; do not ship "honest failure" as the product), avoid invented registry settings, preserve data needed to prevent corruption, and keep Discord/Steam repair paths working. Never describe NVIDIA Reset as rollback: it only clears Exo status, while NVIDIA recovery remains manual through NVIDIA settings or a driver reinstall.
+**Hard stops only:**
+1. Do not brick the PC or network (snapshot + canary + Repair; never permanently kill Wi-Fi).
+2. Do not ban the user (never inject/kill/trim **game anti-cheat** or protected game shipping processes). Launchers and chat clients are fair game.
+3. No folklore (no invented FPS registry, no fake claims).
+4. Never `EmptyWorkingSet` thrash **Steam CEF** (`steamwebhelper`) — it freezes the library UI. Soft reclaim (`SetProcessWorkingSetSize(-1,-1)`) on **non-foreground** CEF/helpers is allowed.
+
+**Lifecycle helpers (authorized):** scoped companions that lower RAM/CPU for a target are OK when they are (a) installed by Apply, (b) reversible by Repair, (c) limited to that target’s processes (e.g. Steam memory guard while Steam runs; Riot/Epic yield on **launcher** processes only). Prefer attaching to the target’s launch path when possible. Do **not** install anonymous always-on malware-style services. Disabling *vendor* junk autostart (Steam/Discord/NVIDIA App) is fine.
+
+Aggressive must still be deterministic: scope actions to the selected application or hardware, make Apply *work* (retry hard paths), preserve data needed to prevent corruption, and keep Discord/Steam/Internet/NVIDIA Repair paths working. Never describe NVIDIA Reset as full driver rollback: it clears Exo status / restores DRS snapshot when present; vendor recovery may still need NVIDIA tools.
 
 ## Shell UI (current overhaul contract)
 
