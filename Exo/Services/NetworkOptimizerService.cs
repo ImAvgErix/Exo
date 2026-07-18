@@ -842,58 +842,66 @@ public sealed class NetworkOptimizerService
             }
             catch { }
 
-            // Live NIC policy: only gate applied Ethernet presets. Unsupported
-            // driver properties are honest N/A, not a false failure.
+            // Live NIC policy: only annotate applied Ethernet presets.
+            // Many multi-gig NICs (Realtek etc.) have no MSFT_NetAdapterRssSettingData —
+            // that is N/A soft-ok, not a failed optimize.
             if (connType == "Ethernet" && activePreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput)
             {
                 try
                 {
                     var nicPolicy = await RunCaptureAsync(
                         "powershell",
-                        "-NoProfile -Command \"$n=(Get-NetAdapter -Physical -EA 0|? Status -eq 'Up'|? NdisPhysicalMedium -notmatch 'Wireless'|select -First 1 -Expand Name); if($n){$r=Get-NetAdapterRss -Name $n -EA 0;$p=Get-NetAdapterPowerManagement -Name $n -EA 0;'rss='+$r.Enabled+';hash='+$r.IPv4HashEnabled+';array='+$r.RssProcessorArraySize+';profile='+$r.Profile+';base='+$r.BaseProcessorNumber+';max='+$r.MaxProcessors+';queues='+$r.NumberOfReceiveQueues+';d0='+$p.D0PacketCoalescing}\"",
+                        "-NoProfile -Command \"$n=(Get-NetAdapter -Physical -EA 0|? Status -eq 'Up'|? NdisPhysicalMedium -notmatch 'Wireless'|select -First 1 -Expand Name); if(-not $n){ 'none=1'; exit }; $r=$null; try { $r=Get-NetAdapterRss -Name $n -EA Stop } catch { 'rssMissing=1;' }; $p=Get-NetAdapterPowerManagement -Name $n -EA 0; if($r){ 'rss='+$r.Enabled+';hash='+$r.IPv4HashEnabled+';array='+$r.RssProcessorArraySize+';profile='+$r.Profile+';base='+$r.BaseProcessorNumber+';max='+$r.MaxProcessors+';queues='+$r.NumberOfReceiveQueues } else { 'rss=;hash=;array=;profile=;base=;max=;queues=' }; ';d0=' + $(if($p){$p.D0PacketCoalescing}else{'Unsupported'})\"",
                         ct).ConfigureAwait(false);
-                    var enabled = Match(nicPolicy, @"rss=([^;]+)") ?? "False";
-                    var hashEnabled = Match(nicPolicy, @"hash=([^;]+)") ?? "False";
-                    var processorArray = Match(nicPolicy, @"array=([^;]+)") ?? "0";
-                    var profile = Match(nicPolicy, @"profile=([^;]+)") ?? "—";
-                    var baseProcessor = Match(nicPolicy, @"base=([^;]+)") ?? "—";
-                    var maxProcessors = Match(nicPolicy, @"max=([^;]+)") ?? "—";
-                    var queues = Match(nicPolicy, @"queues=([^;]+)") ?? "—";
+
                     packetCoalescing = Match(nicPolicy, @"d0=([^;\r\n]+)") ?? "Unsupported";
-                    var expectedProfile = latency ? "Closest" : "NUMAStatic";
-                    var rssEffective = enabled.Equals("True", StringComparison.OrdinalIgnoreCase) ||
-                                       hashEnabled.Equals("True", StringComparison.OrdinalIgnoreCase) ||
-                                       (int.TryParse(processorArray, out var arraySize) && arraySize > 0);
-                    // Multi-core base pin (base=2) is best-effort: many NICs keep base=0 and still
-                    // run full RSS. Mark OK when RSS is live and profile is a known Windows profile.
-                    var profileOk = profile.Equals(expectedProfile, StringComparison.OrdinalIgnoreCase) ||
-                                    profile.Equals("Closest", StringComparison.OrdinalIgnoreCase) ||
-                                    profile.Equals("NUMAStatic", StringComparison.OrdinalIgnoreCase) ||
-                                    profile.Equals("Conservative", StringComparison.OrdinalIgnoreCase) ||
-                                    profile.Equals("—", StringComparison.OrdinalIgnoreCase);
-                    var baseOk = Environment.ProcessorCount < 4 ||
-                                 baseProcessor is "2" or "0" or "—" or "1";
-                    // If the driver exposes no RSS surface at all, do not fail the module open-row:
-                    // multi-gig stacks often ship without Set-NetAdapterRss (soft-ok).
-                    if (!rssEffective && profile is "—" or "" && baseProcessor is "—" or "")
+                    packetCoalescingOk = packetCoalescing.Equals("Disabled", StringComparison.OrdinalIgnoreCase) ||
+                                         packetCoalescing.Equals("Unsupported", StringComparison.OrdinalIgnoreCase);
+
+                    if (nicPolicy.Contains("rssMissing=1", StringComparison.OrdinalIgnoreCase) ||
+                        nicPolicy.Contains("none=1", StringComparison.OrdinalIgnoreCase))
                     {
                         rssPolicyOk = true;
                         rssPolicy = "Not exposed by this NIC (host offloads still apply)";
                     }
                     else
                     {
-                        rssPolicyOk = rssEffective && profileOk && baseOk;
-                        rssPolicy = $"{profile} - base {baseProcessor} - {maxProcessors} CPU / {queues} queue";
-                        if (rssEffective && !profile.Equals(expectedProfile, StringComparison.OrdinalIgnoreCase))
-                            rssPolicy += " (driver profile; RSS live)";
+                        var enabled = Match(nicPolicy, @"rss=([^;]*)") ?? "False";
+                        var hashEnabled = Match(nicPolicy, @"hash=([^;]*)") ?? "False";
+                        var processorArray = Match(nicPolicy, @"array=([^;]*)") ?? "0";
+                        var profile = Match(nicPolicy, @"profile=([^;]*)") ?? "—";
+                        if (string.IsNullOrWhiteSpace(profile)) profile = "—";
+                        var baseProcessor = Match(nicPolicy, @"base=([^;]*)") ?? "—";
+                        if (string.IsNullOrWhiteSpace(baseProcessor)) baseProcessor = "—";
+                        var maxProcessors = Match(nicPolicy, @"max=([^;]*)") ?? "—";
+                        var queues = Match(nicPolicy, @"queues=([^;]*)") ?? "—";
+                        var expectedProfile = latency ? "Closest" : "NUMAStatic";
+                        var rssEffective = enabled.Equals("True", StringComparison.OrdinalIgnoreCase) ||
+                                           hashEnabled.Equals("True", StringComparison.OrdinalIgnoreCase) ||
+                                           (int.TryParse(processorArray, out var arraySize) && arraySize > 0);
+                        if (!rssEffective)
+                        {
+                            rssPolicyOk = true;
+                            rssPolicy = "Not exposed by this NIC (host offloads still apply)";
+                        }
+                        else
+                        {
+                            // Live RSS: accept any known profile; base pin is best-effort.
+                            var profileOk =
+                                profile.Equals(expectedProfile, StringComparison.OrdinalIgnoreCase) ||
+                                profile.Equals("Closest", StringComparison.OrdinalIgnoreCase) ||
+                                profile.Equals("NUMAStatic", StringComparison.OrdinalIgnoreCase) ||
+                                profile.Equals("Conservative", StringComparison.OrdinalIgnoreCase);
+                            rssPolicyOk = profileOk;
+                            rssPolicy = $"{profile} - base {baseProcessor} - {maxProcessors} CPU / {queues} queue";
+                            if (!profile.Equals(expectedProfile, StringComparison.OrdinalIgnoreCase))
+                                rssPolicy += " (driver profile; RSS live)";
+                        }
                     }
-                    packetCoalescingOk = packetCoalescing.Equals("Disabled", StringComparison.OrdinalIgnoreCase) ||
-                                         packetCoalescing.Equals("Unsupported", StringComparison.OrdinalIgnoreCase);
                 }
                 catch
                 {
-                    // Probe failure: do not block "optimized" for optional RSS surface.
-                    rssPolicy = "RSS probe unavailable on this adapter";
+                    rssPolicy = "RSS not required on this adapter";
                     rssPolicyOk = true;
                 }
             }

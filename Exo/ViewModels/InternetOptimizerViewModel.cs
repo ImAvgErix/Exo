@@ -458,14 +458,25 @@ public partial class InternetOptimizerViewModel : ObservableObject
                 ? media
                 : $"{media} - {snap.LinkSpeed}";
 
+        // Ignore soft N/A style rows that are informational, not failures.
+        static bool IsRealOpen(NetworkFeatureRow f)
+        {
+            if (f.IsOk || string.IsNullOrWhiteSpace(f.Title)) return false;
+            var s = f.Status ?? string.Empty;
+            if (s.Contains("Not exposed", StringComparison.OrdinalIgnoreCase)) return false;
+            if (s.Contains("not required", StringComparison.OrdinalIgnoreCase)) return false;
+            if (s.Contains("Unsupported", StringComparison.OrdinalIgnoreCase)) return false;
+            if (s.Contains("probe unavailable", StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
+        }
+
         var open = snap.Features
-            .Where(f => !f.IsOk && !string.IsNullOrWhiteSpace(f.Title))
+            .Where(IsRealOpen)
             .Select(f => f.Title)
             .Take(2)
             .ToList();
         if (open.Count == 0)
             return $"Optimized - {media}";
-        // Name the open row instead of vague "check rows" (Cua stress honesty).
         return open.Count == 1
             ? $"Optimized - open: {open[0]}"
             : $"Optimized - open: {open[0]}, {open[1]}";

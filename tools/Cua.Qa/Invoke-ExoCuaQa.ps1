@@ -12,6 +12,12 @@
 
   Outputs under docs/cua-qa/ (repo-relative when run from repo root).
 
+  Nav contract:
+    1. Re-snapshot immediately before every click (element cache is per-snapshot).
+    2. Resolve Button by AutomationProperties.Name label.
+    3. Background AX click first; if page markers missing, foreground AX then home-card.
+    4. Capture only after verify markers (or after exhausting fallbacks).
+
 .EXAMPLE
   pwsh -File tools/Cua.Qa/Invoke-ExoCuaQa.ps1
 #>
@@ -30,12 +36,22 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $cuaBin = "$env:LOCALAPPDATA\Programs\Cua\cua-driver\bin"
 if (Test-Path $cuaBin) { $env:PATH = "$cuaBin;$env:PATH" }
 
+# Per-module UIA labels that prove we left SYSTEM overview.
+$script:ModuleMarkers = @{
+    'Discord'   = @('Apply Discord', 'Already optimized', 'WHAT EXO WILL CHANGE', 'Equicord', 'DISCORD')
+    'Steam'     = @('Apply Steam', 'STEAM', 'WebHelper', 'steam.exe', 'Background policy')
+    'Internet'  = @('Analyze this connection', 'Repair internet stack', 'INTERNET', 'Analyze & Apply')
+    'NVIDIA'    = @('Apply NVIDIA', 'G-SYNC', 'VRR', 'NVIDIA')
+    'Riot'      = @('Apply Riot', 'RIOT', 'Riot Client')
+    'Epic'      = @('Apply Epic', 'EPIC', 'Epic Games')
+    'ShellHome' = @('Optimization status', 'SYSTEM', 'Open Discord optimizer', 'LIVE SYSTEM READ')
+}
+
 function Invoke-CuaCall {
     param(
         [Parameter(Mandatory)][string]$Tool,
         [hashtable]$Args = $null
     )
-    # Empty-object tools (list_windows / list_apps): pass {} literally.
     if ($null -eq $Args -or $Args.Count -eq 0) {
         $json = '{}'
     } else {
@@ -57,6 +73,70 @@ function Get-CuaJson {
     try { return ($raw | ConvertFrom-Json) } catch { return $null }
 }
 
+function Get-LabelBlob {
+    param($Elements)
+    return (@($Elements | ForEach-Object { [string]$_.label }) -join ' ')
+}
+
+function Test-ModuleLanded {
+    param(
+        [string]$Name,
+        [string]$Blob
+    )
+    $markers = $script:ModuleMarkers[$Name]
+    if (-not $markers) { return $true }
+    foreach ($m in $markers) {
+        if ($Blob -match [regex]::Escape($m)) { return $true }
+    }
+    return $false
+}
+
+function Get-NavButtonIndex {
+    param(
+        [int]$PidExo,
+        [int64]$Hwnd,
+        [string[]]$Candidates
+    )
+    $snap = Get-CuaJson -Tool 'get_window_state' -Args @{
+        pid                = $PidExo
+        window_id          = $Hwnd
+        include_screenshot = $false
+        max_elements       = 80
+    }
+    if (-not $snap -or -not $snap.elements) { return @{ Index = -1; Blob = '' } }
+    $blob = Get-LabelBlob $snap.elements
+    foreach ($lab in $Candidates) {
+        $el = @($snap.elements | Where-Object { $_.role -eq 'Button' -and [string]$_.label -eq $lab } | Select-Object -First 1)
+        if ($el -and $null -ne $el.element_index) {
+            return @{ Index = [int]$el.element_index; Blob = $blob; Label = $lab }
+        }
+    }
+    # Home cards as secondary (Open Discord optimizer, etc.)
+    foreach ($lab in $Candidates) {
+        $el = @($snap.elements | Where-Object { $_.role -eq 'Button' -and [string]$_.label -like "*$lab*" } | Select-Object -First 1)
+        if ($el -and $null -ne $el.element_index) {
+            return @{ Index = [int]$el.element_index; Blob = $blob; Label = [string]$el.label }
+        }
+    }
+    return @{ Index = -1; Blob = $blob; Label = $null }
+}
+
+function Invoke-NavClick {
+    param(
+        [int]$PidExo,
+        [int64]$Hwnd,
+        [int]$ElementIndex,
+        [string]$DeliveryMode = 'background'
+    )
+    $raw = Invoke-CuaCall -Tool 'click' -Args @{
+        pid           = $PidExo
+        window_id     = $Hwnd
+        element_index = $ElementIndex
+        delivery_mode = $DeliveryMode
+    }
+    return $raw
+}
+
 Write-Host '[cua-qa] doctor'
 & cua-driver doctor
 if ($LASTEXITCODE -ne 0) { throw 'cua-driver doctor failed' }
@@ -65,7 +145,13 @@ $status = & cua-driver status 2>&1 | Out-String
 if ($status -notmatch 'running') {
     Write-Host '[cua-qa] starting cua-driver serve'
     Start-Process -FilePath 'cua-driver.exe' -ArgumentList 'serve' -WindowStyle Hidden
-    Start-Sleep -Seconds 2
+    $ready = $false
+    for ($i = 0; $i -lt 10; $i++) {
+        Start-Sleep -Seconds 1
+        $st = & cua-driver status 2>&1 | Out-String
+        if ($st -match 'running') { $ready = $true; break }
+    }
+    if (-not $ready) { throw 'cua-driver serve failed to become ready' }
 }
 
 if (-not (Get-Process -Name Exo -ErrorAction SilentlyContinue)) {
@@ -109,34 +195,86 @@ $summary.Add("- pid: $pidExo")
 $summary.Add("- window_id: $hwnd")
 $summary.Add("- exe: $($exo.Path)")
 $summary.Add("")
+$navFails = 0
 
-function Capture-Module([string]$Name, [int]$ButtonIndex) {
-    Write-Host "[cua-qa] module $Name (element_index=$ButtonIndex)"
-    if ($ButtonIndex -ge 0) {
-        $null = Invoke-CuaCall -Tool 'click' -Args @{
-            pid           = $pidExo
-            window_id     = $hwnd
-            element_index = $ButtonIndex
-            delivery_mode = 'background'
+function Capture-Module {
+    param(
+        [string]$Name,
+        [string[]]$NavLabels
+    )
+    Write-Host "[cua-qa] module $Name (labels: $($NavLabels -join ', '))"
+
+    $landed = $false
+    $clickNote = 'no-nav'
+    if ($NavLabels -and $NavLabels.Count -gt 0) {
+        # Ladder: background AX → foreground AX → home-card Open <Module> optimizer
+        $attempts = @(
+            @{ Mode = 'background'; Labels = $NavLabels },
+            @{ Mode = 'foreground'; Labels = $NavLabels }
+        )
+        if ($Name -ne 'ShellHome') {
+            $attempts += @{
+                Mode   = 'background'
+                Labels = @("Open $Name optimizer", "Open $Name")
+            }
         }
-        # Internet/NVIDIA detect scripts are slower than 2s; wait for status text to settle.
-        Start-Sleep -Seconds 2
-        if ($Name -in @('Internet', 'NVIDIA', 'Discord', 'Steam')) {
-            for ($w = 0; $w -lt 8; $w++) {
-                $probeRaw = Invoke-CuaCall -Tool 'get_window_state' -Args @{
+
+        foreach ($att in $attempts) {
+            $nav = Get-NavButtonIndex -PidExo $pidExo -Hwnd $hwnd -Candidates $att.Labels
+            if ($nav.Index -lt 0) {
+                Write-Host "[cua-qa]   no button for $($att.Labels -join '|') ($($att.Mode))"
+                continue
+            }
+            Write-Host "[cua-qa]   click idx=$($nav.Index) label='$($nav.Label)' mode=$($att.Mode)"
+            $clickRaw = Invoke-NavClick -PidExo $pidExo -Hwnd $hwnd -ElementIndex $nav.Index -DeliveryMode $att.Mode
+            $clickNote = "idx=$($nav.Index) label=$($nav.Label) mode=$($att.Mode)"
+            try {
+                $cj = $clickRaw | ConvertFrom-Json
+                if ($cj.effect) { $clickNote += " effect=$($cj.effect)" }
+                if ($cj.verified -ne $null) { $clickNote += " verified=$($cj.verified)" }
+            } catch { }
+
+            Start-Sleep -Milliseconds 1500
+            # Wait for detect settle on heavy modules
+            if ($Name -in @('Internet', 'NVIDIA', 'Discord', 'Steam')) {
+                for ($w = 0; $w -lt 10; $w++) {
+                    $probe = Get-CuaJson -Tool 'get_window_state' -Args @{
+                        pid                = $pidExo
+                        window_id          = $hwnd
+                        include_screenshot = $false
+                        max_elements       = 50
+                    }
+                    if (-not $probe) { Start-Sleep -Seconds 1; continue }
+                    $statusBlob = Get-LabelBlob $probe.elements
+                    if ($statusBlob -notmatch 'Checking(\.\.\.| status)|Detecting this PC') {
+                        if (Test-ModuleLanded -Name $Name -Blob $statusBlob) {
+                            $landed = $true
+                            break
+                        }
+                    }
+                    Start-Sleep -Seconds 1
+                }
+            } else {
+                $probe = Get-CuaJson -Tool 'get_window_state' -Args @{
                     pid                = $pidExo
                     window_id          = $hwnd
                     include_screenshot = $false
-                    max_elements       = 40
+                    max_elements       = 50
                 }
-                try {
-                    $probe = $probeRaw | ConvertFrom-Json
-                    $statusBlob = (@($probe.elements | ForEach-Object { [string]$_.label }) -join ' ')
-                    if ($statusBlob -notmatch 'Checking(\.\.\.| status)|Detecting this PC') { break }
-                } catch { }
-                Start-Sleep -Seconds 1
+                if ($probe) {
+                    $statusBlob = Get-LabelBlob $probe.elements
+                    $landed = Test-ModuleLanded -Name $Name -Blob $statusBlob
+                }
             }
+
+            if ($landed) {
+                Write-Host "[cua-qa]   landed on $Name"
+                break
+            }
+            Write-Host "[cua-qa]   not landed after $($att.Mode) — escalate"
         }
+    } else {
+        $landed = $true
     }
 
     $png = Join-Path $OutDir ("{0}.png" -f $Name.ToLowerInvariant())
@@ -151,85 +289,69 @@ function Capture-Module([string]$Name, [int]$ButtonIndex) {
     $raw | Set-Content -LiteralPath $jsonPath -Encoding UTF8
 
     $labels = @()
+    $blob = ''
     try {
         $o = $raw | ConvertFrom-Json
         $labels = @($o.elements | ForEach-Object { "[{0}] {1}: {2}" -f $_.element_index, $_.role, $_.label })
+        $blob = Get-LabelBlob $o.elements
+        if (-not $landed) {
+            $landed = Test-ModuleLanded -Name $Name -Blob $blob
+        }
     } catch { }
 
     $summary.Add("## $Name")
     $summary.Add("")
     $summary.Add("- screenshot: ``docs/cua-qa/$([IO.Path]::GetFileName($png))``")
+    $summary.Add("- nav: $clickNote")
+    $summary.Add("- landed: $landed")
     $summary.Add("- elements: $($labels.Count)")
     $summary.Add('```')
     $labels | Select-Object -First 40 | ForEach-Object { $summary.Add($_) }
     $summary.Add('```')
     $summary.Add("")
 
+    if (-not $landed) {
+        $script:navFails++
+        $summary.Add("**FAIL nav:** Did not reach $Name page (markers missing; still Home or wrong module).")
+        $summary.Add('')
+    }
+
     # Honesty heuristics (agent-readable)
-    $blob = ($labels -join ' ').ToLowerInvariant()
-    if ($Name -eq 'Discord' -and $blob -match 'already optimized' -and $blob -match 'not installed') {
+    $blobL = $blob.ToLowerInvariant()
+    if ($Name -eq 'Discord' -and $blobL -match 'already optimized' -and $blobL -match 'not installed') {
         $summary.Add('**FAIL honesty:** Discord shows Already optimized while not-installed banner is visible.')
         $summary.Add('')
     }
-    if ($Name -eq 'NVIDIA' -and $blob -notmatch 'g-sync|gsync|vrr') {
+    if ($Name -eq 'NVIDIA' -and $blobL -notmatch 'g-sync|gsync|vrr') {
         $summary.Add('**WARN:** NVIDIA page missing G-SYNC/VRR control labels in UIA tree.')
         $summary.Add('')
     }
-}
-
-# Fresh snapshot for nav indices (TitleBar EXO + 6 modules + Home typical).
-# NOTE: never use $home — PowerShell aliases it to read-only $HOME.
-$navSnapRaw = Invoke-CuaCall -Tool 'get_window_state' -Args @{
-    pid                = $pidExo
-    window_id          = $hwnd
-    include_screenshot = $false
-    max_elements       = 40
-}
-$navSnap = $navSnapRaw | ConvertFrom-Json
-$byLabel = @{}
-foreach ($el in $navSnap.elements) {
-    if ($el.role -eq 'Button' -and $el.label) { $byLabel[$el.label] = [int]$el.element_index }
+    if ($Name -eq 'Internet' -and $landed) {
+        if ($blobL -match 'rss policy|not exposed by this nic|host offloads') {
+            $summary.Add('- Internet RSS: soft-ok / N-A surface visible (good).')
+            $summary.Add('')
+        }
+        if ($blobL -match 'optimized - open:.*rss') {
+            $summary.Add('**WARN:** Internet status still surfaces RSS as an open failure row.')
+            $summary.Add('')
+        }
+    }
 }
 
 foreach ($m in $Modules) {
     if ($m -eq 'ShellHome') {
-        # 3.6.1 shell: overview is "Open system overview" (not "Home")
-        $navHomeKey = $null
-        foreach ($k in @('Open system overview', 'Home', 'Settings')) {
-            if ($byLabel.ContainsKey($k)) { $navHomeKey = $k; break }
-        }
-        $idx = if ($navHomeKey) { [int]$byLabel[$navHomeKey] } else { -1 }
-        Capture-Module 'ShellHome' $idx
+        Capture-Module -Name 'ShellHome' -NavLabels @('Open system overview', 'Home')
         continue
     }
-    $idx = if ($byLabel.ContainsKey($m)) { [int]$byLabel[$m] } else { -1 }
-    if ($idx -lt 0) {
-        $summary.Add("## $m")
-        $summary.Add("")
-        $summary.Add("**SKIP:** nav button not found in UIA tree.")
-        $summary.Add("")
-        continue
-    }
-    Capture-Module $m $idx
-    # Refresh index map after nav (tree is stable for shell buttons usually)
-    $navSnapRaw = Invoke-CuaCall -Tool 'get_window_state' -Args @{
-        pid                = $pidExo
-        window_id          = $hwnd
-        include_screenshot = $false
-        max_elements       = 40
-    }
-    try {
-        $navSnap = $navSnapRaw | ConvertFrom-Json
-        $byLabel = @{}
-        foreach ($el in $navSnap.elements) {
-            if ($el.role -eq 'Button' -and $el.label) { $byLabel[$el.label] = [int]$el.element_index }
-        }
-    } catch { }
+    Capture-Module -Name $m -NavLabels @($m)
 }
+
+$summary.Insert(5, "- nav_fails: $navFails")
+$summary.Insert(6, "")
 
 $report = Join-Path $OutDir 'REPORT.md'
 $summary | Set-Content -LiteralPath $report -Encoding UTF8
-Write-Host "[cua-qa] wrote $report"
+Write-Host "[cua-qa] wrote $report (nav_fails=$navFails)"
 Write-Host '[cua-qa] done'
+if ($navFails -gt 0) { exit 2 }
 exit 0
-
