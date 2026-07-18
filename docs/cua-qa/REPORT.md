@@ -1,7 +1,7 @@
-# Exo Cua QA - 2026-07-18T15:18:33.7388818-05:00
+# Exo Cua QA - 2026-07-18T16:38:48.1328807-05:00
 
-- pid: 4784
-- window_id: 107217524
+- pid: 8048
+- window_id: 2688494
 - exe: C:\Users\Erix\AppData\Local\Exo\app\Exo.exe
 
 ## Discord
@@ -123,7 +123,7 @@
 [17] Text: Epic
 [18] Pane: 
 [19] Text: INTERNET
-[20] Text: Optimized - check rows
+[20] Text: Optimized - open: RSS placement
 [21] Text: One network setting is open. Analyze & Apply measures this path first. Safety: Wi-Fi is never disabled. Apply snapshots first and auto-rolls back if connectivity fails. Repair restores the pre-Exo snapshot.
 [22] Text: WHAT EXO WILL CHANGE
 [23] Text: Hardware-aware, reversible
@@ -318,18 +318,18 @@
 [24] Text: Every module detects this PC first, applies only supported changes, and keeps a repair path.
 [25] Text: SYSTEM MEMORY
 [26] Text: 4.2 GB
-[27] Text: 11.7 GB free ┬╖ 15.9 GB total
+[27] Text: 11.7 GB free - 15.9 GB total
 [28] ProgressBar: 
 [29] Button: Open Discord optimizer
 [30] Text: Discord
 [31] Text: VERIFIED
 [32] Text: Lean client active
-[33] Text: Privacy patch ┬╖ voice QoS ┬╖ idle memory guard
+[33] Text: Privacy patch - voice QoS - idle memory guard
 [34] Text: 1.1 GB below session peak
 [35] Button: Open Steam optimizer
 [36] Text: Steam
 [37] Text: VERIFIED
 [38] Text: Background policy ready
-[39] Text: Starts with the optimized launcher ┬╖ no unsafe RAM purges
+[39] Text: Starts with the optimized launcher - no unsafe RAM purges
 ```
 

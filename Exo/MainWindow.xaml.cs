@@ -187,6 +187,9 @@ public sealed partial class MainWindow : Window
         _postFirstFrameWorkStarted = true;
         try
         {
+            // Stage kits + resolve pwsh before the user opens a module.
+            App.Services.WarmInBackground();
+            Helpers.StartupLog.Mark("optimizer-warm-started");
             _ = MaybeAutoUpdateAsync(_lifetimeCts.Token);
             Helpers.StartupLog.Mark("auto-update-started");
         }

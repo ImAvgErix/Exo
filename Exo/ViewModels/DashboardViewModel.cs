@@ -115,7 +115,7 @@ public partial class DashboardViewModel : ObservableObject
             MemoryLoadPercent = mem.LoadPercent;
             MemoryPrimary = HomeDashboardReader.FormatBytes(used);
             MemorySecondary =
-                $"{HomeDashboardReader.FormatBytes(mem.AvailableBytes)} free · {HomeDashboardReader.FormatBytes(mem.TotalBytes)} total";
+                $"{HomeDashboardReader.FormatBytes(mem.AvailableBytes)} free - {HomeDashboardReader.FormatBytes(mem.TotalBytes)} total";
         }
 
         // Visible-dashboard refresh: process memory observations + Internet proof.
@@ -151,11 +151,11 @@ public partial class DashboardViewModel : ObservableObject
                 : quality is { Ok: true, IsQualityTest: true } && !string.IsNullOrWhiteSpace(quality.DnsProvider)
                     ? quality.DnsProvider + " DNS selected"
                     : "automatic DNS selection";
-            LatencySecondary = $"Adaptive stack applied · {dns}";
+            LatencySecondary = $"Adaptive stack applied - {dns}";
             InternetLiveMetric = quality is { Ok: true, IsQualityTest: true }
                 ? BuildInternetLiveMetric(quality, latency)
                 : latency is not null
-                    ? $"{latency.AfterP50Ms:0.#} ms idle · {latency.AfterJitterMs:0.#} ms jitter"
+                    ? $"{latency.AfterP50Ms:0.#} ms idle - {latency.AfterJitterMs:0.#} ms jitter"
                     : "Run Analyze & Apply to refresh the route sample";
             return;
         }
@@ -165,8 +165,8 @@ public partial class DashboardViewModel : ObservableObject
             HasLatency = true;
             InternetStatusTag = "MEASURED";
             LatencyPrimary = linkBit ?? "Route measured";
-            LatencySecondary = "Current route sample available · settings not verified";
-            InternetLiveMetric = $"{latency.AfterP50Ms:0.#} ms idle · {latency.AfterJitterMs:0.#} ms jitter";
+            LatencySecondary = "Current route sample available - settings not verified";
+            InternetLiveMetric = $"{latency.AfterP50Ms:0.#} ms idle - {latency.AfterJitterMs:0.#} ms jitter";
             return;
         }
 
@@ -181,7 +181,7 @@ public partial class DashboardViewModel : ObservableObject
     {
         var downLoaded = Math.Max(0, quality.DownloadLoadedMs - quality.PingP50Ms);
         var upLoaded = Math.Max(0, quality.UploadLoadedMs - quality.PingP50Ms);
-        return $"{quality.PingP50Ms:0.#} ms idle · full-load +{downLoaded:0.#} down / +{upLoaded:0.#} up · {quality.PacketLossPercent:0.##}% idle loss";
+        return $"{quality.PingP50Ms:0.#} ms idle - full-load +{downLoaded:0.#} down / +{upLoaded:0.#} up - {quality.PacketLossPercent:0.##}% idle loss";
     }
 
     private void RefreshDiscordRamTile()
@@ -196,7 +196,7 @@ public partial class DashboardViewModel : ObservableObject
         if (belowPeak >= 8L << 20) // ≥ 8 MB so we don't flash noise
         {
             DiscordLiveMetric = live > 0
-                ? $"{HomeDashboardReader.FormatBytes(live)} resident · {HomeDashboardReader.FormatBytes(belowPeak)} below session peak"
+                ? $"{HomeDashboardReader.FormatBytes(live)} resident - {HomeDashboardReader.FormatBytes(belowPeak)} below session peak"
                 : $"{HomeDashboardReader.FormatBytes(belowPeak)} below session peak";
         }
         else if (live > 0)
@@ -212,13 +212,13 @@ public partial class DashboardViewModel : ObservableObject
         {
             DiscordStatusTag = "VERIFIED";
             DiscordStatusPrimary = "Lean client active";
-            DiscordStatusSecondary = "Privacy patch · voice QoS · idle memory guard";
+            DiscordStatusSecondary = "Privacy patch - voice QoS - idle memory guard";
         }
         else if (applied)
         {
             DiscordStatusTag = "APPLIED";
             DiscordStatusPrimary = "Stock-safe mode";
-            DiscordStatusSecondary = "Voice QoS and privacy settings applied · custom kernel skipped";
+            DiscordStatusSecondary = "Voice QoS and privacy settings applied - custom kernel skipped";
         }
         else
         {
@@ -236,7 +236,7 @@ public partial class DashboardViewModel : ObservableObject
 
         if (memory.ProcessCount > 0)
         {
-            SteamLiveMetric = $"{HomeDashboardReader.FormatBytes(memory.WorkingSetBytes)} resident · {HomeDashboardReader.FormatBytes(memory.PrivateBytes)} private";
+            SteamLiveMetric = $"{HomeDashboardReader.FormatBytes(memory.WorkingSetBytes)} resident - {HomeDashboardReader.FormatBytes(memory.PrivateBytes)} private";
         }
         else
         {
@@ -248,8 +248,8 @@ public partial class DashboardViewModel : ObservableObject
             SteamStatusTag = "VERIFIED";
             SteamStatusPrimary = guardRunning ? "Background policy active" : "Background policy ready";
             SteamStatusSecondary = guardRunning
-                ? "Foreground stays responsive · background CEF yields while gaming"
-                : "Starts with the optimized launcher · no unsafe RAM purges";
+                ? "Foreground stays responsive - background CEF yields while gaming"
+                : "Starts with the optimized launcher - no unsafe RAM purges";
         }
         else
         {
@@ -285,7 +285,7 @@ public partial class DashboardViewModel : ObservableObject
                 ? nvidia.GpuName!
                 : !string.IsNullOrWhiteSpace(nvidia.Series) ? nvidia.Series! : "NVIDIA profile active";
             var display = !string.IsNullOrWhiteSpace(nvidia.PrimaryMode)
-                ? $" · {nvidia.PrimaryMode} {nvidia.PrimaryConnection}".TrimEnd()
+                ? $" - {nvidia.PrimaryMode} {nvidia.PrimaryConnection}".TrimEnd()
                 : string.Empty;
             NvidiaPathSecondary = nvidia.Gsync
                 ? $"G-SYNC/VRR profile{display}"
@@ -294,7 +294,7 @@ public partial class DashboardViewModel : ObservableObject
             if (nvidia.VerifiedSettingCount > 0) proof.Add($"{nvidia.VerifiedSettingCount} driver pins");
             if (nvidia.GameProfileCount > 0) proof.Add($"{nvidia.GameProfileCount} game profiles");
             NvidiaLiveMetric = proof.Count > 0
-                ? string.Join(" · ", proof) + " verified"
+                ? string.Join(" - ", proof) + " verified"
                 : "Driver profile import verified";
         }
         else

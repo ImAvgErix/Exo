@@ -697,6 +697,12 @@ public sealed class PowerShellRunnerService
         catch { return null; }
     }
 
+    /// <summary>Prime the pwsh path cache (background warm after first paint).</summary>
+    public void WarmResolvePowerShell()
+    {
+        try { _ = ResolvePowerShell(); } catch { /* cold open still resolves later */ }
+    }
+
     /// <summary>Stable PowerShell 7 only — returns null when only preview/5.1 exist.</summary>
     public static string? TryGetStablePowerShellPath()
     {

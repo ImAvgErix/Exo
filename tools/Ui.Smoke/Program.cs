@@ -131,9 +131,12 @@ if (File.Exists(appServicesCs) && File.Exists(powerShellRunnerCs))
 {
     var servicesSource = File.ReadAllText(appServicesCs);
     var runnerSource = File.ReadAllText(powerShellRunnerCs);
+    // Kits may warm after first frame (Task.Run + WarmInBackground). PowerShell
+    // runtime install still must not start at composition-root time.
     Expect("startup performs no dependency bootstrap",
         !servicesSource.Contains("EnsurePowerShellRuntimeAsync", StringComparison.Ordinal)
-        && !servicesSource.Contains("Task.Run", StringComparison.Ordinal));
+        && (servicesSource.Contains("WarmInBackground", StringComparison.Ordinal)
+            || !servicesSource.Contains("Task.Run", StringComparison.Ordinal)));
     Expect("PowerShell bootstrap requires explicit run opt-in",
         runnerSource.Contains("bool ensureRuntime = false", StringComparison.Ordinal)
         && runnerSource.Contains("if (ensureRuntime)", StringComparison.Ordinal)
@@ -874,6 +877,25 @@ Expect("csproj has semver Version", System.Text.RegularExpressions.Regex.IsMatch
 if (File.Exists(versionFile))
     Expect("VERSION matches csproj Version", File.ReadAllText(versionFile).Trim() == csprojVersion,
         $"VERSION=[{File.ReadAllText(versionFile).Trim()}] csproj=[{csprojVersion}]");
+
+// Post-first-frame warm (kit stage + pwsh resolve) keeps first module open snappy.
+var appServicesPath = Path.Combine(repo, "Exo", "Services", "AppServices.cs");
+if (File.Exists(appServicesPath))
+{
+    var asrc = File.ReadAllText(appServicesPath);
+    Expect("AppServices WarmInBackground present",
+        asrc.Contains("WarmInBackground", StringComparison.Ordinal)
+        && asrc.Contains("GetDiscordRoot", StringComparison.Ordinal)
+        && asrc.Contains("WarmResolvePowerShell", StringComparison.Ordinal));
+}
+var mainCsWarm = Path.Combine(repo, "Exo", "MainWindow.xaml.cs");
+if (File.Exists(mainCsWarm))
+{
+    var mc = File.ReadAllText(mainCsWarm);
+    Expect("MainWindow starts optimizer warm after first frame",
+        mc.Contains("WarmInBackground", StringComparison.Ordinal)
+        && mc.Contains("optimizer-warm-started", StringComparison.Ordinal));
+}
 
 // Live advisor (realtime next-step coach on every optimizer)
 var advisorPath = Path.Combine(repo, "Exo", "Services", "OptimizerAdvisor.cs");

@@ -29,4 +29,29 @@ public sealed class AppServices
         // self-sync in Get*Root(), and PowerShell 7 is prepared only after a user
         // explicitly starts Apply/Repair.
     }
+
+    /// <summary>
+    /// After first paint: stage kit trees + resolve pwsh off the UI thread so the
+    /// first module open does not pay a cold kit copy + PATH scan.
+    /// </summary>
+    public void WarmInBackground()
+    {
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                Scripts.EnsureKitsMatchThisApp();
+                // Touch each root once so working kits exist before the user clicks.
+                _ = Scripts.GetDiscordRoot();
+                _ = Scripts.GetSteamRoot();
+                _ = Scripts.GetNvidiaRoot();
+                _ = Scripts.GetGameLaunchersRoot();
+                PowerShell.WarmResolvePowerShell();
+            }
+            catch
+            {
+                // Best-effort warm; real opens re-run the same paths.
+            }
+        });
+    }
 }

@@ -458,8 +458,17 @@ public partial class InternetOptimizerViewModel : ObservableObject
                 ? media
                 : $"{media} - {snap.LinkSpeed}";
 
-        var allOk = snap.Features.Count > 0 && snap.Features.All(f => f.IsOk);
-        return allOk ? $"Optimized - {media}" : "Optimized - check rows";
+        var open = snap.Features
+            .Where(f => !f.IsOk && !string.IsNullOrWhiteSpace(f.Title))
+            .Select(f => f.Title)
+            .Take(2)
+            .ToList();
+        if (open.Count == 0)
+            return $"Optimized - {media}";
+        // Name the open row instead of vague "check rows" (Cua stress honesty).
+        return open.Count == 1
+            ? $"Optimized - open: {open[0]}"
+            : $"Optimized - open: {open[0]}, {open[1]}";
     }
 
     private void ClearMessage()

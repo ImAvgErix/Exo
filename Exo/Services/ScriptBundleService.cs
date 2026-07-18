@@ -195,14 +195,16 @@ public sealed class ScriptBundleService
     /// </summary>
     private void ResetWorkingKitsFromBundledUnlocked()
     {
-        ReplaceWorkingKitFromBundled("Discord", PathHelper.DiscordScriptsDir,
-            ["Disc-Optimizer.ps1", "Exo-Discord-Run.ps1"]);
-        ReplaceWorkingKitFromBundled("Steam", PathHelper.SteamScriptsDir,
-            ["Steam-Optimizer.ps1", "Exo-Steam-Run.ps1", "Exo-Steam-Detect.ps1"]);
-        ReplaceWorkingKitFromBundled("Nvidia", PathHelper.NvidiaScriptsDir,
-            ["Nvidia-Optimizer.ps1", "Exo-Nvidia-Run.ps1", "Exo-Nvidia-Detect.ps1"]);
-        ReplaceWorkingKitFromBundled("GameLaunchers", PathHelper.GameLauncherScriptsDir,
-            ["GameLauncher-Optimizer.ps1", "GameLauncher-Detect.ps1", "Exo-Riot-Run.ps1", "Exo-Epic-Run.ps1"]);
+        // Parallel kit materialize on upgrade - each kit writes its own folder tree.
+        Parallel.Invoke(
+            () => ReplaceWorkingKitFromBundled("Discord", PathHelper.DiscordScriptsDir,
+                ["Disc-Optimizer.ps1", "Exo-Discord-Run.ps1"]),
+            () => ReplaceWorkingKitFromBundled("Steam", PathHelper.SteamScriptsDir,
+                ["Steam-Optimizer.ps1", "Exo-Steam-Run.ps1", "Exo-Steam-Detect.ps1"]),
+            () => ReplaceWorkingKitFromBundled("Nvidia", PathHelper.NvidiaScriptsDir,
+                ["Nvidia-Optimizer.ps1", "Exo-Nvidia-Run.ps1", "Exo-Nvidia-Detect.ps1"]),
+            () => ReplaceWorkingKitFromBundled("GameLaunchers", PathHelper.GameLauncherScriptsDir,
+                ["GameLauncher-Optimizer.ps1", "GameLauncher-Detect.ps1", "Exo-Riot-Run.ps1", "Exo-Epic-Run.ps1"]));
 
         _discordSyncDone = false;
         _steamSyncDone = false;
