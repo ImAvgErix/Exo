@@ -53,3 +53,25 @@ Planned work is not marked complete until its automated and live gates pass.
 - ARM64 support.
 - Safety-kernel, measurement-harness, optimizer-policy, Riot/Epic, package-size,
   documentation-recovery, signing, and final release slices.
+
+## Slice 2 — safety kernel (in progress)
+
+- Added early current-directory DLL-search removal without replacing the Windows
+  App SDK package graph. A stricter blanket loader policy was rejected by a real
+  launch test because it crashed unpackaged WinUI before first frame.
+- Added single-instance redirection and verified on the live x64 build that the
+  primary stays running while a second launch exits.
+- Added privacy-redacted fatal startup diagnostics with phase, OS, architecture,
+  and runtime information.
+- Added a generated 70-entry compiled manifest for shipped scripts and helpers.
+  Elevated shipped actions fail closed on length or SHA-256 mismatch.
+- Replaced the temporary VBScript and PowerShell wrapper files with a direct UAC
+  request and in-memory encoded bootstrap. The elevated boundary re-hashes the
+  script before starting it and has no unverified re-run fallback.
+- Migrated Internet benchmark, Apply, and Repair to the shared runner. App-built
+  elevated network scripts use an explicit, path-restricted trust policy.
+- Added freshness, fail-closed, runner-routing, and bootstrap contract gates.
+
+Remaining before this slice can be called complete: protected machine-owned
+transaction logs/state, centralized verified downloads with hard failure on a
+missing digest, full cancellation tree tests, and exact NVIDIA Repair coverage.

@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Exo.Models;
 using Exo.Serialization;
+using Exo.Security;
 using Microsoft.Win32;
 
 namespace Exo.Services;
@@ -21,7 +22,13 @@ namespace Exo.Services;
 /// </summary>
 public sealed class NetworkOptimizerService
 {
+    private readonly PowerShellRunnerService _runner;
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(6) };
+
+    public NetworkOptimizerService(PowerShellRunnerService runner)
+    {
+        _runner = runner;
+    }
 
     private static readonly string StatePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -152,28 +159,27 @@ public sealed class NetworkOptimizerService
         try
         {
             progress?.Report("Repairing network stack (elevated)...");
-            var psi = new ProcessStartInfo
-            {
-                FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{path}\"",
-                UseShellExecute = true,
-                Verb = "runas",
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
-            using var p = Process.Start(psi);
-            if (p is null) return (false, "Could not start elevated PowerShell.");
-            await p.WaitForExitAsync(ct).ConfigureAwait(false);
+            var runProgress = new Progress<ScriptRunProgress>(x => progress?.Report(x.Status));
+            var result = await _runner.RunAsync(
+                path,
+                elevate: true,
+                progress: runProgress,
+                cancellationToken: ct,
+                workingDirectory: Path.GetDirectoryName(path),
+                ensureRuntime: true,
+                trustPolicy: ScriptTrustPolicy.AppGeneratedNetwork).ConfigureAwait(false);
             // Exit 2 = explicit Repair-Internet.ps1 -Hard applied winsock/ip reset (reboot required).
             // Normal in-app Repair never auto-runs that path anymore.
-            if (p.ExitCode == 2)
+            if (result.ExitCode == 2)
             {
                 progress?.Report("Clearing Exo network preset...");
                 ClearSavedPreset();
                 return (false,
                     "Hard Winsock/IP reset was applied. Reboot Windows now, then retry.");
             }
-            if (p.ExitCode != 0)
-                return (false, $"Repair exit {p.ExitCode}. Snapshot restore finished but connectivity probe still failed. If you are offline, use a phone hotspot and run Repair-Internet.ps1 -Hard only if you explicitly want a winsock/ip reset.");
+            if (!result.Success)
+                return (false, result.ErrorMessage ??
+                    $"Repair exit {result.ExitCode}. Snapshot restore finished but connectivity probe still failed. If you are offline, use a phone hotspot and run Repair-Internet.ps1 -Hard only if you explicitly want a winsock/ip reset.");
 
             progress?.Report("Clearing Exo network preset...");
             ClearSavedPreset();
@@ -212,11 +218,12 @@ public sealed class NetworkOptimizerService
         try
         {
             await File.WriteAllTextAsync(path, script, ct).ConfigureAwait(false);
-            var stdout = await RunCaptureAsync(
-                "powershell",
-                $"-NoProfile -ExecutionPolicy Bypass -File \"{path}\"",
-                ct).ConfigureAwait(false);
-            return NetworkLogic.TryParseBenchmark(stdout);
+            var result = await _runner.RunAsync(
+                path,
+                elevate: false,
+                cancellationToken: ct,
+                workingDirectory: Path.GetDirectoryName(path)).ConfigureAwait(false);
+            return result.Success ? NetworkLogic.TryParseBenchmark(result.FullOutput) : null;
         }
         catch { return null; }
         finally
@@ -1521,19 +1528,17 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
 
         try
         {
-            var psi = new ProcessStartInfo
-            {
-                FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{path}\"",
-                UseShellExecute = true,
-                Verb = "runas",
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
-            using var p = Process.Start(psi);
-            if (p is null) return (false, "Could not start elevated PowerShell.");
-            await p.WaitForExitAsync(ct).ConfigureAwait(false);
-            if (p.ExitCode != 0)
-                return (false, $"Apply exit {p.ExitCode}. Try again as Administrator.");
+            var runProgress = new Progress<ScriptRunProgress>(x => progress?.Report(x.Status));
+            var result = await _runner.RunAsync(
+                path,
+                elevate: true,
+                progress: runProgress,
+                cancellationToken: ct,
+                workingDirectory: Path.GetDirectoryName(path),
+                ensureRuntime: true,
+                trustPolicy: ScriptTrustPolicy.AppGeneratedNetwork).ConfigureAwait(false);
+            if (!result.Success)
+                return (false, result.ErrorMessage ?? $"Apply exit {result.ExitCode}. Try again as Administrator.");
 
             progress?.Report("Verifying settings...");
             // Give netsh / NIC props time to settle (esp. after adapter restart).

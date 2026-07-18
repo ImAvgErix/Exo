@@ -15,6 +15,16 @@ namespace Exo;
 
 public sealed partial class MainWindow : Window
 {
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(nint hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(nint hWnd, int command);
+
+    private const int ShowRestore = 9;
+
     private enum ShellMode
     {
         Home,
@@ -127,6 +137,21 @@ public sealed partial class MainWindow : Window
         }
 
         StartPostFirstFrameWork();
+    }
+
+    public void BringToForeground()
+    {
+        try
+        {
+            var hWnd = WindowNative.GetWindowHandle(this);
+            _ = ShowWindow(hWnd, ShowRestore);
+            Activate();
+            _ = SetForegroundWindow(hWnd);
+        }
+        catch
+        {
+            Activate();
+        }
     }
 
     /// <summary>First Activate: navigate home if Loaded hasn't already.</summary>

@@ -5,6 +5,7 @@ using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 #endif
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 using Exo.Helpers;
 using Exo.Models;
 
@@ -46,8 +47,62 @@ var appServicesCs = Path.Combine(repo, "Exo", "Services", "AppServices.cs");
 var powerShellRunnerCs = Path.Combine(repo, "Exo", "Services", "PowerShellRunnerService.cs");
 var updateServiceCs = Path.Combine(repo, "Exo", "Services", "GitHubUpdateService.cs");
 var installerPs1 = Path.Combine(repo, "Install-Exo.ps1");
+var programBootCs = Path.Combine(repo, "Exo", "Program.cs");
+var singleInstanceCs = Path.Combine(repo, "Exo", "Helpers", "SingleInstanceManager.cs");
+var startupDiagnosticsCs = Path.Combine(repo, "Exo", "Helpers", "StartupDiagnostics.cs");
+var nativeSecurityCs = Path.Combine(repo, "Exo", "Helpers", "NativeProcessSecurity.cs");
+var shippedManifestCs = Path.Combine(repo, "Exo", "Security", "ShippedScriptManifest.cs");
+var generatedManifestCs = Path.Combine(repo, "Exo", "Security", "ShippedScriptManifest.g.cs");
 
 Expect("files", File.Exists(appXaml) && File.Exists(main) && File.Exists(dash));
+if (File.Exists(programBootCs) && File.Exists(singleInstanceCs) &&
+    File.Exists(startupDiagnosticsCs) && File.Exists(nativeSecurityCs))
+{
+    var programSource = File.ReadAllText(programBootCs);
+    var singleInstanceSource = File.ReadAllText(singleInstanceCs);
+    var diagnosticsSource = File.ReadAllText(startupDiagnosticsCs);
+    var nativeSecuritySource = File.ReadAllText(nativeSecurityCs);
+    Expect("single instance redirects before WinUI startup",
+        programSource.IndexOf("IsPrimaryInstance", StringComparison.Ordinal) <
+        programSource.IndexOf("EnterPhase(\"xaml-requirements\")", StringComparison.Ordinal)
+        && singleInstanceSource.Contains("RedirectActivationToAsync", StringComparison.Ordinal));
+    Expect("fatal startup diagnostics redact user identity",
+        programSource.Contains("StartupDiagnostics.WriteFatal", StringComparison.Ordinal)
+        && diagnosticsSource.Contains("<user-path>", StringComparison.Ordinal)
+        && diagnosticsSource.Contains("<user>", StringComparison.Ordinal));
+    Expect("current directory removed from native DLL search",
+        nativeSecuritySource.Contains("SetDllDirectory(string.Empty)", StringComparison.Ordinal)
+        && !nativeSecuritySource.Contains("LoadLibrarySearchDefaultDirs", StringComparison.Ordinal));
+}
+if (File.Exists(shippedManifestCs) && File.Exists(generatedManifestCs))
+{
+    var integritySource = File.ReadAllText(shippedManifestCs);
+    var generatedSource = File.ReadAllText(generatedManifestCs);
+    var entries = Regex.Matches(generatedSource,
+        "\\[\\\"(?<path>[^\\\"]+)\\\"\\] = new\\((?<length>\\d+)L, \\\"(?<hash>[A-F0-9]{64})\\\"\\)");
+    var manifestFresh = entries.Count >= 50;
+    foreach (Match entry in entries)
+    {
+        var file = Path.Combine(repo, "Exo", "Scripts",
+            entry.Groups["path"].Value.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(file) || new FileInfo(file).Length != long.Parse(entry.Groups["length"].Value))
+        {
+            manifestFresh = false;
+            break;
+        }
+        using var stream = File.OpenRead(file);
+        var hash = Convert.ToHexString(SHA256.HashData(stream));
+        if (!hash.Equals(entry.Groups["hash"].Value, StringComparison.OrdinalIgnoreCase))
+        {
+            manifestFresh = false;
+            break;
+        }
+    }
+    Expect("compiled script manifest matches shipped bytes", manifestFresh);
+    Expect("manifest validation fails closed",
+        integritySource.Contains("SHA-256 mismatch", StringComparison.Ordinal)
+        && integritySource.Contains("not present in this Exo build's signed script manifest", StringComparison.Ordinal));
+}
 if (File.Exists(appServicesCs) && File.Exists(powerShellRunnerCs))
 {
     var servicesSource = File.ReadAllText(appServicesCs);
@@ -59,6 +114,16 @@ if (File.Exists(appServicesCs) && File.Exists(powerShellRunnerCs))
         runnerSource.Contains("bool ensureRuntime = false", StringComparison.Ordinal)
         && runnerSource.Contains("if (ensureRuntime)", StringComparison.Ordinal)
         && runnerSource.Contains("Preparing PowerShell 7", StringComparison.Ordinal));
+    Expect("elevation does not depend on deprecated VBScript",
+        runnerSource.Contains("Verb = \"runas\"", StringComparison.Ordinal)
+        && !runnerSource.Contains("wscript.exe", StringComparison.OrdinalIgnoreCase)
+        && !runnerSource.Contains(".vbs", StringComparison.OrdinalIgnoreCase));
+    Expect("elevated bootstrap is in-memory and rehashes the script",
+        runnerSource.Contains("-EncodedCommand", StringComparison.Ordinal)
+        && runnerSource.Contains("Get-FileHash -LiteralPath $script -Algorithm SHA256", StringComparison.Ordinal)
+        && runnerSource.Contains("Optimizer script changed after approval; execution blocked.", StringComparison.Ordinal)
+        && !runnerSource.Contains("wrap-{stamp}.ps1", StringComparison.Ordinal)
+        && !runnerSource.Contains("& $pwsh -NoProfile -ExecutionPolicy Bypass -File $script", StringComparison.Ordinal));
 
     var actionSources = new[]
     {

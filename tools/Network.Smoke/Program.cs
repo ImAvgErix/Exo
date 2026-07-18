@@ -663,6 +663,11 @@ if (repoRoot is not null)
         Expect("Wi-Fi while Ethernet never hard-fails for Still up",
             netSvc.Contains("Up (metrics prefer Ethernet)", StringComparison.Ordinal) ||
             netSvc.Contains("Up (kept)", StringComparison.Ordinal));
+        Expect("Internet apply and repair use the shared runner",
+            netSvc.Contains("NetworkOptimizerService(PowerShellRunnerService runner)", StringComparison.Ordinal) &&
+            netSvc.Contains("_runner.RunAsync", StringComparison.Ordinal) &&
+            !netSvc.Contains("Verb = \"runas\"", StringComparison.Ordinal) &&
+            !netSvc.Contains("FileName = \"powershell.exe\"", StringComparison.Ordinal));
         var qualityMethod = netSvc.IndexOf("RunQualityBenchmarkAsync", StringComparison.Ordinal);
         var qualityEnd = qualityMethod >= 0
             ? netSvc.IndexOf("LoadQualityBenchmark", qualityMethod, StringComparison.Ordinal)

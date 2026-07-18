@@ -41,5 +41,18 @@ public partial class App : Application
         Helpers.StartupLog.Mark("window-activated");
     }
 
+    public static void TryActivateMainWindow()
+    {
+        var window = MainAppWindow;
+        if (window is null) return;
+        _ = window.DispatcherQueue.TryEnqueue(() =>
+        {
+            if (window is MainWindow main)
+                main.BringToForeground();
+            else
+                window.Activate();
+        });
+    }
+
     public static Window? MainAppWindow { get; set; }
 }
