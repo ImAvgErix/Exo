@@ -17,6 +17,7 @@ $files = Get-ChildItem -LiteralPath $scriptsRoot -Recurse -File | Where-Object {
     $relative -notmatch '^Discord/kit/tools/pwsh/' -and
     $relative -notmatch '^Discord/kit/downloads/' -and
     $relative -notmatch '^Discord/kit/logs/' -and
+    $relative -notmatch '^Nvidia/tools/' -and
     $relative -notmatch '^Discord/kit/tools/(desktop|equicord)\.asar$' -and
     $relative -notmatch '^Discord/kit/tools/(DiscordSetup|Equilotl).*\.exe$'
 } | Sort-Object FullName

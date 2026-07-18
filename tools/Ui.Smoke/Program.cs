@@ -121,6 +121,8 @@ if (File.Exists(shippedManifestCs) && File.Exists(generatedManifestCs))
         }
     }
     Expect("compiled script manifest matches shipped bytes", manifestFresh);
+    Expect("compiled script manifest excludes local build outputs",
+        !generatedSource.Contains("Nvidia/tools/", StringComparison.OrdinalIgnoreCase));
     Expect("manifest validation fails closed",
         integritySource.Contains("SHA-256 mismatch", StringComparison.Ordinal)
         && integritySource.Contains("not present in this Exo build's signed script manifest", StringComparison.Ordinal));
