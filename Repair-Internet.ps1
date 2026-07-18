@@ -146,6 +146,10 @@ function Invoke-ExoInternetRepair {
             }
         }
 
+        # Folklore DNS cache TTL overrides never come back (legacy Exo pinned MaxCacheTtl=86400).
+        Remove-RepairProp 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxCacheTtl'
+        Remove-RepairProp 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxNegativeCacheTtl'
+
         Write-RepairStep 'Restoring TCP globals (netsh) from snapshot...'
         $inet = @($snap.tcpSettings) | Where-Object { [string]$_.settingName -eq 'Internet' } | Select-Object -First 1
         if ($inet -and $inet.autoTuningLevelLocal) {
@@ -249,6 +253,26 @@ function Invoke-ExoInternetRepair {
                 if ($b.enabled) { Enable-NetAdapterBinding -Name $target.Name -ComponentID ([string]$b.componentId) -ErrorAction SilentlyContinue }
                 else { Disable-NetAdapterBinding -Name $target.Name -ComponentID ([string]$b.componentId) -ErrorAction SilentlyContinue }
             } catch {}
+        }
+
+        # Per-adapter DNS servers from the snapshot (same restore as in-app Repair;
+        # pinned resolvers are put back to the recorded set, or DHCP when none was recorded).
+        if ($snap.dnsServers) {
+            Write-RepairStep 'Restoring per-adapter DNS servers from snapshot...'
+            foreach ($ds in @($snap.dnsServers)) {
+                try {
+                    $t = $null
+                    if ($ds.ifIndex) { $t = Get-NetAdapter -InterfaceIndex ([int]$ds.ifIndex) -ErrorAction SilentlyContinue }
+                    if (-not $t -and $ds.name) { $t = Get-NetAdapter -Name ([string]$ds.name) -ErrorAction SilentlyContinue }
+                    if (-not $t) { continue }
+                    $v4 = @($ds.ipv4 | Where-Object { $_ })
+                    $v6 = @($ds.ipv6 | Where-Object { $_ })
+                    if ($v4.Count -gt 0) { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -AddressFamily IPv4 -ServerAddresses $v4 -ErrorAction SilentlyContinue }
+                    else { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -AddressFamily IPv4 -ResetServerAddresses -ErrorAction SilentlyContinue }
+                    if ($v6.Count -gt 0) { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -AddressFamily IPv6 -ServerAddresses $v6 -ErrorAction SilentlyContinue }
+                    else { Set-DnsClientServerAddress -InterfaceIndex $t.ifIndex -AddressFamily IPv6 -ResetServerAddresses -ErrorAction SilentlyContinue }
+                } catch {}
+            }
         }
 
         Write-RepairStep 'Restoring interface metrics (incl. AutomaticMetric)...'

@@ -1071,13 +1071,12 @@ try {
 # while Exo's raw TCP probe still passed — users reinstalled Windows.
 Log '[NCSI] left system default (active probe untouched)'
 Log '[DNS] LLMNR left system default'
-try {
-  New-Item 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' -Force | Out-Null
-  # Larger DNS cache = fewer repeat lookups during gaming sessions
-  Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxCacheTtl' 86400
-  Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxNegativeCacheTtl' 5
-  Log '[DNS] cache TTL tuned'
-} catch {}
+# DNS cache TTL overrides are NOT written. Legacy Exo pinned MaxCacheTtl=86400
+# (stale records for up to 24h - the "dns cache" breakage users reported).
+# Remove any leftover override so Windows honors the resolver's record TTLs.
+Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxCacheTtl'
+Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxNegativeCacheTtl'
+Log '[DNS] cache TTL overrides removed (record TTLs honored)'
 # Disable SMBv1 if present (background noise + security)
 try {
   $smb = Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -EA SilentlyContinue

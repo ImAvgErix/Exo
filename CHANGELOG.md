@@ -1,3 +1,9 @@
+## 3.5.2
+
+- **DNS cache TTL folklore removed**: Apply no longer writes `Dnscache MaxCacheTtl=86400` (records pinned up to 24h → stale DNS). Any leftover override is removed on Apply and never restored by Repair.
+- **Offline rescue restores DNS**: [`Repair-Internet.ps1`](Repair-Internet.ps1) now restores per-adapter DNS servers from the snapshot (matching in-app Repair) instead of leaving pinned resolvers behind.
+- **Repo gate green**: UiPreview tsconfigs are strict JSON again (integrity check passes with 0 issues).
+
 ## 3.5.0
 
 - **Reliable connection quality**: latency, jitter, and loss now come from sequential ICMP samples to one automatically selected healthy target. Loaded latency runs independently from the Cloudflare throughput streams, so client/server scheduling is no longer misreported as internet jitter.

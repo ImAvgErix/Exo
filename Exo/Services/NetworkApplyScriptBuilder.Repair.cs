@@ -79,6 +79,10 @@ if ($snap) {
     }
   }
   Report 'restore-registry' $(if ($restoreFailures -eq 0) { 'ok' } else { 'fail' }) $(if ($restoreFailures -gt 0) { "$restoreFailures value(s) failed" } else { '' })
+  # Folklore DNS cache TTL overrides never come back - even when the pristine
+  # baseline happened to contain them (legacy Exo pinned MaxCacheTtl=86400).
+  Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxCacheTtl'
+  Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxNegativeCacheTtl'
   # --- 2) netsh TCP globals (structured snapshot first, raw parse fallback) ---
   $inet = @($snap.tcpSettings) | Where-Object { [string]$_.settingName -eq 'Internet' } | Select-Object -First 1
   if ($inet -and $inet.autoTuningLevelLocal) {

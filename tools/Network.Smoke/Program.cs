@@ -214,6 +214,12 @@ Expect("repair restores DNS from snapshot", repairScript.Contains("restore-dns",
     && repairScript.Contains("snap.dnsServers", StringComparison.Ordinal));
 Expect("repair prunes only Exo-added DoH", repairScript.Contains("snap.dohRaw", StringComparison.Ordinal)
     && repairScript.Contains("dns delete encryption", StringComparison.OrdinalIgnoreCase));
+// DNS cache TTL folklore is gone: apply removes overrides; repair + rescue never bring them back.
+Expect("apply never writes DNS cache TTL overrides",
+    !latScript.Contains("Set-Dword 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters'", StringComparison.Ordinal) &&
+    latScript.Contains("Remove-Prop 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters' 'MaxCacheTtl'", StringComparison.Ordinal));
+Expect("repair removes TTL overrides even from baseline",
+    repairScript.Contains("Folklore DNS cache TTL", StringComparison.Ordinal));
 
 // --- NIC helpers (network-only; no Windows Game Mode markers) ---
 ExpectEq("vendor Intel I226",
@@ -689,6 +695,11 @@ if (rescuePath is not null && File.Exists(rescuePath))
     Expect("rescue documents offline emergency block",
         rescue.Contains("EMERGENCY", StringComparison.Ordinal) &&
         rescue.Contains("netsh int ip reset", StringComparison.Ordinal));
+    Expect("rescue restores DNS servers from snapshot",
+        rescue.Contains("$snap.dnsServers", StringComparison.Ordinal) &&
+        rescue.Contains("-ResetServerAddresses", StringComparison.Ordinal));
+    Expect("rescue removes TTL overrides even from baseline",
+        rescue.Contains("Folklore DNS cache TTL", StringComparison.Ordinal));
 }
 
 // (f) Parse EVERY generated script with the PowerShell language parser (zero errors)
