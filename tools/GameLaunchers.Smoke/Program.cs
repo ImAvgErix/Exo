@@ -22,8 +22,12 @@ Expect("pristine snapshot precedes startup mutation",
     source.IndexOf("Remove-StartupEntries", snapshot, StringComparison.Ordinal) > snapshot);
 Expect("per-game high-performance GPU preference",
     source.Contains("GpuPreference=2;", StringComparison.Ordinal));
-Expect("per-game Above Normal CPU priority",
-    source.Contains("CpuPriorityClass', 6", StringComparison.Ordinal));
+Expect("no forced game scheduling priority",
+    !source.Contains("CpuPriorityClass", StringComparison.Ordinal) &&
+    !source.Contains("PerfOptions", StringComparison.Ordinal));
+Expect("hybrid GPU split is capability gated",
+    source.Contains("Test-HybridGraphics", StringComparison.Ordinal) &&
+    source.Contains("GpuPreference=1;", StringComparison.Ordinal));
 Expect("Epic uses launcher manifests",
     source.Contains("EpicGamesLauncher\\Data\\Manifests", StringComparison.Ordinal) &&
     source.Contains("LaunchExecutable", StringComparison.Ordinal));
@@ -39,9 +43,8 @@ Expect("anti-cheat and services are never mutated",
 Expect("no Exo background footprint",
     !source.Contains("Register-ScheduledTask", StringComparison.OrdinalIgnoreCase) &&
     !source.Contains("New-Service", StringComparison.OrdinalIgnoreCase));
-Expect("repair restores touched GPU and CPU values",
-    source.Contains("Restore-Value $gpu", StringComparison.Ordinal) &&
-    source.Contains("Restore-Value $ifeo 'CpuPriorityClass'", StringComparison.Ordinal));
+Expect("repair restores every touched GPU value",
+    source.Contains("Restore-Value $gpu", StringComparison.Ordinal));
 Expect("snapshot removed only after successful restore",
     source.IndexOf("Add-Report 'restore' 'ok'", StringComparison.Ordinal) >
     source.IndexOf("Remove-Item -LiteralPath $SnapshotPath -Force -ErrorAction Stop", StringComparison.Ordinal));

@@ -81,21 +81,7 @@ public static partial class NetworkLogic
         string FlowControl,   // "0" | "3"
         string IdleRestrict,  // "1" = prevent NIC idle (latency)
         bool NagleOff)
-    {
-        // --- Extended tweak layer (all snapshot-covered; documented netsh / Set-NetTCPSetting only) ---
-        /// <summary>netsh ecncapability value: disabled (latency) | enabled (throughput) | default (balanced).</summary>
-        public string Ecn { get; init; } = "default";
-        /// <summary>Latency preset only: netsh pacingprofile=off.</summary>
-        public bool PacingOff { get; init; }
-        /// <summary>Latency preset only: netsh hystart=disabled.</summary>
-        public bool HystartOff { get; init; }
-        /// <summary>Latency preset only: netsh int udp set global uro=disabled (24H2+ gate, build 26100).</summary>
-        public bool UroOff { get; init; }
-        /// <summary>Latency preset only: Set-NetTCPSetting InternetCustom InitialRtoMs 1000 + MinRtoMs 300.</summary>
-        public bool TightRto { get; init; }
-        /// <summary>Both presets: netsh timestamps=disabled, fastopen(+fallback)=enabled, MaxSyn 2, NonSackRttResiliency Disabled.</summary>
-        public bool SharedTcpTweaks { get; init; } = true;
-    }
+    { }
 
     public sealed record PathDecision(
         string PolicyLine,
@@ -120,15 +106,7 @@ public static partial class NetworkLogic
             InterruptMod: bulk ? "1" : "0",
             FlowControl: bulk ? "3" : "0",
             IdleRestrict: bulk ? "0" : "1",
-            NagleOff: latency)
-        {
-            Ecn = latency ? "disabled" : bulk ? "enabled" : "default",
-            PacingOff = latency,
-            HystartOff = latency,
-            UroOff = latency,
-            TightRto = latency,
-            SharedTcpTweaks = true
-        };
+            NagleOff: false);
     }
 
     /// <summary>
@@ -171,9 +149,8 @@ public static partial class NetworkLogic
         return Math.Max(2, Math.Min(n, Math.Max(2, n / 2 + n % 2)));
     }
 
-    /// <summary>Prefer elevating IPv6 metric (IPv4 first) on latency / eth-primary paths.</summary>
-    public static bool PreferIpv4First(NetworkPreset preset, bool ethernetInUse) =>
-        preset != NetworkPreset.HighestThroughput || ethernetInUse;
+    /// <summary>Exo leaves Windows' RFC-aware IPv4/IPv6 prefix precedence unchanged.</summary>
+    public static bool PreferIpv4First(NetworkPreset preset, bool ethernetInUse) => false;
 
     /// <summary>Raw NIC advanced-property facts (null = not exposed by driver).</summary>
     public sealed record NicFacts(
@@ -471,14 +448,16 @@ public static partial class NetworkLogic
         // (they prefix 499/500), so they stay covered by the required markers only.
         "Set-Dword $sp 'DnsPriority' 6",
         "Set-Dword $sp 'NetbtPriority' 7",
+        "set prefixpolicy ::ffff:0:0/96",
+        "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol",
+        "Set-Net6to4Configuration",
+        "Set-NetIsatapConfiguration",
+        "Set-NetTeredoConfiguration",
     };
 
     /// <summary>Required host-stack markers in every apply script (network-only).</summary>
     public static readonly string[] RequiredHostMarkers =
     {
-        "SystemResponsiveness' 10",
-        "NetworkThrottlingIndex' 10",
-        "NonBestEffortLimit' 0",
         "DisableTaskOffload' 0",
         "congestionprovider=cubic",
         "wantBand6Live",
@@ -493,18 +472,8 @@ public static partial class NetworkLogic
         "Test-ExoConnectivity",
         "EXO_REPORT:",
         "network-apply-state.json",
-        // Shared TCP tweak layer (both presets)
-        "timestamps=disabled",
-        "fastopen=enabled",
-        "fastopenfallback=enabled",
-        "-MaxSynRetransmissions 2",
-        "-NonSackRttResiliency Disabled",
-        // DNS ServiceProvider priorities pinned to documented Windows defaults
-        // (folklore 4/5/6/7 retired v3.0.11: measured DNS 100ms -> 1s+)
-        "LocalPriority' 499",
-        "HostsPriority' 500",
-        "DnsPriority' 2000",
-        "NetbtPriority' 2001",
+        // Global TCP algorithm choices remain on Windows adaptive defaults.
+        "tcp-algorithms' 'skip'",
         // Background download quiet
         "DoSvc",
         "EnableBITSMaxBandwidth",
@@ -514,8 +483,8 @@ public static partial class NetworkLogic
         "'*FlowControl'",
         "'*JumboPacket'",
         "'*PriorityVLANTag'",
-        // IPv4 fast path via documented prefix policy (not metric hack)
-        "set prefixpolicy ::ffff:0:0/96 55 4",
+        // Per-interface ACK registry folklore is actively retired.
+        "legacy-ack-pins' 'ok'",
     };
 
     /// <summary>Audit a generated apply script for host markers and folklore absence.</summary>
@@ -557,47 +526,16 @@ public static partial class NetworkLogic
         if (script.IndexOf("'*FlowControl' " + knobs.FlowControl, StringComparison.Ordinal) < 0)
             issues.Add("FlowControl mismatch for " + preset + " expect " + knobs.FlowControl);
 
-        // --- Extended tweak layer: preset divergence must be present / absent exactly ---
-        if (script.IndexOf("ecncapability=" + knobs.Ecn, StringComparison.OrdinalIgnoreCase) < 0)
-            issues.Add("ECN mismatch for " + preset + " expect " + knobs.Ecn);
-
-        if (knobs.PacingOff)
+        foreach (var forbidden in new[]
+                 {
+                     "timestamps=disabled", "pacingprofile=off", "hystart=disabled",
+                     "ecncapability=enabled", "ecncapability=disabled", "uro=disabled",
+                     "dynamicport tcp start=1025", "-MaxSynRetransmissions 2",
+                     "-NonSackRttResiliency Disabled", "-InitialRtoMs 1000"
+                 })
         {
-            if (script.IndexOf("pacingprofile=off", StringComparison.OrdinalIgnoreCase) < 0)
-                issues.Add("missing pacingprofile=off for " + preset);
-        }
-        else if (script.IndexOf("pacingprofile=off", StringComparison.OrdinalIgnoreCase) >= 0)
-            issues.Add("pacingprofile=off must not appear for " + preset);
-
-        if (knobs.HystartOff)
-        {
-            if (script.IndexOf("hystart=disabled", StringComparison.OrdinalIgnoreCase) < 0)
-                issues.Add("missing hystart=disabled for " + preset);
-        }
-        else if (script.IndexOf("hystart=disabled", StringComparison.OrdinalIgnoreCase) >= 0)
-            issues.Add("hystart=disabled must not appear for " + preset);
-
-        if (knobs.UroOff)
-        {
-            if (script.IndexOf("uro=disabled", StringComparison.OrdinalIgnoreCase) < 0)
-                issues.Add("missing uro=disabled for " + preset);
-            if (script.IndexOf("26100", StringComparison.Ordinal) < 0)
-                issues.Add("missing 24H2 build gate (26100) for uro on " + preset);
-        }
-        else if (script.IndexOf("uro=disabled", StringComparison.OrdinalIgnoreCase) >= 0)
-            issues.Add("uro=disabled must not appear for " + preset);
-
-        if (knobs.TightRto)
-        {
-            if (script.IndexOf("-InitialRtoMs 1000", StringComparison.Ordinal) < 0)
-                issues.Add("missing InitialRtoMs 1000 for " + preset);
-            if (script.IndexOf("-MinRtoMs 300", StringComparison.Ordinal) < 0)
-                issues.Add("missing MinRtoMs 300 for " + preset);
-        }
-        else
-        {
-            if (script.IndexOf("-InitialRtoMs 1000", StringComparison.Ordinal) >= 0)
-                issues.Add("InitialRtoMs 1000 must not appear for " + preset);
+            if (script.IndexOf(forbidden, StringComparison.OrdinalIgnoreCase) >= 0)
+                issues.Add("global TCP policy must stay adaptive: " + forbidden);
         }
 
         return (issues.Count == 0, issues);

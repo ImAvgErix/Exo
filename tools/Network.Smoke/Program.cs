@@ -159,11 +159,14 @@ Expect("latency LSO 0", latScript.Contains("'*LsoV2IPv4' 0", StringComparison.Or
 Expect("throughput LSO 1", thrScript.Contains("'*LsoV2IPv4' 1", StringComparison.Ordinal));
 Expect("latency flow 0", latScript.Contains("'*FlowControl' 0", StringComparison.Ordinal));
 Expect("throughput flow 3", thrScript.Contains("'*FlowControl' 3", StringComparison.Ordinal));
-Expect("scripts force throttle 10",
-    latScript.Contains("NetworkThrottlingIndex' 10", StringComparison.Ordinal) &&
-    thrScript.Contains("NetworkThrottlingIndex' 10", StringComparison.Ordinal));
-Expect("scripts force responsiveness 10",
-    latScript.Contains("SystemResponsiveness' 10", StringComparison.Ordinal));
+Expect("scripts leave global multimedia scheduler alone",
+    !latScript.Contains("Set-Dword $mm 'NetworkThrottlingIndex'", StringComparison.Ordinal) &&
+    !latScript.Contains("Set-Dword $mm 'SystemResponsiveness'", StringComparison.Ordinal) &&
+    !thrScript.Contains("Set-Dword $mm 'NetworkThrottlingIndex'", StringComparison.Ordinal) &&
+    !thrScript.Contains("Set-Dword $mm 'SystemResponsiveness'", StringComparison.Ordinal));
+Expect("scripts leave global QoS reservation alone",
+    !latScript.Contains("Set-Dword $ps 'NonBestEffortLimit'", StringComparison.Ordinal) &&
+    !thrScript.Contains("Set-Dword $ps 'NonBestEffortLimit'", StringComparison.Ordinal));
 Expect("live band re-probe present", latScript.Contains("wantBand6Live", StringComparison.Ordinal));
 Expect("never disable wifi adapters",
     latScript.Contains("never disable wifi adapters", StringComparison.OrdinalIgnoreCase) &&
@@ -183,7 +186,9 @@ Expect("eth DMA coalescing off", latScript.Contains("DMACoalescing", StringCompa
     || latScript.Contains("DMA Coalescing", StringComparison.OrdinalIgnoreCase));
 Expect("wifi transmit power", latScript.Contains("Transmit Power", StringComparison.OrdinalIgnoreCase));
 Expect("wifi MU-MIMO", latScript.Contains("MU-MIMO", StringComparison.OrdinalIgnoreCase));
-Expect("NetBIOS disable", latScript.Contains("NetbiosOptions", StringComparison.OrdinalIgnoreCase));
+Expect("NetBIOS is not changed by apply",
+    !latScript.Contains("Set-Dword $nb 'NetbiosOptions'", StringComparison.OrdinalIgnoreCase) &&
+    !latScript.Contains("Set-ItemProperty -LiteralPath $nb", StringComparison.OrdinalIgnoreCase));
 Expect("no wifi Restart-NetAdapter force",
     !System.Text.RegularExpressions.Regex.IsMatch(latScript, @"Restart-NetAdapter.*Wi-?Fi",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase));
@@ -254,14 +259,13 @@ Expect("rss 6-core latency",
     NetworkLogic.RssQueueBudget(NetworkPreset.LowestLatency, 6) <= 6);
 Expect("rss throughput uses cores",
     NetworkLogic.RssQueueBudget(NetworkPreset.HighestThroughput, 6) == 6);
-Expect("prefer ipv4 on latency",
-    NetworkLogic.PreferIpv4First(NetworkPreset.LowestLatency, ethernetInUse: false));
+Expect("Windows IP precedence retained",
+    !NetworkLogic.PreferIpv4First(NetworkPreset.LowestLatency, ethernetInUse: false));
 Expect("lat script BufferStrategy", latScript.Contains("BufferStrategy", StringComparison.Ordinal));
 Expect("lat script RssQueueBudget", latScript.Contains("RssQueueBudget", StringComparison.Ordinal));
-Expect("lat script PreferIpv4", latScript.Contains("PreferIpv4First", StringComparison.Ordinal));
-// IPv4-first is now documented prefix-policy precedence — the old metric+20 hack must be gone
-Expect("prefix policy IPv4-first present",
-    latScript.Contains("set prefixpolicy ::ffff:0:0/96 55 4", StringComparison.Ordinal));
+Expect("lat script reports Windows IP precedence", latScript.Contains("IP-precedence=Windows-default", StringComparison.Ordinal));
+Expect("prefix policy is not changed",
+    !latScript.Contains("set prefixpolicy ::ffff:0:0/96", StringComparison.OrdinalIgnoreCase));
 Expect("old IPv6 metric+20 hack removed",
     !latScript.Contains("$want6 = $base + 20", StringComparison.Ordinal) &&
     !thrScript.Contains("$want6 = $base + 20", StringComparison.Ordinal));
@@ -278,7 +282,7 @@ var tk = NetworkLogic.KnobsFor(NetworkPreset.HighestThroughput);
 Expect("knobs diverge rsc", lk.Rsc != tk.Rsc);
 Expect("knobs diverge lso", lk.Lso != tk.Lso);
 Expect("autotune stays supported normal for both policies", lk.AutotuneNetsh == "normal" && tk.AutotuneNetsh == "normal");
-Expect("latency nagle off", lk.NagleOff);
+Expect("latency leaves Nagle adaptive", !lk.NagleOff);
 Expect("throughput nagle not forced", !tk.NagleOff);
 
 // --- Preset-aware NIC status (no false-fail for intentional download settings) ---
@@ -434,45 +438,26 @@ Expect("old wifi Disable-NetAdapter gate removed",
     !latScript.Contains("$ExoWifiDisabled += $w.Name", StringComparison.Ordinal));
 
 // (b) Markers for every new tweak (+ preset divergence)
-Expect("timestamps disabled both",
-    latScript.Contains("timestamps=disabled", StringComparison.Ordinal) &&
-    thrScript.Contains("timestamps=disabled", StringComparison.Ordinal));
-Expect("fastopen both",
-    latScript.Contains("fastopen=enabled", StringComparison.Ordinal) &&
-    thrScript.Contains("fastopen=enabled", StringComparison.Ordinal) &&
-    latScript.Contains("fastopenfallback=enabled", StringComparison.Ordinal) &&
-    thrScript.Contains("fastopenfallback=enabled", StringComparison.Ordinal));
-Expect("pacingprofile off latency only",
-    latScript.Contains("pacingprofile=off", StringComparison.Ordinal) &&
-    !thrScript.Contains("pacingprofile=off", StringComparison.Ordinal));
-Expect("hystart disabled latency only",
-    latScript.Contains("hystart=disabled", StringComparison.Ordinal) &&
-    !thrScript.Contains("hystart=disabled", StringComparison.Ordinal));
-Expect("uro disabled latency only + 26100 gate",
-    latScript.Contains("uro=disabled", StringComparison.Ordinal) &&
-    latScript.Contains("26100", StringComparison.Ordinal) &&
-    !thrScript.Contains("uro=disabled", StringComparison.Ordinal));
-Expect("ecn diverges per preset",
-    latScript.Contains("ecncapability=disabled", StringComparison.Ordinal) &&
-    thrScript.Contains("ecncapability=enabled", StringComparison.Ordinal));
-Expect("RTO tightening latency only",
-    latScript.Contains("-InitialRtoMs 1000", StringComparison.Ordinal) &&
-    latScript.Contains("-MinRtoMs 300", StringComparison.Ordinal) &&
-    !thrScript.Contains("-InitialRtoMs 1000", StringComparison.Ordinal));
-Expect("MaxSyn + NonSackRttResiliency both presets",
-    latScript.Contains("-MaxSynRetransmissions 2", StringComparison.Ordinal) &&
-    thrScript.Contains("-MaxSynRetransmissions 2", StringComparison.Ordinal) &&
-    latScript.Contains("-NonSackRttResiliency Disabled", StringComparison.Ordinal) &&
-    thrScript.Contains("-NonSackRttResiliency Disabled", StringComparison.Ordinal));
-Expect("DNS ServiceProvider priorities pinned to defaults",
-    latScript.Contains("LocalPriority' 499", StringComparison.Ordinal) &&
-    latScript.Contains("HostsPriority' 500", StringComparison.Ordinal) &&
-    latScript.Contains("DnsPriority' 2000", StringComparison.Ordinal) &&
-    latScript.Contains("NetbtPriority' 2001", StringComparison.Ordinal) &&
-    thrScript.Contains("DnsPriority' 2000", StringComparison.Ordinal) &&
-    thrScript.Contains("NetbtPriority' 2001", StringComparison.Ordinal) &&
-    !latScript.Contains("Set-Dword $sp 'DnsPriority' 6", StringComparison.Ordinal) &&
-    !latScript.Contains("Set-Dword $sp 'NetbtPriority' 7", StringComparison.Ordinal));
+foreach (var forbiddenGlobal in new[]
+{
+    "timestamps=disabled", "fastopen=enabled", "fastopenfallback=enabled", "pacingprofile=off",
+    "hystart=disabled", "uro=disabled", "ecncapability=enabled", "ecncapability=disabled",
+    "-InitialRtoMs 1000", "-MinRtoMs 300", "-MaxSynRetransmissions 2",
+    "-NonSackRttResiliency Disabled", "set dynamicport", "Set-Dword $sp"
+})
+{
+    Expect($"global policy absent: {forbiddenGlobal}",
+        !latScript.Contains(forbiddenGlobal, StringComparison.OrdinalIgnoreCase) &&
+        !thrScript.Contains(forbiddenGlobal, StringComparison.OrdinalIgnoreCase));
+}
+Expect("legacy ACK pins are removed, never forced",
+    latScript.Contains("Remove-Prop $p 'TcpAckFrequency'", StringComparison.Ordinal) &&
+    !latScript.Contains("Set-Dword $p 'TcpAckFrequency'", StringComparison.Ordinal));
+Expect("unrelated Windows features remain untouched",
+    !latScript.Contains("Disable-WindowsOptionalFeature", StringComparison.OrdinalIgnoreCase) &&
+    !latScript.Contains("Set-NetTeredoConfiguration", StringComparison.OrdinalIgnoreCase) &&
+    !latScript.Contains("Set-NetIsatapConfiguration", StringComparison.OrdinalIgnoreCase) &&
+    !latScript.Contains("Set-Net6to4Configuration", StringComparison.OrdinalIgnoreCase));
 Expect("DoSvc demand-start + snapshot of StartType",
     latScript.Contains("Set-Service -Name 'DoSvc' -StartupType Manual", StringComparison.Ordinal) &&
     latScript.Contains("startType", StringComparison.Ordinal));
@@ -519,11 +504,10 @@ Expect("netsh build gating helper (skip-with-reason)",
 Expect("EXO_REPORT emitter present", latScript.Contains("EXO_REPORT:", StringComparison.Ordinal));
 foreach (var step in new[]
 {
-    "'snapshot'", "'registry-host'", "'mmcss'", "'qos-psched'", "'powercfg'", "'tcp-globals'",
-    "'tcp-timestamps'", "'tcp-fastopen'", "'tcp-pacing'", "'tcp-hystart'", "'udp-uro'", "'tcp-ecn'",
-    "'tcp-settings'", "'dynamic-ports'", "'nagle'", "'dns-priorities'", "'adapters'", "'rss-base'",
+    "'snapshot'", "'host-policy'", "'registry-host'", "'tcp-globals'", "'tcp-algorithms'",
+    "'tcp-settings'", "'legacy-ack-pins'", "'adapters'", "'rss-base'",
     "'rss-policy'", "'packet-coalescing'",
-    "'bindings'", "'background-quiet'", "'prefix-policy'", "'eth-metrics'", "'wifi-disable'",
+    "'bindings'", "'background-quiet'", "'prefix-policy'", "'eth-metrics'", "'dns-auto'", "'power-policy'", "'wifi-disable'",
     "'post-probe'", "'rollback'", "'apply'"
 })
 {

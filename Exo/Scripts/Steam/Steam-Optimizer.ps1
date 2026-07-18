@@ -247,7 +247,8 @@ function Get-SteamRecoveryFromState($State) {
         ($names -contains 'notifications') -or
         ($names -contains 'trayEntries') -or
         ($names -contains 'appPath') -or
-        ($names -contains 'clientPerformance')
+        ($names -contains 'clientPerformance') -or
+        ($names -contains 'gpuPreferences')
     if (-not $hasWindowsRecovery) { return $null }
 
     return @{
@@ -263,6 +264,7 @@ function Get-SteamRecoveryFromState($State) {
         TrayEntries            = @(Get-SteamObjectProperty $source 'trayEntries' @() | Where-Object { $_ })
         AppPath                = Get-SteamObjectProperty $source 'appPath' $null
         ClientPerformance      = @(Get-SteamObjectProperty $source 'clientPerformance' @() | Where-Object { $_ })
+        GpuPreferences         = @(Get-SteamObjectProperty $source 'gpuPreferences' @() | Where-Object { $_ })
     }
 }
 
@@ -311,6 +313,30 @@ function Get-SteamClientPerformanceSnapshot {
             Existed = [bool]$snapshot
             Value   = if ($snapshot) { $snapshot.Value } else { $null }
             Kind    = if ($snapshot) { [string]$snapshot.Kind } else { 'DWord' }
+        })
+    }
+    return @($entries)
+}
+
+function Get-SteamGpuPreferenceTargets([string]$SteamPath) {
+    return @(
+        (Join-Path $SteamPath 'steam.exe'),
+        (Join-Path $SteamPath 'bin\cef\cef.win64\steamwebhelper.exe'),
+        (Join-Path $SteamPath 'steamwebhelper.exe')
+    ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Sort-Object -Unique
+}
+
+function Get-SteamGpuPreferenceSnapshot([string]$SteamPath) {
+    $key = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
+    $entries = [Collections.Generic.List[hashtable]]::new()
+    foreach ($exe in @(Get-SteamGpuPreferenceTargets $SteamPath)) {
+        $snapshot = Get-SteamRegistryValueSnapshot $key $exe
+        $entries.Add(@{
+            Key = $key
+            Name = $exe
+            Existed = [bool]$snapshot
+            Value = if ($snapshot) { $snapshot.Value } else { $null }
+            Kind = if ($snapshot) { [string]$snapshot.Kind } else { 'String' }
         })
     }
     return @($entries)
@@ -544,6 +570,7 @@ function Get-SteamWindowsRecoverySnapshot([string]$SteamPath) {
         TrayEntries             = @(Get-SteamTraySnapshot $SteamPath)
         AppPath                 = Get-SteamAppPathSnapshot
         ClientPerformance       = @(Get-SteamClientPerformanceSnapshot)
+        GpuPreferences          = @(Get-SteamGpuPreferenceSnapshot $SteamPath)
     }
 }
 
@@ -592,6 +619,7 @@ function Merge-SteamStartupRecovery($Prior, [hashtable]$Current) {
         TrayEntries             = @(Merge-SteamRecoveryItems (Get-SteamObjectProperty $Prior 'TrayEntries' @()) (Get-SteamObjectProperty $Current 'TrayEntries' @()) @('Key'))
         AppPath                 = if (Get-SteamObjectProperty $Prior 'AppPath' $null) { Get-SteamObjectProperty $Prior 'AppPath' $null } else { Get-SteamObjectProperty $Current 'AppPath' $null }
         ClientPerformance       = @(Merge-SteamRecoveryItems (Get-SteamObjectProperty $Prior 'ClientPerformance' @()) (Get-SteamObjectProperty $Current 'ClientPerformance' @()) @('Key', 'Name'))
+        GpuPreferences          = @(Merge-SteamRecoveryItems (Get-SteamObjectProperty $Prior 'GpuPreferences' @()) (Get-SteamObjectProperty $Current 'GpuPreferences' @()) @('Key', 'Name'))
     }
 }
 
@@ -1783,36 +1811,36 @@ function Install-LeanSteamLauncher([string]$SteamPath, [string]$HelperPath) {
     }
 }
 
-function Set-SteamGpuHighPerformance([string]$SteamPath) {
-    # Prefer discrete GPU for steam.exe + steamwebhelper when multi-GPU (laptop dGPU / multi-adapter).
-    $targets = @(
-        (Join-Path $SteamPath 'steam.exe'),
-        (Join-Path $SteamPath 'bin\cef\cef.win64\steamwebhelper.exe'),
-        (Join-Path $SteamPath 'steamwebhelper.exe')
-    )
-    $hasDgpu = $false
+function Set-SteamGpuRouting([string]$SteamPath) {
+    # On hybrid PCs keep the store/library CEF UI on integrated graphics so it
+    # does not wake or contend with the discrete GPU used by games. Single-GPU
+    # desktops stay on Windows automatic selection.
+    $targets = @(Get-SteamGpuPreferenceTargets $SteamPath)
+    $hybrid = $false
     try {
-        foreach ($n in @(Get-CimInstance Win32_VideoController -EA SilentlyContinue | ForEach-Object { [string]$_.Name })) {
-            if ($n -match '(?i)NVIDIA|GeForce|RTX|GTX|Radeon|RX\s*\d|Arc\s*A' -and $n -notmatch '(?i)Microsoft Basic|Hyper-V|Remote') {
-                $hasDgpu = $true; break
-            }
-        }
+        $names = @(Get-CimInstance Win32_VideoController -EA SilentlyContinue |
+            ForEach-Object { [string]$_.Name } |
+            Where-Object { $_ -and $_ -notmatch '(?i)Microsoft Basic|Hyper-V|Remote|Virtual' })
+        $hasDgpu = @($names | Where-Object { $_ -match '(?i)NVIDIA|GeForce|RTX|GTX|Radeon\s+RX|Intel.*Arc' }).Count -gt 0
+        $hasIgpu = @($names | Where-Object { $_ -match '(?i)Intel.*(?:UHD|Iris|HD Graphics)|AMD Radeon\(TM\) Graphics|Radeon Vega' }).Count -gt 0
+        $hybrid = $names.Count -ge 2 -and $hasDgpu -and $hasIgpu
     } catch { }
     $key = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
     try {
         if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
         foreach ($exe in $targets) {
-            if (-not (Test-Path -LiteralPath $exe)) { continue }
-            if ($hasDgpu) {
-                New-ItemProperty -LiteralPath $key -Name $exe -Value 'GpuPreference=2;' -PropertyType String -Force -EA SilentlyContinue | Out-Null
+            if ($hybrid) {
+                New-ItemProperty -LiteralPath $key -Name $exe -Value 'GpuPreference=1;' -PropertyType String -Force -EA Stop | Out-Null
             } else {
                 Remove-ItemProperty -LiteralPath $key -Name $exe -Force -EA SilentlyContinue
             }
         }
-        if ($hasDgpu) { Write-Ok 'Steam GPU preference = High performance (discrete GPU)' }
-        else { Write-Ok 'Steam GPU preference = Auto (no discrete GPU)' }
+        if ($hybrid) { Write-Ok 'Steam client GPU preference = power saving (games retain the discrete GPU)' }
+        else { Write-Ok 'Steam client GPU preference = Windows automatic (single-GPU path)' }
+        return $hybrid
     } catch {
         Write-Warn "Steam GPU preference: $($_.Exception.Message)"
+        throw
     }
 }
 
@@ -2085,6 +2113,16 @@ function Restore-SteamWindowsIntegration([string]$SteamPath, $Recovery, [ref]$Fa
             Write-Ok "Restored Steam client setting: $($entry.Name)"
         } catch {
             $Failures.Value.Add("Steam client setting $($entry.Name): $($_.Exception.Message)")
+        }
+    }
+
+    foreach ($entry in @(Get-SteamObjectProperty $Recovery 'GpuPreferences' @())) {
+        try {
+            Restore-SteamOptionalRegistryValue ([string]$entry.Key) ([string]$entry.Name) `
+                ([bool]$entry.Existed) $entry.Value ([string]$entry.Kind)
+            Write-Ok "Restored Steam GPU preference: $($entry.Name)"
+        } catch {
+            $Failures.Value.Add("Steam GPU preference $($entry.Name): $($_.Exception.Message)")
         }
     }
 
@@ -2402,9 +2440,9 @@ try {
         Apply-SteamWindowsQuiet $steam
         Add-ExoReport 'windows-quiet' 'ok'
     }
-    Write-HubProgress 36 'GPU preference (discrete when present)...'
-    Set-SteamGpuHighPerformance $steam
-    Add-ExoReport 'gpu-preference' 'ok'
+    Write-HubProgress 36 'Capability-aware GPU routing...'
+    $steamHybridGpu = Set-SteamGpuRouting $steam
+    Add-ExoReport 'gpu-routing' 'ok' $(if ($steamHybridGpu) { 'hybrid: client on integrated GPU' } else { 'single GPU: Windows automatic' })
 
     Write-HubProgress 38 'Hardware-accelerated Steam web views...'
     Set-SteamClientHardwareAcceleration

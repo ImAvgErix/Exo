@@ -185,8 +185,8 @@ if (File.Exists(appXaml) && File.Exists(colorTokens) && File.Exists(typeTokens) 
     var colors = File.ReadAllText(colorTokens);
     var types = File.ReadAllText(typeTokens);
     var metrics = File.ReadAllText(metricTokens);
-    Expect("dark page token", colors.Contains("<Color x:Key=\"ExoColorPage\">#000000</Color>", StringComparison.Ordinal));
-    Expect("stone white primary token", colors.Contains("<Color x:Key=\"ExoColorPrimaryText\">#F5F5F4</Color>", StringComparison.Ordinal));
+    Expect("dark page token", colors.Contains("<Color x:Key=\"ExoColorPage\">#050505</Color>", StringComparison.Ordinal));
+    Expect("stone white primary token", colors.Contains("<Color x:Key=\"ExoColorPrimaryText\">#F4F4F2</Color>", StringComparison.Ordinal));
     Expect("light theme removed", !colors.Contains("x:Key=\"Light\"", StringComparison.Ordinal)
         && !a.Contains("x:Key=\"Light\"", StringComparison.Ordinal));
     Expect("High Contrast dictionary", colors.Contains("x:Key=\"HighContrast\"", StringComparison.Ordinal)
@@ -194,8 +194,8 @@ if (File.Exists(appXaml) && File.Exists(colorTokens) && File.Exists(typeTokens) 
     Expect("token dictionaries merged", a.Contains("Styles/Tokens.Colors.xaml", StringComparison.Ordinal)
         && a.Contains("Styles/Tokens.Type.xaml", StringComparison.Ordinal)
         && a.Contains("Styles/Tokens.Metrics.xaml", StringComparison.Ordinal));
-    Expect("dark solid card lift", colors.Contains("#0E0E11", StringComparison.Ordinal)
-        && colors.Contains("#08080A", StringComparison.Ordinal));
+    Expect("dark solid card lift", colors.Contains("#101113", StringComparison.Ordinal)
+        && colors.Contains("#0A0A0B", StringComparison.Ordinal));
     Expect("liquid glass fill token", colors.Contains("ExoGlassFillBrush", StringComparison.Ordinal));
     Expect("settings solid surface brush",
         colors.Contains("ExoSettingsSurfaceBrush", StringComparison.Ordinal)
@@ -232,21 +232,41 @@ if (File.Exists(themeServiceCs))
 if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
-    // v2.6 top bar — liquid-glass circles floating on black (no bar plate).
+    // Labeled top bar: stable Home + modules + Settings with no semantic morphing.
     Expect("nav rail", m.Contains("NavRail", StringComparison.Ordinal));
-    Expect("glass circle nav", m.Contains("ExoGlassCircle", StringComparison.Ordinal)
+    Expect("labeled tab nav", m.Contains("ExoNavTab", StringComparison.Ordinal)
+        && m.Contains("Text=\"Discord\"", StringComparison.Ordinal)
+        && m.Contains("Text=\"Internet\"", StringComparison.Ordinal)
         && !m.Contains("ExoRailGlassFillBrush", StringComparison.Ordinal));
-    Expect("top bar workspace", m.Contains("Padding=\"16,4\"", StringComparison.Ordinal));
+    Expect("top bar workspace",
+        m.Contains("<TitleBar.LeftHeader>", StringComparison.Ordinal)
+        && m.Contains("<TitleBar.Content>", StringComparison.Ordinal)
+        && m.Contains("<TitleBar.RightHeader>", StringComparison.Ordinal));
     Expect("top bar row layout",
         m.Contains("RowDefinitions", StringComparison.Ordinal)
         && m.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));
-    // Responsive shell: Settings morphs to Home; TitleBar reserves caption space.
-    Expect("settings left rail", m.Contains("SettingsButton", StringComparison.Ordinal));
-    Expect("home chrome icon", m.Contains("HomeChromeIcon", StringComparison.Ordinal));
+    // Responsive shell: controls never change meaning; TitleBar reserves caption space.
+    Expect("settings right rail", m.Contains("SettingsButton", StringComparison.Ordinal));
+    Expect("stable home control", m.Contains("x:Name=\"NavHome\"", StringComparison.Ordinal)
+        && !m.Contains("HomeChromeIcon", StringComparison.Ordinal));
     Expect("modules centered layer", m.Contains("ModuleIcons", StringComparison.Ordinal));
     Expect("native TitleBar control", m.Contains("<TitleBar x:Name=\"AppTitleBar\"", StringComparison.Ordinal)
         && !m.Contains("CaptionSpacerHost", StringComparison.Ordinal));
     Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
+    var moduleRowStart = m.IndexOf("<StackPanel x:Name=\"ModuleIcons\"", StringComparison.Ordinal);
+    var moduleRowEnd = m.IndexOf("</StackPanel>", moduleRowStart, StringComparison.Ordinal);
+    var discordInRow = m.IndexOf("x:Name=\"NavDiscord\"", moduleRowStart, StringComparison.Ordinal);
+    var settingsRightHeader = m.IndexOf("<TitleBar.RightHeader>", moduleRowEnd, StringComparison.Ordinal);
+    var settingsInRightHeader = m.IndexOf("x:Name=\"SettingsButton\"", settingsRightHeader, StringComparison.Ordinal);
+    var settingsRightHeaderEnd = m.IndexOf("</TitleBar.RightHeader>", settingsRightHeader, StringComparison.Ordinal);
+    Expect("discord center and settings right cannot overlap",
+        moduleRowStart >= 0
+        && moduleRowEnd > moduleRowStart
+        && discordInRow > moduleRowStart
+        && discordInRow < moduleRowEnd
+        && settingsRightHeader > moduleRowEnd
+        && settingsInRightHeader > settingsRightHeader
+        && settingsInRightHeader < settingsRightHeaderEnd);
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
     Expect("rail nav internet", m.Contains("NavInternet", StringComparison.Ordinal));
     Expect("rail nav nvidia", m.Contains("NavNvidia", StringComparison.Ordinal));
@@ -277,10 +297,10 @@ if (File.Exists(mainCs))
     Expect("settings always on rail",
         cs.Contains("SettingsButton.Visibility = Visibility.Visible", StringComparison.Ordinal)
         && !cs.Contains("SettingsButton.Visibility = Visibility.Collapsed", StringComparison.Ordinal));
-    Expect("settings morphs to home off dashboard",
-        cs.Contains("HomeChromeIcon", StringComparison.Ordinal)
-        && cs.Contains("NavigateHome()", StringComparison.Ordinal)
-        && cs.Contains("_mode != ShellMode.Home", StringComparison.Ordinal));
+    Expect("settings never morphs to home",
+        !cs.Contains("HomeChromeIcon", StringComparison.Ordinal)
+        && !cs.Contains("if (_mode != ShellMode.Home)", StringComparison.Ordinal)
+        && cs.Contains("NavHome.Visibility = Visibility.Visible", StringComparison.Ordinal));
     Expect("dead titlebar fields removed", !cs.Contains("AppTitleText", StringComparison.Ordinal)
         && !cs.Contains("CaptionSpacerHost", StringComparison.Ordinal));
 }
@@ -291,7 +311,7 @@ if (File.Exists(dash))
     Expect("hero status identity",
         d.Contains("HeroBrand", StringComparison.Ordinal)
         && d.Contains("OverviewPrimary", StringComparison.Ordinal)
-        && d.Contains("System overview", StringComparison.Ordinal));
+        && d.Contains("Optimization status", StringComparison.Ordinal));
     Expect("hero tagline",
         d.Contains("HeroTagline", StringComparison.Ordinal)
         && (d.Contains("Maximum performance", StringComparison.Ordinal)
@@ -317,7 +337,7 @@ if (File.Exists(dash))
         && d.Contains("SteamStatusPrimary", StringComparison.Ordinal)
         && d.Contains("NvidiaPathPrimary", StringComparison.Ordinal)
         && d.Contains("LatencyPrimary", StringComparison.Ordinal));
-    Expect("home four outcome cards",
+    Expect("home six outcome cards",
         d.Contains("Text=\"Discord\"", StringComparison.Ordinal)
         && d.Contains("Text=\"Steam\"", StringComparison.Ordinal)
         && d.Contains("Text=\"Internet\"", StringComparison.Ordinal)
@@ -325,9 +345,9 @@ if (File.Exists(dash))
         && d.Contains("StatusTag", StringComparison.Ordinal)
         && d.Contains("LiveMetric", StringComparison.Ordinal));
     Expect("home explains optimizer outcomes",
-        d.Contains("VERIFIED OPTIMIZERS", StringComparison.Ordinal)
+        d.Contains("LIVE SYSTEM READ", StringComparison.Ordinal)
         && d.Contains("OverviewPrimary", StringComparison.Ordinal)
-        && d.Contains("Live detection decides", StringComparison.Ordinal));
+        && d.Contains("detects this PC first", StringComparison.Ordinal));
     Expect("home cards navigate", d.Contains("DiscordCard_Click", StringComparison.Ordinal)
         && d.Contains("SteamCard_Click", StringComparison.Ordinal)
         && d.Contains("InternetCard_Click", StringComparison.Ordinal)
@@ -366,8 +386,8 @@ if (File.Exists(settings))
     var s = File.ReadAllText(settings);
     Expect("settings appearance removed", !s.Contains("Appearance", StringComparison.Ordinal));
     Expect("settings updates", s.Contains("UPDATES", StringComparison.Ordinal) || s.Contains("Updates", StringComparison.Ordinal));
-    Expect("settings app version", s.Contains("App version", StringComparison.Ordinal)
-        && s.Contains("AppVersion", StringComparison.Ordinal)
+    Expect("settings app version", s.Contains("AppVersion", StringComparison.Ordinal)
+        && s.Contains("App behavior and support", StringComparison.Ordinal)
         && !s.Contains("KitVersion", StringComparison.Ordinal));
     Expect("settings no theme controls",
         !s.Contains("DarkMode_Click", StringComparison.Ordinal)
@@ -503,9 +523,10 @@ if (File.Exists(sharedPlateXaml))
         && plate.Contains("ExoLoader", StringComparison.Ordinal)
         && plate.Contains("ExoActionBar", StringComparison.Ordinal)
         && plate.Contains("FeatureTileGrid", StringComparison.Ordinal));
-    Expect("SharedModulePlate compact footer",
-        plate.Contains("Padding=\"16,8,16,10\"", StringComparison.Ordinal)
-        && plate.Contains("Spacing=\"6\"", StringComparison.Ordinal));
+    Expect("SharedModulePlate normal-flow actions",
+        plate.Contains("One normal-flow work surface", StringComparison.Ordinal)
+        && plate.Contains("WHAT EXO WILL CHANGE", StringComparison.Ordinal)
+        && plate.Contains("Hardware-aware · reversible", StringComparison.Ordinal));
     Expect("SharedModulePlate advisor + report",
         plate.Contains("GuidanceText", StringComparison.Ordinal)
         && plate.Contains("ApplyReportRows", StringComparison.Ordinal));
@@ -562,37 +583,27 @@ foreach (var page in new[]
     }
 }
 
-// Feature tiles: vertical StackLayout + SizeChanged width sync (full-width list).
+// Feature tiles: responsive two-column layout; the module owns scrolling.
 var featureGridXaml = Path.Combine(repo, "Exo", "Views", "Controls", "FeatureTileGrid.xaml");
 var featureGridCs = Path.Combine(repo, "Exo", "Views", "Controls", "FeatureTileGrid.xaml.cs");
 Expect("FeatureTileGrid control", File.Exists(featureGridXaml) && File.Exists(featureGridCs));
 if (File.Exists(featureGridXaml))
 {
     var fg = File.ReadAllText(featureGridXaml);
-    Expect("feature grid stretch host",
-        fg.Contains("ScrollHost_SizeChanged", StringComparison.Ordinal)
-        && fg.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal));
-    Expect("feature grid vertical layout",
-        (fg.Contains("StackLayout", StringComparison.Ordinal)
-            && fg.Contains("Orientation=\"Vertical\"", StringComparison.Ordinal))
-        || (fg.Contains("Layout", StringComparison.Ordinal)
-            && fg.Contains("Orientation=\"Vertical\"", StringComparison.Ordinal)));
-    Expect("feature grid overlay scrollbar",
-        fg.Contains("DefaultScrollBarStyle", StringComparison.Ordinal)
-        && fg.Contains("ScrollBarTrackFill", StringComparison.Ordinal)
-        && fg.Contains("ExoFeatureScrollTransparentBrush", StringComparison.Ordinal)
-        && fg.Contains("ScrollBarThumbFill", StringComparison.Ordinal)
-        && fg.Contains("VerticalScrollBarVisibility=\"Auto\"", StringComparison.Ordinal));
-    Expect("feature grid bottom scroll cue",
-        fg.Contains("Margin=\"0,0,0,16\"", StringComparison.Ordinal)
-        && fg.Contains("Trailing scroll buffer", StringComparison.Ordinal));
+    Expect("feature grid stretch host", fg.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal));
+    Expect("feature grid responsive layout",
+        fg.Contains("UniformGridLayout", StringComparison.Ordinal)
+        && fg.Contains("MinItemWidth=\"360\"", StringComparison.Ordinal)
+        && fg.Contains("MinColumnSpacing=\"12\"", StringComparison.Ordinal)
+        && fg.Contains("ItemsStretch=\"Fill\"", StringComparison.Ordinal));
+    Expect("feature grid delegates scrolling", !fg.Contains("<ScrollViewer", StringComparison.Ordinal));
 }
 if (File.Exists(featureGridCs))
 {
     var fgc = File.ReadAllText(featureGridCs);
-    Expect("feature grid width sync",
-        fgc.Contains("TileRepeater.Width", StringComparison.Ordinal)
-        && fgc.Contains("ScrollHost_SizeChanged", StringComparison.Ordinal));
+    Expect("feature grid no manual width sync",
+        !fgc.Contains("TileRepeater.Width", StringComparison.Ordinal)
+        && !fgc.Contains("ScrollHost_SizeChanged", StringComparison.Ordinal));
 }
 foreach (var page in new[]
          {

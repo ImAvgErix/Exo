@@ -72,16 +72,17 @@ automatic clean-driver stage is intentionally blocked until Exo has an
 official notebook-specific lookup. It never substitutes desktop driver
 metadata or packages. Install the official NVIDIA notebook driver manually.
 
-## Client stack + display (not in .nip)
+## Driver, apps, and display (not changed by Apply)
 
-On Apply, Exo keeps **Display.Driver + classic Control Panel only**:
-removes NVIDIA App/GFE and **Virtual/HD Audio**, accepts CPL EULA, enables
-**Use the advanced 3D image settings** (`NVTweak` `Gestalt=2`), and applies
-NVCleanstall-class expert tweaks (MSI High, telemetry/Ansel off, HDCP off).
+The shipping Apply path is deliberately limited to reversible DRS profile
+imports. It does not reinstall or strip the NVIDIA driver, audio components,
+NVIDIA App, overlays, services, tasks, refresh rate, color, scaling, or monitor
+configuration. Hardware and display topology are detected only to select and
+explain the matching profile. The app can open NVIDIA Control Panel; when it is
+missing, Apply attempts to provision the official Store package.
 
-Desktop **color / scaling / refresh** always apply through **NVAPI** (not mouse
-automation): **primary = max Hz**, **secondary = 60 Hz**, Full RGB, GPU no-scaling.
-Live status requires the bundled NVAPI helper and complete enumeration of every
-active NVIDIA-connected display; unavailable or partial checks fail closed.
+This boundary is intentional: component removal, blanket service disabling,
+undocumented MSI/affinity edits, and forced display modes do not have a
+hardware-independent performance win across Windows 11 desktops and laptops.
 
 Profile pack version: see `PROFILE_VERSION`.

@@ -306,21 +306,9 @@ public sealed partial class MainWindow : Window
     {
         _mode = mode;
 
-        // Same left circle: Settings on home, Home when on a module card.
+        // Navigation never changes meaning: EXO is Home and the gear is Settings.
         SettingsButton.Visibility = Visibility.Visible;
-        var onHome = mode == ShellMode.Home;
-        try
-        {
-            SettingsGearIcon.Visibility = onHome ? Visibility.Visible : Visibility.Collapsed;
-            HomeChromeIcon.Visibility = onHome ? Visibility.Collapsed : Visibility.Visible;
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(
-                SettingsButton,
-                onHome ? "Settings" : "Home");
-        }
-        catch { }
-
-        // Legacy NavHome stays collapsed (left chrome owns Home now).
-        NavHome.Visibility = Visibility.Collapsed;
+        NavHome.Visibility = Visibility.Visible;
         UpdateRailSelection(mode);
     }
 
@@ -332,6 +320,7 @@ public sealed partial class MainWindow : Window
     {
         var selected = mode switch
         {
+            ShellMode.Home => NavHome,
             ShellMode.Discord => NavDiscord,
             ShellMode.Steam => NavSteam,
             ShellMode.Internet => NavInternet,
@@ -341,10 +330,11 @@ public sealed partial class MainWindow : Window
             _ => null
         };
 
-        foreach (var btn in new[] { NavDiscord, NavSteam, NavInternet, NavNvidia, NavRiot, NavEpic })
+        foreach (var btn in new[] { NavHome, NavDiscord, NavSteam, NavInternet, NavNvidia, NavRiot, NavEpic })
         {
             var on = selected is not null && ReferenceEquals(btn, selected);
-            btn.Opacity = on ? 1.0 : 0.72;
+            btn.Opacity = on ? 1.0 : 0.76;
+            btn.Background = on ? _selectionFill : _selectionOff;
             btn.BorderBrush = on ? _ringOn : _ringOff;
             btn.BorderThickness = new Thickness(1);
         }
@@ -354,7 +344,11 @@ public sealed partial class MainWindow : Window
     private static readonly SolidColorBrush _ringOn =
         new(ColorHelper.FromArgb(0xD9, 0xFF, 0xFF, 0xFF));
     private static readonly SolidColorBrush _ringOff =
-        new(ColorHelper.FromArgb(0x66, 0xFF, 0xFF, 0xFF));
+        new(ColorHelper.FromArgb(0x00, 0xFF, 0xFF, 0xFF));
+    private static readonly SolidColorBrush _selectionFill =
+        new(ColorHelper.FromArgb(0x16, 0xFF, 0xFF, 0xFF));
+    private static readonly SolidColorBrush _selectionOff =
+        new(ColorHelper.FromArgb(0x00, 0xFF, 0xFF, 0xFF));
 
     private void NavHome_Click(object sender, RoutedEventArgs e) => NavigateHome();
 
@@ -534,14 +528,6 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        // On a module page the same left circle is Home (not settings).
-        if (_mode != ShellMode.Home)
-        {
-            HideSettingsFlyout();
-            NavigateHome();
-            return;
-        }
-
         try
         {
             if (SettingsFlyout.IsOpen)

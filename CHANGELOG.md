@@ -1,3 +1,15 @@
+## 3.6.1
+
+- **Signal-deck UI rebuild**: replaces clipped icon-only chrome with labeled, stable Home/module/Settings navigation; reshapes the dashboard into a compact 3×2 status grid; gives module capabilities a responsive two-column layout; and keeps actions in normal document flow instead of pinning them below empty space.
+- **Settings and motion cleanup**: the opaque settings panel now has a clear update/support hierarchy, navigation no longer waits on a decorative select pulse, and page motion is a short XAML-only crossfade that returns every element to layout-owned pixels.
+- **Release XAML hardening**: publishing now cleans generated WinUI XBF/connector artifacts before compiling, preventing stale named-control maps from producing a green build that crashes at launch after shell edits.
+- **Navigation regression fixed**: Discord remains in the centered module row and Settings now owns the native right-header slot, eliminating the visual collision that hid Discord.
+- **Internet policy rebuilt**: keeps adaptive Windows TCP/IP behavior and removes unrelated SMB, NetBIOS, tunnel, power-plan, scheduler, QoS-reservation, dynamic-port, and undocumented timing mutations. NIC capability tuning, DNS benchmarking/DoH, metrics, RSS/offloads, rollback, and exact Repair remain.
+- **NVIDIA status cleaned up**: current installs always use the reversible safe profile contract; retired driver stripping, service debloat, display mutation, and duplicate DRS requirements no longer leak into detection or cards.
+- **Riot and Epic hardware policy**: detected games use the high-performance GPU without forced undocumented IFEO CPU priority. Hybrid systems route launcher UI to the integrated GPU; single-GPU PCs stay on Windows automatic selection.
+- **Steam hybrid routing**: Steam client/CEF uses the integrated GPU on hybrid systems while games retain the discrete GPU, with exact snapshot/Repair. The contention guard continues to avoid unsafe webhelper trims, caps, suspension, or kills.
+- **Clearer Discord evidence**: the plugin card separates curated features from required APIs instead of presenting dependencies as optional bloat.
+
 ## 3.6.0
 
 - **Adaptive six-module dashboard**: Riot and Epic are real optimizer pages beside Internet, NVIDIA, Discord, and Steam, with capability-aware detection, concise evidence, Apply, and exact Repair.

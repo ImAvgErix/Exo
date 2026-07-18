@@ -20,11 +20,11 @@
 
             <Grid x:Name="HeroBlock">
                 <StackPanel Spacing="4">
-                    <TextBlock Text="EXO"
+                    <TextBlock Text="SYSTEM"
                                Style="{StaticResource ExoSectionTitle}"
                                Margin="0" />
                     <TextBlock x:Name="HeroBrand"
-                               Text="System overview"
+                               Text="Optimization status"
                                Style="{StaticResource ExoPageTitle}" />
                     <TextBlock x:Name="HeroTagline"
                                Text="{x:Bind ViewModel.HeroSummary, Mode=OneWay}"
@@ -37,7 +37,7 @@
             <Border x:Name="FrameHero"
                     Grid.Row="1"
                     Style="{StaticResource ExoModulePlate}"
-                    Padding="20,16">
+                    Padding="20,18">
                 <Grid ColumnSpacing="24">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -45,7 +45,7 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Spacing="4" VerticalAlignment="Center">
-                        <TextBlock Text="VERIFIED OPTIMIZERS"
+                        <TextBlock Text="LIVE SYSTEM READ"
                                    Style="{StaticResource ExoSectionTitle}"
                                    Margin="0" />
                         <TextBlock Text="{x:Bind ViewModel.OverviewPrimary, Mode=OneWay}"
@@ -53,7 +53,7 @@
                                    FontSize="28"
                                    LineHeight="36"
                                    Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                        <TextBlock Text="Live detection decides what is applied. Open a module to review or change it."
+                        <TextBlock Text="Every module detects this PC first, applies only supported changes, and keeps a repair path."
                                    Style="{StaticResource ExoCaption}"
                                    MaxWidth="560"
                                    HorizontalAlignment="Left" />
@@ -94,9 +94,9 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
@@ -105,7 +105,7 @@
                         Style="{StaticResource ExoCardButton}"
                         AutomationProperties.Name="Open Discord optimizer"
                         Click="DiscordCard_Click">
-                    <Grid MinHeight="128" RowSpacing="8">
+                    <Grid MinHeight="116" RowSpacing="7">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -132,7 +132,7 @@
                         Style="{StaticResource ExoCardButton}"
                         AutomationProperties.Name="Open Steam optimizer"
                         Click="SteamCard_Click">
-                    <Grid MinHeight="128" RowSpacing="8">
+                    <Grid MinHeight="116" RowSpacing="7">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -155,11 +155,11 @@
                     </Grid>
                 </Button>
 
-                <Button Grid.Row="1" Grid.Column="0"
+                <Button Grid.Row="0" Grid.Column="2"
                         Style="{StaticResource ExoCardButton}"
                         AutomationProperties.Name="Open Internet optimizer"
                         Click="InternetCard_Click">
-                    <Grid MinHeight="128" RowSpacing="8">
+                    <Grid MinHeight="116" RowSpacing="7">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -182,11 +182,11 @@
                     </Grid>
                 </Button>
 
-                <Button Grid.Row="1" Grid.Column="1"
+                <Button Grid.Row="1" Grid.Column="0"
                         Style="{StaticResource ExoCardButton}"
                         AutomationProperties.Name="Open NVIDIA optimizer"
                         Click="NvidiaCard_Click">
-                    <Grid MinHeight="128" RowSpacing="8">
+                    <Grid MinHeight="116" RowSpacing="7">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -209,11 +209,11 @@
                     </Grid>
                 </Button>
 
-                <Button Grid.Row="2" Grid.Column="0"
+                <Button Grid.Row="1" Grid.Column="1"
                         Style="{StaticResource ExoCardButton}"
                         AutomationProperties.Name="Open Riot optimizer"
                         Click="RiotCard_Click">
-                    <Grid MinHeight="128" RowSpacing="8">
+                    <Grid MinHeight="116" RowSpacing="7">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -236,11 +236,11 @@
                     </Grid>
                 </Button>
 
-                <Button Grid.Row="2" Grid.Column="1"
+                <Button Grid.Row="1" Grid.Column="2"
                         Style="{StaticResource ExoCardButton}"
                         AutomationProperties.Name="Open Epic optimizer"
                         Click="EpicCard_Click">
-                    <Grid MinHeight="128" RowSpacing="8">
+                    <Grid MinHeight="116" RowSpacing="7">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />

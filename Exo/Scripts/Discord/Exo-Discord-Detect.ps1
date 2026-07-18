@@ -63,9 +63,16 @@ function Get-LeanPluginStatus($Settings) {
         foreach ($name in @($allowed)) { [void]$required.Add([string]$name) }
         $enabled = @($Settings.plugins.PSObject.Properties | Where-Object { $_.Value.enabled -eq $true } | ForEach-Object Name)
         $ok = Test-DiscOptLeanPluginNames -EnabledNames $enabled -AllowedNames @($allowed) -RequiredNames @($required) -MaximumEnabled ([int]$policy.maximumEnabled)
-        return [pscustomobject]@{ Ok = $ok; Enabled = $enabled.Count; Maximum = [int]$policy.maximumEnabled; Error = '' }
+        return [pscustomobject]@{
+            Ok = $ok
+            Enabled = $enabled.Count
+            Curated = @($policy.enabled).Count
+            Dependencies = [Math]::Max(0, $enabled.Count - @($policy.enabled).Count)
+            Maximum = [int]$policy.maximumEnabled
+            Error = ''
+        }
     } catch {
-        return [pscustomobject]@{ Ok = $false; Enabled = 0; Maximum = 0; Error = $_.Exception.Message }
+        return [pscustomobject]@{ Ok = $false; Enabled = 0; Curated = 0; Dependencies = 0; Maximum = 0; Error = $_.Exception.Message }
     }
 }
 
@@ -339,7 +346,7 @@ if (-not (Test-Path $discordRoot)) {
                 $leanPluginDetail = if ($leanStatus.Error) {
                     "Plugin policy check unavailable: $($leanStatus.Error)"
                 } else {
-                    "$($leanStatus.Enabled) enabled / budget $($leanStatus.Maximum) / required dependencies gated"
+                    "$($leanStatus.Curated) curated features + $($leanStatus.Dependencies) required APIs; every optional extra is off"
                 }
             } catch {
                 if (Test-Path -LiteralPath $eqThemeFile) { $amoledOk = $true }

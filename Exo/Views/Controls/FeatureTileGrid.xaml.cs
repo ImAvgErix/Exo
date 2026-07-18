@@ -25,9 +25,4 @@ public sealed partial class FeatureTileGrid : UserControl
         InitializeComponent();
     }
 
-    private void ScrollHost_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        if (e.NewSize.Width <= 0) return;
-        TileRepeater.Width = e.NewSize.Width;
-    }
 }

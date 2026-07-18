@@ -40,6 +40,15 @@ function Get-LiveTargets {
 }
 $targets = @(Get-LiveTargets)
 $targetsPresent = $targets.Count
+$hybridGraphics = $false
+try {
+    $gpuNames = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
+        ForEach-Object { [string]$_.Name } |
+        Where-Object { $_ -and $_ -notmatch '(?i)Microsoft Basic|Remote|Hyper-V|Virtual' })
+    $hybridGraphics = $gpuNames.Count -ge 2 -and
+        @($gpuNames | Where-Object { $_ -match '(?i)NVIDIA|GeForce|RTX|GTX|Radeon\s+RX|Intel.*Arc' }).Count -gt 0 -and
+        @($gpuNames | Where-Object { $_ -match '(?i)Intel.*(?:UHD|Iris|HD Graphics)|AMD Radeon\(TM\) Graphics|Radeon Vega' }).Count -gt 0
+} catch { }
 $startupQuiet = $true
 $run = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
 if ($run) {
@@ -52,9 +61,7 @@ $policyVerified = 0
 $gpu = Get-ItemProperty 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences' -ErrorAction SilentlyContinue
 foreach ($path in $targets) {
     $gpuOk = $gpu -and [string]$gpu.PSObject.Properties[[string]$path].Value -eq 'GpuPreference=2;'
-    $exe = [IO.Path]::GetFileName([string]$path)
-    $cpu = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$exe\PerfOptions" -ErrorAction SilentlyContinue).CpuPriorityClass
-    if ($gpuOk -and [int]$cpu -eq 6) { $policyVerified++ }
+    if ($gpuOk) { $policyVerified++ }
 }
 $policyOk = [bool]($targetsPresent -gt 0 -and $policyVerified -eq $targetsPresent)
 $snapshotReady = Test-Path -LiteralPath $snapshotPath -PathType Leaf
@@ -63,7 +70,7 @@ $features = @(
     [ordered]@{ title = "$Module detected"; detail = $(if ($installed) { 'Installed client found' } else { 'Client not found' }); active = [bool]$installed },
     [ordered]@{ title = 'Startup quiet'; detail = 'Launcher no longer starts with Windows'; active = [bool]$startupQuiet },
     [ordered]@{ title = 'Per-game GPU preference'; detail = "$policyVerified of $targetsPresent detected executable(s) use the high-performance GPU"; active = [bool]$policyOk },
-    [ordered]@{ title = 'Per-game CPU priority'; detail = 'Above Normal is scoped to game executables, not the launcher'; active = [bool]$policyOk },
+    [ordered]@{ title = 'Hybrid GPU split'; detail = $(if ($hybridGraphics) { 'Games use the discrete GPU; launcher UI uses integrated graphics' } else { 'Single-GPU path; no unnecessary launcher override' }); active = $true },
     [ordered]@{ title = 'Anti-cheat and updates'; detail = 'Services, anti-cheat, client files, and update paths are outside Exo policy'; active = [bool]$installed },
     [ordered]@{ title = 'Exact Repair'; detail = 'Pre-Exo registry values are saved for restore'; active = [bool]$snapshotReady }
 )
