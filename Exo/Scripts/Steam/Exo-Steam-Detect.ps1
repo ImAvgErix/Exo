@@ -329,7 +329,7 @@ if (-not $steamOk) {
             $memoryGuardOk = Test-SteamMemoryGuardText -Text $helperText
         } catch { }
     }
-    Add-Feature 'Background priority policy' 'Background CEF pages get low memory priority and yield CPU while gaming; the foreground Steam window stays responsive. This does not fake a RAM reduction.' $memoryGuardOk
+    Add-Feature 'Background priority policy' 'Background CEF pages get low memory priority plus EcoQoS while gaming; the foreground Steam window stays Normal. Allocated memory is not mislabeled as reclaimed.' $memoryGuardOk
 
     $debloatOk = Test-SteamCompleteClientDebloat $steam
     # Sparse intermediate states (applying/incomplete/repairing) lack these keys - guard.

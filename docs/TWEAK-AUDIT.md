@@ -1,6 +1,6 @@
 # Exo tweak audit (evidence-based)
 
-Last pass: v3.2.0. Goal: an evidence-based ceiling of real OS/driver/client performance for every module —
+Last pass: v3.6.0. Goal: an evidence-based ceiling of real OS/driver/client performance for every module —
 every known tweak in the landscape is either implemented or listed here with a concrete exclusion
 reason. Nothing is silently skipped, and nothing invented (no dead registry folklore).
 
@@ -18,7 +18,7 @@ without the app. See `docs/INTERNET-GOLDEN-PATH.md`.
 | Knob | Verdict | Why |
 |------|---------|-----|
 | `DisableTaskOffload=0` | **Keep** | `=1` is a real footgun; kills stack offloads |
-| Autotune normal / experimental | **Keep** | Documented `netsh` / `Set-NetTCPSetting` |
+| Autotune normal | **Keep** | Supported adaptive default for both policies; experimental removed because it can grow queues without improving typical multi-gig links |
 | Heuristics disabled | **Keep** | Prevents Windows from restricting autotune |
 | RSS on | **Keep** | Documented multi-queue receive |
 | RSS `BaseProcessorNumber 2` (Ethernet, ≥4 CPUs) | **Implemented (v2.4.0)** | Keeps NIC interrupts off core 0; supported `Set-NetAdapterRss` path |
@@ -62,7 +62,7 @@ without the app. See `docs/INTERNET-GOLDEN-PATH.md`.
 | DefaultTTL / KeepAlive / SynAttackProtect | **Excluded** | No meaningful client gaming effect |
 | Tcp1323Opts registry | **Excluded** | Superseded by netsh timestamps (implemented) |
 | Disable IPv6 (`DisabledComponents`) | **Excluded** | Breaks modern stacks; IPv4-first via prefix policy instead |
-| Force public DNS | **Implemented as opt-in (v3.0.12)** | Was excluded as forced; now a user toggle (**Private DNS**) — Cloudflare dual-stack + DoH registration (`netsh dns add encryption`, autoupgrade + UDP fallback), Win11 22H2+ gated, off by default. Snapshot captures prior per-adapter DNS + DoH registrations; Repair restores/removes exactly |
+| Automatic public DNS selection | **Implemented (v3.6.0)** | Analyze directly tests Cloudflare, Google, and Quad9 on the current route, selects the fastest healthy responder, registers its published DoH template when Windows supports it, and snapshots exact prior adapter DNS/DoH state for Repair. Cloudflare is only the offline fallback. |
 | Force MTU / jumbo for gaming | **Excluded** | Path-MTU breakage risk (PPPoE/VPN) |
 | Interrupt affinity via registry | **Excluded** | `Set-NetAdapterRss` is the supported path (implemented) |
 | Game Mode / GameDVR / HAGS / power plan | **Out of module scope** | Internet module is network-only since v2.3.4; these belong to the future Windows module |
@@ -89,14 +89,12 @@ without the app. See `docs/INTERNET-GOLDEN-PATH.md`.
 Verification contract (v2.4.0): after Profile Inspector import, Exo exports the live DRS database
 (NPI `-exportCustomized`, pinned v3.0.1.11 + SHA-256) and verifies the pinned values; detect
 re-verifies live, so the tile flips to *Drifted — re-apply* if NVIDIA App/CPL resets settings.
-Reset stays status-clear only — never a rollback.
+Repair restores the full pre-Exo DRS database captured before the first Apply.
 
 | Surface | Verdict | Why |
 |---------|---------|-----|
-| Display.Driver-only clean install (+ PhysX kept) | **Keep** | NVI2 package selection |
-| HD/Virtual Audio strip | **Keep** | NVI2 uninstall |
-| ShadowPlay / NvBackend / NodeJS / telemetry package strip | **Implemented (v2.4.0)** | Same NVI2 mechanism at install time |
-| MSI High / telemetry / Ansel / HDCP off / PowerMizer | **Keep** | Real driver/service knobs |
+| Automatic driver/package reinstall or component strip | **Excluded from default policy (v3.6.0)** | Exo does not replace the installed driver, audio, NVIDIA App, Control Panel, services, tasks, or overlays merely to apply latency profiles. |
+| MSI mode / service / telemetry registry edits | **Excluded from default policy (v3.6.0)** | Driver-version and hardware-dependent changes are not required for a reversible DRS policy and cannot be universally verified as faster. |
 | DRS Base pack import (`-silentImport`) | **Keep** | 10 series packs |
 | Post-import DRS verification (`-exportCustomized`) | **Implemented (v2.4.0)** | NPI pinned v3.0.1.11 + SHA-256 |
 | Live DRS drift detect | **Implemented (v2.4.0)** | Non-elevated export + shared classifier |
@@ -104,9 +102,9 @@ Reset stays status-clear only — never a rollback.
 | Background app max frame rate 30 | **Implemented (v2.4.0)** | Pack pin `277041158=30` |
 | Resizable BAR (30/40/50) / shader cache unlimited / LOD clamp / threaded opt | **Keep** | Already pinned in packs |
 | Per-game catalog | **Expanded to 29 titles (v2.4.0)** | Comp deltas: PRF=1, max perf, ULL per pack, frame-gen off |
-| G-SYNC latency/sync policy | **Corrected (v3.2.0)** | G-SYNC + driver VSync on + Ultra Low Latency for non-Reflex DX9/DX11; NVIDIA Reflex overrides driver ULL when supported; VSync is now a required live DRS verification pin |
+| G-SYNC latency/sync policy | **Explicit (v3.6.0)** | Exo never infers the monitor's physical adaptive-sync state. The off path keeps raw-latency sync pins; the user toggle selects the G-SYNC + driver VSync profile. Reflex remains authoritative when supported and enabled by the game. |
 | Minecraft `javaw.exe` profile | **Excluded** | Shared Java host — would force max-perf pins on every Java app |
-| CPL: resolution / refresh / scaling / color range / depth | **Keep** | Exo.NvDisplay (NvAPI) |
+| Automatic resolution / refresh / scaling / color changes | **Excluded from safe default (v3.6.0)** | Hardware is detected and reported, but Apply leaves the active display configuration unchanged. |
 | CPL: digital vibrance (DVC) | **Implemented (v2.4.0; panel slider v2.4.1)** | get/set/status with readback verify; per-display slider in the Exo NVIDIA Panel |
 | CPL: per-display G-SYNC toggle | **Excluded** | Public NVAPI `GSync_*` APIs are Quadro Sync genlock hardware, not consumer VRR; NvAPIWrapper ships no G-SYNC surface. Consumer per-display VRR has no documented public API — DRS pack pins (`* G-SYNC.nip`) cover behavior |
 | Unsigned INF edits (NvCleanInstall "tweaks") | **Excluded** | Breaks driver signing |
@@ -118,7 +116,7 @@ Reset stays status-clear only — never a rollback.
 
 | Surface | Verdict | Why |
 |---------|---------|-----|
-| DiscOpt kernel (priority, 4s trim, raw input) | **Keep** | In-process real behavior |
+| DiscOpt kernel (priority, 4s trim, raw input) | **Keep, compatibility-gated** | Exact bundled binaries/config are verified and stock ffmpeg is backed up; this remains an update-sensitive third-party in-process modification and is not described as a guaranteed RAM/latency gain. Boot failure disarms it. |
 | Voice QoS DSCP 46 policy (per variant) | **Implemented (v2.4.0)** | Documented Windows QoS policy schema; repair removes Exo names only |
 | Spellcheck dictionary trim (keep en-US + system locale) | **Implemented (v2.4.0)** | Deterministic allow list; re-downloaded on demand |
 | Locale `.pak` trim | **Keep** | Existing deterministic debloat |
@@ -143,7 +141,7 @@ Reset stays status-clear only — never a rollback.
 | Friends notifications + sounds fully quiet | **Implemented (v2.4.0)** | Verified `friends` section |
 | config.vdf: `DownloadThrottleKbps=0`, `AllowDownloadsDuringGameplay=0`, `AutoUpdateWindowEnabled=0` | **Implemented (v2.4.0)** | Verified `InstallConfigStore` path |
 | `H264HWAccel` / `GPUAccelWebViews*` etc. | **Rewrite-existing-only** | Modern section path unverifiable — never invented at a guessed path |
-| In-game client/CEF contention guard | **Implemented (v3.2.0)** | Steam and steamwebhelper switch to BelowNormal only while a game runs, then return to responsive idle priorities; no working-set trim or process kill |
+| In-game client/CEF contention guard | **Corrected (v3.6.0)** | Foreground Steam stays Normal/HighQoS. Only background webhelpers receive BelowNormal CPU, low memory priority, and EcoQoS while a game runs; every helper is explicitly restored afterward. No working-set trim, hard cap, suspension, or kill. |
 | Webhelper working-set trim / reclaimed-RAM claims | **Removed (v3.0.11; UI retired v3.2.0)** | `EmptyWorkingSet` froze modern CEF; stale `steam-trim-stats.json` is no longer surfaced as current optimization data |
 | Download cache ceiling | **Excluded** | No verifiable config.vdf key |
 | Auto-update window hour pinning | **Excluded** | Redundant with the two implemented keys |
@@ -151,6 +149,18 @@ Reset stays status-clear only — never a rollback.
 | `-cef-disable-occlusion` / `-cef-disable-renderer-accessibility` | **Excluded (forbidden)** | Documented blanking/hangs on some GPUs |
 | Windows quiet (toasts/tray/autostart) | **Keep** | Real startup/notification reduction |
 | Random "FPS registry packs" | **Not used** | Folklore |
+
+## Riot and Epic
+
+| Surface | Verdict | Why |
+|---------|---------|-----|
+| Installed-game discovery | **Implemented (v3.6.0)** | Riot paths and Epic launcher manifests are parsed locally; missing launchers/games are valid states. |
+| Quiet launcher startup | **Implemented (v3.6.0)** | Only known per-user startup values are snapshotted and changed. Repair restores the exact prior value. |
+| Windows GPU preference | **Implemented (v3.6.0)** | `GpuPreference=2;` is written only for detected game executables, with pristine per-value snapshot and readback verification. |
+| Above Normal CPU priority | **Implemented (v3.6.0)** | IFEO `PerfOptions\CpuPriorityClass=6` is scoped to detected game executable names. Real-time/High priority is forbidden. |
+| Launcher/game cache deletion | **Excluded** | Saves little persistent overhead, can force re-download/rebuild, and is not a latency optimization. |
+| Process killing/background guard | **Excluded** | Exo does not close a game, launcher download, or protected session and installs no resident watcher. |
+| Vanguard/EOS/services/files/manifests/saves | **Forbidden** | Security, anti-cheat, account, game, and store integrity are outside the mutation boundary. |
 
 ## App runtime / publish
 

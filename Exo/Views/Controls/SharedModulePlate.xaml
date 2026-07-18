@@ -32,9 +32,7 @@
                                    Margin="0" />
                         <TextBlock Text="{x:Bind StatusText, Mode=OneWay}"
                                    Style="{StaticResource ExoPageTitle}"
-                                   FontSize="26"
-                                   LineHeight="32"
-                                   CharacterSpacing="-24" />
+                                   CharacterSpacing="-20" />
                         <Border Style="{StaticResource ExoMessageBanner}"
                                 Visibility="{x:Bind HasGuidance, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                             <Grid ColumnSpacing="8">
@@ -95,8 +93,8 @@
                     <StackPanel Spacing="4"
                                 Visibility="{x:Bind HasApplyReport, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Button Style="{StaticResource ExoQuietButton}"
-                                MinHeight="28"
-                                Padding="10,4"
+                                MinHeight="40"
+                                Padding="12,8"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch"
                                 Click="ToggleReport_Click"
@@ -112,7 +110,7 @@
                                            VerticalAlignment="Center" />
                                 <FontIcon Grid.Column="1"
                                           Glyph="{x:Bind ApplyReportChevron, Mode=OneWay}"
-                                          FontSize="10"
+                                          FontSize="12"
                                           Foreground="{ThemeResource ExoMutedTextBrush}"
                                           VerticalAlignment="Center" />
                             </Grid>
@@ -128,7 +126,8 @@
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <FontIcon Glyph="{x:Bind Glyph}" FontSize="11"
+                                            <FontIcon Glyph="{x:Bind Glyph}" FontSize="12"
+                                                      MinWidth="12"
                                                       Foreground="{x:Bind Brush}" VerticalAlignment="Center" />
                                             <TextBlock Grid.Column="1" Text="{x:Bind Text}"
                                                        Style="{StaticResource ExoCaption}" />
@@ -144,8 +143,8 @@
                     <Button Style="{StaticResource ExoQuietButton}"
                             Content="{x:Bind SecondaryLeftLabel, Mode=OneWay}"
                             Click="SecondaryLeft_Click"
-                            MinHeight="34"
-                            Padding="12,6"
+                            MinHeight="40"
+                            Padding="12,8"
                             HorizontalAlignment="Stretch"
                             IsEnabled="{x:Bind SecondaryActionsEnabled, Mode=OneWay}"
                             Visibility="{x:Bind ShowSecondaryActions, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"

@@ -38,6 +38,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial string LastResultGlyph { get; set; } = "\uE73E";
     [ObservableProperty] public partial Brush LastResultBrush { get; set; }
     [ObservableProperty] public partial string HardwarePolicyText { get; set; } = "Detecting GPU and displays...";
+    [ObservableProperty] public partial bool UseGsync { get; set; }
 
     [RelayCommand]
     private async Task RefreshAsync()
@@ -89,7 +90,9 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
                     ProgressStatus = p.Status;
             });
 
-            var args = new[] { "-NonInteractive" };
+            var args = UseGsync
+                ? new[] { "-NonInteractive", "-SafePolicy", "-Gsync" }
+                : new[] { "-NonInteractive", "-SafePolicy", "-RawLatency" };
 
             var result = await _services.PowerShell.RunAsync(
                 _services.Scripts.NvidiaOptimizerScript,
@@ -170,8 +173,8 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
 
-        // Reset is status-clear only (never a driver rollback) — runs immediately;
-        // the page carries the honest one-line description next to the button.
+        // Repair restores the complete DRS snapshot captured before Exo imported
+        // its Base + per-game profiles. The safe policy does not mutate drivers.
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;
@@ -190,7 +193,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             var result = await _services.PowerShell.RunAsync(
                 _services.Scripts.NvidiaRepairScript,
                 arguments: new[] { "-NonInteractive" },
-                elevate: false,
+                elevate: true,
                 progress: progress,
                 cancellationToken: _runCts.Token,
                 workingDirectory: _services.Scripts.GetNvidiaRoot(),
@@ -240,6 +243,9 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             !string.IsNullOrWhiteSpace(hardware)
                 ? hardware
                 : "Apply detects the GPU, display path, refresh range, and laptop/desktop policy automatically.";
+        UseGsync = state.Extra is { Count: > 0 } &&
+            state.Extra.TryGetValue("gsync", out var gsync) &&
+            string.Equals(gsync, "true", StringComparison.OrdinalIgnoreCase);
 
         Features.Clear();
         foreach (var feature in state.Features)

@@ -19,21 +19,37 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        Helpers.StartupLog.Mark("main");
-
-        // Must run before any HWND is created or taskbar uses a generic icon.
-        try { SetCurrentProcessExplicitAppUserModelID(AppUserModelId); } catch { }
-
-        XamlCheckProcessRequirements();
-        ComWrappersSupport.InitializeComWrappers();
-        Helpers.StartupLog.Mark("xaml-runtime-ready");
-        Application.Start(p =>
+        try
         {
-            var context = new DispatcherQueueSynchronizationContext(
-                DispatcherQueue.GetForCurrentThread());
-            SynchronizationContext.SetSynchronizationContext(context);
-            new App();
-        });
-        Helpers.StartupLog.Mark("application-exited");
+            Helpers.NativeProcessSecurity.HardenDllSearch();
+
+            // A redirected secondary launch must not reset the primary process's
+            // crash-loop log or initialize a second WinUI compositor.
+            if (!Helpers.SingleInstanceManager.IsPrimaryInstance())
+                return;
+
+            Helpers.StartupDiagnostics.EnterPhase("main");
+
+            // Must run before any HWND is created or taskbar uses a generic icon.
+            try { SetCurrentProcessExplicitAppUserModelID(AppUserModelId); } catch { }
+
+            Helpers.StartupDiagnostics.EnterPhase("xaml-requirements");
+            XamlCheckProcessRequirements();
+            ComWrappersSupport.InitializeComWrappers();
+            Helpers.StartupDiagnostics.EnterPhase("xaml-runtime-ready");
+            Application.Start(p =>
+            {
+                var context = new DispatcherQueueSynchronizationContext(
+                    DispatcherQueue.GetForCurrentThread());
+                SynchronizationContext.SetSynchronizationContext(context);
+                new App();
+            });
+            Helpers.StartupDiagnostics.EnterPhase("application-exited");
+        }
+        catch (Exception ex)
+        {
+            Helpers.StartupDiagnostics.WriteFatal(ex);
+            throw;
+        }
     }
 }

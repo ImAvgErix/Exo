@@ -110,8 +110,11 @@ public static partial class NetworkLogic
         // Balanced uses latency-leaning host knobs but without aggressive nagle (treat as latency stack lite)
         var bulk = preset == NetworkPreset.HighestThroughput;
         return new PresetKnobs(
-            AutotuneNetsh: bulk ? "experimental" : "normal",
-            AutotunePs: bulk ? "Experimental" : "Normal",
+            // Normal is Windows' supported adaptive default and already scales
+            // to multi-gig bandwidth-delay products. Experimental can inflate
+            // queues without improving a typical 1/2.5/5/10 GbE path.
+            AutotuneNetsh: "normal",
+            AutotunePs: "Normal",
             Rsc: bulk ? "enabled" : "disabled",
             Lso: bulk ? "1" : "0",
             InterruptMod: bulk ? "1" : "0",
@@ -695,14 +698,31 @@ public static partial class NetworkLogic
         var unstable = result.PacketLossPercent >= 0.5 || result.JitterMs >= 8 ||
                        result.DownloadLoadedJitterMs >= 15 || result.UploadLoadedJitterMs >= 15 ||
                        downPenalty >= 25 || upPenalty >= 35;
-        if (unstable || media.WifiUp && !media.EthernetInUse)
+        // Host-side offload disabling cannot fix queueing in a router/ONT. On a
+        // 1+ GbE link it can only cut throughput, so keep RSS/RSC/LSO and report
+        // loaded latency honestly. Wi-Fi and slower paths may use latency-safe
+        // host knobs when the measured path is unstable.
+        var fastEthernet = media.EthernetInUse && media.PrimaryLinkSpeedBps >= 1_000_000_000;
+        if (!fastEthernet && (unstable || media.WifiUp && !media.EthernetInUse))
             return NetworkPreset.LowestLatency;
 
         // A short-lived public endpoint must never downgrade a verified multi-gig
         // Ethernet link. Endpoint saturation is recorded separately in the UI.
-        return media.EthernetInUse && media.PrimaryLinkSpeedBps >= 1_000_000_000 ||
+        return fastEthernet ||
                result.DownloadMbps >= 300 && media.PrimaryLinkSpeedBps >= 1_000_000_000
             ? NetworkPreset.HighestThroughput
             : NetworkPreset.LowestLatency;
+    }
+
+    /// <summary>
+    /// Baseline packet loss from the idle series only. Loaded ICMP misses are not
+    /// connection loss: the quality test deliberately saturates the path and many
+    /// routers/targets deprioritize ping replies under that load.
+    /// </summary>
+    public static double CalculateIdlePacketLossPercent(int attempts, int successful)
+    {
+        if (attempts <= 0) return 100d;
+        var boundedSuccessful = Math.Clamp(successful, 0, attempts);
+        return (attempts - boundedSuccessful) * 100d / attempts;
     }
 }

@@ -15,7 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.10.0'
+$Script:SteamOptVersion = '1.11.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
@@ -1833,6 +1833,7 @@ using System;
 using System.Runtime.InteropServices;
 public static class ExoSteamMemory {
   [StructLayout(LayoutKind.Sequential)] struct MEMORY_PRIORITY_INFORMATION { public uint MemoryPriority; }
+  [StructLayout(LayoutKind.Sequential)] struct PROCESS_POWER_THROTTLING_STATE { public uint Version; public uint ControlMask; public uint StateMask; }
   [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool SetProcessInformation(IntPtr process, int infoClass, ref MEMORY_PRIORITY_INFORMATION info, uint size);
   [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
@@ -1844,6 +1845,14 @@ public static class ExoSteamMemory {
     if (handle == IntPtr.Zero) return false;
     try { var info = new MEMORY_PRIORITY_INFORMATION { MemoryPriority = priority }; return SetProcessInformation(handle, 0, ref info, 4); }
     finally { CloseHandle(handle); }
+  }
+  public static bool SetPowerThrottled(int pid, bool enabled) {
+    IntPtr handle = OpenProcess(0x0200u | 0x1000u, false, pid);
+    if (handle == IntPtr.Zero) return false;
+    try {
+      var info = new PROCESS_POWER_THROTTLING_STATE { Version = 1, ControlMask = 1, StateMask = enabled ? 1u : 0u };
+      return SetProcessInformation(handle, 4, ref info, 12);
+    } finally { CloseHandle(handle); }
   }
 }
 "@
@@ -1891,8 +1900,12 @@ function Set-SteamClientPriority([bool]$InGame) {
       if ($_.PriorityClass -ne $webCls) {
         $_.PriorityClass = $webCls
       }
-      $memoryPriority = if ($InGame) { 1 } elseif ($_.Id -eq $foregroundPid) { 5 } else { 2 }
+      # Foreground ordering matters: never demote the renderer the user is using.
+      $memoryPriority = if ($_.Id -eq $foregroundPid) { 5 } elseif ($InGame) { 1 } else { 2 }
       [void][ExoSteamMemory]::SetMemoryPriority($_.Id, [uint32]$memoryPriority)
+      # EcoQoS is gameplay-only and background-only. StateMask=0 explicitly
+      # returns every renderer to HighQoS when the condition ends.
+      [void][ExoSteamMemory]::SetPowerThrottled($_.Id, ($InGame -and $_.Id -ne $foregroundPid))
     } catch {}
   }
 }
@@ -1935,6 +1948,12 @@ try {
     Start-Sleep -Seconds 5
   }
 } finally {
+  Get-Process -Name 'steamwebhelper' -ErrorAction SilentlyContinue | ForEach-Object {
+    try {
+      [void][ExoSteamMemory]::SetPowerThrottled($_.Id, $false)
+      [void][ExoSteamMemory]::SetMemoryPriority($_.Id, 5)
+    } catch {}
+  }
   try { $mutex.ReleaseMutex() } catch {}
   $mutex.Dispose()
 }
@@ -2487,12 +2506,15 @@ try {
         $helperOk = $helperText -match 'Exo\.SteamMemoryGuard' -and
             $helperText -match 'SetProcessInformation' -and
             $helperText -match 'SetMemoryPriority' -and
+            $helperText -match 'SetPowerThrottled' -and
             $helperText -match 'ForegroundPid' -and
             $helperText -match 'ProcessPriorityClass\]::BelowNormal' -and
             $helperText -match '(?s)\$steamCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
             $helperText -match '(?s)\$backgroundWebCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
             $helperText -match '(?s)\$webCls\s*=\s*if\s*\(\$_\.Id\s*-eq\s*\$foregroundPid\).*?Normal.*?\$backgroundWebCls' -and
             $helperText -match '\$_\.PriorityClass\s*=\s*\$webCls' -and
+            $helperText -match '(?s)\$memoryPriority\s*=\s*if\s*\(\$_\.Id\s*-eq\s*\$foregroundPid\).*?5.*?elseif\s*\(\$InGame\).*?1.*?else\s*\{\s*2\s*\}' -and
+            $helperText -match 'SetPowerThrottled\(\$_\.Id, \(\$InGame -and \$_\.Id -ne \$foregroundPid\)\)' -and
             (-not $helperUnsafe)
     } catch { }
     $fullPassOk = -not [bool]$Quick

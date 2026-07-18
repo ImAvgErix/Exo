@@ -1,10 +1,8 @@
-using System.Text;
-
 namespace Exo.Services;
 
 /// <summary>
-/// Real-time next-step guidance from live detect state. Pure (no I/O) so UI and smokes share it.
-/// Wave 2 (v2): structured CTA = missing essentials + optional last-fail hints + one action.
+/// Concise next action from live detect state. Feature rows carry technical
+/// detail; the advisor does not repeat internal step names or script prose.
 /// </summary>
 public static class OptimizerAdvisor
 {
@@ -16,9 +14,6 @@ public static class OptimizerAdvisor
         IReadOnlyList<(string Name, bool Applied, string Status)> features)
         => BuildV2(module, isApplied, statusText, detailText, features, reportFailSteps: null);
 
-    /// <summary>
-    /// Advisor v2: same as Build, plus optional last-apply fail step ids (from EXO_REPORT).
-    /// </summary>
     public static string BuildV2(
         string module,
         bool isApplied,
@@ -27,80 +22,56 @@ public static class OptimizerAdvisor
         IReadOnlyList<(string Name, bool Applied, string Status)> features,
         IReadOnlyList<string>? reportFailSteps)
     {
-        var missing = features
-            .Where(f => !f.Applied)
-            .Select(f => f.Name)
-            .Where(n => !string.IsNullOrWhiteSpace(n))
-            .Take(6)
-            .ToList();
+        var missingCount = features.Count(f => !f.Applied && !string.IsNullOrWhiteSpace(f.Name));
+        var hasFailure = (reportFailSteps ?? Array.Empty<string>())
+            .Any(step => !string.IsNullOrWhiteSpace(step));
+        var status = (statusText ?? string.Empty).Trim();
+        var detail = (detailText ?? string.Empty).Trim();
+        var state = $"{status} {detail} {string.Join(' ', features.Select(f => f.Status))}".ToLowerInvariant();
 
-        var fails = (reportFailSteps ?? Array.Empty<string>())
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .Select(s => s.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(4)
-            .ToList();
+        if (module == "NVIDIA" && (state.Contains("no nvidia") || state.Contains("needs an nvidia")))
+            return "No supported NVIDIA GPU was detected on this PC.";
+        if (module == "Discord" && (state.Contains("not installed") || state.Contains("no discord")))
+            return "Discord Stable is not installed. Install it, then refresh this page.";
+        if (module == "Steam" && (state.Contains("not installed") || state.Contains("no steam")))
+            return "Steam is not installed. Install and open it once, then refresh this page.";
+        if (module == "Internet" && state.Contains("no physical"))
+            return "No active physical connection was detected. Connect Ethernet or Wi-Fi, then refresh.";
+        if (module == "Steam" && state.Contains("open steam once"))
+            return "Open Steam once so its account configuration exists, then apply again.";
 
-        var sb = new StringBuilder();
-        var st = (statusText ?? "").Trim();
-        var det = (detailText ?? "").Trim();
-
-        if (isApplied && missing.Count == 0 && fails.Count == 0)
+        if (isApplied && missingCount == 0 && !hasFailure)
         {
-            sb.Append("All good on this PC. ");
-            sb.Append(module switch
+            return module switch
             {
-                "Internet" => "CTA: only Re-Apply if latency got worse or you changed adapters.",
-                "Discord" => "CTA: if Discord self-updated, hit Apply once to re-seal mods.",
-                "Steam" => "CTA: if Steam updated, Apply again to re-verify launch path.",
-                "NVIDIA" => "CTA: after a driver update, Apply again to re-import profiles.",
-                _ => "CTA: Refresh if something still feels off."
-            });
-            sb.Append(" Exo installs no background tasks.");
-            return sb.ToString();
+                "Internet" => "Verified on this connection. Analyze again after changing adapters, routers, or service plans.",
+                "Discord" => "Verified on this installation. Apply again after Discord replaces its client files.",
+                "Steam" => "Verified on this installation. Apply again after Steam changes its launcher configuration.",
+                "NVIDIA" => "Verified against the live driver profile. Apply again after a driver update.",
+                _ => "Verified on this PC."
+            };
         }
 
-        // Primary CTA
-        if (missing.Count > 0)
+        if (hasFailure)
+            return "The last Apply needs attention. Retry once; use Repair if verification still fails.";
+
+        if (missingCount > 0)
         {
-            sb.Append("CTA: hit Apply. Still open: ");
-            sb.Append(string.Join(", ", missing));
-            sb.Append('.');
-        }
-        else if (fails.Count > 0)
-        {
-            sb.Append("CTA: hit Apply (or Repair if Apply already failed). Last fail: ");
-            sb.Append(string.Join(", ", fails));
-            sb.Append('.');
-        }
-        else if (!string.IsNullOrEmpty(st) &&
-                 !st.Equals("Checking status...", StringComparison.OrdinalIgnoreCase) &&
-                 !st.Equals("Already optimized", StringComparison.OrdinalIgnoreCase) &&
-                 !st.Equals("All applied", StringComparison.OrdinalIgnoreCase))
-        {
-            sb.Append("CTA: Apply. Status: ").Append(st).Append('.');
-        }
-        else
-        {
-            sb.Append("CTA: Apply. Exo will detect this machine and run the aggressive pack.");
+            return module switch
+            {
+                "Internet" => "Ready to measure this connection and apply one balanced policy.",
+                "Discord" => $"{missingCount} settings are ready for this Discord installation.",
+                "Steam" => $"{missingCount} settings are ready for this Steam installation.",
+                "NVIDIA" => $"{missingCount} settings are ready for the detected GPU and display path.",
+                _ => $"{missingCount} settings are ready for this PC."
+            };
         }
 
-        if (!string.IsNullOrEmpty(det) && det.Length < 160)
-            sb.Append(' ').Append(det);
-
-        var blob = $"{st} {det} {string.Join(' ', features.Select(f => f.Status))}".ToLowerInvariant();
-        if (module == "NVIDIA" && (blob.Contains("no nvidia") || blob.Contains("needs an nvidia")))
-            sb.Append(" Needs an NVIDIA GPU + current driver.");
-        if (module == "Discord" && (blob.Contains("not installed") || blob.Contains("no discord")))
-            sb.Append(" Install Discord Stable first.");
-        if (module == "Steam" && (blob.Contains("not installed") || blob.Contains("no steam")))
-            sb.Append(" Install Steam first.");
-        if (module == "Internet" && blob.Contains("no physical"))
-            sb.Append(" Connect Ethernet or Wi-Fi, then Refresh.");
-        if (module == "Steam" && blob.Contains("open steam once"))
-            sb.Append(" Open Steam once, then Reapply for VDF keys.");
-
-        sb.Append(" No Exo background tasks.");
-        return sb.ToString();
+        return module switch
+        {
+            "Internet" => "Ready to analyze the active connection.",
+            "NVIDIA" => "Ready to verify the detected GPU and driver profile.",
+            _ => "Ready to analyze this installation."
+        };
     }
 }

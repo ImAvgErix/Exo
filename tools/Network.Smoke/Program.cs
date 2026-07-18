@@ -118,6 +118,13 @@ Expect("APIPA not usable", !NetworkLogic.IsUsableIpv4("169.254.1.2"));
 Expect("private usable", NetworkLogic.IsUsableIpv4("192.168.1.10"));
 Expect("empty not usable", !NetworkLogic.IsUsableIpv4(""));
 
+// Loss is an idle-path metric. Missed ICMP while the benchmark deliberately
+// saturates download/upload must never be folded into the connection-loss label.
+Expect("idle loss clean", NetworkLogic.CalculateIdlePacketLossPercent(24, 24) == 0);
+Expect("idle loss one miss", Math.Abs(NetworkLogic.CalculateIdlePacketLossPercent(24, 23) - (100d / 24d)) < 0.001);
+Expect("idle loss bounds successes", NetworkLogic.CalculateIdlePacketLossPercent(24, 30) == 0);
+Expect("idle loss no attempts", NetworkLogic.CalculateIdlePacketLossPercent(0, 0) == 100);
+
 // Band infer
 bool b5 = false, b6 = false, ax = false, be = false;
 NetworkLogic.InferBandSupport("Prefer 6GHz band 802.11be", ref b5, ref b6, ref ax, ref be);
@@ -145,7 +152,7 @@ Expect("throughput apply script audit", thrOk, string.Join("; ", thrIssues));
 
 // Diverge on tradeoffs
 Expect("latency autotune normal", latScript.Contains("autotuninglevel=normal", StringComparison.OrdinalIgnoreCase));
-Expect("throughput autotune experimental", thrScript.Contains("autotuninglevel=experimental", StringComparison.OrdinalIgnoreCase));
+Expect("throughput autotune normal", thrScript.Contains("autotuninglevel=normal", StringComparison.OrdinalIgnoreCase));
 Expect("latency rsc disabled", latScript.Contains("rsc=disabled", StringComparison.OrdinalIgnoreCase));
 Expect("throughput rsc enabled", thrScript.Contains("rsc=enabled", StringComparison.OrdinalIgnoreCase));
 Expect("latency LSO 0", latScript.Contains("'*LsoV2IPv4' 0", StringComparison.Ordinal));
@@ -193,27 +200,38 @@ var dohScript = NetworkApplyScriptBuilder.Build(NetworkPreset.LowestLatency,
         DnsOverHttpsTemplate = "https://dns.google/dns-query"
     }, media);
 Expect("selected DNS provider baked", dohScript.Contains("$ExoDnsProvider = 'Google'", StringComparison.Ordinal));
-Expect("DoH registers encryption", dohScript.Contains("dns add encryption", StringComparison.OrdinalIgnoreCase));
-Expect("DoH updates existing registrations", dohScript.Contains("dns set encryption", StringComparison.OrdinalIgnoreCase));
-Expect("DoH verifies live registration", dohScript.Contains("dns show encryption", StringComparison.OrdinalIgnoreCase)
-    && dohScript.Contains("Auto-upgrade", StringComparison.OrdinalIgnoreCase));
+Expect("DoH registers encryption", dohScript.Contains("Add-DnsClientDohServerAddress", StringComparison.Ordinal));
+Expect("DoH updates existing registrations", dohScript.Contains("Set-DnsClientDohServerAddress", StringComparison.Ordinal));
+Expect("DoH verifies live registration", dohScript.Contains("Get-DnsClientDohServerAddress", StringComparison.Ordinal)
+    && dohScript.Contains("AutoUpgrade", StringComparison.Ordinal));
 Expect("DoH uses analyzed template", dohScript.Contains("dns.google/dns-query", StringComparison.OrdinalIgnoreCase));
 Expect("DoH pins analyzed resolvers", dohScript.Contains("8.8.8.8", StringComparison.Ordinal)
     && dohScript.Contains("2001:4860:4860::8888", StringComparison.Ordinal));
-Expect("DoH gated to Win11 22H2+", dohScript.Contains("22621", StringComparison.Ordinal));
+Expect("DoH capability gated by shipped cmdlets", dohScript.Contains("Get-Command Get-DnsClientDohServerAddress", StringComparison.Ordinal));
+Expect("DoH falls back to correct netsh dnsclient context",
+    dohScript.Contains("netsh dnsclient add encryption", StringComparison.OrdinalIgnoreCase) &&
+    dohScript.Contains("netsh dnsclient show encryption", StringComparison.OrdinalIgnoreCase) &&
+    !dohScript.Contains("netsh dns add encryption", StringComparison.OrdinalIgnoreCase));
 Expect("DoH reports automatic selection", dohScript.Contains("dns-auto", StringComparison.Ordinal));
 Expect("DoH provider failure keeps fastest DNS active and truthful",
-    dohScript.Contains("Windows rejected automatic DoH", StringComparison.Ordinal) &&
+    dohScript.Contains("encrypted DNS unavailable on this Windows build", StringComparison.Ordinal) &&
+    !dohScript.Contains("Windows rejected automatic DoH", StringComparison.Ordinal) &&
     !dohScript.Contains("throw ('DoH registration failed", StringComparison.Ordinal));
 Expect("default apply always has safe resolver", latScript.Contains("$ExoDnsProvider = 'Cloudflare'", StringComparison.Ordinal)
     && latScript.Contains("dns-auto", StringComparison.Ordinal));
 // Snapshot must capture per-adapter DNS + existing DoH so Repair can truly restore.
 Expect("apply snapshot captures adapter DNS", latScript.Contains("$snap.dnsServers", StringComparison.Ordinal));
-Expect("apply snapshot captures DoH registrations", latScript.Contains("$snap.dohRaw", StringComparison.Ordinal));
+Expect("apply snapshot captures typed DoH registrations", latScript.Contains("$snap.dohServers", StringComparison.Ordinal)
+    && latScript.Contains("$snap.exoDohServers", StringComparison.Ordinal)
+    && latScript.Contains("netsh dnsclient show encryption", StringComparison.OrdinalIgnoreCase));
 Expect("repair restores DNS from snapshot", repairScript.Contains("restore-dns", StringComparison.Ordinal)
     && repairScript.Contains("snap.dnsServers", StringComparison.Ordinal));
-Expect("repair prunes only Exo-added DoH", repairScript.Contains("snap.dohRaw", StringComparison.Ordinal)
-    && repairScript.Contains("dns delete encryption", StringComparison.OrdinalIgnoreCase));
+Expect("repair preserves prior DoH and prunes only Exo-added DoH",
+    repairScript.Contains("snap.dohServers", StringComparison.Ordinal)
+    && repairScript.Contains("snap.exoDohServers", StringComparison.Ordinal)
+    && repairScript.Contains("snap.dohRaw", StringComparison.Ordinal)
+    && repairScript.Contains("Remove-DnsClientDohServerAddress", StringComparison.Ordinal)
+    && repairScript.Contains("netsh dnsclient delete encryption", StringComparison.OrdinalIgnoreCase));
 // DNS cache TTL folklore is gone: apply removes overrides; repair + rescue never bring them back.
 Expect("apply never writes DNS cache TTL overrides",
     !latScript.Contains("Set-Dword 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters'", StringComparison.Ordinal) &&
@@ -259,7 +277,7 @@ var lk = NetworkLogic.KnobsFor(NetworkPreset.LowestLatency);
 var tk = NetworkLogic.KnobsFor(NetworkPreset.HighestThroughput);
 Expect("knobs diverge rsc", lk.Rsc != tk.Rsc);
 Expect("knobs diverge lso", lk.Lso != tk.Lso);
-Expect("knobs diverge autotune", lk.AutotuneNetsh != tk.AutotuneNetsh);
+Expect("autotune stays supported normal for both policies", lk.AutotuneNetsh == "normal" && tk.AutotuneNetsh == "normal");
 Expect("latency nagle off", lk.NagleOff);
 Expect("throughput nagle not forced", !tk.NagleOff);
 
@@ -294,10 +312,10 @@ Expect("shared latency state NOT ok for throughput",
 // Autotune must match knobs
 Expect("autotune normal matches latency",
     NetworkLogic.AutotuneMatches(NetworkPreset.LowestLatency, "normal"));
-Expect("autotune normal does NOT match throughput",
-    !NetworkLogic.AutotuneMatches(NetworkPreset.HighestThroughput, "normal"));
-Expect("autotune experimental matches throughput",
-    NetworkLogic.AutotuneMatches(NetworkPreset.HighestThroughput, "experimental"));
+Expect("autotune normal matches throughput",
+    NetworkLogic.AutotuneMatches(NetworkPreset.HighestThroughput, "normal"));
+Expect("autotune experimental does NOT match throughput",
+    !NetworkLogic.AutotuneMatches(NetworkPreset.HighestThroughput, "experimental"));
 Expect("autotune experimental does NOT match latency",
     !NetworkLogic.AutotuneMatches(NetworkPreset.LowestLatency, "experimental"));
 Expect("LSO off matches latency", NetworkLogic.LsoMatches(NetworkPreset.LowestLatency, false));
@@ -560,8 +578,17 @@ Expect("adaptive preset stable fast ethernet",
     qualityParsed is not null && NetworkLogic.RecommendPreset(qualityParsed, media) == NetworkPreset.HighestThroughput);
 var unstableQuality = NetworkLogic.TryParseBenchmark(
     "EXO_BENCH:{\"ok\":true,\"isQualityTest\":true,\"pingP50Ms\":12,\"jitterMs\":2,\"downloadMbps\":500,\"downloadLoadedMs\":18,\"uploadLoadedMs\":25,\"downloadLoadedJitterMs\":25,\"uploadLoadedJitterMs\":4,\"packetLossPercent\":0}");
-Expect("adaptive preset loaded jitter chooses latency",
-    unstableQuality is not null && NetworkLogic.RecommendPreset(unstableQuality, media) == NetworkPreset.LowestLatency);
+Expect("multi-gig Ethernet keeps offloads despite loaded queueing",
+    unstableQuality is not null && NetworkLogic.RecommendPreset(unstableQuality, media) == NetworkPreset.HighestThroughput);
+var slowWifi = new NetworkMediaProfile
+{
+    EthernetInUse = false,
+    WifiAvailable = true,
+    WifiUp = true,
+    PrimaryLinkSpeedBps = 300_000_000
+};
+Expect("unstable Wi-Fi chooses latency-safe host policy",
+    unstableQuality is not null && NetworkLogic.RecommendPreset(unstableQuality, slowWifi) == NetworkPreset.LowestLatency);
 
 // (c) BuildRepair: snapshot-driven true restore + fallback stock reset
 Expect("repair reads snapshot json",
@@ -645,6 +672,11 @@ if (repoRoot is not null)
         Expect("Wi-Fi while Ethernet never hard-fails for Still up",
             netSvc.Contains("Up (metrics prefer Ethernet)", StringComparison.Ordinal) ||
             netSvc.Contains("Up (kept)", StringComparison.Ordinal));
+        Expect("Internet apply and repair use the shared runner",
+            netSvc.Contains("NetworkOptimizerService(PowerShellRunnerService runner)", StringComparison.Ordinal) &&
+            netSvc.Contains("_runner.RunAsync", StringComparison.Ordinal) &&
+            !netSvc.Contains("Verb = \"runas\"", StringComparison.Ordinal) &&
+            !netSvc.Contains("FileName = \"powershell.exe\"", StringComparison.Ordinal));
         var qualityMethod = netSvc.IndexOf("RunQualityBenchmarkAsync", StringComparison.Ordinal);
         var qualityEnd = qualityMethod >= 0
             ? netSvc.IndexOf("LoadQualityBenchmark", qualityMethod, StringComparison.Ordinal)

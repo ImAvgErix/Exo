@@ -10,7 +10,7 @@ public sealed class AppServices
     public OptimizerStateService OptimizerState { get; }
     public GitHubUpdateService Updater { get; }
     public NvidiaPanelSettingsService NvidiaPanel { get; }
-    public NetworkOptimizerService Network { get; } = new();
+    public NetworkOptimizerService Network { get; }
 
     public AppServices()
     {
@@ -19,6 +19,7 @@ public sealed class AppServices
         OptimizerState = new OptimizerStateService(PowerShell, Scripts);
         Updater = new GitHubUpdateService();
         NvidiaPanel = new NvidiaPanelSettingsService(Scripts, PowerShell);
+        Network = new NetworkOptimizerService(PowerShell);
     }
 
     public void Initialize()

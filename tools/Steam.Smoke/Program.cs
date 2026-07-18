@@ -28,6 +28,7 @@ var guard5 = """
 # Never EmptyWorkingSet / Stop-Process steamwebhelper
 SetProcessInformation
 SetMemoryPriority
+SetPowerThrottled
 ForegroundPid
 [System.Diagnostics.ProcessPriorityClass]::High
 [System.Diagnostics.ProcessPriorityClass]::BelowNormal
@@ -46,6 +47,8 @@ $webCls = if ($_.Id -eq $foregroundPid) {
   [System.Diagnostics.ProcessPriorityClass]::Normal
 } else { $backgroundWebCls }
 $_.PriorityClass = $webCls
+$memoryPriority = if ($_.Id -eq $foregroundPid) { 5 } elseif ($InGame) { 1 } else { 2 }
+SetPowerThrottled($_.Id, ($InGame -and $_.Id -ne $foregroundPid))
 Start-Sleep -Seconds 5
 """;
 var guard4 = guard5.Replace("Seconds 5", "Seconds 4");
@@ -94,6 +97,7 @@ Exo.SteamMemoryGuard
 Never EmptyWorkingSet
 SetProcessInformation
 SetMemoryPriority
+SetPowerThrottled
 ForegroundPid
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
@@ -102,6 +106,8 @@ $backgroundWebCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {
 $foregroundPid = ForegroundPid
 $webCls = if ($_.Id -eq $foregroundPid) {{ ProcessPriorityClass]::Normal }} else {{ $backgroundWebCls }}
 $_.PriorityClass = $webCls
+$memoryPriority = if ($_.Id -eq $foregroundPid) {{ 5 }} elseif ($InGame) {{ 1 }} else {{ 2 }}
+SetPowerThrottled($_.Id, ($InGame -and $_.Id -ne $foregroundPid))
 Start-Sleep -Seconds 5
 '@)),
  (E 'ps guard 4' (Test-SteamMemoryGuardText -Text @'
@@ -109,6 +115,7 @@ Exo.SteamMemoryGuard
 Never EmptyWorkingSet
 SetProcessInformation
 SetMemoryPriority
+SetPowerThrottled
 ForegroundPid
 ProcessPriorityClass]::High
 ProcessPriorityClass]::BelowNormal
@@ -117,6 +124,8 @@ $backgroundWebCls = if ($InGame) {{ ProcessPriorityClass]::BelowNormal }} else {
 $foregroundPid = ForegroundPid
 $webCls = if ($_.Id -eq $foregroundPid) {{ ProcessPriorityClass]::Normal }} else {{ $backgroundWebCls }}
 $_.PriorityClass = $webCls
+$memoryPriority = if ($_.Id -eq $foregroundPid) {{ 5 }} elseif ($InGame) {{ 1 }} else {{ 2 }}
+SetPowerThrottled($_.Id, ($InGame -and $_.Id -ne $foregroundPid))
 Start-Sleep -Seconds 4
 '@)),
  (E 'ps guard rejects legacy all-background policy' (-not (Test-SteamMemoryGuardText -Text @'

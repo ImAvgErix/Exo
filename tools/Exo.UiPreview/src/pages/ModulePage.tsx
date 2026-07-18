@@ -9,7 +9,7 @@ interface ModulePageProps { module: ModuleData }
 
 export function ModulePage({ module }: ModulePageProps) {
   const [message, setMessage] = useState<string | null>(null)
-  const [gsync, setGsync] = useState(true)
+  const [gsync, setGsync] = useState(false)
   const [statusTitle, setStatusTitle] = useState(module.statusTitle)
 
   const appliedCount = module.features.filter((f) => f.applied).length

@@ -1,8 +1,24 @@
+## 3.6.0
+
+- **Adaptive six-module dashboard**: Riot and Epic are real optimizer pages beside Internet, NVIDIA, Discord, and Steam, with capability-aware detection, concise evidence, Apply, and exact Repair.
+- **Safe game-launcher policy**: Riot/Epic changes are limited to reversible startup, Windows GPU preference, and Above Normal CPU priority for detected game executables. Anti-cheat, services, client files, manifests, saves, caches, and active games are never touched.
+- **NVIDIA safe policy**: Apply snapshots the full DRS database, leaves driver components/services/display state unchanged by default, makes G-SYNC explicit, and restores the exact pre-Exo profile database on Repair.
+- **Multi-gig Internet policy**: 1+ GbE preserves RSS, RSC, LSO, and normal receive-window autotuning. Loaded queueing is reported as router/ONT behavior instead of “fixed” with throughput-cutting host tweaks; DNS is selected from live Cloudflare/Google/Quad9 tests.
+- **Steam foreground protection**: visible Steam stays Normal priority; only background web helpers get low memory priority and EcoQoS while a game is running. All helpers return to HighQoS/normal memory priority afterward.
+- **Honest memory evidence**: dashboard cards distinguish resident working set from private committed bytes and no longer attribute a normal peak-to-current drop to Exo.
+- **Dark-only responsive shell**: one opaque dark visual system, resizable/maximizable layout, native title bar, crisp shared module plates, white Apply actions, and a decluttered Settings sheet.
+- **Security and release hardening**: shipped scripts are compiled into a SHA-256 manifest and re-verified across elevation; privileged results use protected machine-owned transactions; downloads require HTTPS plus published digests.
+
 ## 3.5.2
 
 - **DNS cache TTL folklore removed**: Apply no longer writes `Dnscache MaxCacheTtl=86400` (records pinned up to 24h → stale DNS). Any leftover override is removed on Apply and never restored by Repair.
 - **Offline rescue restores DNS**: [`Repair-Internet.ps1`](Repair-Internet.ps1) now restores per-adapter DNS servers from the snapshot (matching in-app Repair) instead of leaving pinned resolvers behind.
 - **Repo gate green**: UiPreview tsconfigs are strict JSON again (integrity check passes with 0 issues).
+- **Explicit G-SYNC / VRR control**: restores an NVIDIA-only toggle and defaults to the raw-latency profile when it is off. High-refresh DisplayPort and EDID range remain useful capability hints, but Exo no longer assumes the monitor's physical adaptive-sync setting is enabled.
+- **Verified NVIDIA latency policy**: keeps global Ultra Low Latency for non-Reflex games because NVIDIA Reflex takes priority automatically when a supported game enables it. Toggle-off now disables driver G-SYNC, VSync, and the OS VRR override; all required pins are verified from the live driver export.
+- **Truthful Internet loss**: packet loss now comes only from the idle 24-sample series. Missed ICMP replies while Exo intentionally saturates download/upload are excluded, and full-load download versus upload latency is labeled explicitly.
+- **DNS status repair**: uses Microsoft's supported DNS client APIs with the correct `netsh dnsclient` fallback, verifies automatic DoH before claiming it is active, and keeps the dashboard concise when the current Windows build cannot register encrypted DNS.
+- **Internet UI clarity**: restores four concise explanation cards for connection routing, adaptive tuning, DNS privacy, and exact-state Repair. Primary Apply buttons are white again while Settings remains dark-only.
 
 ## 3.5.0
 

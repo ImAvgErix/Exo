@@ -10,10 +10,10 @@ namespace Exo.Views.Controls;
 public sealed partial class SettingsSheet : UserControl
 {
     /// <summary>Matches gear crank so spin + menu read as one open motion.</summary>
-    public const int OpenMs = 240;
+    public const int OpenMs = 200;
 
     /// <summary>Mirrors OpenMs so the gear counter-crank + menu rise read as one close motion.</summary>
-    public const int CloseMs = 240;
+    public const int CloseMs = 167;
 
     private Storyboard? _openSb;
     private bool _openFinished;
@@ -44,6 +44,11 @@ public sealed partial class SettingsSheet : UserControl
     /// </summary>
     public void PlayOpenAnimation()
     {
+        if (ExoMotion.MotionDisabled)
+        {
+            FinishOpen();
+            return;
+        }
         try
         {
             _openSb?.Stop();
@@ -143,6 +148,11 @@ public sealed partial class SettingsSheet : UserControl
     {
         _closeDone = onDone;
         _closeFinished = false;
+        if (ExoMotion.MotionDisabled)
+        {
+            FinishClose();
+            return;
+        }
         try
         {
             // Stop a still-running open so the two storyboards never fight.

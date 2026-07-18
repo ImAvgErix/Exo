@@ -111,9 +111,6 @@ public sealed class GitHubUpdateService
                 }
             }
 
-            // Always fall back to the canonical latest exe URL when assets list is empty/misnamed.
-            downloadUrl ??= "https://github.com/ImAvgErix/Exo/releases/latest/download/Exo.exe";
-
             if (VersionsEqualOrLocalNewer(localText, remote))
             {
                 return new AppUpdateResult
@@ -127,13 +124,17 @@ public sealed class GitHubUpdateService
 
             return new AppUpdateResult
             {
-                UpdateAvailable = true,
+                UpdateAvailable = downloadUrl is not null,
                 LocalVersion = localText,
                 RemoteVersion = remote,
                 DownloadUrl = downloadUrl,
                 DownloadSize = downloadSize,
                 Sha256 = sha256,
-                Message = $"Exo v{remote} is available (you have v{localText})."
+                Message = downloadUrl is null
+                    ? $"Exo v{remote} exists, but its Exo.exe release asset is missing. Nothing will be downloaded."
+                    : sha256 is null
+                        ? $"Exo v{remote} is available, but GitHub did not publish its SHA-256 digest. Install is blocked."
+                        : $"Exo v{remote} is available (you have v{localText})."
             };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -170,11 +171,14 @@ public sealed class GitHubUpdateService
         if (!check.UpdateAvailable)
             return check;
         var url = check.DownloadUrl;
-        if (string.IsNullOrWhiteSpace(url))
-            url = "https://github.com/ImAvgErix/Exo/releases/latest/download/Exo.exe";
-
-        // Prefer GitHub asset digest when present; size + PE version still gate install.
-        var requireSha = !string.IsNullOrWhiteSpace(check.Sha256);
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var downloadUri) ||
+            downloadUri.Scheme != Uri.UriSchemeHttps ||
+            !downloadUri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return BlockedUpdate(check, "Update URL was not an allowlisted HTTPS GitHub asset. Nothing was downloaded.");
+        }
+        if (string.IsNullOrWhiteSpace(check.Sha256))
+            return BlockedUpdate(check, "GitHub did not publish a SHA-256 digest for this update. Install is blocked.");
 
         // Download Exo.exe (SFX installer) and run it. In-place replace cannot
         // overwrite a locked running Exo.exe, so the installer stage-swaps under
@@ -195,7 +199,7 @@ public sealed class GitHubUpdateService
 
             var setupPath = Path.Combine(work, "Exo-Setup.exe");
 
-            using (var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)
+            using (var response = await Http.GetAsync(downloadUri, HttpCompletionOption.ResponseHeadersRead, ct)
                        .ConfigureAwait(false))
             {
                 if (!response.IsSuccessStatusCode)
@@ -281,7 +285,7 @@ public sealed class GitHubUpdateService
                 };
             }
 
-            if (requireSha)
+            if (!string.IsNullOrWhiteSpace(check.Sha256))
             {
                 Report(status, progress, "Verifying integrity (SHA-256)…", percent: 88);
                 var actualSha256 = await ComputeFileSha256Async(setupPath, ct).ConfigureAwait(false);
@@ -296,10 +300,6 @@ public sealed class GitHubUpdateService
                         Message = "Downloaded update failed SHA-256 verification. Nothing was launched."
                     };
                 }
-            }
-            else
-            {
-                Report(status, progress, "Verifying installer version stamp…", percent: 88);
             }
 
             string? downloadedVersion = null;
@@ -418,6 +418,17 @@ public sealed class GitHubUpdateService
         status?.Report(message);
         progress?.Report(new AppUpdateProgress { Status = message, Percent = percent });
     }
+
+    private static AppUpdateResult BlockedUpdate(AppUpdateResult check, string message) => new()
+    {
+        UpdateAvailable = check.UpdateAvailable,
+        LocalVersion = check.LocalVersion,
+        RemoteVersion = check.RemoteVersion,
+        DownloadUrl = check.DownloadUrl,
+        DownloadSize = check.DownloadSize,
+        Sha256 = check.Sha256,
+        Message = message
+    };
 
     private static async Task<string> ComputeFileSha256Async(string path, CancellationToken ct)
     {

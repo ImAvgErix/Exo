@@ -262,7 +262,7 @@ if (-not (Test-Path $discordRoot)) {
                 -ProxyHashMatchesKit $proxyHashOk `
                 -VersionHashMatchesKit $verHashOk
         }
-        Add-Feature 'Aggressive RAM + latency kernel' 'DiscOpt idle RAM trim, Above Normal priority, thread/raw-input tuning (kit binaries + applied config).' $kernelOk
+        Add-Feature 'Background memory + input policy' 'Verified DiscOpt binaries apply a 4-second idle working-set policy, Above Normal process priority, and input-thread tuning.' $kernelOk
 
         $modPath = Join-Path $app.FullName 'modules'
         $optionalModules = @('discord_hook-1', 'discord_clips-1')
@@ -417,7 +417,7 @@ if (-not (Test-Path $discordRoot)) {
             $qosOk -and $variantsOk -and $leanPluginsOk)
         if ($isApplied) {
             $statusText = 'Already optimized'
-            $detail = 'No-compromise pack active: Equicord, Exo Host, aggressive trim, full debloat, dark mode.'
+            $detail = 'Verified Discord policy active: lean client, background policy, privacy settings, and dark mode.'
         } elseif ($state -and $state.applied -eq $true -and -not $markerOk) {
             $statusText = 'Discord updated - reapply'
             $detail = 'Discord installed a new build. Run Apply again to restore Equicord, Exo Host, kernel, and Windows quiet.'

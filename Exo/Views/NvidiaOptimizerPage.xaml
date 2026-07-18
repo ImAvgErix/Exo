@@ -38,11 +38,34 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="AUTOMATIC HARDWARE POLICY"
+                        <TextBlock Text="DETECTED HARDWARE"
                                    Style="{StaticResource ExoSectionTitle}" />
                         <TextBlock Text="{x:Bind ViewModel.HardwarePolicyText, Mode=OneWay}"
                                    Style="{StaticResource ExoCaption}"
                                    TextWrapping="WrapWholeWords" />
+                        <Grid ColumnSpacing="12" Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="1">
+                                <TextBlock Text="Use G-SYNC / VRR"
+                                           FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                                <TextBlock Text="Enable only when Adaptive-Sync, FreeSync, or G-SYNC is enabled in the monitor's physical menu."
+                                           Style="{StaticResource ExoCaption}"
+                                           TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1"
+                                          Style="{StaticResource ExoCompactSwitch}"
+                                          IsOn="{x:Bind ViewModel.UseGsync, Mode=TwoWay}"
+                                          IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                                          AutomationProperties.Name="Use G-SYNC or VRR profile"
+                                          OnContent=""
+                                          OffContent="" />
+                        </Grid>
                     </StackPanel>
                     <Button Grid.Column="1"
                             Style="{StaticResource ExoQuietButton}"
@@ -65,7 +88,7 @@
                         HorizontalAlignment="Stretch"
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                         AutomationProperties.Name="Apply NVIDIA" />
-                <TextBlock Text="Repair clears Exo's status marker; it does not roll back the NVIDIA driver."
+                <TextBlock Text="Repair restores the complete NVIDIA profile database saved before Apply. Drivers and display settings stay untouched."
                            Style="{StaticResource ExoCaption}"
                            TextAlignment="Center" />
             </StackPanel>

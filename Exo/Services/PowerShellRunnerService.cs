@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Exo.Helpers;
 using Exo.Models;
+using Exo.Security;
 
 namespace Exo.Services;
 
@@ -25,7 +26,8 @@ public sealed class PowerShellRunnerService
         IProgress<ScriptRunProgress>? progress = null,
         CancellationToken cancellationToken = default,
         string? workingDirectory = null,
-        bool ensureRuntime = false)
+        bool ensureRuntime = false,
+        ScriptTrustPolicy trustPolicy = ScriptTrustPolicy.ShippedManifest)
     {
         if (!File.Exists(scriptPath))
         {
@@ -45,6 +47,21 @@ public sealed class PowerShellRunnerService
 
         try
         {
+            if (elevate)
+            {
+                var integrity = ShippedScriptManifest.Verify(scriptPath, trustPolicy);
+                if (!integrity.Ok)
+                {
+                    return new ScriptRunResult
+                    {
+                        Success = false,
+                        ExitCode = -1,
+                        Summary = "Integrity check failed",
+                        ErrorMessage = integrity.Message
+                    };
+                }
+            }
+
             if (ensureRuntime)
             {
                 progress?.Report(new ScriptRunProgress { Percent = 1, Status = "Preparing PowerShell 7..." });
@@ -238,10 +255,9 @@ public sealed class PowerShellRunnerService
     {
         Directory.CreateDirectory(PathHelper.LogsDir);
         var stamp = Guid.NewGuid().ToString("N");
-        var logPath = Path.Combine(PathHelper.LogsDir, $"run-{stamp}.log");
-        var exitPath = Path.Combine(PathHelper.LogsDir, $"exit-{stamp}.txt");
-        var wrapper = Path.Combine(PathHelper.LogsDir, $"wrap-{stamp}.ps1");
-        var vbsPath = Path.Combine(PathHelper.LogsDir, $"elevate-{stamp}.vbs");
+        var transactionPath = Path.Combine(PathHelper.MachineTransactionsDir, stamp);
+        var logPath = Path.Combine(transactionPath, "run.log");
+        var exitPath = Path.Combine(transactionPath, "exit.txt");
         var cancelPath = Path.Combine(PathHelper.LogsDir, $"cancel-{stamp}.txt");
         var outTmp = logPath + ".out";
         var errTmp = logPath + ".err";
@@ -255,16 +271,25 @@ public sealed class PowerShellRunnerService
         var outEsc = outTmp.Replace("'", "''");
         var errEsc = errTmp.Replace("'", "''");
         var pwshEsc = pwsh.Replace("'", "''");
+        var transactionEsc = transactionPath.Replace("'", "''");
+        var storeEsc = PathHelper.MachineTransactionsDir.Replace("'", "''");
+        string expectedHash;
+        await using (var scriptStream = File.OpenRead(scriptPath))
+            expectedHash = Convert.ToHexString(
+                await SHA256.HashDataAsync(scriptStream, cancellationToken).ConfigureAwait(false));
+        var optionsBase64 = Convert.ToBase64String(
+            Encoding.UTF8.GetBytes(JsonSerializer.Serialize(opts)));
 
-        var wrapperBody = string.Join(Environment.NewLine, new[]
+        var bootstrapBody = string.Join(Environment.NewLine, new[]
         {
-            "$ErrorActionPreference = 'Continue'",
+            "$ErrorActionPreference = 'Stop'",
             "$env:EXO = '1'",
             "$env:DISCOPT_NONINTERACTIVE = '1'",
             "$env:EXO_SKIP_BOOT_FLASH = '1'",
             "$env:DISCOPT_SKIP_MANIFEST = '1'",
-            "$env:EXO_LOG = '" + logEsc + "'",
             "Set-Location -LiteralPath '" + workEsc + "'",
+            "$storeRoot = '" + storeEsc + "'",
+            "$transactionRoot = '" + transactionEsc + "'",
             "$log = '" + logEsc + "'",
             "$exitFile = '" + exitEsc + "'",
             "$cancelFile = '" + cancelEsc + "'",
@@ -272,6 +297,28 @@ public sealed class PowerShellRunnerService
             "$pwsh = '" + pwshEsc + "'",
             "$outPath = '" + outEsc + "'",
             "$errPath = '" + errEsc + "'",
+            "$expectedHash = '" + expectedHash + "'",
+            "$optionsJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + optionsBase64 + "'))",
+            "$scriptArgs = @($optionsJson | ConvertFrom-Json)",
+            "function Assert-PlainDirectory([string]$path) {",
+            "  if (-not (Test-Path -LiteralPath $path -PathType Container)) { return }",
+            "  $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop",
+            "  if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw ('Protected store contains a reparse point: ' + $path) }",
+            "}",
+            "function Protect-Directory([string]$path) {",
+            "  $icacls = Join-Path $env:SystemRoot 'System32\\icacls.exe'",
+            "  & $icacls $path '/inheritance:r' '/grant:r' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' | Out-Null",
+            "  if ($LASTEXITCODE -ne 0) { throw ('Could not protect transaction directory (icacls ' + $LASTEXITCODE + ')') }",
+            "}",
+            "$storeParent = Split-Path -Parent $storeRoot",
+            "Assert-PlainDirectory $storeParent",
+            "Assert-PlainDirectory $storeRoot",
+            "if (-not (Test-Path -LiteralPath $storeParent)) { [void](New-Item -ItemType Directory -Path $storeParent -ErrorAction Stop); Protect-Directory $storeParent }",
+            "if (-not (Test-Path -LiteralPath $storeRoot)) { [void](New-Item -ItemType Directory -Path $storeRoot -ErrorAction Stop); Protect-Directory $storeRoot }",
+            "if (Test-Path -LiteralPath $transactionRoot) { throw 'Transaction directory already exists; execution blocked.' }",
+            "[void](New-Item -ItemType Directory -Path $transactionRoot -ErrorAction Stop)",
+            "Protect-Directory $transactionRoot",
+            "$env:EXO_LOG = $log",
             "function Write-LogLine([string]$line) {",
             "  if ([string]::IsNullOrWhiteSpace($line)) { return }",
             "  try { Add-Content -LiteralPath $log -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue } catch { }",
@@ -298,8 +345,10 @@ public sealed class PowerShellRunnerService
             "  exit -2",
             "}",
             "try {",
+            "  $actualHash = (Get-FileHash -LiteralPath $script -Algorithm SHA256 -ErrorAction Stop).Hash",
+            "  if (-not [string]::Equals($actualHash, $expectedHash, [StringComparison]::OrdinalIgnoreCase)) { throw 'Optimizer script changed after approval; execution blocked.' }",
             "  $argText = '-NoProfile -ExecutionPolicy Bypass -File \"' + $script + '\"'",
-            "  foreach ($item in @($args)) { $argText += ' \"' + ([string]$item) + '\"' }",
+            "  foreach ($item in $scriptArgs) { $argText += ' \"' + ([string]$item).Replace('\"','\\\"') + '\"' }",
             "  Write-LogLine 'EXO_PROGRESS:8|Starting optimizer...'",
             "  $p = Start-Process -FilePath $pwsh -ArgumentList $argText -WorkingDirectory '" + workEsc + "' -PassThru -WindowStyle Hidden -RedirectStandardOutput $outPath -RedirectStandardError $errPath",
             "  if ($null -eq $p) { throw 'Failed to start optimizer process' }",
@@ -322,14 +371,7 @@ public sealed class PowerShellRunnerService
             "  if ($wasCancelled) { $code = -2 } else { $code = [int]$p.ExitCode }",
             "} catch {",
             "  Write-LogLine ('[-] Elevated child failed: ' + $_.Exception.Message)",
-            "  try {",
-            "    & $pwsh -NoProfile -ExecutionPolicy Bypass -File $script @args 2>&1 | ForEach-Object { Write-LogLine (\"$_\") }",
-            "    $code = 0",
-            "    if ($null -ne $LASTEXITCODE) { $code = [int]$LASTEXITCODE }",
-            "  } catch {",
-            "    Write-LogLine ('[-] ' + $_.Exception.Message)",
-            "    $code = 1",
-            "  }",
+            "  $code = 1",
             "}",
             "if ($code -eq 0) { Write-LogLine 'EXO_PROGRESS:100|Completed successfully' }",
             "elseif ($code -eq -2) { Write-LogLine 'EXO_PROGRESS:0|Cancelled' }",
@@ -337,27 +379,11 @@ public sealed class PowerShellRunnerService
             "Set-Content -LiteralPath $exitFile -Value $code -Encoding ascii",
             "exit $code"
         });
-        await File.WriteAllTextAsync(wrapper, wrapperBody, cancellationToken).ConfigureAwait(false);
-
-        var argBuilder = new StringBuilder();
-        argBuilder.Append("-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ");
-        argBuilder.Append('"').Append(wrapper).Append('"');
-        foreach (var o in opts)
-        {
-            argBuilder.Append(' ');
-            argBuilder.Append(QuoteArg(o));
-        }
-
-        var psEsc = pwsh.Replace("\"", "\"\"");
-        var argsEsc = argBuilder.ToString().Replace("\"", "\"\"");
-        var vbsBody =
-            "Set shell = CreateObject(\"Shell.Application\")\r\n" +
-            "shell.ShellExecute \"" + psEsc + "\", \"" + argsEsc + "\", \"\", \"runas\", 0\r\n";
-        await File.WriteAllTextAsync(vbsPath, vbsBody, cancellationToken).ConfigureAwait(false);
+        var encodedBootstrap = Convert.ToBase64String(Encoding.Unicode.GetBytes(bootstrapBody));
 
         using var cancellationRegistration = cancellationToken.Register(() =>
         {
-            SignalElevatedCancellation(cancelPath, wrapper, vbsPath, cancelPath, exitPath, outTmp, errTmp);
+            SignalElevatedCancellation(cancelPath, cancelPath, exitPath, outTmp, errTmp);
         });
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -369,11 +395,11 @@ public sealed class PowerShellRunnerService
 
         var psi = new ProcessStartInfo
         {
-            FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "wscript.exe"),
-            Arguments = "//B //Nologo \"" + vbsPath + "\"",
+            FileName = pwsh,
+            Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand " + encodedBootstrap,
             WorkingDirectory = workDir,
-            UseShellExecute = false,
-            CreateNoWindow = true,
+            UseShellExecute = true,
+            Verb = "runas",
             WindowStyle = ProcessWindowStyle.Hidden
         };
         using var launcher = Process.Start(psi);
@@ -387,8 +413,6 @@ public sealed class PowerShellRunnerService
                 Summary = "Launch failed"
             };
         }
-        await launcher.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
         var lastPercent = 5.0;
         var lastStatus = "Waiting for Administrator approval...";
         var lastLength = 0;
@@ -409,16 +433,24 @@ public sealed class PowerShellRunnerService
                 }
                 PollLog(logPath, ref lastLength, ref lastPercent, ref lastStatus, progress);
             }
-            else if (DateTime.UtcNow - startedUtc > TimeSpan.FromSeconds(30) && !sawLog)
+            else if ((launcher.HasExited && DateTime.UtcNow - startedUtc > TimeSpan.FromSeconds(2)) ||
+                     (DateTime.UtcNow - startedUtc > TimeSpan.FromSeconds(30) && !sawLog))
             {
-                progress?.Report(new ScriptRunProgress { Percent = 0, Status = "Elevation cancelled" });
-                CleanupTemp(wrapper, vbsPath, cancelPath, logPath, exitPath, outTmp, errTmp);
+                var bootstrapFailed = launcher.HasExited && launcher.ExitCode != 0;
+                progress?.Report(new ScriptRunProgress
+                {
+                    Percent = 0,
+                    Status = bootstrapFailed ? "Secure transaction failed" : "Elevation cancelled"
+                });
+                CleanupTemp(cancelPath, logPath, exitPath, outTmp, errTmp);
                 return new ScriptRunResult
                 {
                     Success = false,
                     ExitCode = -1,
-                    Summary = "Elevation cancelled",
-                    ErrorMessage = "Administrator approval was cancelled or the elevated session never started."
+                    Summary = bootstrapFailed ? "Secure transaction failed" : "Elevation cancelled",
+                    ErrorMessage = bootstrapFailed
+                        ? $"The elevated transaction boundary failed before logging (exit {launcher.ExitCode})."
+                        : "Administrator approval was cancelled or the elevated session never started."
                 };
             }
 
@@ -427,7 +459,7 @@ public sealed class PowerShellRunnerService
                 var timedOutOutput = File.Exists(logPath)
                     ? await File.ReadAllTextAsync(logPath, cancellationToken).ConfigureAwait(false)
                     : string.Empty;
-                SignalElevatedCancellation(cancelPath, wrapper, vbsPath, cancelPath, exitPath, outTmp, errTmp);
+                SignalElevatedCancellation(cancelPath, cancelPath, exitPath, outTmp, errTmp);
                 return new ScriptRunResult
                 {
                     Success = false,
@@ -442,6 +474,7 @@ public sealed class PowerShellRunnerService
             await Task.Delay(150, cancellationToken).ConfigureAwait(false);
         }
 
+        await launcher.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
         PollLog(logPath, ref lastLength, ref lastPercent, ref lastStatus, progress);
         var exitText = (await File.ReadAllTextAsync(exitPath, cancellationToken).ConfigureAwait(false)).Trim();
         _ = int.TryParse(exitText, out var exitCode);
@@ -454,7 +487,7 @@ public sealed class PowerShellRunnerService
             Percent = ok ? 100 : lastPercent,
             Status = ok ? "Completed successfully" : exitCode == -2 ? "Cancelled" : "Finished with errors"
         });
-        CleanupTemp(wrapper, vbsPath, cancelPath, exitPath, outTmp, errTmp);
+        CleanupTemp(cancelPath);
         return new ScriptRunResult
         {
             Success = ok,
@@ -788,8 +821,13 @@ public sealed class PowerShellRunnerService
     private static async Task<(bool Ok, string Detail)> DownloadVerifiedAsync(
         string url, long expectedSize, string? expectedSha256, string destPath, CancellationToken ct)
     {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            return (false, "download URL was not HTTPS");
+        if (string.IsNullOrWhiteSpace(expectedSha256))
+            return (false, "release asset did not publish a SHA-256 digest");
+
         await using (var fs = File.Create(destPath))
-        await using (var stream = await RuntimeHttp.GetStreamAsync(url, ct).ConfigureAwait(false))
+        await using (var stream = await RuntimeHttp.GetStreamAsync(uri, ct).ConfigureAwait(false))
         {
             await stream.CopyToAsync(fs, ct).ConfigureAwait(false);
         }
@@ -801,7 +839,7 @@ public sealed class PowerShellRunnerService
             return (false, "download size mismatch");
         }
 
-        if (expectedSha256 is not null)
+        if (!string.IsNullOrWhiteSpace(expectedSha256))
         {
             await using var check = File.OpenRead(destPath);
             var hash = Convert.ToHexString(await SHA256.HashDataAsync(check, ct).ConfigureAwait(false));

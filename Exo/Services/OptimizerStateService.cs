@@ -25,7 +25,7 @@ public sealed class OptimizerStateService
     /// Entries have the form "&lt;step&gt;|ok", "&lt;step&gt;|fail:&lt;reason&gt;" or
     /// "&lt;step&gt;|skip:&lt;reason&gt;". Returns an empty list when the state file or
     /// the array is missing (older applies) — never throws.
-    /// Module names: "discord", "steam".
+    /// Module names: "discord", "steam", "riot", "epic".
     /// </summary>
     public static IReadOnlyList<string> TryReadApplyReport(string module)
     {
@@ -47,6 +47,59 @@ public sealed class OptimizerStateService
             return entries;
         }
         catch { return Array.Empty<string>(); }
+    }
+
+    public Task<OptimizerStateInfo> DetectRiotAsync(CancellationToken ct = default) =>
+        DetectGameLauncherAsync("Riot", _scripts.RiotDetectScript, ct);
+
+    public Task<OptimizerStateInfo> DetectEpicAsync(CancellationToken ct = default) =>
+        DetectGameLauncherAsync("Epic", _scripts.EpicDetectScript, ct);
+
+    private async Task<OptimizerStateInfo> DetectGameLauncherAsync(
+        string module,
+        string detectScript,
+        CancellationToken ct)
+    {
+        var fallback = new OptimizerStateInfo
+        {
+            IsApplied = false,
+            StatusText = "Checking status...",
+            Detail = string.Empty,
+            Features = new[]
+            {
+                MakeFeature($"{module} detected", "Live detection unavailable", false),
+                MakeFeature("Startup quiet", "Not verified", false),
+                MakeFeature("Per-game hardware policy", "Not verified", false),
+                MakeFeature("Exact Repair", "Not verified", false)
+            }
+        };
+        if (!File.Exists(detectScript)) return fallback;
+        try
+        {
+            var result = await _runner.RunAsync(
+                detectScript,
+                arguments: Array.Empty<string>(),
+                elevate: false,
+                progress: null,
+                cancellationToken: ct,
+                workingDirectory: _scripts.GetGameLaunchersRoot()).ConfigureAwait(false);
+            var jsonLine = result.FullOutput.Split('\n')
+                .Select(line => line.Trim())
+                .LastOrDefault(line => line.StartsWith('{') &&
+                    line.Contains("isApplied", StringComparison.OrdinalIgnoreCase));
+            if (jsonLine is null) return fallback;
+            using var document = JsonDocument.Parse(jsonLine);
+            var root = document.RootElement;
+            return new OptimizerStateInfo
+            {
+                IsApplied = root.TryGetProperty("isApplied", out var applied) && applied.ValueKind == JsonValueKind.True,
+                StatusText = root.TryGetProperty("statusText", out var status) ? status.GetString() ?? fallback.StatusText : fallback.StatusText,
+                Detail = root.TryGetProperty("detail", out var detail) ? detail.GetString() ?? string.Empty : string.Empty,
+                Features = ParseFeatures(root)
+            };
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch { return fallback; }
     }
 
     public async Task<OptimizerStateInfo> DetectDiscordAsync(

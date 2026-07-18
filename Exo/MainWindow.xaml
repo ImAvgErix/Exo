@@ -6,30 +6,30 @@
     xmlns:controls="using:Exo.Views.Controls"
     Title="Exo">
 
-    <!--
-      v3.0.3 shell (exo-ui-craft + better-ui hit targets):
-      - Left chrome: Settings on home, morphs to Home on module pages (same circle slot)
-      - Module icons optically centered in the full bar (not shoved by left/right chrome)
-      - CaptionSpacer clears Windows min/close
-      - Full circle is clickable (SelectionFill hit-test true)
-    -->
+    <!-- Dark-only responsive shell. TitleBar owns caption spacing and drag behavior. -->
     <Grid x:Name="RootGrid"
           Background="{ThemeResource ExoPageBackgroundBrush}"
-          Padding="16">
+          Padding="0"
+          UseLayoutRounding="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="12" />
+            <RowDefinition Height="8" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Border x:Name="NavRail"
-                Grid.Row="0"
-                Background="Transparent"
-                BorderThickness="0"
-                Padding="2,4"
-                MinHeight="52"
-                HorizontalAlignment="Stretch">
-            <Grid x:Name="NavRailInner">
+        <TitleBar x:Name="AppTitleBar"
+                  Grid.Row="0"
+                  IsBackButtonVisible="False"
+                  IsPaneToggleButtonVisible="False"
+                  HorizontalContentAlignment="Stretch">
+            <TitleBar.Content>
+                <Border x:Name="NavRail"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="16,4"
+                        MinHeight="52"
+                        HorizontalAlignment="Stretch">
+                    <Grid x:Name="NavRailInner">
                 <!-- Layer 1: module icons true-centered in the full bar width -->
                 <StackPanel x:Name="ModuleIcons"
                             Orientation="Horizontal"
@@ -82,6 +82,26 @@
                                Stretch="Uniform"
                                UseLayoutRounding="True"
                                IsHitTestVisible="False"
+                               AutomationProperties.AccessibilityView="Raw" />
+                    </Button>
+                    <Button x:Name="NavRiot"
+                            Style="{StaticResource ExoGlassCircle}"
+                            AutomationProperties.Name="Riot"
+                            Click="NavRiot_Click"
+                            Tag="riot">
+                        <Image Source="ms-appx:///Assets/Logos/riot.png"
+                               Width="24" Height="24" Stretch="Uniform"
+                               UseLayoutRounding="True" IsHitTestVisible="False"
+                               AutomationProperties.AccessibilityView="Raw" />
+                    </Button>
+                    <Button x:Name="NavEpic"
+                            Style="{StaticResource ExoGlassCircle}"
+                            AutomationProperties.Name="Epic"
+                            Click="NavEpic_Click"
+                            Tag="epic">
+                        <Image Source="ms-appx:///Assets/Logos/epic.png"
+                               Width="24" Height="24" Stretch="Uniform"
+                               UseLayoutRounding="True" IsHitTestVisible="False"
                                AutomationProperties.AccessibilityView="Raw" />
                     </Button>
                 </StackPanel>
@@ -141,59 +161,15 @@
                         Width="0" Height="0"
                         Click="NavHome_Click" />
 
-                <!-- Layer 3: dead zone under Windows caption buttons -->
-                <Border x:Name="CaptionSpacerHost"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Stretch"
-                        Background="Transparent"
-                        Width="146"
-                        IsHitTestVisible="False" />
-            </Grid>
-        </Border>
+                    </Grid>
+                </Border>
+            </TitleBar.Content>
+        </TitleBar>
 
-        <Grid Grid.Row="2">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-
-            <Grid x:Name="TitleBarHost"
-                  Grid.Row="0"
-                  Background="Transparent"
-                  MinHeight="0">
-                <Button x:Name="BackButton"
-                        Style="{StaticResource ExoQuietButton}"
-                        AutomationProperties.Name="Back to NVIDIA"
-                        Click="BackButton_Click"
-                        Visibility="Collapsed"
-                        MinHeight="32"
-                        Padding="12,4"
-                        Margin="0,0,0,8"
-                        HorizontalAlignment="Left"
-                        VerticalAlignment="Center"
-                        AllowFocusOnInteraction="True"
-                        IsTabStop="True"
-                        UseSystemFocusVisuals="True">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon Glyph="&#xE72B;" FontSize="12" VerticalAlignment="Center" IsHitTestVisible="False" />
-                        <TextBlock Text="NVIDIA"
-                                   Style="{StaticResource ExoCaption}"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-
-                <Border x:Name="ContextLogoHost" Visibility="Collapsed" Width="0" Height="0" />
-                <Image x:Name="ContextLogo" Visibility="Collapsed" Width="0" Height="0" />
-                <TextBlock x:Name="AppTitleText" Visibility="Collapsed" Text="" />
-                <Grid x:Name="TitleBarDragRegion"
-                      Background="Transparent"
-                      HorizontalAlignment="Stretch"
-                      VerticalAlignment="Stretch"
-                      MinHeight="0" />
-            </Grid>
-
+        <Grid Grid.Row="2"
+              MaxWidth="{StaticResource ExoPageMaxWidth}"
+              HorizontalAlignment="Stretch">
             <Frame x:Name="ContentFrame"
-                   Grid.Row="1"
                    Padding="0"
                    IsTabStop="True"
                    IsNavigationStackEnabled="False" />

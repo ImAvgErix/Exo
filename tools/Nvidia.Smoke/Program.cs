@@ -49,14 +49,16 @@ var drsExpected = new Dictionary<string, string>
     ["277041152"] = "1",  // ULL enabled
     ["277041154"] = "0",  // frame limiter off
     ["294973784"] = "0",  // G-SYNC global (max-FPS pack)
+    ["11041279"] = "0",   // OS VRR override off (explicit toggle owns VRR)
     ["11041231"] = "138504007", // VSync force off (max-FPS pack)
     ["549528094"] = "1",  // threaded optimization
 };
 var drsRequired = NvidiaDetectLogic.DrsRequiredPinIds;
-Expect("drs required pins cover PM/ULL/FRL/G-SYNC/VSync",
-    drsRequired.Contains("274197361") && drsRequired.Contains("390467") &&
+Expect("drs required pins cover ULL/FRL/G-SYNC/VSync without global max power",
+    !drsRequired.Contains("274197361") && drsRequired.Contains("390467") &&
     drsRequired.Contains("277041152") && drsRequired.Contains("277041154") &&
-    drsRequired.Contains("294973784") && drsRequired.Contains("11041231"));
+    drsRequired.Contains("294973784") && drsRequired.Contains("11041279") &&
+    drsRequired.Contains("11041231"));
 
 var drsMatch = new Dictionary<string, string>(drsExpected);
 var (vStatus, vCount, vMism) = NvidiaDetectLogic.ClassifyDrsVerification(drsExpected, drsMatch, drsRequired);
@@ -194,6 +196,7 @@ var corePath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "NvidiaDetectCore.
 var messagesPath = Path.Combine(repo, "Exo", "Helpers", "OptimizerMessages.cs");
 var nvidiaViewModelPath = Path.Combine(repo, "Exo", "ViewModels", "NvidiaOptimizerViewModel.cs");
 var nvDisplaySourcePath = Path.Combine(repo, "tools", "Exo.NvDisplay", "Program.cs");
+var runScriptPath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-Run.ps1");
 var optimizerSrc = File.Exists(optimizerPath) ? File.ReadAllText(optimizerPath) : "";
 var displayApplySrc = File.Exists(displayApplyPath) ? File.ReadAllText(displayApplyPath) : "";
 var detectSrc = File.Exists(detectPath) ? File.ReadAllText(detectPath) : "";
@@ -201,6 +204,7 @@ var coreSrc = File.Exists(corePath) ? File.ReadAllText(corePath) : "";
 var messagesSrc = File.Exists(messagesPath) ? File.ReadAllText(messagesPath) : "";
 var nvidiaViewModelSrc = File.Exists(nvidiaViewModelPath) ? File.ReadAllText(nvidiaViewModelPath) : "";
 var nvDisplaySrc = File.Exists(nvDisplaySourcePath) ? File.ReadAllText(nvDisplaySourcePath) : "";
+var runScriptSrc = File.Exists(runScriptPath) ? File.ReadAllText(runScriptPath) : "";
 
 Expect("optimizer runs -exportCustomized", optimizerSrc.Contains("-exportCustomized", StringComparison.Ordinal));
 Expect("detect runs -exportCustomized", detectSrc.Contains("-exportCustomized", StringComparison.Ordinal));
@@ -215,9 +219,9 @@ Expect("display apply retries NVAPI",
 Expect("display apply success without partial exit 2",
     displayApplySrc.Contains("SUCCESS registry", StringComparison.Ordinal) &&
     !displayApplySrc.Contains("PARTIAL registry-ok nvapi-failed", StringComparison.Ordinal));
-Expect("optimizer displayPrefs accepts working path",
-    optimizerSrc.Contains("$displayPrefsOk = [bool]$dispResult.Success -or [bool]$displayNvApiOk -or [bool]$displayRegistryOk", StringComparison.Ordinal) &&
-    optimizerSrc.Contains("displayPrefs        = [bool]$displayPrefsOk", StringComparison.Ordinal));
+Expect("safe policy leaves display settings unchanged",
+    optimizerSrc.Contains("Display settings unchanged by safe policy", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("displayPrefs        = $(if ($SafePolicy) { $false }", StringComparison.Ordinal));
 Expect("optimizer records registry display method",
     optimizerSrc.Contains("$displayMethod = if ($displayNvApiOk) { 'nvapi' } elseif ($displayRegistryOk) { 'registry' } else { $null }", StringComparison.Ordinal));
 Expect("optimizer retries display before fail",
@@ -230,11 +234,40 @@ Expect("optimizer audio stage runs once",
     CountOf(optimizerSrc, "[void](Remove-NvidiaAudioComponents)") == 1);
 Expect("optimizer bloat stage runs once",
     CountOf(optimizerSrc, "[void](Remove-NvidiaBloatComponents)") == 1);
+Expect("default app path enables NVIDIA safe policy",
+    runScriptSrc.Contains("SafePolicy = $true", StringComparison.Ordinal) &&
+    runScriptSrc.Contains("SkipDriver = $true", StringComparison.Ordinal) &&
+    nvidiaViewModelSrc.Contains("\"-SafePolicy\"", StringComparison.Ordinal));
+Expect("safe policy blocks destructive NVIDIA stages",
+    optimizerSrc.Contains("if ($SafePolicy)", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("driver install, package removal, service/task debloat, audio, overlay, and display mutations are disabled", StringComparison.Ordinal));
+Expect("maximum performance is per-game rather than global",
+    optimizerSrc.Contains("The clones above retain the pin", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("$map.Remove('274197361')", StringComparison.Ordinal));
+Expect("NVIDIA DRS has exact backup and restore",
+    optimizerSrc.Contains("--drs-backup", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("--drs-restore", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("nvidia-drs-pre-exo.bin", StringComparison.Ordinal) &&
+    nvDisplaySrc.Contains("DriverSettingsSession.CreateAndLoad(fullPath)", StringComparison.Ordinal) &&
+    nvDisplaySrc.Contains("session.Save(fullPath)", StringComparison.Ordinal));
 Expect("optimizer selects policy from hardware inventory",
     optimizerSrc.Contains("function Get-NvidiaHardwarePolicy", StringComparison.Ordinal) &&
     optimizerSrc.Contains("--list-displays", StringComparison.Ordinal) &&
     optimizerSrc.Contains("adaptiveSyncSignal", StringComparison.Ordinal) &&
     optimizerSrc.Contains("hardwarePolicy", StringComparison.Ordinal));
+Expect("G-SYNC requires explicit user selection",
+    optimizerSrc.Contains("explicit-gsync", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("safe-default-raw-latency", StringComparison.Ordinal) &&
+    !optimizerSrc.Contains("display-hardware-auto", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("[switch]$RawLatency", StringComparison.Ordinal));
+Expect("raw-latency disables every VRR path",
+    optimizerSrc.Contains("'11041279'  = '0'", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("'294973784' = '0'", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("'278196727' = '0'", StringComparison.Ordinal));
+Expect("global ULL Ultra remains authoritative fallback",
+    optimizerSrc.Contains("'390467'    = '2'", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("'277041152' = '1'", StringComparison.Ordinal) &&
+    detectSrc.Contains("Reflex takes priority automatically", StringComparison.Ordinal));
 Expect("display helper detects refresh and EDID evidence",
     nvDisplaySrc.Contains("maxHz", StringComparison.Ordinal) &&
     nvDisplaySrc.Contains("ReadMonitorVerticalRange", StringComparison.Ordinal) &&
@@ -244,7 +277,7 @@ Expect("secondary display refresh stays unchanged",
     nvDisplaySrc.Contains("?? \"keep\"", StringComparison.Ordinal) &&
     !nvDisplaySrc.Contains("?? \"60\"", StringComparison.Ordinal));
 Expect("NVIDIA reset uses status-cleared copy",
-    messagesSrc.Contains("NvidiaStatusCleared = \"Status cleared. Driver and profiles unchanged.\"", StringComparison.Ordinal) &&
+    messagesSrc.Contains("NvidiaStatusCleared = \"Restored the pre-Exo NVIDIA profile database.\"", StringComparison.Ordinal) &&
     nvidiaViewModelSrc.Contains("OptimizerMessages.NvidiaStatusCleared", StringComparison.Ordinal));
 
 // Policy: always GitHub Latest for Profile Inspector (no hard-pinned old tags).
@@ -258,8 +291,6 @@ Expect("NPI version stamp kept", optimizerSrc.Contains("EXO-NPI-VERSION.txt", St
 Expect("NPI policy github-latest", optimizerSrc.Contains("policy=github-latest", StringComparison.Ordinal));
 
 // --- Stable PowerShell 7 host (repo-wide migration off 7 Preview) ---
-var runScriptPath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-Run.ps1");
-var runScriptSrc = File.Exists(runScriptPath) ? File.ReadAllText(runScriptPath) : "";
 Expect("optimizer host check accepts any pwsh 7.x", optimizerSrc.Contains("function Test-ExoIsPwsh7Host", StringComparison.Ordinal));
 Expect("optimizer resolves stable pwsh first",
     optimizerSrc.Contains("function Get-ExoPwsh", StringComparison.Ordinal) &&
@@ -312,7 +343,7 @@ Expect("catalog excludes shared javaw.exe",
 var packVersion = File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "VERSION")).Trim();
 var profileVersion = File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "profiles", "PROFILE_VERSION")).Trim();
 Expect($"pack VERSION {packVersion}", !string.IsNullOrWhiteSpace(packVersion) && packVersion.StartsWith("1.", StringComparison.Ordinal), packVersion);
-Expect("PROFILE_VERSION 1.5.0", profileVersion == "1.5.0", profileVersion);
+Expect("PROFILE_VERSION 1.6.0", profileVersion == "1.6.0", profileVersion);
 Expect("optimizer version constant matches VERSION",
     optimizerSrc.Contains($"$Script:NvidiaOptVersion = '{packVersion}'", StringComparison.Ordinal));
 

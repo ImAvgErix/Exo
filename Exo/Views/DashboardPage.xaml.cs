@@ -88,6 +88,36 @@ public sealed partial class DashboardPage : Page
         _memoryTimer = null;
     }
 
+    private void DiscordCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.MainAppWindow is MainWindow main) main.NavigateToDiscord();
+    }
+
+    private void SteamCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.MainAppWindow is MainWindow main) main.NavigateToSteam();
+    }
+
+    private void InternetCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.MainAppWindow is MainWindow main) main.NavigateToInternet();
+    }
+
+    private void NvidiaCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.MainAppWindow is MainWindow main) main.NavigateToNvidia();
+    }
+
+    private void RiotCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.MainAppWindow is MainWindow main) main.NavigateToRiot();
+    }
+
+    private void EpicCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.MainAppWindow is MainWindow main) main.NavigateToEpic();
+    }
+
     private void StabilizeHome()
     {
         try
