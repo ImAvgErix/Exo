@@ -34,6 +34,11 @@ public static class PathHelper
 
     public static string SettingsPath => Path.Combine(AppDataDir, "settings.json");
 
+    /// <summary>Elevated transaction output. Never create this from the UI process.</summary>
+    public static string MachineTransactionsDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "Exo", "Transactions");
+
     public static string LogsDir
     {
         get

@@ -19,6 +19,10 @@ as a privileged transaction rather than a normal UI action.
   depend on VBScript or execute a user-writable wrapper script.
 - A cancellation marker asks the elevated boundary to terminate its child and
   reports cancellation. If mutation already began, the user should run Repair.
+- Elevated logs and exit state are created beneath `%ProgramData%\Exo` with
+  inheritance removed: SYSTEM and Administrators have full control; normal users
+  have read/execute only. Reparse-point and pre-created transaction paths fail
+  closed, so the UI does not trust a user-writable success file.
 
 UAC is not treated as a complete security boundary. A malicious process already
 running as the same user can read or modify per-user files and interact with the
@@ -40,17 +44,16 @@ protection.
 
 ## Downloads and updates
 
-The in-app updater accepts HTTPS GitHub release assets, verifies the release
-metadata size, SHA-256 digest when published, and embedded product version before
-launching the installer. Missing independent digests and unsigned release assets
-remain a supply-chain limitation until Exo releases are code-signed and publish a
-separately trusted checksum. Do not describe the current release channel as
-cryptographically authenticated end to end.
+The in-app updater accepts allowlisted HTTPS GitHub release assets and requires
+the asset's SHA-256 digest. It also verifies metadata size and embedded product
+version before launching the installer. A missing digest is a hard failure.
+Unsigned release assets remain a supply-chain limitation until Exo releases are
+code-signed and publish a separately trusted checksum. Do not describe the
+current release channel as cryptographically authenticated end to end.
 
 PowerShell's portable-runtime fallback selects stable official PowerShell GitHub
-releases and verifies the asset size and GitHub digest when available. A future
-release must make a missing digest a hard failure before this path is considered
-fully fail-closed.
+releases and requires the asset size and GitHub SHA-256 digest. A missing digest
+is a hard failure.
 
 ## Optimizer boundaries
 

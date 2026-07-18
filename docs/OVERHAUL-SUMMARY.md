@@ -71,7 +71,12 @@ Planned work is not marked complete until its automated and live gates pass.
 - Migrated Internet benchmark, Apply, and Repair to the shared runner. App-built
   elevated network scripts use an explicit, path-restricted trust policy.
 - Added freshness, fail-closed, runner-routing, and bootstrap contract gates.
+- Moved elevated logs/exit state to a machine-owned ProgramData transaction
+  directory with SID-based ACLs, reparse-point rejection, and read-only access
+  for normal users.
+- Made C# app-update and portable PowerShell downloads HTTPS-only and fail closed
+  when GitHub does not publish a SHA-256 digest.
 
 Remaining before this slice can be called complete: protected machine-owned
-transaction logs/state, centralized verified downloads with hard failure on a
-missing digest, full cancellation tree tests, and exact NVIDIA Repair coverage.
+snapshot/state migration, the remaining script-owned vendor downloads, full
+cancellation tree tests, and exact NVIDIA Repair coverage.

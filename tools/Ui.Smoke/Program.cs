@@ -124,6 +124,12 @@ if (File.Exists(appServicesCs) && File.Exists(powerShellRunnerCs))
         && runnerSource.Contains("Optimizer script changed after approval; execution blocked.", StringComparison.Ordinal)
         && !runnerSource.Contains("wrap-{stamp}.ps1", StringComparison.Ordinal)
         && !runnerSource.Contains("& $pwsh -NoProfile -ExecutionPolicy Bypass -File $script", StringComparison.Ordinal));
+    Expect("elevated results use protected machine transaction storage",
+        runnerSource.Contains("MachineTransactionsDir", StringComparison.Ordinal)
+        && runnerSource.Contains("Protect-Directory", StringComparison.Ordinal)
+        && runnerSource.Contains("*S-1-5-32-545:(OI)(CI)RX", StringComparison.Ordinal)
+        && runnerSource.Contains("Assert-PlainDirectory", StringComparison.Ordinal)
+        && !runnerSource.Contains("$\"exit-{stamp}.txt\"", StringComparison.Ordinal));
 
     var actionSources = new[]
     {
@@ -144,6 +150,10 @@ if (File.Exists(appServicesCs) && File.Exists(powerShellRunnerCs))
     Expect("app updater does not fetch script kits",
         !updateSource.Contains("raw.githubusercontent.com", StringComparison.Ordinal)
         && !updateSource.Contains("codeload.github.com", StringComparison.Ordinal));
+    Expect("runtime and app downloads require SHA-256",
+        runnerSource.Contains("release asset did not publish a SHA-256 digest", StringComparison.Ordinal)
+        && updateSource.Contains("GitHub did not publish a SHA-256 digest", StringComparison.Ordinal)
+        && !updateSource.Contains("latest/download/Exo.exe", StringComparison.Ordinal));
 }
 if (File.Exists(appXaml) && File.Exists(colorTokens) && File.Exists(typeTokens) && File.Exists(metricTokens))
 {
