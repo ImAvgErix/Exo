@@ -1,3 +1,11 @@
+## 3.6.2
+
+- **True-black AMOLED shell**: page background is pure black with quieter hairlines, denser module plates, and 76px capability tiles so more evidence fits without marketing fluff.
+- **Internet RSS honesty**: NICs without an RSS WMI surface report soft-ok instead of a false open failure row; status filters informational N/A lines.
+- **Steam / Discord / launchers memory**: background soft reclaim (never EmptyWorkingSet on Steam CEF), Discord 2.5s idle trim, and Windows-only GPU/FSO/yield for Riot and Epic.
+- **NVIDIA packaging**: ships framework-dependent `Exo.NvDisplay` (~0.7 MB with NvAPIWrapper) including exact DRS backup/restore for Repair; Publish-Exo rejects accidental 70 MB single-file bloat.
+- **Cua install-path QA**: re-snapshot-before-click nav gate with module landing markers so automated screenshots cannot silently stay on Home.
+
 ## 3.6.1
 
 - **Signal-deck UI rebuild**: replaces clipped icon-only chrome with labeled, stable Home/module/Settings navigation; reshapes the dashboard into a compact 3×2 status grid; gives module capabilities a responsive two-column layout; and keeps actions in normal document flow instead of pinning them below empty space.

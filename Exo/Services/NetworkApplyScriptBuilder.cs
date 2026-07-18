@@ -132,7 +132,7 @@ function Test-ExoDnsResolve {
         var idleRestrict = knobs.IdleRestrict;
         var restartEth = options.RestartEthernet ? "1" : "0";
         var preferEth = options.PreferEthernetDisableWifi ? "1" : "0";
-        // Hint only — apply script re-probes live for band capability
+        // Hint only - apply script re-probes live for band capability
         var prefer6Hint = media.ClientSupports6Ghz ? "1" : "0";
         // RSS: use physical cores when known (HT threads are not "12 cores" on a 6-core CPU).
         var coreBudget = media.PhysicalCores > 0
@@ -218,7 +218,7 @@ function Get-ExoPhysicalAdapters {
 """);
 
         // ============================================================================
-        // PRE-APPLY SNAPSHOT — captured BEFORE any mutation. If a snapshot file exists
+        // PRE-APPLY SNAPSHOT - captured BEFORE any mutation. If a snapshot file exists
         // it is the pristine baseline from the first apply and is NEVER overwritten.
         // If capture fails the apply ABORTS before touching anything.
         // ============================================================================
@@ -262,7 +262,7 @@ function Save-ExoNetworkSnapshot {
       }
     })
     # --- every registry value the apply may write (pre-value or 'absent') ---
-    # NOTE: lists are created via ::new() and materialized via .ToArray() —
+    # NOTE: lists are created via ::new() and materialized via .ToArray() -
     # @() over a New-Object-created (PSObject-wrapped) List[object] throws
     # 'Argument types do not match' in pwsh 7.6 (PSToObjectArrayBinder), which
     # aborted the whole snapshot on real Windows.
@@ -532,7 +532,7 @@ if (-not $snapshotOk) {
 
         // --- Per-adapter: branch Ethernet vs Wi‑Fi (MS: wireless often has no RSS/LSO) ---
         // Apply to all physical NICs so dual-homed PCs are ready on either media.
-        // Fuzzy pick among ValidDisplayValues — Intel / Realtek / MediaTek / Qualcomm / Killer strings vary
+        // Fuzzy pick among ValidDisplayValues - Intel / Realtek / MediaTek / Qualcomm / Killer strings vary
         // Prefer-* beats Only-* (never force band-only). Score picks best available option.
         sb.AppendLine("function Select-BandDisplayValue([object[]]$vals, [bool]$want6) {");
         sb.AppendLine("  if (-not $vals -or $vals.Count -eq 0) { return $null }");
@@ -541,7 +541,7 @@ if (-not $snapshotOk) {
         sb.AppendLine("    $s = 0");
         sb.AppendLine("    $isOnly = ($v -match '(?i)\\bonly\\b|\\bexclusive\\b')");
         sb.AppendLine("    $isPref = ($v -match '(?i)prefer|preferred|preferable|priority|favou?r')");
-        sb.AppendLine("    # 2.4 — never choose for gaming when higher exists");
+        sb.AppendLine("    # 2.4 - never choose for gaming when higher exists");
         sb.AppendLine("    if ($v -match '(?i)2\\.4|2,4|2400|2GHz|2\\s*GHz') {");
         sb.AppendLine("      $s = if ($isOnly) { -200 } elseif ($isPref) { -100 } else { -50 }");
         sb.AppendLine("    }");
@@ -640,7 +640,7 @@ if (-not $snapshotOk) {
         sb.AppendLine("      elseif ($vals -contains 'Medium') { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Interrupt Moderation Rate' -DisplayValue 'Medium' -NoRestart -EA SilentlyContinue }");
         sb.AppendLine("    } catch {}");
         sb.AppendLine("  }");
-        // Flow control: pause frames add latency under load — off for gaming, Rx+Tx for bulk
+        // Flow control: pause frames add latency under load - off for gaming, Rx+Tx for bulk
         sb.AppendLine("  Set-Adv $n '*FlowControl' " + flow);
         sb.AppendLine("  if (" + flow + " -eq 0) { try { Set-AdvDisplay $n 'Flow Control' 'Disabled' | Out-Null } catch {} }");
         // Power: EEE/green/selective off; IdleRestriction ON for latency (Intel: prevent low-power idle)
@@ -660,7 +660,7 @@ if (-not $snapshotOk) {
         sb.AppendLine("      if ($pmArgs.ContainsKey('D0PacketCoalescing')) { $packetCoalescingCount++; Log \"[Power] $n D0 packet coalescing disabled\" }");
         sb.AppendLine("    }");
         sb.AppendLine("  } catch { Log \"[Power] $n power-management tuning skipped: $($_.Exception.Message)\" }");
-        // RSS: Microsoft — many wireless NICs do not support RSS
+        // RSS: Microsoft - many wireless NICs do not support RSS
         sb.AppendLine("  if (-not $isWifi) {");
         sb.AppendLine("    Set-Adv $n '*RSS' 1");
         sb.AppendLine("    try { Set-NetAdapterRss -Name $n -Enabled $true -EA SilentlyContinue } catch {}");
@@ -691,13 +691,13 @@ if (-not $snapshotOk) {
         sb.AppendLine("      } catch {}");
         sb.AppendLine("    }");
         // Ethernet-only deep driver knobs (Intel I225/I226, Realtek, Killer…)
-        sb.AppendLine("    # DMA coalescing / adaptive IFS — latency killers when on");
+        sb.AppendLine("    # DMA coalescing / adaptive IFS - latency killers when on");
         sb.AppendLine("    foreach ($kw in @('*DMACoalescing','DMACoalescing')) { Set-Adv $n $kw 0 }");
         sb.AppendLine("    try { Set-AdvDisplay $n 'DMA Coalescing' 'Disabled' | Out-Null } catch {}");
         sb.AppendLine("    try { Set-AdvDisplay $n 'Adaptive Inter-Frame Spacing' 'Disabled' | Out-Null } catch {}");
         sb.AppendLine("    try { Set-AdvDisplay $n 'Gigabit Lite' 'Disabled' | Out-Null } catch {}");
         sb.AppendLine("    try { Set-AdvDisplay $n 'Gigabit Master Slave Mode' 'Auto Detect' | Out-Null } catch {}");
-        // Speed & Duplex / Wait for Link intentionally NOT written — forcing these
+        // Speed & Duplex / Wait for Link intentionally NOT written - forcing these
         // on dock/USB/odd NICs has bricked links that snapshot restore could not
         // always bring back before the user lost UI access.
         sb.AppendLine("    Log '[Eth] Speed & Duplex left at driver default (never force)'");
@@ -734,7 +734,7 @@ if (-not $snapshotOk) {
         sb.AppendLine("      try { Set-AdvDisplay $n 'Energy Efficient Ethernet' 'Off' | Out-Null } catch {}");
         sb.AppendLine("      Log '[NIC] Killer power extras'");
         sb.AppendLine("    }");
-        sb.AppendLine("    # Jumbo: keep standard Ethernet (gaming) — keyword first (1514 = standard frame)");
+        sb.AppendLine("    # Jumbo: keep standard Ethernet (gaming) - keyword first (1514 = standard frame)");
         sb.AppendLine("    try {");
         sb.AppendLine("      $jkw = Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*JumboPacket' -EA SilentlyContinue");
         sb.AppendLine("      if ($jkw) {");
@@ -753,7 +753,7 @@ if (-not $snapshotOk) {
         sb.AppendLine("        }");
         sb.AppendLine("      }");
         sb.AppendLine("    } catch {}");
-        sb.AppendLine("    # Priority & VLAN: keep packet priority (QoS tags) — keyword 1 = packet priority enabled");
+        sb.AppendLine("    # Priority & VLAN: keep packet priority (QoS tags) - keyword 1 = packet priority enabled");
         sb.AppendLine("    Set-Adv $n '*PriorityVLANTag' 1");
         sb.AppendLine("    try {");
         sb.AppendLine("      $pv = Find-AdvPropByName $n @('Packet Priority & VLAN','Priority & VLAN','Priority and VLAN')");
@@ -826,7 +826,7 @@ if (-not $snapshotOk) {
         sb.AppendLine("        }");
         sb.AppendLine("      }");
         sb.AppendLine("    }");
-        // Power / coalescing / BT coexistence — always off for gaming
+        // Power / coalescing / BT coexistence - always off for gaming
         sb.AppendLine("    foreach ($hint in @(");
         sb.AppendLine("      'MIMO Power Save','uAPSD support','uAPSD','Power Saving Mode','Power Saving','Power Save Mode','Power Save',");
         sb.AppendLine("      'Packet Coalescing','Ultra Low Power Mode','Ultra Low Power','Idle Power Save','Wireless Mode Power',");
@@ -853,9 +853,9 @@ if (-not $snapshotOk) {
         // Channel width: best / auto / 160 / 80
         sb.AppendLine("    Set-WifiBest $n @('Channel Width','Channel Width for 5GHz','Channel Width for 5 GHz','802.11n Channel Width for band 2','802.11n Channel Width for band 1') @('Auto','160','80','40','Best')");
         sb.AppendLine("    Set-WifiBest $n @('Channel Width for 2.4GHz','Channel Width for 2.4 GHz') @('Auto','20')");
-        // 802.11 mode — prefer latest
+        // 802.11 mode - prefer latest
         sb.AppendLine("    Set-WifiBest $n @('Wireless Mode','802.11a/b/g Wireless Mode','802.11 Mode','Wi-Fi Mode') @('802.11be','802.11ax','802.11ac','6','5','Auto','Default')");
-        // MU-MIMO / OFDMA / Beamform — on when present
+        // MU-MIMO / OFDMA / Beamform - on when present
         sb.AppendLine("    Set-WifiBest $n @('MU-MIMO','Multi-User MIMO') @('Enabled','On','Enable')");
         sb.AppendLine("    Set-WifiBest $n @('OFDMA','Orthogonal Frequency Division Multiple Access') @('Enabled','On','Enable','Auto')");
         sb.AppendLine("    Set-WifiBest $n @('Beamforming','Explicit Beamforming','Implicit Beamforming','Transmit Beamforming') @('Enabled','On','Enable')");
@@ -919,7 +919,7 @@ if (-not $snapshotOk) {
         sb.AppendLine("else { Report 'packet-coalescing' 'skip' 'driver does not expose D0 packet coalescing' }");
 
         // --- Adapter bindings: ENABLE critical stack only. Never disable Client /
-        // File Sharing / LLDP — that "gaming lean" path broke LAN recovery and
+        // File Sharing / LLDP - that "gaming lean" path broke LAN recovery and
         // made Windows look bricked while Exo's TCP probe still passed.
         sb.AppendLine("""
 function Set-AdapterBindings {
@@ -941,7 +941,7 @@ function Set-AdapterBindings {
     Log ("[bind] $n " + ($bits -join ' '))
   }
 }
-# Delivery Optimization — stop peer upload stealing bandwidth on gaming PCs
+# Delivery Optimization - stop peer upload stealing bandwidth on gaming PCs
 try {
   New-Item 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' -Force | Out-Null
   Set-Dword 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode' 0
@@ -976,7 +976,7 @@ try { Start-Service -Name Psched -EA SilentlyContinue } catch {}
 Log '[compat] transition tunnels, NetBIOS, and SMB left unchanged'
 # NCSI / LLMNR / proxy AutoDetect are intentionally NOT touched. Turning NCSI
 # NoActiveProbe or WinHTTP AutoDetect off made Windows report "No Internet"
-# while Exo's raw TCP probe still passed — users reinstalled Windows.
+# while Exo's raw TCP probe still passed - users reinstalled Windows.
 Log '[NCSI] left system default (active probe untouched)'
 Log '[DNS] LLMNR left system default'
 # DNS cache TTL overrides are NOT written. Legacy Exo pinned MaxCacheTtl=86400
@@ -1103,18 +1103,18 @@ function Set-EthMetrics {
         sb.AppendLine("    }");
         sb.AppendLine("    if ($dohFail.Count -gt 0) {");
         sb.AppendLine("      $dohStatus = 'selected by live test; encrypted DNS unavailable on this Windows build'");
-        sb.AppendLine("      Log ('[DNS] automatic DoH unavailable for ' + ($dohFail -join ', ') + $(if ($dohErrors.Count) { ' — ' + ($dohErrors -join ' | ') } else { '' }))");
+        sb.AppendLine("      Log ('[DNS] automatic DoH unavailable for ' + ($dohFail -join ', ') + $(if ($dohErrors.Count) { ' - ' + ($dohErrors -join ' | ') } else { '' }))");
         sb.AppendLine("    } else { $dohStatus = 'selected by live test; automatic DoH active' }");
         sb.AppendLine("  }");
         sb.AppendLine("  Clear-DnsClientCache -EA SilentlyContinue");
-        sb.AppendLine("  Report 'dns-auto' 'ok' ($ExoDnsProvider + ' · ' + $dohStatus)");
+        sb.AppendLine("  Report 'dns-auto' 'ok' ($ExoDnsProvider + ' - ' + $dohStatus)");
         sb.AppendLine("  Log ('[DNS] ' + $ExoDnsProvider + ' selected by Analyze: ' + ($dnsServers -join ', '))");
         sb.AppendLine("} catch { Report 'dns-auto' 'fail' $_.Exception.Message }");
         sb.AppendLine("Report 'power-policy' 'skip' 'AC/DC power plans retained'");
         // ============================================================================
         // ETHERNET-FIRST = METRICS ONLY. Never Disable-NetAdapter on Wi-Fi.
         // Disabling Wi-Fi after a brief Ethernet probe stranded users when the
-        // cable/DHCP path later failed — Repair was unreachable without internet.
+        // cable/DHCP path later failed - Repair was unreachable without internet.
         // ============================================================================
         sb.AppendLine("if (" + preferEth + " -eq 1) {");
         sb.AppendLine("  $ads = @(Get-ExoPhysicalAdapters)");
@@ -1150,7 +1150,7 @@ function Set-EthMetrics {
         sb.AppendLine("    $metricOk = [bool](Set-EthMetrics)");
         sb.AppendLine("    if ($metricOk) { Log \"[NIC] Metric verified after $($t+1)s\"; break }");
         sb.AppendLine("  }");
-        sb.AppendLine("  if (-not $metricOk) { Log '[NIC] WARN metric not verified after restart wait — last Set-EthMetrics attempt done' }");
+        sb.AppendLine("  if (-not $metricOk) { Log '[NIC] WARN metric not verified after restart wait - last Set-EthMetrics attempt done' }");
         sb.AppendLine("} else {");
         sb.AppendLine("  Log '[Exo-NET] Ethernet restart skipped (user declined)'");
         sb.AppendLine("  # Still re-stamp once more so AutomaticMetric cannot race");
@@ -1163,7 +1163,7 @@ function Set-EthMetrics {
         // Probe runs inside a FULL retry window (link renegotiation after NIC
         // advanced-property writes / adapter restart can take 5-20s+ with DHCP).
         // On failure: FULL snapshot restore (registry + advanced props + bindings +
-        // TCP + metrics + adapter enable) — NOT the old Wi-Fi/metrics-only path that
+        // TCP + metrics + adapter enable) - NOT the old Wi-Fi/metrics-only path that
         // left host-stack / NIC tweaks applied and stranded users.
         // ============================================================================
         sb.AppendLine("""
@@ -1218,7 +1218,7 @@ if (-not $postOk) {
       Log "[rollback] Wi-Fi re-enabled: $wn"
     } catch { Log "[rollback] could not re-enable $wn" }
   }
-  # FULL snapshot restore — Wi-Fi + metrics alone left host-stack / NIC props applied.
+  # FULL snapshot restore - Wi-Fi + metrics alone left host-stack / NIC props applied.
   $snapJson = $null
   try {
     if (Test-Path -LiteralPath $ExoSnapshotPath) {

@@ -38,7 +38,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial string MessageGlyph { get; set; } = "\uE73E";
     [ObservableProperty] public partial Brush MessageBrush { get; set; }
 
-    // Proof layer — persisted benchmark delta, honest rollback marker, restore capability.
+    // Proof layer - persisted benchmark delta, honest rollback marker, restore capability.
     [ObservableProperty] public partial bool HasBenchmark { get; set; }
     [ObservableProperty] public partial string BenchmarkSummary { get; set; } = string.Empty;
     [ObservableProperty] public partial Brush BenchmarkBrush { get; set; } = new SolidColorBrush(Color.FromArgb(255, 161, 161, 170));
@@ -128,8 +128,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
             if (bench.Before is { Ok: true } && bench.After is { Ok: true } after)
             {
                 BenchmarkSummary =
-                    $"Verification sample · {FormatMs(after.PingP50Ms)} ms path latency" +
-                    $" · {FormatMs(after.JitterMs)} ms jitter · conditions vary";
+                    $"Verification sample - {FormatMs(after.PingP50Ms)} ms path latency" +
+                    $" - {FormatMs(after.JitterMs)} ms jitter - conditions vary";
                 BenchmarkBrush = ResolveBrush(
                     "ExoMutedTextBrush",
                     Color.FromArgb(255, 95, 95, 105));
@@ -158,12 +158,12 @@ public partial class InternetOptimizerViewModel : ObservableObject
         }
         catch
         {
-            // Proof layer is additive — never break the page over it.
+            // Proof layer is additive - never break the page over it.
         }
     }
 
     private static string FormatMs(double value) =>
-        value < 0 ? "—" : value.ToString(value >= 100 ? "0" : "0.0");
+        value < 0 ? "-" : value.ToString(value >= 100 ? "0" : "0.0");
 
     private void ApplyQualityResult(NetworkBenchmarkResult? result)
     {
@@ -176,7 +176,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
         var downPenalty = Math.Max(0, result.DownloadLoadedMs - result.PingP50Ms);
         var upPenalty = Math.Max(0, result.UploadLoadedMs - result.PingP50Ms);
-        QualitySummary = $"{result.PingP50Ms:0.#} ms idle · full-load +{downPenalty:0.#} ms download / +{upPenalty:0.#} ms upload · {result.PacketLossPercent:0.##}% idle loss · {result.DnsProvider} DNS";
+        QualitySummary = $"{result.PingP50Ms:0.#} ms idle - full-load +{downPenalty:0.#} ms download / +{upPenalty:0.#} ms upload - {result.PacketLossPercent:0.##}% idle loss - {result.DnsProvider} DNS";
         HasQualityResult = true;
     }
 
@@ -190,7 +190,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
         if (!IsLoading)
             IsFeatureListVisible = Rows.Count > 0;
 
-        // Path (Ethernet vs Wi‑Fi) lives in the header only — no redundant banner on open.
+        // Path (Ethernet vs Wi‑Fi) lives in the header only - no redundant banner on open.
         if (!string.IsNullOrWhiteSpace(snap.Detail) && !snap.ProbeOk)
             SetMessage(snap.Detail, success: false);
         else if (!preserveSuccessMessage)
@@ -204,7 +204,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
         var applied = snap.Features.Count > 0 && snap.Features.All(r => r.IsOk);
         var failSteps = ApplyReportRows
             .Where(r => r.Status == "fail")
-            .Select(r => r.Text.Split('·')[0].Trim())
+            .Select(r => r.Text.Split(" - ", StringSplitOptions.None)[0].Trim())
             .Where(s => s.Length > 0)
             .Take(4)
             .ToList();
@@ -249,7 +249,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
         var dnsStep = _lastApplyReport.LastOrDefault(r =>
             string.Equals(r.Name, "dns-auto", StringComparison.OrdinalIgnoreCase));
         var dnsDetail = dnsStep is not null && !string.IsNullOrWhiteSpace(dnsStep.Reason)
-            ? dnsStep.Reason.Replace(
+            ? SanitizeUiAscii(dnsStep.Reason).Replace(
                 "Windows rejected automatic DoH",
                 "automatic DoH needs a 3.5.1 re-apply",
                 StringComparison.OrdinalIgnoreCase)
@@ -331,7 +331,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
             var note = bufferbloat >= 25
                 ? " Loaded latency is high; router SQM/CAKE can help more than Windows tuning."
                 : string.Empty;
-            SetMessage($"Optimized · {result.DnsProvider} DNS selected.{note}", success: true);
+            SetMessage($"Optimized - {result.DnsProvider} DNS selected.{note}", success: true);
         }
     }
 
@@ -408,7 +408,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
 
-        // Quiet secondary action — runs immediately. The RepairHint caption states
+        // Quiet secondary action - runs immediately. The RepairHint caption states
         // whether this restores the exact pre-Exo snapshot or resets to stock defaults.
         IsBusy = true;
         HasMessage = false;
@@ -443,7 +443,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
     {
         if (!snap.ProbeOk) return "Probe incomplete";
 
-        // ASCII separators only in the plate title — middle-dot often mojibakes
+        // ASCII separators only in the plate title - middle-dot often mojibakes
         // in UIA snapshots / logs and looks broken to users.
         var media = snap.Media.EthernetInUse
             ? "Ethernet path"
@@ -480,6 +480,21 @@ public partial class InternetOptimizerViewModel : ObservableObject
         return open.Count == 1
             ? $"Optimized - open: {open[0]}"
             : $"Optimized - open: {open[0]}, {open[1]}";
+    }
+
+    /// <summary>
+    /// UIA / Cua logs mojibake middle-dots and smart punctuation; keep status ASCII.
+    /// </summary>
+    private static string SanitizeUiAscii(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        return text
+            .Replace("\u00B7", " - ", StringComparison.Ordinal) // ·
+            .Replace("\u2022", " - ", StringComparison.Ordinal) // •
+            .Replace("\u2013", "-", StringComparison.Ordinal)   // –
+            .Replace("\u2014", "-", StringComparison.Ordinal)   // —
+            .Replace("  -  ", " - ", StringComparison.Ordinal)
+            .Replace("  ", " ", StringComparison.Ordinal);
     }
 
     private void ClearMessage()
