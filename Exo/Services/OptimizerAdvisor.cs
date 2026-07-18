@@ -38,13 +38,16 @@ public static class OptimizerAdvisor
 
         if (module == "NVIDIA" && (state.Contains("no nvidia") || state.Contains("needs an nvidia")))
             return "No supported NVIDIA GPU was detected on this PC.";
+        // Phrase-level checks only — never match substrings of healthy rows like
+        // "No Discord autostart" (that contains "no discord" and used to false-positive).
         if (module == "Discord" && (discordInstallMissing
-            || state.Contains("not installed")
-            || state.Contains("no discord")))
+            || status.Contains("not installed", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("discord not installed", StringComparison.OrdinalIgnoreCase)
+            || detail.Contains("install Discord stable", StringComparison.OrdinalIgnoreCase)))
             return "Discord Stable is not installed. Install it, then refresh this page.";
         if (module == "Steam" && (steamInstallMissing
-            || state.Contains("not installed")
-            || state.Contains("no steam")))
+            || status.Contains("not installed", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("steam not installed", StringComparison.OrdinalIgnoreCase)))
             return "Steam is not installed. Install and open it once, then refresh this page.";
         if (module == "Internet" && state.Contains("no physical"))
             return "No active physical connection was detected. Connect Ethernet or Wi-Fi, then refresh.";
