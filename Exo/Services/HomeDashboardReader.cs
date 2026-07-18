@@ -39,8 +39,8 @@ public static class HomeDashboardReader
         int VerifiedSettingCount);
 
     /// <summary>
-    /// Discord live WS + session peak. "Reclaimed" = peak − live when DiscOpt/kernel
-    /// has trimmed idle pages (honest estimate; no invented FPS).
+    /// Discord live working set + session peak. The delta is only a session-level
+    /// observation: it must not be described as memory reclaimed by Exo.
     /// </summary>
     public sealed record DiscordRamSnapshot(
         long LiveBytes,

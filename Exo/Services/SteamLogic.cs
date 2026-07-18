@@ -42,6 +42,7 @@ public static partial class SteamLogic
         if (!text.Contains("Exo.SteamMemoryGuard", StringComparison.Ordinal)) return false;
         if (!text.Contains("SetProcessInformation", StringComparison.Ordinal)) return false;
         if (!text.Contains("SetMemoryPriority", StringComparison.Ordinal)) return false;
+        if (!text.Contains("SetPowerThrottled", StringComparison.Ordinal)) return false;
         if (!text.Contains("ForegroundPid", StringComparison.Ordinal)) return false;
         if (!text.Contains("ProcessPriorityClass]::Normal", StringComparison.Ordinal)) return false;
         if (!text.Contains("ProcessPriorityClass]::BelowNormal", StringComparison.Ordinal)) return false;
@@ -49,6 +50,9 @@ public static partial class SteamLogic
         if (!text.Contains("$backgroundWebCls = if ($InGame)", StringComparison.Ordinal)) return false;
         if (!text.Contains("$webCls = if ($_.Id -eq $foregroundPid)", StringComparison.Ordinal)) return false;
         if (!text.Contains("$_.PriorityClass = $webCls", StringComparison.Ordinal)) return false;
+        if (!Regex.IsMatch(text,
+            @"(?s)\$memoryPriority\s*=\s*if\s*\(\$_.Id\s*-eq\s*\$foregroundPid\).*?5.*?elseif\s*\(\$InGame\).*?1.*?else\s*\{\s*2\s*\}")) return false;
+        if (!text.Contains("SetPowerThrottled($_.Id, ($InGame -and $_.Id -ne $foregroundPid))", StringComparison.Ordinal)) return false;
         // Hard fail if helper still thrashing CEF — evaluate code lines only:
         // a "# Never EmptyWorkingSet" doc comment must not exempt a real call.
         foreach (var rawLine in text.Split('\n'))

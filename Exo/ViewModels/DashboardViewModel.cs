@@ -186,12 +186,12 @@ public partial class DashboardViewModel : ObservableObject
         var live = sample?.LiveBytes ?? 0;
         var reclaimed = sample?.ReclaimedBytes ?? 0;
 
-        // Prefer RAM reclaimed (peak − live) when DiscOpt/kernel has trimmed idle pages.
+        // A peak-to-current delta is useful context, but it does not prove Exo caused it.
         if (reclaimed >= 8L << 20) // ≥ 8 MB so we don't flash noise
         {
             DiscordLiveMetric = live > 0
-                ? $"{HomeDashboardReader.FormatBytes(live)} live · {HomeDashboardReader.FormatBytes(reclaimed)} reclaimed this session"
-                : $"{HomeDashboardReader.FormatBytes(reclaimed)} reclaimed this session";
+                ? $"{HomeDashboardReader.FormatBytes(live)} resident · {HomeDashboardReader.FormatBytes(reclaimed)} below session peak"
+                : $"{HomeDashboardReader.FormatBytes(reclaimed)} below session peak";
         }
         else if (live > 0)
         {
@@ -230,7 +230,7 @@ public partial class DashboardViewModel : ObservableObject
 
         if (memory.ProcessCount > 0)
         {
-            SteamLiveMetric = $"{HomeDashboardReader.FormatBytes(memory.PrivateBytes)} private · {memory.ProcessCount} processes";
+            SteamLiveMetric = $"{HomeDashboardReader.FormatBytes(memory.WorkingSetBytes)} resident · {HomeDashboardReader.FormatBytes(memory.PrivateBytes)} private";
         }
         else
         {

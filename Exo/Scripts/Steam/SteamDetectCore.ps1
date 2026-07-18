@@ -21,6 +21,7 @@ function Test-SteamMemoryGuardText {
     if ($Text -notmatch 'Exo\.SteamMemoryGuard') { return $false }
     if ($Text -notmatch 'SetProcessInformation') { return $false }
     if ($Text -notmatch 'SetMemoryPriority') { return $false }
+    if ($Text -notmatch 'SetPowerThrottled') { return $false }
     if ($Text -notmatch 'ForegroundPid') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::Normal') { return $false }
     if ($Text -notmatch 'ProcessPriorityClass\]::BelowNormal') { return $false }
@@ -28,6 +29,8 @@ function Test-SteamMemoryGuardText {
     if ($Text -notmatch '(?s)\$backgroundWebCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal') { return $false }
     if ($Text -notmatch '(?s)\$webCls\s*=\s*if\s*\(\$_\.Id\s*-eq\s*\$foregroundPid\).*?Normal.*?\$backgroundWebCls') { return $false }
     if ($Text -notmatch '\$_\.PriorityClass\s*=\s*\$webCls') { return $false }
+    if ($Text -notmatch '(?s)\$memoryPriority\s*=\s*if\s*\(\$_\.Id\s*-eq\s*\$foregroundPid\).*?5.*?elseif\s*\(\$InGame\).*?1.*?else\s*\{\s*2\s*\}') { return $false }
+    if ($Text -notmatch 'SetPowerThrottled\(\$_\.Id, \(\$InGame -and \$_\.Id -ne \$foregroundPid\)\)') { return $false }
     # EmptyWorkingSet on steamwebhelper freezes/kills CEF UI - reject thrashing helpers.
     # Evaluate code lines only: a '# Never EmptyWorkingSet' comment must not exempt a real call.
     foreach ($rawLine in ($Text -split "`n")) {
