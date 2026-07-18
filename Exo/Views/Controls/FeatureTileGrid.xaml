@@ -28,7 +28,7 @@
                   Keep WinUI's overlay/auto-hide indicator states, but remove the
                   default acrylic track that reads as a permanent 1px edge line.
                 -->
-                <SolidColorBrush x:Key="ExoFeatureScrollTransparentBrush" Color="#00000000" />
+                <StaticResource x:Key="ExoFeatureScrollTransparentBrush" ResourceKey="ExoTransparentBrush" />
                 <StaticResource x:Key="ScrollBarBackground" ResourceKey="ExoFeatureScrollTransparentBrush" />
                 <StaticResource x:Key="ScrollBarBackgroundPointerOver" ResourceKey="ExoFeatureScrollTransparentBrush" />
                 <StaticResource x:Key="ScrollBarBackgroundDisabled" ResourceKey="ExoFeatureScrollTransparentBrush" />

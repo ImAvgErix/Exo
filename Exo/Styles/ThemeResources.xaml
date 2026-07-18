@@ -4,19 +4,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:helpers="using:Exo.Helpers">
 
-    <!-- Native variable fonts render more cleanly than small bundled glyphs at 100–175% DPI. -->
-    <FontFamily x:Key="ExoDisplayFontItalic">Segoe UI Variable Display</FontFamily>
-    <FontFamily x:Key="ExoUiFont">Segoe UI Variable Text</FontFamily>
-    <FontFamily x:Key="ExoUiFontMedium">Segoe UI Variable Text</FontFamily>
-    <FontFamily x:Key="ExoUiFontSemiBold">Segoe UI Variable Display</FontFamily>
-
-    <!-- Spacing scale: 8 / 12 / 16 / 20 / 28 — v2.6 Liquid Glass chrome -->
-    <CornerRadius x:Key="ExoCardRadius">18</CornerRadius>
-    <CornerRadius x:Key="ExoTileRadius">12</CornerRadius>
-    <CornerRadius x:Key="ExoGlassRadius">20</CornerRadius>
-    <x:Double x:Key="ExoPageMaxWidth">1120</x:Double>
-    <Thickness x:Key="ExoPagePadding">24,16,28,16</Thickness>
-
     <helpers:InverseBoolConverter x:Key="InverseBoolConverter" />
     <helpers:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
     <helpers:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
@@ -27,14 +14,14 @@
 
     <!-- Home status under brand — native text rendering, no synthetic italics. -->
     <Style x:Key="ExoTagline" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource ExoDisplayFontItalic}" />
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontFamily" Value="{StaticResource ExoDisplayFont}" />
+        <Setter Property="FontSize" Value="{StaticResource ExoTypeBodySize}" />
         <Setter Property="FontStyle" Value="Normal" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="CharacterSpacing" Value="0" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
         <Setter Property="TextAlignment" Value="Left" />
-        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="LineHeight" Value="{StaticResource ExoTypeBodyLineHeight}" />
         <Setter Property="OpticalMarginAlignment" Value="TrimSideBearings" />
         <Setter Property="UseLayoutRounding" Value="True" />
         <Setter Property="Foreground" Value="{ThemeResource ExoSecondaryTextBrush}" />
@@ -42,7 +29,7 @@
 
     <Style x:Key="ExoSectionTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="{StaticResource ExoTypeCaptionSize}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="CharacterSpacing" Value="120" />
         <Setter Property="Margin" Value="0,0,0,8" />
@@ -51,34 +38,34 @@
 
     <Style x:Key="ExoBody" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFont}" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="{StaticResource ExoTypeBodySize}" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Foreground" Value="{ThemeResource ExoSecondaryTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="LineHeight" Value="19" />
+        <Setter Property="LineHeight" Value="{StaticResource ExoTypeBodyLineHeight}" />
     </Style>
 
     <Style x:Key="ExoCaption" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFont}" />
-        <Setter Property="FontSize" Value="12.5" />
-        <Setter Property="LineHeight" Value="17" />
+        <Setter Property="FontSize" Value="{StaticResource ExoTypeCaptionSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource ExoTypeCaptionLineHeight}" />
         <Setter Property="Foreground" Value="{ThemeResource ExoMutedTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <Style x:Key="ExoPageTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="28" />
+        <Setter Property="FontSize" Value="{StaticResource ExoTypeTitleSize}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="CharacterSpacing" Value="-20" />
-        <Setter Property="LineHeight" Value="34" />
+        <Setter Property="LineHeight" Value="{StaticResource ExoTypeTitleLineHeight}" />
         <Setter Property="TextWrapping" Value="WrapWholeWords" />
         <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
     </Style>
 
     <Style x:Key="ExoFeatureTitle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFontSemiBold}" />
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontSize" Value="{StaticResource ExoTypeBodySize}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
@@ -87,8 +74,8 @@
 
     <Style x:Key="ExoFeatureDetail" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFont}" />
-        <Setter Property="FontSize" Value="12.5" />
-        <Setter Property="LineHeight" Value="17" />
+        <Setter Property="FontSize" Value="{StaticResource ExoTypeCaptionSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource ExoTypeCaptionLineHeight}" />
         <Setter Property="Foreground" Value="{ThemeResource ExoMutedTextBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
@@ -98,7 +85,7 @@
         <Setter Property="Background" Value="{ThemeResource ExoGlassFillBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassStrokeBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="18" />
+        <Setter Property="CornerRadius" Value="{StaticResource ExoPlateRadius}" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
         <Setter Property="UseLayoutRounding" Value="True" />
@@ -420,15 +407,15 @@
       Press = stronger ring (clear "this is the one").
     -->
     <Style x:Key="ExoCardButton" TargetType="Button">
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderBrush" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="{ThemeResource ExoCardFillBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoDividerBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="16" />
         <Setter Property="CornerRadius" Value="{StaticResource ExoCardRadius}" />
         <Setter Property="ClickMode" Value="Press" />
         <Setter Property="AllowFocusOnInteraction" Value="True" />
-        <Setter Property="HorizontalAlignment" Value="Center" />
-        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Stretch" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
@@ -436,10 +423,13 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Grid x:Name="Root"
-                          Background="Transparent"
-                          UseLayoutRounding="True"
-                          CornerRadius="{TemplateBinding CornerRadius}">
+                    <Border x:Name="Root"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            UseLayoutRounding="True"
+                            CornerRadius="{TemplateBinding CornerRadius}">
+                      <Grid>
                         <ContentPresenter x:Name="Content"
                                           Background="Transparent"
                                           BorderThickness="0"
@@ -513,7 +503,8 @@
                                 </VisualState>
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
-                    </Grid>
+                      </Grid>
+                    </Border>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -696,19 +687,11 @@
         <Setter Property="Height" Value="46" />
         <Setter Property="MinWidth" Value="46" />
         <Setter Property="MinHeight" Value="46" />
-        <Setter Property="CornerRadius" Value="23" />
+        <Setter Property="CornerRadius" Value="{StaticResource ExoPillRadius}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="BorderBrush" Value="#3AFFFFFF" />
-        <Setter Property="Foreground" Value="#F5F5F4" />
-        <Setter Property="Background">
-            <Setter.Value>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#FF202024" Offset="0" />
-                    <GradientStop Color="#FF111114" Offset="0.52" />
-                    <GradientStop Color="#FF09090B" Offset="1" />
-                </LinearGradientBrush>
-            </Setter.Value>
-        </Setter>
+        <Setter Property="BorderBrush" Value="{ThemeResource ExoGlassCircleStrokeBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource ExoPrimaryTextBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ExoGlassCircleFillBrush}" />
     </Style>
 
 </ResourceDictionary>

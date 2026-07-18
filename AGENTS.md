@@ -8,14 +8,14 @@ Exo is a no-compromise Windows performance and debloat tool. Aggressive memory t
 
 Aggressive must still be deterministic: scope actions to the selected application or hardware, make Apply *work* (retry hard paths; do not ship "honest failure" as the product), avoid invented registry settings, preserve data needed to prevent corruption, and keep Discord/Steam repair paths working. Never describe NVIDIA Reset as rollback: it only clears Exo status, while NVIDIA recovery remains manual through NVIDIA settings or a driver reinstall.
 
-## Shell UI (current — v2.6 Exo Instrument)
+## Shell UI (current overhaul contract)
 
-- **Fixed frame** 1180×760, no maximize / free resize
-- **Dark = AMOLED** pure black + edge-glass fills (hard top specular; WinUI cannot match CSS `backdrop-filter`)
+- **Responsive frame** opens near 1180×760, resizes/maximizes, preferred minimum 960×600, clamps to the active work area, and centers content up to 1120px
+- **Dark-only** pure black canvas + crisp opaque lifted surfaces; Windows High Contrast remains an accessibility mode, not a second product theme
 - **Workspace** = full-width **top bar** + content stage that fills the rest of the frame
 - **Navigation** = top glass bar (`NavRail`): EXO left · modules centered · Settings right — **not** WinUI `NavigationView`, **not** a left sidebar
-- **Settings** = gear flyout under the top-bar gear (acrylic/frosted panel — not modal overlay, not a separate settings page)
-- **Home** = four-metric dashboard: **FPS gain · Frame time · RAM reclaimed · Latency** — top-bar EXO control hidden on home (page brand owns it); modules stay in the top bar; no Detect* probes on home; FPS/frame-time stay `—` until capture ships; RAM/latency read LocalAppData; cached so returns do not re-stagger
+- **Settings** = solid dark tokenized flyout under the top-bar gear—not a modal, separate page, or unique transparent material
+- **Home** = verified optimizer state + live proof + system memory; no invented FPS/frame-time claims and no optimizer Detect* script probes on home; local state/system counters are cached so returns do not re-stagger
 - **Top bar** = liquid-glass **circles** floating on pure black (no bar plate): hairline rim (~0.5px feel), rim-lit gradient + dark center, soft shadow, hover = scale + sibling fade + label pill (preview) / wash (WinUI); equal 56px end caps; EXO hidden on home
 - **Modules** = one `ExoModulePlate` filling the stage (header + hairline feature list + action foot)
 - **Motion** = short XAML Storyboards only; **never write hand-off composition visuals** (`ElementCompositionPreview` `Visual.Offset`/`Scale`/`Opacity`) — it detaches elements from XAML layout (everything piles at the origin) and pre-first-frame pokes crash real GPUs with `0xC000027B` (v2.6.0 launch regression); no spring bounce on content

@@ -54,11 +54,12 @@ public sealed partial class MainWindow : Window
         // Prove composition presented before any deferred work or re-enabling motion.
         Microsoft.UI.Xaml.Media.CompositionTarget.Rendered += OnFirstFrameRendered;
 
-        // Fixed shell — no maximize / no edge-resize (UI is designed for this frame).
+        // Start at the designed desktop size, but remain resizable and usable on
+        // different work areas and DPI configurations.
         try
         {
-            AppWindow.Resize(new SizeInt32(1180, 760));
-            ApplyFixedWindowChrome();
+            ApplyResponsiveWindowChrome();
+            ApplyInitialWindowBounds();
             TryCenterOnScreen();
             TrySetWindowIcon();
         }
@@ -72,18 +73,15 @@ public sealed partial class MainWindow : Window
 
         AppWindow.Changed += (_, args) =>
         {
-            UpdateCaptionInset();
             if (args.DidPresenterChange)
-                ApplyFixedWindowChrome();
+                ApplyResponsiveWindowChrome();
         };
         RootGrid.Loaded += (_, _) =>
         {
-            UpdateCaptionInset();
-            ApplyFixedWindowChrome();
+            ApplyResponsiveWindowChrome();
             ClearChromeFocus();
             BootstrapHomeOnce("root-loaded");
         };
-        RootGrid.SizeChanged += (_, _) => UpdateCaptionInset();
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
         Activated += OnWindowActivatedClearFocus;
         Activated += OnFirstActivationBootstrap;
@@ -95,7 +93,6 @@ public sealed partial class MainWindow : Window
         };
 
         ApplyShellChrome();
-        UpdateCaptionInset();
 
         ContentFrame.Navigated += OnContentNavigated;
         Activated += OnFirstActivationReapplyIcon;
@@ -121,7 +118,7 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            SetTitleBar(NavRail);
+            SetTitleBar(AppTitleBar);
             Helpers.StartupLog.Mark("titlebar-set");
         }
         catch
@@ -228,58 +225,37 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    /// <summary>Fixed shell: minimize only — no maximize, no free resize.</summary>
-    private void ApplyFixedWindowChrome()
+    /// <summary>Windows 11 shell contract: normal resize/maximize with a safe minimum.</summary>
+    private void ApplyResponsiveWindowChrome()
     {
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.IsMaximizable = false;
-            presenter.IsResizable = false;
+            presenter.IsMaximizable = true;
+            presenter.IsResizable = true;
             presenter.IsMinimizable = true;
-            // Pin preferred size so the OS doesn't grow the frame.
-            presenter.PreferredMinimumWidth = 1180;
-            presenter.PreferredMinimumHeight = 760;
-            presenter.PreferredMaximumWidth = 1180;
-            presenter.PreferredMaximumHeight = 760;
+            presenter.PreferredMinimumWidth = 960;
+            presenter.PreferredMinimumHeight = 600;
+            presenter.PreferredMaximumWidth = null;
+            presenter.PreferredMaximumHeight = null;
         }
+    }
 
+    private void ApplyInitialWindowBounds()
+    {
         try
         {
-            // Re-assert size if something tried to change it.
-            if (AppWindow.Size.Width != 1180 || AppWindow.Size.Height != 760)
-                AppWindow.Resize(new SizeInt32(1180, 760));
+            var display = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
+            var work = display?.WorkArea;
+            var width = work is null ? 1180 : Math.Min(1180, Math.Max(640, work.Value.Width - 32));
+            var height = work is null ? 760 : Math.Min(760, Math.Max(480, work.Value.Height - 32));
+            AppWindow.Resize(new SizeInt32(width, height));
         }
         catch { }
     }
 
-    private void UpdateCaptionInset()
-    {
-        // Dead zone under Windows min/close so left chrome never sits under them.
-        try
-        {
-            var right = AppWindow.TitleBar.RightInset;
-            if (right < 120) right = 146;
-            CaptionSpacerHost.Width = right;
-        }
-        catch
-        {
-            CaptionSpacerHost.Width = 146;
-        }
-    }
-
     private void ApplyShellChrome()
     {
-        try
-        {
-            if (Application.Current.Resources.TryGetValue("ExoPageBackgroundBrush", out var b) && b is Brush brush)
-                RootGrid.Background = brush;
-        }
-        catch
-        {
-            RootGrid.Background = new SolidColorBrush(ColorHelper.FromArgb(255, 7, 8, 11));
-        }
         App.Services.Theme.Apply();
-        UpdateCaptionInset();
     }
 
     private void TryCenterOnScreen()
@@ -318,13 +294,6 @@ public sealed partial class MainWindow : Window
 
         // Legacy NavHome stays collapsed (left chrome owns Home now).
         NavHome.Visibility = Visibility.Collapsed;
-        BackButton.Visibility = Visibility.Collapsed;
-
-        ContextLogoHost.Visibility = Visibility.Collapsed;
-        ContextLogo.Source = null;
-        AppTitleText.Text = string.Empty;
-        AppTitleText.Visibility = Visibility.Collapsed;
-
         UpdateRailSelection(mode);
     }
 
@@ -435,11 +404,6 @@ public sealed partial class MainWindow : Window
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
-    private void TrySetContextLogo(string relativePath)
-    {
-        ContextLogo.Source = AssetPathToImageSourceConverter.Resolve(relativePath);
-    }
-
     // Soft continuum feel without multi-click lag (single Suppress keeps clicks snappy).
     private static NavigationTransitionInfo Slide() =>
         new SuppressNavigationTransitionInfo();
@@ -490,18 +454,17 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// After elevated NVIDIA driver work the display stack can flicker and leave
-    /// the fixed shell with a broken size/titlebar. Re-assert calm chrome.
+    /// After elevated NVIDIA driver work the display stack can flicker. Re-assert
+    /// the responsive presenter and title-bar contract without changing user size.
     /// </summary>
     public void StabilizeShellAfterExternalWork()
     {
         try
         {
-            ApplyFixedWindowChrome();
-            UpdateCaptionInset();
+            ApplyResponsiveWindowChrome();
             if (_firstFrameMarked)
             {
-                try { SetTitleBar(NavRail); } catch { }
+                try { SetTitleBar(AppTitleBar); } catch { }
             }
             try
             {
@@ -697,12 +660,6 @@ public sealed partial class MainWindow : Window
         {
             _gearSpinning = false;
         }
-    }
-
-    private void BackButton_Click(object sender, RoutedEventArgs e)
-    {
-        HideSettingsFlyout();
-        NavigateHome();
     }
 
     private async Task MaybeAutoUpdateAsync(CancellationToken ct)

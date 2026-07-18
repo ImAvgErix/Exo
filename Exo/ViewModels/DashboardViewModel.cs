@@ -313,7 +313,8 @@ public partial class DashboardViewModel : ObservableObject
             0 => "No optimizer has a verified apply record yet.",
             1 => "One optimizer is verified; three are ready to configure.",
             4 => "Every optimizer has a verified apply record.",
-            _ => $"{appliedCount} optimizers are verified; {4 - appliedCount} still need attention."
+            _ => $"{appliedCount} optimizers are verified; {4 - appliedCount} still " +
+                 ((4 - appliedCount) == 1 ? "needs" : "need") + " attention."
         };
 
         RefreshLiveMemory();

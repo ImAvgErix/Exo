@@ -8,53 +8,11 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <ResourceDictionary Source="Styles/Tokens.Colors.xaml" />
+                <ResourceDictionary Source="Styles/Tokens.Type.xaml" />
+                <ResourceDictionary Source="Styles/Tokens.Metrics.xaml" />
                 <ResourceDictionary Source="Styles/ThemeResources.xaml" />
             </ResourceDictionary.MergedDictionaries>
-
-            <ResourceDictionary.ThemeDictionaries>
-                <!-- Dark shell + opaque lifted surfaces for crisp mixed-DPI rendering. -->
-                <ResourceDictionary x:Key="Dark">
-                    <Color x:Key="SystemAccentColor">#F5F5F4</Color>
-                    <Color x:Key="SystemAccentColorLight1">#FAFAF9</Color>
-                    <Color x:Key="SystemAccentColorLight2">#E7E5E4</Color>
-                    <Color x:Key="SystemAccentColorLight3">#D6D3D1</Color>
-                    <Color x:Key="SystemAccentColorDark1">#A8A29E</Color>
-                    <Color x:Key="SystemAccentColorDark2">#78716C</Color>
-                    <Color x:Key="SystemAccentColorDark3">#57534E</Color>
-                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#F5F5F4" />
-                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#E7E5E4" />
-                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#D6D3D1" />
-                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#F5F5F4" />
-                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#A8A29E" />
-                    <SolidColorBrush x:Key="ExoPageBackgroundBrush" Color="#000000" />
-                    <SolidColorBrush x:Key="ExoCardFillBrush" Color="#FF0E0E11" />
-                    <SolidColorBrush x:Key="ExoCardStrokeBrush" Color="#2AFFFFFF" />
-                    <SolidColorBrush x:Key="ExoGlassFillBrush" Color="#FF08080A" />
-                    <SolidColorBrush x:Key="ExoGlassStrokeBrush" Color="#30FFFFFF" />
-                    <SolidColorBrush x:Key="ExoRailGlassFillBrush" Color="#FF08080A" />
-                    <SolidColorBrush x:Key="ExoSpecularStrokeBrush" Color="#18FFFFFF" />
-                    <SolidColorBrush x:Key="ExoSettingsSurfaceBrush" Color="#FF09090B" />
-                    <SolidColorBrush x:Key="ExoSurfaceRaisedBrush" Color="#FF111114" />
-                    <SolidColorBrush x:Key="ExoSurfaceSunkenBrush" Color="#FF050506" />
-                    <SolidColorBrush x:Key="ExoDividerBrush" Color="#20FFFFFF" />
-                    <SolidColorBrush x:Key="ExoAccentBrush" Color="#F5F5F4" />
-                    <SolidColorBrush x:Key="ExoOnAccentBrush" Color="#000000" />
-                    <SolidColorBrush x:Key="ExoAccentSoftBrush" Color="#16FFFFFF" />
-                    <SolidColorBrush x:Key="ExoQuietButtonFillBrush" Color="#FF111114" />
-                    <SolidColorBrush x:Key="ExoPrimaryTextBrush" Color="#FAFAF9" />
-                    <SolidColorBrush x:Key="ExoSecondaryTextBrush" Color="#D6D3D1" />
-                    <SolidColorBrush x:Key="ExoMutedTextBrush" Color="#9898A3" />
-                    <SolidColorBrush x:Key="ExoSuccessBrush" Color="#34D399" />
-                    <SolidColorBrush x:Key="ExoWarningBrush" Color="#FBBF24" />
-                    <SolidColorBrush x:Key="ExoWarningSoftBrush" Color="#22F59E0B" />
-                    <SolidColorBrush x:Key="ExoErrorBrush" Color="#F87171" />
-                </ResourceDictionary>
-            </ResourceDictionary.ThemeDictionaries>
-
-            <SolidColorBrush x:Key="ExoDiscordBrush" Color="#8B7CFF" />
-            <SolidColorBrush x:Key="ExoSteamBrush" Color="#5AA9FF" />
-            <SolidColorBrush x:Key="ExoInternetBrush" Color="#22D3EE" />
-            <SolidColorBrush x:Key="ExoNvidiaBrush" Color="#76B900" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -37,6 +37,9 @@ var dash = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml");
 var settings = Path.Combine(repo, "Exo", "Views", "Controls", "SettingsSheet.xaml");
 var mainXaml = Path.Combine(repo, "Exo", "MainWindow.xaml");
 var theme = Path.Combine(repo, "Exo", "Styles", "ThemeResources.xaml");
+var colorTokens = Path.Combine(repo, "Exo", "Styles", "Tokens.Colors.xaml");
+var typeTokens = Path.Combine(repo, "Exo", "Styles", "Tokens.Type.xaml");
+var metricTokens = Path.Combine(repo, "Exo", "Styles", "Tokens.Metrics.xaml");
 var converters = Path.Combine(repo, "Exo", "Helpers", "ValueConverters.cs");
 var logosDir = Path.Combine(repo, "Exo", "Assets", "Logos");
 var appServicesCs = Path.Combine(repo, "Exo", "Services", "AppServices.cs");
@@ -77,33 +80,54 @@ if (File.Exists(appServicesCs) && File.Exists(powerShellRunnerCs))
         !updateSource.Contains("raw.githubusercontent.com", StringComparison.Ordinal)
         && !updateSource.Contains("codeload.github.com", StringComparison.Ordinal));
 }
-if (File.Exists(appXaml))
+if (File.Exists(appXaml) && File.Exists(colorTokens) && File.Exists(typeTokens) && File.Exists(metricTokens))
 {
     var a = File.ReadAllText(appXaml);
-    Expect("amoled black", a.Contains("#000000", StringComparison.Ordinal));
-    Expect("stone white accent", a.Contains("#F5F5F4", StringComparison.Ordinal));
-    Expect("light theme removed", !a.Contains("x:Key=\"Light\"", StringComparison.Ordinal)
-        && !a.Contains("#F4F4F5", StringComparison.Ordinal));
-    // v3.2 cohesive surfaces: true black shell with opaque lifted cards avoids
-    // ghosted text and inconsistent transparency at mixed DPI.
-    Expect("dark solid card lift",
-        a.Contains("#FF0E0E11", StringComparison.Ordinal)
-        && a.Contains("#FF08080A", StringComparison.Ordinal));
-    Expect("liquid glass fill token", a.Contains("ExoGlassFillBrush", StringComparison.Ordinal));
-    // Settings uses the same solid dark material as the app; no isolated
-    // translucent flyout and no GPU-fragile AcrylicBrush.
+    var colors = File.ReadAllText(colorTokens);
+    var types = File.ReadAllText(typeTokens);
+    var metrics = File.ReadAllText(metricTokens);
+    Expect("dark page token", colors.Contains("<Color x:Key=\"ExoColorPage\">#000000</Color>", StringComparison.Ordinal));
+    Expect("stone white primary token", colors.Contains("<Color x:Key=\"ExoColorPrimaryText\">#F5F5F4</Color>", StringComparison.Ordinal));
+    Expect("light theme removed", !colors.Contains("x:Key=\"Light\"", StringComparison.Ordinal)
+        && !a.Contains("x:Key=\"Light\"", StringComparison.Ordinal));
+    Expect("High Contrast dictionary", colors.Contains("x:Key=\"HighContrast\"", StringComparison.Ordinal)
+        && colors.Contains("SystemColorWindowBrush", StringComparison.Ordinal));
+    Expect("token dictionaries merged", a.Contains("Styles/Tokens.Colors.xaml", StringComparison.Ordinal)
+        && a.Contains("Styles/Tokens.Type.xaml", StringComparison.Ordinal)
+        && a.Contains("Styles/Tokens.Metrics.xaml", StringComparison.Ordinal));
+    Expect("dark solid card lift", colors.Contains("#0E0E11", StringComparison.Ordinal)
+        && colors.Contains("#08080A", StringComparison.Ordinal));
+    Expect("liquid glass fill token", colors.Contains("ExoGlassFillBrush", StringComparison.Ordinal));
     Expect("settings solid surface brush",
-        a.Contains("ExoSettingsSurfaceBrush", StringComparison.Ordinal)
-        && a.Contains("#FF09090B", StringComparison.Ordinal)
-        && !a.Contains("ExoSettingsAcrylicBrush", StringComparison.Ordinal)
+        colors.Contains("ExoSettingsSurfaceBrush", StringComparison.Ordinal)
+        && !colors.Contains("ExoSettingsAcrylicBrush", StringComparison.Ordinal)
         && !a.Contains("<media:AcrylicBrush", StringComparison.Ordinal));
+    Expect("integer readable type ramp", types.Contains("ExoTypeCaptionSize\">12", StringComparison.Ordinal)
+        && types.Contains("ExoTypeBodySize\">14", StringComparison.Ordinal)
+        && !types.Contains("12.5", StringComparison.Ordinal));
+    Expect("4px metric ramp", metrics.Contains("ExoSpaceXS\">4", StringComparison.Ordinal)
+        && metrics.Contains("ExoSpaceL\">16", StringComparison.Ordinal)
+        && metrics.Contains("ExoPageMaxWidth\">1120", StringComparison.Ordinal));
+
+    var xamlFiles = Directory.EnumerateFiles(Path.Combine(repo, "Exo"), "*.xaml", SearchOption.AllDirectories)
+        .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+            && !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    var hexOutsideTokens = xamlFiles
+        .Where(path => !Path.GetFullPath(path).Equals(Path.GetFullPath(colorTokens), StringComparison.OrdinalIgnoreCase))
+        .Where(path => Regex.IsMatch(File.ReadAllText(path), "#[0-9A-Fa-f]{6,8}"))
+        .Select(path => Path.GetRelativePath(repo, path))
+        .ToArray();
+    Expect("hex colors centralized", hexOutsideTokens.Length == 0, string.Join(", ", hexOutsideTokens));
 }
 var themeServiceCs = Path.Combine(repo, "Exo", "Services", "ThemeService.cs");
 if (File.Exists(themeServiceCs))
 {
     var ts = File.ReadAllText(themeServiceCs);
-    Expect("theme service dark only",
+    Expect("theme service dark with OS High Contrast",
         ts.Contains("ElementTheme.Dark", StringComparison.Ordinal)
+        && ts.Contains("ElementTheme.Default", StringComparison.Ordinal)
+        && ts.Contains("HighContrast", StringComparison.Ordinal)
         && !ts.Contains("ElementTheme.Light", StringComparison.Ordinal));
 }
 if (File.Exists(main))
@@ -113,15 +137,16 @@ if (File.Exists(main))
     Expect("nav rail", m.Contains("NavRail", StringComparison.Ordinal));
     Expect("glass circle nav", m.Contains("ExoGlassCircle", StringComparison.Ordinal)
         && !m.Contains("ExoRailGlassFillBrush", StringComparison.Ordinal));
-    Expect("top bar workspace", m.Contains("Padding=\"16\"", StringComparison.Ordinal));
+    Expect("top bar workspace", m.Contains("Padding=\"16,4\"", StringComparison.Ordinal));
     Expect("top bar row layout",
         m.Contains("RowDefinitions", StringComparison.Ordinal)
         && m.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));
-    // v3.0.3 shell: Settings morphs to Home; modules true-centered; caption clear.
+    // Responsive shell: Settings morphs to Home; TitleBar reserves caption space.
     Expect("settings left rail", m.Contains("SettingsButton", StringComparison.Ordinal));
     Expect("home chrome icon", m.Contains("HomeChromeIcon", StringComparison.Ordinal));
     Expect("modules centered layer", m.Contains("ModuleIcons", StringComparison.Ordinal));
-    Expect("caption spacer on rail", m.Contains("CaptionSpacerHost", StringComparison.Ordinal));
+    Expect("native TitleBar control", m.Contains("<TitleBar x:Name=\"AppTitleBar\"", StringComparison.Ordinal)
+        && !m.Contains("CaptionSpacerHost", StringComparison.Ordinal));
     Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
     Expect("rail nav internet", m.Contains("NavInternet", StringComparison.Ordinal));
@@ -131,21 +156,22 @@ if (File.Exists(main))
     Expect("rail logo internet", m.Contains("internet.png", StringComparison.Ordinal));
     Expect("rail logo nvidia", m.Contains("nvidia.png", StringComparison.Ordinal));
     Expect("settings gear", m.Contains("SettingsButton", StringComparison.Ordinal));
-    Expect("back chrome", m.Contains("BackButton", StringComparison.Ordinal));
+    Expect("dead back chrome removed", !m.Contains("x:Name=\"BackButton\"", StringComparison.Ordinal)
+        && !m.Contains("TitleBarDragRegion", StringComparison.Ordinal));
     Expect("no NavigationView", !m.Contains("<NavigationView", StringComparison.Ordinal));
     Expect("ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
     Expect("no tooltips in main", !m.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
 }
-// SetTitleBar targets the full NavRail. Buttons still click; empty glass + caption
-// column is the drag surface. CaptionSpacer keeps Settings clear of min/close.
+// The WinUI TitleBar control owns caption layout and interactive content.
 var mainCs = Path.Combine(repo, "Exo", "MainWindow.xaml.cs");
 if (File.Exists(mainCs))
 {
     var cs = File.ReadAllText(mainCs);
-    Expect("SetTitleBar NavRail drag", cs.Contains("SetTitleBar(NavRail)", StringComparison.Ordinal));
-    Expect("not SetTitleBar whole host", !cs.Contains("SetTitleBar(TitleBarHost)", StringComparison.Ordinal));
-    Expect("fixed shell no maximize", cs.Contains("IsMaximizable = false", StringComparison.Ordinal));
-    Expect("fixed shell no resize", cs.Contains("IsResizable = false", StringComparison.Ordinal));
+    Expect("SetTitleBar control", cs.Contains("SetTitleBar(AppTitleBar)", StringComparison.Ordinal));
+    Expect("responsive shell maximize", cs.Contains("IsMaximizable = true", StringComparison.Ordinal));
+    Expect("responsive shell resize", cs.Contains("IsResizable = true", StringComparison.Ordinal)
+        && cs.Contains("PreferredMinimumWidth = 960", StringComparison.Ordinal)
+        && cs.Contains("PreferredMinimumHeight = 600", StringComparison.Ordinal));
     Expect("rail selection helper", cs.Contains("UpdateRailSelection", StringComparison.Ordinal));
     Expect("settings always on rail",
         cs.Contains("SettingsButton.Visibility = Visibility.Visible", StringComparison.Ordinal)
@@ -154,7 +180,8 @@ if (File.Exists(mainCs))
         cs.Contains("HomeChromeIcon", StringComparison.Ordinal)
         && cs.Contains("NavigateHome()", StringComparison.Ordinal)
         && cs.Contains("_mode != ShellMode.Home", StringComparison.Ordinal));
-    Expect("no titlebar settings text", !cs.Contains("AppTitleText.Text = \"Settings\"", StringComparison.Ordinal));
+    Expect("dead titlebar fields removed", !cs.Contains("AppTitleText", StringComparison.Ordinal)
+        && !cs.Contains("CaptionSpacerHost", StringComparison.Ordinal));
 }
 if (File.Exists(dash))
 {
@@ -163,7 +190,7 @@ if (File.Exists(dash))
     Expect("hero status identity",
         d.Contains("HeroBrand", StringComparison.Ordinal)
         && d.Contains("OverviewPrimary", StringComparison.Ordinal)
-        && d.Contains("SYSTEM STATUS", StringComparison.Ordinal));
+        && d.Contains("System overview", StringComparison.Ordinal));
     Expect("hero tagline",
         d.Contains("HeroTagline", StringComparison.Ordinal)
         && (d.Contains("Maximum performance", StringComparison.Ordinal)
@@ -181,7 +208,7 @@ if (File.Exists(dash))
         && d.Contains("ExoInternetBrush", StringComparison.Ordinal)
         && d.Contains("ExoNvidiaBrush", StringComparison.Ordinal));
     Expect("home steam live ram tile",
-        d.Contains("Text=\"STEAM\"", StringComparison.Ordinal)
+        d.Contains("Text=\"Steam\"", StringComparison.Ordinal)
         && d.Contains("SteamStatusPrimary", StringComparison.Ordinal)
         && !d.Contains("STEAM RECLAIMED", StringComparison.Ordinal));
     Expect("home module status row",
@@ -190,18 +217,20 @@ if (File.Exists(dash))
         && d.Contains("NvidiaPathPrimary", StringComparison.Ordinal)
         && d.Contains("LatencyPrimary", StringComparison.Ordinal));
     Expect("home four outcome cards",
-        d.Contains("DISCORD", StringComparison.Ordinal)
-        && d.Contains("STEAM", StringComparison.Ordinal)
-        && d.Contains("INTERNET", StringComparison.Ordinal)
+        d.Contains("Text=\"Discord\"", StringComparison.Ordinal)
+        && d.Contains("Text=\"Steam\"", StringComparison.Ordinal)
+        && d.Contains("Text=\"Internet\"", StringComparison.Ordinal)
         && d.Contains("NVIDIA", StringComparison.Ordinal)
         && d.Contains("StatusTag", StringComparison.Ordinal)
         && d.Contains("LiveMetric", StringComparison.Ordinal));
     Expect("home explains optimizer outcomes",
-        d.Contains("SYSTEM STATUS", StringComparison.Ordinal)
+        d.Contains("VERIFIED OPTIMIZERS", StringComparison.Ordinal)
         && d.Contains("OverviewPrimary", StringComparison.Ordinal)
-        && d.Contains("DISCORD", StringComparison.Ordinal)
-        && d.Contains("STEAM", StringComparison.Ordinal)
-        && d.Contains("INTERNET", StringComparison.Ordinal));
+        && d.Contains("Live detection decides", StringComparison.Ordinal));
+    Expect("home cards navigate", d.Contains("DiscordCard_Click", StringComparison.Ordinal)
+        && d.Contains("SteamCard_Click", StringComparison.Ordinal)
+        && d.Contains("InternetCard_Click", StringComparison.Ordinal)
+        && d.Contains("NvidiaCard_Click", StringComparison.Ordinal));
     Expect("no wrap grid cards", !d.Contains("ItemsWrapGrid", StringComparison.Ordinal));
     Expect("no fixed product cards",
         !d.Contains("Width=\"248\"", StringComparison.Ordinal)
@@ -305,6 +334,8 @@ if (File.Exists(updateDlg))
 if (File.Exists(theme))
 {
     var t = File.ReadAllText(theme);
+    var typeSource = File.Exists(typeTokens) ? File.ReadAllText(typeTokens) : string.Empty;
+    var metricSource = File.Exists(metricTokens) ? File.ReadAllText(metricTokens) : string.Empty;
     Expect("theme ExoPrimaryButton", t.Contains("ExoPrimaryButton", StringComparison.Ordinal));
     Expect("primary Apply button is white with dark text",
         t.Contains("Property=\"Background\" Value=\"{ThemeResource ExoAccentBrush}\"", StringComparison.Ordinal)
@@ -312,11 +343,12 @@ if (File.Exists(theme))
         && !t.Contains("ExoPrimaryButtonFillBrush", StringComparison.Ordinal));
     Expect("theme ExoGlassCircle",
         t.Contains("ExoGlassCircle", StringComparison.Ordinal)
-        && t.Contains("CornerRadius\" Value=\"23", StringComparison.Ordinal));
+        && t.Contains("ExoPillRadius", StringComparison.Ordinal)
+        && t.Contains("ExoGlassCircleFillBrush", StringComparison.Ordinal));
     Expect("native variable UI typography",
-        t.Contains("Segoe UI Variable Text", StringComparison.Ordinal)
-        && t.Contains("Segoe UI Variable Display", StringComparison.Ordinal)
-        && !t.Contains("PlusJakartaSans.ttf", StringComparison.Ordinal));
+        typeSource.Contains("Segoe UI Variable Text", StringComparison.Ordinal)
+        && typeSource.Contains("Segoe UI Variable Display", StringComparison.Ordinal)
+        && !typeSource.Contains("PlusJakartaSans.ttf", StringComparison.Ordinal));
     Expect("theme ExoWhiteButton", t.Contains("ExoWhiteButton", StringComparison.Ordinal));
     Expect("theme ExoCardButton", t.Contains("ExoCardButton", StringComparison.Ordinal));
     Expect("theme ExoFeatureTile", t.Contains("ExoFeatureTile", StringComparison.Ordinal));
@@ -326,9 +358,10 @@ if (File.Exists(theme))
         && t.Contains("ExoInfoMessageText", StringComparison.Ordinal)
         && t.Contains("Property=\"Padding\" Value=\"10,6\"", StringComparison.Ordinal));
     Expect("theme ExoIconWell", t.Contains("ExoIconWell", StringComparison.Ordinal));
-    Expect("theme ExoPagePadding", t.Contains("ExoPagePadding", StringComparison.Ordinal));
+    Expect("theme ExoPagePadding", metricSource.Contains("ExoPagePadding", StringComparison.Ordinal));
     Expect("theme choice style removed", !t.Contains("ExoThemeChoice", StringComparison.Ordinal));
-    Expect("display italic", t.Contains("ExoDisplayFontItalic", StringComparison.Ordinal));
+    Expect("decorative italic removed", !t.Contains("ExoDisplayFontItalic", StringComparison.Ordinal)
+        && !typeSource.Contains("FontStyle=\"Italic\"", StringComparison.Ordinal));
     // Opti* theme keys must stay gone (Exo* rename).
     Expect("theme no Opti keys",
         !t.Contains("OptiPrimaryButton", StringComparison.Ordinal)
@@ -673,16 +706,16 @@ if (File.Exists(dashCs))
         && dc.Contains("StabilizeHome", StringComparison.Ordinal));
 }
 
-// Card button must not force Left/Top (top-left drift).
+// Dashboard cards fill their responsive cells; content alignment remains stretched.
 if (File.Exists(theme))
 {
     var tCard = File.ReadAllText(theme);
     var cardIdx = tCard.IndexOf("ExoCardButton", StringComparison.Ordinal);
     var cardSlice = cardIdx >= 0 ? tCard.Substring(cardIdx, Math.Min(800, tCard.Length - cardIdx)) : "";
-    Expect("card button not top-left aligned",
+    Expect("card button fills dashboard cell",
         cardIdx >= 0
         && cardSlice.Contains("HorizontalAlignment", StringComparison.Ordinal)
-        && cardSlice.Contains("Value=\"Center\"", StringComparison.Ordinal)
+        && cardSlice.Contains("Value=\"Stretch\"", StringComparison.Ordinal)
         && !cardSlice.Contains("Value=\"Left\"", StringComparison.Ordinal));
 }
 
@@ -707,9 +740,11 @@ if (File.Exists(advisorPath))
     var adv = File.ReadAllText(advisorPath);
     Expect("OptimizerAdvisor v2 BuildV2 present",
         adv.Contains("BuildV2", StringComparison.Ordinal) &&
-        adv.Contains("CTA:", StringComparison.Ordinal));
-    Expect("OptimizerAdvisor no background tasks message",
-        adv.Contains("No Exo background tasks", StringComparison.Ordinal));
+        adv.Contains("Ready to measure this connection", StringComparison.Ordinal));
+    Expect("OptimizerAdvisor hides internal checklist prose",
+        !adv.Contains("CTA:", StringComparison.Ordinal)
+        && !adv.Contains("Still open:", StringComparison.Ordinal)
+        && !adv.Contains("aggressive pack", StringComparison.Ordinal));
     Expect("OptimizerAdvisor covers all modules",
         adv.Contains("\"Internet\"", StringComparison.Ordinal)
         && adv.Contains("\"Discord\"", StringComparison.Ordinal)
