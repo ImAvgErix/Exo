@@ -45,7 +45,7 @@ public static class HomeDashboardReader
     public sealed record DiscordRamSnapshot(
         long LiveBytes,
         long PeakBytes,
-        long ReclaimedBytes);
+        long BelowPeakBytes);
 
     public sealed record ProcessMemorySnapshot(
         int ProcessCount,
@@ -126,7 +126,7 @@ public static class HomeDashboardReader
 
     /// <summary>
     /// Sample Discord working set and persist a session peak so the home tile can
-    /// show RAM reclaimed when idle trim drops the live set below peak.
+    /// show the current resident set relative to its observed session peak.
     /// </summary>
     public static DiscordRamSnapshot? TrySampleDiscordRam()
     {
@@ -135,30 +135,30 @@ public static class HomeDashboardReader
             var live = TryReadProcessWorkingSetBytes("Discord", "DiscordPTB", "DiscordCanary");
             var path = Path.Combine(PathHelper.AppDataDir, "discord-ram-stats.json");
             long peak = 0;
-            long sessionReclaimed = 0;
+            long belowPeak = 0;
 
             if (File.Exists(path))
             {
                 using var doc = JsonDocument.Parse(File.ReadAllText(path));
                 var root = doc.RootElement;
                 peak = ReadInt64(root, "peakWorkingSetBytes");
-                sessionReclaimed = ReadInt64(root, "sessionReclaimedBytes");
+                belowPeak = ReadInt64(root, "sessionReclaimedBytes");
             }
 
             if (live <= 0)
             {
-                // Process gone — keep peak/reclaimed for display until next open.
-                if (peak <= 0 && sessionReclaimed <= 0) return null;
-                return new DiscordRamSnapshot(0, peak, Math.Max(0, sessionReclaimed));
+                // Process gone — keep the last session observation until next open.
+                if (peak <= 0 && belowPeak <= 0) return null;
+                return new DiscordRamSnapshot(0, peak, Math.Max(0, belowPeak));
             }
 
             if (live > peak)
                 peak = live;
 
-            // When WS drops below peak, credit the drop as reclaimed (idle trim / GC).
+            // A peak delta can be caused by GC, paging, idle trim, or normal workload change.
             var drop = peak - live;
-            if (drop > sessionReclaimed)
-                sessionReclaimed = drop;
+            if (drop > belowPeak)
+                belowPeak = drop;
 
             try
             {
@@ -167,14 +167,14 @@ public static class HomeDashboardReader
                     "{\n" +
                     $"  \"peakWorkingSetBytes\": {peak},\n" +
                     $"  \"liveWorkingSetBytes\": {live},\n" +
-                    $"  \"sessionReclaimedBytes\": {sessionReclaimed},\n" +
+                    $"  \"sessionReclaimedBytes\": {belowPeak},\n" +
                     $"  \"updatedUtc\": \"{DateTime.UtcNow:O}\"\n" +
                     "}\n";
                 File.WriteAllText(path, json);
             }
             catch { /* non-fatal */ }
 
-            return new DiscordRamSnapshot(live, peak, sessionReclaimed);
+            return new DiscordRamSnapshot(live, peak, belowPeak);
         }
         catch
         {

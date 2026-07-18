@@ -1,3 +1,14 @@
+## 3.6.0
+
+- **Adaptive six-module dashboard**: Riot and Epic are real optimizer pages beside Internet, NVIDIA, Discord, and Steam, with capability-aware detection, concise evidence, Apply, and exact Repair.
+- **Safe game-launcher policy**: Riot/Epic changes are limited to reversible startup, Windows GPU preference, and Above Normal CPU priority for detected game executables. Anti-cheat, services, client files, manifests, saves, caches, and active games are never touched.
+- **NVIDIA safe policy**: Apply snapshots the full DRS database, leaves driver components/services/display state unchanged by default, makes G-SYNC explicit, and restores the exact pre-Exo profile database on Repair.
+- **Multi-gig Internet policy**: 1+ GbE preserves RSS, RSC, LSO, and normal receive-window autotuning. Loaded queueing is reported as router/ONT behavior instead of “fixed” with throughput-cutting host tweaks; DNS is selected from live Cloudflare/Google/Quad9 tests.
+- **Steam foreground protection**: visible Steam stays Normal priority; only background web helpers get low memory priority and EcoQoS while a game is running. All helpers return to HighQoS/normal memory priority afterward.
+- **Honest memory evidence**: dashboard cards distinguish resident working set from private committed bytes and no longer attribute a normal peak-to-current drop to Exo.
+- **Dark-only responsive shell**: one opaque dark visual system, resizable/maximizable layout, native title bar, crisp shared module plates, white Apply actions, and a decluttered Settings sheet.
+- **Security and release hardening**: shipped scripts are compiled into a SHA-256 manifest and re-verified across elevation; privileged results use protected machine-owned transactions; downloads require HTTPS plus published digests.
+
 ## 3.5.2
 
 - **DNS cache TTL folklore removed**: Apply no longer writes `Dnscache MaxCacheTtl=86400` (records pinned up to 24h → stale DNS). Any leftover override is removed on Apply and never restored by Repair.

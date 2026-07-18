@@ -49,12 +49,9 @@ Planned work is not marked complete until its automated and live gates pass.
 
 ### Not claimed yet
 
-- Manual High Contrast, Narrator, 125/150% DPI, and text-scale passes.
-- ARM64 support.
-- Safety-kernel, measurement-harness, optimizer-policy, Riot/Epic, package-size,
-  documentation-recovery, signing, and final release slices.
+- Manual High Contrast/Narrator/DPI passes, ARM64, and code signing.
 
-## Slice 2 — safety kernel (in progress)
+## Slice 2 — safety kernel
 
 - Added early current-directory DLL-search removal without replacing the Windows
   App SDK package graph. A stricter blanket loader policy was rejected by a real
@@ -77,6 +74,21 @@ Planned work is not marked complete until its automated and live gates pass.
 - Made C# app-update and portable PowerShell downloads HTTPS-only and fail closed
   when GitHub does not publish a SHA-256 digest.
 
-Remaining before this slice can be called complete: protected machine-owned
-snapshot/state migration, the remaining script-owned vendor downloads, full
-cancellation tree tests, and exact NVIDIA Repair coverage.
+The protected result boundary, script manifest, download verification, and exact
+NVIDIA DRS Repair path are now implemented. Per-user optimizer snapshots remain
+readable by the signed-in user by design; privileged success/exit state does not.
+
+## Slices 3–7 — optimizer policy and release
+
+- Internet now preserves multi-gig offloads/autotuning, measures three DNS
+  providers, separates idle loss from loaded traffic, and reports router-side
+  queueing without claiming Windows repaired it.
+- NVIDIA uses a hardware-aware safe policy, explicit G-SYNC choice, verified
+  per-game profiles, full DRS backup, and exact DRS restore.
+- Steam protects the foreground renderer and applies EcoQoS/low memory priority
+  only to background helpers while a game runs. The dashboard distinguishes
+  resident working set from private committed memory.
+- Riot and Epic ship as real capability-aware modules with reversible Windows
+  startup/GPU/CPU policy and hard anti-cheat/game-file boundaries.
+- The repository now has a current README, MIT license, contributing guide,
+  privacy disclosure, v3.6.0 changelog, and synchronized tweak audit.

@@ -112,7 +112,7 @@ public partial class DashboardViewModel : ObservableObject
                 $"{HomeDashboardReader.FormatBytes(mem.AvailableBytes)} free · {HomeDashboardReader.FormatBytes(mem.TotalBytes)} total";
         }
 
-        // Visible-dashboard refresh: Discord/Steam reclaim + Internet proof.
+        // Visible-dashboard refresh: process memory observations + Internet proof.
         RefreshDiscordRamTile();
         RefreshSteamRamTile();
         RefreshInternetTile();
@@ -184,14 +184,14 @@ public partial class DashboardViewModel : ObservableObject
         var kernel = HomeDashboardReader.TryReadDiscordKernelOnDisk();
         var applied = HomeDashboardReader.TryReadDiscordApplied();
         var live = sample?.LiveBytes ?? 0;
-        var reclaimed = sample?.ReclaimedBytes ?? 0;
+        var belowPeak = sample?.BelowPeakBytes ?? 0;
 
         // A peak-to-current delta is useful context, but it does not prove Exo caused it.
-        if (reclaimed >= 8L << 20) // ≥ 8 MB so we don't flash noise
+        if (belowPeak >= 8L << 20) // ≥ 8 MB so we don't flash noise
         {
             DiscordLiveMetric = live > 0
-                ? $"{HomeDashboardReader.FormatBytes(live)} resident · {HomeDashboardReader.FormatBytes(reclaimed)} below session peak"
-                : $"{HomeDashboardReader.FormatBytes(reclaimed)} below session peak";
+                ? $"{HomeDashboardReader.FormatBytes(live)} resident · {HomeDashboardReader.FormatBytes(belowPeak)} below session peak"
+                : $"{HomeDashboardReader.FormatBytes(belowPeak)} below session peak";
         }
         else if (live > 0)
         {
