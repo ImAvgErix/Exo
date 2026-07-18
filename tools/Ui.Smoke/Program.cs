@@ -85,13 +85,35 @@ if (File.Exists(shippedManifestCs) && File.Exists(generatedManifestCs))
     {
         var file = Path.Combine(repo, "Exo", "Scripts",
             entry.Groups["path"].Value.Replace('/', Path.DirectorySeparatorChar));
-        if (!File.Exists(file) || new FileInfo(file).Length != long.Parse(entry.Groups["length"].Value))
+        if (!File.Exists(file))
         {
             manifestFresh = false;
             break;
         }
-        using var stream = File.OpenRead(file);
-        var hash = Convert.ToHexString(SHA256.HashData(stream));
+        var extension = Path.GetExtension(file);
+        var fileName = Path.GetFileName(file);
+        var isText = extension.Equals(".ps1", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".json", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".ini", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".md", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".c", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".def", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".css", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".txt", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".vbs", StringComparison.OrdinalIgnoreCase) ||
+                     fileName.Equals("VERSION", StringComparison.OrdinalIgnoreCase) ||
+                     fileName.Equals("PROFILE_VERSION", StringComparison.OrdinalIgnoreCase);
+        var bytes = isText
+            ? System.Text.Encoding.UTF8.GetBytes(File.ReadAllText(file)
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace("\r", "\n", StringComparison.Ordinal))
+            : File.ReadAllBytes(file);
+        if (bytes.LongLength != long.Parse(entry.Groups["length"].Value))
+        {
+            manifestFresh = false;
+            break;
+        }
+        var hash = Convert.ToHexString(SHA256.HashData(bytes));
         if (!hash.Equals(entry.Groups["hash"].Value, StringComparison.OrdinalIgnoreCase))
         {
             manifestFresh = false;
@@ -99,6 +121,8 @@ if (File.Exists(shippedManifestCs) && File.Exists(generatedManifestCs))
         }
     }
     Expect("compiled script manifest matches shipped bytes", manifestFresh);
+    Expect("compiled script manifest excludes local build outputs",
+        !generatedSource.Contains("Nvidia/tools/", StringComparison.OrdinalIgnoreCase));
     Expect("manifest validation fails closed",
         integritySource.Contains("SHA-256 mismatch", StringComparison.Ordinal)
         && integritySource.Contains("not present in this Exo build's signed script manifest", StringComparison.Ordinal));

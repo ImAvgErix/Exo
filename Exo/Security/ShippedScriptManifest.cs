@@ -23,12 +23,14 @@ internal static partial class ShippedScriptManifest
 
         try
         {
-            var info = new FileInfo(path);
-            if (!info.Exists || info.Length != entry.Length)
+            if (!File.Exists(path))
+                return (false, $"Optimizer integrity failed for {relative} (file missing).");
+
+            var bytes = ReadManifestBytes(path);
+            if (bytes.LongLength != entry.Length)
                 return (false, $"Optimizer integrity failed for {relative} (length mismatch).");
 
-            using var stream = info.OpenRead();
-            var hash = Convert.ToHexString(SHA256.HashData(stream));
+            var hash = Convert.ToHexString(SHA256.HashData(bytes));
             return hash.Equals(entry.Sha256, StringComparison.OrdinalIgnoreCase)
                 ? (true, relative)
                 : (false, $"Optimizer integrity failed for {relative} (SHA-256 mismatch). Reinstall Exo before applying.");
@@ -37,6 +39,28 @@ internal static partial class ShippedScriptManifest
         {
             return (false, $"Optimizer integrity could not be verified: {ex.Message}");
         }
+    }
+
+    internal static byte[] ReadManifestBytes(string path)
+    {
+        var extension = Path.GetExtension(path);
+        var fileName = Path.GetFileName(path);
+        var isText = extension.Equals(".ps1", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".json", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".ini", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".md", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".c", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".def", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".css", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".txt", StringComparison.OrdinalIgnoreCase) ||
+                     extension.Equals(".vbs", StringComparison.OrdinalIgnoreCase) ||
+                     fileName.Equals("VERSION", StringComparison.OrdinalIgnoreCase) ||
+                     fileName.Equals("PROFILE_VERSION", StringComparison.OrdinalIgnoreCase);
+        if (!isText) return File.ReadAllBytes(path);
+
+        var canonical = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal);
+        return System.Text.Encoding.UTF8.GetBytes(canonical);
     }
 
     private static bool TryGetRelativePath(string path, out string relative)
