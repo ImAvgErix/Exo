@@ -54,8 +54,18 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
         if (IsBusy) return;
         IsBusy = true;
         IsStatusLoading = true;
-        try { ApplyState(await DetectAsync()); }
-        catch { SetResult(OptimizerMessages.StatusFailed, false); }
+        try
+        {
+            ApplyState(await DetectAsync());
+            if (HasLastResult && string.Equals(LastResult, OptimizerMessages.StatusFailed, StringComparison.Ordinal))
+                SetResult(string.Empty, true);
+        }
+        catch (Exception ex)
+        {
+            StatusText = "Unavailable";
+            Features.Clear();
+            SetResult(string.IsNullOrWhiteSpace(ex.Message) ? OptimizerMessages.StatusFailed : ex.Message, false);
+        }
         finally
         {
             IsStatusLoading = false;
@@ -189,14 +199,13 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
             {
                 var text = r.Text ?? string.Empty;
                 var cut = text.IndexOf(" - ", StringComparison.Ordinal);
-                return cut > 0 ? text[..cut].Trim() : text.Split('·')[0].Trim();
+                return cut > 0 ? text[..cut].Trim() : text.Trim();
             })
             .Where(s => s.Length > 0)
             .Take(4)
             .ToList();
-        // Shared soft-drift / verified phrasing (Steam advisor module); launcher honesty overrides below.
         GuidanceText = OptimizerAdvisor.BuildV2(
-            "Steam",
+            _module,
             IsApplied,
             StatusText,
             string.Empty,
@@ -206,7 +215,7 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
         if (IsApplied)
         {
             GuidanceText =
-                $"Verified Windows policy: GPU routing, FSO off, launcher yield while gaming. {_module} client files, services, anti-cheat, updates, and game settings stay untouched.";
+                $"Verified launcher policy: startup quiet + yield while gaming. Windows GPU preference and Fullscreen Optimizations wait for a future Windows module. {_module} client files, services, anti-cheat, updates, and game settings stay untouched.";
         }
         else if (installMissing || statusLooksMissing)
         {

@@ -408,13 +408,13 @@ public partial class DashboardViewModel : ObservableObject
         catch { }
         if (state.Applied) appliedCount++;
         var tag = state.Applied ? "VERIFIED" : !string.IsNullOrWhiteSpace(state.Detail) ? "NEEDS ATTENTION" : "NOT APPLIED";
-        var primary = state.Applied ? "Game policy active" : module == "riot" ? "Riot ready" : "Epic ready";
-        // Honest scope: GPU routing + FSO + launcher yield + startup quiet (never anti-cheat).
+        var primary = state.Applied ? "Launcher policy active" : module == "riot" ? "Riot ready" : "Epic ready";
+        // Launcher-scoped only; Windows GPU/FSO wait for a future Windows module.
         var secondary = state.Applied
-            ? "GPU routing - FSO off - launcher yield while gaming"
+            ? "Startup quiet - launcher yield while gaming"
             : module == "riot" ? "Detect VALORANT and League automatically" : "Discover installed games from Epic manifests";
         var metric = state.Applied
-            ? $"{targetCount} game executable(s) verified - anti-cheat untouched"
+            ? $"{targetCount} game executable(s) for yield detect - anti-cheat untouched"
             : module == "riot" ? "Anti-cheat and Riot services stay untouched" : "Launcher files, caches, and updates stay untouched";
         if (module == "riot")
         {

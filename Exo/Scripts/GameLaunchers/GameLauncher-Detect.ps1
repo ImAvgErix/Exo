@@ -59,15 +59,6 @@ function Get-TargetLabels([string[]]$Paths) {
 $targets = @(Get-LiveTargets)
 $targetsPresent = $targets.Count
 $labels = @(Get-TargetLabels $targets)
-$hybridGraphics = $false
-try {
-    $gpuNames = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
-        ForEach-Object { [string]$_.Name } |
-        Where-Object { $_ -and $_ -notmatch '(?i)Microsoft Basic|Remote|Hyper-V|Virtual' })
-    $hybridGraphics = $gpuNames.Count -ge 2 -and
-        @($gpuNames | Where-Object { $_ -match '(?i)NVIDIA|GeForce|RTX|GTX|Radeon\s+RX|Intel.*Arc' }).Count -gt 0 -and
-        @($gpuNames | Where-Object { $_ -match '(?i)Intel.*(?:UHD|Iris|HD Graphics)|AMD Radeon\(TM\) Graphics|Radeon Vega' }).Count -gt 0
-} catch { }
 
 $startupQuiet = $true
 $run = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
@@ -79,22 +70,6 @@ if ($run) {
         if ("$($property.Name) $($property.Value)" -match "(?i)$Module") { $startupQuiet = $false; break }
     }
 }
-
-$policyVerified = 0
-$gpu = Get-ItemProperty 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences' -ErrorAction SilentlyContinue
-foreach ($path in $targets) {
-    $gpuOk = $gpu -and [string]$gpu.PSObject.Properties[[string]$path].Value -eq 'GpuPreference=2;'
-    if ($gpuOk) { $policyVerified++ }
-}
-$policyOk = [bool]($targetsPresent -gt 0 -and $policyVerified -eq $targetsPresent)
-
-$fsoVerified = 0
-$fso = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers' -ErrorAction SilentlyContinue
-foreach ($path in $targets) {
-    $val = if ($fso) { [string]$fso.PSObject.Properties[[string]$path].Value } else { '' }
-    if ($val -match 'DISABLEDXMAXIMIZEDWINDOWEDMODE') { $fsoVerified++ }
-}
-$fsoOk = [bool]($targetsPresent -gt 0 -and $fsoVerified -eq $targetsPresent)
 
 $yieldRunValue = $null
 try {
@@ -110,38 +85,18 @@ $yieldOk = (Test-Path -LiteralPath $yieldHelper -PathType Leaf) -and
 
 $snapshotReady = Test-Path -LiteralPath $snapshotPath -PathType Leaf
 $markerOk = [bool]($state -and [bool]$state.applied -and [string]$state.applyStatus -eq 'applied')
-$applied = [bool]($installed -and $markerOk -and $startupQuiet -and $policyOk -and $fsoOk -and $yieldOk -and $snapshotReady)
+
+# Launcher-scoped only. Windows GPU preference / FSO belong in a future Windows module.
+$applied = [bool]($installed -and $markerOk -and $startupQuiet -and $yieldOk -and $snapshotReady -and $targetsPresent -gt 0)
 
 $installDetail = if (-not $installed) {
     "Install $Module, open it once, then return."
 } elseif ($targetsPresent -eq 0) {
-    "Client found; install at least one game so Exo can pin GPU + FSO policy."
+    "Client found; install at least one game so Exo can attach the launcher yield companion."
 } elseif ($labels.Count -gt 0) {
     "Found: " + ($labels -join ', ') + "."
 } else {
     "$targetsPresent game executable(s) discovered."
-}
-
-$gpuDetail = if ($targetsPresent -eq 0) {
-    'No game executables detected yet.'
-} elseif ($policyOk) {
-    "All $targetsPresent detected game executable(s) use the high-performance GPU."
-} else {
-    "$policyVerified of $targetsPresent game executable(s) use the high-performance GPU."
-}
-
-$fsoDetail = if ($targetsPresent -eq 0) {
-    'No game executables detected yet.'
-} elseif ($fsoOk) {
-    "Fullscreen Optimizations off on all $targetsPresent game executable(s) (less DWM lag)."
-} else {
-    "$fsoVerified of $targetsPresent game executable(s) have FSO disabled."
-}
-
-$hybridDetail = if ($hybridGraphics) {
-    'Games stay on the discrete GPU; launcher UI prefers integrated graphics so it does not wake dGPU idle power.'
-} else {
-    'Single-GPU PC: games use the only adapter; no launcher override is needed.'
 }
 
 $boundaryDetail = if ($Module -eq 'Riot') {
@@ -156,12 +111,12 @@ $yieldDetail = if ($yieldOk) {
     'Apply installs a reversible Exo yield + soft-reclaim companion for the launcher UI only.'
 }
 
-# 10 even tiles for consistent two-column plate.
+# 7 tiles: launcher-scoped only (no Windows Graphics / FSO policy here).
 $features = @(
     [ordered]@{ title = "$Module install"; detail = $installDetail; active = [bool]$installed },
     [ordered]@{
         title = 'Game discovery'
-        detail = if ($targetsPresent -gt 0) { "$targetsPresent executable(s) ready for GPU + FSO policy." } else { 'No game executables found yet - install a game, then Apply.' }
+        detail = if ($targetsPresent -gt 0) { "$targetsPresent executable(s) used only to detect when a game is running." } else { 'No game executables found yet - install a game, then Apply.' }
         active = [bool]($installed -and $targetsPresent -gt 0)
     },
     [ordered]@{
@@ -169,14 +124,11 @@ $features = @(
         detail = 'Launcher brand is removed from Windows Run; Exo yield companion may remain as Exo-* only.'
         active = [bool]$startupQuiet
     },
-    [ordered]@{ title = 'High-performance GPU'; detail = $gpuDetail; active = [bool]$policyOk },
-    [ordered]@{ title = 'Fullscreen Optimizations off'; detail = $fsoDetail; active = [bool]$fsoOk },
     [ordered]@{ title = 'Launcher yield while gaming'; detail = $yieldDetail; active = [bool]$yieldOk },
-    [ordered]@{ title = 'Hybrid GPU split'; detail = $hybridDetail; active = $true },
     [ordered]@{ title = 'Anti-cheat boundary'; detail = $boundaryDetail; active = [bool]$installed },
     [ordered]@{
         title = 'Exact Repair snapshot'
-        detail = if ($snapshotReady) { 'Pre-Exo registry values are saved so Repair restores startup, GPU, and FSO exactly.' } else { 'Apply captures a pre-change snapshot before any registry edit.' }
+        detail = if ($snapshotReady) { 'Pre-Exo Run entries are saved so Repair restores startup exactly.' } else { 'Apply captures a pre-change snapshot before any registry edit.' }
         active = [bool]$snapshotReady
     },
     [ordered]@{
@@ -191,8 +143,6 @@ if (-not $installed) { $missing += 'install' }
 elseif ($targetsPresent -eq 0) { $missing += 'game discovery' }
 else {
     if (-not $startupQuiet) { $missing += 'startup quiet' }
-    if (-not $policyOk) { $missing += 'GPU preference' }
-    if (-not $fsoOk) { $missing += 'FSO off' }
     if (-not $yieldOk) { $missing += 'yield guard' }
     if (-not $snapshotReady) { $missing += 'repair snapshot' }
     if (-not $markerOk) { $missing += 'verified record' }
@@ -215,13 +165,13 @@ $status = if (-not $installed) {
 $detail = if (-not $installed) {
     "Install $Module before applying."
 } elseif ($applied) {
-    "Verified Windows policy on $targetsPresent game executable(s): GPU routing, FSO off, launcher yield. Anti-cheat untouched."
+    "Verified launcher policy: startup quiet + yield while gaming. Windows GPU/FSO left for a future Windows module. Anti-cheat untouched."
 } elseif ($state -and $state.lastError) {
     [string]$state.lastError
 } elseif ($missing.Count -gt 0) {
     'Run Apply to restore: ' + ($missing -join ', ') + '.'
 } else {
-    'Apply a reversible per-game Windows policy (startup quiet, GPU, FSO, launcher yield).'
+    'Apply a reversible launcher policy (startup quiet, yield while gaming).'
 }
 
 [ordered]@{

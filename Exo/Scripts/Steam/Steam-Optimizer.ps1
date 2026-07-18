@@ -69,6 +69,12 @@ function Assert-ExoPwsh7 {
 }
 Assert-ExoPwsh7
 
+# Shared detect classifiers (keep apply-side helper audit in lockstep with detect).
+$steamDetectCore = Join-Path $Root 'SteamDetectCore.ps1'
+if (Test-Path -LiteralPath $steamDetectCore) {
+    . $steamDetectCore
+}
+
 # Default Steam launch flags (quiet cold start).
 # NEVER use -cef-disable-gpu / -cef-disable-gpu-compositing - modern Steam's
 # steamwebhelper goes blank or freezes on many GPUs (2024+ CEF).
@@ -2515,7 +2521,6 @@ try {
 
     Write-HubProgress 58 'Installing Steam background priority policy...'
     $helper = Install-WebHelperMemoryGuard $steam
-    Add-ExoReport 'background-priority' 'ok'
     Write-HubProgress 68 'Writing quiet CEF launcher...'
     # Always rewrite launcher so CEF flags stay current (e.g. drop broken gpu-disable).
     $launch = Install-LeanSteamLauncher $steam $helper
@@ -2561,34 +2566,24 @@ try {
             $launcherText -match '(?i)start\s+""\s+/HIGH' -and
             $launcherText -notmatch '(?i)-cef-disable-gpu'
     } catch { }
+    # v3 guard: EcoQoS on every non-foreground CEF (not only while InGame).
+    # Must match SteamDetectCore.Test-SteamMemoryGuardText - the old apply-side
+    # regex required `$InGame -and` and falsely failed a correct v3 helper.
     $helperOk = $false
     try {
         $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
-        # Audit executable lines only: documentation names the operations this
-        # helper forbids and must not make a safe generated helper fail verification.
-        $helperUnsafe = $false
-        foreach ($rawLine in ($helperText -split "`n")) {
-            $line = $rawLine.TrimStart()
-            if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }
-            if ($line.Contains('EmptyWorkingSet(') -or $line -match '(?i)Stop-Process.*steamwebhelper') {
-                $helperUnsafe = $true
-                break
-            }
+        if (Get-Command Test-SteamMemoryGuardText -ErrorAction SilentlyContinue) {
+            $helperOk = [bool](Test-SteamMemoryGuardText -Text $helperText)
+        } else {
+            $helperOk = $helperText -match 'Exo\.SteamMemoryGuard' -and
+                $helperText -match 'SoftReclaimWorkingSet' -and
+                $helperText -match 'SetPowerThrottled' -and
+                $helperText -match 'ForegroundPid' -and
+                $helperText -notmatch 'EmptyWorkingSet\('
         }
-        $helperOk = $helperText -match 'Exo\.SteamMemoryGuard' -and
-            $helperText -match 'SetProcessInformation' -and
-            $helperText -match 'SetMemoryPriority' -and
-            $helperText -match 'SetPowerThrottled' -and
-            $helperText -match 'ForegroundPid' -and
-            $helperText -match 'ProcessPriorityClass\]::BelowNormal' -and
-            $helperText -match '(?s)\$steamCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
-            $helperText -match '(?s)\$backgroundWebCls\s*=\s*if\s*\(\$InGame\).*?BelowNormal.*?Normal' -and
-            $helperText -match '(?s)\$webCls\s*=\s*if\s*\(\$_\.Id\s*-eq\s*\$foregroundPid\).*?Normal.*?\$backgroundWebCls' -and
-            $helperText -match '\$_\.PriorityClass\s*=\s*\$webCls' -and
-            $helperText -match '(?s)\$memoryPriority\s*=\s*if\s*\(\$_\.Id\s*-eq\s*\$foregroundPid\).*?5.*?elseif\s*\(\$InGame\).*?1.*?else\s*\{\s*2\s*\}' -and
-            $helperText -match 'SetPowerThrottled\(\$_\.Id, \(\$InGame -and \$_\.Id -ne \$foregroundPid\)\)' -and
-            (-not $helperUnsafe)
     } catch { }
+    if ($helperOk) { Add-ExoReport 'background-priority' 'ok' 'v3 soft reclaim + EcoQoS non-foreground CEF' }
+    else { Add-ExoReport 'background-priority' 'fail' 'memory guard text failed shared detect classifier' }
     $fullPassOk = -not [bool]$Quick
     # Core pack (always required for applied). VDF first-run skips are NOT essentials-
     # satisfied: detect requires downloadOptimized/snappyUi true, so applied must match.

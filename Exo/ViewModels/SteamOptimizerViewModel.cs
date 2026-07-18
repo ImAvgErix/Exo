@@ -65,13 +65,16 @@ public partial class SteamOptimizerViewModel : ObservableObject
             StatusText = "Checking status...";
             var state = await _services.OptimizerState.DetectSteamAsync();
             ApplyState(state);
+            // Clear stale failure banner once detect succeeds.
+            if (HasLastResult && string.Equals(LastResult, Helpers.OptimizerMessages.StatusFailed, StringComparison.Ordinal))
+                SetResult(string.Empty, success: true);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             StatusText = "Unavailable";
             DetailText = string.Empty;
             Features.Clear();
-            SetResult(Helpers.OptimizerMessages.StatusFailed, success: false);
+            SetResult(string.IsNullOrWhiteSpace(ex.Message) ? Helpers.OptimizerMessages.StatusFailed : ex.Message, success: false);
         }
         finally
         {
@@ -258,7 +261,12 @@ public partial class SteamOptimizerViewModel : ObservableObject
         LoadApplyReport();
         var failSteps = ApplyReportRows
             .Where(r => r.Status == "fail")
-            .Select(r => r.Text.Split('·')[0].Trim())
+            .Select(r =>
+            {
+                var text = r.Text ?? string.Empty;
+                var cut = text.IndexOf(" - ", StringComparison.Ordinal);
+                return cut > 0 ? text[..cut].Trim() : text.Trim();
+            })
             .Where(s => s.Length > 0)
             .Take(4)
             .ToList();

@@ -1,7 +1,7 @@
-# Exo Riot / Epic optimizer.
-# Reversible Windows policy only: quiet startup plus capability-aware GPU routing.
-# Games prefer the high-performance adapter; on hybrid PCs launcher UI prefers the
-# power-saving adapter so it does not wake or contend with the discrete GPU.
+# Exo Riot / Epic optimizer (launcher-scoped only).
+# Owns: quiet startup, launcher yield/soft-reclaim while a game runs, exact Repair.
+# Does NOT own Windows Graphics (UserGpuPreferences) or Fullscreen Optimizations —
+# those are global Windows policy and wait for a future Windows optimizer module.
 # Anti-cheat, services, files, caches, and game scheduling are left untouched.
 [CmdletBinding()]
 param(
@@ -11,16 +11,16 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.2.0'
+$Version = '1.3.0'
 $ExoRoot = Join-Path $env:LOCALAPPDATA 'Exo'
 $StatePath = Join-Path $ExoRoot ("{0}-optimizer.json" -f $Module.ToLowerInvariant())
 $SnapshotPath = Join-Path $ExoRoot ("{0}-snapshot.json" -f $Module.ToLowerInvariant())
 $YieldHelperPath = Join-Path $ExoRoot ("{0}-yield-guard.ps1" -f $Module.ToLowerInvariant())
 $YieldRunName = "Exo-$Module-Yield"
 $RunSubKey = 'Software\Microsoft\Windows\CurrentVersion\Run'
+# Legacy keys: only used by Repair to undo older Exo builds that wrote GPU/FSO.
 $GpuSubKey = 'Software\Microsoft\DirectX\UserGpuPreferences'
 $FsoSubKey = 'Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
-$FsoFlags = '~ DISABLEDXMAXIMIZEDWINDOWEDMODE HIGHDPIAWARE'
 $Report = [System.Collections.Generic.List[string]]::new()
 
 function Write-ProgressLine([int]$Percent, [string]$Text) {
@@ -251,28 +251,6 @@ function Remove-StartupEntries {
     } finally { $key.Dispose() }
     return $removed
 }
-function Apply-TargetPolicy([object[]]$Targets, [object[]]$Launchers, [bool]$HybridGraphics) {
-    $gpu = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($GpuSubKey, $true)
-    try {
-        foreach ($target in $Targets) {
-            $gpu.SetValue([string]$target.path, 'GpuPreference=2;', [Microsoft.Win32.RegistryValueKind]::String)
-        }
-        if ($HybridGraphics) {
-            foreach ($target in $Launchers) {
-                $gpu.SetValue([string]$target.path, 'GpuPreference=1;', [Microsoft.Win32.RegistryValueKind]::String)
-            }
-        }
-    } finally { $gpu.Dispose() }
-}
-function Apply-FsoPolicy([object[]]$Targets) {
-    # Fullscreen Optimizations off + DPI aware for game exes only (never anti-cheat services).
-    $fso = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($FsoSubKey, $true)
-    try {
-        foreach ($target in $Targets) {
-            $fso.SetValue([string]$target.path, $FsoFlags, [Microsoft.Win32.RegistryValueKind]::String)
-        }
-    } finally { $fso.Dispose() }
-}
 function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
     # Live companion: while a game runs, demote + soft-reclaim launcher UI only.
     # Never opens, suspends, or modifies game/anti-cheat processes.
@@ -428,36 +406,27 @@ try {
     $targets = @(Get-Targets)
     if ($targets.Count -eq 0) { throw "No installed $Module game executable was found. Install a game, then Apply." }
     $launchers = @(Get-LauncherTargets)
-    $hybridGraphics = Test-HybridGraphics
     Write-ProgressLine 22 ("Detected {0} game executable(s)" -f $targets.Count)
+    # Report rows match the 7 detect tiles so "Last apply - N ok" equals feature count.
+    Add-Report 'install' 'ok' "$Module client present"
+    Add-Report 'game-discovery' 'ok' ("{0} game executable(s) for yield detect only" -f $targets.Count)
     New-Snapshot $targets $launchers
-    Add-Report 'snapshot' 'ok'
+    Add-Report 'snapshot' 'ok' 'pre-Exo Run snapshot captured'
     $removed = Remove-StartupEntries
     Add-Report 'startup' 'ok' ("removed {0} auto-start value(s)" -f $removed)
-    Apply-TargetPolicy $targets $launchers $hybridGraphics
-    Add-Report 'gpu-routing' 'ok' ("{0} game(s); {1}" -f $targets.Count, $(if ($hybridGraphics) { "$($launchers.Count) launcher process(es) on integrated GPU" } else { 'single-GPU path' }))
-    Apply-FsoPolicy $targets
-    Add-Report 'fso' 'ok' 'Fullscreen Optimizations off for detected game executables'
+    # Windows GPU preference + FSO deliberately not applied (future Windows module).
     $yieldOk = Install-YieldGuard $targets $launchers
-    if ($yieldOk) { Add-Report 'yield-guard' 'ok' 'launcher EcoQoS while game runs' }
-    else { Add-Report 'yield-guard' 'skip' 'no launcher processes to demote' }
-    $verified = 0
-    $gpu = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($GpuSubKey)
+    if ($yieldOk) { Add-Report 'yield-guard' 'ok' 'launcher EcoQoS + soft reclaim while game runs' }
+    else { Add-Report 'yield-guard' 'fail' 'no launcher processes to attach yield companion'; throw 'No launcher processes found for yield companion.' }
+    Add-Report 'anti-cheat-boundary' 'ok' 'game/anti-cheat processes never opened or modified'
+    $yieldHelperOk = (Test-Path -LiteralPath $YieldHelperPath -PathType Leaf)
+    $yieldRunOk = $false
     try {
-        foreach ($target in $targets) {
-            $gpuOk = [string]$gpu.GetValue([string]$target.path, '') -eq 'GpuPreference=2;'
-            if ($gpuOk) { $verified++ }
-        }
-    } finally { if ($gpu) { $gpu.Dispose() } }
-    if ($verified -ne $targets.Count) { throw "Only $verified of $($targets.Count) game policies verified." }
-    $fsoOk = 0
-    $fsoKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($FsoSubKey)
-    try {
-        foreach ($target in $targets) {
-            if ([string]$fsoKey.GetValue([string]$target.path, '') -match 'DISABLEDXMAXIMIZEDWINDOWEDMODE') { $fsoOk++ }
-        }
-    } finally { if ($fsoKey) { $fsoKey.Dispose() } }
-    Add-Report 'verify' 'ok' ("gpu={0}/{1}; fso={2}/{1}" -f $verified, $targets.Count, $fsoOk)
+        $rv = [string](Get-ItemPropertyValue -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $YieldRunName -ErrorAction Stop)
+        $yieldRunOk = $rv -match 'yield-guard'
+    } catch { }
+    if (-not ($yieldHelperOk -and $yieldRunOk)) { throw 'Yield companion failed verification (helper or Run key missing).' }
+    Add-Report 'verified-record' 'ok' 'launcher-scoped apply complete'
     $state = [ordered]@{
         version = $Version
         module = $Module
@@ -465,10 +434,12 @@ try {
         applyStatus = 'applied'
         appliedUtc = (Get-Date).ToUniversalTime().ToString('o')
         startupQuiet = $true
-        gamePolicyVerified = $true
-        fsoVerified = ($fsoOk -eq $targets.Count)
-        yieldGuardInstalled = [bool]$yieldOk
-        hybridGraphics = [bool]$hybridGraphics
+        # Legacy fields retained for older Exo builds reading state; not re-applied.
+        gamePolicyVerified = $false
+        fsoVerified = $false
+        windowsGpuPolicyOwnedBy = 'future-windows-module'
+        yieldGuardInstalled = $true
+        hybridGraphics = [bool](Test-HybridGraphics)
         launcherTargetCount = $launchers.Count
         targetCount = $targets.Count
         targets = @($targets)
@@ -480,7 +451,7 @@ try {
     }
     $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $StatePath -Encoding UTF8
     Write-ProgressLine 100 'Verified'
-    Write-Output ("DONE - {0}: startup quiet; GPU routing; FSO off; yield guard for {1} game executable(s)" -f $Module, $targets.Count)
+    Write-Output ("DONE - {0}: startup quiet + launcher yield for {1} game executable(s) (Windows GPU/FSO deferred)" -f $Module, $targets.Count)
     exit 0
 } catch {
     Add-Report 'apply' 'fail' $_.Exception.Message

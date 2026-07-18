@@ -138,7 +138,7 @@ public sealed class OptimizerStateService
 
             using var doc = JsonDocument.Parse(jsonLine);
             var root = doc.RootElement;
-            var applied = root.TryGetProperty("isApplied", out var a) && a.GetBoolean();
+            var applied = root.TryGetProperty("isApplied", out var a) && a.ValueKind == JsonValueKind.True;
             var status = root.TryGetProperty("statusText", out var s) ? s.GetString() ?? heuristic.StatusText : heuristic.StatusText;
             var detail = root.TryGetProperty("detail", out var d) ? d.GetString() ?? string.Empty : string.Empty;
             var features = ParseFeatures(root);
@@ -734,7 +734,8 @@ public sealed class OptimizerStateService
 
             using var doc = JsonDocument.Parse(jsonLine);
             var root = doc.RootElement;
-            var applied = root.TryGetProperty("isApplied", out var a) && a.GetBoolean();
+            // ValueKind check only — GetBoolean() throws on string/null and was blanking the page.
+            var applied = root.TryGetProperty("isApplied", out var a) && a.ValueKind == JsonValueKind.True;
             var status = root.TryGetProperty("statusText", out var s) ? s.GetString() ?? heuristic.StatusText : heuristic.StatusText;
             var detail = root.TryGetProperty("detail", out var d) ? d.GetString() ?? string.Empty : string.Empty;
             var features = ParseFeatures(root);
@@ -1079,7 +1080,7 @@ public sealed class OptimizerStateService
 
             using var doc = JsonDocument.Parse(jsonLine);
             var root = doc.RootElement;
-            var applied = root.TryGetProperty("isApplied", out var a) && a.GetBoolean();
+            var applied = root.TryGetProperty("isApplied", out var a) && a.ValueKind == JsonValueKind.True;
             var status = root.TryGetProperty("statusText", out var s) ? s.GetString() ?? heuristic.StatusText : heuristic.StatusText;
             var detail = root.TryGetProperty("detail", out var d) ? d.GetString() ?? string.Empty : string.Empty;
             var features = ParseFeatures(root);
