@@ -305,9 +305,10 @@ $state = $null
 if (Test-Path $statePath) {
     try { $state = Get-Content $statePath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
 }
-$safePolicy = [bool]($state -and
-    ($state.PSObject.Properties.Name -contains 'safePolicy') -and
-    [bool]$state.safePolicy)
+# The shipping app only exposes the reversible profile policy. Older state files
+# may contain safePolicy=false from the retired clean-driver/debloat pipeline;
+# never let that make current UI report obsolete actions or require them again.
+$safePolicy = $true
 
 # --- Live DRS verification (managed NPI GitHub Latest -exportCustomized) ---
 # Reads the live driver database back and compares the Base Profile pins against
@@ -434,7 +435,7 @@ $latestNv = $null
 $needsUpdate = $false
 $driverBranch = if ($primary) { Get-DriverBranchSeriesFromName $primary.Name } else { $null }
 if (-not $driverBranch) { $driverBranch = $series }
-if (-not $isNotebookGpu -and $driverBranch) {
+if (-not $safePolicy -and -not $isNotebookGpu -and $driverBranch) {
     $latestNv = Get-LatestDriverForSeries $driverBranch
 }
 
@@ -491,7 +492,7 @@ $driverNote = if ($safePolicy -and $currentNv) {
     "Installed Game Ready $currentNv with Exo tweaks. NVIDIA's update service is currently unavailable."
 }
 $features.Add(@{
-    title  = $(if ($safePolicy) { 'NVIDIA driver (unchanged)' } else { 'Driver (newest + install tweaks)' })
+    title  = $(if ($safePolicy) { 'Installed driver' } else { 'Driver (newest + install tweaks)' })
     detail = $driverNote
     active = (-not $needsDriverAction) -and [bool]$currentNv
 })
@@ -632,11 +633,10 @@ $displayOk = $safePolicy -or ((-not $pendingAfterDriver) -and (-not $applyInProg
     ($displayLiveOk -and ($displayMarkerOk -or [bool]$displayLive.Ok))
 ))
 
-$features.Add(@{
-    title  = $(if ($safePolicy) { 'Display settings (unchanged)' } else { 'Exo display policy (driver)' })
-    detail = $(if ($safePolicy) {
-        'Exo did not change G-SYNC, refresh rate, color, scaling, or monitor settings.'
-    } elseif ($displaySkippedNoPanels) {
+if (-not $safePolicy) {
+  $features.Add(@{
+    title  = 'Exo display policy (driver)'
+    detail = $(if ($displaySkippedNoPanels) {
         'No active NVIDIA-connected panels (common on Optimus). Display step not required; 3D profiles still apply.'
     } elseif ($displayLive.Available) {
         "Live NVAPI: $($displayLive.Detail) | primary=max Hz, secondary unchanged, Full RGB, GPU no-scaling"
@@ -644,7 +644,8 @@ $features.Add(@{
         'Live NVAPI helper unavailable; display state cannot be verified.'
     })
     active = $displayOk
-})
+  })
+}
 
 # Control Panel only path: App should be absent; classic CPL present (optional UI only).
 $appInstalled = $false
@@ -682,28 +683,30 @@ if ($state -and $state.PSObject.Properties.Name -contains 'profileApplied' -and 
     $advanced3dOk = $true
 }
 
-$features.Add(@{
-    title  = 'Exo 3D profile (driver DRS)'
-    detail = $(if ($advanced3dOk -and $drsLive -eq 'verified') {
-        "$drsVerifiedText - Base + per-game profiles forced at driver level via Profile Inspector. Trust this over NVIDIA Control Panel radios."
-    } elseif ($advanced3dOk) {
-        'Base + per-game profiles forced at driver level via Profile Inspector. Trust this over NVIDIA Control Panel radios.'
-    } elseif ($profileOk -and $drsLive -eq 'drifted') {
-        $drsDriftedText
-    } else {
-        '3D profiles not fully verified. Apply to import Base + per-game packs.'
+if (-not $safePolicy) {
+  $features.Add(@{
+      title  = 'Exo 3D profile (driver DRS)'
+      detail = $(if ($advanced3dOk -and $drsLive -eq 'verified') {
+          "$drsVerifiedText - Base + per-game profiles forced at driver level via Profile Inspector. Trust this over NVIDIA Control Panel radios."
+      } elseif ($advanced3dOk) {
+          'Base + per-game profiles forced at driver level via Profile Inspector. Trust this over NVIDIA Control Panel radios.'
+      } elseif ($profileOk -and $drsLive -eq 'drifted') {
+          $drsDriftedText
+      } else {
+          '3D profiles not fully verified. Apply to import Base + per-game packs.'
+      })
+      active = $advanced3dOk
+      drsLive = $drsLive
+      drsLiveText = $drsLiveText
     })
-    active = $advanced3dOk
-    drsLive = $drsLive
-    drsLiveText = $drsLiveText
-})
+}
 
 $features.Add(@{
-    title  = $(if ($safePolicy) { 'NVIDIA apps (kept)' } else { 'Driver + classic Control Panel' })
+    title  = $(if ($safePolicy) { 'NVIDIA Control Panel' } else { 'Driver + classic Control Panel' })
     detail = $(if ($safePolicy -and $cplOk) {
-        'NVIDIA App was left as-is. NVIDIA Control Panel is available from Exo.'
+        'Available from Exo. NVIDIA App, overlays, services, and driver packages are left under your control.'
     } elseif ($safePolicy) {
-        'NVIDIA App was left as-is. Control Panel is not currently available.'
+        'Not installed yet. Apply attempts the official Microsoft Store Control Panel package without replacing the driver.'
     } elseif (-not $appInstalled -and $cplInstalled) {
         'NVIDIA App removed; classic Control Panel kept for display UI. Exo panel + NVAPI apply policy.'
     } elseif (-not $appInstalled -and -not $cplInstalled) {
@@ -716,17 +719,17 @@ $features.Add(@{
 
 $backgroundOk = [bool]$debloat.Ok -and [bool]$overlay.Ok
 $backgroundIssues = @($debloat.Issues) + @($overlay.Issues)
-$features.Add(@{
-    title  = $(if ($safePolicy) { 'Background services (unchanged)' } else { 'Privacy / telemetry / overlay off' })
-    detail = $(if ($safePolicy) {
-        'Exo did not disable services, scheduled tasks, telemetry, recording, or overlays.'
-    } elseif ($backgroundOk) {
-        'Overlay preferences, capture, telemetry, updater, background helpers, and auto-start paths are inactive.'
-    } else {
-        "Performance background gap: $($backgroundIssues -join '; ')"
-    })
-    active = $backgroundOk
-})
+if (-not $safePolicy) {
+  $features.Add(@{
+      title  = 'Privacy / telemetry / overlay off'
+      detail = $(if ($backgroundOk) {
+          'Overlay preferences, capture, telemetry, updater, background helpers, and auto-start paths are inactive.'
+      } else {
+          "Performance background gap: $($backgroundIssues -join '; ')"
+      })
+      active = $backgroundOk
+  })
+}
 
 # Driver stage for isApplied: notebooks only need a readable driver; desktop needs tweaks/update gate.
 $driverStageOk = if ($safePolicy -or $isNotebookGpu) { [bool]$currentNv } else { (-not $needsDriverAction) -and [bool]$currentNv }

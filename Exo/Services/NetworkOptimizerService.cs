@@ -898,53 +898,6 @@ public sealed class NetworkOptimizerService
             }
             catch { }
 
-            // Gaming Nagle/ACK keys (per-interface) — expected ON for latency, OFF for throughput
-            bool? nagleOff = null;
-            try
-            {
-                using var ifRoot = Registry.LocalMachine.OpenSubKey(
-                    @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces");
-                if (ifRoot is not null)
-                {
-                    foreach (var name in ifRoot.GetSubKeyNames())
-                    {
-                        using var ik = ifRoot.OpenSubKey(name);
-                        if (ik is null) continue;
-                        var ack = ik.GetValue("TcpAckFrequency");
-                        var nd = ik.GetValue("TCPNoDelay");
-                        if (ack is int a || nd is int)
-                        {
-                            nagleOff = (ack is int aa && aa == 1) || (nd is int nn && nn == 1);
-                            if (nagleOff == true) break;
-                        }
-                    }
-                    nagleOff ??= false;
-                }
-            }
-            catch { }
-
-            // MMCSS targets: SystemResponsiveness=10, NetworkThrottlingIndex=10 (never 0 / never ffffffff)
-            // Registry DWORD may surface as int/long/uint/string depending on writer — parse flexibly.
-            var mmOk = false;
-            var thrStatus = "—";
-            try
-            {
-                using var mm = Registry.LocalMachine.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile");
-                var resp = ReadRegistryDword(mm?.GetValue("SystemResponsiveness"));
-                var thr = ReadRegistryDword(mm?.GetValue("NetworkThrottlingIndex"));
-                // Missing responsiveness → OS default 20 (not our apply); after apply must be 10.
-                // For Balanced (no apply), treat missing as soft OK. For latency/throughput, need 10.
-                var respOk = resp is null
-                    ? activePreset == NetworkPreset.Balanced
-                    : resp == 10;
-                // Missing throttle = OS default 10 (OK). Explicit 10 = OK. 0 / ffffffff(-1) / other = not OK.
-                var thrOk = thr is null or 10;
-                thrStatus = thr is null ? "default" : thr == 10 ? "10" : thr is -1 ? "ffffffff (bad)" : thr.ToString()!;
-                mmOk = respOk && thrOk;
-            }
-            catch { }
-
             // Light pings only for status (not feature cards)
             if (gateway is not "—" && System.Net.IPAddress.TryParse(gateway, out _))
                 gwPing = await PingMsAsync(gateway, ct).ConfigureAwait(false);
@@ -955,9 +908,6 @@ public sealed class NetworkOptimizerService
             var lsoOk = NetworkLogic.LsoMatches(activePreset, lso);
             var rscOk = NetworkLogic.RscMatches(activePreset, rsc);
             var autoOk = NetworkLogic.AutotuneMatches(activePreset, autoTuning);
-            var nagleOk = !latency || nagleOff != false;
-            if (throughput) nagleOk = nagleOff != true;
-
             features.Add(Row("Task offload", taskOffloadDisabled == true ? "Off (bad)" : "On", taskOffloadDisabled != true));
             features.Add(Row("LSO v2",
                 lso == true ? (throughput ? "On · download" : "On")
@@ -973,13 +923,7 @@ public sealed class NetworkOptimizerService
             features.Add(Row("Congestion", congestion, true));
             features.Add(Row("RSS placement", rssPolicy, rssPolicyOk));
             features.Add(Row("Packet coalescing", packetCoalescing, packetCoalescingOk));
-            features.Add(Row("Nagle / ACK",
-                nagleOff == true ? "Off (latency)" : nagleOff == false ? "Default" : "—",
-                nagleOk));
-            features.Add(Row("MMCSS",
-                mmOk ? "Responsiveness 10 · throttle 10" : $"Needs apply (throttle {thrStatus})",
-                mmOk || activePreset == NetworkPreset.Balanced));
-            features.Add(Row("QoS reserve", ReadQosReserve(), ReadQosReserve() is "0%" or "—"));
+            features.Add(Row("TCP algorithms", "Windows adaptive defaults", true));
         }
         catch (Exception ex)
         {

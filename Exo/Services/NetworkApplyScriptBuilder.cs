@@ -122,7 +122,7 @@ function Test-ExoDnsResolve {
         NetworkMediaProfile media)
     {
         var knobs = NetworkLogic.KnobsFor(preset);
-        var latency = knobs.NagleOff;
+        var latency = preset == NetworkPreset.LowestLatency;
         var autotune = knobs.AutotuneNetsh;
         var autoTuningPs = knobs.AutotunePs;
         var rsc = knobs.Rsc;
@@ -145,21 +145,7 @@ function Test-ExoDnsResolve {
         // builds. "ClosestProcessor" is not a valid Profile value and silently
         // left latency applies on the previous (usually NUMAStatic) policy.
         var rssProfile = latency ? "Closest" : "NUMAStatic";
-        var preferIpv4 = NetworkLogic.PreferIpv4First(preset, media.EthernetInUse) ? "1" : "0";
         var vendorHint = string.IsNullOrWhiteSpace(media.NicVendor) ? "Unknown" : media.NicVendor;
-        // Nagle keys only for latency (TCP games); throughput clears them
-        var ackBlock = latency
-            ? """
-  Set-Dword $p 'TcpAckFrequency' 1
-  Set-Dword $p 'TCPNoDelay' 1
-  Set-Dword $p 'TcpDelAckTicks' 0
-"""
-            : """
-  Remove-Prop $p 'TcpAckFrequency'
-  Remove-Prop $p 'TCPNoDelay'
-  Remove-Prop $p 'TcpDelAckTicks'
-""";
-
         var sb = new StringBuilder(48_000);
         sb.AppendLine("$ErrorActionPreference = 'Continue'");
         sb.AppendLine("$ProgressPreference = 'SilentlyContinue'");
@@ -170,7 +156,6 @@ function Test-ExoDnsResolve {
         sb.AppendLine("$BufferStrategy = '" + bufferStrategy + "'");
         sb.AppendLine("$RssQueueBudget = " + rssBudget);
         sb.AppendLine("$LogicalCpuCount = " + logicalCpus);
-        sb.AppendLine("$PreferIpv4First = " + preferIpv4);
         sb.AppendLine("$VendorHint = '" + vendorHint.Replace("'", "") + "'");
         sb.AppendLine("$IsLaptopHint = " + (media.IsLikelyLaptop ? "1" : "0"));
         sb.AppendLine("$ExoDnsProvider = " + PsQuote(options.DnsProvider));
@@ -178,7 +163,7 @@ function Test-ExoDnsResolve {
         sb.AppendLine("$ExoDnsV6 = @(" + PsQuote(options.DnsPrimaryV6) + "," + PsQuote(options.DnsSecondaryV6) + ")");
         sb.AppendLine("$ExoDnsDohTemplate = " + PsQuote(options.DnsOverHttpsTemplate));
         sb.AppendLine("$ExoWifiDisabled = @()");
-        sb.AppendLine("Log \"[Exo-NET] net-only BufferStrategy=$BufferStrategy RssQueues<=$RssQueueBudget PreferIpv4=$PreferIpv4First Vendor=$VendorHint\"");
+        sb.AppendLine("Log \"[Exo-NET] net-only BufferStrategy=$BufferStrategy RssQueues<=$RssQueueBudget IP-precedence=Windows-default Vendor=$VendorHint\"");
         sb.AppendLine(CommonSafetyFunctions);
         sb.AppendLine("""
 function Set-Dword([string]$Path, [string]$Name, [int]$Value) {
@@ -510,61 +495,11 @@ if (-not $snapshotOk) {
         sb.AppendLine("Remove-Prop $tcp 'TcpNumConnections'");
         sb.AppendLine("Remove-Prop $tcp 'LargeSystemCache'");
         sb.AppendLine("Remove-Prop $tcp 'MaxUserPort'");
-        // DNS ServiceProvider priorities: leave Windows defaults (499/500/2000/2001).
-        // Folklore values 4/5/6/7 can make DNS multi-second slow (seen as 100ms → 1s+ in proof layer).
-        sb.AppendLine("$sp = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\ServiceProvider'");
-        sb.AppendLine("if (Test-Path $sp) {");
-        sb.AppendLine("  try {");
-        sb.AppendLine("    Set-Dword $sp 'LocalPriority' 499");
-        sb.AppendLine("    Set-Dword $sp 'HostsPriority' 500");
-        sb.AppendLine("    Set-Dword $sp 'DnsPriority' 2000");
-        sb.AppendLine("    Set-Dword $sp 'NetbtPriority' 2001");
-        sb.AppendLine("    Log '[DNS] ServiceProvider priorities kept at Windows defaults (not folklore 4/5/6/7)'");
-        sb.AppendLine("    Report 'dns-priorities' 'ok' 'windows defaults'");
-        sb.AppendLine("  } catch { Report 'dns-priorities' 'skip' $_.Exception.Message }");
-        sb.AppendLine("} else { Report 'dns-priorities' 'skip' 'ServiceProvider key missing' }");
+        // ServiceProvider priorities, MMCSS, power plans and Psched reservation
+        // policy are intentionally left alone. They are machine-wide policy,
+        // not adapter tuning, and cannot be justified by this route benchmark.
+        sb.AppendLine("Report 'host-policy' 'skip' 'scheduler, power plan, and QoS reservation left unchanged'");
         sb.AppendLine("Report 'registry-host' 'ok'");
-
-        // MMCSS — Microsoft docs:
-        // SystemResponsiveness: % for low-priority; default 20; <10 or >100 clamp to 20 → use 10
-        // NetworkThrottlingIndex: default 10. ffffffff can raise DPC latency / audio issues → force 10
-        sb.AppendLine("$mm = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'");
-        sb.AppendLine("Set-Dword $mm 'SystemResponsiveness' 10");
-        sb.AppendLine("Set-Dword $mm 'NetworkThrottlingIndex' 10");
-        sb.AppendLine("Log '[MMCSS] SystemResponsiveness=10 NetworkThrottlingIndex=10 (forced)'");
-        sb.AppendLine("""
-$mmGames = Join-Path $mm 'Tasks\Games'
-if (-not (Test-Path $mmGames)) { New-Item $mmGames -Force | Out-Null }
-Set-Dword $mmGames 'GPU Priority' 8
-Set-Dword $mmGames 'Priority' 6
-try { Set-ItemProperty $mmGames -Name 'Scheduling Category' -Value 'High' -Force -EA SilentlyContinue } catch {}
-try { Set-ItemProperty $mmGames -Name 'SFIO Priority' -Value 'High' -Force -EA SilentlyContinue } catch {}
-Report 'mmcss' 'ok'
-# QoS "Limit reservable bandwidth" — GPO NonBestEffortLimit 0 removes the old 20% reserve
-New-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' -Force | Out-Null
-Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit' 0
-Report 'qos-psched' 'ok'
-# Power plan: wireless max perf, PCIe ASPM off, USB selective suspend off (AC)
-# GUIDs are Windows built-ins (powercfg /q)
-try {
-  $scheme = (powercfg /getactivescheme) -replace '.*GUID:\s*([0-9a-f\-]+).*','$1'
-  if ($scheme) {
-    # Wireless Adapter Settings → Power Saving Mode = Maximum Performance (0)
-    powercfg /setacvalueindex $scheme 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 0 | Out-Null
-    powercfg /setdcvalueindex $scheme 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 0 | Out-Null
-    # PCI Express → Link State Power Management = Off (0)
-    powercfg /setacvalueindex $scheme 501a4d13-42af-4429-9fd1-a8218c268e20 ee12f906-d277-404b-b6da-e5fa1a576df5 0 | Out-Null
-    powercfg /setdcvalueindex $scheme 501a4d13-42af-4429-9fd1-a8218c268e20 ee12f906-d277-404b-b6da-e5fa1a576df5 0 | Out-Null
-    # USB selective suspend = Disabled (0) on AC
-    powercfg /setacvalueindex $scheme 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 | Out-Null
-    powercfg /setactive $scheme | Out-Null
-    Log '[powercfg] wireless=max, PCIe ASPM=off, USB sel-suspend AC=off'
-    Report 'powercfg' 'ok'
-  } else {
-    Report 'powercfg' 'skip' 'active scheme not readable'
-  }
-} catch { Log '[powercfg] skipped'; Report 'powercfg' 'skip' 'powercfg failed' }
-""");
 
         // --- netsh / Set-NetTCPSetting (supported modern path) ---
         sb.AppendLine("netsh int tcp set global rss=enabled | Out-Null");
@@ -575,58 +510,25 @@ try {
         sb.AppendLine("try { netsh int tcp set supplemental template=internetcustom congestionprovider=cubic | Out-Null } catch {}");
         sb.AppendLine("try { netsh int ip set global taskoffload=enabled | Out-Null } catch {}");
         sb.AppendLine("Report 'tcp-globals' 'ok'");
-        // --- Extended TCP tweak layer (all snapshot-covered, build-gated, reported) ---
-        sb.AppendLine("Invoke-ExoNetshGlobal 'tcp-timestamps' @('int','tcp','set','global','timestamps=disabled')");
-        sb.AppendLine("Invoke-ExoNetshGlobal 'tcp-fastopen' @('int','tcp','set','global','fastopen=enabled')");
-        sb.AppendLine("Invoke-ExoNetshGlobal 'tcp-fastopen-fallback' @('int','tcp','set','global','fastopenfallback=enabled')");
-        if (knobs.PacingOff)
-            sb.AppendLine("Invoke-ExoNetshGlobal 'tcp-pacing' @('int','tcp','set','global','pacingprofile=off')");
-        else
-            sb.AppendLine("Report 'tcp-pacing' 'skip' 'preset keeps Windows default pacing profile'");
-        if (knobs.HystartOff)
-            sb.AppendLine("Invoke-ExoNetshGlobal 'tcp-hystart' @('int','tcp','set','global','hystart=disabled')");
-        else
-            sb.AppendLine("Report 'tcp-hystart' 'skip' 'preset keeps Windows default HyStart'");
-        sb.AppendLine("Invoke-ExoNetshGlobal 'tcp-ecn' @('int','tcp','set','global','ecncapability=" + knobs.Ecn + "')");
-        if (knobs.UroOff)
-        {
-            sb.AppendLine("if ([System.Environment]::OSVersion.Version.Build -ge 26100) {");
-            sb.AppendLine("  Invoke-ExoNetshGlobal 'udp-uro' @('int','udp','set','global','uro=disabled')");
-            sb.AppendLine("} else {");
-            sb.AppendLine("  Report 'udp-uro' 'skip' 'requires Windows 11 24H2 (build 26100+)'");
-            sb.AppendLine("}");
-        }
-        else
-        {
-            sb.AppendLine("Report 'udp-uro' 'skip' 'preset keeps Windows default URO'");
-        }
-        // Ephemeral ports — modern API (MaxUserPort is legacy)
-        sb.AppendLine("try { netsh int ipv4 set dynamicport tcp start=1025 num=64511 | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int ipv4 set dynamicport udp start=1025 num=64511 | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int ipv6 set dynamicport tcp start=1025 num=64511 | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int ipv6 set dynamicport udp start=1025 num=64511 | Out-Null } catch {}");
-        sb.AppendLine("Report 'dynamic-ports' 'ok'");
+        // Leave global retransmission, ECN, timestamps, HyStart, pacing, URO and
+        // ephemeral-port policy on Windows/driver defaults. A short public
+        // benchmark cannot prove a universal replacement for these algorithms.
+        sb.AppendLine("Report 'tcp-algorithms' 'skip' 'Windows adaptive defaults retained'");
         sb.AppendLine("foreach ($pr in @('Internet','InternetCustom')) {");
         sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -CongestionProvider CUBIC -EA SilentlyContinue } catch {}");
         sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -AutoTuningLevelLocal " + autoTuningPs + " -EA SilentlyContinue } catch {}");
         sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -ScalingHeuristics Disabled -EA SilentlyContinue } catch {}");
         sb.AppendLine("}");
-        // InternetCustom RTO / SYN resilience (documented Set-NetTCPSetting fields)
-        sb.AppendLine("try { Set-NetTCPSetting -SettingName InternetCustom -MaxSynRetransmissions 2 -EA SilentlyContinue } catch {}");
-        sb.AppendLine("try { Set-NetTCPSetting -SettingName InternetCustom -NonSackRttResiliency Disabled -EA SilentlyContinue } catch {}");
-        if (knobs.TightRto)
-        {
-            sb.AppendLine("try { Set-NetTCPSetting -SettingName InternetCustom -InitialRtoMs 1000 -EA SilentlyContinue } catch {}");
-            sb.AppendLine("try { Set-NetTCPSetting -SettingName InternetCustom -MinRtoMs 300 -EA SilentlyContinue } catch {}");
-        }
         sb.AppendLine("Report 'tcp-settings' 'ok'");
 
-        // Nagle (per-interface) — only latency preset
+        // Remove only legacy Exo TCP ACK pins. Games own socket behavior and
+        // most real-time traffic is UDP; forcing every interface is not valid.
         sb.AppendLine("Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces' -EA SilentlyContinue | ForEach-Object {");
         sb.AppendLine("  $p = $_.PSPath");
-        sb.AppendLine(ackBlock);
+        sb.AppendLine("  Remove-Prop $p 'TcpAckFrequency'");
+        sb.AppendLine("  Remove-Prop $p 'TCPNoDelay'");
         sb.AppendLine("}");
-        sb.AppendLine("Report 'nagle' 'ok'");
+        sb.AppendLine("Report 'legacy-ack-pins' 'ok' 'per-interface overrides removed'");
 
         // --- Per-adapter: branch Ethernet vs Wi‑Fi (MS: wireless often has no RSS/LSO) ---
         // Apply to all physical NICs so dual-homed PCs are ready on either media.
@@ -1069,18 +971,9 @@ try {
 # Ensure QoS / Packet Scheduler service can run
 try { Set-Service -Name Psched -StartupType Automatic -EA SilentlyContinue } catch {}
 try { Start-Service -Name Psched -EA SilentlyContinue } catch {}
-# Disable Teredo / ISATAP tunnels (not used for gaming; can add background noise)
-try { netsh interface teredo set state disabled | Out-Null } catch {}
-try { netsh interface isatap set state disabled | Out-Null } catch {}
-try { netsh interface 6to4 set state disabled | Out-Null } catch {}
-Log '[tunnel] teredo/isatap/6to4 disabled'
-# Network Discovery / NetBIOS chatter — leave Client binding off; disable NetBIOS over TCP/IP on IPv4
-try {
-  Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces' -EA SilentlyContinue | ForEach-Object {
-    Set-Dword $_.PSPath 'NetbiosOptions' 2
-  }
-  Log '[NetBIOS] NetbiosOptions=2 (disabled over TCP/IP)'
-} catch { Log '[NetBIOS] skipped' }
+# Transition tunnels, NetBIOS and SMB are compatibility/security surfaces, not
+# latency controls. Exo leaves them exactly as Windows or the administrator set them.
+Log '[compat] transition tunnels, NetBIOS, and SMB left unchanged'
 # NCSI / LLMNR / proxy AutoDetect are intentionally NOT touched. Turning NCSI
 # NoActiveProbe or WinHTTP AutoDetect off made Windows report "No Internet"
 # while Exo's raw TCP probe still passed — users reinstalled Windows.
@@ -1092,14 +985,6 @@ Log '[DNS] LLMNR left system default'
 Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxCacheTtl'
 Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxNegativeCacheTtl'
 Log '[DNS] cache TTL overrides removed (record TTLs honored)'
-# Disable SMBv1 if present (background noise + security)
-try {
-  $smb = Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -EA SilentlyContinue
-  if ($smb -and $smb.State -eq 'Enabled') {
-    Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart -EA SilentlyContinue | Out-Null
-    Log '[SMB] SMBv1 disabled'
-  }
-} catch {}
 # Proxy AutoDetect / NCSI policy intentionally untouched (see NCSI note above).
 Log '[proxy] AutoDetect left system default'
 Set-AdapterBindings
@@ -1170,24 +1055,7 @@ function Set-EthMetrics {
 """);
         sb.AppendLine("$ethReadyOk = Set-EthMetrics");
         sb.AppendLine("if ($ethReadyOk) { Report 'eth-metrics' 'ok' } else { Report 'eth-metrics' 'fail' 'metric not verified (AutomaticMetric may still be on)' }");
-        // IPv4 fast path: documented RFC 6724 prefix-policy precedence for IPv4-mapped addresses
-        // (::ffff:0:0/96 default 35/label 4 → 55 puts IPv4 above native IPv6 ::/0 at 40).
-        // Replaces the retired "IPv6 metric = IPv4+20" hack. Original table is in the snapshot
-        // (prefixPolicies) and restored exactly on repair.
-        sb.AppendLine("if ($PreferIpv4First -eq 1) {");
-        sb.AppendLine("  try {");
-        sb.AppendLine("    $null = (netsh int ipv6 set prefixpolicy ::ffff:0:0/96 55 4 store=active 2>&1 | Out-String)");
-        sb.AppendLine("    $ppOut = (netsh int ipv6 set prefixpolicy ::ffff:0:0/96 55 4 store=persistent 2>&1 | Out-String)");
-        sb.AppendLine("    if ($LASTEXITCODE -eq 0) {");
-        sb.AppendLine("      Log '[IPv4] prefix policy ::ffff:0:0/96 precedence 55 (IPv4-mapped first)'");
-        sb.AppendLine("      Report 'prefix-policy' 'ok'");
-        sb.AppendLine("    } else {");
-        sb.AppendLine("      Report 'prefix-policy' 'skip' ('netsh prefixpolicy rejected: ' + $ppOut)");
-        sb.AppendLine("    }");
-        sb.AppendLine("  } catch { Report 'prefix-policy' 'skip' ('netsh prefixpolicy error: ' + $_.Exception.Message) }");
-        sb.AppendLine("} else {");
-        sb.AppendLine("  Report 'prefix-policy' 'skip' 'preset keeps default address precedence'");
-        sb.AppendLine("}");
+        sb.AppendLine("Report 'prefix-policy' 'skip' 'Windows IPv4/IPv6 precedence retained'");
         // Analyze always chooses a healthy public resolver on this exact route.
         // Apply it to active physical adapters and register the matching encrypted
         // template when Windows supports automatic DoH. Repair restores the snapshot.
@@ -1242,17 +1110,7 @@ function Set-EthMetrics {
         sb.AppendLine("  Report 'dns-auto' 'ok' ($ExoDnsProvider + ' · ' + $dohStatus)");
         sb.AppendLine("  Log ('[DNS] ' + $ExoDnsProvider + ' selected by Analyze: ' + ($dnsServers -join ', '))");
         sb.AppendLine("} catch { Report 'dns-auto' 'fail' $_.Exception.Message }");
-        // Laptop: keep AC path max; do not force DC min-CPU 100% (battery). Only re-stamp wireless max on DC.
-        sb.AppendLine("if ($IsLaptopHint -eq 1) {");
-        sb.AppendLine("  try {");
-        sb.AppendLine("    $scheme = (powercfg /getactivescheme) -replace '.*GUID:\\s*([0-9a-f\\-]+).*','$1'");
-        sb.AppendLine("    if ($scheme) {");
-        sb.AppendLine("      powercfg /setdcvalueindex $scheme 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 0 | Out-Null");
-        sb.AppendLine("      powercfg /setactive $scheme | Out-Null");
-        sb.AppendLine("      Log '[laptop] DC wireless=max kept; AC CPU max unchanged'");
-        sb.AppendLine("    }");
-        sb.AppendLine("  } catch {}");
-        sb.AppendLine("}");
+        sb.AppendLine("Report 'power-policy' 'skip' 'AC/DC power plans retained'");
         // ============================================================================
         // ETHERNET-FIRST = METRICS ONLY. Never Disable-NetAdapter on Wi-Fi.
         // Disabling Wi-Fi after a brief Ethernet probe stranded users when the
@@ -1458,15 +1316,6 @@ if (-not $postOk) {
       try { Set-NetIPInterface -InterfaceIndex $a.ifIndex -AddressFamily $af -AutomaticMetric Enabled -EA SilentlyContinue } catch {}
     }
   }
-  try {
-    $sp = 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\ServiceProvider'
-    if (Test-Path -LiteralPath $sp) {
-      Set-ItemProperty -LiteralPath $sp -Name LocalPriority -Value 499 -Type DWord -Force -EA SilentlyContinue
-      Set-ItemProperty -LiteralPath $sp -Name HostsPriority -Value 500 -Type DWord -Force -EA SilentlyContinue
-      Set-ItemProperty -LiteralPath $sp -Name DnsPriority -Value 2000 -Type DWord -Force -EA SilentlyContinue
-      Set-ItemProperty -LiteralPath $sp -Name NetbtPriority -Value 2001 -Type DWord -Force -EA SilentlyContinue
-    }
-  } catch {}
   try { Remove-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'NoActiveProbe' -Force -EA SilentlyContinue } catch {}
   try { Clear-DnsClientCache -EA SilentlyContinue } catch {}
   try { ipconfig /renew | Out-Null } catch {}

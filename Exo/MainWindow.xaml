@@ -20,100 +20,118 @@
         <TitleBar x:Name="AppTitleBar"
                   Grid.Row="0"
                   IsBackButtonVisible="False"
-                  IsPaneToggleButtonVisible="False"
-                  HorizontalContentAlignment="Stretch">
+                  IsPaneToggleButtonVisible="False">
+            <TitleBar.LeftHeader>
+                <Button x:Name="NavHome"
+                        Style="{StaticResource ExoNavTab}"
+                        Width="76"
+                        Margin="8,0,4,0"
+                        AutomationProperties.Name="Open system overview"
+                        Click="NavHome_Click">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="6" Height="6"
+                                CornerRadius="3"
+                                Background="{ThemeResource ExoAccentBrush}"
+                                VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1"
+                                   Text="EXO"
+                                   Style="{StaticResource ExoCaption}"
+                                   CharacterSpacing="140"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </Button>
+            </TitleBar.LeftHeader>
+
             <TitleBar.Content>
                 <Border x:Name="NavRail"
                         Background="Transparent"
                         BorderThickness="0"
-                        Padding="16,4"
-                        MinHeight="52"
-                        HorizontalAlignment="Stretch">
-                    <Grid x:Name="NavRailInner">
-                <!-- Layer 1: module icons true-centered in the full bar width -->
-                <StackPanel x:Name="ModuleIcons"
-                            Orientation="Horizontal"
-                            Spacing="10"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center">
+                        MinHeight="52">
+                    <StackPanel x:Name="ModuleIcons"
+                                Orientation="Horizontal"
+                                Spacing="4"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center">
                     <Button x:Name="NavDiscord"
-                            Style="{StaticResource ExoGlassCircle}"
+                            Style="{StaticResource ExoNavTab}"
                             AutomationProperties.Name="Discord"
                             Click="NavDiscord_Click"
                             Tag="discord">
-                        <Image Source="ms-appx:///Assets/Logos/discord.png"
-                               Width="24" Height="24"
-                               Stretch="Uniform"
-                               UseLayoutRounding="True"
-                               IsHitTestVisible="False"
-                               AutomationProperties.AccessibilityView="Raw" />
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <Image Source="ms-appx:///Assets/Logos/discord.png" Width="18" Height="18" Stretch="Uniform" />
+                            <TextBlock Text="Discord" VerticalAlignment="Center" />
+                        </StackPanel>
                     </Button>
                     <Button x:Name="NavSteam"
-                            Style="{StaticResource ExoGlassCircle}"
+                            Style="{StaticResource ExoNavTab}"
                             AutomationProperties.Name="Steam"
                             Click="NavSteam_Click"
                             Tag="steam">
-                        <Image Source="ms-appx:///Assets/Logos/steam.png"
-                               Width="24" Height="24"
-                               Stretch="Uniform"
-                               UseLayoutRounding="True"
-                               IsHitTestVisible="False"
-                               AutomationProperties.AccessibilityView="Raw" />
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <Image Source="ms-appx:///Assets/Logos/steam.png" Width="18" Height="18" Stretch="Uniform" />
+                            <TextBlock Text="Steam" VerticalAlignment="Center" />
+                        </StackPanel>
                     </Button>
                     <Button x:Name="NavInternet"
-                            Style="{StaticResource ExoGlassCircle}"
+                            Style="{StaticResource ExoNavTab}"
                             AutomationProperties.Name="Internet"
                             Click="NavInternet_Click"
                             Tag="internet">
-                        <Image Source="ms-appx:///Assets/Logos/internet.png"
-                               Width="24" Height="24"
-                               Stretch="Uniform"
-                               UseLayoutRounding="True"
-                               IsHitTestVisible="False"
-                               AutomationProperties.AccessibilityView="Raw" />
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <Image Source="ms-appx:///Assets/Logos/internet.png" Width="18" Height="18" Stretch="Uniform" />
+                            <TextBlock Text="Internet" VerticalAlignment="Center" />
+                        </StackPanel>
                     </Button>
                     <Button x:Name="NavNvidia"
-                            Style="{StaticResource ExoGlassCircle}"
+                            Style="{StaticResource ExoNavTab}"
                             AutomationProperties.Name="NVIDIA"
                             Click="NavNvidia_Click"
                             Tag="nvidia">
-                        <Image Source="ms-appx:///Assets/Logos/nvidia.png"
-                               Width="24" Height="24"
-                               Stretch="Uniform"
-                               UseLayoutRounding="True"
-                               IsHitTestVisible="False"
-                               AutomationProperties.AccessibilityView="Raw" />
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <Image Source="ms-appx:///Assets/Logos/nvidia.png" Width="18" Height="18" Stretch="Uniform" />
+                            <TextBlock Text="NVIDIA" VerticalAlignment="Center" />
+                        </StackPanel>
                     </Button>
                     <Button x:Name="NavRiot"
-                            Style="{StaticResource ExoGlassCircle}"
+                            Style="{StaticResource ExoNavTab}"
                             AutomationProperties.Name="Riot"
                             Click="NavRiot_Click"
                             Tag="riot">
-                        <Image Source="ms-appx:///Assets/Logos/riot.png"
-                               Width="24" Height="24" Stretch="Uniform"
-                               UseLayoutRounding="True" IsHitTestVisible="False"
-                               AutomationProperties.AccessibilityView="Raw" />
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <Image Source="ms-appx:///Assets/Logos/riot.png" Width="18" Height="18" Stretch="Uniform" />
+                            <TextBlock Text="Riot" VerticalAlignment="Center" />
+                        </StackPanel>
                     </Button>
                     <Button x:Name="NavEpic"
-                            Style="{StaticResource ExoGlassCircle}"
+                            Style="{StaticResource ExoNavTab}"
                             AutomationProperties.Name="Epic"
                             Click="NavEpic_Click"
                             Tag="epic">
-                        <Image Source="ms-appx:///Assets/Logos/epic.png"
-                               Width="24" Height="24" Stretch="Uniform"
-                               UseLayoutRounding="True" IsHitTestVisible="False"
-                               AutomationProperties.AccessibilityView="Raw" />
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <Image Source="ms-appx:///Assets/Logos/epic.png" Width="18" Height="18" Stretch="Uniform" />
+                            <TextBlock Text="Epic" VerticalAlignment="Center" />
+                        </StackPanel>
                     </Button>
-                </StackPanel>
+                    </StackPanel>
+                </Border>
+            </TitleBar.Content>
 
-                <!-- Layer 2: left chrome — Settings (home) or Home (module) same slot -->
+            <TitleBar.RightHeader>
+                <!-- Settings is stable on every page; EXO at left is always Home. -->
                 <Button x:Name="SettingsButton"
-                        Style="{StaticResource ExoGlassCircle}"
+                        Style="{StaticResource ExoNavTab}"
+                        Width="44"
+                        MinWidth="44"
                         AutomationProperties.Name="Settings"
                         Click="SettingsButton_Click"
-                        HorizontalAlignment="Left"
+                        HorizontalAlignment="Right"
                         VerticalAlignment="Center"
-                        Margin="0,0,0,0">
+                        Margin="8,0,8,0">
                     <Grid>
                         <FontIcon x:Name="SettingsGearIcon"
                                   Glyph="&#xE713;"
@@ -126,13 +144,6 @@
                                 <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
                             </FontIcon.RenderTransform>
                         </FontIcon>
-                        <FontIcon x:Name="HomeChromeIcon"
-                                  Glyph="&#xE80F;"
-                                  FontSize="15"
-                                  HorizontalAlignment="Center"
-                                  VerticalAlignment="Center"
-                                  Visibility="Collapsed"
-                                  IsHitTestVisible="False" />
                     </Grid>
                     <FlyoutBase.AttachedFlyout>
                         <Flyout x:Name="SettingsFlyout"
@@ -153,17 +164,7 @@
                         </Flyout>
                     </FlyoutBase.AttachedFlyout>
                 </Button>
-
-                <!-- Hidden legacy name kept for selection chrome code paths -->
-                <Button x:Name="NavHome"
-                        Visibility="Collapsed"
-                        IsHitTestVisible="False"
-                        Width="0" Height="0"
-                        Click="NavHome_Click" />
-
-                    </Grid>
-                </Border>
-            </TitleBar.Content>
+            </TitleBar.RightHeader>
         </TitleBar>
 
         <Grid Grid.Row="2"

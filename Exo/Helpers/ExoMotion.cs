@@ -23,9 +23,9 @@ public static class ExoMotion
 
     // Short, clean motion — no bouncy spring on content.
     public const int EntranceMs = 240;
-    public const int FadeMs = 180;
+    public const int FadeMs = 160;
     public const int StaggerStepMs = 22;
-    public const int SelectMs = 90;
+    public const int SelectMs = 0;
     /// <summary>Feature-tile list entrance stagger (module pages).</summary>
     public const int ListStaggerStepMs = 28;
 
@@ -190,51 +190,13 @@ public static class ExoMotion
     }
 
     /// <summary>
-    /// Card select: snappy dim pulse (no scale), then navigate.
-    /// Clear "you picked this" without softening logos.
+    /// Selection navigation is immediate. The pressed visual state already provides
+    /// feedback; adding another storyboard here only makes the app feel latent.
     /// </summary>
     public static void PlaySelect(UIElement el, Action? onDone = null)
     {
-        if (MotionDisabled)
-        {
-            EnsureVisible(el);
-            onDone?.Invoke();
-            return;
-        }
-
-        try
-        {
-            el.RenderTransform = null;
-            el.Opacity = 1;
-            el.IsHitTestVisible = true;
-
-            var sb = new Storyboard();
-            // Soft dim pulse — no scale, no bounce.
-            sb.Children.Add(Fade(el, 1, 0.86, 40, 0));
-            sb.Children.Add(Fade(el, 0.86, 1, 70, 40));
-
-            var finished = false;
-            void Once()
-            {
-                if (finished) return;
-                finished = true;
-                try
-                {
-                    el.Opacity = 1;
-                    el.RenderTransform = null;
-                }
-                catch { }
-                onDone?.Invoke();
-            }
-            sb.Completed += (_, _) => Once();
-            sb.Begin();
-            ScheduleOnUi(el, SelectMs + 50, Once);
-        }
-        catch
-        {
-            EnsureVisible(el);
-            onDone?.Invoke();
-        }
+        EnsureVisible(el);
+        onDone?.Invoke();
     }
 
     /// <summary>Module page soft fade-in.</summary>
@@ -249,10 +211,10 @@ public static class ExoMotion
         ClearTransform(root);
         try
         {
-            root.Opacity = 0.9;
+            root.Opacity = 0.94;
             root.IsHitTestVisible = true;
             var sb = new Storyboard();
-            sb.Children.Add(Fade(root, 0.9, 1, 200, 0));
+            sb.Children.Add(Fade(root, 0.94, 1, 140, 0));
             sb.Completed += (_, _) =>
             {
                 try
@@ -263,7 +225,7 @@ public static class ExoMotion
                 catch { }
             };
             sb.Begin();
-            ScheduleEnsureVisible(root, 260);
+            ScheduleEnsureVisible(root, 190);
         }
         catch
         {

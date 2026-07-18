@@ -1,7 +1,8 @@
 # Exo Riot / Epic optimizer.
-# Reversible Windows policy only: quiet startup plus per-game GPU preference and
-# Above Normal CPU priority. Anti-cheat, launchers, services, files, and caches
-# are deliberately left untouched.
+# Reversible Windows policy only: quiet startup plus capability-aware GPU routing.
+# Games prefer the high-performance adapter; on hybrid PCs launcher UI prefers the
+# power-saving adapter so it does not wake or contend with the discrete GPU.
+# Anti-cheat, services, files, caches, and game scheduling are left untouched.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateSet('Riot','Epic')][string]$Module,
@@ -10,13 +11,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.0.1'
+$Version = '1.1.0'
 $ExoRoot = Join-Path $env:LOCALAPPDATA 'Exo'
 $StatePath = Join-Path $ExoRoot ("{0}-optimizer.json" -f $Module.ToLowerInvariant())
 $SnapshotPath = Join-Path $ExoRoot ("{0}-snapshot.json" -f $Module.ToLowerInvariant())
 $RunSubKey = 'Software\Microsoft\Windows\CurrentVersion\Run'
 $GpuSubKey = 'Software\Microsoft\DirectX\UserGpuPreferences'
-$IfeoBase = 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options'
 $Report = [System.Collections.Generic.List[string]]::new()
 
 function Write-ProgressLine([int]$Percent, [string]$Text) {
@@ -114,6 +114,32 @@ function Get-EpicTargets {
     return @($targets)
 }
 function Get-Targets { if ($Module -eq 'Riot') { @(Get-RiotTargets) } else { @(Get-EpicTargets) } }
+function Get-LauncherTargets {
+    $targets = [System.Collections.Generic.List[object]]::new()
+    if ($Module -eq 'Riot') {
+        foreach ($path in @(
+            (Join-Path ${env:SystemDrive} 'Riot Games\Riot Client\RiotClientServices.exe'),
+            (Join-Path ${env:SystemDrive} 'Riot Games\Riot Client\RiotClientUx.exe'),
+            (Join-Path ${env:SystemDrive} 'Riot Games\Riot Client\RiotClientUxRender.exe')
+        )) { Add-Target $targets $path 'riot-launcher' }
+    } else {
+        $root = Join-Path ${env:ProgramFiles(x86)} 'Epic Games\Launcher\Portal\Binaries\Win64'
+        foreach ($name in @('EpicGamesLauncher.exe','EpicWebHelper.exe')) {
+            Add-Target $targets (Join-Path $root $name) 'epic-launcher'
+        }
+    }
+    return @($targets)
+}
+function Test-HybridGraphics {
+    try {
+        $names = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
+            ForEach-Object { [string]$_.Name } |
+            Where-Object { $_ -and $_ -notmatch '(?i)Microsoft Basic|Remote|Hyper-V|Virtual' })
+        $hasDiscrete = @($names | Where-Object { $_ -match '(?i)NVIDIA|GeForce|RTX|GTX|Radeon\s+RX|Intel.*Arc' }).Count -gt 0
+        $hasIntegrated = @($names | Where-Object { $_ -match '(?i)Intel.*(?:UHD|Iris|HD Graphics)|AMD Radeon\(TM\) Graphics|Radeon Vega' }).Count -gt 0
+        return $names.Count -ge 2 -and $hasDiscrete -and $hasIntegrated
+    } catch { return $false }
+}
 function Test-Installed {
     if ($Module -eq 'Riot') {
         if (Test-Path -LiteralPath (Join-Path ${env:ProgramFiles} 'Riot Vanguard') -PathType Container) { return $true }
@@ -148,23 +174,26 @@ function Get-RunMatches {
     } finally { $key.Dispose() }
     return @($result)
 }
-function New-Snapshot([object[]]$Targets) {
+function New-Snapshot([object[]]$Targets, [object[]]$Launchers) {
     if (Test-Path -LiteralPath $SnapshotPath -PathType Leaf) { return }
     $gpu = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($GpuSubKey)
     $targetStates = [System.Collections.Generic.List[object]]::new()
     try {
         foreach ($target in $Targets) {
-            $ifeoSub = "$IfeoBase\$($target.exe)\PerfOptions"
-            $ifeo = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($ifeoSub)
-            try {
-                [void]$targetStates.Add([ordered]@{
-                    path = $target.path
-                    exe = $target.exe
-                    gpu = Get-ValueSnapshot $gpu ([string]$target.path)
-                    cpu = Get-ValueSnapshot $ifeo 'CpuPriorityClass'
-                    ifeoKeyExisted = ($null -ne $ifeo)
-                })
-            } finally { if ($ifeo) { $ifeo.Dispose() } }
+            [void]$targetStates.Add([ordered]@{
+                path = $target.path
+                exe = $target.exe
+                role = 'game'
+                gpu = Get-ValueSnapshot $gpu ([string]$target.path)
+            })
+        }
+        foreach ($target in $Launchers) {
+            [void]$targetStates.Add([ordered]@{
+                path = $target.path
+                exe = $target.exe
+                role = 'launcher'
+                gpu = Get-ValueSnapshot $gpu ([string]$target.path)
+            })
         }
     } finally { if ($gpu) { $gpu.Dispose() } }
     $snapshot = [ordered]@{
@@ -193,15 +222,16 @@ function Remove-StartupEntries {
     } finally { $key.Dispose() }
     return $removed
 }
-function Apply-TargetPolicy([object[]]$Targets) {
+function Apply-TargetPolicy([object[]]$Targets, [object[]]$Launchers, [bool]$HybridGraphics) {
     $gpu = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($GpuSubKey, $true)
     try {
         foreach ($target in $Targets) {
             $gpu.SetValue([string]$target.path, 'GpuPreference=2;', [Microsoft.Win32.RegistryValueKind]::String)
-            $ifeoSub = "$IfeoBase\$($target.exe)\PerfOptions"
-            $ifeo = [Microsoft.Win32.Registry]::LocalMachine.CreateSubKey($ifeoSub, $true)
-            try { $ifeo.SetValue('CpuPriorityClass', 6, [Microsoft.Win32.RegistryValueKind]::DWord) }
-            finally { $ifeo.Dispose() }
+        }
+        if ($HybridGraphics) {
+            foreach ($target in $Launchers) {
+                $gpu.SetValue([string]$target.path, 'GpuPreference=1;', [Microsoft.Win32.RegistryValueKind]::String)
+            }
         }
     } finally { $gpu.Dispose() }
 }
@@ -228,19 +258,6 @@ function Invoke-Repair {
     try {
         foreach ($target in @($snapshot.targets)) {
             Restore-Value $gpu ([string]$target.path) $target.gpu
-            $ifeoSub = "$IfeoBase\$($target.exe)\PerfOptions"
-            $ifeo = [Microsoft.Win32.Registry]::LocalMachine.CreateSubKey($ifeoSub, $true)
-            try { Restore-Value $ifeo 'CpuPriorityClass' $target.cpu }
-            finally { $ifeo.Dispose() }
-            if (-not [bool]$target.ifeoKeyExisted) {
-                $parent = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("$IfeoBase\$($target.exe)", $true)
-                try {
-                    $perf = $parent.OpenSubKey('PerfOptions')
-                    $empty = $perf -and $perf.ValueCount -eq 0 -and $perf.SubKeyCount -eq 0
-                    if ($perf) { $perf.Dispose() }
-                    if ($empty) { $parent.DeleteSubKey('PerfOptions', $false) }
-                } finally { if ($parent) { $parent.Dispose() } }
-            }
         }
     } finally { $gpu.Dispose() }
     Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue
@@ -259,22 +276,22 @@ try {
     }
     if (-not (Test-Installed)) { throw "$Module is not installed on this PC." }
     $targets = @(Get-Targets)
+    if ($targets.Count -eq 0) { throw "No installed $Module game executable was found. Install a game, then Apply." }
+    $launchers = @(Get-LauncherTargets)
+    $hybridGraphics = Test-HybridGraphics
     Write-ProgressLine 22 ("Detected {0} game executable(s)" -f $targets.Count)
-    New-Snapshot $targets
+    New-Snapshot $targets $launchers
     Add-Report 'snapshot' 'ok'
     $removed = Remove-StartupEntries
     Add-Report 'startup' 'ok' ("removed {0} auto-start value(s)" -f $removed)
-    Apply-TargetPolicy $targets
-    Add-Report 'game-policy' 'ok' ("{0} executable(s)" -f $targets.Count)
+    Apply-TargetPolicy $targets $launchers $hybridGraphics
+    Add-Report 'gpu-routing' 'ok' ("{0} game(s); {1}" -f $targets.Count, $(if ($hybridGraphics) { "$($launchers.Count) launcher process(es) on integrated GPU" } else { 'single-GPU path' }))
     $verified = 0
     $gpu = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($GpuSubKey)
     try {
         foreach ($target in $targets) {
             $gpuOk = [string]$gpu.GetValue([string]$target.path, '') -eq 'GpuPreference=2;'
-            $ifeo = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("$IfeoBase\$($target.exe)\PerfOptions")
-            try { $cpuOk = $ifeo -and [int]$ifeo.GetValue('CpuPriorityClass', 0) -eq 6 }
-            finally { if ($ifeo) { $ifeo.Dispose() } }
-            if ($gpuOk -and $cpuOk) { $verified++ }
+            if ($gpuOk) { $verified++ }
         }
     } finally { if ($gpu) { $gpu.Dispose() } }
     if ($verified -ne $targets.Count) { throw "Only $verified of $($targets.Count) game policies verified." }
@@ -287,6 +304,8 @@ try {
         appliedUtc = (Get-Date).ToUniversalTime().ToString('o')
         startupQuiet = $true
         gamePolicyVerified = $true
+        hybridGraphics = [bool]$hybridGraphics
+        launcherTargetCount = $launchers.Count
         targetCount = $targets.Count
         targets = @($targets)
         antiCheatUntouched = $true
@@ -297,7 +316,7 @@ try {
     }
     $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $StatePath -Encoding UTF8
     Write-ProgressLine 100 'Verified'
-    Write-Output ("DONE - {0}: startup quiet; {1} game executable(s) hardware-prioritized" -f $Module, $targets.Count)
+    Write-Output ("DONE - {0}: startup quiet; {1} game executable(s) routed to the high-performance GPU" -f $Module, $targets.Count)
     exit 0
 } catch {
     Add-Report 'apply' 'fail' $_.Exception.Message

@@ -1,6 +1,6 @@
 # Exo tweak audit (evidence-based)
 
-Last pass: v3.6.0. Goal: an evidence-based ceiling of real OS/driver/client performance for every module —
+Last pass: v3.6.1. Goal: an evidence-based ceiling of real OS/driver/client performance for every module —
 every known tweak in the landscape is either implemented or listed here with a concrete exclusion
 reason. Nothing is silently skipped, and nothing invented (no dead registry folklore).
 
@@ -100,7 +100,8 @@ Repair restores the full pre-Exo DRS database captured before the first Apply.
 | Live DRS drift detect | **Implemented (v2.4.0)** | Non-elevated export + shared classifier |
 | Vulkan/OpenGL present method = layered DXGI | **Implemented (v2.4.0)** | Pack pin `550867192=1` |
 | Background app max frame rate 30 | **Implemented (v2.4.0)** | Pack pin `277041158=30` |
-| Resizable BAR (30/40/50) / shader cache unlimited / LOD clamp / threaded opt | **Keep** | Already pinned in packs |
+| Resizable BAR / DLSS / Frame Generation / RT global overrides | **Excluded from combined Base profile** | Driver allowlists and each game/engine own these; forcing them globally can regress compatibility or frame pacing. |
+| Shader cache unlimited / LOD clamp / threaded optimization | **Keep** | Stable DRS profile controls, verified after import. |
 | Per-game catalog | **Expanded to 29 titles (v2.4.0)** | Comp deltas: PRF=1, max perf, ULL per pack, frame-gen off |
 | G-SYNC latency/sync policy | **Explicit (v3.6.0)** | Exo never infers the monitor's physical adaptive-sync state. The off path keeps raw-latency sync pins; the user toggle selects the G-SYNC + driver VSync profile. Reflex remains authoritative when supported and enabled by the game. |
 | Minecraft `javaw.exe` profile | **Excluded** | Shared Java host — would force max-perf pins on every Java app |
@@ -110,7 +111,7 @@ Repair restores the full pre-Exo DRS database captured before the first Apply.
 | Unsigned INF edits (NvCleanInstall "tweaks") | **Excluded** | Breaks driver signing |
 | EAC/anti-cheat component strip | **Excluded** | Prohibited |
 | `D3PCLatency` / PCIe latency registry keys | **Excluded** | Folklore-grade; not verifiably documented |
-| Tray: hide display IsPromoted=0; delete App ghosts | **Keep** | No logon task spam |
+| Tray icons / App startup entries / package ghosts | **Excluded from default policy (v3.6.1)** | Apply no longer edits unrelated NVIDIA shell, startup, service, task, or package state. |
 
 ## Discord
 
@@ -157,7 +158,8 @@ Repair restores the full pre-Exo DRS database captured before the first Apply.
 | Installed-game discovery | **Implemented (v3.6.0)** | Riot paths and Epic launcher manifests are parsed locally; missing launchers/games are valid states. |
 | Quiet launcher startup | **Implemented (v3.6.0)** | Only known per-user startup values are snapshotted and changed. Repair restores the exact prior value. |
 | Windows GPU preference | **Implemented (v3.6.0)** | `GpuPreference=2;` is written only for detected game executables, with pristine per-value snapshot and readback verification. |
-| Above Normal CPU priority | **Implemented (v3.6.0)** | IFEO `PerfOptions\CpuPriorityClass=6` is scoped to detected game executable names. Real-time/High priority is forbidden. |
+| Forced IFEO CPU priority for games | **Removed (v3.6.1)** | The launcher optimizer does not override game scheduling policy with undocumented per-image registry values; engines, anti-cheat, and Windows retain control. |
+| Hybrid-GPU launcher split | **Implemented (v3.6.1)** | Installed games prefer the high-performance adapter. On an actual iGPU+dGPU system, Riot/Epic launcher UI prefers the integrated adapter so it does not wake or contend with the gaming GPU; single-GPU systems keep Windows automatic selection. |
 | Launcher/game cache deletion | **Excluded** | Saves little persistent overhead, can force re-download/rebuild, and is not a latency optimization. |
 | Process killing/background guard | **Excluded** | Exo does not close a game, launcher download, or protected session and installs no resident watcher. |
 | Vanguard/EOS/services/files/manifests/saves | **Forbidden** | Security, anti-cheat, account, game, and store integrity are outside the mutation boundary. |

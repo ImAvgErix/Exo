@@ -304,6 +304,14 @@ Expect("default CEF does not disable GPU",
         optimizerText,
         @"DefaultCefArgs\s*=\s*@\((?:[^)]|\n)*?-cef-disable-gpu",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+Expect("Steam hybrid GPU routing avoids wasting the discrete GPU",
+    optimizerText.Contains("Set-SteamGpuRouting", StringComparison.Ordinal) &&
+    optimizerText.Contains("GpuPreference=1;", StringComparison.Ordinal) &&
+    !optimizerText.Contains("Set-SteamGpuHighPerformance", StringComparison.Ordinal));
+Expect("Steam GPU routing is snapshot-restorable",
+    optimizerText.Contains("Get-SteamGpuPreferenceSnapshot", StringComparison.Ordinal) &&
+    optimizerText.Contains("GpuPreferences", StringComparison.Ordinal) &&
+    optimizerText.Contains("Restored Steam GPU preference", StringComparison.Ordinal));
 
 // --- Placeholder cleanup (dead Steam stub deleted) ---
 Expect("Placeholders Steam stub deleted",

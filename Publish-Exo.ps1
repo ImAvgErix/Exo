@@ -168,6 +168,14 @@ if (Test-Path -LiteralPath $nvDisplayProj) {
     throw "Exo.NvDisplay project missing at $nvDisplayProj - display Apply will fail on user PCs"
 }
 
+# WinUI's incremental XAML compiler can retain an obsolete connection-id map
+# after named controls move or change type. A normal build may still succeed while
+# the packaged XBF crashes during InitializeComponent. Release builds always clean
+# the app's generated XAML artifacts before publishing.
+Write-Host '[*] Cleaning generated WinUI/XBF artifacts...' -ForegroundColor DarkGray
+& dotnet clean $Project -c $Configuration -r win-x64
+if ($LASTEXITCODE -ne 0) { throw "dotnet clean failed ($LASTEXITCODE)" }
+
 Write-Host "[*] dotnet publish (Version=$asmVersion)..." -ForegroundColor DarkGray
 & dotnet publish $Project `
     -c $Configuration `

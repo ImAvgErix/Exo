@@ -152,7 +152,7 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
         LoadApplyReport();
         GuidanceText = state.IsApplied
             ? "Verified Windows policy only. Client files, services, anti-cheat, updates, and game settings stay untouched."
-            : "Apply disables launcher auto-start and scopes high-performance GPU plus Above Normal CPU priority to detected game executables.";
+            : "Apply disables launcher auto-start and routes detected games to the high-performance GPU. Hybrid PCs keep launcher UI on integrated graphics.";
         HasGuidance = true;
         if (!IsStatusLoading) IsFeatureListVisible = Features.Count > 0;
     }
