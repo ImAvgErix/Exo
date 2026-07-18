@@ -1,7 +1,7 @@
-# Exo Cua QA - 2026-07-18T14:36:19.6055652-05:00
+# Exo Cua QA - 2026-07-18T14:52:59.6929038-05:00
 
-- pid: 11212
-- window_id: 3932850
+- pid: 7568
+- window_id: 22872122
 - exe: C:\Users\Erix\AppData\Local\Exo\app\Exo.exe
 
 ## Discord
@@ -14,19 +14,19 @@
 [2] Button: Close
 [3] Button: Open system overview
 [4] Text: EXO
-[5] Button: Discord
-[6] Text: Discord
-[7] Button: Steam
-[8] Text: Steam
-[9] Button: Internet
-[10] Text: Internet
-[11] Button: NVIDIA
-[12] Text: NVIDIA
-[13] Button: Riot
-[14] Text: Riot
-[15] Button: Epic
-[16] Text: Epic
-[17] Button: Settings
+[5] Button: Settings
+[6] Button: Discord
+[7] Text: Discord
+[8] Button: Steam
+[9] Text: Steam
+[10] Button: Internet
+[11] Text: Internet
+[12] Button: NVIDIA
+[13] Text: NVIDIA
+[14] Button: Riot
+[15] Text: Riot
+[16] Button: Epic
+[17] Text: Epic
 [18] Pane: 
 [19] Text: DISCORD
 [20] Text: Already optimized
@@ -54,26 +54,26 @@
 ## Steam
 
 - screenshot: `docs/cua-qa/steam.png`
-- elements: 54
+- elements: 56
 ```
 [0] Button: Minimize
 [1] Button: Maximize
 [2] Button: Close
 [3] Button: Open system overview
 [4] Text: EXO
-[5] Button: Discord
-[6] Text: Discord
-[7] Button: Steam
-[8] Text: Steam
-[9] Button: Internet
-[10] Text: Internet
-[11] Button: NVIDIA
-[12] Text: NVIDIA
-[13] Button: Riot
-[14] Text: Riot
-[15] Button: Epic
-[16] Text: Epic
-[17] Button: Settings
+[5] Button: Settings
+[6] Button: Discord
+[7] Text: Discord
+[8] Button: Steam
+[9] Text: Steam
+[10] Button: Internet
+[11] Text: Internet
+[12] Button: NVIDIA
+[13] Text: NVIDIA
+[14] Button: Riot
+[15] Text: Riot
+[16] Button: Epic
+[17] Text: Epic
 [18] Pane: 
 [19] Text: STEAM
 [20] Text: 1 setting needs Apply (contention guard)
@@ -83,19 +83,19 @@
 [24] Text: Steam install
 [25] Text: Client found and ready.
 [26] Text: Quiet CEF launcher
-[27] Text: Fast quiet CEF flags + High priority Steam start (Steam launches before the contention guard).
-[28] Text: Background priority policy
-[29] Text: Background CEF pages get low memory priority plus EcoQoS while gaming; the foreground Steam window stays Normal. Allocated memory is not mislabeled as reclaimed.
+[27] Text: Fast quiet CEF flags and High priority Steam start before the in-game contention guard attaches.
+[28] Text: In-game contention guard
+[29] Text: Background CEF helpers drop to low memory priority plus EcoQoS while a game runs; the foreground Steam window stays Normal.
 [30] Text: Complete client debloat
-[31] Text: Caches, leftovers, crashpads cleaned; games preserved.
+[31] Text: Caches, leftovers, and crashpads cleaned; installed games and shader caches stay preserved.
 [32] Text: Library / overlay tweaks
-[33] Text: Quieter overlay and lighter library web views.
+[33] Text: Quieter overlay, lighter library web views, and less CEF busywork in the background.
 [34] Text: Hardware-accelerated client
-[35] Text: Steam CEF uses the GPU instead of costly software rendering.
+[35] Text: Steam CEF uses the GPU instead of costly software rendering for the library UI.
 [36] Text: Windows quiet shell
-[37] Text: No autostart; toasts off; tray not promoted.
+[37] Text: No Steam autostart or toast spam; tray icon is not promoted into the always-visible row.
 [38] Text: Start Menu launch path
-[39] Text: Shortcuts use Exo launcher; no desktop icons.
+[39] Text: Start Menu shortcuts use the Exo quiet launcher; desktop icons are not recreated.
 ```
 
 ## Internet
@@ -108,19 +108,19 @@
 [2] Button: Close
 [3] Button: Open system overview
 [4] Text: EXO
-[5] Button: Discord
-[6] Text: Discord
-[7] Button: Steam
-[8] Text: Steam
-[9] Button: Internet
-[10] Text: Internet
-[11] Button: NVIDIA
-[12] Text: NVIDIA
-[13] Button: Riot
-[14] Text: Riot
-[15] Button: Epic
-[16] Text: Epic
-[17] Button: Settings
+[5] Button: Settings
+[6] Button: Discord
+[7] Text: Discord
+[8] Button: Steam
+[9] Text: Steam
+[10] Button: Internet
+[11] Text: Internet
+[12] Button: NVIDIA
+[13] Text: NVIDIA
+[14] Button: Riot
+[15] Text: Riot
+[16] Button: Epic
+[17] Text: Epic
 [18] Pane: 
 [19] Text: INTERNET
 [20] Text: Ethernet path - 2.5 Gbps
@@ -155,19 +155,19 @@
 [2] Button: Close
 [3] Button: Open system overview
 [4] Text: EXO
-[5] Button: Discord
-[6] Text: Discord
-[7] Button: Steam
-[8] Text: Steam
-[9] Button: Internet
-[10] Text: Internet
-[11] Button: NVIDIA
-[12] Text: NVIDIA
-[13] Button: Riot
-[14] Text: Riot
-[15] Button: Epic
-[16] Text: Epic
-[17] Button: Settings
+[5] Button: Settings
+[6] Button: Discord
+[7] Text: Discord
+[8] Button: Steam
+[9] Text: Steam
+[10] Button: Internet
+[11] Text: Internet
+[12] Button: NVIDIA
+[13] Text: NVIDIA
+[14] Button: Riot
+[15] Text: Riot
+[16] Button: Epic
+[17] Text: Epic
 [18] Pane: 
 [19] Text: NVIDIA
 [20] Text: Driver changed - reapply
@@ -195,95 +195,95 @@
 ## Riot
 
 - screenshot: `docs/cua-qa/riot.png`
-- elements: 47
+- elements: 52
 ```
 [0] Button: Minimize
 [1] Button: Maximize
 [2] Button: Close
 [3] Button: Open system overview
 [4] Text: EXO
-[5] Button: Discord
-[6] Text: Discord
-[7] Button: Steam
-[8] Text: Steam
-[9] Button: Internet
-[10] Text: Internet
-[11] Button: NVIDIA
-[12] Text: NVIDIA
-[13] Button: Riot
-[14] Text: Riot
-[15] Button: Epic
-[16] Text: Epic
-[17] Button: Settings
+[5] Button: Settings
+[6] Button: Discord
+[7] Text: Discord
+[8] Button: Steam
+[9] Text: Steam
+[10] Button: Internet
+[11] Text: Internet
+[12] Button: NVIDIA
+[13] Text: NVIDIA
+[14] Button: Riot
+[15] Text: Riot
+[16] Button: Epic
+[17] Text: Epic
 [18] Pane: 
 [19] Text: RIOT
-[20] Text: All applied
-[21] Text: Verified Windows policy only. Client files, services, anti-cheat, updates, and game settings stay untouched.
+[20] Text: Already optimized
+[21] Text: Verified Windows policy only. Riot client files, services, anti-cheat, updates, and game settings stay untouched.
 [22] Text: WHAT EXO WILL CHANGE
 [23] Text: Hardware-aware, reversible
-[24] Text: Riot detected
-[25] Text: Installed client found
-[26] Text: Startup quiet
-[27] Text: Launcher no longer starts with Windows
-[28] Text: Per-game GPU preference
-[29] Text: 3 of 3 detected executable(s) use the high-performance GPU
-[30] Text: Hybrid GPU split
-[31] Text: Single-GPU path; no unnecessary launcher override
-[32] Text: Anti-cheat and updates
-[33] Text: Services, anti-cheat, client files, and update paths are outside Exo policy
-[34] Text: Exact Repair
-[35] Text: Pre-Exo registry values are saved for restore
-[36] Button: Toggle last apply report
-[37] Text: Last apply ┬╖ 4 ok
-[38] Button: Apply Riot
-[39] Text: Reapply
+[24] Text: Riot install
+[25] Text: Found: League of Legends, VALORANT.
+[26] Text: Game discovery
+[27] Text: 3 executable(s) ready for GPU policy.
+[28] Text: Startup quiet
+[29] Text: Launcher is removed from Windows Run so it does not autostart with the session.
+[30] Text: High-performance GPU
+[31] Text: All 3 detected game executable(s) use the high-performance GPU.
+[32] Text: Hybrid GPU split
+[33] Text: Single-GPU PC: games use the only adapter; no launcher override is needed.
+[34] Text: Anti-cheat boundary
+[35] Text: Vanguard, Riot Client services, game files, and updates are never modified.
+[36] Text: Exact Repair snapshot
+[37] Text: Pre-Exo registry values are saved so Repair can restore startup and GPU prefs exactly.
+[38] Text: Verified optimizer record
+[39] Text: A completed full apply is recorded for this Riot installation.
 ```
 
 ## Epic
 
 - screenshot: `docs/cua-qa/epic.png`
-- elements: 47
+- elements: 52
 ```
 [0] Button: Minimize
 [1] Button: Maximize
 [2] Button: Close
 [3] Button: Open system overview
 [4] Text: EXO
-[5] Button: Discord
-[6] Text: Discord
-[7] Button: Steam
-[8] Text: Steam
-[9] Button: Internet
-[10] Text: Internet
-[11] Button: NVIDIA
-[12] Text: NVIDIA
-[13] Button: Riot
-[14] Text: Riot
-[15] Button: Epic
-[16] Text: Epic
-[17] Button: Settings
+[5] Button: Settings
+[6] Button: Discord
+[7] Text: Discord
+[8] Button: Steam
+[9] Text: Steam
+[10] Button: Internet
+[11] Text: Internet
+[12] Button: NVIDIA
+[13] Text: NVIDIA
+[14] Button: Riot
+[15] Text: Riot
+[16] Button: Epic
+[17] Text: Epic
 [18] Pane: 
 [19] Text: EPIC
-[20] Text: All applied
-[21] Text: Verified Windows policy only. Client files, services, anti-cheat, updates, and game settings stay untouched.
+[20] Text: Already optimized
+[21] Text: Verified Windows policy only. Epic client files, services, anti-cheat, updates, and game settings stay untouched.
 [22] Text: WHAT EXO WILL CHANGE
 [23] Text: Hardware-aware, reversible
-[24] Text: Epic detected
-[25] Text: Installed client found
-[26] Text: Startup quiet
-[27] Text: Launcher no longer starts with Windows
-[28] Text: Per-game GPU preference
-[29] Text: 1 of 1 detected executable(s) use the high-performance GPU
-[30] Text: Hybrid GPU split
-[31] Text: Single-GPU path; no unnecessary launcher override
-[32] Text: Anti-cheat and updates
-[33] Text: Services, anti-cheat, client files, and update paths are outside Exo policy
-[34] Text: Exact Repair
-[35] Text: Pre-Exo registry values are saved for restore
-[36] Button: Toggle last apply report
-[37] Text: Last apply ┬╖ 4 ok
-[38] Button: Apply Epic
-[39] Text: Reapply
+[24] Text: Epic install
+[25] Text: Found: Launcher.
+[26] Text: Game discovery
+[27] Text: 1 executable(s) ready for GPU policy.
+[28] Text: Startup quiet
+[29] Text: Launcher is removed from Windows Run so it does not autostart with the session.
+[30] Text: High-performance GPU
+[31] Text: All 1 detected game executable(s) use the high-performance GPU.
+[32] Text: Hybrid GPU split
+[33] Text: Single-GPU PC: games use the only adapter; no launcher override is needed.
+[34] Text: Anti-cheat boundary
+[35] Text: Epic Online Services, launcher files, caches, and updates are never modified.
+[36] Text: Exact Repair snapshot
+[37] Text: Pre-Exo registry values are saved so Repair can restore startup and GPU prefs exactly.
+[38] Text: Verified optimizer record
+[39] Text: A completed full apply is recorded for this Epic installation.
 ```
 
 ## ShellHome
@@ -296,19 +296,19 @@
 [2] Button: Close
 [3] Button: Open system overview
 [4] Text: EXO
-[5] Button: Discord
-[6] Text: Discord
-[7] Button: Steam
-[8] Text: Steam
-[9] Button: Internet
-[10] Text: Internet
-[11] Button: NVIDIA
-[12] Text: NVIDIA
-[13] Button: Riot
-[14] Text: Riot
-[15] Button: Epic
-[16] Text: Epic
-[17] Button: Settings
+[5] Button: Settings
+[6] Button: Discord
+[7] Text: Discord
+[8] Button: Steam
+[9] Text: Steam
+[10] Button: Internet
+[11] Text: Internet
+[12] Button: NVIDIA
+[13] Text: NVIDIA
+[14] Button: Riot
+[15] Text: Riot
+[16] Button: Epic
+[17] Text: Epic
 [18] Pane: 
 [19] Text: SYSTEM
 [20] Text: Optimization status
@@ -317,8 +317,8 @@
 [23] Text: 5 / 6 verified
 [24] Text: Every module detects this PC first, applies only supported changes, and keeps a repair path.
 [25] Text: SYSTEM MEMORY
-[26] Text: 5.5 GB
-[27] Text: 10.5 GB free ┬╖ 15.9 GB total
+[26] Text: 4.2 GB
+[27] Text: 11.7 GB free ┬╖ 15.9 GB total
 [28] ProgressBar: 
 [29] Text: RECOMMENDED NEXT
 [30] Text: Analyze the live path, tune the stack, and select the fastest healthy DNS

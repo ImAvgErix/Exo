@@ -91,6 +91,7 @@ public sealed partial class MainWindow : Window
         RootGrid.Loaded += (_, _) =>
         {
             ApplyResponsiveWindowChrome();
+            SyncContentHostWidth();
             ClearChromeFocus();
             BootstrapHomeOnce("root-loaded");
         };
@@ -437,6 +438,25 @@ public sealed partial class MainWindow : Window
 
     private static NavigationTransitionInfo SlideBack() =>
         new SuppressNavigationTransitionInfo();
+
+    /// <summary>
+    /// Keep the page column full-width below the 1120 cap and centered above it.
+    /// Without an explicit width, Center + MaxWidth sizes to children and can look left-biased.
+    /// </summary>
+    private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e) => SyncContentHostWidth();
+
+    private void SyncContentHostWidth()
+    {
+        try
+        {
+            if (ContentHost is null || RootGrid is null) return;
+            const double maxPage = 1120;
+            var available = RootGrid.ActualWidth;
+            if (available <= 0) return;
+            ContentHost.Width = Math.Min(available, maxPage);
+        }
+        catch { /* layout best-effort */ }
+    }
 
     public void NavigateHome(bool suppressTransition = false)
     {

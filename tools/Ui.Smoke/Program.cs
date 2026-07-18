@@ -253,20 +253,29 @@ if (File.Exists(main))
     Expect("native TitleBar control", m.Contains("<TitleBar x:Name=\"AppTitleBar\"", StringComparison.Ordinal)
         && !m.Contains("CaptionSpacerHost", StringComparison.Ordinal));
     Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
+    // Module tabs live in a true window-centered overlay (NavRail), not TitleBar.Content
+    // (TitleBar Content is asymmetric vs caption buttons and looked off-center).
     var moduleRowStart = m.IndexOf("<StackPanel x:Name=\"ModuleIcons\"", StringComparison.Ordinal);
     var moduleRowEnd = m.IndexOf("</StackPanel>", moduleRowStart, StringComparison.Ordinal);
     var discordInRow = m.IndexOf("x:Name=\"NavDiscord\"", moduleRowStart, StringComparison.Ordinal);
-    var settingsRightHeader = m.IndexOf("<TitleBar.RightHeader>", moduleRowEnd, StringComparison.Ordinal);
+    var settingsRightHeader = m.IndexOf("<TitleBar.RightHeader>", StringComparison.Ordinal);
     var settingsInRightHeader = m.IndexOf("x:Name=\"SettingsButton\"", settingsRightHeader, StringComparison.Ordinal);
     var settingsRightHeaderEnd = m.IndexOf("</TitleBar.RightHeader>", settingsRightHeader, StringComparison.Ordinal);
+    var navRail = m.IndexOf("x:Name=\"NavRail\"", StringComparison.Ordinal);
     Expect("discord center and settings right cannot overlap",
         moduleRowStart >= 0
         && moduleRowEnd > moduleRowStart
         && discordInRow > moduleRowStart
         && discordInRow < moduleRowEnd
-        && settingsRightHeader > moduleRowEnd
+        && settingsRightHeader >= 0
         && settingsInRightHeader > settingsRightHeader
-        && settingsInRightHeader < settingsRightHeaderEnd);
+        && settingsInRightHeader < settingsRightHeaderEnd
+        && navRail >= 0
+        && m.Contains("HorizontalAlignment=\"Center\"", StringComparison.Ordinal));
+    Expect("content host centered under page max width",
+        m.Contains("x:Name=\"ContentHost\"", StringComparison.Ordinal)
+        && m.Contains("ExoPageMaxWidth", StringComparison.Ordinal)
+        && m.Contains("HorizontalAlignment=\"Center\"", StringComparison.Ordinal));
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
     Expect("rail nav internet", m.Contains("NavInternet", StringComparison.Ordinal));
     Expect("rail nav nvidia", m.Contains("NavNvidia", StringComparison.Ordinal));
@@ -598,6 +607,7 @@ if (File.Exists(featureGridXaml))
     Expect("feature grid responsive layout",
         fg.Contains("UniformGridLayout", StringComparison.Ordinal)
         && fg.Contains("MinItemWidth=\"360\"", StringComparison.Ordinal)
+        && fg.Contains("MinItemHeight=\"84\"", StringComparison.Ordinal)
         && fg.Contains("MinColumnSpacing=\"12\"", StringComparison.Ordinal)
         && fg.Contains("ItemsStretch=\"Fill\"", StringComparison.Ordinal));
     Expect("feature grid delegates scrolling", !fg.Contains("<ScrollViewer", StringComparison.Ordinal));

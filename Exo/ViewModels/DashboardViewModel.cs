@@ -409,11 +409,12 @@ public partial class DashboardViewModel : ObservableObject
         if (state.Applied) appliedCount++;
         var tag = state.Applied ? "VERIFIED" : !string.IsNullOrWhiteSpace(state.Detail) ? "NEEDS ATTENTION" : "NOT APPLIED";
         var primary = state.Applied ? "Game policy active" : module == "riot" ? "Riot ready" : "Epic ready";
+        // Honest scope only: GPU routing + startup quiet (no invented CPU priority claims).
         var secondary = state.Applied
-            ? "High-performance GPU · Above Normal CPU · startup quiet"
+            ? "High-performance GPU routing - startup quiet - exact Repair ready"
             : module == "riot" ? "Detect VALORANT and League automatically" : "Discover installed games from Epic manifests";
         var metric = state.Applied
-            ? $"{targetCount} game executable(s) verified · exact Repair ready"
+            ? $"{targetCount} game executable(s) verified - anti-cheat untouched"
             : module == "riot" ? "Anti-cheat and Riot services stay untouched" : "Launcher files, caches, and updates stay untouched";
         if (module == "riot")
         {

@@ -10,53 +10,115 @@
     <Grid x:Name="RootGrid"
           Background="{ThemeResource ExoPageBackgroundBrush}"
           Padding="0"
-          UseLayoutRounding="True">
+          UseLayoutRounding="True"
+          SizeChanged="RootGrid_SizeChanged">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="8" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TitleBar x:Name="AppTitleBar"
-                  Grid.Row="0"
-                  IsBackButtonVisible="False"
-                  IsPaneToggleButtonVisible="False">
-            <TitleBar.LeftHeader>
-                <Button x:Name="NavHome"
-                        Style="{StaticResource ExoNavTab}"
-                        Width="76"
-                        Margin="8,0,4,0"
-                        AutomationProperties.Name="Open system overview"
-                        Click="NavHome_Click">
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Border Width="6" Height="6"
-                                CornerRadius="3"
-                                Background="{ThemeResource ExoAccentBrush}"
-                                VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="1"
-                                   Text="EXO"
-                                   Style="{StaticResource ExoCaption}"
-                                   CharacterSpacing="140"
-                                   Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                                   VerticalAlignment="Center" />
-                    </Grid>
-                </Button>
-            </TitleBar.LeftHeader>
+        <!--
+          Title chrome: EXO left, Settings right, caption buttons system-owned.
+          Module tabs sit in a true window-centered overlay so they are not pulled
+          left by the asymmetric caption reserve on the right.
+        -->
+        <Grid x:Name="TitleChrome"
+              Grid.Row="0"
+              MinHeight="52"
+              UseLayoutRounding="True">
+            <TitleBar x:Name="AppTitleBar"
+                      IsBackButtonVisible="False"
+                      IsPaneToggleButtonVisible="False">
+                <TitleBar.LeftHeader>
+                    <Button x:Name="NavHome"
+                            Style="{StaticResource ExoNavTab}"
+                            Width="76"
+                            Margin="8,0,4,0"
+                            AutomationProperties.Name="Open system overview"
+                            Click="NavHome_Click">
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="6" Height="6"
+                                    CornerRadius="3"
+                                    Background="{ThemeResource ExoAccentBrush}"
+                                    VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1"
+                                       Text="EXO"
+                                       Style="{StaticResource ExoCaption}"
+                                       CharacterSpacing="140"
+                                       Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                </TitleBar.LeftHeader>
 
-            <TitleBar.Content>
-                <Border x:Name="NavRail"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        MinHeight="52">
-                    <StackPanel x:Name="ModuleIcons"
-                                Orientation="Horizontal"
-                                Spacing="4"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center">
+                <!-- Keep Content empty so TitleBar does not host a second, off-center nav rail. -->
+                <TitleBar.Content>
+                    <Border Height="1" Width="1" Opacity="0" IsHitTestVisible="False" />
+                </TitleBar.Content>
+
+                <TitleBar.RightHeader>
+                    <Button x:Name="SettingsButton"
+                            Style="{StaticResource ExoNavTab}"
+                            Width="44"
+                            MinWidth="44"
+                            AutomationProperties.Name="Settings"
+                            Click="SettingsButton_Click"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Margin="8,0,8,0">
+                        <Grid>
+                            <FontIcon x:Name="SettingsGearIcon"
+                                      Glyph="&#xE713;"
+                                      FontSize="15"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      IsHitTestVisible="False"
+                                      RenderTransformOrigin="0.5,0.5">
+                                <FontIcon.RenderTransform>
+                                    <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
+                                </FontIcon.RenderTransform>
+                            </FontIcon>
+                        </Grid>
+                        <FlyoutBase.AttachedFlyout>
+                            <Flyout x:Name="SettingsFlyout"
+                                    Placement="Bottom"
+                                    Opened="SettingsFlyout_Opened"
+                                    Closing="SettingsFlyout_Closing"
+                                    Closed="SettingsFlyout_Closed">
+                                <Flyout.FlyoutPresenterStyle>
+                                    <Style TargetType="FlyoutPresenter">
+                                        <Setter Property="Padding" Value="0" />
+                                        <Setter Property="BorderThickness" Value="0" />
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="CornerRadius" Value="0" />
+                                        <Setter Property="MaxWidth" Value="392" />
+                                    </Style>
+                                </Flyout.FlyoutPresenterStyle>
+                                <controls:SettingsSheet x:Name="SettingsSheetHost" />
+                            </Flyout>
+                        </FlyoutBase.AttachedFlyout>
+                    </Button>
+                </TitleBar.RightHeader>
+            </TitleBar>
+
+            <!-- True optical center of the window (not the TitleBar Content slot). -->
+            <Border x:Name="NavRail"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MinHeight="52"
+                    IsHitTestVisible="True">
+                <StackPanel x:Name="ModuleIcons"
+                            Orientation="Horizontal"
+                            Spacing="4"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
                     <Button x:Name="NavDiscord"
                             Style="{StaticResource ExoNavTab}"
                             AutomationProperties.Name="Discord"
@@ -117,63 +179,22 @@
                             <TextBlock Text="Epic" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
-                    </StackPanel>
-                </Border>
-            </TitleBar.Content>
+                </StackPanel>
+            </Border>
+        </Grid>
 
-            <TitleBar.RightHeader>
-                <!-- Settings is stable on every page; EXO at left is always Home. -->
-                <Button x:Name="SettingsButton"
-                        Style="{StaticResource ExoNavTab}"
-                        Width="44"
-                        MinWidth="44"
-                        AutomationProperties.Name="Settings"
-                        Click="SettingsButton_Click"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Center"
-                        Margin="8,0,8,0">
-                    <Grid>
-                        <FontIcon x:Name="SettingsGearIcon"
-                                  Glyph="&#xE713;"
-                                  FontSize="15"
-                                  HorizontalAlignment="Center"
-                                  VerticalAlignment="Center"
-                                  IsHitTestVisible="False"
-                                  RenderTransformOrigin="0.5,0.5">
-                            <FontIcon.RenderTransform>
-                                <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
-                            </FontIcon.RenderTransform>
-                        </FontIcon>
-                    </Grid>
-                    <FlyoutBase.AttachedFlyout>
-                        <Flyout x:Name="SettingsFlyout"
-                                Placement="Bottom"
-                                Opened="SettingsFlyout_Opened"
-                                Closing="SettingsFlyout_Closing"
-                                Closed="SettingsFlyout_Closed">
-                            <Flyout.FlyoutPresenterStyle>
-                                <Style TargetType="FlyoutPresenter">
-                                    <Setter Property="Padding" Value="0" />
-                                    <Setter Property="BorderThickness" Value="0" />
-                                    <Setter Property="Background" Value="Transparent" />
-                                    <Setter Property="CornerRadius" Value="0" />
-                                    <Setter Property="MaxWidth" Value="392" />
-                                </Style>
-                            </Flyout.FlyoutPresenterStyle>
-                            <controls:SettingsSheet x:Name="SettingsSheetHost" />
-                        </Flyout>
-                    </FlyoutBase.AttachedFlyout>
-                </Button>
-            </TitleBar.RightHeader>
-        </TitleBar>
-
-        <Grid Grid.Row="2"
+        <!-- Centered page column: fills width below 1120, centers above it (no left bias). -->
+        <Grid x:Name="ContentHost"
+              Grid.Row="2"
               MaxWidth="{StaticResource ExoPageMaxWidth}"
-              HorizontalAlignment="Stretch">
+              HorizontalAlignment="Center"
+              VerticalAlignment="Stretch">
             <Frame x:Name="ContentFrame"
                    Padding="0"
                    IsTabStop="True"
-                   IsNavigationStackEnabled="False" />
+                   IsNavigationStackEnabled="False"
+                   HorizontalAlignment="Stretch"
+                   VerticalAlignment="Stretch" />
         </Grid>
     </Grid>
 </Window>

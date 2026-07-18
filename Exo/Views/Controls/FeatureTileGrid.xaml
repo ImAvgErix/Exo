@@ -7,12 +7,20 @@
     HorizontalAlignment="Stretch"
     VerticalAlignment="Top">
 
+    <!--
+      Two-up capability tiles with fixed row height so every module plate
+      (Discord, Steam, Riot, Epic, …) reads as one consistent card system.
+    -->
     <ItemsRepeater x:Name="TileRepeater"
                    ItemsSource="{x:Bind ItemsSource, Mode=OneWay}"
                    HorizontalAlignment="Stretch">
         <ItemsRepeater.Layout>
+            <!--
+              MinItemWidth ~ half plate: keeps a stable two-column rhythm like Discord.
+              Lower values (e.g. 280) spill into three columns and leave orphan half-rows.
+            -->
             <UniformGridLayout MinItemWidth="360"
-                               MinItemHeight="72"
+                               MinItemHeight="84"
                                MinRowSpacing="12"
                                MinColumnSpacing="12"
                                ItemsJustification="Start"
@@ -21,7 +29,12 @@
         <ItemsRepeater.ItemTemplate>
             <DataTemplate x:DataType="vm:FeatureRowViewModel">
                 <Border Style="{StaticResource ExoFeatureTile}"
-                        Opacity="{x:Bind Opacity}">
+                        Opacity="{x:Bind Opacity}"
+                        Height="84"
+                        MinHeight="84"
+                        MaxHeight="84"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch">
                     <Grid ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="3" />
@@ -29,11 +42,14 @@
                         </Grid.ColumnDefinitions>
                         <Border Style="{StaticResource ExoStatusRail}"
                                 Opacity="{x:Bind RailOpacity}" />
-                        <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="1"
+                                    Spacing="3"
+                                    VerticalAlignment="Center">
                             <TextBlock Text="{x:Bind Title}"
                                        Style="{StaticResource ExoFeatureTitle}"
                                        CharacterSpacing="-2"
-                                       TextTrimming="CharacterEllipsis" />
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxLines="1" />
                             <TextBlock Text="{x:Bind Detail}"
                                        Style="{StaticResource ExoFeatureDetail}"
                                        TextWrapping="WrapWholeWords"

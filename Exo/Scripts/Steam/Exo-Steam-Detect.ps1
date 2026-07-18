@@ -318,7 +318,7 @@ if (-not $steamOk) {
             $cefOk = Test-SteamCefLauncherText -Text $launcherText
         } catch { }
     }
-    Add-Feature 'Quiet CEF launcher' 'Fast quiet CEF flags + High priority Steam start (Steam launches before the contention guard).' $cefOk
+    Add-Feature 'Quiet CEF launcher' 'Fast quiet CEF flags and High priority Steam start before the in-game contention guard attaches.' $cefOk
 
     # Reversible background memory priority + in-game CPU yield policy.
     $memoryGuardOk = $false
@@ -329,7 +329,7 @@ if (-not $steamOk) {
             $memoryGuardOk = Test-SteamMemoryGuardText -Text $helperText
         } catch { }
     }
-    Add-Feature 'Background priority policy' 'Background CEF pages get low memory priority plus EcoQoS while gaming; the foreground Steam window stays Normal. Allocated memory is not mislabeled as reclaimed.' $memoryGuardOk
+    Add-Feature 'In-game contention guard' 'Background CEF helpers drop to low memory priority plus EcoQoS while a game runs; the foreground Steam window stays Normal.' $memoryGuardOk
 
     $debloatOk = Test-SteamCompleteClientDebloat $steam
     # Sparse intermediate states (applying/incomplete/repairing) lack these keys - guard.
@@ -337,25 +337,27 @@ if (-not $steamOk) {
         ($state.PSObject.Properties.Name -contains 'downloadOptimized') -and $state.downloadOptimized) -and
         (Test-SteamDownloadConfig $steam)
     $debloatCombined = $debloatOk -and $dlOk
-    Add-Feature 'Complete client debloat' 'Caches, leftovers, crashpads cleaned; games preserved.' $debloatCombined
+    Add-Feature 'Complete client debloat' 'Caches, leftovers, and crashpads cleaned; installed games and shader caches stay preserved.' $debloatCombined
 
     $snapOk = [bool]($state -and ($state.PSObject.Properties.Name -contains 'clientTweaksVerified') -and $state.clientTweaksVerified -and
         ($state.PSObject.Properties.Name -contains 'snappyUi') -and $state.snappyUi -and
         ($state.PSObject.Properties.Name -contains 'overlayTweaks') -and $state.overlayTweaks) -and
         (Test-SteamClientTweaks $steam)
-    Add-Feature 'Library / overlay tweaks' 'Quieter overlay and lighter library web views.' $snapOk
+    Add-Feature 'Library / overlay tweaks' 'Quieter overlay, lighter library web views, and less CEF busywork in the background.' $snapOk
 
     $hardwareOk = [bool]($state -and ($state.PSObject.Properties.Name -contains 'clientHardwareAcceleration') -and
         $state.clientHardwareAcceleration) -and (Test-SteamClientHardwareAcceleration)
-    Add-Feature 'Hardware-accelerated client' 'Steam CEF uses the GPU instead of costly software rendering.' $hardwareOk
+    Add-Feature 'Hardware-accelerated client' 'Steam CEF uses the GPU instead of costly software rendering for the library UI.' $hardwareOk
 
     $windowsQuietOk = Test-SteamWindowsQuiet $steam
-    Add-Feature 'Windows quiet shell' 'No autostart; toasts off; tray not promoted.' $windowsQuietOk
+    Add-Feature 'Windows quiet shell' 'No Steam autostart or toast spam; tray icon is not promoted into the always-visible row.' $windowsQuietOk
 
     $launchOk = Test-SteamStartMenuLaunchPath $steam
-    Add-Feature 'Start Menu launch path' 'Shortcuts use Exo launcher; no desktop icons.' $launchOk
+    Add-Feature 'Start Menu launch path' 'Start Menu shortcuts use the Exo quiet launcher; desktop icons are not recreated.' $launchOk
 
     $runtimeOk = Test-SteamRuntimeIntegrity $steam
+    Add-Feature 'Runtime integrity' 'Required Steam binaries and the durable quiet helper remain on disk after apply.' $runtimeOk
+
     # Trust apply flags - do NOT pin exact kit version strings (1.7.3+ was falsely "incomplete").
     $markerOk = Test-SteamApplyRecord -State $state
     # Durable quiet re-enforce helper must exist after modern applies.
@@ -370,7 +372,8 @@ if (-not $steamOk) {
     } elseif ($markerOk -and -not (Test-Path -LiteralPath $helper)) {
         $markerOk = $false
     }
-    Add-Feature 'Verified apply' 'Full apply recorded with durable quiet + runtime intact.' ($markerOk -and $runtimeOk)
+    # 10 tiles (even) so the two-column plate never leaves a lonely half-width card.
+    Add-Feature 'Verified optimizer record' 'A completed full apply is recorded with durable quiet policy intact.' ($markerOk -and $runtimeOk)
 
     $isApplied = $steamOk -and $markerOk -and $cefOk -and $memoryGuardOk -and $debloatOk -and
         $runtimeOk -and $dlOk -and $snapOk -and $hardwareOk -and $windowsQuietOk -and $launchOk

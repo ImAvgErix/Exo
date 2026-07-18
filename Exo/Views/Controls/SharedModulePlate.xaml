@@ -15,16 +15,18 @@
                   ZoomMode="Disabled">
         <Border Style="{StaticResource ExoModulePlate}"
                 Margin="16,8,16,16"
-                Padding="20">
-            <StackPanel Spacing="20">
-                <Grid ColumnSpacing="16">
+                Padding="20"
+                HorizontalAlignment="Stretch">
+            <StackPanel Spacing="20" HorizontalAlignment="Stretch">
+                <Grid ColumnSpacing="16" HorizontalAlignment="Stretch">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="4" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Background="{ThemeResource ExoAccentBrush}"
                             CornerRadius="2"
-                            Opacity="0.9" />
+                            Opacity="0.9"
+                            MinHeight="48" />
                     <StackPanel Grid.Column="1" Spacing="5">
                         <TextBlock Text="{x:Bind ModuleTitle, Mode=OneWay}"
                                    Style="{StaticResource ExoSectionTitle}"

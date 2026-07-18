@@ -133,9 +133,6 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
 
     private void ApplyState(OptimizerStateInfo state)
     {
-        IsApplied = state.IsApplied;
-        StatusText = state.StatusText;
-        RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
         Features.Clear();
         foreach (var feature in state.Features)
         {
@@ -149,11 +146,73 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
                 RailOpacity = UiStatusPresentation.FeatureRailOpacity(feature.IsActive)
             });
         }
+
+        // Honesty + Discord-grade status: never claim optimized when install/games rows are open.
+        var installMissing = Features.Any(f =>
+            f.Title.Contains("install", StringComparison.OrdinalIgnoreCase) && !f.IsActive);
+        var statusLooksMissing = (state.StatusText ?? string.Empty)
+            .Contains("not installed", StringComparison.OrdinalIgnoreCase);
+
+        if (installMissing || statusLooksMissing)
+        {
+            IsApplied = false;
+            StatusText = "Not installed";
+            RunButtonLabel = "Apply";
+        }
+        else
+        {
+            IsApplied = state.IsApplied;
+            var raw = (state.StatusText ?? string.Empty).Trim();
+            var missing = Features.Count(f => !f.IsActive && !string.IsNullOrWhiteSpace(f.Title));
+            if (!state.IsApplied
+                && missing > 0
+                && missing <= 3
+                && (string.Equals(raw, "Not applied", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(raw, "Ready to optimize", StringComparison.OrdinalIgnoreCase)
+                    || string.IsNullOrWhiteSpace(raw)))
+            {
+                StatusText = missing == 1
+                    ? "1 setting needs Apply"
+                    : $"{missing} settings need Apply";
+            }
+            else
+            {
+                StatusText = string.IsNullOrWhiteSpace(raw) ? "Ready" : raw;
+            }
+            RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
+        }
+
         LoadApplyReport();
-        GuidanceText = state.IsApplied
-            ? "Verified Windows policy only. Client files, services, anti-cheat, updates, and game settings stay untouched."
-            : "Apply disables launcher auto-start and routes detected games to the high-performance GPU. Hybrid PCs keep launcher UI on integrated graphics.";
-        HasGuidance = true;
+        var failSteps = ApplyReportRows
+            .Where(r => r.Status == "fail")
+            .Select(r =>
+            {
+                var text = r.Text ?? string.Empty;
+                var cut = text.IndexOf(" - ", StringComparison.Ordinal);
+                return cut > 0 ? text[..cut].Trim() : text.Split('·')[0].Trim();
+            })
+            .Where(s => s.Length > 0)
+            .Take(4)
+            .ToList();
+        // Shared soft-drift / verified phrasing (Steam advisor module); launcher honesty overrides below.
+        GuidanceText = OptimizerAdvisor.BuildV2(
+            "Steam",
+            IsApplied,
+            StatusText,
+            string.Empty,
+            Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList(),
+            failSteps);
+        // Keep launcher-specific honesty notes when fully verified or not installed.
+        if (IsApplied)
+        {
+            GuidanceText =
+                $"Verified Windows policy only. {_module} client files, services, anti-cheat, updates, and game settings stay untouched.";
+        }
+        else if (installMissing || statusLooksMissing)
+        {
+            GuidanceText = $"{_module} is not installed. Install it, open it once, then refresh this page.";
+        }
+        HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
         if (!IsStatusLoading) IsFeatureListVisible = Features.Count > 0;
     }
 
