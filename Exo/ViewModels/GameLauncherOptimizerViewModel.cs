@@ -206,7 +206,7 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
         if (IsApplied)
         {
             GuidanceText =
-                $"Verified Windows policy only. {_module} client files, services, anti-cheat, updates, and game settings stay untouched.";
+                $"Verified Windows policy: GPU routing, FSO off, launcher yield while gaming. {_module} client files, services, anti-cheat, updates, and game settings stay untouched.";
         }
         else if (installMissing || statusLooksMissing)
         {

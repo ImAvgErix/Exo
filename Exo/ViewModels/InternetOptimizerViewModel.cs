@@ -44,7 +44,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial Brush BenchmarkBrush { get; set; } = new SolidColorBrush(Color.FromArgb(255, 161, 161, 170));
     [ObservableProperty] public partial bool HasRollback { get; set; }
     [ObservableProperty] public partial string RollbackNotice { get; set; } = string.Empty;
-    [ObservableProperty] public partial string RepairHint { get; set; } = "Repair: reset to stock defaults";
+    [ObservableProperty] public partial string RepairHint { get; set; } =
+        "Repair always available - restores the pre-Exo snapshot. Wi-Fi is never permanently disabled.";
     [ObservableProperty] public partial bool HasQualityResult { get; set; }
     [ObservableProperty] public partial string QualitySummary { get; set; } = string.Empty;
 
@@ -214,6 +215,13 @@ public partial class InternetOptimizerViewModel : ObservableObject
             snap.Detail,
             snap.Features.Select(r => (r.Title, r.IsOk, r.Status)).ToList(),
             failSteps);
+        // Always surface brick-safety: Wi-Fi stays up, snapshot first, auto-rollback on probe fail.
+        const string safety =
+            "Safety: Wi-Fi is never disabled. Apply snapshots first and auto-rolls back if connectivity fails. Repair restores the pre-Exo snapshot.";
+        if (string.IsNullOrWhiteSpace(GuidanceText))
+            GuidanceText = safety;
+        else if (!GuidanceText.Contains("Wi-Fi is never disabled", StringComparison.OrdinalIgnoreCase))
+            GuidanceText = GuidanceText.TrimEnd() + " " + safety;
         HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
     }
 

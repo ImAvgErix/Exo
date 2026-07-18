@@ -11,12 +11,16 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.1.0'
+$Version = '1.2.0'
 $ExoRoot = Join-Path $env:LOCALAPPDATA 'Exo'
 $StatePath = Join-Path $ExoRoot ("{0}-optimizer.json" -f $Module.ToLowerInvariant())
 $SnapshotPath = Join-Path $ExoRoot ("{0}-snapshot.json" -f $Module.ToLowerInvariant())
+$YieldHelperPath = Join-Path $ExoRoot ("{0}-yield-guard.ps1" -f $Module.ToLowerInvariant())
+$YieldRunName = "Exo-$Module-Yield"
 $RunSubKey = 'Software\Microsoft\Windows\CurrentVersion\Run'
 $GpuSubKey = 'Software\Microsoft\DirectX\UserGpuPreferences'
+$FsoSubKey = 'Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
+$FsoFlags = '~ DISABLEDXMAXIMIZEDWINDOWEDMODE HIGHDPIAWARE'
 $Report = [System.Collections.Generic.List[string]]::new()
 
 function Write-ProgressLine([int]$Percent, [string]$Text) {
@@ -177,6 +181,7 @@ function Get-RunMatches {
 function New-Snapshot([object[]]$Targets, [object[]]$Launchers) {
     if (Test-Path -LiteralPath $SnapshotPath -PathType Leaf) { return }
     $gpu = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($GpuSubKey)
+    $fso = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($FsoSubKey)
     $targetStates = [System.Collections.Generic.List[object]]::new()
     try {
         foreach ($target in $Targets) {
@@ -185,6 +190,7 @@ function New-Snapshot([object[]]$Targets, [object[]]$Launchers) {
                 exe = $target.exe
                 role = 'game'
                 gpu = Get-ValueSnapshot $gpu ([string]$target.path)
+                fso = Get-ValueSnapshot $fso ([string]$target.path)
             })
         }
         foreach ($target in $Launchers) {
@@ -193,15 +199,20 @@ function New-Snapshot([object[]]$Targets, [object[]]$Launchers) {
                 exe = $target.exe
                 role = 'launcher'
                 gpu = Get-ValueSnapshot $gpu ([string]$target.path)
+                fso = Get-ValueSnapshot $fso ([string]$target.path)
             })
         }
-    } finally { if ($gpu) { $gpu.Dispose() } }
+    } finally {
+        if ($gpu) { $gpu.Dispose() }
+        if ($fso) { $fso.Dispose() }
+    }
     $snapshot = [ordered]@{
-        schema = 1
+        schema = 2
         module = $Module
         capturedUtc = (Get-Date).ToUniversalTime().ToString('o')
         run = @(Get-RunMatches)
         targets = @($targetStates)
+        yieldRunName = $YieldRunName
     }
     New-Item -ItemType Directory -Path $ExoRoot -Force | Out-Null
     $snapshot | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $SnapshotPath -Encoding UTF8
@@ -235,7 +246,106 @@ function Apply-TargetPolicy([object[]]$Targets, [object[]]$Launchers, [bool]$Hyb
         }
     } finally { $gpu.Dispose() }
 }
+function Apply-FsoPolicy([object[]]$Targets) {
+    # Fullscreen Optimizations off + DPI aware for game exes only (never anti-cheat services).
+    $fso = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($FsoSubKey, $true)
+    try {
+        foreach ($target in $Targets) {
+            $fso.SetValue([string]$target.path, $FsoFlags, [Microsoft.Win32.RegistryValueKind]::String)
+        }
+    } finally { $fso.Dispose() }
+}
+function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
+    # Live companion: while a game runs, demote launcher UI only (memory priority + EcoQoS).
+    # Never opens, suspends, or modifies game/anti-cheat processes.
+    $gameNames = @($Targets | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension([string]$_.path) } | Sort-Object -Unique)
+    $launcherNames = @($Launchers | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension([string]$_.path) } | Sort-Object -Unique)
+    if ($gameNames.Count -eq 0 -or $launcherNames.Count -eq 0) { return $false }
+    $gameList = ($gameNames | ForEach-Object { "'$_'" }) -join ','
+    $launcherList = ($launcherNames | ForEach-Object { "'$_'" }) -join ','
+    $lines = @(
+        "# Exo $Module launcher yield guard. Never touches game or anti-cheat processes."
+        '$ErrorActionPreference = ''SilentlyContinue'''
+        '$created = $false'
+        ("`$mutex = [Threading.Mutex]::new(`$true, 'Local\Exo.{0}.YieldGuard', [ref]`$created)" -f $Module)
+        'if (-not $created) { $mutex.Dispose(); exit 0 }'
+        'Add-Type -TypeDefinition @"'
+        'using System;'
+        'using System.Runtime.InteropServices;'
+        'public static class ExoLaunchYield {'
+        '  [StructLayout(LayoutKind.Sequential)] struct MEMORY_PRIORITY_INFORMATION { public uint MemoryPriority; }'
+        '  [StructLayout(LayoutKind.Sequential)] struct PROCESS_POWER_THROTTLING_STATE { public uint Version; public uint ControlMask; public uint StateMask; }'
+        '  [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);'
+        '  [DllImport("kernel32.dll", SetLastError=true)] static extern bool SetProcessInformation(IntPtr process, int infoClass, ref MEMORY_PRIORITY_INFORMATION info, uint size);'
+        '  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);'
+        '  public static bool SetMemoryPriority(int pid, uint priority) {'
+        '    IntPtr h = OpenProcess(0x0200u | 0x1000u, false, pid);'
+        '    if (h == IntPtr.Zero) return false;'
+        '    try { var info = new MEMORY_PRIORITY_INFORMATION { MemoryPriority = priority }; return SetProcessInformation(h, 0, ref info, 4); }'
+        '    finally { CloseHandle(h); }'
+        '  }'
+        '  public static bool SetPowerThrottled(int pid, bool enabled) {'
+        '    IntPtr h = OpenProcess(0x0200u | 0x1000u, false, pid);'
+        '    if (h == IntPtr.Zero) return false;'
+        '    try {'
+        '      var info = new PROCESS_POWER_THROTTLING_STATE { Version = 1, ControlMask = 1, StateMask = enabled ? 1u : 0u };'
+        '      return SetProcessInformation(h, 4, ref info, 12);'
+        '    } finally { CloseHandle(h); }'
+        '  }'
+        '}'
+        '"@'
+        ("`$games = @({0})" -f $gameList)
+        ("`$launchers = @({0})" -f $launcherList)
+        'try {'
+        '  while ($true) {'
+        '    $gameRunning = $false'
+        '    foreach ($n in $games) {'
+        '      if (Get-Process -Name $n -ErrorAction SilentlyContinue) { $gameRunning = $true; break }'
+        '    }'
+        '    foreach ($n in $launchers) {'
+        '      Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object {'
+        '        try {'
+        '          if ($gameRunning) {'
+        '            if ($_.PriorityClass -ne [Diagnostics.ProcessPriorityClass]::BelowNormal) {'
+        '              $_.PriorityClass = [Diagnostics.ProcessPriorityClass]::BelowNormal'
+        '            }'
+        '            [void][ExoLaunchYield]::SetMemoryPriority($_.Id, 1)'
+        '            [void][ExoLaunchYield]::SetPowerThrottled($_.Id, $true)'
+        '          } else {'
+        '            if ($_.PriorityClass -ne [Diagnostics.ProcessPriorityClass]::Normal) {'
+        '              $_.PriorityClass = [Diagnostics.ProcessPriorityClass]::Normal'
+        '            }'
+        '            [void][ExoLaunchYield]::SetMemoryPriority($_.Id, 5)'
+        '            [void][ExoLaunchYield]::SetPowerThrottled($_.Id, $false)'
+        '          }'
+        '        } catch {}'
+        '      }'
+        '    }'
+        '    Start-Sleep -Seconds 3'
+        '  }'
+        '} finally {'
+        '  try { $mutex.ReleaseMutex() } catch {}'
+        '  $mutex.Dispose()'
+        '}'
+    )
+    [IO.File]::WriteAllText($YieldHelperPath, ($lines -join "`r`n") + "`r`n", [Text.UTF8Encoding]::new($false))
+    $pwsh = $null
+    try { $pwsh = (Get-Command pwsh -ErrorAction SilentlyContinue).Source } catch {}
+    if (-not $pwsh) { $pwsh = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe' }
+    if (Test-Path -LiteralPath $pwsh) {
+        $run = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($RunSubKey, $true)
+        try {
+            $cmd = '"{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $pwsh, $YieldHelperPath
+            $run.SetValue($YieldRunName, $cmd, [Microsoft.Win32.RegistryValueKind]::String)
+        } finally { $run.Dispose() }
+        try {
+            Start-Process -FilePath $pwsh -ArgumentList @('-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',$YieldHelperPath) -WindowStyle Hidden | Out-Null
+        } catch {}
+    }
+    return $true
+}
 function Restore-Value([Microsoft.Win32.RegistryKey]$Key, [string]$Name, $Snapshot) {
+    if ($null -eq $Snapshot) { return }
     if ([bool]$Snapshot.existed) {
         $Key.SetValue($Name, $Snapshot.value, (Convert-Kind ([string]$Snapshot.kind)))
     } else { $Key.DeleteValue($Name, $false) }
@@ -247,12 +357,15 @@ function Invoke-Repair {
         return
     }
     $snapshot = Get-Content -LiteralPath $SnapshotPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ([int]$snapshot.schema -ne 1 -or [string]$snapshot.module -ne $Module) { throw 'Snapshot contract mismatch.' }
+    $schema = [int]$snapshot.schema
+    if ($schema -notin @(1, 2) -or [string]$snapshot.module -ne $Module) { throw 'Snapshot contract mismatch.' }
     $run = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($RunSubKey, $true)
     try {
         foreach ($entry in @($snapshot.run)) {
             $run.SetValue([string]$entry.name, $entry.value, (Convert-Kind ([string]$entry.kind)))
         }
+        # Remove Exo yield Run entry if present.
+        try { $run.DeleteValue($YieldRunName, $false) } catch {}
     } finally { $run.Dispose() }
     $gpu = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($GpuSubKey, $true)
     try {
@@ -260,6 +373,17 @@ function Invoke-Repair {
             Restore-Value $gpu ([string]$target.path) $target.gpu
         }
     } finally { $gpu.Dispose() }
+    if ($schema -ge 2) {
+        $fso = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($FsoSubKey, $true)
+        try {
+            foreach ($target in @($snapshot.targets)) {
+                if ($target.PSObject.Properties.Name -contains 'fso') {
+                    Restore-Value $fso ([string]$target.path) $target.fso
+                }
+            }
+        } finally { $fso.Dispose() }
+    }
+    Remove-Item -LiteralPath $YieldHelperPath -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $SnapshotPath -Force -ErrorAction Stop
     Add-Report 'restore' 'ok'
@@ -286,6 +410,11 @@ try {
     Add-Report 'startup' 'ok' ("removed {0} auto-start value(s)" -f $removed)
     Apply-TargetPolicy $targets $launchers $hybridGraphics
     Add-Report 'gpu-routing' 'ok' ("{0} game(s); {1}" -f $targets.Count, $(if ($hybridGraphics) { "$($launchers.Count) launcher process(es) on integrated GPU" } else { 'single-GPU path' }))
+    Apply-FsoPolicy $targets
+    Add-Report 'fso' 'ok' 'Fullscreen Optimizations off for detected game executables'
+    $yieldOk = Install-YieldGuard $targets $launchers
+    if ($yieldOk) { Add-Report 'yield-guard' 'ok' 'launcher EcoQoS while game runs' }
+    else { Add-Report 'yield-guard' 'skip' 'no launcher processes to demote' }
     $verified = 0
     $gpu = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($GpuSubKey)
     try {
@@ -295,7 +424,14 @@ try {
         }
     } finally { if ($gpu) { $gpu.Dispose() } }
     if ($verified -ne $targets.Count) { throw "Only $verified of $($targets.Count) game policies verified." }
-    Add-Report 'verify' 'ok'
+    $fsoOk = 0
+    $fsoKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($FsoSubKey)
+    try {
+        foreach ($target in $targets) {
+            if ([string]$fsoKey.GetValue([string]$target.path, '') -match 'DISABLEDXMAXIMIZEDWINDOWEDMODE') { $fsoOk++ }
+        }
+    } finally { if ($fsoKey) { $fsoKey.Dispose() } }
+    Add-Report 'verify' 'ok' ("gpu={0}/{1}; fso={2}/{1}" -f $verified, $targets.Count, $fsoOk)
     $state = [ordered]@{
         version = $Version
         module = $Module
@@ -304,6 +440,8 @@ try {
         appliedUtc = (Get-Date).ToUniversalTime().ToString('o')
         startupQuiet = $true
         gamePolicyVerified = $true
+        fsoVerified = ($fsoOk -eq $targets.Count)
+        yieldGuardInstalled = [bool]$yieldOk
         hybridGraphics = [bool]$hybridGraphics
         launcherTargetCount = $launchers.Count
         targetCount = $targets.Count
@@ -316,7 +454,7 @@ try {
     }
     $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $StatePath -Encoding UTF8
     Write-ProgressLine 100 'Verified'
-    Write-Output ("DONE - {0}: startup quiet; {1} game executable(s) routed to the high-performance GPU" -f $Module, $targets.Count)
+    Write-Output ("DONE - {0}: startup quiet; GPU routing; FSO off; yield guard for {1} game executable(s)" -f $Module, $targets.Count)
     exit 0
 } catch {
     Add-Report 'apply' 'fail' $_.Exception.Message

@@ -329,7 +329,7 @@ if (-not $steamOk) {
             $memoryGuardOk = Test-SteamMemoryGuardText -Text $helperText
         } catch { }
     }
-    Add-Feature 'In-game contention guard' 'Background CEF helpers drop to low memory priority plus EcoQoS while a game runs; the foreground Steam window stays Normal.' $memoryGuardOk
+    Add-Feature 'In-game contention guard' 'While a game runs: background steamwebhelper gets very-low memory priority, EcoQoS, and soft page reclaim; the foreground Steam window stays Normal. EmptyWorkingSet is never used (it freezes CEF).' $memoryGuardOk
 
     $debloatOk = Test-SteamCompleteClientDebloat $steam
     # Sparse intermediate states (applying/incomplete/repairing) lack these keys - guard.

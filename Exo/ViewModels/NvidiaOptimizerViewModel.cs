@@ -269,6 +269,19 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             DetailText,
             Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList(),
             reportFailSteps: null);
+        // Latency honesty: what the two packs actually pin.
+        if (IsApplied)
+        {
+            GuidanceText = UseGsync
+                ? "Verified G-SYNC/VRR pack: Adaptive Sync on, Ultra Low Latency Ultra, Reflex preferred in supported games. Reapply after a driver update."
+                : "Verified raw-latency pack: VSync off, Ultra Low Latency Ultra, low prerender queue. Reflex preferred in supported games. Reapply after a driver update.";
+        }
+        else if (!string.IsNullOrWhiteSpace(GuidanceText) &&
+                 !GuidanceText.Contains("Ultra Low Latency", StringComparison.OrdinalIgnoreCase))
+        {
+            GuidanceText = GuidanceText.TrimEnd() +
+                " Raw latency = VSync off + Ultra Low Latency Ultra. Enable G-SYNC only when Adaptive-Sync is on in the monitor menu.";
+        }
         HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
     }
 

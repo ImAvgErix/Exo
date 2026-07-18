@@ -409,9 +409,9 @@ public partial class DashboardViewModel : ObservableObject
         if (state.Applied) appliedCount++;
         var tag = state.Applied ? "VERIFIED" : !string.IsNullOrWhiteSpace(state.Detail) ? "NEEDS ATTENTION" : "NOT APPLIED";
         var primary = state.Applied ? "Game policy active" : module == "riot" ? "Riot ready" : "Epic ready";
-        // Honest scope only: GPU routing + startup quiet (no invented CPU priority claims).
+        // Honest scope: GPU routing + FSO + launcher yield + startup quiet (never anti-cheat).
         var secondary = state.Applied
-            ? "High-performance GPU routing - startup quiet - exact Repair ready"
+            ? "GPU routing - FSO off - launcher yield while gaming"
             : module == "riot" ? "Detect VALORANT and League automatically" : "Discover installed games from Epic manifests";
         var metric = state.Applied
             ? $"{targetCount} game executable(s) verified - anti-cheat untouched"
