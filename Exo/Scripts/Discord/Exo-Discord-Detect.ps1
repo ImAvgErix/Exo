@@ -269,7 +269,7 @@ if (-not (Test-Path $discordRoot)) {
                 -ProxyHashMatchesKit $proxyHashOk `
                 -VersionHashMatchesKit $verHashOk
         }
-        Add-Feature 'Background memory + input policy' 'Verified DiscOpt binaries apply a 4-second idle working-set policy, Above Normal process priority, and input-thread tuning.' $kernelOk
+        Add-Feature 'Background memory + input policy' 'Verified DiscOpt binaries apply a 2.5-second idle working-set policy, Above Normal process priority, raw input, and input-thread tuning.' $kernelOk
 
         $modPath = Join-Path $app.FullName 'modules'
         $optionalModules = @('discord_hook-1', 'discord_clips-1')

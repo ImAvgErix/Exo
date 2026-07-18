@@ -151,9 +151,9 @@ $boundaryDetail = if ($Module -eq 'Riot') {
 }
 
 $yieldDetail = if ($yieldOk) {
-    'While a game runs, launcher UI drops to low memory priority + EcoQoS. Games and anti-cheat stay untouched.'
+    'While a game runs, launcher UI drops to low memory priority + EcoQoS and soft-reclaims idle pages. Games and anti-cheat stay untouched.'
 } else {
-    'Apply installs a reversible Exo yield companion for the launcher UI only.'
+    'Apply installs a reversible Exo yield + soft-reclaim companion for the launcher UI only.'
 }
 
 # 10 even tiles for consistent two-column plate.

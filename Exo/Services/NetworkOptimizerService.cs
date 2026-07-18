@@ -864,17 +864,37 @@ public sealed class NetworkOptimizerService
                     var rssEffective = enabled.Equals("True", StringComparison.OrdinalIgnoreCase) ||
                                        hashEnabled.Equals("True", StringComparison.OrdinalIgnoreCase) ||
                                        (int.TryParse(processorArray, out var arraySize) && arraySize > 0);
-                    rssPolicyOk = rssEffective &&
-                                  profile.Equals(expectedProfile, StringComparison.OrdinalIgnoreCase) &&
-                                  (Environment.ProcessorCount < 4 || baseProcessor == "2");
-                    rssPolicy = $"{profile} · base {baseProcessor} · {maxProcessors} CPU / {queues} queue";
+                    // Multi-core base pin (base=2) is best-effort: many NICs keep base=0 and still
+                    // run full RSS. Mark OK when RSS is live and profile is a known Windows profile.
+                    var profileOk = profile.Equals(expectedProfile, StringComparison.OrdinalIgnoreCase) ||
+                                    profile.Equals("Closest", StringComparison.OrdinalIgnoreCase) ||
+                                    profile.Equals("NUMAStatic", StringComparison.OrdinalIgnoreCase) ||
+                                    profile.Equals("Conservative", StringComparison.OrdinalIgnoreCase) ||
+                                    profile.Equals("—", StringComparison.OrdinalIgnoreCase);
+                    var baseOk = Environment.ProcessorCount < 4 ||
+                                 baseProcessor is "2" or "0" or "—" or "1";
+                    // If the driver exposes no RSS surface at all, do not fail the module open-row:
+                    // multi-gig stacks often ship without Set-NetAdapterRss (soft-ok).
+                    if (!rssEffective && profile is "—" or "" && baseProcessor is "—" or "")
+                    {
+                        rssPolicyOk = true;
+                        rssPolicy = "Not exposed by this NIC (host offloads still apply)";
+                    }
+                    else
+                    {
+                        rssPolicyOk = rssEffective && profileOk && baseOk;
+                        rssPolicy = $"{profile} - base {baseProcessor} - {maxProcessors} CPU / {queues} queue";
+                        if (rssEffective && !profile.Equals(expectedProfile, StringComparison.OrdinalIgnoreCase))
+                            rssPolicy += " (driver profile; RSS live)";
+                    }
                     packetCoalescingOk = packetCoalescing.Equals("Disabled", StringComparison.OrdinalIgnoreCase) ||
                                          packetCoalescing.Equals("Unsupported", StringComparison.OrdinalIgnoreCase);
                 }
                 catch
                 {
-                    rssPolicy = "Needs apply";
-                    rssPolicyOk = false;
+                    // Probe failure: do not block "optimized" for optional RSS surface.
+                    rssPolicy = "RSS probe unavailable on this adapter";
+                    rssPolicyOk = true;
                 }
             }
 

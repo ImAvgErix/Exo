@@ -1,7 +1,7 @@
-# Exo Cua QA - 2026-07-18T17:35:02.4861151-05:00
+# Exo Cua QA - 2026-07-18T17:40:58.6385881-05:00
 
-- pid: 7076
-- window_id: 3081154
+- pid: 8772
+- window_id: 1770972
 - exe: C:\Users\Erix\AppData\Local\Exo\app\Exo.exe
 
 ## Discord
@@ -38,7 +38,7 @@
 [26] Text: Exo Host (fast launch)
 [27] Text: Equicord loader + stock Discord shell + SKIP_HOST_UPDATE / chromium lean (no OpenAsar).
 [28] Text: Background memory + input policy
-[29] Text: Verified DiscOpt binaries apply a 4-second idle working-set policy, Above Normal process priority, and input-thread tuning.
+[29] Text: Verified DiscOpt binaries apply a 2.5-second idle working-set policy, Above Normal process priority, raw input, and input-thread tuning.
 [30] Text: Complete client debloat
 [31] Text: Old builds, optional hook/clips modules, game SDK files, extra locales, and disposable caches are removed.
 [32] Text: Discord runtime integrity
@@ -85,7 +85,7 @@
 [26] Text: Quiet CEF launcher
 [27] Text: Fast quiet CEF flags and High priority Steam start before the in-game contention guard attaches.
 [28] Text: In-game contention guard
-[29] Text: While a game runs: background steamwebhelper gets very-low memory priority, EcoQoS, and soft page reclaim; the foreground Steam window stays Normal. EmptyWorkingSet is never used (it freezes CEF).
+[29] Text: Non-foreground steamwebhelper always soft-reclaims idle pages + EcoQoS; tighter while a game runs. Foreground Steam stays Normal. EmptyWorkingSet never used (freezes CEF).
 [30] Text: Complete client debloat
 [31] Text: Caches, leftovers, and crashpads cleaned; installed games and shader caches stay preserved.
 [32] Text: Library / overlay tweaks
@@ -232,7 +232,7 @@
 [32] Text: Fullscreen Optimizations off
 [33] Text: Fullscreen Optimizations off on all 3 game executable(s) (less DWM lag).
 [34] Text: Launcher yield while gaming
-[35] Text: While a game runs, launcher UI drops to low memory priority + EcoQoS. Games and anti-cheat stay untouched.
+[35] Text: While a game runs, launcher UI drops to low memory priority + EcoQoS and soft-reclaims idle pages. Games and anti-cheat stay untouched.
 [36] Text: Hybrid GPU split
 [37] Text: Single-GPU PC: games use the only adapter; no launcher override is needed.
 [38] Text: Anti-cheat boundary
@@ -279,7 +279,7 @@
 [32] Text: Fullscreen Optimizations off
 [33] Text: Fullscreen Optimizations off on all 1 game executable(s) (less DWM lag).
 [34] Text: Launcher yield while gaming
-[35] Text: While a game runs, launcher UI drops to low memory priority + EcoQoS. Games and anti-cheat stay untouched.
+[35] Text: While a game runs, launcher UI drops to low memory priority + EcoQoS and soft-reclaims idle pages. Games and anti-cheat stay untouched.
 [36] Text: Hybrid GPU split
 [37] Text: Single-GPU PC: games use the only adapter; no launcher override is needed.
 [38] Text: Anti-cheat boundary
@@ -317,8 +317,8 @@
 [23] Text: 6 / 6 verified
 [24] Text: Every module detects this PC first, applies only supported changes, and keeps a repair path.
 [25] Text: SYSTEM MEMORY
-[26] Text: 4.2 GB
-[27] Text: 11.8 GB free - 15.9 GB total
+[26] Text: 4.4 GB
+[27] Text: 11.5 GB free - 15.9 GB total
 [28] ProgressBar: 
 [29] Button: Open Discord optimizer
 [30] Text: Discord

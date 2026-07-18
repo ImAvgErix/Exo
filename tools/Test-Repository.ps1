@@ -157,7 +157,7 @@ else {
 }
 
 $discordConfig = Get-Content -LiteralPath (Join-Path $Root 'Exo\Scripts\Discord\kit\config.ini') -Raw
-foreach ($marker in @('TrimIntervalMs=4000', 'PriorityClass=3')) {
+foreach ($marker in @('TrimIntervalMs=2500', 'PriorityClass=3')) {
     Assert-ContainsText $discordConfig $marker 'Discord aggressive kernel config'
 }
 

@@ -4,7 +4,7 @@ Bundled with [Exo](https://github.com/ImAvgErix/Exo). Prefer the app:
 
 The full profile uses Equicord + Exo Host (stock Discord shell
 with SKIP_HOST_UPDATE and lean chromium flags — OpenASAR is no longer used),
-the DiscOpt 4-second memory-trim and latency kernel, Above Normal priority,
+the DiscOpt 2.5-second memory-trim and latency kernel, Above Normal priority,
 full disposable-cache cleanup, allowlisted module/game-SDK debloat,
 English-only locale assets, voice QoS (DSCP 46) policies, and Windows
 startup/toast/tray suppression. Login/session and Discord updater integrity

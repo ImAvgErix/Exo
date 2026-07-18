@@ -118,7 +118,7 @@ public static partial class DiscordLogic
 
     /// <summary>
     /// Valid gaming DiscOpt config: EnableTrim=1, PriorityClass=3, TrimIntervalMs in 2000–15000.
-    /// Accepts kit (4000) and prior applies (5000) — does not hardcode a single interval.
+    /// Accepts kit (2500) and prior applies (4000/5000) — does not hardcode a single interval.
     /// </summary>
     public static bool IsKernelConfigText(string? configText)
     {

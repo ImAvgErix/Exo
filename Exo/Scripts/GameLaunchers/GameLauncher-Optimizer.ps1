@@ -274,7 +274,7 @@ function Apply-FsoPolicy([object[]]$Targets) {
     } finally { $fso.Dispose() }
 }
 function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
-    # Live companion: while a game runs, demote launcher UI only (memory priority + EcoQoS).
+    # Live companion: while a game runs, demote + soft-reclaim launcher UI only.
     # Never opens, suspends, or modifies game/anti-cheat processes.
     $gameNames = @($Targets | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension([string]$_.path) } | Sort-Object -Unique)
     $launcherNames = @($Launchers | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension([string]$_.path) } | Sort-Object -Unique)
@@ -282,7 +282,7 @@ function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
     $gameList = ($gameNames | ForEach-Object { "'$_'" }) -join ','
     $launcherList = ($launcherNames | ForEach-Object { "'$_'" }) -join ','
     $lines = @(
-        "# Exo $Module launcher yield guard. Never touches game or anti-cheat processes."
+        "# Exo $Module launcher yield + soft reclaim. Never touches game or anti-cheat processes."
         '$ErrorActionPreference = ''SilentlyContinue'''
         '$created = $false'
         ("`$mutex = [Threading.Mutex]::new(`$true, 'Local\Exo.{0}.YieldGuard', [ref]`$created)" -f $Module)
@@ -295,6 +295,7 @@ function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
         '  [StructLayout(LayoutKind.Sequential)] struct PROCESS_POWER_THROTTLING_STATE { public uint Version; public uint ControlMask; public uint StateMask; }'
         '  [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);'
         '  [DllImport("kernel32.dll", SetLastError=true)] static extern bool SetProcessInformation(IntPtr process, int infoClass, ref MEMORY_PRIORITY_INFORMATION info, uint size);'
+        '  [DllImport("kernel32.dll", SetLastError=true)] static extern bool SetProcessWorkingSetSize(IntPtr process, IntPtr min, IntPtr max);'
         '  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);'
         '  public static bool SetMemoryPriority(int pid, uint priority) {'
         '    IntPtr h = OpenProcess(0x0200u | 0x1000u, false, pid);'
@@ -309,6 +310,12 @@ function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
         '      var info = new PROCESS_POWER_THROTTLING_STATE { Version = 1, ControlMask = 1, StateMask = enabled ? 1u : 0u };'
         '      return SetProcessInformation(h, 4, ref info, 12);'
         '    } finally { CloseHandle(h); }'
+        '  }'
+        '  public static bool SoftReclaimWorkingSet(int pid) {'
+        '    IntPtr h = OpenProcess(0x0100u | 0x0200u, false, pid);'
+        '    if (h == IntPtr.Zero) return false;'
+        '    try { return SetProcessWorkingSetSize(h, new IntPtr(-1), new IntPtr(-1)); }'
+        '    finally { CloseHandle(h); }'
         '  }'
         '}'
         '"@'
@@ -329,6 +336,7 @@ function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
         '            }'
         '            [void][ExoLaunchYield]::SetMemoryPriority($_.Id, 1)'
         '            [void][ExoLaunchYield]::SetPowerThrottled($_.Id, $true)'
+        '            [void][ExoLaunchYield]::SoftReclaimWorkingSet($_.Id)'
         '          } else {'
         '            if ($_.PriorityClass -ne [Diagnostics.ProcessPriorityClass]::Normal) {'
         '              $_.PriorityClass = [Diagnostics.ProcessPriorityClass]::Normal'
@@ -339,7 +347,7 @@ function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
         '        } catch {}'
         '      }'
         '    }'
-        '    Start-Sleep -Seconds 3'
+        '    if ($gameRunning) { Start-Sleep -Seconds 2 } else { Start-Sleep -Seconds 3 }'
         '  }'
         '} finally {'
         '  try { $mutex.ReleaseMutex() } catch {}'
