@@ -526,7 +526,11 @@ if (File.Exists(sharedPlateXaml))
     Expect("SharedModulePlate normal-flow actions",
         plate.Contains("One normal-flow work surface", StringComparison.Ordinal)
         && plate.Contains("WHAT EXO WILL CHANGE", StringComparison.Ordinal)
-        && plate.Contains("Hardware-aware · reversible", StringComparison.Ordinal));
+        && (plate.Contains("Hardware-aware, reversible", StringComparison.Ordinal)
+            || plate.Contains("Hardware-aware", StringComparison.Ordinal))
+        && plate.Contains("Reading this PC", StringComparison.Ordinal)
+        && plate.Contains("Actions unlock when detection finishes", StringComparison.Ordinal)
+        && plate.Contains("InverseBoolToVisibilityConverter", StringComparison.Ordinal));
     Expect("SharedModulePlate advisor + report",
         plate.Contains("GuidanceText", StringComparison.Ordinal)
         && plate.Contains("ApplyReportRows", StringComparison.Ordinal));

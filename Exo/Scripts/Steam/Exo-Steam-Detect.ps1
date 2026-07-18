@@ -375,16 +375,21 @@ if (-not $steamOk) {
     $isApplied = $steamOk -and $markerOk -and $cefOk -and $memoryGuardOk -and $debloatOk -and
         $runtimeOk -and $dlOk -and $snapOk -and $hardwareOk -and $windowsQuietOk -and $launchOk
 
+    $missingCore = @()
+    if (-not $cefOk) { $missingCore += 'quiet CEF launch' }
+    if (-not $memoryGuardOk) { $missingCore += 'contention guard' }
+    if (-not $launchOk) { $missingCore += 'Start Menu path' }
     $statusText = if ($isApplied) { 'Already optimized' }
-    elseif (-not $cefOk -or -not $memoryGuardOk -or -not $launchOk) { 'Launcher needs restore' }
+    elseif ($missingCore.Count -eq 1) { "1 setting needs Apply ($($missingCore[0]))" }
+    elseif ($missingCore.Count -gt 1) { "$($missingCore.Count) launcher settings need Apply" }
     elseif (-not $windowsQuietOk) { 'Windows quiet incomplete' }
     else { 'Ready to optimize' }
     $detail = if ($isApplied) {
         'Hardware-accelerated CEF, debloat, Windows quiet, in-game CPU yield, and autostart re-enforce are active.'
-    } elseif (-not $cefOk -or -not $memoryGuardOk) {
-        'Steam launcher or contention guard is missing. Run to restore the Exo launch path.'
+    } elseif ($missingCore.Count -gt 0) {
+        'Run Apply to restore: ' + ($missingCore -join ', ') + '.'
     } else {
-        'Some pieces are missing. Run to finish the checklist below.'
+        'Some pieces are missing. Run Apply to finish the checklist below.'
     }
 }
 
