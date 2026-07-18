@@ -217,8 +217,6 @@ public partial class SteamOptimizerViewModel : ObservableObject
     private void ApplyState(OptimizerStateInfo state)
     {
         IsApplied = state.IsApplied;
-        StatusText = state.StatusText;
-        DetailText = string.Empty;
         Features.Clear();
         foreach (var feature in state.Features)
         {
@@ -232,6 +230,28 @@ public partial class SteamOptimizerViewModel : ObservableObject
                 RailOpacity = Helpers.UiStatusPresentation.FeatureRailOpacity(feature.IsActive)
             });
         }
+
+        // Soften generic heuristic status when only a few rows are open.
+        // Script detect already emits "1 setting needs Apply (...)" — keep that.
+        var missing = Features.Count(f => !f.IsActive && !string.IsNullOrWhiteSpace(f.Title));
+        var raw = (state.StatusText ?? string.Empty).Trim();
+        if (!state.IsApplied
+            && missing > 0
+            && missing <= 3
+            && (string.Equals(raw, "Not applied", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(raw, "Ready to optimize", StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(raw)))
+        {
+            StatusText = missing == 1
+                ? "1 setting needs Apply"
+                : $"{missing} launcher settings need Apply";
+        }
+        else
+        {
+            StatusText = string.IsNullOrWhiteSpace(raw) ? "Ready" : raw;
+        }
+
+        DetailText = string.Empty;
         RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
         if (!IsStatusLoading)
             IsFeatureListVisible = Features.Count > 0;

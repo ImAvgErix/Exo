@@ -53,7 +53,8 @@ public static class OptimizerAdvisor
             return "No active physical connection was detected. Connect Ethernet or Wi-Fi, then refresh.";
         if (module == "Steam" && state.Contains("open steam once"))
             return "Open Steam once so its account configuration exists, then apply again.";
-        // Prefer calm copy over "Launcher needs restore" when only a few rows fail.
+
+        // Soft copy when detect reports a small drift (exact "needs Apply" status from scripts).
         if (module == "Steam" && status.Contains("needs Apply", StringComparison.OrdinalIgnoreCase))
             return status.Contains("1 setting", StringComparison.OrdinalIgnoreCase)
                 ? "One launcher setting is out of policy. Apply restores it without touching games."
@@ -80,6 +81,31 @@ public static class OptimizerAdvisor
 
         if (missingCount > 0)
         {
+            // Prefer calm singular/plural copy — "1 settings are ready" reads broken.
+            if (missingCount == 1)
+            {
+                return module switch
+                {
+                    "Internet" => "One network setting is open. Analyze & Apply measures this path first.",
+                    "Discord" => "One setting is ready for this Discord installation.",
+                    "Steam" => "One launcher setting is out of policy. Apply restores it without touching games.",
+                    "NVIDIA" => "One GPU setting is ready for the detected display path.",
+                    _ => "One setting is ready for this PC."
+                };
+            }
+
+            if (missingCount <= 3)
+            {
+                return module switch
+                {
+                    "Internet" => "A few network settings are open. Analyze & Apply measures this path first.",
+                    "Discord" => $"{missingCount} settings are ready for this Discord installation.",
+                    "Steam" => "A few launcher settings are out of policy. Apply restores them without touching games.",
+                    "NVIDIA" => $"{missingCount} settings are ready for the detected GPU and display path.",
+                    _ => $"{missingCount} settings are ready for this PC."
+                };
+            }
+
             return module switch
             {
                 "Internet" => "Ready to measure this connection and apply one balanced policy.",

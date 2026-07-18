@@ -883,6 +883,50 @@ if (File.Exists(advisorPath))
         && adv.Contains("\"Discord\"", StringComparison.Ordinal)
         && adv.Contains("\"Steam\"", StringComparison.Ordinal)
         && adv.Contains("\"NVIDIA\"", StringComparison.Ordinal));
+    Expect("OptimizerAdvisor singular copy for one open setting",
+        adv.Contains("One setting is ready", StringComparison.Ordinal)
+        || adv.Contains("One launcher setting is out of policy", StringComparison.Ordinal));
+    Expect("OptimizerAdvisor rejects broken 1-settings grammar",
+        !adv.Contains("{missingCount} settings are ready", StringComparison.Ordinal)
+        || adv.Contains("missingCount == 1", StringComparison.Ordinal)
+        || adv.Contains("One setting", StringComparison.Ordinal));
+}
+
+// Dashboard recommended-next deep-link (Home -> first open module)
+// dashCs already declared above for entrance checks; reuse it.
+var nextActionVmPath = Path.Combine(repo, "Exo", "ViewModels", "DashboardViewModel.cs");
+if (File.Exists(dash) && File.Exists(dashCs) && File.Exists(nextActionVmPath))
+{
+    var nextActionXaml = File.ReadAllText(dash);
+    var nextActionCode = File.ReadAllText(dashCs);
+    var nextActionVm = File.ReadAllText(nextActionVmPath);
+    Expect("dashboard recommended-next CTA present",
+        nextActionXaml.Contains("NextAction_Click", StringComparison.Ordinal)
+        && nextActionXaml.Contains("Open recommended next optimizer", StringComparison.Ordinal));
+    Expect("dashboard recommended-next navigates modules",
+        nextActionCode.Contains("NextAction_Click", StringComparison.Ordinal)
+        && nextActionCode.Contains("NavigateToDiscord", StringComparison.Ordinal)
+        && nextActionCode.Contains("NavigateToSteam", StringComparison.Ordinal));
+    Expect("dashboard NextAction state on view model",
+        nextActionVm.Contains("HasNextAction", StringComparison.Ordinal)
+        && nextActionVm.Contains("UpdateNextAction", StringComparison.Ordinal)
+        && nextActionVm.Contains("NextActionModule", StringComparison.Ordinal));
+}
+
+// Internet plate title stays ASCII-safe (no middle-dot mojibake in header status)
+var internetVmPath = Path.Combine(repo, "Exo", "ViewModels", "InternetOptimizerViewModel.cs");
+if (File.Exists(internetVmPath))
+{
+    var ivm = File.ReadAllText(internetVmPath);
+    // Match the method body only — call sites sit near other · metrics strings.
+    var buildStatusIdx = ivm.IndexOf("private static string BuildStatus(", StringComparison.Ordinal);
+    var slice = buildStatusIdx >= 0
+        ? ivm.Substring(buildStatusIdx, Math.Min(700, ivm.Length - buildStatusIdx))
+        : string.Empty;
+    Expect("Internet BuildStatus uses ASCII separators",
+        buildStatusIdx >= 0
+        && slice.Contains("Ethernet path", StringComparison.Ordinal)
+        && !slice.Contains("·", StringComparison.Ordinal));
 }
 // Wave-2 shared script libs
 Expect("Exo.Common.ps1 shared lib",

@@ -118,6 +118,20 @@ public sealed partial class DashboardPage : Page
         if (App.MainAppWindow is MainWindow main) main.NavigateToEpic();
     }
 
+    private void NextAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.MainAppWindow is not MainWindow main) return;
+        switch (ViewModel.NextActionModule)
+        {
+            case "Discord": main.NavigateToDiscord(); break;
+            case "Steam": main.NavigateToSteam(); break;
+            case "Internet": main.NavigateToInternet(); break;
+            case "NVIDIA": main.NavigateToNvidia(); break;
+            case "Riot": main.NavigateToRiot(); break;
+            case "Epic": main.NavigateToEpic(); break;
+        }
+    }
+
     private void StabilizeHome()
     {
         try

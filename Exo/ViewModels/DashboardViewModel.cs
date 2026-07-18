@@ -40,6 +40,12 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] public partial string HeroSummary { get; set; } = "Maximum performance. No compromise.";
     [ObservableProperty] public partial string OverviewPrimary { get; set; } = "0 / 6 verified";
 
+    /// <summary>Module id for the recommended next deep-link (discord/steam/internet/nvidia/riot/epic).</summary>
+    [ObservableProperty] public partial string NextActionModule { get; set; } = string.Empty;
+    [ObservableProperty] public partial string NextActionLabel { get; set; } = string.Empty;
+    [ObservableProperty] public partial string NextActionDetail { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool HasNextAction { get; set; }
+
     [ObservableProperty] public partial string MemoryPrimary { get; set; } = "—";
     [ObservableProperty] public partial string MemorySecondary { get; set; } = "Reading system memory...";
     [ObservableProperty] public partial string MemoryLoadText { get; set; } = "";
@@ -320,16 +326,69 @@ public partial class DashboardViewModel : ObservableObject
         FrameTimeSecondary = DiscordStatusSecondary;
 
         OverviewPrimary = $"{appliedCount} / 6 verified";
+        UpdateNextAction(appliedCount);
         HeroSummary = appliedCount switch
         {
-            0 => "No optimizer has a verified apply record yet.",
+            0 => HasNextAction
+                ? $"Start with {NextActionModule} - no verified apply records yet."
+                : "No optimizer has a verified apply record yet.",
             1 => "One optimizer is verified; five are ready to configure.",
             6 => "Every optimizer has a verified apply record.",
-            _ => $"{appliedCount} optimizers are verified; {6 - appliedCount} still " +
-                 ((6 - appliedCount) == 1 ? "needs" : "need") + " attention."
+            _ => HasNextAction
+                ? $"{appliedCount} verified - next: open {NextActionModule}."
+                : $"{appliedCount} optimizers are verified; {6 - appliedCount} still " +
+                  ((6 - appliedCount) == 1 ? "needs" : "need") + " attention."
         };
 
         RefreshLiveMemory();
+    }
+
+    /// <summary>
+    /// Pick the highest-priority module that is not verified so Home can deep-link
+    /// straight into work instead of forcing users to scan six cards.
+    /// </summary>
+    private void UpdateNextAction(int appliedCount)
+    {
+        if (appliedCount >= 6)
+        {
+            HasNextAction = false;
+            NextActionModule = string.Empty;
+            NextActionLabel = string.Empty;
+            NextActionDetail = string.Empty;
+            return;
+        }
+
+        // Priority: install-adjacent launchers first (user sees value fast), then path, GPU, games.
+        (string Id, string Label, string Tag, string Detail)[] candidates =
+        [
+            ("Discord", "Open Discord", DiscordStatusTag, DiscordStatusSecondary),
+            ("Steam", "Open Steam", SteamStatusTag, SteamStatusSecondary),
+            ("Internet", "Open Internet", InternetStatusTag, LatencySecondary),
+            ("NVIDIA", "Open NVIDIA", NvidiaStatusTag, NvidiaPathSecondary),
+            ("Riot", "Open Riot", RiotStatusTag, RiotStatusSecondary),
+            ("Epic", "Open Epic", EpicStatusTag, EpicStatusSecondary),
+        ];
+
+        foreach (var c in candidates)
+        {
+            if (string.Equals(c.Tag, "VERIFIED", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            HasNextAction = true;
+            NextActionModule = c.Id;
+            NextActionLabel = string.Equals(c.Tag, "NEEDS ATTENTION", StringComparison.OrdinalIgnoreCase)
+                ? $"Fix {c.Id}"
+                : c.Label;
+            NextActionDetail = string.IsNullOrWhiteSpace(c.Detail)
+                ? "Detect this PC, then Apply only supported changes."
+                : c.Detail;
+            return;
+        }
+
+        HasNextAction = false;
+        NextActionModule = string.Empty;
+        NextActionLabel = string.Empty;
+        NextActionDetail = string.Empty;
     }
 
     private void RefreshLauncherTile(string module, ref int appliedCount)

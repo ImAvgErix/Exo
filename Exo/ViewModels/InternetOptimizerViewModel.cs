@@ -435,19 +435,23 @@ public partial class InternetOptimizerViewModel : ObservableObject
     {
         if (!snap.ProbeOk) return "Probe incomplete";
 
+        // ASCII separators only in the plate title — middle-dot often mojibakes
+        // in UIA snapshots / logs and looks broken to users.
         var media = snap.Media.EthernetInUse
             ? "Ethernet path"
             : snap.Media.EthernetUp
                 ? "Ethernet (no IP yet)"
                 : snap.Media.WifiUp
-                    ? $"Wi‑Fi · {snap.Media.PreferredBandTarget}"
+                    ? $"Wi-Fi - {snap.Media.PreferredBandTarget}"
                     : snap.ConnectionType;
 
         if (snap.ActivePreset == NetworkPreset.Balanced)
-            return $"{media} · {snap.LinkSpeed}";
+            return string.IsNullOrWhiteSpace(snap.LinkSpeed)
+                ? media
+                : $"{media} - {snap.LinkSpeed}";
 
         var allOk = snap.Features.Count > 0 && snap.Features.All(f => f.IsOk);
-        return allOk ? $"Optimized · {media}" : "Optimized · check rows";
+        return allOk ? $"Optimized - {media}" : "Optimized - check rows";
     }
 
     private void ClearMessage()

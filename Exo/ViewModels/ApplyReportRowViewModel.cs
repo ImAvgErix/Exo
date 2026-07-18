@@ -46,8 +46,8 @@ public static class ApplyReportPresentation
             normalized = "skip";
 
         var text = string.IsNullOrWhiteSpace(reason)
-            ? $"{name} · {normalized}"
-            : $"{name} · {normalized} — {reason}";
+            ? $"{name} - {normalized}"
+            : $"{name} - {normalized} - {reason}";
 
         return new ApplyReportRowViewModel
         {
@@ -68,7 +68,7 @@ public static class ApplyReportPresentation
         };
     }
 
-    /// <summary>Compact header line, e.g. "Last apply · 9 ok · 1 fail · 2 skip".</summary>
+    /// <summary>Compact header line, e.g. "Last apply - 9 ok - 1 fail - 2 skip".</summary>
     public static string Summarize(IReadOnlyList<ApplyReportRowViewModel> rows)
     {
         if (rows is null || rows.Count == 0) return "Last apply";
@@ -76,9 +76,9 @@ public static class ApplyReportPresentation
         var fail = rows.Count(r => r.Status == "fail");
         var skip = rows.Count(r => r.Status == "skip");
         var text = "Last apply";
-        if (ok > 0) text += $" · {ok} ok";
-        if (fail > 0) text += $" · {fail} fail";
-        if (skip > 0) text += $" · {skip} skip";
+        if (ok > 0) text += $" - {ok} ok";
+        if (fail > 0) text += $" - {fail} fail";
+        if (skip > 0) text += $" - {skip} skip";
         return text;
     }
 

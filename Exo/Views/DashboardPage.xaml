@@ -38,7 +38,11 @@
                     Grid.Row="1"
                     Style="{StaticResource ExoModulePlate}"
                     Padding="20,18">
-                <Grid ColumnSpacing="24">
+                <Grid RowSpacing="14" ColumnSpacing="24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="280" />
@@ -83,6 +87,46 @@
                                          Margin="0,4,0,0"
                                          Value="{x:Bind ViewModel.MemoryLoadPercent, Mode=OneWay}" />
                         </StackPanel>
+                    </Border>
+
+                    <!-- Recommended next: one-click deep-link into the highest-priority open module. -->
+                    <Border Grid.Row="1"
+                            Grid.ColumnSpan="2"
+                            Background="{ThemeResource ExoSurfaceSunkenBrush}"
+                            BorderBrush="{ThemeResource ExoDividerBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource ExoTileRadius}"
+                            Padding="12,10"
+                            Visibility="{x:Bind ViewModel.HasNextAction, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE7C3;"
+                                      FontSize="14"
+                                      Foreground="{ThemeResource ExoAccentBrush}"
+                                      VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="RECOMMENDED NEXT"
+                                           Style="{StaticResource ExoSectionTitle}"
+                                           Margin="0" />
+                                <TextBlock Text="{x:Bind ViewModel.NextActionDetail, Mode=OneWay}"
+                                           Style="{StaticResource ExoCaption}"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxLines="2" />
+                            </StackPanel>
+                            <Button Grid.Column="2"
+                                    Style="{StaticResource ExoPrimaryButton}"
+                                    MinWidth="128"
+                                    MinHeight="40"
+                                    Padding="14,8"
+                                    VerticalAlignment="Center"
+                                    Content="{x:Bind ViewModel.NextActionLabel, Mode=OneWay}"
+                                    Click="NextAction_Click"
+                                    AutomationProperties.Name="Open recommended next optimizer" />
+                        </Grid>
                     </Border>
                 </Grid>
             </Border>
