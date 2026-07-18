@@ -188,8 +188,8 @@ if (File.Exists(appXaml) && File.Exists(colorTokens) && File.Exists(typeTokens) 
     var colors = File.ReadAllText(colorTokens);
     var types = File.ReadAllText(typeTokens);
     var metrics = File.ReadAllText(metricTokens);
-    Expect("dark page token", colors.Contains("<Color x:Key=\"ExoColorPage\">#050505</Color>", StringComparison.Ordinal));
-    Expect("stone white primary token", colors.Contains("<Color x:Key=\"ExoColorPrimaryText\">#F4F4F2</Color>", StringComparison.Ordinal));
+    Expect("dark page token", colors.Contains("<Color x:Key=\"ExoColorPage\">#000000</Color>", StringComparison.Ordinal));
+    Expect("stone white primary token", colors.Contains("<Color x:Key=\"ExoColorPrimaryText\">#F2F2F0</Color>", StringComparison.Ordinal));
     Expect("light theme removed", !colors.Contains("x:Key=\"Light\"", StringComparison.Ordinal)
         && !a.Contains("x:Key=\"Light\"", StringComparison.Ordinal));
     Expect("High Contrast dictionary", colors.Contains("x:Key=\"HighContrast\"", StringComparison.Ordinal)
@@ -197,8 +197,8 @@ if (File.Exists(appXaml) && File.Exists(colorTokens) && File.Exists(typeTokens) 
     Expect("token dictionaries merged", a.Contains("Styles/Tokens.Colors.xaml", StringComparison.Ordinal)
         && a.Contains("Styles/Tokens.Type.xaml", StringComparison.Ordinal)
         && a.Contains("Styles/Tokens.Metrics.xaml", StringComparison.Ordinal));
-    Expect("dark solid card lift", colors.Contains("#101113", StringComparison.Ordinal)
-        && colors.Contains("#0A0A0B", StringComparison.Ordinal));
+    Expect("dark solid card lift", colors.Contains("#0E0E0E", StringComparison.Ordinal)
+        && colors.Contains("#0A0A0A", StringComparison.Ordinal));
     Expect("liquid glass fill token", colors.Contains("ExoGlassFillBrush", StringComparison.Ordinal));
     Expect("settings solid surface brush",
         colors.Contains("ExoSettingsSurfaceBrush", StringComparison.Ordinal)
@@ -359,7 +359,9 @@ if (File.Exists(dash))
     Expect("home explains optimizer outcomes",
         d.Contains("LIVE SYSTEM READ", StringComparison.Ordinal)
         && d.Contains("OverviewPrimary", StringComparison.Ordinal)
-        && d.Contains("detects this PC first", StringComparison.Ordinal));
+        && d.Contains("SYSTEM MEMORY", StringComparison.Ordinal)
+        // Phase 4: drop marketing blurb; verified counts + memory card are the outcome signal
+        && !d.Contains("detects this PC first", StringComparison.Ordinal));
     Expect("home cards navigate", d.Contains("DiscordCard_Click", StringComparison.Ordinal)
         && d.Contains("SteamCard_Click", StringComparison.Ordinal)
         && d.Contains("InternetCard_Click", StringComparison.Ordinal)
@@ -538,11 +540,11 @@ if (File.Exists(sharedPlateXaml))
     Expect("SharedModulePlate normal-flow actions",
         plate.Contains("One normal-flow work surface", StringComparison.Ordinal)
         && plate.Contains("WHAT EXO WILL CHANGE", StringComparison.Ordinal)
-        && (plate.Contains("Hardware-aware, reversible", StringComparison.Ordinal)
-            || plate.Contains("Hardware-aware", StringComparison.Ordinal))
         && plate.Contains("Reading this PC", StringComparison.Ordinal)
         && plate.Contains("Actions unlock when detection finishes", StringComparison.Ordinal)
-        && plate.Contains("InverseBoolToVisibilityConverter", StringComparison.Ordinal));
+        && plate.Contains("InverseBoolToVisibilityConverter", StringComparison.Ordinal)
+        // Phase 4 declutter: drop decorative "Hardware-aware" caption noise
+        && !plate.Contains("Hardware-aware, reversible", StringComparison.Ordinal));
     Expect("SharedModulePlate advisor + report",
         plate.Contains("GuidanceText", StringComparison.Ordinal)
         && plate.Contains("ApplyReportRows", StringComparison.Ordinal));
@@ -610,8 +612,8 @@ if (File.Exists(featureGridXaml))
     Expect("feature grid responsive layout",
         fg.Contains("UniformGridLayout", StringComparison.Ordinal)
         && fg.Contains("MinItemWidth=\"360\"", StringComparison.Ordinal)
-        && fg.Contains("MinItemHeight=\"84\"", StringComparison.Ordinal)
-        && fg.Contains("MinColumnSpacing=\"12\"", StringComparison.Ordinal)
+        && fg.Contains("MinItemHeight=\"76\"", StringComparison.Ordinal)
+        && fg.Contains("MinColumnSpacing=\"8\"", StringComparison.Ordinal)
         && fg.Contains("ItemsStretch=\"Fill\"", StringComparison.Ordinal));
     Expect("feature grid delegates scrolling", !fg.Contains("<ScrollViewer", StringComparison.Ordinal));
 }

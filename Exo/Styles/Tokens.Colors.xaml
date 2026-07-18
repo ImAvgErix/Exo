@@ -9,23 +9,24 @@
     -->
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Dark">
-            <Color x:Key="ExoColorPage">#050505</Color>
-            <Color x:Key="ExoColorSunken">#080809</Color>
-            <Color x:Key="ExoColorBase">#0A0A0B</Color>
-            <Color x:Key="ExoColorCard">#101113</Color>
-            <Color x:Key="ExoColorRaised">#17181B</Color>
-            <Color x:Key="ExoColorOverlay">#0E0F10</Color>
-            <Color x:Key="ExoColorHairline">#18FFFFFF</Color>
-            <Color x:Key="ExoColorCardStroke">#24FFFFFF</Color>
-            <Color x:Key="ExoColorGlassStroke">#2CFFFFFF</Color>
-            <Color x:Key="ExoColorGlassCircleStroke">#30FFFFFF</Color>
-            <Color x:Key="ExoColorSpecular">#12FFFFFF</Color>
+            <!-- True-black AMOLED stack: pure page, subtle steps, quieter hairlines. -->
+            <Color x:Key="ExoColorPage">#000000</Color>
+            <Color x:Key="ExoColorSunken">#050505</Color>
+            <Color x:Key="ExoColorBase">#0A0A0A</Color>
+            <Color x:Key="ExoColorCard">#0E0E0E</Color>
+            <Color x:Key="ExoColorRaised">#141414</Color>
+            <Color x:Key="ExoColorOverlay">#0C0C0C</Color>
+            <Color x:Key="ExoColorHairline">#12FFFFFF</Color>
+            <Color x:Key="ExoColorCardStroke">#18FFFFFF</Color>
+            <Color x:Key="ExoColorGlassStroke">#1CFFFFFF</Color>
+            <Color x:Key="ExoColorGlassCircleStroke">#22FFFFFF</Color>
+            <Color x:Key="ExoColorSpecular">#0CFFFFFF</Color>
             <Color x:Key="ExoColorTransparent">#00000000</Color>
-            <Color x:Key="ExoColorAccentSoft">#16FFFFFF</Color>
-            <Color x:Key="ExoColorPrimaryText">#F4F4F2</Color>
-            <Color x:Key="ExoColorSecondaryText">#CACBCD</Color>
-            <Color x:Key="ExoColorMutedText">#9B9DA1</Color>
-            <Color x:Key="ExoColorDisabledText">#66686C</Color>
+            <Color x:Key="ExoColorAccentSoft">#12FFFFFF</Color>
+            <Color x:Key="ExoColorPrimaryText">#F2F2F0</Color>
+            <Color x:Key="ExoColorSecondaryText">#C2C3C5</Color>
+            <Color x:Key="ExoColorMutedText">#8E9094</Color>
+            <Color x:Key="ExoColorDisabledText">#5C5E62</Color>
             <Color x:Key="ExoColorSuccess">#34D399</Color>
             <Color x:Key="ExoColorWarning">#FBBF24</Color>
             <Color x:Key="ExoColorWarningSoft">#22F59E0B</Color>
@@ -36,8 +37,8 @@
             <Color x:Key="ExoColorNvidia">#76B900</Color>
             <Color x:Key="ExoColorRiot">#FFD737</Color>
             <Color x:Key="ExoColorEpic">#F3F3F3</Color>
-            <Color x:Key="ExoColorRailTop">#202024</Color>
-            <Color x:Key="ExoColorRailBottom">#09090B</Color>
+            <Color x:Key="ExoColorRailTop">#1A1A1A</Color>
+            <Color x:Key="ExoColorRailBottom">#050505</Color>
 
             <Color x:Key="SystemAccentColor">#F5F5F4</Color>
             <Color x:Key="SystemAccentColorLight1">#FAFAF9</Color>

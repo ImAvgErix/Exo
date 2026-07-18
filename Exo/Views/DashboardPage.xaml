@@ -19,7 +19,7 @@
             </Grid.RowDefinitions>
 
             <Grid x:Name="HeroBlock">
-                <StackPanel Spacing="4">
+                <StackPanel Spacing="2">
                     <TextBlock Text="SYSTEM"
                                Style="{StaticResource ExoSectionTitle}"
                                Margin="0" />
@@ -29,7 +29,7 @@
                     <TextBlock x:Name="HeroTagline"
                                Text="{x:Bind ViewModel.HeroSummary, Mode=OneWay}"
                                Style="{StaticResource ExoTagline}"
-                               MaxWidth="680"
+                               MaxWidth="640"
                                HorizontalAlignment="Left" />
                 </StackPanel>
             </Grid>
@@ -37,30 +37,26 @@
             <Border x:Name="FrameHero"
                     Grid.Row="1"
                     Style="{StaticResource ExoModulePlate}"
-                    Padding="20,18">
-                <Grid RowSpacing="14" ColumnSpacing="24">
+                    Padding="16,14">
+                <Grid RowSpacing="10" ColumnSpacing="16">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="280" />
+                        <ColumnDefinition Width="240" />
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Spacing="4" VerticalAlignment="Center">
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
                         <TextBlock Text="LIVE SYSTEM READ"
                                    Style="{StaticResource ExoSectionTitle}"
                                    Margin="0" />
                         <TextBlock Text="{x:Bind ViewModel.OverviewPrimary, Mode=OneWay}"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                   FontSize="28"
-                                   LineHeight="36"
+                                   FontSize="26"
+                                   LineHeight="32"
                                    Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                        <TextBlock Text="Every module detects this PC first, applies only supported changes, and keeps a repair path."
-                                   Style="{StaticResource ExoCaption}"
-                                   MaxWidth="560"
-                                   HorizontalAlignment="Left" />
                     </StackPanel>
 
                     <Border Grid.Column="1"
@@ -68,22 +64,22 @@
                             BorderBrush="{ThemeResource ExoDividerBrush}"
                             BorderThickness="1"
                             CornerRadius="{StaticResource ExoTileRadius}"
-                            Padding="16,12">
-                        <StackPanel Spacing="4">
+                            Padding="12,10">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="SYSTEM MEMORY"
                                        Style="{StaticResource ExoSectionTitle}"
                                        Margin="0" />
                             <TextBlock Text="{x:Bind ViewModel.MemoryPrimary, Mode=OneWay}"
                                        FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       FontSize="20"
-                                       LineHeight="28"
+                                       FontSize="18"
+                                       LineHeight="24"
                                        Foreground="{ThemeResource ExoPrimaryTextBrush}" />
                             <TextBlock Text="{x:Bind ViewModel.MemorySecondary, Mode=OneWay}"
                                        Style="{StaticResource ExoCaption}"
                                        TextTrimming="CharacterEllipsis" />
                             <ProgressBar Minimum="0"
                                          Maximum="100"
-                                         Height="4"
+                                         Height="3"
                                          Margin="0,4,0,0"
                                          Value="{x:Bind ViewModel.MemoryLoadPercent, Mode=OneWay}" />
                         </StackPanel>
@@ -96,7 +92,7 @@
                             BorderBrush="{ThemeResource ExoDividerBrush}"
                             BorderThickness="1"
                             CornerRadius="{StaticResource ExoTileRadius}"
-                            Padding="12,10"
+                            Padding="10,8"
                             Visibility="{x:Bind ViewModel.HasNextAction, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>

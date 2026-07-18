@@ -20,9 +20,9 @@
               Lower values (e.g. 280) spill into three columns and leave orphan half-rows.
             -->
             <UniformGridLayout MinItemWidth="360"
-                               MinItemHeight="84"
-                               MinRowSpacing="12"
-                               MinColumnSpacing="12"
+                               MinItemHeight="76"
+                               MinRowSpacing="8"
+                               MinColumnSpacing="8"
                                ItemsJustification="Start"
                                ItemsStretch="Fill" />
         </ItemsRepeater.Layout>
@@ -30,12 +30,12 @@
             <DataTemplate x:DataType="vm:FeatureRowViewModel">
                 <Border Style="{StaticResource ExoFeatureTile}"
                         Opacity="{x:Bind Opacity}"
-                        Height="84"
-                        MinHeight="84"
-                        MaxHeight="84"
+                        Height="76"
+                        MinHeight="76"
+                        MaxHeight="76"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Stretch">
-                    <Grid ColumnSpacing="12">
+                    <Grid ColumnSpacing="10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="3" />
                             <ColumnDefinition Width="*" />
@@ -43,7 +43,7 @@
                         <Border Style="{StaticResource ExoStatusRail}"
                                 Opacity="{x:Bind RailOpacity}" />
                         <StackPanel Grid.Column="1"
-                                    Spacing="3"
+                                    Spacing="2"
                                     VerticalAlignment="Center">
                             <TextBlock Text="{x:Bind Title}"
                                        Style="{StaticResource ExoFeatureTitle}"

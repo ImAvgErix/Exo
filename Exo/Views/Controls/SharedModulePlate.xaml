@@ -14,20 +14,20 @@
                   HorizontalScrollMode="Disabled"
                   ZoomMode="Disabled">
         <Border Style="{StaticResource ExoModulePlate}"
-                Margin="16,8,16,16"
-                Padding="20"
+                Margin="12,6,12,12"
+                Padding="16,14"
                 HorizontalAlignment="Stretch">
-            <StackPanel Spacing="20" HorizontalAlignment="Stretch">
-                <Grid ColumnSpacing="16" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="14" HorizontalAlignment="Stretch">
+                <Grid ColumnSpacing="12" HorizontalAlignment="Stretch">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="4" />
+                        <ColumnDefinition Width="3" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Background="{ThemeResource ExoAccentBrush}"
-                            CornerRadius="2"
-                            Opacity="0.9"
-                            MinHeight="48" />
-                    <StackPanel Grid.Column="1" Spacing="5">
+                            CornerRadius="1.5"
+                            Opacity="0.85"
+                            MinHeight="40" />
+                    <StackPanel Grid.Column="1" Spacing="3">
                         <TextBlock Text="{x:Bind ModuleTitle, Mode=OneWay}"
                                    Style="{StaticResource ExoSectionTitle}"
                                    Margin="0" />
@@ -39,15 +39,15 @@
                 </Grid>
 
                 <Border Style="{StaticResource ExoMessageBanner}"
-                        Padding="12,10"
+                        Padding="10,8"
                         Visibility="{x:Bind HasGuidance, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Grid ColumnSpacing="10">
+                    <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <FontIcon Glyph="&#xE946;"
-                                  FontSize="13"
+                                  FontSize="12"
                                   Foreground="{ThemeResource ExoAccentBrush}"
                                   VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1"
@@ -59,20 +59,12 @@
 
                 <ContentPresenter Content="{x:Bind HeaderExtra, Mode=OneWay}" />
 
-                <StackPanel Spacing="10">
-                    <Grid>
-                        <TextBlock Text="WHAT EXO WILL CHANGE"
-                                   Style="{StaticResource ExoSectionTitle}"
-                                   Margin="0"
-                                   VerticalAlignment="Center" />
-                        <!-- ASCII separator: · often mojibakes in UIA / logs as ┬╖ -->
-                        <TextBlock Text="Hardware-aware, reversible"
-                                   Style="{StaticResource ExoCaption}"
-                                   HorizontalAlignment="Right"
-                                   VerticalAlignment="Center" />
-                    </Grid>
-                    <Grid MinHeight="96">
-                        <StackPanel Spacing="10"
+                <StackPanel Spacing="8">
+                    <TextBlock Text="WHAT EXO WILL CHANGE"
+                               Style="{StaticResource ExoSectionTitle}"
+                               Margin="0" />
+                    <Grid MinHeight="80">
+                        <StackPanel Spacing="8"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
                                     Visibility="{x:Bind IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -91,7 +83,7 @@
                     </Grid>
                 </StackPanel>
 
-                <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
+                <Border Height="1" Background="{ThemeResource ExoDividerBrush}" Opacity="0.7" />
 
                 <Border Style="{StaticResource ExoActionBar}">
                     <StackPanel HorizontalAlignment="Stretch" Spacing="8">
