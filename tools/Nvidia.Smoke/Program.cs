@@ -250,6 +250,31 @@ Expect("NVIDIA DRS has exact backup and restore",
     optimizerSrc.Contains("nvidia-drs-pre-exo.bin", StringComparison.Ordinal) &&
     nvDisplaySrc.Contains("DriverSettingsSession.CreateAndLoad(fullPath)", StringComparison.Ordinal) &&
     nvDisplaySrc.Contains("session.Save(fullPath)", StringComparison.Ordinal));
+// Packaging: Publish-Exo ships FDD NvDisplay (~0.7 MB) not 70 MB single-file.
+var publishScript = Path.Combine(repo, "Publish-Exo.ps1");
+if (File.Exists(publishScript))
+{
+    var pub = File.ReadAllText(publishScript);
+    Expect("Publish-Exo ships NvDisplay FDD",
+        pub.Contains("Exo.NvDisplay", StringComparison.Ordinal) &&
+        pub.Contains("--self-contained false", StringComparison.Ordinal) &&
+        pub.Contains("PublishSingleFile=false", StringComparison.Ordinal) &&
+        pub.Contains("NvAPIWrapper.dll", StringComparison.Ordinal) &&
+        !pub.Contains("PublishSingleFile=true", StringComparison.Ordinal));
+}
+// Repair matrix: DRS restore is the authoritative undo; drivers/display stay untouched.
+Expect("NVIDIA Repair restores DRS snapshot",
+    optimizerSrc.Contains("Repair: restore the exact pre-Exo NVIDIA DRS database", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("nvidia-drs-pre-exo.bin", StringComparison.Ordinal) &&
+    File.Exists(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-Repair.ps1")));
+var nvidiaPageXaml = Path.Combine(repo, "Exo", "Views", "NvidiaOptimizerPage.xaml");
+if (File.Exists(nvidiaPageXaml))
+{
+    var nx = File.ReadAllText(nvidiaPageXaml);
+    Expect("NVIDIA page Repair CTA + DRS copy",
+        nx.Contains("SecondaryLeftLabel=\"Repair\"", StringComparison.Ordinal) &&
+        nx.Contains("Repair restores the complete NVIDIA profile database", StringComparison.Ordinal));
+}
 Expect("optimizer selects policy from hardware inventory",
     optimizerSrc.Contains("function Get-NvidiaHardwarePolicy", StringComparison.Ordinal) &&
     optimizerSrc.Contains("--list-displays", StringComparison.Ordinal) &&

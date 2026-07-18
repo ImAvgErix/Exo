@@ -142,28 +142,35 @@ $asmVersion = $Version
 $asmFour = if ($asmVersion -match '^\d+\.\d+\.\d+$') { "$asmVersion.0" } else { $asmVersion }
 
 # Build NVIDIA NVAPI display helper into Scripts\Nvidia\tools (no Control Panel UI).
+# Framework-dependent (FDD): ~0.7 MB with NvAPIWrapper vs ~70 MB self-contained single-file.
+# Host ships with the app's .NET runtime; NvAPIWrapper is not trim-safe so keep PublishTrimmed=false.
 $nvDisplayProj = Join-Path $Root 'tools\Exo.NvDisplay\Exo.NvDisplay.csproj'
 $nvDisplayOut = Join-Path $Root 'Exo\Scripts\Nvidia\tools'
 if (Test-Path -LiteralPath $nvDisplayProj) {
-    Write-Host '[*] Building Exo.NvDisplay (NVAPI display helper)...' -ForegroundColor DarkGray
+    Write-Host '[*] Building Exo.NvDisplay FDD (NVAPI + DRS helper)...' -ForegroundColor DarkGray
     New-Item -ItemType Directory -Force -Path $nvDisplayOut | Out-Null
     Get-ChildItem -LiteralPath $nvDisplayOut -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
     & dotnet publish $nvDisplayProj `
         -c $Configuration `
         -r win-x64 `
-        --self-contained true `
-        -p:PublishSingleFile=true `
+        --self-contained false `
+        -p:PublishSingleFile=false `
         -p:PublishTrimmed=false `
-        -p:IncludeNativeLibrariesForSelfExtract=true `
         -p:DebugType=none `
         -p:DebugSymbols=false `
         -o $nvDisplayOut
     if ($LASTEXITCODE -ne 0) { throw "Exo.NvDisplay publish failed (exit $LASTEXITCODE)" }
     $nvExe = Join-Path $nvDisplayOut 'Exo.NvDisplay.exe'
+    $nvApi = Join-Path $nvDisplayOut 'NvAPIWrapper.dll'
     if (-not (Test-Path -LiteralPath $nvExe)) { throw "Missing $nvExe after publish" }
+    if (-not (Test-Path -LiteralPath $nvApi)) { throw "Missing $nvApi after FDD publish (NVAPI binding)" }
     $nvLen = (Get-Item -LiteralPath $nvExe).Length
-    if ($nvLen -lt 1MB) { throw "Exo.NvDisplay.exe too small ($nvLen bytes) - publish single-file may have failed" }
-    Write-Host "[+] NVAPI helper: $nvExe ($([math]::Round($nvLen/1MB,1)) MB)" -ForegroundColor Green
+    $nvApiLen = (Get-Item -LiteralPath $nvApi).Length
+    $nvTotal = $nvLen + $nvApiLen
+    # FDD footprint is hundreds of KB; reject empty stubs and accidental 70MB single-file bloat.
+    if ($nvLen -lt 50KB) { throw "Exo.NvDisplay.exe too small ($nvLen bytes) - FDD publish may have failed" }
+    if ($nvTotal -gt 8MB) { throw "Exo.NvDisplay FDD payload too large ($nvTotal bytes) - expected framework-dependent, not single-file" }
+    Write-Host "[+] NVAPI helper FDD: $nvExe ($([math]::Round($nvTotal/1KB,0)) KB total with NvAPIWrapper)" -ForegroundColor Green
 } else {
     throw "Exo.NvDisplay project missing at $nvDisplayProj - display Apply will fail on user PCs"
 }
@@ -203,7 +210,7 @@ if ($fv -notlike "$asmVersion*") {
     throw "Publish version stamp failed: FileVersion is '$fv' but VERSION file says '$asmVersion'. Fix csproj/publish props."
 }
 
-# Wave-2: scripts + NvDisplay must be inside the published app tree (or beside SFX payload).
+# Wave-2: scripts + NvDisplay FDD must be inside the published app tree (or beside SFX payload).
 $publishedNv = @(
     (Join-Path $OutDir 'Scripts\Nvidia\tools\Exo.NvDisplay.exe'),
     (Join-Path $Root 'Exo\Scripts\Nvidia\tools\Exo.NvDisplay.exe')
@@ -211,7 +218,15 @@ $publishedNv = @(
 if (-not $publishedNv) {
     throw 'Wave-2 publish check: Exo.NvDisplay.exe missing after publish (display Apply would fail).'
 }
-Write-Host "[+] Publish check: NvDisplay present ($publishedNv)" -ForegroundColor Green
+$publishedNvApi = Join-Path (Split-Path -Parent $publishedNv) 'NvAPIWrapper.dll'
+if (-not (Test-Path -LiteralPath $publishedNvApi)) {
+    throw 'Wave-2 publish check: NvAPIWrapper.dll missing next to Exo.NvDisplay.exe (FDD binding).'
+}
+$publishedNvLen = (Get-Item -LiteralPath $publishedNv).Length
+if ($publishedNvLen -gt 8MB) {
+    throw "Wave-2 publish check: Exo.NvDisplay.exe is $publishedNvLen bytes - expected FDD under 8MB, not single-file."
+}
+Write-Host "[+] Publish check: NvDisplay FDD present ($publishedNv + NvAPIWrapper)" -ForegroundColor Green
 $sharedLib = Join-Path $Root 'Exo\Scripts\lib\Exo.Common.ps1'
 $noBgLib = Join-Path $Root 'Exo\Scripts\lib\Exo.NoBackground.ps1'
 if (-not (Test-Path -LiteralPath $sharedLib) -or -not (Test-Path -LiteralPath $noBgLib)) {

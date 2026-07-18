@@ -84,7 +84,8 @@ function Test-ModuleLanded {
         [string]$Blob
     )
     $markers = $script:ModuleMarkers[$Name]
-    if (-not $markers) { return $true }
+    # Unknown module names must not auto-pass (e.g. "NVIDIA,ShellHome" from bad CLI bind).
+    if (-not $markers -or $markers.Count -eq 0) { return $false }
     foreach ($m in $markers) {
         if ($Blob -match [regex]::Escape($m)) { return $true }
     }
@@ -338,7 +339,20 @@ function Capture-Module {
     }
 }
 
-foreach ($m in $Modules) {
+# Normalize -Modules: support "NVIDIA,ShellHome" when outer shell splits arrays poorly.
+$moduleList = [System.Collections.Generic.List[string]]::new()
+foreach ($raw in @($Modules)) {
+    foreach ($part in (@($raw -split '[,;]') | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
+        if (-not $moduleList.Contains($part)) { $moduleList.Add($part) }
+    }
+}
+if ($moduleList.Count -eq 0) {
+    foreach ($d in @('Discord', 'Steam', 'Internet', 'NVIDIA', 'Riot', 'Epic', 'ShellHome')) {
+        $moduleList.Add($d)
+    }
+}
+
+foreach ($m in $moduleList) {
     if ($m -eq 'ShellHome') {
         Capture-Module -Name 'ShellHome' -NavLabels @('Open system overview', 'Home')
         continue
