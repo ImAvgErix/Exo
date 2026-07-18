@@ -119,7 +119,24 @@ function Capture-Module([string]$Name, [int]$ButtonIndex) {
             element_index = $ButtonIndex
             delivery_mode = 'background'
         }
+        # Internet/NVIDIA detect scripts are slower than 2s; wait for status text to settle.
         Start-Sleep -Seconds 2
+        if ($Name -in @('Internet', 'NVIDIA', 'Discord', 'Steam')) {
+            for ($w = 0; $w -lt 8; $w++) {
+                $probeRaw = Invoke-CuaCall -Tool 'get_window_state' -Args @{
+                    pid                = $pidExo
+                    window_id          = $hwnd
+                    include_screenshot = $false
+                    max_elements       = 40
+                }
+                try {
+                    $probe = $probeRaw | ConvertFrom-Json
+                    $statusBlob = (@($probe.elements | ForEach-Object { [string]$_.label }) -join ' ')
+                    if ($statusBlob -notmatch 'Checking(\.\.\.| status)|Detecting this PC') { break }
+                } catch { }
+                Start-Sleep -Seconds 1
+            }
+        }
     }
 
     $png = Join-Path $OutDir ("{0}.png" -f $Name.ToLowerInvariant())
@@ -176,8 +193,12 @@ foreach ($el in $navSnap.elements) {
 
 foreach ($m in $Modules) {
     if ($m -eq 'ShellHome') {
-        $navHomeKey = 'Home'
-        $idx = if ($byLabel.ContainsKey($navHomeKey)) { [int]$byLabel[$navHomeKey] } else { -1 }
+        # 3.6.1 shell: overview is "Open system overview" (not "Home")
+        $navHomeKey = $null
+        foreach ($k in @('Open system overview', 'Home', 'Settings')) {
+            if ($byLabel.ContainsKey($k)) { $navHomeKey = $k; break }
+        }
+        $idx = if ($navHomeKey) { [int]$byLabel[$navHomeKey] } else { -1 }
         Capture-Module 'ShellHome' $idx
         continue
     }
