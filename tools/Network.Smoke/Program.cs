@@ -152,7 +152,7 @@ Expect("throughput apply script audit", thrOk, string.Join("; ", thrIssues));
 
 // Diverge on tradeoffs
 Expect("latency autotune normal", latScript.Contains("autotuninglevel=normal", StringComparison.OrdinalIgnoreCase));
-Expect("throughput autotune experimental", thrScript.Contains("autotuninglevel=experimental", StringComparison.OrdinalIgnoreCase));
+Expect("throughput autotune normal", thrScript.Contains("autotuninglevel=normal", StringComparison.OrdinalIgnoreCase));
 Expect("latency rsc disabled", latScript.Contains("rsc=disabled", StringComparison.OrdinalIgnoreCase));
 Expect("throughput rsc enabled", thrScript.Contains("rsc=enabled", StringComparison.OrdinalIgnoreCase));
 Expect("latency LSO 0", latScript.Contains("'*LsoV2IPv4' 0", StringComparison.Ordinal));
@@ -277,7 +277,7 @@ var lk = NetworkLogic.KnobsFor(NetworkPreset.LowestLatency);
 var tk = NetworkLogic.KnobsFor(NetworkPreset.HighestThroughput);
 Expect("knobs diverge rsc", lk.Rsc != tk.Rsc);
 Expect("knobs diverge lso", lk.Lso != tk.Lso);
-Expect("knobs diverge autotune", lk.AutotuneNetsh != tk.AutotuneNetsh);
+Expect("autotune stays supported normal for both policies", lk.AutotuneNetsh == "normal" && tk.AutotuneNetsh == "normal");
 Expect("latency nagle off", lk.NagleOff);
 Expect("throughput nagle not forced", !tk.NagleOff);
 
@@ -312,10 +312,10 @@ Expect("shared latency state NOT ok for throughput",
 // Autotune must match knobs
 Expect("autotune normal matches latency",
     NetworkLogic.AutotuneMatches(NetworkPreset.LowestLatency, "normal"));
-Expect("autotune normal does NOT match throughput",
-    !NetworkLogic.AutotuneMatches(NetworkPreset.HighestThroughput, "normal"));
-Expect("autotune experimental matches throughput",
-    NetworkLogic.AutotuneMatches(NetworkPreset.HighestThroughput, "experimental"));
+Expect("autotune normal matches throughput",
+    NetworkLogic.AutotuneMatches(NetworkPreset.HighestThroughput, "normal"));
+Expect("autotune experimental does NOT match throughput",
+    !NetworkLogic.AutotuneMatches(NetworkPreset.HighestThroughput, "experimental"));
 Expect("autotune experimental does NOT match latency",
     !NetworkLogic.AutotuneMatches(NetworkPreset.LowestLatency, "experimental"));
 Expect("LSO off matches latency", NetworkLogic.LsoMatches(NetworkPreset.LowestLatency, false));
@@ -578,8 +578,17 @@ Expect("adaptive preset stable fast ethernet",
     qualityParsed is not null && NetworkLogic.RecommendPreset(qualityParsed, media) == NetworkPreset.HighestThroughput);
 var unstableQuality = NetworkLogic.TryParseBenchmark(
     "EXO_BENCH:{\"ok\":true,\"isQualityTest\":true,\"pingP50Ms\":12,\"jitterMs\":2,\"downloadMbps\":500,\"downloadLoadedMs\":18,\"uploadLoadedMs\":25,\"downloadLoadedJitterMs\":25,\"uploadLoadedJitterMs\":4,\"packetLossPercent\":0}");
-Expect("adaptive preset loaded jitter chooses latency",
-    unstableQuality is not null && NetworkLogic.RecommendPreset(unstableQuality, media) == NetworkPreset.LowestLatency);
+Expect("multi-gig Ethernet keeps offloads despite loaded queueing",
+    unstableQuality is not null && NetworkLogic.RecommendPreset(unstableQuality, media) == NetworkPreset.HighestThroughput);
+var slowWifi = new NetworkMediaProfile
+{
+    EthernetInUse = false,
+    WifiAvailable = true,
+    WifiUp = true,
+    PrimaryLinkSpeedBps = 300_000_000
+};
+Expect("unstable Wi-Fi chooses latency-safe host policy",
+    unstableQuality is not null && NetworkLogic.RecommendPreset(unstableQuality, slowWifi) == NetworkPreset.LowestLatency);
 
 // (c) BuildRepair: snapshot-driven true restore + fallback stock reset
 Expect("repair reads snapshot json",

@@ -329,12 +329,15 @@ public sealed class NetworkOptimizerService
             var unstable = packetLoss >= 0.5 || Jitter(idle) >= 8 ||
                            downJitter >= 15 || upJitter >= 15 ||
                            downPenalty >= 25 || upPenalty >= 35;
-            var useThroughput = media.EthernetInUse && linkMbps >= 1_000 && !unstable ||
+            var fastEthernet = media.EthernetInUse && linkMbps >= 1_000;
+            var useThroughput = fastEthernet ||
                                 !unstable && down.Mbps >= 300;
             var recommended = useThroughput ? "highest-throughput" : "lowest-latency";
-            var reason = unstable
-                ? "loaded latency or packet stability needs latency-safe buffering"
-                : media.EthernetInUse && linkMbps >= 1_000
+            var reason = fastEthernet && unstable
+                ? "multi-gig Ethernet keeps RSS and offloads; loaded queueing is reported instead of applying throughput-cutting host tweaks"
+                : unstable
+                    ? "loaded latency or packet stability needs latency-safe host policy"
+                : fastEthernet
                     ? "multi-gig Ethernet gets full RSS and offload throughput without latency folklore"
                     : "the measured path is stable enough for balanced throughput and latency tuning";
 

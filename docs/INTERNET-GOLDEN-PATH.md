@@ -35,7 +35,7 @@
 | Setting | Latency preset | Throughput preset | Why |
 |---------|----------------|-------------------|-----|
 | DisableTaskOffload | 0 | 0 | `1` is a real footgun |
-| autotuninglevel | **normal** | **experimental** | MS-supported |
+| autotuninglevel | **normal** | **normal** | Supported adaptive default; experimental is intentionally not shipped |
 | heuristics | disabled | disabled | Stops autotune clamp |
 | RSS (global) | enabled | enabled | Documented |
 | RSC (global + NIC) | **disabled** | **enabled** | Latency vs CPU tradeoff |

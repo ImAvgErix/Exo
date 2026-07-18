@@ -18,7 +18,7 @@ without the app. See `docs/INTERNET-GOLDEN-PATH.md`.
 | Knob | Verdict | Why |
 |------|---------|-----|
 | `DisableTaskOffload=0` | **Keep** | `=1` is a real footgun; kills stack offloads |
-| Autotune normal / experimental | **Keep** | Documented `netsh` / `Set-NetTCPSetting` |
+| Autotune normal | **Keep** | Supported adaptive default for both policies; experimental removed because it can grow queues without improving typical multi-gig links |
 | Heuristics disabled | **Keep** | Prevents Windows from restricting autotune |
 | RSS on | **Keep** | Documented multi-queue receive |
 | RSS `BaseProcessorNumber 2` (Ethernet, ≥4 CPUs) | **Implemented (v2.4.0)** | Keeps NIC interrupts off core 0; supported `Set-NetAdapterRss` path |
