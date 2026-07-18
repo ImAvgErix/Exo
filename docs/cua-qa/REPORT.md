@@ -1,7 +1,7 @@
-# Exo Cua QA - 2026-07-18T15:16:40.7278895-05:00
+# Exo Cua QA - 2026-07-18T15:18:33.7388818-05:00
 
-- pid: 6708
-- window_id: 18088670
+- pid: 4784
+- window_id: 107217524
 - exe: C:\Users\Erix\AppData\Local\Exo\app\Exo.exe
 
 ## Discord
@@ -217,8 +217,8 @@
 [17] Text: Epic
 [18] Pane: 
 [19] Text: RIOT
-[20] Text: 1 setting needs Apply (yield guard)
-[21] Text: One launcher setting is out of policy. Apply restores it without touching games.
+[20] Text: Already optimized
+[21] Text: Verified Windows policy: GPU routing, FSO off, launcher yield while gaming. Riot client files, services, anti-cheat, updates, and game settings stay untouched.
 [22] Text: WHAT EXO WILL CHANGE
 [23] Text: Hardware-aware, reversible
 [24] Text: Riot install
@@ -232,7 +232,7 @@
 [32] Text: Fullscreen Optimizations off
 [33] Text: Fullscreen Optimizations off on all 3 game executable(s) (less DWM lag).
 [34] Text: Launcher yield while gaming
-[35] Text: Apply installs a reversible Exo yield companion for the launcher UI only.
+[35] Text: While a game runs, launcher UI drops to low memory priority + EcoQoS. Games and anti-cheat stay untouched.
 [36] Text: Hybrid GPU split
 [37] Text: Single-GPU PC: games use the only adapter; no launcher override is needed.
 [38] Text: Anti-cheat boundary
@@ -264,8 +264,8 @@
 [17] Text: Epic
 [18] Pane: 
 [19] Text: EPIC
-[20] Text: 1 setting needs Apply (yield guard)
-[21] Text: One launcher setting is out of policy. Apply restores it without touching games.
+[20] Text: Already optimized
+[21] Text: Verified Windows policy: GPU routing, FSO off, launcher yield while gaming. Epic client files, services, anti-cheat, updates, and game settings stay untouched.
 [22] Text: WHAT EXO WILL CHANGE
 [23] Text: Hardware-aware, reversible
 [24] Text: Epic install
@@ -279,7 +279,7 @@
 [32] Text: Fullscreen Optimizations off
 [33] Text: Fullscreen Optimizations off on all 1 game executable(s) (less DWM lag).
 [34] Text: Launcher yield while gaming
-[35] Text: Apply installs a reversible Exo yield companion for the launcher UI only.
+[35] Text: While a game runs, launcher UI drops to low memory priority + EcoQoS. Games and anti-cheat stay untouched.
 [36] Text: Hybrid GPU split
 [37] Text: Single-GPU PC: games use the only adapter; no launcher override is needed.
 [38] Text: Anti-cheat boundary
@@ -317,8 +317,8 @@
 [23] Text: 6 / 6 verified
 [24] Text: Every module detects this PC first, applies only supported changes, and keeps a repair path.
 [25] Text: SYSTEM MEMORY
-[26] Text: 4.4 GB
-[27] Text: 11.6 GB free ┬╖ 15.9 GB total
+[26] Text: 4.2 GB
+[27] Text: 11.7 GB free ┬╖ 15.9 GB total
 [28] ProgressBar: 
 [29] Button: Open Discord optimizer
 [30] Text: Discord

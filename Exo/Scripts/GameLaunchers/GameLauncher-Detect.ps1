@@ -96,8 +96,17 @@ foreach ($path in $targets) {
 }
 $fsoOk = [bool]($targetsPresent -gt 0 -and $fsoVerified -eq $targetsPresent)
 
+$yieldRunValue = $null
+try {
+    if ($run -and ($run.PSObject.Properties.Name -contains $yieldRunName)) {
+        $yieldRunValue = [string]$run.$yieldRunName
+    }
+} catch { }
+if ([string]::IsNullOrWhiteSpace($yieldRunValue)) {
+    try { $yieldRunValue = [string](Get-ItemPropertyValue -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $yieldRunName -ErrorAction Stop) } catch { }
+}
 $yieldOk = (Test-Path -LiteralPath $yieldHelper -PathType Leaf) -and
-    ($run -and [string]$run.PSObject.Properties[$yieldRunName].Value -match 'yield-guard')
+    (-not [string]::IsNullOrWhiteSpace($yieldRunValue) -and $yieldRunValue -match 'yield-guard')
 
 $snapshotReady = Test-Path -LiteralPath $snapshotPath -PathType Leaf
 $markerOk = [bool]($state -and [bool]$state.applied -and [string]$state.applyStatus -eq 'applied')

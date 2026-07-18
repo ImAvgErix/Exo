@@ -243,6 +243,8 @@ function Remove-StartupEntries {
     $removed = 0
     try {
         foreach ($name in @($key.GetValueNames())) {
+            # Never delete Exo's own yield companion (name contains module brand).
+            if ($name -eq $YieldRunName -or $name -match '(?i)^Exo-') { continue }
             $value = [string]$key.GetValue($name, '')
             if ("$name $value" -match "(?i)$Module") { $key.DeleteValue($name, $false); $removed++ }
         }
