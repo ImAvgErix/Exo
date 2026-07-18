@@ -25,15 +25,17 @@ param(
     [switch]$InstallApp,       # deprecated / ignored - Control Panel only
     [switch]$SkipProfile,
     [switch]$SkipDriver,
-    [switch]$ForceDriver
+    [switch]$ForceDriver,
+    [switch]$SafePolicy
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.13.1'
+$Script:NvidiaOptVersion = '1.14.0'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
 $StatePath = Join-Path $StateDir 'nvidia-optimizer.json'
+$DrsSnapshotPath = Join-Path $StateDir 'nvidia-drs-pre-exo.bin'
 # Keep Exo's managed Profile Inspector private. Never delete user-installed copies.
 $NpiDir = Join-Path $StateDir 'tools\nvidiaProfileInspector'
 $DriverCacheDir = Join-Path $StateDir 'drivers'
@@ -520,6 +522,15 @@ function New-ExoCombinedProfileNip {
         [void]$array.AppendChild($clone)
     }
 
+    # Prefer maximum performance is useful for game executables, but forcing it
+    # on the global Base Profile keeps the GPU in a high-power state for desktop
+    # and background apps. The clones above retain the pin; Base returns to the
+    # driver default for lower idle power and less background heat.
+    $globalPowerNodes = @($base.SelectNodes("Settings/ProfileSetting[SettingID='274197361']"))
+    foreach ($node in $globalPowerNodes) {
+        [void]$node.ParentNode.RemoveChild($node)
+    }
+
     $settings = New-Object System.Xml.XmlWriterSettings
     # UTF-16 LE + BOM (matches shipped .nip packs). Constructor is (bigEndian, byteOrderMark).
     $settings.Encoding = New-Object System.Text.UnicodeEncoding $false, $true
@@ -912,7 +923,11 @@ function Get-ExoNipBaseProfileMap {
         Where-Object { [string]$_.ProfileName -eq 'Base Profile' } |
         Select-Object -First 1
     if (-not $base) { return $null }
-    return (Get-ExoNipSettingMap -ProfileNode $base)
+    $map = Get-ExoNipSettingMap -ProfileNode $base
+    # New-ExoCombinedProfileNip deliberately removes the global power pin after
+    # cloning it into game profiles. Verify the policy that is actually imported.
+    [void]$map.Remove('274197361')
+    return $map
 }
 
 function Invoke-ExoNpiExportCustomized {
@@ -1014,8 +1029,9 @@ function Get-ExoDrsVerificationResult {
 }
 
 # Pins that every Exo pack customizes and a correct import must therefore export:
-# power management mode, ULL (CPL state + enabled), frame limiter off, G-SYNC global.
-$Script:DrsRequiredPinIds = @('274197361', '390467', '277041152', '277041154', '294973784', '11041279', '11041231')
+# ULL (CPL state + enabled), frame limiter off, G-SYNC/VRR, and VSync policy.
+# Power management is intentionally per-game rather than global.
+$Script:DrsRequiredPinIds = @('390467', '277041152', '277041154', '294973784', '11041279', '11041231')
 
 function Test-ExoDrsImportVerified {
     # Post-import verification: export live DRS with the managed NPI and compare the
@@ -4054,13 +4070,55 @@ function Save-State([hashtable]$State) {
     [IO.File]::WriteAllText($StatePath, ($State | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
 }
 
+function Invoke-ExoDrsDatabaseAction {
+    param([Parameter(Mandatory)][ValidateSet('backup','restore')][string]$Action)
+    $helper = Join-Path $Root 'tools\Exo.NvDisplay.exe'
+    if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) {
+        throw 'The bundled NVIDIA NVAPI helper is missing; DRS mutation is blocked.'
+    }
+    $flag = if ($Action -eq 'backup') { '--drs-backup' } else { '--drs-restore' }
+    $psi = [Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = $helper
+    $psi.ArgumentList.Add($flag)
+    $psi.ArgumentList.Add($DrsSnapshotPath)
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $process = [Diagnostics.Process]::Start($psi)
+    if (-not $process) { throw "Could not start NVIDIA DRS $Action helper." }
+    try {
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+        if (-not $process.WaitForExit(120000)) {
+            try { $process.Kill($true) } catch { }
+            throw "NVIDIA DRS $Action timed out."
+        }
+        if ($process.ExitCode -ne 0) {
+            throw "NVIDIA DRS $Action failed (exit $($process.ExitCode)): $stderr"
+        }
+        foreach ($line in @($stdout -split "`r?`n")) {
+            if ($line) { Write-Output $line }
+        }
+    } finally {
+        $process.Dispose()
+    }
+}
+
 function Invoke-Repair {
-    Write-Step 'Repair: clear Exo NVIDIA state marker'
+    Write-Step 'Repair: restore the exact pre-Exo NVIDIA DRS database'
+    if (Test-Path -LiteralPath $DrsSnapshotPath -PathType Leaf) {
+        Invoke-ExoDrsDatabaseAction -Action restore
+        Remove-Item -LiteralPath $DrsSnapshotPath -Force -ErrorAction Stop
+        Write-Ok 'Restored the complete pre-Exo NVIDIA driver profile database'
+    } else {
+        Write-Ok 'No Exo NVIDIA DRS snapshot exists; no driver profiles were changed'
+    }
     if (Test-Path $StatePath) {
         Remove-Item $StatePath -Force -ErrorAction SilentlyContinue
         Write-Ok 'Cleared nvidia-optimizer.json'
     }
-    Write-Ok 'Driver profiles and NVIDIA App installs are left intact. Re-apply to re-import Exo pack.'
+    Write-Ok 'Drivers, NVIDIA App, Control Panel, audio, services, tasks, and displays were not changed by the safe policy.'
 }
 
 # --- main ---
@@ -4078,6 +4136,10 @@ try {
     Set-ExoStage 'elevation-check'
     if (-not (Test-ExoIsAdmin)) {
         throw 'Administrator rights are required (driver install, DRS profile import, and system debloat all need elevation). Run Exo elevated and Apply again.'
+    }
+    if ($SafePolicy) {
+        $SkipDriver = $true
+        Write-Ok 'Safe policy: driver install, package removal, service/task debloat, audio, overlay, and display mutations are disabled'
     }
 
     Set-ExoStage 'gpu-detect'
@@ -4146,6 +4208,8 @@ try {
         displayMethod         = $null
         debloatApplied        = $false
         overlayDisabled       = $false
+        policy                = 'safe-drs-v2'
+        safePolicy            = [bool]$SafePolicy
     }
 
     # Pipeline order (correct stack):
@@ -4254,9 +4318,13 @@ try {
                 $prior = Get-Content -LiteralPath $StatePath -Raw -Encoding UTF8 | ConvertFrom-Json
                 $sameSeries = [string]$prior.series -eq [string]$seriesId
                 $sameGsync = [bool]$prior.gsync -eq [bool]$useGsync
+                $samePolicy = ($prior.PSObject.Properties.Name -contains 'policy') -and
+                    [string]$prior.policy -eq 'safe-drs-v2' -and
+                    ($prior.PSObject.Properties.Name -contains 'version') -and
+                    [string]$prior.version -eq $Script:NvidiaOptVersion
                 $already = [bool]$prior.profileApplied -and
                     [string]$prior.drsVerified -eq 'True' -and
-                    $sameSeries -and $sameGsync -and
+                    $sameSeries -and $sameGsync -and $samePolicy -and
                     (-not [string]::IsNullOrWhiteSpace([string]$prior.profileSha256))
                 if ($already) {
                     $nipCheck = Get-ProfileFile $seriesId $useGsync
@@ -4290,6 +4358,14 @@ try {
         $nip = Get-ProfileFile $seriesId $useGsync
         if (-not $nip) { throw "Missing profile for series $seriesId (G-SYNC=$useGsync)" }
         Assert-ExoNipProfile -Path $nip -UseGsync $useGsync
+        if ($SafePolicy -and -not (Test-Path -LiteralPath $DrsSnapshotPath -PathType Leaf)) {
+            Set-ExoStage 'drs-snapshot'
+            Write-HubProgress 44 'Backing up the complete NVIDIA profile database...'
+            Invoke-ExoDrsDatabaseAction -Action backup
+            if (-not (Test-Path -LiteralPath $DrsSnapshotPath -PathType Leaf)) {
+                throw 'NVIDIA DRS backup was not created; profile import is blocked.'
+            }
+        }
         $profileSha256 = (Get-FileHash -LiteralPath $nip -Algorithm SHA256 -ErrorAction Stop).Hash
         Write-Ok "Base profile: $(Split-Path $nip -Leaf)"
 
@@ -4355,7 +4431,13 @@ try {
         Write-Warn '-InstallApp is ignored: Exo is the panel (no NVIDIA App / Control Panel).'
     }
 
-    if (-not $SkipApp) {
+    if ($SafePolicy) {
+        Write-HubProgress 64 'Checking NVIDIA Control Panel...'
+        $appInstalled = Test-NvidiaAppInstalled
+        $cplOk = Test-NvidiaControlPanelInstalled
+        if (-not $cplOk) { $cplOk = Install-NvidiaControlPanel }
+        Write-Ok "NVIDIA App=$(if ($appInstalled) { 'present (kept)' } else { 'absent' }); Control Panel=$(if ($cplOk) { 'ready' } else { 'unavailable' })"
+    } elseif (-not $SkipApp) {
         Write-HubProgress 64 'Removing NVIDIA App + GFE (silent NVI2)...'
         $clientWipe = $null
         for ($wipeTry = 1; $wipeTry -le 3; $wipeTry++) {
@@ -4385,6 +4467,18 @@ try {
         Write-Ok "App=$(if ($appInstalled) { 'present' } else { 'absent' }) CPL=$(if ($cplOk) { 'present' } else { 'absent' })"
     }
 
+    if ($SafePolicy) {
+        $displayClient = @{ Client = 'nvidia-control-panel'; ControlPanel = [bool]$cplOk }
+        $advanced3dOk = $false
+        $overlayResult = [pscustomobject]@{ Ok = $true; Issues = @() }
+        $debloatResult = [pscustomobject]@{ Ok = $true; Issues = @() }
+        $dispResult = @{ Success = $true; NvApiOk = $false; RegistryOk = $false; Details = @('Display settings unchanged by safe policy') }
+        $displayNvApiOk = $false
+        $displayRegistryOk = $false
+        $displayPrefsOk = $true
+        $displayMethod = 'unchanged'
+        Write-HubProgress 90 'System packages and displays left unchanged'
+    } else {
     Write-HubProgress 70 'Removing NVIDIA audio and unused driver packages...'
     [void](Remove-NvidiaAudioComponents)
     [void](Remove-NvidiaBloatComponents)
@@ -4446,6 +4540,7 @@ try {
     $advanced3dOk = Enable-NvidiaAdvanced3dImageSettings
     [void](Enable-NvidiaControlPanelDeveloperSettings)
     $appInstalled = Test-NvidiaAppInstalled  # expect false
+    }
 
     Set-ExoStage 'finalize-checks'
     Write-HubProgress 94 'Verifying driver/profile versions...'
@@ -4513,6 +4608,8 @@ try {
     Write-HubProgress 96 'Saving verified status...'
     Save-State @{
         version             = $Script:NvidiaOptVersion
+        policy              = 'safe-drs-v2'
+        safePolicy          = [bool]$SafePolicy
         appliedUtc          = (Get-Date).ToUniversalTime().ToString('o')
         gpuName             = $primary.Name
         driver              = $primary.Driver
@@ -4534,23 +4631,23 @@ try {
         drsMismatch         = @($drsVerification.Mismatches)
         drsVerifyReason     = $drsVerification.Reason
         npiPath             = $npi
-        nvidiaApp           = $false
+        nvidiaApp           = [bool]$appInstalled
         nvidiaControlPanel  = [bool]$cplOk
         clientWipe          = $clientWipe
-        clientReinstall     = (-not [bool]$SkipApp)
+        clientReinstall     = (-not [bool]$SafePolicy -and -not [bool]$SkipApp)
         nvidiaAppOptional   = $true
-        nvidiaAppUnsupported = $true
+        nvidiaAppUnsupported = $false
         nvidiaAppBeta       = $false
         nvidiaAppConfigured = $false
-        controlPanelOnly    = $false
-        exoPanel        = $true
+        controlPanelOnly    = (-not [bool]$appInstalled)
+        exoPanel        = $false
         advanced3dImageSettings = [bool]$advanced3dOk
-        displayClient       = 'exo-panel'
-        displayPrefs        = [bool]$displayPrefsOk
+        displayClient       = 'nvidia-control-panel'
+        displayPrefs        = $(if ($SafePolicy) { $false } else { [bool]$displayPrefsOk })
         displayMethod       = $displayMethod
         displayDetails      = $dispResult.Details
-        debloatApplied      = [bool]$debloatResult.Ok
-        overlayDisabled     = [bool]$overlayResult.Ok
+        debloatApplied      = $(if ($SafePolicy) { $false } else { [bool]$debloatResult.Ok })
+        overlayDisabled     = $(if ($SafePolicy) { $false } else { [bool]$overlayResult.Ok })
         driverUpdatePass    = $driverInfo
         applyInProgress     = $false
         pendingAfterDriver  = $false
@@ -4560,30 +4657,37 @@ try {
         gameProfiles        = @($gameProfiles)
         gameProfileCount    = @($gameProfiles).Count
         gameProfileDeltas   = $true
+        repairSnapshot      = [bool](Test-Path -LiteralPath $DrsSnapshotPath -PathType Leaf)
         lastErrorStage      = $null
         lastError           = $null
         lastErrorUtc        = $null
     }
 
     Write-Ok 'NVIDIA Optimizer finished'
-    if (-not $SkipApp) {
+    if ($SafePolicy) {
+        Write-Ok 'Safe policy: Base + per-game DRS profiles verified; driver, App, audio, services, tasks, and displays were left unchanged.'
+        Write-Ok 'Repair snapshot is ready and restores the complete pre-Exo NVIDIA profile database.'
+    } elseif (-not $SkipApp) {
         if ($cplOk) {
             Write-Ok 'Client stack: removed App/GFE -> classic Control Panel + EULA + advanced 3D -> overlay/toasts off -> NVAPI display.'
         } else {
             Write-Ok 'Client stack: removed App/GFE -> NVAPI display (Control Panel UI install skipped/failed).'
         }
     }
-    if ($advanced3dOk) {
+    if (-not $SafePolicy -and $advanced3dOk) {
         Write-Ok 'Control Panel: Use the advanced 3D image settings is ON (Manage 3D / .nip profiles active).'
     }
-    Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling; primary max Hz; secondary unchanged). Control Panel is the minimal UI.'
+    if (-not $SafePolicy) {
+        Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling; primary max Hz; secondary unchanged). Control Panel is the minimal UI.'
+    }
     $doneMethod = Get-ExoHashString $driverInfo 'Method' 'none'
     if ($doneMethod -in @('exo-clean', 'exo-clean-partial-tweaks', 'in-place-tweaks')) {
         Write-Ok "Driver stage ($doneMethod) completed with 3D + Control Panel + NVAPI display."
     }
     Write-HubProgress 100 'Completed successfully'
-    Write-Output ("DONE - NVIDIA {0}{1} (driver -> base+{2} games -> Control Panel + NVAPI display)" -f `
-        $seriesId, $(if ($useGsync) { ' G-SYNC' } else { ' max FPS / latency' }), @($gameProfiles).Count)
+    $doneScope = if ($SafePolicy) { 'reversible DRS profile policy' } else { 'driver + profile + display policy' }
+    Write-Output ("DONE - NVIDIA {0}{1}: {2} ({3} game profiles)" -f `
+        $seriesId, $(if ($useGsync) { ' G-SYNC' } else { ' raw latency' }), $doneScope, @($gameProfiles).Count)
     exit 0
 } catch {
     $failStage = [string]$Script:CurrentStage

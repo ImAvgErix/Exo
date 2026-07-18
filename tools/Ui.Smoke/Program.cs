@@ -656,8 +656,8 @@ if (File.Exists(nvidiaXamlPath))
     var nx = File.ReadAllText(nvidiaXamlPath);
     // NVIDIA Repair is status-clear only — honest caption, no rollback claim.
     Expect("nvidia repair honest caption",
-        nx.Contains("Repair clears Exo's status marker", StringComparison.Ordinal)
-        && nx.Contains("does not roll back", StringComparison.OrdinalIgnoreCase));
+        nx.Contains("Repair restores the complete NVIDIA profile database", StringComparison.Ordinal)
+        && nx.Contains("Drivers and display settings stay untouched", StringComparison.Ordinal));
 }
 
 var loaderCs = Path.Combine(repo, "Exo", "Views", "Controls", "ExoLoader.xaml.cs");

@@ -12,13 +12,15 @@
 //   - NVTweak: PerformScalingOn=GPU, ScalingOverride=ON, No-scaling mode
 //   - NVTweak Gestalt=2 (Use the advanced 3D image settings)
 //
-// Usage: Exo.NvDisplay.exe [--apply|--status]
+// Also owns exact NVIDIA DRS database snapshot/restore for Exo Repair.
+// Usage: Exo.NvDisplay.exe [--apply|--status|--drs-backup PATH|--drs-restore PATH]
 
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Win32;
 using NvAPIWrapper;
 using NvAPIWrapper.Display;
+using NvAPIWrapper.DRS;
 using NvAPIWrapper.GPU;
 using NvAPIWrapper.Native;
 using NvAPIWrapper.Native.Display;
@@ -56,6 +58,8 @@ static class Program
         var setVibranceRaw = GetArgValue(rawArgs, "--set-vibrance") ?? GetArgValue(rawArgs, "/set-vibrance");
         var getVibrance = normalizedArgs.Any(a => a is "--get-vibrance" or "/get-vibrance");
         var displayIdRaw = GetArgValue(rawArgs, "--display-id") ?? GetArgValue(rawArgs, "/display-id");
+        var drsBackupRaw = GetArgValue(rawArgs, "--drs-backup") ?? GetArgValue(rawArgs, "/drs-backup");
+        var drsRestoreRaw = GetArgValue(rawArgs, "--drs-restore") ?? GetArgValue(rawArgs, "/drs-restore");
 
         var knownPrefixes = new[]
         {
@@ -64,14 +68,16 @@ static class Program
             "--set-depth", "/set-depth", "--set-mode", "/set-mode",
             "--set-scaling", "/set-scaling", "--set-color-range", "/set-color-range",
             "--set-vibrance", "/set-vibrance", "--get-vibrance", "/get-vibrance",
-            "--display-id", "/display-id"
+            "--display-id", "/display-id", "--drs-backup", "/drs-backup",
+            "--drs-restore", "/drs-restore"
         };
         var valueTaking = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "--set-depth", "/set-depth", "--set-mode", "/set-mode",
             "--set-scaling", "/set-scaling", "--set-color-range", "/set-color-range",
             "--set-vibrance", "/set-vibrance",
-            "--display-id", "/display-id"
+            "--display-id", "/display-id", "--drs-backup", "/drs-backup",
+            "--drs-restore", "/drs-restore"
         };
         {
             var skipNext = false;
@@ -92,7 +98,8 @@ static class Program
                           setScalingRaw is not null || setColorRangeRaw is not null ||
                           setVibranceRaw is not null;
         var statusOnly = normalizedArgs.Any(a => a is "--status" or "-s" or "/status");
-        var apply = !statusOnly && !listColor && !listDisplays && !panelMutate && !getVibrance;
+        var drsOperation = drsBackupRaw is not null || drsRestoreRaw is not null;
+        var apply = !statusOnly && !listColor && !listDisplays && !panelMutate && !getVibrance && !drsOperation;
         if (normalizedArgs.Any(a => a is "--apply" or "-a" or "/apply")) apply = true;
         if (statusOnly && apply)
         {
@@ -112,6 +119,8 @@ static class Program
             Console.WriteLine("  --set-color-range full|limited [--display-id ID]");
             Console.WriteLine("  --get-vibrance [--display-id ID]  Read digital vibrance (DVC) levels");
             Console.WriteLine("  --set-vibrance LEVEL [--display-id ID]  Set digital vibrance (driver range, usually 0-63)");
+            Console.WriteLine("  --drs-backup PATH    Save the complete NVIDIA DRS database for exact Repair");
+            Console.WriteLine("  --drs-restore PATH   Load and commit a complete NVIDIA DRS database backup");
             return 0;
         }
 
@@ -124,6 +133,9 @@ static class Program
 
         try
         {
+            if (drsBackupRaw is not null || drsRestoreRaw is not null)
+                return RunDrsDatabaseOperation(drsBackupRaw, drsRestoreRaw);
+
             var enumeration = GetActiveDisplays();
             if (!enumeration.Succeeded)
             {
@@ -560,6 +572,79 @@ static class Program
         finally
         {
             try { NVIDIA.Unload(); } catch { }
+        }
+    }
+
+    private static int RunDrsDatabaseOperation(string? backupPath, string? restorePath)
+    {
+        if ((backupPath is null) == (restorePath is null))
+        {
+            Console.Error.WriteLine("Choose exactly one of --drs-backup or --drs-restore.");
+            return 64;
+        }
+
+        var requested = backupPath ?? restorePath!;
+        string fullPath;
+        try { fullPath = Path.GetFullPath(requested); }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine("Invalid DRS path: " + ex.Message);
+            return 64;
+        }
+
+        var exoStateRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Exo");
+        var allowedRoot = Path.GetFullPath(exoStateRoot).TrimEnd(Path.DirectorySeparatorChar) +
+                          Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(allowedRoot, StringComparison.OrdinalIgnoreCase) ||
+            !fullPath.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine("DRS backups are restricted to Exo LocalAppData .bin files.");
+            return 64;
+        }
+
+        try
+        {
+            if (backupPath is not null)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+                if (File.Exists(fullPath))
+                {
+                    Console.Error.WriteLine("DRS backup already exists; refusing to overwrite the pristine snapshot.");
+                    return 5;
+                }
+                using var session = DriverSettingsSession.CreateAndLoad();
+                session.Save(fullPath);
+                if (!File.Exists(fullPath) || new FileInfo(fullPath).Length == 0)
+                    throw new InvalidDataException("NVAPI produced an empty DRS backup.");
+                Console.WriteLine("EXO_NVDRS_JSON:" + JsonSerializer.Serialize(new
+                {
+                    ok = true,
+                    mode = "backup",
+                    bytes = new FileInfo(fullPath).Length
+                }));
+                return 0;
+            }
+
+            if (!File.Exists(fullPath) || new FileInfo(fullPath).Length == 0)
+            {
+                Console.Error.WriteLine("DRS backup is missing or empty.");
+                return 5;
+            }
+            using (var session = DriverSettingsSession.CreateAndLoad(fullPath))
+                session.Save();
+            Console.WriteLine("EXO_NVDRS_JSON:" + JsonSerializer.Serialize(new
+            {
+                ok = true,
+                mode = "restore",
+                bytes = new FileInfo(fullPath).Length
+            }));
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine("DRS operation failed: " + ex.Message);
+            return 6;
         }
     }
 

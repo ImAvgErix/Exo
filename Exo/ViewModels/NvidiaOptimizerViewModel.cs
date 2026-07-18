@@ -91,8 +91,8 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             });
 
             var args = UseGsync
-                ? new[] { "-NonInteractive", "-Gsync" }
-                : new[] { "-NonInteractive", "-RawLatency" };
+                ? new[] { "-NonInteractive", "-SafePolicy", "-Gsync" }
+                : new[] { "-NonInteractive", "-SafePolicy", "-RawLatency" };
 
             var result = await _services.PowerShell.RunAsync(
                 _services.Scripts.NvidiaOptimizerScript,
@@ -173,8 +173,8 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
     {
         if (IsBusy) return;
 
-        // Reset is status-clear only (never a driver rollback) — runs immediately;
-        // the page carries the honest one-line description next to the button.
+        // Repair restores the complete DRS snapshot captured before Exo imported
+        // its Base + per-game profiles. The safe policy does not mutate drivers.
         IsBusy = true;
         IsProgressVisible = true;
         ProgressPercent = 0;
@@ -193,7 +193,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             var result = await _services.PowerShell.RunAsync(
                 _services.Scripts.NvidiaRepairScript,
                 arguments: new[] { "-NonInteractive" },
-                elevate: false,
+                elevate: true,
                 progress: progress,
                 cancellationToken: _runCts.Token,
                 workingDirectory: _services.Scripts.GetNvidiaRoot(),

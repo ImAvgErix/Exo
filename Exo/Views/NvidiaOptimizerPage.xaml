@@ -88,7 +88,7 @@
                         HorizontalAlignment="Stretch"
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                         AutomationProperties.Name="Apply NVIDIA" />
-                <TextBlock Text="Repair clears Exo's status marker; it does not roll back the NVIDIA driver."
+                <TextBlock Text="Repair restores the complete NVIDIA profile database saved before Apply. Drivers and display settings stay untouched."
                            Style="{StaticResource ExoCaption}"
                            TextAlignment="Center" />
             </StackPanel>

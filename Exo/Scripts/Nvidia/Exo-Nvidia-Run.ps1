@@ -29,7 +29,7 @@ if (-not (Test-Path $Optimizer)) { throw "Missing Nvidia-Optimizer.ps1 in $Root"
 
 # Hashtable splat = named params. Array splat (@('-NonInteractive')) is positional and
 # wrongly binds "-NonInteractive" to -Series (ValidateSet fails / "Finished with errors").
-$params = @{ NonInteractive = $true }
+$params = @{ NonInteractive = $true; SafePolicy = $true; SkipDriver = $true }
 if ($Gsync) { $params['Gsync'] = $true }
 if ($RawLatency) { $params['RawLatency'] = $true }
 if ($Series) { $params['Series'] = $Series }
