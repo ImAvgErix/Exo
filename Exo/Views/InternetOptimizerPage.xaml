@@ -7,16 +7,10 @@
     xmlns:controls="using:Exo.Views.Controls"
     Background="Transparent">
 
-    <!--
-      One adaptive action: measure first, then apply one verified link policy.
-      Repair stays separate from optimization.
-    -->
     <controls:SharedModulePlate
         x:Name="Plate"
         ModuleTitle="INTERNET"
         StatusText="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}"
-        GuidanceText="{x:Bind ViewModel.GuidanceText, Mode=OneWay}"
-        HasGuidance="{x:Bind ViewModel.HasGuidance, Mode=OneWay}"
         IsLoading="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
         FeatureItems="{x:Bind ViewModel.Rows, Mode=OneWay}"
         IsFeatureListVisible="{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay}"
@@ -24,8 +18,35 @@
         LastResult="{x:Bind ViewModel.Message, Mode=OneWay}"
         LastResultGlyph="{x:Bind ViewModel.MessageGlyph, Mode=OneWay}"
         LastResultBrush="{x:Bind ViewModel.MessageBrush, Mode=OneWay}"
+        IsProgressVisible="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
+        ProgressStatus="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}"
+        SelectedApplyMode="{x:Bind ViewModel.SelectedApplyMode, Mode=TwoWay}"
+        ApplyModeOptions="{x:Bind ViewModel.ApplyModeOptions, Mode=OneWay}"
+        PolicyTogglesEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
         HasApplyReport="False"
         ShowSecondaryActions="False">
+        <controls:SharedModulePlate.HeaderExtra>
+            <Border Style="{StaticResource ExoCard}" Padding="12,8">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Link policy"
+                               FontFamily="{StaticResource ExoUiFontSemiBold}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                               VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="1"
+                              MinWidth="168"
+                              SelectedItem="{x:Bind ViewModel.SelectedProfileOption, Mode=TwoWay}"
+                              ItemsSource="{x:Bind ViewModel.ProfileOptions, Mode=OneWay}"
+                              IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                              AutomationProperties.Name="Link policy" />
+                </Grid>
+            </Border>
+        </controls:SharedModulePlate.HeaderExtra>
         <controls:SharedModulePlate.FootExtra>
             <StackPanel Spacing="6">
                 <Border Style="{StaticResource ExoMessageBanner}"
@@ -46,9 +67,6 @@
                            FontFamily="{StaticResource ExoUiFontSemiBold}"
                            TextAlignment="Center"
                            Visibility="{x:Bind ViewModel.HasQualityResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBlock Text="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}" Style="{StaticResource ExoCaption}"
-                           TextAlignment="Center"
-                           Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
             </StackPanel>
         </controls:SharedModulePlate.FootExtra>
         <controls:SharedModulePlate.PrimaryActions>
@@ -67,9 +85,6 @@
                         HorizontalAlignment="Stretch"
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                         AutomationProperties.Name="Repair internet stack" />
-                <TextBlock Text="{x:Bind ViewModel.RepairHint, Mode=OneWay}"
-                           Style="{StaticResource ExoCaption}"
-                           TextAlignment="Center" />
             </StackPanel>
         </controls:SharedModulePlate.PrimaryActions>
     </controls:SharedModulePlate>

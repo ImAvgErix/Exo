@@ -11,15 +11,25 @@ public sealed partial class InternetOptimizerPage : Page
 
     public InternetOptimizerPage()
     {
+        NavigationCacheMode = NavigationCacheMode.Enabled;
         ViewModel = new InternetOptimizerViewModel(App.Services);
         InitializeComponent();
         DataContext = ViewModel;
     }
 
-    protected override async void OnNavigatedTo(NavigationEventArgs e)
+    protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        await ViewModel.InitializeAsync();
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            _ = ViewModel.InitializeAsync();
+        });
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        ViewModel.CancelBackgroundWork();
+        base.OnNavigatedFrom(e);
     }
 
     private void Repair_Click(object sender, RoutedEventArgs e) =>

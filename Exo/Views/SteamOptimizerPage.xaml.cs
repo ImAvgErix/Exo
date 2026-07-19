@@ -15,19 +15,28 @@ public sealed partial class SteamOptimizerPage : Page
 
     public SteamOptimizerPage()
     {
+        NavigationCacheMode = NavigationCacheMode.Enabled;
         ViewModel = new SteamOptimizerViewModel(App.Services);
         InitializeComponent();
         DataContext = ViewModel;
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
     }
 
-    protected override async void OnNavigatedTo(NavigationEventArgs e)
+    protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        await ViewModel.InitializeAsync();
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            _ = ViewModel.InitializeAsync();
+        });
     }
 
-    /// <summary>Staggered tile entrance on the first loading → loaded transition only.</summary>
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        ViewModel.CancelBackgroundWork();
+        base.OnNavigatedFrom(e);
+    }
+
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_tilesEntered) return;

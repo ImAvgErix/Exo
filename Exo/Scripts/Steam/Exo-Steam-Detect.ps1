@@ -301,13 +301,63 @@ if (Test-Path $statePath) {
     try { $state = Get-Content $statePath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
 }
 
+function Get-SteamLibrarySummary([string]$SteamPath) {
+    # Same language as Riot/Epic install rows: Installed · Found: …
+    $names = [System.Collections.Generic.List[string]]::new()
+    $count = 0
+    try {
+        $libs = [System.Collections.Generic.List[string]]::new()
+        [void]$libs.Add($SteamPath)
+        $vdf = Join-Path $SteamPath 'steamapps\libraryfolders.vdf'
+        if (Test-Path -LiteralPath $vdf) {
+            $raw = Get-Content -LiteralPath $vdf -Raw -ErrorAction Stop
+            foreach ($m in [regex]::Matches($raw, '"path"\s+"([^"]+)"')) {
+                $p = $m.Groups[1].Value -replace '\\\\', '\'
+                if ($p -and (Test-Path -LiteralPath $p -PathType Container)) { [void]$libs.Add($p) }
+            }
+        }
+        foreach ($lib in @($libs | Sort-Object -Unique)) {
+            $apps = Join-Path $lib 'steamapps'
+            if (-not (Test-Path -LiteralPath $apps -PathType Container)) { continue }
+            foreach ($acf in @(Get-ChildItem -LiteralPath $apps -Filter 'appmanifest_*.acf' -File -ErrorAction SilentlyContinue)) {
+                $count++
+                if ($names.Count -ge 4) { continue }
+                try {
+                    $text = Get-Content -LiteralPath $acf.FullName -Raw -ErrorAction Stop
+                    $nm = [regex]::Match($text, '"name"\s+"([^"]+)"')
+                    if ($nm.Success) {
+                        $label = $nm.Groups[1].Value.Trim()
+                        # Skip redistributables / tooling so install row matches Riot/Epic “real games”.
+                        if ($label -match '(?i)redistributable|directx|vcredist|steamworks common|proton|steam linux') {
+                            $count--
+                            continue
+                        }
+                        if ($label -and $names -notcontains $label) { [void]$names.Add($label) }
+                    }
+                } catch { }
+            }
+        }
+    } catch { }
+    return @{ Count = $count; Names = @($names) }
+}
+
 $steamOk = [bool]$steam
 if (-not $steamOk) {
     $statusText = 'Steam not installed'
     $detail = 'Install Steam, open it once, then return.'
-    Add-Feature 'Steam install' 'Required before optimizations can apply.' $false
+    Add-Feature 'Steam install' 'Install Steam, open it once, then return.' $false
 } else {
-    Add-Feature 'Steam install' 'Client found and ready.' $true
+    $lib = Get-SteamLibrarySummary $steam
+    $installDetail = if ([int]$lib.Count -le 0) {
+        'Installed - no library games found yet. Install a game, then Apply.'
+    } elseif (@($lib.Names).Count -gt 0) {
+        $shown = @($lib.Names | Select-Object -First 4)
+        $tail = if ([int]$lib.Count -gt $shown.Count) { " +$([int]$lib.Count - $shown.Count) more" } else { '' }
+        "Installed - Found: $($shown -join ', ')$tail."
+    } else {
+        "Installed - Found $($lib.Count) library game(s)."
+    }
+    Add-Feature 'Steam install' $installDetail $true
 
     # Quiet CEF launcher (SteamLogic / SteamDetectCore)
     $cefOk = $false

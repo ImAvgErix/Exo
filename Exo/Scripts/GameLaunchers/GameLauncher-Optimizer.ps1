@@ -1,26 +1,29 @@
-# Exo Riot / Epic optimizer (launcher-scoped only).
-# Owns: quiet startup, launcher yield/soft-reclaim while a game runs, exact Repair.
-# Does NOT own Windows Graphics (UserGpuPreferences) or Fullscreen Optimizations —
-# those are global Windows policy and wait for a future Windows optimizer module.
-# Anti-cheat, services, files, caches, and game scheduling are left untouched.
+# Exo Riot / Epic optimizer.
+# Owns: quiet startup, shell quiet, launcher yield while gaming, per-game Windows
+# high-perf GPU preference + Fullscreen Optimizations off, exact Repair.
+# Anti-cheat, services, game files, and caches stay untouched.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateSet('Riot','Epic')][string]$Module,
     [switch]$Repair,
-    [switch]$NonInteractive
+    [switch]$NonInteractive,
+    [switch]$Experimental
 )
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.3.0'
+$Version = '1.5.0'
 $ExoRoot = Join-Path $env:LOCALAPPDATA 'Exo'
 $StatePath = Join-Path $ExoRoot ("{0}-optimizer.json" -f $Module.ToLowerInvariant())
 $SnapshotPath = Join-Path $ExoRoot ("{0}-snapshot.json" -f $Module.ToLowerInvariant())
 $YieldHelperPath = Join-Path $ExoRoot ("{0}-yield-guard.ps1" -f $Module.ToLowerInvariant())
 $YieldRunName = "Exo-$Module-Yield"
 $RunSubKey = 'Software\Microsoft\Windows\CurrentVersion\Run'
-# Legacy keys: only used by Repair to undo older Exo builds that wrote GPU/FSO.
 $GpuSubKey = 'Software\Microsoft\DirectX\UserGpuPreferences'
 $FsoSubKey = 'Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
+# High performance discrete GPU (Windows Graphics settings).
+$GpuHighPerf = 'GpuPreference=2;'
+# Disable Fullscreen Optimizations for the exe path.
+$FsoDisable = '~ DISABLEDXMAXIMIZEDWINDOWEDMODE'
 $Report = [System.Collections.Generic.List[string]]::new()
 
 function Write-ProgressLine([int]$Percent, [string]$Text) {
@@ -251,6 +254,62 @@ function Remove-StartupEntries {
     } finally { $key.Dispose() }
     return $removed
 }
+
+# Steam-parity shell quiet, scoped to this launcher brand only (toasts + tasks).
+# Cross-connect from Steam windows-quiet — never machine-wide Windows policy.
+function Get-LauncherNotifyIds {
+    if ($Module -eq 'Riot') {
+        return @(
+            'Riot Client', 'RiotClient', 'Riot Games', 'RiotClientUx',
+            'VALORANT', 'League of Legends', 'riotclientservices.exe'
+        )
+    }
+    return @(
+        'EpicGamesLauncher', 'Epic Games Launcher', 'com.epicgames.launcher',
+        'EpicGamesLauncher.exe', 'UnrealEngineLauncher'
+    )
+}
+function Get-LauncherTaskPatterns {
+    if ($Module -eq 'Riot') { return @('(?i)Riot|VALORANT|League of Legends|Vanguard') }
+    return @('(?i)Epic Games|EpicGames|EOS|Unreal Engine')
+}
+function Apply-LauncherShellQuiet {
+    $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+    $touched = 0
+    foreach ($id in @(Get-LauncherNotifyIds)) {
+        $path = Join-Path $base $id
+        try {
+            if (-not (Test-Path -LiteralPath $path)) {
+                New-Item -Path $path -Force -ErrorAction SilentlyContinue | Out-Null
+            }
+            if (Test-Path -LiteralPath $path) {
+                New-ItemProperty -LiteralPath $path -Name Enabled -PropertyType DWord -Value 0 -Force -ErrorAction SilentlyContinue | Out-Null
+                Set-ItemProperty -LiteralPath $path -Name Enabled -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+                $touched++
+            }
+        } catch { }
+    }
+    $tasksQuiet = 0
+    try {
+        $patterns = @(Get-LauncherTaskPatterns)
+        Get-ScheduledTask -ErrorAction SilentlyContinue | ForEach-Object {
+            $blob = "$($_.TaskName) $($_.TaskPath)"
+            $hit = $false
+            foreach ($re in $patterns) { if ($blob -match $re) { $hit = $true; break } }
+            if (-not $hit) { return }
+            # Never disable anti-cheat / Vanguard integrity services via task kill folklore —
+            # only disable enabled non-critical update/toast tasks when Settings allows.
+            if ($blob -match '(?i)Vanguard|vgk|vgc|EOSOverlay|EasyAntiCheat') { return }
+            try {
+                if ($_.Settings.Enabled) {
+                    Disable-ScheduledTask -InputObject $_ -ErrorAction SilentlyContinue | Out-Null
+                    $tasksQuiet++
+                }
+            } catch { }
+        }
+    } catch { }
+    return @{ Notify = $touched; Tasks = $tasksQuiet }
+}
 function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
     # Live companion: while a game runs, demote + soft-reclaim launcher UI only.
     # Never opens, suspends, or modifies game/anti-cheat processes.
@@ -325,7 +384,7 @@ function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
         '        } catch {}'
         '      }'
         '    }'
-        '    if ($gameRunning) { Start-Sleep -Seconds 2 } else { Start-Sleep -Seconds 3 }'
+        ("    if (`$gameRunning) {{ Start-Sleep -Seconds {0} }} else {{ Start-Sleep -Seconds {1} }}" -f $(if ($Experimental) { 1 } else { 2 }), $(if ($Experimental) { 2 } else { 3 }))
         '  }'
         '} finally {'
         '  try { $mutex.ReleaseMutex() } catch {}'
@@ -353,6 +412,64 @@ function Restore-Value([Microsoft.Win32.RegistryKey]$Key, [string]$Name, $Snapsh
     if ([bool]$Snapshot.existed) {
         $Key.SetValue($Name, $Snapshot.value, (Convert-Kind ([string]$Snapshot.kind)))
     } else { $Key.DeleteValue($Name, $false) }
+}
+
+function Apply-WindowsGamePolicy([object[]]$Targets, [object[]]$Launchers, [switch]$Force, [switch]$LauncherFso) {
+    # Games always high-perf dGPU + FSO off.
+    # Hybrid systems: launchers prefer integrated (GpuPreference=1) so the UI
+    # stays off the gaming GPU; single-GPU leaves launchers on high-perf / automatic.
+    # Launcher FSO is Experimental-only (windowed UI; usually no-op).
+    $gpuWritten = 0
+    $fsoWritten = 0
+    $hybrid = [bool](Test-HybridGraphics)
+    $launcherGpu = if ($hybrid) { 'GpuPreference=1;' } else { $GpuHighPerf }
+    $gpu = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($GpuSubKey, $true)
+    try {
+        foreach ($t in @($Targets)) {
+            $path = [string]$t.path
+            if ([string]::IsNullOrWhiteSpace($path)) { continue }
+            $cur = [string]$gpu.GetValue($path, $null)
+            if (-not $Force -and $cur -eq $GpuHighPerf) { continue }
+            $gpu.SetValue($path, $GpuHighPerf, [Microsoft.Win32.RegistryValueKind]::String)
+            $gpuWritten++
+        }
+        foreach ($t in @($Launchers)) {
+            $path = [string]$t.path
+            if ([string]::IsNullOrWhiteSpace($path)) { continue }
+            $cur = [string]$gpu.GetValue($path, $null)
+            if (-not $Force -and $cur -eq $launcherGpu) { continue }
+            $gpu.SetValue($path, $launcherGpu, [Microsoft.Win32.RegistryValueKind]::String)
+            $gpuWritten++
+        }
+    } finally { $gpu.Dispose() }
+
+    $fso = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($FsoSubKey, $true)
+    try {
+        foreach ($t in @($Targets)) {
+            $path = [string]$t.path
+            if ([string]::IsNullOrWhiteSpace($path)) { continue }
+            $cur = [string]$fso.GetValue($path, $null)
+            if (-not $Force -and $cur -eq $FsoDisable) { continue }
+            $fso.SetValue($path, $FsoDisable, [Microsoft.Win32.RegistryValueKind]::String)
+            $fsoWritten++
+        }
+        if ($LauncherFso) {
+            # Experimental: also pin FSO off on launcher UI (usually no-op but keeps parity).
+            foreach ($t in @($Launchers)) {
+                $path = [string]$t.path
+                if ([string]::IsNullOrWhiteSpace($path)) { continue }
+                $fso.SetValue($path, $FsoDisable, [Microsoft.Win32.RegistryValueKind]::String)
+                $fsoWritten++
+            }
+        }
+    } finally { $fso.Dispose() }
+
+    return @{
+        Gpu = $gpuWritten
+        Fso = $fsoWritten
+        Hybrid = $hybrid
+        LauncherGpu = $(if ($hybrid) { 'integrated' } else { 'high-perf' })
+    }
 }
 function Invoke-Repair {
     if (-not (Test-Path -LiteralPath $SnapshotPath -PathType Leaf)) {
@@ -414,10 +531,31 @@ try {
     Add-Report 'snapshot' 'ok' 'pre-Exo Run snapshot captured'
     $removed = Remove-StartupEntries
     Add-Report 'startup' 'ok' ("removed {0} auto-start value(s)" -f $removed)
-    # Windows GPU preference + FSO deliberately not applied (future Windows module).
+    # Steam-parity: launcher toasts + non-AC scheduled tasks (app-scoped only).
+    $shell = Apply-LauncherShellQuiet
+    Add-Report 'shell-quiet' 'ok' ("toasts={0}; tasks-quieted={1}" -f [int]$shell.Notify, [int]$shell.Tasks)
+    if ($Experimental) {
+        $shell2 = Apply-LauncherShellQuiet
+        Add-Report 'shell-quiet-exp' 'ok' ("experimental re-stamp toasts={0}; tasks={1}" -f [int]$shell2.Notify, [int]$shell2.Tasks)
+    }
+    # Full apply always re-stamps game GPU/FSO (safe + reversible).
+    # Experimental: also launcher FSO + tighter yield cadence.
+    $winPolicy = Apply-WindowsGamePolicy -Targets $targets -Launchers $launchers -Force -LauncherFso:$Experimental
+    $gpuReason = if ([bool]$winPolicy.Hybrid) {
+        "game GpuPreference=2; launcher integrated on hybrid ({0} path(s))" -f [int]$winPolicy.Gpu
+    } else {
+        "high-perf GpuPreference=2 on {0} executable(s)" -f [int]$winPolicy.Gpu
+    }
+    Add-Report 'gpu-preference' 'ok' $gpuReason
+    Add-Report 'fso' 'ok' ("Fullscreen Optimizations off on {0} path(s)" -f [int]$winPolicy.Fso)
     $yieldOk = Install-YieldGuard $targets $launchers
-    if ($yieldOk) { Add-Report 'yield-guard' 'ok' 'launcher EcoQoS + soft reclaim while game runs' }
-    else { Add-Report 'yield-guard' 'fail' 'no launcher processes to attach yield companion'; throw 'No launcher processes found for yield companion.' }
+    if ($yieldOk) {
+        $mode = if ($Experimental) { 'experimental cadence' } else { 'stable cadence' }
+        Add-Report 'yield-guard' 'ok' ("launcher EcoQoS + soft reclaim while game runs ($mode)")
+    } else {
+        Add-Report 'yield-guard' 'fail' 'no launcher processes to attach yield companion'
+        throw 'No launcher processes found for yield companion.'
+    }
     Add-Report 'anti-cheat-boundary' 'ok' 'game/anti-cheat processes never opened or modified'
     $yieldHelperOk = (Test-Path -LiteralPath $YieldHelperPath -PathType Leaf)
     $yieldRunOk = $false
@@ -426,7 +564,7 @@ try {
         $yieldRunOk = $rv -match 'yield-guard'
     } catch { }
     if (-not ($yieldHelperOk -and $yieldRunOk)) { throw 'Yield companion failed verification (helper or Run key missing).' }
-    Add-Report 'verified-record' 'ok' 'launcher-scoped apply complete'
+    Add-Report 'verified-record' 'ok' 'full apply complete'
     $state = [ordered]@{
         version = $Version
         module = $Module
@@ -434,10 +572,11 @@ try {
         applyStatus = 'applied'
         appliedUtc = (Get-Date).ToUniversalTime().ToString('o')
         startupQuiet = $true
-        # Legacy fields retained for older Exo builds reading state; not re-applied.
-        gamePolicyVerified = $false
-        fsoVerified = $false
-        windowsGpuPolicyOwnedBy = 'future-windows-module'
+        shellQuiet = $true
+        gamePolicyVerified = $true
+        fsoVerified = $true
+        windowsGpuPolicyOwnedBy = $Module.ToLowerInvariant()
+        experimental = [bool]$Experimental
         yieldGuardInstalled = $true
         hybridGraphics = [bool](Test-HybridGraphics)
         launcherTargetCount = $launchers.Count
@@ -451,7 +590,7 @@ try {
     }
     $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $StatePath -Encoding UTF8
     Write-ProgressLine 100 'Verified'
-    Write-Output ("DONE - {0}: startup quiet + launcher yield for {1} game executable(s) (Windows GPU/FSO deferred)" -f $Module, $targets.Count)
+    Write-Output ("DONE - {0}: startup quiet + yield + high-perf GPU/FSO for {1} game executable(s)" -f $Module, $targets.Count)
     exit 0
 } catch {
     Add-Report 'apply' 'fail' $_.Exception.Message

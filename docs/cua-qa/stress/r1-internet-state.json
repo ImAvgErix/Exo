@@ -5,7 +5,7 @@
     {
       "depth": 2,
       "element_index": 0,
-      "element_token": "s00c2:0",
+      "element_token": "s01a4:0",
       "frame": {
         "h": 32,
         "w": 46,
@@ -18,7 +18,7 @@
     {
       "depth": 2,
       "element_index": 1,
-      "element_token": "s00c2:1",
+      "element_token": "s01a4:1",
       "frame": {
         "h": 32,
         "w": 46,
@@ -31,7 +31,7 @@
     {
       "depth": 2,
       "element_index": 2,
-      "element_token": "s00c2:2",
+      "element_token": "s01a4:2",
       "frame": {
         "h": 32,
         "w": 46,
@@ -44,7 +44,7 @@
     {
       "depth": 4,
       "element_index": 3,
-      "element_token": "s00c2:3",
+      "element_token": "s01a4:3",
       "frame": {
         "h": 40,
         "w": 76,
@@ -57,7 +57,7 @@
     {
       "depth": 5,
       "element_index": 4,
-      "element_token": "s00c2:4",
+      "element_token": "s01a4:4",
       "frame": {
         "h": 16,
         "w": 26,
@@ -71,7 +71,7 @@
     {
       "depth": 4,
       "element_index": 5,
-      "element_token": "s00c2:5",
+      "element_token": "s01a4:5",
       "frame": {
         "h": 40,
         "w": 44,
@@ -84,7 +84,7 @@
     {
       "depth": 3,
       "element_index": 6,
-      "element_token": "s00c2:6",
+      "element_token": "s01a4:6",
       "frame": {
         "h": 40,
         "w": 86,
@@ -97,7 +97,7 @@
     {
       "depth": 4,
       "element_index": 7,
-      "element_token": "s00c2:7",
+      "element_token": "s01a4:7",
       "frame": {
         "h": 15,
         "w": 41,
@@ -111,7 +111,7 @@
     {
       "depth": 3,
       "element_index": 8,
-      "element_token": "s00c2:8",
+      "element_token": "s01a4:8",
       "frame": {
         "h": 40,
         "w": 78,
@@ -124,7 +124,7 @@
     {
       "depth": 4,
       "element_index": 9,
-      "element_token": "s00c2:9",
+      "element_token": "s01a4:9",
       "frame": {
         "h": 15,
         "w": 33,
@@ -138,7 +138,7 @@
     {
       "depth": 3,
       "element_index": 10,
-      "element_token": "s00c2:10",
+      "element_token": "s01a4:10",
       "frame": {
         "h": 40,
         "w": 87,
@@ -151,7 +151,7 @@
     {
       "depth": 4,
       "element_index": 11,
-      "element_token": "s00c2:11",
+      "element_token": "s01a4:11",
       "frame": {
         "h": 15,
         "w": 42,
@@ -165,7 +165,7 @@
     {
       "depth": 3,
       "element_index": 12,
-      "element_token": "s00c2:12",
+      "element_token": "s01a4:12",
       "frame": {
         "h": 40,
         "w": 84,
@@ -178,7 +178,7 @@
     {
       "depth": 4,
       "element_index": 13,
-      "element_token": "s00c2:13",
+      "element_token": "s01a4:13",
       "frame": {
         "h": 15,
         "w": 39,
@@ -192,7 +192,7 @@
     {
       "depth": 3,
       "element_index": 14,
-      "element_token": "s00c2:14",
+      "element_token": "s01a4:14",
       "frame": {
         "h": 40,
         "w": 76,
@@ -205,7 +205,7 @@
     {
       "depth": 4,
       "element_index": 15,
-      "element_token": "s00c2:15",
+      "element_token": "s01a4:15",
       "frame": {
         "h": 15,
         "w": 22,
@@ -219,7 +219,7 @@
     {
       "depth": 3,
       "element_index": 16,
-      "element_token": "s00c2:16",
+      "element_token": "s01a4:16",
       "frame": {
         "h": 40,
         "w": 76,
@@ -232,7 +232,7 @@
     {
       "depth": 4,
       "element_index": 17,
-      "element_token": "s00c2:17",
+      "element_token": "s01a4:17",
       "frame": {
         "h": 15,
         "w": 22,
@@ -246,7 +246,7 @@
     {
       "depth": 3,
       "element_index": 18,
-      "element_token": "s00c2:18",
+      "element_token": "s01a4:18",
       "frame": {
         "h": 691,
         "w": 1120,
@@ -258,12 +258,12 @@
     {
       "depth": 4,
       "element_index": 19,
-      "element_token": "s00c2:19",
+      "element_token": "s01a4:19",
       "frame": {
         "h": 15,
-        "w": 1026,
-        "x": 457,
-        "y": 250
+        "w": 1047,
+        "x": 444,
+        "y": 242
       },
       "label": "INTERNET",
       "parent_index": 18,
@@ -272,40 +272,40 @@
     {
       "depth": 4,
       "element_index": 20,
-      "element_token": "s00c2:20",
+      "element_token": "s01a4:20",
       "frame": {
         "h": 36,
-        "w": 1026,
-        "x": 457,
-        "y": 270
+        "w": 1047,
+        "x": 444,
+        "y": 260
       },
-      "label": "Ethernet path - 2.5 Gbps",
+      "label": "Optimized - Ethernet path",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
       "element_index": 21,
-      "element_token": "s00c2:21",
+      "element_token": "s01a4:21",
       "frame": {
         "h": 32,
-        "w": 997,
-        "x": 473,
-        "y": 337
+        "w": 1020,
+        "x": 460,
+        "y": 319
       },
-      "label": "Ready to measure this connection and apply one balanced policy. Safety: Wi-Fi is never disabled. Apply snapshots first and auto-rolls back if connectivity fails. Repair restores the pre-Exo snapshot.",
+      "label": "Verified on this connection. Analyze again after changing adapters, routers, or service plans. Safety: Wi-Fi is never disabled. Apply snapshots first and auto-rolls back if connectivity fails. Repair restores the pre-Exo snapshot.",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
       "element_index": 22,
-      "element_token": "s00c2:22",
+      "element_token": "s01a4:22",
       "frame": {
         "h": 15,
-        "w": 1046,
-        "x": 437,
-        "y": 421
+        "w": 1062,
+        "x": 429,
+        "y": 388
       },
       "label": "WHAT EXO WILL CHANGE",
       "parent_index": 18,
@@ -314,26 +314,12 @@
     {
       "depth": 4,
       "element_index": 23,
-      "element_token": "s00c2:23",
-      "frame": {
-        "h": 16,
-        "w": 144,
-        "x": 1339,
-        "y": 420
-      },
-      "label": "Hardware-aware, reversible",
-      "parent_index": 18,
-      "role": "Text"
-    },
-    {
-      "depth": 4,
-      "element_index": 24,
-      "element_token": "s00c2:24",
+      "element_token": "s01a4:23",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 467,
-        "y": 470
+        "w": 488,
+        "x": 455,
+        "y": 432
       },
       "label": "Connection path",
       "parent_index": 18,
@@ -341,13 +327,13 @@
     },
     {
       "depth": 4,
-      "element_index": 25,
-      "element_token": "s00c2:25",
+      "element_index": 24,
+      "element_token": "s01a4:24",
       "frame": {
         "h": 16,
-        "w": 472,
-        "x": 467,
-        "y": 490
+        "w": 488,
+        "x": 455,
+        "y": 451
       },
       "label": "2.5 Gbps Ethernet gets the lowest route metric; Wi-Fi is never disabled.",
       "parent_index": 18,
@@ -355,13 +341,13 @@
     },
     {
       "depth": 4,
-      "element_index": 26,
-      "element_token": "s00c2:26",
+      "element_index": 25,
+      "element_token": "s01a4:25",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 996,
-        "y": 462
+        "w": 488,
+        "x": 990,
+        "y": 424
       },
       "label": "Adaptive tuning",
       "parent_index": 18,
@@ -369,27 +355,27 @@
     },
     {
       "depth": 4,
-      "element_index": 27,
-      "element_token": "s00c2:27",
+      "element_index": 26,
+      "element_token": "s01a4:26",
       "frame": {
         "h": 32,
-        "w": 472,
-        "x": 996,
-        "y": 482
+        "w": 488,
+        "x": 990,
+        "y": 443
       },
-      "label": "Measures idle latency, full-load queueing, and throughput before choosing one combined policy.",
+      "label": "Measured idle latency, full-load queueing, and throughput; applied multi-gig throughput + latency policy.",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
-      "element_index": 28,
-      "element_token": "s00c2:28",
+      "element_index": 27,
+      "element_token": "s01a4:27",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 467,
-        "y": 558
+        "w": 488,
+        "x": 455,
+        "y": 516
       },
       "label": "DNS privacy",
       "parent_index": 18,
@@ -397,27 +383,27 @@
     },
     {
       "depth": 4,
-      "element_index": 29,
-      "element_token": "s00c2:29",
+      "element_index": 28,
+      "element_token": "s01a4:28",
       "frame": {
-        "h": 32,
-        "w": 472,
-        "x": 467,
-        "y": 578
+        "h": 16,
+        "w": 488,
+        "x": 455,
+        "y": 535
       },
-      "label": "Tests Cloudflare, Google, and Quad9 on this route, selects the fastest healthy resolver, and requests automatic DoH when Windows supports it.",
+      "label": "Google - selected by live test; automatic DoH active",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
-      "element_index": 30,
-      "element_token": "s00c2:30",
+      "element_index": 29,
+      "element_token": "s01a4:29",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 996,
-        "y": 558
+        "w": 488,
+        "x": 990,
+        "y": 516
       },
       "label": "Safe repair",
       "parent_index": 18,
@@ -425,27 +411,41 @@
     },
     {
       "depth": 4,
-      "element_index": 31,
-      "element_token": "s00c2:31",
+      "element_index": 30,
+      "element_token": "s01a4:30",
       "frame": {
-        "h": 32,
-        "w": 472,
-        "x": 996,
-        "y": 578
+        "h": 16,
+        "w": 488,
+        "x": 990,
+        "y": 535
       },
-      "label": "Apply takes a pre-change snapshot; Repair can return the Windows network stack to stock defaults.",
+      "label": "A pre-Exo snapshot is ready; Repair restores DNS, DoH, routes, TCP, and NIC settings.",
+      "parent_index": 18,
+      "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 31,
+      "element_token": "s01a4:31",
+      "frame": {
+        "h": 16,
+        "w": 1062,
+        "x": 429,
+        "y": 600
+      },
+      "label": "12.3 ms idle - full-load +1.4 ms download / +43.8 ms upload - 0% idle loss - Google DNS",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
       "element_index": 32,
-      "element_token": "s00c2:32",
+      "element_token": "s01a4:32",
       "frame": {
         "h": 40,
-        "w": 1046,
-        "x": 437,
-        "y": 675
+        "w": 1062,
+        "x": 429,
+        "y": 624
       },
       "label": "Analyze this connection and apply the best measured settings",
       "parent_index": 18,
@@ -454,12 +454,12 @@
     {
       "depth": 5,
       "element_index": 33,
-      "element_token": "s00c2:33",
+      "element_token": "s01a4:33",
       "frame": {
         "h": 17,
         "w": 104,
         "x": 908,
-        "y": 687
+        "y": 636
       },
       "label": "Analyze & Apply",
       "parent_index": 32,
@@ -468,12 +468,12 @@
     {
       "depth": 4,
       "element_index": 34,
-      "element_token": "s00c2:34",
+      "element_token": "s01a4:34",
       "frame": {
         "h": 40,
-        "w": 1046,
-        "x": 437,
-        "y": 721
+        "w": 1062,
+        "x": 429,
+        "y": 670
       },
       "label": "Repair internet stack",
       "parent_index": 18,
@@ -482,12 +482,12 @@
     {
       "depth": 5,
       "element_index": 35,
-      "element_token": "s00c2:35",
+      "element_token": "s01a4:35",
       "frame": {
         "h": 16,
         "w": 38,
         "x": 941,
-        "y": 733
+        "y": 682
       },
       "label": "Repair",
       "parent_index": 34,
@@ -496,21 +496,21 @@
     {
       "depth": 4,
       "element_index": 36,
-      "element_token": "s00c2:36",
+      "element_token": "s01a4:36",
       "frame": {
         "h": 16,
-        "w": 1046,
-        "x": 437,
-        "y": 767
+        "w": 1062,
+        "x": 429,
+        "y": 716
       },
-      "label": "Repair: reset to stock defaults",
+      "label": "Repair: restore exact pre-Exo state",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 1,
       "element_index": 37,
-      "element_token": "s00c2:37",
+      "element_token": "s01a4:37",
       "label": "Exo",
       "role": "TitleBar",
       "value": "Exo"
@@ -518,7 +518,7 @@
     {
       "depth": 3,
       "element_index": 38,
-      "element_token": "s00c2:38",
+      "element_token": "s01a4:38",
       "frame": {
         "h": 22,
         "w": 22,
@@ -532,7 +532,7 @@
     {
       "depth": 2,
       "element_index": 39,
-      "element_token": "s00c2:39",
+      "element_token": "s01a4:39",
       "label": "Minimize",
       "parent_index": 37,
       "role": "Button"
@@ -540,7 +540,7 @@
     {
       "depth": 2,
       "element_index": 40,
-      "element_token": "s00c2:40",
+      "element_token": "s01a4:40",
       "label": "Maximize",
       "parent_index": 37,
       "role": "Button"
@@ -548,19 +548,19 @@
     {
       "depth": 2,
       "element_index": 41,
-      "element_token": "s00c2:41",
+      "element_token": "s01a4:41",
       "label": "Close",
       "parent_index": 37,
       "role": "Button"
     }
   ],
-  "pid": 8724,
+  "pid": 4144,
   "screenshot_file_path": "C:\\Users\\Erix\\Exo\\docs\\cua-qa\\stress\\r1-internet.png",
   "screenshot_height": 753,
   "screenshot_mime_type": "image/png",
   "screenshot_width": 1166,
-  "snapshot_id": "s00c2",
-  "tree_markdown": "- Window \"Exo\"\n  - Pane \"Non Client Input Sink Window\"\n  - Pane \"AppWindow Custom Title Bar\"\n    - [0] Button \"Minimize\" [id=Minimize actions=[invoke]]\n    - [1] Button \"Maximize\" [id=Maximize actions=[invoke]]\n    - [2] Button \"Close\" [id=Close actions=[invoke]]\n        - [3] Button \"Open system overview\" [id=NavHome actions=[invoke]]\n          - [4] Text \"EXO\" [actions=[text]]\n        - [5] Button \"Settings\" [id=SettingsButton actions=[invoke]]\n      - [6] Button \"Discord\" [id=NavDiscord actions=[invoke]]\n        - [7] Text \"Discord\" [actions=[text]]\n      - [8] Button \"Steam\" [id=NavSteam actions=[invoke]]\n        - [9] Text \"Steam\" [actions=[text]]\n      - [10] Button \"Internet\" [id=NavInternet actions=[invoke]]\n        - [11] Text \"Internet\" [actions=[text]]\n      - [12] Button \"NVIDIA\" [id=NavNvidia actions=[invoke]]\n        - [13] Text \"NVIDIA\" [actions=[text]]\n      - [14] Button \"Riot\" [id=NavRiot actions=[invoke]]\n        - [15] Text \"Riot\" [actions=[text]]\n      - [16] Button \"Epic\" [id=NavEpic actions=[invoke]]\n        - [17] Text \"Epic\" [actions=[text]]\n      - [18] Pane [actions=[scroll]]\n        - [19] Text \"INTERNET\" [actions=[text]]\n        - [20] Text \"Ethernet path - 2.5 Gbps\" [actions=[text]]\n        - [21] Text \"Ready to measure this connection and apply one balanced policy. Safety: Wi-Fi is never disabled. Apply snapshots first and auto-rolls back if connectivity fails. Repair restores the pre-Exo snapshot.\" [actions=[text]]\n        - [22] Text \"WHAT EXO WILL CHANGE\" [actions=[text]]\n        - [23] Text \"Hardware-aware, reversible\" [actions=[text]]\n        - [24] Text \"Connection path\" [actions=[text]]\n        - [25] Text \"2.5 Gbps Ethernet gets the lowest route metric; Wi-Fi is never disabled.\" [actions=[text]]\n        - [26] Text \"Adaptive tuning\" [actions=[text]]\n        - [27] Text \"Measures idle latency, full-load queueing, and throughput before choosing one combined policy.\" [actions=[text]]\n        - [28] Text \"DNS privacy\" [actions=[text]]\n        - [29] Text \"Tests Cloudflare, Google, and Quad9 on this route, selects the fastest healthy resolver, and requests automatic DoH when Windows supports it.\" [actions=[text]]\n        - [30] Text \"Safe repair\" [actions=[text]]\n        - [31] Text \"Apply takes a pre-change snapshot; Repair can return the Windows network stack to stock defaults.\" [actions=[text]]\n        - [32] Button \"Analyze this connection and apply the best measured settings\" [actions=[invoke]]\n          - [33] Text \"Analyze & Apply\" [actions=[text]]\n        - [34] Button \"Repair internet stack\" [actions=[invoke]]\n          - [35] Text \"Repair\" [actions=[text]]\n        - [36] Text \"Repair: reset to stock defaults\" [actions=[text]]\n  - [37] TitleBar [value=\"Exo\" actions=[set_value]]\n    - MenuBar \"System\"\n      - [38] MenuItem \"System\" [actions=[invoke,expand]]\n    - [39] Button \"Minimize\" [actions=[invoke]]\n    - [40] Button \"Maximize\" [actions=[invoke]]\n    - [41] Button \"Close\" [actions=[invoke]]\n",
-  "window_id": 42074252
+  "snapshot_id": "s01a4",
+  "tree_markdown": "- Window \"Exo\"\n  - Pane \"Non Client Input Sink Window\"\n  - Pane \"AppWindow Custom Title Bar\"\n    - [0] Button \"Minimize\" [id=Minimize actions=[invoke]]\n    - [1] Button \"Maximize\" [id=Maximize actions=[invoke]]\n    - [2] Button \"Close\" [id=Close actions=[invoke]]\n        - [3] Button \"Open system overview\" [id=NavHome actions=[invoke]]\n          - [4] Text \"EXO\" [actions=[text]]\n        - [5] Button \"Settings\" [id=SettingsButton actions=[invoke]]\n      - [6] Button \"Discord\" [id=NavDiscord actions=[invoke]]\n        - [7] Text \"Discord\" [actions=[text]]\n      - [8] Button \"Steam\" [id=NavSteam actions=[invoke]]\n        - [9] Text \"Steam\" [actions=[text]]\n      - [10] Button \"Internet\" [id=NavInternet actions=[invoke]]\n        - [11] Text \"Internet\" [actions=[text]]\n      - [12] Button \"NVIDIA\" [id=NavNvidia actions=[invoke]]\n        - [13] Text \"NVIDIA\" [actions=[text]]\n      - [14] Button \"Riot\" [id=NavRiot actions=[invoke]]\n        - [15] Text \"Riot\" [actions=[text]]\n      - [16] Button \"Epic\" [id=NavEpic actions=[invoke]]\n        - [17] Text \"Epic\" [actions=[text]]\n      - [18] Pane [actions=[scroll]]\n        - [19] Text \"INTERNET\" [actions=[text]]\n        - [20] Text \"Optimized - Ethernet path\" [actions=[text]]\n        - [21] Text \"Verified on this connection. Analyze again after changing adapters, routers, or service plans. Safety: Wi-Fi is never disabled. Apply snapshots first and auto-rolls back if connectivity fails. Repair restores the pre-Exo snapshot.\" [actions=[text]]\n        - [22] Text \"WHAT EXO WILL CHANGE\" [actions=[text]]\n        - [23] Text \"Connection path\" [actions=[text]]\n        - [24] Text \"2.5 Gbps Ethernet gets the lowest route metric; Wi-Fi is never disabled.\" [actions=[text]]\n        - [25] Text \"Adaptive tuning\" [actions=[text]]\n        - [26] Text \"Measured idle latency, full-load queueing, and throughput; applied multi-gig throughput + latency policy.\" [actions=[text]]\n        - [27] Text \"DNS privacy\" [actions=[text]]\n        - [28] Text \"Google - selected by live test; automatic DoH active\" [actions=[text]]\n        - [29] Text \"Safe repair\" [actions=[text]]\n        - [30] Text \"A pre-Exo snapshot is ready; Repair restores DNS, DoH, routes, TCP, and NIC settings.\" [actions=[text]]\n        - [31] Text \"12.3 ms idle - full-load +1.4 ms download / +43.8 ms upload - 0% idle loss - Google DNS\" [actions=[text]]\n        - [32] Button \"Analyze this connection and apply the best measured settings\" [actions=[invoke]]\n          - [33] Text \"Analyze & Apply\" [actions=[text]]\n        - [34] Button \"Repair internet stack\" [actions=[invoke]]\n          - [35] Text \"Repair\" [actions=[text]]\n        - [36] Text \"Repair: restore exact pre-Exo state\" [actions=[text]]\n  - [37] TitleBar [value=\"Exo\" actions=[set_value]]\n    - MenuBar \"System\"\n      - [38] MenuItem \"System\" [actions=[invoke,expand]]\n    - [39] Button \"Minimize\" [actions=[invoke]]\n    - [40] Button \"Maximize\" [actions=[invoke]]\n    - [41] Button \"Close\" [actions=[invoke]]\n",
+  "window_id": 4916162
 }
 

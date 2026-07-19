@@ -173,6 +173,12 @@ function Set-Dword([string]$Path, [string]$Name, [int]$Value) {
   New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
   Set-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -Type DWord -Force -EA SilentlyContinue
 }
+function Set-String([string]$Path, [string]$Name, [string]$Value) {
+  if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force | Out-Null }
+  Remove-ItemProperty -LiteralPath $Path -Name $Name -Force -EA SilentlyContinue
+  New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType String -Force -EA SilentlyContinue | Out-Null
+  Set-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -Type String -Force -EA SilentlyContinue
+}
 function Remove-Prop([string]$Path, [string]$Name) {
   if (Test-Path -LiteralPath $Path) { Remove-ItemProperty -LiteralPath $Path -Name $Name -Force -EA SilentlyContinue }
 }
@@ -495,10 +501,24 @@ if (-not $snapshotOk) {
         sb.AppendLine("Remove-Prop $tcp 'TcpNumConnections'");
         sb.AppendLine("Remove-Prop $tcp 'LargeSystemCache'");
         sb.AppendLine("Remove-Prop $tcp 'MaxUserPort'");
-        // ServiceProvider priorities, MMCSS, power plans and Psched reservation
-        // policy are intentionally left alone. They are machine-wide policy,
-        // not adapter tuning, and cannot be justified by this route benchmark.
-        sb.AppendLine("Report 'host-policy' 'skip' 'scheduler, power plan, and QoS reservation left unchanged'");
+        // Stable = full safe host stack (documented values, snapshotted for Repair).
+        // SystemResponsiveness=10 (MS clamps <10 to 20), NetworkThrottlingIndex=10,
+        // Games task Priority/GPU/SFIO, NonBestEffortLimit=0. Not folklore (-1 / 0).
+        // Experimental only re-stamps these harder / re-applies after drift.
+        sb.AppendLine("$mm = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'");
+        sb.AppendLine("Set-Dword $mm 'NetworkThrottlingIndex' 10");
+        sb.AppendLine("Set-Dword $mm 'SystemResponsiveness' 10");
+        sb.AppendLine("$games = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'");
+        sb.AppendLine("if (-not (Test-Path -LiteralPath $games)) { New-Item -Path $games -Force | Out-Null }");
+        sb.AppendLine("Set-Dword $games 'GPU Priority' 8");
+        sb.AppendLine("Set-Dword $games 'Priority' 6");
+        sb.AppendLine("Set-String $games 'Scheduling Category' 'High'");
+        sb.AppendLine("Set-String $games 'SFIO Priority' 'High'");
+        sb.AppendLine("$psched = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Psched'");
+        sb.AppendLine("Set-Dword $psched 'NonBestEffortLimit' 0");
+        sb.AppendLine(options.Experimental
+            ? "Report 'host-policy' 'ok' 'full safe host stack (experimental re-stamp)'"
+            : "Report 'host-policy' 'ok' 'full safe host stack: MMCSS NTI=10, Responsiveness=10, Games task, Psched'");
         sb.AppendLine("Report 'registry-host' 'ok'");
 
         // --- netsh / Set-NetTCPSetting (supported modern path) ---

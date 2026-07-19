@@ -5,12 +5,12 @@
     {
       "depth": 2,
       "element_index": 0,
-      "element_token": "s0141:0",
+      "element_token": "s021d:0",
       "frame": {
         "h": 32,
         "w": 46,
-        "x": 1782,
-        "y": 0
+        "x": 1404,
+        "y": 160
       },
       "label": "Minimize",
       "role": "Button"
@@ -18,25 +18,25 @@
     {
       "depth": 2,
       "element_index": 1,
-      "element_token": "s0141:1",
+      "element_token": "s021d:1",
       "frame": {
         "h": 32,
         "w": 46,
-        "x": 1828,
-        "y": 0
+        "x": 1450,
+        "y": 160
       },
-      "label": "Restore",
+      "label": "Maximize",
       "role": "Button"
     },
     {
       "depth": 2,
       "element_index": 2,
-      "element_token": "s0141:2",
+      "element_token": "s021d:2",
       "frame": {
         "h": 32,
         "w": 46,
-        "x": 1874,
-        "y": 0
+        "x": 1496,
+        "y": 160
       },
       "label": "Close",
       "role": "Button"
@@ -44,12 +44,12 @@
     {
       "depth": 4,
       "element_index": 3,
-      "element_token": "s0141:3",
+      "element_token": "s021d:3",
       "frame": {
         "h": 40,
         "w": 76,
-        "x": 8,
-        "y": 6
+        "x": 386,
+        "y": 167
       },
       "label": "Open system overview",
       "role": "Button"
@@ -57,12 +57,12 @@
     {
       "depth": 5,
       "element_index": 4,
-      "element_token": "s0141:4",
+      "element_token": "s021d:4",
       "frame": {
         "h": 16,
         "w": 26,
-        "x": 40,
-        "y": 18
+        "x": 418,
+        "y": 179
       },
       "label": "EXO",
       "parent_index": 3,
@@ -71,12 +71,12 @@
     {
       "depth": 4,
       "element_index": 5,
-      "element_token": "s0141:5",
+      "element_token": "s021d:5",
       "frame": {
         "h": 40,
         "w": 44,
-        "x": 1682,
-        "y": 6
+        "x": 1304,
+        "y": 167
       },
       "label": "Settings",
       "role": "Button"
@@ -84,12 +84,12 @@
     {
       "depth": 3,
       "element_index": 6,
-      "element_token": "s0141:6",
+      "element_token": "s021d:6",
       "frame": {
         "h": 40,
         "w": 86,
         "x": 707,
-        "y": 6
+        "y": 167
       },
       "label": "Discord",
       "role": "Button"
@@ -97,12 +97,12 @@
     {
       "depth": 4,
       "element_index": 7,
-      "element_token": "s0141:7",
+      "element_token": "s021d:7",
       "frame": {
         "h": 15,
         "w": 41,
         "x": 742,
-        "y": 19
+        "y": 180
       },
       "label": "Discord",
       "parent_index": 6,
@@ -111,12 +111,12 @@
     {
       "depth": 3,
       "element_index": 8,
-      "element_token": "s0141:8",
+      "element_token": "s021d:8",
       "frame": {
         "h": 40,
         "w": 78,
         "x": 797,
-        "y": 6
+        "y": 167
       },
       "label": "Steam",
       "role": "Button"
@@ -124,12 +124,12 @@
     {
       "depth": 4,
       "element_index": 9,
-      "element_token": "s0141:9",
+      "element_token": "s021d:9",
       "frame": {
         "h": 15,
         "w": 33,
         "x": 832,
-        "y": 19
+        "y": 180
       },
       "label": "Steam",
       "parent_index": 8,
@@ -138,12 +138,12 @@
     {
       "depth": 3,
       "element_index": 10,
-      "element_token": "s0141:10",
+      "element_token": "s021d:10",
       "frame": {
         "h": 40,
         "w": 87,
         "x": 879,
-        "y": 6
+        "y": 167
       },
       "label": "Internet",
       "role": "Button"
@@ -151,12 +151,12 @@
     {
       "depth": 4,
       "element_index": 11,
-      "element_token": "s0141:11",
+      "element_token": "s021d:11",
       "frame": {
         "h": 15,
         "w": 42,
         "x": 914,
-        "y": 19
+        "y": 180
       },
       "label": "Internet",
       "parent_index": 10,
@@ -165,12 +165,12 @@
     {
       "depth": 3,
       "element_index": 12,
-      "element_token": "s0141:12",
+      "element_token": "s021d:12",
       "frame": {
         "h": 40,
         "w": 84,
         "x": 970,
-        "y": 6
+        "y": 167
       },
       "label": "NVIDIA",
       "role": "Button"
@@ -178,12 +178,12 @@
     {
       "depth": 4,
       "element_index": 13,
-      "element_token": "s0141:13",
+      "element_token": "s021d:13",
       "frame": {
         "h": 15,
         "w": 39,
         "x": 1005,
-        "y": 19
+        "y": 180
       },
       "label": "NVIDIA",
       "parent_index": 12,
@@ -192,12 +192,12 @@
     {
       "depth": 3,
       "element_index": 14,
-      "element_token": "s0141:14",
+      "element_token": "s021d:14",
       "frame": {
         "h": 40,
         "w": 76,
         "x": 1058,
-        "y": 6
+        "y": 167
       },
       "label": "Riot",
       "role": "Button"
@@ -205,12 +205,12 @@
     {
       "depth": 4,
       "element_index": 15,
-      "element_token": "s0141:15",
+      "element_token": "s021d:15",
       "frame": {
         "h": 15,
         "w": 22,
         "x": 1098,
-        "y": 19
+        "y": 180
       },
       "label": "Riot",
       "parent_index": 14,
@@ -219,12 +219,12 @@
     {
       "depth": 3,
       "element_index": 16,
-      "element_token": "s0141:16",
+      "element_token": "s021d:16",
       "frame": {
         "h": 40,
         "w": 76,
         "x": 1138,
-        "y": 6
+        "y": 167
       },
       "label": "Epic",
       "role": "Button"
@@ -232,12 +232,12 @@
     {
       "depth": 4,
       "element_index": 17,
-      "element_token": "s0141:17",
+      "element_token": "s021d:17",
       "frame": {
         "h": 15,
         "w": 22,
         "x": 1178,
-        "y": 19
+        "y": 180
       },
       "label": "Epic",
       "parent_index": 16,
@@ -246,24 +246,24 @@
     {
       "depth": 3,
       "element_index": 18,
-      "element_token": "s0141:18",
+      "element_token": "s021d:18",
       "frame": {
-        "h": 1020,
+        "h": 691,
         "w": 1120,
         "x": 400,
-        "y": 60
+        "y": 221
       },
       "role": "Pane"
     },
     {
       "depth": 4,
       "element_index": 19,
-      "element_token": "s0141:19",
+      "element_token": "s021d:19",
       "frame": {
         "h": 15,
-        "w": 1026,
-        "x": 457,
-        "y": 89
+        "w": 1047,
+        "x": 444,
+        "y": 242
       },
       "label": "NVIDIA",
       "parent_index": 18,
@@ -272,40 +272,40 @@
     {
       "depth": 4,
       "element_index": 20,
-      "element_token": "s0141:20",
+      "element_token": "s021d:20",
       "frame": {
         "h": 36,
-        "w": 1026,
-        "x": 457,
-        "y": 109
+        "w": 1047,
+        "x": 444,
+        "y": 260
       },
-      "label": "Failed at drs-snapshot",
+      "label": "All applied",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
       "element_index": 21,
-      "element_token": "s0141:21",
+      "element_token": "s021d:21",
       "frame": {
         "h": 16,
-        "w": 997,
-        "x": 473,
-        "y": 176
+        "w": 1020,
+        "x": 460,
+        "y": 319
       },
-      "label": "3 settings are ready for the detected GPU and display path. Raw latency = VSync off + Ultra Low Latency Ultra. Enable G-SYNC only when Adaptive-Sync is on in the monitor menu.",
+      "label": "Verified raw-latency pack: VSync off, Ultra Low Latency Ultra, low prerender queue. Reflex preferred in supported games. Reapply after a driver update.",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
       "element_index": 22,
-      "element_token": "s0141:22",
+      "element_token": "s021d:22",
       "frame": {
         "h": 15,
-        "w": 815,
-        "x": 452,
-        "y": 234
+        "w": 831,
+        "x": 444,
+        "y": 369
       },
       "label": "DETECTED HARDWARE",
       "parent_index": 18,
@@ -314,12 +314,12 @@
     {
       "depth": 4,
       "element_index": 23,
-      "element_token": "s0141:23",
+      "element_token": "s021d:23",
       "frame": {
         "h": 16,
-        "w": 815,
-        "x": 452,
-        "y": 259
+        "w": 831,
+        "x": 444,
+        "y": 394
       },
       "label": "NVIDIA GeForce RTX 3070 - 1920x1080@165 DisplayPort - raw latency",
       "parent_index": 18,
@@ -328,12 +328,12 @@
     {
       "depth": 4,
       "element_index": 24,
-      "element_token": "s0141:24",
+      "element_token": "s021d:24",
       "frame": {
         "h": 16,
-        "w": 649,
-        "x": 452,
-        "y": 283
+        "w": 665,
+        "x": 444,
+        "y": 418
       },
       "label": "Use G-SYNC / VRR",
       "parent_index": 18,
@@ -342,12 +342,12 @@
     {
       "depth": 4,
       "element_index": 25,
-      "element_token": "s0141:25",
+      "element_token": "s021d:25",
       "frame": {
         "h": 16,
-        "w": 649,
-        "x": 452,
-        "y": 300
+        "w": 665,
+        "x": 444,
+        "y": 435
       },
       "label": "Enable only when Adaptive-Sync, FreeSync, or G-SYNC is enabled in the monitor's physical menu.",
       "parent_index": 18,
@@ -356,12 +356,12 @@
     {
       "depth": 4,
       "element_index": 26,
-      "element_token": "s0141:26",
+      "element_token": "s021d:26",
       "frame": {
         "h": 40,
         "w": 56,
-        "x": 1113,
-        "y": 283
+        "x": 1121,
+        "y": 418
       },
       "label": "Use G-SYNC or VRR profile",
       "parent_index": 18,
@@ -370,12 +370,12 @@
     {
       "depth": 4,
       "element_index": 27,
-      "element_token": "s0141:27",
+      "element_token": "s021d:27",
       "frame": {
         "h": 34,
         "w": 189,
-        "x": 1279,
-        "y": 262
+        "x": 1287,
+        "y": 397
       },
       "label": "Open NVIDIA Control Panel",
       "parent_index": 18,
@@ -384,12 +384,12 @@
     {
       "depth": 5,
       "element_index": 28,
-      "element_token": "s0141:28",
+      "element_token": "s021d:28",
       "frame": {
         "h": 16,
         "w": 163,
-        "x": 1292,
-        "y": 271
+        "x": 1300,
+        "y": 406
       },
       "label": "Open NVIDIA Control Panel",
       "parent_index": 27,
@@ -398,12 +398,12 @@
     {
       "depth": 4,
       "element_index": 29,
-      "element_token": "s0141:29",
+      "element_token": "s021d:29",
       "frame": {
         "h": 15,
-        "w": 1046,
-        "x": 437,
-        "y": 355
+        "w": 1062,
+        "x": 429,
+        "y": 483
       },
       "label": "WHAT EXO WILL CHANGE",
       "parent_index": 18,
@@ -412,26 +412,12 @@
     {
       "depth": 4,
       "element_index": 30,
-      "element_token": "s0141:30",
-      "frame": {
-        "h": 16,
-        "w": 144,
-        "x": 1339,
-        "y": 354
-      },
-      "label": "Hardware-aware, reversible",
-      "parent_index": 18,
-      "role": "Text"
-    },
-    {
-      "depth": 4,
-      "element_index": 31,
-      "element_token": "s0141:31",
+      "element_token": "s021d:30",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 467,
-        "y": 404
+        "w": 488,
+        "x": 455,
+        "y": 527
       },
       "label": "NVIDIA GPU",
       "parent_index": 18,
@@ -439,13 +425,13 @@
     },
     {
       "depth": 4,
-      "element_index": 32,
-      "element_token": "s0141:32",
+      "element_index": 31,
+      "element_token": "s021d:31",
       "frame": {
         "h": 16,
-        "w": 472,
-        "x": 467,
-        "y": 424
+        "w": 488,
+        "x": 455,
+        "y": 546
       },
       "label": "NVIDIA GeForce RTX 3070",
       "parent_index": 18,
@@ -453,13 +439,13 @@
     },
     {
       "depth": 4,
-      "element_index": 33,
-      "element_token": "s0141:33",
+      "element_index": 32,
+      "element_token": "s021d:32",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 996,
-        "y": 396
+        "w": 488,
+        "x": 990,
+        "y": 519
       },
       "label": "Installed driver",
       "parent_index": 18,
@@ -467,13 +453,13 @@
     },
     {
       "depth": 4,
-      "element_index": 34,
-      "element_token": "s0141:34",
+      "element_index": 33,
+      "element_token": "s021d:33",
       "frame": {
         "h": 32,
-        "w": 472,
-        "x": 996,
-        "y": 416
+        "w": 488,
+        "x": 990,
+        "y": 538
       },
       "label": "Driver 610.74 detected. Exo leaves driver installation and MSI/service policy unchanged; update through NVIDIA when you choose.",
       "parent_index": 18,
@@ -481,13 +467,13 @@
     },
     {
       "depth": 4,
-      "element_index": 35,
-      "element_token": "s0141:35",
+      "element_index": 34,
+      "element_token": "s021d:34",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 467,
-        "y": 500
+        "w": 488,
+        "x": 455,
+        "y": 611
       },
       "label": "Hardware-matched policy",
       "parent_index": 18,
@@ -495,13 +481,13 @@
     },
     {
       "depth": 4,
-      "element_index": 36,
-      "element_token": "s0141:36",
+      "element_index": 35,
+      "element_token": "s021d:35",
       "frame": {
         "h": 16,
-        "w": 472,
-        "x": 467,
-        "y": 520
+        "w": 488,
+        "x": 455,
+        "y": 630
       },
       "label": "NVIDIA GeForce RTX 3070 - 1920x1080@165 DisplayPort - raw latency",
       "parent_index": 18,
@@ -509,13 +495,13 @@
     },
     {
       "depth": 4,
-      "element_index": 37,
-      "element_token": "s0141:37",
+      "element_index": 36,
+      "element_token": "s021d:36",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 996,
-        "y": 500
+        "w": 488,
+        "x": 990,
+        "y": 611
       },
       "label": "3D Base Profile",
       "parent_index": 18,
@@ -523,27 +509,27 @@
     },
     {
       "depth": 4,
-      "element_index": 38,
-      "element_token": "s0141:38",
+      "element_index": 37,
+      "element_token": "s021d:37",
       "frame": {
         "h": 16,
-        "w": 472,
-        "x": 996,
-        "y": 520
+        "w": 488,
+        "x": 990,
+        "y": 630
       },
-      "label": "Not applied yet. Apply runs Profile Inspector -silentImport (no GUI / replace click).",
+      "label": "Max FPS / latency pack - 30 Series.nip (Verified in driver)",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
-      "element_index": 39,
-      "element_token": "s0141:39",
+      "element_index": 38,
+      "element_token": "s021d:38",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 467,
-        "y": 588
+        "w": 488,
+        "x": 455,
+        "y": 687
       },
       "label": "Latency / sync policy",
       "parent_index": 18,
@@ -551,13 +537,13 @@
     },
     {
       "depth": 4,
-      "element_index": 40,
-      "element_token": "s0141:40",
+      "element_index": 39,
+      "element_token": "s021d:39",
       "frame": {
         "h": 32,
-        "w": 472,
-        "x": 467,
-        "y": 608
+        "w": 488,
+        "x": 455,
+        "y": 706
       },
       "label": "Raw-latency path: G-SYNC/VRR and VSync off + Ultra Low Latency; Reflex takes priority automatically in supported games.",
       "parent_index": 18,
@@ -565,13 +551,13 @@
     },
     {
       "depth": 4,
-      "element_index": 41,
-      "element_token": "s0141:41",
+      "element_index": 40,
+      "element_token": "s021d:40",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 996,
-        "y": 588
+        "w": 488,
+        "x": 990,
+        "y": 687
       },
       "label": "Per-game profiles",
       "parent_index": 18,
@@ -579,27 +565,27 @@
     },
     {
       "depth": 4,
-      "element_index": 42,
-      "element_token": "s0141:42",
+      "element_index": 41,
+      "element_token": "s021d:41",
       "frame": {
         "h": 32,
-        "w": 472,
-        "x": 996,
-        "y": 608
+        "w": 488,
+        "x": 990,
+        "y": 706
       },
-      "label": "Per-game profiles not recorded. Apply to import Base + Val/CS2/R6/Rivals and other big titles.",
+      "label": "Imported 29 game profiles from your series pack + competitive/hybrid deltas (Valorant, Counter-Strike 2, Marvel Rivals, Rainbow Six Siege, Fortnite, Apex Legends...).",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
-      "element_index": 43,
-      "element_token": "s0141:43",
+      "element_index": 42,
+      "element_token": "s021d:42",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 467,
-        "y": 684
+        "w": 488,
+        "x": 455,
+        "y": 771
       },
       "label": "NVIDIA Control Panel",
       "parent_index": 18,
@@ -607,13 +593,13 @@
     },
     {
       "depth": 4,
-      "element_index": 44,
-      "element_token": "s0141:44",
+      "element_index": 43,
+      "element_token": "s021d:43",
       "frame": {
         "h": 32,
-        "w": 472,
-        "x": 467,
-        "y": 704
+        "w": 488,
+        "x": 455,
+        "y": 790
       },
       "label": "Available from Exo. NVIDIA App, overlays, services, and driver packages are left under your control.",
       "parent_index": 18,
@@ -621,13 +607,13 @@
     },
     {
       "depth": 4,
-      "element_index": 45,
-      "element_token": "s0141:45",
+      "element_index": 44,
+      "element_token": "s021d:44",
       "frame": {
         "h": 40,
-        "w": 1046,
-        "x": 437,
-        "y": 801
+        "w": 1062,
+        "x": 429,
+        "y": 871
       },
       "label": "Apply NVIDIA",
       "parent_index": 18,
@@ -635,70 +621,54 @@
     },
     {
       "depth": 5,
-      "element_index": 46,
-      "element_token": "s0141:46",
+      "element_index": 45,
+      "element_token": "s021d:45",
       "frame": {
         "h": 17,
-        "w": 38,
-        "x": 941,
-        "y": 813
+        "w": 51,
+        "x": 935,
+        "y": 883
       },
-      "label": "Apply",
-      "parent_index": 45,
+      "label": "Reapply",
+      "parent_index": 44,
       "role": "Text"
     },
     {
       "depth": 4,
-      "element_index": 47,
-      "element_token": "s0141:47",
-      "frame": {
-        "h": 16,
-        "w": 1046,
-        "x": 437,
-        "y": 847
-      },
+      "element_index": 46,
+      "element_token": "s021d:46",
       "label": "Repair restores the complete NVIDIA profile database saved before Apply. Drivers and display settings stay untouched.",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
-      "element_index": 48,
-      "element_token": "s0141:48",
-      "frame": {
-        "h": 40,
-        "w": 1046,
-        "x": 437,
-        "y": 871
-      },
+      "element_index": 47,
+      "element_token": "s021d:47",
       "label": "Repair",
       "parent_index": 18,
       "role": "Button"
     },
     {
       "depth": 5,
-      "element_index": 49,
-      "element_token": "s0141:49",
-      "frame": {
-        "h": 16,
-        "w": 38,
-        "x": 941,
-        "y": 883
-      },
+      "element_index": 48,
+      "element_token": "s021d:48",
       "label": "Repair",
-      "parent_index": 48,
+      "parent_index": 47,
       "role": "Text"
+    },
+    {
+      "depth": 4,
+      "element_index": 49,
+      "element_token": "s021d:49",
+      "label": "Vertical",
+      "parent_index": 18,
+      "role": "ScrollBar"
     },
     {
       "depth": 1,
       "element_index": 50,
-      "element_token": "s0141:50",
-      "frame": {
-        "h": 5,
-        "w": 1920,
-        "x": 0,
-        "y": -5
-      },
+      "element_token": "s021d:50",
       "label": "Exo",
       "role": "TitleBar",
       "value": "Exo"
@@ -706,12 +676,12 @@
     {
       "depth": 3,
       "element_index": 51,
-      "element_token": "s0141:51",
+      "element_token": "s021d:51",
       "frame": {
         "h": 22,
         "w": 22,
-        "x": 0,
-        "y": 0
+        "x": 378,
+        "y": 168
       },
       "label": "System",
       "parent_index": 50,
@@ -720,7 +690,7 @@
     {
       "depth": 2,
       "element_index": 52,
-      "element_token": "s0141:52",
+      "element_token": "s021d:52",
       "label": "Minimize",
       "parent_index": 50,
       "role": "Button"
@@ -728,27 +698,27 @@
     {
       "depth": 2,
       "element_index": 53,
-      "element_token": "s0141:53",
-      "label": "Restore",
+      "element_token": "s021d:53",
+      "label": "Maximize",
       "parent_index": 50,
       "role": "Button"
     },
     {
       "depth": 2,
       "element_index": 54,
-      "element_token": "s0141:54",
+      "element_token": "s021d:54",
       "label": "Close",
       "parent_index": 50,
       "role": "Button"
     }
   ],
-  "pid": 8724,
+  "pid": 4144,
   "screenshot_file_path": "C:\\Users\\Erix\\Exo\\docs\\cua-qa\\stress\\final-nvidia.png",
-  "screenshot_height": 882,
+  "screenshot_height": 753,
   "screenshot_mime_type": "image/png",
-  "screenshot_width": 1568,
-  "snapshot_id": "s0141",
-  "tree_markdown": "- Window \"Exo\"\n  - Pane \"Non Client Input Sink Window\"\n  - Pane \"AppWindow Custom Title Bar\"\n    - [0] Button \"Minimize\" [id=Minimize actions=[invoke]]\n    - [1] Button \"Restore\" [id=Restore actions=[invoke]]\n    - [2] Button \"Close\" [id=Close actions=[invoke]]\n        - [3] Button \"Open system overview\" [id=NavHome actions=[invoke]]\n          - [4] Text \"EXO\" [actions=[text]]\n        - [5] Button \"Settings\" [id=SettingsButton actions=[invoke]]\n      - [6] Button \"Discord\" [id=NavDiscord actions=[invoke]]\n        - [7] Text \"Discord\" [actions=[text]]\n      - [8] Button \"Steam\" [id=NavSteam actions=[invoke]]\n        - [9] Text \"Steam\" [actions=[text]]\n      - [10] Button \"Internet\" [id=NavInternet actions=[invoke]]\n        - [11] Text \"Internet\" [actions=[text]]\n      - [12] Button \"NVIDIA\" [id=NavNvidia actions=[invoke]]\n        - [13] Text \"NVIDIA\" [actions=[text]]\n      - [14] Button \"Riot\" [id=NavRiot actions=[invoke]]\n        - [15] Text \"Riot\" [actions=[text]]\n      - [16] Button \"Epic\" [id=NavEpic actions=[invoke]]\n        - [17] Text \"Epic\" [actions=[text]]\n      - [18] Pane [actions=[scroll]]\n        - [19] Text \"NVIDIA\" [actions=[text]]\n        - [20] Text \"Failed at drs-snapshot\" [actions=[text]]\n        - [21] Text \"3 settings are ready for the detected GPU and display path. Raw latency = VSync off + Ultra Low Latency Ultra. Enable G-SYNC only when Adaptive-Sync is on in the monitor menu.\" [actions=[text]]\n        - [22] Text \"DETECTED HARDWARE\" [actions=[text]]\n        - [23] Text \"NVIDIA GeForce RTX 3070 - 1920x1080@165 DisplayPort - raw latency\" [actions=[text]]\n        - [24] Text \"Use G-SYNC / VRR\" [actions=[text]]\n        - [25] Text \"Enable only when Adaptive-Sync, FreeSync, or G-SYNC is enabled in the monitor's physical menu.\" [actions=[text]]\n        - [26] Button \"Use G-SYNC or VRR profile\" [actions=[toggle]]\n        - [27] Button \"Open NVIDIA Control Panel\" [actions=[invoke]]\n          - [28] Text \"Open NVIDIA Control Panel\" [actions=[text]]\n        - [29] Text \"WHAT EXO WILL CHANGE\" [actions=[text]]\n        - [30] Text \"Hardware-aware, reversible\" [actions=[text]]\n        - [31] Text \"NVIDIA GPU\" [actions=[text]]\n        - [32] Text \"NVIDIA GeForce RTX 3070\" [actions=[text]]\n        - [33] Text \"Installed driver\" [actions=[text]]\n        - [34] Text \"Driver 610.74 detected. Exo leaves driver installation and MSI/service policy unchanged; update through NVIDIA when you choose.\" [actions=[text]]\n        - [35] Text \"Hardware-matched policy\" [actions=[text]]\n        - [36] Text \"NVIDIA GeForce RTX 3070 - 1920x1080@165 DisplayPort - raw latency\" [actions=[text]]\n        - [37] Text \"3D Base Profile\" [actions=[text]]\n        - [38] Text \"Not applied yet. Apply runs Profile Inspector -silentImport (no GUI / replace click).\" [actions=[text]]\n        - [39] Text \"Latency / sync policy\" [actions=[text]]\n        - [40] Text \"Raw-latency path: G-SYNC/VRR and VSync off + Ultra Low Latency; Reflex takes priority automatically in supported games.\" [actions=[text]]\n        - [41] Text \"Per-game profiles\" [actions=[text]]\n        - [42] Text \"Per-game profiles not recorded. Apply to import Base + Val/CS2/R6/Rivals and other big titles.\" [actions=[text]]\n        - [43] Text \"NVIDIA Control Panel\" [actions=[text]]\n        - [44] Text \"Available from Exo. NVIDIA App, overlays, services, and driver packages are left under your control.\" [actions=[text]]\n        - [45] Button \"Apply NVIDIA\" [actions=[invoke]]\n          - [46] Text \"Apply\" [actions=[text]]\n        - [47] Text \"Repair restores the complete NVIDIA profile database saved before Apply. Drivers and display settings stay untouched.\" [actions=[text]]\n        - [48] Button \"Repair\" [actions=[invoke]]\n          - [49] Text \"Repair\" [actions=[text]]\n  - [50] TitleBar [value=\"Exo\" actions=[set_value]]\n    - MenuBar \"System\"\n      - [51] MenuItem \"System\" [actions=[invoke,expand]]\n    - [52] Button \"Minimize\" [actions=[invoke]]\n    - [53] Button \"Restore\" [actions=[invoke]]\n    - [54] Button \"Close\" [actions=[invoke]]\n",
-  "window_id": 42074252
+  "screenshot_width": 1166,
+  "snapshot_id": "s021d",
+  "tree_markdown": "- Window \"Exo\"\n  - Pane \"Non Client Input Sink Window\"\n  - Pane \"AppWindow Custom Title Bar\"\n    - [0] Button \"Minimize\" [id=Minimize actions=[invoke]]\n    - [1] Button \"Maximize\" [id=Maximize actions=[invoke]]\n    - [2] Button \"Close\" [id=Close actions=[invoke]]\n        - [3] Button \"Open system overview\" [id=NavHome actions=[invoke]]\n          - [4] Text \"EXO\" [actions=[text]]\n        - [5] Button \"Settings\" [id=SettingsButton actions=[invoke]]\n      - [6] Button \"Discord\" [id=NavDiscord actions=[invoke]]\n        - [7] Text \"Discord\" [actions=[text]]\n      - [8] Button \"Steam\" [id=NavSteam actions=[invoke]]\n        - [9] Text \"Steam\" [actions=[text]]\n      - [10] Button \"Internet\" [id=NavInternet actions=[invoke]]\n        - [11] Text \"Internet\" [actions=[text]]\n      - [12] Button \"NVIDIA\" [id=NavNvidia actions=[invoke]]\n        - [13] Text \"NVIDIA\" [actions=[text]]\n      - [14] Button \"Riot\" [id=NavRiot actions=[invoke]]\n        - [15] Text \"Riot\" [actions=[text]]\n      - [16] Button \"Epic\" [id=NavEpic actions=[invoke]]\n        - [17] Text \"Epic\" [actions=[text]]\n      - [18] Pane [actions=[scroll]]\n        - [19] Text \"NVIDIA\" [actions=[text]]\n        - [20] Text \"All applied\" [actions=[text]]\n        - [21] Text \"Verified raw-latency pack: VSync off, Ultra Low Latency Ultra, low prerender queue. Reflex preferred in supported games. Reapply after a driver update.\" [actions=[text]]\n        - [22] Text \"DETECTED HARDWARE\" [actions=[text]]\n        - [23] Text \"NVIDIA GeForce RTX 3070 - 1920x1080@165 DisplayPort - raw latency\" [actions=[text]]\n        - [24] Text \"Use G-SYNC / VRR\" [actions=[text]]\n        - [25] Text \"Enable only when Adaptive-Sync, FreeSync, or G-SYNC is enabled in the monitor's physical menu.\" [actions=[text]]\n        - [26] Button \"Use G-SYNC or VRR profile\" [actions=[toggle]]\n        - [27] Button \"Open NVIDIA Control Panel\" [actions=[invoke]]\n          - [28] Text \"Open NVIDIA Control Panel\" [actions=[text]]\n        - [29] Text \"WHAT EXO WILL CHANGE\" [actions=[text]]\n        - [30] Text \"NVIDIA GPU\" [actions=[text]]\n        - [31] Text \"NVIDIA GeForce RTX 3070\" [actions=[text]]\n        - [32] Text \"Installed driver\" [actions=[text]]\n        - [33] Text \"Driver 610.74 detected. Exo leaves driver installation and MSI/service policy unchanged; update through NVIDIA when you choose.\" [actions=[text]]\n        - [34] Text \"Hardware-matched policy\" [actions=[text]]\n        - [35] Text \"NVIDIA GeForce RTX 3070 - 1920x1080@165 DisplayPort - raw latency\" [actions=[text]]\n        - [36] Text \"3D Base Profile\" [actions=[text]]\n        - [37] Text \"Max FPS / latency pack - 30 Series.nip (Verified in driver)\" [actions=[text]]\n        - [38] Text \"Latency / sync policy\" [actions=[text]]\n        - [39] Text \"Raw-latency path: G-SYNC/VRR and VSync off + Ultra Low Latency; Reflex takes priority automatically in supported games.\" [actions=[text]]\n        - [40] Text \"Per-game profiles\" [actions=[text]]\n        - [41] Text \"Imported 29 game profiles from your series pack + competitive/hybrid deltas (Valorant, Counter-Strike 2, Marvel Rivals, Rainbow Six Siege, Fortnite, Apex Legends...).\" [actions=[text]]\n        - [42] Text \"NVIDIA Control Panel\" [actions=[text]]\n        - [43] Text \"Available from Exo. NVIDIA App, overlays, services, and driver packages are left under your control.\" [actions=[text]]\n        - [44] Button \"Apply NVIDIA\" [actions=[invoke]]\n          - [45] Text \"Reapply\" [actions=[text]]\n        - [46] Text \"Repair restores the complete NVIDIA profile database saved before Apply. Drivers and display settings stay untouched.\" [actions=[text]]\n        - [47] Button \"Repair\" [actions=[invoke]]\n          - [48] Text \"Repair\" [actions=[text]]\n        - [49] ScrollBar \"Vertical\" [id=VerticalScrollBar actions=[set_value]]\n  - [50] TitleBar [value=\"Exo\" actions=[set_value]]\n    - MenuBar \"System\"\n      - [51] MenuItem \"System\" [actions=[invoke,expand]]\n    - [52] Button \"Minimize\" [actions=[invoke]]\n    - [53] Button \"Maximize\" [actions=[invoke]]\n    - [54] Button \"Close\" [actions=[invoke]]\n",
+  "window_id": 4916162
 }
 

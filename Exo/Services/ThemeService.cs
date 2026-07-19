@@ -77,25 +77,20 @@ public sealed class ThemeService
                 ? _uiSettings.GetColorValue(UIColorType.Accent)
                 : Color.FromArgb(255, 20, 20, 20);
 
-            // Transparent caption buttons blend into the custom title bar while
-            // foreground/interaction colors remain visible in High Contrast.
+            // System caption is disabled (custom glass min/close). Keep bar colors
+            // transparent so any residual OS paint does not flash light chrome.
             titleBar.ButtonBackgroundColor = Colors.Transparent;
             titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
-            titleBar.BackgroundColor = Colors.Transparent;
-            titleBar.InactiveBackgroundColor = Colors.Transparent;
-
+            titleBar.BackgroundColor = Color.FromArgb(255, 5, 5, 6);
+            titleBar.InactiveBackgroundColor = Color.FromArgb(255, 5, 5, 6);
             titleBar.ForegroundColor = foreground;
             titleBar.InactiveForegroundColor = inactive;
-            titleBar.ButtonForegroundColor = foreground;
-            titleBar.ButtonInactiveForegroundColor = inactive;
-            titleBar.ButtonHoverBackgroundColor = hover;
-            titleBar.ButtonHoverForegroundColor = highContrast
-                ? _uiSettings.GetColorValue(UIColorType.Background)
-                : foreground;
-            titleBar.ButtonPressedBackgroundColor = hover;
-            titleBar.ButtonPressedForegroundColor = highContrast
-                ? _uiSettings.GetColorValue(UIColorType.Background)
-                : foreground;
+            titleBar.ButtonForegroundColor = Colors.Transparent;
+            titleBar.ButtonInactiveForegroundColor = Colors.Transparent;
+            titleBar.ButtonHoverBackgroundColor = Colors.Transparent;
+            titleBar.ButtonHoverForegroundColor = Colors.Transparent;
+            titleBar.ButtonPressedBackgroundColor = Colors.Transparent;
+            titleBar.ButtonPressedForegroundColor = Colors.Transparent;
         }
         catch
         {

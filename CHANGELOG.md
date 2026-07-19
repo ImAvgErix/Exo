@@ -1,3 +1,13 @@
+## 3.7.0
+
+- **WebView glass shell**: primary UI is WinUI 3 + WebView2 with a React/TypeScript/Tailwind liquid-glass surface — centered optimizer nav, in-bar min/close, solid glass panels (no fake transparency), Home meters, and module pages with Stable / Experimental modes.
+- **Home network card**: hero is negotiated **link rate** (e.g. 2.5G); mini stats for Idle, Load ↓, Load ↑, Loss, DNS, and Rating from the last Internet quality sample (no “Link capacity” / media / prose noise).
+- **Module load UX**: features stay on a skeleton until detect finishes — no half-list flash of toggle-only rows while Apply/Repair stay locked.
+- **Discord preserve**: Stable Apply merges host/chromium flags only; does not rewrite in-app audio, reduced motion, or Discord notification prefs. Windows quiet (OS toasts / Run key / tasks / tray) stays on. Single end-of-Apply Discord open (no thrash relaunch).
+- **Internet host policy**: Stable stamps full safe stack (NTI/Responsiveness/Games MMCSS/Psched); Experimental force re-stamps. Multi-gig keeps throughput; loaded queueing is reported honestly.
+- **Hybrid GPU**: Riot/Epic launchers prefer iGPU when a discrete GPU exists; games stay high-performance. NVIDIA remains SafePolicy with explicit G-SYNC vs raw latency.
+- **Ship path**: embedded `wwwroot` assets + script SHA manifest; Discord/Network/UI smoke gates updated for preserve + chromium-only variant detect.
+
 ## 3.6.2
 
 - **True-black AMOLED shell**: page background is pure black with quieter hairlines, denser module plates, and 76px capability tiles so more evidence fits without marketing fluff.

@@ -18,6 +18,26 @@ public partial class SteamOptimizerViewModel : ObservableObject
     {
         _services = services;
         LastResultBrush = ResolveBrush("ExoSuccessBrush", Color.FromArgb(255, 34, 197, 94));
+        try
+        {
+            PreferExperimental = services.Settings.Current.ExperimentalSteam;
+            SelectedApplyMode = PreferExperimental ? "Experimental" : "Stable";
+        }
+        catch { }
+    }
+
+    partial void OnSelectedApplyModeChanged(string value)
+    {
+        var exp = string.Equals(value, "Experimental", StringComparison.OrdinalIgnoreCase);
+        if (PreferExperimental != exp) PreferExperimental = exp;
+    }
+
+    partial void OnPreferExperimentalChanged(bool value)
+    {
+        var mode = value ? "Experimental" : "Stable";
+        if (!string.Equals(SelectedApplyMode, mode, StringComparison.Ordinal))
+            SelectedApplyMode = mode;
+        try { _services.Settings.Update(s => s.ExperimentalSteam = value); } catch { }
     }
 
     [ObservableProperty] public partial string StatusText { get; set; } = "Checking status...";
@@ -30,6 +50,9 @@ public partial class SteamOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial bool IsApplied { get; set; }
     [ObservableProperty] public partial bool IsBusy { get; set; }
     [ObservableProperty] public partial bool IsStatusLoading { get; set; } = true;
+    [ObservableProperty] public partial bool PreferExperimental { get; set; }
+    public IReadOnlyList<string> ApplyModeOptions { get; } = new[] { "Stable", "Experimental" };
+    [ObservableProperty] public partial string SelectedApplyMode { get; set; } = "Stable";
     [ObservableProperty] public partial bool IsFeatureListVisible { get; set; }
     [ObservableProperty] public partial bool IsProgressVisible { get; set; }
     [ObservableProperty] public partial double ProgressPercent { get; set; }
@@ -53,34 +76,66 @@ public partial class SteamOptimizerViewModel : ObservableObject
     [RelayCommand]
     private void ToggleApplyReport() => IsApplyReportOpen = !IsApplyReportOpen;
 
+    private DateTimeOffset _lastFullDetectUtc = DateTimeOffset.MinValue;
+    private static readonly TimeSpan DetectFreshness = TimeSpan.FromSeconds(120);
+    private int _detectGen;
+    private CancellationTokenSource? _detectCts;
+
     [RelayCommand]
-    private async Task RefreshAsync()
+    private Task RefreshAsync() => RefreshCoreAsync(force: true);
+
+    public void CancelBackgroundWork()
     {
-        if (IsBusy) return;
-        IsBusy = true;
-        IsStatusLoading = true;
-        IsFeatureListVisible = false;
+        try { _detectCts?.Cancel(); } catch { }
+        Interlocked.Increment(ref _detectGen);
+    }
+
+    private async Task RefreshCoreAsync(bool force)
+    {
+        if (!force && Features.Count > 0 && DateTimeOffset.UtcNow - _lastFullDetectUtc < DetectFreshness)
+        {
+            IsStatusLoading = false;
+            IsFeatureListVisible = true;
+            return;
+        }
+
+        try { _detectCts?.Cancel(); } catch { }
+        _detectCts?.Dispose();
+        _detectCts = new CancellationTokenSource();
+        var ct = _detectCts.Token;
+        var gen = Interlocked.Increment(ref _detectGen);
+        if (Features.Count == 0)
+        {
+            IsStatusLoading = true;
+            IsFeatureListVisible = false;
+            StatusText = "Checking status...";
+        }
         try
         {
-            StatusText = "Checking status...";
-            var state = await _services.OptimizerState.DetectSteamAsync();
+            var state = await _services.OptimizerState.DetectSteamAsync(ct, fastOnly: false).ConfigureAwait(true);
+            if (gen != _detectGen || ct.IsCancellationRequested) return;
             ApplyState(state);
-            // Clear stale failure banner once detect succeeds.
+            _lastFullDetectUtc = DateTimeOffset.UtcNow;
             if (HasLastResult && string.Equals(LastResult, Helpers.OptimizerMessages.StatusFailed, StringComparison.Ordinal))
                 SetResult(string.Empty, success: true);
         }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            StatusText = "Unavailable";
-            DetailText = string.Empty;
-            Features.Clear();
-            SetResult(string.IsNullOrWhiteSpace(ex.Message) ? Helpers.OptimizerMessages.StatusFailed : ex.Message, success: false);
+            if (gen == _detectGen && Features.Count == 0)
+            {
+                StatusText = "Unavailable";
+                DetailText = string.Empty;
+                SetResult(string.IsNullOrWhiteSpace(ex.Message) ? Helpers.OptimizerMessages.StatusFailed : ex.Message, success: false);
+            }
         }
         finally
         {
-            IsStatusLoading = false;
-            IsFeatureListVisible = Features.Count > 0;
-            IsBusy = false;
+            if (gen == _detectGen)
+            {
+                IsStatusLoading = false;
+                IsFeatureListVisible = Features.Count > 0;
+            }
         }
     }
 
@@ -107,9 +162,11 @@ public partial class SteamOptimizerViewModel : ObservableObject
                     ProgressStatus = p.Status;
             });
 
+            var args = new List<string> { "-NonInteractive" };
+            if (PreferExperimental) args.Add("-Experimental");
             var result = await _services.PowerShell.RunAsync(
                 _services.Scripts.SteamOptimizerScript,
-                arguments: new[] { "-NonInteractive" },
+                arguments: args,
                 elevate: true,
                 progress: progress,
                 cancellationToken: _runCts.Token,
@@ -259,25 +316,8 @@ public partial class SteamOptimizerViewModel : ObservableObject
         if (!IsStatusLoading)
             IsFeatureListVisible = Features.Count > 0;
         LoadApplyReport();
-        var failSteps = ApplyReportRows
-            .Where(r => r.Status == "fail")
-            .Select(r =>
-            {
-                var text = r.Text ?? string.Empty;
-                var cut = text.IndexOf(" - ", StringComparison.Ordinal);
-                return cut > 0 ? text[..cut].Trim() : text.Trim();
-            })
-            .Where(s => s.Length > 0)
-            .Take(4)
-            .ToList();
-        GuidanceText = OptimizerAdvisor.BuildV2(
-            "Steam",
-            IsApplied,
-            StatusText,
-            DetailText,
-            Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList(),
-            failSteps);
-        HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
+        GuidanceText = string.Empty;
+        HasGuidance = false;
     }
 
     private void LoadApplyReport()
@@ -314,10 +354,5 @@ public partial class SteamOptimizerViewModel : ObservableObject
         return new SolidColorBrush(fallback);
     }
 
-    public async Task InitializeAsync()
-    {
-        // Full live detect only — no fast heuristic flash of "Already optimized".
-        if (IsBusy) return;
-        await RefreshAsync();
-    }
+    public Task InitializeAsync() => RefreshCoreAsync(force: false);
 }

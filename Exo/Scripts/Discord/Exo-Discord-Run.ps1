@@ -10,7 +10,8 @@ param(
     [switch]$SkipEquicord,
     [switch]$SkipOpenAsar,
     [switch]$SkipKernel,
-    [switch]$FreshInstall
+    [switch]$FreshInstall,
+    [switch]$Experimental
 )
 
 $ErrorActionPreference = 'Stop'
@@ -76,6 +77,8 @@ function Get-ProgressForLine([string]$Line, [int]$Current) {
         'Windows'                         = @{ P = 92; S = 'Applying Windows tweaks...' }
         'Start menu'                      = @{ P = 94; S = 'Refreshing Start menu shortcut...' }
         'DONE'                            = @{ P = 100; S = 'Completed successfully' }
+        'Reopening Discord'               = @{ P = 97; S = 'Reopening Discord...' }
+        'Discord reopened'                = @{ P = 99; S = 'Discord reopened' }
         'BlockKrisp'                      = @{ P = 96; S = 'Finishing checks...' }
         'everything applied successfully' = @{ P = 100; S = 'Completed successfully' }
         'finished successfully'           = @{ P = 99; S = 'Almost done...' }
@@ -133,6 +136,7 @@ if ($SkipEquicord) { $runArgs += '-SkipEquicord' }
 if ($SkipOpenAsar) { $runArgs += '-SkipOpenAsar' }
 if ($SkipKernel) { $runArgs += '-SkipKernel' }
 if ($FreshInstall) { $runArgs += '-FreshInstall' }
+if ($Experimental) { $runArgs += '-Experimental'; Write-HubStep 'Experimental apply mode' }
 
 Write-HubProgress 18 'Running Disc-Optimizer...'
 Write-HubStep "Arguments: $($runArgs -join ' ')"

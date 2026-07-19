@@ -20,29 +20,43 @@ Expect("Riot and Epic parameter gate", source.Contains("ValidateSet('Riot','Epic
 Expect("pristine snapshot precedes startup mutation",
     source.IndexOf("New-Snapshot $targets", StringComparison.Ordinal) is var snapshot && snapshot >= 0 &&
     source.IndexOf("Remove-StartupEntries", snapshot, StringComparison.Ordinal) > snapshot);
-Expect("per-game high-performance GPU preference",
-    source.Contains("GpuPreference=2;", StringComparison.Ordinal));
+// Windows high-perf GPU + FSO are re-owned by Riot/Epic apply (user-requested).
+Expect("applies high-perf GPU preference",
+    source.Contains("GpuPreference=2;", StringComparison.Ordinal) &&
+    source.Contains("Apply-WindowsGamePolicy", StringComparison.Ordinal));
+Expect("applies FSO off for game exes",
+    source.Contains("DISABLEDXMAXIMIZEDWINDOWEDMODE", StringComparison.Ordinal) &&
+    source.Contains("fso", StringComparison.OrdinalIgnoreCase));
+Expect("experimental forces Windows policy rewrite",
+    source.Contains("-Force:$Experimental", StringComparison.Ordinal) ||
+    source.Contains("Force:$Experimental", StringComparison.Ordinal));
 Expect("no forced game scheduling priority",
     !source.Contains("CpuPriorityClass", StringComparison.Ordinal) &&
     !source.Contains("PerfOptions", StringComparison.Ordinal));
-Expect("hybrid GPU split is capability gated",
-    source.Contains("Test-HybridGraphics", StringComparison.Ordinal) &&
-    source.Contains("GpuPreference=1;", StringComparison.Ordinal));
+Expect("hybrid graphics capability flag only",
+    source.Contains("Test-HybridGraphics", StringComparison.Ordinal));
+Expect("Steam-parity shell quiet cross-connect",
+    source.Contains("Apply-LauncherShellQuiet", StringComparison.Ordinal) &&
+    source.Contains("shell-quiet", StringComparison.Ordinal));
+Expect("detect verifies GPU and FSO",
+    detect.Contains("High-perf GPU", StringComparison.Ordinal) &&
+    detect.Contains("Fullscreen Optimizations", StringComparison.Ordinal));
 Expect("Epic uses launcher manifests",
     source.Contains("EpicGamesLauncher\\Data\\Manifests", StringComparison.Ordinal) &&
     source.Contains("LaunchExecutable", StringComparison.Ordinal));
 Expect("Riot detects VALORANT and League",
     source.Contains("VALORANT-Win64-Shipping.exe", StringComparison.Ordinal) &&
     source.Contains("League of Legends.exe", StringComparison.Ordinal));
+// Anti-cheat brand names may appear only as exclusion filters / never-touch docs.
 Expect("anti-cheat and services are never mutated",
     !source.Contains("Stop-Service", StringComparison.OrdinalIgnoreCase) &&
     !source.Contains("Set-Service", StringComparison.OrdinalIgnoreCase) &&
     !source.Contains("sc.exe", StringComparison.OrdinalIgnoreCase) &&
-    !source.Contains("vgc", StringComparison.OrdinalIgnoreCase) &&
-    !source.Contains("EasyAntiCheat", StringComparison.OrdinalIgnoreCase));
+    source.Contains("anti-cheat-boundary", StringComparison.Ordinal));
 Expect("no Exo background footprint",
     !source.Contains("Register-ScheduledTask", StringComparison.OrdinalIgnoreCase) &&
     !source.Contains("New-Service", StringComparison.OrdinalIgnoreCase));
+// Repair still undoes legacy GPU values from older Exo builds.
 Expect("repair restores every touched GPU value",
     source.Contains("Restore-Value $gpu", StringComparison.Ordinal));
 Expect("snapshot removed only after successful restore",

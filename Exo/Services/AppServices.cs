@@ -36,7 +36,7 @@ public sealed class AppServices
     /// </summary>
     public void WarmInBackground()
     {
-        _ = Task.Run(() =>
+        _ = Task.Run(async () =>
         {
             try
             {
@@ -47,6 +47,11 @@ public sealed class AppServices
                 _ = Scripts.GetNvidiaRoot();
                 _ = Scripts.GetGameLaunchersRoot();
                 PowerShell.WarmResolvePowerShell();
+                // Fast heuristics only — prime status JSON path so first module
+                // open is less cold (full script detect still runs on open).
+                _ = await OptimizerState.DetectDiscordAsync(fastOnly: true).ConfigureAwait(false);
+                _ = await OptimizerState.DetectSteamAsync(fastOnly: true).ConfigureAwait(false);
+                _ = await OptimizerState.DetectNvidiaAsync(fastOnly: true).ConfigureAwait(false);
             }
             catch
             {

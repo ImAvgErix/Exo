@@ -96,19 +96,16 @@ public static partial class DiscordLogic
     public static bool IsVariantOptimized(bool settingsFlagsOk, bool autostartQuiet, bool qosOk) =>
         settingsFlagsOk && autostartQuiet && qosOk;
 
-    [GeneratedRegex(@"""OPEN_ON_STARTUP""\s*:\s*false", RegexOptions.IgnoreCase)]
-    private static partial Regex VariantStartupOffRegex();
-
     /// <summary>
-    /// Variant (PTB/Canary) settings.json flags: startup off + chromium lean present.
-    /// Keep in sync with Test-DiscOptVariantSettingsJson (SKIP_HOST_UPDATE not required
-    /// on test channels).
+    /// Variant (PTB/Canary) settings.json: chromium lean present.
+    /// Does not require OPEN_ON_STARTUP=false — that is a Discord in-app pref and
+    /// must stay under the user's control (Windows autostart is handled via Run key).
+    /// Keep in sync with Test-DiscOptVariantSettingsJson.
     /// </summary>
     public static bool IsVariantSettingsJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return false;
-        return VariantStartupOffRegex().IsMatch(json) &&
-               ChromiumSwitchesKeyRegex().IsMatch(json);
+        return ChromiumSwitchesKeyRegex().IsMatch(json);
     }
 
     public static bool IsKernelLayout(long ffmpegProxyBytes, long ffmpegRealBytes, long versionDllBytes) =>

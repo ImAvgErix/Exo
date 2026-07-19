@@ -13,7 +13,12 @@ namespace Exo.Services;
 
 public sealed class PowerShellRunnerService
 {
-    private readonly SemaphoreSlim _runGate = new(1, 1);
+    // Elevated apply/repair stays serial. Background detect can run in parallel so
+    // switching modules never waits on another module's PowerShell detect.
+    private readonly SemaphoreSlim _elevateGate = new(1, 1);
+    // One detect at a time — rapid module switching cancels prior work and
+    // should not pile three heavy pwsh processes on the UI machine.
+    private readonly SemaphoreSlim _detectGate = new(1, 1);
 
     private static readonly Regex ProgressRegex = new(
         @"EXO_PROGRESS\s*:\s*(\d{1,3})\s*\|\s*(.+)$",
@@ -78,7 +83,8 @@ public sealed class PowerShellRunnerService
                 }
             }
 
-            await _runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            var gate = elevate ? _elevateGate : _detectGate;
+            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 // Always silent: PowerShell 7 (stable), no visible terminal window.
@@ -95,7 +101,7 @@ public sealed class PowerShellRunnerService
             }
             finally
             {
-                _runGate.Release();
+                gate.Release();
             }
         }
         catch (OperationCanceledException)

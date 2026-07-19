@@ -170,13 +170,19 @@ function Apply-EquicordProfile {
     Sync-PluginManifests
 
     $settings = $null
-    if (Test-Path $destPath) {
+    $hadHealthyUserProfile = $false
+    $forceLeanRebuild = ($env:EXO_EXPERIMENTAL -eq '1')
+    if ($forceLeanRebuild) {
+        Write-Ok 'Experimental: rebuilding Equicord lean profile from policy (not preserving prior plugins)'
+    }
+    elseif (Test-Path $destPath) {
         try {
             $existing = ConvertTo-HashtableDeep (Get-Content $destPath -Raw -Encoding UTF8 | ConvertFrom-Json)
             $bytes = (Get-Item $destPath).Length
             $pluginCount = if ($existing.plugins) { @($existing.plugins.Keys).Count } else { 0 }
             if ($bytes -gt 200 -and $pluginCount -gt 0) {
                 $settings = $existing
+                $hadHealthyUserProfile = $true
                 Write-Ok "Preserving existing Equicord settings ($pluginCount plugins, $([math]::Round($bytes/1KB,1)) KB)"
             }
         } catch {
@@ -187,67 +193,76 @@ function Apply-EquicordProfile {
         $settings = Build-FullEquicordSettings
     }
 
-    # Hard safety locks (always, every machine).
+    # Hard safety locks only (always). Never rewrite the user's plugins/themes/audio
+    # on a healthy profile — that felt like "Apply reset my Discord settings".
     $settings.autoUpdateNotification = $false
     $settings.eagerPatches = $false
-    $settings.enableOnlineThemes = $false
-    $settings.useQuickCss = $true
     $settings.enableReactDevtools = $false
-    $settings.mainWindowFrameless = $false
-    $settings.frameless = $false
-    $settings.transparent = $false
-    $settings.windowsMaterial = 'none'
-    $settings.winNativeTitleBar = $false
     if (-not $settings.cloud) { $settings.cloud = @{} }
     $settings.cloud.settingsSync = $false
-    $settings.cloud.authenticated = $false
-    $settings.cloud.url = 'https://cloud.equicord.org/'
-    $settings.enabledThemes = @($EnabledTheme)
 
-    # Enforce a measured plugin budget instead of preserving an arbitrarily heavy
-    # old profile. Required plugins and transitive dependencies are added from the
-    # bundled manifests; everything else is disabled but its options are retained.
-    $leanPolicy = Get-EquicordLeanPolicy
-    $leanAllowed = Get-EquicordLeanAllowedNames -Policy $leanPolicy
-    foreach ($name in @($settings.plugins.Keys)) {
-        if (-not $leanAllowed.Contains([string]$name)) { $settings.plugins[$name].enabled = $false }
-    }
-    $overridesPath = Join-Path $Profiles 'equicord-overrides.json'
-    $overridePlugins = @{}
-    if (Test-Path -LiteralPath $overridesPath) {
-        $overrideRoot = ConvertTo-HashtableDeep (Get-Content -LiteralPath $overridesPath -Raw -Encoding UTF8 | ConvertFrom-Json)
-        if ($overrideRoot.plugins) { $overridePlugins = $overrideRoot.plugins }
-    }
-    foreach ($name in @($leanAllowed)) {
-        if (-not ($settings.plugins.Keys -contains $name)) { $settings.plugins[$name] = @{} }
-        if ($overridePlugins.ContainsKey($name)) {
-            foreach ($option in @($overridePlugins[$name].Keys)) {
-                $settings.plugins[$name][$option] = ConvertTo-HashtableDeep $overridePlugins[$name][$option]
-            }
+    if ($hadHealthyUserProfile -and -not $forceLeanRebuild) {
+        Write-Ok 'Equicord: keeping your plugins/themes/notifications (safety locks only)'
+        # Ensure required privacy plugin stays on without stomping its other options.
+        # Do NOT rewrite notifications, NotificationVolume, or any other user plugin options.
+        if (-not ($settings.plugins.Keys -contains 'NoTrack')) { $settings.plugins['NoTrack'] = @{} }
+        $settings.plugins['NoTrack'].enabled = $true
+        if (-not ($settings.plugins['NoTrack'].Keys -contains 'disableAnalytics')) {
+            $settings.plugins['NoTrack'].disableAnalytics = $true
         }
-        $settings.plugins[$name].enabled = $true
+    } else {
+        # First-time / corrupt / Experimental rebuild — apply lean policy once.
+        Write-Ok 'Equicord: building lean default profile'
+        $settings.enableOnlineThemes = $false
+        $settings.useQuickCss = $true
+        $settings.mainWindowFrameless = $false
+        $settings.frameless = $false
+        $settings.transparent = $false
+        $settings.windowsMaterial = 'none'
+        $settings.winNativeTitleBar = $false
+        $settings.cloud.authenticated = $false
+        $settings.cloud.url = 'https://cloud.equicord.org/'
+        $settings.enabledThemes = @($EnabledTheme)
+
+        $leanPolicy = Get-EquicordLeanPolicy
+        $leanAllowed = Get-EquicordLeanAllowedNames -Policy $leanPolicy
+        if (-not $settings.plugins) { $settings.plugins = @{} }
+        foreach ($name in @($settings.plugins.Keys)) {
+            if (-not $leanAllowed.Contains([string]$name)) { $settings.plugins[$name].enabled = $false }
+        }
+        $overridesPath = Join-Path $Profiles 'equicord-overrides.json'
+        $overridePlugins = @{}
+        if (Test-Path -LiteralPath $overridesPath) {
+            $overrideRoot = ConvertTo-HashtableDeep (Get-Content -LiteralPath $overridesPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+            if ($overrideRoot.plugins) { $overridePlugins = $overrideRoot.plugins }
+        }
+        foreach ($name in @($leanAllowed)) {
+            if (-not ($settings.plugins.Keys -contains $name)) { $settings.plugins[$name] = @{} }
+            if ($overridePlugins.ContainsKey($name)) {
+                foreach ($option in @($overridePlugins[$name].Keys)) {
+                    $settings.plugins[$name][$option] = ConvertTo-HashtableDeep $overridePlugins[$name][$option]
+                }
+            }
+            $settings.plugins[$name].enabled = $true
+        }
+        foreach ($name in $ForceDisabledPlugins) {
+            if ($leanAllowed.Contains([string]$name)) { continue }
+            if (-not ($settings.plugins.Keys -contains $name)) { $settings.plugins[$name] = @{} }
+            $settings.plugins[$name].enabled = $false
+        }
+        if (-not ($settings.plugins.Keys -contains 'StreamerModeOn')) { $settings.plugins['StreamerModeOn'] = @{} }
+        $settings.plugins['StreamerModeOn'].enabled = $false
+        if (-not ($settings.plugins.Keys -contains 'NoRoleHeaders')) { $settings.plugins['NoRoleHeaders'] = @{} }
+        $settings.plugins['NoRoleHeaders'].enabled = $false
+        if (-not ($settings.plugins.Keys -contains 'NotificationVolume')) { $settings.plugins['NotificationVolume'] = @{} }
+        $settings.plugins['NotificationVolume'].enabled = $true
+        if (-not ($settings.plugins['NotificationVolume'].Keys -contains 'notificationVolume')) {
+            $settings.plugins['NotificationVolume'].notificationVolume = 25
+        }
+        if (-not ($settings.plugins.Keys -contains 'NoTrack')) { $settings.plugins['NoTrack'] = @{} }
+        $settings.plugins['NoTrack'].enabled = $true
+        $settings.plugins['NoTrack'].disableAnalytics = $true
     }
-
-    foreach ($name in $ForceDisabledPlugins) {
-        if ($leanAllowed.Contains([string]$name)) { continue }
-        if (-not ($settings.plugins.Keys -contains $name)) { $settings.plugins[$name] = @{} }
-        $settings.plugins[$name].enabled = $false
-    }
-
-    if (-not ($settings.plugins.Keys -contains 'StreamerModeOn')) { $settings.plugins['StreamerModeOn'] = @{} }
-    $settings.plugins['StreamerModeOn'].enabled = $false
-
-    # Always restore member-list role headers (even when preserving an older profile that enabled NoRoleHeaders).
-    if (-not ($settings.plugins.Keys -contains 'NoRoleHeaders')) { $settings.plugins['NoRoleHeaders'] = @{} }
-    $settings.plugins['NoRoleHeaders'].enabled = $false
-
-    if (-not ($settings.plugins.Keys -contains 'NotificationVolume')) { $settings.plugins['NotificationVolume'] = @{} }
-    $settings.plugins['NotificationVolume'].enabled = $true
-    $settings.plugins['NotificationVolume'].notificationVolume = 25
-
-    if (-not ($settings.plugins.Keys -contains 'NoTrack')) { $settings.plugins['NoTrack'] = @{} }
-    $settings.plugins['NoTrack'].enabled = $true
-    $settings.plugins['NoTrack'].disableAnalytics = $true
 
     Write-JsonFile $destPath $settings 30
 

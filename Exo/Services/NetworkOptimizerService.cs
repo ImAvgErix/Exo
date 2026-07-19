@@ -90,6 +90,43 @@ public sealed class NetworkOptimizerService
         return NetworkPreset.Balanced;
     }
 
+    /// <summary>
+    /// User-selected policy for Analyze &amp; Apply. Defaults to lowest latency
+    /// (gaming default). Independent of last applied preset until Apply runs.
+    /// </summary>
+    public NetworkPreset LoadPreferredPolicy()
+    {
+        try
+        {
+            if (!File.Exists(StatePath)) return NetworkPreset.LowestLatency;
+            using var doc = JsonDocument.Parse(File.ReadAllText(StatePath));
+            if (doc.RootElement.TryGetProperty("preferredPolicy", out var p) &&
+                Enum.TryParse<NetworkPreset>(p.GetString(), true, out var preferred) &&
+                preferred is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput)
+                return preferred;
+            // Fall back to last applied non-balanced preset when preference was never saved.
+            if (doc.RootElement.TryGetProperty("preset", out var applied) &&
+                Enum.TryParse<NetworkPreset>(applied.GetString(), true, out var preset) &&
+                preset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput)
+                return preset;
+        }
+        catch { }
+        return NetworkPreset.LowestLatency;
+    }
+
+    public void SavePreferredPolicy(NetworkPreset preferred)
+    {
+        if (preferred is not (NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput))
+            preferred = NetworkPreset.LowestLatency;
+        try
+        {
+            var state = LoadStateObject();
+            state["preferredPolicy"] = preferred.ToString();
+            SaveStateObject(state);
+        }
+        catch { }
+    }
+
     public void SavePreset(NetworkPreset preset, NetworkApplyOptions? options = null)
     {
         try
@@ -97,6 +134,9 @@ public sealed class NetworkOptimizerService
             // Merge-write: keep benchmark / report / rollback keys intact across preset saves.
             var state = LoadStateObject();
             state["preset"] = preset.ToString();
+            state["preferredPolicy"] = preset is NetworkPreset.HighestThroughput
+                ? NetworkPreset.HighestThroughput.ToString()
+                : NetworkPreset.LowestLatency.ToString();
             state["appliedUtc"] = DateTime.UtcNow.ToString("o");
             // Metrics-only prefer-ethernet flag (Wi-Fi is never disabled as of 2.6.6+).
             // Default false matches NetworkApplyOptions and InternetOptimizerViewModel.

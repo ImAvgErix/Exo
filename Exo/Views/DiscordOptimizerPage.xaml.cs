@@ -15,16 +15,27 @@ public sealed partial class DiscordOptimizerPage : Page
 
     public DiscordOptimizerPage()
     {
+        NavigationCacheMode = NavigationCacheMode.Enabled;
         ViewModel = new DiscordOptimizerViewModel(App.Services);
         InitializeComponent();
         DataContext = ViewModel;
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
     }
 
-    protected override async void OnNavigatedTo(NavigationEventArgs e)
+    protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        await ViewModel.InitializeAsync();
+        // Defer detect so the navigation click returns immediately.
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            _ = ViewModel.InitializeAsync();
+        });
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        ViewModel.CancelBackgroundWork();
+        base.OnNavigatedFrom(e);
     }
 
     /// <summary>Staggered tile entrance on the first loading → loaded transition only.</summary>

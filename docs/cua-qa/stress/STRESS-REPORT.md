@@ -1,5 +1,5 @@
-# Exo Cua STRESS - 2026-07-18T15:09:05.0219176-05:00
-- pid: 8724
+# Exo Cua STRESS - 2026-07-18T18:20:59.7805114-05:00
+- pid: 4144
 - exe: C:\Users\Erix\AppData\Local\Exo\app\Exo.exe
 - uac: assumed non-interactive elevate (user disabled UAC)
 

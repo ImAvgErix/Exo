@@ -1,16 +1,16 @@
 {
   "_note": "Prefer `elements` ΓÇö `tree_markdown` will continue to work but new fields will only be added to the structured side. Issue #22865: use `max_elements` / `max_depth` to bound the UIA walk on apps with very large trees.",
-  "element_count": 60,
+  "element_count": 59,
   "elements": [
     {
       "depth": 2,
       "element_index": 0,
-      "element_token": "s00e3:0",
+      "element_token": "s01c6:0",
       "frame": {
         "h": 32,
         "w": 46,
-        "x": 1782,
-        "y": 0
+        "x": 1404,
+        "y": 160
       },
       "label": "Minimize",
       "role": "Button"
@@ -18,25 +18,25 @@
     {
       "depth": 2,
       "element_index": 1,
-      "element_token": "s00e3:1",
+      "element_token": "s01c6:1",
       "frame": {
         "h": 32,
         "w": 46,
-        "x": 1828,
-        "y": 0
+        "x": 1450,
+        "y": 160
       },
-      "label": "Restore",
+      "label": "Maximize",
       "role": "Button"
     },
     {
       "depth": 2,
       "element_index": 2,
-      "element_token": "s00e3:2",
+      "element_token": "s01c6:2",
       "frame": {
         "h": 32,
         "w": 46,
-        "x": 1874,
-        "y": 0
+        "x": 1496,
+        "y": 160
       },
       "label": "Close",
       "role": "Button"
@@ -44,12 +44,12 @@
     {
       "depth": 4,
       "element_index": 3,
-      "element_token": "s00e3:3",
+      "element_token": "s01c6:3",
       "frame": {
         "h": 40,
         "w": 76,
-        "x": 8,
-        "y": 6
+        "x": 386,
+        "y": 167
       },
       "label": "Open system overview",
       "role": "Button"
@@ -57,12 +57,12 @@
     {
       "depth": 5,
       "element_index": 4,
-      "element_token": "s00e3:4",
+      "element_token": "s01c6:4",
       "frame": {
         "h": 16,
         "w": 26,
-        "x": 40,
-        "y": 18
+        "x": 418,
+        "y": 179
       },
       "label": "EXO",
       "parent_index": 3,
@@ -71,12 +71,12 @@
     {
       "depth": 4,
       "element_index": 5,
-      "element_token": "s00e3:5",
+      "element_token": "s01c6:5",
       "frame": {
         "h": 40,
         "w": 44,
-        "x": 1682,
-        "y": 6
+        "x": 1304,
+        "y": 167
       },
       "label": "Settings",
       "role": "Button"
@@ -84,12 +84,12 @@
     {
       "depth": 3,
       "element_index": 6,
-      "element_token": "s00e3:6",
+      "element_token": "s01c6:6",
       "frame": {
         "h": 40,
         "w": 86,
         "x": 707,
-        "y": 6
+        "y": 167
       },
       "label": "Discord",
       "role": "Button"
@@ -97,12 +97,12 @@
     {
       "depth": 4,
       "element_index": 7,
-      "element_token": "s00e3:7",
+      "element_token": "s01c6:7",
       "frame": {
         "h": 15,
         "w": 41,
         "x": 742,
-        "y": 19
+        "y": 180
       },
       "label": "Discord",
       "parent_index": 6,
@@ -111,12 +111,12 @@
     {
       "depth": 3,
       "element_index": 8,
-      "element_token": "s00e3:8",
+      "element_token": "s01c6:8",
       "frame": {
         "h": 40,
         "w": 78,
         "x": 797,
-        "y": 6
+        "y": 167
       },
       "label": "Steam",
       "role": "Button"
@@ -124,12 +124,12 @@
     {
       "depth": 4,
       "element_index": 9,
-      "element_token": "s00e3:9",
+      "element_token": "s01c6:9",
       "frame": {
         "h": 15,
         "w": 33,
         "x": 832,
-        "y": 19
+        "y": 180
       },
       "label": "Steam",
       "parent_index": 8,
@@ -138,12 +138,12 @@
     {
       "depth": 3,
       "element_index": 10,
-      "element_token": "s00e3:10",
+      "element_token": "s01c6:10",
       "frame": {
         "h": 40,
         "w": 87,
         "x": 879,
-        "y": 6
+        "y": 167
       },
       "label": "Internet",
       "role": "Button"
@@ -151,12 +151,12 @@
     {
       "depth": 4,
       "element_index": 11,
-      "element_token": "s00e3:11",
+      "element_token": "s01c6:11",
       "frame": {
         "h": 15,
         "w": 42,
         "x": 914,
-        "y": 19
+        "y": 180
       },
       "label": "Internet",
       "parent_index": 10,
@@ -165,12 +165,12 @@
     {
       "depth": 3,
       "element_index": 12,
-      "element_token": "s00e3:12",
+      "element_token": "s01c6:12",
       "frame": {
         "h": 40,
         "w": 84,
         "x": 970,
-        "y": 6
+        "y": 167
       },
       "label": "NVIDIA",
       "role": "Button"
@@ -178,12 +178,12 @@
     {
       "depth": 4,
       "element_index": 13,
-      "element_token": "s00e3:13",
+      "element_token": "s01c6:13",
       "frame": {
         "h": 15,
         "w": 39,
         "x": 1005,
-        "y": 19
+        "y": 180
       },
       "label": "NVIDIA",
       "parent_index": 12,
@@ -192,12 +192,12 @@
     {
       "depth": 3,
       "element_index": 14,
-      "element_token": "s00e3:14",
+      "element_token": "s01c6:14",
       "frame": {
         "h": 40,
         "w": 76,
         "x": 1058,
-        "y": 6
+        "y": 167
       },
       "label": "Riot",
       "role": "Button"
@@ -205,12 +205,12 @@
     {
       "depth": 4,
       "element_index": 15,
-      "element_token": "s00e3:15",
+      "element_token": "s01c6:15",
       "frame": {
         "h": 15,
         "w": 22,
         "x": 1098,
-        "y": 19
+        "y": 180
       },
       "label": "Riot",
       "parent_index": 14,
@@ -219,12 +219,12 @@
     {
       "depth": 3,
       "element_index": 16,
-      "element_token": "s00e3:16",
+      "element_token": "s01c6:16",
       "frame": {
         "h": 40,
         "w": 76,
         "x": 1138,
-        "y": 6
+        "y": 167
       },
       "label": "Epic",
       "role": "Button"
@@ -232,12 +232,12 @@
     {
       "depth": 4,
       "element_index": 17,
-      "element_token": "s00e3:17",
+      "element_token": "s01c6:17",
       "frame": {
         "h": 15,
         "w": 22,
         "x": 1178,
-        "y": 19
+        "y": 180
       },
       "label": "Epic",
       "parent_index": 16,
@@ -246,24 +246,24 @@
     {
       "depth": 3,
       "element_index": 18,
-      "element_token": "s00e3:18",
+      "element_token": "s01c6:18",
       "frame": {
-        "h": 1020,
+        "h": 691,
         "w": 1120,
         "x": 400,
-        "y": 60
+        "y": 221
       },
       "role": "Pane"
     },
     {
       "depth": 4,
       "element_index": 19,
-      "element_token": "s00e3:19",
+      "element_token": "s01c6:19",
       "frame": {
         "h": 15,
-        "w": 1026,
-        "x": 457,
-        "y": 89
+        "w": 1047,
+        "x": 444,
+        "y": 242
       },
       "label": "DISCORD",
       "parent_index": 18,
@@ -272,12 +272,12 @@
     {
       "depth": 4,
       "element_index": 20,
-      "element_token": "s00e3:20",
+      "element_token": "s01c6:20",
       "frame": {
         "h": 36,
-        "w": 1026,
-        "x": 457,
-        "y": 109
+        "w": 1047,
+        "x": 444,
+        "y": 260
       },
       "label": "Already optimized",
       "parent_index": 18,
@@ -286,12 +286,12 @@
     {
       "depth": 4,
       "element_index": 21,
-      "element_token": "s00e3:21",
+      "element_token": "s01c6:21",
       "frame": {
         "h": 16,
-        "w": 997,
-        "x": 473,
-        "y": 176
+        "w": 1020,
+        "x": 460,
+        "y": 319
       },
       "label": "Verified on this installation. Apply again after Discord replaces its client files.",
       "parent_index": 18,
@@ -300,12 +300,12 @@
     {
       "depth": 4,
       "element_index": 22,
-      "element_token": "s00e3:22",
+      "element_token": "s01c6:22",
       "frame": {
         "h": 15,
-        "w": 1046,
-        "x": 437,
-        "y": 244
+        "w": 1062,
+        "x": 429,
+        "y": 372
       },
       "label": "WHAT EXO WILL CHANGE",
       "parent_index": 18,
@@ -314,26 +314,12 @@
     {
       "depth": 4,
       "element_index": 23,
-      "element_token": "s00e3:23",
-      "frame": {
-        "h": 16,
-        "w": 144,
-        "x": 1339,
-        "y": 243
-      },
-      "label": "Hardware-aware, reversible",
-      "parent_index": 18,
-      "role": "Text"
-    },
-    {
-      "depth": 4,
-      "element_index": 24,
-      "element_token": "s00e3:24",
+      "element_token": "s01c6:23",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 467,
-        "y": 293
+        "w": 488,
+        "x": 455,
+        "y": 416
       },
       "label": "Client mods & privacy",
       "parent_index": 18,
@@ -341,13 +327,13 @@
     },
     {
       "depth": 4,
-      "element_index": 25,
-      "element_token": "s00e3:25",
+      "element_index": 24,
+      "element_token": "s01c6:24",
       "frame": {
         "h": 16,
-        "w": 472,
-        "x": 467,
-        "y": 313
+        "w": 488,
+        "x": 455,
+        "y": 435
       },
       "label": "Equicord loads privacy plugins and strips noisy telemetry.",
       "parent_index": 18,
@@ -355,13 +341,13 @@
     },
     {
       "depth": 4,
-      "element_index": 26,
-      "element_token": "s00e3:26",
+      "element_index": 25,
+      "element_token": "s01c6:25",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 996,
-        "y": 285
+        "w": 488,
+        "x": 990,
+        "y": 408
       },
       "label": "Exo Host (fast launch)",
       "parent_index": 18,
@@ -369,13 +355,13 @@
     },
     {
       "depth": 4,
-      "element_index": 27,
-      "element_token": "s00e3:27",
+      "element_index": 26,
+      "element_token": "s01c6:26",
       "frame": {
         "h": 32,
-        "w": 472,
-        "x": 996,
-        "y": 305
+        "w": 488,
+        "x": 990,
+        "y": 427
       },
       "label": "Equicord loader + stock Discord shell + SKIP_HOST_UPDATE / chromium lean (no OpenAsar).",
       "parent_index": 18,
@@ -383,13 +369,13 @@
     },
     {
       "depth": 4,
-      "element_index": 28,
-      "element_token": "s00e3:28",
+      "element_index": 27,
+      "element_token": "s01c6:27",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 467,
-        "y": 381
+        "w": 488,
+        "x": 455,
+        "y": 492
       },
       "label": "Background memory + input policy",
       "parent_index": 18,
@@ -397,27 +383,27 @@
     },
     {
       "depth": 4,
-      "element_index": 29,
-      "element_token": "s00e3:29",
+      "element_index": 28,
+      "element_token": "s01c6:28",
       "frame": {
         "h": 32,
-        "w": 472,
-        "x": 467,
-        "y": 401
+        "w": 488,
+        "x": 455,
+        "y": 511
       },
-      "label": "Verified DiscOpt binaries apply a 4-second idle working-set policy, Above Normal process priority, and input-thread tuning.",
+      "label": "Verified DiscOpt binaries apply a 2.5-second idle working-set policy, Above Normal process priority, raw input, and input-thread tuning.",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
-      "element_index": 30,
-      "element_token": "s00e3:30",
+      "element_index": 29,
+      "element_token": "s01c6:29",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 996,
-        "y": 381
+        "w": 488,
+        "x": 990,
+        "y": 492
       },
       "label": "Complete client debloat",
       "parent_index": 18,
@@ -425,13 +411,13 @@
     },
     {
       "depth": 4,
-      "element_index": 31,
-      "element_token": "s00e3:31",
+      "element_index": 30,
+      "element_token": "s01c6:30",
       "frame": {
         "h": 32,
-        "w": 472,
-        "x": 996,
-        "y": 401
+        "w": 488,
+        "x": 990,
+        "y": 511
       },
       "label": "Old builds, optional hook/clips modules, game SDK files, extra locales, and disposable caches are removed.",
       "parent_index": 18,
@@ -439,13 +425,13 @@
     },
     {
       "depth": 4,
-      "element_index": 32,
-      "element_token": "s00e3:32",
+      "element_index": 31,
+      "element_token": "s01c6:31",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 467,
-        "y": 485
+        "w": 488,
+        "x": 455,
+        "y": 584
       },
       "label": "Discord runtime integrity",
       "parent_index": 18,
@@ -453,13 +439,13 @@
     },
     {
       "depth": 4,
-      "element_index": 33,
-      "element_token": "s00e3:33",
+      "element_index": 32,
+      "element_token": "s01c6:32",
       "frame": {
         "h": 16,
-        "w": 472,
-        "x": 467,
-        "y": 505
+        "w": 488,
+        "x": 455,
+        "y": 603
       },
       "label": "Required desktop, utility, voice, and media modules remain installed.",
       "parent_index": 18,
@@ -467,13 +453,13 @@
     },
     {
       "depth": 4,
-      "element_index": 34,
-      "element_token": "s00e3:34",
+      "element_index": 33,
+      "element_token": "s01c6:33",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 996,
-        "y": 485
+        "w": 488,
+        "x": 990,
+        "y": 584
       },
       "label": "Dark mode",
       "parent_index": 18,
@@ -481,13 +467,13 @@
     },
     {
       "depth": 4,
-      "element_index": 35,
-      "element_token": "s00e3:35",
+      "element_index": 34,
+      "element_token": "s01c6:34",
       "frame": {
         "h": 16,
-        "w": 472,
-        "x": 996,
-        "y": 505
+        "w": 488,
+        "x": 990,
+        "y": 603
       },
       "label": "True-black Equicord theme without a forced overlay.",
       "parent_index": 18,
@@ -495,13 +481,13 @@
     },
     {
       "depth": 4,
-      "element_index": 36,
-      "element_token": "s00e3:36",
+      "element_index": 35,
+      "element_token": "s01c6:35",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 467,
-        "y": 581
+        "w": 488,
+        "x": 455,
+        "y": 668
       },
       "label": "Lean plugin budget",
       "parent_index": 18,
@@ -509,13 +495,13 @@
     },
     {
       "depth": 4,
-      "element_index": 37,
-      "element_token": "s00e3:37",
+      "element_index": 36,
+      "element_token": "s01c6:36",
       "frame": {
         "h": 16,
-        "w": 472,
-        "x": 467,
-        "y": 601
+        "w": 488,
+        "x": 455,
+        "y": 687
       },
       "label": "18 curated features + 10 required APIs; every optional extra is off",
       "parent_index": 18,
@@ -523,13 +509,13 @@
     },
     {
       "depth": 4,
-      "element_index": 38,
-      "element_token": "s00e3:38",
+      "element_index": 37,
+      "element_token": "s01c6:37",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 996,
-        "y": 581
+        "w": 488,
+        "x": 990,
+        "y": 668
       },
       "label": "Windows background suppression",
       "parent_index": 18,
@@ -537,13 +523,13 @@
     },
     {
       "depth": 4,
-      "element_index": 39,
-      "element_token": "s00e3:39",
+      "element_index": 38,
+      "element_token": "s01c6:38",
       "frame": {
         "h": 16,
-        "w": 472,
-        "x": 996,
-        "y": 601
+        "w": 488,
+        "x": 990,
+        "y": 687
       },
       "label": "No Discord autostart or scheduled tasks; Windows toasts off; tray icon not promoted.",
       "parent_index": 18,
@@ -551,13 +537,13 @@
     },
     {
       "depth": 4,
-      "element_index": 40,
-      "element_token": "s00e3:40",
+      "element_index": 39,
+      "element_token": "s01c6:39",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 467,
-        "y": 677
+        "w": 488,
+        "x": 455,
+        "y": 752
       },
       "label": "Start Menu / apps launch path",
       "parent_index": 18,
@@ -565,13 +551,13 @@
     },
     {
       "depth": 4,
-      "element_index": 41,
-      "element_token": "s00e3:41",
+      "element_index": 40,
+      "element_token": "s01c6:40",
       "frame": {
         "h": 16,
-        "w": 472,
-        "x": 467,
-        "y": 697
+        "w": 488,
+        "x": 455,
+        "y": 771
       },
       "label": "Start Menu Discord shortcut uses Update.exe (or Exo launch helper). No desktop icons.",
       "parent_index": 18,
@@ -579,13 +565,13 @@
     },
     {
       "depth": 4,
-      "element_index": 42,
-      "element_token": "s00e3:42",
+      "element_index": 41,
+      "element_token": "s01c6:41",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 996,
-        "y": 669
+        "w": 488,
+        "x": 990,
+        "y": 744
       },
       "label": "Voice priority (QoS DSCP 46)",
       "parent_index": 18,
@@ -593,13 +579,13 @@
     },
     {
       "depth": 4,
-      "element_index": 43,
-      "element_token": "s00e3:43",
+      "element_index": 42,
+      "element_token": "s01c6:42",
       "frame": {
         "h": 32,
-        "w": 472,
-        "x": 996,
-        "y": 689
+        "w": 488,
+        "x": 990,
+        "y": 763
       },
       "label": "Windows QoS policy tags Discord voice UDP traffic as Expedited Forwarding for every installed variant.",
       "parent_index": 18,
@@ -607,13 +593,13 @@
     },
     {
       "depth": 4,
-      "element_index": 44,
-      "element_token": "s00e3:44",
+      "element_index": 43,
+      "element_token": "s01c6:43",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 467,
-        "y": 773
+        "w": 488,
+        "x": 455,
+        "y": 836
       },
       "label": "Discord variants (PTB/Canary)",
       "parent_index": 18,
@@ -621,13 +607,13 @@
     },
     {
       "depth": 4,
-      "element_index": 45,
-      "element_token": "s00e3:45",
+      "element_index": 44,
+      "element_token": "s01c6:44",
       "frame": {
         "h": 16,
-        "w": 472,
-        "x": 467,
-        "y": 793
+        "w": 488,
+        "x": 455,
+        "y": 855
       },
       "label": "Only stable Discord is installed; PTB/Canary would be optimized automatically.",
       "parent_index": 18,
@@ -635,13 +621,13 @@
     },
     {
       "depth": 4,
-      "element_index": 46,
-      "element_token": "s00e3:46",
+      "element_index": 45,
+      "element_token": "s01c6:45",
       "frame": {
         "h": 17,
-        "w": 472,
-        "x": 996,
-        "y": 773
+        "w": 488,
+        "x": 990,
+        "y": 836
       },
       "label": "Verified optimizer record",
       "parent_index": 18,
@@ -649,13 +635,13 @@
     },
     {
       "depth": 4,
-      "element_index": 47,
-      "element_token": "s00e3:47",
+      "element_index": 46,
+      "element_token": "s01c6:46",
       "frame": {
         "h": 16,
-        "w": 472,
-        "x": 996,
-        "y": 793
+        "w": 488,
+        "x": 990,
+        "y": 855
       },
       "label": "A completed full apply is recorded for this exact Discord build.",
       "parent_index": 18,
@@ -663,155 +649,113 @@
     },
     {
       "depth": 4,
-      "element_index": 48,
-      "element_token": "s00e3:48",
-      "frame": {
-        "h": 3,
-        "w": 1046,
-        "x": 437,
-        "y": 882
-      },
+      "element_index": 47,
+      "element_token": "s01c6:47",
       "parent_index": 18,
       "role": "ProgressBar"
     },
     {
       "depth": 4,
-      "element_index": 49,
-      "element_token": "s00e3:49",
-      "frame": {
-        "h": 16,
-        "w": 1046,
-        "x": 437,
-        "y": 890
-      },
+      "element_index": 48,
+      "element_token": "s01c6:48",
       "label": "User-token boot check (explorer launch, 50s)...",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
-      "element_index": 50,
-      "element_token": "s00e3:50",
-      "frame": {
-        "h": 40,
-        "w": 1046,
-        "x": 437,
-        "y": 914
-      },
+      "element_index": 49,
+      "element_token": "s01c6:49",
       "label": "Toggle last apply report",
       "parent_index": 18,
       "role": "Button"
     },
     {
       "depth": 5,
-      "element_index": 51,
-      "element_token": "s00e3:51",
-      "frame": {
-        "h": 16,
-        "w": 1000,
-        "x": 450,
-        "y": 926
-      },
+      "element_index": 50,
+      "element_token": "s01c6:50",
       "label": "Last apply - 11 ok",
-      "parent_index": 50,
+      "parent_index": 49,
       "role": "Text"
     },
     {
       "depth": 5,
-      "element_index": 52,
-      "element_token": "s00e3:52",
-      "frame": {
-        "h": 17,
-        "w": 51,
-        "x": 935,
-        "y": 974
-      },
+      "element_index": 51,
+      "element_token": "s01c6:51",
       "label": "Reapply",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 5,
-      "element_index": 53,
-      "element_token": "s00e3:53",
-      "frame": {
-        "h": 16,
-        "w": 38,
-        "x": 941,
-        "y": 1022
-      },
+      "element_index": 52,
+      "element_token": "s01c6:52",
       "label": "Repair",
       "parent_index": 18,
       "role": "Text"
     },
     {
       "depth": 4,
-      "element_index": 54,
-      "element_token": "s00e3:54",
+      "element_index": 53,
+      "element_token": "s01c6:53",
       "label": "Vertical",
       "parent_index": 18,
       "role": "ScrollBar"
     },
     {
       "depth": 1,
-      "element_index": 55,
-      "element_token": "s00e3:55",
-      "frame": {
-        "h": 5,
-        "w": 1920,
-        "x": 0,
-        "y": -5
-      },
+      "element_index": 54,
+      "element_token": "s01c6:54",
       "label": "Exo",
       "role": "TitleBar",
       "value": "Exo"
     },
     {
       "depth": 3,
-      "element_index": 56,
-      "element_token": "s00e3:56",
+      "element_index": 55,
+      "element_token": "s01c6:55",
       "frame": {
         "h": 22,
         "w": 22,
-        "x": 0,
-        "y": 0
+        "x": 378,
+        "y": 168
       },
       "label": "System",
-      "parent_index": 55,
+      "parent_index": 54,
       "role": "MenuItem"
     },
     {
       "depth": 2,
-      "element_index": 57,
-      "element_token": "s00e3:57",
+      "element_index": 56,
+      "element_token": "s01c6:56",
       "label": "Minimize",
-      "parent_index": 55,
+      "parent_index": 54,
+      "role": "Button"
+    },
+    {
+      "depth": 2,
+      "element_index": 57,
+      "element_token": "s01c6:57",
+      "label": "Maximize",
+      "parent_index": 54,
       "role": "Button"
     },
     {
       "depth": 2,
       "element_index": 58,
-      "element_token": "s00e3:58",
-      "label": "Restore",
-      "parent_index": 55,
-      "role": "Button"
-    },
-    {
-      "depth": 2,
-      "element_index": 59,
-      "element_token": "s00e3:59",
+      "element_token": "s01c6:58",
       "label": "Close",
-      "parent_index": 55,
+      "parent_index": 54,
       "role": "Button"
     }
   ],
-  "pid": 8724,
+  "pid": 4144,
   "screenshot_file_path": "C:\\Users\\Erix\\Exo\\docs\\cua-qa\\stress\\apply-done-discord.png",
-  "screenshot_height": 882,
+  "screenshot_height": 753,
   "screenshot_mime_type": "image/png",
-  "screenshot_width": 1568,
-  "snapshot_id": "s00e3",
-  "tree_markdown": "- Window \"Exo\"\n  - Pane \"Non Client Input Sink Window\"\n  - Pane \"AppWindow Custom Title Bar\"\n    - [0] Button \"Minimize\" [id=Minimize actions=[invoke]]\n    - [1] Button \"Restore\" [id=Restore actions=[invoke]]\n    - [2] Button \"Close\" [id=Close actions=[invoke]]\n        - [3] Button \"Open system overview\" [id=NavHome actions=[invoke]]\n          - [4] Text \"EXO\" [actions=[text]]\n        - [5] Button \"Settings\" [id=SettingsButton actions=[invoke]]\n      - [6] Button \"Discord\" [id=NavDiscord actions=[invoke]]\n        - [7] Text \"Discord\" [actions=[text]]\n      - [8] Button \"Steam\" [id=NavSteam actions=[invoke]]\n        - [9] Text \"Steam\" [actions=[text]]\n      - [10] Button \"Internet\" [id=NavInternet actions=[invoke]]\n        - [11] Text \"Internet\" [actions=[text]]\n      - [12] Button \"NVIDIA\" [id=NavNvidia actions=[invoke]]\n        - [13] Text \"NVIDIA\" [actions=[text]]\n      - [14] Button \"Riot\" [id=NavRiot actions=[invoke]]\n        - [15] Text \"Riot\" [actions=[text]]\n      - [16] Button \"Epic\" [id=NavEpic actions=[invoke]]\n        - [17] Text \"Epic\" [actions=[text]]\n      - [18] Pane [actions=[scroll]]\n        - [19] Text \"DISCORD\" [actions=[text]]\n        - [20] Text \"Already optimized\" [actions=[text]]\n        - [21] Text \"Verified on this installation. Apply again after Discord replaces its client files.\" [actions=[text]]\n        - [22] Text \"WHAT EXO WILL CHANGE\" [actions=[text]]\n        - [23] Text \"Hardware-aware, reversible\" [actions=[text]]\n        - [24] Text \"Client mods & privacy\" [actions=[text]]\n        - [25] Text \"Equicord loads privacy plugins and strips noisy telemetry.\" [actions=[text]]\n        - [26] Text \"Exo Host (fast launch)\" [actions=[text]]\n        - [27] Text \"Equicord loader + stock Discord shell + SKIP_HOST_UPDATE / chromium lean (no OpenAsar).\" [actions=[text]]\n        - [28] Text \"Background memory + input policy\" [actions=[text]]\n        - [29] Text \"Verified DiscOpt binaries apply a 4-second idle working-set policy, Above Normal process priority, and input-thread tuning.\" [actions=[text]]\n        - [30] Text \"Complete client debloat\" [actions=[text]]\n        - [31] Text \"Old builds, optional hook/clips modules, game SDK files, extra locales, and disposable caches are removed.\" [actions=[text]]\n        - [32] Text \"Discord runtime integrity\" [actions=[text]]\n        - [33] Text \"Required desktop, utility, voice, and media modules remain installed.\" [actions=[text]]\n        - [34] Text \"Dark mode\" [actions=[text]]\n        - [35] Text \"True-black Equicord theme without a forced overlay.\" [actions=[text]]\n        - [36] Text \"Lean plugin budget\" [actions=[text]]\n        - [37] Text \"18 curated features + 10 required APIs; every optional extra is off\" [actions=[text]]\n        - [38] Text \"Windows background suppression\" [actions=[text]]\n        - [39] Text \"No Discord autostart or scheduled tasks; Windows toasts off; tray icon not promoted.\" [actions=[text]]\n        - [40] Text \"Start Menu / apps launch path\" [actions=[text]]\n        - [41] Text \"Start Menu Discord shortcut uses Update.exe (or Exo launch helper). No desktop icons.\" [actions=[text]]\n        - [42] Text \"Voice priority (QoS DSCP 46)\" [actions=[text]]\n        - [43] Text \"Windows QoS policy tags Discord voice UDP traffic as Expedited Forwarding for every installed variant.\" [actions=[text]]\n        - [44] Text \"Discord variants (PTB/Canary)\" [actions=[text]]\n        - [45] Text \"Only stable Discord is installed; PTB/Canary would be optimized automatically.\" [actions=[text]]\n        - [46] Text \"Verified optimizer record\" [actions=[text]]\n        - [47] Text \"A completed full apply is recorded for this exact Discord build.\" [actions=[text]]\n        - [48] ProgressBar [actions=[set_value]]\n        - [49] Text \"User-token boot check (explorer launch, 50s)...\" [actions=[text]]\n        - [50] Button \"Toggle last apply report\" [actions=[invoke]]\n          - [51] Text \"Last apply - 11 ok\" [actions=[text]]\n        - Button \"Apply Discord\"\n          - [52] Text \"Reapply\" [actions=[text]]\n        - Button \"Repair\"\n          - [53] Text \"Repair\" [actions=[text]]\n        - [54] ScrollBar \"Vertical\" [id=VerticalScrollBar actions=[set_value]]\n  - [55] TitleBar [value=\"Exo\" actions=[set_value]]\n    - MenuBar \"System\"\n      - [56] MenuItem \"System\" [actions=[invoke,expand]]\n    - [57] Button \"Minimize\" [actions=[invoke]]\n    - [58] Button \"Restore\" [actions=[invoke]]\n    - [59] Button \"Close\" [actions=[invoke]]\n",
-  "window_id": 42074252
+  "screenshot_width": 1166,
+  "snapshot_id": "s01c6",
+  "tree_markdown": "- Window \"Exo\"\n  - Pane \"Non Client Input Sink Window\"\n  - Pane \"AppWindow Custom Title Bar\"\n    - [0] Button \"Minimize\" [id=Minimize actions=[invoke]]\n    - [1] Button \"Maximize\" [id=Maximize actions=[invoke]]\n    - [2] Button \"Close\" [id=Close actions=[invoke]]\n        - [3] Button \"Open system overview\" [id=NavHome actions=[invoke]]\n          - [4] Text \"EXO\" [actions=[text]]\n        - [5] Button \"Settings\" [id=SettingsButton actions=[invoke]]\n      - [6] Button \"Discord\" [id=NavDiscord actions=[invoke]]\n        - [7] Text \"Discord\" [actions=[text]]\n      - [8] Button \"Steam\" [id=NavSteam actions=[invoke]]\n        - [9] Text \"Steam\" [actions=[text]]\n      - [10] Button \"Internet\" [id=NavInternet actions=[invoke]]\n        - [11] Text \"Internet\" [actions=[text]]\n      - [12] Button \"NVIDIA\" [id=NavNvidia actions=[invoke]]\n        - [13] Text \"NVIDIA\" [actions=[text]]\n      - [14] Button \"Riot\" [id=NavRiot actions=[invoke]]\n        - [15] Text \"Riot\" [actions=[text]]\n      - [16] Button \"Epic\" [id=NavEpic actions=[invoke]]\n        - [17] Text \"Epic\" [actions=[text]]\n      - [18] Pane [actions=[scroll]]\n        - [19] Text \"DISCORD\" [actions=[text]]\n        - [20] Text \"Already optimized\" [actions=[text]]\n        - [21] Text \"Verified on this installation. Apply again after Discord replaces its client files.\" [actions=[text]]\n        - [22] Text \"WHAT EXO WILL CHANGE\" [actions=[text]]\n        - [23] Text \"Client mods & privacy\" [actions=[text]]\n        - [24] Text \"Equicord loads privacy plugins and strips noisy telemetry.\" [actions=[text]]\n        - [25] Text \"Exo Host (fast launch)\" [actions=[text]]\n        - [26] Text \"Equicord loader + stock Discord shell + SKIP_HOST_UPDATE / chromium lean (no OpenAsar).\" [actions=[text]]\n        - [27] Text \"Background memory + input policy\" [actions=[text]]\n        - [28] Text \"Verified DiscOpt binaries apply a 2.5-second idle working-set policy, Above Normal process priority, raw input, and input-thread tuning.\" [actions=[text]]\n        - [29] Text \"Complete client debloat\" [actions=[text]]\n        - [30] Text \"Old builds, optional hook/clips modules, game SDK files, extra locales, and disposable caches are removed.\" [actions=[text]]\n        - [31] Text \"Discord runtime integrity\" [actions=[text]]\n        - [32] Text \"Required desktop, utility, voice, and media modules remain installed.\" [actions=[text]]\n        - [33] Text \"Dark mode\" [actions=[text]]\n        - [34] Text \"True-black Equicord theme without a forced overlay.\" [actions=[text]]\n        - [35] Text \"Lean plugin budget\" [actions=[text]]\n        - [36] Text \"18 curated features + 10 required APIs; every optional extra is off\" [actions=[text]]\n        - [37] Text \"Windows background suppression\" [actions=[text]]\n        - [38] Text \"No Discord autostart or scheduled tasks; Windows toasts off; tray icon not promoted.\" [actions=[text]]\n        - [39] Text \"Start Menu / apps launch path\" [actions=[text]]\n        - [40] Text \"Start Menu Discord shortcut uses Update.exe (or Exo launch helper). No desktop icons.\" [actions=[text]]\n        - [41] Text \"Voice priority (QoS DSCP 46)\" [actions=[text]]\n        - [42] Text \"Windows QoS policy tags Discord voice UDP traffic as Expedited Forwarding for every installed variant.\" [actions=[text]]\n        - [43] Text \"Discord variants (PTB/Canary)\" [actions=[text]]\n        - [44] Text \"Only stable Discord is installed; PTB/Canary would be optimized automatically.\" [actions=[text]]\n        - [45] Text \"Verified optimizer record\" [actions=[text]]\n        - [46] Text \"A completed full apply is recorded for this exact Discord build.\" [actions=[text]]\n        - [47] ProgressBar [actions=[set_value]]\n        - [48] Text \"User-token boot check (explorer launch, 50s)...\" [actions=[text]]\n        - [49] Button \"Toggle last apply report\" [actions=[invoke]]\n          - [50] Text \"Last apply - 11 ok\" [actions=[text]]\n        - Button \"Apply Discord\"\n          - [51] Text \"Reapply\" [actions=[text]]\n        - Button \"Repair\"\n          - [52] Text \"Repair\" [actions=[text]]\n        - [53] ScrollBar \"Vertical\" [id=VerticalScrollBar actions=[set_value]]\n  - [54] TitleBar [value=\"Exo\" actions=[set_value]]\n    - MenuBar \"System\"\n      - [55] MenuItem \"System\" [actions=[invoke,expand]]\n    - [56] Button \"Minimize\" [actions=[invoke]]\n    - [57] Button \"Maximize\" [actions=[invoke]]\n    - [58] Button \"Close\" [actions=[invoke]]\n",
+  "window_id": 4916162
 }
 

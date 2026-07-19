@@ -323,12 +323,10 @@ if (-not (Test-Path $discordRoot)) {
         $amoledOk = $false
         $leanPluginsOk = $false
         $leanPluginDetail = 'Lean plugin policy missing or unreadable.'
-        $startupOk = $false
         $settingsPath = Join-Path $appData 'discord\settings.json'
         if (Test-Path -LiteralPath $settingsPath) {
             try {
                 $sjRaw = Get-Content $settingsPath -Raw -Encoding UTF8
-                $startupOk = Test-DiscOptStartupOffFromSettingsJson -JsonText $sjRaw
                 $sj = $sjRaw | ConvertFrom-Json
                 if ($sj.BACKGROUND_COLOR -eq '#000000') { $amoledOk = $true }
             } catch {}
@@ -357,10 +355,11 @@ if (-not (Test-Path $discordRoot)) {
         Add-Feature 'Dark mode' 'True-black Equicord theme without a forced overlay.' $amoledOk
         Add-Feature 'Lean plugin budget' $leanPluginDetail $leanPluginsOk
 
+        # Windows quiet = OS shell only (Run key / tasks / OS toasts / tray).
+        # Discord OPEN_ON_STARTUP is an in-app pref and is intentionally not required.
         $notificationsOk = Test-DiscordToastsOff
-        $windowsQuietOk = $startupOk -and $notificationsOk -and
-            (Test-StableDiscordWindowsQuiet $discordRoot)
-        Add-Feature 'Windows background suppression' 'No Discord autostart or scheduled tasks; Windows toasts off; tray icon not promoted.' $windowsQuietOk
+        $windowsQuietOk = $notificationsOk -and (Test-StableDiscordWindowsQuiet $discordRoot)
+        Add-Feature 'Windows background suppression' 'No Discord autostart or scheduled tasks; Windows toasts off; tray icon not promoted. Discord in-app notification/audio/motion prefs are left alone.' $windowsQuietOk
 
         $launchOk = $false
         try {

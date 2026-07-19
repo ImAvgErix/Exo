@@ -11,7 +11,8 @@ param(
     [switch]$Quick,
     [switch]$Repair,
     [switch]$NonInteractive,
-    [switch]$NoLaunch
+    [switch]$NoLaunch,
+    [switch]$Experimental
 )
 
 $ErrorActionPreference = 'Stop'
@@ -1857,6 +1858,9 @@ function Install-WebHelperMemoryGuard([string]$SteamPath) {
     # EmptyWorkingSet is banned (freezes CEF). Soft reclaim (SetProcessWorkingSetSize -1,-1)
     # runs on every NON-FOREGROUND steamwebhelper (library + in-game). EcoQoS/very-low
     # memory priority still tighten harder while a game runs. Never touches game processes.
+    # Experimental: tighter soft-reclaim loop (1s in-game / 2s library vs 2s/3s).
+    $sleepGame = if ($Experimental) { 1 } else { 2 }
+    $sleepIdle = if ($Experimental) { 2 } else { 3 }
     $helper = Join-Path $SteamPath 'Exo-SteamMemoryGuard.ps1'
     $body = @'
 # Exo - Steam memory + contention guard (v3).
@@ -2014,8 +2018,8 @@ try {
     Set-SteamClientPriority -InGame:$inGame
     $ticks++
     if (($ticks % 15) -eq 0) { Reinstate-SteamQuiet }
-    # Tight loop: 2s in-game, 3s library (soft reclaim stays active either way).
-    if ($inGame) { Start-Sleep -Seconds 2 } else { Start-Sleep -Seconds 3 }
+    # Tight loop: experimental uses faster soft-reclaim cadence (literals injected below).
+    if ($inGame) { Start-Sleep -Seconds __EXO_SLEEP_GAME__ } else { Start-Sleep -Seconds __EXO_SLEEP_IDLE__ }
   }
 } finally {
   Get-Process -Name 'steamwebhelper' -ErrorAction SilentlyContinue | ForEach-Object {
@@ -2028,10 +2032,12 @@ try {
   $mutex.Dispose()
 }
 '@
+    $body = $body.Replace('__EXO_SLEEP_GAME__', [string]$sleepGame).Replace('__EXO_SLEEP_IDLE__', [string]$sleepIdle)
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
     $oldHelper = Join-Path $SteamPath 'Exo-SteamWebHelperTrim.ps1'
     if (Test-Path -LiteralPath $oldHelper) { Remove-Item -LiteralPath $oldHelper -Force -ErrorAction SilentlyContinue }
-    Write-Ok 'Steam memory + contention guard v3 (soft reclaim non-foreground CEF always; EcoQoS harder in-game)'
+    $mode = if ($Experimental) { 'experimental cadence' } else { 'stable cadence' }
+    Write-Ok "Steam memory + contention guard v3 (soft reclaim; EcoQoS in-game; $mode)"
     return $helper
 }
 

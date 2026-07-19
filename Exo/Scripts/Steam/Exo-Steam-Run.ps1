@@ -2,7 +2,8 @@
 param(
     [switch]$Quick,
     [switch]$NonInteractive,
-    [switch]$Repair
+    [switch]$Repair,
+    [switch]$Experimental
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,6 +53,7 @@ if (-not $Quick -and -not $Repair) {
 $runArgs = @()
 if ($Quick) { $runArgs += '-Quick' }
 if ($Repair) { $runArgs += '-Repair' }
+if ($Experimental) { $runArgs += '-Experimental'; Write-Output '[*] Experimental apply mode' }
 $runArgs += '-NonInteractive'
 $runArgs += '-NoLaunch'
 

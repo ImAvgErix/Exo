@@ -1,0 +1,169 @@
+{
+  "_legacy_windows": [
+    {
+      "height": 1080,
+      "is_on_screen": true,
+      "minimized": false,
+      "pid": 8372,
+      "title": "Γá╕ - List windows via Cua for ExoΓÇª - Optimize Exo-Final-Master-Prompt-v2 BeyoΓÇª - grok",
+      "width": 1920,
+      "window_id": 7472776,
+      "x": 1920,
+      "y": 0
+    },
+    {
+      "height": 28,
+      "is_on_screen": false,
+      "minimized": true,
+      "pid": 14284,
+      "title": "VALORANT  ",
+      "width": 160,
+      "window_id": 1246652,
+      "x": -32000,
+      "y": -32000
+    },
+    {
+      "height": 793,
+      "is_on_screen": true,
+      "minimized": false,
+      "pid": 10616,
+      "title": "Exo",
+      "width": 1186,
+      "window_id": 8586698,
+      "x": 367,
+      "y": 140
+    },
+    {
+      "height": 1080,
+      "is_on_screen": true,
+      "minimized": false,
+      "pid": 8484,
+      "title": "Cua.AgentCursorOverlay.default",
+      "width": 3840,
+      "window_id": 23462634,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "height": 779,
+      "is_on_screen": true,
+      "minimized": false,
+      "pid": 8528,
+      "title": "ui",
+      "width": 1184,
+      "window_id": 62588438,
+      "x": 368,
+      "y": 153
+    },
+    {
+      "height": 1080,
+      "is_on_screen": true,
+      "minimized": false,
+      "pid": 3412,
+      "title": "Program Manager",
+      "width": 3840,
+      "window_id": 65772,
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "current_space_id": null,
+  "windows": [
+    {
+      "app_name": "WindowsTerminal.exe",
+      "bounds": {
+        "height": 1080,
+        "width": 1920,
+        "x": 1920,
+        "y": 0
+      },
+      "is_on_screen": true,
+      "layer": 0,
+      "minimized": false,
+      "pid": 8372,
+      "title": "Γá╕ - List windows via Cua for ExoΓÇª - Optimize Exo-Final-Master-Prompt-v2 BeyoΓÇª - grok",
+      "window_id": 7472776,
+      "z_index": 5
+    },
+    {
+      "app_name": "VALORANT-Win64-Shipping.exe",
+      "bounds": {
+        "height": 28,
+        "width": 160,
+        "x": -32000,
+        "y": -32000
+      },
+      "is_on_screen": false,
+      "layer": 0,
+      "minimized": true,
+      "pid": 14284,
+      "title": "VALORANT  ",
+      "window_id": 1246652,
+      "z_index": 4
+    },
+    {
+      "app_name": "Exo.exe",
+      "bounds": {
+        "height": 793,
+        "width": 1186,
+        "x": 367,
+        "y": 140
+      },
+      "is_on_screen": true,
+      "layer": 0,
+      "minimized": false,
+      "pid": 10616,
+      "title": "Exo",
+      "window_id": 8586698,
+      "z_index": 3
+    },
+    {
+      "app_name": "cua-driver.exe",
+      "bounds": {
+        "height": 1080,
+        "width": 3840,
+        "x": 0,
+        "y": 0
+      },
+      "is_on_screen": true,
+      "layer": 0,
+      "minimized": false,
+      "pid": 8484,
+      "title": "Cua.AgentCursorOverlay.default",
+      "window_id": 23462634,
+      "z_index": 2
+    },
+    {
+      "app_name": "msedgewebview2.exe",
+      "bounds": {
+        "height": 779,
+        "width": 1184,
+        "x": 368,
+        "y": 153
+      },
+      "is_on_screen": true,
+      "layer": 0,
+      "minimized": false,
+      "pid": 8528,
+      "title": "ui",
+      "window_id": 62588438,
+      "z_index": 1
+    },
+    {
+      "app_name": "explorer.exe",
+      "bounds": {
+        "height": 1080,
+        "width": 3840,
+        "x": 0,
+        "y": 0
+      },
+      "is_on_screen": true,
+      "layer": 0,
+      "minimized": false,
+      "pid": 3412,
+      "title": "Program Manager",
+      "window_id": 65772,
+      "z_index": 0
+    }
+  ]
+}

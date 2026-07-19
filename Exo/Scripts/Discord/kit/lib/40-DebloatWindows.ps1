@@ -806,7 +806,9 @@ function Remove-DiscordExtraSpellcheckDictionaries([ref]$Freed) {
 }
 
 function Set-DiscordVariantQuiet {
-    # PTB / Canary quiet pass: host boot flags + no autostart + safe caches.
+    # PTB / Canary: Windows autostart off + host/chromium lean merge only.
+    # Same in-app preserve policy as stable — never stomp audio, tray, startup,
+    # reduced-motion, or Discord notification prefs.
     # Equicord / DiscOpt kernel stay stable-only by design (test channels update
     # frequently; module layout is not guaranteed). QoS policies are applied per
     # variant by Set-DiscordVoiceQosPolicies.
@@ -820,39 +822,22 @@ function Set-DiscordVariantQuiet {
         try {
             $variantAppData = Get-DiscOptEnvPath 'APPDATA' ([string]$variant.AppDataDir)
             $settingsPath = Join-Path $variantAppData 'settings.json'
-            $merged = @{}
+            # Reuse stable host-only merge (preserves all user Discord prefs).
+            Apply-DiscordProfile $settingsPath
+            # Variants keep host update checks on (no Equicord pipeline on PTB/Canary).
             if (Test-Path -LiteralPath $settingsPath) {
                 try {
                     $merged = ConvertTo-HashtableDeep (Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json)
-                } catch { $merged = @{} }
+                    $merged['SKIP_HOST_UPDATE'] = $false
+                    if (-not (Test-Path -LiteralPath $variantAppData)) {
+                        New-Item -ItemType Directory -Path $variantAppData -Force | Out-Null
+                    }
+                    attrib -R $settingsPath 2>$null
+                    Write-JsonFile $settingsPath $merged 20
+                } catch { }
             }
-            $merged['OPEN_ON_STARTUP'] = $false
-            $merged['MINIMIZE_TO_TRAY'] = $true
-            $merged['SKIP_HOST_UPDATE'] = $false
-            $merged['DESKTOP_TTI_EARLY_UPDATE_CHECK'] = $false
-            $merged['DESKTOP_TTI_DNSTCP_WARMUP'] = $true
-            $merged['DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR'] = $true
-            $merged['DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS'] = 2000
-            $merged.chromiumSwitches = @{
-                'disable-breakpad'                        = 1
-                'disable-crash-reporter'                  = 1
-                'disable-domain-reliability'              = 1
-                'disable-logging'                         = 1
-                'disable-component-update'                = 1
-                'disable-background-networking'           = 1
-                'no-pings'                                = 1
-                'disable-renderer-backgrounding'          = 1
-                'disable-backgrounding-occluded-windows'  = 1
-                'disable-background-timer-throttling'     = 1
-                'disable-hang-monitor'                    = 1
-            }
-            if (-not (Test-Path -LiteralPath $variantAppData)) {
-                New-Item -ItemType Directory -Path $variantAppData -Force | Out-Null
-            }
-            if (Test-Path -LiteralPath $settingsPath) { attrib -R $settingsPath 2>$null }
-            Write-JsonFile $settingsPath $merged 20
             $flagsOk = $true
-            Write-Ok "$name settings.json flags applied (startup off, chromium lean)"
+            Write-Ok "$name host flags merged (in-app audio/notifications/tray prefs untouched)"
         } catch {
             Write-Warn "$name settings.json: $($_.Exception.Message)"
         }
@@ -903,8 +888,8 @@ function Test-DiscordWindowsSuppression {
     } catch { return $false }
 }
 function Apply-WindowsTweaks([string]$AppDir) {
-    # Ownership: Discord-scoped Windows integration only (not a future Windows module).
-    # See docs/WINDOWS-OWNERSHIP.md — Windows module must skip these keys if already verified.
+    # Windows-shell quiet + GPU/FSO/QoS. Does NOT rewrite Discord in-app settings
+    # (audio, reduced motion, notification prefs live in Local Storage / settings UI).
     Write-Step 'Applying Windows tweaks (notifications, tray, startup, GPU, QoS)...'
     Disable-DiscordWindowsAutostart
     Disable-DiscordScheduledTasks
@@ -913,7 +898,7 @@ function Apply-WindowsTweaks([string]$AppDir) {
     Set-DiscordGpuHighPerformance $AppDir
     Set-DiscordFullscreenOptimizationsOff $AppDir
     [void](Set-DiscordVoiceQosPolicies)
-    Write-Ok 'Windows tweaks applied (toasts OFF, tray hidden, no autostart, GPU high-perf, voice QoS)'
+    Write-Ok 'Windows tweaks applied (OS toasts/tray/autostart; Discord in-app prefs untouched)'
 }
 
 function Test-ExoHasDiscreteGpu {
@@ -1062,7 +1047,12 @@ function Get-DiscOptPowerShellExe {
 }
 
 function Apply-DiscordProfile([string]$DestPath = '') {
-    Write-Step 'Applying boot/optimizer flags (preserving your in-app settings)...'
+    # Host/chromium lean merge ONLY.
+    # NEVER rewrite Discord in-app prefs: audio (audioSubsystem, useLegacyAudioDevice,
+    # offloadAdmControls, asyncVideo*), OPEN_ON_STARTUP, MINIMIZE_TO_TRAY, window geometry,
+    # BACKGROUND_COLOR, or anything stored in Local Storage (reduced motion, notification
+    # channel settings). Windows quiet (OS toasts) is Apply-WindowsTweaks — separate path.
+    Write-Step 'Merging host flags only (your Discord settings stay intact)...'
     if ([string]::IsNullOrWhiteSpace($DestPath)) {
         $DestPath = Join-Path $AppData 'settings.json'
     }
@@ -1071,50 +1061,57 @@ function Apply-DiscordProfile([string]$DestPath = '') {
 
     $kit = ConvertTo-HashtableDeep (Get-Content $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json)
     $merged = @{}
+    $snapshotUser = @{}
     if (Test-Path $DestPath) {
         try {
             $merged = ConvertTo-HashtableDeep (Get-Content $DestPath -Raw -Encoding UTF8 | ConvertFrom-Json)
-        } catch {}
+            # Snapshot in-app prefs so we can restore if anything clobbers them.
+            foreach ($k in @(
+                'audioSubsystem', 'useLegacyAudioDevice', 'offloadAdmControls',
+                'asyncVideoInputDeviceInit', 'OPEN_ON_STARTUP', 'MINIMIZE_TO_TRAY',
+                'START_MINIMIZED', 'IS_MAXIMIZED', 'IS_MINIMIZED', 'BACKGROUND_COLOR'
+            )) {
+                if ($merged.ContainsKey($k)) { $snapshotUser[$k] = $merged[$k] }
+            }
+        } catch {
+            Write-Warn 'Could not parse existing settings.json - starting from empty merge'
+            $merged = @{}
+        }
     }
 
-    # Strip noisy/debug keys Discord or older kits may leave behind.
+    # Strip only known-broken kit leftovers — never user prefs.
     foreach ($drop in @(
         'DANGEROUS_ENABLE_DEVTOOLS_ONLY_ENABLE_IF_YOU_KNOW_WHAT_YOURE_DOING',
-        'devTools',
-        'OPENASAR_HARDCODED'
+        'OPENASAR_HARDCODED',
+        'openasar',
+        '_comment'
     )) {
         if ($merged.ContainsKey($drop)) { $merged.Remove($drop) }
     }
 
-    # Kit keys we may stamp - do NOT force hardware acceleration or BACKGROUND_COLOR.
-    # Equicord themes handle dark/AMOLED (not OpenAsar CSS).
-    $allowed = @(
-        'SKIP_HOST_UPDATE', 'OPEN_ON_STARTUP', 'MINIMIZE_TO_TRAY', 'START_MINIMIZED',
-        'IS_MAXIMIZED', 'IS_MINIMIZED', 'debugLogging', 'offloadAdmControls',
-        'asyncVideoInputDeviceInit', 'DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR',
-        'DESKTOP_TTI_DNSTCP_WARMUP', 'DESKTOP_TTI_EARLY_UPDATE_CHECK',
+    # Explicit allow-list. Kit file may contain docs-only keys; never bulk-copy kit.
+    $hostOnly = @(
+        'SKIP_HOST_UPDATE',
+        'debugLogging',
+        'DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR',
+        'DESKTOP_TTI_DNSTCP_WARMUP',
+        'DESKTOP_TTI_EARLY_UPDATE_CHECK',
         'DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS',
-        'audioSubsystem', 'useLegacyAudioDevice'
+        'DESKTOP_TTI_SPLASH_USE_WEBP'
     )
-    foreach ($key in $allowed) {
-        if ($kit.Keys -contains $key) { $merged[$key] = $kit[$key] }
+    foreach ($key in $hostOnly) {
+        if ($kit.Keys -contains $key -and $key -ne '_comment') { $merged[$key] = $kit[$key] }
     }
-    # Leave enableHardwareAcceleration alone (Discord default = on). Remove forced false from old kits.
-    if ($merged.Keys -contains 'enableHardwareAcceleration' -and $merged['enableHardwareAcceleration'] -eq $false) {
-        if (-not ($kit.Keys -contains 'enableHardwareAcceleration')) {
-            $merged.Remove('enableHardwareAcceleration')
-            Write-LogLine 'OK' 'Hardware acceleration left at Discord default (not forced off)'
-        }
+    $merged['DESKTOP_TTI_EARLY_UPDATE_CHECK'] = $false
+    $merged['DESKTOP_TTI_DNSTCP_WARMUP'] = $true
+    $merged['DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR'] = $true
+    if (-not ($merged.Keys -contains 'DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS')) {
+        $merged['DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS'] = 2000
     }
+    $merged['debugLogging'] = $false
 
-    # Exo Host chromium lean (safe; no single-process / sandbox kills).
-    # disable-background-timer-throttling: keep JS timers full-rate when the
-    # window is hidden (voice/notification latency; real Chromium switch).
-    # disable-hang-monitor: no "page unresponsive" watchdog dialogs (real switch;
-    # UI-only watchdog, no renderer behavior change).
-    # FORBIDDEN here (documented client blanking): single-process, disable-gpu,
-    # disable-software-rasterizer, disable-gpu-compositing, in-process-gpu.
-    $merged.chromiumSwitches = @{
+    # Merge chromium switches — never wipe user's extra switches.
+    $leanSwitches = @{
         'disable-breakpad'                        = 1
         'disable-crash-reporter'                  = 1
         'disable-domain-reliability'              = 1
@@ -1127,30 +1124,25 @@ function Apply-DiscordProfile([string]$DestPath = '') {
         'disable-background-timer-throttling'     = 1
         'disable-hang-monitor'                    = 1
     }
-    # Drop legacy OpenAsar settings block - Equicord NoTrack/SilentTyping cover that surface.
-    if ($merged.Keys -contains 'openasar') { $merged.Remove('openasar') }
+    $existingSw = @{}
+    if ($merged.Keys -contains 'chromiumSwitches' -and $merged['chromiumSwitches']) {
+        try { $existingSw = ConvertTo-HashtableDeep $merged['chromiumSwitches'] } catch { $existingSw = @{} }
+    }
+    foreach ($k in $leanSwitches.Keys) { $existingSw[$k] = $leanSwitches[$k] }
+    $merged['chromiumSwitches'] = $existingSw
 
-    # Stable boot flags (Equicord AMOLED theme owns look)
-    $merged['DESKTOP_TTI_EARLY_UPDATE_CHECK'] = $false
-    $merged['DESKTOP_TTI_DNSTCP_WARMUP'] = $true
-    $merged['DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR'] = $true
-    $merged['DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS'] = 2000
-    $merged['audioSubsystem'] = 'standard'
-    $merged['useLegacyAudioDevice'] = $false
-    $merged['asyncVideoInputDeviceInit'] = $false
-    $merged['debugLogging'] = $false
-    $merged['OPEN_ON_STARTUP'] = $false
+    # Never force host-update skip until modules are healthy.
     $merged['SKIP_HOST_UPDATE'] = $true
-    $merged['MINIMIZE_TO_TRAY'] = $true
-    if ($merged.Keys -contains 'BACKGROUND_COLOR') { $merged.Remove('BACKGROUND_COLOR') }
-
-    # Never force host-update skip until modules are healthy - SKIP_HOST_UPDATE=true
-    # with a broken installer.db freezes Discord on "Starting...".
     $activeForSkip = Get-ActiveApp
     if (-not $activeForSkip -or -not (Test-DiscordModulesReady $activeForSkip.FullName)) {
         $merged['SKIP_HOST_UPDATE'] = $false
         Write-LogLine 'OK' 'SKIP_HOST_UPDATE left false until modules are healthy'
     }
+
+    # Belt-and-suspenders: restore any in-app prefs that existed before merge.
+    foreach ($k in @($snapshotUser.Keys)) { $merged[$k] = $snapshotUser[$k] }
+
+    Write-Ok 'Host flags merged (audio / reduced-motion / in-app notifications / tray / startup untouched)'
 
     $dir = Split-Path $DestPath -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
