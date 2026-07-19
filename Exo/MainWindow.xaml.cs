@@ -256,18 +256,22 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    /// <summary>Windows 11 shell contract: normal resize/maximize with a safe minimum.</summary>
+    // Fixed shell: one designed canvas so dashboard + modules never reflow mid-session.
+    private const int FixedWindowWidth = 1120;
+    private const int FixedWindowHeight = 720;
+
+    /// <summary>Fixed non-resizable frame — UI is authored to this size.</summary>
     private void ApplyResponsiveWindowChrome()
     {
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.IsMaximizable = true;
-            presenter.IsResizable = true;
+            presenter.IsMaximizable = false;
+            presenter.IsResizable = false;
             presenter.IsMinimizable = true;
-            presenter.PreferredMinimumWidth = 960;
-            presenter.PreferredMinimumHeight = 600;
-            presenter.PreferredMaximumWidth = null;
-            presenter.PreferredMaximumHeight = null;
+            presenter.PreferredMinimumWidth = FixedWindowWidth;
+            presenter.PreferredMinimumHeight = FixedWindowHeight;
+            presenter.PreferredMaximumWidth = FixedWindowWidth;
+            presenter.PreferredMaximumHeight = FixedWindowHeight;
         }
     }
 
@@ -275,11 +279,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var display = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
-            var work = display?.WorkArea;
-            var width = work is null ? 1180 : Math.Min(1180, Math.Max(640, work.Value.Width - 32));
-            var height = work is null ? 760 : Math.Min(760, Math.Max(480, work.Value.Height - 32));
-            AppWindow.Resize(new SizeInt32(width, height));
+            AppWindow.Resize(new SizeInt32(FixedWindowWidth, FixedWindowHeight));
         }
         catch { }
     }

@@ -190,6 +190,8 @@ if (File.Exists(appXaml) && File.Exists(colorTokens) && File.Exists(typeTokens) 
     var metrics = File.ReadAllText(metricTokens);
     Expect("dark page token", colors.Contains("<Color x:Key=\"ExoColorPage\">#000000</Color>", StringComparison.Ordinal));
     Expect("stone white primary token", colors.Contains("<Color x:Key=\"ExoColorPrimaryText\">#F2F2F0</Color>", StringComparison.Ordinal));
+    Expect("riot brand red", colors.Contains("<Color x:Key=\"ExoColorRiot\">#FF4655</Color>", StringComparison.Ordinal));
+    Expect("discord brand blurple", colors.Contains("<Color x:Key=\"ExoColorDiscord\">#5865F2</Color>", StringComparison.Ordinal));
     Expect("light theme removed", !colors.Contains("x:Key=\"Light\"", StringComparison.Ordinal)
         && !a.Contains("x:Key=\"Light\"", StringComparison.Ordinal));
     Expect("High Contrast dictionary", colors.Contains("x:Key=\"HighContrast\"", StringComparison.Ordinal)
@@ -304,10 +306,12 @@ if (File.Exists(mainCs))
 {
     var cs = File.ReadAllText(mainCs);
     Expect("SetTitleBar control", cs.Contains("SetTitleBar(AppTitleBar)", StringComparison.Ordinal));
-    Expect("responsive shell maximize", cs.Contains("IsMaximizable = true", StringComparison.Ordinal));
-    Expect("responsive shell resize", cs.Contains("IsResizable = true", StringComparison.Ordinal)
-        && cs.Contains("PreferredMinimumWidth = 960", StringComparison.Ordinal)
-        && cs.Contains("PreferredMinimumHeight = 600", StringComparison.Ordinal));
+    Expect("fixed shell size", cs.Contains("IsResizable = false", StringComparison.Ordinal)
+        && cs.Contains("IsMaximizable = false", StringComparison.Ordinal)
+        && cs.Contains("FixedWindowWidth", StringComparison.Ordinal)
+        && cs.Contains("FixedWindowHeight", StringComparison.Ordinal)
+        && cs.Contains("1120", StringComparison.Ordinal)
+        && cs.Contains("720", StringComparison.Ordinal));
     Expect("rail selection helper", cs.Contains("UpdateRailSelection", StringComparison.Ordinal));
     Expect("settings always on rail",
         cs.Contains("SettingsButton.Visibility = Visibility.Visible", StringComparison.Ordinal)

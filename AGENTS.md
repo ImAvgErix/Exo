@@ -18,7 +18,7 @@ Aggressive must still be deterministic: scope actions to the selected applicatio
 
 ## Shell UI (current overhaul contract)
 
-- **Responsive frame** opens near 1180×760, resizes/maximizes, preferred minimum 960×600, clamps to the active work area, and centers content up to 1120px
+- **Fixed frame** is **1120×720**, non-resizable and non-maximizable so the UI is authored to one canvas (minimize still works)
 - **Dark-only** pure black canvas + crisp opaque lifted surfaces; Windows High Contrast remains an accessibility mode, not a second product theme
 - **Workspace** = full-width **top bar** + content stage that fills the rest of the frame
 - **Navigation** = top chrome: **EXO pill** (home + settings) left · modules centered · caption buttons right — **not** WinUI `NavigationView`, **not** a left sidebar
