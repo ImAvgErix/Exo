@@ -3,8 +3,6 @@
 Private, reversible Windows 11 optimization for Internet, NVIDIA, Discord,
 Steam, Riot, and Epic.
 
-![Exo glass home](docs/exo-shell.png)
-
 Exo detects the current PC before it changes anything. Each module has one
 primary **Apply**, a detector that explains the active policy, and a **Repair**
 path that restores the captured pre-Exo state. The app is dark-only, local-first,
