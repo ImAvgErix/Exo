@@ -15,7 +15,7 @@ using Microsoft.Win32;
 namespace Exo.Services;
 
 /// <summary>
-/// Full-stack Windows network optimizer — SG TCP Optimizer–class and beyond
+/// Full-stack Windows network optimizer - SG TCP Optimizer-class and beyond
 /// (TCP/IP, AFD, DNS, QoS, multimedia throttle, NIC advanced, power, Wi‑Fi, DO).
 /// Presets: LowestLatency (gaming) vs HighestThroughput (downloads) vs Balanced.
 /// Safe across Ethernet / Wi‑Fi / multi-NIC; missing properties are skipped.
@@ -90,6 +90,43 @@ public sealed class NetworkOptimizerService
         return NetworkPreset.Balanced;
     }
 
+    /// <summary>
+    /// User-selected policy for Analyze &amp; Apply. Defaults to lowest latency
+    /// (gaming default). Independent of last applied preset until Apply runs.
+    /// </summary>
+    public NetworkPreset LoadPreferredPolicy()
+    {
+        try
+        {
+            if (!File.Exists(StatePath)) return NetworkPreset.LowestLatency;
+            using var doc = JsonDocument.Parse(File.ReadAllText(StatePath));
+            if (doc.RootElement.TryGetProperty("preferredPolicy", out var p) &&
+                Enum.TryParse<NetworkPreset>(p.GetString(), true, out var preferred) &&
+                preferred is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput)
+                return preferred;
+            // Fall back to last applied non-balanced preset when preference was never saved.
+            if (doc.RootElement.TryGetProperty("preset", out var applied) &&
+                Enum.TryParse<NetworkPreset>(applied.GetString(), true, out var preset) &&
+                preset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput)
+                return preset;
+        }
+        catch { }
+        return NetworkPreset.LowestLatency;
+    }
+
+    public void SavePreferredPolicy(NetworkPreset preferred)
+    {
+        if (preferred is not (NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput))
+            preferred = NetworkPreset.LowestLatency;
+        try
+        {
+            var state = LoadStateObject();
+            state["preferredPolicy"] = preferred.ToString();
+            SaveStateObject(state);
+        }
+        catch { }
+    }
+
     public void SavePreset(NetworkPreset preset, NetworkApplyOptions? options = null)
     {
         try
@@ -97,6 +134,9 @@ public sealed class NetworkOptimizerService
             // Merge-write: keep benchmark / report / rollback keys intact across preset saves.
             var state = LoadStateObject();
             state["preset"] = preset.ToString();
+            state["preferredPolicy"] = preset is NetworkPreset.HighestThroughput
+                ? NetworkPreset.HighestThroughput.ToString()
+                : NetworkPreset.LowestLatency.ToString();
             state["appliedUtc"] = DateTime.UtcNow.ToString("o");
             // Metrics-only prefer-ethernet flag (Wi-Fi is never disabled as of 2.6.6+).
             // Default false matches NetworkApplyOptions and InternetOptimizerViewModel.
@@ -107,7 +147,7 @@ public sealed class NetworkOptimizerService
     }
 
     /// <summary>
-    /// Last apply chose Ethernet-first metrics (Wi-Fi stays enabled). Default false —
+    /// Last apply chose Ethernet-first metrics (Wi-Fi stays enabled). Default false -
     /// never treat missing state as "Wi-Fi should be down".
     /// </summary>
     public bool LoadPreferEthernetDisableWifi()
@@ -152,7 +192,7 @@ public sealed class NetworkOptimizerService
         var hadSnapshot = HasRestoreSnapshot();
         progress?.Report(hadSnapshot
             ? "Preparing repair (exact restore from pre-apply snapshot)..."
-            : "Preparing repair (stock network stack — no snapshot found)...");
+            : "Preparing repair (stock network stack - no snapshot found)...");
         var script = NetworkApplyScriptBuilder.BuildRepair();
         var path = Path.Combine(Path.GetTempPath(), $"exo-net-repair-{Guid.NewGuid():N}.ps1");
         await File.WriteAllTextAsync(path, script, ct).ConfigureAwait(false);
@@ -187,7 +227,7 @@ public sealed class NetworkOptimizerService
             if (hadSnapshot && HasRestoreSnapshot())
             {
                 // Snapshot kept = script recorded restore failures; be honest, allow retry.
-                return (true, "Repair ran, but some values could not be restored exactly — the snapshot was kept so you can retry Repair. Adapters were re-enabled; reboot if the link stays down.");
+                return (true, "Repair ran, but some values could not be restored exactly - the snapshot was kept so you can retry Repair. Adapters were re-enabled; reboot if the link stays down.");
             }
             return (true, hadSnapshot
                 ? "Network restored to the exact pre-Exo state from the snapshot. Adapters re-enabled; snapshot cleared."
@@ -359,7 +399,7 @@ public sealed class NetworkOptimizerService
                 UploadLoadedJitterMs = Math.Round(upJitter, 2),
                 PacketLossPercent = Math.Round(packetLoss, 2),
                 DataUsedMb = Math.Round((down.Bytes + up.Bytes) / 1024d / 1024d, 1),
-                Endpoint = $"Cloudflare throughput · {latencyTarget} latency",
+                Endpoint = $"Cloudflare throughput - {latencyTarget} latency",
                 ParallelStreams = streams,
                 TransferSeconds = transferDuration.TotalSeconds,
                 LinkSpeedMbps = Math.Round(linkMbps, 0),
@@ -774,15 +814,15 @@ public sealed class NetworkOptimizerService
     public async Task<NetworkSnapshot> ProbeAsync(CancellationToken ct = default)
     {
         var features = new List<NetworkFeatureRow>();
-        string adapterName = "—", adapterDesc = "—", linkSpeed = "—", connType = "Unknown";
-        string ipv4 = "—", gateway = "—", dns = "—", mtu = "—";
+        string adapterName = "-", adapterDesc = "-", linkSpeed = "-", connType = "Unknown";
+        string ipv4 = "-", gateway = "-", dns = "-", mtu = "-";
         bool? taskOffloadDisabled = null, lso = null, rsc = null;
-        string autoTuning = "—", congestion = "—";
+        string autoTuning = "-", congestion = "-";
         string rssPolicy = "Not applicable", packetCoalescing = "Unsupported";
         var rssPolicyOk = true;
         var packetCoalescingOk = true;
         int? gwPing = null, netPing = null;
-        string publicIp = "—", provider = "—", area = "—";
+        string publicIp = "-", provider = "-", area = "-";
         var detail = string.Empty;
         var probeOk = true;
 
@@ -819,10 +859,10 @@ public sealed class NetworkOptimizerService
                 dns = string.Join(", ", ipProps.DnsAddresses
                     .Where(d => d.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
                     .Select(d => d.ToString()));
-                if (string.IsNullOrWhiteSpace(dns)) dns = "—";
+                if (string.IsNullOrWhiteSpace(dns)) dns = "-";
 
-                try { mtu = ipProps.GetIPv4Properties()?.Mtu.ToString() ?? "—"; }
-                catch { mtu = "—"; }
+                try { mtu = ipProps.GetIPv4Properties()?.Mtu.ToString() ?? "-"; }
+                catch { mtu = "-"; }
             }
             else
             {
@@ -842,50 +882,78 @@ public sealed class NetworkOptimizerService
             }
             catch { }
 
-            // Live NIC policy: only gate applied Ethernet presets. Unsupported
-            // driver properties are honest N/A, not a false failure.
+            // Live NIC policy: only annotate applied Ethernet presets.
+            // Many multi-gig NICs (Realtek etc.) have no MSFT_NetAdapterRssSettingData -
+            // that is N/A soft-ok, not a failed optimize.
             if (connType == "Ethernet" && activePreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput)
             {
                 try
                 {
                     var nicPolicy = await RunCaptureAsync(
                         "powershell",
-                        "-NoProfile -Command \"$n=(Get-NetAdapter -Physical -EA 0|? Status -eq 'Up'|? NdisPhysicalMedium -notmatch 'Wireless'|select -First 1 -Expand Name); if($n){$r=Get-NetAdapterRss -Name $n -EA 0;$p=Get-NetAdapterPowerManagement -Name $n -EA 0;'rss='+$r.Enabled+';hash='+$r.IPv4HashEnabled+';array='+$r.RssProcessorArraySize+';profile='+$r.Profile+';base='+$r.BaseProcessorNumber+';max='+$r.MaxProcessors+';queues='+$r.NumberOfReceiveQueues+';d0='+$p.D0PacketCoalescing}\"",
+                        "-NoProfile -Command \"$n=(Get-NetAdapter -Physical -EA 0|? Status -eq 'Up'|? NdisPhysicalMedium -notmatch 'Wireless'|select -First 1 -Expand Name); if(-not $n){ 'none=1'; exit }; $r=$null; try { $r=Get-NetAdapterRss -Name $n -EA Stop } catch { 'rssMissing=1;' }; $p=Get-NetAdapterPowerManagement -Name $n -EA 0; if($r){ 'rss='+$r.Enabled+';hash='+$r.IPv4HashEnabled+';array='+$r.RssProcessorArraySize+';profile='+$r.Profile+';base='+$r.BaseProcessorNumber+';max='+$r.MaxProcessors+';queues='+$r.NumberOfReceiveQueues } else { 'rss=;hash=;array=;profile=;base=;max=;queues=' }; ';d0=' + $(if($p){$p.D0PacketCoalescing}else{'Unsupported'})\"",
                         ct).ConfigureAwait(false);
-                    var enabled = Match(nicPolicy, @"rss=([^;]+)") ?? "False";
-                    var hashEnabled = Match(nicPolicy, @"hash=([^;]+)") ?? "False";
-                    var processorArray = Match(nicPolicy, @"array=([^;]+)") ?? "0";
-                    var profile = Match(nicPolicy, @"profile=([^;]+)") ?? "—";
-                    var baseProcessor = Match(nicPolicy, @"base=([^;]+)") ?? "—";
-                    var maxProcessors = Match(nicPolicy, @"max=([^;]+)") ?? "—";
-                    var queues = Match(nicPolicy, @"queues=([^;]+)") ?? "—";
+
                     packetCoalescing = Match(nicPolicy, @"d0=([^;\r\n]+)") ?? "Unsupported";
-                    var expectedProfile = latency ? "Closest" : "NUMAStatic";
-                    var rssEffective = enabled.Equals("True", StringComparison.OrdinalIgnoreCase) ||
-                                       hashEnabled.Equals("True", StringComparison.OrdinalIgnoreCase) ||
-                                       (int.TryParse(processorArray, out var arraySize) && arraySize > 0);
-                    rssPolicyOk = rssEffective &&
-                                  profile.Equals(expectedProfile, StringComparison.OrdinalIgnoreCase) &&
-                                  (Environment.ProcessorCount < 4 || baseProcessor == "2");
-                    rssPolicy = $"{profile} · base {baseProcessor} · {maxProcessors} CPU / {queues} queue";
                     packetCoalescingOk = packetCoalescing.Equals("Disabled", StringComparison.OrdinalIgnoreCase) ||
                                          packetCoalescing.Equals("Unsupported", StringComparison.OrdinalIgnoreCase);
+
+                    if (nicPolicy.Contains("rssMissing=1", StringComparison.OrdinalIgnoreCase) ||
+                        nicPolicy.Contains("none=1", StringComparison.OrdinalIgnoreCase))
+                    {
+                        rssPolicyOk = true;
+                        rssPolicy = "Not exposed by this NIC (host offloads still apply)";
+                    }
+                    else
+                    {
+                        var enabled = Match(nicPolicy, @"rss=([^;]*)") ?? "False";
+                        var hashEnabled = Match(nicPolicy, @"hash=([^;]*)") ?? "False";
+                        var processorArray = Match(nicPolicy, @"array=([^;]*)") ?? "0";
+                        var profile = Match(nicPolicy, @"profile=([^;]*)") ?? "-";
+                        if (string.IsNullOrWhiteSpace(profile)) profile = "-";
+                        var baseProcessor = Match(nicPolicy, @"base=([^;]*)") ?? "-";
+                        if (string.IsNullOrWhiteSpace(baseProcessor)) baseProcessor = "-";
+                        var maxProcessors = Match(nicPolicy, @"max=([^;]*)") ?? "-";
+                        var queues = Match(nicPolicy, @"queues=([^;]*)") ?? "-";
+                        var expectedProfile = latency ? "Closest" : "NUMAStatic";
+                        var rssEffective = enabled.Equals("True", StringComparison.OrdinalIgnoreCase) ||
+                                           hashEnabled.Equals("True", StringComparison.OrdinalIgnoreCase) ||
+                                           (int.TryParse(processorArray, out var arraySize) && arraySize > 0);
+                        if (!rssEffective)
+                        {
+                            rssPolicyOk = true;
+                            rssPolicy = "Not exposed by this NIC (host offloads still apply)";
+                        }
+                        else
+                        {
+                            // Live RSS: accept any known profile; base pin is best-effort.
+                            var profileOk =
+                                profile.Equals(expectedProfile, StringComparison.OrdinalIgnoreCase) ||
+                                profile.Equals("Closest", StringComparison.OrdinalIgnoreCase) ||
+                                profile.Equals("NUMAStatic", StringComparison.OrdinalIgnoreCase) ||
+                                profile.Equals("Conservative", StringComparison.OrdinalIgnoreCase);
+                            rssPolicyOk = profileOk;
+                            rssPolicy = $"{profile} - base {baseProcessor} - {maxProcessors} CPU / {queues} queue";
+                            if (!profile.Equals(expectedProfile, StringComparison.OrdinalIgnoreCase))
+                                rssPolicy += " (driver profile; RSS live)";
+                        }
+                    }
                 }
                 catch
                 {
-                    rssPolicy = "Needs apply";
-                    rssPolicyOk = false;
+                    rssPolicy = "RSS not required on this adapter";
+                    rssPolicyOk = true;
                 }
             }
 
             var tcpGlobal = await RunCaptureAsync("netsh", "int tcp show global", ct).ConfigureAwait(false);
-            autoTuning = Match(tcpGlobal, @"Receive Window Auto-Tuning Level\s*:\s*(\S+)") ?? "—";
+            autoTuning = Match(tcpGlobal, @"Receive Window Auto-Tuning Level\s*:\s*(\S+)") ?? "-";
             var rscStr = Match(tcpGlobal, @"Receive Segment Coalescing State\s*:\s*(\w+)");
             if (rscStr is not null)
                 rsc = rscStr.Equals("enabled", StringComparison.OrdinalIgnoreCase);
 
             var supp = await RunCaptureAsync("netsh", "int tcp show supplemental", ct).ConfigureAwait(false);
-            congestion = Match(supp, @"Congestion Control Provider\s*:\s*(\w+)") ?? "—";
+            congestion = Match(supp, @"Congestion Control Provider\s*:\s*(\w+)") ?? "-";
 
             try
             {
@@ -899,7 +967,7 @@ public sealed class NetworkOptimizerService
             catch { }
 
             // Light pings only for status (not feature cards)
-            if (gateway is not "—" && System.Net.IPAddress.TryParse(gateway, out _))
+            if (gateway is not "-" && System.Net.IPAddress.TryParse(gateway, out _))
                 gwPing = await PingMsAsync(gateway, ct).ConfigureAwait(false);
             netPing = await PingMsAsync("1.1.1.1", ct).ConfigureAwait(false)
                       ?? await PingMsAsync("8.8.8.8", ct).ConfigureAwait(false);
@@ -910,12 +978,12 @@ public sealed class NetworkOptimizerService
             var autoOk = NetworkLogic.AutotuneMatches(activePreset, autoTuning);
             features.Add(Row("Task offload", taskOffloadDisabled == true ? "Off (bad)" : "On", taskOffloadDisabled != true));
             features.Add(Row("LSO v2",
-                lso == true ? (throughput ? "On · download" : "On")
-                    : lso == false ? (latency ? "Off · latency" : "Off") : "—",
+                lso == true ? (throughput ? "On - download" : "On")
+                    : lso == false ? (latency ? "Off - latency" : "Off") : "-",
                 lsoOk));
             features.Add(Row("RSC",
-                rsc == true ? (throughput ? "On · download" : "On")
-                    : rsc == false ? (latency ? "Off · latency" : "Off") : "—",
+                rsc == true ? (throughput ? "On - download" : "On")
+                    : rsc == false ? (latency ? "Off - latency" : "Off") : "-",
                 rscOk));
             features.Add(Row("Auto-tuning",
                 autoOk ? autoTuning : $"{autoTuning} (want {NetworkLogic.KnobsFor(activePreset).AutotuneNetsh})",
@@ -941,10 +1009,10 @@ public sealed class NetworkOptimizerService
             {
                 var presetApplied = LoadSavedPreset() is NetworkPreset.LowestLatency
                     or NetworkPreset.HighestThroughput;
-                // Apply only enables QoS+IPv4+IPv6 — never forces Client/LLDP off (fail-closed).
+                // Apply only enables QoS+IPv4+IPv6 - never forces Client/LLDP off (fail-closed).
                 var bindStatus = mediaProfile.AdapterBindingsOk
                     ? "Applied (QoS + IPv4/IPv6 on)"
-                    : mediaProfile.AdapterBindingsHint is ("—" or "")
+                    : mediaProfile.AdapterBindingsHint is ("-" or "")
                         ? "Needs apply"
                         : mediaProfile.AdapterBindingsHint;
                 // Stock Windows bindings are fine until user applies a preset.
@@ -955,13 +1023,13 @@ public sealed class NetworkOptimizerService
             if (mediaProfile.EthernetInUse)
             {
                 // Applied path sets primary Ethernet to 1 (secondaries 5+).
-                // AutomaticMetric Enabled with ~20–25 means apply did not stick (common after restart race).
+                // AutomaticMetric Enabled with ~20-25 means apply did not stick (common after restart race).
                 var metricOk = mediaProfile.EthernetMetric is null or <= 5;
                 var metricStatus = mediaProfile.EthernetMetric is int m
                     ? (metricOk
                         ? m.ToString()
-                        : $"{m} (want 1 · re-apply)")
-                    : "—";
+                        : $"{m} (want 1 - re-apply)")
+                    : "-";
                 features.Add(Row("Ethernet metric", metricStatus, metricOk));
                 if (mediaProfile.WifiAvailable)
                 {
@@ -981,24 +1049,24 @@ public sealed class NetworkOptimizerService
                     : mediaProfile.ClientSupports6Ghz ? "Wi‑Fi 6E/6 GHz"
                     : mediaProfile.ClientSupportsWifi6 ? "Wi‑Fi 6"
                     : mediaProfile.ClientSupports5Ghz ? "5 GHz class" : "Legacy";
-                var bandDetail = $"Prefer {mediaProfile.PreferredBandTarget} · {gen}";
-                if (mediaProfile.ConnectedRadioHint is not "—")
-                    bandDetail += $" · {mediaProfile.ConnectedRadioHint}";
-                if (mediaProfile.CurrentBandSetting is not ("—" or ""))
-                    bandDetail += $" · set: {mediaProfile.CurrentBandSetting}";
+                var bandDetail = $"Prefer {mediaProfile.PreferredBandTarget} - {gen}";
+                if (mediaProfile.ConnectedRadioHint is not "-")
+                    bandDetail += $" - {mediaProfile.ConnectedRadioHint}";
+                if (mediaProfile.CurrentBandSetting is not ("-" or ""))
+                    bandDetail += $" - set: {mediaProfile.CurrentBandSetting}";
                 features.Add(Row("Wi‑Fi capability", bandDetail, true));
             }
-            if (!string.IsNullOrWhiteSpace(mediaProfile.NicHints) && mediaProfile.NicHints is not "—")
+            if (!string.IsNullOrWhiteSpace(mediaProfile.NicHints) && mediaProfile.NicHints is not "-")
                 features.Add(Row("NIC status", mediaProfile.NicHints, mediaProfile.NicOk));
-            // Path / media only (no Windows Game Mode / CPU plan rows — those are not Internet)
+            // Path / media only (no Windows Game Mode / CPU plan rows - those are not Internet)
             if (!string.IsNullOrWhiteSpace(mediaProfile.NicVendor) &&
                 mediaProfile.NicVendor is not ("Unknown" or "Other" or ""))
             {
                 var link = mediaProfile.PrimaryLinkSpeedBps >= 2_500_000_000 ? "2.5G+"
                     : mediaProfile.PrimaryLinkSpeedBps >= 1_000_000_000 ? "1G"
-                    : mediaProfile.PrimaryLinkSpeedBps >= 100_000_000 ? "100M" : "—";
+                    : mediaProfile.PrimaryLinkSpeedBps >= 100_000_000 ? "100M" : "-";
                 features.Add(Row("Adapter",
-                    $"{mediaProfile.PrimaryMediaKind} · {mediaProfile.NicVendor} · {link}",
+                    $"{mediaProfile.PrimaryMediaKind} - {mediaProfile.NicVendor} - {link}",
                     true));
             }
         }
@@ -1011,7 +1079,7 @@ public sealed class NetworkOptimizerService
             if (rollback is { RolledBack: true })
             {
                 features.Add(Row("Last apply",
-                    $"Auto-rollback ({rollback.Reason}) — Wi‑Fi restored",
+                    $"Auto-rollback ({rollback.Reason}) - Wi‑Fi restored",
                     false));
             }
             else if (rollback is { ConnectivityAfterApply: false })
@@ -1064,15 +1132,15 @@ public sealed class NetworkOptimizerService
         var supports5 = false;
         var wifi6 = false;
         var wifi7 = false;
-        var radioHint = "—";
-        var driverRadios = "—";
-        var currentBand = "—";
+        var radioHint = "-";
+        var driverRadios = "-";
+        var currentBand = "-";
         int? ethMetric = null;
-        var nicHints = "—";
+        var nicHints = "-";
         var nicOk = true;
         int fcR = -1, imR = -1, idleR = -1, ssR = -1;
         var bindOk = true;
-        var bindHint = "—";
+        var bindHint = "-";
         var nicVendor = "Unknown";
         var primaryMedia = "Unknown";
         long linkBps = 0;
@@ -1119,7 +1187,7 @@ foreach ($e in @($eth | Where-Object Status -eq 'Up')) {
     Where-Object { $_.IPAddress -notlike '169.254.*' })
   if ($ip.Count -gt 0) {
     $eInUse = $true
-    # Prefer ReceiveLinkSpeed (bps int) — LinkSpeed is a display string and sorts wrong
+    # Prefer ReceiveLinkSpeed (bps int) - LinkSpeed is a display string and sorts wrong
     $spd = 0L
     try { $spd = [int64]$e.ReceiveLinkSpeed } catch { $spd = 0 }
     $bestSpd = 0L
@@ -1131,7 +1199,7 @@ if ($bestEth) {
   $mi = Get-NetIPInterface -InterfaceIndex $bestEth.ifIndex -AddressFamily IPv4 -EA SilentlyContinue
   if ($mi) {
     $eMetric = [int]$mi.InterfaceMetric
-    # When AutomaticMetric is still on, Windows shows speed-based defaults (~20–25) — not our apply
+    # When AutomaticMetric is still on, Windows shows speed-based defaults (~20-25) - not our apply
     if ($mi.AutomaticMetric -eq 'Enabled' -and $eMetric -gt 5) {
       # Keep real live metric for UI; feature row will fail until apply sticks
     }
@@ -1165,7 +1233,7 @@ if ($iface -match '(?i)Band\s*:\s*(.+)') { $hint = $Matches[1].Trim() }
 elseif ($iface -match '(?i)Radio type\s*:\s*(.+)') { $hint = $Matches[1].Trim() }
 if ($iface -match '(?i)Channel\s*:\s*(\d+)') {
   $ch = [int]$Matches[1]
-  if ($hint -eq '-') { $hint = "ch $ch" } else { $hint = "$hint · ch $ch" }
+  if ($hint -eq '-') { $hint = "ch $ch" } else { $hint = "$hint - ch $ch" }
 }
 if ($hint -match '(?i)6\s*GHz|6GHz') { $band6 = $true }
 if ($hint -match '(?i)5\s*GHz|5GHz') { $band5 = $true }
@@ -1303,7 +1371,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                             bindOk = v is "1" or "True" or "true";
                             break;
                         case "BINDHINT" when v is not ("-" or ""):
-                            bindHint = v.Replace(',', '·');
+                            bindHint = v.Replace(",", " - ");
                             break;
                         case "VENDOR" when v is not ("-" or ""):
                             nicVendor = v;
@@ -1436,7 +1504,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         if (!NetworkLogic.RscMatches(preset, snap.RscEnabled)) return false;
         // NIC status: when probe computed it for this saved preset, require OK
         if (snap.ActivePreset == preset && !snap.Media.NicOk &&
-            snap.Media.NicHints is not ("—" or "" or null))
+            snap.Media.NicHints is not ("-" or "" or null))
             return false;
         return true;
     }
@@ -1593,11 +1661,11 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
     /// <summary>Expose benchmark script generation for audit/smokes (same path as RunBenchmarkAsync).</summary>
     public static string BuildBenchmarkScript() => NetworkApplyScriptBuilder.BuildBenchmark();
 
-    // BuildFullApplyScript removed — see NetworkApplyScriptBuilder
+    // BuildFullApplyScript removed - see NetworkApplyScriptBuilder
     private static NetworkFeatureRow Row(string title, string status, bool ok, string? note = null) => new()
     {
         Title = title,
-        Status = string.IsNullOrWhiteSpace(note) ? status : $"{status} · {note}",
+        Status = string.IsNullOrWhiteSpace(note) ? status : $"{status} - {note}",
         IsOk = ok
     };
 
@@ -1607,7 +1675,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         return s[..(max - 1)].TrimEnd() + "…";
     }
 
-    private static string FmtMs(int? ms) => ms is int v ? $"{v} ms" : "—";
+    private static string FmtMs(int? ms) => ms is int v ? $"{v} ms" : "-";
 
     private static string ReadQosReserve()
     {
@@ -1618,7 +1686,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
             if (i is int n) return n == 0 ? "0%" : $"{n}%";
         }
         catch { }
-        return "—";
+        return "-";
     }
 
     /// <summary>Registry DWORD can surface as int/long/uint/string depending on how it was written.</summary>
@@ -1640,7 +1708,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
 
     private static string FormatSpeed(long bitsPerSecond)
     {
-        if (bitsPerSecond <= 0) return "—";
+        if (bitsPerSecond <= 0) return "-";
         double v = bitsPerSecond;
         string[] units = { "bps", "Kbps", "Mbps", "Gbps" };
         var i = 0;

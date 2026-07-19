@@ -2,22 +2,32 @@
 
 ## Product direction
 
-Exo is a no-compromise Windows performance and debloat tool. Aggressive memory trimming, background-process reduction, priority tuning, cache cleanup, telemetry removal, and latency/FPS optimization are intentional core features. Do not quietly weaken them into conservative defaults.
+Exo is a no-compromise Windows performance and debloat tool. **Dual-scope:** the same bar applies to **Exo itself** and to **every target** it optimizes (Discord, Steam, Internet, NVIDIA, Riot, Epic, …). Vendor apps are treated as bloated by default — cut RAM, background CPU, autostart, telemetry, and clutter. Do not quietly weaken policies into conservative “leave the host alone” defaults.
 
-**No Exo background footprint:** never create Exo scheduled tasks, logon tasks, Run-key startup entries, or Exo-named Windows services. Apply runs when the user clicks Apply; purge any leftover `Exo-*` tasks on Apply/Repair. (Disabling *vendor* junk like NVIDIA App container or Steam/Discord autostart is fine — that is not Exo installing itself.)
+**Goals (app + targets):** performance/speed, less RAM / soft-reclaimed idle pages, debloat, privacy, black/uncluttered UI, reversible Apply/Repair.
 
-Aggressive must still be deterministic: scope actions to the selected application or hardware, make Apply *work* (retry hard paths; do not ship "honest failure" as the product), avoid invented registry settings, preserve data needed to prevent corruption, and keep Discord/Steam repair paths working. Never describe NVIDIA Reset as rollback: it only clears Exo status, while NVIDIA recovery remains manual through NVIDIA settings or a driver reinstall.
+**Hard stops only:**
+1. Do not brick the PC or network (snapshot + canary + Repair; never permanently kill Wi-Fi).
+2. Do not ban the user (never inject/kill/trim **game anti-cheat** or protected game shipping processes). Launchers and chat clients are fair game.
+3. No folklore (no invented FPS registry, no fake claims).
+4. Never `EmptyWorkingSet` thrash **Steam CEF** (`steamwebhelper`) — it freezes the library UI. Soft reclaim (`SetProcessWorkingSetSize(-1,-1)`) on **non-foreground** CEF/helpers is allowed.
+
+**Lifecycle helpers (authorized):** scoped companions that lower RAM/CPU for a target are OK when they are (a) installed by Apply, (b) reversible by Repair, (c) limited to that target’s processes (e.g. Steam memory guard while Steam runs; Riot/Epic yield on **launcher** processes only). Prefer attaching to the target’s launch path when possible. Do **not** install anonymous always-on malware-style services. Disabling *vendor* junk autostart (Steam/Discord/NVIDIA App) is fine.
+
+Aggressive must still be deterministic: scope actions to the selected application or hardware, make Apply *work* (retry hard paths), preserve data needed to prevent corruption, and keep Discord/Steam/Internet/NVIDIA Repair paths working. Never describe NVIDIA Reset as full driver rollback: it clears Exo status / restores DRS snapshot when present; vendor recovery may still need NVIDIA tools.
 
 ## Shell UI (current overhaul contract)
 
-- **Responsive frame** opens near 1180×760, resizes/maximizes, preferred minimum 960×600, clamps to the active work area, and centers content up to 1120px
+- **Fixed frame** is **1200×800**, non-resizable and non-maximizable so home + module plates fit without page scroll (minimize still works)
 - **Dark-only** pure black canvas + crisp opaque lifted surfaces; Windows High Contrast remains an accessibility mode, not a second product theme
 - **Workspace** = full-width **top bar** + content stage that fills the rest of the frame
-- **Navigation** = top glass bar (`NavRail`): EXO left · modules centered · Settings right — **not** WinUI `NavigationView`, **not** a left sidebar
-- **Settings** = solid dark tokenized flyout under the top-bar gear—not a modal, separate page, or unique transparent material
+- **Navigation** = top chrome: **EXO pill** (home + settings) left · modules centered · caption buttons right — **not** WinUI `NavigationView`, **not** a left sidebar
+- **EXO control** = one branded pill: left segment **Home** (`NavHome` / “Open system overview”), right segment **Settings** gear flyout — same height/radius language as module tabs
+- **Settings** = solid dark tokenized flyout from the EXO pill gear—not a modal, separate page, or unique transparent material
 - **Home** = verified optimizer state + live proof + system memory; no invented FPS/frame-time claims and no optimizer Detect* script probes on home; local state/system counters are cached so returns do not re-stagger
-- **Top bar** = liquid-glass **circles** floating on pure black (no bar plate): hairline rim (~0.5px feel), rim-lit gradient + dark center, soft shadow, hover = scale + sibling fade + label pill (preview) / wash (WinUI); equal 56px end caps; EXO hidden on home
+- **Toolbar consistency** = all nav tabs share `ExoNavTab` height 40, radius 11, spacing 4–6, hairline selection ring; no orphan gear on the far right
 - **Modules** = one `ExoModulePlate` filling the stage (header + hairline feature list + action foot)
+- **Windows tweak ownership** = app optimizers keep **app-scoped** Windows integration (Discord/Steam quiet shell, GPU for that exe, Internet stack); a future **Windows** module owns only **machine-wide** host policy and **skips** keys already owned — see `docs/WINDOWS-OWNERSHIP.md`
 - **Motion** = short XAML Storyboards only; **never write hand-off composition visuals** (`ElementCompositionPreview` `Visual.Offset`/`Scale`/`Opacity`) — it detaches elements from XAML layout (everything piles at the origin) and pre-first-frame pokes crash real GPUs with `0xC000027B` (v2.6.0 launch regression); no spring bounce on content
 - **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)
 - **Feature rows** = thin status rail + Applied/Not applied (live detect)

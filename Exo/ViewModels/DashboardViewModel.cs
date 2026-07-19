@@ -4,12 +4,19 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Exo.Helpers;
 using Exo.Models;
 using Exo.Services;
+using Microsoft.UI.Xaml.Media;
+using Windows.UI;
 
 namespace Exo.ViewModels;
 
 public partial class DashboardViewModel : ObservableObject
 {
+    private const int SparkCapacity = 36;
     private readonly AppServices _services;
+    private readonly Queue<double> _ramSpark = new();
+    private readonly Queue<double> _cpuSpark = new();
+    private readonly Queue<double> _gpuSpark = new();
+    private readonly Queue<double> _netSpark = new();
 
     public DashboardViewModel(AppServices services)
     {
@@ -31,21 +38,72 @@ public partial class DashboardViewModel : ObservableObject
             card.InitializePresentation();
 
         SoonCards = Cards.Where(c => c.IsComingSoon).ToList();
-        RefreshDashboard();
+
+        CheckRows =
+        [
+            new OptimizerCheckRowViewModel("Discord", "discord"),
+            new OptimizerCheckRowViewModel("Steam", "steam"),
+            new OptimizerCheckRowViewModel("Internet", "internet"),
+            new OptimizerCheckRowViewModel("NVIDIA", "nvidia"),
+            new OptimizerCheckRowViewModel("Riot", "riot"),
+            new OptimizerCheckRowViewModel("Epic", "epic"),
+        ];
+
+        RamSeries = new ObservableCollection<double>();
+        CpuSeries = new ObservableCollection<double>();
+        GpuSeries = new ObservableCollection<double>();
+        NetSeries = new ObservableCollection<double>();
+
+        RefreshDashboard(seedChecks: true);
     }
 
     public IReadOnlyList<OptimizerCardViewModel> Cards { get; }
     public IReadOnlyList<OptimizerCardViewModel> SoonCards { get; }
+    public ObservableCollection<OptimizerCheckRowViewModel> CheckRows { get; }
+    public ObservableCollection<double> RamSeries { get; }
+    public ObservableCollection<double> CpuSeries { get; }
+    public ObservableCollection<double> GpuSeries { get; }
+    public ObservableCollection<double> NetSeries { get; }
 
     [ObservableProperty] public partial string HeroSummary { get; set; } = "Maximum performance. No compromise.";
     [ObservableProperty] public partial string OverviewPrimary { get; set; } = "0 / 6 verified";
+    [ObservableProperty] public partial string AppliedModulesList { get; set; } = "None applied yet";
+
+    [ObservableProperty] public partial string NextActionModule { get; set; } = string.Empty;
+    [ObservableProperty] public partial string NextActionLabel { get; set; } = string.Empty;
+    [ObservableProperty] public partial string NextActionDetail { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool HasNextAction { get; set; }
+
+    [ObservableProperty] public partial string SpecsCpu { get; set; } = "—";
+    [ObservableProperty] public partial string SpecsGpu { get; set; } = "—";
+    [ObservableProperty] public partial string SpecsRam { get; set; } = "—";
+    [ObservableProperty] public partial string SpecsOs { get; set; } = "—";
+    [ObservableProperty] public partial string SpecsSecondary { get; set; } = "Reading machine…";
 
     [ObservableProperty] public partial string MemoryPrimary { get; set; } = "—";
-    [ObservableProperty] public partial string MemorySecondary { get; set; } = "Reading system memory...";
+    [ObservableProperty] public partial string MemorySecondary { get; set; } = "Reading…";
     [ObservableProperty] public partial string MemoryLoadText { get; set; } = "";
     [ObservableProperty] public partial double MemoryLoadPercent { get; set; }
     [ObservableProperty] public partial bool HasMemory { get; set; }
 
+    [ObservableProperty] public partial string CpuPrimary { get; set; } = "—";
+    [ObservableProperty] public partial string CpuSecondary { get; set; } = "Sampling…";
+    [ObservableProperty] public partial double CpuLoadPercent { get; set; }
+    [ObservableProperty] public partial bool HasCpuLoad { get; set; }
+
+    [ObservableProperty] public partial string GpuPrimary { get; set; } = "—";
+    [ObservableProperty] public partial string GpuSecondary { get; set; } = "GPU";
+    [ObservableProperty] public partial double GpuLoadPercent { get; set; }
+    [ObservableProperty] public partial bool HasGpuLoad { get; set; }
+
+    [ObservableProperty] public partial string MemSpeedPrimary { get; set; } = "—";
+    [ObservableProperty] public partial string MemSpeedSecondary { get; set; } = "DRAM speed";
+
+    [ObservableProperty] public partial string NetPrimary { get; set; } = "—";
+    [ObservableProperty] public partial string NetSecondary { get; set; } = "Link / idle latency";
+    [ObservableProperty] public partial double NetMetricPercent { get; set; }
+
+    // Kept for RefreshDashboard tile logic + Ui.Smoke source contracts.
     [ObservableProperty] public partial string DiscordStatusPrimary { get; set; } = "—";
     [ObservableProperty] public partial string DiscordStatusSecondary { get; set; } = "Not optimized yet";
     [ObservableProperty] public partial string DiscordStatusTag { get; set; } = "NOT APPLIED";
@@ -54,19 +112,16 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] public partial string SteamStatusSecondary { get; set; } = "Not optimized yet";
     [ObservableProperty] public partial string SteamStatusTag { get; set; } = "NOT APPLIED";
     [ObservableProperty] public partial string SteamLiveMetric { get; set; } = "No live process sample";
-
     [ObservableProperty] public partial bool HasLatency { get; set; }
     [ObservableProperty] public partial string LatencyPrimary { get; set; } = "—";
     [ObservableProperty] public partial string LatencySecondary { get; set; } = "Apply Internet to measure the current connection";
     [ObservableProperty] public partial string InternetStatusTag { get; set; } = "NOT APPLIED";
     [ObservableProperty] public partial string InternetLiveMetric { get; set; } = "No current route sample";
-
     [ObservableProperty] public partial bool HasNvidiaPath { get; set; }
     [ObservableProperty] public partial string NvidiaPathPrimary { get; set; } = "—";
     [ObservableProperty] public partial string NvidiaPathSecondary { get; set; } = "Apply NVIDIA profiles";
     [ObservableProperty] public partial string NvidiaStatusTag { get; set; } = "NOT APPLIED";
     [ObservableProperty] public partial string NvidiaLiveMetric { get; set; } = "No verified driver profile";
-
     [ObservableProperty] public partial string RiotStatusPrimary { get; set; } = "Riot ready";
     [ObservableProperty] public partial string RiotStatusSecondary { get; set; } = "Apply reversible per-game hardware policy";
     [ObservableProperty] public partial string RiotStatusTag { get; set; } = "NOT APPLIED";
@@ -75,17 +130,47 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] public partial string EpicStatusSecondary { get; set; } = "Apply policy to games discovered from manifests";
     [ObservableProperty] public partial string EpicStatusTag { get; set; } = "NOT APPLIED";
     [ObservableProperty] public partial string EpicLiveMetric { get; set; } = "Launcher files and updates stay untouched";
-
     [ObservableProperty] public partial string FpsPrimary { get; set; } = "—";
     [ObservableProperty] public partial string FpsSecondary { get; set; } = "";
     [ObservableProperty] public partial string FrameTimePrimary { get; set; } = "—";
     [ObservableProperty] public partial string FrameTimeSecondary { get; set; } = "";
 
+    /// <summary>True outcomes after last silent detect pass (used by checklist animation).</summary>
+    public IReadOnlyDictionary<string, bool> LastCheckOutcomes { get; private set; } =
+        new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+
     public Task RefreshStatesAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        RefreshDashboard();
+        RefreshDashboard(seedChecks: false);
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Drive the checklist UI through Checking → Applied/Missing for each row.
+    /// Call from the page after RefreshStatesAsync so outcomes are ready.
+    /// </summary>
+    /// <summary>Raised when a chip settles to Applied/Missing so the page can pop the glyph.</summary>
+    public event Action<OptimizerCheckRowViewModel>? CheckRowSettled;
+
+    public async Task PlayCheckSequenceAsync(CancellationToken ct = default)
+    {
+        foreach (var row in CheckRows)
+            row.SetPhase(OptimizerCheckPhase.Idle);
+
+        await Task.Delay(60, ct).ConfigureAwait(true);
+
+        foreach (var row in CheckRows)
+        {
+            ct.ThrowIfCancellationRequested();
+            row.SetPhase(OptimizerCheckPhase.Checking);
+            await Task.Delay(120, ct).ConfigureAwait(true);
+
+            var ok = LastCheckOutcomes.TryGetValue(row.ModuleId, out var applied) && applied;
+            row.SetPhase(ok ? OptimizerCheckPhase.Applied : OptimizerCheckPhase.Missing);
+            try { CheckRowSettled?.Invoke(row); } catch { }
+            await Task.Delay(55, ct).ConfigureAwait(true);
+        }
     }
 
     public void RefreshLiveMemory()
@@ -107,15 +192,138 @@ public partial class DashboardViewModel : ObservableObject
             HasMemory = true;
             MemoryLoadText = $"{mem.LoadPercent}% in use";
             MemoryLoadPercent = mem.LoadPercent;
-            MemoryPrimary = HomeDashboardReader.FormatBytes(used);
+            MemoryPrimary = $"{mem.LoadPercent}%";
             MemorySecondary =
-                $"{HomeDashboardReader.FormatBytes(mem.AvailableBytes)} free · {HomeDashboardReader.FormatBytes(mem.TotalBytes)} total";
+                $"{HomeDashboardReader.FormatBytes(used)} / {HomeDashboardReader.FormatBytes(mem.TotalBytes)}";
+            PushSpark(_ramSpark, RamSeries, mem.LoadPercent);
         }
 
-        // Visible-dashboard refresh: process memory observations + Internet proof.
+        var cpu = HomeDashboardReader.TryReadCpuLoadPercent();
+        if (cpu is null)
+        {
+            if (!HasCpuLoad)
+            {
+                CpuPrimary = "—";
+                CpuSecondary = "Sampling…";
+                CpuLoadPercent = 0;
+            }
+        }
+        else
+        {
+            HasCpuLoad = true;
+            CpuLoadPercent = Math.Round(cpu.Value, 0);
+            CpuPrimary = $"{CpuLoadPercent:0}%";
+            CpuSecondary = "Load";
+            PushSpark(_cpuSpark, CpuSeries, CpuLoadPercent);
+        }
+
+        var gpu = HomeDashboardReader.TryReadGpuLoadPercent();
+        if (gpu is null)
+        {
+            if (!HasGpuLoad)
+            {
+                GpuPrimary = "—";
+                GpuSecondary = "Load";
+                GpuLoadPercent = 0;
+            }
+        }
+        else
+        {
+            HasGpuLoad = true;
+            GpuLoadPercent = Math.Round(gpu.Value, 0);
+            GpuPrimary = $"{GpuLoadPercent:0}%";
+            GpuSecondary = "Load";
+            PushSpark(_gpuSpark, GpuSeries, GpuLoadPercent);
+        }
+
+        // DRAM speed kept for API/smokes if needed, but not shown as a redundant tile.
+        var mhz = HomeDashboardReader.TryReadMemorySpeedMhz();
+        if (mhz is > 0)
+        {
+            MemSpeedPrimary = $"{mhz} MT/s";
+            MemSpeedSecondary = "DRAM";
+        }
+        else if (mem is not null)
+        {
+            MemSpeedPrimary = HomeDashboardReader.FormatBytes(mem.TotalBytes);
+            MemSpeedSecondary = "Installed";
+        }
+
+        RefreshNetworkLiveTile();
         RefreshDiscordRamTile();
         RefreshSteamRamTile();
         RefreshInternetTile();
+    }
+
+    private void RefreshNetworkLiveTile()
+    {
+        var link = HomeDashboardReader.TryReadPrimaryLinkSpeed();
+        var latency = HomeDashboardReader.TryReadLatency(_services.Network);
+        var quality = _services.Network.LoadQualityBenchmark();
+
+        // Caption = link; hero = idle latency (honest sample, not a fake “health” score).
+        if (link is not null && link.BitsPerSecond > 0)
+            NetPrimary = $"{link.Label} {link.MediaKind}";
+        else
+            NetPrimary = "No link";
+
+        double? idleMs = null;
+        if (quality is { Ok: true, IsQualityTest: true })
+            idleMs = quality.PingP50Ms;
+        else if (latency is not null)
+            idleMs = latency.AfterP50Ms;
+
+        if (idleMs is not null)
+        {
+            NetSecondary = $"{idleMs.Value:0.#} ms idle";
+            // Bar: lower latency fills more (visual only; label is the ms).
+            var fill = Math.Clamp(100.0 - (idleMs.Value / 80.0 * 100.0), 4, 100);
+            NetMetricPercent = fill;
+            PushSpark(_netSpark, NetSeries, fill);
+        }
+        else
+        {
+            NetSecondary = "No sample yet";
+            NetMetricPercent = 0;
+        }
+    }
+
+    private static void PushSpark(Queue<double> queue, ObservableCollection<double> series, double value)
+    {
+        var v = Math.Clamp(value, 0, 100);
+        queue.Enqueue(v);
+        while (queue.Count > SparkCapacity)
+            queue.Dequeue();
+
+        // Replace series contents so ExoSparkline CollectionChanged rebuilds the path.
+        series.Clear();
+        foreach (var sample in queue)
+            series.Add(sample);
+    }
+
+    private void RefreshSystemSpecs()
+    {
+        var specs = HomeDashboardReader.TryReadSystemSpecs();
+        if (specs is null)
+        {
+            SpecsCpu = "—";
+            SpecsGpu = "—";
+            SpecsRam = "—";
+            SpecsOs = "—";
+            SpecsSecondary = "System specs unavailable";
+            return;
+        }
+
+        SpecsCpu = specs.CpuName;
+        SpecsGpu = !string.IsNullOrWhiteSpace(specs.GpuName) ? specs.GpuName! : "—";
+        SpecsRam = !string.IsNullOrWhiteSpace(specs.RamLabel)
+            ? specs.RamLabel
+            : specs.TotalRamBytes > 0
+                ? HomeDashboardReader.FormatBytes(specs.TotalRamBytes)
+                : "—";
+        SpecsOs = !string.IsNullOrWhiteSpace(specs.OsName) ? specs.OsName : "—";
+        SpecsSecondary = string.Join(" · ", new[] { SpecsCpu, SpecsGpu, SpecsRam, SpecsOs }
+            .Where(s => !string.IsNullOrWhiteSpace(s) && s != "—"));
     }
 
     private void RefreshInternetTile(ref int appliedCount)
@@ -145,11 +353,11 @@ public partial class DashboardViewModel : ObservableObject
                 : quality is { Ok: true, IsQualityTest: true } && !string.IsNullOrWhiteSpace(quality.DnsProvider)
                     ? quality.DnsProvider + " DNS selected"
                     : "automatic DNS selection";
-            LatencySecondary = $"Adaptive stack applied · {dns}";
+            LatencySecondary = $"Adaptive stack applied - {dns}";
             InternetLiveMetric = quality is { Ok: true, IsQualityTest: true }
                 ? BuildInternetLiveMetric(quality, latency)
                 : latency is not null
-                    ? $"{latency.AfterP50Ms:0.#} ms idle · {latency.AfterJitterMs:0.#} ms jitter"
+                    ? $"{latency.AfterP50Ms:0.#} ms idle - {latency.AfterJitterMs:0.#} ms jitter"
                     : "Run Analyze & Apply to refresh the route sample";
             return;
         }
@@ -159,8 +367,8 @@ public partial class DashboardViewModel : ObservableObject
             HasLatency = true;
             InternetStatusTag = "MEASURED";
             LatencyPrimary = linkBit ?? "Route measured";
-            LatencySecondary = "Current route sample available · settings not verified";
-            InternetLiveMetric = $"{latency.AfterP50Ms:0.#} ms idle · {latency.AfterJitterMs:0.#} ms jitter";
+            LatencySecondary = "Current route sample available - settings not verified";
+            InternetLiveMetric = $"{latency.AfterP50Ms:0.#} ms idle - {latency.AfterJitterMs:0.#} ms jitter";
             return;
         }
 
@@ -175,7 +383,7 @@ public partial class DashboardViewModel : ObservableObject
     {
         var downLoaded = Math.Max(0, quality.DownloadLoadedMs - quality.PingP50Ms);
         var upLoaded = Math.Max(0, quality.UploadLoadedMs - quality.PingP50Ms);
-        return $"{quality.PingP50Ms:0.#} ms idle · full-load +{downLoaded:0.#} down / +{upLoaded:0.#} up · {quality.PacketLossPercent:0.##}% idle loss";
+        return $"{quality.PingP50Ms:0.#} ms idle - full-load +{downLoaded:0.#} down / +{upLoaded:0.#} up - {quality.PacketLossPercent:0.##}% idle loss";
     }
 
     private void RefreshDiscordRamTile()
@@ -186,11 +394,10 @@ public partial class DashboardViewModel : ObservableObject
         var live = sample?.LiveBytes ?? 0;
         var belowPeak = sample?.BelowPeakBytes ?? 0;
 
-        // A peak-to-current delta is useful context, but it does not prove Exo caused it.
-        if (belowPeak >= 8L << 20) // ≥ 8 MB so we don't flash noise
+        if (belowPeak >= 8L << 20)
         {
             DiscordLiveMetric = live > 0
-                ? $"{HomeDashboardReader.FormatBytes(live)} resident · {HomeDashboardReader.FormatBytes(belowPeak)} below session peak"
+                ? $"{HomeDashboardReader.FormatBytes(live)} resident - {HomeDashboardReader.FormatBytes(belowPeak)} below session peak"
                 : $"{HomeDashboardReader.FormatBytes(belowPeak)} below session peak";
         }
         else if (live > 0)
@@ -206,13 +413,13 @@ public partial class DashboardViewModel : ObservableObject
         {
             DiscordStatusTag = "VERIFIED";
             DiscordStatusPrimary = "Lean client active";
-            DiscordStatusSecondary = "Privacy patch · voice QoS · idle memory guard";
+            DiscordStatusSecondary = "Privacy patch - voice QoS - idle memory guard";
         }
         else if (applied)
         {
             DiscordStatusTag = "APPLIED";
             DiscordStatusPrimary = "Stock-safe mode";
-            DiscordStatusSecondary = "Voice QoS and privacy settings applied · custom kernel skipped";
+            DiscordStatusSecondary = "Voice QoS and privacy settings applied - custom kernel skipped";
         }
         else
         {
@@ -230,7 +437,7 @@ public partial class DashboardViewModel : ObservableObject
 
         if (memory.ProcessCount > 0)
         {
-            SteamLiveMetric = $"{HomeDashboardReader.FormatBytes(memory.WorkingSetBytes)} resident · {HomeDashboardReader.FormatBytes(memory.PrivateBytes)} private";
+            SteamLiveMetric = $"{HomeDashboardReader.FormatBytes(memory.WorkingSetBytes)} resident - {HomeDashboardReader.FormatBytes(memory.PrivateBytes)} private";
         }
         else
         {
@@ -242,8 +449,8 @@ public partial class DashboardViewModel : ObservableObject
             SteamStatusTag = "VERIFIED";
             SteamStatusPrimary = guardRunning ? "Background policy active" : "Background policy ready";
             SteamStatusSecondary = guardRunning
-                ? "Foreground stays responsive · background CEF yields while gaming"
-                : "Starts with the optimized launcher · no unsafe RAM purges";
+                ? "Foreground stays responsive - background CEF yields while gaming"
+                : "Starts with the optimized launcher - no unsafe RAM purges";
         }
         else
         {
@@ -253,33 +460,43 @@ public partial class DashboardViewModel : ObservableObject
         }
     }
 
-    private void RefreshDashboard()
+    private void RefreshDashboard(bool seedChecks)
     {
         var appliedCount = 0;
+        var appliedNames = new List<string>(6);
+        var outcomes = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
-        // Discord / Steam tiles filled by live RAM helpers (and on timer)
+        RefreshSystemSpecs();
+
         RefreshDiscordRamTile();
         RefreshSteamRamTile();
-        if (HomeDashboardReader.TryReadDiscordApplied() || HomeDashboardReader.TryReadDiscordKernelOnDisk())
-            appliedCount++;
-        if (ReadModuleState("steam-optimizer.json").Applied)
-            appliedCount++;
+        var discordOk = HomeDashboardReader.TryReadDiscordApplied() || HomeDashboardReader.TryReadDiscordKernelOnDisk();
+        outcomes["discord"] = discordOk;
+        if (discordOk) { appliedCount++; appliedNames.Add("Discord"); }
 
-        // Internet — real before/after ping + live link speed
+        var steamOk = ReadModuleState("steam-optimizer.json").Applied;
+        outcomes["steam"] = steamOk;
+        if (steamOk) { appliedCount++; appliedNames.Add("Steam"); }
+
+        var beforeNet = appliedCount;
         RefreshInternetTile(ref appliedCount);
+        var internetOk = appliedCount > beforeNet;
+        outcomes["internet"] = internetOk;
+        if (internetOk) appliedNames.Add("Internet");
 
-        // NVIDIA
         var nvidia = HomeDashboardReader.TryReadNvidiaPath();
         if (nvidia is not null)
         {
             appliedCount++;
+            appliedNames.Add("NVIDIA");
+            outcomes["nvidia"] = true;
             HasNvidiaPath = true;
             NvidiaStatusTag = "VERIFIED";
             NvidiaPathPrimary = !string.IsNullOrWhiteSpace(nvidia.GpuName)
                 ? nvidia.GpuName!
                 : !string.IsNullOrWhiteSpace(nvidia.Series) ? nvidia.Series! : "NVIDIA profile active";
             var display = !string.IsNullOrWhiteSpace(nvidia.PrimaryMode)
-                ? $" · {nvidia.PrimaryMode} {nvidia.PrimaryConnection}".TrimEnd()
+                ? $" - {nvidia.PrimaryMode} {nvidia.PrimaryConnection}".TrimEnd()
                 : string.Empty;
             NvidiaPathSecondary = nvidia.Gsync
                 ? $"G-SYNC/VRR profile{display}"
@@ -288,11 +505,12 @@ public partial class DashboardViewModel : ObservableObject
             if (nvidia.VerifiedSettingCount > 0) proof.Add($"{nvidia.VerifiedSettingCount} driver pins");
             if (nvidia.GameProfileCount > 0) proof.Add($"{nvidia.GameProfileCount} game profiles");
             NvidiaLiveMetric = proof.Count > 0
-                ? string.Join(" · ", proof) + " verified"
+                ? string.Join(" - ", proof) + " verified"
                 : "Driver profile import verified";
         }
         else
         {
+            outcomes["nvidia"] = false;
             var nvState = ReadModuleState("nvidia-optimizer.json");
             HasNvidiaPath = false;
             if (!string.IsNullOrWhiteSpace(nvState.Detail))
@@ -311,8 +529,26 @@ public partial class DashboardViewModel : ObservableObject
             }
         }
 
+        var beforeRiot = appliedCount;
         RefreshLauncherTile("riot", ref appliedCount);
+        outcomes["riot"] = appliedCount > beforeRiot;
+        if (outcomes["riot"]) appliedNames.Add("Riot");
+
+        var beforeEpic = appliedCount;
         RefreshLauncherTile("epic", ref appliedCount);
+        outcomes["epic"] = appliedCount > beforeEpic;
+        if (outcomes["epic"]) appliedNames.Add("Epic");
+
+        LastCheckOutcomes = outcomes;
+
+        if (seedChecks)
+        {
+            foreach (var row in CheckRows)
+            {
+                var ok = outcomes.TryGetValue(row.ModuleId, out var a) && a;
+                row.SetPhase(ok ? OptimizerCheckPhase.Applied : OptimizerCheckPhase.Missing);
+            }
+        }
 
         FpsPrimary = NvidiaPathPrimary;
         FpsSecondary = NvidiaPathSecondary;
@@ -320,16 +556,61 @@ public partial class DashboardViewModel : ObservableObject
         FrameTimeSecondary = DiscordStatusSecondary;
 
         OverviewPrimary = $"{appliedCount} / 6 verified";
-        HeroSummary = appliedCount switch
-        {
-            0 => "No optimizer has a verified apply record yet.",
-            1 => "One optimizer is verified; five are ready to configure.",
-            6 => "Every optimizer has a verified apply record.",
-            _ => $"{appliedCount} optimizers are verified; {6 - appliedCount} still " +
-                 ((6 - appliedCount) == 1 ? "needs" : "need") + " attention."
-        };
+        AppliedModulesList = appliedNames.Count > 0
+            ? string.Join(" · ", appliedNames)
+            : "None applied yet";
+        UpdateNextAction(appliedCount);
+        // Keep one short line for any residual bindings; header no longer stacks essays.
+        HeroSummary = appliedCount == 6
+            ? "All optimizers verified"
+            : HasNextAction
+                ? $"Next: {NextActionModule}"
+                : $"{appliedCount}/6 verified";
 
         RefreshLiveMemory();
+    }
+
+    private void UpdateNextAction(int appliedCount)
+    {
+        if (appliedCount >= 6)
+        {
+            HasNextAction = false;
+            NextActionModule = string.Empty;
+            NextActionLabel = string.Empty;
+            NextActionDetail = string.Empty;
+            return;
+        }
+
+        (string Id, string Label, string Tag, string Detail)[] candidates =
+        [
+            ("Discord", "Open Discord", DiscordStatusTag, DiscordStatusSecondary),
+            ("Steam", "Open Steam", SteamStatusTag, SteamStatusSecondary),
+            ("Internet", "Open Internet", InternetStatusTag, LatencySecondary),
+            ("NVIDIA", "Open NVIDIA", NvidiaStatusTag, NvidiaPathSecondary),
+            ("Riot", "Open Riot", RiotStatusTag, RiotStatusSecondary),
+            ("Epic", "Open Epic", EpicStatusTag, EpicStatusSecondary),
+        ];
+
+        foreach (var c in candidates)
+        {
+            if (string.Equals(c.Tag, "VERIFIED", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            HasNextAction = true;
+            NextActionModule = c.Id;
+            NextActionLabel = string.Equals(c.Tag, "NEEDS ATTENTION", StringComparison.OrdinalIgnoreCase)
+                ? $"Fix {c.Id}"
+                : c.Id;
+            NextActionDetail = string.IsNullOrWhiteSpace(c.Detail)
+                ? "Detect this PC, then Apply only supported changes."
+                : c.Detail;
+            return;
+        }
+
+        HasNextAction = false;
+        NextActionModule = string.Empty;
+        NextActionLabel = string.Empty;
+        NextActionDetail = string.Empty;
     }
 
     private void RefreshLauncherTile(string module, ref int appliedCount)
@@ -349,12 +630,12 @@ public partial class DashboardViewModel : ObservableObject
         catch { }
         if (state.Applied) appliedCount++;
         var tag = state.Applied ? "VERIFIED" : !string.IsNullOrWhiteSpace(state.Detail) ? "NEEDS ATTENTION" : "NOT APPLIED";
-        var primary = state.Applied ? "Game policy active" : module == "riot" ? "Riot ready" : "Epic ready";
+        var primary = state.Applied ? "Launcher policy active" : module == "riot" ? "Riot ready" : "Epic ready";
         var secondary = state.Applied
-            ? "High-performance GPU · Above Normal CPU · startup quiet"
+            ? "Startup quiet - launcher yield while gaming"
             : module == "riot" ? "Detect VALORANT and League automatically" : "Discover installed games from Epic manifests";
         var metric = state.Applied
-            ? $"{targetCount} game executable(s) verified · exact Repair ready"
+            ? $"{targetCount} game executable(s) for yield detect - anti-cheat untouched"
             : module == "riot" ? "Anti-cheat and Riot services stay untouched" : "Launcher files, caches, and updates stay untouched";
         if (module == "riot")
         {
@@ -412,6 +693,81 @@ public partial class DashboardViewModel : ObservableObject
                 Status = status
             }
         };
+}
+
+public enum OptimizerCheckPhase
+{
+    Idle,
+    Checking,
+    Applied,
+    Missing
+}
+
+public partial class OptimizerCheckRowViewModel : ObservableObject
+{
+    private static readonly SolidColorBrush IdleBrush = new(Color.FromArgb(0xFF, 0x6B, 0x6B, 0x70));
+    private static readonly SolidColorBrush CheckingBrush = new(Color.FromArgb(0xFF, 0xC8, 0xC8, 0xCC));
+    private static readonly SolidColorBrush AppliedBrush = new(Color.FromArgb(0xFF, 0x3D, 0xDC, 0x84));
+    private static readonly SolidColorBrush MissingBrush = new(Color.FromArgb(0xFF, 0xF0, 0x5B, 0x5B));
+
+    public OptimizerCheckRowViewModel(string title, string moduleId)
+    {
+        Title = title;
+        ModuleId = moduleId;
+        SetPhase(OptimizerCheckPhase.Idle);
+    }
+
+    public string Title { get; }
+    public string ModuleId { get; }
+
+    [ObservableProperty] public partial string StatusLabel { get; set; } = "…";
+    [ObservableProperty] public partial string Glyph { get; set; } = "\uE915"; // circle
+    [ObservableProperty] public partial Brush GlyphBrush { get; set; } = IdleBrush;
+    [ObservableProperty] public partial double GlyphOpacity { get; set; } = 0.45;
+    [ObservableProperty] public partial double PulseOpacity { get; set; }
+    [ObservableProperty] public partial OptimizerCheckPhase Phase { get; set; } = OptimizerCheckPhase.Idle;
+
+    public void SetPhase(OptimizerCheckPhase phase)
+    {
+        Phase = phase;
+        switch (phase)
+        {
+            case OptimizerCheckPhase.Checking:
+                StatusLabel = "Checking…";
+                Glyph = "\uE915";
+                GlyphBrush = CheckingBrush;
+                GlyphOpacity = 0.35;
+                PulseOpacity = 0.9;
+                break;
+            case OptimizerCheckPhase.Applied:
+                StatusLabel = "Applied";
+                Glyph = "\uE73E";
+                GlyphBrush = AppliedBrush;
+                GlyphOpacity = 1.0;
+                PulseOpacity = 0;
+                break;
+            case OptimizerCheckPhase.Missing:
+                StatusLabel = "Not applied";
+                Glyph = "\uE711";
+                GlyphBrush = MissingBrush;
+                GlyphOpacity = 0.95;
+                PulseOpacity = 0;
+                break;
+            default:
+                StatusLabel = "…";
+                Glyph = "\uE915";
+                GlyphBrush = IdleBrush;
+                GlyphOpacity = 0.35;
+                PulseOpacity = 0;
+                break;
+        }
+    }
+}
+
+public partial class SparkBarViewModel : ObservableObject
+{
+    [ObservableProperty] public partial double Height { get; set; } = 2;
+    [ObservableProperty] public partial double Opacity { get; set; } = 0.15;
 }
 
 public partial class OptimizerCardViewModel : ObservableObject

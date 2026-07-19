@@ -44,6 +44,22 @@ public sealed partial class SharedModulePlate : UserControl
         DependencyProperty.Register(nameof(HeaderExtra), typeof(UIElement), typeof(SharedModulePlate), new PropertyMetadata(null));
     public UIElement? HeaderExtra { get => (UIElement?)GetValue(HeaderExtraProperty); set => SetValue(HeaderExtraProperty, value); }
 
+    public static readonly DependencyProperty ShowApplyModeToggleProperty =
+        DependencyProperty.Register(nameof(ShowApplyModeToggle), typeof(bool), typeof(SharedModulePlate), new PropertyMetadata(true));
+    public bool ShowApplyModeToggle { get => (bool)GetValue(ShowApplyModeToggleProperty); set => SetValue(ShowApplyModeToggleProperty, value); }
+
+    public static readonly DependencyProperty SelectedApplyModeProperty =
+        DependencyProperty.Register(nameof(SelectedApplyMode), typeof(string), typeof(SharedModulePlate), new PropertyMetadata("Stable"));
+    public string SelectedApplyMode { get => (string)GetValue(SelectedApplyModeProperty); set => SetValue(SelectedApplyModeProperty, value); }
+
+    public static readonly DependencyProperty ApplyModeOptionsProperty =
+        DependencyProperty.Register(nameof(ApplyModeOptions), typeof(object), typeof(SharedModulePlate), new PropertyMetadata(null));
+    public object? ApplyModeOptions { get => GetValue(ApplyModeOptionsProperty); set => SetValue(ApplyModeOptionsProperty, value); }
+
+    public static readonly DependencyProperty PolicyTogglesEnabledProperty =
+        DependencyProperty.Register(nameof(PolicyTogglesEnabled), typeof(bool), typeof(SharedModulePlate), new PropertyMetadata(true));
+    public bool PolicyTogglesEnabled { get => (bool)GetValue(PolicyTogglesEnabledProperty); set => SetValue(PolicyTogglesEnabledProperty, value); }
+
     public static readonly DependencyProperty FootExtraProperty =
         DependencyProperty.Register(nameof(FootExtra), typeof(UIElement), typeof(SharedModulePlate), new PropertyMetadata(null));
     public UIElement? FootExtra { get => (UIElement?)GetValue(FootExtraProperty); set => SetValue(FootExtraProperty, value); }

@@ -269,7 +269,7 @@ if (-not (Test-Path $discordRoot)) {
                 -ProxyHashMatchesKit $proxyHashOk `
                 -VersionHashMatchesKit $verHashOk
         }
-        Add-Feature 'Background memory + input policy' 'Verified DiscOpt binaries apply a 4-second idle working-set policy, Above Normal process priority, and input-thread tuning.' $kernelOk
+        Add-Feature 'Background memory + input policy' 'Verified DiscOpt binaries apply a 2.5-second idle working-set policy, Above Normal process priority, raw input, and input-thread tuning.' $kernelOk
 
         $modPath = Join-Path $app.FullName 'modules'
         $optionalModules = @('discord_hook-1', 'discord_clips-1')
@@ -323,12 +323,10 @@ if (-not (Test-Path $discordRoot)) {
         $amoledOk = $false
         $leanPluginsOk = $false
         $leanPluginDetail = 'Lean plugin policy missing or unreadable.'
-        $startupOk = $false
         $settingsPath = Join-Path $appData 'discord\settings.json'
         if (Test-Path -LiteralPath $settingsPath) {
             try {
                 $sjRaw = Get-Content $settingsPath -Raw -Encoding UTF8
-                $startupOk = Test-DiscOptStartupOffFromSettingsJson -JsonText $sjRaw
                 $sj = $sjRaw | ConvertFrom-Json
                 if ($sj.BACKGROUND_COLOR -eq '#000000') { $amoledOk = $true }
             } catch {}
@@ -357,10 +355,11 @@ if (-not (Test-Path $discordRoot)) {
         Add-Feature 'Dark mode' 'True-black Equicord theme without a forced overlay.' $amoledOk
         Add-Feature 'Lean plugin budget' $leanPluginDetail $leanPluginsOk
 
+        # Windows quiet = OS shell only (Run key / tasks / OS toasts / tray).
+        # Discord OPEN_ON_STARTUP is an in-app pref and is intentionally not required.
         $notificationsOk = Test-DiscordToastsOff
-        $windowsQuietOk = $startupOk -and $notificationsOk -and
-            (Test-StableDiscordWindowsQuiet $discordRoot)
-        Add-Feature 'Windows background suppression' 'No Discord autostart or scheduled tasks; Windows toasts off; tray icon not promoted.' $windowsQuietOk
+        $windowsQuietOk = $notificationsOk -and (Test-StableDiscordWindowsQuiet $discordRoot)
+        Add-Feature 'Windows background suppression' 'No Discord autostart or scheduled tasks; Windows toasts off; tray icon not promoted. Discord in-app notification/audio/motion prefs are left alone.' $windowsQuietOk
 
         $launchOk = $false
         try {
@@ -422,6 +421,8 @@ if (-not (Test-Path $discordRoot)) {
         $isApplied = [bool]($markerOk -and $equicordOk -and $exoHostOk -and $kernelOk -and
             $debloatOk -and $windowsQuietOk -and $amoledOk -and $runtimeOk -and $launchOk -and
             $qosOk -and $variantsOk -and $leanPluginsOk)
+        # Never claim applied without a live app-* build (stale markers / leftover Equicord).
+        if (-not $app) { $isApplied = $false }
         if ($isApplied) {
             $statusText = 'Already optimized'
             $detail = 'Verified Discord policy active: lean client, background policy, privacy settings, and dark mode.'

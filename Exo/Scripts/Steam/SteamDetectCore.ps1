@@ -30,14 +30,17 @@ function Test-SteamMemoryGuardText {
     if ($Text -notmatch '(?s)\$webCls\s*=\s*if\s*\(\$_\.Id\s*-eq\s*\$foregroundPid\).*?Normal.*?\$backgroundWebCls') { return $false }
     if ($Text -notmatch '\$_\.PriorityClass\s*=\s*\$webCls') { return $false }
     if ($Text -notmatch '(?s)\$memoryPriority\s*=\s*if\s*\(\$_\.Id\s*-eq\s*\$foregroundPid\).*?5.*?elseif\s*\(\$InGame\).*?1.*?else\s*\{\s*2\s*\}') { return $false }
-    if ($Text -notmatch 'SetPowerThrottled\(\$_\.Id, \(\$InGame -and \$_\.Id -ne \$foregroundPid\)\)') { return $false }
-    # EmptyWorkingSet on steamwebhelper freezes/kills CEF UI - reject thrashing helpers.
-    # Evaluate code lines only: a '# Never EmptyWorkingSet' comment must not exempt a real call.
+    if ($Text -notmatch 'SetPowerThrottled\(\$_\.Id, \(\$_\.Id -ne \$foregroundPid\)\)' -and
+        $Text -notmatch 'SetPowerThrottled\(\$_\.Id, \(\$InGame -and \$_\.Id -ne \$foregroundPid\)\)') { return $false }
+    # EmptyWorkingSet freezes CEF - always banned. SoftReclaimWorkingSet allowed
+    # when gated on non-foreground CEF (library + in-game).
+    $allowsSoftReclaim = ($Text -match 'SoftReclaimWorkingSet') -and
+        ($Text -match '\$_\.Id -ne \$foregroundPid')
     foreach ($rawLine in ($Text -split "`n")) {
         $line = $rawLine.TrimStart()
         if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }
         if ($line.Contains('EmptyWorkingSet(')) { return $false }
-        if ($line.Contains('SetProcessWorkingSetSize')) { return $false }
+        if ($line.Contains('SetProcessWorkingSetSize') -and -not $allowsSoftReclaim) { return $false }
         if ($line -match '(?i)Stop-Process.*steamwebhelper|Suspend-Process') { return $false }
     }
     if ($Text -match 'Start-Sleep\s+-Seconds\s+(\d+)') {

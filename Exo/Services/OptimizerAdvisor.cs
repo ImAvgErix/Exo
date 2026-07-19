@@ -29,16 +29,40 @@ public static class OptimizerAdvisor
         var detail = (detailText ?? string.Empty).Trim();
         var state = $"{status} {detail} {string.Join(' ', features.Select(f => f.Status))}".ToLowerInvariant();
 
+        // Install-presence checks ALWAYS win over isApplied / "Already optimized".
+        // Stale markers or leftover Equicord state must not claim success without the host app.
+        var discordInstallMissing = module == "Discord" && features.Any(f =>
+            f.Name.Contains("install", StringComparison.OrdinalIgnoreCase) && !f.Applied);
+        var steamInstallMissing = module == "Steam" && features.Any(f =>
+            f.Name.Contains("install", StringComparison.OrdinalIgnoreCase) && !f.Applied);
+
         if (module == "NVIDIA" && (state.Contains("no nvidia") || state.Contains("needs an nvidia")))
             return "No supported NVIDIA GPU was detected on this PC.";
-        if (module == "Discord" && (state.Contains("not installed") || state.Contains("no discord")))
+        // Phrase-level checks only — never match substrings of healthy rows like
+        // "No Discord autostart" (that contains "no discord" and used to false-positive).
+        if (module == "Discord" && (discordInstallMissing
+            || status.Contains("not installed", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("discord not installed", StringComparison.OrdinalIgnoreCase)
+            || detail.Contains("install Discord stable", StringComparison.OrdinalIgnoreCase)))
             return "Discord Stable is not installed. Install it, then refresh this page.";
-        if (module == "Steam" && (state.Contains("not installed") || state.Contains("no steam")))
+        if (module == "Steam" && (steamInstallMissing
+            || status.Contains("not installed", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("steam not installed", StringComparison.OrdinalIgnoreCase)))
             return "Steam is not installed. Install and open it once, then refresh this page.";
         if (module == "Internet" && state.Contains("no physical"))
             return "No active physical connection was detected. Connect Ethernet or Wi-Fi, then refresh.";
         if (module == "Steam" && state.Contains("open steam once"))
             return "Open Steam once so its account configuration exists, then apply again.";
+
+        // Soft copy when detect reports a small drift (exact "needs Apply" status from scripts).
+        if (module == "Steam" && status.Contains("needs Apply", StringComparison.OrdinalIgnoreCase))
+            return status.Contains("1 setting", StringComparison.OrdinalIgnoreCase)
+                ? "One launcher setting is out of policy. Apply restores it without touching games."
+                : "A few launcher settings are out of policy. Apply restores them without touching games.";
+
+        // Never claim verified/applied when the install feature is missing (stale apply marker).
+        if (discordInstallMissing || steamInstallMissing)
+            isApplied = false;
 
         if (isApplied && missingCount == 0 && !hasFailure)
         {
@@ -57,6 +81,31 @@ public static class OptimizerAdvisor
 
         if (missingCount > 0)
         {
+            // Prefer calm singular/plural copy — "1 settings are ready" reads broken.
+            if (missingCount == 1)
+            {
+                return module switch
+                {
+                    "Internet" => "One network setting is open. Analyze & Apply measures this path first.",
+                    "Discord" => "One setting is ready for this Discord installation.",
+                    "Steam" => "One launcher setting is out of policy. Apply restores it without touching games.",
+                    "NVIDIA" => "One GPU setting is ready for the detected display path.",
+                    _ => "One setting is ready for this PC."
+                };
+            }
+
+            if (missingCount <= 3)
+            {
+                return module switch
+                {
+                    "Internet" => "A few network settings are open. Analyze & Apply measures this path first.",
+                    "Discord" => $"{missingCount} settings are ready for this Discord installation.",
+                    "Steam" => "A few launcher settings are out of policy. Apply restores them without touching games.",
+                    "NVIDIA" => $"{missingCount} settings are ready for the detected GPU and display path.",
+                    _ => $"{missingCount} settings are ready for this PC."
+                };
+            }
+
             return module switch
             {
                 "Internet" => "Ready to measure this connection and apply one balanced policy.",

@@ -115,10 +115,10 @@ Expect("variant definitions cover stable+ptb+canary",
     DiscordLogic.VariantDefinitions.Length == 3 &&
     DiscordLogic.VariantDefinitions.Any(v => v.LocalDir == "DiscordPTB" && v.Exe == "DiscordPTB.exe") &&
     DiscordLogic.VariantDefinitions.Any(v => v.LocalDir == "DiscordCanary" && v.AppDataDir == "discordcanary"));
-Expect("variant settings good",
-    DiscordLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":false,"chromiumSwitches":{"no-pings":1}}"""));
-Expect("variant settings startup on fails",
-    !DiscordLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":true,"chromiumSwitches":{"no-pings":1}}"""));
+Expect("variant settings good (chromium only)",
+    DiscordLogic.IsVariantSettingsJson("""{"chromiumSwitches":{"no-pings":1}}"""));
+Expect("variant settings still good when startup left on",
+    DiscordLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":true,"chromiumSwitches":{"no-pings":1}}"""));
 Expect("variant settings missing chromium fails",
     !DiscordLogic.IsVariantSettingsJson("""{"OPEN_ON_STARTUP":false}"""));
 Expect("variant optimized all true", DiscordLogic.IsVariantOptimized(true, true, true));
@@ -187,8 +187,8 @@ PriorityClass=3
   (E 'ps qos map exe mismatch' (-not (Test-DiscOptQosPolicyMap -Map @{{ 'Version' = '1.0'; 'Application Name' = 'Discord.exe'; 'Protocol' = 'UDP'; 'DSCP Value' = '46'; 'Throttle Rate' = '-1' }} -ExpectedExe 'DiscordPTB.exe'))),
   (E 'ps variant defs 3' (@(Get-DiscOptVariantDefinitions).Count -eq 3)),
   (E 'ps variant defs ptb' (@(Get-DiscOptVariantDefinitions | Where-Object {{ $_.LocalDir -eq 'DiscordPTB' -and $_.Exe -eq 'DiscordPTB.exe' -and $_.QosPolicy -eq 'Exo Discord PTB Voice' }}).Count -eq 1)),
-  (E 'ps variant settings good' (Test-DiscOptVariantSettingsJson -JsonText '{{""OPEN_ON_STARTUP"":false,""chromiumSwitches"":{{""no-pings"":1}}}}')),
-  (E 'ps variant settings startup on' (-not (Test-DiscOptVariantSettingsJson -JsonText '{{""OPEN_ON_STARTUP"":true,""chromiumSwitches"":{{""no-pings"":1}}}}'))),
+  (E 'ps variant settings good' (Test-DiscOptVariantSettingsJson -JsonText '{{""chromiumSwitches"":{{""no-pings"":1}}}}')),
+  (E 'ps variant settings startup on still ok' (Test-DiscOptVariantSettingsJson -JsonText '{{""OPEN_ON_STARTUP"":true,""chromiumSwitches"":{{""no-pings"":1}}}}')),
   (E 'ps variant optimized' (Test-DiscOptVariantOptimized -SettingsFlagsOk $true -AutostartQuiet $true -QosOk $true)),
   (E 'ps variant not optimized without qos' (-not (Test-DiscOptVariantOptimized -SettingsFlagsOk $true -AutostartQuiet $true -QosOk $false))),
   (E 'ps toast intentional' (Test-DiscOptToastsOffFromMap -Map @{{ Discord = 0; Other = $null }})),
@@ -255,20 +255,21 @@ var (auditOk, auditIssues) = DiscordLogic.AuditApplyScriptText(applyBlob);
 Expect("apply audit", auditOk, string.Join("; ", auditIssues));
 Expect("no Exo-Discord scheduled task create",
     applyBlob.IndexOf("Register-ScheduledTask -TaskName 'Exo-Discord", StringComparison.OrdinalIgnoreCase) < 0);
-// Elevated Exo Apply must prove the complete kernel through a user-token launch;
-// rollback is reserved for a real boot failure.
-Expect("elevated apply keeps kernel pending user-token verification",
-    applyBlob.Contains("Keep the complete kernel when that succeeds", StringComparison.Ordinal) &&
+// Boot safety: keep kernel after a healthy boot; disarm only after real boot failure.
+// Single end-open path (no thrash open/kill mid-apply) — see Disc-Optimizer + Confirm-DiscordBootsAfterMods.
+Expect("boot check keeps kernel when Discord loads",
+    applyBlob.Contains("Confirm-DiscordBootsAfterMods", StringComparison.Ordinal) &&
+    applyBlob.Contains("Boot check passed", StringComparison.Ordinal) &&
     !applyBlob.Contains("Disarming DiscOpt kernel after elevated Apply", StringComparison.Ordinal));
-Expect("elevated apply rolls kernel back only after boot failure",
+Expect("boot check rolls kernel back only after boot failure",
     applyBlob.Contains("Disable-DiscOptKernelOnDisk", StringComparison.Ordinal) &&
-    applyBlob.Contains("Boot failed with DiscOpt kernel - disarming kernel", StringComparison.Ordinal) &&
-    applyBlob.Contains("disarmed after user-token boot fail", StringComparison.Ordinal));
+    applyBlob.Contains("Boot check failed with kernel - trying without kernel", StringComparison.Ordinal) &&
+    applyBlob.Contains("Kernel disabled automatically", StringComparison.Ordinal));
 Expect("elevated host boot-check honest",
     applyBlob.Contains("Disable-DiscOptKernelOnDisk", StringComparison.Ordinal) &&
-    (applyBlob.Contains("user-token boot", StringComparison.Ordinal) ||
-     applyBlob.Contains("elevated host", StringComparison.Ordinal) ||
-     applyBlob.Contains("Confirm-DiscordBootsAsUser", StringComparison.Ordinal)));
+    (applyBlob.Contains("user-token boot", StringComparison.OrdinalIgnoreCase) ||
+     applyBlob.Contains("Confirm-DiscordBootsAsUser", StringComparison.Ordinal) ||
+     applyBlob.Contains("Confirm-DiscordBootsAfterMods", StringComparison.Ordinal)));
 Expect("Install-DiscOptKernel present",
     applyBlob.Contains("Install-DiscOptKernel", StringComparison.Ordinal));
 Expect("Apply-WindowsTweaks present",
@@ -561,9 +562,18 @@ if (File.Exists(detectPs1))
 }
 
 Log($"=== SUMMARY failed={failed} ===");
-Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
-File.WriteAllLines(logPath, lines);
-Console.WriteLine("Wrote " + logPath);
+try
+{
+    var logDir = Path.GetDirectoryName(logPath);
+    if (!string.IsNullOrWhiteSpace(logDir))
+        Directory.CreateDirectory(logDir);
+    File.WriteAllLines(logPath, lines);
+    Console.WriteLine("Wrote " + logPath);
+}
+catch (Exception ex)
+{
+    Console.WriteLine("Log write skipped: " + ex.Message);
+}
 Environment.Exit(failed == 0 ? 0 : 1);
 
 static string FindRepoRoot()

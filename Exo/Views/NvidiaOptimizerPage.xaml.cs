@@ -15,13 +15,14 @@ public sealed partial class NvidiaOptimizerPage : Page
 
     public NvidiaOptimizerPage()
     {
+        NavigationCacheMode = NavigationCacheMode.Enabled;
         ViewModel = new NvidiaOptimizerViewModel(App.Services);
         InitializeComponent();
         DataContext = ViewModel;
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
     }
 
-    protected override async void OnNavigatedTo(NavigationEventArgs e)
+    protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         try
@@ -31,10 +32,18 @@ public sealed partial class NvidiaOptimizerPage : Page
         }
         catch { }
         try { ExoMotion.EnsureVisible(this); } catch { }
-        await ViewModel.InitializeAsync();
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            _ = ViewModel.InitializeAsync();
+        });
     }
 
-    /// <summary>Staggered tile entrance on the first loading → loaded transition only.</summary>
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        ViewModel.CancelBackgroundWork();
+        base.OnNavigatedFrom(e);
+    }
+
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_tilesEntered) return;
@@ -43,7 +52,6 @@ public sealed partial class NvidiaOptimizerPage : Page
         _tilesEntered = true;
         try
         {
-            // After a heavy driver Apply, skip stagger if motion was freeze-killed.
             if (ExoMotion.MotionDisabled)
             {
                 ExoMotion.EnsureVisible(Plate);
@@ -62,5 +70,4 @@ public sealed partial class NvidiaOptimizerPage : Page
 
     private void Repair_Click(object sender, RoutedEventArgs e) =>
         ViewModel.RepairCommand.Execute(null);
-
 }

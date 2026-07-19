@@ -22,14 +22,76 @@ public partial class InternetOptimizerViewModel : ObservableObject
         var banner = UiStatusPresentation.BannerForSuccess(true);
         MessageGlyph = banner.Glyph;
         MessageBrush = ResolveBrush(banner.BrushKey, Color.FromArgb(255, 34, 197, 94));
+        // Gaming default: lowest latency. User can flip to high throughput.
+        var preferred = _services.Network.LoadPreferredPolicy();
+        PreferLowestLatency = preferred != NetworkPreset.HighestThroughput;
+        SelectedProfileOption = PreferLowestLatency ? "Lowest latency" : "High throughput";
+        try
+        {
+            PreferExperimental = services.Settings.Current.ExperimentalInternet;
+            SelectedApplyMode = PreferExperimental ? "Experimental" : "Stable";
+        }
+        catch { }
+    }
+
+    partial void OnSelectedApplyModeChanged(string value)
+    {
+        var exp = string.Equals(value, "Experimental", StringComparison.OrdinalIgnoreCase);
+        if (PreferExperimental != exp) PreferExperimental = exp;
+    }
+
+    partial void OnPreferExperimentalChanged(bool value)
+    {
+        var mode = value ? "Experimental" : "Stable";
+        if (!string.Equals(SelectedApplyMode, mode, StringComparison.Ordinal))
+            SelectedApplyMode = mode;
+        try { _services.Settings.Update(s => s.ExperimentalInternet = value); } catch { }
+    }
+
+    partial void OnSelectedProfileOptionChanged(string value)
+    {
+        var latency = string.Equals(value, "Lowest latency", StringComparison.OrdinalIgnoreCase);
+        if (PreferLowestLatency != latency) PreferLowestLatency = latency;
     }
 
     public ObservableCollection<FeatureRowViewModel> Rows { get; } = new();
 
+    /// <summary>When true, Analyze &amp; Apply uses LowestLatency knobs (FC/IM off).</summary>
+    [ObservableProperty] public partial bool PreferLowestLatency { get; set; } = true;
+
+    public bool PreferHighThroughput
+    {
+        get => !PreferLowestLatency;
+        set
+        {
+            if (PreferLowestLatency == !value) return;
+            PreferLowestLatency = !value;
+        }
+    }
+
+    public NetworkPreset SelectedPolicy =>
+        PreferLowestLatency ? NetworkPreset.LowestLatency : NetworkPreset.HighestThroughput;
+
+    partial void OnPreferLowestLatencyChanged(bool value)
+    {
+        var opt = value ? "Lowest latency" : "High throughput";
+        if (!string.Equals(SelectedProfileOption, opt, StringComparison.Ordinal))
+            SelectedProfileOption = opt;
+        OnPropertyChanged(nameof(PreferHighThroughput));
+        OnPropertyChanged(nameof(SelectedPolicy));
+        try { _services.Network.SavePreferredPolicy(SelectedPolicy); } catch { }
+    }
+
+    public IReadOnlyList<string> ApplyModeOptions { get; } = new[] { "Stable", "Experimental" };
+    [ObservableProperty] public partial string SelectedApplyMode { get; set; } = "Stable";
+    public IReadOnlyList<string> ProfileOptions { get; } = new[] { "Lowest latency", "High throughput" };
+    [ObservableProperty] public partial string SelectedProfileOption { get; set; } = "Lowest latency";
+
     [ObservableProperty] public partial string HeaderStatus { get; set; } = "Checking...";
     [ObservableProperty] public partial string GuidanceText { get; set; } = "Detecting this PC...";
-    [ObservableProperty] public partial bool HasGuidance { get; set; } = true;
+    [ObservableProperty] public partial bool HasGuidance { get; set; }
     [ObservableProperty] public partial bool IsLoading { get; set; } = true;
+    [ObservableProperty] public partial bool PreferExperimental { get; set; }
     [ObservableProperty] public partial bool IsFeatureListVisible { get; set; }
     [ObservableProperty] public partial bool IsBusy { get; set; }
     [ObservableProperty] public partial string ProgressStatus { get; set; } = string.Empty;
@@ -38,13 +100,13 @@ public partial class InternetOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial string MessageGlyph { get; set; } = "\uE73E";
     [ObservableProperty] public partial Brush MessageBrush { get; set; }
 
-    // Proof layer — persisted benchmark delta, honest rollback marker, restore capability.
+    // Proof layer - persisted benchmark delta, honest rollback marker, restore capability.
     [ObservableProperty] public partial bool HasBenchmark { get; set; }
     [ObservableProperty] public partial string BenchmarkSummary { get; set; } = string.Empty;
     [ObservableProperty] public partial Brush BenchmarkBrush { get; set; } = new SolidColorBrush(Color.FromArgb(255, 161, 161, 170));
     [ObservableProperty] public partial bool HasRollback { get; set; }
     [ObservableProperty] public partial string RollbackNotice { get; set; } = string.Empty;
-    [ObservableProperty] public partial string RepairHint { get; set; } = "Repair: reset to stock defaults";
+    [ObservableProperty] public partial string RepairHint { get; set; } = string.Empty;
     [ObservableProperty] public partial bool HasQualityResult { get; set; }
     [ObservableProperty] public partial string QualitySummary { get; set; } = string.Empty;
 
@@ -63,36 +125,76 @@ public partial class InternetOptimizerViewModel : ObservableObject
     private void ToggleApplyReport() => IsApplyReportOpen = !IsApplyReportOpen;
 
     [RelayCommand]
+    private void SelectLatencyPolicy() => PreferLowestLatency = true;
+
+    [RelayCommand]
+    private void SelectThroughputPolicy() => PreferLowestLatency = false;
+
+    [RelayCommand]
     public Task RefreshAsync() => LoadSnapshotAsync(showFullPageLoading: !IsBusy);
 
     /// <summary>
     /// Probe and update header + feature rows.
     /// Does not early-return on IsBusy so apply/repair can refresh in place.
     /// </summary>
-    private async Task LoadSnapshotAsync(bool showFullPageLoading)
+    private DateTimeOffset _lastProbeUtc = DateTimeOffset.MinValue;
+    private static readonly TimeSpan ProbeFreshness = TimeSpan.FromSeconds(90);
+    private int _probeGen;
+    private CancellationTokenSource? _probeCts;
+
+    public void CancelBackgroundWork()
     {
-        if (showFullPageLoading)
+        try { _probeCts?.Cancel(); } catch { }
+        Interlocked.Increment(ref _probeGen);
+    }
+
+    private async Task LoadSnapshotAsync(bool showFullPageLoading, bool force = true)
+    {
+        if (!force && Rows.Count > 0 && DateTimeOffset.UtcNow - _lastProbeUtc < ProbeFreshness)
+        {
+            IsLoading = false;
+            IsFeatureListVisible = true;
+            return;
+        }
+
+        try { _probeCts?.Cancel(); } catch { }
+        _probeCts?.Dispose();
+        _probeCts = new CancellationTokenSource();
+        var ct = _probeCts.Token;
+        var gen = Interlocked.Increment(ref _probeGen);
+        if (Rows.Count == 0)
         {
             IsLoading = true;
             IsFeatureListVisible = false;
+            HeaderStatus = "Checking...";
         }
+
         try
         {
-            var snap = await _services.Network.ProbeAsync();
+            var snap = await _services.Network.ProbeAsync(ct).ConfigureAwait(true);
+            if (gen != _probeGen || ct.IsCancellationRequested) return;
             ApplySnapshotToUi(snap, preserveSuccessMessage: false);
+            _lastProbeUtc = DateTimeOffset.UtcNow;
         }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            HeaderStatus = "Unavailable";
-            SetMessage(ex.Message, success: false);
+            if (gen == _probeGen && Rows.Count == 0)
+            {
+                HeaderStatus = "Unavailable";
+                SetMessage(ex.Message, success: false);
+            }
         }
         finally
         {
-            if (showFullPageLoading)
+            if (gen == _probeGen)
+            {
                 IsLoading = false;
-            IsFeatureListVisible = Rows.Count > 0;
+                IsFeatureListVisible = Rows.Count > 0;
+            }
         }
-        await LoadProofLayerAsync();
+        if (gen == _probeGen && !ct.IsCancellationRequested)
+            await LoadProofLayerAsync();
     }
 
     /// <summary>
@@ -113,10 +215,6 @@ public partial class InternetOptimizerViewModel : ObservableObject
                 return (r, b, rb, hs, qb);
             });
 
-            RepairHint = hasSnapshot
-                ? "Repair: restore exact pre-Exo state"
-                : "Repair: reset to stock defaults";
-
             HasRollback = rollback?.RolledBack == true;
             RollbackNotice = HasRollback
                 ? "Apply rolled back: " + (string.IsNullOrWhiteSpace(rollback!.Reason)
@@ -127,8 +225,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
             if (bench.Before is { Ok: true } && bench.After is { Ok: true } after)
             {
                 BenchmarkSummary =
-                    $"Verification sample · {FormatMs(after.PingP50Ms)} ms path latency" +
-                    $" · {FormatMs(after.JitterMs)} ms jitter · conditions vary";
+                    $"Verification sample - {FormatMs(after.PingP50Ms)} ms path latency" +
+                    $" - {FormatMs(after.JitterMs)} ms jitter - conditions vary";
                 BenchmarkBrush = ResolveBrush(
                     "ExoMutedTextBrush",
                     Color.FromArgb(255, 95, 95, 105));
@@ -157,12 +255,12 @@ public partial class InternetOptimizerViewModel : ObservableObject
         }
         catch
         {
-            // Proof layer is additive — never break the page over it.
+            // Proof layer is additive - never break the page over it.
         }
     }
 
     private static string FormatMs(double value) =>
-        value < 0 ? "—" : value.ToString(value >= 100 ? "0" : "0.0");
+        value < 0 ? "-" : value.ToString(value >= 100 ? "0" : "0.0");
 
     private void ApplyQualityResult(NetworkBenchmarkResult? result)
     {
@@ -175,7 +273,9 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
         var downPenalty = Math.Max(0, result.DownloadLoadedMs - result.PingP50Ms);
         var upPenalty = Math.Max(0, result.UploadLoadedMs - result.PingP50Ms);
-        QualitySummary = $"{result.PingP50Ms:0.#} ms idle · full-load +{downPenalty:0.#} ms download / +{upPenalty:0.#} ms upload · {result.PacketLossPercent:0.##}% idle loss · {result.DnsProvider} DNS";
+        // +N under load is bufferbloat (ping rise while saturating), not idle RTT.
+        QualitySummary =
+            $"{result.PingP50Ms:0.#} ms idle · load spike +{downPenalty:0.#} down / +{upPenalty:0.#} up · {result.PacketLossPercent:0.##}% idle loss · {result.DnsProvider} DNS";
         HasQualityResult = true;
     }
 
@@ -189,7 +289,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
         if (!IsLoading)
             IsFeatureListVisible = Rows.Count > 0;
 
-        // Path (Ethernet vs Wi‑Fi) lives in the header only — no redundant banner on open.
+        // Path (Ethernet vs Wi‑Fi) lives in the header only - no redundant banner on open.
         if (!string.IsNullOrWhiteSpace(snap.Detail) && !snap.ProbeOk)
             SetMessage(snap.Detail, success: false);
         else if (!preserveSuccessMessage)
@@ -200,21 +300,9 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
     private void RefreshGuidance(NetworkSnapshot snap)
     {
-        var applied = snap.Features.Count > 0 && snap.Features.All(r => r.IsOk);
-        var failSteps = ApplyReportRows
-            .Where(r => r.Status == "fail")
-            .Select(r => r.Text.Split('·')[0].Trim())
-            .Where(s => s.Length > 0)
-            .Take(4)
-            .ToList();
-        GuidanceText = OptimizerAdvisor.BuildV2(
-            "Internet",
-            applied,
-            HeaderStatus,
-            snap.Detail,
-            snap.Features.Select(r => (r.Title, r.IsOk, r.Status)).ToList(),
-            failSteps);
-        HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
+        _ = snap;
+        GuidanceText = string.Empty;
+        HasGuidance = false;
     }
 
     /// <summary>
@@ -233,15 +321,15 @@ public partial class InternetOptimizerViewModel : ObservableObject
                 : "Keeps every adapter recoverable and changes route priority only when a healthy path exists.";
         AddInfoCard("Connection path", path, snap.ProbeOk);
 
-        var policy = _lastQuality is { Ok: true, IsQualityTest: true } quality
-            ? $"Measured idle latency, full-load queueing, and throughput; applied {PresetLabel(snap.ActivePreset)} policy."
-            : "Measures idle latency, full-load queueing, and throughput before choosing one combined policy.";
-        AddInfoCard("Adaptive tuning", policy, applied);
+        var policy = applied
+            ? $"Last apply used {PresetLabel(snap.ActivePreset)}. Toggle selects Lowest latency (FC/IM off) or High throughput (FC/IM on)."
+            : $"Selected: {PresetLabel(SelectedPolicy)}. Analyze measures DNS/quality, then applies your toggle.";
+        AddInfoCard("Policy", policy, PreferLowestLatency || PreferHighThroughput);
 
         var dnsStep = _lastApplyReport.LastOrDefault(r =>
             string.Equals(r.Name, "dns-auto", StringComparison.OrdinalIgnoreCase));
         var dnsDetail = dnsStep is not null && !string.IsNullOrWhiteSpace(dnsStep.Reason)
-            ? dnsStep.Reason.Replace(
+            ? SanitizeUiAscii(dnsStep.Reason).Replace(
                 "Windows rejected automatic DoH",
                 "automatic DoH needs a 3.5.1 re-apply",
                 StringComparison.OrdinalIgnoreCase)
@@ -275,8 +363,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
     private static string PresetLabel(NetworkPreset preset) => preset switch
     {
-        NetworkPreset.HighestThroughput => "multi-gig throughput + latency",
-        NetworkPreset.LowestLatency => "latency-safe",
+        NetworkPreset.HighestThroughput => "high throughput",
+        NetworkPreset.LowestLatency => "lowest latency",
         _ => "balanced"
     };
 
@@ -288,7 +376,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
         HasMessage = false;
         ProgressStatus = "Starting sustained connection analysis...";
         NetworkBenchmarkResult? result = null;
-        NetworkPreset preset = NetworkPreset.LowestLatency;
+        // Toggle owns the stack (latency vs throughput). Analyze picks DNS + quality proof only.
+        var preset = SelectedPolicy;
         try
         {
             var snap = _lastSnap ?? await _services.Network.ProbeAsync();
@@ -300,10 +389,13 @@ public partial class InternetOptimizerViewModel : ObservableObject
                 return;
             }
 
-            preset = NetworkLogic.RecommendPreset(result, snap.Media);
+            // Surface what auto-mode would have chosen, but never override the toggle.
+            var suggested = NetworkLogic.RecommendPreset(result, snap.Media);
             _services.Network.PersistQualityBenchmark(result);
             ApplyQualityResult(result);
-            ProgressStatus = "Applying the best verified settings for this link...";
+            ProgressStatus = suggested == preset
+                ? $"Applying {PresetLabel(preset)} stack..."
+                : $"Applying {PresetLabel(preset)} stack (measure suggested {PresetLabel(suggested)})...";
         }
         catch (Exception ex)
         {
@@ -316,14 +408,16 @@ public partial class InternetOptimizerViewModel : ObservableObject
             if (result is null) ProgressStatus = string.Empty;
         }
 
+        if (result is null) return;
+
         var applied = await ApplyPresetAsync(preset, result);
-        if (result is not null && applied)
+        if (applied)
         {
             var bufferbloat = Math.Max(result.DownloadLoadedMs, result.UploadLoadedMs) - result.PingP50Ms;
             var note = bufferbloat >= 25
                 ? " Loaded latency is high; router SQM/CAKE can help more than Windows tuning."
                 : string.Empty;
-            SetMessage($"Optimized · {result.DnsProvider} DNS selected.{note}", success: true);
+            SetMessage($"Optimized ({PresetLabel(preset)}) - {result.DnsProvider} DNS selected.{note}", success: true);
         }
     }
 
@@ -342,12 +436,14 @@ public partial class InternetOptimizerViewModel : ObservableObject
             _lastSnap = snap;
             HeaderStatus = BuildStatus(snap);
 
-            // Fail-closed defaults: never disable Wi-Fi, never restart NICs.
-            // Ethernet-first is metrics-only (see NetworkApplyScriptBuilder).
+            // Fail-closed: never disable Wi-Fi. Restart Ethernet briefly so advanced
+            // NIC props (flow control, interrupt moderation) actually stick on drivers
+            // that ignore NoRestart writes (Intel I226 etc.).
             var options = new NetworkApplyOptions
             {
                 PreferEthernetDisableWifi = false,
-                RestartEthernet = false,
+                RestartEthernet = snap.Media.EthernetInUse || snap.Media.EthernetUp,
+                Experimental = PreferExperimental,
                 DnsProvider = string.IsNullOrWhiteSpace(result.DnsProvider) ? "Cloudflare" : result.DnsProvider,
                 DnsPrimary = string.IsNullOrWhiteSpace(result.DnsPrimary) ? "1.1.1.1" : result.DnsPrimary,
                 DnsSecondary = string.IsNullOrWhiteSpace(result.DnsSecondary) ? "1.0.0.1" : result.DnsSecondary,
@@ -393,14 +489,14 @@ public partial class InternetOptimizerViewModel : ObservableObject
         return succeeded;
     }
 
-    public Task InitializeAsync() => LoadSnapshotAsync(showFullPageLoading: true);
+    public Task InitializeAsync() => LoadSnapshotAsync(showFullPageLoading: Rows.Count == 0, force: false);
 
     [RelayCommand]
     private async Task RepairAsync()
     {
         if (IsBusy) return;
 
-        // Quiet secondary action — runs immediately. The RepairHint caption states
+        // Quiet secondary action - runs immediately. The RepairHint caption states
         // whether this restores the exact pre-Exo snapshot or resets to stock defaults.
         IsBusy = true;
         HasMessage = false;
@@ -435,19 +531,58 @@ public partial class InternetOptimizerViewModel : ObservableObject
     {
         if (!snap.ProbeOk) return "Probe incomplete";
 
+        // ASCII separators only in the plate title - middle-dot often mojibakes
+        // in UIA snapshots / logs and looks broken to users.
         var media = snap.Media.EthernetInUse
             ? "Ethernet path"
             : snap.Media.EthernetUp
                 ? "Ethernet (no IP yet)"
                 : snap.Media.WifiUp
-                    ? $"Wi‑Fi · {snap.Media.PreferredBandTarget}"
+                    ? $"Wi-Fi - {snap.Media.PreferredBandTarget}"
                     : snap.ConnectionType;
 
         if (snap.ActivePreset == NetworkPreset.Balanced)
-            return $"{media} · {snap.LinkSpeed}";
+            return string.IsNullOrWhiteSpace(snap.LinkSpeed)
+                ? media
+                : $"{media} - {snap.LinkSpeed}";
 
-        var allOk = snap.Features.Count > 0 && snap.Features.All(f => f.IsOk);
-        return allOk ? $"Optimized · {media}" : "Optimized · check rows";
+        // Ignore soft N/A style rows that are informational, not failures.
+        static bool IsRealOpen(NetworkFeatureRow f)
+        {
+            if (f.IsOk || string.IsNullOrWhiteSpace(f.Title)) return false;
+            var s = f.Status ?? string.Empty;
+            if (s.Contains("Not exposed", StringComparison.OrdinalIgnoreCase)) return false;
+            if (s.Contains("not required", StringComparison.OrdinalIgnoreCase)) return false;
+            if (s.Contains("Unsupported", StringComparison.OrdinalIgnoreCase)) return false;
+            if (s.Contains("probe unavailable", StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
+        }
+
+        var open = snap.Features
+            .Where(IsRealOpen)
+            .Select(f => f.Title)
+            .Take(2)
+            .ToList();
+        if (open.Count == 0)
+            return $"Optimized - {media}";
+        return open.Count == 1
+            ? $"Optimized - open: {open[0]}"
+            : $"Optimized - open: {open[0]}, {open[1]}";
+    }
+
+    /// <summary>
+    /// UIA / Cua logs mojibake middle-dots and smart punctuation; keep status ASCII.
+    /// </summary>
+    private static string SanitizeUiAscii(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        return text
+            .Replace("\u00B7", " - ", StringComparison.Ordinal) // ·
+            .Replace("\u2022", " - ", StringComparison.Ordinal) // •
+            .Replace("\u2013", "-", StringComparison.Ordinal)   // –
+            .Replace("\u2014", "-", StringComparison.Ordinal)   // —
+            .Replace("  -  ", " - ", StringComparison.Ordinal)
+            .Replace("  ", " ", StringComparison.Ordinal);
     }
 
     private void ClearMessage()

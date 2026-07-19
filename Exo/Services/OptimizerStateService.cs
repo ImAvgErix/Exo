@@ -138,7 +138,7 @@ public sealed class OptimizerStateService
 
             using var doc = JsonDocument.Parse(jsonLine);
             var root = doc.RootElement;
-            var applied = root.TryGetProperty("isApplied", out var a) && a.GetBoolean();
+            var applied = root.TryGetProperty("isApplied", out var a) && a.ValueKind == JsonValueKind.True;
             var status = root.TryGetProperty("statusText", out var s) ? s.GetString() ?? heuristic.StatusText : heuristic.StatusText;
             var detail = root.TryGetProperty("detail", out var d) ? d.GetString() ?? string.Empty : string.Empty;
             var features = ParseFeatures(root);
@@ -423,7 +423,6 @@ public sealed class OptimizerStateService
         features.Add(MakeFeature("Runtime modules", "", runtimeOk));
 
         var amoledOk = false;
-        var startupOk = false;
         var settingsPath = Path.Combine(appData, "discord", "settings.json");
         if (File.Exists(settingsPath))
         {
@@ -433,9 +432,6 @@ public sealed class OptimizerStateService
                 if (doc.RootElement.TryGetProperty("BACKGROUND_COLOR", out var bg) &&
                     bg.GetString() == "#000000")
                     amoledOk = true;
-                if (doc.RootElement.TryGetProperty("OPEN_ON_STARTUP", out var su) &&
-                    su.ValueKind == JsonValueKind.False)
-                    startupOk = true;
             }
             catch { /* ignore */ }
         }
@@ -484,8 +480,10 @@ public sealed class OptimizerStateService
         {
             toastMap.Clear();
         }
+        // Windows quiet = OS shell only (Run key, tasks, OS toasts, tray).
+        // OPEN_ON_STARTUP in settings.json is a Discord in-app pref — not required.
         var notificationsOk = DiscordLogic.AreToastsOff(toastMap);
-        var windowsQuietOk = startupOk && notificationsOk &&
+        var windowsQuietOk = notificationsOk &&
                              IsStableDiscordRunQuiet(discordRoot) &&
                              AreStableDiscordScheduledTasksDisabled(discordRoot) &&
                              AreStableDiscordTrayEntriesHidden(discordRoot);
@@ -734,7 +732,8 @@ public sealed class OptimizerStateService
 
             using var doc = JsonDocument.Parse(jsonLine);
             var root = doc.RootElement;
-            var applied = root.TryGetProperty("isApplied", out var a) && a.GetBoolean();
+            // ValueKind check only — GetBoolean() throws on string/null and was blanking the page.
+            var applied = root.TryGetProperty("isApplied", out var a) && a.ValueKind == JsonValueKind.True;
             var status = root.TryGetProperty("statusText", out var s) ? s.GetString() ?? heuristic.StatusText : heuristic.StatusText;
             var detail = root.TryGetProperty("detail", out var d) ? d.GetString() ?? string.Empty : string.Empty;
             var features = ParseFeatures(root);
@@ -1079,7 +1078,7 @@ public sealed class OptimizerStateService
 
             using var doc = JsonDocument.Parse(jsonLine);
             var root = doc.RootElement;
-            var applied = root.TryGetProperty("isApplied", out var a) && a.GetBoolean();
+            var applied = root.TryGetProperty("isApplied", out var a) && a.ValueKind == JsonValueKind.True;
             var status = root.TryGetProperty("statusText", out var s) ? s.GetString() ?? heuristic.StatusText : heuristic.StatusText;
             var detail = root.TryGetProperty("detail", out var d) ? d.GetString() ?? string.Empty : string.Empty;
             var features = ParseFeatures(root);
@@ -1165,6 +1164,8 @@ public sealed class OptimizerStateService
         string? profileSha256 = null;
         string? profileDriverVersion = null;
         bool? gsync = null;
+        // Product path is SafePolicy (DRS profile pack only) unless old state says otherwise.
+        var safePolicy = true;
         if (File.Exists(statePath))
         {
             try
@@ -1179,6 +1180,18 @@ public sealed class OptimizerStateService
                 if (root.TryGetProperty("gsync", out var gs) &&
                     gs.ValueKind is JsonValueKind.True or JsonValueKind.False)
                     gsync = gs.GetBoolean();
+                if (root.TryGetProperty("safePolicy", out var sp))
+                {
+                    if (sp.ValueKind == JsonValueKind.False) safePolicy = false;
+                    else if (sp.ValueKind == JsonValueKind.True) safePolicy = true;
+                }
+                if (root.TryGetProperty("policy", out var pol) && pol.ValueKind == JsonValueKind.String)
+                {
+                    var p = pol.GetString() ?? "";
+                    if (p.Contains("safe", StringComparison.OrdinalIgnoreCase) ||
+                        p.Contains("drs", StringComparison.OrdinalIgnoreCase))
+                        safePolicy = true;
+                }
 
                 driverTweaksVersion = ReadString(root, "driverTweaksVersion");
                 driverTweaksApplied = IsTrue(root, "driverTweaksVerified") &&
@@ -1190,15 +1203,24 @@ public sealed class OptimizerStateService
                 profileDriverVersion = ReadString(root, "profileDriverVersion");
                 var validProfileHash = profileSha256 is { Length: 64 } &&
                                        profileSha256.All(Uri.IsHexDigit);
-                profileApplied = IsTrue(root, "profileApplied") &&
-                                 !string.IsNullOrWhiteSpace(profileFile) &&
-                                 !string.IsNullOrWhiteSpace(profileVersion) &&
-                                 validProfileHash &&
-                                 !string.IsNullOrWhiteSpace(profileDriverVersion) &&
-                                 string.Equals(
-                                     profileDriverVersion,
-                                     driverTweaksVersion,
-                                     StringComparison.OrdinalIgnoreCase);
+                // Safe policy: profile applied when marker says so (driver version pair optional).
+                if (safePolicy)
+                {
+                    profileApplied = IsTrue(root, "profileApplied") ||
+                                     (validProfileHash && !string.IsNullOrWhiteSpace(profileFile));
+                }
+                else
+                {
+                    profileApplied = IsTrue(root, "profileApplied") &&
+                                     !string.IsNullOrWhiteSpace(profileFile) &&
+                                     !string.IsNullOrWhiteSpace(profileVersion) &&
+                                     validProfileHash &&
+                                     !string.IsNullOrWhiteSpace(profileDriverVersion) &&
+                                     string.Equals(
+                                         profileDriverVersion,
+                                         driverTweaksVersion,
+                                         StringComparison.OrdinalIgnoreCase);
+                }
 
                 var displayMethod = root.TryGetProperty("displayMethod", out var method) &&
                                     method.ValueKind == JsonValueKind.String
@@ -1233,11 +1255,21 @@ public sealed class OptimizerStateService
         // debloat / display still apply. Display may be N/A on Optimus (iGPU panels).
         var displayStageOk = displayApplied || notebookGpu;
 
-        features.Add(MakeFeature("Driver / MSI", "",
-            notebookGpu ? gpuOk : (driverTweaksApplied && gpuOk)));
-        features.Add(MakeFeature("3D profiles", "", profileApplied && gpuOk));
-        features.Add(MakeFeature("Debloat", "", debloatApplied && gpuOk));
-        features.Add(MakeFeature("Display prefs", "", displayStageOk && gpuOk));
+        if (safePolicy)
+        {
+            features.Add(MakeFeature("Installed driver", "", gpuOk));
+            features.Add(MakeFeature("3D profiles", "", profileApplied && gpuOk));
+            features.Add(MakeFeature("Latency / sync policy", "", profileApplied && gpuOk));
+            features.Add(MakeFeature("NVIDIA Control Panel", "", gpuOk));
+        }
+        else
+        {
+            features.Add(MakeFeature("Driver / MSI", "",
+                notebookGpu ? gpuOk : (driverTweaksApplied && gpuOk)));
+            features.Add(MakeFeature("3D profiles", "", profileApplied && gpuOk));
+            features.Add(MakeFeature("Debloat", "", debloatApplied && gpuOk));
+            features.Add(MakeFeature("Display prefs", "", displayStageOk && gpuOk));
+        }
 
         var extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (!string.IsNullOrEmpty(series))
@@ -1248,11 +1280,14 @@ public sealed class OptimizerStateService
             extra["gsync"] = gsync.Value ? "true" : "false";
         if (notebookGpu)
             extra["notebookGpu"] = "true";
+        extra["safePolicy"] = safePolicy ? "true" : "false";
 
-        // Notebook no longer forces permanent "not applied".
-        var applied = hasMarker && !restartPending && !applyInProgress &&
-                      (notebookGpu || driverTweaksApplied) &&
-                      profileApplied && displayStageOk && debloatApplied;
+        // Safe policy: applied when marker + profiles verified (no MSI/debloat gates).
+        var applied = safePolicy
+            ? hasMarker && !restartPending && !applyInProgress && profileApplied && gpuOk
+            : hasMarker && !restartPending && !applyInProgress &&
+              (notebookGpu || driverTweaksApplied) &&
+              profileApplied && displayStageOk && debloatApplied;
         var statusText = !gpuOk
             ? "No NVIDIA GPU"
             : restartPending
@@ -1261,11 +1296,11 @@ public sealed class OptimizerStateService
                 ? $"Failed at {lastErrorStage}"
             : !profileApplied
                 ? "3D profile incomplete"
-                : !displayStageOk
+                : !safePolicy && !displayStageOk
                     ? "Display setup incomplete"
-                    : !debloatApplied
+                    : !safePolicy && !debloatApplied
                         ? "Background debloat incomplete"
-                        : !notebookGpu && !driverTweaksApplied
+                        : !safePolicy && !notebookGpu && !driverTweaksApplied
                             ? "Driver tweaks incomplete"
                             : applied
                                 ? "All applied"

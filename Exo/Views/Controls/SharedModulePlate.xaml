@@ -8,86 +8,116 @@
     HorizontalAlignment="Stretch"
     VerticalAlignment="Stretch">
 
-    <!-- One normal-flow work surface: status, capabilities, evidence, actions. -->
-    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Disabled"
-                  HorizontalScrollMode="Disabled"
-                  ZoomMode="Disabled">
-        <Border Style="{StaticResource ExoModulePlate}"
-                Margin="16,8,16,16"
-                Padding="20">
-            <StackPanel Spacing="20">
-                <Grid ColumnSpacing="16">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="4" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Border Background="{ThemeResource ExoAccentBrush}"
-                            CornerRadius="2"
-                            Opacity="0.9" />
-                    <StackPanel Grid.Column="1" Spacing="5">
-                        <TextBlock Text="{x:Bind ModuleTitle, Mode=OneWay}"
-                                   Style="{StaticResource ExoSectionTitle}"
-                                   Margin="0" />
-                        <TextBlock Text="{x:Bind StatusText, Mode=OneWay}"
-                                   Style="{StaticResource ExoPageTitle}"
-                                   CharacterSpacing="-16"
-                                   TextWrapping="WrapWholeWords" />
-                    </StackPanel>
-                </Grid>
+    <!--
+      Fixed-canvas module surface: no page scroll. Header + features fill the middle;
+      Apply/Repair stay pinned at the bottom of the plate. No advisor tidbits.
+    -->
+    <Border Style="{StaticResource ExoModulePlate}"
+            Margin="0,8,0,4"
+            Padding="16,12"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
+        <Grid RowSpacing="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-                <Border Style="{StaticResource ExoMessageBanner}"
-                        Padding="12,10"
-                        Visibility="{x:Bind HasGuidance, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Grid ColumnSpacing="10">
+            <!-- Status header -->
+            <Grid ColumnSpacing="12" HorizontalAlignment="Stretch">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="3" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Background="{ThemeResource ExoAccentBrush}"
+                        CornerRadius="1.5"
+                        Opacity="0.9"
+                        MinHeight="36" />
+                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="{x:Bind ModuleTitle, Mode=OneWay}"
+                               Style="{StaticResource ExoSectionTitle}"
+                               Margin="0" />
+                    <TextBlock Text="{x:Bind StatusText, Mode=OneWay}"
+                               FontFamily="{StaticResource ExoUiFontSemiBold}"
+                               FontSize="22"
+                               LineHeight="28"
+                               CharacterSpacing="-16"
+                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               MaxLines="1" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Options + extras only after checks finish (no half-loaded chrome). -->
+            <StackPanel Grid.Row="1"
+                        Spacing="6"
+                        Visibility="{x:Bind IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                <Border Style="{StaticResource ExoCard}"
+                        Padding="12,8"
+                        Visibility="{x:Bind ShowApplyModeToggle, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Grid ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <FontIcon Glyph="&#xE946;"
-                                  FontSize="13"
-                                  Foreground="{ThemeResource ExoAccentBrush}"
-                                  VerticalAlignment="Top" />
-                        <TextBlock Grid.Column="1"
-                                   Text="{x:Bind GuidanceText, Mode=OneWay}"
-                                   Style="{StaticResource ExoMessageText}"
-                                   TextWrapping="Wrap" />
+                        <TextBlock Text="Apply mode"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                                   VerticalAlignment="Center" />
+                        <ComboBox Grid.Column="1"
+                                  MinWidth="168"
+                                  SelectedItem="{x:Bind SelectedApplyMode, Mode=TwoWay}"
+                                  ItemsSource="{x:Bind ApplyModeOptions, Mode=OneWay}"
+                                  IsEnabled="{x:Bind PolicyTogglesEnabled, Mode=OneWay}"
+                                  AutomationProperties.Name="Apply mode" />
                     </Grid>
                 </Border>
-
                 <ContentPresenter Content="{x:Bind HeaderExtra, Mode=OneWay}" />
+            </StackPanel>
 
-                <StackPanel Spacing="10">
-                    <Grid>
-                        <TextBlock Text="WHAT EXO WILL CHANGE"
-                                   Style="{StaticResource ExoSectionTitle}"
-                                   Margin="0"
-                                   VerticalAlignment="Center" />
-                        <TextBlock Text="Hardware-aware · reversible"
-                                   Style="{StaticResource ExoCaption}"
-                                   HorizontalAlignment="Right"
-                                   VerticalAlignment="Center" />
-                    </Grid>
-                    <Grid MinHeight="72">
-                        <controls:ExoLoader IsActive="{x:Bind IsLoading, Mode=OneWay}"
-                                            Visibility="{x:Bind IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                            HorizontalAlignment="Center"
-                                            VerticalAlignment="Center" />
-                        <controls:FeatureTileGrid x:Name="FeatureGrid"
-                                                  HorizontalAlignment="Stretch"
-                                                  VerticalAlignment="Top"
-                                                  ItemsSource="{x:Bind FeatureItems, Mode=OneWay}"
-                                                  Visibility="{x:Bind IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                    </Grid>
+            <!-- Capability grid: loader only until detect finishes, then full tiles. -->
+            <Grid Grid.Row="2" MinHeight="48">
+                <StackPanel Spacing="6"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Visibility="{x:Bind IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <controls:ExoLoader IsActive="{x:Bind IsLoading, Mode=OneWay}"
+                                        HorizontalAlignment="Center" />
+                    <TextBlock Text="Reading this PC..."
+                               Style="{StaticResource ExoCaption}"
+                               TextAlignment="Center" />
                 </StackPanel>
+                <controls:FeatureTileGrid x:Name="FeatureGrid"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch"
+                                          ItemsSource="{x:Bind FeatureItems, Mode=OneWay}"
+                                          Visibility="{x:Bind IsFeatureListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+            </Grid>
 
-                <Border Height="1" Background="{ThemeResource ExoDividerBrush}" />
+            <Border Grid.Row="3"
+                    Height="1"
+                    Background="{ThemeResource ExoDividerBrush}"
+                    Opacity="0.65"
+                    Margin="0,2,0,0"
+                    Visibility="{x:Bind IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
 
-                <Border Style="{StaticResource ExoActionBar}">
-                    <StackPanel HorizontalAlignment="Stretch" Spacing="8">
+            <!-- Actions pinned to plate foot -->
+            <Border Grid.Row="4" Style="{StaticResource ExoActionBar}" Padding="0,2,0,0">
+                <StackPanel HorizontalAlignment="Stretch" Spacing="6">
+                    <StackPanel Spacing="6"
+                                Visibility="{x:Bind IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                         <ContentPresenter Content="{x:Bind FootExtra, Mode=OneWay}" />
 
-                        <Border Style="{StaticResource ExoMessageBanner}"
+                        <Border Background="{ThemeResource ExoSurfaceSunkenBrush}"
+                                BorderBrush="{ThemeResource ExoDividerBrush}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="10,7"
                                 Visibility="{x:Bind HasLastResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                             <Grid ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>
@@ -97,15 +127,18 @@
                                 <FontIcon Glyph="{x:Bind LastResultGlyph, Mode=OneWay}"
                                           FontSize="12"
                                           Foreground="{x:Bind LastResultBrush, Mode=OneWay}"
-                                          VerticalAlignment="Top" />
+                                          VerticalAlignment="Center" />
                                 <TextBlock Grid.Column="1"
                                            Text="{x:Bind LastResult, Mode=OneWay}"
-                                           Style="{StaticResource ExoMessageText}"
-                                           TextWrapping="Wrap" />
+                                           Style="{StaticResource ExoCaption}"
+                                           Foreground="{ThemeResource ExoSecondaryTextBrush}"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxLines="2"
+                                           TextWrapping="WrapWholeWords" />
                             </Grid>
                         </Border>
 
-                        <StackPanel Spacing="5"
+                        <StackPanel Spacing="4"
                                     Visibility="{x:Bind IsProgressVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                             <ProgressBar Minimum="0" Maximum="100"
                                          Value="{x:Bind ProgressPercent, Mode=OneWay}"
@@ -113,14 +146,15 @@
                                          Foreground="{ThemeResource ExoAccentBrush}" />
                             <TextBlock Text="{x:Bind ProgressStatus, Mode=OneWay}"
                                        Style="{StaticResource ExoCaption}"
-                                       TextAlignment="Center" />
+                                       TextAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
                         </StackPanel>
 
-                        <StackPanel Spacing="5"
+                        <StackPanel Spacing="4"
                                     Visibility="{x:Bind HasApplyReport, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                             <Button Style="{StaticResource ExoQuietButton}"
-                                    MinHeight="40"
-                                    Padding="12,8"
+                                    MinHeight="36"
+                                    Padding="12,6"
                                     HorizontalAlignment="Stretch"
                                     HorizontalContentAlignment="Stretch"
                                     Click="ToggleReport_Click"
@@ -141,21 +175,23 @@
                                               VerticalAlignment="Center" />
                                 </Grid>
                             </Button>
-                            <ScrollViewer MaxHeight="144"
+                            <!-- Only expanded report may scroll; page itself never does. -->
+                            <ScrollViewer MaxHeight="96"
                                           VerticalScrollBarVisibility="Auto"
                                           Visibility="{x:Bind IsApplyReportOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <ItemsRepeater ItemsSource="{x:Bind ApplyReportRows, Mode=OneWay}">
                                     <ItemsRepeater.ItemTemplate>
                                         <DataTemplate x:DataType="vm:ApplyReportRowViewModel">
-                                            <Grid ColumnSpacing="8" Padding="8,3">
+                                            <Grid ColumnSpacing="8" Padding="6,2">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
-                                                <FontIcon Glyph="{x:Bind Glyph}" FontSize="12" MinWidth="12"
+                                                <FontIcon Glyph="{x:Bind Glyph}" FontSize="11" MinWidth="12"
                                                           Foreground="{x:Bind Brush}" VerticalAlignment="Center" />
                                                 <TextBlock Grid.Column="1" Text="{x:Bind Text}"
-                                                           Style="{StaticResource ExoCaption}" />
+                                                           Style="{StaticResource ExoCaption}"
+                                                           TextTrimming="CharacterEllipsis" />
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsRepeater.ItemTemplate>
@@ -168,15 +204,15 @@
                         <Button Style="{StaticResource ExoQuietButton}"
                                 Content="{x:Bind SecondaryLeftLabel, Mode=OneWay}"
                                 Click="SecondaryLeft_Click"
-                                MinHeight="40"
-                                Padding="12,8"
+                                MinHeight="36"
+                                Padding="12,6"
                                 HorizontalAlignment="Stretch"
                                 IsEnabled="{x:Bind SecondaryActionsEnabled, Mode=OneWay}"
                                 Visibility="{x:Bind ShowSecondaryActions, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                 AutomationProperties.Name="{x:Bind SecondaryLeftLabel, Mode=OneWay}" />
                     </StackPanel>
-                </Border>
-            </StackPanel>
-        </Border>
-    </ScrollViewer>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
 </UserControl>

@@ -17,6 +17,26 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     {
         _services = services;
         LastResultBrush = ResolveBrush("ExoSuccessBrush", Color.FromArgb(255, 34, 197, 94));
+        try
+        {
+            PreferExperimental = services.Settings.Current.ExperimentalDiscord;
+            SelectedApplyMode = PreferExperimental ? "Experimental" : "Stable";
+        }
+        catch { }
+    }
+
+    partial void OnSelectedApplyModeChanged(string value)
+    {
+        var exp = string.Equals(value, "Experimental", StringComparison.OrdinalIgnoreCase);
+        if (PreferExperimental != exp) PreferExperimental = exp;
+    }
+
+    partial void OnPreferExperimentalChanged(bool value)
+    {
+        var mode = value ? "Experimental" : "Stable";
+        if (!string.Equals(SelectedApplyMode, mode, StringComparison.Ordinal))
+            SelectedApplyMode = mode;
+        try { _services.Settings.Update(s => s.ExperimentalDiscord = value); } catch { }
     }
 
     [ObservableProperty]
@@ -45,6 +65,15 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool IsStatusLoading { get; set; } = true;
+
+    /// <summary>When true, Apply passes -Experimental for a more aggressive pass.</summary>
+    [ObservableProperty]
+    public partial bool PreferExperimental { get; set; }
+
+    public IReadOnlyList<string> ApplyModeOptions { get; } = new[] { "Stable", "Experimental" };
+
+    [ObservableProperty]
+    public partial string SelectedApplyMode { get; set; } = "Stable";
 
     [ObservableProperty]
     public partial bool IsFeatureListVisible { get; set; }
@@ -90,31 +119,73 @@ public partial class DiscordOptimizerViewModel : ObservableObject
     [RelayCommand]
     private void ToggleApplyReport() => IsApplyReportOpen = !IsApplyReportOpen;
 
+    private DateTimeOffset _lastFullDetectUtc = DateTimeOffset.MinValue;
+    private static readonly TimeSpan DetectFreshness = TimeSpan.FromSeconds(120);
+    private int _detectGen;
+    private CancellationTokenSource? _detectCts;
+
     [RelayCommand]
-    private async Task RefreshAsync()
+    private Task RefreshAsync() => RefreshCoreAsync(force: true);
+
+    /// <summary>Leave-page cancel so rapid module switches do not stack PowerShell detects.</summary>
+    public void CancelBackgroundWork()
     {
-        if (IsBusy) return;
-        IsBusy = true;
-        IsStatusLoading = true;
-        IsFeatureListVisible = false;
+        try { _detectCts?.Cancel(); } catch { }
+        Interlocked.Increment(ref _detectGen);
+    }
+
+    /// <summary>
+    /// Detect never uses IsBusy (so module switches stay snappy). Cold open: loader only
+    /// until full check finishes. Warm re-entry within TTL: show cached UI immediately.
+    /// </summary>
+    private async Task RefreshCoreAsync(bool force)
+    {
+        if (!force && Features.Count > 0 && DateTimeOffset.UtcNow - _lastFullDetectUtc < DetectFreshness)
+        {
+            IsStatusLoading = false;
+            IsFeatureListVisible = true;
+            return;
+        }
+
+        try { _detectCts?.Cancel(); } catch { }
+        _detectCts?.Dispose();
+        _detectCts = new CancellationTokenSource();
+        var ct = _detectCts.Token;
+        var gen = Interlocked.Increment(ref _detectGen);
+
+        var cold = Features.Count == 0;
+        if (cold)
+        {
+            IsStatusLoading = true;
+            IsFeatureListVisible = false;
+            StatusText = "Checking status...";
+        }
+
         try
         {
-            StatusText = "Checking status...";
-            var state = await _services.OptimizerState.DetectDiscordAsync();
+            var state = await _services.OptimizerState.DetectDiscordAsync(ct, fastOnly: false)
+                .ConfigureAwait(true);
+            if (gen != _detectGen || ct.IsCancellationRequested) return;
             ApplyState(state);
+            _lastFullDetectUtc = DateTimeOffset.UtcNow;
         }
+        catch (OperationCanceledException) { /* left page */ }
         catch (Exception)
         {
-            StatusText = "Unavailable";
-            DetailText = string.Empty;
-            Features.Clear();
-            SetResult(Helpers.OptimizerMessages.StatusFailed, success: false);
+            if (gen == _detectGen && Features.Count == 0)
+            {
+                StatusText = "Unavailable";
+                DetailText = string.Empty;
+                SetResult(Helpers.OptimizerMessages.StatusFailed, success: false);
+            }
         }
         finally
         {
-            IsStatusLoading = false;
-            IsFeatureListVisible = Features.Count > 0;
-            IsBusy = false;
+            if (gen == _detectGen)
+            {
+                IsStatusLoading = false;
+                IsFeatureListVisible = Features.Count > 0;
+            }
         }
     }
 
@@ -133,10 +204,8 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
         try
         {
-            var args = new List<string>
-            {
-                "-NonInteractive"
-            };
+            var args = new List<string> { "-NonInteractive" };
+            if (PreferExperimental) args.Add("-Experimental");
 
             var progress = new Progress<ScriptRunProgress>(p =>
             {
@@ -271,9 +340,6 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
     private void ApplyState(OptimizerStateInfo state)
     {
-        IsApplied = state.IsApplied;
-        StatusText = state.StatusText;
-        DetailText = string.Empty;
         Features.Clear();
         foreach (var feature in state.Features)
         {
@@ -287,7 +353,29 @@ public partial class DiscordOptimizerViewModel : ObservableObject
                 RailOpacity = Helpers.UiStatusPresentation.FeatureRailOpacity(feature.IsActive)
             });
         }
-        RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
+
+        // Honesty: never show "Already optimized" when Discord is not present.
+        // CUA GUI QA (docs/cua-qa) caught Status=Already optimized + banner "not installed".
+        var installMissing = Features.Any(f =>
+            f.Title.Contains("install", StringComparison.OrdinalIgnoreCase) && !f.IsActive);
+        var statusLooksMissing = (state.StatusText ?? string.Empty)
+            .Contains("not installed", StringComparison.OrdinalIgnoreCase);
+
+        if (installMissing || statusLooksMissing)
+        {
+            IsApplied = false;
+            StatusText = "Not installed";
+            DetailText = string.Empty;
+            RunButtonLabel = "Apply";
+        }
+        else
+        {
+            IsApplied = state.IsApplied;
+            StatusText = state.StatusText ?? "Ready";
+            DetailText = string.Empty;
+            RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
+        }
+
         if (!IsStatusLoading)
             IsFeatureListVisible = Features.Count > 0;
         LoadApplyReport();
@@ -296,20 +384,9 @@ public partial class DiscordOptimizerViewModel : ObservableObject
 
     private void UpdateGuidance()
     {
-        var failSteps = ApplyReportRows
-            .Where(r => r.Status == "fail")
-            .Select(r => r.Text.Split('·')[0].Trim())
-            .Where(s => s.Length > 0)
-            .Take(4)
-            .ToList();
-        GuidanceText = OptimizerAdvisor.BuildV2(
-            "Discord",
-            IsApplied,
-            StatusText,
-            DetailText,
-            Features.Select(f => (f.Title, f.IsActive, f.Detail)).ToList(),
-            failSteps);
-        HasGuidance = !string.IsNullOrWhiteSpace(GuidanceText);
+        // Advisor tidbits removed from module UI — keep properties empty for binding safety.
+        GuidanceText = string.Empty;
+        HasGuidance = false;
     }
 
     private void LoadApplyReport()
@@ -346,12 +423,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         return new SolidColorBrush(fallback);
     }
 
-    public async Task InitializeAsync()
-    {
-        // Full live detect only — no fast heuristic flash of "Already optimized".
-        if (IsBusy) return;
-        await RefreshAsync();
-    }
+    public Task InitializeAsync() => RefreshCoreAsync(force: false);
 }
 
 public sealed class FeatureRowViewModel

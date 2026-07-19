@@ -25,7 +25,7 @@
     <AssemblyName>Exo</AssemblyName>
     <Product>Exo</Product>
     <Company>Exo</Company>
-    <Version>3.6.1</Version>
+    <Version>3.7.0</Version>
     <Description>Private, reversible Windows optimization.</Description>
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
@@ -54,6 +54,24 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+
+  <!--
+    Build React UI then re-include wwwroot so hashed asset renames don't leave
+    stale Content paths from evaluation time (MSB3030).
+  -->
+  <Target Name="BuildWebUi"
+          BeforeTargets="PrepareForBuild"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\ui\package.json') And Exists('$(MSBuildThisFileDirectory)..\ui\node_modules')">
+    <Exec Command="npm run build"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\ui"
+          IgnoreExitCode="false" />
+    <ItemGroup>
+      <Content Remove="wwwroot\**\*" />
+      <Content Include="wwwroot\**\*">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
 
   <!-- Unpackaged WinUI 3 bootstrap -->
   <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">

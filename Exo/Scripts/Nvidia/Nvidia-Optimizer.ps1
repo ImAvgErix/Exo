@@ -26,7 +26,8 @@ param(
     [switch]$SkipProfile,
     [switch]$SkipDriver,
     [switch]$ForceDriver,
-    [switch]$SafePolicy
+    [switch]$SafePolicy,
+    [switch]$Experimental
 )
 
 $ErrorActionPreference = 'Stop'
@@ -4312,7 +4313,8 @@ try {
     $gameProfiles = @()
     $gameProfilesApplied = $false
     # Skip re-import when state already has this pack applied + DRS verified (same G-SYNC + series).
-    if (-not $SkipProfile) {
+    # Experimental always re-imports (force refresh after driver/game churn).
+    if (-not $SkipProfile -and -not $Experimental) {
         try {
             if (Test-Path -LiteralPath $StatePath) {
                 $prior = Get-Content -LiteralPath $StatePath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -4349,6 +4351,9 @@ try {
         } catch {
             Write-Warn "Could not evaluate prior profile state: $($_.Exception.Message)"
         }
+    }
+    elseif ($Experimental -and -not $SkipProfile) {
+        Write-Ok 'Experimental: forcing 3D profile re-import + DRS verify'
     }
     if (-not $SkipProfile) {
         Set-ExoStage 'profile-pack-verify'

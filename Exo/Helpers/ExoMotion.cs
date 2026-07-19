@@ -5,32 +5,38 @@ using Microsoft.UI.Xaml.Media.Animation;
 namespace Exo.Helpers;
 
 /// <summary>
-/// Safe open animations (XAML Storyboards only).
-/// - NEVER touches hand-off composition visuals: writing Offset/Scale there
-///   detaches elements from XAML layout — they pile at the parent origin —
-///   and pre-first-frame pokes can fail fast with 0xC000027B on real GPUs
-///   (the v2.6.0 black-flash launch crash).
-/// - Cards / feature tiles: fade + light rise; select: quick press pulse before navigate.
+/// Full-reign motion via XAML Storyboards only.
+/// Never writes Composition Offset/Scale (that detaches layout and caused the
+/// v2.6.0 black-flash crash). Crash-loop still forces MotionDisabled = true.
 /// </summary>
 public static class ExoMotion
 {
     /// <summary>
-    /// Crash-loop safe mode: when the previous launch died before presenting a
-    /// frame, all entrance motion collapses to instant EnsureVisible so a
-    /// composition-animation failure cannot brick startup twice.
+    /// Crash-loop safe mode: previous launch died before first frame —
+    /// collapse all entrance motion to instant visibility.
     /// </summary>
     public static bool MotionDisabled { get; set; }
 
-    // Short, clean motion — no bouncy spring on content.
-    public const int EntranceMs = 240;
-    public const int FadeMs = 160;
-    public const int StaggerStepMs = 22;
-    public const int SelectMs = 0;
-    /// <summary>Feature-tile list entrance stagger (module pages).</summary>
-    public const int ListStaggerStepMs = 28;
+    /// <summary>
+    /// Rich profile: deeper staggers, soft scale on plates, press squish,
+    /// result pops. Always on unless <see cref="MotionDisabled"/>.
+    /// </summary>
+    public static bool RichMotion { get; set; } = true;
+
+    public const int EntranceMs = 380;
+    public const int FadeMs = 240;
+    public const int StaggerStepMs = 52;
+    public const int SelectMs = 110;
+    public const int ListStaggerStepMs = 36;
 
     public static EasingFunctionBase Glide() =>
         new CubicEase { EasingMode = EasingMode.EaseOut };
+
+    public static EasingFunctionBase GlideDeep() =>
+        new QuinticEase { EasingMode = EasingMode.EaseOut };
+
+    public static EasingFunctionBase GlideIn() =>
+        new CubicEase { EasingMode = EasingMode.EaseIn };
 
     public static CompositeTransform EnsureTransform(UIElement el)
     {
@@ -42,35 +48,25 @@ public static class ExoMotion
         return ct;
     }
 
-    /// <summary>Hard identity + full opacity. Call after every open/close cycle.</summary>
-    public static void EnsureVisible(UIElement el)
-    {
-        ResetVisual(el, show: true);
-    }
+    public static void EnsureVisible(UIElement el) => ResetVisual(el, show: true);
 
     public static void ResetVisual(UIElement el, bool show = true)
     {
         el.Opacity = show ? 1 : 0;
         el.IsHitTestVisible = show;
         el.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
-        try
-        {
-            // Drop transforms entirely — a leftover scale/translate matrix is the
-            // main reason text + logos stay soft after entrance/hover.
-            el.RenderTransform = null;
-        }
-        catch { }
+        try { el.RenderTransform = null; } catch { }
     }
 
     /// <summary>
-    /// Card entrance: fade + short integer rise, then hard-clear transform.
-    /// Rise uses whole pixels only; transform is dropped at end so type stays crisp.
+    /// Plate / card entrance: fade + rise (+ optional micro-scale in rich mode).
+    /// Transform is cleared at end so type stays crisp.
     /// </summary>
     public static void PlayEnter(
         UIElement el,
         int delayMs = 0,
-        float fromY = 10f,
-        float fromScale = 1f, // ignored — scale softens logos
+        float fromY = 12f,
+        float fromScale = 1f,
         bool enableHit = true,
         double toOpacity = 1.0)
     {
@@ -82,26 +78,32 @@ public static class ExoMotion
             return;
         }
 
-        // Snap rise to whole pixels so we never park mid-pixel.
-        var rise = (float)Math.Round(Math.Clamp(fromY, 0f, 10f));
+        var rise = (float)Math.Round(Math.Clamp(fromY, 0f, 18f));
         var settle = Math.Clamp(toOpacity, 0.1, 1.0);
-        ScheduleEnsureVisible(el, delayMs + EntranceMs + 48, settle);
+        var useScale = RichMotion && fromScale > 0f && fromScale < 0.999f;
+        var startScale = useScale ? Math.Clamp(fromScale, 0.92f, 0.99f) : 1f;
+        ScheduleEnsureVisible(el, delayMs + EntranceMs + 60, settle);
 
         try
         {
             var tf = EnsureTransform(el);
             tf.TranslateX = 0;
             tf.TranslateY = rise;
-            tf.ScaleX = 1;
-            tf.ScaleY = 1;
+            tf.ScaleX = startScale;
+            tf.ScaleY = startScale;
 
             el.Opacity = 0;
             el.IsHitTestVisible = false;
 
             var sb = new Storyboard();
-            sb.Children.Add(Fade(el, 0, settle, FadeMs, delayMs));
+            sb.Children.Add(Fade(el, 0, settle, FadeMs + 50, delayMs));
             if (rise > 0)
-                sb.Children.Add(TranslateY(tf, rise, 0, EntranceMs, delayMs));
+                sb.Children.Add(TranslateYDeep(tf, rise, 0, EntranceMs, delayMs));
+            if (useScale)
+            {
+                sb.Children.Add(Scale(tf, "ScaleX", startScale, 1.0, EntranceMs, delayMs));
+                sb.Children.Add(Scale(tf, "ScaleY", startScale, 1.0, EntranceMs, delayMs));
+            }
 
             sb.Completed += (_, _) =>
             {
@@ -109,7 +111,6 @@ public static class ExoMotion
                 {
                     el.Opacity = settle;
                     el.IsHitTestVisible = enableHit;
-                    // Drop transform so layout owns pixels (no residual matrix blur).
                     el.RenderTransform = null;
                 }
                 catch { }
@@ -119,11 +120,9 @@ public static class ExoMotion
             if (enableHit)
             {
                 var captured = el;
-                var d = delayMs + 70;
-                ScheduleOnUi(captured, d, () =>
+                ScheduleOnUi(captured, delayMs + 80, () =>
                 {
-                    try { captured.IsHitTestVisible = true; }
-                    catch { }
+                    try { captured.IsHitTestVisible = true; } catch { }
                 });
             }
         }
@@ -135,29 +134,30 @@ public static class ExoMotion
 
     public static void PlayStagger(
         IReadOnlyList<UIElement> items,
-        int baseDelayMs = 16,
+        int baseDelayMs = 20,
         int stepMs = StaggerStepMs,
-        float fromY = 8f,
-        float fromScale = 1f)
+        float fromY = 12f,
+        float fromScale = 0.97f)
     {
+        var scale = RichMotion && !MotionDisabled ? fromScale : 1f;
         for (var i = 0; i < items.Count; i++)
         {
             if (items[i] is null) continue;
-            PlayEnter(items[i], baseDelayMs + i * stepMs, fromY, fromScale);
+            PlayEnter(items[i], baseDelayMs + i * stepMs, fromY, scale);
         }
     }
 
     /// <summary>
-    /// Feature-list entrance for module pages: subtle staggered fade + short rise
-    /// on the freshly realized tiles (same storyboard language as the dashboard
-    /// PlayStagger). Waits a few frames for the ItemsRepeater to realize children,
-    /// then animates each tile toward its current (data-bound) opacity so dimmed
-    /// inactive tiles stay dimmed. Callers gate re-entry (first loaded-only).
+    /// Feature grid: cascade each realized child (rich) or single host fade (safe).
     /// </summary>
     public static void PlayListEnter(FrameworkElement host, int expectedCount = 0)
     {
         if (host is null) return;
-        if (MotionDisabled) return; // rows are data-bound visible; nothing to reveal
+        if (MotionDisabled)
+        {
+            EnsureVisible(host);
+            return;
+        }
         _ = RunListEnterAsync(host, expectedCount);
     }
 
@@ -165,41 +165,155 @@ public static class ExoMotion
     {
         try
         {
-            // Wait (UI thread) until the repeater realized its items.
-            for (var attempt = 0; attempt < 24; attempt++)
+            for (var attempt = 0; attempt < 28; attempt++)
             {
                 var count = VisualTreeHelper.GetChildrenCount(host);
-                if (count > 0 && count >= expectedCount)
+                if (count > 0 && (expectedCount <= 0 || count >= expectedCount))
                     break;
                 await Task.Delay(16);
             }
 
-            var items = new List<(UIElement El, double Target)>();
+            var kids = new List<UIElement>();
             var childCount = VisualTreeHelper.GetChildrenCount(host);
             for (var i = 0; i < childCount; i++)
             {
                 if (VisualTreeHelper.GetChild(host, i) is UIElement el)
-                    items.Add((el, el.Opacity <= 0 ? 1.0 : el.Opacity));
+                    kids.Add(el);
             }
-            if (items.Count == 0) return;
 
-            for (var i = 0; i < items.Count; i++)
-                PlayEnter(items[i].El, i * ListStaggerStepMs, fromY: 8f, toOpacity: items[i].Target);
+            if (RichMotion && kids.Count > 0)
+            {
+                foreach (var el in kids)
+                {
+                    el.Opacity = 0;
+                    el.IsHitTestVisible = false;
+                }
+                EnsureVisible(host);
+                PlayStagger(kids, baseDelayMs: 24, stepMs: ListStaggerStepMs, fromY: 10f, fromScale: 0.96f);
+            }
+            else
+            {
+                foreach (var el in kids)
+                    EnsureVisible(el);
+                PlayEnter(host, delayMs: 0, fromY: 6f, fromScale: 1f, toOpacity: 1.0);
+            }
         }
-        catch { }
+        catch
+        {
+            try { EnsureVisible(host); } catch { }
+        }
     }
 
-    /// <summary>
-    /// Selection navigation is immediate. The pressed visual state already provides
-    /// feedback; adding another storyboard here only makes the app feel latent.
-    /// </summary>
+    /// <summary>Press squish then release — tactile, interruptible via storyboard restart.</summary>
     public static void PlaySelect(UIElement el, Action? onDone = null)
     {
-        EnsureVisible(el);
-        onDone?.Invoke();
+        if (el is null)
+        {
+            onDone?.Invoke();
+            return;
+        }
+
+        if (MotionDisabled || !RichMotion)
+        {
+            EnsureVisible(el);
+            onDone?.Invoke();
+            return;
+        }
+
+        try
+        {
+            var tf = EnsureTransform(el);
+            var sb = new Storyboard();
+            sb.Children.Add(Scale(tf, "ScaleX", 1.0, 0.96, 70, 0));
+            sb.Children.Add(Scale(tf, "ScaleY", 1.0, 0.96, 70, 0));
+            sb.Children.Add(Scale(tf, "ScaleX", 0.96, 1.0, 140, 70));
+            sb.Children.Add(Scale(tf, "ScaleY", 0.96, 1.0, 140, 70));
+            sb.Completed += (_, _) =>
+            {
+                try { el.RenderTransform = null; } catch { }
+            };
+            sb.Begin();
+            // Navigation stays immediate; motion is visual only.
+            onDone?.Invoke();
+        }
+        catch
+        {
+            EnsureVisible(el);
+            onDone?.Invoke();
+        }
     }
 
-    /// <summary>Module page soft fade-in.</summary>
+    /// <summary>Check/X settle: scale overshoot pop + fade.</summary>
+    public static void PlayResultPop(UIElement el, int delayMs = 0)
+    {
+        if (el is null) return;
+        if (MotionDisabled)
+        {
+            EnsureVisible(el);
+            return;
+        }
+
+        try
+        {
+            var tf = EnsureTransform(el);
+            tf.ScaleX = 0.82;
+            tf.ScaleY = 0.82;
+            el.Opacity = 0.2;
+            el.IsHitTestVisible = true;
+
+            var sb = new Storyboard();
+            sb.Children.Add(Fade(el, 0.2, 1.0, 220, delayMs));
+            sb.Children.Add(Scale(tf, "ScaleX", 0.82, 1.1, 160, delayMs));
+            sb.Children.Add(Scale(tf, "ScaleY", 0.82, 1.1, 160, delayMs));
+            sb.Children.Add(Scale(tf, "ScaleX", 1.1, 1.0, 130, delayMs + 150));
+            sb.Children.Add(Scale(tf, "ScaleY", 1.1, 1.0, 130, delayMs + 150));
+            sb.Completed += (_, _) =>
+            {
+                try
+                {
+                    el.Opacity = 1;
+                    el.RenderTransform = null;
+                }
+                catch { }
+            };
+            sb.Begin();
+            ScheduleEnsureVisible(el, delayMs + 360);
+        }
+        catch
+        {
+            EnsureVisible(el);
+        }
+    }
+
+    /// <summary>Soft pulse loop for “checking” chrome (stop by clearing storyboard / opacity).</summary>
+    public static Storyboard? PlayPulseOpacity(UIElement el, double low = 0.25, double high = 0.95, int periodMs = 700)
+    {
+        if (el is null || MotionDisabled) return null;
+        try
+        {
+            var sb = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
+            var a = new DoubleAnimation
+            {
+                From = low,
+                To = high,
+                Duration = TimeSpan.FromMilliseconds(periodMs / 2),
+                AutoReverse = true,
+                EasingFunction = Glide(),
+                EnableDependentAnimation = true
+            };
+            Storyboard.SetTarget(a, el);
+            Storyboard.SetTargetProperty(a, "Opacity");
+            sb.Children.Add(a);
+            sb.Begin();
+            return sb;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Module page soft fade + optional micro rise.</summary>
     public static void PlayPageEnter(UIElement root)
     {
         if (MotionDisabled)
@@ -208,24 +322,28 @@ public static class ExoMotion
             return;
         }
 
-        ClearTransform(root);
         try
         {
-            root.Opacity = 0.94;
+            var tf = EnsureTransform(root);
+            tf.TranslateY = RichMotion ? 8 : 0;
+            root.Opacity = 0;
             root.IsHitTestVisible = true;
+
             var sb = new Storyboard();
-            sb.Children.Add(Fade(root, 0.94, 1, 140, 0));
+            sb.Children.Add(Fade(root, 0, 1, RichMotion ? 280 : 140, 0));
+            if (RichMotion)
+                sb.Children.Add(TranslateYDeep(tf, 8, 0, 320, 0));
             sb.Completed += (_, _) =>
             {
                 try
                 {
                     root.Opacity = 1;
-                    ClearTransform(root);
+                    root.RenderTransform = null;
                 }
                 catch { }
             };
             sb.Begin();
-            ScheduleEnsureVisible(root, 190);
+            ScheduleEnsureVisible(root, 360);
         }
         catch
         {
@@ -233,25 +351,38 @@ public static class ExoMotion
         }
     }
 
-    private static void ClearTransform(UIElement el)
+    /// <summary>Cascade optimizer rows: each row enters after the previous settles a beat.</summary>
+    public static void PlayRowCascade(IReadOnlyList<UIElement> rows, int stepMs = 70)
     {
-        try
+        if (rows is null || rows.Count == 0) return;
+        if (MotionDisabled)
         {
-            el.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
-            if (el.RenderTransform is CompositeTransform tf)
-            {
-                tf.TranslateX = 0;
-                tf.TranslateY = 0;
-                tf.ScaleX = 1;
-                tf.ScaleY = 1;
-                tf.Rotation = 0;
-            }
-            else
-            {
-                el.RenderTransform = null;
-            }
+            foreach (var r in rows) EnsureVisible(r);
+            return;
         }
-        catch { }
+        PlayStagger(rows, baseDelayMs: 40, stepMs: stepMs, fromY: 10f, fromScale: 0.95f);
+    }
+
+    private static DoubleAnimation Scale(
+        CompositeTransform tf,
+        string property,
+        double from,
+        double to,
+        int ms,
+        int delayMs)
+    {
+        var a = new DoubleAnimation
+        {
+            From = from,
+            To = to,
+            Duration = TimeSpan.FromMilliseconds(ms),
+            BeginTime = TimeSpan.FromMilliseconds(delayMs),
+            EasingFunction = GlideDeep(),
+            EnableDependentAnimation = true
+        };
+        Storyboard.SetTarget(a, tf);
+        Storyboard.SetTargetProperty(a, property);
+        return a;
     }
 
     private static void ScheduleEnsureVisible(UIElement el, int delayMs, double settleOpacity = 1.0)
@@ -269,10 +400,6 @@ public static class ExoMotion
         });
     }
 
-    /// <summary>
-    /// Single-shot UI-queue fallback for storyboard completion. This avoids
-    /// creating thread-pool work just to wait for a visual transition.
-    /// </summary>
     private static void ScheduleOnUi(UIElement el, int delayMs, Action action)
     {
         try
@@ -292,10 +419,7 @@ public static class ExoMotion
                     action();
                 }
                 catch { }
-                finally
-                {
-                    timer = null;
-                }
+                finally { timer = null; }
             };
             timer.Start();
         }
@@ -310,7 +434,7 @@ public static class ExoMotion
             To = to,
             Duration = TimeSpan.FromMilliseconds(ms),
             BeginTime = TimeSpan.FromMilliseconds(delayMs),
-            EasingFunction = Glide(),
+            EasingFunction = GlideDeep(),
             EnableDependentAnimation = true
         };
         Storyboard.SetTarget(a, target);
@@ -318,7 +442,7 @@ public static class ExoMotion
         return a;
     }
 
-    private static DoubleAnimation TranslateY(CompositeTransform tf, double from, double to, int ms, int delayMs)
+    private static DoubleAnimation TranslateYDeep(CompositeTransform tf, double from, double to, int ms, int delayMs)
     {
         var a = new DoubleAnimation
         {
@@ -326,8 +450,7 @@ public static class ExoMotion
             To = to,
             Duration = TimeSpan.FromMilliseconds(ms),
             BeginTime = TimeSpan.FromMilliseconds(delayMs),
-            // EaseOut only — BackEase overshoot leaves subpixel soft frames.
-            EasingFunction = Glide(),
+            EasingFunction = GlideDeep(),
             EnableDependentAnimation = true
         };
         Storyboard.SetTarget(a, tf);

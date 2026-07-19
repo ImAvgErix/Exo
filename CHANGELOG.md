@@ -1,3 +1,21 @@
+## 3.7.0
+
+- **WebView glass shell**: primary UI is WinUI 3 + WebView2 with a React/TypeScript/Tailwind liquid-glass surface — centered optimizer nav, in-bar min/close, solid glass panels (no fake transparency), Home meters, and module pages with Stable / Experimental modes.
+- **Home network card**: hero is negotiated **link rate** (e.g. 2.5G); mini stats for Idle, Load ↓, Load ↑, Loss, DNS, and Rating from the last Internet quality sample (no “Link capacity” / media / prose noise).
+- **Module load UX**: features stay on a skeleton until detect finishes — no half-list flash of toggle-only rows while Apply/Repair stay locked.
+- **Discord preserve**: Stable Apply merges host/chromium flags only; does not rewrite in-app audio, reduced motion, or Discord notification prefs. Windows quiet (OS toasts / Run key / tasks / tray) stays on. Single end-of-Apply Discord open (no thrash relaunch).
+- **Internet host policy**: Stable stamps full safe stack (NTI/Responsiveness/Games MMCSS/Psched); Experimental force re-stamps. Multi-gig keeps throughput; loaded queueing is reported honestly.
+- **Hybrid GPU**: Riot/Epic launchers prefer iGPU when a discrete GPU exists; games stay high-performance. NVIDIA remains SafePolicy with explicit G-SYNC vs raw latency.
+- **Ship path**: embedded `wwwroot` assets + script SHA manifest; Discord/Network/UI smoke gates updated for preserve + chromium-only variant detect.
+
+## 3.6.2
+
+- **True-black AMOLED shell**: page background is pure black with quieter hairlines, denser module plates, and 76px capability tiles so more evidence fits without marketing fluff.
+- **Internet RSS honesty**: NICs without an RSS WMI surface report soft-ok instead of a false open failure row; status filters informational N/A lines.
+- **Steam / Discord / launchers memory**: background soft reclaim (never EmptyWorkingSet on Steam CEF), Discord 2.5s idle trim, and Windows-only GPU/FSO/yield for Riot and Epic.
+- **NVIDIA packaging**: ships framework-dependent `Exo.NvDisplay` (~0.7 MB with NvAPIWrapper) including exact DRS backup/restore for Repair; Publish-Exo rejects accidental 70 MB single-file bloat.
+- **Cua install-path QA**: re-snapshot-before-click nav gate with module landing markers so automated screenshots cannot silently stay on Home.
+
 ## 3.6.1
 
 - **Signal-deck UI rebuild**: replaces clipped icon-only chrome with labeled, stable Home/module/Settings navigation; reshapes the dashboard into a compact 3×2 status grid; gives module capabilities a responsive two-column layout; and keeps actions in normal document flow instead of pinning them below empty space.

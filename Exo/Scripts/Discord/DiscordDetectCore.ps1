@@ -87,7 +87,9 @@ function Test-DiscOptVariantOptimized {
 
 <#
 .SYNOPSIS
-  Variant (PTB/Canary) settings.json flags: startup off + chromium lean present.
+  Variant (PTB/Canary) settings.json flags: chromium lean present.
+  Does NOT require OPEN_ON_STARTUP=false — that is a Discord in-app pref.
+  Windows autostart is enforced via Run-key removal, not settings.json.
   SKIP_HOST_UPDATE is intentionally NOT required on test channels (frequent
   host updates; forcing skip can freeze a broken install on Starting).
 #>
@@ -97,8 +99,6 @@ function Test-DiscOptVariantSettingsJson {
     try {
         $sj = $JsonText | ConvertFrom-Json
         $names = @($sj.PSObject.Properties.Name)
-        if ($names -notcontains 'OPEN_ON_STARTUP') { return $false }
-        if ($sj.OPEN_ON_STARTUP -ne $false) { return $false }
         if ($names -notcontains 'chromiumSwitches') { return $false }
         return [bool]$sj.chromiumSwitches
     } catch { return $false }
@@ -118,7 +118,7 @@ function Test-DiscOptKernelLayout {
 <#
 .SYNOPSIS
   True when config.ini content is a valid gaming DiscOpt kernel (not folklore).
-  Accepts current kit (TrimIntervalMs=4000) and prior apply (5000) - exact kit hash not required for ini.
+  Accepts kit TrimIntervalMs 2500 (and prior 4000/5000) - exact kit hash not required for ini.
 #>
 function Test-DiscOptKernelConfigText {
     param([AllowNull()][string]$ConfigText)
@@ -127,7 +127,7 @@ function Test-DiscOptKernelConfigText {
     if ($ConfigText -notmatch '(?m)^\s*PriorityClass\s*=\s*3\s*$') { return $false }
     if ($ConfigText -notmatch '(?m)^\s*TrimIntervalMs\s*=\s*(\d+)\s*$') { return $false }
     $trimMs = [int]$Matches[1]
-    # Valid range: 2s-15s idle trim (kit ships 4000; older applies used 5000)
+    # Valid range: 2s-15s idle trim (kit ships 2500; older applies used 4000/5000)
     if ($trimMs -lt 2000 -or $trimMs -gt 15000) { return $false }
     return $true
 }

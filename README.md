@@ -6,41 +6,58 @@ Steam, Riot, and Epic.
 ![Exo dashboard](docs/exo-shell.png)
 
 Exo detects the current PC before it changes anything. Each module has one
-primary Apply action, a detector that explains the active policy, and a Repair
+primary **Apply**, a detector that explains the active policy, and a **Repair**
 path that restores the captured pre-Exo state. The app is dark-only, local-first,
 and leaves no Exo service, startup entry, scheduled task, tray process, account,
 analytics, or advertising behind.
+
+## Shell (3.7)
+
+Exo’s UI is a fixed dark **liquid-glass** shell: native WinUI 3 window chrome
+with a React/TypeScript WebView2 surface (Tailwind). Top bar keeps optimizers
+centered, custom minimize/close live in the chrome, and Home shows live Memory /
+CPU / GPU plus a network card (link rate, idle latency, load latency, loss, DNS,
+rating). Module pages use Stable vs Experimental apply modes; features load fully
+after detect (no half-list flash). Settings open as an overlay from the shell.
+
+Native WinUI module pages remain in the tree for parity/fallback; the shipped
+experience is the WebView shell.
 
 ## What it optimizes
 
 | Module | Policy |
 |---|---|
-| Internet | Measures the current route, link, latency, loss, load response, and DNS candidates; preserves multi-gig throughput and applies only supported Windows/NIC controls. |
-| NVIDIA | Detects GPU series and display topology, applies verified global/per-game DRS profiles, and exposes G-SYNC as an explicit choice. |
-| Discord | Applies a lean client/privacy profile, voice QoS, quiet Windows integration, dark styling, and a verified update-sensitive background policy. |
-| Steam | Tunes supported client settings and lets background CEF helpers yield while gaming without killing, suspending, or purging them. |
-| Riot | Applies reversible Windows startup/GPU/CPU policy to detected Riot games without touching Vanguard or game files. |
-| Epic | Applies reversible Windows startup/GPU/CPU policy to executables found through Epic manifests without touching EOS, manifests, saves, or game files. |
+| Internet | Measures route, link, idle/load latency, loss, and DNS candidates; preserves multi-gig throughput; applies supported Windows/NIC host knobs only. |
+| NVIDIA | Detects GPU series and topology; verified global/per-game DRS profiles; G-SYNC / VRR vs raw latency is an explicit choice (SafePolicy). |
+| Discord | Lean client path (Equicord + Exo Host), voice QoS, **Windows** quiet (OS toasts / autostart / tray). **In-app** audio, reduced motion, and notification prefs are preserved on Stable Apply. |
+| Steam | Supported client settings; background CEF helpers yield while gaming without kill/suspend/purge. |
+| Riot | Reversible Windows startup / hybrid GPU / yield for detected Riot games — never Vanguard or game files. |
+| Epic | Same launcher-scoped model for Epic-manifest games — never EOS, saves, or game files. |
+
+**Stable** applies the full safe reversible stack. **Experimental** only force
+re-imports, rebuilds, or tighter loops — it is not “more dangerous by default.”
 
 Exo deliberately excludes folklore registry packs, forced MTU/jumbo frames,
 anti-cheat changes, unsigned driver edits, destructive RAM purges, and global
 settings whose correct value depends on the game. See
-[the tweak audit](docs/TWEAK-AUDIT.md) for the full decision record.
+[the tweak audit](docs/TWEAK-AUDIT.md).
 
 ## Install
 
 Download `Exo.exe` from the [latest release](https://github.com/ImAvgErix/Exo/releases/latest)
-and double-click it. The release is self-contained for Windows 11 x64.
+and double-click it. Self-contained Windows 11 x64.
 
-PowerShell bootstrap alternative:
+PowerShell bootstrap:
 
 ```powershell
 irm https://raw.githubusercontent.com/ImAvgErix/Exo/main/Install-Exo.ps1 | iex
 ```
 
-The bootstrap requires GitHub's SHA-256 digest and checks the embedded version
-before it launches the installer. Current public builds are not code-signed, so
-Windows may show SmartScreen. Do not download Exo from third-party mirrors.
+The bootstrap requires GitHub’s SHA-256 digest and checks the embedded version
+before launch. Public builds are not code-signed, so Windows may show SmartScreen.
+Do not download Exo from third-party mirrors.
+
+Install path: `%LocalAppData%\Exo\app\`.
 
 ## Safety model
 
@@ -48,26 +65,45 @@ Windows may show SmartScreen. Do not download Exo from third-party mirrors.
 - Each mutation is capability-gated, snapshotted, verified, and repairable.
 - Riot Vanguard, Epic Online Services, game binaries, saves, logins, and
   anti-cheat state are outside the mutation boundary.
+- Discord Apply does **not** rewrite in-app audio, reduced motion, or Discord
+  notification UI prefs; Windows toast quiet is separate and intentional.
 - Exo reports observed metrics and policy state; it does not promise universal
   FPS, ping, RAM, or throughput gains.
 
 Read [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md) before using the
-aggressive Discord client modification or system-wide network policy.
+Discord client modification or system-wide network policy.
+
+## Network home metrics
+
+| Label | Meaning |
+|---|---|
+| Hero (e.g. 2.5G) | Negotiated **link capacity**, not ping |
+| Idle | Unloaded ICMP RTT (p50) |
+| Load ↓ / Load ↑ | ICMP RTT **while** saturating download / upload |
+| Loss | Idle-path packet loss only |
+| DNS | Selected resolver family from the last quality test |
+| Rating | Simple grade from idle + load + loss (last quality sample) |
+
+Full quality numbers appear after **Internet → Apply** (cached sample). Load ↑
+can be much higher than idle under multi-gig upload queueing; that is reported,
+not “fixed” by cutting throughput on multi-gig Ethernet.
 
 ## Build and test
 
-Requirements: Windows 11, Visual Studio Build Tools/SDK support for Windows App
-SDK, PowerShell 7, and .NET 10 SDK.
+Requirements: Windows 11, Windows App SDK / WinUI 3 tooling, PowerShell 7,
+.NET 10 SDK, and Node.js (for the React UI when rebuilding `Exo/wwwroot`).
 
 ```powershell
+# UI (optional if wwwroot is already current)
+cd ui; npm ci; npm run build; cd ..
+
 dotnet build Exo.sln -c Release -p:Platform=x64
 pwsh -File tools/Test-Repository.ps1
 pwsh -File Publish-Exo.ps1
 ```
 
-CI runs the UI, Network, Discord, Steam, NVIDIA, Riot/Epic, and contract smoke
-suites. NVIDIA hardware/display behavior still requires a real NVIDIA Windows
-machine because GitHub-hosted runners have no GPU.
+CI runs UI, Network, Discord, Steam, NVIDIA, Riot/Epic, and contract smoke
+suites. NVIDIA hardware behavior still needs a real NVIDIA Windows machine.
 
 ## Contributing
 

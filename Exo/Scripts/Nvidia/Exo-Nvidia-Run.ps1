@@ -5,7 +5,10 @@ param(
     [switch]$RawLatency,
     [string]$Series = '',
     [switch]$SkipApp,
-    [switch]$SkipProfile
+    [switch]$SkipProfile,
+    [switch]$Experimental,
+    # Accepted for WinUI/VM call sites; product path always forces SafePolicy below.
+    [switch]$SafePolicy
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,6 +38,11 @@ if ($RawLatency) { $params['RawLatency'] = $true }
 if ($Series) { $params['Series'] = $Series }
 if ($SkipApp) { $params['SkipApp'] = $true }
 if ($SkipProfile) { $params['SkipProfile'] = $true }
+# Experimental forces profile re-import; SafePolicy stays on (no clean-driver path).
+if ($Experimental) {
+    Write-Output '[*] Experimental NVIDIA apply (force DRS re-import; safe policy retained)'
+    $params['Experimental'] = $true
+}
 
 & $Optimizer @params 2>&1 | ForEach-Object { Write-Output "$_" }
 if ($null -ne $LASTEXITCODE) { exit [int]$LASTEXITCODE }

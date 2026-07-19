@@ -20,6 +20,35 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
         _services = services;
         _module = module is "Riot" or "Epic" ? module : throw new ArgumentOutOfRangeException(nameof(module));
         LastResultBrush = ResolveBrush("ExoSuccessBrush", Color.FromArgb(255, 34, 197, 94));
+        try
+        {
+            PreferExperimental = _module == "Riot"
+                ? services.Settings.Current.ExperimentalRiot
+                : services.Settings.Current.ExperimentalEpic;
+            SelectedApplyMode = PreferExperimental ? "Experimental" : "Stable";
+        }
+        catch { }
+    }
+
+    partial void OnSelectedApplyModeChanged(string value)
+    {
+        var exp = string.Equals(value, "Experimental", StringComparison.OrdinalIgnoreCase);
+        if (PreferExperimental != exp) PreferExperimental = exp;
+    }
+
+    partial void OnPreferExperimentalChanged(bool value)
+    {
+        var mode = value ? "Experimental" : "Stable";
+        if (!string.Equals(SelectedApplyMode, mode, StringComparison.Ordinal))
+            SelectedApplyMode = mode;
+        try
+        {
+            if (_module == "Riot")
+                _services.Settings.Update(s => s.ExperimentalRiot = value);
+            else
+                _services.Settings.Update(s => s.ExperimentalEpic = value);
+        }
+        catch { }
     }
 
     [ObservableProperty] public partial string StatusText { get; set; } = "Checking status...";
@@ -28,6 +57,9 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
     [ObservableProperty] public partial bool IsApplied { get; set; }
     [ObservableProperty] public partial bool IsBusy { get; set; }
     [ObservableProperty] public partial bool IsStatusLoading { get; set; } = true;
+    [ObservableProperty] public partial bool PreferExperimental { get; set; }
+    public IReadOnlyList<string> ApplyModeOptions { get; } = new[] { "Stable", "Experimental" };
+    [ObservableProperty] public partial string SelectedApplyMode { get; set; } = "Stable";
     [ObservableProperty] public partial bool IsFeatureListVisible { get; set; }
     [ObservableProperty] public partial bool IsProgressVisible { get; set; }
     [ObservableProperty] public partial double ProgressPercent { get; set; }
@@ -48,19 +80,65 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
     partial void OnIsApplyReportOpenChanged(bool value) => OnPropertyChanged(nameof(ApplyReportChevron));
     [RelayCommand] private void ToggleApplyReport() => IsApplyReportOpen = !IsApplyReportOpen;
 
+    private DateTimeOffset _lastFullDetectUtc = DateTimeOffset.MinValue;
+    private static readonly TimeSpan DetectFreshness = TimeSpan.FromSeconds(120);
+    private int _detectGen;
+    private CancellationTokenSource? _detectCts;
+
     [RelayCommand]
-    private async Task RefreshAsync()
+    private Task RefreshAsync() => RefreshCoreAsync(force: true);
+
+    public void CancelBackgroundWork()
     {
-        if (IsBusy) return;
-        IsBusy = true;
-        IsStatusLoading = true;
-        try { ApplyState(await DetectAsync()); }
-        catch { SetResult(OptimizerMessages.StatusFailed, false); }
-        finally
+        try { _detectCts?.Cancel(); } catch { }
+        Interlocked.Increment(ref _detectGen);
+    }
+
+    private async Task RefreshCoreAsync(bool force)
+    {
+        if (!force && Features.Count > 0 && DateTimeOffset.UtcNow - _lastFullDetectUtc < DetectFreshness)
         {
             IsStatusLoading = false;
-            IsFeatureListVisible = Features.Count > 0;
-            IsBusy = false;
+            IsFeatureListVisible = true;
+            return;
+        }
+
+        try { _detectCts?.Cancel(); } catch { }
+        _detectCts?.Dispose();
+        _detectCts = new CancellationTokenSource();
+        var ct = _detectCts.Token;
+        var gen = Interlocked.Increment(ref _detectGen);
+        if (Features.Count == 0)
+        {
+            IsStatusLoading = true;
+            IsFeatureListVisible = false;
+            StatusText = "Checking status...";
+        }
+        try
+        {
+            ApplyState(await DetectAsync().WaitAsync(ct).ConfigureAwait(true));
+            if (gen != _detectGen || ct.IsCancellationRequested) return;
+            _lastFullDetectUtc = DateTimeOffset.UtcNow;
+            if (HasLastResult && string.Equals(LastResult, OptimizerMessages.StatusFailed, StringComparison.Ordinal))
+                SetResult(string.Empty, true);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (gen == _detectGen && Features.Count == 0)
+            {
+                StatusText = "Unavailable";
+                Features.Clear();
+                SetResult(string.IsNullOrWhiteSpace(ex.Message) ? OptimizerMessages.StatusFailed : ex.Message, false);
+            }
+        }
+        finally
+        {
+            if (gen == _detectGen)
+            {
+                IsStatusLoading = false;
+                IsFeatureListVisible = Features.Count > 0;
+            }
         }
     }
 
@@ -93,8 +171,10 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
                 ("Epic", false) => _services.Scripts.EpicOptimizerScript,
                 _ => _services.Scripts.EpicRepairScript
             };
+            var args = new List<string> { "-NonInteractive" };
+            if (!repair && PreferExperimental) args.Add("-Experimental");
             var result = await _services.PowerShell.RunAsync(
-                script, ["-NonInteractive"], elevate: true, progress,
+                script, args, elevate: true, progress,
                 _runCts.Token, _services.Scripts.GetGameLaunchersRoot(), ensureRuntime: true);
             if (result.Success)
             {
@@ -133,9 +213,6 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
 
     private void ApplyState(OptimizerStateInfo state)
     {
-        IsApplied = state.IsApplied;
-        StatusText = state.StatusText;
-        RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
         Features.Clear();
         foreach (var feature in state.Features)
         {
@@ -149,11 +226,45 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
                 RailOpacity = UiStatusPresentation.FeatureRailOpacity(feature.IsActive)
             });
         }
+
+        // Honesty + Discord-grade status: never claim optimized when install/games rows are open.
+        var installMissing = Features.Any(f =>
+            f.Title.Contains("install", StringComparison.OrdinalIgnoreCase) && !f.IsActive);
+        var statusLooksMissing = (state.StatusText ?? string.Empty)
+            .Contains("not installed", StringComparison.OrdinalIgnoreCase);
+
+        if (installMissing || statusLooksMissing)
+        {
+            IsApplied = false;
+            StatusText = "Not installed";
+            RunButtonLabel = "Apply";
+        }
+        else
+        {
+            IsApplied = state.IsApplied;
+            var raw = (state.StatusText ?? string.Empty).Trim();
+            var missing = Features.Count(f => !f.IsActive && !string.IsNullOrWhiteSpace(f.Title));
+            if (!state.IsApplied
+                && missing > 0
+                && missing <= 3
+                && (string.Equals(raw, "Not applied", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(raw, "Ready to optimize", StringComparison.OrdinalIgnoreCase)
+                    || string.IsNullOrWhiteSpace(raw)))
+            {
+                StatusText = missing == 1
+                    ? "1 setting needs Apply"
+                    : $"{missing} settings need Apply";
+            }
+            else
+            {
+                StatusText = string.IsNullOrWhiteSpace(raw) ? "Ready" : raw;
+            }
+            RunButtonLabel = state.IsApplied ? "Reapply" : "Apply";
+        }
+
         LoadApplyReport();
-        GuidanceText = state.IsApplied
-            ? "Verified Windows policy only. Client files, services, anti-cheat, updates, and game settings stay untouched."
-            : "Apply disables launcher auto-start and routes detected games to the high-performance GPU. Hybrid PCs keep launcher UI on integrated graphics.";
-        HasGuidance = true;
+        GuidanceText = string.Empty;
+        HasGuidance = false;
         if (!IsStatusLoading) IsFeatureListVisible = Features.Count > 0;
     }
 
@@ -188,5 +299,5 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
         return new SolidColorBrush(fallback);
     }
 
-    public Task InitializeAsync() => RefreshAsync();
+    public Task InitializeAsync() => RefreshCoreAsync(force: false);
 }

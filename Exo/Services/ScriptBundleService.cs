@@ -60,10 +60,17 @@ public sealed class ScriptBundleService
 
         lock (_syncLock)
         {
-            EnsureAppKitStampCore();
-            var working = Path.Combine(PathHelper.WorkingScriptsDir, "Discord");
-            EnsureDiscordScriptsSynced(working);
-            return working;
+            try
+            {
+                EnsureAppKitStampCore();
+                var working = Path.Combine(PathHelper.WorkingScriptsDir, "Discord");
+                EnsureDiscordScriptsSynced(working);
+                if (Directory.Exists(working) && File.Exists(Path.Combine(working, "Exo-Discord-Detect.ps1")))
+                    return working;
+            }
+            catch { }
+
+            return PathHelper.DiscordScriptsDir;
         }
     }
 
@@ -71,10 +78,20 @@ public sealed class ScriptBundleService
     {
         lock (_syncLock)
         {
-            EnsureAppKitStampCore();
-            var working = Path.Combine(PathHelper.WorkingScriptsDir, "Steam");
-            EnsureSteamScriptsSynced(working);
-            return working;
+            try
+            {
+                EnsureAppKitStampCore();
+                var working = Path.Combine(PathHelper.WorkingScriptsDir, "Steam");
+                EnsureSteamScriptsSynced(working);
+                if (Directory.Exists(working) && File.Exists(Path.Combine(working, "Exo-Steam-Detect.ps1")))
+                    return working;
+            }
+            catch
+            {
+                // File locks during parallel kit materialize — use bundled kit.
+            }
+
+            return PathHelper.SteamScriptsDir;
         }
     }
 
@@ -82,10 +99,17 @@ public sealed class ScriptBundleService
     {
         lock (_syncLock)
         {
-            EnsureAppKitStampCore();
-            var working = Path.Combine(PathHelper.WorkingScriptsDir, "Nvidia");
-            EnsureNvidiaScriptsSynced(working);
-            return working;
+            try
+            {
+                EnsureAppKitStampCore();
+                var working = Path.Combine(PathHelper.WorkingScriptsDir, "Nvidia");
+                EnsureNvidiaScriptsSynced(working);
+                if (Directory.Exists(working) && File.Exists(Path.Combine(working, "Exo-Nvidia-Detect.ps1")))
+                    return working;
+            }
+            catch { }
+
+            return PathHelper.NvidiaScriptsDir;
         }
     }
 
@@ -93,10 +117,24 @@ public sealed class ScriptBundleService
     {
         lock (_syncLock)
         {
-            EnsureAppKitStampCore();
-            var working = Path.Combine(PathHelper.WorkingScriptsDir, "GameLaunchers");
-            EnsureGameLauncherScriptsSynced(working);
-            return working;
+            try
+            {
+                EnsureAppKitStampCore();
+                var working = Path.Combine(PathHelper.WorkingScriptsDir, "GameLaunchers");
+                EnsureGameLauncherScriptsSynced(working);
+                if (Directory.Exists(working) &&
+                    File.Exists(Path.Combine(working, "Exo-Riot-Detect.ps1")) &&
+                    File.Exists(Path.Combine(working, "GameLauncher-Detect.ps1")))
+                {
+                    return working;
+                }
+            }
+            catch
+            {
+                // Staging can fail after a partial cache wipe / file lock; fall back.
+            }
+
+            return PathHelper.GameLauncherScriptsDir;
         }
     }
 
@@ -195,14 +233,23 @@ public sealed class ScriptBundleService
     /// </summary>
     private void ResetWorkingKitsFromBundledUnlocked()
     {
-        ReplaceWorkingKitFromBundled("Discord", PathHelper.DiscordScriptsDir,
-            ["Disc-Optimizer.ps1", "Exo-Discord-Run.ps1"]);
-        ReplaceWorkingKitFromBundled("Steam", PathHelper.SteamScriptsDir,
-            ["Steam-Optimizer.ps1", "Exo-Steam-Run.ps1", "Exo-Steam-Detect.ps1"]);
-        ReplaceWorkingKitFromBundled("Nvidia", PathHelper.NvidiaScriptsDir,
-            ["Nvidia-Optimizer.ps1", "Exo-Nvidia-Run.ps1", "Exo-Nvidia-Detect.ps1"]);
-        ReplaceWorkingKitFromBundled("GameLaunchers", PathHelper.GameLauncherScriptsDir,
-            ["GameLauncher-Optimizer.ps1", "GameLauncher-Detect.ps1", "Exo-Riot-Run.ps1", "Exo-Epic-Run.ps1"]);
+        // Sequential kit materialize — parallel Directory.Move races on Windows and
+        // threw "file is being used by another process" (blanked every module page).
+        foreach (var job in new (string Name, string Bundled, string[] Required)[]
+                 {
+                     ("Discord", PathHelper.DiscordScriptsDir,
+                         ["Disc-Optimizer.ps1", "Exo-Discord-Run.ps1"]),
+                     ("Steam", PathHelper.SteamScriptsDir,
+                         ["Steam-Optimizer.ps1", "Exo-Steam-Run.ps1", "Exo-Steam-Detect.ps1"]),
+                     ("Nvidia", PathHelper.NvidiaScriptsDir,
+                         ["Nvidia-Optimizer.ps1", "Exo-Nvidia-Run.ps1", "Exo-Nvidia-Detect.ps1"]),
+                     ("GameLaunchers", PathHelper.GameLauncherScriptsDir,
+                         ["GameLauncher-Optimizer.ps1", "GameLauncher-Detect.ps1", "Exo-Riot-Run.ps1", "Exo-Epic-Run.ps1"])
+                 })
+        {
+            try { ReplaceWorkingKitFromBundled(job.Name, job.Bundled, job.Required); }
+            catch { /* best-effort; Get*Root falls back to bundled Scripts */ }
+        }
 
         _discordSyncDone = false;
         _steamSyncDone = false;
@@ -224,42 +271,62 @@ public sealed class ScriptBundleService
                 return; // incomplete bundle; leave existing working kit alone
         }
 
-        var working = Path.Combine(PathHelper.WorkingScriptsDir, kitName);
-        var staging = Path.Combine(PathHelper.WorkingScriptsDir, $"{kitName}.fresh-{Guid.NewGuid():N}");
-        var backup = Path.Combine(PathHelper.WorkingScriptsDir, $"{kitName}.prev-{Guid.NewGuid():N}");
-        var moved = false;
-
-        try
+        Exception? last = null;
+        for (var attempt = 0; attempt < 4; attempt++)
         {
-            CopyDirectory(bundled, staging);
-            foreach (var required in requiredFiles)
-            {
-                if (!File.Exists(Path.Combine(staging, required)))
-                    throw new InvalidDataException($"Bundled {kitName} kit is incomplete (missing {required}).");
-            }
+            var working = Path.Combine(PathHelper.WorkingScriptsDir, kitName);
+            var staging = Path.Combine(PathHelper.WorkingScriptsDir, $"{kitName}.fresh-{Guid.NewGuid():N}");
+            var backup = Path.Combine(PathHelper.WorkingScriptsDir, $"{kitName}.prev-{Guid.NewGuid():N}");
+            var moved = false;
 
-            if (Directory.Exists(working))
+            try
             {
-                Directory.Move(working, backup);
-                moved = true;
-            }
+                CopyDirectory(bundled, staging);
+                foreach (var required in requiredFiles)
+                {
+                    if (!File.Exists(Path.Combine(staging, required)))
+                        throw new InvalidDataException($"Bundled {kitName} kit is incomplete (missing {required}).");
+                }
 
-            Directory.Move(staging, working);
-        }
-        catch
-        {
-            if (moved && !Directory.Exists(working) && Directory.Exists(backup))
-            {
-                try { Directory.Move(backup, working); } catch { /* preserve original */ }
-            }
-            throw;
-        }
-        finally
-        {
-            TryDeleteDirectory(staging);
-            if (Directory.Exists(working))
+                if (Directory.Exists(working))
+                {
+                    Directory.Move(working, backup);
+                    moved = true;
+                }
+
+                Directory.Move(staging, working);
                 TryDeleteDirectory(backup);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                last = ex;
+                if (moved && !Directory.Exists(working) && Directory.Exists(backup))
+                {
+                    try { Directory.Move(backup, working); } catch { /* preserve original */ }
+                }
+                TryDeleteDirectory(staging);
+                Thread.Sleep(80 * (attempt + 1));
+            }
+            catch
+            {
+                if (moved && !Directory.Exists(working) && Directory.Exists(backup))
+                {
+                    try { Directory.Move(backup, working); } catch { /* preserve original */ }
+                }
+                TryDeleteDirectory(staging);
+                throw;
+            }
+            finally
+            {
+                TryDeleteDirectory(staging);
+                if (Directory.Exists(working) && Directory.Exists(backup))
+                    TryDeleteDirectory(backup);
+            }
         }
+
+        if (last is not null)
+            throw last;
     }
 
     private void EnsureSteamScriptsSynced(string working)
@@ -364,6 +431,7 @@ public sealed class ScriptBundleService
     {
         var bundled = PathHelper.GameLauncherScriptsDir;
         if (!Directory.Exists(bundled)) return;
+        Directory.CreateDirectory(Path.GetDirectoryName(working)!);
         var required = new[]
         {
             "GameLauncher-Optimizer.ps1", "GameLauncher-Detect.ps1",
@@ -372,7 +440,8 @@ public sealed class ScriptBundleService
         };
         var bundledVersion = ReadVersionFile(Path.Combine(bundled, "VERSION")) ?? "0";
         var workingVersion = ReadVersionFile(Path.Combine(working, "VERSION")) ?? string.Empty;
-        var broken = required.Any(file => !File.Exists(Path.Combine(working, file)));
+        var broken = !Directory.Exists(working) ||
+            required.Any(file => !File.Exists(Path.Combine(working, file)));
         if (_gameLaunchersSyncDone && !broken &&
             string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal)) return;
         if (broken || !string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))

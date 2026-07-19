@@ -1,19 +1,12 @@
 {
+  "_comment": "Host/boot keys only. Apply-DiscordProfile never copies audio, tray, startup, window geometry, or in-app prefs from this file.",
   "SKIP_HOST_UPDATE": true,
-  "OPEN_ON_STARTUP": false,
-  "MINIMIZE_TO_TRAY": true,
-  "START_MINIMIZED": false,
-  "IS_MAXIMIZED": true,
-  "IS_MINIMIZED": false,
   "debugLogging": false,
-  "offloadAdmControls": true,
-  "useLegacyAudioDevice": false,
-  "asyncVideoInputDeviceInit": false,
-  "audioSubsystem": "standard",
   "DESKTOP_TTI_REMOVE_V8_CACHE_CLEAR": true,
   "DESKTOP_TTI_DNSTCP_WARMUP": true,
   "DESKTOP_TTI_EARLY_UPDATE_CHECK": false,
   "DESKTOP_TTI_UPDATE_BACKOFF_MAX_MS": 2000,
+  "DESKTOP_TTI_SPLASH_USE_WEBP": true,
   "chromiumSwitches": {
     "disable-breakpad": 1,
     "disable-crash-reporter": 1,
@@ -23,6 +16,8 @@
     "disable-background-networking": 1,
     "no-pings": 1,
     "disable-renderer-backgrounding": 1,
-    "disable-backgrounding-occluded-windows": 1
+    "disable-backgrounding-occluded-windows": 1,
+    "disable-background-timer-throttling": 1,
+    "disable-hang-monitor": 1
   }
 }

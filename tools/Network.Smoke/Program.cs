@@ -159,14 +159,23 @@ Expect("latency LSO 0", latScript.Contains("'*LsoV2IPv4' 0", StringComparison.Or
 Expect("throughput LSO 1", thrScript.Contains("'*LsoV2IPv4' 1", StringComparison.Ordinal));
 Expect("latency flow 0", latScript.Contains("'*FlowControl' 0", StringComparison.Ordinal));
 Expect("throughput flow 3", thrScript.Contains("'*FlowControl' 3", StringComparison.Ordinal));
-Expect("scripts leave global multimedia scheduler alone",
+// Stable apply leaves machine-wide MMCSS/Psched alone; experimental stamps them.
+Expect("stable scripts leave global multimedia scheduler alone",
     !latScript.Contains("Set-Dword $mm 'NetworkThrottlingIndex'", StringComparison.Ordinal) &&
     !latScript.Contains("Set-Dword $mm 'SystemResponsiveness'", StringComparison.Ordinal) &&
     !thrScript.Contains("Set-Dword $mm 'NetworkThrottlingIndex'", StringComparison.Ordinal) &&
     !thrScript.Contains("Set-Dword $mm 'SystemResponsiveness'", StringComparison.Ordinal));
-Expect("scripts leave global QoS reservation alone",
-    !latScript.Contains("Set-Dword $ps 'NonBestEffortLimit'", StringComparison.Ordinal) &&
-    !thrScript.Contains("Set-Dword $ps 'NonBestEffortLimit'", StringComparison.Ordinal));
+Expect("stable scripts leave global QoS reservation alone",
+    !latScript.Contains("Set-Dword $psched 'NonBestEffortLimit'", StringComparison.Ordinal) &&
+    !thrScript.Contains("Set-Dword $psched 'NonBestEffortLimit'", StringComparison.Ordinal) &&
+    !latScript.Contains("Set-Dword $ps 'NonBestEffortLimit'", StringComparison.Ordinal));
+var latExp = NetworkApplyScriptBuilder.Build(
+    NetworkPreset.LowestLatency,
+    new NetworkApplyOptions { Experimental = true },
+    new NetworkMediaProfile { EthernetInUse = true, PrimaryLinkSpeedBps = 2_500_000_000 });
+Expect("experimental stamps NetworkThrottlingIndex",
+    latExp.Contains("NetworkThrottlingIndex", StringComparison.Ordinal) &&
+    latExp.Contains("experimental:", StringComparison.OrdinalIgnoreCase));
 Expect("live band re-probe present", latScript.Contains("wantBand6Live", StringComparison.Ordinal));
 Expect("never disable wifi adapters",
     latScript.Contains("never disable wifi adapters", StringComparison.OrdinalIgnoreCase) &&

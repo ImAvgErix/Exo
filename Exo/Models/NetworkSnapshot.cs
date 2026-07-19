@@ -107,6 +107,12 @@ public sealed class NetworkApplyOptions
     public string DnsPrimaryV6 { get; init; } = "2606:4700:4700::1111";
     public string DnsSecondaryV6 { get; init; } = "2606:4700:4700::1001";
     public string DnsOverHttpsTemplate { get; init; } = "https://cloudflare-dns.com/dns-query";
+
+    /// <summary>
+    /// Experimental apply: force re-stamp / re-import style paths on top of the full
+    /// stable stack. Host MMCSS/Games/Psched knobs ship in Stable (safe values only).
+    /// </summary>
+    public bool Experimental { get; init; }
 }
 
 /// <summary>
