@@ -18,7 +18,7 @@ public sealed class AppSettings
     public string? LastDiscordRunUtc { get; set; }
 
     /// <summary>Bundled / last known Discord kit version string.</summary>
-    public string DiscordKitVersion { get; set; } = "1.3.57";
+    public string DiscordKitVersion { get; set; } = "1.3.58";
 
     /// <summary>Per-module experimental Apply (more aggressive; default stable/off).</summary>
     public bool ExperimentalDiscord { get; set; }

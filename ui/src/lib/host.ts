@@ -124,7 +124,11 @@ export function onHostEvent(event: string, handler: (data: unknown) => void) {
   }
 }
 
-async function call<T>(method: string, params?: Record<string, unknown>): Promise<T> {
+async function call<T>(
+  method: string,
+  params?: Record<string, unknown>,
+  timeoutMs = 180_000,
+): Promise<T> {
   if (!isHost()) return mockCall<T>(method, params)
   const id = crypto.randomUUID()
   const req: HostRequest = { id, method, params }
@@ -136,7 +140,7 @@ async function call<T>(method: string, params?: Record<string, unknown>): Promis
         pending.delete(id)
         reject(new Error(`host timeout: ${method}`))
       }
-    }, 180_000)
+    }, timeoutMs)
   })
 }
 
@@ -159,7 +163,18 @@ export const host = {
       checkForUpdatesOnLaunch?: boolean
       experimentalDefaults: Record<string, boolean>
     }>('settings.set', patch),
-  checkUpdates: () => call<{ message: string; updateAvailable: boolean }>('settings.checkUpdates'),
+  /** Check + download/install when available. Long timeout for multi-minute SFX download. */
+  checkUpdates: () =>
+    call<{
+      message: string
+      updateAvailable: boolean
+      alreadyLatest?: boolean
+      installed?: boolean
+      shouldExit?: boolean
+      appVersion?: string
+      localVersion?: string
+      remoteVersion?: string
+    }>('settings.checkUpdates', undefined, 30 * 60_000),
   openLogs: () => call<{ ok: boolean; path?: string; message?: string }>('shell.openLogs'),
   openIssues: () => call<{ ok: boolean; message?: string }>('shell.openIssues'),
   minimize: () => call<{ ok: boolean }>('shell.minimize'),
@@ -208,19 +223,26 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
         { id: 'epic', title: 'Epic', applied: false },
       ],
       next: { id: 'internet', label: 'Internet' },
-      appVersion: '3.7.0',
+      appVersion: '3.7.1',
     } as T)
   }
   if (method === 'dashboard.live') return Promise.resolve(mockLive() as T)
   if (method === 'settings.get' || method === 'settings.set') {
     return Promise.resolve({
-      appVersion: '3.7.0-dev',
+      appVersion: '3.7.1-dev',
       checkForUpdatesOnLaunch: true,
       experimentalDefaults: {},
     } as T)
   }
   if (method === 'settings.checkUpdates') {
-    return Promise.resolve({ message: 'You are on the latest build (mock).', updateAvailable: false } as T)
+    return Promise.resolve({
+      message: 'You are on the latest build (mock).',
+      updateAvailable: false,
+      alreadyLatest: true,
+      installed: false,
+      shouldExit: false,
+      appVersion: '3.7.1-dev',
+    } as T)
   }
   if (method === 'shell.openLogs') {
     return Promise.resolve({ ok: true, path: 'mock-logs' } as T)

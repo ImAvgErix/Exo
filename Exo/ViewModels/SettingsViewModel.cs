@@ -140,37 +140,21 @@ public partial class SettingsViewModel : ObservableObject
 
             if (app.UpdateAvailable)
             {
-                var installNow = true;
-                if (ConfirmUpdateAsync is not null)
-                    installNow = await ConfirmUpdateAsync(app.LocalVersion, app.RemoteVersion);
+                // No consent card — download + quiet install with the inline progress bar.
+                UpdateStatus = $"Downloading v{app.RemoteVersion}…";
+                IsUpdateProgressIndeterminate = false;
+                UpdateProgressPercent = 0;
+                var install = await _services.Updater.InstallAppUpdateAsync(
+                    app, status: status, progress: detail);
 
-                if (installNow)
+                UpdateStatus = install.Message;
+                AppVersion = GetAppVersionText();
+                if (install.ShouldExit)
                 {
-                    UpdateStatus = "Installing…";
-                    AppUpdateResult install;
-                    if (InstallUpdateAsync is not null)
-                    {
-                        // Modal: orbit loader + progress bar (same as launch auto-update).
-                        install = await InstallUpdateAsync(app);
-                    }
-                    else
-                    {
-                        install = await _services.Updater.InstallAppUpdateAsync(
-                            app, status: status, progress: detail);
-                    }
-
-                    UpdateStatus = install.Message;
-                    AppVersion = GetAppVersionText();
-                    if (install.ShouldExit)
-                    {
-                        await Task.Delay(400);
-                        Microsoft.UI.Xaml.Application.Current?.Exit();
-                        return;
-                    }
-                }
-                else
-                {
-                    UpdateStatus = $"v{app.RemoteVersion} available — install skipped.";
+                    UpdateProgressPercent = 100;
+                    await Task.Delay(400);
+                    Microsoft.UI.Xaml.Application.Current?.Exit();
+                    return;
                 }
             }
             else

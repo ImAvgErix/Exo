@@ -378,7 +378,7 @@ public sealed class WebHostBridge
         var s = _services.Settings.Current;
         return new
         {
-            appVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "3.7.0",
+            appVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "3.7.1",
             checkForUpdatesOnLaunch = s.CheckForUpdatesOnLaunch,
             experimentalDefaults = new
             {
@@ -444,20 +444,100 @@ public sealed class WebHostBridge
         }
     }
 
+    /// <summary>
+    /// Check GitHub latest; when an update is available, download + quiet-install
+    /// without a native ContentDialog card. Progress streams to the WebView settings panel.
+    /// </summary>
     private async Task<object> CheckUpdatesAsync()
     {
+        string AppVer()
+        {
+            var v = typeof(App).Assembly.GetName().Version;
+            return v is null ? "0.0.0" : $"{v.Major}.{v.Minor}.{v.Build}";
+        }
+
+        void PushProgress(string status, double percent) =>
+            PostEvent("settings.updateProgress", new { status, percent });
+
         try
         {
-            var r = await _services.Updater.CheckAppUpdateAsync().ConfigureAwait(true);
+            var status = new Progress<string>(m => PushProgress(m, -1));
+            var detail = new Progress<AppUpdateProgress>(p =>
+                PushProgress(p.Status, p.Percent));
+
+            PushProgress("Checking GitHub releases…", -1);
+            var check = await _services.Updater
+                .CheckAppUpdateAsync(status: status, progress: detail)
+                .ConfigureAwait(true);
+
+            if (!check.UpdateAvailable)
+            {
+                PushProgress(check.Message, check.AlreadyLatest ? 100 : -1);
+                return new
+                {
+                    message = check.Message,
+                    updateAvailable = false,
+                    alreadyLatest = check.AlreadyLatest,
+                    installed = false,
+                    shouldExit = false,
+                    appVersion = AppVer(),
+                    localVersion = check.LocalVersion,
+                    remoteVersion = check.RemoteVersion
+                };
+            }
+
+            // Auto-download + apply (no "Update available" card).
+            PushProgress($"Downloading Exo v{check.RemoteVersion}…", 0);
+            var install = await _services.Updater
+                .InstallAppUpdateAsync(check, status: status, progress: detail)
+                .ConfigureAwait(true);
+
+            if (install.ShouldExit)
+            {
+                PushProgress(install.Message, 100);
+                // Quiet installer was started — leave so stage-swap can replace files.
+                _ = Task.Run(async () =>
+                {
+                    try { await Task.Delay(900).ConfigureAwait(false); } catch { }
+                    try
+                    {
+                        _queue.TryEnqueue(() =>
+                        {
+                            try { Microsoft.UI.Xaml.Application.Current?.Exit(); } catch { }
+                        });
+                    }
+                    catch { }
+                });
+            }
+            else
+            {
+                PushProgress(install.Message, install.UpdateAvailable ? -1 : 100);
+            }
+
             return new
             {
-                message = r.Message,
-                updateAvailable = r.UpdateAvailable
+                message = install.Message,
+                updateAvailable = true,
+                alreadyLatest = false,
+                installed = install.ShouldExit,
+                shouldExit = install.ShouldExit,
+                appVersion = AppVer(),
+                localVersion = install.LocalVersion,
+                remoteVersion = install.RemoteVersion
             };
         }
         catch (Exception ex)
         {
-            return new { message = ex.Message, updateAvailable = false };
+            PushProgress(ex.Message, -1);
+            return new
+            {
+                message = ex.Message,
+                updateAvailable = false,
+                alreadyLatest = false,
+                installed = false,
+                shouldExit = false,
+                appVersion = AppVer()
+            };
         }
     }
 

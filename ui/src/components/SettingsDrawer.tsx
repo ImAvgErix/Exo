@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react'
-import { host } from '../lib/host'
+import { host, onHostEvent } from '../lib/host'
 
 /**
  * Compact popover. Parent must be the shell root (position: relative).
  * Uses absolute coords only — never fixed, never flex flow (WebView2 breaks both).
+ * Updates download/install in-panel (progress bar) — no native dialog card.
  */
 export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [version, setVersion] = useState('—')
   const [checkOnLaunch, setCheckOnLaunch] = useState(false)
   const [line, setLine] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /** null = hidden; -1 = indeterminate; 0–100 = determinate */
+  const [progress, setProgress] = useState<number | null>(null)
 
   useEffect(() => {
     if (!open) return
     setLine(null)
+    setProgress(null)
     void host
       .getSettings()
       .then((s) => {
@@ -26,15 +30,24 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !busy) onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open, onClose, busy])
+
+  useEffect(() => {
+    return onHostEvent('settings.updateProgress', (data) => {
+      const d = data as { status?: string; percent?: number }
+      if (typeof d.status === 'string' && d.status.trim()) setLine(d.status)
+      if (typeof d.percent === 'number') setProgress(d.percent)
+    })
+  }, [])
 
   if (!open) return null
 
   async function toggleCheckOnLaunch() {
+    if (busy) return
     const next = !checkOnLaunch
     setCheckOnLaunch(next)
     try {
@@ -48,18 +61,35 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
 
   async function checkUpdates() {
     setBusy(true)
-    setLine(null)
+    setLine('Checking GitHub…')
+    setProgress(-1)
     try {
       const r = await host.checkUpdates()
       setLine(r.message)
+      if (r.appVersion) setVersion(r.appVersion)
+      if (r.shouldExit) {
+        setProgress(100)
+        setLine(r.message || 'Restarting into the new build…')
+        // Host exits after apply; keep bar at 100%.
+        return
+      }
+      if (r.alreadyLatest || !r.updateAvailable) {
+        setProgress(null)
+      } else if (r.installed) {
+        setProgress(100)
+      } else {
+        setProgress(null)
+      }
     } catch (e) {
       setLine(e instanceof Error ? e.message : 'Update check failed')
+      setProgress(null)
     } finally {
       setBusy(false)
     }
   }
 
   async function openLogs() {
+    if (busy) return
     try {
       const r = await host.openLogs()
       setLine(r.ok ? 'Opened logs.' : r.message || 'Could not open logs.')
@@ -69,6 +99,7 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
   }
 
   async function openIssues() {
+    if (busy) return
     try {
       await host.openIssues()
       setLine('Opened GitHub.')
@@ -77,23 +108,30 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
     }
   }
 
+  const barWidth =
+    progress == null
+      ? 0
+      : progress < 0
+        ? 32
+        : Math.max(4, Math.min(100, progress))
+
   return (
     <div className="pointer-events-none absolute inset-0 z-50" aria-hidden={false}>
-      {/* Scrim — absolute fill of shell, out of flex flow */}
       <button
         type="button"
         aria-label="Close settings"
         className="pointer-events-auto absolute inset-0 bg-page"
         style={{ opacity: 0.72 }}
-        onClick={onClose}
+        onClick={() => {
+          if (!busy) onClose()
+        }}
       />
 
-      {/* Panel — under gear inside the glass nav (pad 12 + bar ~48) */}
       <div
         role="dialog"
         aria-label="Settings"
         className="glass specular pointer-events-auto absolute overflow-hidden rounded-2xl"
-        style={{ top: 58, left: 12, width: 272 }}
+        style={{ top: 58, left: 12, width: 288 }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-3">
@@ -106,8 +144,11 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
             </div>
             <button
               type="button"
-              onClick={onClose}
-              className="glass-chip flex h-7 w-7 items-center justify-center rounded-full text-xs text-muted hover:text-text"
+              onClick={() => {
+                if (!busy) onClose()
+              }}
+              disabled={busy}
+              className="glass-chip flex h-7 w-7 items-center justify-center rounded-full text-xs text-muted hover:text-text disabled:opacity-40"
               aria-label="Close"
             >
               ✕
@@ -117,7 +158,8 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
           <button
             type="button"
             onClick={() => void toggleCheckOnLaunch()}
-            className="glass-chip mb-2 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left"
+            disabled={busy}
+            className="glass-chip mb-2 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left disabled:opacity-50"
           >
             <span className="min-w-0 flex-1 text-[12px] font-semibold">Updates on launch</span>
             <span
@@ -139,25 +181,48 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
             onClick={() => void checkUpdates()}
             className="mb-2 w-full rounded-xl bg-white py-2 text-[13px] font-semibold text-black disabled:opacity-40"
           >
-            {busy ? 'Checking…' : 'Check for updates'}
+            {busy
+              ? progress != null && progress >= 0
+                ? `Updating ${Math.round(progress)}%`
+                : 'Updating…'
+              : 'Check for updates'}
           </button>
 
+          {/* In-settings progress — no native update card */}
+          {progress != null && (
+            <div className="mb-2">
+              <div className="h-1.5 overflow-hidden rounded-full bg-sunken ring-1 ring-glass-border">
+                <div
+                  className={`h-full rounded-full bg-white transition-[width] duration-200 ${
+                    progress < 0 ? 'animate-pulse' : ''
+                  }`}
+                  style={{ width: `${barWidth}%` }}
+                />
+              </div>
+              {progress >= 0 && (
+                <p className="mt-1 text-right text-[10px] tabular text-muted">{Math.round(progress)}%</p>
+              )}
+            </div>
+          )}
+
           {line && (
-            <p className="mb-2 line-clamp-2 text-[11px] leading-snug text-secondary">{line}</p>
+            <p className="mb-2 line-clamp-3 text-[11px] leading-snug text-secondary">{line}</p>
           )}
 
           <div className="grid grid-cols-2 gap-1.5">
             <button
               type="button"
+              disabled={busy}
               onClick={() => void openLogs()}
-              className="glass-chip rounded-xl py-2 text-[12px] font-semibold hover:brightness-110"
+              className="glass-chip rounded-xl py-2 text-[12px] font-semibold hover:brightness-110 disabled:opacity-40"
             >
               Logs
             </button>
             <button
               type="button"
+              disabled={busy}
               onClick={() => void openIssues()}
-              className="glass-chip rounded-xl py-2 text-[12px] font-semibold hover:brightness-110"
+              className="glass-chip rounded-xl py-2 text-[12px] font-semibold hover:brightness-110 disabled:opacity-40"
             >
               Report issue
             </button>

@@ -47,6 +47,10 @@ settings whose correct value depends on the game. See
 Download `Exo.exe` from the [latest release](https://github.com/ImAvgErix/Exo/releases/latest)
 and double-click it. Self-contained Windows 11 x64.
 
+In-app: **Settings → Check for updates** checks GitHub, then downloads and
+quiet-installs with a progress bar in the settings panel (no separate update
+card). Exo restarts when the installer is ready.
+
 PowerShell bootstrap:
 
 ```powershell

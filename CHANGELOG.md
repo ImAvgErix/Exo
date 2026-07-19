@@ -1,3 +1,9 @@
+## 3.7.1
+
+- **In-app updates actually install**: Settings → Check for updates no longer only reports a new version — it downloads and quiet-installs with an **in-settings progress bar** (no native dialog card).
+- **Update hosts**: allowlisted GitHub CDN download hosts so asset redirects are not blocked.
+- **Long download window**: WebView host timeout for updates raised to 30 minutes for multi‑gig/slow links.
+
 ## 3.7.0
 
 - **WebView glass shell**: primary UI is WinUI 3 + WebView2 with a React/TypeScript/Tailwind liquid-glass surface — centered optimizer nav, in-bar min/close, solid glass panels (no fake transparency), Home meters, and module pages with Stable / Experimental modes.

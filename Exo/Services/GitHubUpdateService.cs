@@ -173,7 +173,7 @@ public sealed class GitHubUpdateService
         var url = check.DownloadUrl;
         if (!Uri.TryCreate(url, UriKind.Absolute, out var downloadUri) ||
             downloadUri.Scheme != Uri.UriSchemeHttps ||
-            !downloadUri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
+            !IsAllowedUpdateHost(downloadUri.Host))
         {
             return BlockedUpdate(check, "Update URL was not an allowlisted HTTPS GitHub asset. Nothing was downloaded.");
         }
@@ -407,6 +407,21 @@ public sealed class GitHubUpdateService
                 Message = $"App update failed: {ex.Message}"
             };
         }
+    }
+
+    /// <summary>
+    /// GitHub release asset URLs (github.com/…/releases/download) and CDN hosts
+    /// used after redirect (objects.githubusercontent.com, release-assets…).
+    /// </summary>
+    private static bool IsAllowedUpdateHost(string host)
+    {
+        if (string.IsNullOrWhiteSpace(host)) return false;
+        if (host.Equals("github.com", StringComparison.OrdinalIgnoreCase)) return true;
+        if (host.EndsWith(".github.com", StringComparison.OrdinalIgnoreCase)) return true;
+        if (host.Equals("objects.githubusercontent.com", StringComparison.OrdinalIgnoreCase)) return true;
+        if (host.Equals("release-assets.githubusercontent.com", StringComparison.OrdinalIgnoreCase)) return true;
+        if (host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     private static void Report(

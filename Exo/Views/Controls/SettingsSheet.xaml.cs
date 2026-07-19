@@ -32,10 +32,7 @@ public sealed partial class SettingsSheet : UserControl
 
     private void UserControl_Loaded(object sender, RoutedEventArgs e)
     {
-        ViewModel.ConfirmUpdateAsync = (local, remote) =>
-            ExoUpdateDialog.ConfirmInstallAsync(XamlRoot, local, remote);
-        ViewModel.InstallUpdateAsync = check =>
-            ExoUpdateDialog.InstallWithProgressAsync(XamlRoot, check, App.Services.Updater);
+        // Updates install inline via SettingsViewModel progress — no ContentDialog cards.
     }
 
     /// <summary>
