@@ -696,18 +696,19 @@
         <Setter Property="Background" Value="{ThemeResource ExoGlassCircleFillBrush}" />
     </Style>
 
-    <!-- Labeled shell navigation stays discoverable and fits the 960px minimum window. -->
+    <!-- Labeled shell navigation: one tab language for EXO pill segments + module tabs. -->
     <Style x:Key="ExoNavTab" TargetType="Button" BasedOn="{StaticResource ExoRailButton}">
         <Setter Property="Height" Value="40" />
         <Setter Property="MinHeight" Value="40" />
-        <Setter Property="MinWidth" Value="76" />
-        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="MinWidth" Value="72" />
+        <Setter Property="Padding" Value="12,0" />
         <Setter Property="CornerRadius" Value="11" />
         <Setter Property="FontFamily" Value="{StaticResource ExoUiFontMedium}" />
         <Setter Property="FontSize" Value="12" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
 </ResourceDictionary>

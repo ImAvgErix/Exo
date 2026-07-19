@@ -903,6 +903,8 @@ function Test-DiscordWindowsSuppression {
     } catch { return $false }
 }
 function Apply-WindowsTweaks([string]$AppDir) {
+    # Ownership: Discord-scoped Windows integration only (not a future Windows module).
+    # See docs/WINDOWS-OWNERSHIP.md — Windows module must skip these keys if already verified.
     Write-Step 'Applying Windows tweaks (notifications, tray, startup, GPU, QoS)...'
     Disable-DiscordWindowsAutostart
     Disable-DiscordScheduledTasks

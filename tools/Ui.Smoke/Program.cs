@@ -249,30 +249,33 @@ if (File.Exists(main))
         m.Contains("RowDefinitions", StringComparison.Ordinal)
         && m.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));
     // Responsive shell: controls never change meaning; TitleBar reserves caption space.
-    Expect("settings right rail", m.Contains("SettingsButton", StringComparison.Ordinal));
+    Expect("settings on EXO pill", m.Contains("SettingsButton", StringComparison.Ordinal)
+        && m.Contains("ExoBrandPill", StringComparison.Ordinal));
     Expect("stable home control", m.Contains("x:Name=\"NavHome\"", StringComparison.Ordinal)
         && !m.Contains("HomeChromeIcon", StringComparison.Ordinal));
     Expect("modules centered layer", m.Contains("ModuleIcons", StringComparison.Ordinal));
     Expect("native TitleBar control", m.Contains("<TitleBar x:Name=\"AppTitleBar\"", StringComparison.Ordinal)
         && !m.Contains("CaptionSpacerHost", StringComparison.Ordinal));
     Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
-    // Module tabs live in a true window-centered overlay (NavRail), not TitleBar.Content
-    // (TitleBar Content is asymmetric vs caption buttons and looked off-center).
+    // Module tabs in window-centered NavRail; Settings lives on EXO pill (LeftHeader).
     var moduleRowStart = m.IndexOf("<StackPanel x:Name=\"ModuleIcons\"", StringComparison.Ordinal);
     var moduleRowEnd = m.IndexOf("</StackPanel>", moduleRowStart, StringComparison.Ordinal);
     var discordInRow = m.IndexOf("x:Name=\"NavDiscord\"", moduleRowStart, StringComparison.Ordinal);
-    var settingsRightHeader = m.IndexOf("<TitleBar.RightHeader>", StringComparison.Ordinal);
-    var settingsInRightHeader = m.IndexOf("x:Name=\"SettingsButton\"", settingsRightHeader, StringComparison.Ordinal);
-    var settingsRightHeaderEnd = m.IndexOf("</TitleBar.RightHeader>", settingsRightHeader, StringComparison.Ordinal);
+    var brandPill = m.IndexOf("x:Name=\"ExoBrandPill\"", StringComparison.Ordinal);
+    var settingsOnPill = m.IndexOf("x:Name=\"SettingsButton\"", brandPill, StringComparison.Ordinal);
+    var leftHeader = m.IndexOf("<TitleBar.LeftHeader>", StringComparison.Ordinal);
+    var leftHeaderEnd = m.IndexOf("</TitleBar.LeftHeader>", leftHeader, StringComparison.Ordinal);
     var navRail = m.IndexOf("x:Name=\"NavRail\"", StringComparison.Ordinal);
-    Expect("discord center and settings right cannot overlap",
+    Expect("discord center and settings on EXO pill cannot overlap",
         moduleRowStart >= 0
         && moduleRowEnd > moduleRowStart
         && discordInRow > moduleRowStart
         && discordInRow < moduleRowEnd
-        && settingsRightHeader >= 0
-        && settingsInRightHeader > settingsRightHeader
-        && settingsInRightHeader < settingsRightHeaderEnd
+        && brandPill >= 0
+        && settingsOnPill > brandPill
+        && leftHeader >= 0
+        && settingsOnPill > leftHeader
+        && settingsOnPill < leftHeaderEnd
         && navRail >= 0
         && m.Contains("HorizontalAlignment=\"Center\"", StringComparison.Ordinal));
     Expect("content host centered under page max width",

@@ -310,21 +310,22 @@ public sealed partial class MainWindow : Window
     {
         _mode = mode;
 
-        // Navigation never changes meaning: EXO is Home and the gear is Settings.
+        // EXO pill always visible: home segment + settings gear in one control.
         SettingsButton.Visibility = Visibility.Visible;
         NavHome.Visibility = Visibility.Visible;
+        ExoBrandPill.Visibility = Visibility.Visible;
         UpdateRailSelection(mode);
     }
 
     /// <summary>
-    /// Highlight the active module circle: soft glass fill + accent selection ring.
-    /// The active module keeps its rail item selected.
+    /// Highlight the active module tab (or the whole EXO brand pill on Home).
+    /// Same fill + hairline ring language across the toolbar.
     /// </summary>
     private void UpdateRailSelection(ShellMode mode)
     {
         var selected = mode switch
         {
-            ShellMode.Home => NavHome,
+            ShellMode.Home => null, // brand pill handles home chrome
             ShellMode.Discord => NavDiscord,
             ShellMode.Steam => NavSteam,
             ShellMode.Internet => NavInternet,
@@ -334,7 +335,18 @@ public sealed partial class MainWindow : Window
             _ => null
         };
 
-        foreach (var btn in new[] { NavHome, NavDiscord, NavSteam, NavInternet, NavNvidia, NavRiot, NavEpic })
+        var homeOn = mode == ShellMode.Home;
+        ExoBrandPill.Opacity = homeOn ? 1.0 : 0.92;
+        ExoBrandPill.Background = homeOn ? _selectionFill : _selectionOff;
+        ExoBrandPill.BorderBrush = homeOn ? _ringOn : _ringOff;
+        NavHome.Opacity = 1.0;
+        NavHome.Background = _selectionOff;
+        NavHome.BorderBrush = _ringOff;
+        SettingsButton.Opacity = 1.0;
+        SettingsButton.Background = _selectionOff;
+        SettingsButton.BorderBrush = _ringOff;
+
+        foreach (var btn in new[] { NavDiscord, NavSteam, NavInternet, NavNvidia, NavRiot, NavEpic })
         {
             var on = selected is not null && ReferenceEquals(btn, selected);
             btn.Opacity = on ? 1.0 : 0.76;
