@@ -3,7 +3,7 @@
 Private, reversible Windows 11 optimization for Internet, NVIDIA, Discord,
 Steam, Riot, and Epic.
 
-![Exo dashboard](docs/exo-shell.png)
+![Exo glass home](docs/exo-shell.png)
 
 Exo detects the current PC before it changes anything. Each module has one
 primary **Apply**, a detector that explains the active policy, and a **Repair**
@@ -61,7 +61,9 @@ The bootstrap requires GitHub’s SHA-256 digest and checks the embedded version
 before launch. Public builds are not code-signed, so Windows may show SmartScreen.
 Do not download Exo from third-party mirrors.
 
-Install path: `%LocalAppData%\Exo\app\`.
+Install path: `%LocalAppData%\Exo\app\`. The release `Exo.exe` is **self-contained**
+(no separate .NET install). If Windows asks for .NET 10, you are not running the
+GitHub release installer (reinstall from Releases, not a raw `bin` build).
 
 ## Safety model
 

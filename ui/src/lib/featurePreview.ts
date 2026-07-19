@@ -30,8 +30,14 @@ export function featuresForSelection(
       rows,
       'Latency / sync policy',
       opts.useGsync
-        ? 'Next Apply: G-SYNC / VRR profile pack (adaptive sync on when the display supports it).'
-        : 'Next Apply: raw-latency profile pack (no VRR / G-SYNC path).',
+        ? 'Next Apply (Profile Inspector): G-SYNC / VRR DRS pack. Scaling/color stay in Control Panel.'
+        : 'Next Apply (Profile Inspector): raw-latency DRS pack. Scaling/color stay in Control Panel.',
+      true,
+    )
+    upsert(
+      rows,
+      'Display scaling & color',
+      'Not forced by Exo. Use Open Control Panel for scaling, Full RGB, and NVIDIA color.',
       true,
     )
     // Older detect titles

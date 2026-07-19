@@ -85,6 +85,7 @@ public sealed class WebHostBridge
                 "shell.settings" => RequestSettings(),
                 "shell.openLogs" => OpenLogsFolder(),
                 "shell.openIssues" => OpenIssues(),
+                "shell.openNvidiaControlPanel" => OpenNvidiaControlPanel(),
                 "shell.minimize" => MinimizeWindow(),
                 "shell.close" => CloseWindow(),
                 "settings.get" => BuildSettings(),
@@ -378,7 +379,7 @@ public sealed class WebHostBridge
         var s = _services.Settings.Current;
         return new
         {
-            appVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "3.7.1",
+            appVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "3.7.2",
             checkForUpdatesOnLaunch = s.CheckForUpdatesOnLaunch,
             experimentalDefaults = new
             {
@@ -437,6 +438,20 @@ public sealed class WebHostBridge
                 UseShellExecute = true
             });
             return new { ok = true };
+        }
+        catch (Exception ex)
+        {
+            return new { ok = false, message = ex.Message };
+        }
+    }
+
+    private object OpenNvidiaControlPanel()
+    {
+        try
+        {
+            if (_services.NvidiaPanel.TryLaunchControlPanel(out var error))
+                return new { ok = true };
+            return new { ok = false, message = error ?? "NVIDIA Control Panel is not installed." };
         }
         catch (Exception ex)
         {

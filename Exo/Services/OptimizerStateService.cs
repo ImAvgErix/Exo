@@ -1251,24 +1251,23 @@ public sealed class OptimizerStateService
                                gpuName,
                                @"(?i)\bMX\d+\b|\b\d{3,4}M\b"));
 
-        // Notebook: desktop Game Ready auto-download is blocked, but profiles /
-        // debloat / display still apply. Display may be N/A on Optimus (iGPU panels).
-        var displayStageOk = displayApplied || notebookGpu;
-
+        // Display scaling/color are never forced — Control Panel button only.
+        // Applied = Profile Inspector DRS pack (not display prefs).
         if (safePolicy)
         {
             features.Add(MakeFeature("Installed driver", "", gpuOk));
-            features.Add(MakeFeature("3D profiles", "", profileApplied && gpuOk));
+            features.Add(MakeFeature("3D profiles (Profile Inspector)", "", profileApplied && gpuOk));
             features.Add(MakeFeature("Latency / sync policy", "", profileApplied && gpuOk));
+            features.Add(MakeFeature("Display scaling & color", "Manual in Control Panel", true));
             features.Add(MakeFeature("NVIDIA Control Panel", "", gpuOk));
         }
         else
         {
             features.Add(MakeFeature("Driver / MSI", "",
                 notebookGpu ? gpuOk : (driverTweaksApplied && gpuOk)));
-            features.Add(MakeFeature("3D profiles", "", profileApplied && gpuOk));
+            features.Add(MakeFeature("3D profiles (Profile Inspector)", "", profileApplied && gpuOk));
             features.Add(MakeFeature("Debloat", "", debloatApplied && gpuOk));
-            features.Add(MakeFeature("Display prefs", "", displayStageOk && gpuOk));
+            features.Add(MakeFeature("Display scaling & color", "Manual in Control Panel", true));
         }
 
         var extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -1282,12 +1281,12 @@ public sealed class OptimizerStateService
             extra["notebookGpu"] = "true";
         extra["safePolicy"] = safePolicy ? "true" : "false";
 
-        // Safe policy: applied when marker + profiles verified (no MSI/debloat gates).
+        // Applied = Profile Inspector DRS only (display scaling/color never gated).
         var applied = safePolicy
             ? hasMarker && !restartPending && !applyInProgress && profileApplied && gpuOk
             : hasMarker && !restartPending && !applyInProgress &&
               (notebookGpu || driverTweaksApplied) &&
-              profileApplied && displayStageOk && debloatApplied;
+              profileApplied && debloatApplied;
         var statusText = !gpuOk
             ? "No NVIDIA GPU"
             : restartPending
@@ -1296,15 +1295,13 @@ public sealed class OptimizerStateService
                 ? $"Failed at {lastErrorStage}"
             : !profileApplied
                 ? "3D profile incomplete"
-                : !safePolicy && !displayStageOk
-                    ? "Display setup incomplete"
-                    : !safePolicy && !debloatApplied
-                        ? "Background debloat incomplete"
-                        : !safePolicy && !notebookGpu && !driverTweaksApplied
-                            ? "Driver tweaks incomplete"
-                            : applied
-                                ? "All applied"
-                                : "Not applied";
+                : !safePolicy && !debloatApplied
+                    ? "Background debloat incomplete"
+                    : !safePolicy && !notebookGpu && !driverTweaksApplied
+                        ? "Driver tweaks incomplete"
+                        : applied
+                            ? "All applied"
+                            : "Not applied";
         var detail = applyInProgress && !string.IsNullOrWhiteSpace(lastError)
             ? lastError!
             : string.Empty;

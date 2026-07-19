@@ -4472,24 +4472,35 @@ try {
         Write-Ok "App=$(if ($appInstalled) { 'present' } else { 'absent' }) CPL=$(if ($cplOk) { 'present' } else { 'absent' })"
     }
 
+    # Display scaling / Full RGB / NVIDIA colors are NEVER forced by Apply.
+    # Those live in NVIDIA Control Panel and are unreliable to automate — open
+    # Control Panel from Exo for manual changes. Profile Inspector (DRS) stays.
+    $displayClient = @{ Client = 'nvidia-control-panel'; ControlPanel = [bool]$cplOk }
+    $dispResult = @{
+        Success    = $true
+        Method     = 'skipped'
+        NvApiOk    = $false
+        RegistryOk = $false
+        Details    = @('Scaling and NVIDIA color left to Control Panel (not forced by Exo)')
+    }
+    $displayNvApiOk = $false
+    $displayRegistryOk = $false
+    $displayPrefsOk = $true
+    $displayMethod = 'unchanged'
+    $advanced3dOk = $false
+
     if ($SafePolicy) {
-        $displayClient = @{ Client = 'nvidia-control-panel'; ControlPanel = [bool]$cplOk }
-        $advanced3dOk = $false
         $overlayResult = [pscustomobject]@{ Ok = $true; Issues = @() }
         $debloatResult = [pscustomobject]@{ Ok = $true; Issues = @() }
-        $dispResult = @{ Success = $true; NvApiOk = $false; RegistryOk = $false; Details = @('Display settings unchanged by safe policy') }
-        $displayNvApiOk = $false
-        $displayRegistryOk = $false
-        $displayPrefsOk = $true
-        $displayMethod = 'unchanged'
-        Write-HubProgress 90 'System packages and displays left unchanged'
+        Write-HubProgress 90 'Display scaling/color left to Control Panel; applying 3D via Profile Inspector only'
+        Write-Ok 'Skipped Control Panel display prefs (scaling / Full RGB / NVIDIA color). Use Control Panel button.'
     } else {
     Write-HubProgress 70 'Removing NVIDIA audio and unused driver packages...'
     [void](Remove-NvidiaAudioComponents)
     [void](Remove-NvidiaBloatComponents)
 
     $displayClient = @{
-        Client       = 'exo-panel'
+        Client       = 'nvidia-control-panel'
         ControlPanel = [bool]$cplOk
     }
 
@@ -4499,17 +4510,16 @@ try {
     Write-HubProgress 78 'Privacy / system debloat (telemetry once)...'
     Disable-NvidiaTelemetry
 
-    Write-HubProgress 80 'Driver DRS flags + developer counters + overlay off...'
-    $advanced3dOk = Enable-NvidiaAdvanced3dImageSettings
-    [void](Enable-NvidiaControlPanelDeveloperSettings)
+    Write-HubProgress 80 'Overlay off (no scaling/color force)...'
+    # Do not stamp Control Panel "advanced 3D Gestalt" or developer radios — NPI owns DRS.
+    $advanced3dOk = $false
     Disable-NvidiaOverlay
     Set-NvidiaWindowsNotificationsOff
 
     $overlayResult = Test-NvidiaOverlayDisabled
     foreach ($issue in $overlayResult.Issues) { Write-Warn "Overlay verification: $issue" }
     if (-not [bool]$overlayResult.Ok) {
-        # CPL path: overlay registry is best-effort; do not fail whole Apply
-        Write-Warn 'Overlay verification soft-pass (Control Panel path)'
+        Write-Warn 'Overlay verification soft-pass'
         $overlayResult = [pscustomobject]@{ Ok = $true; Issues = @($overlayResult.Issues) }
     }
     $debloatResult = Test-NvidiaPerformanceDebloat
@@ -4517,34 +4527,15 @@ try {
     if (-not [bool]$debloatResult.Ok) {
         $hard = @($debloatResult.Issues | Where-Object { $_ -notmatch '(?i)background|overlay|App|NVIDIA App' })
         if ($hard.Count -eq 0) {
-            Write-Warn 'Debloat soft-pass (Control Panel path; App-related gaps ignored)'
+            Write-Warn 'Debloat soft-pass (App-related gaps ignored)'
             $debloatResult = [pscustomobject]@{ Ok = $true; Issues = @($debloatResult.Issues) }
         }
     }
 
     Set-ExoStage 'display-policy'
-    Write-HubProgress 90 'Display scaling/Hz/Full RGB (NVAPI + Control Panel)...'
-    Write-Ok 'Applying display prefs via NVAPI (primary max Hz, secondary refresh unchanged)'
-    $dispResult = Coerce-Hashtable (Set-NvidiaDisplayPreferences)
-    if (-not $dispResult) {
-        $dispResult = @{
-            Success    = $false
-            Method     = 'none'
-            NvApiOk    = $false
-            RegistryOk = $false
-            Details    = @('Display helper returned no result')
-        }
-    }
-    $displayNvApiOk = [bool]$dispResult.NvApiOk
-    $displayRegistryOk = [bool]$dispResult.RegistryOk
-    # Working apply: any path that landed prefs (Success / NVAPI / registry stamp).
-    $displayPrefsOk = [bool]$dispResult.Success -or [bool]$displayNvApiOk -or [bool]$displayRegistryOk
-    $displayMethod = if ($displayNvApiOk) { 'nvapi' } elseif ($displayRegistryOk) { 'registry' } else { $null }
-    # One re-assert after display (NVAPI/DRS may touch profiles) - not a full second apply pass
-    Write-HubProgress 92 'Re-assert DRS advanced 3D + developer after display...'
-    $advanced3dOk = Enable-NvidiaAdvanced3dImageSettings
-    [void](Enable-NvidiaControlPanelDeveloperSettings)
-    $appInstalled = Test-NvidiaAppInstalled  # expect false
+    Write-HubProgress 90 'Skipping display scaling/color (use NVIDIA Control Panel)...'
+    Write-Ok 'Display scaling, Full RGB, and NVIDIA color are not forced — open Control Panel from Exo.'
+    $appInstalled = Test-NvidiaAppInstalled
     }
 
     Set-ExoStage 'finalize-checks'
@@ -4586,27 +4577,13 @@ try {
     if (Test-NvidiaAppInstalled) {
         Write-Warn 'NVIDIA App is still present on this PC after wipe; Exo prefers Control Panel only.'
     }
-    if (-not [bool]$displayPrefsOk) {
-        # Last chance: re-run display apply once more before failing the whole pass.
-        Write-Warn 'Display prefs not verified - forcing one more Display-Apply pass...'
-        Set-ExoStage 'display-policy-retry'
-        $dispResult = Coerce-Hashtable (Set-NvidiaDisplayPreferences)
-        if (-not $dispResult) {
-            $dispResult = @{ Success = $false; NvApiOk = $false; RegistryOk = $false; Details = @() }
-        }
-        $displayNvApiOk = [bool]$dispResult.NvApiOk
-        $displayRegistryOk = [bool]$dispResult.RegistryOk
-        $displayPrefsOk = [bool]$dispResult.Success -or [bool]$displayNvApiOk -or [bool]$displayRegistryOk
-        $displayMethod = if ($displayNvApiOk) { 'nvapi' } elseif ($displayRegistryOk) { 'registry' } else { $null }
-    }
-    if (-not [bool]$displayPrefsOk) {
-        throw 'Display preferences could not be applied (NVAPI helper and registry stamps both failed). Check that Exo.NvDisplay.exe is bundled and re-Apply.'
-    }
+    # Display scaling / NVIDIA color are intentionally not applied or re-tried.
+    $displayPrefsOk = $true
     if (-not [bool]$debloatResult.Ok) {
-        throw "The performance profile and display settings were applied, but NVIDIA background debloat verification failed: $($debloatResult.Issues -join '; ')"
+        throw "3D profiles were applied, but NVIDIA background debloat verification failed: $($debloatResult.Issues -join '; ')"
     }
     if (-not [bool]$overlayResult.Ok) {
-        throw "The performance profile and display settings were applied, but NVIDIA overlay verification failed: $($overlayResult.Issues -join '; ')"
+        throw "3D profiles were applied, but NVIDIA overlay verification failed: $($overlayResult.Issues -join '; ')"
     }
 
     Set-ExoStage 'save-state'
@@ -4648,9 +4625,10 @@ try {
         exoPanel        = $false
         advanced3dImageSettings = [bool]$advanced3dOk
         displayClient       = 'nvidia-control-panel'
-        displayPrefs        = $(if ($SafePolicy) { $false } else { [bool]$displayPrefsOk })
-        displayMethod       = $displayMethod
-        displayDetails      = $dispResult.Details
+        # Always false: Exo does not force Control Panel scaling / Full RGB / color.
+        displayPrefs        = $false
+        displayMethod       = 'unchanged'
+        displayDetails      = @($dispResult.Details)
         debloatApplied      = $(if ($SafePolicy) { $false } else { [bool]$debloatResult.Ok })
         overlayDisabled     = $(if ($SafePolicy) { $false } else { [bool]$overlayResult.Ok })
         driverUpdatePass    = $driverInfo
@@ -4670,27 +4648,22 @@ try {
 
     Write-Ok 'NVIDIA Optimizer finished'
     if ($SafePolicy) {
-        Write-Ok 'Safe policy: Base + per-game DRS profiles verified; driver, App, audio, services, tasks, and displays were left unchanged.'
-        Write-Ok 'Repair snapshot is ready and restores the complete pre-Exo NVIDIA profile database.'
+        Write-Ok 'Safe policy: Base + per-game DRS via Profile Inspector; scaling/color left to Control Panel.'
+        Write-Ok 'Repair snapshot restores the complete pre-Exo NVIDIA profile database.'
     } elseif (-not $SkipApp) {
         if ($cplOk) {
-            Write-Ok 'Client stack: removed App/GFE -> classic Control Panel + EULA + advanced 3D -> overlay/toasts off -> NVAPI display.'
+            Write-Ok 'Client stack: App/GFE cleaned; Control Panel available for scaling/color; 3D via Profile Inspector.'
         } else {
-            Write-Ok 'Client stack: removed App/GFE -> NVAPI display (Control Panel UI install skipped/failed).'
+            Write-Ok 'Client stack cleaned; 3D via Profile Inspector (Control Panel UI optional).'
         }
     }
-    if (-not $SafePolicy -and $advanced3dOk) {
-        Write-Ok 'Control Panel: Use the advanced 3D image settings is ON (Manage 3D / .nip profiles active).'
-    }
-    if (-not $SafePolicy) {
-        Write-Ok 'Display prefs via NVAPI (Full RGB + GPU no-scaling; primary max Hz; secondary unchanged). Control Panel is the minimal UI.'
-    }
+    Write-Ok 'Display scaling and NVIDIA color were not forced — use the Control Panel button in Exo.'
     $doneMethod = Get-ExoHashString $driverInfo 'Method' 'none'
     if ($doneMethod -in @('exo-clean', 'exo-clean-partial-tweaks', 'in-place-tweaks')) {
-        Write-Ok "Driver stage ($doneMethod) completed with 3D + Control Panel + NVAPI display."
+        Write-Ok "Driver stage ($doneMethod) completed; 3D profiles via Profile Inspector."
     }
     Write-HubProgress 100 'Completed successfully'
-    $doneScope = if ($SafePolicy) { 'reversible DRS profile policy' } else { 'driver + profile + display policy' }
+    $doneScope = if ($SafePolicy) { 'Profile Inspector DRS policy (no display force)' } else { 'driver + Profile Inspector DRS (no display force)' }
     Write-Output ("DONE - NVIDIA {0}{1}: {2} ({3} game profiles)" -f `
         $seriesId, $(if ($useGsync) { ' G-SYNC' } else { ' raw latency' }), $doneScope, @($gameProfiles).Count)
     exit 0

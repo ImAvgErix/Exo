@@ -1,3 +1,9 @@
+## 3.7.2
+
+- **Self-contained ship guard**: publish fails if `Exo.runtimeconfig.json` is framework-dependent (missing `includedFrameworks`) so users are never prompted to install .NET 10 for a “broken” copy.
+- **NVIDIA display prefs**: Apply no longer forces Control Panel scaling / Full RGB / NVIDIA color (use the Control Panel button). **Profile Inspector DRS packs stay**.
+- **Brand**: new monochrome Exo app icon/logo; README hero screenshot updated to the glass home UI.
+
 ## 3.7.1
 
 - **In-app updates actually install**: Settings → Check for updates no longer only reports a new version — it downloads and quiet-installs with an **in-settings progress bar** (no native dialog card).

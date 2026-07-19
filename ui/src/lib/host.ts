@@ -177,6 +177,8 @@ export const host = {
     }>('settings.checkUpdates', undefined, 30 * 60_000),
   openLogs: () => call<{ ok: boolean; path?: string; message?: string }>('shell.openLogs'),
   openIssues: () => call<{ ok: boolean; message?: string }>('shell.openIssues'),
+  openNvidiaControlPanel: () =>
+    call<{ ok: boolean; message?: string }>('shell.openNvidiaControlPanel'),
   minimize: () => call<{ ok: boolean }>('shell.minimize'),
   close: () => call<{ ok: boolean }>('shell.close'),
 }
@@ -223,13 +225,13 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
         { id: 'epic', title: 'Epic', applied: false },
       ],
       next: { id: 'internet', label: 'Internet' },
-      appVersion: '3.7.1',
+      appVersion: '3.7.2',
     } as T)
   }
   if (method === 'dashboard.live') return Promise.resolve(mockLive() as T)
   if (method === 'settings.get' || method === 'settings.set') {
     return Promise.resolve({
-      appVersion: '3.7.1-dev',
+      appVersion: '3.7.2-dev',
       checkForUpdatesOnLaunch: true,
       experimentalDefaults: {},
     } as T)
@@ -241,7 +243,7 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
       alreadyLatest: true,
       installed: false,
       shouldExit: false,
-      appVersion: '3.7.1-dev',
+      appVersion: '3.7.2-dev',
     } as T)
   }
   if (method === 'shell.openLogs') {

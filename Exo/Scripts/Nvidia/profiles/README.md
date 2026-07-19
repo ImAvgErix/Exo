@@ -74,12 +74,13 @@ metadata or packages. Install the official NVIDIA notebook driver manually.
 
 ## Driver, apps, and display (not changed by Apply)
 
-The shipping Apply path is deliberately limited to reversible DRS profile
-imports. It does not reinstall or strip the NVIDIA driver, audio components,
-NVIDIA App, overlays, services, tasks, refresh rate, color, scaling, or monitor
-configuration. Hardware and display topology are detected only to select and
-explain the matching profile. The app can open NVIDIA Control Panel; when it is
-missing, Apply attempts to provision the official Store package.
+The shipping Apply path imports reversible DRS packs via **Profile Inspector**
+only. It does not force Control Panel display settings (scaling, Full RGB,
+NVIDIA color, refresh overrides) — use the Control Panel button in Exo for those.
+It also does not reinstall or strip the NVIDIA driver, audio, NVIDIA App,
+overlays, services, or tasks. Hardware topology is detected only to select the
+matching profile. When Control Panel is missing, Apply may provision the Store
+package so the button works.
 
 This boundary is intentional: component removal, blanket service disabling,
 undocumented MSI/affinity edits, and forced display modes do not have a

@@ -210,6 +210,20 @@ if ($fv -notlike "$asmVersion*") {
     throw "Publish version stamp failed: FileVersion is '$fv' but VERSION file says '$asmVersion'. Fix csproj/publish props."
 }
 
+# Self-contained guard: FDD runtimeconfig asks users to install .NET 10 (broken ship).
+$runtimeCfg = Join-Path $OutDir 'Exo.runtimeconfig.json'
+if (-not (Test-Path -LiteralPath $runtimeCfg)) {
+    throw 'Publish check: Exo.runtimeconfig.json missing.'
+}
+$runtimeText = Get-Content -LiteralPath $runtimeCfg -Raw
+if ($runtimeText -notmatch 'includedFrameworks') {
+    throw 'Publish check: Exo.runtimeconfig.json is framework-dependent (missing includedFrameworks). Users would be prompted to install .NET 10. Re-run with --self-contained true.'
+}
+if (-not (Test-Path -LiteralPath (Join-Path $OutDir 'coreclr.dll'))) {
+    throw 'Publish check: coreclr.dll missing — payload is not self-contained.'
+}
+Write-Host '[+] Publish check: self-contained runtime (includedFrameworks + coreclr)' -ForegroundColor Green
+
 # Wave-2: scripts + NvDisplay FDD must be inside the published app tree (or beside SFX payload).
 $publishedNv = @(
     (Join-Path $OutDir 'Scripts\Nvidia\tools\Exo.NvDisplay.exe'),

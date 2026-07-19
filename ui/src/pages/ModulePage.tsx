@@ -116,6 +116,15 @@ export function ModulePage() {
     }
   }
 
+  async function openNvidiaCpl() {
+    try {
+      const r = await host.openNvidiaControlPanel()
+      if (!r.ok) setError(r.message || 'Could not open NVIDIA Control Panel')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not open NVIDIA Control Panel')
+    }
+  }
+
   const selection = useMemo(
     () => ({ experimental, useGsync, preferLowestLatency }),
     [experimental, useGsync, preferLowestLatency],
@@ -170,8 +179,8 @@ export function ModulePage() {
 
         {moduleId === 'nvidia' && (
           <OptionCard
-            title="Display profile"
-            hint="G-SYNC / VRR vs raw-latency (no VRR). Features update live; applied on next Apply."
+            title="3D profile pack"
+            hint="Apply imports via Profile Inspector (DRS). Scaling and NVIDIA color stay manual in Control Panel."
           >
             <Segmented
               value={useGsync ? 'gsync' : 'raw'}
@@ -182,6 +191,14 @@ export function ModulePage() {
                 { id: 'gsync', label: 'G-SYNC / VRR' },
               ]}
             />
+            <button
+              type="button"
+              disabled={uiLocked}
+              onClick={() => void openNvidiaCpl()}
+              className="glass-chip mt-2 w-full rounded-xl py-2 text-[12px] font-semibold disabled:opacity-40"
+            >
+              Open Control Panel
+            </button>
           </OptionCard>
         )}
 

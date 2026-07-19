@@ -633,19 +633,12 @@ $displayOk = $safePolicy -or ((-not $pendingAfterDriver) -and (-not $applyInProg
     ($displayLiveOk -and ($displayMarkerOk -or [bool]$displayLive.Ok))
 ))
 
-if (-not $safePolicy) {
-  $features.Add(@{
-    title  = 'Exo display policy (driver)'
-    detail = $(if ($displaySkippedNoPanels) {
-        'No active NVIDIA-connected panels (common on Optimus). Display step not required; 3D profiles still apply.'
-    } elseif ($displayLive.Available) {
-        "Live NVAPI: $($displayLive.Detail) | primary=max Hz, secondary unchanged, Full RGB, GPU no-scaling"
-    } else {
-        'Live NVAPI helper unavailable; display state cannot be verified.'
-    })
-    active = $displayOk
-  })
-}
+# Scaling / Full RGB / NVIDIA color are not forced by Apply — open Control Panel.
+$features.Add(@{
+    title  = 'Display scaling & color'
+    detail = 'Not forced by Exo (unreliable to automate). Use the Control Panel button for scaling, Full RGB, and NVIDIA color.'
+    active = $true
+})
 
 # Control Panel only path: App should be absent; classic CPL present (optional UI only).
 $appInstalled = $false
@@ -702,19 +695,13 @@ if (-not $safePolicy) {
 }
 
 $features.Add(@{
-    title  = $(if ($safePolicy) { 'NVIDIA Control Panel' } else { 'Driver + classic Control Panel' })
-    detail = $(if ($safePolicy -and $cplOk) {
-        'Available from Exo. NVIDIA App, overlays, services, and driver packages are left under your control.'
-    } elseif ($safePolicy) {
-        'Not installed yet. Apply attempts the official Microsoft Store Control Panel package without replacing the driver.'
-    } elseif (-not $appInstalled -and $cplInstalled) {
-        'NVIDIA App removed; classic Control Panel kept for display UI. Exo panel + NVAPI apply policy.'
-    } elseif (-not $appInstalled -and -not $cplInstalled) {
-        'NVIDIA App removed. No Control Panel UI - use Exo NVIDIA Panel or Re-Apply to install CPL.'
+    title  = 'NVIDIA Control Panel'
+    detail = $(if ($cplOk) {
+        'Open from Exo for scaling, NVIDIA color, and other display UI. Apply only forces 3D via Profile Inspector (DRS).'
     } else {
-        'NVIDIA App still installed. Re-Apply to strip App and keep Control Panel + Exo panel.'
+        'Not installed yet. Apply may install the Store Control Panel package so the button works; display prefs stay manual.'
     })
-    active = $(if ($safePolicy) { $cplOk } else { -not $appInstalled })
+    active = $cplOk
 })
 
 $backgroundOk = [bool]$debloat.Ok -and [bool]$overlay.Ok
@@ -734,12 +721,13 @@ if (-not $safePolicy) {
 # Driver stage for isApplied: notebooks only need a readable driver; desktop needs tweaks/update gate.
 $driverStageOk = if ($safePolicy -or $isNotebookGpu) { [bool]$currentNv } else { (-not $needsDriverAction) -and [bool]$currentNv }
 
+# isApplied = Profile Inspector DRS only — never gate on scaling/color display prefs.
 $isApplied = if ($safePolicy) {
     $gpuOk -and (-not $pendingAfterDriver) -and (-not $applyInProgress) -and
     $applied -and $gameOk -and $advanced3dOk -and $driverStageOk -and $latencyPolicyOk
 } else {
     $gpuOk -and (-not $pendingAfterDriver) -and (-not $applyInProgress) -and
-    $applied -and $gameOk -and $displayOk -and $backgroundOk -and $clientOk -and $advanced3dOk -and
+    $applied -and $gameOk -and $backgroundOk -and $clientOk -and $advanced3dOk -and
     $driverStageOk -and $latencyPolicyOk
 }
 
@@ -763,7 +751,6 @@ elseif ($driverChanged -or (-not $profileOk -and $state -and ($state.PSObject.Pr
 elseif ($profileOk -and $drsLive -eq 'drifted') { 'Profile drifted - reapply' }
 elseif (-not $profileOk) { '3D profile incomplete' }
 elseif (-not $gameOk) { 'Game profiles incomplete' }
-elseif (-not $safePolicy -and -not $displayOk) { 'Display policy incomplete' }
 elseif (-not $safePolicy -and -not $clientOk) { 'NVIDIA App still present' }
 elseif (-not $advanced3dOk) { '3D profile incomplete' }
 elseif (-not $safePolicy -and -not $backgroundOk) { 'Background re-armed - reapply' }
@@ -771,23 +758,22 @@ elseif ($isApplied) { 'All applied' }
 else { 'Not applied' }
 
 $detail = if (-not $gpuOk) { 'Needs an NVIDIA GPU and current drivers.' }
-elseif ($pendingAfterDriver) { 'Restart Windows, then Apply once more to finish profile and display setup.' }
+elseif ($pendingAfterDriver) { 'Restart Windows, then Apply once more to finish Profile Inspector import.' }
 elseif ($applyInProgress -and $lastError) { $lastError }
 elseif (-not $currentNv) { 'Could not read the NVIDIA driver version. Repair the driver, then refresh.' }
-elseif ($isNotebookGpu -and -not $isApplied) { 'Laptop GPU: desktop auto-update is skipped. Apply still imports 3D profiles and display policy when panels are NVIDIA-connected.' }
-elseif (-not $safePolicy -and -not $isNotebookGpu -and $needsUpdate) { 'Apply can install a clean display driver package, then continues with profiles and display prefs.' }
+elseif ($isNotebookGpu -and -not $isApplied) { 'Laptop GPU: desktop auto-update is skipped. Apply still imports 3D profiles via Profile Inspector.' }
+elseif (-not $safePolicy -and -not $isNotebookGpu -and $needsUpdate) { 'Apply can install a clean display driver package, then continues with Profile Inspector packs.' }
 elseif (-not $isNotebookGpu -and $needsRetweak) { 'Driver version is current; Apply will set MSI/privacy tweaks in place.' }
 elseif ($driverChanged) { "Driver is now $currentNv but last verified $($state.profileDriverVersion). Apply again." }
 elseif ($profileOk -and $drsLive -eq 'drifted') { "The driver DRS no longer matches the imported Exo pack ($($drsMismatch.Count) pin(s) drifted). Apply again to re-import." }
-elseif (-not $profileOk) { $(if ($applyInProgress) { 'Previous Apply was interrupted. Apply again.' } else { '3D profile not fully verified. Apply again.' }) }
+elseif (-not $profileOk) { $(if ($applyInProgress) { 'Previous Apply was interrupted. Apply again.' } else { '3D profile not fully verified. Apply again (Profile Inspector).' }) }
 elseif (-not $gameOk) { 'Base profile is present but per-game catalog is incomplete. Apply again.' }
-elseif (-not $safePolicy -and -not $displayOk) { $(if ($lastErrorStage -eq 'display-policy' -and $lastError) { $lastError } else { 'Display policy incomplete (resolution/refresh/color/scaling). Apply again or use Display panel.' }) }
 elseif (-not $safePolicy -and -not $clientOk) { 'NVIDIA App is still installed. Apply removes it; Exo uses the driver directly.' }
-elseif (-not $advanced3dOk) { '3D profiles not fully verified. Apply imports them at driver level.' }
+elseif (-not $advanced3dOk) { '3D profiles not fully verified. Apply imports them via Profile Inspector.' }
 elseif (-not $safePolicy -and -not $backgroundOk) { "Background settings need another pass ($($backgroundIssues -join '; '))." }
-elseif ($isApplied -and $safePolicy) { 'The reversible Base and per-game profile policy is verified. Drivers, apps, background services, and displays were left unchanged.' }
-elseif ($isApplied) { 'Driver policy, 3D profiles, and display settings look good on this machine.' }
-else { 'Apply to set profiles and display policy for this GPU.' }
+elseif ($isApplied -and $safePolicy) { 'Profile Inspector Base + per-game DRS verified. Scaling and NVIDIA color are manual in Control Panel.' }
+elseif ($isApplied) { 'Driver policy and Profile Inspector 3D packs look good. Use Control Panel for scaling/color.' }
+else { 'Apply imports 3D profiles via Profile Inspector. Use Control Panel for scaling and NVIDIA color.' }
 
 [ordered]@{
     isApplied          = $isApplied
