@@ -5,36 +5,38 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:Exo.ViewModels"
     HorizontalAlignment="Stretch"
-    VerticalAlignment="Top">
+    VerticalAlignment="Stretch">
 
     <!--
-      Two-up capability tiles with fixed row height so every module plate
-      (Discord, Steam, Riot, Epic, …) reads as one consistent card system.
+      Dense two-column capability grid sized for the fixed 1200x800 shell.
+      One-line title + one-line detail; up to ~12 tiles without page scroll.
     -->
     <ItemsRepeater x:Name="TileRepeater"
                    ItemsSource="{x:Bind ItemsSource, Mode=OneWay}"
-                   HorizontalAlignment="Stretch">
+                   HorizontalAlignment="Stretch"
+                   VerticalAlignment="Stretch">
         <ItemsRepeater.Layout>
-            <!--
-              MinItemWidth ~ half plate: keeps a stable two-column rhythm like Discord.
-              Lower values (e.g. 280) spill into three columns and leave orphan half-rows.
-            -->
-            <UniformGridLayout MinItemWidth="360"
-                               MinItemHeight="76"
-                               MinRowSpacing="8"
-                               MinColumnSpacing="8"
+            <UniformGridLayout MinItemWidth="340"
+                               MinItemHeight="52"
+                               MinRowSpacing="6"
+                               MinColumnSpacing="6"
                                ItemsJustification="Start"
                                ItemsStretch="Fill" />
         </ItemsRepeater.Layout>
         <ItemsRepeater.ItemTemplate>
             <DataTemplate x:DataType="vm:FeatureRowViewModel">
-                <Border Style="{StaticResource ExoFeatureTile}"
+                <Border Background="{ThemeResource ExoSurfaceSunkenBrush}"
+                        BorderBrush="{ThemeResource ExoDividerBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10"
                         Opacity="{x:Bind Opacity}"
-                        Height="76"
-                        MinHeight="76"
-                        MaxHeight="76"
+                        Height="52"
+                        MinHeight="52"
+                        MaxHeight="52"
+                        Padding="10,6"
                         HorizontalAlignment="Stretch"
-                        VerticalAlignment="Stretch">
+                        VerticalAlignment="Stretch"
+                        UseLayoutRounding="True">
                     <Grid ColumnSpacing="10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="3" />
@@ -43,17 +45,20 @@
                         <Border Style="{StaticResource ExoStatusRail}"
                                 Opacity="{x:Bind RailOpacity}" />
                         <StackPanel Grid.Column="1"
-                                    Spacing="2"
+                                    Spacing="1"
                                     VerticalAlignment="Center">
                             <TextBlock Text="{x:Bind Title}"
                                        Style="{StaticResource ExoFeatureTitle}"
+                                       FontSize="13"
                                        CharacterSpacing="-2"
                                        TextTrimming="CharacterEllipsis"
                                        MaxLines="1" />
                             <TextBlock Text="{x:Bind Detail}"
                                        Style="{StaticResource ExoFeatureDetail}"
-                                       TextWrapping="WrapWholeWords"
-                                       MaxLines="2"
+                                       FontSize="11"
+                                       LineHeight="14"
+                                       TextWrapping="NoWrap"
+                                       MaxLines="1"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                     </Grid>

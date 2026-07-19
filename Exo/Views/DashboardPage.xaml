@@ -6,10 +6,13 @@
     Loaded="Page_Loaded"
     Unloaded="Page_Unloaded">
 
-    <!-- Fixed shell canvas: no scroll on home at 1120×720. -->
+    <!--
+      Fixed 1200x800 canvas home — no ScrollViewer.
+      Status strip + 3x2 brand cards fill the stage.
+    -->
     <Grid x:Name="PageRoot"
-          Padding="16,12,16,16"
-          RowSpacing="12"
+          Padding="18,10,18,14"
+          RowSpacing="10"
           UseLayoutRounding="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -17,93 +20,126 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Title band -->
-        <Grid x:Name="HeroBlock">
-            <StackPanel Spacing="2">
+        <!-- Compact title + optional recommended action on one row -->
+        <Grid x:Name="HeroBlock" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Spacing="1" VerticalAlignment="Center">
                 <TextBlock Text="SYSTEM"
                            Style="{StaticResource ExoSectionTitle}"
                            Margin="0" />
                 <TextBlock x:Name="HeroBrand"
                            Text="Optimization status"
-                           Style="{StaticResource ExoPageTitle}" />
+                           FontFamily="{StaticResource ExoUiFontSemiBold}"
+                           FontSize="24"
+                           LineHeight="30"
+                           Foreground="{ThemeResource ExoPrimaryTextBrush}" />
                 <TextBlock x:Name="HeroTagline"
                            Text="{x:Bind ViewModel.HeroSummary, Mode=OneWay}"
-                           Style="{StaticResource ExoTagline}"
-                           MaxWidth="720"
-                           HorizontalAlignment="Left" />
+                           Style="{StaticResource ExoCaption}"
+                           Foreground="{ThemeResource ExoSecondaryTextBrush}"
+                           MaxLines="1"
+                           TextTrimming="CharacterEllipsis" />
             </StackPanel>
+
+            <Border Grid.Column="1"
+                    Background="{ThemeResource ExoSurfaceSunkenBrush}"
+                    BorderBrush="{ThemeResource ExoDividerBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="12,8"
+                    VerticalAlignment="Center"
+                    Visibility="{x:Bind ViewModel.HasNextAction, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <StackPanel Spacing="1" VerticalAlignment="Center" MaxWidth="220">
+                        <TextBlock Text="NEXT"
+                                   Style="{StaticResource ExoSectionTitle}"
+                                   Margin="0" />
+                        <TextBlock Text="{x:Bind ViewModel.NextActionDetail, Mode=OneWay}"
+                                   Style="{StaticResource ExoCaption}"
+                                   MaxLines="1"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Button Style="{StaticResource ExoPrimaryButton}"
+                            MinWidth="108"
+                            MinHeight="34"
+                            Padding="12,6"
+                            Content="{x:Bind ViewModel.NextActionLabel, Mode=OneWay}"
+                            Click="NextAction_Click"
+                            AutomationProperties.Name="Open recommended next optimizer" />
+                </StackPanel>
+            </Border>
         </Grid>
 
-        <!-- Hero: two equal peers — no tiny corner widget -->
+        <!-- Metrics strip: equal peers, full width -->
         <Border x:Name="FrameHero"
                 Grid.Row="1"
                 Style="{StaticResource ExoModulePlate}"
-                Padding="0"
-                Height="108">
-            <Grid ColumnSpacing="0">
+                Height="88"
+                Padding="0">
+            <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="1" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Grid Padding="18,14" VerticalAlignment="Center">
-                    <StackPanel Spacing="4">
+                <Grid Padding="18,12" VerticalAlignment="Center">
+                    <StackPanel Spacing="2">
                         <TextBlock Text="LIVE SYSTEM READ"
                                    Style="{StaticResource ExoSectionTitle}"
                                    Margin="0" />
                         <TextBlock Text="{x:Bind ViewModel.OverviewPrimary, Mode=OneWay}"
                                    FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                   FontSize="28"
-                                   LineHeight="34"
+                                   FontSize="30"
+                                   LineHeight="36"
                                    Foreground="{ThemeResource ExoPrimaryTextBrush}" />
                     </StackPanel>
                 </Grid>
 
                 <Border Grid.Column="1"
                         Background="{ThemeResource ExoDividerBrush}"
-                        Opacity="0.85"
-                        Margin="0,16" />
+                        Margin="0,14"
+                        Opacity="0.9" />
 
-                <Grid Grid.Column="2" Padding="18,14" VerticalAlignment="Center">
-                    <StackPanel Spacing="6">
+                <Grid Grid.Column="2" Padding="18,12" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Spacing="2" VerticalAlignment="Center" Margin="0,0,14,0">
                         <TextBlock Text="SYSTEM MEMORY"
                                    Style="{StaticResource ExoSectionTitle}"
                                    Margin="0" />
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="{x:Bind ViewModel.MemoryPrimary, Mode=OneWay}"
-                                       FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       FontSize="28"
-                                       LineHeight="34"
-                                       Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                                       VerticalAlignment="Center" />
-                            <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
-                                <TextBlock Text="{x:Bind ViewModel.MemorySecondary, Mode=OneWay}"
-                                           Style="{StaticResource ExoCaption}"
-                                           TextTrimming="CharacterEllipsis" />
-                                <ProgressBar Minimum="0"
-                                             Maximum="100"
-                                             Height="4"
-                                             CornerRadius="2"
-                                             Value="{x:Bind ViewModel.MemoryLoadPercent, Mode=OneWay}" />
-                            </StackPanel>
-                        </Grid>
+                        <TextBlock Text="{x:Bind ViewModel.MemoryPrimary, Mode=OneWay}"
+                                   FontFamily="{StaticResource ExoUiFontSemiBold}"
+                                   FontSize="30"
+                                   LineHeight="36"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="{x:Bind ViewModel.MemorySecondary, Mode=OneWay}"
+                                   Style="{StaticResource ExoCaption}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <ProgressBar Minimum="0"
+                                     Maximum="100"
+                                     Height="5"
+                                     CornerRadius="2.5"
+                                     Value="{x:Bind ViewModel.MemoryLoadPercent, Mode=OneWay}" />
                     </StackPanel>
                 </Grid>
             </Grid>
         </Border>
 
+        <!-- 3x2 brand modules fill remaining height -->
         <Grid x:Name="StatRow"
               Grid.Row="2"
               RowSpacing="10"
               ColumnSpacing="10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
@@ -112,55 +148,15 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Recommended next: full-width band between card rows when present -->
-            <Border x:Name="NextActionBand"
-                    Grid.Row="1"
-                    Grid.ColumnSpan="3"
-                    Background="{ThemeResource ExoSurfaceSunkenBrush}"
-                    BorderBrush="{ThemeResource ExoDividerBrush}"
-                    BorderThickness="1"
-                    CornerRadius="{StaticResource ExoTileRadius}"
-                    Padding="12,10"
-                    Margin="0,0,0,0"
-                    Visibility="{x:Bind ViewModel.HasNextAction, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <FontIcon Glyph="&#xE7C3;"
-                              FontSize="14"
-                              Foreground="{ThemeResource ExoAccentBrush}"
-                              VerticalAlignment="Center" />
-                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="RECOMMENDED NEXT"
-                                   Style="{StaticResource ExoSectionTitle}"
-                                   Margin="0" />
-                        <TextBlock Text="{x:Bind ViewModel.NextActionDetail, Mode=OneWay}"
-                                   Style="{StaticResource ExoCaption}"
-                                   TextTrimming="CharacterEllipsis"
-                                   MaxLines="1" />
-                    </StackPanel>
-                    <Button Grid.Column="2"
-                            Style="{StaticResource ExoPrimaryButton}"
-                            MinWidth="120"
-                            MinHeight="36"
-                            Padding="14,6"
-                            VerticalAlignment="Center"
-                            Content="{x:Bind ViewModel.NextActionLabel, Mode=OneWay}"
-                            Click="NextAction_Click"
-                            AutomationProperties.Name="Open recommended next optimizer" />
-                </Grid>
-            </Border>
-
+            <!-- Discord -->
             <Button Grid.Row="0" Grid.Column="0"
                     Style="{StaticResource ExoCardButton}"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Stretch"
+                    Padding="14,12"
                     AutomationProperties.Name="Open Discord optimizer"
                     Click="DiscordCard_Click">
-                <Grid MinHeight="124" RowSpacing="6" Padding="2,0">
+                <Grid RowSpacing="6">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -174,27 +170,39 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border Background="{ThemeResource ExoDiscordBrush}" CornerRadius="2" />
-                        <TextBlock Grid.Column="1" Text="Discord" Style="{StaticResource ExoFeatureTitle}" />
+                        <TextBlock Grid.Column="1" Text="Discord" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
                         <TextBlock Grid.Column="2"
                                    Text="{x:Bind ViewModel.DiscordStatusTag, Mode=OneWay}"
-                                   Style="{StaticResource ExoCaption}"
-                                   Foreground="{ThemeResource ExoDiscordBrush}"
+                                   FontSize="10"
                                    FontWeight="SemiBold"
-                                   CharacterSpacing="40" />
+                                   CharacterSpacing="60"
+                                   Foreground="{ThemeResource ExoDiscordBrush}"
+                                   VerticalAlignment="Center" />
                     </Grid>
-                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.DiscordStatusPrimary, Mode=OneWay}" Style="{StaticResource ExoBody}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.DiscordStatusSecondary, Mode=OneWay}" Style="{StaticResource ExoCaption}" TextWrapping="WrapWholeWords" MaxLines="2" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.DiscordLiveMetric, Mode=OneWay}" Style="{StaticResource ExoCaption}" Foreground="{ThemeResource ExoSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.DiscordStatusPrimary, Mode=OneWay}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.DiscordStatusSecondary, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               TextWrapping="WrapWholeWords" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.DiscordLiveMetric, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               Foreground="{ThemeResource ExoSecondaryTextBrush}"
+                               TextTrimming="CharacterEllipsis" />
                 </Grid>
             </Button>
 
+            <!-- Steam -->
             <Button Grid.Row="0" Grid.Column="1"
                     Style="{StaticResource ExoCardButton}"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Stretch"
+                    Padding="14,12"
                     AutomationProperties.Name="Open Steam optimizer"
                     Click="SteamCard_Click">
-                <Grid MinHeight="124" RowSpacing="6" Padding="2,0">
+                <Grid RowSpacing="6">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -208,27 +216,39 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border Background="{ThemeResource ExoSteamBrush}" CornerRadius="2" />
-                        <TextBlock Grid.Column="1" Text="Steam" Style="{StaticResource ExoFeatureTitle}" />
+                        <TextBlock Grid.Column="1" Text="Steam" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
                         <TextBlock Grid.Column="2"
                                    Text="{x:Bind ViewModel.SteamStatusTag, Mode=OneWay}"
-                                   Style="{StaticResource ExoCaption}"
-                                   Foreground="{ThemeResource ExoSteamBrush}"
+                                   FontSize="10"
                                    FontWeight="SemiBold"
-                                   CharacterSpacing="40" />
+                                   CharacterSpacing="60"
+                                   Foreground="{ThemeResource ExoSteamBrush}"
+                                   VerticalAlignment="Center" />
                     </Grid>
-                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.SteamStatusPrimary, Mode=OneWay}" Style="{StaticResource ExoBody}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.SteamStatusSecondary, Mode=OneWay}" Style="{StaticResource ExoCaption}" TextWrapping="WrapWholeWords" MaxLines="2" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.SteamLiveMetric, Mode=OneWay}" Style="{StaticResource ExoCaption}" Foreground="{ThemeResource ExoSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.SteamStatusPrimary, Mode=OneWay}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.SteamStatusSecondary, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               TextWrapping="WrapWholeWords" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.SteamLiveMetric, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               Foreground="{ThemeResource ExoSecondaryTextBrush}"
+                               TextTrimming="CharacterEllipsis" />
                 </Grid>
             </Button>
 
+            <!-- Internet -->
             <Button Grid.Row="0" Grid.Column="2"
                     Style="{StaticResource ExoCardButton}"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Stretch"
+                    Padding="14,12"
                     AutomationProperties.Name="Open Internet optimizer"
                     Click="InternetCard_Click">
-                <Grid MinHeight="124" RowSpacing="6" Padding="2,0">
+                <Grid RowSpacing="6">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -242,27 +262,39 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border Background="{ThemeResource ExoInternetBrush}" CornerRadius="2" />
-                        <TextBlock Grid.Column="1" Text="Internet" Style="{StaticResource ExoFeatureTitle}" />
+                        <TextBlock Grid.Column="1" Text="Internet" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
                         <TextBlock Grid.Column="2"
                                    Text="{x:Bind ViewModel.InternetStatusTag, Mode=OneWay}"
-                                   Style="{StaticResource ExoCaption}"
-                                   Foreground="{ThemeResource ExoInternetBrush}"
+                                   FontSize="10"
                                    FontWeight="SemiBold"
-                                   CharacterSpacing="40" />
+                                   CharacterSpacing="60"
+                                   Foreground="{ThemeResource ExoInternetBrush}"
+                                   VerticalAlignment="Center" />
                     </Grid>
-                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.LatencyPrimary, Mode=OneWay}" Style="{StaticResource ExoBody}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.LatencySecondary, Mode=OneWay}" Style="{StaticResource ExoCaption}" TextWrapping="WrapWholeWords" MaxLines="2" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.InternetLiveMetric, Mode=OneWay}" Style="{StaticResource ExoCaption}" Foreground="{ThemeResource ExoSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.LatencyPrimary, Mode=OneWay}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.LatencySecondary, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               TextWrapping="WrapWholeWords" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.InternetLiveMetric, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               Foreground="{ThemeResource ExoSecondaryTextBrush}"
+                               TextTrimming="CharacterEllipsis" />
                 </Grid>
             </Button>
 
-            <Button Grid.Row="2" Grid.Column="0"
+            <!-- NVIDIA -->
+            <Button Grid.Row="1" Grid.Column="0"
                     Style="{StaticResource ExoCardButton}"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Stretch"
+                    Padding="14,12"
                     AutomationProperties.Name="Open NVIDIA optimizer"
                     Click="NvidiaCard_Click">
-                <Grid MinHeight="124" RowSpacing="6" Padding="2,0">
+                <Grid RowSpacing="6">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -276,27 +308,39 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border Background="{ThemeResource ExoNvidiaBrush}" CornerRadius="2" />
-                        <TextBlock Grid.Column="1" Text="NVIDIA" Style="{StaticResource ExoFeatureTitle}" />
+                        <TextBlock Grid.Column="1" Text="NVIDIA" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
                         <TextBlock Grid.Column="2"
                                    Text="{x:Bind ViewModel.NvidiaStatusTag, Mode=OneWay}"
-                                   Style="{StaticResource ExoCaption}"
-                                   Foreground="{ThemeResource ExoNvidiaBrush}"
+                                   FontSize="10"
                                    FontWeight="SemiBold"
-                                   CharacterSpacing="40" />
+                                   CharacterSpacing="60"
+                                   Foreground="{ThemeResource ExoNvidiaBrush}"
+                                   VerticalAlignment="Center" />
                     </Grid>
-                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.NvidiaPathPrimary, Mode=OneWay}" Style="{StaticResource ExoBody}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.NvidiaPathSecondary, Mode=OneWay}" Style="{StaticResource ExoCaption}" TextWrapping="WrapWholeWords" MaxLines="2" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.NvidiaLiveMetric, Mode=OneWay}" Style="{StaticResource ExoCaption}" Foreground="{ThemeResource ExoSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.NvidiaPathPrimary, Mode=OneWay}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.NvidiaPathSecondary, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               TextWrapping="WrapWholeWords" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.NvidiaLiveMetric, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               Foreground="{ThemeResource ExoSecondaryTextBrush}"
+                               TextTrimming="CharacterEllipsis" />
                 </Grid>
             </Button>
 
-            <Button Grid.Row="2" Grid.Column="1"
+            <!-- Riot -->
+            <Button Grid.Row="1" Grid.Column="1"
                     Style="{StaticResource ExoCardButton}"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Stretch"
+                    Padding="14,12"
                     AutomationProperties.Name="Open Riot optimizer"
                     Click="RiotCard_Click">
-                <Grid MinHeight="124" RowSpacing="6" Padding="2,0">
+                <Grid RowSpacing="6">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -310,27 +354,39 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border Background="{ThemeResource ExoRiotBrush}" CornerRadius="2" />
-                        <TextBlock Grid.Column="1" Text="Riot" Style="{StaticResource ExoFeatureTitle}" />
+                        <TextBlock Grid.Column="1" Text="Riot" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
                         <TextBlock Grid.Column="2"
                                    Text="{x:Bind ViewModel.RiotStatusTag, Mode=OneWay}"
-                                   Style="{StaticResource ExoCaption}"
-                                   Foreground="{ThemeResource ExoRiotBrush}"
+                                   FontSize="10"
                                    FontWeight="SemiBold"
-                                   CharacterSpacing="40" />
+                                   CharacterSpacing="60"
+                                   Foreground="{ThemeResource ExoRiotBrush}"
+                                   VerticalAlignment="Center" />
                     </Grid>
-                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.RiotStatusPrimary, Mode=OneWay}" Style="{StaticResource ExoBody}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.RiotStatusSecondary, Mode=OneWay}" Style="{StaticResource ExoCaption}" TextWrapping="WrapWholeWords" MaxLines="2" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.RiotLiveMetric, Mode=OneWay}" Style="{StaticResource ExoCaption}" Foreground="{ThemeResource ExoSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.RiotStatusPrimary, Mode=OneWay}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.RiotStatusSecondary, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               TextWrapping="WrapWholeWords" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.RiotLiveMetric, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               Foreground="{ThemeResource ExoSecondaryTextBrush}"
+                               TextTrimming="CharacterEllipsis" />
                 </Grid>
             </Button>
 
-            <Button Grid.Row="2" Grid.Column="2"
+            <!-- Epic -->
+            <Button Grid.Row="1" Grid.Column="2"
                     Style="{StaticResource ExoCardButton}"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Stretch"
+                    Padding="14,12"
                     AutomationProperties.Name="Open Epic optimizer"
                     Click="EpicCard_Click">
-                <Grid MinHeight="124" RowSpacing="6" Padding="2,0">
+                <Grid RowSpacing="6">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -344,17 +400,27 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border Background="{ThemeResource ExoEpicBrush}" CornerRadius="2" />
-                        <TextBlock Grid.Column="1" Text="Epic" Style="{StaticResource ExoFeatureTitle}" />
+                        <TextBlock Grid.Column="1" Text="Epic" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource ExoPrimaryTextBrush}" />
                         <TextBlock Grid.Column="2"
                                    Text="{x:Bind ViewModel.EpicStatusTag, Mode=OneWay}"
-                                   Style="{StaticResource ExoCaption}"
-                                   Foreground="{ThemeResource ExoMutedTextBrush}"
+                                   FontSize="10"
                                    FontWeight="SemiBold"
-                                   CharacterSpacing="40" />
+                                   CharacterSpacing="60"
+                                   Foreground="{ThemeResource ExoMutedTextBrush}"
+                                   VerticalAlignment="Center" />
                     </Grid>
-                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.EpicStatusPrimary, Mode=OneWay}" Style="{StaticResource ExoBody}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.EpicStatusSecondary, Mode=OneWay}" Style="{StaticResource ExoCaption}" TextWrapping="WrapWholeWords" MaxLines="2" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.EpicLiveMetric, Mode=OneWay}" Style="{StaticResource ExoCaption}" Foreground="{ThemeResource ExoSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.EpicStatusPrimary, Mode=OneWay}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="2" Text="{x:Bind ViewModel.EpicStatusSecondary, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               TextWrapping="WrapWholeWords" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.EpicLiveMetric, Mode=OneWay}"
+                               Style="{StaticResource ExoCaption}"
+                               Foreground="{ThemeResource ExoSecondaryTextBrush}"
+                               TextTrimming="CharacterEllipsis" />
                 </Grid>
             </Button>
         </Grid>

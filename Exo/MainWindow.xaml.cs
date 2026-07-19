@@ -256,9 +256,9 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    // Fixed shell: one designed canvas so dashboard + modules never reflow mid-session.
-    private const int FixedWindowWidth = 1120;
-    private const int FixedWindowHeight = 720;
+    // Fixed shell: one designed canvas (wide enough for 2-col capability grids + actions).
+    private const int FixedWindowWidth = 1200;
+    private const int FixedWindowHeight = 800;
 
     /// <summary>Fixed non-resizable frame — UI is authored to this size.</summary>
     private void ApplyResponsiveWindowChrome()

@@ -211,7 +211,7 @@ if (File.Exists(appXaml) && File.Exists(colorTokens) && File.Exists(typeTokens) 
         && !types.Contains("12.5", StringComparison.Ordinal));
     Expect("4px metric ramp", metrics.Contains("ExoSpaceXS\">4", StringComparison.Ordinal)
         && metrics.Contains("ExoSpaceL\">16", StringComparison.Ordinal)
-        && metrics.Contains("ExoPageMaxWidth\">1120", StringComparison.Ordinal));
+        && metrics.Contains("ExoPageMaxWidth\">1160", StringComparison.Ordinal));
 
     var xamlFiles = Directory.EnumerateFiles(Path.Combine(repo, "Exo"), "*.xaml", SearchOption.AllDirectories)
         .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
@@ -310,8 +310,8 @@ if (File.Exists(mainCs))
         && cs.Contains("IsMaximizable = false", StringComparison.Ordinal)
         && cs.Contains("FixedWindowWidth", StringComparison.Ordinal)
         && cs.Contains("FixedWindowHeight", StringComparison.Ordinal)
-        && cs.Contains("1120", StringComparison.Ordinal)
-        && cs.Contains("720", StringComparison.Ordinal));
+        && cs.Contains("1200", StringComparison.Ordinal)
+        && cs.Contains("800", StringComparison.Ordinal));
     Expect("rail selection helper", cs.Contains("UpdateRailSelection", StringComparison.Ordinal));
     Expect("settings always on rail",
         cs.Contains("SettingsButton.Visibility = Visibility.Visible", StringComparison.Ordinal)
@@ -544,14 +544,15 @@ if (File.Exists(sharedPlateXaml))
         && plate.Contains("ExoLoader", StringComparison.Ordinal)
         && plate.Contains("ExoActionBar", StringComparison.Ordinal)
         && plate.Contains("FeatureTileGrid", StringComparison.Ordinal));
-    Expect("SharedModulePlate normal-flow actions",
-        plate.Contains("One normal-flow work surface", StringComparison.Ordinal)
+    Expect("SharedModulePlate fixed-canvas layout",
+        plate.Contains("Fixed-canvas module surface", StringComparison.Ordinal)
         && plate.Contains("WHAT EXO WILL CHANGE", StringComparison.Ordinal)
         && plate.Contains("Reading this PC", StringComparison.Ordinal)
         && plate.Contains("Actions unlock when detection finishes", StringComparison.Ordinal)
         && plate.Contains("InverseBoolToVisibilityConverter", StringComparison.Ordinal)
-        // Phase 4 declutter: drop decorative "Hardware-aware" caption noise
-        && !plate.Contains("Hardware-aware, reversible", StringComparison.Ordinal));
+        // No outer page scroll — only expanded apply report may scroll.
+        && !plate.Contains("One normal-flow work surface", StringComparison.Ordinal)
+        && plate.Contains("MaxHeight=\"96\"", StringComparison.Ordinal));
     Expect("SharedModulePlate advisor + report",
         plate.Contains("GuidanceText", StringComparison.Ordinal)
         && plate.Contains("ApplyReportRows", StringComparison.Ordinal));
@@ -618,9 +619,9 @@ if (File.Exists(featureGridXaml))
     Expect("feature grid stretch host", fg.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal));
     Expect("feature grid responsive layout",
         fg.Contains("UniformGridLayout", StringComparison.Ordinal)
-        && fg.Contains("MinItemWidth=\"360\"", StringComparison.Ordinal)
-        && fg.Contains("MinItemHeight=\"76\"", StringComparison.Ordinal)
-        && fg.Contains("MinColumnSpacing=\"8\"", StringComparison.Ordinal)
+        && fg.Contains("MinItemWidth=\"340\"", StringComparison.Ordinal)
+        && fg.Contains("MinItemHeight=\"52\"", StringComparison.Ordinal)
+        && fg.Contains("MinColumnSpacing=\"6\"", StringComparison.Ordinal)
         && fg.Contains("ItemsStretch=\"Fill\"", StringComparison.Ordinal));
     Expect("feature grid delegates scrolling", !fg.Contains("<ScrollViewer", StringComparison.Ordinal));
 }

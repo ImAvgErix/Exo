@@ -24,7 +24,7 @@
     <CornerRadius x:Key="ExoPillRadius">999</CornerRadius>
 
     <x:Double x:Key="ExoStrokeHairline">1</x:Double>
-    <x:Double x:Key="ExoPageMaxWidth">1120</x:Double>
+    <x:Double x:Key="ExoPageMaxWidth">1160</x:Double>
     <Thickness x:Key="ExoPagePadding">16</Thickness>
     <Thickness x:Key="ExoControlPadding">12,8</Thickness>
     <Thickness x:Key="ExoCardPadding">16</Thickness>
