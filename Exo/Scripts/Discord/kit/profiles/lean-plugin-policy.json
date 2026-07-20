@@ -18,7 +18,8 @@
     "NoSystemBadge",
     "NoF1",
     "NoTypingAnimation",
-    "NotificationVolume"
+    "NotificationVolume",
+    "FakeNitro"
   ],
   "maximumEnabled": 32
 }

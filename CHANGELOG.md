@@ -1,3 +1,11 @@
+## 3.13.12
+
+- **Discord FakeNitro (Nitro-quality stream without Nitro)**
+  - `FakeNitro` is now on the lean essentials allowlist so Apply keeps it enabled.
+  - Stream quality bypass is always pinned (`enableStreamQualityBypass=true`) — screenshare at Nitro resolutions/FPS without a Nitro subscription.
+  - Full FakeNitro settings remain in `equicord-overrides.json` (emoji/sticker bypass + stream quality).
+  - Healthy-profile Apply no longer leaves FakeNitro off after a lean rebuild.
+
 ## 3.13.11
 
 - **Lock-in: every Windows tweak runs, nothing hangs**

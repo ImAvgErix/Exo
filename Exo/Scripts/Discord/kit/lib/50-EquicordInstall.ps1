@@ -210,6 +210,11 @@ function Apply-EquicordProfile {
         if (-not ($settings.plugins['NoTrack'].Keys -contains 'disableAnalytics')) {
             $settings.plugins['NoTrack'].disableAnalytics = $true
         }
+        # FakeNitro: Nitro-quality screenshare without Nitro (stream quality bypass).
+        # Always pin enabled + stream bypass; leave emoji/sticker options alone if present.
+        if (-not ($settings.plugins.Keys -contains 'FakeNitro')) { $settings.plugins['FakeNitro'] = @{} }
+        $settings.plugins['FakeNitro'].enabled = $true
+        $settings.plugins['FakeNitro'].enableStreamQualityBypass = $true
     } else {
         # First-time / corrupt / Experimental rebuild  -  apply lean policy once.
         Write-Ok 'Equicord: building lean default profile'
