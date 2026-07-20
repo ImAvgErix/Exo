@@ -201,6 +201,8 @@ function Apply-EquicordProfile {
     if (-not $settings.cloud) { $settings.cloud = @{} }
     $settings.cloud.settingsSync = $false
 
+    $leanPolicy = Get-EquicordLeanPolicy
+
     if ($hadHealthyUserProfile -and -not $forceLeanRebuild) {
         Write-Ok 'Equicord: keeping your plugins/themes/notifications (safety locks only)'
         # Ensure required privacy plugin stays on without stomping its other options.
@@ -210,11 +212,6 @@ function Apply-EquicordProfile {
         if (-not ($settings.plugins['NoTrack'].Keys -contains 'disableAnalytics')) {
             $settings.plugins['NoTrack'].disableAnalytics = $true
         }
-        # FakeNitro: Nitro-quality screenshare without Nitro (stream quality bypass).
-        # Always pin enabled + stream bypass; leave emoji/sticker options alone if present.
-        if (-not ($settings.plugins.Keys -contains 'FakeNitro')) { $settings.plugins['FakeNitro'] = @{} }
-        $settings.plugins['FakeNitro'].enabled = $true
-        $settings.plugins['FakeNitro'].enableStreamQualityBypass = $true
     } else {
         # First-time / corrupt / Experimental rebuild  -  apply lean policy once.
         Write-Ok 'Equicord: building lean default profile'
@@ -229,7 +226,6 @@ function Apply-EquicordProfile {
         $settings.cloud.url = 'https://cloud.equicord.org/'
         $settings.enabledThemes = @($EnabledTheme)
 
-        $leanPolicy = Get-EquicordLeanPolicy
         $leanAllowed = Get-EquicordLeanAllowedNames -Policy $leanPolicy
         if (-not $settings.plugins) { $settings.plugins = @{} }
         foreach ($name in @($settings.plugins.Keys)) {
@@ -269,6 +265,33 @@ function Apply-EquicordProfile {
         $settings.plugins['NoTrack'].disableAnalytics = $true
     }
 
+    # Hard pin: Nitro-quality stream without Nitro (always, both healthy + lean rebuild).
+    # FakeNitro unlocks canStreamQuality / canUseHighVideoUploadQuality.
+    # LimitlessScreenshare adds resolution/FPS sliders beyond stock presets.
+    if (-not $settings.plugins) { $settings.plugins = @{} }
+    if (-not ($settings.plugins.Keys -contains 'FakeNitro') -or -not ($settings.plugins['FakeNitro'] -is [hashtable])) {
+        $settings.plugins['FakeNitro'] = @{}
+    }
+    $settings.plugins['FakeNitro'].enabled = $true
+    $settings.plugins['FakeNitro'].enableStreamQualityBypass = $true
+    if (-not ($settings.plugins['FakeNitro'].Keys -contains 'enableEmojiBypass')) {
+        $settings.plugins['FakeNitro'].enableEmojiBypass = $true
+    }
+    if (-not ($settings.plugins['FakeNitro'].Keys -contains 'enableStickerBypass')) {
+        $settings.plugins['FakeNitro'].enableStickerBypass = $true
+    }
+    if (-not ($settings.plugins.Keys -contains 'LimitlessScreenshare') -or -not ($settings.plugins['LimitlessScreenshare'] -is [hashtable])) {
+        $settings.plugins['LimitlessScreenshare'] = @{}
+    }
+    $settings.plugins['LimitlessScreenshare'].enabled = $true
+    if (-not ($settings.plugins['LimitlessScreenshare'].Keys -contains 'maxResolution')) {
+        $settings.plugins['LimitlessScreenshare'].maxResolution = 1440
+    }
+    if (-not ($settings.plugins['LimitlessScreenshare'].Keys -contains 'maxFPS')) {
+        $settings.plugins['LimitlessScreenshare'].maxFPS = 60
+    }
+    Write-Ok 'Pinned FakeNitro + LimitlessScreenshare (Nitro-quality stream without Nitro)'
+
     Write-JsonFile $destPath $settings 30
 
     # Broken custom themes from older kits.
@@ -287,8 +310,11 @@ function Apply-EquicordProfile {
 
     $enabled = @($settings.plugins.Values | Where-Object { $_.enabled -eq $true }).Count
     $total = @($settings.plugins.Keys).Count
-    if ($enabled -gt [int]$leanPolicy.maximumEnabled) {
-        throw "Lean plugin budget exceeded ($enabled > $($leanPolicy.maximumEnabled))"
+    # Budget is for lean rebuilds only. Healthy profiles may keep extra user plugins.
+    if (-not $hadHealthyUserProfile -or $forceLeanRebuild) {
+        if ($enabled -gt [int]$leanPolicy.maximumEnabled) {
+            throw "Lean plugin budget exceeded ($enabled > $($leanPolicy.maximumEnabled))"
+        }
     }
     Write-Ok "Universal profile written: $enabled / $total plugins enabled, dark mode on"
     Write-Ok "Themes: $($settings.enabledThemes -join ', ')"

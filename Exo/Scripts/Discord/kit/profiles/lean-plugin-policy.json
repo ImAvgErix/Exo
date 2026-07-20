@@ -19,7 +19,8 @@
     "NoF1",
     "NoTypingAnimation",
     "NotificationVolume",
-    "FakeNitro"
+    "FakeNitro",
+    "LimitlessScreenshare"
   ],
-  "maximumEnabled": 32
+  "maximumEnabled": 36
 }

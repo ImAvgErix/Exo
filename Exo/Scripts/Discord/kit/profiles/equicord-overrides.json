@@ -142,6 +142,11 @@
       "useHyperLinks": true,
       "disableEmbedPermissionCheck": false
     },
+    "LimitlessScreenshare": {
+      "enabled": true,
+      "maxResolution": 1440,
+      "maxFPS": 60
+    },
 
     "ImageZoom": { "enabled": false },
     "ViewIcons": { "enabled": false },

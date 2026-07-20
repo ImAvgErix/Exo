@@ -1,3 +1,10 @@
+## 3.13.13
+
+- **Discord stream quality actually works now**
+  - Live diagnosis: FakeNitro was present but **`enabled: false`** — lean rebuilds left it off, and healthy-profile Apply never rewrote it on machines that never re-applied after 3.13.12.
+  - **Always pin** FakeNitro (`enableStreamQualityBypass=true`) **and** LimitlessScreenshare (res/FPS sliders up to 1440p/60) on every Equicord profile write — both healthy preserve and lean rebuild paths.
+  - Fixed lean budget check only enforcing on rebuilds (healthy profiles no longer risk a post-write throw).
+  - Lean allowlist includes both plugins (max enabled raised to 36).
 ## 3.13.12
 
 - **Discord FakeNitro (Nitro-quality stream without Nitro)**
