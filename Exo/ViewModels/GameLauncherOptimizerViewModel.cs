@@ -172,7 +172,7 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
                 _ => _services.Scripts.EpicRepairScript
             };
             var args = new List<string> { "-NonInteractive" };
-            if (!repair && PreferExperimental) args.Add("-Experimental");
+            if (!repair) args.Add("-Experimental");
             var result = await _services.PowerShell.RunAsync(
                 script, args, elevate: true, progress,
                 _runCts.Token, _services.Scripts.GetGameLaunchersRoot(), ensureRuntime: true);

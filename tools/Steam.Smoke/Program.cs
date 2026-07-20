@@ -58,6 +58,9 @@ var guardThrash = guard5 + "\nEmptyWorkingSet(h)\n";
 Expect("memory guard 5s ok", SteamLogic.IsMemoryGuardText(guard5));
 Expect("memory guard 4s ok", SteamLogic.IsMemoryGuardText(guard4));
 Expect("memory guard 4000ms ok", SteamLogic.IsMemoryGuardText(guardMs));
+// Competitive cadence writes 1s in-game + 2s library; first Seconds match is 1.
+var guardCompetitive = guard5.Replace("Start-Sleep -Seconds 5", "if ($inGame) { Start-Sleep -Seconds 1 } else { Start-Sleep -Seconds 2 }");
+Expect("memory guard competitive 1s/2s ok", SteamLogic.IsMemoryGuardText(guardCompetitive));
 Expect("memory guard 60s fail", !SteamLogic.IsMemoryGuardText(guardBad));
 Expect("memory guard rejects EmptyWorkingSet", !SteamLogic.IsMemoryGuardText(guardThrash));
 
@@ -214,7 +217,8 @@ Expect("Steam CEF hardware acceleration is verified and reversible",
     optimizerText.Contains("ClientPerformance", StringComparison.Ordinal) &&
     optimizerText.Contains("Restore-SteamOptionalRegistryValue ([string]$entry.Key) ([string]$entry.Name)", StringComparison.Ordinal) &&
     optimizerText.Contains("clientHardwareAcceleration = $clientHardwareOk", StringComparison.Ordinal) &&
-    detectorText.Contains("Hardware-accelerated client", StringComparison.Ordinal));
+    (detectorText.Contains("GPU-powered Steam UI", StringComparison.Ordinal) ||
+     detectorText.Contains("Hardware-accelerated client", StringComparison.Ordinal)));
 
 // --- Stable PowerShell 7 host (preview requirement removed) ---
 Expect("stable pwsh host classifier present",
@@ -291,15 +295,21 @@ var bodyStart = helperStart >= 0 ? optimizerText.IndexOf("$body = @'", helperSta
 var bodyEnd = bodyStart >= 0 ? optimizerText.IndexOf("'@", bodyStart + 1, StringComparison.Ordinal) : -1;
 Expect("shipped helper body located", bodyStart > helperStart && bodyEnd > bodyStart);
 var helperBody = bodyEnd > bodyStart ? optimizerText.Substring(bodyStart, bodyEnd - bodyStart) : "";
+// Expand competitive cadence placeholders (install path writes 1s game / 2s library).
+var helperExpanded = helperBody
+    .Replace("__EXO_SLEEP_GAME__", "1", StringComparison.Ordinal)
+    .Replace("__EXO_SLEEP_IDLE__", "2", StringComparison.Ordinal);
 Expect("memory guard uses Windows priority and passes shipped classifier",
-    SteamLogic.IsMemoryGuardText(helperBody) &&
-    helperBody.Contains("SetProcessInformation", StringComparison.Ordinal) &&
-    helperBody.Contains("SoftReclaimWorkingSet", StringComparison.Ordinal) &&
-    helperBody.Contains("$_.Id -ne $foregroundPid", StringComparison.Ordinal) &&
-    !helperBody.Contains("EmptyWorkingSet(", StringComparison.Ordinal));
+    SteamLogic.IsMemoryGuardText(helperExpanded) &&
+    helperExpanded.Contains("SetProcessInformation", StringComparison.Ordinal) &&
+    helperExpanded.Contains("SoftReclaimWorkingSet", StringComparison.Ordinal) &&
+    helperExpanded.Contains("$_.Id -ne $foregroundPid", StringComparison.Ordinal) &&
+    !helperExpanded.Contains("EmptyWorkingSet(", StringComparison.Ordinal));
+var detectCoreText = File.Exists(core) ? File.ReadAllText(core) : "";
 Expect("apply verifier ignores safety documentation but audits executable lines",
-    optimizerText.Contains("if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }", StringComparison.Ordinal) &&
-    optimizerText.Contains("$line -match '(?i)Stop-Process.*steamwebhelper'", StringComparison.Ordinal) &&
+    detectCoreText.Contains("if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }", StringComparison.Ordinal) &&
+    detectCoreText.Contains("Stop-Process.*steamwebhelper", StringComparison.Ordinal) &&
+    detectCoreText.Contains("Suspend-Process", StringComparison.Ordinal) &&
     !optimizerText.Contains("$helperText -notmatch '(?i)Stop-Process.*steamwebhelper'", StringComparison.Ordinal));
 Expect("default CEF does not disable GPU",
     !System.Text.RegularExpressions.Regex.IsMatch(

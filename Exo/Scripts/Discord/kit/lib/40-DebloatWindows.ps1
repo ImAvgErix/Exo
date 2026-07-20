@@ -807,7 +807,7 @@ function Remove-DiscordExtraSpellcheckDictionaries([ref]$Freed) {
 
 function Set-DiscordVariantQuiet {
     # PTB / Canary: Windows autostart off + host/chromium lean merge only.
-    # Same in-app preserve policy as stable — never stomp audio, tray, startup,
+    # Same in-app preserve policy as stable  -  never stomp audio, tray, startup,
     # reduced-motion, or Discord notification prefs.
     # Equicord / DiscOpt kernel stay stable-only by design (test channels update
     # frequently; module layout is not guaranteed). QoS policies are applied per
@@ -1051,7 +1051,7 @@ function Apply-DiscordProfile([string]$DestPath = '') {
     # NEVER rewrite Discord in-app prefs: audio (audioSubsystem, useLegacyAudioDevice,
     # offloadAdmControls, asyncVideo*), OPEN_ON_STARTUP, MINIMIZE_TO_TRAY, window geometry,
     # BACKGROUND_COLOR, or anything stored in Local Storage (reduced motion, notification
-    # channel settings). Windows quiet (OS toasts) is Apply-WindowsTweaks — separate path.
+    # channel settings). Windows quiet (OS toasts) is Apply-WindowsTweaks  -  separate path.
     Write-Step 'Merging host flags only (your Discord settings stay intact)...'
     if ([string]::IsNullOrWhiteSpace($DestPath)) {
         $DestPath = Join-Path $AppData 'settings.json'
@@ -1079,7 +1079,7 @@ function Apply-DiscordProfile([string]$DestPath = '') {
         }
     }
 
-    # Strip only known-broken kit leftovers — never user prefs.
+    # Strip only known-broken kit leftovers  -  never user prefs.
     foreach ($drop in @(
         'DANGEROUS_ENABLE_DEVTOOLS_ONLY_ENABLE_IF_YOU_KNOW_WHAT_YOURE_DOING',
         'OPENASAR_HARDCODED',
@@ -1110,7 +1110,7 @@ function Apply-DiscordProfile([string]$DestPath = '') {
     }
     $merged['debugLogging'] = $false
 
-    # Merge chromium switches — never wipe user's extra switches.
+    # Merge chromium switches  -  never wipe user extra switches.
     $leanSwitches = @{
         'disable-breakpad'                        = 1
         'disable-crash-reporter'                  = 1

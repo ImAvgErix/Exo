@@ -9,7 +9,6 @@
 
     <controls:SharedModulePlate
         x:Name="Plate"
-        ModuleTitle="INTERNET"
         StatusText="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}"
         IsLoading="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
         FeatureItems="{x:Bind ViewModel.Rows, Mode=OneWay}"
@@ -22,31 +21,13 @@
         ProgressStatus="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}"
         SelectedApplyMode="{x:Bind ViewModel.SelectedApplyMode, Mode=TwoWay}"
         ApplyModeOptions="{x:Bind ViewModel.ApplyModeOptions, Mode=OneWay}"
+        ShowProfileToggle="True"
+        ProfileLabel="Stack profile"
+        SelectedProfile="{x:Bind ViewModel.SelectedProfileOption, Mode=TwoWay}"
+        ProfileOptions="{x:Bind ViewModel.ProfileOptions, Mode=OneWay}"
         PolicyTogglesEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
         HasApplyReport="False"
         ShowSecondaryActions="False">
-        <controls:SharedModulePlate.HeaderExtra>
-            <Border Style="{StaticResource ExoCard}" Padding="12,8">
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Link policy"
-                               FontFamily="{StaticResource ExoUiFontSemiBold}"
-                               FontSize="13"
-                               FontWeight="SemiBold"
-                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                               VerticalAlignment="Center" />
-                    <ComboBox Grid.Column="1"
-                              MinWidth="168"
-                              SelectedItem="{x:Bind ViewModel.SelectedProfileOption, Mode=TwoWay}"
-                              ItemsSource="{x:Bind ViewModel.ProfileOptions, Mode=OneWay}"
-                              IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                              AutomationProperties.Name="Link policy" />
-                </Grid>
-            </Border>
-        </controls:SharedModulePlate.HeaderExtra>
         <controls:SharedModulePlate.FootExtra>
             <StackPanel Spacing="6">
                 <Border Style="{StaticResource ExoMessageBanner}"

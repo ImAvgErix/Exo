@@ -51,20 +51,75 @@ function Write-ExoReport {
     }
 }
 
-function Import-ExoSharedLibs {
-    # Resolves Exo/Scripts/lib next to Discord|Steam|Nvidia module folders.
+function Get-ExoLibDir {
+    # Resolve Scripts/lib whether we run from:
+    #   %LocalAppData%\Exo\scripts\Steam  (working kit)
+    #   %LocalAppData%\Exo\app\Scripts\Steam (bundled)
+    #   repo Exo\Scripts\Steam
+    param([string]$From = '')
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrWhiteSpace($From)) {
+        [void]$candidates.Add((Join-Path $From 'lib'))
+        [void]$candidates.Add((Join-Path (Split-Path -Parent $From) 'lib'))
+        [void]$candidates.Add((Join-Path $From '..\lib'))
+    }
     $here = $PSScriptRoot
-    if ([string]::IsNullOrWhiteSpace($here)) {
+    if ([string]::IsNullOrWhiteSpace($here) -and $MyInvocation.MyCommand.Path) {
         $here = Split-Path -Parent $MyInvocation.MyCommand.Path
     }
-    $libDir = Join-Path $here 'lib'
-    if (-not (Test-Path -LiteralPath (Join-Path $libDir 'Exo.Common.ps1'))) {
-        # Called from module folder (Scripts/Discord) -> parent/lib
-        $libDir = Join-Path (Split-Path -Parent $here) 'lib'
+    if (-not [string]::IsNullOrWhiteSpace($here)) {
+        [void]$candidates.Add((Join-Path $here 'lib'))
+        [void]$candidates.Add((Join-Path (Split-Path -Parent $here) 'lib'))
+        [void]$candidates.Add((Join-Path $here '..\lib'))
     }
-    $noBg = Join-Path $libDir 'Exo.NoBackground.ps1'
-    if (Test-Path -LiteralPath $noBg) {
-        . $noBg
+    if ($env:LOCALAPPDATA) {
+        [void]$candidates.Add((Join-Path $env:LOCALAPPDATA 'Exo\scripts\lib'))
+        [void]$candidates.Add((Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\lib'))
     }
-    return $libDir
+    # Exo.exe base (elevated hosts still set this when launched from the app folder)
+    try {
+        $proc = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+        if ($proc) {
+            $appDir = Split-Path -Parent $proc
+            [void]$candidates.Add((Join-Path $appDir 'Scripts\lib'))
+        }
+    } catch { }
+
+    foreach ($c in $candidates) {
+        if ([string]::IsNullOrWhiteSpace($c)) { continue }
+        try {
+            $full = [IO.Path]::GetFullPath($c)
+        } catch { continue }
+        if (Test-Path -LiteralPath (Join-Path $full 'Exo.GameBar.ps1')) { return $full }
+        if (Test-Path -LiteralPath (Join-Path $full 'Exo.Common.ps1')) { return $full }
+    }
+    return $null
+}
+
+function Import-ExoSharedLibs {
+    <#
+    .SYNOPSIS
+      Resolve Scripts/lib and return the directory path.
+      Callers MUST dot-source the return value ps1 files at script scope
+      (dot-source inside this function would not export to the caller).
+    #>
+    param([string]$From = '')
+    return (Get-ExoLibDir -From $From)
+}
+
+function Import-ExoSharedLibFiles {
+    # Returns ordered list of lib script paths that exist (caller dotsources).
+    param([string]$From = '')
+    $libDir = Get-ExoLibDir -From $From
+    if (-not $libDir) { return @() }
+    $paths = [System.Collections.Generic.List[string]]::new()
+    foreach ($name in @(
+        'Exo.NoBackground.ps1', 'Exo.GameBar.ps1', 'Exo.PowerPlan.ps1', 'Exo.AmoledTheme.ps1',
+        'Exo.InputDevices.ps1', 'Exo.Controllers.ps1', 'Exo.ScheduledTasks.ps1', 'Exo.WindowsUpdate.ps1',
+        'Exo.DefenderPurge.ps1', 'Exo.ShellDebloat.ps1', 'Exo.OptionalFeatures.ps1', 'Exo.GamingStack.ps1'
+    )) {
+        $path = Join-Path $libDir $name
+        if (Test-Path -LiteralPath $path) { [void]$paths.Add($path) }
+    }
+    return @($paths)
 }

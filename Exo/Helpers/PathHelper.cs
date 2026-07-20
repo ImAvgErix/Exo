@@ -22,6 +22,8 @@ public static class PathHelper
 
     public static string GameLauncherScriptsDir => Path.Combine(ScriptsRoot, "GameLaunchers");
 
+    public static string WindowsScriptsDir => Path.Combine(ScriptsRoot, "Windows");
+
     public static string AppDataDir
     {
         get

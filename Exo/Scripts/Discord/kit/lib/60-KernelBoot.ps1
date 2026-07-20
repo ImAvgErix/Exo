@@ -205,7 +205,7 @@ function Disable-DiscOptKernelOnDisk([string]$AppDir) {
 }
 
 function Test-DiscordCiBootProbeEnabled {
-    # This weaker probe is only valid on GitHub's disposable runner, which has
+    # This weaker probe is only valid on GitHub disposable runner, which has
     # no real Discord login. Both gates are required so production can never
     # mistake a permanently loading client for a healthy one.
     return (($env:GITHUB_ACTIONS -eq 'true') -and ($env:EXO_CI_BOOT_PROBE -eq '1'))

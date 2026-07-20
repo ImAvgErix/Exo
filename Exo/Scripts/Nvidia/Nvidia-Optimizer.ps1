@@ -37,7 +37,7 @@ $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
 $StatePath = Join-Path $StateDir 'nvidia-optimizer.json'
 $DrsSnapshotPath = Join-Path $StateDir 'nvidia-drs-pre-exo.bin'
-# Keep Exo's managed Profile Inspector private. Never delete user-installed copies.
+# Keep Exo managed Profile Inspector private. Never delete user-installed copies.
 $NpiDir = Join-Path $StateDir 'tools\nvidiaProfileInspector'
 $DriverCacheDir = Join-Path $StateDir 'drivers'
 $NpiExeName = 'nvidiaProfileInspector.exe'
@@ -843,7 +843,7 @@ function Import-ExoNipProfile {
         [Parameter(Mandatory)][string]$NipPath,
         [int]$TimeoutSec = 120
     )
-    # Use Exo's isolated managed copy; user-installed Profile Inspector is never touched.
+    # Use Exo isolated managed copy; user-installed Profile Inspector is never touched.
     if (-not (Test-Path -LiteralPath $NipPath)) {
         throw "NIP profile missing: $NipPath"
     }
@@ -1253,7 +1253,7 @@ function Test-NvidiaAppSetupUnsupportedExit {
     $c = 0
     try { $c = [int]$Code } catch { return $false }
 
-    # Exact values from Brian's log + positive twin
+    # Exact values from Brian log + positive twin
     if ($c -eq -436207616 -or $c -eq 436207616) { return $true }
 
     try {
@@ -3172,7 +3172,7 @@ function Install-ExoCleanDriver {
         return @{ Success = $false; ExitCode = -1; Error = 'extract-failed'; Method = 'exo-clean' }
     }
 
-    # NVIDIA's documented codes: 0 = success, 1 = success/restart required.
+    # NVIDIA documented codes: 0 = success, 1 = success/restart required.
     $okCodes = @(0, 1)
     if ($okCodes -contains $exitCode) {
         Start-Sleep -Seconds 2
@@ -3231,16 +3231,23 @@ function Test-ExoNvidiaDisplayPciNode {
 }
 
 function Apply-ExoDriverInstallTweaks {
-    # NVCleanstall expert checklist (Exo silent equivalent):
+    param(
+        # Experimental: DisableDynamicPstate (Nexus "Disable P-States") - more heat/power.
+        [switch]$Experimental
+    )
+    # NVCleanstall / Nexus GPU pack checklist (Exo silent equivalent):
     #  [x] Disable installer telemetry / advertising
     #  [x] Clean install Display.Driver only (done in Install-ExoCleanDriver)
     #  [x] Disable Ansel / NvCamera (service + profile)
     #  [x] Disable driver telemetry
     #  [x] MSI High (Message Signaled Interrupts + High priority)
     #  [x] Disable HDCP (RMHdcpKeyglobZero on display GPU nodes)
+    #  [x] Power management: Prefer maximum performance (NIP per-game + PowerMizer class keys)
+    #  [x] Latency: ULL Ultra + PRF=1 via series .nip (not registry folklore)
+    #  [x] Experimental only: DisableDynamicPstate (Nexus P-States pack)
     #  [x] No Virtual/HD Audio (stripped separately - not "sleep timer", full remove)
     #  SKIP: EAC INF strip / accept-unsigned (install-time only, unsafe on stock setup.exe)
-    Write-Step 'Applying Exo driver expert tweaks (MSI High, telemetry off, Ansel off, HDCP off)...'
+    Write-Step 'Applying Exo driver expert tweaks (MSI High, telemetry off, Ansel off, HDCP off, PowerMizer)...'
 
     # --- MSI High (real interrupt mode tweak) ---
     $msiCount = 0
@@ -3355,7 +3362,7 @@ function Apply-ExoDriverInstallTweaks {
                 New-ItemProperty -LiteralPath $cam -Name 'EnableAnsel' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
             }
         }
-        # Prefer maximum performance PowerMizer when notebook key present
+        # Prefer maximum performance PowerMizer on display class nodes (desktop + notebook)
         try {
             $classRoot = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
             Get-ChildItem -LiteralPath $classRoot -ErrorAction SilentlyContinue | Where-Object {
@@ -3363,23 +3370,60 @@ function Apply-ExoDriverInstallTweaks {
             } | ForEach-Object {
                 $desc = [string](Get-ItemProperty -LiteralPath $_.PSPath -EA SilentlyContinue).DriverDesc
                 if ($desc -notmatch '(?i)NVIDIA|GeForce|RTX|GTX') { return }
-                # PowerMizerEnable 0 + PowerMizerLevel 1 = prefer max when exposed
+                # PowerMizerEnable + Level 1 = prefer maximum when exposed
                 New-ItemProperty -LiteralPath $_.PSPath -Name 'PowerMizerEnable' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
                 New-ItemProperty -LiteralPath $_.PSPath -Name 'PowerMizerLevel' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
                 New-ItemProperty -LiteralPath $_.PSPath -Name 'PowerMizerLevelAC' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
+                New-ItemProperty -LiteralPath $_.PSPath -Name 'PowerMizerLevelDC' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
             }
         } catch { }
         Write-Ok 'Installer telemetry / advertising RIDs off; Ansel/PowerMizer tuned'
     } catch { }
 
+    # DisableDynamicPstate (Nexus/Paragon "Disable P-States")  -  higher sustained clocks/heat.
+    # Always applied on full expert pass; Experimental force-rewrites even if already set.
+    $pstateCount = 0
+    try {
+        $classRoot = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+        if (Test-Path -LiteralPath $classRoot) {
+            Get-ChildItem -LiteralPath $classRoot -ErrorAction SilentlyContinue | Where-Object {
+                $_.PSChildName -match '^\d{4}$'
+            } | ForEach-Object {
+                $desc = [string](Get-ItemProperty -LiteralPath $_.PSPath -EA SilentlyContinue).DriverDesc
+                if ($desc -notmatch '(?i)NVIDIA|GeForce|RTX|GTX') { return }
+                New-ItemProperty -LiteralPath $_.PSPath -Name 'DisableDynamicPstate' -Value 1 -PropertyType DWord -Force -ErrorAction Stop | Out-Null
+                $pstateCount++
+            }
+        }
+        if ($pstateCount -gt 0) {
+            Write-Ok ("DisableDynamicPstate=1 on {0} display node(s) (max clocks)" -f $pstateCount)
+        } else {
+            Write-Warn 'No NVIDIA display class nodes for DisableDynamicPstate'
+        }
+    } catch {
+        Write-Warn "P-States: $($_.Exception.Message)"
+    }
+
+    # Host Game Mode / HAGS / Game Bar / priority live on the Windows card only.
+
     Disable-NvidiaTelemetry
-    Write-Ok 'Expert tweaks done (MSI High, telemetry off, Ansel off, HDCP off)'
+    Write-Ok 'Expert tweaks done (MSI High, telemetry off, Ansel off, HDCP off, PowerMizer)'
 }
 
 function Test-ExoDriverInstallTweaks {
     # Signals that Exo clean install + expert tweaks actually landed.
     $issues = New-Object System.Collections.Generic.List[string]
     $oks = New-Object System.Collections.Generic.List[string]
+    $msiOk = $false
+    $hdcpOk = $false
+    $powerMizerOk = $false
+    $pstateDisabled = $false
+    $hdcpSeen = 0
+    $hdcpHits = 0
+    $pmSeen = 0
+    $pmHits = 0
+    $pstateSeen = 0
+    $pstateHits = 0
 
     # Non-display capture/telemetry services should stay disabled.
     foreach ($serviceName in @('NvTelemetryContainer', 'NvCamera', 'FvSvc')) {
@@ -3439,6 +3483,7 @@ function Test-ExoDriverInstallTweaks {
     } catch { }
     if ($msiSeen -gt 0) {
         if ($msiGaps -eq 0) {
+            $msiOk = $true
             [void]$oks.Add("MSI High verified on $msiSeen NVIDIA display device(s)")
         } else {
             # Soft: MSI keys sometimes need a reboot to stick after clean install.
@@ -3448,8 +3493,38 @@ function Test-ExoDriverInstallTweaks {
         }
     } else {
         # Soft skip - do not brick the whole Apply after a successful clean driver install.
+        $msiOk = $true
         [void]$oks.Add('MSI High skipped (no display PCI Class nodes visible yet - reboot may help)')
     }
+
+    # HDCP + PowerMizer + optional DisableDynamicPstate on display class nodes
+    try {
+        $classRoot = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+        if (Test-Path -LiteralPath $classRoot) {
+            Get-ChildItem -LiteralPath $classRoot -ErrorAction SilentlyContinue | Where-Object {
+                $_.PSChildName -match '^\d{4}$'
+            } | ForEach-Object {
+                $props = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
+                $desc = if ($props -and $props.PSObject.Properties.Name -contains 'DriverDesc') { [string]$props.DriverDesc } else { '' }
+                $provider = if ($props -and $props.PSObject.Properties.Name -contains 'ProviderName') { [string]$props.ProviderName } else { '' }
+                if ($desc -notmatch '(?i)NVIDIA|GeForce|RTX|GTX' -and $provider -notmatch '(?i)NVIDIA') { return }
+                $hdcpSeen++
+                $pmSeen++
+                $pstateSeen++
+                if ($props.PSObject.Properties.Name -contains 'RMHdcpKeyglobZero' -and [int]$props.RMHdcpKeyglobZero -eq 1) { $hdcpHits++ }
+                if ($props.PSObject.Properties.Name -contains 'PowerMizerLevel' -and [int]$props.PowerMizerLevel -eq 1) { $pmHits++ }
+                if ($props.PSObject.Properties.Name -contains 'DisableDynamicPstate' -and [int]$props.DisableDynamicPstate -eq 1) { $pstateHits++ }
+            }
+        }
+    } catch { }
+    $hdcpOk = ($hdcpSeen -eq 0) -or ($hdcpHits -ge $hdcpSeen)
+    $powerMizerOk = ($pmSeen -eq 0) -or ($pmHits -ge 1)
+    $pstateDisabled = ($pstateHits -gt 0)
+    if ($hdcpSeen -gt 0 -and $hdcpHits -ge $hdcpSeen) { [void]$oks.Add("HDCP disabled on $hdcpHits node(s)") }
+    elseif ($hdcpSeen -gt 0) { [void]$oks.Add("HDCP partial ($hdcpHits of $hdcpSeen)") }
+    else { [void]$oks.Add('HDCP nodes not visible yet') }
+    if ($pmHits -gt 0) { [void]$oks.Add("PowerMizer prefer-max on $pmHits node(s)") }
+    if ($pstateHits -gt 0) { [void]$oks.Add("DisableDynamicPstate on $pstateHits node(s)") }
 
     # Exo remembered this exact driver version as tweaked
     $remembered = $false
@@ -3468,10 +3543,15 @@ function Test-ExoDriverInstallTweaks {
     # A remembered marker is informational only; live performance gaps must win.
     $ok = ($issues.Count -eq 0)
     return [pscustomobject]@{
-        Ok        = [bool]$ok
-        Remembered = $remembered
-        Issues    = @($issues)
-        OkSignals = @($oks)
+        Ok              = [bool]$ok
+        Remembered      = $remembered
+        Issues          = @($issues)
+        OkSignals       = @($oks)
+        MsiOk           = [bool]$msiOk
+        MsiSeen         = [int]$msiSeen
+        HdcpOk          = [bool]$hdcpOk
+        PowerMizerOk    = [bool]$powerMizerOk
+        PstateDisabled  = [bool]$pstateDisabled
     }
 }
 
@@ -3562,7 +3642,7 @@ function Start-DriverUpdateIfNeeded {
     if (-not $versionBehind -and -not $tweaks.Ok -and -not $Force) {
         Write-Step 'Applying Exo tweaks in-place (no driver download)'
         try {
-            Apply-ExoDriverInstallTweaks
+            Apply-ExoDriverInstallTweaks -Experimental:$Experimental
             $verifiedTweaks = Test-ExoDriverInstallTweaks
             # Always continue the pipeline after in-place tweaks. Soft MSI residual
             # must not force a full redownload or abort Apply.
@@ -3631,7 +3711,7 @@ function Start-DriverUpdateIfNeeded {
     if ($install -and $install.Success) {
         $postTweaks = $null
         try {
-            Apply-ExoDriverInstallTweaks
+            Apply-ExoDriverInstallTweaks -Experimental:$Experimental
             $postTweaks = Test-ExoDriverInstallTweaks
         } catch {
             Write-Warn "Post-install tweaks: $($_.Exception.Message)"
@@ -4312,48 +4392,9 @@ try {
     }
     $gameProfiles = @()
     $gameProfilesApplied = $false
-    # Skip re-import when state already has this pack applied + DRS verified (same G-SYNC + series).
-    # Experimental always re-imports (force refresh after driver/game churn).
-    if (-not $SkipProfile -and -not $Experimental) {
-        try {
-            if (Test-Path -LiteralPath $StatePath) {
-                $prior = Get-Content -LiteralPath $StatePath -Raw -Encoding UTF8 | ConvertFrom-Json
-                $sameSeries = [string]$prior.series -eq [string]$seriesId
-                $sameGsync = [bool]$prior.gsync -eq [bool]$useGsync
-                $samePolicy = ($prior.PSObject.Properties.Name -contains 'policy') -and
-                    [string]$prior.policy -eq 'safe-drs-v2' -and
-                    ($prior.PSObject.Properties.Name -contains 'version') -and
-                    [string]$prior.version -eq $Script:NvidiaOptVersion
-                $already = [bool]$prior.profileApplied -and
-                    [string]$prior.drsVerified -eq 'True' -and
-                    $sameSeries -and $sameGsync -and $samePolicy -and
-                    (-not [string]::IsNullOrWhiteSpace([string]$prior.profileSha256))
-                if ($already) {
-                    $nipCheck = Get-ProfileFile $seriesId $useGsync
-                    $hashNow = if ($nipCheck) {
-                        (Get-FileHash -LiteralPath $nipCheck -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
-                    } else { '' }
-                    if ($hashNow -and [string]$prior.profileSha256 -eq $hashNow) {
-                        Write-Ok '3D profile pack already applied + DRS verified - skip re-import'
-                        $SkipProfile = $true
-                        $profileApplied = $true
-                        $profileSha256 = [string]$prior.profileSha256
-                        $drsVerification = @{
-                            Verified     = 'True'
-                            VerifiedAt   = [string]$prior.drsVerifiedAt
-                            SettingCount = [int]$prior.drsVerifiedSettingCount
-                            Mismatches   = @()
-                            Reason       = 'already verified - skipped re-import'
-                        }
-                    }
-                }
-            }
-        } catch {
-            Write-Warn "Could not evaluate prior profile state: $($_.Exception.Message)"
-        }
-    }
-    elseif ($Experimental -and -not $SkipProfile) {
-        Write-Ok 'Experimental: forcing 3D profile re-import + DRS verify'
+    # Always re-import on Apply (max aggression / fight NVIDIA App drift). Skip only if -SkipProfile.
+    if (-not $SkipProfile) {
+        Write-Ok 'Forcing 3D profile re-import + DRS verify (competitive apply always re-stamps)'
     }
     if (-not $SkipProfile) {
         Set-ExoStage 'profile-pack-verify'
@@ -4473,7 +4514,7 @@ try {
     }
 
     # Display scaling / Full RGB / NVIDIA colors are NEVER forced by Apply.
-    # Those live in NVIDIA Control Panel and are unreliable to automate — open
+    # Those live in NVIDIA Control Panel and are unreliable to automate  -  open
     # Control Panel from Exo for manual changes. Profile Inspector (DRS) stays.
     $displayClient = @{ Client = 'nvidia-control-panel'; ControlPanel = [bool]$cplOk }
     $dispResult = @{
@@ -4507,11 +4548,19 @@ try {
     # Single ordered stage - no triple-pass of the same Enable/Disable work.
     # (Client wipe may still retry up to 3x only when App remains installed.)
     Set-ExoStage 'debloat'
+    Write-HubProgress 76 'Driver expert tweaks (MSI / HDCP / PowerMizer / telemetry)...'
+    # Re-stamp on every full Apply so detect rows stay true after driver churn
+    # without requiring a full clean reinstall.
+    try {
+        Apply-ExoDriverInstallTweaks -Experimental:$Experimental
+    } catch {
+        Write-Warn "Driver expert tweaks: $($_.Exception.Message)"
+    }
     Write-HubProgress 78 'Privacy / system debloat (telemetry once)...'
     Disable-NvidiaTelemetry
 
     Write-HubProgress 80 'Overlay off (no scaling/color force)...'
-    # Do not stamp Control Panel "advanced 3D Gestalt" or developer radios — NPI owns DRS.
+    # Do not stamp Control Panel "advanced 3D Gestalt" or developer radios  -  NPI owns DRS.
     $advanced3dOk = $false
     Disable-NvidiaOverlay
     Set-NvidiaWindowsNotificationsOff
@@ -4534,13 +4583,13 @@ try {
 
     Set-ExoStage 'display-policy'
     Write-HubProgress 90 'Skipping display scaling/color (use NVIDIA Control Panel)...'
-    Write-Ok 'Display scaling, Full RGB, and NVIDIA color are not forced — open Control Panel from Exo.'
+    Write-Ok 'Display scaling, Full RGB, and NVIDIA color are not forced  -  open Control Panel from Exo.'
     $appInstalled = Test-NvidiaAppInstalled
     }
 
     Set-ExoStage 'finalize-checks'
     Write-HubProgress 94 'Verifying driver/profile versions...'
-    # Remember this driver version as tweak-OK so detect won't re-prompt until the version changes.
+    # Remember this driver version as tweak-OK so detect will not re-prompt until the version changes.
     $tweaksVer = $null
     $driverInfo = Normalize-DriverUpdateInfo $driverInfo
     # TweaksOk soft-true after in-place / partial clean; still record success so Apply is green.
@@ -4657,7 +4706,7 @@ try {
             Write-Ok 'Client stack cleaned; 3D via Profile Inspector (Control Panel UI optional).'
         }
     }
-    Write-Ok 'Display scaling and NVIDIA color were not forced — use the Control Panel button in Exo.'
+    Write-Ok 'Display scaling and NVIDIA color were not forced  -  use the Control Panel button in Exo.'
     $doneMethod = Get-ExoHashString $driverInfo 'Method' 'none'
     if ($doneMethod -in @('exo-clean', 'exo-clean-partial-tweaks', 'in-place-tweaks')) {
         Write-Ok "Driver stage ($doneMethod) completed; 3D profiles via Profile Inspector."

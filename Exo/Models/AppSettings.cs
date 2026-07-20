@@ -18,11 +18,12 @@ public sealed class AppSettings
     public string? LastDiscordRunUtc { get; set; }
 
     /// <summary>Bundled / last known Discord kit version string.</summary>
-    public string DiscordKitVersion { get; set; } = "1.3.59";
+    public string DiscordKitVersion { get; set; } = "1.3.70";
 
     /// <summary>Per-module experimental Apply (more aggressive; default stable/off).</summary>
     public bool ExperimentalDiscord { get; set; }
     public bool ExperimentalSteam { get; set; }
+    public bool ExperimentalWindows { get; set; }
     public bool ExperimentalNvidia { get; set; }
     public bool ExperimentalInternet { get; set; }
     public bool ExperimentalRiot { get; set; }
@@ -36,6 +37,7 @@ public sealed class AppSettings
         DiscordKitVersion = DiscordKitVersion,
         ExperimentalDiscord = ExperimentalDiscord,
         ExperimentalSteam = ExperimentalSteam,
+        ExperimentalWindows = ExperimentalWindows,
         ExperimentalNvidia = ExperimentalNvidia,
         ExperimentalInternet = ExperimentalInternet,
         ExperimentalRiot = ExperimentalRiot,

@@ -11,6 +11,7 @@ public sealed class AppServices
     public GitHubUpdateService Updater { get; }
     public NvidiaPanelSettingsService NvidiaPanel { get; }
     public NetworkOptimizerService Network { get; }
+    public NativeApplyService NativeApply { get; }
 
     public AppServices()
     {
@@ -20,6 +21,7 @@ public sealed class AppServices
         Updater = new GitHubUpdateService();
         NvidiaPanel = new NvidiaPanelSettingsService(Scripts, PowerShell);
         Network = new NetworkOptimizerService(PowerShell);
+        NativeApply = new NativeApplyService(PowerShell);
     }
 
     public void Initialize()

@@ -11,6 +11,28 @@ if (Test-Path -LiteralPath $statePath) {
     try { $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
 }
 
+# Shared Game Bar / DSCP + gaming glue (optional; detect stays soft if missing)
+$__common = Join-Path (Split-Path -Parent $PSScriptRoot) 'lib\Exo.Common.ps1'
+if (-not (Test-Path -LiteralPath $__common)) { $__common = Join-Path $PSScriptRoot '..\lib\Exo.Common.ps1' }
+if (-not (Test-Path -LiteralPath $__common) -and $env:LOCALAPPDATA) {
+    $__common = Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\lib\Exo.Common.ps1'
+}
+if (Test-Path -LiteralPath $__common) {
+    . $__common
+    foreach ($__libPath in @(Import-ExoSharedLibFiles -From $PSScriptRoot)) { . $__libPath }
+} else {
+    foreach ($name in @('Exo.GameBar.ps1', 'Exo.GamingStack.ps1')) {
+        foreach ($c in @(
+            (Join-Path (Split-Path -Parent $PSScriptRoot) "lib\$name"),
+            (Join-Path $PSScriptRoot "..\lib\$name"),
+            (Join-Path $env:LOCALAPPDATA "Exo\scripts\lib\$name"),
+            (Join-Path $env:LOCALAPPDATA "Exo\app\Scripts\lib\$name")
+        )) {
+            if ($c -and (Test-Path -LiteralPath $c)) { . $c; break }
+        }
+    }
+}
+
 $installed = if ($Module -eq 'Riot') {
     (Test-Path (Join-Path ${env:SystemDrive} 'Riot Games')) -or
     (Test-Path (Join-Path ${env:ProgramFiles} 'Riot Vanguard'))
@@ -20,27 +42,60 @@ $installed = if ($Module -eq 'Riot') {
     (Test-Path (Join-Path $env:ProgramData 'Epic\EpicGamesLauncher\Data\Manifests'))
 }
 
-# Returns list of @{ path; label } — same shape for Riot and Epic.
+# Returns list of @{ path; label }  -  same shape for Riot and Epic.
 function Get-LiveGameEntries {
     $entries = [System.Collections.Generic.List[object]]::new()
     $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
     if ($Module -eq 'Riot') {
+        # Known relative paths only  -  full tree recurse under Riot Games is multi-second.
         $riotRoot = Join-Path ${env:SystemDrive} 'Riot Games'
+        $known = @(
+            @{ Rel = 'VALORANT\live\VALORANT\Binaries\Win64\VALORANT-Win64-Shipping.exe'; Label = 'VALORANT' },
+            @{ Rel = 'VALORANT\live\ShooterGame\Binaries\Win64\VALORANT-Win64-Shipping.exe'; Label = 'VALORANT' },
+            @{ Rel = 'VALORANT\VALORANT.exe'; Label = 'VALORANT' },
+            @{ Rel = 'League of Legends\Game\League of Legends.exe'; Label = 'League of Legends' },
+            @{ Rel = 'League of Legends\League of Legends.exe'; Label = 'League of Legends' }
+        )
         if (Test-Path -LiteralPath $riotRoot -PathType Container) {
-            $map = @{
-                'VALORANT-Win64-Shipping.exe' = 'VALORANT'
-                'VALORANT.exe' = 'VALORANT'
-                'League of Legends.exe' = 'League of Legends'
-            }
-            Get-ChildItem -LiteralPath $riotRoot -File -Recurse -ErrorAction SilentlyContinue |
-                Where-Object { $map.ContainsKey($_.Name) } |
-                ForEach-Object {
-                    $full = $_.FullName
-                    if ($seen.Add($full)) {
-                        [void]$entries.Add([pscustomobject]@{ path = $full; label = [string]$map[$_.Name] })
-                    }
+            foreach ($k in $known) {
+                $full = Join-Path $riotRoot $k.Rel
+                if ((Test-Path -LiteralPath $full -PathType Leaf) -and $seen.Add($full)) {
+                    [void]$entries.Add([pscustomobject]@{ path = $full; label = [string]$k.Label })
                 }
+            }
+            # Shallow fallback: one level of product folders only (no deep recurse).
+            if ($entries.Count -eq 0) {
+                $names = @{
+                    'VALORANT-Win64-Shipping.exe' = 'VALORANT'
+                    'VALORANT.exe' = 'VALORANT'
+                    'League of Legends.exe' = 'League of Legends'
+                }
+                Get-ChildItem -LiteralPath $riotRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                    Get-ChildItem -LiteralPath $_.FullName -File -Recurse -Depth 4 -ErrorAction SilentlyContinue |
+                        Where-Object { $names.ContainsKey($_.Name) } |
+                        ForEach-Object {
+                            if ($seen.Add($_.FullName)) {
+                                [void]$entries.Add([pscustomobject]@{ path = $_.FullName; label = [string]$names[$_.Name] })
+                            }
+                        }
+                }
+            }
+        }
+        # Running process paths as last resort
+        foreach ($pair in @(
+            @{ N = 'VALORANT-Win64-Shipping'; L = 'VALORANT' },
+            @{ N = 'VALORANT'; L = 'VALORANT' },
+            @{ N = 'League of Legends'; L = 'League of Legends' }
+        )) {
+            Get-Process -Name $pair.N -ErrorAction SilentlyContinue | ForEach-Object {
+                try {
+                    $p = [string]$_.Path
+                    if ($p -and $seen.Add($p)) {
+                        [void]$entries.Add([pscustomobject]@{ path = $p; label = [string]$pair.L })
+                    }
+                } catch { }
+            }
         }
         return @($entries)
     }
@@ -97,14 +152,29 @@ try {
 if ([string]::IsNullOrWhiteSpace($yieldRunValue)) {
     try { $yieldRunValue = [string](Get-ItemPropertyValue -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $yieldRunName -ErrorAction Stop) } catch { }
 }
-$yieldOk = (Test-Path -LiteralPath $yieldHelper -PathType Leaf) -and
-    (-not [string]::IsNullOrWhiteSpace($yieldRunValue) -and $yieldRunValue -match 'yield-guard')
+# Yield guard is retired (no background Run-key pwsh). "Ok" means purged / not installed.
+$yieldRunPresent = $false
+try {
+    $rv = [string](Get-ItemPropertyValue -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $yieldRunName -ErrorAction Stop)
+    $yieldRunPresent = $rv -match 'yield-guard|pwsh'
+} catch { }
+$yieldHelperPresent = Test-Path -LiteralPath $yieldHelper -PathType Leaf
+$yieldSilent = $false
+if ($yieldRunPresent) {
+  try {
+    $rv2 = [string](Get-ItemPropertyValue -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $yieldRunName -EA Stop)
+    $yieldSilent = $rv2 -match '(?i)wscript|RunHidden'
+  } catch {}
+}
+# Ok if purged OR installed as silent wscript companion (no console)
+$yieldOk = ((-not $yieldRunPresent) -and (-not $yieldHelperPresent)) -or ($yieldSilent -and $yieldHelperPresent)
 
 $snapshotReady = Test-Path -LiteralPath $snapshotPath -PathType Leaf
 $markerOk = [bool]($state -and [bool]$state.applied -and [string]$state.applyStatus -eq 'applied')
 
-$shellQuiet = [bool]($state -and $state.shellQuiet -eq $true)
-if (-not $shellQuiet -and $markerOk) { $shellQuiet = $true }
+# Live-ish: marker records last apply intent; startupQuiet is the live Run-key probe.
+# Do not force shellQuiet true from marker alone (false applied).
+$shellQuiet = [bool]($state -and $state.shellQuiet -eq $true -and $startupQuiet)
 
 $gpuOk = $false
 $fsoOk = $false
@@ -122,25 +192,58 @@ try {
             $p = [string]$p
             if ([string]::IsNullOrWhiteSpace($p)) { continue }
             $need++
-            # Games must be high-perf (2). Marker fallback covers hybrid launcher routing.
+            # Games must be high-perf (2) only  -  never count iGPU (1) as game OK.
             if ($gpuKey) {
                 $v = [string]$gpuKey.GetValue($p, '')
-                if ($v -eq $gpuHigh -or $v -eq $gpuIntegrated) { $gpuHits++ }
+                if ($v -eq $gpuHigh) { $gpuHits++ }
             }
             if ($fsoKey -and [string]$fsoKey.GetValue($p, '') -eq $fsoDisable) { $fsoHits++ }
         }
-        $gpuOk = ($need -gt 0 -and $gpuHits -ge $need) -or [bool]($state -and $state.gamePolicyVerified -eq $true -and $markerOk)
-        $fsoOk = ($need -gt 0 -and $fsoHits -ge $need) -or [bool]($state -and $state.fsoVerified -eq $true -and $markerOk)
+        # Live registry only for isApplied honesty (markers are informational).
+        $gpuOk = ($need -gt 0 -and $gpuHits -ge $need)
+        $fsoOk = ($need -gt 0 -and $fsoHits -ge $need)
     } finally {
         if ($gpuKey) { $gpuKey.Dispose() }
         if ($fsoKey) { $fsoKey.Dispose() }
     }
 } catch {
-    $gpuOk = [bool]($state -and $state.gamePolicyVerified -eq $true -and $markerOk)
-    $fsoOk = [bool]($state -and $state.fsoVerified -eq $true -and $markerOk)
+    $gpuOk = $false
+    $fsoOk = $false
 }
 
-$applied = [bool]($installed -and $markerOk -and $startupQuiet -and $shellQuiet -and $yieldOk -and $snapshotReady -and $targetsPresent -gt 0 -and $gpuOk -and $fsoOk)
+# Per-game DSCP 46 (Game Bar quiet lives on the Windows card)
+$dscpOk = $false
+$dscpCount = 0
+try {
+    $hits = 0
+    $need = 0
+    foreach ($p in @($targets)) {
+        $exe = [IO.Path]::GetFileName([string]$p)
+        if ([string]::IsNullOrWhiteSpace($exe)) { continue }
+        $need++
+        $safe = ($exe -replace '[^\w\.\-]', '_')
+        $pol = "Exo-$Module-DSCP-$safe"
+        $path = Join-Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS' $pol
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        try {
+            $item = Get-Item -LiteralPath $path -ErrorAction Stop
+            if ([string]$item.GetValue('DSCP Value') -eq '46' -and
+                ([string]$item.GetValue('Application Name') -ieq $exe)) {
+                $hits++
+            }
+        } catch { }
+    }
+    $dscpCount = $hits
+    if ($need -eq 0) {
+        $dscpOk = $true # no games → not a blocker
+    } else {
+        $dscpOk = ($hits -ge $need)
+    }
+} catch {
+    $dscpOk = $false
+}
+
+$applied = [bool]($installed -and $markerOk -and $startupQuiet -and $shellQuiet -and $yieldOk -and $snapshotReady -and $targetsPresent -gt 0 -and $gpuOk -and $fsoOk -and $dscpOk)
 
 # Consistent install copy for Riot + Epic: "Installed · Found: A, B" or guidance.
 function Format-FoundGames([string[]]$Names, [int]$Count) {
@@ -164,102 +267,131 @@ $installDetail = if (-not $installed) {
 }
 
 $boundaryDetail = if ($Module -eq 'Riot') {
-    'Vanguard, Riot Client services, game files, and updates are never modified.'
+    'Vanguard, Riot Client services, game files, and updates are never modified. Only safe launcher logs/cache junk is cleared.'
 } else {
-    'Epic Online Services, launcher files, caches, and updates are never modified.'
+    'Epic Online Services, game installs, and updates are never modified. Only safe launcher logs/webcache junk is cleared.'
+}
+
+$cacheOk = [bool]($state -and $state.launcherCacheCleaned -eq $true -and $markerOk)
+$menuQuietOk = $false
+$exoCmd = Join-Path $root ("launchers\{0}-Exo.cmd" -f $Module)
+if (-not (Test-Path -LiteralPath $exoCmd)) {
+    $exoCmd = Join-Path $root ("launchers\{0}-Exo.cmd" -f $(if ($Module -eq 'Epic') { 'Epic' } else { 'Riot' }))
+}
+if (Test-Path -LiteralPath $exoCmd) {
+    $menuQuietOk = $true
+} elseif ($state -and $state.startMenuQuiet -eq $true -and $markerOk) {
+    $menuQuietOk = $true
 }
 
 $yieldDetail = if ($yieldOk) {
-    'While a game runs, launcher UI drops to low memory priority + EcoQoS and soft-reclaims idle pages. Games and anti-cheat stay untouched.'
+    'Silent VBS companion: soft-reclaim launcher RAM + close UI when a game is running.'
 } else {
-    'Apply installs a reversible Exo yield + soft-reclaim companion for the launcher UI only.'
+    'Companion missing or still using a visible pwsh Run key  -  re-Apply.'
 }
 
 $discoveryDetail = if ($targetsPresent -gt 0) {
     $found = Format-FoundGames $labels $targetsPresent
-    "$found Used for yield detect + Windows GPU/FSO policy."
+    "$found Used for Windows GPU/FSO policy."
 } else {
-    'No game executables found yet — install a game, then Apply.'
+    'No game executables found yet  -  install a game, then Apply.'
 }
 
-$features = @(
-    [ordered]@{ title = "$Module install"; detail = $installDetail; active = [bool]$installed },
-    [ordered]@{
-        title = 'Game discovery'
-        detail = $discoveryDetail
-        active = [bool]($installed -and $targetsPresent -gt 0)
-    },
-    [ordered]@{
-        title = 'Startup quiet'
-        detail = 'Launcher brand is removed from Windows Run; Exo yield companion may remain as Exo-* only.'
-        active = [bool]$startupQuiet
-    },
-    [ordered]@{
-        title = 'Shell quiet'
-        detail = 'Launcher toast notifications muted; non-anti-cheat scheduled tasks quieted (Steam-parity, app-scoped).'
-        active = [bool]($installed -and $shellQuiet)
-    },
-    [ordered]@{
-        title = 'High-perf GPU'
-        detail = if ($gpuOk) {
-            $hybrid = $false
-            try {
-                $names = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object { [string]$_.Name })
-                $hybrid = ($names.Count -ge 2) -and
-                    (@($names | Where-Object { $_ -match '(?i)NVIDIA|GeForce|RTX|GTX|Radeon\s+RX|Intel.*Arc' }).Count -gt 0) -and
-                    (@($names | Where-Object { $_ -match '(?i)Intel.*(?:UHD|Iris|HD Graphics)|AMD Radeon\(TM\) Graphics|Radeon Vega' }).Count -gt 0)
-            } catch { }
-            if ($hybrid) {
-                'Games pin discrete GPU (GpuPreference=2); launcher UI prefers integrated on hybrid systems.'
-            } else {
-                'UserGpuPreferences pins high-performance GPU for game executables.'
-            }
-        } else {
-            'Apply pins high-performance GPU for games; hybrid systems leave launchers on integrated.'
-        }
-        active = [bool]$gpuOk
-    },
-    [ordered]@{
-        title = 'Fullscreen Optimizations off'
-        detail = if ($fsoOk) { 'AppCompat FSO disabled for game executables.' } else { 'Apply disables Fullscreen Optimizations on game executables.' }
-        active = [bool]$fsoOk
-    },
-    [ordered]@{ title = 'Launcher yield while gaming'; detail = $yieldDetail; active = [bool]$yieldOk },
-    [ordered]@{ title = 'Anti-cheat boundary'; detail = $boundaryDetail; active = [bool]$installed },
-    [ordered]@{
-        title = 'Exact Repair snapshot'
-        detail = if ($snapshotReady) { 'Pre-Exo Run/GPU/FSO entries are saved so Repair restores exactly.' } else { 'Apply captures a pre-change snapshot before any registry edit.' }
-        active = [bool]$snapshotReady
-    },
-    [ordered]@{
-        title = 'Verified optimizer record'
-        detail = if ($markerOk) { "A completed full apply is recorded for this $Module installation." } else { 'No verified apply record yet for this PC.' }
-        active = [bool]$markerOk
+# Skip Get-CimInstance on detect (WMI tax)  -  static copy is enough for the tile.
+$gpuDetail = if ($gpuOk) {
+    'Games are pinned to high-performance graphics for maximum frame rates.'
+} else {
+    'Apply pins games to high-performance graphics so Windows does not strand them on weak GPU paths.'
+}
+
+$features = [System.Collections.Generic.List[object]]::new()
+[void]$features.Add([ordered]@{ title = "$Module ready"; detail = $installDetail; active = [bool]$installed })
+[void]$features.Add([ordered]@{
+    title = 'Games found'
+    detail = $discoveryDetail
+    active = [bool]($installed -and $targetsPresent -gt 0)
+})
+[void]$features.Add([ordered]@{
+    title = 'Silent startup'
+    detail = 'Launcher stays out of Windows Run. Only the Exo yield companion may remain.'
+    active = [bool]$startupQuiet
+})
+[void]$features.Add([ordered]@{
+    title = 'Silent Windows integration'
+    detail = 'Toasts muted and non-anti-cheat scheduled tasks quieted - scoped to this launcher only.'
+    active = [bool]($installed -and $shellQuiet)
+})
+[void]$features.Add([ordered]@{
+    title = 'High-performance GPU'
+    detail = $gpuDetail
+    active = [bool]$gpuOk
+})
+[void]$features.Add([ordered]@{
+    title = 'True fullscreen path'
+    detail = if ($fsoOk) { 'Fullscreen Optimizations off so games present frames with less OS interference.' } else { 'Apply turns off Fullscreen Optimizations on your game executables.' }
+    active = [bool]$fsoOk
+})
+
+# Host Game Mode / HAGS / Game Bar live on the Windows card only.
+
+[void]$features.Add([ordered]@{
+    title = 'Priority game traffic'
+    detail = if ($dscpOk -and $dscpCount -gt 0) {
+        "Network priority for $dscpCount game executable(s) on routers that honor DSCP."
+    } else {
+        'Apply marks game UDP traffic for priority on routers that honor DSCP.'
     }
-)
+    active = [bool]$dscpOk
+})
+[void]$features.Add([ordered]@{ title = 'Silent launcher companion'; detail = $yieldDetail; active = [bool]$yieldOk })
+[void]$features.Add([ordered]@{
+    title = 'Launcher junk cleaned'
+    detail = if ($cacheOk) { 'Launcher logs/webcache/crash junk cleared  -  game installs untouched.' } else { 'Apply clears safe launcher logs and web cache only.' }
+    active = [bool]$cacheOk
+})
+[void]$features.Add([ordered]@{
+    title = 'Quiet Start Menu launch'
+    detail = if ($menuQuietOk) { 'Start Menu opens the Exo high-priority quiet launcher.' } else { 'Apply retargets Start Menu to a quiet Exo launcher cmd when a shortcut exists.' }
+    active = [bool]$menuQuietOk
+})
+[void]$features.Add([ordered]@{ title = 'Anti-cheat untouched'; detail = $boundaryDetail; active = [bool]$installed })
+[void]$features.Add([ordered]@{
+    title = 'One-click Repair ready'
+    detail = if ($snapshotReady) { 'Pre-Exo settings are saved so Repair can restore exactly what was there before.' } else { 'Apply captures a safety snapshot before any change.' }
+    active = [bool]$snapshotReady
+})
+[void]$features.Add([ordered]@{
+    title = 'Optimization verified'
+    detail = if ($markerOk) { "A completed $Module apply is on record for this PC." } else { 'No verified apply yet - run Apply to finish.' }
+    active = [bool]$markerOk
+})
+$features = @($features)
 
+# Status from the same rows the UI shows — exclude pure info tiles.
+$infoTitles = @(
+    'Optimization verified',
+    'Anti-cheat untouched',
+    'One-click Repair ready'
+)
 $missing = @()
-if (-not $installed) { $missing += 'install' }
-elseif ($targetsPresent -eq 0) { $missing += 'game discovery' }
-else {
-    if (-not $startupQuiet) { $missing += 'startup quiet' }
-    if (-not $shellQuiet) { $missing += 'shell quiet' }
-    if (-not $gpuOk) { $missing += 'high-perf GPU' }
-    if (-not $fsoOk) { $missing += 'FSO off' }
-    if (-not $yieldOk) { $missing += 'yield guard' }
-    if (-not $snapshotReady) { $missing += 'repair snapshot' }
-    if (-not $markerOk) { $missing += 'verified record' }
+foreach ($f in $features) {
+    $t = [string]$f.title
+    if ($infoTitles -contains $t) { continue }
+    if (-not [bool]$f.active) { $missing += $t }
 }
+
+$allCheckableOn = ($missing.Count -eq 0) -and $installed -and ($targetsPresent -gt 0)
+$appliedHonest = [bool]$applied -and $allCheckableOn
 
 $status = if (-not $installed) {
     'Not installed'
-} elseif ($applied) {
+} elseif ($appliedHonest) {
     'Already optimized'
 } elseif ($missing.Count -eq 1) {
     "1 setting needs Apply ($($missing[0]))"
-} elseif ($missing.Count -gt 1 -and $missing.Count -le 3) {
+} elseif ($missing.Count -gt 1) {
     "$($missing.Count) settings need Apply"
-} elseif ($state -and $state.lastError) {
+} elseif ($state -and ($state.PSObject.Properties.Name -contains 'lastError') -and $state.lastError) {
     'Needs attention'
 } else {
     'Ready to optimize'
@@ -267,18 +399,18 @@ $status = if (-not $installed) {
 
 $detail = if (-not $installed) {
     "Install $Module before applying."
-} elseif ($applied) {
-    "Verified: startup quiet, high-perf GPU, FSO off, yield while gaming. Anti-cheat untouched."
-} elseif ($state -and $state.lastError) {
+} elseif ($appliedHonest) {
+    "Verified: startup quiet, high-perf GPU, FSO off, game DSCP, yield while gaming. Anti-cheat untouched."
+} elseif ($state -and ($state.PSObject.Properties.Name -contains 'lastError') -and $state.lastError) {
     [string]$state.lastError
 } elseif ($missing.Count -gt 0) {
-    'Run Apply to restore: ' + ($missing -join ', ') + '.'
+    'Off: ' + ($missing -join ', ') + '.'
 } else {
-    'Apply a reversible policy: startup quiet, high-perf GPU, FSO off, yield while gaming.'
+    'Apply a reversible policy: startup quiet, high-perf GPU, FSO off, game DSCP, yield while gaming.'
 }
 
 [ordered]@{
-    isApplied  = $applied
+    isApplied  = $appliedHonest
     statusText = $status
     detail     = $detail
     features   = $features

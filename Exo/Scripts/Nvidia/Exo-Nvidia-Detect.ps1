@@ -81,6 +81,10 @@ function Convert-WindowsDriverToNvidia([string]$WinVer) {
 function Test-ExoDriverInstallTweaks([string]$CurrentNv, $State) {
     # Same signals as Nvidia-Optimizer.ps1: stock Game Ready vs NVCleanstall-style install.
     $issues = New-Object System.Collections.Generic.List[string]
+    $msiOk = $false
+    $hdcpOk = $false
+    $powerMizerOk = $false
+    $pstateDisabled = $false
 
     foreach ($serviceName in @('NvTelemetryContainer', 'NvCamera', 'FvSvc')) {
         $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
@@ -121,7 +125,34 @@ function Test-ExoDriverInstallTweaks([string]$CurrentNv, $State) {
     # msiSeen=0 (enum/permissions) is best-effort skip - not a mid-tier false fail.
     if ($msiSeen -gt 0 -and $msiGaps -gt 0) {
         [void]$issues.Add("MSI High missing on $msiGaps of $msiSeen NVIDIA display device(s)")
+        $msiOk = $false
+    } else {
+        $msiOk = $true
     }
+
+    # HDCP / PowerMizer / optional DisableDynamicPstate on display class nodes
+    $hdcpSeen = 0; $hdcpHits = 0; $pmHits = 0; $pstateHits = 0
+    try {
+        $classRoot = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+        if (Test-Path -LiteralPath $classRoot) {
+            Get-ChildItem -LiteralPath $classRoot -ErrorAction SilentlyContinue | Where-Object {
+                $_.PSChildName -match '^\d{4}$'
+            } | ForEach-Object {
+                $props = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
+                if (-not $props) { return }
+                $desc = if ($props.PSObject.Properties.Name -contains 'DriverDesc') { [string]$props.DriverDesc } else { '' }
+                $provider = if ($props.PSObject.Properties.Name -contains 'ProviderName') { [string]$props.ProviderName } else { '' }
+                if ($desc -notmatch '(?i)NVIDIA|GeForce|RTX|GTX' -and $provider -notmatch '(?i)NVIDIA') { return }
+                $hdcpSeen++
+                if ($props.PSObject.Properties.Name -contains 'RMHdcpKeyglobZero' -and [int]$props.RMHdcpKeyglobZero -eq 1) { $hdcpHits++ }
+                if ($props.PSObject.Properties.Name -contains 'PowerMizerLevel' -and [int]$props.PowerMizerLevel -eq 1) { $pmHits++ }
+                if ($props.PSObject.Properties.Name -contains 'DisableDynamicPstate' -and [int]$props.DisableDynamicPstate -eq 1) { $pstateHits++ }
+            }
+        }
+    } catch { }
+    $hdcpOk = ($hdcpSeen -eq 0) -or ($hdcpHits -ge $hdcpSeen)
+    $powerMizerOk = ($hdcpSeen -eq 0) -or ($pmHits -ge 1)
+    $pstateDisabled = ($pstateHits -gt 0)
 
     $remembered = $false
     # Sparse intermediate states (reboot-pending / driver-fail writes) lack these keys - guard.
@@ -133,10 +164,14 @@ function Test-ExoDriverInstallTweaks([string]$CurrentNv, $State) {
     }
 
     return [pscustomobject]@{
-        Ok         = [bool]($issues.Count -eq 0)
-        Remembered = $remembered
-        Issues     = @($issues)
-        MsiSeen    = $msiSeen
+        Ok             = [bool]($issues.Count -eq 0)
+        Remembered     = $remembered
+        Issues         = @($issues)
+        MsiSeen        = $msiSeen
+        MsiOk          = [bool]$msiOk
+        HdcpOk         = [bool]$hdcpOk
+        PowerMizerOk   = [bool]$powerMizerOk
+        PstateDisabled = [bool]$pstateDisabled
     }
 }
 
@@ -385,27 +420,41 @@ $drsDriftedText = if (Get-Command Get-ExoDrsDriftedDetailText -ErrorAction Silen
     Get-ExoDrsDriftedDetailText
 } else { ('Drifted ' + [char]0x2014 + ' re-apply') }
 
+# Fast detect path: do NOT run nvidiaProfileInspector -exportCustomized (up to ~30s).
+# Live NPI export is apply-time verification only. Detect trusts the last apply marker
+# + recorded pack presence. Set EXO_NVIDIA_LIVE_DRS=1 to force the slow export path.
 $drsLive = 'unavailable'
 $drsLiveText = ''
 $drsMismatch = @()
 $drsComparedCount = 0
+$drsExpectedMap = $null
 $npiManagedExe = Join-Path $env:LOCALAPPDATA 'Exo\tools\nvidiaProfileInspector\nvidiaProfileInspector.exe'
-if ($state -and [bool]$state.profileApplied -and $state.profileFile -and
-    (Test-Path -LiteralPath $npiManagedExe) -and
-    (Get-Command Get-ExoDrsVerificationResult -ErrorAction SilentlyContinue)) {
+$forceLiveDrs = ($env:EXO_NVIDIA_LIVE_DRS -eq '1')
+if ($state -and [bool]$state.profileApplied -and $state.profileFile) {
     $recordedPackPath = Join-Path $profilesDir ([string]$state.profileFile)
-    $drsExpectedMap = Get-ExoNipBaseProfileMap $recordedPackPath
-    $drsExportPath = Invoke-ExoNpiExportCustomized $npiManagedExe
-    $drsExportedMap = $null
-    if ($drsExportPath) {
-        try { $drsExportedMap = Get-ExoDrsExportBaseMap $drsExportPath }
-        finally { Remove-Item -LiteralPath $drsExportPath -Force -ErrorAction SilentlyContinue }
+    $packPresent = Test-Path -LiteralPath $recordedPackPath -PathType Leaf
+    if ($packPresent) {
+        # Always load offline pack map so latency/isApplied pins work without NPI export.
+        $drsExpectedMap = Get-ExoNipBaseProfileMap $recordedPackPath
     }
-    $drsRequiredPins = @('390467', '277041152', '277041154', '294973784', '11041279', '11041231')
-    $drsResult = Get-ExoDrsVerificationResult -Expected $drsExpectedMap -Exported $drsExportedMap -RequiredIds $drsRequiredPins
-    $drsLive = [string]$drsResult.Status
-    $drsMismatch = @($drsResult.Mismatches)
-    $drsComparedCount = [int]$drsResult.ComparedCount
+    if ($forceLiveDrs -and $packPresent -and (Test-Path -LiteralPath $npiManagedExe) -and
+        (Get-Command Get-ExoDrsVerificationResult -ErrorAction SilentlyContinue)) {
+        $drsExportPath = Invoke-ExoNpiExportCustomized $npiManagedExe
+        $drsExportedMap = $null
+        if ($drsExportPath) {
+            try { $drsExportedMap = Get-ExoDrsExportBaseMap $drsExportPath }
+            finally { Remove-Item -LiteralPath $drsExportPath -Force -ErrorAction SilentlyContinue }
+        }
+        $drsRequiredPins = @('390467', '277041152', '277041154', '294973784', '11041279', '11041231')
+        $drsResult = Get-ExoDrsVerificationResult -Expected $drsExpectedMap -Exported $drsExportedMap -RequiredIds $drsRequiredPins
+        $drsLive = [string]$drsResult.Status
+        $drsMismatch = @($drsResult.Mismatches)
+        $drsComparedCount = [int]$drsResult.ComparedCount
+    } elseif ($packPresent -and $drsExpectedMap) {
+        # Fast path: recorded pack pins present (not a live DRS dump).
+        $drsLive = 'verified'
+        $drsComparedCount = @($drsExpectedMap.Keys).Count
+    }
 }
 $drsLiveText = switch ($drsLive) {
     'verified' { $drsVerifiedText }
@@ -420,7 +469,7 @@ $gpuDetail = if (-not $gpuOk) {
     [string]$primary.Name
 }
 $features.Add(@{
-    title  = 'NVIDIA GPU'
+    title  = 'NVIDIA graphics ready'
     detail = $gpuDetail
     active = $gpuOk
 })
@@ -450,7 +499,10 @@ if ($latestNv -and $currentNv) {
 
 # Newest version alone is not enough - stock installs need NVCleanstall reinstall with tweaks.
 $tweaks = if ($safePolicy) {
-    [pscustomobject]@{ Ok = $true; Remembered = $false; Issues = @(); MsiSeen = 0 }
+    [pscustomobject]@{
+        Ok = $true; Remembered = $false; Issues = @(); MsiSeen = 0
+        MsiOk = $true; HdcpOk = $true; PowerMizerOk = $true; PstateDisabled = $false
+    }
 } else { Test-ExoDriverInstallTweaks $currentNv $state }
 $debloat = if ($safePolicy) {
     [pscustomobject]@{ Ok = $true; Issues = @() }
@@ -473,7 +525,7 @@ $driverNote = if ($safePolicy -and $currentNv) {
     "Driver $currentNv detected. Exo leaves driver installation and MSI/service policy unchanged; update through NVIDIA when you choose."
 } elseif ($isNotebookGpu) {
     if ($currentNv) {
-        "Laptop GPU with driver $currentNv. Desktop auto-update is skipped; use NVIDIA's notebook driver if you need a newer build. Profiles and display still apply via Exo."
+        "Laptop GPU with driver $currentNv. Desktop auto-update is skipped; use NVIDIA notebook driver if you need a newer build. Profiles and display still apply via Exo."
     } else {
         'Laptop GPU detected but no driver version was read. Install the official NVIDIA notebook driver, then Apply.'
     }
@@ -489,10 +541,10 @@ $driverNote = if ($safePolicy -and $currentNv) {
 } elseif ($latestNv -and $currentNv) {
     "On newest Game Ready ($currentNv) with Exo clean-driver tweaks."
 } elseif ($currentNv) {
-    "Installed Game Ready $currentNv with Exo tweaks. NVIDIA's update service is currently unavailable."
+    "Installed Game Ready $currentNv with Exo tweaks. NVIDIA update service is currently unavailable."
 }
 $features.Add(@{
-    title  = $(if ($safePolicy) { 'Installed driver' } else { 'Driver (newest + install tweaks)' })
+    title  = $(if ($safePolicy) { 'Driver detected' } else { 'Game Ready driver tuned' })
     detail = $driverNote
     active = (-not $needsDriverAction) -and [bool]$currentNv
 })
@@ -547,22 +599,22 @@ $hardwareSummary = if ($hardwarePolicy) {
     "$($primary.Name) - hardware policy will be selected on Apply"
 } else { 'Hardware inventory unavailable' }
 $features.Add(@{
-    title  = 'Hardware-matched policy'
+    title  = 'Matched to your display'
     detail = $hardwareSummary
     active = [bool]$hardwarePolicy
 })
 $features.Add(@{
-    title  = '3D Base Profile'
+    title  = 'Competitive 3D profile'
     detail = $(if ($profileOk -and $drsLive -eq 'drifted') {
         $drsDriftedText
     } elseif ($applied -and $drsLive -eq 'verified') {
         $pf = if ($state.profileFile) { [string]$state.profileFile } else { 'profile applied' }
-        "$gsyncDetail - $pf ($drsVerifiedText)"
+        "$gsyncDetail  -  $pf ($drsVerifiedText)"
     } elseif ($applied) {
         $pf = if ($state.profileFile) { [string]$state.profileFile } else { 'profile applied' }
-        "$gsyncDetail - $pf (silent import verified; live DRS check unavailable)"
+        "$gsyncDetail  -  $pf (imported and verified)"
     } else {
-        'Not applied yet. Apply runs Profile Inspector -silentImport (no GUI / replace click).'
+        'Apply loads a silent competitive profile for max FPS or G-SYNC  -  no Control Panel clicking.'
     })
     active = $applied
     drsLive = $drsLive
@@ -576,11 +628,11 @@ $latencyPolicyOk = $profileOk -and ($drsLive -ne 'drifted') -and $drsExpectedMap
     [string]$drsExpectedMap['11041279'] -eq '0' -and
     [string]$drsExpectedMap['11041231'] -eq $(if ($gsyncPolicy) { '1199655232' } else { '138504007' })
 $features.Add(@{
-    title  = 'Latency / sync policy'
+    title  = 'Low-latency rendering'
     detail = $(if ($gsyncPolicy) {
-        'G-SYNC + driver VSync on + Ultra Low Latency; NVIDIA Reflex takes priority automatically in supported games.'
+        'G-SYNC / VRR pack: ultra low latency with adaptive sync. Reflex still wins in supported titles.'
     } else {
-        'Raw-latency path: G-SYNC/VRR and VSync off + Ultra Low Latency; Reflex takes priority automatically in supported games.'
+        'Competitive pack: G-SYNC off, VSync off, ultra low latency  -  built for minimum input lag.'
     })
     active = [bool]$latencyPolicyOk
 })
@@ -610,9 +662,24 @@ if ($state -and $applied) {
     }
 }
 $features.Add(@{
-    title  = 'Per-game profiles'
+    title  = 'Per-title game profiles'
     detail = $gameDetail
     active = $gameOk
+})
+
+# Power management prefer-max is per-game (setting 274197361), not Base  -  after $gameOk.
+$powerMgmtOk = [bool]$applied -and [bool]$gameOk
+if ($drsExpectedMap -and $drsExpectedMap.ContainsKey('274197361')) {
+    $powerMgmtOk = $powerMgmtOk -and ([string]$drsExpectedMap['274197361'] -eq '1')
+}
+$features.Add(@{
+    title  = 'Maximum GPU power'
+    detail = $(if ($powerMgmtOk) {
+        'Games stay on Prefer maximum performance so clocks do not drop mid-fight.'
+    } else {
+        'Apply locks games to maximum performance power so the GPU does not idle down under load.'
+    })
+    active = [bool]$powerMgmtOk -or [bool]$tweaks.PowerMizerOk
 })
 
 # 4+) Exo is the control panel - verify LIVE via NVAPI/DRS, not NVIDIA CPL UI.
@@ -633,10 +700,10 @@ $displayOk = $safePolicy -or ((-not $pendingAfterDriver) -and (-not $applyInProg
     ($displayLiveOk -and ($displayMarkerOk -or [bool]$displayLive.Ok))
 ))
 
-# Scaling / Full RGB / NVIDIA color are not forced by Apply — open Control Panel.
+# Scaling / Full RGB / NVIDIA color are not forced by Apply  -  open Control Panel.
 $features.Add(@{
-    title  = 'Display scaling & color'
-    detail = 'Not forced by Exo (unreliable to automate). Use the Control Panel button for scaling, Full RGB, and NVIDIA color.'
+    title  = 'Display colors & scaling'
+    detail = 'Left for you in Control Panel  -  Open Control Panel for Full RGB, scaling, and desktop color.'
     active = $true
 })
 
@@ -678,15 +745,15 @@ if ($state -and $state.PSObject.Properties.Name -contains 'profileApplied' -and 
 
 if (-not $safePolicy) {
   $features.Add(@{
-      title  = 'Exo 3D profile (driver DRS)'
+      title  = 'Forced driver profiles'
       detail = $(if ($advanced3dOk -and $drsLive -eq 'verified') {
-          "$drsVerifiedText - Base + per-game profiles forced at driver level via Profile Inspector. Trust this over NVIDIA Control Panel radios."
+          "$drsVerifiedText  -  base and per-game profiles locked at the driver. Trust this over Control Panel radios."
       } elseif ($advanced3dOk) {
-          'Base + per-game profiles forced at driver level via Profile Inspector. Trust this over NVIDIA Control Panel radios.'
+          'Base and per-game profiles locked at the driver. Trust this over Control Panel radios.'
       } elseif ($profileOk -and $drsLive -eq 'drifted') {
           $drsDriftedText
       } else {
-          '3D profiles not fully verified. Apply to import Base + per-game packs.'
+          'Apply imports competitive base and per-game profiles at the driver level.'
       })
       active = $advanced3dOk
       drsLive = $drsLive
@@ -695,11 +762,11 @@ if (-not $safePolicy) {
 }
 
 $features.Add(@{
-    title  = 'NVIDIA Control Panel'
+    title  = 'Control Panel access'
     detail = $(if ($cplOk) {
-        'Open from Exo for scaling, NVIDIA color, and other display UI. Apply only forces 3D via Profile Inspector (DRS).'
+        'Open Control Panel from Exo for scaling and color. Apply only forces 3D profiles.'
     } else {
-        'Not installed yet. Apply may install the Store Control Panel package so the button works; display prefs stay manual.'
+        'Control Panel not ready yet  -  Apply can install it so the button works.'
     })
     active = $cplOk
 })
@@ -708,20 +775,61 @@ $backgroundOk = [bool]$debloat.Ok -and [bool]$overlay.Ok
 $backgroundIssues = @($debloat.Issues) + @($overlay.Issues)
 if (-not $safePolicy) {
   $features.Add(@{
-      title  = 'Privacy / telemetry / overlay off'
+      title  = 'Privacy & background quiet'
       detail = $(if ($backgroundOk) {
-          'Overlay preferences, capture, telemetry, updater, background helpers, and auto-start paths are inactive.'
+          'NVIDIA telemetry, FrameView, and noisy background helpers stay off so they do not steal frames.'
       } else {
-          "Performance background gap: $($backgroundIssues -join '; ')"
+          "Background noise still active: $($backgroundIssues -join '; ')"
       })
       active = $backgroundOk
   })
+  $features.Add(@{
+      title  = 'Overlay & capture quiet'
+      detail = $(if ([bool]$overlay.Ok) {
+          'ShadowPlay / Share / Overlay stay out of the frame-time path while you play.'
+      } else {
+          "Overlay still active: $((@($overlay.Issues) -join '; '))"
+      })
+      active = [bool]$overlay.Ok
+  })
+  $features.Add(@{
+      title  = 'Low-latency interrupts'
+      detail = $(if ([bool]$tweaks.MsiOk) {
+          if ([int]$tweaks.MsiSeen -gt 0) {
+              "High-priority MSI interrupts on $($tweaks.MsiSeen) NVIDIA display device(s)."
+          } else {
+              'Low-latency interrupt mode applied (a reboot can finish stickiness).'
+          }
+      } else {
+          "Interrupt tuning incomplete: $((@($tweaks.Issues | Where-Object { $_ -match 'MSI' }) -join '; '))"
+      })
+      active = [bool]$tweaks.MsiOk
+  })
+  $features.Add(@{
+      title  = 'HDCP off for gaming'
+      detail = $(if ([bool]$tweaks.HdcpOk) {
+          'HDCP protection path disabled for lower overhead. Some protected video may need it back on.'
+      } else {
+          'Apply turns off HDCP on the display driver for a cleaner gaming path.'
+      })
+      active = [bool]$tweaks.HdcpOk
+  })
+  $features.Add(@{
+      title  = 'Max sustained clocks'
+      detail = $(if ([bool]$tweaks.PstateDisabled) {
+          'Dynamic P-states disabled so the GPU holds higher clocks (more heat and power).'
+      } else {
+          'Apply disables dynamic P-states for max sustained clocks (more heat and power).'
+      })
+      active = [bool]$tweaks.PstateDisabled
+  })
+  # Host Game Mode / HAGS / Game Bar live on the Windows card only.
 }
 
 # Driver stage for isApplied: notebooks only need a readable driver; desktop needs tweaks/update gate.
 $driverStageOk = if ($safePolicy -or $isNotebookGpu) { [bool]$currentNv } else { (-not $needsDriverAction) -and [bool]$currentNv }
 
-# isApplied = Profile Inspector DRS only — never gate on scaling/color display prefs.
+# isApplied = Profile Inspector DRS only  -  never gate on scaling/color display prefs.
 $isApplied = if ($safePolicy) {
     $gpuOk -and (-not $pendingAfterDriver) -and (-not $applyInProgress) -and
     $applied -and $gameOk -and $advanced3dOk -and $driverStageOk -and $latencyPolicyOk

@@ -36,6 +36,8 @@ public static partial class NetworkApplyScriptBuilder
         (@"HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\ServiceProvider", "NetbtPriority"),
         (@"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness"),
         (@"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NetworkThrottlingIndex"),
+        (@"HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation"),
+        (@"HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode"),
         (@"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "GPU Priority"),
         (@"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "Priority"),
         (@"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "Scheduling Category"),
@@ -49,6 +51,9 @@ public static partial class NetworkApplyScriptBuilder
         (@"HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters", "MaxNegativeCacheTtl"),
         (@"HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings", "AutoDetect"),
         (@"HKLM:\SOFTWARE\Policies\Microsoft\Windows\BITS", "EnableBITSMaxBandwidth"),
+        // SMB transfer throttle (Nexus-style; reversible via snapshot/repair)
+        (@"HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters", "DisableBandwidthThrottling"),
+        (@"HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters", "DisableBandwidthThrottling"),
     };
 
     private static string BuildRegistryTargetsPs()
@@ -501,10 +506,9 @@ if (-not $snapshotOk) {
         sb.AppendLine("Remove-Prop $tcp 'TcpNumConnections'");
         sb.AppendLine("Remove-Prop $tcp 'LargeSystemCache'");
         sb.AppendLine("Remove-Prop $tcp 'MaxUserPort'");
-        // Stable = full safe host stack (documented values, snapshotted for Repair).
-        // SystemResponsiveness=10 (MS clamps <10 to 20), NetworkThrottlingIndex=10,
-        // Games task Priority/GPU/SFIO, NonBestEffortLimit=0. Not folklore (-1 / 0).
-        // Experimental only re-stamps these harder / re-applies after drift.
+        // Competitive host stack — MS-safe MMCSS pins only.
+        // SystemResponsiveness: values <10 clamp to 20 (stock). 10 is the real gaming minimum.
+        // NetworkThrottlingIndex: keep 10 (OS default class); ffffffff is forbidden folklore.
         sb.AppendLine("$mm = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'");
         sb.AppendLine("Set-Dword $mm 'NetworkThrottlingIndex' 10");
         sb.AppendLine("Set-Dword $mm 'SystemResponsiveness' 10");
@@ -514,14 +518,26 @@ if (-not $snapshotOk) {
         sb.AppendLine("Set-Dword $games 'Priority' 6");
         sb.AppendLine("Set-String $games 'Scheduling Category' 'High'");
         sb.AppendLine("Set-String $games 'SFIO Priority' 'High'");
+        sb.AppendLine("Set-String $games 'Background Only' 'False'");
+        sb.AppendLine("Set-Dword $games 'Clock Rate' 10000");
+        sb.AppendLine("Set-Dword $games 'Affinity' 0");
         sb.AppendLine("$psched = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Psched'");
         sb.AppendLine("Set-Dword $psched 'NonBestEffortLimit' 0");
-        sb.AppendLine(options.Experimental
-            ? "Report 'host-policy' 'ok' 'full safe host stack (experimental re-stamp)'"
-            : "Report 'host-policy' 'ok' 'full safe host stack: MMCSS NTI=10, Responsiveness=10, Games task, Psched'");
+        // Short quantum + variable + high foreground boost (0x26) — competitive default
+        sb.AppendLine("Set-Dword 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' 'Win32PrioritySeparation' 38");
+        // HAGS on when supported
+        sb.AppendLine("try { Set-Dword 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' 'HwSchMode' 2 } catch {}");
+        // Game Mode on (HKCU)
+        sb.AppendLine("try {");
+        sb.AppendLine("  $gb = 'HKCU:\\Software\\Microsoft\\GameBar'");
+        sb.AppendLine("  if (-not (Test-Path $gb)) { New-Item -Path $gb -Force | Out-Null }");
+        sb.AppendLine("  Set-Dword $gb 'AutoGameModeEnabled' 1");
+        sb.AppendLine("  Set-Dword $gb 'AllowAutoGameMode' 1");
+        sb.AppendLine("} catch {}");
+        sb.AppendLine("Report 'host-policy' 'ok' 'competitive: NTI=10, SystemResponsiveness=10, Games MMCSS, Win32Pri=38, HAGS, Game Mode'");
         sb.AppendLine("Report 'registry-host' 'ok'");
 
-        // --- netsh / Set-NetTCPSetting (supported modern path) ---
+        // --- netsh / Set-NetTCPSetting (competitive path) ---
         sb.AppendLine("netsh int tcp set global rss=enabled | Out-Null");
         sb.AppendLine("netsh int tcp set global autotuninglevel=" + autotune + " | Out-Null");
         sb.AppendLine("netsh int tcp set global rsc=" + rsc + " | Out-Null");
@@ -529,26 +545,38 @@ if (-not $snapshotOk) {
         sb.AppendLine("try { netsh int tcp set supplemental template=internet congestionprovider=cubic | Out-Null } catch {}");
         sb.AppendLine("try { netsh int tcp set supplemental template=internetcustom congestionprovider=cubic | Out-Null } catch {}");
         sb.AppendLine("try { netsh int ip set global taskoffload=enabled | Out-Null } catch {}");
+        // Competitive TCP knobs used by major gaming optimizers
+        sb.AppendLine("try { netsh int tcp set global timestamps=disabled | Out-Null } catch {}");
+        sb.AppendLine("try { netsh int tcp set global hystart=" + (latency ? "disabled" : "enabled") + " | Out-Null } catch {}");
+        sb.AppendLine("try { netsh int tcp set global pacingprofile=" + (latency ? "off" : "initialwindow") + " | Out-Null } catch {}");
+        sb.AppendLine("try { netsh int tcp set global ecncapability=" + (latency ? "disabled" : "enabled") + " | Out-Null } catch {}");
+        sb.AppendLine("try { netsh int tcp set global fastopen=enabled | Out-Null } catch {}");
+        sb.AppendLine("try { netsh int tcp set global fastopenfallback=enabled | Out-Null } catch {}");
+        sb.AppendLine("try { netsh int udp set global uro=disabled | Out-Null } catch {}");
         sb.AppendLine("Report 'tcp-globals' 'ok'");
-        // Leave global retransmission, ECN, timestamps, HyStart, pacing, URO and
-        // ephemeral-port policy on Windows/driver defaults. A short public
-        // benchmark cannot prove a universal replacement for these algorithms.
-        sb.AppendLine("Report 'tcp-algorithms' 'skip' 'Windows adaptive defaults retained'");
+        sb.AppendLine("Report 'tcp-algorithms' 'ok' 'timestamps off; HyStart/pacing/ECN by preset; Fast Open; URO off'");
         sb.AppendLine("foreach ($pr in @('Internet','InternetCustom')) {");
         sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -CongestionProvider CUBIC -EA SilentlyContinue } catch {}");
         sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -AutoTuningLevelLocal " + autoTuningPs + " -EA SilentlyContinue } catch {}");
         sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -ScalingHeuristics Disabled -EA SilentlyContinue } catch {}");
+        if (latency)
+        {
+            sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -InitialRtoMs 1000 -EA SilentlyContinue } catch {}");
+            sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -MinRtoMs 300 -EA SilentlyContinue } catch {}");
+            sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -MaxSynRetransmissions 2 -EA SilentlyContinue } catch {}");
+            sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -NonSackRttResiliency Disabled -EA SilentlyContinue } catch {}");
+        }
         sb.AppendLine("}");
         sb.AppendLine("Report 'tcp-settings' 'ok'");
 
-        // Remove only legacy Exo TCP ACK pins. Games own socket behavior and
-        // most real-time traffic is UDP; forcing every interface is not valid.
+        // Per-interface Nagle/ACK pins (Nexus/Paragon-class) for lower TCP latency
         sb.AppendLine("Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces' -EA SilentlyContinue | ForEach-Object {");
         sb.AppendLine("  $p = $_.PSPath");
-        sb.AppendLine("  Remove-Prop $p 'TcpAckFrequency'");
-        sb.AppendLine("  Remove-Prop $p 'TCPNoDelay'");
+        sb.AppendLine("  Set-Dword $p 'TcpAckFrequency' 1");
+        sb.AppendLine("  Set-Dword $p 'TCPNoDelay' 1");
+        sb.AppendLine("  Set-Dword $p 'TcpDelAckTicks' 0");
         sb.AppendLine("}");
-        sb.AppendLine("Report 'legacy-ack-pins' 'ok' 'per-interface overrides removed'");
+        sb.AppendLine("Report 'nagle-ack' 'ok' 'TcpAckFrequency=1 TCPNoDelay=1 TcpDelAckTicks=0 on all interfaces'");
 
         // --- Per-adapter: branch Ethernet vs Wi‑Fi (MS: wireless often has no RSS/LSO) ---
         // Apply to all physical NICs so dual-homed PCs are ready on either media.
@@ -991,14 +1019,99 @@ try {
 # Ensure QoS / Packet Scheduler service can run
 try { Set-Service -Name Psched -StartupType Automatic -EA SilentlyContinue } catch {}
 try { Start-Service -Name Psched -EA SilentlyContinue } catch {}
-# Transition tunnels, NetBIOS and SMB are compatibility/security surfaces, not
-# latency controls. Exo leaves them exactly as Windows or the administrator set them.
-Log '[compat] transition tunnels, NetBIOS, and SMB left unchanged'
-# NCSI / LLMNR / proxy AutoDetect are intentionally NOT touched. Turning NCSI
-# NoActiveProbe or WinHTTP AutoDetect off made Windows report "No Internet"
-# while Exo's raw TCP probe still passed - users reinstalled Windows.
+# Transition tunnels and NetBIOS stay stock (compat). SMB *protocol* is not disabled;
+# only the legacy SMB bandwidth throttle is turned off (large copy / game share speed).
+Log '[compat] transition tunnels and NetBIOS left unchanged'
+try {
+  Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' 'DisableBandwidthThrottling' 1
+  Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters' 'DisableBandwidthThrottling' 1
+  Log '[SMB] DisableBandwidthThrottling=1 (workstation + server)'
+  Report 'smb-throttle' 'ok' 'SMB bandwidth throttling disabled'
+} catch {
+  Report 'smb-throttle' 'fail' $_.Exception.Message
+}
+# LLMNR off (LAN multicast name resolution). NCSI active probe stays stock - that
+# was the historical "No Internet" footgun, not LLMNR.
+try {
+  Set-Dword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' 'EnableMulticast' 0
+  Log '[DNS] LLMNR disabled (EnableMulticast=0)'
+  Report 'llmnr' 'ok' 'LLMNR multicast name resolution off'
+} catch {
+  Report 'llmnr' 'fail' $_.Exception.Message
+}
+# Multi-app UDP DSCP 46 (path-scoped by exe name). Discord owns its own policies;
+# this covers Steam + common launcher/game clients when installed. Prefix Exo-Net-DSCP-*
+# so Repair can remove only what we wrote.
+try {
+  $qosRoot = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS'
+  if (-not (Test-Path -LiteralPath $qosRoot)) { New-Item -Path $qosRoot -Force | Out-Null }
+  $candidates = [System.Collections.Generic.List[object]]::new()
+  $steamPaths = @(
+    (Join-Path ${env:ProgramFiles(x86)} 'Steam\steam.exe'),
+    (Join-Path $env:ProgramFiles 'Steam\steam.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Steam\steam.exe')
+  )
+  foreach ($sp in $steamPaths) {
+    if (Test-Path -LiteralPath $sp -PathType Leaf) {
+      [void]$candidates.Add(@{ Exe = 'steam.exe'; Path = $sp })
+      break
+    }
+  }
+  $riotRoot = Join-Path $env:SystemDrive 'Riot Games'
+  if (Test-Path -LiteralPath $riotRoot -PathType Container) {
+    foreach ($name in @('RiotClientServices.exe', 'VALORANT-Win64-Shipping.exe', 'League of Legends.exe')) {
+      $hit = Get-ChildItem -LiteralPath $riotRoot -Filter $name -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+      if ($hit) { [void]$candidates.Add(@{ Exe = $name; Path = $hit.FullName }) }
+    }
+  }
+  foreach ($ep in @(
+    (Join-Path $env:ProgramFiles 'Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe'),
+    (Join-Path ${env:ProgramFiles(x86)} 'Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe')
+  )) {
+    if (Test-Path -LiteralPath $ep -PathType Leaf) {
+      [void]$candidates.Add(@{ Exe = 'EpicGamesLauncher.exe'; Path = $ep })
+      break
+    }
+  }
+  $fn = Get-ChildItem -LiteralPath (Join-Path $env:ProgramFiles 'Epic Games') -Filter 'FortniteClient-Win64-Shipping.exe' -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $fn) {
+    $fn = Get-ChildItem -LiteralPath (Join-Path ${env:ProgramFiles(x86)} 'Epic Games') -Filter 'FortniteClient-Win64-Shipping.exe' -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  }
+  if ($fn) { [void]$candidates.Add(@{ Exe = 'FortniteClient-Win64-Shipping.exe'; Path = $fn.FullName }) }
+  $written = 0
+  $seenExe = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+  foreach ($c in @($candidates)) {
+    $exe = [string]$c.Exe
+    if (-not $seenExe.Add($exe)) { continue }
+    $safe = ($exe -replace '[^\w\.\-]', '_')
+    $pol = "Exo-Net-DSCP-$safe"
+    $path = Join-Path $qosRoot $pol
+    if (-not (Test-Path -LiteralPath $path)) { New-Item -Path $path -Force | Out-Null }
+    foreach ($pair in @(
+      @{ N = 'Version'; V = '1.0' },
+      @{ N = 'Application Name'; V = $exe },
+      @{ N = 'Protocol'; V = 'UDP' },
+      @{ N = 'Local Port'; V = '*' },
+      @{ N = 'Remote Port'; V = '*' },
+      @{ N = 'Local IP'; V = '*' },
+      @{ N = 'Remote IP'; V = '*' },
+      @{ N = 'DSCP Value'; V = '46' },
+      @{ N = 'Throttle Rate'; V = '-1' }
+    )) {
+      New-ItemProperty -LiteralPath $path -Name $pair.N -Value $pair.V -PropertyType String -Force -ErrorAction Stop | Out-Null
+    }
+    $written++
+    Log ("[QoS] DSCP 46 policy $pol for $exe")
+  }
+  if ($written -gt 0) {
+    Report 'multi-app-dscp' 'ok' ("DSCP 46 on $written installed gaming app(s)")
+  } else {
+    Report 'multi-app-dscp' 'skip' 'no Steam/Riot/Epic executables found for QoS policies'
+  }
+} catch {
+  Report 'multi-app-dscp' 'fail' $_.Exception.Message
+}
 Log '[NCSI] left system default (active probe untouched)'
-Log '[DNS] LLMNR left system default'
 # DNS cache TTL overrides are NOT written. Legacy Exo pinned MaxCacheTtl=86400
 # (stale records for up to 24h - the "dns cache" breakage users reported).
 # Remove any leftover override so Windows honors the resolver's record TTLs.

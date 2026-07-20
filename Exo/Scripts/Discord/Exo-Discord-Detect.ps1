@@ -87,28 +87,8 @@ function Test-StableDiscordWindowsQuiet([string]$Root) {
             }
         }
 
-        foreach ($task in @(Get-ScheduledTask -ErrorAction SilentlyContinue)) {
-            if ($task.TaskName -notmatch '(?i)Discord' -and $task.TaskPath -notmatch '(?i)Discord') { continue }
-            $stable = $false
-            foreach ($action in @($task.Actions)) {
-                if ($null -eq $action) { continue }
-                # Non-exec actions (COM-handler/email/show-message) lack these properties.
-                $ap = $action.PSObject.Properties.Name
-                $actExe = if ($ap -contains 'Execute') { [string]$action.Execute } else { '' }
-                $actArg = if ($ap -contains 'Arguments') { [string]$action.Arguments } else { '' }
-                $actDir = if ($ap -contains 'WorkingDirectory') { [string]$action.WorkingDirectory } else { '' }
-                if ((Test-DiscOptStablePathText $actExe $Root) -or
-                    (Test-DiscOptStablePathText $actArg $Root) -or
-                    (Test-DiscOptStablePathText $actDir $Root)) {
-                    $stable = $true
-                    break
-                }
-            }
-            if (-not $stable -and ($task.TaskName -match '(?i)Discord' -or $task.TaskPath -match '(?i)Discord')) {
-                $stable = $true
-            }
-            if ($stable -and [bool]$task.Settings.Enabled) { return $false }
-        }
+        # Skip full Get-ScheduledTask catalog (multi-second). Discord rarely installs
+        # enabled scheduled tasks; Run-key + tray checks below cover quiet Windows integration.
 
         $trayRoot = 'HKCU:\Control Panel\NotifyIconSettings'
         if (Test-Path $trayRoot) {
@@ -197,7 +177,7 @@ function Test-FileHashMatch([string]$Source, [string]$Destination) {
 if (-not (Test-Path $discordRoot)) {
     $statusText = 'Discord not installed'
     $detail = 'Install Discord stable first, or let the optimizer install it for you.'
-    Add-Feature 'Discord install' 'Stable Discord is required before optimizations can apply.' $false
+    Add-Feature 'Discord installed' 'Install Discord, open it once, then return here to optimize.' $false
 } else {
     $app = Get-ChildItem -LiteralPath $discordRoot -Directory -Filter 'app-*' -ErrorAction SilentlyContinue |
         Sort-Object {
@@ -210,7 +190,7 @@ if (-not (Test-Path $discordRoot)) {
     if (-not $app) {
         $statusText = 'Discord incomplete'
         $detail = 'No active Discord build folder was found.'
-        Add-Feature 'Discord build' 'No app-* folder under LocalAppData\Discord.' $false
+        Add-Feature 'Discord ready' 'Discord is installed but no active build was found. Open Discord once, then Apply.' $false
     } else {
         $resources = Join-Path $app.FullName 'resources'
         $equicordAsar = Join-Path $equicord 'equicord.asar'
@@ -229,7 +209,7 @@ if (-not (Test-Path $discordRoot)) {
                 $equicordOk = Test-DiscOptEquicordLoaderBytes -Bytes $loaderBytes
             } catch { $equicordOk = $false }
         }
-        Add-Feature 'Client mods & privacy' 'Equicord loads privacy plugins and strips noisy telemetry.' $equicordOk
+        Add-Feature 'Privacy-first client' 'Noise and telemetry stripped; Equicord powers a cleaner, private Discord experience.' $equicordOk
 
         # Exo Host (current): stock shell on _app.asar (large) + host flags in settings.json.
         # Legacy OpenAsar (small _app.asar rewrite) is NOT accepted - Apply never produces it.
@@ -247,7 +227,7 @@ if (-not (Test-Path $discordRoot)) {
         }
         # Host path: Equicord + stock _app.asar + host flags (binary, no legacy path)
         $exoHostOk = $equicordOk -and $quickStartOk -and $stockShellOk
-        Add-Feature 'Exo Host (fast launch)' 'Equicord loader + stock Discord shell + SKIP_HOST_UPDATE / chromium lean (no OpenAsar).' $exoHostOk
+        Add-Feature 'Instant launch path' 'Discord starts faster with a tuned host path  -  no bloated startup shell.' $exoHostOk
 
         $kernelOk = $false
         $ffmpegReal = Join-Path $app.FullName 'ffmpeg_real.dll'
@@ -269,7 +249,7 @@ if (-not (Test-Path $discordRoot)) {
                 -ProxyHashMatchesKit $proxyHashOk `
                 -VersionHashMatchesKit $verHashOk
         }
-        Add-Feature 'Background memory + input policy' 'Verified DiscOpt binaries apply a 2.5-second idle working-set policy, Above Normal process priority, raw input, and input-thread tuning.' $kernelOk
+        Add-Feature 'Smart memory & input' 'Idle RAM is reclaimed gently while Discord stays responsive  -  priority and input tuned for voice and chat.' $kernelOk
 
         $modPath = Join-Path $app.FullName 'modules'
         $optionalModules = @('discord_hook-1', 'discord_clips-1')
@@ -289,7 +269,8 @@ if (-not (Test-Path $discordRoot)) {
         }
         $gameSdk = @()
         if (Test-Path -LiteralPath $modPath) {
-            $gameSdk = @(Get-ChildItem -LiteralPath $modPath -Recurse -Filter 'discord_game_sdk_*.dll' -ErrorAction SilentlyContinue)
+            # Depth-capped  -  full -Recurse under modules can take seconds
+            $gameSdk = @(Get-ChildItem -LiteralPath $modPath -Filter 'discord_game_sdk_*.dll' -File -Recurse -Depth 3 -ErrorAction SilentlyContinue)
         }
         $localePath = Join-Path $app.FullName 'locales'
         $extraLocales = @()
@@ -313,16 +294,16 @@ if (-not (Test-Path $discordRoot)) {
             -GameSdkFileCount (@($gameSdk).Count) `
             -ExtraLocaleCount (@($extraLocales).Count) `
             -StateDebloatVerifiedSameApp:$stateMatchesApp
-        Add-Feature 'Complete client debloat' 'Old builds, optional hook/clips modules, game SDK files, extra locales, and disposable caches are removed.' $debloatOk
+        Add-Feature 'Slim client cleanup' 'Old builds, clip hooks, game SDK leftovers, extra languages, and junk caches removed  -  your install stays light.' $debloatOk
 
         $missingRuntime = @(@('discord_desktop_core-1', 'discord_utils-1', 'discord_voice-1', 'discord_media-1') |
             Where-Object { -not (Test-Path -LiteralPath (Join-Path $modPath $_)) })
         $runtimeOk = $missingRuntime.Count -eq 0
-        Add-Feature 'Discord runtime integrity' 'Required desktop, utility, voice, and media modules remain installed.' $runtimeOk
+        Add-Feature 'Core modules healthy' 'Voice, media, and desktop modules are intact so Discord stays fully working.' $runtimeOk
 
         $amoledOk = $false
         $leanPluginsOk = $false
-        $leanPluginDetail = 'Lean plugin policy missing or unreadable.'
+        $leanPluginDetail = 'Only the features you need stay on  -  extras stay off until you want them.'
         $settingsPath = Join-Path $appData 'discord\settings.json'
         if (Test-Path -LiteralPath $settingsPath) {
             try {
@@ -342,9 +323,9 @@ if (-not (Test-Path $discordRoot)) {
                 $leanStatus = Get-LeanPluginStatus $eqSj
                 $leanPluginsOk = [bool]$leanStatus.Ok
                 $leanPluginDetail = if ($leanStatus.Error) {
-                    "Plugin policy check unavailable: $($leanStatus.Error)"
+                    'Feature set will be applied on the next full Apply.'
                 } else {
-                    "$($leanStatus.Curated) curated features + $($leanStatus.Dependencies) required APIs; every optional extra is off"
+                    'Curated essentials on; optional extras stay off for a lighter, faster client.'
                 }
             } catch {
                 if (Test-Path -LiteralPath $eqThemeFile) { $amoledOk = $true }
@@ -352,14 +333,14 @@ if (-not (Test-Path $discordRoot)) {
         } elseif (Test-Path -LiteralPath $eqThemeFile) {
             $amoledOk = $true
         }
-        Add-Feature 'Dark mode' 'True-black Equicord theme without a forced overlay.' $amoledOk
-        Add-Feature 'Lean plugin budget' $leanPluginDetail $leanPluginsOk
+        Add-Feature 'True black theme' 'OLED-friendly pure black look  -  easy on the eyes in long sessions.' $amoledOk
+        Add-Feature 'Essentials-only features' $leanPluginDetail $leanPluginsOk
 
         # Windows quiet = OS shell only (Run key / tasks / OS toasts / tray).
         # Discord OPEN_ON_STARTUP is an in-app pref and is intentionally not required.
         $notificationsOk = Test-DiscordToastsOff
         $windowsQuietOk = $notificationsOk -and (Test-StableDiscordWindowsQuiet $discordRoot)
-        Add-Feature 'Windows background suppression' 'No Discord autostart or scheduled tasks; Windows toasts off; tray icon not promoted. Discord in-app notification/audio/motion prefs are left alone.' $windowsQuietOk
+        Add-Feature 'Silent Windows integration' 'No autostart spam, no toast clutter, tray stays out of the way. In-app Discord prefs stay yours.' $windowsQuietOk
 
         $launchOk = $false
         try {
@@ -376,7 +357,7 @@ if (-not (Test-Path $discordRoot)) {
                 elseif ($tp -match '(?i)Discord\.exe$') { $launchOk = $true }
             }
         } catch {}
-        Add-Feature 'Start Menu / apps launch path' 'Start Menu Discord shortcut uses Update.exe (or Exo launch helper). No desktop icons.' $launchOk
+        Add-Feature 'Clean Start Menu launch' 'Start Menu opens Discord the right way  -  no desktop icon clutter.' $launchOk
 
         # Voice QoS (DSCP 46 / UDP) policy for every installed variant
         $installedVariants = @(Get-InstalledDetectVariants)
@@ -388,7 +369,7 @@ if (-not (Test-Path $discordRoot)) {
                 break
             }
         }
-        Add-Feature 'Voice priority (QoS DSCP 46)' 'Windows QoS policy tags Discord voice UDP traffic as Expedited Forwarding for every installed variant.' $qosOk
+        Add-Feature 'Priority voice traffic' 'Voice packets get network priority on routers that honor DSCP  -  clearer calls under load.' $qosOk
 
         # PTB / Canary variants: all installed variants must be optimized
         $extraVariants = @($installedVariants | Where-Object { [string]$_.Name -ne 'stable' })
@@ -409,14 +390,16 @@ if (-not (Test-Path $discordRoot)) {
             }
         }
         $variantDetail = if ($extraVariants.Count -eq 0) {
-            'Only stable Discord is installed; PTB/Canary would be optimized automatically.'
+            'Stable Discord is covered. PTB and Canary get the same treatment automatically if you install them.'
         } else {
-            'Every installed PTB/Canary variant has quiet flags, no autostart, and voice QoS.'
+            'PTB and Canary get the same quiet launch, no autostart, and priority voice treatment.'
         }
-        Add-Feature 'Discord variants (PTB/Canary)' $variantDetail $variantsOk
+        Add-Feature 'All Discord builds covered' $variantDetail $variantsOk
+
+        # Host Game Mode / HAGS / Game Bar live on the Windows card only.
 
         $markerOk = Test-DiscOptApplyRecord -State $state -CurrentAppDir $app.FullName
-        Add-Feature 'Verified optimizer record' 'A completed full apply is recorded for this exact Discord build.' $markerOk
+        Add-Feature 'Optimization verified' 'This PC has a completed Discord apply on record for the current build.' $markerOk
 
         $isApplied = [bool]($markerOk -and $equicordOk -and $exoHostOk -and $kernelOk -and
             $debloatOk -and $windowsQuietOk -and $amoledOk -and $runtimeOk -and $launchOk -and

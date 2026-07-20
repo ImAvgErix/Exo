@@ -404,6 +404,16 @@ function Invoke-ExoInternetRepair {
         try { Remove-RepairProp 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' 'NoActiveProbe' } catch {}
         try {
             Remove-RepairProp 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' 'EnableMulticast'
+            Remove-RepairProp 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' 'DisableBandwidthThrottling'
+            Remove-RepairProp 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters' 'DisableBandwidthThrottling'
+            try {
+                $qosRoot = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS'
+                if (Test-Path -LiteralPath $qosRoot) {
+                    Get-ChildItem -LiteralPath $qosRoot -ErrorAction SilentlyContinue |
+                        Where-Object { $_.PSChildName -like 'Exo-Net-DSCP-*' } |
+                        ForEach-Object { Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction SilentlyContinue }
+                }
+            } catch {}
             Remove-RepairProp 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxCacheTtl'
             Remove-RepairProp 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxNegativeCacheTtl'
             Remove-RepairProp 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' 'AutoDetect'

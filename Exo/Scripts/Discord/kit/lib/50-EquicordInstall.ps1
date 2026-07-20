@@ -193,8 +193,8 @@ function Apply-EquicordProfile {
         $settings = Build-FullEquicordSettings
     }
 
-    # Hard safety locks only (always). Never rewrite the user's plugins/themes/audio
-    # on a healthy profile — that felt like "Apply reset my Discord settings".
+    # Hard safety locks only (always). Never rewrite the user plugins/themes/audio
+    # on a healthy profile  -  that felt like "Apply reset my Discord settings".
     $settings.autoUpdateNotification = $false
     $settings.eagerPatches = $false
     $settings.enableReactDevtools = $false
@@ -211,7 +211,7 @@ function Apply-EquicordProfile {
             $settings.plugins['NoTrack'].disableAnalytics = $true
         }
     } else {
-        # First-time / corrupt / Experimental rebuild — apply lean policy once.
+        # First-time / corrupt / Experimental rebuild  -  apply lean policy once.
         Write-Ok 'Equicord: building lean default profile'
         $settings.enableOnlineThemes = $false
         $settings.useQuickCss = $true

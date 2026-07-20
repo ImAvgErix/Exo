@@ -96,9 +96,8 @@ public static partial class NetworkLogic
         // Balanced uses latency-leaning host knobs but without aggressive nagle (treat as latency stack lite)
         var bulk = preset == NetworkPreset.HighestThroughput;
         return new PresetKnobs(
-            // Normal is Windows' supported adaptive default and already scales
-            // to multi-gig bandwidth-delay products. Experimental can inflate
-            // queues without improving a typical 1/2.5/5/10 GbE path.
+            // Competitive stack (Nexus/Paragon/Evolve-class): low latency disables
+            // RSC/LSO/IM/flow; throughput enables them. Nagle off on both gaming presets.
             AutotuneNetsh: "normal",
             AutotunePs: "Normal",
             Rsc: bulk ? "enabled" : "disabled",
@@ -106,7 +105,7 @@ public static partial class NetworkLogic
             InterruptMod: bulk ? "1" : "0",
             FlowControl: bulk ? "3" : "0",
             IdleRestrict: bulk ? "0" : "1",
-            NagleOff: false);
+            NagleOff: true);
     }
 
     /// <summary>

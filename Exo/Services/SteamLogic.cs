@@ -72,13 +72,19 @@ public static partial class SteamLogic
             if (line.Contains("Suspend-Process", StringComparison.OrdinalIgnoreCase)) return false;
         }
 
-        var sec = SleepSecondsRegex().Match(text);
-        if (sec.Success && int.TryParse(sec.Groups[1].Value, out var s) && s is >= 2 and <= 15)
-            return true;
+        // Competitive cadence: 1s in-game / 2s library. Any loop sleep in 1-15s is valid.
+        // Do not require the first match (often the 1s game branch) to be >= 2.
+        foreach (Match sec in SleepSecondsRegex().Matches(text))
+        {
+            if (int.TryParse(sec.Groups[1].Value, out var s) && s is >= 1 and <= 15)
+                return true;
+        }
 
-        var ms = SleepMillisecondsRegex().Match(text);
-        if (ms.Success && int.TryParse(ms.Groups[1].Value, out var m) && m is >= 2000 and <= 15000)
-            return true;
+        foreach (Match ms in SleepMillisecondsRegex().Matches(text))
+        {
+            if (int.TryParse(ms.Groups[1].Value, out var m) && m is >= 1000 and <= 15000)
+                return true;
+        }
 
         return false;
     }

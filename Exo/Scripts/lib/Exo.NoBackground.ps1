@@ -1,37 +1,48 @@
-# Exo.NoBackground.ps1 - purge Exo scheduled tasks and Exo Run keys (Wave 2).
-# Product law: Exo never installs background tasks/services/startup for itself.
+# Exo.NoBackground.ps1 — purge noisy Exo console helpers; KEEP silent yield companions.
+# Allowed: Exo-*-Yield with -WindowStyle Hidden -File *yield-guard*.ps1 (no wscript).
+# Removed: console pwsh/powershell without Hidden, MemoryGuard, wscript stubs.
 
 Set-StrictMode -Version Latest
 
+function Test-ExoSilentCompanionValue {
+    param([string]$Name, [string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
+
+    # Broken / banned hosts — never "silent"
+    if ($Value -match '(?i)wscript|WindowsApps\\pwsh') { return $false }
+
+    # Hidden PowerShell yield companion (current design)
+    $isYieldName = $Name -match '(?i)^Exo-(Riot|Epic)-Yield$' -or $Name -match '(?i)^Exo-.*Yield$'
+    $isYieldFile = $Value -match '(?i)yield-guard\.ps1'
+    $isHiddenPs =
+        $Value -match '(?i)(pwsh|powershell)(\.exe)?' -and
+        $Value -match '(?i)-WindowStyle\s+Hidden' -and
+        $Value -match '(?i)-File\s'
+
+    if (($isYieldName -or $isYieldFile) -and $isHiddenPs) { return $true }
+    return $false
+}
+
 function Unregister-ExoBackground {
     param([switch]$Quiet)
-
     $removed = 0
-
-    # Known historical names + any task whose name starts with Exo-
     $known = @(
-        'Exo-NvidiaTrayHide',
-        'Exo-NvidiaDisplayPersist',
-        'Exo-NvidiaBackgroundPersist',
-        'Exo-NvidiaTray',
-        'Exo-Nvidia',
-        'Exo-Discord',
-        'Exo-Steam',
-        'Exo-Internet'
+        'Exo Steam Memory Guard',
+        'Exo Discord Ram',
+        'Exo-Steam-MemoryGuard',
+        'ExoDiscordRam'
     )
     foreach ($name in $known) {
         try {
             Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
             $removed++
         } catch { }
-        try {
-            $null = schtasks /Delete /TN $name /F 2>&1
-        } catch { }
+        try { $null = schtasks /Delete /TN $name /F 2>&1 } catch { }
     }
 
     try {
         Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
-            $_.TaskName -match '(?i)^Exo-'
+            $_.TaskName -like 'Exo-*' -or $_.TaskPath -like '*\Exo\*'
         } | ForEach-Object {
             try {
                 Unregister-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath -Confirm:$false -ErrorAction SilentlyContinue
@@ -47,14 +58,27 @@ function Unregister-ExoBackground {
     )) {
         if (-not (Test-Path -LiteralPath $run)) { continue }
         try {
-            $props = Get-ItemProperty -LiteralPath $run -ErrorAction SilentlyContinue
-            if (-not $props) { continue }
-            foreach ($p in $props.PSObject.Properties) {
-                if ($p.Name -match '^PS') { continue }
-                $val = [string]$p.Value
-                if ($p.Name -match '(?i)^Exo' -or $val -match '(?i)\\Exo\\|LocalAppData\\Exo') {
+            $item = Get-Item -LiteralPath $run -ErrorAction SilentlyContinue
+            if (-not $item) { continue }
+            foreach ($name in @($item.GetValueNames())) {
+                $val = [string]$item.GetValue($name)
+                if (-not ($name -like 'Exo*' -or $val -match '(?i)LocalAppData\\Exo|yield-guard|MemoryGuard')) {
+                    continue
+                }
+
+                # Keep silent yield companions
+                if (Test-ExoSilentCompanionValue -Name $name -Value $val) { continue }
+
+                # Drop wscript / WindowsApps stubs even if named Yield
+                $isBrokenHost = $val -match '(?i)wscript|WindowsApps\\pwsh'
+                $isLegacyGuard = $val -match '(?i)MemoryGuard|Exo-SteamMemoryGuard|ExoDiscordRam'
+                $isConsolePs =
+                    $val -match '(?i)(pwsh|powershell)(\.exe)?' -and
+                    $val -notmatch '(?i)-WindowStyle\s+Hidden'
+
+                if ($isBrokenHost -or $isLegacyGuard -or $isConsolePs -or ($name -like 'Exo*' -and -not (Test-ExoSilentCompanionValue -Name $name -Value $val))) {
                     try {
-                        Remove-ItemProperty -LiteralPath $run -Name $p.Name -Force -ErrorAction SilentlyContinue
+                        Remove-ItemProperty -LiteralPath $run -Name $name -Force -ErrorAction SilentlyContinue
                         $removed++
                     } catch { }
                 }
@@ -62,8 +86,48 @@ function Unregister-ExoBackground {
         } catch { }
     }
 
+    # Do NOT wipe StartupApproved for Exo-*-Yield — that re-enables the "disabled at login" bit wrongly.
+    try {
+        $sa = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+        if (Test-Path $sa) {
+            $item = Get-Item -LiteralPath $sa -ErrorAction SilentlyContinue
+            foreach ($name in @($item.GetValueNames())) {
+                if ($name -notlike 'Exo*') { continue }
+                if ($name -match '(?i)^Exo-(Riot|Epic)-Yield$') { continue }
+                try {
+                    Remove-ItemProperty -LiteralPath $sa -Name $name -Force -ErrorAction SilentlyContinue
+                    $removed++
+                } catch { }
+            }
+        }
+    } catch { }
+
     if (-not $Quiet) {
         Write-Output ("EXO_REPORT:no-background|ok:purged={0}" -f $removed)
     }
     return $removed
+}
+
+function Test-ExoNoBackground {
+    # True when no noisy Exo console Run keys. Silent Hidden+File yield companions allowed.
+    try {
+        foreach ($run in @(
+            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
+            'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run'
+        )) {
+            if (-not (Test-Path $run)) { continue }
+            $item = Get-Item -LiteralPath $run -ErrorAction SilentlyContinue
+            if (-not $item) { continue }
+            foreach ($name in @($item.GetValueNames())) {
+                $val = [string]$item.GetValue($name)
+                if (-not ($name -like 'Exo*' -or $val -match '(?i)LocalAppData\\Exo|yield-guard|MemoryGuard')) {
+                    continue
+                }
+                if (Test-ExoSilentCompanionValue -Name $name -Value $val) { continue }
+                # Any other Exo / guard entry is noise
+                return $false
+            }
+        }
+    } catch { }
+    return $true
 }

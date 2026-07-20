@@ -12,7 +12,6 @@
     -->
     <controls:SharedModulePlate
         x:Name="Plate"
-        ModuleTitle="DISCORD"
         StatusText="{x:Bind ViewModel.StatusText, Mode=OneWay}"
         FeatureItems="{x:Bind ViewModel.Features, Mode=OneWay}"
         IsLoading="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay}"

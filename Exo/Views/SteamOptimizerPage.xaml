@@ -10,7 +10,6 @@
     <!-- SharedModulePlate (v3): Steam instrument plate. -->
     <controls:SharedModulePlate
         x:Name="Plate"
-        ModuleTitle="STEAM"
         StatusText="{x:Bind ViewModel.StatusText, Mode=OneWay}"
         FeatureItems="{x:Bind ViewModel.Features, Mode=OneWay}"
         IsLoading="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay}"

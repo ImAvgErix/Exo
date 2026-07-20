@@ -163,7 +163,7 @@ public partial class SteamOptimizerViewModel : ObservableObject
             });
 
             var args = new List<string> { "-NonInteractive" };
-            if (PreferExperimental) args.Add("-Experimental");
+            args.Add("-Experimental");
             var result = await _services.PowerShell.RunAsync(
                 _services.Scripts.SteamOptimizerScript,
                 arguments: args,

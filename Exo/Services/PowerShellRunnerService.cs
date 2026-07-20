@@ -16,9 +16,9 @@ public sealed class PowerShellRunnerService
     // Elevated apply/repair stays serial. Background detect can run in parallel so
     // switching modules never waits on another module's PowerShell detect.
     private readonly SemaphoreSlim _elevateGate = new(1, 1);
-    // One detect at a time — rapid module switching cancels prior work and
-    // should not pile three heavy pwsh processes on the UI machine.
-    private readonly SemaphoreSlim _detectGate = new(1, 1);
+    // Allow a couple concurrent detects so flipping cards doesn't queue forever.
+    // Still capped so we don't spawn a pwsh storm.
+    private readonly SemaphoreSlim _detectGate = new(2, 2);
 
     private static readonly Regex ProgressRegex = new(
         @"EXO_PROGRESS\s*:\s*(\d{1,3})\s*\|\s*(.+)$",

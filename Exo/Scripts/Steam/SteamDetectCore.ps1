@@ -43,13 +43,17 @@ function Test-SteamMemoryGuardText {
         if ($line.Contains('SetProcessWorkingSetSize') -and -not $allowsSoftReclaim) { return $false }
         if ($line -match '(?i)Stop-Process.*steamwebhelper|Suspend-Process') { return $false }
     }
-    if ($Text -match 'Start-Sleep\s+-Seconds\s+(\d+)') {
-        $sec = [int]$Matches[1]
-        if ($sec -ge 2 -and $sec -le 15) { return $true }
+    # Competitive cadence uses 1s in-game / 2s library. Accept any loop sleep in 1-15s
+    # (first match may be the 1s game branch  -  do not require >=2 only).
+    $secHits = [regex]::Matches($Text, 'Start-Sleep\s+-Seconds\s+(\d+)', 'IgnoreCase')
+    foreach ($m in $secHits) {
+        $sec = [int]$m.Groups[1].Value
+        if ($sec -ge 1 -and $sec -le 15) { return $true }
     }
-    if ($Text -match 'Start-Sleep\s+-Milliseconds\s+(\d+)') {
-        $ms = [int]$Matches[1]
-        if ($ms -ge 2000 -and $ms -le 15000) { return $true }
+    $msHits = [regex]::Matches($Text, 'Start-Sleep\s+-Milliseconds\s+(\d+)', 'IgnoreCase')
+    foreach ($m in $msHits) {
+        $ms = [int]$m.Groups[1].Value
+        if ($ms -ge 1000 -and $ms -le 15000) { return $true }
     }
     return $false
 }
@@ -93,4 +97,106 @@ function Test-SteamLegacyAggressiveCmdAbsent {
         if (Test-Path -LiteralPath (Join-Path $SteamPath $name)) { return $false }
     }
     return $true
+}
+
+function Test-SteamGameExeNameJunk([string]$Name) {
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $true }
+    return ($Name -match '(?i)^(UnityCrashHandler|CrashReport|CrashHandler|EasyAntiCheat(_EOS)?|BEService|BEClient|vcredist|vc_redist|dotnet|setup|uninstall|unins\d*|REDprelauncher|EpicWebHelper|steamerrorreporter|steam_monitor|cef_server|streaming_client|write_mini_dump|installscript|dxsetup|vulkansdk|oalinst|PhysX|dotnetfx|WindowsNoEditor|Win64Server|DedicatedServer)')
+}
+
+function Get-SteamLibraryRootsCore([string]$SteamPath) {
+    $roots = New-Object System.Collections.Generic.List[string]
+    if ($SteamPath) { [void]$roots.Add($SteamPath) }
+    $vdf = Join-Path $SteamPath 'steamapps\libraryfolders.vdf'
+    if (Test-Path -LiteralPath $vdf) {
+        try {
+            $text = [IO.File]::ReadAllText($vdf)
+            foreach ($m in [regex]::Matches($text, '"path"\s+"([^"]+)"')) {
+                $p = $m.Groups[1].Value -replace '\\\\', '\'
+                if ($p -and (Test-Path -LiteralPath $p) -and -not $roots.Contains($p)) {
+                    [void]$roots.Add($p)
+                }
+            }
+        } catch { }
+    }
+    return @($roots)
+}
+
+function Get-SteamInstalledGameExes {
+    param(
+        [Parameter(Mandatory)][string]$SteamPath,
+        [int]$MaxPaths = 300
+    )
+    $list = [System.Collections.Generic.List[string]]::new()
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($lib in @(Get-SteamLibraryRootsCore $SteamPath)) {
+        $steamApps = Join-Path $lib 'steamapps'
+        if (-not (Test-Path -LiteralPath $steamApps -PathType Container)) { continue }
+        $manifests = @()
+        try { $manifests = @(Get-ChildItem -LiteralPath $steamApps -Filter 'appmanifest_*.acf' -File -ErrorAction Stop) } catch { continue }
+        foreach ($mf in $manifests) {
+            if ($list.Count -ge $MaxPaths) { break }
+            $installdir = $null
+            try {
+                $text = [IO.File]::ReadAllText($mf.FullName)
+                $m = [regex]::Match($text, '"installdir"\s+"([^"]+)"')
+                if ($m.Success) { $installdir = $m.Groups[1].Value }
+            } catch { continue }
+            if ([string]::IsNullOrWhiteSpace($installdir)) { continue }
+            $common = Join-Path $steamApps ("common\" + $installdir)
+            if (-not (Test-Path -LiteralPath $common -PathType Container)) { continue }
+            $candidates = [System.Collections.Generic.List[string]]::new()
+            try {
+                Get-ChildItem -LiteralPath $common -Filter '*.exe' -File -ErrorAction SilentlyContinue |
+                    ForEach-Object { [void]$candidates.Add($_.FullName) }
+                Get-ChildItem -LiteralPath $common -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                    Get-ChildItem -LiteralPath $_.FullName -Filter '*.exe' -File -ErrorAction SilentlyContinue |
+                        ForEach-Object { [void]$candidates.Add($_.FullName) }
+                    foreach ($sub in @('Binaries\Win64', 'bin\Win64', 'Win64', 'x64', 'binaries', 'bin')) {
+                        $p = Join-Path $_.FullName $sub
+                        if (Test-Path -LiteralPath $p -PathType Container) {
+                            Get-ChildItem -LiteralPath $p -Filter '*.exe' -File -ErrorAction SilentlyContinue |
+                                ForEach-Object { [void]$candidates.Add($_.FullName) }
+                        }
+                    }
+                }
+            } catch { }
+            foreach ($exe in $candidates) {
+                if ($list.Count -ge $MaxPaths) { break }
+                $leaf = [IO.Path]::GetFileName($exe)
+                if (Test-SteamGameExeNameJunk $leaf) { continue }
+                if ($leaf -match '(?i)^steam(webhelper|errorreporter)?\.exe$') { continue }
+                if ($seen.Add($exe)) { [void]$list.Add($exe) }
+            }
+        }
+        if ($list.Count -ge $MaxPaths) { break }
+    }
+    return @($list)
+}
+
+function Test-SteamLibraryGamePolicy {
+    param([Parameter(Mandatory)][string]$SteamPath)
+    $paths = @(Get-SteamInstalledGameExes -SteamPath $SteamPath -MaxPaths 40)
+    if ($paths.Count -eq 0) { return $true }
+    $gpuKey = $null
+    $fsoKey = $null
+    $hits = 0
+    $need = 0
+    try {
+        $gpuKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\DirectX\UserGpuPreferences')
+        $fsoKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers')
+        foreach ($p in $paths) {
+            $need++
+            $gpuOk = $false
+            $fsoOk = $false
+            if ($gpuKey -and [string]$gpuKey.GetValue($p, '') -eq 'GpuPreference=2;') { $gpuOk = $true }
+            if ($fsoKey -and [string]$fsoKey.GetValue($p, '') -eq '~ DISABLEDXMAXIMIZEDWINDOWEDMODE') { $fsoOk = $true }
+            if ($gpuOk -and $fsoOk) { $hits++ }
+        }
+    } finally {
+        if ($gpuKey) { $gpuKey.Dispose() }
+        if ($fsoKey) { $fsoKey.Dispose() }
+    }
+    if ($need -eq 0) { return $true }
+    return (($hits / $need) -ge 0.5)
 }

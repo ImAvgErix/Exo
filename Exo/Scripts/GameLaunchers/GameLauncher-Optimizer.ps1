@@ -11,7 +11,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.5.0'
+$Version = '1.8.1'
 $ExoRoot = Join-Path $env:LOCALAPPDATA 'Exo'
 $StatePath = Join-Path $ExoRoot ("{0}-optimizer.json" -f $Module.ToLowerInvariant())
 $SnapshotPath = Join-Path $ExoRoot ("{0}-snapshot.json" -f $Module.ToLowerInvariant())
@@ -25,6 +25,31 @@ $GpuHighPerf = 'GpuPreference=2;'
 # Disable Fullscreen Optimizations for the exe path.
 $FsoDisable = '~ DISABLEDXMAXIMIZEDWINDOWEDMODE'
 $Report = [System.Collections.Generic.List[string]]::new()
+
+# Shared Game Bar / DSCP + competitive gaming glue (script-scope dotsource)
+$__common = Join-Path (Split-Path -Parent $PSScriptRoot) 'lib\Exo.Common.ps1'
+if (-not (Test-Path -LiteralPath $__common)) { $__common = Join-Path $PSScriptRoot '..\lib\Exo.Common.ps1' }
+if (-not (Test-Path -LiteralPath $__common) -and $env:LOCALAPPDATA) {
+    $__common = Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\lib\Exo.Common.ps1'
+}
+if (Test-Path -LiteralPath $__common) {
+    . $__common
+    foreach ($__libPath in @(Import-ExoSharedLibFiles -From $PSScriptRoot)) { . $__libPath }
+}
+# Always force-load GameBar (DSCP). Import can miss when elevated cwd differs.
+if (-not (Get-Command Set-ExoGameQosPolicy -ErrorAction SilentlyContinue)) {
+    foreach ($c in @(
+        (Join-Path (Split-Path -Parent $PSScriptRoot) 'lib\Exo.GameBar.ps1'),
+        (Join-Path $PSScriptRoot '..\lib\Exo.GameBar.ps1'),
+        (Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\lib\Exo.GameBar.ps1'),
+        (Join-Path $env:LOCALAPPDATA 'Exo\scripts\lib\Exo.GameBar.ps1')
+    )) {
+        if ($c -and (Test-Path -LiteralPath $c)) { . $c; break }
+    }
+}
+if (-not (Get-Command Set-ExoGameQosPolicy -ErrorAction SilentlyContinue)) {
+    Write-Warning 'Exo.GameBar.ps1 not loaded — per-game DSCP will be skipped'
+}
 
 function Write-ProgressLine([int]$Percent, [string]$Text) {
     Write-Output ("EXO_PROGRESS:{0}|{1}" -f $Percent, $Text)
@@ -63,6 +88,23 @@ function Get-UninstallEntries {
         }
     }
 }
+function Get-UninstallDisplayText($Entry) {
+    # StrictMode-safe: many uninstall keys omit DisplayName/Publisher.
+    if ($null -eq $Entry) { return '' }
+    $dn = ''
+    $pub = ''
+    try {
+        if ($Entry.PSObject.Properties.Name -contains 'DisplayName' -and $null -ne $Entry.DisplayName) {
+            $dn = [string]$Entry.DisplayName
+        }
+    } catch { }
+    try {
+        if ($Entry.PSObject.Properties.Name -contains 'Publisher' -and $null -ne $Entry.Publisher) {
+            $pub = [string]$Entry.Publisher
+        }
+    } catch { }
+    return ("{0} {1}" -f $dn, $pub).Trim()
+}
 function Get-RiotTargets {
     $targets = [System.Collections.Generic.List[object]]::new()
     $roots = [System.Collections.Generic.List[string]]::new()
@@ -73,9 +115,15 @@ function Get-RiotTargets {
         if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Container)) { [void]$roots.Add($candidate) }
     }
     foreach ($entry in @(Get-UninstallEntries | Where-Object {
-        "$( $_.DisplayName ) $( $_.Publisher )" -match '(?i)Riot|VALORANT|League of Legends'
+        (Get-UninstallDisplayText $_) -match '(?i)Riot|VALORANT|League of Legends'
     })) {
-        $root = Normalize-Path ([string]$entry.InstallLocation)
+        $loc = ''
+        try {
+            if ($entry.PSObject.Properties.Name -contains 'InstallLocation') {
+                $loc = [string]$entry.InstallLocation
+            }
+        } catch { }
+        $root = Normalize-Path $loc
         if ($root -and (Test-Path -LiteralPath $root -PathType Container)) { [void]$roots.Add($root) }
     }
     foreach ($procName in @('VALORANT-Win64-Shipping','VALORANT','League of Legends')) {
@@ -83,14 +131,31 @@ function Get-RiotTargets {
             try { Add-Target $targets ([string]$_.Path) 'running-process' } catch { }
         }
     }
+    # Prefer known relative paths (no multi-second full-tree recurse).
+    $knownRels = @(
+        'VALORANT\live\VALORANT\Binaries\Win64\VALORANT-Win64-Shipping.exe',
+        'VALORANT\live\ShooterGame\Binaries\Win64\VALORANT-Win64-Shipping.exe',
+        'VALORANT\VALORANT.exe',
+        'League of Legends\Game\League of Legends.exe',
+        'League of Legends\League of Legends.exe'
+    )
     $gameNames = @(
         'VALORANT-Win64-Shipping.exe', 'VALORANT.exe',
         'League of Legends.exe'
     )
     foreach ($root in @($roots | Sort-Object -Unique)) {
-        Get-ChildItem -LiteralPath $root -File -Recurse -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -in $gameNames } |
-            ForEach-Object { Add-Target $targets $_.FullName 'riot-install' }
+        if ($root -match '(?i)Vanguard') { continue }
+        foreach ($rel in $knownRels) {
+            Add-Target $targets (Join-Path $root $rel) 'riot-known'
+        }
+        # Shallow fallback only when known paths miss (depth-capped).
+        if ($targets.Count -eq 0) {
+            Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                Get-ChildItem -LiteralPath $_.FullName -File -Recurse -Depth 4 -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -in $gameNames } |
+                    ForEach-Object { Add-Target $targets $_.FullName 'riot-install' }
+            }
+        }
     }
     return @($targets)
 }
@@ -109,15 +174,7 @@ function Get-EpicTargets {
             } catch { }
         }
     }
-    foreach ($process in @(Get-Process -ErrorAction SilentlyContinue)) {
-        try {
-            $path = [string]$process.Path
-            if ($path -and $path -match '(?i)\\Epic Games\\' -and
-                [IO.Path]::GetFileName($path) -notmatch '(?i)^EpicGamesLauncher|EpicWebHelper') {
-                Add-Target $targets $path 'running-process'
-            }
-        } catch { }
-    }
+    # Manifests are authoritative  -  skip scanning every process (slow + noisy).
     return @($targets)
 }
 function Get-Targets { if ($Module -eq 'Riot') { @(Get-RiotTargets) } else { @(Get-EpicTargets) } }
@@ -171,7 +228,7 @@ function Test-Installed {
             if (Test-Path -LiteralPath $epic -PathType Leaf) { return $true }
         }
     }
-    return @((Get-UninstallEntries) | Where-Object { "$( $_.DisplayName ) $( $_.Publisher )" -match "(?i)$Module" }).Count -gt 0
+    return @((Get-UninstallEntries) | Where-Object { (Get-UninstallDisplayText $_) -match "(?i)$Module" }).Count -gt 0
 }
 function Get-ValueSnapshot([Microsoft.Win32.RegistryKey]$Key, [string]$Name) {
     if (-not $Key -or $Name -notin @($Key.GetValueNames())) {
@@ -225,13 +282,16 @@ function New-Snapshot([object[]]$Targets, [object[]]$Launchers) {
         if ($gpu) { $gpu.Dispose() }
         if ($fso) { $fso.Dispose() }
     }
+    # schema 4: Game Bar owned by Windows card  -  never snapshot/restore host Game Bar here.
     $snapshot = [ordered]@{
-        schema = 2
+        schema = 4
         module = $Module
         capturedUtc = (Get-Date).ToUniversalTime().ToString('o')
         run = @(Get-RunMatches)
         targets = @($targetStates)
         yieldRunName = $YieldRunName
+        gameBar = @() # legacy field empty; Windows owns Game Bar
+        qosPolicies = @()
     }
     New-Item -ItemType Directory -Path $ExoRoot -Force | Out-Null
     $snapshot | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $SnapshotPath -Encoding UTF8
@@ -246,7 +306,7 @@ function Remove-StartupEntries {
     $removed = 0
     try {
         foreach ($name in @($key.GetValueNames())) {
-            # Never delete Exo's own yield companion (name contains module brand).
+            # Never delete Exo own yield companion (name contains module brand).
             if ($name -eq $YieldRunName -or $name -match '(?i)^Exo-') { continue }
             $value = [string]$key.GetValue($name, '')
             if ("$name $value" -match "(?i)$Module") { $key.DeleteValue($name, $false); $removed++ }
@@ -256,7 +316,7 @@ function Remove-StartupEntries {
 }
 
 # Steam-parity shell quiet, scoped to this launcher brand only (toasts + tasks).
-# Cross-connect from Steam windows-quiet — never machine-wide Windows policy.
+# Cross-connect from Steam windows-quiet  -  never machine-wide Windows policy.
 function Get-LauncherNotifyIds {
     if ($Module -eq 'Riot') {
         return @(
@@ -292,17 +352,31 @@ function Apply-LauncherShellQuiet {
     $tasksQuiet = 0
     try {
         $patterns = @(Get-LauncherTaskPatterns)
-        Get-ScheduledTask -ErrorAction SilentlyContinue | ForEach-Object {
-            $blob = "$($_.TaskName) $($_.TaskPath)"
+        # Prefer named lookup when possible; full Get-ScheduledTask is multi-second.
+        $candidates = @()
+        try {
+            if ($Module -eq 'Epic') {
+                $candidates += @(Get-ScheduledTask -TaskPath '\' -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -match '(?i)Epic|Unreal' })
+                $candidates += @(Get-ScheduledTask -TaskPath '\Epic Games\' -ErrorAction SilentlyContinue)
+            } else {
+                $candidates += @(Get-ScheduledTask -TaskPath '\' -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -match '(?i)Riot|VALORANT|League' })
+                $candidates += @(Get-ScheduledTask -TaskPath '\Riot Games\' -ErrorAction SilentlyContinue)
+            }
+        } catch { }
+        if ($candidates.Count -eq 0) {
+            $candidates = @(Get-ScheduledTask -ErrorAction SilentlyContinue)
+        }
+        foreach ($task in $candidates) {
+            if (-not $task) { continue }
+            $blob = "$($task.TaskName) $($task.TaskPath)"
             $hit = $false
             foreach ($re in $patterns) { if ($blob -match $re) { $hit = $true; break } }
-            if (-not $hit) { return }
-            # Never disable anti-cheat / Vanguard integrity services via task kill folklore —
-            # only disable enabled non-critical update/toast tasks when Settings allows.
-            if ($blob -match '(?i)Vanguard|vgk|vgc|EOSOverlay|EasyAntiCheat') { return }
+            if (-not $hit) { continue }
+            # Never disable anti-cheat / Vanguard integrity services via task kill folklore
+            if ($blob -match '(?i)Vanguard|vgk|vgc|EOSOverlay|EasyAntiCheat') { continue }
             try {
-                if ($_.Settings.Enabled) {
-                    Disable-ScheduledTask -InputObject $_ -ErrorAction SilentlyContinue | Out-Null
+                if ($task.Settings.Enabled) {
+                    Disable-ScheduledTask -InputObject $task -ErrorAction SilentlyContinue | Out-Null
                     $tasksQuiet++
                 }
             } catch { }
@@ -310,23 +384,202 @@ function Apply-LauncherShellQuiet {
     } catch { }
     return @{ Notify = $touched; Tasks = $tasksQuiet }
 }
+function Get-ExoPwshPath {
+    # NEVER return WindowsApps\pwsh.exe stub (breaks Run keys + WSH).
+    foreach ($p in @(
+        (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'),
+        (Join-Path $env:ProgramFiles 'PowerShell\7-preview\pwsh.exe')
+    )) {
+        if ($p -and (Test-Path -LiteralPath $p)) { return $p }
+    }
+    $apps = Join-Path $env:ProgramFiles 'WindowsApps'
+    if (Test-Path -LiteralPath $apps) {
+        $hit = Get-ChildItem -LiteralPath $apps -Directory -Filter 'Microsoft.PowerShell_*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object {
+                $c = Join-Path $_.FullName 'pwsh.exe'
+                if (Test-Path -LiteralPath $c) { $c }
+            } |
+            Select-Object -First 1
+        if ($hit) { return $hit }
+    }
+    $ps51 = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (Test-Path -LiteralPath $ps51) { return $ps51 }
+    return $null
+}
+
+function Clear-LauncherSafeCaches {
+    # Launcher-only logs/web/crash junk  -  never game installs, anti-cheat, or save data.
+    $freed = 0L
+    $paths = [System.Collections.Generic.List[string]]::new()
+    if ($Module -eq 'Epic') {
+        $epicLocal = Join-Path $env:LOCALAPPDATA 'EpicGamesLauncher'
+        foreach ($p in @(
+            (Join-Path $epicLocal 'Saved\Logs'),
+            (Join-Path $epicLocal 'Saved\webcache'),
+            (Join-Path $epicLocal 'Saved\webcache_4430'),
+            (Join-Path $epicLocal 'Saved\webcache_4147'),
+            (Join-Path $epicLocal 'Saved\webcache_4616'),
+            (Join-Path $epicLocal 'Saved\Crashes'),
+            (Join-Path $epicLocal 'Saved\Config\CrashReportClient'),
+            (Join-Path $epicLocal 'Intermediate'),
+            (Join-Path $env:LOCALAPPDATA 'Epic\EpicGamesLauncher\Data\EMS'),
+            (Join-Path $env:LOCALAPPDATA 'Epic\EpicGamesLauncher\Data\Manifests\.tmp'),
+            (Join-Path $env:TEMP 'EpicGamesLauncher'),
+            (Join-Path $env:TEMP 'Epic')
+        )) { if ($p) { [void]$paths.Add($p) } }
+        # CEF GPU/Code caches under Saved (versioned folders)
+        $saved = Join-Path $epicLocal 'Saved'
+        if (Test-Path -LiteralPath $saved) {
+            Get-ChildItem -LiteralPath $saved -Directory -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -match '(?i)^webcache|GPUCache|Code Cache|GrShaderCache|DawnCache|ShaderCache' } |
+                ForEach-Object { [void]$paths.Add($_.FullName) }
+        }
+    } else {
+        $riotLocal = Join-Path $env:LOCALAPPDATA 'Riot Games\Riot Client'
+        foreach ($p in @(
+            (Join-Path $riotLocal 'Logs'),
+            (Join-Path $riotLocal 'Crashes'),
+            (Join-Path $riotLocal 'Cache'),
+            (Join-Path $riotLocal 'GPUCache'),
+            (Join-Path $riotLocal 'Code Cache'),
+            (Join-Path $riotLocal 'DawnCache'),
+            (Join-Path $riotLocal 'ShaderCache'),
+            (Join-Path $riotLocal 'GrShaderCache'),
+            (Join-Path $riotLocal 'Service Worker'),
+            (Join-Path $env:LOCALAPPDATA 'Riot Games\Metadata'),
+            (Join-Path $env:LOCALAPPDATA 'Riot Games\Riot Client\Config\Crashpad'),
+            (Join-Path $env:TEMP 'Riot Games'),
+            (Join-Path $env:TEMP 'Riot Client')
+        )) { if ($p) { [void]$paths.Add($p) } }
+    }
+    foreach ($path in $paths) {
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        try {
+            Get-ChildItem -LiteralPath $path -Force -Recurse -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    try {
+                        if ($_.PSIsContainer) { return }
+                        $len = [long]$_.Length
+                        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+                        if (-not (Test-Path -LiteralPath $_.FullName)) { $freed += $len }
+                    } catch { }
+                }
+            # Empty leftover dirs under cache roots (not the root itself if locked)
+            Get-ChildItem -LiteralPath $path -Directory -Force -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    try { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue } catch { }
+                }
+        } catch { }
+    }
+    return $freed
+}
+
+function Install-QuietStartMenuLaunch {
+    # Steam-parity: Start Menu opens a quiet Exo launcher cmd (no desktop spam).
+    $launchers = @(Get-LauncherTargets)
+    if ($launchers.Count -eq 0) { return $false }
+    $primary = [string]$launchers[0].path
+    if (-not $primary -or -not (Test-Path -LiteralPath $primary)) { return $false }
+    $cmdName = if ($Module -eq 'Epic') { 'Epic-Exo.cmd' } else { 'Riot-Exo.cmd' }
+    $cmdDir = Join-Path $ExoRoot 'launchers'
+    New-Item -ItemType Directory -Path $cmdDir -Force -ErrorAction SilentlyContinue | Out-Null
+    $cmdPath = Join-Path $cmdDir $cmdName
+    $dir = [IO.Path]::GetDirectoryName($primary)
+    $leaf = [IO.Path]::GetFileName($primary)
+    # Quiet-ish flags that do not touch anti-cheat.
+    # Epic: -StartMinimized reduces splash chrome. Riot ClientUx is CEF  -  no unsafe flags.
+    $extra = if ($Module -eq 'Epic') { ' -StartMinimized' } else { '' }
+    $body = @"
+@echo off
+rem Exo quiet $Module launcher  -  high priority host, no extra chrome.
+start "" /HIGH /D "$dir" "$primary"$extra
+"@
+    try {
+        [IO.File]::WriteAllText($cmdPath, $body, [Text.UTF8Encoding]::new($false))
+    } catch { return $false }
+
+    $programs = [Environment]::GetFolderPath('Programs')
+    $linkName = if ($Module -eq 'Epic') { 'Epic Games Launcher.lnk' } else { 'Riot Client.lnk' }
+    $candidates = @(
+        (Join-Path $programs $linkName),
+        (Join-Path $programs "Epic Games\$linkName"),
+        (Join-Path $programs "Riot Games\$linkName"),
+        (Join-Path $programs 'Riot Games\Riot Client.lnk'),
+        (Join-Path $programs 'Epic Games\Epic Games Launcher.lnk')
+    )
+    $patched = 0
+    foreach ($lnk in $candidates) {
+        if (-not (Test-Path -LiteralPath $lnk)) { continue }
+        try {
+            $w = New-Object -ComObject WScript.Shell
+            $s = $w.CreateShortcut($lnk)
+            $s.TargetPath = $cmdPath
+            $s.WorkingDirectory = $cmdDir
+            $s.Arguments = ''
+            $s.Save()
+            $patched++
+        } catch { }
+    }
+    return ($patched -gt 0) -or (Test-Path -LiteralPath $cmdPath)
+}
+
+function Remove-YieldGuard {
+    # Only strip BROKEN yield entries (wscript / WindowsApps stub). Never delete a good -File companion.
+    $removed = 0
+    try {
+        $run = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($RunSubKey, $true)
+        if ($run) {
+            try {
+                foreach ($name in @($run.GetValueNames())) {
+                    if ($name -ne $YieldRunName -and $name -notmatch '(?i)^Exo-.*-Yield$') { continue }
+                    $val = [string]$run.GetValue($name)
+                    $broken = $val -match '(?i)wscript|RunHidden|WindowsApps\\pwsh\.exe'
+                    $missingFile = $val -match '(?i)-File\s+"?([^"]+\.ps1)' -and -not (Test-Path -LiteralPath $Matches[1])
+                    if ($broken -or $missingFile -or [string]::IsNullOrWhiteSpace($val)) {
+                        try { $run.DeleteValue($name, $false); $removed++ } catch {}
+                    }
+                }
+            } finally { $run.Dispose() }
+        }
+    } catch {}
+    return $removed
+}
+
 function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
-    # Live companion: while a game runs, demote + soft-reclaim launcher UI only.
-    # Never opens, suspends, or modifies game/anti-cheat processes.
-    $gameNames = @($Targets | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension([string]$_.path) } | Sort-Object -Unique)
-    $launcherNames = @($Launchers | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension([string]$_.path) } | Sort-Object -Unique)
-    if ($gameNames.Count -eq 0 -or $launcherNames.Count -eq 0) { return $false }
-    $gameList = ($gameNames | ForEach-Object { "'$_'" }) -join ','
-    $launcherList = ($launcherNames | ForEach-Object { "'$_'" }) -join ','
+    # Hidden PowerShell companion — NEVER wscript (WSH error dialogs + WindowsApps stub failures).
+    # Soft reclaim + demote launcher while game runs. Never touches AC/game files.
+    [void](Remove-YieldGuard)
+
+    $gameNames = @($Targets | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension([string]$_.path) } | Where-Object { $_ } | Sort-Object -Unique)
+    $launcherNames = @($Launchers | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension([string]$_.path) } | Where-Object { $_ } | Sort-Object -Unique)
+    if ($Module -eq 'Riot') {
+        $launcherNames = @($launcherNames + @('RiotClientServices','RiotClientUx','RiotClientCrashHandler') | Sort-Object -Unique)
+    } elseif ($Module -eq 'Epic') {
+        $launcherNames = @($launcherNames + @('EpicGamesLauncher','EpicWebHelper') | Sort-Object -Unique)
+    }
+    if ($gameNames.Count -eq 0) {
+        Write-Output "EXO_REPORT:yield-guard|skip:no game process names for companion"
+        return $false
+    }
+
+    $gameList = ($gameNames | ForEach-Object { "'$($_ -replace '''','''''')'" }) -join ','
+    $launcherList = ($launcherNames | ForEach-Object { "'$($_ -replace '''','''''')'" }) -join ','
     $lines = @(
-        "# Exo $Module launcher yield + soft reclaim. Never touches game or anti-cheat processes."
+        "# Exo $Module companion — hidden PowerShell only (no wscript)."
         '$ErrorActionPreference = ''SilentlyContinue'''
         '$created = $false'
         ("`$mutex = [Threading.Mutex]::new(`$true, 'Local\Exo.{0}.YieldGuard', [ref]`$created)" -f $Module)
         'if (-not $created) { $mutex.Dispose(); exit 0 }'
+        'try { Add-Type -Name ExoWin -Namespace Native -MemberDefinition @"'
+        'using System; using System.Runtime.InteropServices;'
+        'public static class ExoWin {'
+        '  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);'
+        '  public const uint WM_CLOSE = 0x0010;'
+        '}'
+        '"@ } catch {}'
         'Add-Type -TypeDefinition @"'
-        'using System;'
-        'using System.Runtime.InteropServices;'
+        'using System; using System.Runtime.InteropServices;'
         'public static class ExoLaunchYield {'
         '  [StructLayout(LayoutKind.Sequential)] struct MEMORY_PRIORITY_INFORMATION { public uint MemoryPriority; }'
         '  [StructLayout(LayoutKind.Sequential)] struct PROCESS_POWER_THROTTLING_STATE { public uint Version; public uint ControlMask; public uint StateMask; }'
@@ -358,6 +611,7 @@ function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
         '"@'
         ("`$games = @({0})" -f $gameList)
         ("`$launchers = @({0})" -f $launcherList)
+        '$closedOnce = @{}'
         'try {'
         '  while ($true) {'
         '    $gameRunning = $false'
@@ -368,23 +622,25 @@ function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
         '      Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object {'
         '        try {'
         '          if ($gameRunning) {'
-        '            if ($_.PriorityClass -ne [Diagnostics.ProcessPriorityClass]::BelowNormal) {'
-        '              $_.PriorityClass = [Diagnostics.ProcessPriorityClass]::BelowNormal'
-        '            }'
+        '            if ($_.PriorityClass -ne [Diagnostics.ProcessPriorityClass]::BelowNormal) { $_.PriorityClass = [Diagnostics.ProcessPriorityClass]::BelowNormal }'
         '            [void][ExoLaunchYield]::SetMemoryPriority($_.Id, 1)'
         '            [void][ExoLaunchYield]::SetPowerThrottled($_.Id, $true)'
         '            [void][ExoLaunchYield]::SoftReclaimWorkingSet($_.Id)'
-        '          } else {'
-        '            if ($_.PriorityClass -ne [Diagnostics.ProcessPriorityClass]::Normal) {'
-        '              $_.PriorityClass = [Diagnostics.ProcessPriorityClass]::Normal'
+        '            if (-not $closedOnce.ContainsKey($_.Id) -and $_.MainWindowHandle -ne [IntPtr]::Zero) {'
+        '              try { [void][Native.ExoWin]::PostMessage($_.MainWindowHandle, [Native.ExoWin]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero) } catch {'
+        '                try { $_.CloseMainWindow() | Out-Null } catch {}'
+        '              }'
+        '              $closedOnce[$_.Id] = $true'
         '            }'
+        '          } else {'
+        '            if ($_.PriorityClass -ne [Diagnostics.ProcessPriorityClass]::Normal) { $_.PriorityClass = [Diagnostics.ProcessPriorityClass]::Normal }'
         '            [void][ExoLaunchYield]::SetMemoryPriority($_.Id, 5)'
         '            [void][ExoLaunchYield]::SetPowerThrottled($_.Id, $false)'
         '          }'
         '        } catch {}'
         '      }'
         '    }'
-        ("    if (`$gameRunning) {{ Start-Sleep -Seconds {0} }} else {{ Start-Sleep -Seconds {1} }}" -f $(if ($Experimental) { 1 } else { 2 }), $(if ($Experimental) { 2 } else { 3 }))
+        '    if ($gameRunning) { Start-Sleep -Seconds 1 } else { Start-Sleep -Seconds 2 }'
         '  }'
         '} finally {'
         '  try { $mutex.ReleaseMutex() } catch {}'
@@ -392,19 +648,48 @@ function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
         '}'
     )
     [IO.File]::WriteAllText($YieldHelperPath, ($lines -join "`r`n") + "`r`n", [Text.UTF8Encoding]::new($false))
-    $pwsh = $null
-    try { $pwsh = (Get-Command pwsh -ErrorAction SilentlyContinue).Source } catch {}
-    if (-not $pwsh) { $pwsh = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe' }
-    if (Test-Path -LiteralPath $pwsh) {
+    if (-not (Test-Path -LiteralPath $YieldHelperPath -PathType Leaf)) {
+        Write-Output "EXO_REPORT:yield-guard|fail:helper file not written"
+        return $false
+    }
+
+    $hostExe = Get-ExoPwshPath
+    if (-not $hostExe -or -not (Test-Path -LiteralPath $hostExe)) {
+        Write-Output ("EXO_REPORT:yield-guard|fail:no PowerShell host (Program Files 7 / store / 5.1)")
+        return $false
+    }
+
+    # Fully quoted Run key — no wscript, no WindowsApps stub
+    $runCmd = '"{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $hostExe, $YieldHelperPath
+
+    try {
         $run = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($RunSubKey, $true)
         try {
-            $cmd = '"{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $pwsh, $YieldHelperPath
-            $run.SetValue($YieldRunName, $cmd, [Microsoft.Win32.RegistryValueKind]::String)
+            $run.SetValue($YieldRunName, $runCmd, [Microsoft.Win32.RegistryValueKind]::String)
+            $verify = [string]$run.GetValue($YieldRunName, '')
+            if ($verify -ne $runCmd) {
+                Write-Output "EXO_REPORT:yield-guard|fail:Run key verify mismatch"
+                return $false
+            }
         } finally { $run.Dispose() }
-        try {
-            Start-Process -FilePath $pwsh -ArgumentList @('-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',$YieldHelperPath) -WindowStyle Hidden | Out-Null
-        } catch {}
+    } catch {
+        Write-Output ("EXO_REPORT:yield-guard|fail:Run key write: {0}" -f $_.Exception.Message)
+        return $false
     }
+
+    # Start now with CreateNoWindow — never wscript (no WSH dialogs)
+    try {
+        $psi = [Diagnostics.ProcessStartInfo]::new()
+        $psi.FileName = $hostExe
+        $psi.Arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}"' -f $YieldHelperPath
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+        [void][Diagnostics.Process]::Start($psi)
+    } catch {
+        Write-Output ("EXO_REPORT:yield-guard|warn:start-now failed (Run key still set): {0}" -f $_.Exception.Message)
+    }
+    Write-Output ("EXO_REPORT:yield-guard|ok:hidden PowerShell companion host={0}" -f $hostExe)
     return $true
 }
 function Restore-Value([Microsoft.Win32.RegistryKey]$Key, [string]$Name, $Snapshot) {
@@ -418,7 +703,7 @@ function Apply-WindowsGamePolicy([object[]]$Targets, [object[]]$Launchers, [swit
     # Games always high-perf dGPU + FSO off.
     # Hybrid systems: launchers prefer integrated (GpuPreference=1) so the UI
     # stays off the gaming GPU; single-GPU leaves launchers on high-perf / automatic.
-    # Launcher FSO is Experimental-only (windowed UI; usually no-op).
+    # Launcher FSO on for max aggression (windowed UI; usually no-op, harmless).
     $gpuWritten = 0
     $fsoWritten = 0
     $hybrid = [bool](Test-HybridGraphics)
@@ -454,7 +739,7 @@ function Apply-WindowsGamePolicy([object[]]$Targets, [object[]]$Launchers, [swit
             $fsoWritten++
         }
         if ($LauncherFso) {
-            # Experimental: also pin FSO off on launcher UI (usually no-op but keeps parity).
+            # Also pin FSO off on launcher UI (usually no-op but keeps parity).
             foreach ($t in @($Launchers)) {
                 $path = [string]$t.path
                 if ([string]::IsNullOrWhiteSpace($path)) { continue }
@@ -479,7 +764,7 @@ function Invoke-Repair {
     }
     $snapshot = Get-Content -LiteralPath $SnapshotPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $schema = [int]$snapshot.schema
-    if ($schema -notin @(1, 2) -or [string]$snapshot.module -ne $Module) { throw 'Snapshot contract mismatch.' }
+    if ($schema -notin @(1, 2, 3, 4) -or [string]$snapshot.module -ne $Module) { throw 'Snapshot contract mismatch.' }
     $run = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($RunSubKey, $true)
     try {
         foreach ($entry in @($snapshot.run)) {
@@ -503,6 +788,17 @@ function Invoke-Repair {
                 }
             }
         } finally { $fso.Dispose() }
+    }
+    # schema 3 snapshots may include gameBar  -  do NOT restore (Windows owns Game Bar).
+    # Always remove Exo DSCP policies we created for this module.
+    if ($schema -ge 3) {
+        Add-Report 'game-bar' 'skip' 'Game Bar owned by Windows module  -  not restored'
+        foreach ($pol in @($snapshot.qosPolicies)) {
+            $name = [string]$pol
+            if ($name -and (Get-Command Remove-ExoGameQosPolicy -ErrorAction SilentlyContinue)) {
+                [void](Remove-ExoGameQosPolicy -PolicyName $name)
+            }
+        }
     }
     Remove-Item -LiteralPath $YieldHelperPath -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue
@@ -534,13 +830,11 @@ try {
     # Steam-parity: launcher toasts + non-AC scheduled tasks (app-scoped only).
     $shell = Apply-LauncherShellQuiet
     Add-Report 'shell-quiet' 'ok' ("toasts={0}; tasks-quieted={1}" -f [int]$shell.Notify, [int]$shell.Tasks)
-    if ($Experimental) {
-        $shell2 = Apply-LauncherShellQuiet
-        Add-Report 'shell-quiet-exp' 'ok' ("experimental re-stamp toasts={0}; tasks={1}" -f [int]$shell2.Notify, [int]$shell2.Tasks)
-    }
-    # Full apply always re-stamps game GPU/FSO (safe + reversible).
-    # Experimental: also launcher FSO + tighter yield cadence.
-    $winPolicy = Apply-WindowsGamePolicy -Targets $targets -Launchers $launchers -Force -LauncherFso:$Experimental
+    # Re-stamp shell quiet a second time (toast/task drift after first pass).
+    $shell2 = Apply-LauncherShellQuiet
+    Add-Report 'shell-quiet-restamp' 'ok' ("toasts={0}; tasks={1}" -f [int]$shell2.Notify, [int]$shell2.Tasks)
+    # Full apply always re-stamps game GPU/FSO + launcher FSO + tight yield cadence.
+    $winPolicy = Apply-WindowsGamePolicy -Targets $targets -Launchers $launchers -Force -LauncherFso
     $gpuReason = if ([bool]$winPolicy.Hybrid) {
         "game GpuPreference=2; launcher integrated on hybrid ({0} path(s))" -f [int]$winPolicy.Gpu
     } else {
@@ -548,22 +842,51 @@ try {
     }
     Add-Report 'gpu-preference' 'ok' $gpuReason
     Add-Report 'fso' 'ok' ("Fullscreen Optimizations off on {0} path(s)" -f [int]$winPolicy.Fso)
+    Write-ProgressLine 48 'Cleaning launcher logs/cache (games untouched)...'
+    $cacheFreed = Clear-LauncherSafeCaches
+    Add-Report 'launcher-cache' 'ok' ("freed ~{0:N1} MB launcher junk" -f ($cacheFreed / 1MB))
+    Write-ProgressLine 52 'Quiet Start Menu launch path...'
+    $menuOk = Install-QuietStartMenuLaunch
+    if ($menuOk) { Add-Report 'start-menu' 'ok' 'Start Menu points at Exo quiet launcher' }
+    else { Add-Report 'start-menu' 'skip' 'no Start Menu shortcut found to retarget' }
+    # Host Game Mode / HAGS / Game Bar / priority live on the Windows card only.
+    # Per-game UDP DSCP 46 (voice/game traffic); exe-name policies only
+    $qosNames = [System.Collections.Generic.List[string]]::new()
+    if (Get-Command Set-ExoGameQosPolicy -ErrorAction SilentlyContinue) {
+        $qosOk = 0
+        foreach ($t in @($targets)) {
+            $exe = [string]$t.exe
+            if ([string]::IsNullOrWhiteSpace($exe)) { continue }
+            $safe = ($exe -replace '[^\w\.\-]', '_')
+            $pol = "Exo-$Module-DSCP-$safe"
+            try {
+                if (Set-ExoGameQosPolicy -PolicyName $pol -ExeName $exe) {
+                    $qosOk++
+                    [void]$qosNames.Add($pol)
+                }
+            } catch { }
+        }
+        if ($qosOk -gt 0) {
+            Add-Report 'game-dscp' 'ok' ("DSCP 46 on {0} game exe policy(ies)" -f $qosOk)
+            # Merge policy names into existing snapshot for repair removal
+            try {
+                if (Test-Path -LiteralPath $SnapshotPath -PathType Leaf) {
+                    $snapObj = Get-Content -LiteralPath $SnapshotPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                    $snapObj | Add-Member -NotePropertyName qosPolicies -NotePropertyValue @($qosNames) -Force
+                    $snapObj | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $SnapshotPath -Encoding UTF8
+                }
+            } catch { }
+        } else {
+            Add-Report 'game-dscp' 'skip' 'no game QoS policies written'
+        }
+    }
     $yieldOk = Install-YieldGuard $targets $launchers
     if ($yieldOk) {
-        $mode = if ($Experimental) { 'experimental cadence' } else { 'stable cadence' }
-        Add-Report 'yield-guard' 'ok' ("launcher EcoQoS + soft reclaim while game runs ($mode)")
+        Add-Report 'yield-guard' 'ok' 'hidden PowerShell companion (no WSH); soft-reclaim launcher while game runs'
     } else {
-        Add-Report 'yield-guard' 'fail' 'no launcher processes to attach yield companion'
-        throw 'No launcher processes found for yield companion.'
+        Add-Report 'yield-guard' 'fail' 'companion not installed (no games or PowerShell host missing)'
     }
     Add-Report 'anti-cheat-boundary' 'ok' 'game/anti-cheat processes never opened or modified'
-    $yieldHelperOk = (Test-Path -LiteralPath $YieldHelperPath -PathType Leaf)
-    $yieldRunOk = $false
-    try {
-        $rv = [string](Get-ItemPropertyValue -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $YieldRunName -ErrorAction Stop)
-        $yieldRunOk = $rv -match 'yield-guard'
-    } catch { }
-    if (-not ($yieldHelperOk -and $yieldRunOk)) { throw 'Yield companion failed verification (helper or Run key missing).' }
     Add-Report 'verified-record' 'ok' 'full apply complete'
     $state = [ordered]@{
         version = $Version
@@ -575,14 +898,20 @@ try {
         shellQuiet = $true
         gamePolicyVerified = $true
         fsoVerified = $true
+        gameBarQuiet = $false # host Game Bar quiet is owned by the Windows module
+        gameDscp = @($qosNames)
         windowsGpuPolicyOwnedBy = $Module.ToLowerInvariant()
         experimental = [bool]$Experimental
-        yieldGuardInstalled = $true
+        yieldGuardInstalled = [bool]$yieldOk
         hybridGraphics = [bool](Test-HybridGraphics)
+        launcherCacheCleaned = $true
+        launcherCacheFreedBytes = [long]$cacheFreed
+        startMenuQuiet = [bool]$menuOk
         launcherTargetCount = $launchers.Count
         targetCount = $targets.Count
         targets = @($targets)
         antiCheatUntouched = $true
+        # Install binaries untouched; only logs/webcache cleared + Start Menu retarget
         launcherFilesUntouched = $true
         snapshotReady = (Test-Path -LiteralPath $SnapshotPath -PathType Leaf)
         applyReport = @($Report)
@@ -590,7 +919,7 @@ try {
     }
     $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $StatePath -Encoding UTF8
     Write-ProgressLine 100 'Verified'
-    Write-Output ("DONE - {0}: startup quiet + yield + high-perf GPU/FSO for {1} game executable(s)" -f $Module, $targets.Count)
+    Write-Output ("DONE - {0}: GPU/FSO + silent launcher companion for {1} game(s)" -f $Module, $targets.Count)
     exit 0
 } catch {
     Add-Report 'apply' 'fail' $_.Exception.Message

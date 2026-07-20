@@ -9,7 +9,6 @@
 
     <controls:SharedModulePlate
         x:Name="Plate"
-        ModuleTitle="NVIDIA"
         StatusText="{x:Bind ViewModel.StatusText, Mode=OneWay}"
         FeatureItems="{x:Bind ViewModel.Features, Mode=OneWay}"
         IsLoading="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay}"
@@ -23,45 +22,24 @@
         ProgressStatus="{x:Bind ViewModel.ProgressStatus, Mode=OneWay}"
         SelectedApplyMode="{x:Bind ViewModel.SelectedApplyMode, Mode=TwoWay}"
         ApplyModeOptions="{x:Bind ViewModel.ApplyModeOptions, Mode=OneWay}"
+        ShowProfileToggle="True"
+        ProfileLabel="Stack profile"
+        ProfileHint="{x:Bind ViewModel.HardwarePolicyText, Mode=OneWay}"
+        HasProfileHint="True"
+        SelectedProfile="{x:Bind ViewModel.SelectedProfileOption, Mode=TwoWay}"
+        ProfileOptions="{x:Bind ViewModel.ProfileOptions, Mode=OneWay}"
         PolicyTogglesEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
         SecondaryLeftLabel="Repair"
         SecondaryActionsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
         SecondaryLeftClick="Repair_Click">
         <controls:SharedModulePlate.HeaderExtra>
-            <StackPanel Spacing="6">
-                <Border Style="{StaticResource ExoCard}" Padding="12,8">
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Spacing="1" VerticalAlignment="Center">
-                            <TextBlock Text="Profile"
-                                       FontFamily="{StaticResource ExoUiFontSemiBold}"
-                                       FontSize="13"
-                                       FontWeight="SemiBold"
-                                       Foreground="{ThemeResource ExoPrimaryTextBrush}" />
-                            <TextBlock Text="{x:Bind ViewModel.HardwarePolicyText, Mode=OneWay}"
-                                       Style="{StaticResource ExoCaption}"
-                                       TextTrimming="CharacterEllipsis"
-                                       MaxLines="1" />
-                        </StackPanel>
-                        <ComboBox Grid.Column="1"
-                                  MinWidth="168"
-                                  SelectedItem="{x:Bind ViewModel.SelectedProfileOption, Mode=TwoWay}"
-                                  ItemsSource="{x:Bind ViewModel.ProfileOptions, Mode=OneWay}"
-                                  IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                                  AutomationProperties.Name="NVIDIA profile" />
-                    </Grid>
-                </Border>
-                <Button Style="{StaticResource ExoQuietButton}"
-                        Content="Control Panel"
-                        Command="{x:Bind ViewModel.OpenControlPanelCommand}"
-                        HorizontalAlignment="Stretch"
-                        MinHeight="36"
-                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
-                        AutomationProperties.Name="Open NVIDIA Control Panel" />
-            </StackPanel>
+            <Button Style="{StaticResource ExoQuietButton}"
+                    Content="Control Panel"
+                    Command="{x:Bind ViewModel.OpenControlPanelCommand}"
+                    HorizontalAlignment="Stretch"
+                    MinHeight="36"
+                    IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
+                    AutomationProperties.Name="Open NVIDIA Control Panel" />
         </controls:SharedModulePlate.HeaderExtra>
         <controls:SharedModulePlate.PrimaryActions>
             <Button Style="{StaticResource ExoPrimaryButton}"

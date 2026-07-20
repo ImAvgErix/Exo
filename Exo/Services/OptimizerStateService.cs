@@ -50,16 +50,23 @@ public sealed class OptimizerStateService
     }
 
     public Task<OptimizerStateInfo> DetectRiotAsync(CancellationToken ct = default) =>
-        DetectGameLauncherAsync("Riot", _scripts.RiotDetectScript, ct);
+        Task.Run(() => NativeLiveDetect.DetectLauncher("riot"), ct);
 
     public Task<OptimizerStateInfo> DetectEpicAsync(CancellationToken ct = default) =>
-        DetectGameLauncherAsync("Epic", _scripts.EpicDetectScript, ct);
+        Task.Run(() => NativeLiveDetect.DetectLauncher("epic"), ct);
+
+    public Task<OptimizerStateInfo> DetectWindowsAsync(CancellationToken ct = default) =>
+        Task.Run(() => NativeLiveDetect.DetectWindows(), ct);
 
     private async Task<OptimizerStateInfo> DetectGameLauncherAsync(
         string module,
         string detectScript,
         CancellationToken ct)
     {
+        // Prefer pure C# live probes (no soft markers, no PS hang).
+        var live = NativeLiveDetect.DetectLauncher(module);
+        if (live.Features.Count > 0) return live;
+
         var fallback = new OptimizerStateInfo
         {
             IsApplied = false,
@@ -696,67 +703,11 @@ public sealed class OptimizerStateService
         catch { return false; }
     }
 
-    public async Task<OptimizerStateInfo> DetectSteamAsync(
+    public Task<OptimizerStateInfo> DetectSteamAsync(
         CancellationToken ct = default,
-        bool fastOnly = false)
-    {
-        var heuristic = await RunHeuristicAsync(DetectSteamHeuristic, "Steam", ct)
-            .ConfigureAwait(false);
-        if (fastOnly)
-            return heuristic;
-
-        var detectScript = _scripts.SteamDetectScript;
-        if (!File.Exists(detectScript))
-            return heuristic;
-
-        try
-        {
-            var result = await _runner.RunAsync(
-                detectScript,
-                arguments: Array.Empty<string>(),
-                elevate: false,
-                progress: null,
-                cancellationToken: ct,
-                workingDirectory: _scripts.GetSteamRoot());
-
-            if (!result.Success && string.IsNullOrWhiteSpace(result.FullOutput))
-                return heuristic;
-
-            var jsonLine = result.FullOutput
-                .Split('\n')
-                .Select(l => l.TrimEnd('\r').Trim())
-                .LastOrDefault(l => l.StartsWith('{') && l.Contains("isApplied", StringComparison.OrdinalIgnoreCase));
-
-            if (jsonLine is null)
-                return heuristic;
-
-            using var doc = JsonDocument.Parse(jsonLine);
-            var root = doc.RootElement;
-            // ValueKind check only — GetBoolean() throws on string/null and was blanking the page.
-            var applied = root.TryGetProperty("isApplied", out var a) && a.ValueKind == JsonValueKind.True;
-            var status = root.TryGetProperty("statusText", out var s) ? s.GetString() ?? heuristic.StatusText : heuristic.StatusText;
-            var detail = root.TryGetProperty("detail", out var d) ? d.GetString() ?? string.Empty : string.Empty;
-            var features = ParseFeatures(root);
-            if (features.Count == 0)
-                features = heuristic.Features.ToList();
-
-            return new OptimizerStateInfo
-            {
-                IsApplied = applied,
-                StatusText = status,
-                Detail = detail,
-                Features = features
-            };
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch
-        {
-            return heuristic;
-        }
-    }
+        bool fastOnly = false) =>
+        // Pure C# live probes — no PS detect, no soft markers for greens.
+        Task.Run(() => NativeLiveDetect.DetectSteam(), ct);
 
     private OptimizerStateInfo DetectSteamHeuristic()
     {

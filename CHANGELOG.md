@@ -1,3 +1,94 @@
+## 3.13.11
+
+- **Lock-in: every Windows tweak runs, nothing hangs**
+  - Full native apply covers **every card row** (Game Mode, HAGS, host latency, USB, tasks, DISM, Defender policy, power plan, AI, UAC, etc.).
+  - **No skipped competitive tweaks** — expanded scheduled-task list (~90) + expanded DISM feature list (~18).
+  - **Never hang**: every `dism.exe` / `schtasks.exe` call uses hard kill timeouts + total budgets (90s tasks / 120s DISM).
+  - Removed hang APIs: no `Get-WindowsOptionalFeature`, no full `Get-ScheduledTask` catalog.
+  - PS libs for optional features / tasks rewritten to the same timeout-safe pattern if Repair/depth ever calls them.
+
+## 3.13.10
+
+- **Windows stuck at 77% fixed**: Experimental deep pack hung on DISM optional features (`Get-WindowsOptionalFeature` / `DismHost`). Windows Apply is now **always native-only** (including Experimental). PS optional-feature DISM is a no-op; native already runs a bounded `dism.exe` shortlist.
+
+## 3.13.9
+
+- **Apply pipeline rewrite (all optimizers)** — no more “native then always force full elevated PS kit”:
+  | Module | Apply path |
+  |---|---|
+  | **Windows** | Native C# only (default). Experimental optional depth pack soft-fails. |
+  | **Riot / Epic** | Native C# only (PS was duplicate + stripped yield). Repair still PS. |
+  | **Steam** | Native C# primary; PS deep pack soft-fails if native OK. |
+  | **Internet** | C# NetworkOptimizerService + MS-safe SR/NTI=10 restamp. |
+  | **Discord / NVIDIA** | Specialized PowerShell kits (unchanged depth). |
+- Windows PS deep pack is **depth-only** (tasks / optional features / policy Defender) — skips re-running host glue when `path=native-csharp`.
+- Deep pack failure no longer fails the whole Apply when native essentials succeeded.
+
+## 3.13.8
+
+- **Windows Defender purge hang fixed**: deep pack froze on `Set-MpPreference` / `MpCmdRun -RemoveDefinitions` / `Stop-Service WinDefend` / Appx removal under Tamper Protection. Defender path is now **policy-first** (registry + bounded `sc config` + known task paths only) and finishes in &lt;1s. Test is policy pin only (service-dead was dishonest under TP).
+- **Yield companions no longer stripped by Windows Apply**: `Unregister-ExoBackground` treated Hidden PowerShell `yield-guard` as noise and deleted Riot/Epic Run keys during Windows deep pack. Silent companions are kept; wscript/WindowsApps stubs still purged.
+- **LiveYield detect honesty**: helper-without-Run-key is FAIL (not green “purged”).
+- **Internet host-policy report**: no more folklore `resp=0` / `NTI=max` text — writes and reports **10/10**.
+- Live PC verification (registry/powercfg/netsh, not logs): core Windows/Internet/Steam/Discord/Riot/Epic/NVIDIA knobs **PASS** on machine.
+
+## 3.13.7
+
+- **Windows deep pack crash fixed**: native C# foundation wrote `windows-optimizer.json` without a `recovery` property; StrictMode then threw *“The property 'recovery' cannot be found”* during snapshot capture and aborted the entire PS deep pack (~4s FAIL). Safe property accessor; re-Apply now completes the full deep pack.
+- **Games MMCSS typo fixed**: `Set-ExoHostLatencyProfile` used `$game` instead of `$games` — Tasks\Games keys never wrote on the PS path.
+- **SystemResponsiveness audit**: MS clamps values &lt;10 to **20** (stock). Exo pin is **10** everywhere (Windows + Internet). Removed folklore `0` / `NetworkThrottlingIndex=ffffffff`. Detect requires `PowerThrottlingOff=1` + `SystemResponsiveness=10`.
+
+## 3.13.6
+
+- **Windows Apply actually starts**: Windows scripts were missing from the signed script manifest → deep pack died with “not present in signed script manifest.” Full 95-entry manifest regenerated (includes `Windows/*`).
+- **Riot/Epic yield companion**: Run key now verified after write; no longer strips good `-File yield-guard` entries; re-stamped after deep pack. Detect accepts hidden PowerShell yield (not WSH).
+- **Host latency detect**: accepts `SystemResponsiveness` 0–20 (Internet competitive uses 0; Windows uses 10).
+- **No Exo background detect**: hidden yield Run keys are allowed (were false-failing Windows when Riot/Epic yield installed).
+- Live detect: Windows / Steam / Riot / Epic all `isApplied=true` after fix.
+
+## 3.13.5
+
+- **Detailed apply logs**: every Apply/Repair writes `%LocalAppData%\Exo\logs\apply-{module}-latest.log` (plus timestamped copy) with native steps, progress, elevated PS full output, and stack traces on failure. UI errors include the full log path. Settings → Open Logs opens the newest apply log.
+- **Riot deep-pack fix**: StrictMode crash on uninstall keys missing `DisplayName` (`Get-UninstallDisplayText` safe accessor).
+
+## 3.13.4
+
+- **Riot/Epic Windows Script Host crash fixed**: yield companion no longer uses `wscript` or the WindowsApps `pwsh` stub (that was the WSH error popup). Uses real PowerShell/pwsh with `-WindowStyle Hidden` + quoted `-File` only; Apply never launches WSH.
+- Broken `Exo-Riot-Yield` / `Exo-Epic-Yield` Run keys are stripped and rewritten on next Apply.
+
+## 3.13.3
+
+- **Hybrid Apply (Discord-class depth)**: Steam / Windows / Riot / Epic no longer stop at instant C# registry writes. Apply now runs:
+  1. Native foundation (0–28%) — reliable registry/files
+  2. Full elevated PowerShell deep pack (28–96%) — same kit depth as Discord (cache cleans, full optimizers, progress bar)
+  3. Live detect after
+- Progress bar shows real EXO_PROGRESS from the deep pack (not a 0.5s flash).
+- Power plan PS path no longer double-`duplicatescheme` Ultimate (spam fix).
+
+## 3.13.2
+
+- **Honest live detect** for Steam / Windows / Riot / Epic (C# registry/file/powercfg probes — no soft marker greens).
+- **Power plan fixed**: Apply creates/activates **Exo Competitive AMD/Intel** (not Ultimate spam). Purges duplicate Ultimate Performance clones. Live detect requires Exo plan active by name.
+- **Epic Rocket League**: manifest launches `Launcher.exe` — also pins real `RocketLeague.exe` to `GpuPreference=2;` (was stuck on `AppStatus=0`).
+- **Windows deep passes**: scheduled-task shortlist + bounded DISM optional-feature shortlist, recorded only after they actually run.
+- Verified live: all card rows ON; active scheme Exo Competitive AMD; 5 plans left (Exo + Balanced + High + Saver + Nexus).
+
+## 3.13.1
+
+- **Partial-apply fix**: native Apply now covers every detect checklist row so cards go fully green.
+  - Steam: `GPUAccelWebViewsV3`, full `Test-SteamApplyRecord` markers, config.vdf download keys, localconfig tweaks, locked memory-guard rewrite retries, library policy verified flag.
+  - Windows: input pack, AMOLED, UAC, AI, inbox, WU pause, Defender policy, explorer declutter, scheduled-tasks/optional-features markers.
+  - Riot/Epic: silent yield companion (or honest purge), snapshot, shellQuiet, cache clean, Start Menu quiet cmd; detect no longer dies on missing `lastError`.
+- Live detect after apply: Steam / Windows / Riot / Epic all `isApplied=true` with zero checkable OFF rows.
+
+## 3.13.0
+
+- **Native C# apply path (best path that won’t fail)**: Steam, Windows, Riot, and Epic Apply no longer depend on the full PowerShell optimizer kits. Registry, GPU/FSO, CEF launcher, memory-guard template, Game Mode/HAGS/Game Bar, and DSCP write through pure C# (`NativeReg` + module native apply). One compact elevated reg pack only when HKLM needs admin — no lib imports, no apostrophe breakage, no DISM hangs on apply.
+- **Steam**: memory guard template passes shared classifier; CEF launcher (`Steam-Exo.cmd`), library GPU/FSO (37 games on smoke), client DSCP, startup/toasts/tray — live smoke PASS.
+- **Windows**: Game Bar quiet, Game Mode, HAGS, Win32 priority, mouse precision, sticky keys, menu delay, host latency, MPO, explorer quiet, power plan — live smoke PASS.
+- **Riot / Epic**: game high-perf GPU + FSO off, launcher quiet, shell toasts, per-game DSCP — live smoke PASS.
+- **Internet** stays C# network stack; **Discord** Equicord kit and **NVIDIA** NPI/DRS remain specialized PS/native hybrids. Repair still uses snapshot PS kits.
+
 ## 3.7.2
 
 - **Self-contained ship guard**: publish fails if `Exo.runtimeconfig.json` is framework-dependent (missing `includedFrameworks`) so users are never prompted to install .NET 10 for a “broken” copy.

@@ -1,6 +1,6 @@
 /** Typed bridge to the .NET WebView2 host. Falls back to mock data in browser dev. */
 
-export type ModuleId = 'discord' | 'steam' | 'internet' | 'nvidia' | 'riot' | 'epic'
+export type ModuleId = 'discord' | 'steam' | 'windows' | 'internet' | 'nvidia' | 'riot' | 'epic'
 
 export interface LiveStats {
   memoryPercent: number
@@ -144,13 +144,43 @@ async function call<T>(
   })
 }
 
+/** Per-module detect cache — reopening a card within TTL is instant. */
+const DETECT_TTL_MS = 120_000
+const detectCache = new Map<ModuleId, { at: number; status: ModuleStatus }>()
+
+export function invalidateDetectCache(module?: ModuleId) {
+  if (module) detectCache.delete(module)
+  else detectCache.clear()
+}
+
 export const host = {
   getDashboard: () => call<DashboardSnapshot>('dashboard.get'),
   getLive: () => call<LiveStats>('dashboard.live'),
-  detect: (module: ModuleId) => call<ModuleStatus>('module.detect', { module }),
-  apply: (module: ModuleId, options?: Record<string, unknown>) =>
-    call<ModuleStatus>('module.apply', { module, ...(options || {}) }),
-  repair: (module: ModuleId) => call<ModuleStatus>('module.repair', { module }),
+  detect: async (module: ModuleId, opts?: { force?: boolean }) => {
+    if (!opts?.force) {
+      const hit = detectCache.get(module)
+      if (hit && Date.now() - hit.at < DETECT_TTL_MS) return hit.status
+    }
+    const status = await call<ModuleStatus>('module.detect', { module })
+    detectCache.set(module, { at: Date.now(), status })
+    return status
+  },
+  apply: async (module: ModuleId, options?: Record<string, unknown>) => {
+    const status = await call<ModuleStatus>('module.apply', {
+      module,
+      ...(options || {}),
+    })
+    // Cross-module side effects — wipe entire client cache
+    detectCache.clear()
+    detectCache.set(module, { at: Date.now(), status })
+    return status
+  },
+  repair: async (module: ModuleId) => {
+    const status = await call<ModuleStatus>('module.repair', { module })
+    detectCache.clear()
+    detectCache.set(module, { at: Date.now(), status })
+    return status
+  },
   getSettings: () =>
     call<{
       appVersion: string
@@ -219,12 +249,13 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
       modules: [
         { id: 'discord', title: 'Discord', applied: true },
         { id: 'steam', title: 'Steam', applied: true },
+        { id: 'windows', title: 'Windows', applied: false },
         { id: 'internet', title: 'Internet', applied: false },
         { id: 'nvidia', title: 'NVIDIA', applied: true },
         { id: 'riot', title: 'Riot', applied: false },
         { id: 'epic', title: 'Epic', applied: false },
       ],
-      next: { id: 'internet', label: 'Internet' },
+      next: { id: 'windows', label: 'Windows' },
       appVersion: '3.7.2',
     } as T)
   }

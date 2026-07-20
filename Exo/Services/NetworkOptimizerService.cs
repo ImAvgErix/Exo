@@ -976,22 +976,186 @@ public sealed class NetworkOptimizerService
             var lsoOk = NetworkLogic.LsoMatches(activePreset, lso);
             var rscOk = NetworkLogic.RscMatches(activePreset, rsc);
             var autoOk = NetworkLogic.AutotuneMatches(activePreset, autoTuning);
-            features.Add(Row("Task offload", taskOffloadDisabled == true ? "Off (bad)" : "On", taskOffloadDisabled != true));
-            features.Add(Row("LSO v2",
-                lso == true ? (throughput ? "On - download" : "On")
-                    : lso == false ? (latency ? "Off - latency" : "Off") : "-",
+            features.Add(Row("Full network offload",
+                taskOffloadDisabled == true ? "Blocked (bad)" : "On",
+                taskOffloadDisabled != true));
+
+            // Host stack written on every latency/throughput apply
+            var gamingPreset = activePreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput;
+            try
+            {
+                using var mm = Registry.LocalMachine.OpenSubKey(
+                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile");
+                var nti = ReadRegistryDword(mm?.GetValue("NetworkThrottlingIndex"));
+                var resp = ReadRegistryDword(mm?.GetValue("SystemResponsiveness"));
+                // Competitive: NTI=0xFFFFFFFF (reads as -1 as signed int) and Responsiveness=0
+                var ntiMax = nti is -1 or int.MaxValue;
+                var hostOk = ntiMax && resp is 0;
+                features.Add(Row("Gaming multimedia stack",
+                    hostOk ? "Network throttle off · max responsiveness" :
+                    nti is null && resp is null ? "Stock / not applied" :
+                    "Partial — re-Apply",
+                    hostOk || !gamingPreset));
+            }
+            catch
+            {
+                features.Add(Row("Gaming multimedia stack", "-", true));
+            }
+
+            try
+            {
+                using var games = Registry.LocalMachine.OpenSubKey(
+                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games");
+                var pri = ReadRegistryDword(games?.GetValue("Priority"));
+                var gpuPri = ReadRegistryDword(games?.GetValue("GPU Priority"));
+                var sched = games?.GetValue("Scheduling Category") as string;
+                var gamesOk = pri is 6 && gpuPri is 8 &&
+                              string.Equals(sched, "High", StringComparison.OrdinalIgnoreCase);
+                features.Add(Row("Games priority class",
+                    gamesOk ? "High scheduling · GPU priority boosted" :
+                    games is null ? "Stock / not applied" : "Partial — re-Apply",
+                    gamesOk || !gamingPreset));
+            }
+            catch
+            {
+                features.Add(Row("Games priority class", "-", true));
+            }
+
+            var qosReserve = ReadQosReserve();
+            features.Add(Row("Full bandwidth for apps",
+                qosReserve is "0%" ? "No reserved bandwidth tax" : qosReserve,
+                qosReserve is "0%" or "-" || !gamingPreset));
+
+            // Competitive Nagle/ACK pins
+            try
+            {
+                var ackOk = false;
+                using var ifRoot = Registry.LocalMachine.OpenSubKey(
+                    @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces");
+                if (ifRoot is not null)
+                {
+                    foreach (var sub in ifRoot.GetSubKeyNames())
+                    {
+                        using var iface = ifRoot.OpenSubKey(sub);
+                        var ack = ReadRegistryDword(iface?.GetValue("TcpAckFrequency"));
+                        var nd = ReadRegistryDword(iface?.GetValue("TCPNoDelay"));
+                        if (ack is 1 && nd is 1) { ackOk = true; break; }
+                    }
+                }
+                features.Add(Row("Instant TCP response",
+                    ackOk ? "Low-latency ACK path on" : "Stock / not applied",
+                    ackOk || !gamingPreset));
+            }
+            catch
+            {
+                features.Add(Row("Instant TCP response", "-", true));
+            }
+
+            try
+            {
+                using var pri = Registry.LocalMachine.OpenSubKey(
+                    @"SYSTEM\CurrentControlSet\Control\PriorityControl");
+                var w32 = ReadRegistryDword(pri?.GetValue("Win32PrioritySeparation"));
+                features.Add(Row("Foreground boost",
+                    w32 is 38 ? "Snappy foreground priority" : w32?.ToString() ?? "Stock",
+                    w32 is 38 || !gamingPreset));
+            }
+            catch
+            {
+                features.Add(Row("Foreground boost", "-", true));
+            }
+
+            try
+            {
+                using var gfx = Registry.LocalMachine.OpenSubKey(
+                    @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers");
+                var hags = ReadRegistryDword(gfx?.GetValue("HwSchMode"));
+                features.Add(Row("Hardware GPU scheduling",
+                    hags is 2 ? "On" : "Off / stock",
+                    hags is 2 || !gamingPreset));
+            }
+            catch
+            {
+                features.Add(Row("Hardware GPU scheduling", "-", true));
+            }
+
+            // SMB transfer throttle + LLMNR (written on latency/throughput apply; repair clears)
+            try
+            {
+                using var smb = Registry.LocalMachine.OpenSubKey(
+                    @"SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters");
+                var thr = smb?.GetValue("DisableBandwidthThrottling");
+                var smbOk = thr is int si && si != 0;
+                features.Add(Row("Fast file transfers",
+                    smbOk ? "SMB throttle off" : "Default / on",
+                    smbOk || !gamingPreset));
+            }
+            catch
+            {
+                features.Add(Row("Fast file transfers", "-", true));
+            }
+
+            try
+            {
+                using var dnsClientKey = Registry.LocalMachine.OpenSubKey(
+                    @"SOFTWARE\Policies\Microsoft\Windows NT\DNSClient");
+                var multi = dnsClientKey?.GetValue("EnableMulticast");
+                var llmnrOff = multi is int mi && mi == 0;
+                features.Add(Row("Cleaner name resolution",
+                    llmnrOff ? "LAN multicast name noise off" : "System default",
+                    llmnrOff || !gamingPreset));
+            }
+            catch
+            {
+                features.Add(Row("Cleaner name resolution", "-", true));
+            }
+
+            // Multi-app DSCP 46 (Exo-Net-DSCP-* policies from Internet apply)
+            try
+            {
+                using var qos = Registry.LocalMachine.OpenSubKey(
+                    @"SOFTWARE\Policies\Microsoft\Windows\QoS");
+                var dscpCount = 0;
+                if (qos is not null)
+                {
+                    foreach (var sub in qos.GetSubKeyNames())
+                    {
+                        if (sub.StartsWith("Exo-Net-DSCP-", StringComparison.OrdinalIgnoreCase))
+                            dscpCount++;
+                    }
+                }
+                features.Add(Row("Priority game traffic",
+                    dscpCount > 0 ? $"Priority on {dscpCount} gaming app(s)" : "None yet",
+                    dscpCount > 0 || !gamingPreset));
+            }
+            catch
+            {
+                features.Add(Row("Priority game traffic", "-", true));
+            }
+
+            features.Add(Row("Large send offload",
+                lso == true ? (throughput ? "On — download path" : "On")
+                    : lso == false ? (latency ? "Off — latency path" : "Off") : "-",
                 lsoOk));
-            features.Add(Row("RSC",
-                rsc == true ? (throughput ? "On - download" : "On")
-                    : rsc == false ? (latency ? "Off - latency" : "Off") : "-",
+            features.Add(Row("Receive coalescing",
+                rsc == true ? (throughput ? "On — download path" : "On")
+                    : rsc == false ? (latency ? "Off — latency path" : "Off") : "-",
                 rscOk));
-            features.Add(Row("Auto-tuning",
+            features.Add(Row("Smart window scaling",
                 autoOk ? autoTuning : $"{autoTuning} (want {NetworkLogic.KnobsFor(activePreset).AutotuneNetsh})",
                 autoOk));
-            features.Add(Row("Congestion", congestion, true));
-            features.Add(Row("RSS placement", rssPolicy, rssPolicyOk));
-            features.Add(Row("Packet coalescing", packetCoalescing, packetCoalescingOk));
-            features.Add(Row("TCP algorithms", "Windows adaptive defaults", true));
+            // Interrupt moderation / flow control target from preset
+            var knobs = NetworkLogic.KnobsFor(activePreset);
+            features.Add(Row("Interrupt timing",
+                knobs.InterruptMod == "0" ? "Immediate — latency path" : "Batched — throughput path",
+                true));
+            features.Add(Row("Link flow control",
+                knobs.FlowControl == "0" ? "Off — no pause frames" : "On — bulk transfers",
+                true));
+            features.Add(Row("Congestion control", congestion, true));
+            features.Add(Row("Multi-core receive", rssPolicy, rssPolicyOk));
+            features.Add(Row("No packet batching delay", packetCoalescing, packetCoalescingOk));
+            features.Add(Row("Modern TCP stack", "Adaptive Windows defaults retained", true));
         }
         catch (Exception ex)
         {

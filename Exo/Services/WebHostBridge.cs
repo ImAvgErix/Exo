@@ -18,6 +18,15 @@ public sealed class WebHostBridge
     private readonly DispatcherQueue _queue;
     private CoreWebView2? _web;
 
+    /// <summary>Internet ProbeAsync cache — full probe is multi-process + ping.</summary>
+    private NetworkSnapshot? _internetProbeCache;
+    private DateTimeOffset _internetProbeCacheUtc = DateTimeOffset.MinValue;
+    private static readonly TimeSpan InternetProbeFreshness = TimeSpan.FromSeconds(90);
+
+    /// <summary>Module detect JSON cache (web UI re-open without re-spawning pwsh).</summary>
+    private readonly Dictionary<string, (DateTimeOffset At, object Payload)> _detectCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly TimeSpan ModuleDetectFreshness = TimeSpan.FromSeconds(120);
+
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -191,6 +200,7 @@ public sealed class WebHostBridge
         {
             Row("discord", "Discord", vm.DiscordStatusTag),
             Row("steam", "Steam", vm.SteamStatusTag),
+            Row("windows", "Windows", vm.WindowsStatusTag),
             Row("internet", "Internet", vm.InternetStatusTag),
             Row("nvidia", "NVIDIA", vm.NvidiaStatusTag),
             Row("riot", "Riot", vm.RiotStatusTag),
@@ -385,6 +395,7 @@ public sealed class WebHostBridge
             {
                 discord = s.ExperimentalDiscord,
                 steam = s.ExperimentalSteam,
+                windows = s.ExperimentalWindows,
                 internet = s.ExperimentalInternet,
                 nvidia = s.ExperimentalNvidia,
                 riot = s.ExperimentalRiot,
@@ -415,12 +426,24 @@ public sealed class WebHostBridge
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Exo", "logs");
             Directory.CreateDirectory(logs);
+            // Prefer opening the newest apply-*-latest.log so failures are one click away.
+            string? newest = null;
+            try
+            {
+                newest = Directory.EnumerateFiles(logs, "apply-*-latest.log")
+                    .Select(f => new FileInfo(f))
+                    .OrderByDescending(f => f.LastWriteTimeUtc)
+                    .Select(f => f.FullName)
+                    .FirstOrDefault();
+            }
+            catch { }
+
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = logs,
+                FileName = newest ?? logs,
                 UseShellExecute = true
             });
-            return new { ok = true, path = logs };
+            return new { ok = true, path = newest ?? logs, folder = logs };
         }
         catch (Exception ex)
         {
@@ -570,6 +593,7 @@ public sealed class WebHostBridge
         {
             "discord" => "discord",
             "steam" => "steam",
+            "windows" => "windows",
             "internet" => "internet",
             "nvidia" => "nvidia",
             "riot" => "riot",
@@ -580,22 +604,57 @@ public sealed class WebHostBridge
     private async Task<object> DetectModuleAsync(JsonElement p, bool hasParams)
     {
         var module = ReadString(p, hasParams, "module") ?? "discord";
-        return await DetectCoreAsync(module).ConfigureAwait(true);
+        var force = false;
+        if (hasParams && p.ValueKind == JsonValueKind.Object &&
+            p.TryGetProperty("force", out var forceEl) &&
+            (forceEl.ValueKind == JsonValueKind.True ||
+             (forceEl.ValueKind == JsonValueKind.String &&
+              bool.TryParse(forceEl.GetString(), out var fb) && fb)))
+            force = true;
+        return await DetectCoreAsync(module, force).ConfigureAwait(true);
     }
 
-    private async Task<object> DetectCoreAsync(string module)
+    private async Task<object> DetectCoreAsync(string module, bool force = false)
     {
+        var key = (module ?? "discord").Trim().ToLowerInvariant();
+        if (!force &&
+            _detectCache.TryGetValue(key, out var hit) &&
+            DateTimeOffset.UtcNow - hit.At < ModuleDetectFreshness)
+            return hit.Payload;
+
         var ct = CancellationToken.None;
-        return module.ToLowerInvariant() switch
+        // Always full detect so the UI feature list matches Apply (heuristics hide tweaks).
+        // Scripts are Get-ScheduledTask-free; host cache (120s) keeps re-opens instant.
+        object payload = key switch
         {
-            "discord" => MapState("discord", await _services.OptimizerState.DetectDiscordAsync(ct).ConfigureAwait(true)),
-            "steam" => MapState("steam", await _services.OptimizerState.DetectSteamAsync(ct).ConfigureAwait(true)),
-            "nvidia" => MapState("nvidia", await _services.OptimizerState.DetectNvidiaAsync(ct).ConfigureAwait(true)),
+            "discord" => MapState("discord", await _services.OptimizerState.DetectDiscordAsync(ct, fastOnly: false).ConfigureAwait(true)),
+            "steam" => MapState("steam", await _services.OptimizerState.DetectSteamAsync(ct, fastOnly: false).ConfigureAwait(true)),
+            "windows" => MapState("windows", await _services.OptimizerState.DetectWindowsAsync(ct).ConfigureAwait(true)),
+            "nvidia" => MapState("nvidia", await _services.OptimizerState.DetectNvidiaAsync(ct, fastOnly: false).ConfigureAwait(true)),
             "riot" => MapState("riot", await _services.OptimizerState.DetectRiotAsync(ct).ConfigureAwait(true)),
             "epic" => MapState("epic", await _services.OptimizerState.DetectEpicAsync(ct).ConfigureAwait(true)),
-            "internet" => await MapInternetAsync().ConfigureAwait(true),
+            "internet" => await MapInternetAsync(force).ConfigureAwait(true),
             _ => throw new InvalidOperationException($"Unknown module: {module}")
         };
+        _detectCache[key] = (DateTimeOffset.UtcNow, payload);
+        return payload;
+    }
+
+    private void InvalidateDetectCache(string? module = null)
+    {
+        if (string.IsNullOrWhiteSpace(module))
+        {
+            _detectCache.Clear();
+            _internetProbeCache = null;
+            _internetProbeCacheUtc = DateTimeOffset.MinValue;
+            return;
+        }
+        _detectCache.Remove(module.Trim().ToLowerInvariant());
+        if (string.Equals(module, "internet", StringComparison.OrdinalIgnoreCase))
+        {
+            _internetProbeCache = null;
+            _internetProbeCacheUtc = DateTimeOffset.MinValue;
+        }
     }
 
     /// <summary>
@@ -603,12 +662,23 @@ public sealed class WebHostBridge
     /// InternetOptimizerViewModel (path / policy / DNS / repair), plus adapter
     /// identity from ProbeAsync when available.
     /// </summary>
-    private async Task<object> MapInternetAsync()
+    private async Task<object> MapInternetAsync(bool force = false)
     {
         NetworkSnapshot? snap = null;
         try
         {
-            snap = await _services.Network.ProbeAsync().ConfigureAwait(true);
+            if (!force &&
+                _internetProbeCache is not null &&
+                DateTimeOffset.UtcNow - _internetProbeCacheUtc < InternetProbeFreshness)
+            {
+                snap = _internetProbeCache;
+            }
+            else
+            {
+                snap = await _services.Network.ProbeAsync().ConfigureAwait(true);
+                _internetProbeCache = snap;
+                _internetProbeCacheUtc = DateTimeOffset.UtcNow;
+            }
         }
         catch
         {
@@ -616,8 +686,8 @@ public sealed class WebHostBridge
         }
 
         var savedPreset = snap?.ActivePreset ?? _services.Network.LoadSavedPreset();
-        var applied = savedPreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput
-            || !string.IsNullOrWhiteSpace(HomeDashboardReader.TryReadInternetStatus());
+        // Only competitive presets count as applied — not Balanced / leftover status strings.
+        var applied = savedPreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput;
         var preferLowest = savedPreset != NetworkPreset.HighestThroughput;
         var presetLabel = savedPreset switch
         {
@@ -749,12 +819,45 @@ public sealed class WebHostBridge
             if (state.Extra.TryGetValue("gsync", out var g) || state.Extra.TryGetValue("Gsync", out g))
                 useGsync = string.Equals(g, "true", StringComparison.OrdinalIgnoreCase) || g == "1";
         }
+
+        // Recompute status from feature rows so "N need Apply" matches red tiles.
+        static bool IsInfoTitle(string? title)
+        {
+            if (string.IsNullOrWhiteSpace(title)) return true;
+            var t = title.Trim();
+            return t.Equals("Optimization verified", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Anti-cheat untouched", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("One-click Repair ready", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Safe repair", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Policy", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Adapter", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Last apply", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Display scaling & color", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Latency / sync policy", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Stack profile", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Gaming multimedia stack", StringComparison.OrdinalIgnoreCase);
+        }
+
+        var checkable = state.Features
+            .Where(f => !IsInfoTitle(f.Title))
+            .ToList();
+        var off = checkable.Where(f => !f.IsActive).Select(f => f.Title).ToList();
+        var statusText = off.Count == 0
+            ? (state.IsApplied || checkable.Count == 0 ? "Already optimized" : "Ready to optimize")
+            : off.Count == 1
+                ? $"1 setting needs Apply ({off[0]})"
+                : $"{off.Count} settings need Apply";
+        // Honest applied: host flag AND no checkable gaps
+        var isApplied = state.IsApplied && off.Count == 0;
+
         return new
         {
             id,
-            isApplied = state.IsApplied,
-            statusText = state.StatusText,
-            detail = state.Detail,
+            isApplied,
+            statusText,
+            detail = off.Count > 0
+                ? "Off: " + string.Join(", ", off) + "."
+                : state.Detail,
             features = state.Features.Select(f => new
             {
                 title = f.Title,
@@ -767,6 +870,7 @@ public sealed class WebHostBridge
                 {
                     "discord" => _services.Settings.Current.ExperimentalDiscord,
                     "steam" => _services.Settings.Current.ExperimentalSteam,
+                    "windows" => _services.Settings.Current.ExperimentalWindows,
                     "internet" => _services.Settings.Current.ExperimentalInternet,
                     "nvidia" => _services.Settings.Current.ExperimentalNvidia,
                     "riot" => _services.Settings.Current.ExperimentalRiot,
@@ -800,6 +904,7 @@ public sealed class WebHostBridge
                 {
                     case "discord": s.ExperimentalDiscord = experimental; break;
                     case "steam": s.ExperimentalSteam = experimental; break;
+                    case "windows": s.ExperimentalWindows = experimental; break;
                     case "internet": s.ExperimentalInternet = experimental; break;
                     case "nvidia": s.ExperimentalNvidia = experimental; break;
                     case "riot": s.ExperimentalRiot = experimental; break;
@@ -809,16 +914,46 @@ public sealed class WebHostBridge
         }
         catch { /* non-fatal */ }
 
-        await RunModuleScriptAsync(module, repair: false, experimental, useGsync, preferLowestLatency)
-            .ConfigureAwait(true);
-        return await DetectCoreAsync(module).ConfigureAwait(true);
+        try
+        {
+            await RunModuleScriptAsync(module, repair: false, experimental, useGsync, preferLowestLatency)
+                .ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // Always point at the detailed log so Riot/Windows failures are actionable.
+            var latest = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Exo", "logs", $"apply-{module}-latest.log");
+            var hint = File.Exists(latest)
+                ? $"{ex.Message}{Environment.NewLine}Full log: {latest}"
+                : ex.Message;
+            throw new InvalidOperationException(hint, ex);
+        }
+        // Cross-module side effects (Windows Game Bar, yield companions, DSCP, …)
+        InvalidateDetectCache();
+        return await DetectCoreAsync(module, force: true).ConfigureAwait(true);
     }
 
     private async Task<object> RepairModuleAsync(JsonElement p, bool hasParams)
     {
         var module = (ReadString(p, hasParams, "module") ?? "discord").ToLowerInvariant();
-        await RunModuleScriptAsync(module, repair: true, experimental: false).ConfigureAwait(true);
-        return await DetectCoreAsync(module).ConfigureAwait(true);
+        try
+        {
+            await RunModuleScriptAsync(module, repair: true, experimental: false).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            var latest = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Exo", "logs", $"apply-{module}-latest.log");
+            var hint = File.Exists(latest)
+                ? $"{ex.Message}{Environment.NewLine}Full log: {latest}"
+                : ex.Message;
+            throw new InvalidOperationException(hint, ex);
+        }
+        InvalidateDetectCache();
+        return await DetectCoreAsync(module, force: true).ConfigureAwait(true);
     }
 
     private async Task RunModuleScriptAsync(
@@ -830,83 +965,339 @@ public sealed class WebHostBridge
     {
         var scripts = _services.Scripts;
         var runner = _services.PowerShell;
+        using var log = new ModuleApplyLog(module + (repair ? "-repair" : ""));
+        log.Line($"mode={(repair ? "repair" : "apply")} experimental={experimental} useGsync={useGsync} preferLowestLatency={preferLowestLatency}");
 
-        void Report(double percent, string status) =>
+        void Report(double percent, string status)
+        {
+            log.Progress(percent, status);
             PostEvent("module.progress", new { module, percent, status });
+        }
 
         var progress = new Progress<ScriptRunProgress>(pr => Report(pr.Percent, pr.Status));
 
-        if (module == "internet")
+        try
         {
-            var net = _services.Network;
-            var strProgress = new Progress<string>(s => Report(-1, s));
-            if (repair)
+            if (module == "internet")
             {
-                var (ok, msg) = await net.RepairAsync(strProgress).ConfigureAwait(true);
-                if (!ok) throw new InvalidOperationException(msg);
+                var net = _services.Network;
+                var strProgress = new Progress<string>(s =>
+                {
+                    log.Line("NET  " + s);
+                    Report(-1, s);
+                });
+                if (repair)
+                {
+                    log.Line("Internet Repair starting...");
+                    var (ok, msg) = await net.RepairAsync(strProgress).ConfigureAwait(true);
+                    log.Line($"Internet Repair result ok={ok} msg={msg}");
+                    if (!ok) throw new InvalidOperationException(msg);
+                    log.Finish(true, "Internet repair ok");
+                    return;
+                }
+
+                var preset = preferLowestLatency ? NetworkPreset.LowestLatency : NetworkPreset.HighestThroughput;
+                log.Line($"Internet Apply preset={preset}");
+                var (aok, amsg) = await net.ApplyPresetAsync(
+                    preset,
+                    new NetworkApplyOptions { Experimental = experimental, RestartEthernet = true },
+                    strProgress).ConfigureAwait(true);
+                log.Line($"Internet Apply result ok={aok} msg={amsg}");
+                if (!aok) throw new InvalidOperationException(amsg);
+                // Enforce MS-safe MMCSS pins after network script (never leave folklore 0 / ffffffff).
+                RestampHostLatency(log);
+                log.Finish(true, "Internet apply ok");
                 return;
             }
 
-            var preset = preferLowestLatency ? NetworkPreset.LowestLatency : NetworkPreset.HighestThroughput;
-            var (aok, amsg) = await net.ApplyPresetAsync(
-                preset,
-                new NetworkApplyOptions { Experimental = experimental, RestartEthernet = true },
-                strProgress).ConfigureAwait(true);
-            if (!aok) throw new InvalidOperationException(amsg);
-            return;
+            // ── Apply pipeline policy (repair always uses full PS kit) ──────────
+            // discord / nvidia  → specialized PowerShell kits only
+            // internet          → NetworkOptimizerService only (handled above)
+            // riot / epic       → native C# ONLY (PS kit duplicates + broke yield)
+            // windows / steam   → native C# primary; PS deep pack soft-fails if native OK
+            //
+            // Old hybrid always forced a full elevated PS kit after native → double
+            // work, double elevation, hangs (Defender), and strip of yield Run keys.
+            var supportsNative = !repair && _services.NativeApply.SupportsNativeApply(module);
+            // Modules whose competitive apply is fully covered by native C#.
+            var nativeComplete = module is "riot" or "epic" or "windows";
+            // Steam still benefits from PS debloat depth; soft-fail if native essentials OK.
+            var softFailDeepPack = module is "steam" or "windows";
+            // Riot/Epic/Windows: full competitive apply is native C# (every detect row).
+            // No redundant PS kit — hang sources (DISM/schtasks) are hard-timeout inside native.
+            // Steam still runs PS deep pack for CEF/debloat depth (soft-fail if native OK).
+            var skipDeepPack = supportsNative && (module is "riot" or "epic" or "windows");
+
+            log.Line($"pipeline supportsNative={supportsNative} nativeComplete={nativeComplete} skipDeepPack={skipDeepPack} softFailDeep={softFailDeepPack} experimental={experimental}");
+
+            NativeApplyResult? nativeResult = null;
+            if (supportsNative)
+            {
+                Report(2, "Native apply (registry / files / policy)...");
+                var step = 0;
+                // Scale native progress: full range when no deep pack, else 2–55%.
+                var nativeCap = skipDeepPack ? 92.0 : 55.0;
+                var strProgress = new Progress<string>(s =>
+                {
+                    step++;
+                    log.Line($"NATIVE  {s}");
+                    var pct = Math.Min(nativeCap, 2 + step * (skipDeepPack ? 5.0 : 2.5));
+                    Report(pct, s);
+                });
+                nativeResult = await _services.NativeApply.ApplyAsync(
+                    module, experimental, strProgress, CancellationToken.None).ConfigureAwait(true);
+                log.Line($"NATIVE result Ok={nativeResult.Ok} Message={nativeResult.Message} NeedsElev={nativeResult.NeedsElevation}");
+                foreach (var s in nativeResult.Steps)
+                    log.Step(s.Id, s.Status, s.Reason);
+                if (nativeResult.ElevatedHklmOps.Count > 0)
+                    log.Line("NATIVE elevOps=" + string.Join(" ; ", nativeResult.ElevatedHklmOps));
+
+                if (!nativeResult.Ok)
+                {
+                    var essentialFailed = nativeResult.Steps.Any(s =>
+                        s.Status == "fail" &&
+                        s.Id is "startup" or "memory-guard-write" or "launcher-write"
+                            or "background-priority" or "cef-launcher" or "game-mode" or "game-bar"
+                            or "gpu-fso" or "power-plan" or "yield");
+                    if (essentialFailed || nativeResult.Steps.Count == 0)
+                    {
+                        log.Finish(false, nativeResult.Message);
+                        throw new InvalidOperationException(
+                            string.IsNullOrWhiteSpace(nativeResult.Message)
+                                ? "Native apply failed"
+                                : nativeResult.Message);
+                    }
+                    log.Line("NATIVE non-essential gaps — continuing if deep pack allowed");
+                }
+
+                if (skipDeepPack)
+                {
+                    // Final host pins (safe even when Internet folklore previously wrote 0).
+                    if (module is "windows")
+                        RestampHostLatency(log);
+
+                    Report(100, "Native apply complete (no redundant PowerShell kit)");
+                    log.Finish(true, "native-only ok");
+                    return;
+                }
+
+                Report(55, "Native done — optional deep pack (soft-fail if native OK)...");
+            }
+
+            string script;
+            string workDir;
+            var args = new List<string>();
+
+            switch (module)
+            {
+                case "discord":
+                    script = repair ? scripts.DiscordRepairScript : scripts.DiscordOptimizerScript;
+                    workDir = scripts.GetDiscordRoot();
+                    break;
+                case "steam":
+                    script = repair ? scripts.SteamRepairScript : scripts.SteamOptimizerScript;
+                    workDir = scripts.GetSteamRoot();
+                    break;
+                case "windows":
+                    script = repair ? scripts.WindowsRepairScript : scripts.WindowsOptimizerScript;
+                    workDir = scripts.GetWindowsRoot();
+                    break;
+                case "nvidia":
+                    script = repair ? scripts.NvidiaRepairScript : scripts.NvidiaOptimizerScript;
+                    workDir = scripts.GetNvidiaRoot();
+                    if (!repair)
+                        args.Add(useGsync ? "-Gsync" : "-RawLatency");
+                    break;
+                case "riot":
+                    script = repair ? scripts.RiotRepairScript : scripts.RiotOptimizerScript;
+                    workDir = scripts.GetGameLaunchersRoot();
+                    break;
+                case "epic":
+                    script = repair ? scripts.EpicRepairScript : scripts.EpicOptimizerScript;
+                    workDir = scripts.GetGameLaunchersRoot();
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown module: {module}");
+            }
+
+            if (!repair && experimental)
+                args.Add("-Experimental");
+
+            log.Line($"script={script}");
+            log.Line($"workDir={workDir}");
+            log.Line($"args=[{string.Join(" ", args)}]");
+            log.Line($"scriptExists={File.Exists(script)}");
+
+            if (!File.Exists(script))
+            {
+                // Native-only modules already returned. Steam experimental without script still fails.
+                if (nativeResult is { Ok: true } && softFailDeepPack)
+                {
+                    log.Line("Deep pack script missing — accepting native apply");
+                    Report(100, "Native apply complete (deep pack script missing)");
+                    log.Finish(true, "native ok; deep pack skipped");
+                    return;
+                }
+                log.Finish(false, "Optimizer script missing");
+                throw new FileNotFoundException("Optimizer script missing", script);
+            }
+
+            var deepBase = supportsNative ? 55.0 : 0.0;
+            var deepSpan = supportsNative ? 40.0 : 95.0;
+            var deepProgress = new Progress<ScriptRunProgress>(pr =>
+            {
+                if (pr.Percent < 0) Report(-1, pr.Status);
+                else Report(deepBase + pr.Percent / 100.0 * deepSpan, pr.Status);
+            });
+
+            if (supportsNative)
+                Report(56, "Deep pack (elevated; non-fatal if native already OK)...");
+            else
+                Report(5, repair ? "Repair (elevated)..." : "Apply (elevated)...");
+
+            var result = await runner.RunAsync(
+                script,
+                arguments: args.ToArray(),
+                elevate: true,
+                progress: deepProgress,
+                cancellationToken: CancellationToken.None,
+                workingDirectory: workDir).ConfigureAwait(true);
+
+            log.Line($"PS Success={result.Success} ExitCode={result.ExitCode} Summary={result.Summary}");
+            log.Line($"PS LogPath={result.LogPath}");
+            if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
+                log.Line($"PS ErrorMessage={result.ErrorMessage}");
+            ModuleApplyLog.MirrorElevatedTransaction(module, result.LogPath, log);
+            if (!string.IsNullOrWhiteSpace(result.FullOutput))
+            {
+                log.Line("----- PS FullOutput (truncated if huge) -----");
+                var fo = result.FullOutput;
+                if (fo.Length > 80_000) fo = fo[^80_000..];
+                foreach (var line in fo.Split('\n'))
+                    log.Line(line.TrimEnd('\r'));
+            }
+
+            if (!result.Success)
+            {
+                var err = string.IsNullOrWhiteSpace(result.ErrorMessage)
+                    ? (string.IsNullOrWhiteSpace(result.Summary) ? "Deep pack failed" : result.Summary)
+                    : result.ErrorMessage!;
+
+                // Soft-fail: native already applied the competitive stack.
+                if (softFailDeepPack && nativeResult is { Ok: true })
+                {
+                    log.Line($"DEEP PACK soft-fail (native OK): {err}");
+                    log.Step("deep-pack", "partial", err.Length > 200 ? err[..200] : err);
+                    if (module is "windows" or "steam")
+                        RestampHostLatency(log);
+                    Report(100, "Native apply complete (deep pack partial — see log)");
+                    log.Finish(true, "native ok; deep pack partial");
+                    return;
+                }
+
+                // Windows integrity: retry once from bundled Scripts root.
+                if (!repair && module == "windows" &&
+                    err.Contains("signed script manifest", StringComparison.OrdinalIgnoreCase))
+                {
+                    log.Line("RETRY windows deep pack from bundled ScriptsRoot...");
+                    var bundled = Path.Combine(PathHelper.ScriptsRoot, "Windows", "Exo-Windows-Run.ps1");
+                    log.Line($"bundled={bundled} exists={File.Exists(bundled)}");
+                    if (File.Exists(bundled))
+                    {
+                        var retry = await runner.RunAsync(
+                            bundled,
+                            arguments: args.ToArray(),
+                            elevate: true,
+                            progress: deepProgress,
+                            cancellationToken: CancellationToken.None,
+                            workingDirectory: Path.GetDirectoryName(bundled)!).ConfigureAwait(true);
+                        log.Line($"RETRY Success={retry.Success} Exit={retry.ExitCode} Summary={retry.Summary}");
+                        ModuleApplyLog.MirrorElevatedTransaction(module, retry.LogPath, log);
+                        if (retry.Success)
+                        {
+                            result = retry;
+                            err = null!;
+                        }
+                        else if (softFailDeepPack && nativeResult is { Ok: true })
+                        {
+                            log.Line($"RETRY soft-fail (native OK): {retry.ErrorMessage ?? retry.Summary}");
+                            Report(100, "Native apply complete (deep pack retry partial)");
+                            log.Finish(true, "native ok; deep pack partial");
+                            return;
+                        }
+                        else
+                        {
+                            err = string.IsNullOrWhiteSpace(retry.ErrorMessage)
+                                ? (retry.Summary ?? err)
+                                : retry.ErrorMessage!;
+                        }
+                    }
+                }
+
+                if (err is not null)
+                {
+                    log.Finish(false, err);
+                    throw new InvalidOperationException(err + Environment.NewLine + "Full log: " + log.LatestPath);
+                }
+            }
+
+            // Re-stamp yield if PS path ran (riot/epic native-only skips this).
+            if (!repair && (module is "riot" or "epic") && !skipDeepPack)
+            {
+                log.Line("Re-stamp native yield companion after deep pack...");
+                Report(97, "Re-stamping yield companion...");
+                try
+                {
+                    var restamp = LauncherNativeApply.Apply(module, experimental, new Progress<string>(s => log.Line("RESTAMP  " + s)));
+                    foreach (var s in restamp.Steps.Where(x => x.Id is "yield" or "gpu-fso" or "game-dscp"))
+                        log.Step(s.Id, s.Status, s.Reason);
+                }
+                catch (Exception ex)
+                {
+                    log.Line("RESTAMP failed (non-fatal): " + ex.Message);
+                }
+            }
+
+            if (!repair && module is "windows" or "steam")
+                RestampHostLatency(log);
+
+            var doneMsg = supportsNative
+                ? (result.Success ? "native + deep pack ok" : "native ok; deep pack partial")
+                : "apply ok";
+            Report(100, "Completed successfully");
+            log.Finish(true, doneMsg);
         }
-
-        string script;
-        string workDir;
-        var args = new List<string>();
-
-        switch (module)
+        catch (Exception ex)
         {
-            case "discord":
-                script = repair ? scripts.DiscordRepairScript : scripts.DiscordOptimizerScript;
-                workDir = scripts.GetDiscordRoot();
-                break;
-            case "steam":
-                script = repair ? scripts.SteamRepairScript : scripts.SteamOptimizerScript;
-                workDir = scripts.GetSteamRoot();
-                break;
-            case "nvidia":
-                script = repair ? scripts.NvidiaRepairScript : scripts.NvidiaOptimizerScript;
-                workDir = scripts.GetNvidiaRoot();
-                if (!repair)
-                    args.Add(useGsync ? "-Gsync" : "-RawLatency");
-                break;
-            case "riot":
-                script = repair ? scripts.RiotRepairScript : scripts.RiotOptimizerScript;
-                workDir = scripts.GetGameLaunchersRoot();
-                break;
-            case "epic":
-                script = repair ? scripts.EpicRepairScript : scripts.EpicOptimizerScript;
-                workDir = scripts.GetGameLaunchersRoot();
-                break;
-            default:
-                throw new InvalidOperationException($"Unknown module: {module}");
+            log.Exception(ex, "RunModuleScriptAsync");
+            log.Finish(false, ex.Message);
+            throw;
         }
+    }
 
-        if (!repair && experimental)
-            args.Add("-Experimental");
-
-        if (!File.Exists(script))
-            throw new FileNotFoundException("Optimizer script missing", script);
-
-        var result = await runner.RunAsync(
-            script,
-            arguments: args.ToArray(),
-            elevate: true,
-            progress: progress,
-            cancellationToken: CancellationToken.None,
-            workingDirectory: workDir).ConfigureAwait(true);
-
-        if (!result.Success)
-            throw new InvalidOperationException(
-                string.IsNullOrWhiteSpace(result.ErrorMessage)
-                    ? (string.IsNullOrWhiteSpace(result.Summary) ? "Apply failed" : result.Summary)
-                    : result.ErrorMessage!);
+    /// <summary>
+    /// MS-safe host latency pins. Values &lt;10 for SystemResponsiveness clamp to 20 (stock).
+    /// </summary>
+    private static void RestampHostLatency(ModuleApplyLog log)
+    {
+        try
+        {
+            NativeReg.TrySetDword("HKLM",
+                @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling",
+                "PowerThrottlingOff", 1);
+            NativeReg.TrySetDword("HKLM",
+                @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile",
+                "SystemResponsiveness", 10);
+            NativeReg.TrySetDword("HKLM",
+                @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile",
+                "NetworkThrottlingIndex", 10);
+            log.Line(
+                $"Host latency restamp PowerThrottlingOff=1 SystemResponsiveness={NativeReg.GetDword("HKLM", @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness")} NTI={NativeReg.GetDword("HKLM", @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NetworkThrottlingIndex")}");
+        }
+        catch (Exception ex)
+        {
+            log.Line("Host latency restamp: " + ex.Message);
+        }
     }
 
     private static string? ReadString(JsonElement p, bool has, string name)

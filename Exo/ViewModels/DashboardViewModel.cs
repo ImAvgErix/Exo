@@ -25,9 +25,9 @@ public partial class DashboardViewModel : ObservableObject
         {
             Card("discord", "Discord", "Assets/Logos/discord.png", OptimizerStatus.Available),
             Card("steam", "Steam", "Assets/Logos/steam.png", OptimizerStatus.Available),
+            Card("windows", "Windows", "Assets/Logos/windows.png", OptimizerStatus.Available),
             Card("internet", "Internet", "Assets/Logos/internet.png", OptimizerStatus.Available),
             Card("nvidia", "NVIDIA", "Assets/Logos/nvidia.png", OptimizerStatus.Available),
-            Card("windows", "Windows", "Assets/Logos/windows.png", OptimizerStatus.ComingSoon),
             Card("amd", "AMD", "Assets/Logos/amd.png", OptimizerStatus.ComingSoon),
             Card("brave", "Brave", "Assets/Logos/brave.png", OptimizerStatus.ComingSoon),
             Card("riot", "Riot", "Assets/Logos/riot.png", OptimizerStatus.Available),
@@ -43,6 +43,7 @@ public partial class DashboardViewModel : ObservableObject
         [
             new OptimizerCheckRowViewModel("Discord", "discord"),
             new OptimizerCheckRowViewModel("Steam", "steam"),
+            new OptimizerCheckRowViewModel("Windows", "windows"),
             new OptimizerCheckRowViewModel("Internet", "internet"),
             new OptimizerCheckRowViewModel("NVIDIA", "nvidia"),
             new OptimizerCheckRowViewModel("Riot", "riot"),
@@ -66,7 +67,7 @@ public partial class DashboardViewModel : ObservableObject
     public ObservableCollection<double> NetSeries { get; }
 
     [ObservableProperty] public partial string HeroSummary { get; set; } = "Maximum performance. No compromise.";
-    [ObservableProperty] public partial string OverviewPrimary { get; set; } = "0 / 6 verified";
+    [ObservableProperty] public partial string OverviewPrimary { get; set; } = "0 / 7 verified";
     [ObservableProperty] public partial string AppliedModulesList { get; set; } = "None applied yet";
 
     [ObservableProperty] public partial string NextActionModule { get; set; } = string.Empty;
@@ -130,6 +131,10 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] public partial string EpicStatusSecondary { get; set; } = "Apply policy to games discovered from manifests";
     [ObservableProperty] public partial string EpicStatusTag { get; set; } = "NOT APPLIED";
     [ObservableProperty] public partial string EpicLiveMetric { get; set; } = "Launcher files and updates stay untouched";
+    [ObservableProperty] public partial string WindowsStatusPrimary { get; set; } = "Windows ready";
+    [ObservableProperty] public partial string WindowsStatusSecondary { get; set; } = "Apply host Game Mode, HAGS, Game Bar, and priority";
+    [ObservableProperty] public partial string WindowsStatusTag { get; set; } = "NOT APPLIED";
+    [ObservableProperty] public partial string WindowsLiveMetric { get; set; } = "Host gaming stack not applied";
     [ObservableProperty] public partial string FpsPrimary { get; set; } = "—";
     [ObservableProperty] public partial string FpsSecondary { get; set; } = "";
     [ObservableProperty] public partial string FrameTimePrimary { get; set; } = "—";
@@ -478,6 +483,25 @@ public partial class DashboardViewModel : ObservableObject
         outcomes["steam"] = steamOk;
         if (steamOk) { appliedCount++; appliedNames.Add("Steam"); }
 
+        var windowsOk = ReadModuleState("windows-optimizer.json").Applied;
+        outcomes["windows"] = windowsOk;
+        if (windowsOk)
+        {
+            appliedCount++;
+            appliedNames.Add("Windows");
+            WindowsStatusTag = "VERIFIED";
+            WindowsStatusPrimary = "Host stack active";
+            WindowsStatusSecondary = "Game Mode, HAGS, Game Bar quiet, foreground boost";
+            WindowsLiveMetric = "Windows host gaming stack verified";
+        }
+        else
+        {
+            WindowsStatusTag = "NOT APPLIED";
+            WindowsStatusPrimary = "Windows ready";
+            WindowsStatusSecondary = "Apply host Game Mode, HAGS, Game Bar, and priority";
+            WindowsLiveMetric = "Host gaming stack not applied";
+        }
+
         var beforeNet = appliedCount;
         RefreshInternetTile(ref appliedCount);
         var internetOk = appliedCount > beforeNet;
@@ -555,24 +579,24 @@ public partial class DashboardViewModel : ObservableObject
         FrameTimePrimary = DiscordStatusPrimary;
         FrameTimeSecondary = DiscordStatusSecondary;
 
-        OverviewPrimary = $"{appliedCount} / 6 verified";
+        OverviewPrimary = $"{appliedCount} / 7 verified";
         AppliedModulesList = appliedNames.Count > 0
             ? string.Join(" · ", appliedNames)
             : "None applied yet";
         UpdateNextAction(appliedCount);
         // Keep one short line for any residual bindings; header no longer stacks essays.
-        HeroSummary = appliedCount == 6
+        HeroSummary = appliedCount == 7
             ? "All optimizers verified"
             : HasNextAction
                 ? $"Next: {NextActionModule}"
-                : $"{appliedCount}/6 verified";
+                : $"{appliedCount}/7 verified";
 
         RefreshLiveMemory();
     }
 
     private void UpdateNextAction(int appliedCount)
     {
-        if (appliedCount >= 6)
+        if (appliedCount >= 7)
         {
             HasNextAction = false;
             NextActionModule = string.Empty;
@@ -585,6 +609,7 @@ public partial class DashboardViewModel : ObservableObject
         [
             ("Discord", "Open Discord", DiscordStatusTag, DiscordStatusSecondary),
             ("Steam", "Open Steam", SteamStatusTag, SteamStatusSecondary),
+            ("Windows", "Open Windows", WindowsStatusTag, WindowsStatusSecondary),
             ("Internet", "Open Internet", InternetStatusTag, LatencySecondary),
             ("NVIDIA", "Open NVIDIA", NvidiaStatusTag, NvidiaPathSecondary),
             ("Riot", "Open Riot", RiotStatusTag, RiotStatusSecondary),

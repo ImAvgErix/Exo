@@ -24,13 +24,38 @@ public sealed partial class SharedModulePlate : UserControl
     private void SecondaryLeft_Click(object sender, RoutedEventArgs e) =>
         SecondaryLeftClick?.Invoke(sender, e);
 
+    /// <summary>Legacy; module name lives in the top toolbar, not on the plate.</summary>
     public static readonly DependencyProperty ModuleTitleProperty =
-        DependencyProperty.Register(nameof(ModuleTitle), typeof(string), typeof(SharedModulePlate), new PropertyMetadata("MODULE"));
+        DependencyProperty.Register(nameof(ModuleTitle), typeof(string), typeof(SharedModulePlate), new PropertyMetadata(string.Empty));
     public string ModuleTitle { get => (string)GetValue(ModuleTitleProperty); set => SetValue(ModuleTitleProperty, value); }
 
     public static readonly DependencyProperty StatusTextProperty =
         DependencyProperty.Register(nameof(StatusText), typeof(string), typeof(SharedModulePlate), new PropertyMetadata(string.Empty));
     public string StatusText { get => (string)GetValue(StatusTextProperty); set => SetValue(StatusTextProperty, value); }
+
+    public static readonly DependencyProperty ShowProfileToggleProperty =
+        DependencyProperty.Register(nameof(ShowProfileToggle), typeof(bool), typeof(SharedModulePlate), new PropertyMetadata(false));
+    public bool ShowProfileToggle { get => (bool)GetValue(ShowProfileToggleProperty); set => SetValue(ShowProfileToggleProperty, value); }
+
+    public static readonly DependencyProperty ProfileLabelProperty =
+        DependencyProperty.Register(nameof(ProfileLabel), typeof(string), typeof(SharedModulePlate), new PropertyMetadata("Stack profile"));
+    public string ProfileLabel { get => (string)GetValue(ProfileLabelProperty); set => SetValue(ProfileLabelProperty, value); }
+
+    public static readonly DependencyProperty ProfileHintProperty =
+        DependencyProperty.Register(nameof(ProfileHint), typeof(string), typeof(SharedModulePlate), new PropertyMetadata(string.Empty));
+    public string ProfileHint { get => (string)GetValue(ProfileHintProperty); set => SetValue(ProfileHintProperty, value); }
+
+    public static readonly DependencyProperty HasProfileHintProperty =
+        DependencyProperty.Register(nameof(HasProfileHint), typeof(bool), typeof(SharedModulePlate), new PropertyMetadata(false));
+    public bool HasProfileHint { get => (bool)GetValue(HasProfileHintProperty); set => SetValue(HasProfileHintProperty, value); }
+
+    public static readonly DependencyProperty SelectedProfileProperty =
+        DependencyProperty.Register(nameof(SelectedProfile), typeof(string), typeof(SharedModulePlate), new PropertyMetadata(string.Empty));
+    public string SelectedProfile { get => (string)GetValue(SelectedProfileProperty); set => SetValue(SelectedProfileProperty, value); }
+
+    public static readonly DependencyProperty ProfileOptionsProperty =
+        DependencyProperty.Register(nameof(ProfileOptions), typeof(object), typeof(SharedModulePlate), new PropertyMetadata(null));
+    public object? ProfileOptions { get => GetValue(ProfileOptionsProperty); set => SetValue(ProfileOptionsProperty, value); }
 
     public static readonly DependencyProperty GuidanceTextProperty =
         DependencyProperty.Register(nameof(GuidanceText), typeof(string), typeof(SharedModulePlate), new PropertyMetadata(string.Empty));

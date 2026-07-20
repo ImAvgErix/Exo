@@ -355,6 +355,13 @@ if ($snap) {
   Set-Dword $mm 'SystemResponsiveness' 20
   # Default NetworkThrottlingIndex is 10
   Set-Dword $mm 'NetworkThrottlingIndex' 10
+  # Competitive extras → stock-ish
+  try { Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' 'Win32PrioritySeparation' 2 } catch {}
+  try { Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'HwSchMode' } catch {}
+  try {
+    Remove-Prop 'HKCU:\Software\Microsoft\GameBar' 'AutoGameModeEnabled'
+    Remove-Prop 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode'
+  } catch {}
   # Remove QoS reserve policy so OS default applies again
   Remove-Prop 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit'
   try { Remove-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' -Recurse -Force -EA SilentlyContinue } catch {}
@@ -410,6 +417,17 @@ if ($snap) {
   # Network policies Exo may have set — clear force-values
   try {
     Remove-Prop 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' 'EnableMulticast'
+    Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' 'DisableBandwidthThrottling'
+    Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters' 'DisableBandwidthThrottling'
+    # Multi-app DSCP policies written by Internet apply (Exo-Net-DSCP-*)
+    try {
+      $qosRoot = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS'
+      if (Test-Path -LiteralPath $qosRoot) {
+        Get-ChildItem -LiteralPath $qosRoot -ErrorAction SilentlyContinue |
+          Where-Object { $_.PSChildName -like 'Exo-Net-DSCP-*' } |
+          ForEach-Object { Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction SilentlyContinue }
+      }
+    } catch {}
     Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxCacheTtl'
     Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxNegativeCacheTtl'
     # Undo folklore ServiceProvider priorities if present

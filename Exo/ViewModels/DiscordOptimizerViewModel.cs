@@ -205,7 +205,8 @@ public partial class DiscordOptimizerViewModel : ObservableObject
         try
         {
             var args = new List<string> { "-NonInteractive" };
-            if (PreferExperimental) args.Add("-Experimental");
+            // Always competitive max-aggression (UI no longer offers Stable/Experimental).
+            args.Add("-Experimental");
 
             var progress = new Progress<ScriptRunProgress>(p =>
             {

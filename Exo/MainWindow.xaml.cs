@@ -244,6 +244,7 @@ public sealed partial class MainWindow : Window
     public void NavigateHome(bool suppressTransition = false) => NavigateWebHash("#/");
     public void NavigateToDiscord() => NavigateWebHash("#/module/discord");
     public void NavigateToSteam() => NavigateWebHash("#/module/steam");
+    public void NavigateToWindows() => NavigateWebHash("#/module/windows");
     public void NavigateToInternet() => NavigateWebHash("#/module/internet");
     public void NavigateToNvidia() => NavigateWebHash("#/module/nvidia");
     public void NavigateToRiot() => NavigateWebHash("#/module/riot");

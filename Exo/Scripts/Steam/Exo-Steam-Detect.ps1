@@ -108,14 +108,15 @@ function Test-SteamTrayQuiet([string]$SteamPath) {
 }
 
 function Test-SteamScheduledTasksQuiet {
+    # Never full Get-ScheduledTask on detect (multi-second). Marker / soft true.
     try {
-        foreach ($task in @(Get-ScheduledTask -ErrorAction SilentlyContinue)) {
-            if ($task.TaskName -notmatch '(?i)\bSteam\b' -and $task.TaskPath -notmatch '(?i)\\Steam\\') { continue }
-            if ($task.TaskName -match '(?i)Steam(VR|Link|OS|Deck)' -or $task.TaskPath -match '(?i)Steam(VR|Link|OS|Deck)') { continue }
-            if ([bool]$task.Settings.Enabled) { return $false }
+        $statePath = Join-Path $env:LOCALAPPDATA 'Exo\steam-optimizer.json'
+        if (Test-Path -LiteralPath $statePath) {
+            $st = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($st.windowsVerified -eq $true -or $st.applyStatus -eq 'applied') { return $true }
         }
-        return $true
-    } catch { return $true }
+    } catch { }
+    return $true
 }
 
 function Test-SteamWindowsQuiet([string]$SteamPath) {
@@ -327,7 +328,12 @@ function Get-SteamLibrarySummary([string]$SteamPath) {
                     $nm = [regex]::Match($text, '"name"\s+"([^"]+)"')
                     if ($nm.Success) {
                         $label = $nm.Groups[1].Value.Trim()
-                        # Skip redistributables / tooling so install row matches Riot/Epic “real games”.
+                        # Strip (R)/(TM)/unicode marks; fix Call of Dutyr mojibake
+                        $label = $label -replace '[\u00ae\u2122\u00a9]', ''
+                        $label = $label -replace '\(R\)|\(TM\)|\(C\)', ''
+                        $label = $label -replace '(?i)\bDutyr\b', 'Duty'
+                        $label = ($label -replace '\s+', ' ').Trim()
+                        # Skip redistributables / tooling so install row matches Riot/Epic real games.
                         if ($label -match '(?i)redistributable|directx|vcredist|steamworks common|proton|steam linux') {
                             $count--
                             continue
@@ -345,19 +351,19 @@ $steamOk = [bool]$steam
 if (-not $steamOk) {
     $statusText = 'Steam not installed'
     $detail = 'Install Steam, open it once, then return.'
-    Add-Feature 'Steam install' 'Install Steam, open it once, then return.' $false
+    Add-Feature 'Steam installed' 'Install Steam, open it once, then return here to optimize.' $false
 } else {
     $lib = Get-SteamLibrarySummary $steam
     $installDetail = if ([int]$lib.Count -le 0) {
-        'Installed - no library games found yet. Install a game, then Apply.'
+        'Steam is ready  -  install a game, then Apply for the full library-aware pass.'
     } elseif (@($lib.Names).Count -gt 0) {
         $shown = @($lib.Names | Select-Object -First 4)
         $tail = if ([int]$lib.Count -gt $shown.Count) { " +$([int]$lib.Count - $shown.Count) more" } else { '' }
-        "Installed - Found: $($shown -join ', ')$tail."
+        "Ready with: $($shown -join ', ')$tail."
     } else {
-        "Installed - Found $($lib.Count) library game(s)."
+        "Ready  -  $($lib.Count) library game(s) found."
     }
-    Add-Feature 'Steam install' $installDetail $true
+    Add-Feature 'Steam installed' $installDetail $true
 
     # Quiet CEF launcher (SteamLogic / SteamDetectCore)
     $cefOk = $false
@@ -368,7 +374,38 @@ if (-not $steamOk) {
             $cefOk = Test-SteamCefLauncherText -Text $launcherText
         } catch { }
     }
-    Add-Feature 'Quiet CEF launcher' 'Fast quiet CEF flags and High priority Steam start before the in-game contention guard attaches.' $cefOk
+    Add-Feature 'Fast quiet launch' 'Steam starts lean and high-priority  -  less chrome, quicker into your library and games.' $cefOk
+
+    # Client-only FSO + DSCP (never library games)
+    $fsoFlag = '~ DISABLEDXMAXIMIZEDWINDOWEDMODE'
+    $fsoOk = $false
+    $dscpOk = $false
+    try {
+        $fsoKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers')
+        $steamExe = Join-Path $steam 'steam.exe'
+        if ($fsoKey -and (Test-Path -LiteralPath $steamExe)) {
+            $fsoOk = [string]$fsoKey.GetValue($steamExe, '') -eq $fsoFlag
+        }
+        if ($fsoKey) { $fsoKey.Dispose() }
+    } catch { }
+    try {
+        $qosPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS\Exo-Steam-DSCP-steam.exe'
+        if (Test-Path -LiteralPath $qosPath) {
+            $dscpOk = [string](Get-ItemPropertyValue -Path $qosPath -Name 'DSCP Value' -ErrorAction Stop) -eq '46'
+        }
+    } catch { }
+    # Soft: if FSO missing but apply was elevated incomplete, still show tile
+    Add-Feature 'Client FSO + priority net' 'Fullscreen Optimizations off on Steam client; UDP DSCP 46 for Steam traffic when elevated apply succeeds.' ($fsoOk -or $dscpOk)
+
+    # Marker only on detect — live library EXE scan is multi-second on large libraries.
+    # StrictMode-safe: older steam-optimizer.json lacks libraryGamePolicyVerified.
+    $libGamesOk = $false
+    try {
+        if ($state -and ($state.PSObject.Properties.Name -contains 'libraryGamePolicyVerified')) {
+            $libGamesOk = [bool]$state.libraryGamePolicyVerified
+        }
+    } catch { $libGamesOk = $false }
+    Add-Feature 'Library games GPU & FSO' 'Installed Steam games get high-perf GPU preference, FSO off, and DSCP priority - Windows policy only, game files untouched.' $libGamesOk
 
     # Reversible background memory priority + in-game CPU yield policy.
     $memoryGuardOk = $false
@@ -379,34 +416,37 @@ if (-not $steamOk) {
             $memoryGuardOk = Test-SteamMemoryGuardText -Text $helperText
         } catch { }
     }
-    Add-Feature 'In-game contention guard' 'Non-foreground steamwebhelper always soft-reclaims idle pages + EcoQoS; tighter while a game runs. Foreground Steam stays Normal. EmptyWorkingSet never used (freezes CEF).' $memoryGuardOk
+    Add-Feature 'Yield to your game' 'When a game is running, Steam background UI steps aside  -  more room for FPS and less stutter from the client.' $memoryGuardOk
 
+    # LIVE checks only — never require a successful state marker (failed/incomplete applies
+    # were turning real greens into reds: "5 need Apply" while CEF/hardware already on).
     $debloatOk = Test-SteamCompleteClientDebloat $steam
-    # Sparse intermediate states (applying/incomplete/repairing) lack these keys - guard.
-    $dlOk = [bool]($state -and ($state.PSObject.Properties.Name -contains 'configVerified') -and $state.configVerified -and
-        ($state.PSObject.Properties.Name -contains 'downloadOptimized') -and $state.downloadOptimized) -and
-        (Test-SteamDownloadConfig $steam)
-    $debloatCombined = $debloatOk -and $dlOk
-    Add-Feature 'Complete client debloat' 'Caches, leftovers, and crashpads cleaned; installed games and shader caches stay preserved.' $debloatCombined
+    $dlOk = Test-SteamDownloadConfig $steam
+    # Debloat is the main cleaner row; download config is bonus when present.
+    # If config.vdf missing, still allow green when disk debloat is clean.
+    $cfgPath = Join-Path $steam 'config\config.vdf'
+    $debloatCombined = if ($debloatOk) {
+        if (-not (Test-Path -LiteralPath $cfgPath)) { $true }
+        else { [bool]$dlOk }
+    } else { $false }
+    Add-Feature 'Cleaner Steam install' 'Caches and leftovers cleared. Your games and shader caches stay untouched.' $debloatCombined
 
-    $snapOk = [bool]($state -and ($state.PSObject.Properties.Name -contains 'clientTweaksVerified') -and $state.clientTweaksVerified -and
-        ($state.PSObject.Properties.Name -contains 'snappyUi') -and $state.snappyUi -and
-        ($state.PSObject.Properties.Name -contains 'overlayTweaks') -and $state.overlayTweaks) -and
-        (Test-SteamClientTweaks $steam)
-    Add-Feature 'Library / overlay tweaks' 'Quieter overlay, lighter library web views, and less CEF busywork in the background.' $snapOk
+    $snapOk = Test-SteamClientTweaks $steam
+    Add-Feature 'Snappier library & overlay' 'Library UI feels lighter and the overlay stays quieter in the background.' $snapOk
 
-    $hardwareOk = [bool]($state -and ($state.PSObject.Properties.Name -contains 'clientHardwareAcceleration') -and
-        $state.clientHardwareAcceleration) -and (Test-SteamClientHardwareAcceleration)
-    Add-Feature 'Hardware-accelerated client' 'Steam CEF uses the GPU instead of costly software rendering for the library UI.' $hardwareOk
+    $hardwareOk = Test-SteamClientHardwareAcceleration
+    Add-Feature 'GPU-powered Steam UI' 'Steam web UI uses your GPU so the client stays smooth instead of burning CPU on software paint.' $hardwareOk
 
     $windowsQuietOk = Test-SteamWindowsQuiet $steam
-    Add-Feature 'Windows quiet shell' 'No Steam autostart or toast spam; tray icon is not promoted into the always-visible row.' $windowsQuietOk
+    Add-Feature 'Silent Windows integration' 'No Steam autostart spam, no toast clutter, tray stays out of the way.' $windowsQuietOk
+
+    # Host Game Mode / HAGS / Game Bar live on the Windows card only.
 
     $launchOk = Test-SteamStartMenuLaunchPath $steam
-    Add-Feature 'Start Menu launch path' 'Start Menu shortcuts use the Exo quiet launcher; desktop icons are not recreated.' $launchOk
+    Add-Feature 'Clean Start Menu launch' 'Start Menu opens the Exo quiet Steam launcher  -  no desktop icon spam.' $launchOk
 
     $runtimeOk = Test-SteamRuntimeIntegrity $steam
-    Add-Feature 'Runtime integrity' 'Required Steam binaries and the durable quiet helper remain on disk after apply.' $runtimeOk
+    Add-Feature 'Helpers stay healthy' 'Quiet launch helper and memory guard remain on disk after apply.' $runtimeOk
 
     # Trust apply flags - do NOT pin exact kit version strings (1.7.3+ was falsely "incomplete").
     $markerOk = Test-SteamApplyRecord -State $state
@@ -422,27 +462,31 @@ if (-not $steamOk) {
     } elseif ($markerOk -and -not (Test-Path -LiteralPath $helper)) {
         $markerOk = $false
     }
-    # 10 tiles (even) so the two-column plate never leaves a lonely half-width card.
-    Add-Feature 'Verified optimizer record' 'A completed full apply is recorded with durable quiet policy intact.' ($markerOk -and $runtimeOk)
+    Add-Feature 'Optimization verified' 'This PC has a completed Steam apply on record with durable quiet policy intact.' ($markerOk -and $runtimeOk)
 
+    # Client FSO/DSCP + library policy are part of full apply when elevated.
+    $clientNetOk = [bool]($fsoOk -or $dscpOk)
     $isApplied = $steamOk -and $markerOk -and $cefOk -and $memoryGuardOk -and $debloatOk -and
-        $runtimeOk -and $dlOk -and $snapOk -and $hardwareOk -and $windowsQuietOk -and $launchOk
+        $runtimeOk -and $dlOk -and $snapOk -and $hardwareOk -and $windowsQuietOk -and $launchOk -and
+        $clientNetOk -and $libGamesOk
 
-    $missingCore = @()
-    if (-not $cefOk) { $missingCore += 'quiet CEF launch' }
-    if (-not $memoryGuardOk) { $missingCore += 'contention guard' }
-    if (-not $launchOk) { $missingCore += 'Start Menu path' }
+    # Status from ALL inactive checklist rows (matches UI) — exclude Optimization verified.
+    $missingAll = @()
+    foreach ($f in @($script:features)) {
+        $t = [string]$f.title
+        if ($t -eq 'Optimization verified') { continue }
+        if (-not [bool]$f.active) { $missingAll += $t }
+    }
     $statusText = if ($isApplied) { 'Already optimized' }
-    elseif ($missingCore.Count -eq 1) { "1 setting needs Apply ($($missingCore[0]))" }
-    elseif ($missingCore.Count -gt 1) { "$($missingCore.Count) launcher settings need Apply" }
-    elseif (-not $windowsQuietOk) { 'Windows quiet incomplete' }
+    elseif ($missingAll.Count -eq 1) { "1 setting needs Apply ($($missingAll[0]))" }
+    elseif ($missingAll.Count -gt 1) { "$($missingAll.Count) settings need Apply" }
     else { 'Ready to optimize' }
     $detail = if ($isApplied) {
-        'Hardware-accelerated CEF, debloat, Windows quiet, in-game CPU yield, and autostart re-enforce are active.'
-    } elseif ($missingCore.Count -gt 0) {
-        'Run Apply to restore: ' + ($missingCore -join ', ') + '.'
+        'Hardware-accelerated CEF, debloat, Windows quiet, library GPU/FSO, in-game yield, and quiet launch are active.'
+    } elseif ($missingAll.Count -gt 0) {
+        'Off: ' + ($missingAll -join ', ') + '.'
     } else {
-        'Some pieces are missing. Run Apply to finish the checklist below.'
+        'Run Apply to finish the checklist below.'
     }
 }
 

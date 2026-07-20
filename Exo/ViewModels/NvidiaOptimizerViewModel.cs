@@ -166,7 +166,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
 
             var args = new List<string> { "-NonInteractive", "-SafePolicy" };
             args.Add(UseGsync ? "-Gsync" : "-RawLatency");
-            if (PreferExperimental) args.Add("-Experimental");
+            args.Add("-Experimental");
 
             var result = await _services.PowerShell.RunAsync(
                 _services.Scripts.NvidiaOptimizerScript,

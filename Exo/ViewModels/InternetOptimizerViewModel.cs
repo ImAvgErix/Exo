@@ -306,8 +306,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Four plain-language cards explain outcomes instead of exposing a wall of
-    /// registry/driver implementation details. Deep verification stays internal.
+    /// Full probe feature list (SMB, LLMNR, multi-app DSCP, host MMCSS, NIC knobs, …)
+    /// plus a short path/DNS/repair summary so new tweaks are visible, not buried.
     /// </summary>
     private void RefreshInfoCards(NetworkSnapshot snap)
     {
@@ -322,9 +322,21 @@ public partial class InternetOptimizerViewModel : ObservableObject
         AddInfoCard("Connection path", path, snap.ProbeOk);
 
         var policy = applied
-            ? $"Last apply used {PresetLabel(snap.ActivePreset)}. Toggle selects Lowest latency (FC/IM off) or High throughput (FC/IM on)."
-            : $"Selected: {PresetLabel(SelectedPolicy)}. Analyze measures DNS/quality, then applies your toggle.";
-        AddInfoCard("Policy", policy, PreferLowestLatency || PreferHighThroughput);
+            ? $"Last apply used {PresetLabel(snap.ActivePreset)}. Stack profile selects Lowest latency or High throughput."
+            : $"Selected: {PresetLabel(SelectedPolicy)}. Analyze measures DNS/quality, then applies your stack profile.";
+        AddInfoCard("Stack profile", policy, PreferLowestLatency || PreferHighThroughput);
+
+        // Live engine knobs from probe (includes SMB, LLMNR, multi-app DSCP, host multimedia, …)
+        if (snap.Features is { Count: > 0 })
+        {
+            foreach (var f in snap.Features)
+            {
+                if (string.IsNullOrWhiteSpace(f.Title)) continue;
+                // Skip redundant path/policy echoes if present
+                if (f.Title.Equals("Path policy", StringComparison.OrdinalIgnoreCase)) continue;
+                AddInfoCard(f.Title, string.IsNullOrWhiteSpace(f.Status) ? "—" : f.Status, f.IsOk);
+            }
+        }
 
         var dnsStep = _lastApplyReport.LastOrDefault(r =>
             string.Equals(r.Name, "dns-auto", StringComparison.OrdinalIgnoreCase));
@@ -443,7 +455,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
             {
                 PreferEthernetDisableWifi = false,
                 RestartEthernet = snap.Media.EthernetInUse || snap.Media.EthernetUp,
-                Experimental = PreferExperimental,
+                Experimental = true,
                 DnsProvider = string.IsNullOrWhiteSpace(result.DnsProvider) ? "Cloudflare" : result.DnsProvider,
                 DnsPrimary = string.IsNullOrWhiteSpace(result.DnsPrimary) ? "1.1.1.1" : result.DnsPrimary,
                 DnsSecondary = string.IsNullOrWhiteSpace(result.DnsSecondary) ? "1.0.0.1" : result.DnsSecondary,

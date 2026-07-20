@@ -16,7 +16,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.11.0'
+$Script:SteamOptVersion = '1.14.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
@@ -76,8 +76,29 @@ if (Test-Path -LiteralPath $steamDetectCore) {
     . $steamDetectCore
 }
 
+# Shared Game Bar + competitive gaming glue (must . at script scope, not inside a function)
+$__common = Join-Path (Split-Path -Parent $Root) 'lib\Exo.Common.ps1'
+if (-not (Test-Path -LiteralPath $__common)) { $__common = Join-Path $Root '..\lib\Exo.Common.ps1' }
+if (-not (Test-Path -LiteralPath $__common) -and $env:LOCALAPPDATA) {
+    $__common = Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\lib\Exo.Common.ps1'
+}
+if (Test-Path -LiteralPath $__common) {
+    . $__common
+    foreach ($__libPath in @(Import-ExoSharedLibFiles -From $Root)) { . $__libPath }
+}
+# Force GameBar for DSCP (elevated apply sometimes missed Import path)
+if (-not (Get-Command Set-ExoGameQosPolicy -ErrorAction SilentlyContinue)) {
+    foreach ($c in @(
+        (Join-Path (Split-Path -Parent $Root) 'lib\Exo.GameBar.ps1'),
+        (Join-Path $Root '..\lib\Exo.GameBar.ps1'),
+        (Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\lib\Exo.GameBar.ps1')
+    )) {
+        if ($c -and (Test-Path -LiteralPath $c)) { . $c; break }
+    }
+}
+
 # Default Steam launch flags (quiet cold start).
-# NEVER use -cef-disable-gpu / -cef-disable-gpu-compositing - modern Steam's
+# NEVER use -cef-disable-gpu / -cef-disable-gpu-compositing - modern Steam
 # steamwebhelper goes blank or freezes on many GPUs (2024+ CEF).
 # Also forbidden: occlusion / renderer-accessibility disables, -silent on Start Menu.
 $Script:DefaultCefArgs = @(
@@ -255,7 +276,8 @@ function Get-SteamRecoveryFromState($State) {
         ($names -contains 'trayEntries') -or
         ($names -contains 'appPath') -or
         ($names -contains 'clientPerformance') -or
-        ($names -contains 'gpuPreferences')
+        ($names -contains 'gpuPreferences') -or
+        ($names -contains 'gameBar')
     if (-not $hasWindowsRecovery) { return $null }
 
     return @{
@@ -272,6 +294,7 @@ function Get-SteamRecoveryFromState($State) {
         AppPath                = Get-SteamObjectProperty $source 'appPath' $null
         ClientPerformance      = @(Get-SteamObjectProperty $source 'clientPerformance' @() | Where-Object { $_ })
         GpuPreferences         = @(Get-SteamObjectProperty $source 'gpuPreferences' @() | Where-Object { $_ })
+        GameBar                = @(Get-SteamObjectProperty $source 'gameBar' @() | Where-Object { $_ })
     }
 }
 
@@ -578,6 +601,7 @@ function Get-SteamWindowsRecoverySnapshot([string]$SteamPath) {
         AppPath                 = Get-SteamAppPathSnapshot
         ClientPerformance       = @(Get-SteamClientPerformanceSnapshot)
         GpuPreferences          = @(Get-SteamGpuPreferenceSnapshot $SteamPath)
+        GameBar                 = @(if (Get-Command Get-ExoGameBarSnapshot -ErrorAction SilentlyContinue) { Get-ExoGameBarSnapshot } else { @() })
     }
 }
 
@@ -627,6 +651,12 @@ function Merge-SteamStartupRecovery($Prior, [hashtable]$Current) {
         AppPath                 = if (Get-SteamObjectProperty $Prior 'AppPath' $null) { Get-SteamObjectProperty $Prior 'AppPath' $null } else { Get-SteamObjectProperty $Current 'AppPath' $null }
         ClientPerformance       = @(Merge-SteamRecoveryItems (Get-SteamObjectProperty $Prior 'ClientPerformance' @()) (Get-SteamObjectProperty $Current 'ClientPerformance' @()) @('Key', 'Name'))
         GpuPreferences          = @(Merge-SteamRecoveryItems (Get-SteamObjectProperty $Prior 'GpuPreferences' @()) (Get-SteamObjectProperty $Current 'GpuPreferences' @()) @('Key', 'Name'))
+        # Prefer prior Game Bar snapshot so re-apply keeps the original pre-Exo values.
+        GameBar                 = $(
+            $priorGb = @(Get-SteamObjectProperty $Prior 'GameBar' @())
+            if ($priorGb.Count -gt 0) { @($priorGb) }
+            else { @(Get-SteamObjectProperty $Current 'GameBar' @()) }
+        )
     }
 }
 
@@ -751,7 +781,7 @@ function Set-SteamTrayIconHidden([string]$SteamPath) {
 
 function Apply-SteamWindowsQuiet([string]$SteamPath) {
     # Ownership: Steam-scoped Windows integration only (not a future Windows module).
-    # See docs/WINDOWS-OWNERSHIP.md — Windows module must skip these keys if already verified.
+    # See docs/WINDOWS-OWNERSHIP.md  -  Windows module must skip these keys if already verified.
     Write-Step 'Applying Windows quiet shell (toasts, tray, tasks)...'
     Disable-SteamScheduledTasks
     Set-SteamWindowsNotificationsOff
@@ -1208,7 +1238,7 @@ function Find-ExoVdfSection([string]$Raw, [int]$From, [int]$To, [string]$Name) {
 function Set-SteamVdfKeyAtPath([string]$Raw, [string[]]$SectionPath, [string]$Key, [string]$Value) {
     # VDF-aware injector: rewrite the key when present anywhere; otherwise INSERT
     # it at the exact section path (creating intermediate sections as needed)
-    # with tab indentation matching Valve's own writer. Callers back up the file
+    # with tab indentation matching Valve own writer. Callers back up the file
     # (.exo-bak) before persisting the result.
     $pattern = '"' + [regex]::Escape($Key) + '"\s+"[^"]*"'
     if ($Raw -match $pattern) {
@@ -1599,14 +1629,24 @@ function Write-SteamLaunchCmd([string]$CmdPath, [string]$SteamPath, [string]$Hel
     $cmdExe = $exe.Replace('%', '%%')
     $cmdHelper = $HelperPath.Replace('%', '%%')
     $cmdPs = $ps.Replace('%', '%%')
-    # Start Steam first (HIGH) so the UI appears ASAP; kick the contention guard right
-    # after without waiting for it. Helper self-limits with a mutex.
-    # Helpers are hosted by stable PowerShell 7 (resolved via Get-ExoPwsh).
+    # Place silent VBS next to the cmd (same Steam folder) so wscript can hide the host.
+    $vbsSrc = Join-Path (Split-Path -Parent $PSScriptRoot) 'lib\Exo.RunHidden.vbs'
+    if (-not (Test-Path -LiteralPath $vbsSrc)) {
+        $vbsSrc = Join-Path $env:LOCALAPPDATA 'Exo\app\Scripts\lib\Exo.RunHidden.vbs'
+    }
+    $vbsDst = Join-Path $SteamPath 'Exo-RunHidden.vbs'
+    if (Test-Path -LiteralPath $vbsSrc) {
+        try { Copy-Item -LiteralPath $vbsSrc -Destination $vbsDst -Force -ErrorAction SilentlyContinue } catch { }
+    }
+    $cmdVbs = $vbsDst.Replace('%', '%%')
+    # Start Steam first (HIGH). Contention guard via wscript window-style 0  -  NEVER start /MIN
+    # (minimized consoles were the "2-3 PowerShell windows stay open" bug).
+    $guardCmd = ('\"{0}\" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"{1}\"' -f $cmdPs, $cmdHelper)
     $cmd = @(
         '@echo off'
-        ("rem Exo {0} - fast quiet CEF + in-game contention guard (PowerShell 7)" -f $Label)
+        ("rem Exo {0} - fast quiet CEF + silent in-game contention guard (no console)" -f $Label)
         ('start "" /HIGH /D "{0}" "{1}" {2} %*' -f $cmdSteamPath, $cmdExe, $args)
-        ('start "" /MIN "{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $cmdPs, $cmdHelper)
+        ('if exist "{0}" (wscript //nologo "{0}" "{1}") else (start "" /B "{2}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{3}")' -f $cmdVbs, $guardCmd, $cmdPs, $cmdHelper)
     ) -join "`r`n"
     [IO.File]::WriteAllText($CmdPath, $cmd + "`r`n", [Text.UTF8Encoding]::new($false))
 }
@@ -1853,14 +1893,195 @@ function Set-SteamGpuRouting([string]$SteamPath) {
     }
 }
 
+function Set-SteamClientFullscreenOptimizations([string]$SteamPath) {
+    # App-scoped only: Steam client + CEF  -  never game EXEs from the library.
+    $fsoKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
+    $flag = '~ DISABLEDXMAXIMIZEDWINDOWEDMODE'
+    $targets = @(Get-SteamGpuPreferenceTargets $SteamPath)
+    $n = 0
+    try {
+        if (-not (Test-Path $fsoKey)) { New-Item -Path $fsoKey -Force | Out-Null }
+        foreach ($exe in $targets) {
+            New-ItemProperty -LiteralPath $fsoKey -Name $exe -Value $flag -PropertyType String -Force -ErrorAction Stop | Out-Null
+            $n++
+        }
+        Write-Ok ("Fullscreen Optimizations off on {0} Steam client path(s)" -f $n)
+        return $n
+    } catch {
+        Write-Warn "Steam FSO: $($_.Exception.Message)"
+        return $n
+    }
+}
+
+function Set-SteamClientDscp {
+    # DSCP 46 for Steam client UDP (downloads/P2P/voice)  -  same QoS model as Discord voice.
+    # Needs elevated apply (HKLM). Soft-fail when policies cannot be written.
+    if (-not (Get-Command Set-ExoGameQosPolicy -ErrorAction SilentlyContinue)) {
+        $lib = Join-Path (Split-Path -Parent $PSScriptRoot) 'lib\Exo.GameBar.ps1'
+        if (Test-Path -LiteralPath $lib) { . $lib }
+    }
+    if (-not (Get-Command Set-ExoGameQosPolicy -ErrorAction SilentlyContinue)) { return 0 }
+    $ok = 0
+    foreach ($exe in @('steam.exe', 'steamwebhelper.exe')) {
+        $pol = "Exo-Steam-DSCP-$exe"
+        try {
+            if (Set-ExoGameQosPolicy -PolicyName $pol -ExeName $exe) { $ok++ }
+        } catch { }
+    }
+    if ($ok -gt 0) { Write-Ok ("Steam client DSCP 46 on {0} policy(ies)" -f $ok) }
+    else { Write-Warn 'Steam client DSCP policies not written (need elevation)' }
+    return $ok
+}
+
+function Test-SteamGameExeNameJunk([string]$Name) {
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $true }
+    return ($Name -match '(?i)^(UnityCrashHandler|CrashReport|CrashHandler|EasyAntiCheat(_EOS)?|BEService|BEClient|vcredist|vc_redist|dotnet|setup|uninstall|unins\d*|REDprelauncher|EpicWebHelper|steamerrorreporter|steam_monitor|cef_server|streaming_client|write_mini_dump|installscript|dxsetup|vulkansdk|oalinst|PhysX|dotnetfx|WindowsNoEditor|Win64Server|DedicatedServer)')
+}
+
+function Get-SteamInstalledGameExes {
+    # Discover installed game EXEs from library appmanifests (Windows policy only  -  never rewrite game files).
+    param(
+        [Parameter(Mandatory)][string]$SteamPath,
+        [int]$MaxPaths = 300
+    )
+    $list = [System.Collections.Generic.List[string]]::new()
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $steamClient = @(Get-SteamGpuPreferenceTargets $SteamPath)
+
+    foreach ($lib in @(Get-SteamLibraryRoots $SteamPath)) {
+        $steamApps = Join-Path $lib 'steamapps'
+        if (-not (Test-Path -LiteralPath $steamApps -PathType Container)) { continue }
+        $manifests = @()
+        try {
+            $manifests = @(Get-ChildItem -LiteralPath $steamApps -Filter 'appmanifest_*.acf' -File -ErrorAction Stop)
+        } catch { continue }
+
+        foreach ($mf in $manifests) {
+            if ($list.Count -ge $MaxPaths) { break }
+            $installdir = $null
+            try {
+                $text = [IO.File]::ReadAllText($mf.FullName)
+                $m = [regex]::Match($text, '"installdir"\s+"([^"]+)"')
+                if ($m.Success) { $installdir = $m.Groups[1].Value }
+            } catch { continue }
+            if ([string]::IsNullOrWhiteSpace($installdir)) { continue }
+            $common = Join-Path $steamApps ("common\" + $installdir)
+            if (-not (Test-Path -LiteralPath $common -PathType Container)) { continue }
+
+            $candidates = [System.Collections.Generic.List[string]]::new()
+            # Root + one level + common Binaries/Win64 depth (no full-tree recurse)
+            try {
+                Get-ChildItem -LiteralPath $common -Filter '*.exe' -File -ErrorAction SilentlyContinue |
+                    ForEach-Object { [void]$candidates.Add($_.FullName) }
+                Get-ChildItem -LiteralPath $common -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                    Get-ChildItem -LiteralPath $_.FullName -Filter '*.exe' -File -ErrorAction SilentlyContinue |
+                        ForEach-Object { [void]$candidates.Add($_.FullName) }
+                    # Shipping/Win64 style
+                    foreach ($sub in @('Binaries\Win64', 'bin\Win64', 'Win64', 'x64', 'binaries', 'bin')) {
+                        $p = Join-Path $_.FullName $sub
+                        if (Test-Path -LiteralPath $p -PathType Container) {
+                            Get-ChildItem -LiteralPath $p -Filter '*.exe' -File -ErrorAction SilentlyContinue |
+                                ForEach-Object { [void]$candidates.Add($_.FullName) }
+                        }
+                    }
+                }
+            } catch { }
+
+            foreach ($exe in $candidates) {
+                if ($list.Count -ge $MaxPaths) { break }
+                $leaf = [IO.Path]::GetFileName($exe)
+                if (Test-SteamGameExeNameJunk $leaf) { continue }
+                # Never re-stamp Steam client binaries as "games"
+                $isClient = $false
+                foreach ($c in $steamClient) {
+                    if ($exe -ieq $c) { $isClient = $true; break }
+                }
+                if ($isClient) { continue }
+                if ($leaf -match '(?i)^steam(webhelper|errorreporter)?\.exe$') { continue }
+                if ($seen.Add($exe)) { [void]$list.Add($exe) }
+            }
+        }
+        if ($list.Count -ge $MaxPaths) { break }
+    }
+    return @($list)
+}
+
+function Set-SteamLibraryGamePolicy {
+    # Riot/Epic-parity: high-perf GPU + FSO off + DSCP 46 on installed Steam game EXEs.
+    # Does not touch game files, launch options, anti-cheat, or Steamworks.
+    param([Parameter(Mandatory)][string]$SteamPath)
+    $paths = @(Get-SteamInstalledGameExes -SteamPath $SteamPath)
+    $gpuKey = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
+    $fsoKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
+    $fsoFlag = '~ DISABLEDXMAXIMIZEDWINDOWEDMODE'
+    $gpuN = 0
+    $fsoN = 0
+    $dscpN = 0
+    $dscpNames = [System.Collections.Generic.List[string]]::new()
+
+    if ($paths.Count -eq 0) {
+        Write-Warn 'No Steam library game EXEs discovered for Windows GPU/FSO policy'
+        return @{ Paths = 0; Gpu = 0; Fso = 0; Dscp = 0; Names = @() }
+    }
+
+    try {
+        if (-not (Test-Path $gpuKey)) { New-Item -Path $gpuKey -Force | Out-Null }
+        if (-not (Test-Path $fsoKey)) { New-Item -Path $fsoKey -Force | Out-Null }
+        foreach ($exe in $paths) {
+            try {
+                New-ItemProperty -LiteralPath $gpuKey -Name $exe -Value 'GpuPreference=2;' -PropertyType String -Force -ErrorAction Stop | Out-Null
+                $gpuN++
+            } catch { }
+            try {
+                New-ItemProperty -LiteralPath $fsoKey -Name $exe -Value $fsoFlag -PropertyType String -Force -ErrorAction Stop | Out-Null
+                $fsoN++
+            } catch { }
+        }
+    } catch {
+        Write-Warn "Steam library GPU/FSO: $($_.Exception.Message)"
+    }
+
+    if (-not (Get-Command Set-ExoGameQosPolicy -ErrorAction SilentlyContinue)) {
+        $lib = Join-Path (Split-Path -Parent $PSScriptRoot) 'lib\Exo.GameBar.ps1'
+        if (Test-Path -LiteralPath $lib) { . $lib }
+    }
+    if (Get-Command Set-ExoGameQosPolicy -ErrorAction SilentlyContinue) {
+        $uniqueExe = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($p in $paths) {
+            $leaf = [IO.Path]::GetFileName($p)
+            if (-not $leaf -or -not $uniqueExe.Add($leaf)) { continue }
+            # Cap QoS policies (registry noise)  -  first 80 unique game EXE names
+            if ($uniqueExe.Count -gt 80) { break }
+            $safe = ($leaf -replace '[^\w\.\-]', '_')
+            $pol = "Exo-SteamGame-DSCP-$safe"
+            try {
+                if (Set-ExoGameQosPolicy -PolicyName $pol -ExeName $leaf) {
+                    $dscpN++
+                    [void]$dscpNames.Add($pol)
+                }
+            } catch { }
+        }
+    }
+
+    Write-Ok ("Steam library policy: {0} game path(s); GPU={1}; FSO={2}; DSCP={3}" -f $paths.Count, $gpuN, $fsoN, $dscpN)
+    return @{
+        Paths = $paths.Count
+        Gpu   = $gpuN
+        Fso   = $fsoN
+        Dscp  = $dscpN
+        Names = @($dscpNames)
+        Sample = @($paths | Select-Object -First 12)
+    }
+}
+
 function Install-WebHelperMemoryGuard([string]$SteamPath) {
     # Reversible companion v3: aggressive RAM/CPU policy for Steam host processes only.
     # EmptyWorkingSet is banned (freezes CEF). Soft reclaim (SetProcessWorkingSetSize -1,-1)
     # runs on every NON-FOREGROUND steamwebhelper (library + in-game). EcoQoS/very-low
     # memory priority still tighten harder while a game runs. Never touches game processes.
-    # Experimental: tighter soft-reclaim loop (1s in-game / 2s library vs 2s/3s).
-    $sleepGame = if ($Experimental) { 1 } else { 2 }
-    $sleepIdle = if ($Experimental) { 2 } else { 3 }
+    # Competitive cadence (was Experimental-only): 1s in-game / 2s library soft-reclaim.
+    $sleepGame = 1
+    $sleepIdle = 2
     $helper = Join-Path $SteamPath 'Exo-SteamMemoryGuard.ps1'
     $body = @'
 # Exo - Steam memory + contention guard (v3).
@@ -1927,6 +2148,7 @@ function Test-SteamGameRunning {
 function Set-SteamClientPriority([bool]$InGame) {
   # Foreground Steam/CEF stays responsive. Everything else yields RAM/CPU.
   $foregroundPid = [ExoSteamMemory]::ForegroundPid()
+  # Classifier (SteamDetectCore) requires InGame=BelowNormal, idle=Normal for both.
   $steamCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
   } else {
@@ -1935,7 +2157,7 @@ function Set-SteamClientPriority([bool]$InGame) {
   $backgroundWebCls = if ($InGame) {
     [System.Diagnostics.ProcessPriorityClass]::BelowNormal
   } else {
-    [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+    [System.Diagnostics.ProcessPriorityClass]::Normal
   }
   Get-Process -Name 'steam' -ErrorAction SilentlyContinue | ForEach-Object {
     try {
@@ -2036,7 +2258,7 @@ try {
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
     $oldHelper = Join-Path $SteamPath 'Exo-SteamWebHelperTrim.ps1'
     if (Test-Path -LiteralPath $oldHelper) { Remove-Item -LiteralPath $oldHelper -Force -ErrorAction SilentlyContinue }
-    $mode = if ($Experimental) { 'experimental cadence' } else { 'stable cadence' }
+    $mode = 'competitive cadence'
     Write-Ok "Steam memory + contention guard v3 (soft reclaim; EcoQoS in-game; $mode)"
     return $helper
 }
@@ -2172,6 +2394,11 @@ function Restore-SteamWindowsIntegration([string]$SteamPath, $Recovery, [ref]$Fa
         } catch {
             $Failures.Value.Add("Steam GPU preference $($entry.Name): $($_.Exception.Message)")
         }
+    }
+
+    # Game Bar is owned by the Windows optimizer  -  never restore host Game Bar from Steam repair.
+    if (@(Get-SteamObjectProperty $Recovery 'GameBar' @()).Count -gt 0) {
+        Write-Ok 'Skipped Game Bar restore (owned by Windows card)'
     }
 
     $appPath = Get-SteamObjectProperty $Recovery 'AppPath' $null
@@ -2488,11 +2715,31 @@ try {
         Apply-SteamWindowsQuiet $steam
         Add-ExoReport 'windows-quiet' 'ok'
     }
+
+    # Host Game Mode / HAGS / Game Bar / priority live on the Windows card only.
+    $gameBarQuietOk = $false
+
     Write-HubProgress 36 'Capability-aware GPU routing...'
     $steamHybridGpu = Set-SteamGpuRouting $steam
     Add-ExoReport 'gpu-routing' 'ok' $(if ($steamHybridGpu) { 'hybrid: client on integrated GPU' } else { 'single GPU: Windows automatic' })
 
-    Write-HubProgress 38 'Hardware-accelerated Steam web views...'
+    Write-HubProgress 37 'Steam client FSO + DSCP...'
+    $steamFso = Set-SteamClientFullscreenOptimizations $steam
+    if ($steamFso -gt 0) { Add-ExoReport 'client-fso' 'ok' ("FSO off on {0} path(s)" -f $steamFso) }
+    else { Add-ExoReport 'client-fso' 'skip' 'no steam client paths for FSO' }
+    $steamDscp = Set-SteamClientDscp
+    if ($steamDscp -gt 0) { Add-ExoReport 'client-dscp' 'ok' ("DSCP 46 on {0} Steam policy(ies)" -f $steamDscp) }
+    else { Add-ExoReport 'client-dscp' 'skip' 'QoS policy write skipped or not elevated' }
+
+    Write-HubProgress 38 'Library game GPU / FSO / DSCP (Windows policy only)...'
+    $libPolicy = Set-SteamLibraryGamePolicy -SteamPath $steam
+    if ([int]$libPolicy.Paths -gt 0) {
+        Add-ExoReport 'library-game-policy' 'ok' ("paths={0}; gpu={1}; fso={2}; dscp={3}" -f $libPolicy.Paths, $libPolicy.Gpu, $libPolicy.Fso, $libPolicy.Dscp)
+    } else {
+        Add-ExoReport 'library-game-policy' 'skip' 'no installed game EXEs discovered'
+    }
+
+    Write-HubProgress 39 'Hardware-accelerated Steam web views...'
     Set-SteamClientHardwareAcceleration
     $clientHardwareOk = Test-SteamClientHardwareAcceleration
     if ($clientHardwareOk) { Add-ExoReport 'cef-hardware' 'ok' }
@@ -2590,6 +2837,16 @@ try {
                 $helperText -notmatch 'EmptyWorkingSet\('
         }
     } catch { }
+    if (-not $helperOk) {
+        # One rewrite/retry — classifier drift should never fail a full apply after a rewrite.
+        try {
+            $helper = Install-WebHelperMemoryGuard $steam
+            $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
+            if (Get-Command Test-SteamMemoryGuardText -ErrorAction SilentlyContinue) {
+                $helperOk = [bool](Test-SteamMemoryGuardText -Text $helperText)
+            }
+        } catch { $helperOk = $false }
+    }
     if ($helperOk) { Add-ExoReport 'background-priority' 'ok' 'v3 soft reclaim + EcoQoS non-foreground CEF' }
     else { Add-ExoReport 'background-priority' 'fail' 'memory guard text failed shared detect classifier' }
     $fullPassOk = -not [bool]$Quick
@@ -2643,6 +2900,15 @@ try {
         noDesktopShortcuts   = $debloatOk
         fullApply            = $fullPassOk
         quick                = [bool]$Quick
+        gameBarQuiet         = [bool]$gameBarQuietOk
+        libraryGamePolicyVerified = ([int]$libPolicy.Paths -eq 0) -or (
+            [int]$libPolicy.Gpu -gt 0 -and [int]$libPolicy.Fso -gt 0
+        )
+        libraryGamePathCount = [int]$libPolicy.Paths
+        libraryGameGpuCount  = [int]$libPolicy.Gpu
+        libraryGameFsoCount  = [int]$libPolicy.Fso
+        libraryGameDscpCount = [int]$libPolicy.Dscp
+        libraryGameDscpPolicies = @($libPolicy.Names)
         applyReport          = @(Get-ExoReportEntries)
     }
     Save-SteamOptState $state

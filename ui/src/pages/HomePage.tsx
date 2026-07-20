@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { host, type DashboardSnapshot, type LiveStats } from '../lib/host'
 
+const easeOut = [0.23, 1, 0.32, 1] as const
+
 export function HomePage() {
+  const reduce = useReducedMotion()
   const [dash, setDash] = useState<DashboardSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -48,7 +52,12 @@ export function HomePage() {
   const applied = modules.filter((m) => m.applied).length
 
   return (
-    <section className="glass specular flex h-full min-h-0 flex-col overflow-hidden rounded-2xl">
+    <motion.section
+      className="glass specular flex h-full min-h-0 flex-col overflow-hidden rounded-2xl"
+      initial={reduce ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={reduce ? { duration: 0 } : { duration: 0.28, ease: easeOut }}
+    >
       <div className="shrink-0 border-b border-glass-border px-4 py-3.5">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[10px] font-semibold tracking-[0.16em] text-muted">THIS PC</p>
@@ -88,7 +97,7 @@ export function HomePage() {
         />
         <NetCell live={live} />
       </div>
-    </section>
+    </motion.section>
   )
 }
 
@@ -121,9 +130,11 @@ function StatCell({
       <div className="mt-auto pt-4">
         {bar != null ? (
           <div className="h-1.5 overflow-hidden rounded-full bg-sunken ring-1 ring-glass-border">
-            <div
-              className={`h-full rounded-full transition-[width] duration-500 ${barClass}`}
-              style={{ width: `${Math.max(0, Math.min(100, bar))}%` }}
+            <motion.div
+              className={`h-full rounded-full ${barClass}`}
+              initial={false}
+              animate={{ width: `${Math.max(0, Math.min(100, bar))}%` }}
+              transition={{ duration: 0.45, ease: easeOut }}
             />
           </div>
         ) : (

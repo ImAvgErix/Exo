@@ -1,11 +1,85 @@
-import type { ModuleId, ModuleStatus } from './host'
+import type { ModuleId } from './host'
 
-export type FeatureRow = { title: string; detail: string; active: boolean }
+export type FeatureRow = {
+  title: string
+  detail: string
+  active: boolean
+  /** Informational only — never counted as a gap / need-Apply row */
+  info?: boolean
+}
 
 type Opts = {
   experimental: boolean
   useGsync: boolean
   preferLowestLatency: boolean
+}
+
+/** Titles that are always informational (not real optimize checks). */
+const INFO_TITLES = new Set(
+  [
+    'optimization verified',
+    'anti-cheat untouched',
+    'safe repair',
+    'policy',
+    'stack profile',
+    'latency / sync policy',
+    'display scaling & color',
+    'gaming multimedia stack',
+    'adapter',
+    'last apply',
+    'one-click repair ready',
+  ].map((s) => s.toLowerCase()),
+)
+
+export function isInfoFeature(f: FeatureRow): boolean {
+  if (f.info) return true
+  return INFO_TITLES.has(f.title.trim().toLowerCase())
+}
+
+/** Rows that count toward "N settings need Apply". */
+export function checkableFeatures(rows: FeatureRow[]): FeatureRow[] {
+  return rows.filter((f) => !isInfoFeature(f))
+}
+
+/** Build status line from the same list the user sees. */
+export function statusFromFeatures(
+  rows: FeatureRow[],
+  isApplied?: boolean,
+): { headline: string; offCount: number; onCount: number; total: number } {
+  const check = checkableFeatures(rows)
+  const on = check.filter((f) => f.active).length
+  const off = check.filter((f) => !f.active)
+  const total = check.length
+  if (total === 0) {
+    return {
+      headline: isApplied ? 'Applied' : 'Ready to optimize',
+      offCount: 0,
+      onCount: 0,
+      total: 0,
+    }
+  }
+  if (off.length === 0 || isApplied) {
+    return {
+      headline: isApplied || off.length === 0 ? 'Applied' : 'Ready to optimize',
+      offCount: 0,
+      onCount: on,
+      total,
+    }
+  }
+  if (off.length === 1) {
+    return {
+      headline: `1 setting needs Apply (${off[0].title})`,
+      offCount: 1,
+      onCount: on,
+      total,
+    }
+  }
+  return {
+    headline: `${off.length} settings need Apply`,
+    offCount: off.length,
+    onCount: on,
+    total,
+  }
 }
 
 /** Rewrite / inject feature rows so the list matches the toggles about to Apply. */
@@ -14,35 +88,30 @@ export function featuresForSelection(
   base: FeatureRow[] | undefined,
   opts: Opts,
 ): FeatureRow[] {
-  const rows = (base ?? []).map((f) => ({ ...f }))
+  const rows = (base ?? []).map((f) => ({ ...f, info: isInfoFeature(f) }))
 
-  upsert(
-    rows,
-    'Apply mode',
-    opts.experimental
-      ? experimentalDetail(moduleId)
-      : 'Stable — full safe reversible stack for this module.',
-    true,
-  )
+  // Apply mode is always competitive max-aggression (no Stable/Experimental split).
+  removeTitle(rows, 'Apply mode')
+  removeTitle(rows, 'Experimental rebuild')
+  removeTitle(rows, 'Experimental guard')
+  removeTitle(rows, 'Experimental yield')
+  removeTitle(rows, 'Experimental re-import')
 
   if (moduleId === 'nvidia') {
-    upsert(
+    upsertInfo(
       rows,
       'Latency / sync policy',
       opts.useGsync
         ? 'Next Apply (Profile Inspector): G-SYNC / VRR DRS pack. Scaling/color stay in Control Panel.'
         : 'Next Apply (Profile Inspector): raw-latency DRS pack. Scaling/color stay in Control Panel.',
-      true,
     )
-    upsert(
+    upsertInfo(
       rows,
       'Display scaling & color',
       'Not forced by Exo. Use Open Control Panel for scaling, Full RGB, and NVIDIA color.',
-      true,
     )
-    // Older detect titles
     patchTitleMatch(rows, /g-?sync|latency|sync policy|3d profile/i, (f) => {
-      if (/latency|sync|g-?sync/i.test(f.title)) {
+      if (/latency|sync|g-?sync/i.test(f.title) && !isInfoFeature(f)) {
         f.detail = opts.useGsync
           ? 'Selected: G-SYNC / VRR on next Apply.'
           : 'Selected: raw latency (no VRR) on next Apply.'
@@ -51,66 +120,30 @@ export function featuresForSelection(
   }
 
   if (moduleId === 'internet') {
-    upsert(
+    upsertInfo(
       rows,
-      'Policy',
+      'Stack profile',
       opts.preferLowestLatency
-        ? 'Selected: lowest latency (FC/IM-style path knobs off; gaming-oriented NIC stack).'
-        : 'Selected: high throughput (multi-gig defaults; FC/IM kept where useful).',
-      true,
+        ? 'Selected: lowest latency (IM/RSC/LSO off; competitive Nagle/ACK + host stack).'
+        : 'Selected: high throughput (multi-gig; FC/IM on where useful + competitive host stack).',
     )
-    upsert(
+    // Real host knobs from apply — keep as checkable only if host already sent a real row;
+    // this is a description of the stack, not a live probe.
+    upsertInfo(
       rows,
-      'Host policy',
-      opts.experimental
-        ? 'Experimental re-stamps MMCSS / Games task / Psched host knobs on Apply.'
-        : 'Stable stamps safe host knobs (NTI=10, Responsiveness=10, Games task, Psched).',
-      true,
+      'Gaming multimedia stack',
+      'Network throttle off, max responsiveness, games priority class, foreground boost, and hardware GPU scheduling.',
     )
+    removeTitle(rows, 'Host policy')
+    removeTitle(rows, 'Policy')
+    // Connection path is a probe, not "applied policy" alone
+    const path = rows.find((r) => /connection path/i.test(r.title))
+    if (path) path.info = false
   }
 
-  if (moduleId === 'discord' && opts.experimental) {
-    upsert(
-      rows,
-      'Experimental rebuild',
-      'Force client debloat + lean Equicord profile rebuild on Apply.',
-      true,
-    )
-  } else {
-    removeTitle(rows, 'Experimental rebuild')
-  }
-
-  if (moduleId === 'steam' && opts.experimental) {
-    upsert(
-      rows,
-      'Experimental guard',
-      'Tighter in-game soft-reclaim cadence (1s / 2s) on the memory guard.',
-      true,
-    )
-  } else {
-    removeTitle(rows, 'Experimental guard')
-  }
-
-  if ((moduleId === 'riot' || moduleId === 'epic') && opts.experimental) {
-    upsert(
-      rows,
-      'Experimental yield',
-      'Tighter launcher yield loop + launcher FSO re-stamp on Apply.',
-      true,
-    )
-  } else {
-    removeTitle(rows, 'Experimental yield')
-  }
-
-  if (moduleId === 'nvidia' && opts.experimental) {
-    upsert(
-      rows,
-      'Experimental re-import',
-      'Force DRS profile re-import even if already verified (SafePolicy retained).',
-      true,
-    )
-  } else {
-    removeTitle(rows, 'Experimental re-import')
+  // Stamp info flag after mutations
+  for (const r of rows) {
+    if (isInfoFeature(r)) r.info = true
   }
 
   return rows
@@ -121,41 +154,29 @@ export function statusDetailForSelection(
   baseDetail: string | undefined,
   opts: Opts,
 ): string {
-  const parts: string[] = []
-  parts.push(opts.experimental ? 'Experimental apply' : 'Stable apply')
-  if (moduleId === 'nvidia') parts.push(opts.useGsync ? 'G-SYNC / VRR' : 'raw latency')
-  if (moduleId === 'internet')
-    parts.push(opts.preferLowestLatency ? 'lowest latency stack' : 'high throughput stack')
-  const sel = parts.join(' · ')
-  if (!baseDetail || baseDetail === '—') return `${sel}.`
-  return `${baseDetail} · Next: ${sel}.`
-}
+  const profile =
+    moduleId === 'nvidia'
+      ? opts.useGsync
+        ? 'G-SYNC / VRR'
+        : 'raw latency'
+      : moduleId === 'internet'
+        ? opts.preferLowestLatency
+          ? 'lowest latency'
+          : 'high throughput'
+        : null
 
-function experimentalDetail(id: ModuleId): string {
-  switch (id) {
-    case 'discord':
-      return 'Experimental — force debloat + lean Equicord rebuild.'
-    case 'steam':
-      return 'Experimental — tighter memory/contention guard cadence.'
-    case 'internet':
-      return 'Experimental — force re-stamp of full host + NIC stack.'
-    case 'nvidia':
-      return 'Experimental — force DRS profile re-import (still SafePolicy).'
-    case 'riot':
-    case 'epic':
-      return 'Experimental — tighter yield cadence + launcher FSO.'
-    default:
-      return 'Experimental — extra force paths on Apply.'
+  if (!baseDetail || baseDetail === '—') {
+    return profile ? `${profile} stack.` : 'Ready.'
   }
+  return profile ? `${baseDetail} · ${profile}` : baseDetail
 }
 
-function upsert(rows: FeatureRow[], title: string, detail: string, active: boolean) {
+function upsertInfo(rows: FeatureRow[], title: string, detail: string) {
   const i = rows.findIndex((r) => r.title.toLowerCase() === title.toLowerCase())
   if (i >= 0) {
-    rows[i] = { ...rows[i], title, detail, active }
+    rows[i] = { ...rows[i], title, detail, active: true, info: true }
   } else {
-    // Put option-driven rows near the top so the toggle change is obvious.
-    rows.unshift({ title, detail, active })
+    rows.unshift({ title, detail, active: true, info: true })
   }
 }
 
@@ -171,14 +192,5 @@ function patchTitleMatch(
 ) {
   for (const f of rows) {
     if (re.test(f.title)) fn(f)
-  }
-}
-
-export function optionsFromStatus(s: ModuleStatus | null): Partial<Opts> {
-  if (!s?.options) return {}
-  return {
-    experimental: s.options.experimental,
-    useGsync: s.options.useGsync,
-    preferLowestLatency: s.options.preferLowestLatency,
   }
 }

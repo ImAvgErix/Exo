@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion'
 import { host, type ModuleId } from '../lib/host'
 import { SettingsDrawer } from './SettingsDrawer'
 
 const modules: { id: ModuleId; label: string; logo: string }[] = [
   { id: 'discord', label: 'Discord', logo: '/logos/discord.png' },
   { id: 'steam', label: 'Steam', logo: '/logos/steam.png' },
+  { id: 'windows', label: 'Windows', logo: '/logos/windows.png' },
   { id: 'internet', label: 'Internet', logo: '/logos/internet.png' },
   { id: 'nvidia', label: 'NVIDIA', logo: '/logos/nvidia.png' },
   { id: 'riot', label: 'Riot', logo: '/logos/riot.png' },
@@ -20,21 +22,17 @@ export function Shell() {
   const nav = useNavigate()
   const onHome = loc.pathname === '/' || loc.pathname === ''
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const reduce = useReducedMotion()
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-page text-text">
       <div className="shrink-0 px-3 pt-2.5">
-        {/*
-          Three-zone bar: left controls | absolutely centered optimizers | right spacer
-          for native min/close overlay. Optimizers stay dead-center always.
-        */}
         <header className="glass specular relative z-20 flex h-12 shrink-0 items-center rounded-2xl px-2">
-          {/* Left cluster — fixed width (settings always; home slot reserved) */}
           <div className={`relative z-10 flex ${SIDE_W} shrink-0 items-center gap-1`}>
             <button
               type="button"
               onClick={() => setSettingsOpen((v) => !v)}
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition ${
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
                 settingsOpen
                   ? 'bg-raised text-text ring-1 ring-glass-border'
                   : 'text-secondary hover:bg-raised hover:text-text'
@@ -52,7 +50,7 @@ export function Shell() {
                 setSettingsOpen(false)
                 nav('/')
               }}
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition ${
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
                 onHome
                   ? 'pointer-events-none opacity-0'
                   : 'text-secondary hover:bg-raised hover:text-text'
@@ -66,51 +64,58 @@ export function Shell() {
             </button>
           </div>
 
-          {/* Optimizers — true center of the bar, never pushed by side clusters */}
           <nav
             className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center"
             aria-label="Optimizers"
           >
-            <div className="pointer-events-auto flex items-center gap-0.5">
-              {modules.map((m) => {
-                const active =
-                  loc.pathname === `/module/${m.id}` ||
-                  loc.pathname.endsWith(`/module/${m.id}`)
-                return (
-                  <NavLink
-                    key={m.id}
-                    to={`/module/${m.id}`}
-                    onClick={() => setSettingsOpen(false)}
-                    className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition ${
-                      active
-                        ? 'bg-raised text-text ring-1 ring-glass-border'
-                        : 'text-muted hover:bg-raised/80 hover:text-secondary'
-                    }`}
-                  >
-                    <img
-                      src={m.logo}
-                      alt=""
-                      className="h-3.5 w-3.5 object-contain opacity-90"
-                      draggable={false}
-                    />
-                    {m.label}
-                  </NavLink>
-                )
-              })}
-            </div>
+            <LayoutGroup id="exo-nav">
+              <div className="pointer-events-auto flex items-center gap-0.5">
+                {modules.map((m) => {
+                  const active =
+                    loc.pathname === `/module/${m.id}` ||
+                    loc.pathname.endsWith(`/module/${m.id}`)
+                  return (
+                    <NavLink
+                      key={m.id}
+                      to={`/module/${m.id}`}
+                      onClick={() => setSettingsOpen(false)}
+                      className={`relative flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold tracking-wide ${
+                        active ? 'text-text' : 'text-muted hover:text-secondary'
+                      }`}
+                    >
+                      {active && (
+                        <motion.span
+                          layoutId={reduce ? undefined : 'nav-pill'}
+                          className="absolute inset-0 -z-0 rounded-xl bg-raised ring-1 ring-glass-border"
+                          transition={
+                            reduce
+                              ? { duration: 0 }
+                              : { type: 'spring', duration: 0.38, bounce: 0.12 }
+                          }
+                          aria-hidden
+                        />
+                      )}
+                      <img
+                        src={m.logo}
+                        alt=""
+                        className="relative z-10 h-3.5 w-3.5 object-contain opacity-90"
+                        draggable={false}
+                      />
+                      <span className="relative z-10">{m.label}</span>
+                    </NavLink>
+                  )
+                })}
+              </div>
+            </LayoutGroup>
           </nav>
 
-          {/*
-            Right cluster — matches native caption overlay width so min/close
-            sit inside the glass bar. Also offers web fallbacks if host is unavailable.
-          */}
           <div
             className={`relative z-10 ml-auto flex ${SIDE_W} shrink-0 items-center justify-end gap-1`}
           >
             <button
               type="button"
               onClick={() => void host.minimize()}
-              className="flex h-7 w-9 items-center justify-center rounded-lg bg-raised text-secondary ring-1 ring-glass-border transition hover:bg-[#24242C] hover:text-text"
+              className="flex h-7 w-9 items-center justify-center rounded-lg bg-raised text-secondary ring-1 ring-glass-border hover:bg-[#24242C] hover:text-text"
               aria-label="Minimize"
               title="Minimize"
             >
@@ -119,7 +124,7 @@ export function Shell() {
             <button
               type="button"
               onClick={() => void host.close()}
-              className="flex h-7 w-9 items-center justify-center rounded-lg bg-raised text-secondary ring-1 ring-glass-border transition hover:bg-[#C42B1C] hover:text-white hover:ring-[#E04A3A]"
+              className="flex h-7 w-9 items-center justify-center rounded-lg bg-raised text-secondary ring-1 ring-glass-border hover:bg-[#C42B1C] hover:text-white hover:ring-[#E04A3A]"
               aria-label="Close"
               title="Close"
             >
@@ -130,7 +135,22 @@ export function Shell() {
       </div>
 
       <main className="relative z-10 min-h-0 flex-1 overflow-hidden px-3 pb-3 pt-2.5">
-        <Outlet />
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={loc.pathname}
+            className="h-full min-h-0"
+            initial={reduce ? false : { opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? undefined : { opacity: 0, y: -4 }}
+            transition={
+              reduce
+                ? { duration: 0 }
+                : { duration: 0.22, ease: [0.23, 1, 0.32, 1] }
+            }
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />

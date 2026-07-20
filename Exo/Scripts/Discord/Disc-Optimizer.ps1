@@ -37,11 +37,12 @@ if ($Quick) {
     $SkipManifestSync = $true
 }
 
-# Experimental: force full debloat + rebuild Equicord lean profile (no preserve).
+# Max-aggression Apply always force-rebuilds lean Equicord + debloat (no soft preserve).
+# -Experimental is accepted for CLI compat but is no longer a lighter/heavier mode.
+$ForceDebloat = $true
+$env:EXO_EXPERIMENTAL = '1'
 if ($Experimental) {
-    $ForceDebloat = $true
-    $env:EXO_EXPERIMENTAL = '1'
-    Write-Host '[*] Experimental Discord apply (force debloat + lean profile rebuild)' -ForegroundColor Cyan
+    Write-Host '[*] Discord apply (force debloat + lean profile rebuild)' -ForegroundColor Cyan
 }
 
 if ($env:EXO -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
@@ -53,7 +54,7 @@ if ($env:EXO -eq '1' -or $env:DISCOPT_NONINTERACTIVE -eq '1') {
 }
 
 $ErrorActionPreference = 'Stop'
-$Script:DiscOptVersion = '1.3.59'
+$Script:DiscOptVersion = '1.3.70'
 $Script:SelfPath = $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $Script:SelfPath
 $KitDir = Join-Path $Root 'kit'
@@ -686,8 +687,8 @@ if (-not $SkipKernel) {
     $Script:DiscOptKernelProxyActive = $false
 }
 
-# 5b) Boot safety (disk only mid-apply — do NOT open Discord here).
-# Opening Discord 2–3 times for check + kill + relaunch is excessive.
+# 5b) Boot safety (disk only mid-apply  -  do NOT open Discord here).
+# Opening Discord 2-3 times for check + kill + relaunch is excessive.
 # One user-token open at the end of Apply proves boot and leaves Discord open.
 $exoQuiet = ($env:EXO -eq '1' -and $NoLaunch) -or ($env:EXO_SKIP_BOOT_FLASH -eq '1')
 $Script:DiscordDeferUserBoot = $false
@@ -710,7 +711,7 @@ if ($exoQuiet) {
     $modsOk = Test-DiscordModulesReady $app.FullName
     if ($exeOk -and $asarOk -and $eqOk -and $modsOk) {
         $Script:DiscordDeferUserBoot = $true
-        Write-Ok 'Disk verify passed — boot proof deferred to single end relaunch'
+        Write-Ok 'Disk verify passed  -  boot proof deferred to single end relaunch'
         Add-ExoReport 'boot-check' 'skip' 'deferred to single end relaunch'
     } else {
         Write-Warn "Quiet verify incomplete (exe=$exeOk asar=$asarOk eq=$eqOk mods=$modsOk)"
@@ -745,6 +746,7 @@ if (-not $Quick) {
         Add-ExoReport 'windows-quiet' 'fail' $_.Exception.Message
         throw
     }
+    # Host Game Mode / HAGS / Game Bar / priority live on the Windows card only.
     $qosFailed = @($Script:DiscordQosResults | Where-Object { -not $_.Ok })
     if (@($Script:DiscordQosResults).Count -gt 0 -and $qosFailed.Count -eq 0) {
         Add-ExoReport 'voice-qos' 'ok'
@@ -810,7 +812,7 @@ if ($Quick) {
             Write-Warn "Debloat soft residual (not failing Apply): $($debloatState.SoftReasons -join ', ')"
             Add-ExoReport 'verify-debloat' 'skip' ("soft residual: " + ($debloatState.SoftReasons -join ', '))
         }
-        # Do not require OPEN_ON_STARTUP=false or full Windows suppression — those
+        # Do not require OPEN_ON_STARTUP=false or full Windows suppression  -  those
         # are user choices. Verify host flags + install integrity only.
         $settingsPath = Join-Path $AppData 'settings.json'
         try {
@@ -862,7 +864,7 @@ if ($shouldRelaunch) {
             $healthy = @(Get-Process -Name 'Discord' -ErrorAction SilentlyContinue).Count -gt 0
         }
         if (-not $healthy) {
-            Write-Warn 'First open unhealthy — disarming DiscOpt kernel and trying once'
+            Write-Warn 'First open unhealthy  -  disarming DiscOpt kernel and trying once'
             try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
             $Script:DiscOptKernelProxyActive = $false
             Add-ExoReport 'kernel' 'fail' 'disarmed after end-open fail'
@@ -880,13 +882,13 @@ if ($shouldRelaunch) {
                 $healthy = @(Get-Process -Name 'Discord' -ErrorAction SilentlyContinue).Count -gt 0
             }
         }
-        # Leave Discord running — do not Stop-Discord after success.
+        # Leave Discord running  -  do not Stop-Discord after success.
         if ($healthy) {
             Write-Ok 'Discord open and healthy after Apply (single launch)'
             Add-ExoReport 'boot-check' 'ok' 'single end open verified'
             Add-ExoReport 'relaunch' 'ok' 'left running'
         } else {
-            Write-Warn 'Discord did not stay healthy — try Start Menu if the window is missing'
+            Write-Warn 'Discord did not stay healthy  -  try Start Menu if the window is missing'
             Add-ExoReport 'boot-check' 'fail' 'end open unhealthy'
             Add-ExoReport 'relaunch' 'fail' 'unhealthy after at most two opens'
         }
