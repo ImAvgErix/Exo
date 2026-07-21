@@ -1,3 +1,21 @@
+## 3.14.0
+
+- **Games hub (Marvel Rivals)**
+  - New **Games** module: library rail + Potato / Optimized profiles.
+  - Detect Steam install, seed UTOC bypass + IoStore packs, apply Engine.ini profiles.
+  - Library uses the real **Marvel.exe** app icon (sharp pre-scaled tiles).
+- **Unified optimizer status language**
+  - Ready / Applied / Partial / Missing shared across modules.
+  - Post-apply live re-verify; expandable last-apply step report when present.
+  - Feature counts match the tiles you see (including Partial with real off gaps).
+- **Dashboard Verify**
+  - Compact **Verify** chip next to `N / N verified` (force live re-detect all modules, no Apply).
+  - Removed the huge Verify CTA from Settings.
+- **Settings**
+  - Classic compact settings popover restored (updates, logs, report).
+- **Clean-PC readiness**
+  - Bundled Marvel Rivals bypass + pack seeds under `Scripts/Games` for first-run Apply.
+
 ## 3.13.13
 
 - **Discord stream quality actually works now**

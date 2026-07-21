@@ -1,13 +1,29 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { host, type DashboardSnapshot, type LiveStats } from '../lib/host'
+import {
+  host,
+  onHostEvent,
+  type DashboardSnapshot,
+  type LiveStats,
+} from '../lib/host'
 
 const easeOut = [0.23, 1, 0.32, 1] as const
+
+const chipClass =
+  'rounded-lg bg-raised px-2.5 py-1 text-[11px] font-semibold tabular ring-1 ring-glass-border'
 
 export function HomePage() {
   const reduce = useReducedMotion()
   const [dash, setDash] = useState<DashboardSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [verifying, setVerifying] = useState(false)
+  const [verifyLabel, setVerifyLabel] = useState('Verify')
+
+  const loadDashboard = useCallback(async () => {
+    const d = await host.getDashboard()
+    setDash(d)
+    return d
+  }, [])
 
   const refreshLive = useCallback(async () => {
     try {
@@ -37,6 +53,38 @@ export function HomePage() {
     }
   }, [refreshLive])
 
+  useEffect(() => {
+    return onHostEvent('settings.verifyProgress', (data) => {
+      const d = data as { status?: string; percent?: number }
+      if (typeof d.percent === 'number' && d.percent >= 0) {
+        setVerifyLabel(`Verify ${Math.round(d.percent)}%`)
+      } else if (typeof d.status === 'string' && d.status.trim()) {
+        // keep chip compact — percent when available
+      }
+    })
+  }, [])
+
+  async function runVerify() {
+    if (verifying) return
+    setVerifying(true)
+    setVerifyLabel('…')
+    try {
+      const r = await host.verifyAll()
+      await loadDashboard()
+      // brief summary on the chip, then back to Verify
+      const n = r.applied ?? 0
+      const total =
+        (r.applied ?? 0) + (r.partial ?? 0) + (r.ready ?? 0) + (r.missing ?? 0)
+      setVerifyLabel(total > 0 ? `${n}/${total}` : 'Done')
+      window.setTimeout(() => setVerifyLabel('Verify'), 2200)
+    } catch {
+      setVerifyLabel('Failed')
+      window.setTimeout(() => setVerifyLabel('Verify'), 2200)
+    } finally {
+      setVerifying(false)
+    }
+  }
+
   if (error) {
     return <div className="flex h-full items-center justify-center text-sm text-error">{error}</div>
   }
@@ -61,9 +109,20 @@ export function HomePage() {
       <div className="shrink-0 border-b border-glass-border px-4 py-3.5">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[10px] font-semibold tracking-[0.16em] text-muted">THIS PC</p>
-          <p className="rounded-lg bg-raised px-2.5 py-1 text-[11px] font-semibold tabular ring-1 ring-glass-border">
-            {overview || `${applied} / ${modules.length} verified`}
-          </p>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <p className={chipClass}>
+              {overview || `${applied} / ${modules.length} verified`}
+            </p>
+            <button
+              type="button"
+              disabled={verifying}
+              onClick={() => void runVerify()}
+              title="Live re-check every optimizer. Does not apply changes."
+              className={`${chipClass} hover:bg-[#24242C] hover:text-text disabled:opacity-50`}
+            >
+              {verifyLabel}
+            </button>
+          </div>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-4">
           <Spec label="CPU" value={specs.cpu} />

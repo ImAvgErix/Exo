@@ -1,6 +1,39 @@
 /** Typed bridge to the .NET WebView2 host. Falls back to mock data in browser dev. */
 
-export type ModuleId = 'discord' | 'steam' | 'windows' | 'internet' | 'nvidia' | 'riot' | 'epic'
+export type ModuleId =
+  | 'discord'
+  | 'steam'
+  | 'games'
+  | 'windows'
+  | 'internet'
+  | 'nvidia'
+  | 'riot'
+  | 'epic'
+
+export type GamePreset = 'potato' | 'optimized'
+
+export interface GameListItem {
+  id: string
+  title: string
+  platform: string
+  blurb: string
+  /** Web-root path e.g. /logos/marvel-rivals.png */
+  icon?: string
+  ready: boolean
+  installed: boolean
+  applied: boolean
+  activePreset?: string | null
+  statusText: string
+  detail: string
+}
+
+export interface GameHubSnapshot {
+  selectedGameId: string
+  statusText: string
+  detail: string
+  games: GameListItem[]
+  selected: ModuleStatus | null
+}
 
 export interface LiveStats {
   memoryPercent: number
@@ -53,15 +86,30 @@ export interface DashboardSnapshot {
 export interface ModuleStatus {
   id: ModuleId
   isApplied: boolean
+  /** Shared vocabulary: ready | applied | partial | missing | … */
+  statusKind?: string
   statusText: string
   detail: string
   features: Array<{ title: string; detail: string; active: boolean }>
+  /** Last-apply step lines: "step|ok", "step|fail:reason" */
+  applyReport?: string[]
   /** Host-provided defaults for module options */
   options?: {
     experimental?: boolean
     useGsync?: boolean
     preferLowestLatency?: boolean
+    /** Games module: potato | optimized */
+    gamePreset?: GamePreset | string
   }
+}
+
+export interface VerifyAllResult {
+  results: ModuleStatus[]
+  summary: string
+  applied: number
+  partial: number
+  ready: number
+  missing: number
 }
 
 type HostRequest = { id: string; method: string; params?: Record<string, unknown> }
@@ -161,7 +209,10 @@ export const host = {
       const hit = detectCache.get(module)
       if (hit && Date.now() - hit.at < DETECT_TTL_MS) return hit.status
     }
-    const status = await call<ModuleStatus>('module.detect', { module })
+    const status = await call<ModuleStatus>('module.detect', {
+      module,
+      ...(opts?.force ? { force: true } : {}),
+    })
     detectCache.set(module, { at: Date.now(), status })
     return status
   },
@@ -181,6 +232,12 @@ export const host = {
     detectCache.set(module, { at: Date.now(), status })
     return status
   },
+  /** Games hub: catalog + selected game detail */
+  listGames: (gameId?: string | null) =>
+    call<GameHubSnapshot>('games.list', gameId ? { gameId } : {}),
+  applyGame: (gameId: string, gamePreset: GamePreset | string) =>
+    call<GameHubSnapshot>('games.apply', { gameId, gamePreset }),
+  repairGame: (gameId: string) => call<GameHubSnapshot>('games.repair', { gameId }),
   getSettings: () =>
     call<{
       appVersion: string
@@ -211,6 +268,18 @@ export const host = {
     call<{ ok: boolean; message?: string }>('shell.openNvidiaControlPanel'),
   minimize: () => call<{ ok: boolean }>('shell.minimize'),
   close: () => call<{ ok: boolean }>('shell.close'),
+  /**
+   * Settings → Verify: force live detect on every module (no Apply).
+   * Long timeout — several modules probe PS / native stacks.
+   */
+  verifyAll: async () => {
+    const r = await call<VerifyAllResult>('module.verifyAll', undefined, 10 * 60_000)
+    detectCache.clear()
+    for (const row of r.results ?? []) {
+      if (row?.id) detectCache.set(row.id, { at: Date.now(), status: row })
+    }
+    return r
+  },
 }
 
 const mockLive = (): LiveStats => ({
@@ -249,6 +318,7 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
       modules: [
         { id: 'discord', title: 'Discord', applied: true },
         { id: 'steam', title: 'Steam', applied: true },
+        { id: 'games', title: 'Games', applied: false },
         { id: 'windows', title: 'Windows', applied: false },
         { id: 'internet', title: 'Internet', applied: false },
         { id: 'nvidia', title: 'NVIDIA', applied: true },
@@ -286,23 +356,67 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
   if (method === 'shell.minimize' || method === 'shell.close') {
     return Promise.resolve({ ok: true } as T)
   }
-  if (method.startsWith('module.')) {
-    const id = (params?.module as ModuleId) || 'discord'
+  if (method === 'module.verifyAll') {
     return Promise.resolve({
-      id,
-      isApplied: method === 'module.apply',
-      statusText: method === 'module.apply' ? 'Applied' : 'Ready',
+      results: [],
+      summary: '2 applied · 1 partial · 3 ready · 0 missing (mock)',
+      applied: 2,
+      partial: 1,
+      ready: 3,
+      missing: 0,
+    } as T)
+  }
+  if (method.startsWith('module.') || method.startsWith('games.')) {
+    const id = (params?.module as ModuleId) || 'discord'
+    const mockStatus: ModuleStatus = {
+      id: method.startsWith('games.') ? 'games' : id,
+      isApplied: method.includes('apply'),
+      statusKind: method.includes('apply') ? 'applied' : 'ready',
+      statusText: method.includes('apply') ? 'Optimized applied' : 'Ready to optimize',
       detail: 'Browser mock — run Exo.exe for real optimizers.',
       features: [
         { title: 'Install', detail: 'Present', active: true },
-        { title: 'Policy', detail: method === 'module.apply' ? 'Verified' : 'Not applied', active: method === 'module.apply' },
+        { title: 'UTOC signature bypass', detail: 'Present', active: true },
+        { title: '~mods folder', detail: 'OK', active: true },
+        { title: 'Game profile', detail: method.includes('apply') ? 'Optimized active' : 'Not applied', active: method.includes('apply') },
+        { title: 'Profile', detail: 'Optimized', active: true },
+        { title: 'DLSS left alone', detail: 'OK', active: true },
+        { title: 'One-click Repair ready', detail: 'OK', active: true },
       ],
+      applyReport: method.includes('apply')
+        ? ['bypass|ok', 'packs|ok', 'engine.ini|ok']
+        : [],
       options: {
         experimental: false,
         useGsync: id === 'nvidia',
         preferLowestLatency: id === 'internet',
+        gamePreset: 'optimized',
       },
-    } as T)
+    }
+    if (method.startsWith('games.')) {
+      return Promise.resolve({
+        selectedGameId: (params?.gameId as string) || 'marvel-rivals',
+        statusText: '1 installed · 0 optimized',
+        detail: 'Pick a game, choose Potato or Optimized, then Apply.',
+        games: [
+          {
+            id: 'marvel-rivals',
+            title: 'Marvel Rivals',
+            platform: 'Steam',
+            blurb: 'IoStore packs + Engine.ini',
+            icon: '/logos/marvel-rivals.png',
+            ready: true,
+            installed: true,
+            applied: method.includes('apply'),
+            activePreset: method.includes('apply') ? 'Optimized' : null,
+            statusText: method.includes('apply') ? 'Optimized applied' : 'Installed',
+            detail: 'Mock path',
+          },
+        ],
+        selected: mockStatus,
+      } as T)
+    }
+    return Promise.resolve(mockStatus as T)
   }
   return Promise.resolve(undefined as T)
 }

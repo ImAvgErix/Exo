@@ -5,6 +5,7 @@ import { host, onHostEvent } from '../lib/host'
  * Compact popover. Parent must be the shell root (position: relative).
  * Uses absolute coords only — never fixed, never flex flow (WebView2 breaks both).
  * Updates download/install in-panel (progress bar) — no native dialog card.
+ * Verify lives on the Home dashboard chip — not here.
  */
 export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [version, setVersion] = useState('—')
@@ -70,7 +71,6 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
       if (r.shouldExit) {
         setProgress(100)
         setLine(r.message || 'Restarting into the new build…')
-        // Host exits after apply; keep bar at 100%.
         return
       }
       if (r.alreadyLatest || !r.updateAvailable) {
@@ -188,7 +188,6 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
               : 'Check for updates'}
           </button>
 
-          {/* In-settings progress — no native update card */}
           {progress != null && (
             <div className="mb-2">
               <div className="h-1.5 overflow-hidden rounded-full bg-sunken ring-1 ring-glass-border">
@@ -200,7 +199,9 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
                 />
               </div>
               {progress >= 0 && (
-                <p className="mt-1 text-right text-[10px] tabular text-muted">{Math.round(progress)}%</p>
+                <p className="mt-1 text-right text-[10px] tabular text-muted">
+                  {Math.round(progress)}%
+                </p>
               )}
             </div>
           )}

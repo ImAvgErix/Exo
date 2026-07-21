@@ -12,6 +12,7 @@ type Opts = {
   experimental: boolean
   useGsync: boolean
   preferLowestLatency: boolean
+  gamePreset?: 'potato' | 'optimized' | string
 }
 
 /** Titles that are always informational (not real optimize checks). */
@@ -28,6 +29,8 @@ const INFO_TITLES = new Set(
     'adapter',
     'last apply',
     'one-click repair ready',
+    'profile',
+    'dlss left alone',
   ].map((s) => s.toLowerCase()),
 )
 
@@ -41,16 +44,21 @@ export function checkableFeatures(rows: FeatureRow[]): FeatureRow[] {
   return rows.filter((f) => !isInfoFeature(f))
 }
 
-/** Build status line from the same list the user sees. */
+/**
+ * Build status from the list the user sees.
+ * onCount/total always include every visible row so "4/6 on" matches the grid.
+ * offCount only counts apply-relevant (non-info) gaps.
+ */
 export function statusFromFeatures(
   rows: FeatureRow[],
   isApplied?: boolean,
 ): { headline: string; offCount: number; onCount: number; total: number } {
+  const visibleOn = rows.filter((f) => f.active).length
+  const visibleTotal = rows.length
   const check = checkableFeatures(rows)
-  const on = check.filter((f) => f.active).length
   const off = check.filter((f) => !f.active)
-  const total = check.length
-  if (total === 0) {
+
+  if (visibleTotal === 0) {
     return {
       headline: isApplied ? 'Applied' : 'Ready to optimize',
       offCount: 0,
@@ -58,27 +66,45 @@ export function statusFromFeatures(
       total: 0,
     }
   }
-  if (off.length === 0 || isApplied) {
+
+  // No checkable gaps → Applied (or Ready if nothing was applied yet)
+  if (off.length === 0) {
     return {
-      headline: isApplied || off.length === 0 ? 'Applied' : 'Ready to optimize',
+      headline:
+        isApplied || visibleOn === visibleTotal
+          ? visibleOn === visibleTotal
+            ? 'Applied'
+            : `Applied · ${visibleOn}/${visibleTotal} on`
+          : 'Ready to optimize',
       offCount: 0,
-      onCount: on,
-      total,
+      onCount: visibleOn,
+      total: visibleTotal,
     }
   }
+
+  // Applied with live gaps → Partial (keep real offCount)
+  if (isApplied) {
+    return {
+      headline: `Partial · ${off.length} still off · ${visibleOn}/${visibleTotal} on`,
+      offCount: off.length,
+      onCount: visibleOn,
+      total: visibleTotal,
+    }
+  }
+
   if (off.length === 1) {
     return {
       headline: `1 setting needs Apply (${off[0].title})`,
       offCount: 1,
-      onCount: on,
-      total,
+      onCount: visibleOn,
+      total: visibleTotal,
     }
   }
   return {
     headline: `${off.length} settings need Apply`,
     offCount: off.length,
-    onCount: on,
-    total,
+    onCount: visibleOn,
+    total: visibleTotal,
   }
 }
 
@@ -141,6 +167,22 @@ export function featuresForSelection(
     if (path) path.info = false
   }
 
+  if (moduleId === 'games') {
+    const potato = opts.gamePreset === 'potato'
+    upsertInfo(
+      rows,
+      'Profile',
+      potato
+        ? 'Selected: Potato — max FPS, low textures / draw distance.'
+        : 'Selected: Optimized — high FPS, normal-looking textures.',
+    )
+    patchTitleMatch(rows, /game profile/i, (f) => {
+      f.detail = potato
+        ? 'Next Apply: Potato profile + packs.'
+        : 'Next Apply: Optimized profile + packs.'
+    })
+  }
+
   // Stamp info flag after mutations
   for (const r of rows) {
     if (isInfoFeature(r)) r.info = true
@@ -163,10 +205,18 @@ export function statusDetailForSelection(
         ? opts.preferLowestLatency
           ? 'lowest latency'
           : 'high throughput'
-        : null
+        : moduleId === 'games'
+          ? opts.gamePreset === 'potato'
+            ? 'Potato'
+            : 'Optimized'
+          : null
 
   if (!baseDetail || baseDetail === '—') {
-    return profile ? `${profile} stack.` : 'Ready.'
+    return profile
+      ? moduleId === 'games'
+        ? `${profile} profile selected.`
+        : `${profile} stack.`
+      : 'Ready.'
   }
   return profile ? `${baseDetail} · ${profile}` : baseDetail
 }

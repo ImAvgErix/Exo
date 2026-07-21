@@ -7,6 +7,7 @@ import { SettingsDrawer } from './SettingsDrawer'
 const modules: { id: ModuleId; label: string; logo: string }[] = [
   { id: 'discord', label: 'Discord', logo: '/logos/discord.png' },
   { id: 'steam', label: 'Steam', logo: '/logos/steam.png' },
+  { id: 'games', label: 'Games', logo: '/logos/games.png' },
   { id: 'windows', label: 'Windows', logo: '/logos/windows.png' },
   { id: 'internet', label: 'Internet', logo: '/logos/internet.png' },
   { id: 'nvidia', label: 'NVIDIA', logo: '/logos/nvidia.png' },
@@ -79,9 +80,10 @@ export function Shell() {
                       key={m.id}
                       to={`/module/${m.id}`}
                       onClick={() => setSettingsOpen(false)}
-                      className={`relative flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold tracking-wide ${
+                      className={`relative flex items-center gap-1 rounded-xl px-1.5 py-1.5 text-[10px] font-semibold tracking-wide sm:gap-1.5 sm:px-2 sm:text-[11px] ${
                         active ? 'text-text' : 'text-muted hover:text-secondary'
                       }`}
+                      title={m.label}
                     >
                       {active && (
                         <motion.span
@@ -98,10 +100,10 @@ export function Shell() {
                       <img
                         src={m.logo}
                         alt=""
-                        className="relative z-10 h-3.5 w-3.5 object-contain opacity-90"
+                        className="relative z-10 h-3.5 w-3.5 shrink-0 object-contain opacity-90"
                         draggable={false}
                       />
-                      <span className="relative z-10">{m.label}</span>
+                      <span className="relative z-10 max-w-[4.5rem] truncate">{m.label}</span>
                     </NavLink>
                   )
                 })}

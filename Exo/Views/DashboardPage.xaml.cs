@@ -174,6 +174,7 @@ public sealed partial class DashboardPage : Page
         {
             case "discord": main.NavigateToDiscord(); break;
             case "steam": main.NavigateToSteam(); break;
+            case "games": main.NavigateToGames(); break;
             case "internet": main.NavigateToInternet(); break;
             case "nvidia": main.NavigateToNvidia(); break;
             case "riot": main.NavigateToRiot(); break;
@@ -188,6 +189,7 @@ public sealed partial class DashboardPage : Page
         {
             case "Discord": main.NavigateToDiscord(); break;
             case "Steam": main.NavigateToSteam(); break;
+            case "Games": main.NavigateToGames(); break;
             case "Internet": main.NavigateToInternet(); break;
             case "NVIDIA": main.NavigateToNvidia(); break;
             case "Riot": main.NavigateToRiot(); break;

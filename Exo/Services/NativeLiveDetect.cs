@@ -656,11 +656,16 @@ public static class NativeLiveDetect
 
         var helperPresent = File.Exists(helper);
 
-        // Broken hosts (WSH / WindowsApps stub) — always fail if present
-        if (!string.IsNullOrEmpty(runVal) &&
-            (runVal.Contains("wscript", StringComparison.OrdinalIgnoreCase) ||
-             runVal.Contains(@"WindowsApps\pwsh", StringComparison.OrdinalIgnoreCase)))
-            return false;
+        // Broken hosts: WSH, or a bare WindowsApps\pwsh alias stub (not real PS7).
+        // Store-installed PowerShell (…\WindowsApps\Microsoft.PowerShell*…\pwsh.exe) is valid.
+        if (!string.IsNullOrEmpty(runVal))
+        {
+            if (runVal.Contains("wscript", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (runVal.Contains(@"WindowsApps\pwsh", StringComparison.OrdinalIgnoreCase) &&
+                !runVal.Contains("Microsoft.PowerShell", StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
 
         // Good: Hidden PowerShell -File yield-guard + helper on disk
         var goodRun = !string.IsNullOrEmpty(runVal) &&
@@ -672,8 +677,17 @@ public static class NativeLiveDetect
 
         // Helper without Run key = Windows "no background" wrongly stripped it (not ok)
         if (helperPresent && !goodRun) return false;
-        // Neither installed = feature off
-        if (!helperPresent && string.IsNullOrEmpty(runVal)) return false;
+
+        // Neither companion nor Run key:
+        // - No game EXEs yet → intentional purge on Apply (clean / launcher-only) = OK
+        // - Games installed → yield required = off until reapply
+        if (!helperPresent && string.IsNullOrEmpty(runVal))
+        {
+            var games = module.Equals("riot", StringComparison.OrdinalIgnoreCase)
+                ? DiscoverRiot()
+                : DiscoverEpic();
+            return games.Count == 0;
+        }
 
         return goodRun && helperPresent;
     }

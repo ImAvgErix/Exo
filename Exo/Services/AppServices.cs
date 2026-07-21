@@ -12,6 +12,7 @@ public sealed class AppServices
     public NvidiaPanelSettingsService NvidiaPanel { get; }
     public NetworkOptimizerService Network { get; }
     public NativeApplyService NativeApply { get; }
+    public GameOptimizerService Games { get; } = new();
 
     public AppServices()
     {

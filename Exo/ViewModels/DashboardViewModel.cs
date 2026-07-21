@@ -43,6 +43,7 @@ public partial class DashboardViewModel : ObservableObject
         [
             new OptimizerCheckRowViewModel("Discord", "discord"),
             new OptimizerCheckRowViewModel("Steam", "steam"),
+            new OptimizerCheckRowViewModel("Games", "games"),
             new OptimizerCheckRowViewModel("Windows", "windows"),
             new OptimizerCheckRowViewModel("Internet", "internet"),
             new OptimizerCheckRowViewModel("NVIDIA", "nvidia"),
@@ -135,6 +136,10 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] public partial string WindowsStatusSecondary { get; set; } = "Apply host Game Mode, HAGS, Game Bar, and priority";
     [ObservableProperty] public partial string WindowsStatusTag { get; set; } = "NOT APPLIED";
     [ObservableProperty] public partial string WindowsLiveMetric { get; set; } = "Host gaming stack not applied";
+    [ObservableProperty] public partial string GamesStatusPrimary { get; set; } = "Games ready";
+    [ObservableProperty] public partial string GamesStatusSecondary { get; set; } = "Potato or Optimized profiles for installed games";
+    [ObservableProperty] public partial string GamesStatusTag { get; set; } = "NOT APPLIED";
+    [ObservableProperty] public partial string GamesLiveMetric { get; set; } = "No game profile applied";
     [ObservableProperty] public partial string FpsPrimary { get; set; } = "—";
     [ObservableProperty] public partial string FpsSecondary { get; set; } = "";
     [ObservableProperty] public partial string FrameTimePrimary { get; set; } = "—";
@@ -563,6 +568,42 @@ public partial class DashboardViewModel : ObservableObject
         outcomes["epic"] = appliedCount > beforeEpic;
         if (outcomes["epic"]) appliedNames.Add("Epic");
 
+        // Games module (config profiles) — pure C# state file.
+        var gamesOk = false;
+        try
+        {
+            var gamesState = _services.Games.Detect();
+            gamesOk = gamesState.IsApplied;
+            if (gamesOk)
+            {
+                appliedCount++;
+                appliedNames.Add("Games");
+                GamesStatusTag = "VERIFIED";
+                GamesStatusPrimary = gamesState.StatusText;
+                GamesStatusSecondary = gamesState.Detail;
+                GamesLiveMetric = gamesState.Extra is not null
+                    && gamesState.Extra.TryGetValue("activePreset", out var ap)
+                    && !string.IsNullOrWhiteSpace(ap)
+                    ? $"Profile: {ap}"
+                    : "Game profile verified";
+            }
+            else
+            {
+                GamesStatusTag = "NOT APPLIED";
+                GamesStatusPrimary = gamesState.StatusText;
+                GamesStatusSecondary = gamesState.Detail;
+                GamesLiveMetric = "Pick Potato or Optimized, then Apply";
+            }
+        }
+        catch
+        {
+            GamesStatusTag = "NOT APPLIED";
+            GamesStatusPrimary = "Games ready";
+            GamesStatusSecondary = "Potato or Optimized profiles for installed games";
+            GamesLiveMetric = "No game profile applied";
+        }
+        outcomes["games"] = gamesOk;
+
         LastCheckOutcomes = outcomes;
 
         if (seedChecks)
@@ -579,24 +620,24 @@ public partial class DashboardViewModel : ObservableObject
         FrameTimePrimary = DiscordStatusPrimary;
         FrameTimeSecondary = DiscordStatusSecondary;
 
-        OverviewPrimary = $"{appliedCount} / 7 verified";
+        OverviewPrimary = $"{appliedCount} / 8 verified";
         AppliedModulesList = appliedNames.Count > 0
             ? string.Join(" · ", appliedNames)
             : "None applied yet";
         UpdateNextAction(appliedCount);
         // Keep one short line for any residual bindings; header no longer stacks essays.
-        HeroSummary = appliedCount == 7
+        HeroSummary = appliedCount == 8
             ? "All optimizers verified"
             : HasNextAction
                 ? $"Next: {NextActionModule}"
-                : $"{appliedCount}/7 verified";
+                : $"{appliedCount}/8 verified";
 
         RefreshLiveMemory();
     }
 
     private void UpdateNextAction(int appliedCount)
     {
-        if (appliedCount >= 7)
+        if (appliedCount >= 8)
         {
             HasNextAction = false;
             NextActionModule = string.Empty;
@@ -609,6 +650,7 @@ public partial class DashboardViewModel : ObservableObject
         [
             ("Discord", "Open Discord", DiscordStatusTag, DiscordStatusSecondary),
             ("Steam", "Open Steam", SteamStatusTag, SteamStatusSecondary),
+            ("Games", "Open Games", GamesStatusTag, GamesStatusSecondary),
             ("Windows", "Open Windows", WindowsStatusTag, WindowsStatusSecondary),
             ("Internet", "Open Internet", InternetStatusTag, LatencySecondary),
             ("NVIDIA", "Open NVIDIA", NvidiaStatusTag, NvidiaPathSecondary),

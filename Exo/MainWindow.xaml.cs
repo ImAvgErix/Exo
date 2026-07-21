@@ -249,6 +249,7 @@ public sealed partial class MainWindow : Window
     public void NavigateToNvidia() => NavigateWebHash("#/module/nvidia");
     public void NavigateToRiot() => NavigateWebHash("#/module/riot");
     public void NavigateToEpic() => NavigateWebHash("#/module/epic");
+    public void NavigateToGames() => NavigateWebHash("#/module/games");
 
     public void StabilizeShellAfterExternalWork()
     {

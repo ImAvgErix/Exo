@@ -90,6 +90,11 @@ public sealed class WebHostBridge
                 "module.detect" => await DetectModuleAsync(paramsEl, hasParams).ConfigureAwait(true),
                 "module.apply" => await ApplyModuleAsync(paramsEl, hasParams).ConfigureAwait(true),
                 "module.repair" => await RepairModuleAsync(paramsEl, hasParams).ConfigureAwait(true),
+                "module.verifyAll" => await VerifyAllModulesAsync().ConfigureAwait(true),
+                "games.list" => MapGamesHub(
+                    _services.Games.ListGames(ReadString(paramsEl, hasParams, "gameId"))),
+                "games.apply" => await ApplyGameHubAsync(paramsEl, hasParams).ConfigureAwait(true),
+                "games.repair" => await RepairGameHubAsync(paramsEl, hasParams).ConfigureAwait(true),
                 "shell.navigate" => null,
                 "shell.settings" => RequestSettings(),
                 "shell.openLogs" => OpenLogsFolder(),
@@ -200,6 +205,7 @@ public sealed class WebHostBridge
         {
             Row("discord", "Discord", vm.DiscordStatusTag),
             Row("steam", "Steam", vm.SteamStatusTag),
+            Row("games", "Games", vm.GamesStatusTag),
             Row("windows", "Windows", vm.WindowsStatusTag),
             Row("internet", "Internet", vm.InternetStatusTag),
             Row("nvidia", "NVIDIA", vm.NvidiaStatusTag),
@@ -593,6 +599,7 @@ public sealed class WebHostBridge
         {
             "discord" => "discord",
             "steam" => "steam",
+            "games" => "games",
             "windows" => "windows",
             "internet" => "internet",
             "nvidia" => "nvidia",
@@ -629,6 +636,7 @@ public sealed class WebHostBridge
         {
             "discord" => MapState("discord", await _services.OptimizerState.DetectDiscordAsync(ct, fastOnly: false).ConfigureAwait(true)),
             "steam" => MapState("steam", await _services.OptimizerState.DetectSteamAsync(ct, fastOnly: false).ConfigureAwait(true)),
+            "games" => MapState("games", await Task.Run(() => _services.Games.Detect()).ConfigureAwait(true)),
             "windows" => MapState("windows", await _services.OptimizerState.DetectWindowsAsync(ct).ConfigureAwait(true)),
             "nvidia" => MapState("nvidia", await _services.OptimizerState.DetectNvidiaAsync(ct, fastOnly: false).ConfigureAwait(true)),
             "riot" => MapState("riot", await _services.OptimizerState.DetectRiotAsync(ct).ConfigureAwait(true)),
@@ -781,11 +789,52 @@ public sealed class WebHostBridge
             }
         }
 
-        var statusText = applied
-            ? (savedPreset == NetworkPreset.HighestThroughput
-                ? "High-throughput stack applied"
-                : "Lowest-latency stack applied")
-            : "Ready to optimize";
+        var pathOk = snap?.ProbeOk ?? false;
+        var dnsOk = applied || !string.IsNullOrWhiteSpace(dnsStatus);
+        var checkableOff = new List<string>();
+        if (!pathOk) checkableOff.Add("Connection path");
+        if (!dnsOk) checkableOff.Add("DNS privacy");
+        if (snap is not null &&
+            !string.IsNullOrWhiteSpace(snap.Media.NicHints) &&
+            snap.Media.NicHints is not ("—" or "-") &&
+            !snap.Media.NicOk)
+            checkableOff.Add("NIC status");
+
+        // Feature tiles always include Policy + Safe repair as active; count from list size
+        var visibleTotal = features.Count;
+        var visibleOn = Math.Max(0, visibleTotal - checkableOff.Count);
+
+        string statusKind;
+        string statusText;
+        if (applied && checkableOff.Count == 0)
+        {
+            statusKind = "applied";
+            statusText = visibleTotal > 0
+                ? $"Applied · {visibleOn}/{visibleTotal} on"
+                : "Applied";
+        }
+        else if (applied && checkableOff.Count > 0)
+        {
+            statusKind = "partial";
+            statusText = $"Partial · {checkableOff.Count} still off · {visibleOn}/{visibleTotal} on";
+        }
+        else if (checkableOff.Count > 0)
+        {
+            statusKind = "ready";
+            statusText = checkableOff.Count == 1
+                ? $"Ready · 1 need Apply ({checkableOff[0]})"
+                : $"Ready · {checkableOff.Count} need Apply";
+        }
+        else
+        {
+            statusKind = applied ? "applied" : "ready";
+            statusText = applied
+                ? (savedPreset == NetworkPreset.HighestThroughput
+                    ? "High-throughput stack applied"
+                    : "Lowest-latency stack applied")
+                : "Ready to optimize";
+        }
+
         var detail = applied
             ? "Stack applied. Use Apply to re-measure and reapply, or Repair to undo."
             : "Measure the live path and apply the adaptive stack for your selected profile.";
@@ -795,13 +844,24 @@ public sealed class WebHostBridge
                 ? $"Live ~{ping} ms · {presetLabel} stack. Reapply or Repair."
                 : $"Live ~{ping} ms · ready to apply {(preferLowest ? "lowest latency" : "high throughput")}.";
 
+        if (checkableOff.Count > 0)
+            detail = "Off: " + string.Join(", ", checkableOff) + ".";
+        else if (statusKind == "applied")
+            detail = "Verified on this PC from live checks.";
+
+        var applyReport = OptimizerStateService.TryReadApplyReport("network");
+        if (applyReport.Count == 0)
+            applyReport = OptimizerStateService.TryReadApplyReport("internet");
+
         return new
         {
             id = "internet",
-            isApplied = applied,
+            isApplied = statusKind == "applied",
+            statusKind,
             statusText,
             detail,
             features = features.ToArray(),
+            applyReport = applyReport.ToArray(),
             options = new
             {
                 experimental = _services.Settings.Current.ExperimentalInternet,
@@ -835,35 +895,98 @@ public sealed class WebHostBridge
                    || t.Equals("Display scaling & color", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Latency / sync policy", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Stack profile", StringComparison.OrdinalIgnoreCase)
-                   || t.Equals("Gaming multimedia stack", StringComparison.OrdinalIgnoreCase);
+                   || t.Equals("Gaming multimedia stack", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Profile", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("DLSS left alone", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Exo packs ready", StringComparison.OrdinalIgnoreCase);
         }
 
         var checkable = state.Features
             .Where(f => !IsInfoTitle(f.Title))
             .ToList();
         var off = checkable.Where(f => !f.IsActive).Select(f => f.Title).ToList();
-        var statusText = off.Count == 0
-            ? (state.IsApplied || checkable.Count == 0 ? "Already optimized" : "Ready to optimize")
-            : off.Count == 1
-                ? $"1 setting needs Apply ({off[0]})"
-                : $"{off.Count} settings need Apply";
-        // Honest applied: host flag AND no checkable gaps
-        var isApplied = state.IsApplied && off.Count == 0;
+        var visibleOn = state.Features.Count(f => f.IsActive);
+        var visibleTotal = state.Features.Count;
+
+        // Shared vocabulary: Ready / Applied / Partial / Missing
+        var hostBlob = $"{state.StatusText} {state.Detail}".ToLowerInvariant();
+        var missing = hostBlob.Contains("not installed") ||
+                      hostBlob.Contains("no nvidia") ||
+                      hostBlob.Contains("marvel rivals not installed") ||
+                      hostBlob.Contains("not found in steam");
+        string statusKind;
+        string statusText;
+        if (missing && !state.IsApplied)
+        {
+            statusKind = "missing";
+            statusText = "Missing target";
+        }
+        else if (off.Count == 0 && (state.IsApplied || checkable.Count == 0 || checkable.All(f => f.IsActive)))
+        {
+            statusKind = "applied";
+            statusText = visibleTotal > 0
+                ? $"Applied · {visibleOn}/{visibleTotal} on"
+                : "Applied";
+        }
+        else if (off.Count > 0 && (state.IsApplied || state.Features.Any(f => f.IsActive)))
+        {
+            statusKind = "partial";
+            statusText = $"Partial · {off.Count} still off · {visibleOn}/{visibleTotal} on";
+        }
+        else if (off.Count > 0)
+        {
+            statusKind = "ready";
+            statusText = off.Count == 1
+                ? $"Ready · 1 need Apply ({off[0]})"
+                : $"Ready · {off.Count} need Apply";
+        }
+        else
+        {
+            statusKind = "ready";
+            statusText = "Ready";
+        }
+
+        // Honest applied flag for UI: live gaps win
+        var isApplied = statusKind == "applied";
+
+        // applyReport lives in *-optimizer.json (aliases for games/network)
+        var reportId = id switch
+        {
+            "games" => "game",
+            "internet" => "network",
+            _ => id
+        };
+        // game-optimizer.json (not games-); TryReadApplyReport uses "{module}-optimizer.json"
+        if (reportId == "game")
+        {
+            // Prefer game-optimizer.json; also try games-
+        }
+        var applyReport = OptimizerStateService.TryReadApplyReport(reportId);
+        if (applyReport.Count == 0 && id == "games")
+            applyReport = OptimizerStateService.TryReadApplyReport("games");
+        if (applyReport.Count == 0 && id == "internet")
+        {
+            // network-optimizer may not use applyReport array — leave empty
+        }
 
         return new
         {
             id,
             isApplied,
+            statusKind,
             statusText,
             detail = off.Count > 0
                 ? "Off: " + string.Join(", ", off) + "."
-                : state.Detail,
+                : string.IsNullOrWhiteSpace(state.Detail)
+                    ? (statusKind == "applied" ? "Verified on this PC from live checks." : state.Detail)
+                    : state.Detail,
             features = state.Features.Select(f => new
             {
                 title = f.Title,
                 detail = f.Detail,
                 active = f.IsActive
             }).ToArray(),
+            applyReport = applyReport.ToArray(),
             options = new
             {
                 experimental = id switch
@@ -878,9 +1001,96 @@ public sealed class WebHostBridge
                     _ => false
                 },
                 useGsync,
-                preferLowestLatency = true
+                preferLowestLatency = true,
+                gamePreset = state.Extra is not null &&
+                             state.Extra.TryGetValue("preset", out var gp) &&
+                             !string.IsNullOrWhiteSpace(gp)
+                    ? gp
+                    : "optimized"
             }
         };
+    }
+
+    /// <summary>
+    /// Settings → Verify: force live detect for every module (no Apply).
+    /// </summary>
+    private async Task<object> VerifyAllModulesAsync()
+    {
+        var modules = new[]
+        {
+            "discord", "steam", "windows", "internet", "nvidia", "riot", "epic", "games"
+        };
+        var results = new List<object>();
+        var applied = 0;
+        var partial = 0;
+        var ready = 0;
+        var missing = 0;
+
+        for (var i = 0; i < modules.Length; i++)
+        {
+            var m = modules[i];
+            PostEvent("settings.verifyProgress", new
+            {
+                percent = (i + 1) * 100.0 / modules.Length,
+                status = $"Verifying {m}…"
+            });
+            InvalidateDetectCache(m);
+            try
+            {
+                var row = await DetectCoreAsync(m, force: true).ConfigureAwait(true);
+                results.Add(row);
+                CountKind(ExtractStatusKind(row), ref applied, ref partial, ref ready, ref missing);
+            }
+            catch (Exception ex)
+            {
+                results.Add(new
+                {
+                    id = m,
+                    statusKind = "failed",
+                    statusText = "Failed",
+                    detail = ex.Message,
+                    isApplied = false
+                });
+            }
+        }
+
+        PostEvent("settings.verifyProgress", new { percent = 100.0, status = "Verify complete" });
+        InvalidateDetectCache();
+        return new
+        {
+            results,
+            summary = $"{applied} applied · {partial} partial · {ready} ready · {missing} missing",
+            applied,
+            partial,
+            ready,
+            missing
+        };
+    }
+
+    private static void CountKind(string kind, ref int applied, ref int partial, ref int ready, ref int missing)
+    {
+        switch (kind)
+        {
+            case "applied": applied++; break;
+            case "partial": partial++; break;
+            case "missing": missing++; break;
+            default: ready++; break;
+        }
+    }
+
+    private static string ExtractStatusKind(object mapped)
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(mapped);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("statusKind", out var k))
+                return k.GetString() ?? "ready";
+            if (doc.RootElement.TryGetProperty("isApplied", out var a) && a.ValueKind == JsonValueKind.True)
+                return "applied";
+        }
+        catch { }
+        return "ready";
     }
 
     private async Task<object> ApplyModuleAsync(JsonElement p, bool hasParams)
@@ -895,6 +1105,9 @@ public sealed class WebHostBridge
             useGsync = gs.ValueKind == JsonValueKind.True;
         if (hasParams && p.TryGetProperty("preferLowestLatency", out var ll))
             preferLowestLatency = ll.ValueKind == JsonValueKind.True;
+        var gamePreset = ReadString(p, hasParams, "gamePreset")
+            ?? ReadString(p, hasParams, "preset")
+            ?? GameOptimizerService.PresetOptimized;
         // Persist experimental toggle so next open matches last Apply intent.
         try
         {
@@ -916,6 +1129,37 @@ public sealed class WebHostBridge
 
         try
         {
+            if (module == "games")
+            {
+                var gameId = ReadString(p, hasParams, "gameId")
+                             ?? GameOptimizerService.GameIdMarvelRivals;
+                using var log = new ModuleApplyLog("games");
+                void Report(double percent, string status)
+                {
+                    log.Progress(percent, status);
+                    PostEvent("module.progress", new { module, percent, status });
+                }
+                Report(5, "Applying game profile…");
+                var strProgress = new Progress<string>(s =>
+                {
+                    log.Line(s);
+                    Report(-1, s);
+                });
+                var (ok, msg) = await _services.Games
+                    .ApplyAsync(gameId, gamePreset, strProgress, CancellationToken.None)
+                    .ConfigureAwait(true);
+                log.Line($"result ok={ok} msg={msg}");
+                if (!ok)
+                {
+                    log.Finish(false, msg);
+                    throw new InvalidOperationException(msg);
+                }
+                Report(100, "Done");
+                log.Finish(true, msg);
+                InvalidateDetectCache();
+                return await DetectCoreAsync(module, force: true).ConfigureAwait(true);
+            }
+
             await RunModuleScriptAsync(module, repair: false, experimental, useGsync, preferLowestLatency)
                 .ConfigureAwait(true);
         }
@@ -940,6 +1184,37 @@ public sealed class WebHostBridge
         var module = (ReadString(p, hasParams, "module") ?? "discord").ToLowerInvariant();
         try
         {
+            if (module == "games")
+            {
+                var gameId = ReadString(p, hasParams, "gameId")
+                             ?? GameOptimizerService.GameIdMarvelRivals;
+                using var log = new ModuleApplyLog("game-repair");
+                void Report(double percent, string status)
+                {
+                    log.Progress(percent, status);
+                    PostEvent("module.progress", new { module, percent, status });
+                }
+                Report(10, "Restoring game configs…");
+                var strProgress = new Progress<string>(s =>
+                {
+                    log.Line(s);
+                    Report(-1, s);
+                });
+                var (ok, msg) = await _services.Games
+                    .RepairAsync(gameId, strProgress, CancellationToken.None)
+                    .ConfigureAwait(true);
+                log.Line($"result ok={ok} msg={msg}");
+                if (!ok)
+                {
+                    log.Finish(false, msg);
+                    throw new InvalidOperationException(msg);
+                }
+                Report(100, "Repair complete");
+                log.Finish(true, msg);
+                InvalidateDetectCache();
+                return await DetectCoreAsync(module, force: true).ConfigureAwait(true);
+            }
+
             await RunModuleScriptAsync(module, repair: true, experimental: false).ConfigureAwait(true);
         }
         catch (Exception ex)
@@ -1155,13 +1430,17 @@ public sealed class WebHostBridge
             else
                 Report(5, repair ? "Repair (elevated)..." : "Apply (elevated)...");
 
+            // Clean PC: Discord/Steam/NVIDIA kits need PowerShell 7. Internet already
+            // bootstraps pwsh via NetworkOptimizerService; native-only modules skip this path.
+            var needPwshBootstrap = module is "discord" or "steam" or "nvidia" or "windows";
             var result = await runner.RunAsync(
                 script,
                 arguments: args.ToArray(),
                 elevate: true,
                 progress: deepProgress,
                 cancellationToken: CancellationToken.None,
-                workingDirectory: workDir).ConfigureAwait(true);
+                workingDirectory: workDir,
+                ensureRuntime: needPwshBootstrap).ConfigureAwait(true);
 
             log.Line($"PS Success={result.Success} ExitCode={result.ExitCode} Summary={result.Summary}");
             log.Line($"PS LogPath={result.LogPath}");
@@ -1298,6 +1577,99 @@ public sealed class WebHostBridge
         {
             log.Line("Host latency restamp: " + ex.Message);
         }
+    }
+
+    private async Task<object> ApplyGameHubAsync(JsonElement p, bool hasParams)
+    {
+        var gameId = ReadString(p, hasParams, "gameId")
+                     ?? GameOptimizerService.GameIdMarvelRivals;
+        var gamePreset = ReadString(p, hasParams, "gamePreset")
+                         ?? ReadString(p, hasParams, "preset")
+                         ?? GameOptimizerService.PresetOptimized;
+        using var log = new ModuleApplyLog("games");
+        void Report(double percent, string status)
+        {
+            log.Progress(percent, status);
+            PostEvent("module.progress", new { module = "games", percent, status });
+        }
+        Report(5, "Applying…");
+        var strProgress = new Progress<string>(s =>
+        {
+            log.Line(s);
+            Report(-1, s);
+        });
+        var (ok, msg) = await _services.Games
+            .ApplyAsync(gameId, gamePreset, strProgress, CancellationToken.None)
+            .ConfigureAwait(true);
+        log.Line($"result ok={ok} msg={msg}");
+        if (!ok)
+        {
+            log.Finish(false, msg);
+            throw new InvalidOperationException(msg);
+        }
+        Report(100, "Done");
+        log.Finish(true, msg);
+        InvalidateDetectCache("games");
+        return MapGamesHub(_services.Games.ListGames(gameId));
+    }
+
+    private async Task<object> RepairGameHubAsync(JsonElement p, bool hasParams)
+    {
+        var gameId = ReadString(p, hasParams, "gameId")
+                     ?? GameOptimizerService.GameIdMarvelRivals;
+        using var log = new ModuleApplyLog("games-repair");
+        void Report(double percent, string status)
+        {
+            log.Progress(percent, status);
+            PostEvent("module.progress", new { module = "games", percent, status });
+        }
+        Report(10, "Repairing…");
+        var strProgress = new Progress<string>(s =>
+        {
+            log.Line(s);
+            Report(-1, s);
+        });
+        var (ok, msg) = await _services.Games
+            .RepairAsync(gameId, strProgress, CancellationToken.None)
+            .ConfigureAwait(true);
+        log.Line($"result ok={ok} msg={msg}");
+        if (!ok)
+        {
+            log.Finish(false, msg);
+            throw new InvalidOperationException(msg);
+        }
+        Report(100, "Repair complete");
+        log.Finish(true, msg);
+        InvalidateDetectCache("games");
+        return MapGamesHub(_services.Games.ListGames(gameId));
+    }
+
+    private object MapGamesHub(GameOptimizerService.GamesHubSnapshot hub)
+    {
+        var selectedMapped = MapState("games", hub.Selected);
+        return new
+        {
+            selectedGameId = hub.SelectedGameId,
+            statusText = hub.StatusText,
+            detail = hub.Detail,
+            games = hub.Games.Select(g => new
+            {
+                id = g.Id,
+                title = g.Title,
+                platform = g.Platform,
+                blurb = g.Blurb,
+                icon = string.IsNullOrWhiteSpace(g.Icon)
+                    ? $"/logos/{g.Id}.png"
+                    : g.Icon,
+                ready = g.Ready,
+                installed = g.Installed,
+                applied = g.Applied,
+                activePreset = g.ActivePreset,
+                statusText = g.StatusText,
+                detail = g.Detail
+            }).ToArray(),
+            selected = selectedMapped
+        };
     }
 
     private static string? ReadString(JsonElement p, bool has, string name)

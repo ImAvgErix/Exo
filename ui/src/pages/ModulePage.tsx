@@ -1,15 +1,33 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { host, type ModuleId, type ModuleStatus, onHostEvent } from '../lib/host'
 import {
-  checkableFeatures,
+  host,
+  type GamePreset,
+  type ModuleId,
+  type ModuleStatus,
+  onHostEvent,
+} from '../lib/host'
+import {
   featuresForSelection,
-  statusDetailForSelection,
   statusFromFeatures,
 } from '../lib/featurePreview'
+import {
+  classifyStatus,
+  parseApplyReport,
+  type Tone,
+} from '../lib/moduleUx'
 
-const ids: ModuleId[] = ['discord', 'steam', 'windows', 'internet', 'nvidia', 'riot', 'epic']
+const ids: ModuleId[] = [
+  'discord',
+  'steam',
+  'games',
+  'windows',
+  'internet',
+  'nvidia',
+  'riot',
+  'epic',
+]
 
 function isModule(id: string | undefined): id is ModuleId {
   return !!id && (ids as string[]).includes(id)
@@ -19,6 +37,10 @@ const easeOut = [0.23, 1, 0.32, 1] as const
 
 type Outcome = 'idle' | 'applied' | 'partial' | 'failed' | 'repaired'
 
+/**
+ * Per-module optimizer page. Apply / Repair only.
+ * Full verify-all is Settings → Verify optimizers (not a huge CTA here).
+ */
 export function ModulePage() {
   const { id } = useParams()
   const moduleId = isModule(id) ? id : 'discord'
@@ -30,13 +52,15 @@ export function ModulePage() {
   const [progressText, setProgressText] = useState('')
   const [useGsync, setUseGsync] = useState(true)
   const [preferLowestLatency, setPreferLowestLatency] = useState(true)
+  /** Games: Potato (max FPS / muddy) vs Optimized (high FPS, normal look) */
+  const [gamePreset, setGamePreset] = useState<GamePreset>('optimized')
   const [error, setError] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<Outcome>('idle')
   const [outcomeMsg, setOutcomeMsg] = useState<string | null>(null)
+  const [reportOpen, setReportOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    // Keep previous status while re-detecting so the card doesn't flash empty.
     setDetecting(true)
     setError(null)
     setBusy(false)
@@ -44,6 +68,7 @@ export function ModulePage() {
     setProgressText('')
     setOutcome('idle')
     setOutcomeMsg(null)
+    setReportOpen(false)
     ;(async () => {
       try {
         const s = await host.detect(moduleId)
@@ -52,6 +77,8 @@ export function ModulePage() {
         if (s.options?.useGsync != null) setUseGsync(!!s.options.useGsync)
         if (s.options?.preferLowestLatency != null)
           setPreferLowestLatency(!!s.options.preferLowestLatency)
+        if (s.options?.gamePreset === 'potato' || s.options?.gamePreset === 'optimized')
+          setGamePreset(s.options.gamePreset)
         if (s.isApplied) {
           setOutcome('applied')
           setOutcomeMsg(null)
@@ -86,38 +113,54 @@ export function ModulePage() {
     setOutcomeMsg(null)
     setProgress(0)
     setProgressText('Starting…')
+    setReportOpen(false)
     try {
-      const s = await host.apply(moduleId, {
+      let s = await host.apply(moduleId, {
         experimental: true,
         useGsync,
         preferLowestLatency,
+        gamePreset,
       })
+      setStatus(s)
+      setProgressText('Verifying live…')
+      setProgress(92)
+      // Force live re-detect so tiles match disk (not just apply return)
+      s = await host.detect(moduleId, { force: true })
       setStatus(s)
       const feats = featuresForSelection(
         moduleId,
         s.features,
-        { experimental: true, useGsync, preferLowestLatency },
+        { experimental: true, useGsync, preferLowestLatency, gamePreset },
       )
       const stats = statusFromFeatures(feats, s.isApplied)
-      if (stats.offCount === 0 || s.isApplied) {
+      if (stats.offCount === 0 || (s.isApplied && stats.offCount === 0)) {
         setOutcome('applied')
         setOutcomeMsg(
           stats.total > 0
-            ? `Done — ${stats.onCount}/${stats.total} features on.`
-            : 'Done — stack applied.',
+            ? `Verified — ${stats.onCount}/${stats.total} on.`
+            : 'Verified on this PC.',
+        )
+      } else if (s.isApplied || stats.onCount > 0) {
+        setOutcome('partial')
+        setOutcomeMsg(
+          `Finished with gaps — ${stats.onCount}/${stats.total} on (${stats.offCount} still off).`,
         )
       } else {
         setOutcome('partial')
         setOutcomeMsg(
-          `Finished with gaps — ${stats.onCount}/${stats.total} on (${stats.offCount} still off). Reapply if needed.`,
+          `Finished — ${stats.onCount}/${stats.total} on. Reapply if needed.`,
         )
       }
+      if ((s.applyReport?.length ?? 0) > 0) setReportOpen(true)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Apply failed'
-      // Surface full multi-line log path (host appends "Full log: …")
       setError(msg)
       setOutcome('failed')
-      setOutcomeMsg(msg.includes('Full log:') ? msg : `${msg}\nOpen Logs from Settings for apply-{module}-latest.log`)
+      setOutcomeMsg(
+        msg.includes('Full log:')
+          ? msg
+          : `${msg}\nOpen Logs from Settings for apply-{module}-latest.log`,
+      )
     } finally {
       setBusy(false)
       setProgressText('')
@@ -129,11 +172,12 @@ export function ModulePage() {
     setError(null)
     setOutcome('idle')
     setOutcomeMsg(null)
+    setReportOpen(false)
     try {
       const s = await host.repair(moduleId)
       setStatus(s)
       setOutcome('repaired')
-      setOutcomeMsg('Repair finished — Exo changes reversed.')
+      setOutcomeMsg('Repair finished — Exo changes reversed. Use Settings → Verify to re-check.')
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Repair failed'
       setError(msg)
@@ -154,8 +198,8 @@ export function ModulePage() {
   }
 
   const selection = useMemo(
-    () => ({ experimental: true, useGsync, preferLowestLatency }),
-    [useGsync, preferLowestLatency],
+    () => ({ experimental: true, useGsync, preferLowestLatency, gamePreset }),
+    [useGsync, preferLowestLatency, gamePreset],
   )
 
   const features = useMemo(
@@ -166,67 +210,28 @@ export function ModulePage() {
     [moduleId, status, selection],
   )
 
-  // Counts + headline always come from the visible list (never host statusText alone).
-  const featureStats = useMemo(
-    () => statusFromFeatures(features, status?.isApplied),
-    [features, status?.isApplied],
+  const classified = useMemo(
+    () =>
+      classifyStatus({
+        detecting,
+        busy,
+        busyText: progressText || 'Working…',
+        outcome,
+        hostStatusText: status?.statusText,
+        hostDetail: outcomeMsg || status?.detail,
+        isApplied: status?.isApplied,
+        features,
+      }),
+    [detecting, busy, progressText, outcome, outcomeMsg, status, features],
   )
 
-  const detailLine = useMemo(() => {
-    if (detecting || !status) return 'Checking this PC…'
-    if (outcomeMsg && outcome !== 'idle') return outcomeMsg
-    if (featureStats.offCount > 0 && outcome === 'idle') {
-      const off = checkableFeatures(features)
-        .filter((f) => !f.active)
-        .map((f) => f.title)
-      return `Off: ${off.join(', ')}.`
-    }
-    return statusDetailForSelection(moduleId, status.detail, selection)
-  }, [
-    detecting,
-    moduleId,
-    status,
-    selection,
-    outcome,
-    outcomeMsg,
-    featureStats.offCount,
-    features,
-  ])
-
-  const statusHeadline = (() => {
-    if (detecting && features.length === 0) return 'Checking this PC…'
-    if (busy) return progressText || 'Working…'
-    if (outcome === 'applied') return 'Applied'
-    if (outcome === 'partial') {
-      return featureStats.offCount > 0
-        ? `Partially applied — ${featureStats.offCount} still off`
-        : 'Partially applied'
-    }
-    if (outcome === 'failed') return 'Failed'
-    if (outcome === 'repaired') return 'Repaired'
-    // Prefer visible feature math over host statusText ("2 need Apply" vs 3 red rows).
-    if (features.length > 0) return featureStats.headline
-    if (status?.isApplied) return 'Applied'
-    return status?.statusText ?? '—'
-  })()
+  const tone: Tone = classified.tone
+  const reportSteps = useMemo(
+    () => parseApplyReport(status?.applyReport),
+    [status?.applyReport],
+  )
 
   const uiLocked = detecting || busy
-  const activeCount = featureStats.onCount
-  const totalCount = featureStats.total
-  const allCheckableOn =
-    featureStats.total > 0 && featureStats.offCount === 0
-  const outcomeTone =
-    outcome === 'applied' ||
-    (outcome === 'idle' && (status?.isApplied || allCheckableOn))
-      ? 'ok'
-      : outcome === 'failed'
-        ? 'bad'
-        : outcome === 'partial' ||
-            (outcome === 'idle' && featureStats.offCount > 0)
-          ? 'warn'
-          : outcome === 'repaired'
-            ? 'ok'
-            : 'neutral'
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
@@ -278,15 +283,39 @@ export function ModulePage() {
         </section>
       )}
 
-      {/* Status — outcome is loud and obvious */}
+      {moduleId === 'games' && (
+        <section className="glass specular shrink-0 rounded-2xl px-3 py-2">
+          <p className="text-[11px] font-semibold tracking-[0.04em] text-secondary">
+            Profile
+          </p>
+          <div className="mt-1.5">
+            <Segmented
+              value={gamePreset}
+              onChange={(v) => setGamePreset(v === 'potato' ? 'potato' : 'optimized')}
+              disabled={uiLocked}
+              options={[
+                { id: 'potato', label: 'Potato' },
+                { id: 'optimized', label: 'Optimized' },
+              ]}
+            />
+          </div>
+          <p className="mt-1.5 text-[11px] leading-snug text-muted">
+            {gamePreset === 'potato'
+              ? 'Max FPS — low textures, short draw distance, heavy effect cuts.'
+              : 'High FPS — normal-looking textures; cuts post, fog, and heavy shadows.'}
+          </p>
+        </section>
+      )}
+
+      {/* Status — shared vocabulary (Ready / Applied / Partial / …) */}
       <section
         className="glass specular shrink-0 rounded-2xl px-3.5 py-2.5"
         style={
-          outcomeTone === 'ok'
+          tone === 'ok'
             ? { boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--color-success) 35%, transparent)' }
-            : outcomeTone === 'bad'
+            : tone === 'bad'
               ? { boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--color-error) 40%, transparent)' }
-              : outcomeTone === 'warn'
+              : tone === 'warn'
                 ? { boxShadow: 'inset 0 0 0 1px #fbbf2444' }
                 : undefined
         }
@@ -294,11 +323,11 @@ export function ModulePage() {
         <div className="flex items-start gap-2.5">
           <span
             className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
-              outcomeTone === 'ok'
+              tone === 'ok'
                 ? 'bg-success shadow-[0_0_8px_var(--color-success)]'
-                : outcomeTone === 'bad'
+                : tone === 'bad'
                   ? 'bg-error shadow-[0_0_8px_var(--color-error)]'
-                  : outcomeTone === 'warn'
+                  : tone === 'warn'
                     ? 'bg-amber-400'
                     : 'bg-muted/50'
             }`}
@@ -307,18 +336,20 @@ export function ModulePage() {
           <div className="min-w-0 flex-1">
             <p
               className={`truncate text-[16px] font-semibold tracking-tight leading-snug ${
-                outcomeTone === 'ok'
+                tone === 'ok'
                   ? 'text-success'
-                  : outcomeTone === 'bad'
+                  : tone === 'bad'
                     ? 'text-error'
-                    : outcomeTone === 'warn'
+                    : tone === 'warn'
                       ? 'text-amber-300'
                       : 'text-text'
               }`}
             >
-              {statusHeadline}
+              {classified.headline}
             </p>
-            <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-muted">{detailLine}</p>
+            <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-muted">
+              {classified.detail}
+            </p>
             {error && outcome !== 'failed' && (
               <p className="mt-1 text-[12px] text-error line-clamp-2">{error}</p>
             )}
@@ -341,6 +372,43 @@ export function ModulePage() {
                 </div>
               </div>
             )}
+            {reportSteps.length > 0 && !busy && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => setReportOpen((v) => !v)}
+                  className="text-[11px] font-semibold text-secondary hover:text-text"
+                >
+                  {reportOpen ? 'Hide last apply' : 'Last apply'} · {reportSteps.length} steps
+                </button>
+                {reportOpen && (
+                  <ul className="mt-1 max-h-20 space-y-0.5 overflow-y-auto">
+                    {reportSteps.map((s) => (
+                      <li
+                        key={s.raw}
+                        className="flex items-center gap-1.5 text-[10px] leading-tight"
+                      >
+                        <span
+                          className={
+                            s.status === 'ok'
+                              ? 'text-success'
+                              : s.status === 'fail'
+                                ? 'text-error'
+                                : 'text-muted'
+                          }
+                        >
+                          {s.status === 'ok' ? '✓' : s.status === 'fail' ? '✕' : '·'}
+                        </span>
+                        <span className="truncate text-muted">
+                          {s.id}
+                          {s.reason ? `: ${s.reason}` : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -352,9 +420,9 @@ export function ModulePage() {
           <p className="text-[11px] tabular text-muted">
             {detecting || !status
               ? '…'
-              : totalCount === 0
+              : classified.total === 0
                 ? '—'
-                : `${activeCount}/${totalCount} on`}
+                : `${classified.on}/${classified.total} on`}
           </p>
         </div>
 
