@@ -1,3 +1,9 @@
+## 3.14.2
+
+- **Update popup TLDR**
+  - Auto-update and manual check show a plain **What's new** list from the GitHub release notes.
+  - Launch check uses the branded **Update available** dialog with version jump + short bullets.
+  - Settings panel shows the same summary before download.
 ## 3.14.1
 
 - **Silent Windows integration (Steam / Riot / Epic)**

@@ -16,17 +16,55 @@ public static class ExoUpdateDialog
     public static async Task<bool> ConfirmInstallAsync(
         XamlRoot xamlRoot,
         string localVersion,
-        string remoteVersion)
+        string remoteVersion,
+        string? releaseSummary = null)
     {
-        var body = new StackPanel { Spacing = 8, MaxWidth = 360 };
+        var body = new StackPanel { Spacing = 10, MaxWidth = 380 };
+
         body.Children.Add(new TextBlock
         {
-            Text = "You have a new version. Update now.",
+            Text = $"v{localVersion} → v{remoteVersion}",
+            FontFamily = (FontFamily)Application.Current.Resources["ExoUiFontSemiBold"],
+            FontSize = 13,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = (Brush)Application.Current.Resources["ExoSecondaryTextBrush"],
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        body.Children.Add(new TextBlock
+        {
+            Text = "A new Exo build is ready. Update now?",
             FontFamily = (FontFamily)Application.Current.Resources["ExoUiFont"],
             FontSize = 14,
             Foreground = (Brush)Application.Current.Resources["ExoPrimaryTextBrush"],
             TextWrapping = TextWrapping.Wrap,
             LineHeight = 22
+        });
+
+        var tldr = string.IsNullOrWhiteSpace(releaseSummary)
+            ? "Bug fixes and improvements."
+            : releaseSummary.Trim();
+
+        body.Children.Add(new TextBlock
+        {
+            Text = "What’s new",
+            FontFamily = (FontFamily)Application.Current.Resources["ExoUiFontSemiBold"],
+            FontSize = 12,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = (Brush)Application.Current.Resources["ExoPrimaryTextBrush"],
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+
+        body.Children.Add(new TextBlock
+        {
+            Text = tldr,
+            FontFamily = (FontFamily)Application.Current.Resources["ExoUiFont"],
+            FontSize = 13,
+            Foreground = (Brush)Application.Current.Resources["ExoSecondaryTextBrush"],
+            TextWrapping = TextWrapping.Wrap,
+            LineHeight = 20,
+            MaxHeight = 160,
+            TextTrimming = TextTrimming.CharacterEllipsis
         });
 
         var dialog = CreateShell(
@@ -84,7 +122,7 @@ public static class ExoUpdateDialog
         };
 
         var dialog = CreateShell(
-            title: "Updating",
+            title: $"Updating to v{check.RemoteVersion}",
             content: body,
             primaryText: null,
             closeText: null,
@@ -135,6 +173,7 @@ public static class ExoUpdateDialog
                     UpdateAvailable = true,
                     LocalVersion = check.LocalVersion,
                     RemoteVersion = check.RemoteVersion,
+                    ReleaseSummary = check.ReleaseSummary,
                     Message = "Update cancelled."
                 };
             }
@@ -146,6 +185,7 @@ public static class ExoUpdateDialog
                     UpdateAvailable = true,
                     LocalVersion = check.LocalVersion,
                     RemoteVersion = check.RemoteVersion,
+                    ReleaseSummary = check.ReleaseSummary,
                     Message = ex.Message
                 };
             }
@@ -166,6 +206,7 @@ public static class ExoUpdateDialog
             UpdateAvailable = true,
             LocalVersion = check.LocalVersion,
             RemoteVersion = check.RemoteVersion,
+            ReleaseSummary = check.ReleaseSummary,
             Message = "Update did not complete."
         };
     }

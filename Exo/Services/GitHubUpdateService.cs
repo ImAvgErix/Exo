@@ -62,13 +62,16 @@ public sealed class GitHubUpdateService
             var root = doc.RootElement;
             var tag = root.TryGetProperty("tag_name", out var t) ? (t.GetString() ?? "") : "";
             var remote = tag.Trim().TrimStart('v', 'V');
+            var body = root.TryGetProperty("body", out var bodyEl) ? bodyEl.GetString() : null;
+            var summary = BuildReleaseTldr(body, remote);
             if (!TryParseReleaseVersion(remote, out _))
             {
                 return new AppUpdateResult
                 {
                     LocalVersion = localText,
                     RemoteVersion = string.IsNullOrWhiteSpace(remote) ? "?" : remote,
-                    Message = "The latest GitHub release has invalid version metadata."
+                    Message = "The latest GitHub release has invalid version metadata.",
+                    ReleaseSummary = summary
                 };
             }
             // Releases ship Exo.exe as a self-extracting installer. A legacy ZIP
@@ -118,9 +121,20 @@ public sealed class GitHubUpdateService
                     AlreadyLatest = true,
                     LocalVersion = localText,
                     RemoteVersion = remote,
-                    Message = $"Exo is up to date (v{localText})."
+                    Message = $"Exo is up to date (v{localText}).",
+                    ReleaseSummary = summary
                 };
             }
+
+            var headline = downloadUrl is null
+                ? $"Exo v{remote} exists, but its Exo.exe release asset is missing. Nothing will be downloaded."
+                : sha256 is null
+                    ? $"Exo v{remote} is available, but GitHub did not publish its SHA-256 digest. Install is blocked."
+                    : $"Exo v{remote} is available (you have v{localText}).";
+            // Include TLDR in Message for WebView settings line + logs.
+            var messageWithTldr = string.IsNullOrWhiteSpace(summary)
+                ? headline
+                : $"{headline}\n\nWhat's new:\n{summary}";
 
             return new AppUpdateResult
             {
@@ -130,11 +144,8 @@ public sealed class GitHubUpdateService
                 DownloadUrl = downloadUrl,
                 DownloadSize = downloadSize,
                 Sha256 = sha256,
-                Message = downloadUrl is null
-                    ? $"Exo v{remote} exists, but its Exo.exe release asset is missing. Nothing will be downloaded."
-                    : sha256 is null
-                        ? $"Exo v{remote} is available, but GitHub did not publish its SHA-256 digest. Install is blocked."
-                        : $"Exo v{remote} is available (you have v{localText})."
+                Message = messageWithTldr,
+                ReleaseSummary = summary
             };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -442,8 +453,76 @@ public sealed class GitHubUpdateService
         DownloadUrl = check.DownloadUrl,
         DownloadSize = check.DownloadSize,
         Sha256 = check.Sha256,
-        Message = message
+        Message = message,
+        ReleaseSummary = check.ReleaseSummary
     };
+
+    /// <summary>
+    /// Turn a GitHub release body into a short plain-language list for the update popup.
+    /// Prefers bullet lines; strips markdown; caps at 4 items.
+    /// </summary>
+    public static string BuildReleaseTldr(string? body, string remoteVersion)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return $"Bug fixes and improvements in v{remoteVersion}.";
+
+        var bullets = new List<string>();
+        foreach (var raw in body.Replace("\r\n", "\n").Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0) continue;
+            // Skip big headings / install noise
+            if (line.StartsWith('#')) continue;
+            if (line.StartsWith("### Install", StringComparison.OrdinalIgnoreCase)) continue;
+            if (line.StartsWith("|")) continue; // tables
+
+            string? item = null;
+            if (line.StartsWith("- ", StringComparison.Ordinal) ||
+                line.StartsWith("* ", StringComparison.Ordinal))
+                item = line[2..].Trim();
+            else if (line.Length > 2 && char.IsDigit(line[0]) && line[1] is '.' or ')')
+                item = line[2..].Trim();
+
+            if (string.IsNullOrWhiteSpace(item)) continue;
+            item = SimplifyReleaseBullet(item);
+            if (item.Length < 4) continue;
+            if (bullets.Any(b => string.Equals(b, item, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            bullets.Add(item);
+            if (bullets.Count >= 4) break;
+        }
+
+        if (bullets.Count == 0)
+        {
+            // Fallback: first non-empty prose line
+            foreach (var raw in body.Replace("\r\n", "\n").Split('\n'))
+            {
+                var line = SimplifyReleaseBullet(raw.Trim());
+                if (line.Length < 12 || line.StartsWith('#')) continue;
+                return line.Length > 160 ? line[..157] + "…" : line;
+            }
+            return $"Bug fixes and improvements in v{remoteVersion}.";
+        }
+
+        return string.Join("\n", bullets.Select(b => "• " + b));
+    }
+
+    private static string SimplifyReleaseBullet(string item)
+    {
+        // Strip markdown emphasis / code / links
+        item = System.Text.RegularExpressions.Regex.Replace(item, @"\*\*(.+?)\*\*", "$1");
+        item = System.Text.RegularExpressions.Regex.Replace(item, @"`([^`]+)`", "$1");
+        item = System.Text.RegularExpressions.Regex.Replace(item, @"\[([^\]]+)\]\([^)]+\)", "$1");
+        item = item.Replace("**", "").Trim();
+        // Soften a few dense tech phrases for the popup
+        item = item
+            .Replace("applyReport", "apply report", StringComparison.OrdinalIgnoreCase)
+            .Replace("StartupApproved", "Windows Startup apps", StringComparison.OrdinalIgnoreCase)
+            .Replace("StartupMode", "Steam startup setting", StringComparison.OrdinalIgnoreCase);
+        if (item.Length > 120)
+            item = item[..117].TrimEnd() + "…";
+        return item;
+    }
 
     private static async Task<string> ComputeFileSha256Async(string path, CancellationToken ct)
     {

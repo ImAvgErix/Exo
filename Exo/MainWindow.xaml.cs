@@ -140,6 +140,60 @@ public sealed partial class MainWindow : Window
         if (_postFirstFrameWorkStarted) return;
         _postFirstFrameWorkStarted = true;
         try { App.Services.WarmInBackground(); } catch { }
+        // Auto-update consent popup (with release TLDR) when the setting is on.
+        _ = MaybeAutoUpdateAsync();
+    }
+
+    /// <summary>
+    /// After first paint: if "Updates on launch" is on, check GitHub and show the
+    /// branded Update available dialog with a plain-language TLDR of the release.
+    /// </summary>
+    private async Task MaybeAutoUpdateAsync()
+    {
+        try
+        {
+            if (!App.Services.Settings.Current.CheckForUpdatesOnLaunch) return;
+            await Task.Delay(1400, _lifetimeCts.Token).ConfigureAwait(true);
+            if (_lifetimeCts.IsCancellationRequested) return;
+
+            var check = await App.Services.Updater
+                .CheckAppUpdateAsync(status: null, progress: null, _lifetimeCts.Token)
+                .ConfigureAwait(true);
+            if (!check.UpdateAvailable || string.IsNullOrWhiteSpace(check.DownloadUrl))
+                return;
+            if (string.IsNullOrWhiteSpace(check.Sha256))
+                return; // install path would block; don't nag
+
+            var root = RootGrid.XamlRoot;
+            if (root is null) return;
+
+            var go = await ExoUpdateDialog.ConfirmInstallAsync(
+                root,
+                check.LocalVersion,
+                check.RemoteVersion,
+                check.ReleaseSummary).ConfigureAwait(true);
+            if (!go || _lifetimeCts.IsCancellationRequested) return;
+
+            var install = await ExoUpdateDialog.InstallWithProgressAsync(
+                root,
+                check,
+                App.Services.Updater,
+                _lifetimeCts.Token).ConfigureAwait(true);
+
+            if (install.ShouldExit)
+            {
+                try { await Task.Delay(400, _lifetimeCts.Token).ConfigureAwait(true); } catch { }
+                try { Microsoft.UI.Xaml.Application.Current?.Exit(); } catch { }
+            }
+        }
+        catch (OperationCanceledException) when (_lifetimeCts.IsCancellationRequested)
+        {
+            /* window closed */
+        }
+        catch (Exception ex)
+        {
+            StartupLog.Mark("auto-update-failed:" + ex.GetType().Name);
+        }
     }
 
     public void BringToForeground()

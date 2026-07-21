@@ -41,6 +41,8 @@ public sealed class AppUpdateResult
     public string LocalVersion { get; init; } = string.Empty;
     public string RemoteVersion { get; init; } = string.Empty;
     public string Message { get; init; } = string.Empty;
+    /// <summary>Plain-language TLDR for the update popup (short bullets).</summary>
+    public string? ReleaseSummary { get; init; }
     public string? DownloadUrl { get; init; }
     public long? DownloadSize { get; init; }
     public string? Sha256 { get; init; }

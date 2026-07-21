@@ -526,9 +526,14 @@ public sealed class WebHostBridge
                     shouldExit = false,
                     appVersion = AppVer(),
                     localVersion = check.LocalVersion,
-                    remoteVersion = check.RemoteVersion
+                    remoteVersion = check.RemoteVersion,
+                    releaseSummary = check.ReleaseSummary
                 };
             }
+
+            // Surface TLDR in the settings panel before download begins.
+            if (!string.IsNullOrWhiteSpace(check.ReleaseSummary))
+                PushProgress($"What's new in v{check.RemoteVersion}:\n{check.ReleaseSummary}", 0);
 
             // Auto-download + apply (no "Update available" card).
             PushProgress($"Downloading Exo v{check.RemoteVersion}…", 0);
@@ -567,7 +572,8 @@ public sealed class WebHostBridge
                 shouldExit = install.ShouldExit,
                 appVersion = AppVer(),
                 localVersion = install.LocalVersion,
-                remoteVersion = install.RemoteVersion
+                remoteVersion = install.RemoteVersion,
+                releaseSummary = check.ReleaseSummary
             };
         }
         catch (Exception ex)

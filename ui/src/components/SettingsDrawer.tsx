@@ -66,11 +66,21 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
     setProgress(-1)
     try {
       const r = await host.checkUpdates()
-      setLine(r.message)
+      // Host message already includes "What's new" when a newer build exists.
+      let text = r.message
+      if (
+        r.updateAvailable &&
+        r.releaseSummary &&
+        text &&
+        !text.includes("What's new")
+      ) {
+        text = `Exo v${r.remoteVersion ?? '?'} is available (you have v${r.localVersion ?? version}).\n\nWhat's new:\n${r.releaseSummary}`
+      }
+      setLine(text)
       if (r.appVersion) setVersion(r.appVersion)
       if (r.shouldExit) {
         setProgress(100)
-        setLine(r.message || 'Restarting into the new build…')
+        setLine(text || 'Restarting into the new build…')
         return
       }
       if (r.alreadyLatest || !r.updateAvailable) {
@@ -207,7 +217,9 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
           )}
 
           {line && (
-            <p className="mb-2 line-clamp-3 text-[11px] leading-snug text-secondary">{line}</p>
+            <p className="mb-2 max-h-28 overflow-y-auto whitespace-pre-wrap text-[11px] leading-snug text-secondary">
+              {line}
+            </p>
           )}
 
           <div className="grid grid-cols-2 gap-1.5">

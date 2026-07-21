@@ -261,6 +261,8 @@ export const host = {
       appVersion?: string
       localVersion?: string
       remoteVersion?: string
+      /** Plain-language bullets from the GitHub release body */
+      releaseSummary?: string
     }>('settings.checkUpdates', undefined, 30 * 60_000),
   openLogs: () => call<{ ok: boolean; path?: string; message?: string }>('shell.openLogs'),
   openIssues: () => call<{ ok: boolean; message?: string }>('shell.openIssues'),
