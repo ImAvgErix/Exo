@@ -340,6 +340,8 @@ public sealed partial class GameOptimizerService
                 PresetOptimized => "Optimized",
                 _ => null
             };
+            // Always surface last chosen profile for the UI toggle (Potato vs Optimized).
+            var lastPreset = rec?.Preset is PresetPotato or PresetOptimized ? presetLabel : null;
             var (installUrl, installLabel) = GetInstallTarget(entry.Id);
             return new GameListItem
             {
@@ -351,12 +353,14 @@ public sealed partial class GameOptimizerService
                 Ready = entry.Ready,
                 Installed = probe.Installed,
                 Applied = applied,
-                ActivePreset = applied ? presetLabel : null,
+                ActivePreset = lastPreset,
                 StatusText = !probe.Installed
                     ? "Not installed"
                     : applied
                         ? $"{presetLabel} applied"
-                        : "Installed",
+                        : lastPreset is not null
+                            ? $"Installed · last {lastPreset}"
+                            : "Installed",
                 Detail = probe.Installed
                     ? ShortPath(probe.InstallPath!)
                     : "Steam App " + (entry.SteamAppId ?? "—"),
@@ -1380,8 +1384,17 @@ public sealed partial class GameOptimizerService
         try
         {
             if (!File.Exists(StatePath)) return new GamesState();
-            return JsonSerializer.Deserialize<GamesState>(File.ReadAllText(StatePath), JsonOpts)
-                   ?? new GamesState();
+            var state = JsonSerializer.Deserialize<GamesState>(File.ReadAllText(StatePath), JsonOpts)
+                        ?? new GamesState();
+            // System.Text.Json rebuilds Dictionary without our comparer — re-key case-insensitive.
+            if (state.Games is not null && state.Games.Comparer != StringComparer.OrdinalIgnoreCase)
+            {
+                var rebuilt = new Dictionary<string, GameApplyRecord>(StringComparer.OrdinalIgnoreCase);
+                foreach (var kv in state.Games)
+                    rebuilt[kv.Key] = kv.Value;
+                state.Games = rebuilt;
+            }
+            return state;
         }
         catch { return new GamesState(); }
     }

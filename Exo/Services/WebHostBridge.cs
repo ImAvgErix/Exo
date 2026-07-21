@@ -1036,11 +1036,16 @@ public sealed class WebHostBridge
                 },
                 useGsync,
                 preferLowestLatency = true,
+                // Prefer activePreset (last applied) so Potato titles don't open as Optimized.
                 gamePreset = state.Extra is not null &&
-                             state.Extra.TryGetValue("preset", out var gp) &&
-                             !string.IsNullOrWhiteSpace(gp)
-                    ? gp
-                    : "optimized",
+                             state.Extra.TryGetValue("activePreset", out var ap) &&
+                             !string.IsNullOrWhiteSpace(ap)
+                    ? ap
+                    : state.Extra is not null &&
+                      state.Extra.TryGetValue("preset", out var gp) &&
+                      !string.IsNullOrWhiteSpace(gp)
+                        ? gp
+                        : "optimized",
                 displayMode = state.Extra is not null &&
                               state.Extra.TryGetValue("displayMode", out var dm) &&
                               !string.IsNullOrWhiteSpace(dm)

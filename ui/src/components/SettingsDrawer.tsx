@@ -50,6 +50,15 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
     })
   }, [])
 
+  // Hooks must stay above any early return (opening Settings used to crash React).
+  const barWidth = useMemo(() => {
+    if (progress == null) return 0
+    if (progress < 0) return 32
+    return Math.max(4, Math.min(100, progress))
+  }, [progress])
+
+  const phaseLabel = phase ?? (busy ? 'Working' : null)
+
   if (!open) return null
 
   async function toggleCheckOnLaunch() {
@@ -107,7 +116,7 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
         )
       }
       if (r.releaseSummary?.trim()) {
-        bits.push('What’s new')
+        bits.push("What's new")
         bits.push(
           ...r.releaseSummary
             .replace(/\r\n/g, '\n')
@@ -149,14 +158,6 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
       setLine(e instanceof Error ? e.message : 'Could not open browser.')
     }
   }
-
-  const barWidth = useMemo(() => {
-    if (progress == null) return 0
-    if (progress < 0) return 32
-    return Math.max(4, Math.min(100, progress))
-  }, [progress])
-
-  const phaseLabel = phase ?? (busy ? 'Working' : null)
 
   return (
     <div className="pointer-events-none absolute inset-0 z-50" aria-hidden={false}>

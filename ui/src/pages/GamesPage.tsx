@@ -17,6 +17,15 @@ const easeOut = [0.23, 1, 0.32, 1] as const
 
 type Outcome = 'idle' | 'applied' | 'partial' | 'failed' | 'repaired'
 
+/** Host may send "potato" / "Potato" / "Potato · applied" — normalize for the toggle. */
+function normalizePresetLabel(raw?: string | null): GamePreset | null {
+  if (!raw) return null
+  const t = raw.trim().toLowerCase()
+  if (t === 'potato' || t.startsWith('potato')) return 'potato'
+  if (t === 'optimized' || t.startsWith('optimized')) return 'optimized'
+  return null
+}
+
 /** Per-game logos — cache-bust so new assets load after rebuild. */
 function gameIcon(g: GameListItem): { src: string; src2x?: string } {
   const v = 'v=6'
@@ -102,6 +111,16 @@ export function GamesPage() {
   const [outcomeMsg, setOutcomeMsg] = useState<string | null>(null)
   const [reportOpen, setReportOpen] = useState(false)
 
+  function presetFromHub(snap: GameHubSnapshot, gameId?: string | null): GamePreset {
+    // Prefer last applied for this title (host Extra / list row) — never leave a stale Optimized.
+    const row = snap.games.find((g) => g.id === (gameId ?? snap.selectedGameId))
+    const fromRow = normalizePresetLabel(row?.activePreset)
+    if (fromRow) return fromRow
+    const fromOpts = normalizePresetLabel(snap.selected?.options?.gamePreset)
+    if (fromOpts) return fromOpts
+    return 'optimized'
+  }
+
   async function refresh(gameId?: string | null) {
     setDetecting(true)
     setError(null)
@@ -109,8 +128,7 @@ export function GamesPage() {
       const snap = await host.listGames(gameId ?? selectedId ?? undefined)
       setHub(snap)
       setSelectedId(snap.selectedGameId)
-      const p = snap.selected?.options?.gamePreset
-      if (p === 'potato' || p === 'optimized') setPreset(p)
+      setPreset(presetFromHub(snap, snap.selectedGameId))
       if (snap.selected?.isApplied) {
         setOutcome('applied')
         setOutcomeMsg(null)
@@ -143,6 +161,9 @@ export function GamesPage() {
   async function selectGame(g: GameListItem) {
     if (busy) return
     setSelectedId(g.id)
+    // Instant feedback from list row so Potato titles don't flash Optimized.
+    const instant = normalizePresetLabel(g.activePreset)
+    if (instant) setPreset(instant)
     setOutcome('idle')
     setOutcomeMsg(null)
     setReportOpen(false)
@@ -181,10 +202,7 @@ export function GamesPage() {
       const total = feats.length
       // Apply RPC succeeded → always show applied. Live feature rows are diagnostics only.
       const label = preset === 'potato' ? 'Potato' : 'Optimized'
-      // Keep toggle on what we just applied (host may also echo it back).
-      setPreset(preset)
-      const p = snap.selected?.options?.gamePreset
-      if (p === 'potato' || p === 'optimized') setPreset(p)
+      setPreset(presetFromHub(snap, selectedId) || preset)
       setOutcome('applied')
       setOutcomeMsg(
         total > 0

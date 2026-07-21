@@ -229,12 +229,14 @@ public sealed partial class GameOptimizerService
         var applied = probe.Installed
                       && rec?.Preset is PresetPotato or PresetOptimized
                       && ConfigGameLooksApplied(entry.Id, rec!.Preset!);
+        // Always surface last chosen profile so the UI toggle matches (even if verify is soft).
         var presetLabel = rec?.Preset switch
         {
             PresetPotato => "Potato",
             PresetOptimized => "Optimized",
             _ => null
         };
+        var lastPreset = rec?.Preset is PresetPotato or PresetOptimized ? presetLabel : null;
 
         var (installUrl, installLabel) = GetInstallTarget(entry.Id);
         return new GameListItem
@@ -247,12 +249,14 @@ public sealed partial class GameOptimizerService
             Ready = entry.Ready,
             Installed = probe.Installed,
             Applied = applied,
-            ActivePreset = applied ? presetLabel : null,
+            ActivePreset = lastPreset,
             StatusText = !probe.Installed
                 ? "Not installed"
                 : applied
                     ? $"{presetLabel} applied"
-                    : "Installed",
+                    : lastPreset is not null
+                        ? $"Installed · last {lastPreset}"
+                        : "Installed",
             Detail = probe.Installed
                 ? (probe.PrimaryConfig is not null ? ShortPath(probe.PrimaryConfig) : entry.Blurb)
                 : entry.Blurb,

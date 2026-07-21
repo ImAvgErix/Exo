@@ -1,3 +1,7 @@
+## 3.15.6
+
+- Fix Settings button crash (React hooks order in settings drawer)
+- Potato/Optimized toggle now follows each game's last applied profile (no more Optimized flash)
 ## 3.15.5
 
 - Real free official game logos for every hub title (Steam / Icons8 brand marks — no placeholders or AI)
@@ -1293,6 +1297,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 
