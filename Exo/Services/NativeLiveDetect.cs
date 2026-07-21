@@ -257,17 +257,24 @@ public static class NativeLiveDetect
                    && NativeReg.MatchesDword("HKCU", @"Software\Valve\Steam", "GPUAccelWebViewsV3", 1);
         features.Add(F("GPU-powered Steam UI", "H264 + GPUAccelWebViews + V3 = 1.", hwOk));
 
-        // Steam rewrites StartupMode after launch (often back to 7). Detect live truth.
-        var modeOk = NativeReg.MatchesDword("HKCU", @"Software\Valve\Steam", "StartupMode", 0);
+        // Steam rewrites StartupMode after every client launch (often back to 7).
+        // Core quiet = no Run key + Startup apps Off + toasts Off. Re-pin StartupMode
+        // on every detect so opening Exo does not leave a permanent red "need Apply".
         var noRun = !RunKeyHasSteam();
         var toastOk = LiveSteamToasts();
         var approvedOff = IsStartupApprovedDisabled("Steam");
-        var silentOk = modeOk && noRun && toastOk && approvedOff;
+        if (noRun && toastOk && approvedOff)
+            NativeReg.TrySetDword("HKCU", @"Software\Valve\Steam", "StartupMode", 0);
+        var modeOk = NativeReg.MatchesDword("HKCU", @"Software\Valve\Steam", "StartupMode", 0);
+        // Silent is green when Windows won't autostart Steam. StartupMode is best-effort
+        // (Steam rewrites it) — do not keep the whole module red forever because of it.
+        var silentOk = noRun && toastOk && approvedOff;
         var silentDetail = silentOk
-            ? "StartupMode=0, no Run key, Startup apps Off, toasts Off."
+            ? (modeOk
+                ? "No Run key, Startup apps Off, toasts Off, StartupMode=0."
+                : "No Run key, Startup apps Off, toasts Off. (Steam rewrites StartupMode after it opens — re-pinned when you open Exo.)")
             : string.Join("; ", new[]
             {
-                modeOk ? null : $"StartupMode={(NativeReg.GetValue("HKCU", @"Software\Valve\Steam", "StartupMode")?.ToString() ?? "?")} (want 0)",
                 noRun ? null : "Steam still in Run",
                 toastOk ? null : "toast keys not fully Off",
                 approvedOff ? null : "Windows Startup apps still On for Steam",

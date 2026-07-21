@@ -374,7 +374,9 @@ public sealed partial class GameOptimizerService
             var title = GameTitle(gameId);
 
             if (string.Equals(gameId, GameIdValorant, StringComparison.OrdinalIgnoreCase))
-                return (true, $"{label} applied for Valorant (borderless). Restart the client.");
+                return (true,
+                    $"{label} for Valorant — quality lows + borderless written. " +
+                    "Fully close Valorant (and Riot Client if open), then launch again so display sticks.");
 
             if (string.Equals(gameId, GameIdPredecessor, StringComparison.OrdinalIgnoreCase))
                 return (true, $"{label} for Predecessor — quality cut + borderless. Restart the game.");
@@ -412,6 +414,9 @@ public sealed partial class GameOptimizerService
                 ApplyBo7Display(probe, "Fullscreen borderless window");
                 break;
             case GameIdValorant:
+                // Always force borderless on every GUS under VALORANT\Saved\Config
+                ApplyValorantBorderlessEverywhere(probe.ConfigRoot);
+                break;
             case GameIdFortnite:
             case GameIdTheFinals:
             case GameIdPredecessor:
@@ -1064,11 +1069,23 @@ public sealed partial class GameOptimizerService
                     if (primary is null || new FileInfo(f).Length > new FileInfo(primary).Length)
                         primary = f;
                 }
+                // Always include every GameUserSettings.ini (even short/empty) — display lives here.
                 foreach (var f in Directory.EnumerateFiles(baseDir, "GameUserSettings.ini", SearchOption.AllDirectories))
-                {
-                    if (new FileInfo(f).Length < 40) continue;
                     files.Add(f);
-                }
+            }
+            catch { /* ignore */ }
+        }
+
+        // Ensure global WindowsClient GUS path is always a write target
+        var globalGus = Path.Combine(baseDir, "WindowsClient", "GameUserSettings.ini");
+        if (!files.Any(f => string.Equals(f, globalGus, StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(globalGus)!);
+                if (!File.Exists(globalGus))
+                    File.WriteAllText(globalGus, "");
+                files.Add(globalGus);
             }
             catch { /* ignore */ }
         }
@@ -1086,28 +1103,25 @@ public sealed partial class GameOptimizerService
             Installed = installed && files.Count > 0,
             ConfigRoot = baseDir,
             PrimaryConfig = primary,
-            MethodBlurb = "RiotUserSettings.ini graphics — Vanguard process never touched",
-            ConfigFiles = files
+            MethodBlurb = "RiotUserSettings + GUS borderless — Vanguard never touched",
+            ConfigFiles = files.Distinct(StringComparer.OrdinalIgnoreCase).ToList()
         };
     }
 
     /// <summary>
-    /// Valorant — graphics live almost entirely in RiotUserSettings.ini.
-    /// Many PCs already sit on competitive lows (all 0 / shadows off) so Apply may change
-    /// almost nothing — that is expected, not a no-op bug. We still enforce the full set,
-    /// mark the profile, and never touch Vanguard / crosshair / sens.
-    /// Potato = absolute min. Optimized = same lows + slightly higher AF for target clarity.
+    /// Valorant — graphics in RiotUserSettings.ini; display (borderless) in GameUserSettings.ini.
+    /// Always force UE FullscreenMode=1 (WindowedFullscreen). Close client before apply for best stick.
+    /// Potato = min quality. Optimized = same lows + AF 4x for clarity.
     /// </summary>
     private static void ApplyValorant(string preset, ConfigProbe probe, string displayMode = DisplayLeave)
     {
         var potato = preset == PresetPotato;
-        // Ladder: 0=Low/1x … higher = better looking / costlier
         var tex = "0";
         var mat = "0";
         var detail = "0";
         var ui = "0";
         var aa = "0";
-        // AF: 0=1x, 1=2x, 2=4x, 3=8x, 4=16x — Optimized uses 4x (cheap clarity)
+        // AF: 0=1x … Optimized 4x for clearer targets at low cost
         var af = potato ? "0" : "2";
         var reflex = "2"; // On + Boost
 
@@ -1120,12 +1134,10 @@ public sealed partial class GameOptimizerService
             {
                 var text = File.ReadAllText(path);
                 text = StripIniExoMarkers(text);
-                if (!text.Contains("Exo Games", StringComparison.OrdinalIgnoreCase))
-                    text = "; Exo Games — valorant profile=" + preset + "\r\n" + text.TrimStart('\uFEFF');
-                else
-                    text = Regex.Replace(text, @"(?m)^;\s*Exo Games[^\r\n]*",
-                        "; Exo Games — valorant profile=" + preset);
+                text = "; Exo Games — valorant profile=" + preset + "\r\n" +
+                       Regex.Replace(text.TrimStart('\uFEFF'), @"(?m)^;\s*Exo Games[^\r\n]*\r?\n?", "");
 
+                // Competitive quality ladder (always re-write so game can't leave leftovers)
                 text = EnsureSectionLine(text, "Settings", "EAresIntSettingName::TextureQuality", tex);
                 text = EnsureSectionLine(text, "Settings", "EAresIntSettingName::MaterialQuality", mat);
                 text = EnsureSectionLine(text, "Settings", "EAresIntSettingName::DetailQuality", detail);
@@ -1141,36 +1153,85 @@ public sealed partial class GameOptimizerService
                 text = EnsureSectionLine(text, "Settings", "EAresBoolSettingName::LimitFramerateInMenu", "False");
                 text = EnsureSectionLine(text, "Settings", "EAresBoolSettingName::LimitFramerateInBackground", "False");
                 text = EnsureSectionLine(text, "Settings", "EAresIntSettingName::PlayerPerfShowFrameRate", "1");
-                // Only enable multithreaded if the key already exists (don't invent unknown keys)
-                if (text.Contains("MultithreadedRendering", StringComparison.OrdinalIgnoreCase))
-                    text = EnsureSectionLine(text, "Settings", "EAresBoolSettingName::MultithreadedRendering", "True");
+                text = EnsureSectionLine(text, "Settings", "EAresBoolSettingName::MultithreadedRendering", "True");
+                // Competitive visual clutter
+                text = EnsureSectionLine(text, "Settings", "EAresBoolSettingName::ShowBulletTracers", "False");
+                text = EnsureSectionLine(text, "Settings", "EAresBoolSettingName::ShowBlood", "False");
+                text = EnsureSectionLine(text, "Settings", "EAresBoolSettingName::ShowBloodVisual", "False");
+                text = EnsureSectionLine(text, "Settings", "EAresBoolSettingName::ShowCorpses", "False");
+                text = EnsureSectionLine(text, "Settings", "EAresBoolSettingName::ShowCorpsesVisual", "False");
+                text = EnsureSectionLine(text, "Settings", "EAresBoolSettingName::EnableInstabilityIndicators", "False");
 
                 WriteConfigText(path, text);
                 continue;
             }
 
             if (name.Equals("GameUserSettings.ini", StringComparison.OrdinalIgnoreCase))
-            {
-                var text = File.ReadAllText(path);
-                if (text.Length < 40) continue;
-                text = StripIniExoMarkers(text);
-                text = ExoIniMarkerLine(GameIdValorant, preset) + "\r\n" + text.TrimStart('\uFEFF');
-                // Latency-friendly only — never force FullscreenMode (borderless is often better)
-                text = EnsureSectionLine(text, "/Script/ShooterGame.ShooterGameUserSettings", "bUseVSync", "False");
-                text = EnsureSectionLine(text, "/Script/ShooterGame.ShooterGameUserSettings", "bUseDynamicResolution", "False");
-                // FrameRateLimit 0 = uncapped; leave if user had a custom cap? Competitive default uncapped.
-                // Only set uncapped when already 0 or missing — if they set a cap, keep it
-                if (!Regex.IsMatch(text, @"(?im)^\s*FrameRateLimit\s*=") ||
-                    Regex.IsMatch(text, @"(?im)^\s*FrameRateLimit\s*=\s*0"))
-                    text = EnsureSectionLine(text, "/Script/ShooterGame.ShooterGameUserSettings", "FrameRateLimit", "0.000000");
-                WriteConfigText(path, text);
-            }
+                WriteValorantGameUserSettings(path, preset);
         }
 
-        ApplyDisplayPreference(GameIdValorant, displayMode, probe);
+        // Always walk every GUS under Config again (display is critical; probe list can miss new folders).
+        ApplyValorantBorderlessEverywhere(probe.ConfigRoot);
+        _ = displayMode;
     }
 
-    /// <summary>Read live Valorant graphics keys for honest feature tiles.</summary>
+    /// <summary>
+    /// Force WindowedFullscreen (borderless) on every Valorant GameUserSettings.ini.
+    /// UE: 0=exclusive fullscreen, 1=borderless, 2=windowed.
+    /// </summary>
+    private static void ApplyValorantBorderlessEverywhere(string? configRoot)
+    {
+        if (string.IsNullOrWhiteSpace(configRoot) || !Directory.Exists(configRoot)) return;
+        try
+        {
+            foreach (var path in Directory.EnumerateFiles(configRoot, "GameUserSettings.ini", SearchOption.AllDirectories))
+                WriteValorantGameUserSettings(path, preset: null);
+        }
+        catch { /* busy */ }
+    }
+
+    private static void WriteValorantGameUserSettings(string path, string? preset)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var text = File.Exists(path) ? File.ReadAllText(path) : "";
+            text = StripIniExoMarkers(text);
+            if (!string.IsNullOrWhiteSpace(preset))
+                text = ExoIniMarkerLine(GameIdValorant, preset) + "\r\n" + text.TrimStart('\uFEFF');
+
+            const string shooter = "/Script/ShooterGame.ShooterGameUserSettings";
+            const string engine = "/Script/Engine.GameUserSettings";
+
+            // Always create the ShooterGame section so empty/stub GUS still get display.
+            text = EnsureSectionLine(text, shooter, "bUseVSync", "False");
+            text = EnsureSectionLine(text, shooter, "bUseDynamicResolution", "False");
+            text = EnsureSectionLine(text, shooter, "FrameRateLimit", "0.000000");
+            // Borderless / windowed fullscreen
+            text = EnsureSectionLine(text, shooter, "FullscreenMode", "1");
+            text = EnsureSectionLine(text, shooter, "LastConfirmedFullscreenMode", "1");
+            text = EnsureSectionLine(text, shooter, "PreferredFullscreenMode", "1");
+            // Letterbox + exclusive-looking scaling off
+            text = EnsureSectionLine(text, shooter, "bShouldLetterbox", "False");
+            text = EnsureSectionLine(text, shooter, "bLastConfirmedShouldLetterbox", "False");
+
+            text = EnsureSectionLine(text, engine, "bUseDesiredScreenHeight", "False");
+            // Patch any leftover FullscreenMode lines anywhere in the file
+            text = Regex.Replace(text, @"(?im)^(\s*FullscreenMode\s*=\s*).*$", "${1}1");
+            text = Regex.Replace(text, @"(?im)^(\s*LastConfirmedFullscreenMode\s*=\s*).*$", "${1}1");
+            text = Regex.Replace(text, @"(?im)^(\s*PreferredFullscreenMode\s*=\s*).*$", "${1}1");
+            text = Regex.Replace(text, @"(?im)^(\s*bShouldLetterbox\s*=\s*).*$", "${1}False");
+            text = Regex.Replace(text, @"(?im)^(\s*bLastConfirmedShouldLetterbox\s*=\s*).*$", "${1}False");
+
+            WriteConfigText(path, text);
+        }
+        catch
+        {
+            /* one path locked — others may still write */
+        }
+    }
+
+    /// <summary>Read live Valorant graphics + display for honest feature tiles.</summary>
     private static List<OptimizerFeatureInfo> BuildValorantLiveFeatures(string? primaryConfig, bool applied, string presetLabel)
     {
         var list = new List<OptimizerFeatureInfo>();
@@ -1204,14 +1265,29 @@ public sealed partial class GameOptimizerService
         var reflex = Get("EAresIntSettingName::NvidiaReflexLowLatencySetting");
         var af = Get("EAresIntSettingName::AnisotropicFiltering");
         var aa = Get("EAresIntSettingName::AntiAliasing");
-        var vsyncLimit = Get("EAresBoolSettingName::LimitFramerateInMenu");
+        var menuCap = Get("EAresBoolSettingName::LimitFramerateInMenu");
 
-        // Competitive target: all quality 0, shadows false, bloom 0, reflex 2
         bool IsCompLow() =>
             tex is "0" && mat is "0" && det is "0" &&
             sh.Equals("False", StringComparison.OrdinalIgnoreCase) &&
             bloom is "0";
 
+        // Live display from any GUS under VALORANT
+        var (fsMode, letterbox) = ReadValorantDisplayLive();
+        var borderlessOk = fsMode is "1";
+        var displayLabel = fsMode switch
+        {
+            "0" => "Exclusive fullscreen",
+            "1" => "Borderless (windowed fullscreen)",
+            "2" => "Windowed",
+            _ => $"Unknown ({fsMode})"
+        };
+
+        list.Add(F("Display mode",
+            borderlessOk
+                ? $"{displayLabel} · letterbox={letterbox}"
+                : $"{displayLabel} — Apply sets borderless. Close Valorant first.",
+            borderlessOk));
         list.Add(F("Texture / Material / Detail",
             $"{QualLabel(tex)} / {QualLabel(mat)} / {QualLabel(det)}",
             tex is "0" && mat is "0" && det is "0"));
@@ -1221,22 +1297,42 @@ public sealed partial class GameOptimizerService
         list.Add(F("NVIDIA Reflex",
             reflex is "2" ? "On + Boost" : reflex is "1" ? "On" : $"value {reflex}",
             reflex is "2" or "1"));
-        list.Add(F("Anisotropic filter",
-            af is "0" ? "1x" : af is "1" ? "2x" : af is "2" ? "4x" : af is "3" ? "8x" : af,
-            true));
         list.Add(F("FPS limits off (menu/bg/battery)",
-            vsyncLimit.Equals("False", StringComparison.OrdinalIgnoreCase) ? "Uncapped menus OK" : "Check limits",
-            vsyncLimit.Equals("False", StringComparison.OrdinalIgnoreCase)));
+            menuCap.Equals("False", StringComparison.OrdinalIgnoreCase) ? "Uncapped menus OK" : "Check limits",
+            menuCap.Equals("False", StringComparison.OrdinalIgnoreCase)));
         list.Add(F("Already competitive lows?",
             IsCompLow()
-                ? "Yes — Apply may not feel different (config already maxed for FPS)"
+                ? "Yes — quality already min; Apply still forces borderless + profile mark"
                 : "No — Apply will lower quality keys",
-            IsCompLow()));
+            true)); // informational — never fails Applied status
         list.Add(F("Exo profile",
             applied ? $"{presetLabel} marked" : "Not marked yet",
             applied));
         list.Add(F("Vanguard", "Never touched by Exo", true));
         return list;
+    }
+
+    private static (string FullscreenMode, string Letterbox) ReadValorantDisplayLive()
+    {
+        try
+        {
+            var root = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "VALORANT", "Saved", "Config");
+            if (!Directory.Exists(root)) return ("?", "?");
+            foreach (var path in Directory.EnumerateFiles(root, "GameUserSettings.ini", SearchOption.AllDirectories)
+                         .OrderByDescending(p => new FileInfo(p).Length))
+            {
+                if (new FileInfo(path).Length < 20) continue;
+                var t = File.ReadAllText(path);
+                var m = Regex.Match(t, @"(?im)^\s*FullscreenMode\s*=\s*(\d+)");
+                var lb = Regex.Match(t, @"(?im)^\s*bShouldLetterbox\s*=\s*(\w+)");
+                if (m.Success)
+                    return (m.Groups[1].Value, lb.Success ? lb.Groups[1].Value : "?");
+            }
+        }
+        catch { /* ignore */ }
+        return ("?", "?");
     }
 
     // ── League of Legends ─────────────────────────────────────────────────

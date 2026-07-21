@@ -1,3 +1,8 @@
+## 3.15.7
+
+- Steam: Silent Windows no longer stuck red — re-pins StartupMode Steam rewrites after launch
+- Valorant: force borderless on every GameUserSettings.ini; stronger potato quality writes; honest display check
+- Close Valorant fully after Apply so display mode sticks
 ## 3.15.6
 
 - Fix Settings button crash (React hooks order in settings drawer)
@@ -1297,6 +1302,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 
