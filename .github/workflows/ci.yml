@@ -27,9 +27,12 @@ jobs:
 
       - name: Build React UI into Exo/wwwroot
         working-directory: ui
+        shell: bash
         run: |
+          set -euo pipefail
           npm ci
           npm run build
+          test -f ../Exo/wwwroot/index.html
 
       - name: Build Exo and NVIDIA display helper
         run: |
