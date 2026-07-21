@@ -1,3 +1,8 @@
+## 3.16.0
+
+- No always-on background companions — Riot/Epic yield Run keys removed; Steam launches without memory-guard process
+- Optimizers stay one-shot (GPU, FSO, startup quiet, game configs) with zero idle helper tasks
+- Detect greys “No background companion” when Run is clean
 ## 3.15.9
 
 - Riot/Epic: yield companion now minimizes + closes launcher UI ~10s after a game starts (not just priority demote)
@@ -1314,6 +1319,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

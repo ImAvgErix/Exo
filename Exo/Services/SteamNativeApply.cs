@@ -954,12 +954,17 @@ try {
             var cmdVbs = Esc(vbsDst);
             var guardCmd = $"\\\"{cmdPs}\\\" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \\\"{cmdHelper}\\\"";
 
+            // Product policy: no background memory-guard process.
+            // Steam-Exo.cmd only starts Steam with lean CEF flags + high priority — zero extra tasks.
+            _ = cmdHelper;
+            _ = cmdPs;
+            _ = cmdVbs;
+            _ = guardCmd;
             var cmd = string.Join("\r\n", new[]
             {
                 "@echo off",
-                "rem Exo default CEF - fast quiet CEF + silent in-game contention guard (no console)",
-                $"start \"\" /HIGH /D \"{cmdSteamPath}\" \"{cmdExe}\" {args} %*",
-                $"if exist \"{cmdVbs}\" (wscript //nologo \"{cmdVbs}\" \"{guardCmd}\") else (start \"\" /B \"{cmdPs}\" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"{cmdHelper}\")"
+                "rem Exo lean Steam launch — CEF flags + /HIGH only (no background guard process)",
+                $"start \"\" /HIGH /D \"{cmdSteamPath}\" \"{cmdExe}\" {args} %*"
             }) + "\r\n";
 
             File.WriteAllText(cmdPath, cmd, new UTF8Encoding(false));

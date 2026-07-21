@@ -566,17 +566,13 @@ public static class WindowsNativeApply
             {
                 if (!name.StartsWith("Exo-", StringComparison.OrdinalIgnoreCase)) continue;
                 var v = run.GetValue(name)?.ToString() ?? "";
-                // Keep silent yield companions
-                if (v.Contains("yield-guard", StringComparison.OrdinalIgnoreCase) &&
-                    v.Contains("Hidden", StringComparison.OrdinalIgnoreCase) &&
-                    v.Contains("-File", StringComparison.OrdinalIgnoreCase) &&
-                    !v.Contains("wscript", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                // Drop noisy / broken
-                if (v.Contains("wscript", StringComparison.OrdinalIgnoreCase) ||
+                // Drop ALL Exo background companions (yield, memory guard, wscript, console)
+                if (v.Contains("yield-guard", StringComparison.OrdinalIgnoreCase) ||
+                    v.Contains("wscript", StringComparison.OrdinalIgnoreCase) ||
                     v.Contains(@"WindowsApps\pwsh", StringComparison.OrdinalIgnoreCase) ||
                     (v.Contains("pwsh", StringComparison.OrdinalIgnoreCase) && !v.Contains("Hidden", StringComparison.OrdinalIgnoreCase)) ||
-                    v.Contains("MemoryGuard", StringComparison.OrdinalIgnoreCase))
+                    v.Contains("MemoryGuard", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("Yield", StringComparison.OrdinalIgnoreCase))
                 {
                     try { run.DeleteValue(name, false); removed++; } catch { }
                 }

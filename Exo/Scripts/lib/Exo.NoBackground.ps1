@@ -1,25 +1,11 @@
-# Exo.NoBackground.ps1 — purge noisy Exo console helpers; KEEP silent yield companions.
-# Allowed: Exo-*-Yield with -WindowStyle Hidden -File *yield-guard*.ps1 (no wscript).
-# Removed: console pwsh/powershell without Hidden, MemoryGuard, wscript stubs.
+# Exo.NoBackground.ps1 — purge ALL Exo Run-key companions (no always-on yield).
+# Product policy: zero idle background processes. One-shot Apply only.
 
 Set-StrictMode -Version Latest
 
 function Test-ExoSilentCompanionValue {
     param([string]$Name, [string]$Value)
-    if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
-
-    # Broken / banned hosts — never "silent"
-    if ($Value -match '(?i)wscript|WindowsApps\\pwsh') { return $false }
-
-    # Hidden PowerShell yield companion (current design)
-    $isYieldName = $Name -match '(?i)^Exo-(Riot|Epic)-Yield$' -or $Name -match '(?i)^Exo-.*Yield$'
-    $isYieldFile = $Value -match '(?i)yield-guard\.ps1'
-    $isHiddenPs =
-        $Value -match '(?i)(pwsh|powershell)(\.exe)?' -and
-        $Value -match '(?i)-WindowStyle\s+Hidden' -and
-        $Value -match '(?i)-File\s'
-
-    if (($isYieldName -or $isYieldFile) -and $isHiddenPs) { return $true }
+    # Never keep yield / memory guard / any Exo Run companion
     return $false
 }
 

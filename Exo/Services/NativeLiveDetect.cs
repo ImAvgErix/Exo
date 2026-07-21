@@ -234,15 +234,12 @@ public static class NativeLiveDetect
         var libOk = LiveSteamLibraryGpuFso(steam);
         features.Add(F("Library games GPU & FSO", "Live GpuPreference=2 + FSO on library games.", libOk));
 
-        var helper = Path.Combine(steam, "Exo-SteamMemoryGuard.ps1");
-        var guardOk = false;
-        try
-        {
-            if (File.Exists(helper))
-                guardOk = SteamLogic.IsMemoryGuardText(File.ReadAllText(helper));
-        }
-        catch { }
-        features.Add(F("Yield to your game", "Memory guard classifier pass on disk.", guardOk));
+        // No always-on memory guard — green when CEF lean launcher is present (one-shot path).
+        features.Add(F("Yield to your game",
+            cefOk
+                ? "No background guard — lean Steam-Exo.cmd only (zero idle processes)."
+                : "Apply Steam to install Steam-Exo.cmd (no background helper).",
+            cefOk));
 
         var debloatOk = !File.Exists(Path.Combine(steam, "Steam-Exo-Aggressive.cmd"))
                         && File.Exists(cmdPath)
@@ -284,8 +281,8 @@ public static class NativeLiveDetect
         var launchOk = LiveStartMenuPointsToExo(steam, cmdPath);
         features.Add(F("Clean Start Menu launch", "Start Menu Steam.lnk → Steam-Exo.cmd.", launchOk));
 
-        var runtimeOk = File.Exists(Path.Combine(steam, "steam.exe")) && (guardOk || File.Exists(helper));
-        features.Add(F("Helpers stay healthy", "steam.exe + memory guard / CEF launcher on disk.", runtimeOk && cefOk && guardOk));
+        var runtimeOk = File.Exists(Path.Combine(steam, "steam.exe")) && cefOk;
+        features.Add(F("Helpers stay healthy", "steam.exe + Steam-Exo.cmd on disk (no background process).", runtimeOk));
 
         var checkable = features.Where(f => !IsInfo(f.Title)).ToList();
         var off = checkable.Where(f => !f.IsActive).Select(f => f.Title).ToList();
@@ -298,7 +295,7 @@ public static class NativeLiveDetect
                 : off.Count == 1 ? $"1 setting needs Apply ({off[0]})"
                 : $"{off.Count} settings need Apply",
             Detail = applied
-                ? "Live: CEF launcher, memory guard, HW accel, Windows quiet, library GPU/FSO."
+                ? "Live: CEF launcher, HW accel, Windows quiet, library GPU/FSO (no background helpers)."
                 : "Off: " + string.Join(", ", off) + ".",
             Features = features
         };
@@ -346,10 +343,10 @@ public static class NativeLiveDetect
 
         var yieldOk = LiveYieldOk(module);
         features.Add(F(
-            "Silent launcher companion",
+            "No background companion",
             yieldOk
-                ? "Yield guard on Run: demotes + minimizes launcher, closes UI ~10s after game starts."
-                : "Missing/broken yield companion — re-Apply Riot/Epic.",
+                ? "No always-on yield process (one-shot Apply only — GPU/FSO/startup)."
+                : "Leftover yield Run key — re-Apply to purge.",
             yieldOk));
 
         // Soft "Apply recorded it" — informational only, never blocks Applied.
@@ -792,55 +789,26 @@ public static class NativeLiveDetect
         return need == 0 || hit >= need;
     }
 
+    /// <summary>
+    /// Green when there is NO always-on yield companion (product: zero idle background).
+    /// </summary>
     private static bool LiveYieldOk(string module)
     {
-        var mod = char.ToUpper(module[0]) + module[1..];
-        var yieldName = $"Exo-{mod}-Yield";
-        var helper = Path.Combine(PathHelper.AppDataDir, $"{module}-yield-guard.ps1");
-        string? runVal = null;
+        _ = module;
         try
         {
             using var run = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
-            runVal = run?.GetValue(yieldName)?.ToString();
+            if (run is null) return true;
+            foreach (var name in run.GetValueNames())
+            {
+                var val = run.GetValue(name)?.ToString() ?? "";
+                if (name.Contains("Yield", StringComparison.OrdinalIgnoreCase) ||
+                    val.Contains("yield-guard", StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
         }
-        catch { }
-
-        var helperPresent = File.Exists(helper);
-
-        // Broken hosts: WSH, or a bare WindowsApps\pwsh alias stub (not real PS7).
-        // Store-installed PowerShell (…\WindowsApps\Microsoft.PowerShell*…\pwsh.exe) is valid.
-        if (!string.IsNullOrEmpty(runVal))
-        {
-            if (runVal.Contains("wscript", StringComparison.OrdinalIgnoreCase))
-                return false;
-            if (runVal.Contains(@"WindowsApps\pwsh", StringComparison.OrdinalIgnoreCase) &&
-                !runVal.Contains("Microsoft.PowerShell", StringComparison.OrdinalIgnoreCase))
-                return false;
-        }
-
-        // Good: Hidden PowerShell -File yield-guard + helper on disk
-        var goodRun = !string.IsNullOrEmpty(runVal) &&
-                      runVal.Contains("yield-guard", StringComparison.OrdinalIgnoreCase) &&
-                      (runVal.Contains("pwsh", StringComparison.OrdinalIgnoreCase) ||
-                       runVal.Contains("powershell", StringComparison.OrdinalIgnoreCase)) &&
-                      runVal.Contains("-File", StringComparison.OrdinalIgnoreCase) &&
-                      runVal.Contains("Hidden", StringComparison.OrdinalIgnoreCase);
-
-        // Helper without Run key = Windows "no background" wrongly stripped it (not ok)
-        if (helperPresent && !goodRun) return false;
-
-        // Neither companion nor Run key:
-        // - No game EXEs yet → intentional purge on Apply (clean / launcher-only) = OK
-        // - Games installed → yield required = off until reapply
-        if (!helperPresent && string.IsNullOrEmpty(runVal))
-        {
-            var games = module.Equals("riot", StringComparison.OrdinalIgnoreCase)
-                ? DiscoverRiot()
-                : DiscoverEpic();
-            return games.Count == 0;
-        }
-
-        return goodRun && helperPresent;
+        catch { /* treat as ok */ }
+        return true;
     }
 
     private static List<string> DiscoverRiot()

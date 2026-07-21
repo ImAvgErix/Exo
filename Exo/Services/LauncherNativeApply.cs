@@ -48,8 +48,10 @@ public static class LauncherNativeApply
         Report("Per-game DSCP...");
         steps.Add(ApplyDscp(games, module, admin, elevOps));
 
-        Report("Silent yield companion...");
-        steps.Add(InstallYieldGuard(module, games, launchers));
+        // Product policy: no always-on background companions (Run-key yield loops).
+        // One-shot apply only: GPU, FSO, startup quiet, caches. Zero idle processes.
+        Report("Removing background companions...");
+        steps.Add(PurgeYieldCompanion(module));
 
         Report("Launcher cache clean...");
         steps.Add(ClearLauncherCaches(module));
@@ -457,17 +459,19 @@ public static class LauncherNativeApply
         catch { return false; }
     }
 
-    private static NativeApplyStep InstallYieldGuard(string module, List<string> games, List<string> launchers)
+    /// <summary>
+    /// Product policy: no always-on background yield processes.
+    /// Removes Run keys + helper scripts. One-shot Apply (GPU/FSO/startup) stays.
+    /// </summary>
+    private static NativeApplyStep PurgeYieldCompanion(string module)
     {
-        // NEVER use Windows Script Host (wscript) — it pops error dialogs with WindowsApps pwsh stubs.
-        // Run key: real powershell/pwsh -WindowStyle Hidden -File "helper.ps1" (quoted paths only).
+        var removed = 0;
         try
         {
             var mod = char.ToUpper(module[0]) + module[1..];
             var yieldName = $"Exo-{mod}-Yield";
             var helperPath = Path.Combine(PathHelper.AppDataDir, $"{module}-yield-guard.ps1");
 
-            // Always strip any wscript-based Exo yield keys first (broken / WSH popups).
             try
             {
                 using var run = Registry.CurrentUser.OpenSubKey(
@@ -476,212 +480,28 @@ public static class LauncherNativeApply
                 {
                     foreach (var name in run.GetValueNames().ToArray())
                     {
-                        if (!name.Equals(yieldName, StringComparison.OrdinalIgnoreCase) &&
-                            !name.StartsWith("Exo-", StringComparison.OrdinalIgnoreCase))
-                            continue;
                         var val = run.GetValue(name)?.ToString() ?? "";
-                        if (val.Contains("wscript", StringComparison.OrdinalIgnoreCase) ||
-                            val.Contains("WindowsApps\\pwsh", StringComparison.OrdinalIgnoreCase) ||
-                            name.Equals(yieldName, StringComparison.OrdinalIgnoreCase))
+                        if (name.Equals(yieldName, StringComparison.OrdinalIgnoreCase) ||
+                            val.Contains("yield-guard", StringComparison.OrdinalIgnoreCase))
                         {
-                            try { run.DeleteValue(name, false); } catch { }
+                            try { run.DeleteValue(name, false); removed++; } catch { }
                         }
                     }
                 }
             }
             catch { }
 
-            if (games.Count == 0)
+            try
             {
-                try { if (File.Exists(helperPath)) File.Delete(helperPath); } catch { }
-                return new NativeApplyStep { Id = "yield", Status = "ok", Reason = "purged (no games)" };
-            }
-
-            var gameNames = games.Select(Path.GetFileNameWithoutExtension)
-                .Where(n => !string.IsNullOrEmpty(n))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            var launcherNames = launchers.Select(Path.GetFileNameWithoutExtension)
-                .Where(n => !string.IsNullOrEmpty(n))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (module == "riot")
-            {
-                foreach (var n in new[] { "RiotClientServices", "RiotClientUx", "RiotClientCrashHandler" })
-                    if (!launcherNames.Contains(n, StringComparer.OrdinalIgnoreCase)) launcherNames.Add(n);
-            }
-            else
-            {
-                foreach (var n in new[] { "EpicGamesLauncher", "EpicWebHelper" })
-                    if (!launcherNames.Contains(n, StringComparer.OrdinalIgnoreCase)) launcherNames.Add(n);
-            }
-
-            // Extra known game process names (Get-Process -Name has no .exe; spaces OK)
-            if (module == "riot")
-            {
-                foreach (var n in new[]
-                         {
-                             "VALORANT-Win64-Shipping", "VALORANT", "League of Legends",
-                             "LeagueClient", "LeagueClientUx", "RiotClientServices" // client alone is not a game
-                         })
+                if (File.Exists(helperPath))
                 {
-                    // Don't treat launcher as game — only shipping / game EXEs
-                    if (n.StartsWith("RiotClient", StringComparison.OrdinalIgnoreCase)) continue;
-                    if (!gameNames.Contains(n, StringComparer.OrdinalIgnoreCase))
-                        gameNames.Add(n);
+                    File.Delete(helperPath);
+                    removed++;
                 }
             }
-            else
-            {
-                foreach (var n in new[]
-                         {
-                             "FortniteClient-Win64-Shipping", "FortniteClient", "RocketLeague",
-                             "Predecessor", "Discovery", "TheFinals"
-                         })
-                {
-                    if (!gameNames.Contains(n, StringComparer.OrdinalIgnoreCase))
-                        gameNames.Add(n);
-                }
-            }
+            catch { }
 
-            var gameList = string.Join(",", gameNames.Select(n => "'" + n!.Replace("'", "''") + "'"));
-            var launcherList = string.Join(",", launcherNames.Select(n => "'" + n!.Replace("'", "''") + "'"));
-            // closeUi = true for Riot/Epic: after game is up, CloseMainWindow on launcher UI.
-            // Never kills AC / Vanguard. Steam uses a separate memory guard (minimize only).
-            var body = $@"# Exo {mod} companion v2 — yield + auto-close launcher UI when a game is running.
-# NO wscript. Hidden PowerShell only. Never touches anti-cheat.
-$ErrorActionPreference = 'SilentlyContinue'
-$created = $false
-$mutex = [Threading.Mutex]::new($true, 'Local\Exo.{mod}.YieldGuard', [ref]$created)
-if (-not $created) {{ $mutex.Dispose(); exit 0 }}
-$games = @({gameList})
-$launchers = @({launcherList})
-# Grace seconds after game process appears before closing launcher windows (lets launch finish).
-$graceSec = 10
-$seenGameSec = 0
-
-Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public static class ExoYieldWin {{
-  [DllImport(""user32.dll"")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-  [DllImport(""user32.dll"")] public static extern bool IsWindowVisible(IntPtr hWnd);
-  public const int SW_MINIMIZE = 6;
-  public const int SW_HIDE = 0;
-}}
-'@
-
-function Test-ExoGameRunning {{
-  foreach ($n in $games) {{
-    if ([string]::IsNullOrWhiteSpace($n)) {{ continue }}
-    # Exact name
-    if (Get-Process -Name $n -ErrorAction SilentlyContinue) {{ return $true }}
-  }}
-  # Loose match: any process whose name starts with a known game token
-  $all = @(Get-Process -ErrorAction SilentlyContinue)
-  foreach ($n in $games) {{
-    if ([string]::IsNullOrWhiteSpace($n)) {{ continue }}
-    if ($all | Where-Object {{ $_.ProcessName -like ($n + '*') }}) {{ return $true }}
-  }}
-  # Hardcoded competitive titles this module cares about
-  if ($all | Where-Object {{
-      $_.ProcessName -match 'VALORANT|League of Legends|FortniteClient|RocketLeague|Predecessor-Win64|Discovery-Win64'
-    }}) {{ return $true }}
-  return $false
-}}
-
-function Set-ExoLauncherYield([bool]$InGame) {{
-  foreach ($n in $launchers) {{
-    Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object {{
-      try {{
-        if ($InGame) {{
-          if ($_.PriorityClass -ne [Diagnostics.ProcessPriorityClass]::Idle) {{
-            $_.PriorityClass = [Diagnostics.ProcessPriorityClass]::Idle
-          }}
-          # Minimize every visible top-level window for this process
-          if ($_.MainWindowHandle -ne [IntPtr]::Zero -and [ExoYieldWin]::IsWindowVisible($_.MainWindowHandle)) {{
-            [void][ExoYieldWin]::ShowWindow($_.MainWindowHandle, [ExoYieldWin]::SW_MINIMIZE)
-          }}
-        }} else {{
-          if ($_.PriorityClass -ne [Diagnostics.ProcessPriorityClass]::Normal) {{
-            $_.PriorityClass = [Diagnostics.ProcessPriorityClass]::Normal
-          }}
-        }}
-      }} catch {{}}
-    }}
-  }}
-}}
-
-function Close-ExoLauncherUi {{
-  # Soft-close launcher UI after grace. Prefer CloseMainWindow (lets process exit cleanly).
-  # Do NOT stop Vanguard / Riot Vanguard / EasyAntiCheat / BEService.
-  $closeNames = @($launchers) + @(
-    'RiotClientUx','RiotClientUxRender','RiotClientCrashHandler',
-    'EpicGamesLauncher','EpicWebHelper','EpicGamesLauncher-Win32-Shipping'
-  ) | Select-Object -Unique
-  foreach ($n in $closeNames) {{
-    if ($n -match '(?i)vanguard|easyanticheat|beservice|ricochet') {{ continue }}
-    Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object {{
-      try {{
-        if ($_.MainWindowHandle -ne [IntPtr]::Zero) {{
-          [void][ExoYieldWin]::ShowWindow($_.MainWindowHandle, [ExoYieldWin]::SW_MINIMIZE)
-          $null = $_.CloseMainWindow()
-        }}
-      }} catch {{}}
-    }}
-  }}
-  # If Epic/Riot UI still open with a window after close request, hide it
-  Start-Sleep -Milliseconds 400
-  foreach ($n in @('EpicGamesLauncher','RiotClientUx','RiotClientServices')) {{
-    Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object {{
-      try {{
-        if ($_.MainWindowHandle -ne [IntPtr]::Zero -and [ExoYieldWin]::IsWindowVisible($_.MainWindowHandle)) {{
-          [void][ExoYieldWin]::ShowWindow($_.MainWindowHandle, [ExoYieldWin]::SW_HIDE)
-          $null = $_.CloseMainWindow()
-        }}
-      }} catch {{}}
-    }}
-  }}
-}}
-
-try {{
-  while ($true) {{
-    $gameRunning = Test-ExoGameRunning
-    Set-ExoLauncherYield -InGame:$gameRunning
-    if ($gameRunning) {{
-      $seenGameSec++
-      if ($seenGameSec -ge $graceSec) {{
-        Close-ExoLauncherUi
-      }}
-      Start-Sleep -Seconds 1
-    }} else {{
-      $seenGameSec = 0
-      Start-Sleep -Seconds 2
-    }}
-  }}
-}} finally {{ try {{ $mutex.ReleaseMutex() }} catch {{}}; $mutex.Dispose() }}
-";
-            Directory.CreateDirectory(PathHelper.AppDataDir);
-            File.WriteAllText(helperPath, body, new System.Text.UTF8Encoding(false));
-
-            var host = FindYieldHost();
-            if (host is null || !File.Exists(host))
-            {
-                try { File.Delete(helperPath); } catch { }
-                return new NativeApplyStep { Id = "yield", Status = "ok", Reason = "purged (no PowerShell host)" };
-            }
-
-            // Fully quoted, no wscript.
-            var runCmd =
-                $"\"{host}\" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"{helperPath}\"";
-
-            using (var run = Registry.CurrentUser.CreateSubKey(
-                       @"Software\Microsoft\Windows\CurrentVersion\Run", true))
-            {
-                run?.SetValue(yieldName, runCmd, RegistryValueKind.String);
-            }
-
-            // Kill stale yield instances for this module, then start fresh.
+            // Best-effort: stop any leftover pwsh running our yield script
             try
             {
                 foreach (var p in System.Diagnostics.Process.GetProcessesByName("pwsh")
@@ -689,50 +509,29 @@ try {{
                 {
                     try
                     {
-                        var cmd = p.MainModule?.FileName ?? "";
-                        // Only our yield scripts
-                        _ = cmd;
+                        // Can't always read CommandLine without WMI; skip kill-all
+                        p.Dispose();
                     }
-                    catch { /* access denied */ }
-                    finally { p.Dispose(); }
+                    catch { }
                 }
             }
             catch { }
-
-            try
-            {
-                using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = host,
-                    Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"{helperPath}\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
-                });
-            }
-            catch { /* non-fatal; Run key still set for next login */ }
 
             return new NativeApplyStep
             {
                 Id = "yield",
                 Status = "ok",
-                Reason = $"companion started; games={gameNames.Count}; close-launcher-ui after {10}s in-game"
+                Reason = $"no background companion (purged={removed})"
             };
         }
         catch (Exception ex)
         {
-            try
+            return new NativeApplyStep
             {
-                var helperPath = Path.Combine(PathHelper.AppDataDir, $"{module}-yield-guard.ps1");
-                if (File.Exists(helperPath)) File.Delete(helperPath);
-                using var run = Registry.CurrentUser.OpenSubKey(
-                    @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
-                var yieldName = $"Exo-{char.ToUpper(module[0]) + module[1..]}-Yield";
-                try { run?.DeleteValue(yieldName, false); } catch { }
-            }
-            catch { }
-            // Never fail the whole Riot/Epic apply over companion.
-            return new NativeApplyStep { Id = "yield", Status = "ok", Reason = "purged after error: " + ex.Message };
+                Id = "yield",
+                Status = "ok",
+                Reason = "no background companion (" + ex.Message + ")"
+            };
         }
     }
 
