@@ -1,3 +1,9 @@
+## 3.15.9
+
+- Riot/Epic: yield companion now minimizes + closes launcher UI ~10s after a game starts (not just priority demote)
+- Steam: auto-minimizes main window while a game is running (never kills steam.exe / DRM)
+- Deeper ban-safe profiles: more BO7 dvars, League HUD/FX, Fortnite/Pred Engine cuts
+- Companion restarts cleanly on Apply; better game process detection
 ## 3.15.8
 
 - All games: force borderless like Valorant — walk every config path, not just the first file
@@ -1308,6 +1314,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

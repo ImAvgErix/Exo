@@ -1068,6 +1068,18 @@ public sealed partial class GameOptimizerService
             ["BulletImpacts"] = "true",
             ["PersistentDamageLayer"] = "true",
             ["SustainabilityPauseRendering"] = "true",
+            // Extra competitive / FPS keys (SetCodKey only rewrites lines that already exist)
+            ["FilmicStrength"] = "0.000000",
+            ["WeaponMotionBlur"] = "false",
+            ["MotionBlur"] = "Off",
+            ["FilmGrain"] = "0.000000",
+            ["SunShadowQuality"] = "Low",
+            ["SpotShadowQuality"] = "Low",
+            ["Clutter"] = "false",
+            ["Tessellation"] = "false",
+            ["ReflectionProbeRelighting"] = "false",
+            ["StaticReflectionQuality"] = "Off",
+            ["ParticleLighting"] = "false",
         };
     }
 
@@ -1213,6 +1225,15 @@ public sealed partial class GameOptimizerService
         eng = EnsureSectionLine(eng, "SystemSettings", "r.DefaultFeature.Bloom", "0");
         eng = EnsureSectionLine(eng, "SystemSettings", "r.SceneColorFringeQuality", "0");
         eng = EnsureSectionLine(eng, "SystemSettings", "r.Tonemapper.Quality", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.AmbientOcclusionLevels", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.DefaultFeature.AmbientOcclusion", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.LensFlareQuality", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.VolumetricFog", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.Fog", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.Shadow.CSM.MaxCascades", potato ? "0" : "1");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.Shadow.MaxResolution", potato ? "512" : "1024");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.Streaming.PoolSize", potato ? "1500" : "3000");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.ViewDistanceScale", potato ? "0.6" : "0.85");
         WriteConfigText(enginePath, eng);
 
         ApplyDisplayPreference(GameIdFortnite, displayMode, probe);
@@ -1586,6 +1607,23 @@ public sealed partial class GameOptimizerService
         text = EnsureSectionLine(text, "Performance", "CharacterQuality", potato ? "0" : "1");
         text = EnsureSectionLine(text, "Performance", "EnableFXAA", "0");
         text = EnsureSectionLine(text, "Performance", "EnableHUDAnimations", potato ? "0" : "1");
+        // Extra League performance surface (safe official keys)
+        text = EnsureSectionLine(text, "Performance", "EnableShadows", "0");
+        text = EnsureSectionLine(text, "Performance", "ShadowQuality", "0");
+        text = EnsureSectionLine(text, "General", "EnableCustomAnnouncer", "0");
+        text = EnsureSectionLine(text, "General", "SnapCameraOnRespawn", "1");
+        text = EnsureSectionLine(text, "General", "BindSysKeys", "0");
+        text = EnsureSectionLine(text, "General", "CursorScale", "1.0000");
+        text = EnsureSectionLine(text, "General", "RelativeTeamColors", "1");
+        text = EnsureSectionLine(text, "HUD", "DrawHealthBars", "1");
+        text = EnsureSectionLine(text, "HUD", "ShowTimestamps", "0");
+        text = EnsureSectionLine(text, "FloatingText", "Damage_Enabled", "1");
+        text = EnsureSectionLine(text, "FloatingText", "Heal_Enabled", "0");
+        text = EnsureSectionLine(text, "FloatingText", "Gold_Enabled", "0");
+        text = EnsureSectionLine(text, "FloatingText", "Exp_Enabled", "0");
+        text = EnsureSectionLine(text, "FloatingText", "QuestReceived_Enabled", "0");
+        text = EnsureSectionLine(text, "FloatingText", "Level_Enabled", "0");
+        text = EnsureSectionLine(text, "FloatingText", "SpellyMultiKill_Enabled", "0");
 
         WriteConfigText(path, text);
         ApplyDisplayPreference(GameIdLeague, displayMode, probe);
@@ -1687,6 +1725,18 @@ public sealed partial class GameOptimizerService
         eng = EnsureSectionLine(eng, "SystemSettings", "r.DepthOfFieldQuality", "0");
         eng = EnsureSectionLine(eng, "SystemSettings", "r.DefaultFeature.MotionBlur", "0");
         eng = EnsureSectionLine(eng, "SystemSettings", "r.VolumetricFog", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.AmbientOcclusionLevels", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.AmbientOcclusionMaxQuality", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.DefaultFeature.AmbientOcclusion", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.DefaultFeature.AutoExposure", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.DefaultFeature.LensFlare", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.LensFlareQuality", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.SceneColorFringeQuality", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.Tonemapper.GrainQuantization", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.Tonemapper.Quality", "0");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.Shadow.MaxResolution", potato ? "512" : "1024");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.Shadow.CSM.MaxCascades", potato ? "1" : "2");
+        eng = EnsureSectionLine(eng, "SystemSettings", "r.Streaming.PoolSize", potato ? "1000" : "2000");
         WriteConfigText(engPath, eng);
 
         ApplyDisplayPreference(GameIdPredecessor, displayMode, probe);

@@ -535,8 +535,19 @@ function Test-SteamGameRunning {
   return $false
 }
 
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class ExoSteamWin {
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  public const int SW_MINIMIZE = 6;
+}
+"@ -ErrorAction SilentlyContinue
+
 function Set-SteamClientPriority([bool]$InGame) {
   # Foreground Steam/CEF stays responsive. Everything else yields RAM/CPU.
+  # Never kill steam.exe (DRM) — minimize main windows while in-game instead.
   $foregroundPid = [ExoSteamMemory]::ForegroundPid()
   # Classifier (SteamDetectCore) requires InGame=BelowNormal, idle=Normal for both.
   $steamCls = if ($InGame) {
@@ -559,6 +570,14 @@ function Set-SteamClientPriority([bool]$InGame) {
         $steamMem = if ($InGame) { 1 } else { 2 }
         [void][ExoSteamMemory]::SetMemoryPriority($_.Id, [uint32]$steamMem)
         if ($InGame) { [void][ExoSteamMemory]::SoftReclaimWorkingSet($_.Id) }
+      }
+      # Auto-minimize Steam main window while a game is running (does not exit Steam).
+      if ($InGame -and $_.MainWindowHandle -ne [IntPtr]::Zero) {
+        try {
+          if ([ExoSteamWin]::IsWindowVisible($_.MainWindowHandle)) {
+            [void][ExoSteamWin]::ShowWindow($_.MainWindowHandle, [ExoSteamWin]::SW_MINIMIZE)
+          }
+        } catch {}
       }
     } catch {}
   }

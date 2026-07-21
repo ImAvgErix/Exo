@@ -348,8 +348,8 @@ public static class NativeLiveDetect
         features.Add(F(
             "Silent launcher companion",
             yieldOk
-                ? "Hidden PowerShell yield-guard on Run + helper on disk (or no games yet)."
-                : "Missing/broken yield companion — re-Apply (no WSH).",
+                ? "Yield guard on Run: demotes + minimizes launcher, closes UI ~10s after game starts."
+                : "Missing/broken yield companion — re-Apply Riot/Epic.",
             yieldOk));
 
         // Soft "Apply recorded it" — informational only, never blocks Applied.
