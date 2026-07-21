@@ -2,6 +2,7 @@
 
 export type ModuleId =
   | 'discord'
+  | 'brave'
   | 'steam'
   | 'games'
   | 'windows'
@@ -364,6 +365,7 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
       live: mockLive(),
       modules: [
         { id: 'discord', title: 'Discord', applied: true },
+        { id: 'brave', title: 'Brave', applied: false },
         { id: 'steam', title: 'Steam', applied: true },
         { id: 'games', title: 'Games', applied: false },
         { id: 'windows', title: 'Windows', applied: false },

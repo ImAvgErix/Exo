@@ -20,6 +20,7 @@ import {
 
 const ids: ModuleId[] = [
   'discord',
+  'brave',
   'steam',
   'games',
   'windows',

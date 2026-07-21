@@ -25,7 +25,7 @@
     <AssemblyName>Exo</AssemblyName>
     <Product>Exo</Product>
     <Company>Exo</Company>
-    <Version>3.16.8</Version>
+    <Version>3.16.9</Version>
     <Description>Private, reversible Windows optimization.</Description>
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
@@ -34,6 +34,7 @@
     <!-- Keep the self-contained app lean: WinUI + runtime only. The full
          Microsoft.WindowsAppSDK metapackage also ships unused AI/ML, Widgets,
          and DWrite components (including ONNX Runtime and DirectML). -->
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="9.0.6" />
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.3.0" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="2.3.1" />
     <!-- WinUI 2.3.0's dependency metadata names an unpublished rolling build;
@@ -43,6 +44,7 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <Manifest Include="$(ApplicationManifest)" />
+    <PackageReference Include="SQLitePCLRaw.bundle_winsqlite3" Version="2.1.11" />
   </ItemGroup>
 
   <!-- Bundle optimizer scripts next to the app (exclude multi-MB caches; download on demand) -->
@@ -63,12 +65,8 @@
     Build React UI then re-include wwwroot so hashed asset renames don't leave
     stale Content paths from evaluation time (MSB3030).
   -->
-  <Target Name="BuildWebUi"
-          BeforeTargets="PrepareForBuild"
-          Condition="Exists('$(MSBuildThisFileDirectory)..\ui\package.json') And Exists('$(MSBuildThisFileDirectory)..\ui\node_modules')">
-    <Exec Command="npm run build"
-          WorkingDirectory="$(MSBuildThisFileDirectory)..\ui"
-          IgnoreExitCode="false" />
+  <Target Name="BuildWebUi" BeforeTargets="PrepareForBuild" Condition="Exists('$(MSBuildThisFileDirectory)..\ui\package.json') And Exists('$(MSBuildThisFileDirectory)..\ui\node_modules')">
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildThisFileDirectory)..\ui" IgnoreExitCode="false" />
     <ItemGroup>
       <Content Remove="wwwroot\**\*" />
       <Content Include="wwwroot\**\*">

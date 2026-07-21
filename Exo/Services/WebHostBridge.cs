@@ -207,6 +207,7 @@ public sealed class WebHostBridge
         var modules = new[]
         {
             Row("discord", "Discord", vm.DiscordStatusTag),
+            Row("brave", "Brave", "READY"),
             Row("steam", "Steam", vm.SteamStatusTag),
             Row("games", "Games", vm.GamesStatusTag),
             Row("windows", "Windows", vm.WindowsStatusTag),
@@ -757,6 +758,7 @@ public sealed class WebHostBridge
         label.ToLowerInvariant() switch
         {
             "discord" => "discord",
+            "brave" => "brave",
             "steam" => "steam",
             "games" => "games",
             "windows" => "windows",
@@ -794,6 +796,7 @@ public sealed class WebHostBridge
         object payload = key switch
         {
             "discord" => MapState("discord", await _services.OptimizerState.DetectDiscordAsync(ct, fastOnly: false).ConfigureAwait(true)),
+            "brave" => MapState("brave", await _services.OptimizerState.DetectBraveAsync(ct).ConfigureAwait(true)),
             "steam" => MapState("steam", await _services.OptimizerState.DetectSteamAsync(ct, fastOnly: false).ConfigureAwait(true)),
             "games" => MapState("games", await Task.Run(() => _services.Games.Detect()).ConfigureAwait(true)),
             "windows" => MapState("windows", await _services.OptimizerState.DetectWindowsAsync(ct).ConfigureAwait(true)),
@@ -1087,7 +1090,9 @@ public sealed class WebHostBridge
         var missing = hostBlob.Contains("not installed") ||
                       hostBlob.Contains("no nvidia") ||
                       hostBlob.Contains("marvel rivals not installed") ||
-                      hostBlob.Contains("not found in steam");
+                      hostBlob.Contains("not found in steam") ||
+                      (string.Equals(id, "brave", StringComparison.OrdinalIgnoreCase) &&
+                       hostBlob.Contains("not installed"));
         string statusKind;
         string statusText;
         // Games hub: host IsApplied / profile marker is source of truth. Live quality rows are diagnostics.
@@ -1214,7 +1219,7 @@ public sealed class WebHostBridge
     {
         var modules = new[]
         {
-            "discord", "steam", "windows", "internet", "nvidia", "riot", "epic", "games"
+            "discord", "brave", "steam", "windows", "internet", "nvidia", "riot", "epic", "games"
         };
         var results = new List<object>();
         var applied = 0;
@@ -1467,8 +1472,29 @@ public sealed class WebHostBridge
                     return;
                 }
 
+                // Analyze first — home dashboard Load ↓/↑, Loss, and full Rating come from
+                // qualityBenchmark in network-optimizer.json. Without this step (old UI path
+                // only applied TCP/DNS), friends only saw idle ping + DNS + a soft "Good".
+                Report(4, "Analyzing connection quality…");
+                log.Line("Internet quality benchmark starting...");
+                var snap = await net.ProbeAsync().ConfigureAwait(true);
+                var quality = await net.RunQualityBenchmarkAsync(snap.Media, strProgress).ConfigureAwait(true);
+                if (quality is not { Ok: true, IsQualityTest: true })
+                {
+                    throw new InvalidOperationException(
+                        "Connection quality test could not finish (need a working internet path). " +
+                        "No network settings were changed. Try again on Ethernet or check firewall/VPN.");
+                }
+                net.PersistQualityBenchmark(quality);
+                log.Line(
+                    $"Quality ok idle={quality.PingP50Ms:0.#}ms load↓={quality.DownloadLoadedMs:0.#} " +
+                    $"load↑={quality.UploadLoadedMs:0.#} loss={quality.PacketLossPercent:0.##}% " +
+                    $"dns={quality.DnsProvider} down={quality.DownloadMbps:0}Mbps up={quality.UploadMbps:0}Mbps");
+                Report(35, $"Quality: {quality.PingP50Ms:0.#} ms idle · {quality.DnsProvider} DNS");
+
                 var preset = preferLowestLatency ? NetworkPreset.LowestLatency : NetworkPreset.HighestThroughput;
                 log.Line($"Internet Apply preset={preset}");
+                Report(40, $"Applying {preset} stack…");
                 var (aok, amsg) = await net.ApplyPresetAsync(
                     preset,
                     new NetworkApplyOptions { Experimental = experimental, RestartEthernet = true },
@@ -1476,27 +1502,54 @@ public sealed class WebHostBridge
                 log.Line($"Internet Apply result ok={aok} msg={amsg}");
                 if (!aok) throw new InvalidOperationException(amsg);
                 // Host gaming stack (MMCSS/HAGS/Game Mode) is Windows-owned — do not restamp from Internet.
-                log.Finish(true, "Internet apply ok");
+                log.Finish(true, "Internet analyze + apply ok");
+                return;
+            }
+
+            // Brave — native only for Apply + Repair (no PS kit).
+            if (module == "brave")
+            {
+                Report(2, repair ? "Repairing Brave policies…" : "Brave absolute debloat…");
+                var step = 0;
+                var strProg = new Progress<string>(s =>
+                {
+                    step++;
+                    log.Line("NATIVE  " + s);
+                    Report(Math.Min(95, 2 + step * 8.0), s);
+                });
+                var braveResult = repair
+                    ? await Task.Run(() => BraveNativeApply.Repair(strProg)).ConfigureAwait(true)
+                    : await _services.NativeApply.ApplyAsync("brave", experimental, strProg, CancellationToken.None)
+                        .ConfigureAwait(true);
+                foreach (var s in braveResult.Steps)
+                    log.Step(s.Id, s.Status, s.Reason);
+                if (!braveResult.Ok && !repair)
+                {
+                    log.Finish(false, braveResult.Message);
+                    throw new InvalidOperationException(braveResult.Message);
+                }
+                Report(100, repair ? "Brave repair complete" : "Brave optimized");
+                log.Finish(true, braveResult.Message);
                 return;
             }
 
             // ── Apply pipeline policy (repair always uses full PS kit) ──────────
             // discord / nvidia  → specialized PowerShell kits only
             // internet          → NetworkOptimizerService only (handled above)
-            // riot / epic       → native C# ONLY (PS kit duplicates + broke yield)
+            // riot / epic / brave → native C# ONLY
             // windows / steam   → native C# primary; PS deep pack soft-fails if native OK
             //
             // Old hybrid always forced a full elevated PS kit after native → double
             // work, double elevation, hangs (Defender), and strip of yield Run keys.
             var supportsNative = !repair && _services.NativeApply.SupportsNativeApply(module);
             // Modules whose competitive apply is fully covered by native C#.
-            var nativeComplete = module is "riot" or "epic" or "windows";
+            var nativeComplete = module is "riot" or "epic" or "windows" or "brave";
             // Steam still benefits from PS debloat depth; soft-fail if native essentials OK.
             var softFailDeepPack = module is "steam" or "windows";
-            // Riot/Epic/Windows: full competitive apply is native C# (every detect row).
+            // Riot/Epic/Windows/Brave: full competitive apply is native C# (every detect row).
             // No redundant PS kit — hang sources (DISM/schtasks) are hard-timeout inside native.
             // Steam still runs PS deep pack for CEF/debloat depth (soft-fail if native OK).
-            var skipDeepPack = supportsNative && (module is "riot" or "epic" or "windows");
+            var skipDeepPack = supportsNative && (module is "riot" or "epic" or "windows" or "brave");
 
             log.Line($"pipeline supportsNative={supportsNative} nativeComplete={nativeComplete} skipDeepPack={skipDeepPack} softFailDeep={softFailDeepPack} experimental={experimental}");
 

@@ -47,6 +47,7 @@ inventory (still offline-first; no silent telemetry).
 | **Discord** | Stable/PTB/Canary under LocalAppData |
 | **Steam** | steam.exe + all `libraryfolders.vdf` libraries |
 | **Riot / Epic** | Uninstall registry, manifests, process paths, all drives when possible |
+| **Brave** | Stable/Beta/Nightly exe paths, User Data / Default profile, extensions, live policies |
 | **Games** | Per-title probes: Steam/Epic/Riot roots + real config files |
 
 ## Implementation checklist (Apply / Detect)

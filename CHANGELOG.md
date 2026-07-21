@@ -1,3 +1,10 @@
+## 3.16.9
+
+- **Brave optimizer** (native): absolute debloat at SlimBrave Neo Max class + more — policies, AMOLED/dark, Memory Saver, no background, **surgical vault wipe** (SQL; keeps search engines), **content filter lists** (cookie/annoyances/social/AI/chat/shorts), **all profiles**, **full prefs snapshot Repair**, **Proton Pass** force-install, GPU high-perf, startup + update-task quiet, opens `brave://policy` + filters + extension for verify
+- Keeps history/bookmarks; closes Brave on Apply; PC-aware multi-channel discover
+- **Internet Analyze & Apply** (Web UI) now runs the full connection quality test before apply — home dashboard **Load ↓ / Load ↑ / Loss** fill for every PC (not only idle + DNS)
+- Quality sample is persisted to `network-optimizer.json` so the dash shows it after reopen
+
 ## 3.16.8
 
 - File Explorer: hide **Home / Gallery / Network** from nav; **Recycle Bin on This PC**, hidden on desktop

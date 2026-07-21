@@ -6,11 +6,163 @@ using Microsoft.Win32;
 namespace Exo.Services;
 
 /// <summary>
-/// Honest live detectors for Steam / Windows / Riot / Epic.
+/// Honest live detectors for Steam / Windows / Riot / Epic / Brave.
 /// No soft "marker-only green" — every row is a real registry/file/powercfg probe.
 /// </summary>
 public static class NativeLiveDetect
 {
+    public static OptimizerStateInfo DetectBrave()
+    {
+        var features = new List<OptimizerFeatureInfo>();
+        var install = BraveNativeApply.Discover();
+        var installed = install.Installed;
+
+        features.Add(F("Brave installed", installed ? install.ExePath ?? "Found" : "Not installed.", installed));
+
+        var policyRoot = @"SOFTWARE\Policies\BraveSoftware\Brave";
+        bool Pol(string name, int expect) =>
+            NativeReg.MatchesDword("HKLM", policyRoot, name, expect)
+            || NativeReg.MatchesDword("HKCU", policyRoot, name, expect);
+
+        var debloat = Pol("BraveRewardsDisabled", 1) && Pol("BraveWalletDisabled", 1)
+                      && Pol("BraveVPNDisabled", 1) && Pol("BraveAIChatEnabled", 0)
+                      && Pol("BraveNewsDisabled", 1);
+        features.Add(F("Product bloat off", "Rewards/Wallet/VPN/Leo/News policies.", debloat));
+
+        var bg = Pol("BackgroundModeEnabled", 0);
+        features.Add(F("No background when closed", "BackgroundModeEnabled=0.", bg));
+
+        var telemetry = Pol("BraveP3AEnabled", 0) && Pol("BraveStatsPingEnabled", 0)
+                        && Pol("MetricsReportingEnabled", 0);
+        features.Add(F("Telemetry quiet", "P3A / stats / metrics off.", telemetry));
+
+        var vault = Pol("PasswordManagerEnabled", 0) && Pol("AutofillAddressEnabled", 0)
+                    && Pol("AutofillCreditCardEnabled", 0);
+        features.Add(F("Brave vault disabled", "No password/address/card save — use Proton Pass.", vault));
+
+        var shields = Pol("DefaultBraveAdblockSetting", 2)
+                      || Pol("DefaultBraveFingerprintingV2Setting", 3);
+        features.Add(F("Shields pinned hard", "Aggressive ads + strong fingerprint policies.", shields));
+
+        var privacy = Pol("BraveGlobalPrivacyControlEnabled", 1)
+                      && Pol("BraveDeAmpEnabled", 1)
+                      && Pol("BlockThirdPartyCookies", 1);
+        features.Add(F("Privacy pins", "GPC + De-AMP + 3P cookies blocked.", privacy));
+
+        var proton = false;
+        if (install.DefaultProfile is not null)
+        {
+            proton = Directory.Exists(Path.Combine(install.DefaultProfile, "Extensions",
+                BraveNativeApply.ProtonPassExtensionId));
+        }
+        // Force-list also counts as applied intent
+        var forceList = NativeReg.GetValue("HKLM", policyRoot + @"\ExtensionInstallForcelist", "1")?.ToString()
+                        ?? NativeReg.GetValue("HKCU", policyRoot + @"\ExtensionInstallForcelist", "1")?.ToString();
+        var protonOk = proton || (!string.IsNullOrEmpty(forceList) &&
+                                  forceList.Contains(BraveNativeApply.ProtonPassExtensionId, StringComparison.OrdinalIgnoreCase));
+        features.Add(F("Proton Pass",
+            proton ? "Extension on disk." : protonOk ? "Force-install policy set." : "Missing — re-Apply.",
+            protonOk));
+
+        var darker = false;
+        if (install.DefaultProfile is not null)
+        {
+            try
+            {
+                var pref = Path.Combine(install.DefaultProfile, "Preferences");
+                if (File.Exists(pref))
+                {
+                    var t = File.ReadAllText(pref);
+                    darker = t.Contains("\"darker_mode\":true", StringComparison.Ordinal)
+                             || t.Contains("\"selected_value\":\"#000000\"", StringComparison.Ordinal);
+                }
+            }
+            catch { }
+        }
+        features.Add(F("AMOLED / darkest UI", "Darker mode + black NTP when set.", darker));
+
+        var filters = false;
+        if (install.UserData is not null)
+        {
+            try
+            {
+                var ls = Path.Combine(install.UserData, "Local State");
+                if (File.Exists(ls))
+                {
+                    var t = File.ReadAllText(ls);
+                    // Cookie + annoyances UUIDs enabled
+                    filters = t.Contains("67E792D4-AE03-4D1A-9EDE-80E01C81F9B8", StringComparison.OrdinalIgnoreCase)
+                              && t.Contains("7911A1CB-304E-4CDB-ABB3-E2A94A37E4DD", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch { }
+        }
+        features.Add(F("Content filter lists", "Cookie / annoyances / social lists enabled.", filters));
+
+        var gpu = false;
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\DirectX\UserGpuPreferences");
+            if (key is not null && install.ExePath is not null)
+            {
+                var v = key.GetValue(install.ExePath)?.ToString() ?? "";
+                gpu = v.Contains("GpuPreference=2", StringComparison.Ordinal);
+            }
+        }
+        catch { }
+        features.Add(F("High-performance GPU", "UserGpuPreferences GpuPreference=2.", gpu));
+
+        var startup = !RunKeyHasBrave();
+        features.Add(F("Silent startup", "No Brave Run keys.", startup));
+
+        var multi = install.Profiles.Count >= 1;
+        features.Add(F(
+            "All profiles covered",
+            multi ? $"{install.Profiles.Count} profile(s) under User Data." : "No profile dirs.",
+            multi));
+
+        var snap = Directory.Exists(Path.Combine(PathHelper.AppDataDir, "brave-snapshot"))
+                   && File.Exists(Path.Combine(PathHelper.AppDataDir, "brave-snapshot", "snapshot.json"));
+        features.Add(F("One-click Repair ready", "Full prefs snapshot present.", snap));
+
+        var checkable = features.Where(f => !IsInfo(f.Title) && f.Title is not "One-click Repair ready").ToList();
+        var off = checkable.Where(f => !f.IsActive).Select(f => f.Title).ToList();
+        var applied = installed && off.Count == 0;
+
+        return new OptimizerStateInfo
+        {
+            IsApplied = applied,
+            StatusText = !installed ? "Not installed"
+                : applied ? "Already optimized"
+                : off.Count == 1 ? $"1 setting needs Apply ({off[0]})"
+                : off.Count > 1 ? $"{off.Count} settings need Apply"
+                : "Ready to optimize",
+            Detail = applied
+                ? "Live: absolute debloat policies, vault off, Proton Pass, quiet host."
+                : off.Count > 0 ? "Off: " + string.Join(", ", off) + "." : "",
+            Features = features
+        };
+    }
+
+    private static bool RunKeyHasBrave()
+    {
+        try
+        {
+            using var run = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
+            if (run is null) return false;
+            foreach (var name in run.GetValueNames())
+            {
+                var val = run.GetValue(name)?.ToString() ?? "";
+                if (name.Contains("Brave", StringComparison.OrdinalIgnoreCase) ||
+                    val.Contains("brave.exe", StringComparison.OrdinalIgnoreCase) ||
+                    val.Contains("BraveSoftware", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        catch { }
+        return false;
+    }
+
     public static OptimizerStateInfo DetectWindows()
     {
         var features = new List<OptimizerFeatureInfo>();

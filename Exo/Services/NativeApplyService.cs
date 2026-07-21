@@ -7,7 +7,7 @@ namespace Exo.Services;
 /// <summary>
 /// Best-path apply router (see WebHostBridge pipeline policy):
 /// <list type="bullet">
-/// <item>Riot / Epic / Windows — native C# is the full competitive apply</item>
+/// <item>Riot / Epic / Windows / Brave — native C# is the full competitive apply</item>
 /// <item>Steam — native C# essentials; optional PS deep pack soft-fails</item>
 /// <item>Internet — NetworkOptimizerService (not this class)</item>
 /// <item>Discord / NVIDIA — specialized PowerShell kits only</item>
@@ -24,7 +24,7 @@ public sealed class NativeApplyService
     }
 
     public bool SupportsNativeApply(string module) =>
-        module.ToLowerInvariant() is "steam" or "windows" or "riot" or "epic";
+        module.ToLowerInvariant() is "steam" or "windows" or "riot" or "epic" or "brave";
 
     public async Task<NativeApplyResult> ApplyAsync(
         string module,
@@ -44,6 +44,7 @@ public sealed class NativeApplyService
                 "windows" => await Task.Run(() => WindowsNativeApply.Apply(experimental, progress), ct).ConfigureAwait(false),
                 "riot" => await Task.Run(() => LauncherNativeApply.Apply("riot", experimental, progress), ct).ConfigureAwait(false),
                 "epic" => await Task.Run(() => LauncherNativeApply.Apply("epic", experimental, progress), ct).ConfigureAwait(false),
+                "brave" => await Task.Run(() => BraveNativeApply.Apply(experimental, progress), ct).ConfigureAwait(false),
                 _ => NativeApplyResult.Fail(module, "Module has no native apply path")
             };
         }
@@ -83,7 +84,7 @@ public sealed class NativeApplyService
                     Status = elev.Message.Contains("cancel", StringComparison.OrdinalIgnoreCase) ? "skip" : "fail",
                     Reason = elev.Message
                 });
-                // Core HKCU success still counts as ok for steam/windows/riot/epic
+                // Core HKCU success still counts as ok for steam/windows/riot/epic/brave
             }
         }
         else if (NativeReg.IsAdministrator() && result.ElevatedHklmOps.Count > 0)

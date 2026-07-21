@@ -55,6 +55,9 @@ public sealed class OptimizerStateService
     public Task<OptimizerStateInfo> DetectEpicAsync(CancellationToken ct = default) =>
         Task.Run(() => NativeLiveDetect.DetectLauncher("epic"), ct);
 
+    public Task<OptimizerStateInfo> DetectBraveAsync(CancellationToken ct = default) =>
+        Task.Run(() => NativeLiveDetect.DetectBrave(), ct);
+
     public Task<OptimizerStateInfo> DetectWindowsAsync(CancellationToken ct = default) =>
         Task.Run(() => NativeLiveDetect.DetectWindows(), ct);
 

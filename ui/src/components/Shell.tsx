@@ -7,6 +7,7 @@ import { WelcomePrompt } from './WelcomePrompt'
 
 const modules: { id: ModuleId; label: string; logo: string }[] = [
   { id: 'discord', label: 'Discord', logo: '/logos/discord.png' },
+  { id: 'brave', label: 'Brave', logo: '/logos/brave.png' },
   { id: 'steam', label: 'Steam', logo: '/logos/steam.png' },
   { id: 'games', label: 'Games', logo: '/logos/games.png' },
   { id: 'windows', label: 'Windows', logo: '/logos/windows.png' },

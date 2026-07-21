@@ -31,4 +31,5 @@ Also see **[PC-AWARE.md](PC-AWARE.md)** — community multi-PC: discover this ma
 - **Internet** — TCP/IP, DNS/DoH, metrics, NIC advanced, Psched NonBestEffortLimit only (no host gaming stack)
 - **NVIDIA** — driver/DRS only; display mode left to Games
 - **Riot / Epic** — Run quiet + shell quiet + high-perf GPU + DSCP; purge yield; no FSO-off on games
+- **Brave** — managed policies (Neo Max-class debloat), profile prefs, vault purge, Proton Pass force-install, GPU/startup/task quiet; owns Brave only
 - **Games** — per-title quality + always borderless configs
