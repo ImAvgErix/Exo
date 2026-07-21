@@ -1,3 +1,17 @@
+## 3.14.1
+
+- **Silent Windows integration (Steam / Riot / Epic)**
+  - Pins Windows Startup apps (StartupApproved) + Steam StartupMode=0 on Apply.
+  - Live detect shows honest Off reasons when Steam re-enables itself.
+  - Toast ID lists aligned between Apply and detect.
+- **Discord**: no auto-reopen after Apply (stays closed).
+- **Apply progress UI**: step text shown once (not triple-printed).
+- **Honesty**
+  - Windows Controllers row = USB only (not Game Bar soft OR).
+  - Removed duplicate Instant menus row.
+  - Windows tasks/optional deep rows require real applyReport proof.
+  - Launcher junk cleaned is informational only.
+- **Games library**: compact Marvel.exe icon.
 ## 3.14.0
 
 - **Games hub (Marvel Rivals)**

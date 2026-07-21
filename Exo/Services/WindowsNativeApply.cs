@@ -718,10 +718,19 @@ public static class WindowsNativeApply
             else if (code == 0) disabled++;
             else missing++; // not present or access denied
         }
+        // Honest status: timeouts = partial; zero disables with no timeout is still OK
+        // (tasks already gone / denied) but not a "full deep win" for UI deepPass.
+        var status = timedOut > 0
+            ? "partial"
+            : disabled > 0
+                ? "ok"
+                : missing > 0
+                    ? "skip"
+                    : "ok";
         return new NativeApplyStep
         {
             Id = "scheduled-tasks",
-            Status = "ok",
+            Status = status,
             Reason = $"disabled={disabled}; missing/denied={missing}; timedOut={timedOut}; list={tasks.Length}; ms={sw.ElapsedMilliseconds}"
         };
     }
@@ -754,7 +763,9 @@ public static class WindowsNativeApply
             "SearchEngine-Client-Package",
         };
         var disabled = 0;
-        var skipped = 0;
+        var alreadyOff = 0;
+        var notPresent = 0;
+        var failed = 0;
         var timedOut = 0;
         var budgetMs = 120_000; // max 2 min for all DISM
         var sw = Stopwatch.StartNew();
@@ -771,17 +782,17 @@ public static class WindowsNativeApply
                 "dism.exe",
                 $"/Online /Get-FeatureInfo /FeatureName:{name}",
                 8000);
-            if (qTo) { timedOut++; skipped++; continue; }
-            if (qCode != 0 || string.IsNullOrEmpty(outText)) { skipped++; continue; }
+            if (qTo) { timedOut++; continue; }
+            if (qCode != 0 || string.IsNullOrEmpty(outText)) { notPresent++; continue; }
             if (outText.Contains("State : Disabled", StringComparison.OrdinalIgnoreCase) ||
                 outText.Contains("State : Disable Pending", StringComparison.OrdinalIgnoreCase))
             {
-                skipped++; // already off
+                alreadyOff++;
                 continue;
             }
             if (!outText.Contains("State : Enabled", StringComparison.OrdinalIgnoreCase))
             {
-                skipped++;
+                notPresent++;
                 continue;
             }
 
@@ -789,16 +800,28 @@ public static class WindowsNativeApply
                 "dism.exe",
                 $"/Online /Disable-Feature /FeatureName:{name} /NoRestart",
                 25_000);
-            if (dTo) { timedOut++; skipped++; continue; }
+            if (dTo) { timedOut++; continue; }
             if (dCode is 0 or 3010) disabled++;
-            else skipped++;
+            else failed++;
         }
+
+        // ok = nothing left enabled that we failed on; no timeouts
+        // skip = no enabled targets existed (all absent/already off)
+        // partial = timeouts or disable failures
+        string status;
+        if (timedOut > 0 || failed > 0)
+            status = "partial";
+        else if (disabled > 0 || alreadyOff > 0)
+            status = "ok";
+        else
+            status = "skip"; // nothing actionable on this SKU
 
         return new NativeApplyStep
         {
             Id = "optional-features",
-            Status = "ok",
-            Reason = $"disabled={disabled}; skipped={skipped}; timedOut={timedOut}; list={features.Length}; ms={sw.ElapsedMilliseconds}"
+            Status = status,
+            Reason =
+                $"disabled={disabled}; alreadyOff={alreadyOff}; notPresent={notPresent}; failed={failed}; timedOut={timedOut}; list={features.Length}; ms={sw.ElapsedMilliseconds}"
         };
     }
 
@@ -858,20 +881,70 @@ public static class WindowsNativeApply
                                      NativeReg.MatchesDword("HKLM",
                                          @"SOFTWARE\Policies\Microsoft\Windows Defender",
                                          "DisableAntiSpyware", 1),
-                ["controllersOk"] = steps.Any(s => (s.Id is "usb" or "game-bar") && s.Status == "ok")
-                                    || NativeReg.MatchesDword("HKLM", @"SYSTEM\CurrentControlSet\Services\USB", "DisableSelectiveSuspend", 1),
+                ["controllersOk"] = NativeReg.MatchesDword("HKLM",
+                                        @"SYSTEM\CurrentControlSet\Services\USB", "DisableSelectiveSuspend", 1)
+                                    || steps.Any(s => s.Id == "usb" && s.Status == "ok"),
                 ["noBackgroundOk"] = steps.Any(s => s.Id == "no-background" && s.Status == "ok"),
-                ["scheduledTasksOk"] = steps.Any(s => s.Id == "scheduled-tasks" && s.Status == "ok"),
-                ["scheduledTasksDeepPass"] = steps.Any(s => s.Id == "scheduled-tasks" && s.Status == "ok"),
-                ["scheduledTasksPct"] = 100.0,
-                ["optionalFeaturesOk"] = steps.Any(s => s.Id == "optional-features" && s.Status == "ok"),
-                ["optionalFeaturesDeepPass"] = steps.Any(s => s.Id == "optional-features" && s.Status == "ok"),
-                ["optionalFeaturesDisabled"] = 1, // pass recorded; actual count in applyReport
+                // Deep-pass flags only when the step truly completed without timeout/fail.
+                // "skip" means nothing to do (OK for apply) but detect still live-probes.
+                ["scheduledTasksOk"] = steps.Any(s => s.Id == "scheduled-tasks" && s.Status is "ok" or "skip"),
+                ["scheduledTasksDeepPass"] = IsTaskDeepPass(steps),
+                ["scheduledTasksPct"] = TaskQuietPct(steps),
+                ["optionalFeaturesOk"] = steps.Any(s => s.Id == "optional-features" && s.Status is "ok" or "skip"),
+                ["optionalFeaturesDeepPass"] = IsOptionalDeepPass(steps),
+                ["optionalFeaturesDisabled"] = ParseReasonInt(steps, "optional-features", "disabled")
+                                               + ParseReasonInt(steps, "optional-features", "alreadyOff"),
                 ["pendingElevOps"] = elevOps,
                 ["applyReport"] = steps.Select(s => s.ToReportLine()).ToList()
             };
             File.WriteAllText(path, JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch { /* non-fatal */ }
+    }
+
+    private static bool IsTaskDeepPass(List<NativeApplyStep> steps)
+    {
+        var s = steps.FirstOrDefault(x => x.Id == "scheduled-tasks");
+        if (s is null || s.Status is not ("ok" or "skip")) return false;
+        // Require real disables OR clean skip (nothing present) — never partial/timeout
+        if (s.Status == "skip") return true;
+        var disabled = ParseReasonField(s.Reason, "disabled");
+        var timedOut = ParseReasonField(s.Reason, "timedOut");
+        return timedOut == 0 && disabled > 0;
+    }
+
+    private static bool IsOptionalDeepPass(List<NativeApplyStep> steps)
+    {
+        var s = steps.FirstOrDefault(x => x.Id == "optional-features");
+        if (s is null || s.Status is not ("ok" or "skip")) return false;
+        var failed = ParseReasonField(s.Reason, "failed");
+        var timedOut = ParseReasonField(s.Reason, "timedOut");
+        if (failed > 0 || timedOut > 0) return false;
+        // ok with alreadyOff/disabled, or skip with nothing actionable
+        return true;
+    }
+
+    private static double TaskQuietPct(List<NativeApplyStep> steps)
+    {
+        var s = steps.FirstOrDefault(x => x.Id == "scheduled-tasks");
+        if (s is null) return 0;
+        var disabled = ParseReasonField(s.Reason, "disabled");
+        var list = ParseReasonField(s.Reason, "list");
+        if (list <= 0) return 0;
+        return Math.Round(100.0 * disabled / list, 1);
+    }
+
+    private static int ParseReasonInt(List<NativeApplyStep> steps, string id, string field)
+    {
+        var s = steps.FirstOrDefault(x => x.Id == id);
+        return s is null ? 0 : ParseReasonField(s.Reason, field);
+    }
+
+    private static int ParseReasonField(string? reason, string field)
+    {
+        if (string.IsNullOrEmpty(reason)) return 0;
+        var m = System.Text.RegularExpressions.Regex.Match(
+            reason, $@"\b{System.Text.RegularExpressions.Regex.Escape(field)}=(\d+)");
+        return m.Success && int.TryParse(m.Groups[1].Value, out var n) ? n : 0;
     }
 }

@@ -319,8 +319,16 @@ public static class LauncherNativeApply
     private static NativeApplyStep QuietShell(string module)
     {
         var ids = module == "riot"
-            ? new[] { "Riot Client", "RiotClient", "VALORANT", "League of Legends", "riotgameclient" }
-            : new[] { "EpicGamesLauncher", "com.epicgames.launcher", "Epic Games Launcher", "EpicGames" };
+            ? new[]
+            {
+                "Riot Client", "RiotClient", "VALORANT", "League of Legends", "riotgameclient",
+                "Riot Games", "RiotClientUx", "riotclientservices.exe"
+            }
+            : new[]
+            {
+                "EpicGamesLauncher", "com.epicgames.launcher", "Epic Games Launcher", "EpicGames",
+                "EpicGamesLauncher.exe"
+            };
 
         var n = 0;
         foreach (var id in ids)
@@ -329,7 +337,19 @@ public static class LauncherNativeApply
             if (NativeReg.TrySetDword("HKCU", path, "Enabled", 0)) n++;
             NativeReg.TrySetDword("HKCU", path, "ShowInActionCenter", 0);
         }
-        return new NativeApplyStep { Id = "shell-quiet", Status = n > 0 ? "ok" : "ok", Reason = $"ids={n}" };
+
+        // Windows Settings → Startup apps (same stickiness issue as Steam)
+        var approvedNames = module == "riot"
+            ? new[] { "RiotClient", "Riot Client", "Riot" }
+            : new[] { "EpicGamesLauncher", "EpicGames", "Epic Games Launcher" };
+        var approved = SteamNativeApply.DisableStartupApproved(approvedNames);
+
+        return new NativeApplyStep
+        {
+            Id = "shell-quiet",
+            Status = n > 0 ? "ok" : "fail",
+            Reason = $"toastIds={n}; startupApproved={approved}"
+        };
     }
 
     private static NativeApplyStep ApplyGpuFso(

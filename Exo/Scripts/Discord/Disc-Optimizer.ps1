@@ -688,13 +688,12 @@ if (-not $SkipKernel) {
 }
 
 # 5b) Boot safety (disk only mid-apply  -  do NOT open Discord here).
-# Opening Discord 2-3 times for check + kill + relaunch is excessive.
-# One user-token open at the end of Apply proves boot and leaves Discord open.
-$exoQuiet = ($env:EXO -eq '1' -and $NoLaunch) -or ($env:EXO_SKIP_BOOT_FLASH -eq '1')
+# Exo Apply never auto-reopens Discord; user opens it from Start Menu.
+$exoQuiet = ($env:EXO -eq '1' -and $NoLaunch) -or ($env:EXO_SKIP_BOOT_FLASH -eq '1') -or $NoLaunch
 $Script:DiscordDeferUserBoot = $false
 if ($exoQuiet) {
     Write-HubProgress 90 'Verifying files on disk...'
-    Write-Step 'Quiet disk verify (Discord stays closed until the end)...'
+    Write-Step 'Quiet disk verify (Discord stays closed)...'
     $verDll = Join-Path $app.FullName 'version.dll'
     $exeOk = Test-Path (Join-Path $app.FullName 'Discord.exe')
     $asarPath = Join-Path $app.FullName 'resources\app.asar'
@@ -711,16 +710,16 @@ if ($exoQuiet) {
     $modsOk = Test-DiscordModulesReady $app.FullName
     if ($exeOk -and $asarOk -and $eqOk -and $modsOk) {
         $Script:DiscordDeferUserBoot = $true
-        Write-Ok 'Disk verify passed  -  boot proof deferred to single end relaunch'
-        Add-ExoReport 'boot-check' 'skip' 'deferred to single end relaunch'
+        Write-Ok 'Disk verify passed (Discord stays closed)'
+        Add-ExoReport 'boot-check' 'ok' 'disk verify only — no auto-open'
     } else {
         Write-Warn "Quiet verify incomplete (exe=$exeOk asar=$asarOk eq=$eqOk mods=$modsOk)"
         if (-not $modsOk -or -not $asarOk) {
             try { Use-StockDiscordRuntime $app.FullName } catch { }
         }
         try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
-        $Script:DiscordDeferUserBoot = $exeOk -and (Test-Path (Join-Path $app.FullName 'Discord.exe'))
-        Add-ExoReport 'boot-check' 'fail' 'quiet disk verify incomplete; will still try one relaunch'
+        $Script:DiscordDeferUserBoot = $false
+        Add-ExoReport 'boot-check' 'fail' 'quiet disk verify incomplete'
     }
 } elseif ($Quick) {
     Write-Step 'Quick boot smoke check...'
@@ -836,66 +835,12 @@ if ($Quick) {
 
 Write-RunSummary -AppDir $app.FullName -Launched $false
 
-# Single user-token open: proves boot + leaves Discord running (no mid-apply flash).
-# Worst case on kernel fail: one more launch after disarm (never 3 open/kill cycles).
-$shouldRelaunch =
-    ($env:EXO -eq '1' -or $NoLaunch) -and
-    (-not $Quick) -and
-    $fullApplyVerified -and
-    $app -and
-    (Test-Path -LiteralPath (Join-Path $app.FullName 'Discord.exe'))
-
-if ($shouldRelaunch) {
-    try {
-        Write-HubProgress 97 'Opening Discord...'
-        Write-Step 'One user-token open (boot proof + leave running)...'
-        Stop-Discord
-        Start-Sleep -Milliseconds 500
-        if (Get-Command Invoke-DiscordLaunchAsUser -ErrorAction SilentlyContinue) {
-            Invoke-DiscordLaunchAsUser $app.FullName
-        } else {
-            [void](Invoke-DiscordLaunch -AppDir $app.FullName)
-        }
-        $healthy = $false
-        if (Get-Command Wait-DiscordHealthy -ErrorAction SilentlyContinue) {
-            $healthy = [bool](Wait-DiscordHealthy 45)
-        } else {
-            Start-Sleep -Seconds 3
-            $healthy = @(Get-Process -Name 'Discord' -ErrorAction SilentlyContinue).Count -gt 0
-        }
-        if (-not $healthy) {
-            Write-Warn 'First open unhealthy  -  disarming DiscOpt kernel and trying once'
-            try { Disable-DiscOptKernelOnDisk $app.FullName } catch { }
-            $Script:DiscOptKernelProxyActive = $false
-            Add-ExoReport 'kernel' 'fail' 'disarmed after end-open fail'
-            Stop-Discord
-            Start-Sleep -Milliseconds 500
-            if (Get-Command Invoke-DiscordLaunchAsUser -ErrorAction SilentlyContinue) {
-                Invoke-DiscordLaunchAsUser $app.FullName
-            } else {
-                [void](Invoke-DiscordLaunch -AppDir $app.FullName)
-            }
-            if (Get-Command Wait-DiscordHealthy -ErrorAction SilentlyContinue) {
-                $healthy = [bool](Wait-DiscordHealthy 45)
-            } else {
-                Start-Sleep -Seconds 3
-                $healthy = @(Get-Process -Name 'Discord' -ErrorAction SilentlyContinue).Count -gt 0
-            }
-        }
-        # Leave Discord running  -  do not Stop-Discord after success.
-        if ($healthy) {
-            Write-Ok 'Discord open and healthy after Apply (single launch)'
-            Add-ExoReport 'boot-check' 'ok' 'single end open verified'
-            Add-ExoReport 'relaunch' 'ok' 'left running'
-        } else {
-            Write-Warn 'Discord did not stay healthy  -  try Start Menu if the window is missing'
-            Add-ExoReport 'boot-check' 'fail' 'end open unhealthy'
-            Add-ExoReport 'relaunch' 'fail' 'unhealthy after at most two opens'
-        }
-    } catch {
-        Write-Warn "Could not open Discord after Apply: $($_.Exception.Message)"
-        Add-ExoReport 'relaunch' 'fail' $_.Exception.Message
-    }
+# Never auto-reopen Discord after Exo Apply (-NoLaunch / EXO=1).
+# Disk verify above is enough; user opens Discord from Start Menu when ready.
+# Standalone Disc-Optimizer without -NoLaunch still offers interactive launch.
+if ($NoLaunch -or $env:EXO -eq '1' -or $env:EXO_SKIP_BOOT_FLASH -eq '1') {
+    Write-Ok 'Disc Optimizer finished (Discord left closed — open it from Start Menu when you want).'
+    Add-ExoReport 'relaunch' 'skip' 'NoLaunch / Exo host — no auto-open'
 } elseif (-not $NoLaunch) {
     Wait-UserThenStartDiscord $app.FullName
 } else {

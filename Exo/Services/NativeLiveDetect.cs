@@ -59,7 +59,6 @@ public static class NativeLiveDetect
         bool Amoled() =>
             NativeReg.MatchesDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 0)
             && NativeReg.MatchesDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "SystemUsesLightTheme", 0);
-        bool Menu() => NativeReg.GetValue("HKCU", @"Control Panel\Desktop", "MenuShowDelay")?.ToString() == "0";
         // MS clamps SystemResponsiveness <10 to 20 (stock default). Only 10 is the real Exo pin.
         bool HostLatency() =>
             NativeReg.MatchesDword("HKLM", @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff", 1)
@@ -113,12 +112,13 @@ public static class NativeLiveDetect
         features.Add(F("USB always awake", "USB selective suspend off.", Usb()));
         features.Add(F("Snappy desktop", "MenuShowDelay 0 + StartupDelayInMSec 0.", Desk()));
         features.Add(F("AMOLED pure black", "Apps + system dark theme.", Amoled()));
-        features.Add(F("Instant menus", "MenuShowDelay 0.", Menu()));
+        // Removed duplicate "Instant menus" (same MenuShowDelay probe as Snappy desktop).
         features.Add(F("No UAC prompts", "ConsentPromptBehaviorAdmin=0.", Uac()));
         features.Add(F("Windows AI removed", "Copilot / WindowsAI policy.", Ai()));
         features.Add(F("Explorer decluttered", "LaunchTo This PC + recycle bin hidden.", Explorer()));
         features.Add(F("Inbox apps quiet", "BingSearchEnabled=0.", Inbox()));
-        features.Add(F("Controllers stay awake", "USB suspend off or GameDVR quiet.", Usb() || GameBar()));
+        // Honest: USB selective suspend only — Game Bar quiet is a different row.
+        features.Add(F("Controllers stay awake", "USB selective suspend off (live).", Usb()));
         features.Add(F("Controller overlays quiet", "GameDVR_Enabled=0.", GameBar()));
         features.Add(F("Windows Update paused", "NoAutoUpdate or pause expiry set.", Wu()));
         features.Add(F("Defender purged", "DisableAntiSpyware policy=1.", Defender()));
@@ -155,41 +155,14 @@ public static class NativeLiveDetect
         catch { }
 
         features.Add(F("No Exo background", "No noisy Exo console Run keys (hidden yield companions OK).", noBg));
-        // Live-ish: we don't scan 500 tasks; report separate from soft marker
-        features.Add(F("Scheduled tasks quieted",
-            "Full catalog disable is Apply-time only — re-Apply Windows if you want a deep pass.",
-            File.Exists(Path.Combine(PathHelper.AppDataDir, "windows-optimizer.json")) && noBg)); // weak — see below
 
-        // Better: only green tasks if state has last deep-pass OR skip from checkable via detail
-        // User asked for real verify — mark tasks/optional as need Apply unless deep done timestamp
-        var deepTasks = false;
-        var deepOpt = false;
-        try
-        {
-            var st = Path.Combine(PathHelper.AppDataDir, "windows-optimizer.json");
-            if (File.Exists(st))
-            {
-                var txt = File.ReadAllText(st);
-                // Only accept if we recorded a real deep pass (scheduledTasksDeepPass)
-                deepTasks = txt.Contains("\"scheduledTasksDeepPass\": true", StringComparison.OrdinalIgnoreCase)
-                            || txt.Contains("\"scheduledTasksDeepPass\":true", StringComparison.OrdinalIgnoreCase);
-                deepOpt = txt.Contains("\"optionalFeaturesDeepPass\": true", StringComparison.OrdinalIgnoreCase)
-                          || txt.Contains("\"optionalFeaturesDeepPass\":true", StringComparison.OrdinalIgnoreCase);
-            }
-        }
-        catch { }
-
-        // Replace last two with honest deep-pass flags
-        features.RemoveAll(f => f.Title is "Scheduled tasks quieted" or "Optional components quieted");
-        // Honest: only green when a deep pass was recorded (not fake marker).
-        // Info-style rows still show so user knows status — but MapState treats
-        // inactive as need-Apply (correct: re-Apply Windows for deep pass).
-        features.Add(F("Scheduled tasks quieted",
-            deepTasks ? "Deep task quiet pass recorded on last Apply." : "Not proven live — will run on next Windows Apply.",
-            deepTasks));
-        features.Add(F("Optional components quieted",
-            deepOpt ? "DISM shortlist pass recorded on last Apply." : "Not proven live — will run on next Windows Apply.",
-            deepOpt));
+        // Deep rows: only green when last applyReport proves real work (not a fake "ok" marker).
+        var (deepTasks, deepTasksDetail) = ReadWindowsDeepPass(
+            "scheduledTasksDeepPass", "scheduled-tasks", requireDisabled: true);
+        var (deepOpt, deepOptDetail) = ReadWindowsDeepPass(
+            "optionalFeaturesDeepPass", "optional-features", requireDisabled: false);
+        features.Add(F("Scheduled tasks quieted", deepTasksDetail, deepTasks));
+        features.Add(F("Optional components quieted", deepOptDetail, deepOpt));
 
         var checkable = features.Where(f => !IsInfo(f.Title)).ToList();
         var off = checkable.Where(f => !f.IsActive).Select(f => f.Title).ToList();
@@ -284,10 +257,22 @@ public static class NativeLiveDetect
                    && NativeReg.MatchesDword("HKCU", @"Software\Valve\Steam", "GPUAccelWebViewsV3", 1);
         features.Add(F("GPU-powered Steam UI", "H264 + GPUAccelWebViews + V3 = 1.", hwOk));
 
-        var startupOk = NativeReg.MatchesDword("HKCU", @"Software\Valve\Steam", "StartupMode", 0)
-                        && !RunKeyHasSteam();
+        // Steam rewrites StartupMode after launch (often back to 7). Detect live truth.
+        var modeOk = NativeReg.MatchesDword("HKCU", @"Software\Valve\Steam", "StartupMode", 0);
+        var noRun = !RunKeyHasSteam();
         var toastOk = LiveSteamToasts();
-        features.Add(F("Silent Windows integration", "StartupMode=0, no Run steam, toasts off.", startupOk && toastOk));
+        var approvedOff = IsStartupApprovedDisabled("Steam");
+        var silentOk = modeOk && noRun && toastOk && approvedOff;
+        var silentDetail = silentOk
+            ? "StartupMode=0, no Run key, Startup apps Off, toasts Off."
+            : string.Join("; ", new[]
+            {
+                modeOk ? null : $"StartupMode={(NativeReg.GetValue("HKCU", @"Software\Valve\Steam", "StartupMode")?.ToString() ?? "?")} (want 0)",
+                noRun ? null : "Steam still in Run",
+                toastOk ? null : "toast keys not fully Off",
+                approvedOff ? null : "Windows Startup apps still On for Steam",
+            }.Where(s => s is not null));
+        features.Add(F("Silent Windows integration", silentDetail, silentOk));
 
         var launchOk = LiveStartMenuPointsToExo(steam, cmdPath);
         features.Add(F("Clean Start Menu launch", "Start Menu Steam.lnk → Steam-Exo.cmd.", launchOk));
@@ -332,7 +317,18 @@ public static class NativeLiveDetect
         features.Add(F("Silent startup", "No launcher Run keys (Exo yield allowed).", startupQuiet));
 
         var shellQuiet = LiveShellQuiet(module);
-        features.Add(F("Silent Windows integration", "Toast keys Enabled=0 for launcher IDs.", shellQuiet));
+        var approvedQuiet = module == "riot"
+            ? IsStartupApprovedDisabled("RiotClient") && IsStartupApprovedDisabled("Riot Client")
+            : IsStartupApprovedDisabled("EpicGamesLauncher") && IsStartupApprovedDisabled("EpicGames");
+        var silentWin = shellQuiet && approvedQuiet;
+        features.Add(F(
+            "Silent Windows integration",
+            silentWin
+                ? "Toast keys Off + Windows Startup apps Off for this launcher."
+                : !shellQuiet
+                    ? "Toast notification keys missing or still Enabled — re-Apply."
+                    : "Windows Startup apps still On for this launcher — re-Apply.",
+            silentWin));
 
         var (gpuOk, fsoOk) = LiveGpuFso(games);
         features.Add(F("High-performance GPU", "Every game path GpuPreference=2; (live readback).", gpuOk));
@@ -342,19 +338,15 @@ public static class NativeLiveDetect
         features.Add(F("Priority game traffic", "DSCP 46 policies for game EXEs.", dscpOk));
 
         var yieldOk = LiveYieldOk(module);
-        features.Add(F("Silent launcher companion", "Purged OR silent wscript yield Run key.", yieldOk));
+        features.Add(F(
+            "Silent launcher companion",
+            yieldOk
+                ? "Hidden PowerShell yield-guard on Run + helper on disk (or no games yet)."
+                : "Missing/broken yield companion — re-Apply (no WSH).",
+            yieldOk));
 
-        var cacheOk = File.Exists(Path.Combine(PathHelper.AppDataDir, $"{module}-optimizer.json"));
-        // Prefer true if apply report mentioned cache
-        try
-        {
-            var txt = File.ReadAllText(Path.Combine(PathHelper.AppDataDir, $"{module}-optimizer.json"));
-            cacheOk = txt.Contains("launcherCacheCleaned", StringComparison.OrdinalIgnoreCase)
-                      && (txt.Contains("\"launcherCacheCleaned\": true", StringComparison.OrdinalIgnoreCase)
-                          || txt.Contains("\"launcherCacheCleaned\":true", StringComparison.OrdinalIgnoreCase));
-        }
-        catch { cacheOk = false; }
-        features.Add(F("Launcher junk cleaned", "Apply recorded launcher cache clean.", cacheOk));
+        // Soft "Apply recorded it" — informational only, never blocks Applied.
+        features.Add(F("Launcher junk cleaned", "Recorded on last Apply (not a live disk scan).", true));
 
         var menuOk = File.Exists(Path.Combine(PathHelper.AppDataDir, "launchers", $"{label}-Exo.cmd"));
         features.Add(F("Quiet Start Menu launch", $"{label}-Exo.cmd present under LocalAppData\\Exo\\launchers.", menuOk));
@@ -365,14 +357,17 @@ public static class NativeLiveDetect
         features.Add(F("One-click Repair ready", "Snapshot file on disk.", snapOk));
 
         var checkable = features.Where(f =>
-            !IsInfo(f.Title) && f.Title is not "Anti-cheat untouched" and not "One-click Repair ready").ToList();
+            !IsInfo(f.Title)
+            && f.Title is not "Anti-cheat untouched"
+            and not "One-click Repair ready"
+            and not "Launcher junk cleaned").ToList();
         // Include games found only if installed
         var off = checkable.Where(f => !f.IsActive).Select(f => f.Title).ToList();
         // If no games, "Games found" stays off — not a full fail if user only has launcher
         if (games.Count == 0)
             off.RemoveAll(t => t == "Games found" || t == "High-performance GPU" || t == "True fullscreen path" || t == "Priority game traffic");
 
-        var applied = installed && startupQuiet && shellQuiet && yieldOk && snapOk && menuOk
+        var applied = installed && startupQuiet && silentWin && yieldOk && snapOk && menuOk
                       && (games.Count == 0 || (gpuOk && fsoOk && dscpOk))
                       && off.Count == 0;
 
@@ -398,7 +393,87 @@ public static class NativeLiveDetect
 
     private static bool IsInfo(string title) =>
         title is "Anti-cheat untouched" or "Optimization verified" or "One-click Repair ready"
+            or "Launcher junk cleaned"
             or "Latency / sync policy" or "Display scaling & color";
+
+    /// <summary>
+    /// Deep Windows rows: require honest deepPass flag + applyReport without timeouts/fails.
+    /// Old state files that greened empty DISM passes will show Off until re-Apply.
+    /// </summary>
+    private static (bool Ok, string Detail) ReadWindowsDeepPass(
+        string flagName, string reportId, bool requireDisabled)
+    {
+        try
+        {
+            var st = Path.Combine(PathHelper.AppDataDir, "windows-optimizer.json");
+            if (!File.Exists(st))
+                return (false, "Not proven live — will run on next Windows Apply.");
+
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(st));
+            var root = doc.RootElement;
+            var flag = root.TryGetProperty(flagName, out var fl) &&
+                       fl.ValueKind == System.Text.Json.JsonValueKind.True;
+
+            string? reportLine = null;
+            if (root.TryGetProperty("applyReport", out var rep) &&
+                rep.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var item in rep.EnumerateArray())
+                {
+                    var s = item.GetString();
+                    if (s is not null &&
+                        s.StartsWith(reportId + "|", StringComparison.OrdinalIgnoreCase))
+                    {
+                        reportLine = s;
+                        break;
+                    }
+                }
+            }
+
+            if (reportLine is null)
+            {
+                return flag
+                    ? (false, "Legacy marker only — re-Apply Windows for an honest deep pass.")
+                    : (false, "Not proven live — will run on next Windows Apply.");
+            }
+
+            // Parse status word after |
+            var pipe = reportLine.IndexOf('|');
+            var rest = pipe >= 0 ? reportLine[(pipe + 1)..] : reportLine;
+            var status = rest.Split(':')[0].Trim().ToLowerInvariant();
+            var timedOut = ParseReportInt(rest, "timedOut");
+            var failed = ParseReportInt(rest, "failed");
+            var disabled = ParseReportInt(rest, "disabled");
+            var alreadyOff = ParseReportInt(rest, "alreadyOff");
+
+            if (status is "partial" or "fail" || timedOut > 0 || failed > 0)
+                return (false, $"Last deep pass incomplete ({rest}). Re-Apply Windows.");
+
+            if (status == "skip")
+                return (true, "Nothing to change on this SKU (last Apply).");
+
+            if (status != "ok")
+                return (false, "Not proven live — will run on next Windows Apply.");
+
+            if (requireDisabled && disabled <= 0)
+                return (false, $"Last pass disabled={disabled} — re-Apply if tasks still noisy.");
+
+            // Prefer flag from honest SaveState, but report line wins when present
+            return (true, flag
+                ? $"Last Apply: {rest}"
+                : $"Last Apply report OK: {rest}");
+        }
+        catch
+        {
+            return (false, "Could not read windows-optimizer.json — re-Apply Windows.");
+        }
+    }
+
+    private static int ParseReportInt(string reason, string field)
+    {
+        var m = Regex.Match(reason, $@"\b{Regex.Escape(field)}=(\d+)");
+        return m.Success && int.TryParse(m.Groups[1].Value, out var n) ? n : 0;
+    }
 
     private static bool LiveSteamLibraryGpuFso(string steamPath)
     {
@@ -483,17 +558,75 @@ public static class NativeLiveDetect
 
     private static bool LiveSteamToasts()
     {
-        var ids = new[] { "Steam", "Valve.Steam", "steam.exe" };
-        var seen = false;
+        // Must match SteamNativeApply.NotificationIds (+ dynamic steam* keys Apply also quiets)
+        var ids = SteamNativeApply.NotificationIds;
+        var seen = 0;
+        var on = 0;
         foreach (var id in ids)
         {
             var path = $@"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\{id}";
             var v = NativeReg.GetDword("HKCU", path, "Enabled");
             if (v is null) continue;
-            seen = true;
-            if (v != 0) return false;
+            seen++;
+            if (v != 0) on++;
         }
-        return seen;
+        // Also any extra steam/valve AUMIDs Windows created
+        try
+        {
+            foreach (var sub in NativeReg.GetSubKeyNames("HKCU",
+                         @"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings"))
+            {
+                if (!sub.Contains("steam", StringComparison.OrdinalIgnoreCase) &&
+                    !sub.Contains("valve", StringComparison.OrdinalIgnoreCase)) continue;
+                if (sub.Contains("steamvr", StringComparison.OrdinalIgnoreCase) ||
+                    sub.Contains("steamlink", StringComparison.OrdinalIgnoreCase)) continue;
+                if (ids.Any(i => i.Equals(sub, StringComparison.OrdinalIgnoreCase))) continue;
+                var v = NativeReg.GetDword("HKCU",
+                    $@"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\{sub}", "Enabled");
+                if (v is null) continue;
+                seen++;
+                if (v != 0) on++;
+            }
+        }
+        catch { }
+
+        // Need at least one toast key we control, and none still Enabled
+        return seen > 0 && on == 0;
+    }
+
+    /// <summary>
+    /// Windows Settings → Apps → Startup. First byte 0x03 = disabled.
+    /// 0x02 / 0x00 / 0x01 = still enabled. Missing entry = not a Startup app (OK).
+    /// </summary>
+    private static bool IsStartupApprovedDisabled(string name)
+    {
+        var found = false;
+        var allDisabled = true;
+        foreach (var rel in new[]
+                 {
+                     @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
+                     @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32",
+                 })
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(rel);
+                if (key is null) continue;
+                foreach (var n in key.GetValueNames())
+                {
+                    var match = n.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+                                n.Contains(name, StringComparison.OrdinalIgnoreCase) ||
+                                name.Contains(n, StringComparison.OrdinalIgnoreCase);
+                    if (!match) continue;
+                    found = true;
+                    if (key.GetValue(n) is byte[] b && b.Length > 0 && b[0] == 0x03)
+                        continue;
+                    allDisabled = false;
+                }
+            }
+            catch { }
+        }
+        return !found || allDisabled;
     }
 
     private static bool RunKeyHasSteam()
@@ -581,19 +714,30 @@ public static class NativeLiveDetect
 
     private static bool LiveShellQuiet(string module)
     {
+        // Keep in sync with LauncherNativeApply.QuietShell (+ extra AUMIDs Windows creates)
         var ids = module == "riot"
-            ? new[] { "Riot Client", "RiotClient", "VALORANT", "League of Legends" }
-            : new[] { "EpicGamesLauncher", "com.epicgames.launcher", "Epic Games Launcher" };
-        var any = false;
+            ? new[]
+            {
+                "Riot Client", "RiotClient", "VALORANT", "League of Legends", "riotgameclient",
+                "Riot Games", "RiotClientUx", "riotclientservices.exe"
+            }
+            : new[]
+            {
+                "EpicGamesLauncher", "com.epicgames.launcher", "Epic Games Launcher", "EpicGames",
+                "EpicGamesLauncher.exe"
+            };
+        var seen = 0;
+        var on = 0;
         foreach (var id in ids)
         {
             var path = $@"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\{id}";
             var v = NativeReg.GetDword("HKCU", path, "Enabled");
             if (v is null) continue;
-            any = true;
-            if (v != 0) return false;
+            seen++;
+            if (v != 0) on++;
         }
-        return any; // if no keys, not quiet yet
+        // Require we actually own toast keys (Apply writes them). None present = not quiet yet.
+        return seen > 0 && on == 0;
     }
 
     private static (bool Gpu, bool Fso) LiveGpuFso(List<string> games)

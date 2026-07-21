@@ -888,6 +888,7 @@ public sealed class WebHostBridge
             return t.Equals("Optimization verified", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Anti-cheat untouched", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("One-click Repair ready", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Launcher junk cleaned", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Safe repair", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Policy", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Adapter", StringComparison.OrdinalIgnoreCase)

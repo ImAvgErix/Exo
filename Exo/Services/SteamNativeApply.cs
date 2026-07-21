@@ -236,13 +236,63 @@ public static class SteamNativeApply
             catch { /* HKLM may fail without admin — StartupMode still covers quiet */ }
         }
 
+        // Steam client rewrites StartupMode after launch — pin to 0 every Apply.
         var modeOk = NativeReg.TrySetDword("HKCU", @"Software\Valve\Steam", "StartupMode", 0);
+        // Windows Settings → Startup apps (Explorer StartupApproved). 0x03 = disabled.
+        // Without this, Steam stays "On" even when Run keys are empty.
+        var approved = DisableStartupApproved(new[] { "Steam", "Steam Client", "steam" });
+
         return new NativeApplyStep
         {
             Id = "startup",
             Status = modeOk ? "ok" : "fail",
-            Reason = $"removed={removed}; StartupMode=0"
+            Reason = $"removed={removed}; StartupMode=0; startupApproved={approved}"
         };
+    }
+
+    /// <summary>Pin Windows Startup apps entries to disabled (first byte 0x03).</summary>
+    internal static int DisableStartupApproved(IEnumerable<string> names)
+    {
+        var n = 0;
+        var list = names.ToArray();
+        var disabled = new byte[] { 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+        foreach (var rel in new[]
+                 {
+                     @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
+                     @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32",
+                 })
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.CreateSubKey(rel, true);
+                if (key is null) continue;
+                foreach (var name in list)
+                {
+                    try
+                    {
+                        key.SetValue(name, disabled, RegistryValueKind.Binary);
+                        n++;
+                    }
+                    catch { /* create/write failed */ }
+                }
+                // Extra fuzzy pass only for tokens we were asked to quiet
+                foreach (var existing in key.GetValueNames())
+                {
+                    var hit = list.Any(t =>
+                        existing.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                        t.Contains(existing, StringComparison.OrdinalIgnoreCase));
+                    if (!hit) continue;
+                    try
+                    {
+                        key.SetValue(existing, disabled, RegistryValueKind.Binary);
+                        n++;
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+        return n;
     }
 
     private static NativeApplyStep QuietNotifications()
@@ -254,16 +304,18 @@ public static class SteamNativeApply
             if (NativeReg.TrySetDword("HKCU", path, "Enabled", 0)) n++;
             NativeReg.TrySetDword("HKCU", path, "ShowInActionCenter", 0);
         }
-        // Dynamic steam* keys
+        // Dynamic steam* keys (Steam creates extra AUMIDs over time)
         try
         {
             foreach (var sub in NativeReg.GetSubKeyNames("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings"))
             {
-                if (!sub.Contains("steam", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!sub.Contains("steam", StringComparison.OrdinalIgnoreCase) &&
+                    !sub.Contains("valve", StringComparison.OrdinalIgnoreCase)) continue;
                 if (sub.Contains("steamvr", StringComparison.OrdinalIgnoreCase) ||
                     sub.Contains("steamlink", StringComparison.OrdinalIgnoreCase)) continue;
                 var path = $@"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\{sub}";
                 if (NativeReg.TrySetDword("HKCU", path, "Enabled", 0)) n++;
+                NativeReg.TrySetDword("HKCU", path, "ShowInActionCenter", 0);
             }
         }
         catch { }

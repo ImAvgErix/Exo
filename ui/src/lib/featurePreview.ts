@@ -29,6 +29,7 @@ const INFO_TITLES = new Set(
     'adapter',
     'last apply',
     'one-click repair ready',
+    'launcher junk cleaned',
     'profile',
     'dlss left alone',
   ].map((s) => s.toLowerCase()),

@@ -128,9 +128,11 @@ export function classifyStatus(args: {
   }
 
   if (args.busy) {
+    // One line only — ModulePage also shows this under the progress bar.
+    // Don't repeat the same string as headline + detail.
     return {
       kind: 'checking',
-      headline: args.busyText || 'Working…',
+      headline: 'Working…',
       detail: args.busyText || 'Applying changes…',
       tone: 'neutral',
       on,

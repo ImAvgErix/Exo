@@ -366,11 +366,9 @@ export function GamesPage() {
                 )}
                 {busy && (
                   <div className="mt-2">
-                    <div className="mb-1 flex justify-between text-[11px] text-muted">
-                      <span className="truncate">{progressText || 'Working…'}</span>
-                      <span className="tabular shrink-0">
-                        {progress >= 0 ? `${Math.round(progress)}%` : ''}
-                      </span>
+                    {/* Step text is already in detail — bar only shows percent */}
+                    <div className="mb-1 flex justify-end text-[11px] tabular text-muted">
+                      {progress >= 0 ? `${Math.round(progress)}%` : ''}
                     </div>
                     <div className="h-1 overflow-hidden rounded-full bg-black/50">
                       <motion.div
