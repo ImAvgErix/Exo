@@ -189,7 +189,7 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
             type="button"
             disabled={busy}
             onClick={() => void checkUpdates()}
-            className="mb-2 w-full rounded-xl bg-white py-2 text-[13px] font-semibold text-black disabled:opacity-40"
+            className="mb-2 w-full rounded-xl bg-white py-2.5 text-[13px] font-semibold text-black shadow-[0_0_20px_rgb(255_255_255/0.08)] disabled:opacity-40"
           >
             {busy
               ? progress != null && progress >= 0
@@ -199,8 +199,18 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
           </button>
 
           {progress != null && (
-            <div className="mb-2">
-              <div className="h-1.5 overflow-hidden rounded-full bg-sunken ring-1 ring-glass-border">
+            <div className="glass-chip mb-2 rounded-xl px-2.5 py-2">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <p className="text-[10px] font-semibold tracking-[0.08em] text-muted">
+                  {busy ? 'INSTALLING' : 'UPDATE'}
+                </p>
+                {progress >= 0 && (
+                  <p className="text-[11px] tabular font-semibold text-text">
+                    {Math.round(progress)}%
+                  </p>
+                )}
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10">
                 <div
                   className={`h-full rounded-full bg-white transition-[width] duration-200 ${
                     progress < 0 ? 'animate-pulse' : ''
@@ -208,18 +218,13 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
                   style={{ width: `${barWidth}%` }}
                 />
               </div>
-              {progress >= 0 && (
-                <p className="mt-1 text-right text-[10px] tabular text-muted">
-                  {Math.round(progress)}%
-                </p>
-              )}
             </div>
           )}
 
           {line && (
-            <p className="mb-2 max-h-28 overflow-y-auto whitespace-pre-wrap text-[11px] leading-snug text-secondary">
-              {line}
-            </p>
+            <div className="glass-chip mb-2 max-h-32 overflow-y-auto rounded-xl px-2.5 py-2">
+              <p className="whitespace-pre-wrap text-[11px] leading-snug text-secondary">{line}</p>
+            </div>
           )}
 
           <div className="grid grid-cols-2 gap-1.5">

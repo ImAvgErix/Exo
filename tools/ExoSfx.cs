@@ -22,6 +22,8 @@ internal static class Program
     private static readonly int SelfPid = Process.GetCurrentProcess().Id;
     private static bool _silent;
     private static string _logPath = "";
+    /// <summary>Optional parent app PID — wait until it exits before replacing files (in-app update).</summary>
+    private static int _waitParentPid;
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
@@ -36,14 +38,27 @@ internal static class Program
     private static int Main(string[] args)
     {
         bool silent = false;
+        int waitPid = 0;
         if (args != null)
         {
             foreach (string a in args)
             {
                 if (string.IsNullOrWhiteSpace(a)) continue;
-                string t = a.Trim().ToLowerInvariant();
-                if (t == "/silent" || t == "/quiet" || t == "--silent" || t == "-s" || t == "/s")
+                string t = a.Trim();
+                string lower = t.ToLowerInvariant();
+                if (lower == "/silent" || lower == "/quiet" || lower == "--silent" || lower == "-s" || lower == "/s")
                     silent = true;
+                // /waitpid:1234 or --waitpid=1234 — in-app updater passes the running Exo PID
+                if (lower.StartsWith("/waitpid:") || lower.StartsWith("--waitpid=") || lower.StartsWith("/pid:"))
+                {
+                    int colon = t.IndexOf(':');
+                    int eq = t.IndexOf('=');
+                    int sep = colon >= 0 ? colon : eq;
+                    if (sep > 0 && sep + 1 < t.Length)
+                    {
+                        int.TryParse(t.Substring(sep + 1).Trim(), out waitPid);
+                    }
+                }
             }
         }
         // Also honor env for in-app updates.
@@ -53,9 +68,13 @@ internal static class Program
             if (!string.IsNullOrEmpty(envSilent) &&
                 (envSilent == "1" || envSilent.Equals("true", StringComparison.OrdinalIgnoreCase)))
                 silent = true;
+            string envPid = Environment.GetEnvironmentVariable("EXO_UPDATE_WAIT_PID");
+            if (!string.IsNullOrEmpty(envPid) && int.TryParse(envPid.Trim(), out int envWait) && envWait > 0)
+                waitPid = envWait;
         }
         catch { }
         _silent = silent;
+        _waitParentPid = waitPid > 0 && waitPid != SelfPid ? waitPid : 0;
 
         bool consoleOpen = false;
         bool mutexOwned = false;
@@ -110,12 +129,20 @@ internal static class Program
 
             Log("Exo installer starting..." + (silent ? " (quiet)" : ""));
             Log("PID " + SelfPid);
+            if (_waitParentPid > 0)
+                Log("Waiting for parent Exo pid=" + _waitParentPid + " to exit…");
+
+            // In-app updates: parent starts us then exits. Wait for that PID first so
+            // ReplaceDirectory is not racing a still-locked app folder.
+            if (_waitParentPid > 0)
+                WaitForProcessExit(_waitParentPid, TimeSpan.FromSeconds(90));
 
             Log("Closing any running Exo app (not this installer)...");
             StopOtherExo();
-            // Extra settle time so file locks release.
-            Thread.Sleep(600);
+            // Extra settle time so file locks release (WebView2 / AV scanners).
+            Thread.Sleep(900);
             StopOtherExo();
+            Thread.Sleep(400);
 
             // One-time upgrade path: OptiHub (the app's old name) may still be
             // installed. Close it, carry its settings/state over, remove it.
@@ -517,21 +544,36 @@ internal static class Program
         if (Directory.Exists(dest))
         {
             backup = dest + ".old-" + DateTime.Now.ToString("yyyyMMddHHmmss");
-            try
+            Exception lastMove = null;
+            // Retry: WebView2 / Defender often hold handles for a few seconds after Kill.
+            for (int attempt = 1; attempt <= 20; attempt++)
             {
-                if (Directory.Exists(backup))
+                try
                 {
-                    Directory.Delete(backup, true);
+                    if (Directory.Exists(backup))
+                    {
+                        try { Directory.Delete(backup, true); } catch { }
+                    }
+                    // Re-kill any stragglers mid-retry
+                    if (attempt == 5 || attempt == 10 || attempt == 15)
+                        StopOtherExo();
+                    Directory.Move(dest, backup);
+                    liveMoved = true;
+                    lastMove = null;
+                    break;
                 }
-                Directory.Move(dest, backup);
-                liveMoved = true;
+                catch (Exception ex)
+                {
+                    lastMove = ex;
+                    Thread.Sleep(350 + attempt * 50);
+                }
             }
-            catch (Exception ex)
+            if (!liveMoved)
             {
                 throw new InvalidOperationException(
                     "Could not move the current Exo installation out of the way. " +
                     "Close Exo and any antivirus scan using the app folder, then retry.",
-                    ex);
+                    lastMove);
             }
         }
 
@@ -1112,7 +1154,7 @@ internal static class Program
     /// </summary>
     private static void StopOtherExo()
     {
-        for (int i = 0; i < 24; i++)
+        for (int i = 0; i < 32; i++)
         {
             Process[] procs = Process.GetProcessesByName("Exo");
             bool anyOther = false;
@@ -1131,7 +1173,7 @@ internal static class Program
                 catch { }
             }
 
-            Thread.Sleep(250);
+            Thread.Sleep(280);
 
             foreach (Process p in Process.GetProcessesByName("Exo"))
             {
@@ -1143,15 +1185,61 @@ internal static class Program
                         continue;
                     }
                     if (!p.HasExited)
-                        p.Kill();
+                    {
+                        try { p.Kill(); } catch { }
+                        try { p.WaitForExit(4000); } catch { }
+                    }
                 }
                 catch { }
                 try { p.Dispose(); } catch { }
             }
 
             if (!anyOther) break;
-            Thread.Sleep(200);
+            Thread.Sleep(250);
         }
-        Thread.Sleep(500);
+        Thread.Sleep(700);
+    }
+
+    /// <summary>Block until <paramref name="pid"/> exits (or timeout). Used so in-app updates don't race file locks.</summary>
+    private static void WaitForProcessExit(int pid, TimeSpan timeout)
+    {
+        if (pid <= 0 || pid == SelfPid) return;
+        DateTime deadline = DateTime.UtcNow + timeout;
+        try
+        {
+            using (Process p = Process.GetProcessById(pid))
+            {
+                Log("Parent process found: " + p.ProcessName + " pid=" + pid);
+                int waitMs = (int)Math.Min(timeout.TotalMilliseconds, int.MaxValue);
+                if (!p.WaitForExit(waitMs))
+                    Log("Timed out waiting for parent pid=" + pid + " — continuing with force-close.");
+                else
+                    Log("Parent pid=" + pid + " exited.");
+            }
+        }
+        catch (ArgumentException)
+        {
+            // Already gone
+            Log("Parent pid=" + pid + " already gone.");
+        }
+        catch (Exception ex)
+        {
+            Log("Wait parent warning: " + ex.Message);
+        }
+
+        // Spin until the PID truly vanishes (handles brief zombie windows).
+        while (DateTime.UtcNow < deadline)
+        {
+            bool alive = false;
+            try
+            {
+                using (Process p = Process.GetProcessById(pid))
+                    alive = !p.HasExited;
+            }
+            catch { alive = false; }
+            if (!alive) break;
+            Thread.Sleep(150);
+        }
+        Thread.Sleep(400);
     }
 }

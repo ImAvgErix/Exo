@@ -1,3 +1,9 @@
+## 3.15.1
+
+- Fix in-app update install: SFX waits for parent PID before replacing app folder (file-in-use race)
+- Retry moving locked install directory; stronger process stop
+- Update card restyled to match glass shell (white CTA, dark card, TLDR chip)
+- Settings update progress uses glass chip bar; install failures surface instead of silent no-op
 ## 3.15.0
 
 - Games hub multi-title optimizers (BO7, Fortnite, Valorant, League, CS2, Apex, HD2, Finals, Predecessor, Rivals)
@@ -1268,6 +1274,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

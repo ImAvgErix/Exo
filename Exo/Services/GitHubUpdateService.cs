@@ -339,21 +339,23 @@ public sealed class GitHubUpdateService
             }
 
             Report(status, progress, $"Applying v{check.RemoteVersion}…", percent: 95);
-            // Quiet in-app update: winexe SFX + /quiet + env - no console, no MessageBox.
-            // Installer stages under %LocalAppData%\Exo\app, refreshes Start Menu, relaunches.
+            // Quiet in-app update: SFX waits for THIS process to exit (/waitpid) so it can
+            // replace %LocalAppData%\Exo\app without "file in use" failures, then relaunches.
+            var selfPid = Environment.ProcessId;
             Environment.SetEnvironmentVariable("EXO_SILENT_INSTALL", "1");
+            Environment.SetEnvironmentVariable("EXO_UPDATE_WAIT_PID", selfPid.ToString());
+            var args = $"/quiet /waitpid:{selfPid}";
             Process? started = null;
             try
             {
                 started = Process.Start(new ProcessStartInfo
                 {
                     FileName = setupPath,
-                    Arguments = "/quiet",
+                    Arguments = args,
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden,
                     WorkingDirectory = work,
-                    // Child inherits EXO_SILENT_INSTALL from this process environment.
                     ErrorDialog = false
                 });
             }
@@ -368,7 +370,7 @@ public sealed class GitHubUpdateService
                     started = Process.Start(new ProcessStartInfo
                     {
                         FileName = setupPath,
-                        Arguments = "/quiet",
+                        Arguments = args,
                         UseShellExecute = true,
                         WindowStyle = ProcessWindowStyle.Hidden,
                         WorkingDirectory = work,
@@ -391,6 +393,9 @@ public sealed class GitHubUpdateService
                 };
             }
 
+            // Brief settle so the child is fully running before we exit.
+            try { await Task.Delay(350, ct).ConfigureAwait(false); } catch { /* ignore */ }
+
             Report(status, progress, $"Restarting into v{check.RemoteVersion}…", percent: 100);
             return new AppUpdateResult
             {
@@ -401,7 +406,7 @@ public sealed class GitHubUpdateService
                 DownloadSize = check.DownloadSize,
                 Sha256 = check.Sha256,
                 ShouldExit = true,
-                Message = $"Applying v{check.RemoteVersion}... Exo will restart."
+                Message = $"Applying v{check.RemoteVersion}… Exo will close and reopen."
             };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

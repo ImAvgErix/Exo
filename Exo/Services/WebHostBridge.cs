@@ -545,23 +545,28 @@ public sealed class WebHostBridge
             if (install.ShouldExit)
             {
                 PushProgress(install.Message, 100);
-                // Quiet installer was started — leave so stage-swap can replace files.
+                // SFX is waiting on our PID (/waitpid) — exit quickly so it can replace the app folder.
                 _ = Task.Run(async () =>
                 {
-                    try { await Task.Delay(900).ConfigureAwait(false); } catch { }
+                    try { await Task.Delay(250).ConfigureAwait(false); } catch { }
                     try
                     {
                         _queue.TryEnqueue(() =>
                         {
                             try { Microsoft.UI.Xaml.Application.Current?.Exit(); } catch { }
+                            try { Environment.Exit(0); } catch { }
                         });
                     }
-                    catch { }
+                    catch
+                    {
+                        try { Environment.Exit(0); } catch { }
+                    }
                 });
             }
             else
             {
-                PushProgress(install.Message, install.UpdateAvailable ? -1 : 100);
+                // Installer never launched or refused — show the real error in Settings.
+                PushProgress(install.Message, -1);
             }
 
             return new

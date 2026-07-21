@@ -182,8 +182,22 @@ public sealed partial class MainWindow : Window
 
             if (install.ShouldExit)
             {
-                try { await Task.Delay(400, _lifetimeCts.Token).ConfigureAwait(true); } catch { }
+                // Exit promptly so the SFX (/waitpid) can replace %LocalAppData%\Exo\app.
+                try { await Task.Delay(200, _lifetimeCts.Token).ConfigureAwait(true); } catch { }
                 try { Microsoft.UI.Xaml.Application.Current?.Exit(); } catch { }
+                try { Environment.Exit(0); } catch { }
+            }
+            else if (!string.IsNullOrWhiteSpace(install.Message))
+            {
+                // Surface install failure (previously silent when quiet SFX failed).
+                try
+                {
+                    await ExoUpdateDialog.ShowMessageAsync(
+                        root,
+                        "Update did not finish",
+                        install.Message + "\n\nYou can also download Exo.exe from GitHub Releases.").ConfigureAwait(true);
+                }
+                catch { /* ignore */ }
             }
         }
         catch (OperationCanceledException) when (_lifetimeCts.IsCancellationRequested)
@@ -192,7 +206,19 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            StartupLog.Mark("auto-update-failed:" + ex.GetType().Name);
+            StartupLog.Mark("auto-update-failed:" + ex.GetType().Name + ":" + ex.Message);
+            try
+            {
+                var root = RootGrid.XamlRoot;
+                if (root is not null)
+                {
+                    await ExoUpdateDialog.ShowMessageAsync(
+                        root,
+                        "Update failed",
+                        ex.Message).ConfigureAwait(true);
+                }
+            }
+            catch { /* ignore */ }
         }
     }
 
