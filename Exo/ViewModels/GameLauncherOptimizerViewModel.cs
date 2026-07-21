@@ -166,9 +166,9 @@ public partial class GameLauncherOptimizerViewModel : ObservableObject
             });
             var script = (_module, repair) switch
             {
-                ("Riot", false) => _services.Scripts.RiotOptimizerScript,
+                ("Riot", false) => _services.Scripts.RiotApplyScript,
                 ("Riot", true) => _services.Scripts.RiotRepairScript,
-                ("Epic", false) => _services.Scripts.EpicOptimizerScript,
+                ("Epic", false) => _services.Scripts.EpicApplyScript,
                 _ => _services.Scripts.EpicRepairScript
             };
             var args = new List<string> { "-NonInteractive" };

@@ -8,11 +8,11 @@
     <AssemblyName>Contracts.Smoke</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\..\Exo\Services\NetworkLogic.cs" Link="Shipped\NetworkLogic.cs" />
-    <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.cs" Link="Shipped\NetworkApplyScriptBuilder.cs" />
-    <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.Repair.cs" Link="Shipped\NetworkApplyScriptBuilder.Repair.cs" />
-    <Compile Include="..\..\Exo\Services\NetworkApplyScriptBuilder.Benchmark.cs" Link="Shipped\NetworkApplyScriptBuilder.Benchmark.cs" />
-    <Compile Include="..\..\Exo\Models\NetworkSnapshot.cs" Link="Shipped\NetworkSnapshot.cs" />
+    <Compile Include="..\..\Exo\Services\ExoInternetLogic.cs" Link="Shipped\ExoInternetLogic.cs" />
+    <Compile Include="..\..\Exo\Services\ExoInternetApplyScriptBuilder.cs" Link="Shipped\ExoInternetApplyScriptBuilder.cs" />
+    <Compile Include="..\..\Exo\Services\ExoInternetApplyScriptBuilder.Repair.cs" Link="Shipped\ExoInternetApplyScriptBuilder.Repair.cs" />
+    <Compile Include="..\..\Exo\Services\ExoInternetApplyScriptBuilder.Benchmark.cs" Link="Shipped\ExoInternetApplyScriptBuilder.Benchmark.cs" />
+    <Compile Include="..\..\Exo\Models\ExoInternetSnapshot.cs" Link="Shipped\ExoInternetSnapshot.cs" />
     <Compile Include="..\..\Exo\Services\SteamLogic.cs" Link="Shipped\SteamLogic.cs" />
     <Compile Include="..\..\Exo\Services\DiscordLogic.cs" Link="Shipped\DiscordLogic.cs" />
     <Compile Include="..\..\Exo\Services\NvidiaDetectLogic.cs" Link="Shipped\NvidiaDetectLogic.cs" />

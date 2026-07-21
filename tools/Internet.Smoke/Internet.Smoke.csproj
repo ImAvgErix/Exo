@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Internet.Smoke</RootNamespace>
+    <AssemblyName>Internet.Smoke</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Drive the real shipped sources (not a reimplementation). -->
+    <Compile Include="..\..\Exo\Services\ExoInternetLogic.cs" Link="Shipped\ExoInternetLogic.cs" />
+    <Compile Include="..\..\Exo\Services\ExoInternetApplyScriptBuilder.cs" Link="Shipped\ExoInternetApplyScriptBuilder.cs" />
+    <Compile Include="..\..\Exo\Services\ExoInternetApplyScriptBuilder.Repair.cs" Link="Shipped\ExoInternetApplyScriptBuilder.Repair.cs" />
+    <Compile Include="..\..\Exo\Services\ExoInternetApplyScriptBuilder.Benchmark.cs" Link="Shipped\ExoInternetApplyScriptBuilder.Benchmark.cs" />
+    <Compile Include="..\..\Exo\Models\ExoInternetSnapshot.cs" Link="Shipped\ExoInternetSnapshot.cs" />
+  </ItemGroup>
+</Project>

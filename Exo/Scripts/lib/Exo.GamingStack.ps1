@@ -351,7 +351,7 @@ function Set-ExoHostLatencyProfile {
         if (-not (Test-Path $mm)) { New-Item -Path $mm -Force | Out-Null }
         # MS clamps values <10 to 20 (default). 10 is the real gaming minimum that takes effect.
         New-ItemProperty -Path $mm -Name 'SystemResponsiveness' -Value 10 -PropertyType DWord -Force | Out-Null
-        # Keep default-class NTI=10 (ffffffff can raise DPC/audio issues; forbidden in NetworkLogic)
+        # Keep default-class NTI=10 (ffffffff can raise DPC/audio issues; forbidden in ExoInternetLogic)
         New-ItemProperty -Path $mm -Name 'NetworkThrottlingIndex' -Value 10 -PropertyType DWord -Force | Out-Null
         $n++
     } catch { }

@@ -50,7 +50,7 @@ Use concise prompts and targeted diffs. Do not have the coordinator redo complet
 
 1. `pwsh -NoProfile -File ./tools/Test-Linux.ps1` (Linux/cloud) or `dotnet run --project tools/Ui.Smoke -c Release` (Windows)
 2. `.\tools\Test-Repository.ps1`
-3. Optimizer smokes as needed (Network / Discord / Steam / NVIDIA)
+3. Optimizer smokes as needed (Internet / Discord / Steam / NVIDIA)
 4. `.\Publish-Exo.ps1` then install to `%LocalAppData%\Exo\app` for local QA
 5. `.\Release-Exo.ps1` only when intentionally publishing a GitHub release
 
@@ -61,7 +61,7 @@ Exo is a **Windows-only WinUI 3** app. Cloud agents run on **Linux**, so what is
 Toolchain (already present via the VM snapshot; the update script only runs `dotnet restore`): **.NET 8 SDK** at `~/.dotnet` (symlinked to `/usr/local/bin/dotnet`) and **PowerShell 7** as `pwsh`. A `/usr/local/bin/powershell.exe -> pwsh` shim exists because the Discord/Steam/Nvidia smoke harnesses hardcode `FileName = "powershell.exe"`; without that shim they abort at the `*DetectCore.ps1` step on Linux.
 
 What runs on Linux (one command):
-- `pwsh -NoProfile -File ./tools/Test-Linux.ps1` — repository integrity + Network / Steam / Nvidia / Discord / Ui smokes. Must pass with `failed=0`.
+- `pwsh -NoProfile -File ./tools/Test-Linux.ps1` — repository integrity + Internet / Steam / Nvidia / Discord / Ui smokes. Must pass with `failed=0`.
 
 UI click-testing on Linux (mock shell only — not the WinUI app):
 - `cd tools/Exo.UiPreview && npm install && npx playwright install chromium && npm run preview:click`
@@ -70,7 +70,7 @@ UI click-testing on Linux (mock shell only — not the WinUI app):
 
 Also individually:
 - `pwsh -NoProfile -File ./tools/Test-Repository.ps1`
-- `dotnet run --project tools/Network.Smoke|Steam.Smoke|Nvidia.Smoke|Discord.Smoke|Ui.Smoke -c Release`
+- `dotnet run --project tools/Internet.Smoke|Steam.Smoke|Nvidia.Smoke|Discord.Smoke|Ui.Smoke -c Release`
 
 `DiscordLogic.IsStableDiscordPathText` normalizes Windows-style Discord roots with backslash compare so the Discord smoke passes on Linux too (product paths remain Windows install paths).
 

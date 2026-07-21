@@ -7,7 +7,7 @@
     xmlns:controls="using:Exo.Views.Controls"
     Background="Transparent">
 
-    <controls:SharedModulePlate
+    <controls:ExoModulePlate
         x:Name="Plate"
         StatusText="{x:Bind ViewModel.HeaderStatus, Mode=OneWay}"
         IsLoading="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
@@ -28,7 +28,7 @@
         PolicyTogglesEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
         HasApplyReport="False"
         ShowSecondaryActions="False">
-        <controls:SharedModulePlate.FootExtra>
+        <controls:ExoModulePlate.FootExtra>
             <StackPanel Spacing="6">
                 <Border Style="{StaticResource ExoMessageBanner}"
                         Visibility="{x:Bind ViewModel.HasRollback, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -49,8 +49,8 @@
                            TextAlignment="Center"
                            Visibility="{x:Bind ViewModel.HasQualityResult, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
             </StackPanel>
-        </controls:SharedModulePlate.FootExtra>
-        <controls:SharedModulePlate.PrimaryActions>
+        </controls:ExoModulePlate.FootExtra>
+        <controls:ExoModulePlate.PrimaryActions>
             <StackPanel Spacing="6">
                 <Button Style="{StaticResource ExoPrimaryButton}"
                         Content="Analyze &amp; Apply"
@@ -67,6 +67,6 @@
                         IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                         AutomationProperties.Name="Repair internet stack" />
             </StackPanel>
-        </controls:SharedModulePlate.PrimaryActions>
-    </controls:SharedModulePlate>
+        </controls:ExoModulePlate.PrimaryActions>
+    </controls:ExoModulePlate>
 </Page>

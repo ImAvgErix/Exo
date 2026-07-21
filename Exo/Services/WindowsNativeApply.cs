@@ -529,16 +529,36 @@ public static class WindowsNativeApply
     private static NativeApplyStep SetWindowsAiQuiet(bool admin, List<string> elevOps)
     {
         var n = 0;
+        // HKCU policies + UI
         if (NativeReg.TrySetDword("HKCU", @"Software\Policies\Microsoft\Windows\WindowsCopilot", "TurnOffWindowsCopilot", 1)) n++;
         if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "ShowCopilotButton", 0)) n++;
         if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\Shell\Copilot", "IsCopilotAvailable", 0)) n++;
         if (NativeReg.TrySetDword("HKCU", @"Software\Policies\Microsoft\Windows\WindowsAI", "DisableAIDataAnalysis", 1)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Feeds", "ShellFeedsTaskbarViewMode", 2)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "TaskbarDa", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "TaskbarMn", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Input\Settings", "InsightsEnabled", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Search", "BingSearchEnabled", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\SearchSettings", "IsAADCloudSearchEnabled", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", "SubscribedContent-338387Enabled", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", "SystemPaneSuggestionsEnabled", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", "SubscribedContent-338393Enabled", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", "SoftLandingEnabled", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Policies\Microsoft\Windows\Explorer", "DisableSearchBoxSuggestions", 1)) n++;
+
         if (admin)
         {
             if (NativeReg.TrySetDword("HKLM", @"SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot", "TurnOffWindowsCopilot", 1)) n++;
             if (NativeReg.TrySetDword("HKLM", @"SOFTWARE\Policies\Microsoft\Windows\WindowsAI", "DisableAIDataAnalysis", 1)) n++;
             if (NativeReg.TrySetDword("HKLM", @"SOFTWARE\Policies\Microsoft\Windows\WindowsAI", "TurnOffSavingSnapshots", 1)) n++;
             if (NativeReg.TrySetDword("HKLM", @"SOFTWARE\Policies\Microsoft\Windows\WindowsAI", "AllowRecallEnablement", 0)) n++;
+            if (NativeReg.TrySetDword("HKLM", @"SOFTWARE\Policies\Microsoft\Windows\WindowsAI", "DisableClickToDo", 1)) n++;
+            if (NativeReg.TrySetDword("HKLM", @"SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests", 0)) n++;
+            if (NativeReg.TrySetDword("HKLM", @"SOFTWARE\Policies\Microsoft\Windows\Windows Search", "DisableWebSearch", 1)) n++;
+            if (NativeReg.TrySetDword("HKLM", @"SOFTWARE\Policies\Microsoft\Windows\Windows Search", "ConnectedSearchUseWeb", 0)) n++;
+            if (NativeReg.TrySetDword("HKLM", @"SOFTWARE\Policies\Microsoft\Windows\CloudContent", "DisableWindowsConsumerFeatures", 1)) n++;
+            if (NativeReg.TrySetDword("HKLM", @"SOFTWARE\Policies\Microsoft\Windows\CloudContent", "DisableSoftLanding", 1)) n++;
+            if (NativeReg.TrySetDword("HKLM", @"SOFTWARE\Policies\Microsoft\Windows\CloudContent", "DisableCloudOptimizedContent", 1)) n++;
         }
         else
         {
@@ -546,8 +566,70 @@ public static class WindowsNativeApply
             elevOps.Add(@"dword:HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI|DisableAIDataAnalysis|1");
             elevOps.Add(@"dword:HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI|TurnOffSavingSnapshots|1");
             elevOps.Add(@"dword:HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI|AllowRecallEnablement|0");
+            elevOps.Add(@"dword:HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI|DisableClickToDo|1");
+            elevOps.Add(@"dword:HKLM\SOFTWARE\Policies\Microsoft\Dsh|AllowNewsAndInterests|0");
+            elevOps.Add(@"dword:HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search|DisableWebSearch|1");
+            elevOps.Add(@"dword:HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search|ConnectedSearchUseWeb|0");
+            elevOps.Add(@"dword:HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent|DisableWindowsConsumerFeatures|1");
+            elevOps.Add(@"dword:HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent|DisableSoftLanding|1");
         }
-        return new NativeApplyStep { Id = "windows-ai", Status = n > 0 ? "ok" : "skip", Reason = $"written={n}" };
+
+        // Best-effort: disable known Windows AI scheduled tasks (never touch Update/Defender).
+        try
+        {
+            foreach (var task in new[]
+                     {
+                         @"\Microsoft\Windows\WindowsAI\*",
+                         @"\Microsoft\Windows\Shell\FamilySafetyMonitor",
+                         @"\Microsoft\Windows\Feedback\Siuf\DmClient",
+                         @"\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload",
+                         @"\Microsoft\Windows\CloudExperienceHost\CreateObjectTask",
+                         @"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
+                         @"\Microsoft\Windows\Application Experience\ProgramDataUpdater",
+                         @"\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
+                         @"\Microsoft\Windows\Maps\MapsUpdateTask"
+                     })
+            {
+                RunTimed("schtasks", $"/Change /TN \"{task}\" /Disable", 4000);
+            }
+        }
+        catch { }
+
+        return new NativeApplyStep { Id = "windows-ai", Status = n > 0 ? "ok" : "skip", Reason = $"written={n}; elevQueued={elevOps.Count}" };
+    }
+
+    /// <summary>AI-agent entry: exhaustive Copilot/Recall/Widgets/Search AI purge (HKCU + elev HKLM ops).</summary>
+    public static NativeApplyResult ApplyAiPurgeOnly(IProgress<string>? progress = null)
+    {
+        var elev = new List<string>();
+        var admin = NativeReg.IsAdministrator();
+        progress?.Report("Windows AI / Copilot / Recall / Widgets purge...");
+        var step = SetWindowsAiQuiet(admin, elev);
+        progress?.Report(step.Reason);
+        return new NativeApplyResult
+        {
+            Ok = step.Status is "ok" or "partial",
+            Module = "windows-ai",
+            Message = step.Reason,
+            Steps = [step],
+            NeedsElevation = elev.Count > 0 && !admin,
+            ElevatedHklmOps = elev
+        };
+    }
+
+    /// <summary>AI-agent entry: deep Exo Competitive Intel/AMD/hybrid power plan only.</summary>
+    public static NativeApplyResult ApplyPowerPlanOnly(IProgress<string>? progress = null)
+    {
+        progress?.Report("Exo Competitive power plan...");
+        var step = SetHighPerfPower();
+        progress?.Report(step.Reason);
+        return new NativeApplyResult
+        {
+            Ok = step.Status == "ok",
+            Module = "power",
+            Message = step.Reason,
+            Steps = [step]
+        };
     }
 
     private static NativeApplyStep SetUacNeverNotify(bool admin, List<string> elevOps)

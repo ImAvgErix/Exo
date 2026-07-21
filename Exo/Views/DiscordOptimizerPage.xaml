@@ -8,9 +8,9 @@
     Background="Transparent">
 
     <!--
-      SharedModulePlate (v3): header + advisor + features + sticky instrument foot.
+      ExoModulePlate (v3): header + advisor + features + sticky instrument foot.
     -->
-    <controls:SharedModulePlate
+    <controls:ExoModulePlate
         x:Name="Plate"
         StatusText="{x:Bind ViewModel.StatusText, Mode=OneWay}"
         FeatureItems="{x:Bind ViewModel.Features, Mode=OneWay}"
@@ -35,13 +35,13 @@
         SecondaryActionsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
         ToggleReportClick="ToggleReport_Click"
         SecondaryLeftClick="Repair_Click">
-        <controls:SharedModulePlate.PrimaryActions>
+        <controls:ExoModulePlate.PrimaryActions>
             <Button Style="{StaticResource ExoPrimaryButton}"
                     Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
                     Click="Run_Click"
                     HorizontalAlignment="Stretch"
                     IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                     AutomationProperties.Name="Apply Discord" />
-        </controls:SharedModulePlate.PrimaryActions>
-    </controls:SharedModulePlate>
+        </controls:ExoModulePlate.PrimaryActions>
+    </controls:ExoModulePlate>
 </Page>

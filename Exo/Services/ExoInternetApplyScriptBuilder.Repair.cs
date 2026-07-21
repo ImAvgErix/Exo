@@ -2,7 +2,7 @@ using System.Text;
 
 namespace Exo.Services;
 
-public static partial class NetworkApplyScriptBuilder
+public static partial class ExoInternetApplyScriptBuilder
 {
     /// <summary>
     /// Undo Exo network apply. TRUE RESTORE path: reads %LocalAppData%\Exo\network-snapshot.json

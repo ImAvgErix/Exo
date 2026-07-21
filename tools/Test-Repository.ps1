@@ -52,7 +52,7 @@ if ($projectVersion -ne $appVersion) {
     Add-Failure "VERSION mismatch: VERSION=$appVersion, Exo.csproj=$projectVersion"
 }
 
-$discordOptimizerPath = Join-Path $Root 'Exo\Scripts\Discord\Disc-Optimizer.ps1'
+$discordOptimizerPath = Join-Path $Root 'Exo\Scripts\Discord\Discord-Optimizer.ps1'
 $discordOptimizer = Get-Content -LiteralPath $discordOptimizerPath -Raw
 $discordMatch = [regex]::Match($discordOptimizer, '\$Script:DiscOptVersion\s*=\s*''([^'']+)''')
 if (-not $discordMatch.Success -or $discordMatch.Groups[1].Value -ne $discordVersion) {

@@ -271,11 +271,17 @@ export const host = {
       welcomePromptSeen?: boolean
       buyMeACoffeeUrl?: string
       issuesUrl?: string
+      hasXaiApiKey?: boolean
+      aiOptimalGateEnabled?: boolean
+      upscalerRiskAcknowledged?: boolean
       experimentalDefaults: Record<string, boolean>
     }>('settings.get'),
   setSettings: (patch: {
     checkForUpdatesOnLaunch?: boolean
     welcomePromptSeen?: boolean
+    xaiApiKey?: string
+    aiOptimalGateEnabled?: boolean
+    upscalerRiskAcknowledged?: boolean
   }) =>
     call<{
       appVersion: string
@@ -283,8 +289,33 @@ export const host = {
       welcomePromptSeen?: boolean
       buyMeACoffeeUrl?: string
       issuesUrl?: string
+      hasXaiApiKey?: boolean
+      aiOptimalGateEnabled?: boolean
+      upscalerRiskAcknowledged?: boolean
       experimentalDefaults: Record<string, boolean>
     }>('settings.set', patch),
+  getAiStatus: () =>
+    call<{
+      hasOptimal: boolean
+      isOptimal: boolean
+      message: string
+      driftCount: number
+      hasXaiApiKey: boolean
+      aiOptimalGateEnabled: boolean
+      toolCount: number
+      catalogDomains: number
+    }>('ai.getStatus'),
+  runAi: (opts?: { force?: boolean; requireGrok?: boolean }) =>
+    call<{
+      success: boolean
+      skippedOptimal?: boolean
+      message: string
+      source?: string
+      analysis?: string
+      actionCount?: number
+      okCount?: number
+    }>('ai.run', opts, 30 * 60_000),
+  cancelAi: () => call<{ ok: boolean; message?: string }>('ai.cancel'),
   getChangelog: () =>
     call<{
       ok: boolean
@@ -386,8 +417,36 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
       welcomePromptSeen: true,
       buyMeACoffeeUrl: 'https://www.buymeacoffee.com/UhhErix',
       issuesUrl: 'https://github.com/ImAvgErix/Exo/issues',
+      hasXaiApiKey: false,
+      aiOptimalGateEnabled: true,
+      upscalerRiskAcknowledged: false,
       experimentalDefaults: {},
     } as T)
+  }
+  if (method === 'ai.getStatus') {
+    return Promise.resolve({
+      hasOptimal: false,
+      isOptimal: false,
+      message: 'No optimal state yet — run deep Exo AI optimization.',
+      driftCount: 0,
+      hasXaiApiKey: false,
+      aiOptimalGateEnabled: true,
+      toolCount: 48,
+      catalogDomains: 70,
+    } as T)
+  }
+  if (method === 'ai.run') {
+    return Promise.resolve({
+      success: true,
+      skippedOptimal: false,
+      message: 'Mock deep optimization complete',
+      source: 'local',
+      actionCount: 3,
+      okCount: 3,
+    } as T)
+  }
+  if (method === 'ai.cancel') {
+    return Promise.resolve({ ok: true, message: 'cancelled' } as T)
   }
   if (method === 'settings.getChangelog') {
     return Promise.resolve({

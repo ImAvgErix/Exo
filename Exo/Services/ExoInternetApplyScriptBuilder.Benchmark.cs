@@ -2,11 +2,11 @@ using System.Text;
 
 namespace Exo.Services;
 
-public static partial class NetworkApplyScriptBuilder
+public static partial class ExoInternetApplyScriptBuilder
 {
     /// <summary>
     /// Small post-apply verification probe. The explicit Analyze action uses the
-    /// sustained native C# test in <see cref="NetworkOptimizerService"/> instead.
+    /// sustained native C# test in <see cref="ExoInternetOptimizerService"/> instead.
     /// </summary>
     public static string BuildBenchmark()
     {

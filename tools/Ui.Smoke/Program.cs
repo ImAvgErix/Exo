@@ -34,7 +34,7 @@ Expect("AppSettings clone", settingsB.CheckForUpdatesOnLaunch);
 var repo = FindRepoRoot();
 var appXaml = Path.Combine(repo, "Exo", "App.xaml");
 var main = Path.Combine(repo, "Exo", "MainWindow.xaml");
-var dash = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml");
+var dash = Path.Combine(repo, "Exo", "Views", "HomePage.xaml");
 var settings = Path.Combine(repo, "Exo", "Views", "Controls", "SettingsSheet.xaml");
 var mainXaml = Path.Combine(repo, "Exo", "MainWindow.xaml");
 var theme = Path.Combine(repo, "Exo", "Styles", "ThemeResources.xaml");
@@ -406,7 +406,7 @@ if (File.Exists(dash))
     Expect("no pick-a-target blurb", !d.Contains("Pick a target", StringComparison.Ordinal));
 }
 // Checklist navigation + sequence live in code-behind / view model.
-var dashPageCs = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs");
+var dashPageCs = Path.Combine(repo, "Exo", "Views", "HomePage.xaml.cs");
 if (File.Exists(dashPageCs))
 {
     var dcs = File.ReadAllText(dashPageCs);
@@ -559,19 +559,19 @@ if (File.Exists(converters))
     }
 }
 
-// v3 SharedModulePlate hosts loader + action bar + feature grid for optimizers.
-var sharedPlateXaml = Path.Combine(repo, "Exo", "Views", "Controls", "SharedModulePlate.xaml");
-var sharedPlateCs = Path.Combine(repo, "Exo", "Views", "Controls", "SharedModulePlate.xaml.cs");
-Expect("SharedModulePlate control", File.Exists(sharedPlateXaml) && File.Exists(sharedPlateCs));
+// v3 ExoModulePlate hosts loader + action bar + feature grid for optimizers.
+var sharedPlateXaml = Path.Combine(repo, "Exo", "Views", "Controls", "ExoModulePlate.xaml");
+var sharedPlateCs = Path.Combine(repo, "Exo", "Views", "Controls", "ExoModulePlate.xaml.cs");
+Expect("ExoModulePlate control", File.Exists(sharedPlateXaml) && File.Exists(sharedPlateCs));
 if (File.Exists(sharedPlateXaml))
 {
     var plate = File.ReadAllText(sharedPlateXaml);
-    Expect("SharedModulePlate instrument chrome",
+    Expect("ExoModulePlate instrument chrome",
         plate.Contains("ExoModulePlate", StringComparison.Ordinal)
         && plate.Contains("ExoLoader", StringComparison.Ordinal)
         && plate.Contains("ExoActionBar", StringComparison.Ordinal)
         && plate.Contains("FeatureTileGrid", StringComparison.Ordinal));
-    Expect("SharedModulePlate fixed-canvas layout",
+    Expect("ExoModulePlate fixed-canvas layout",
         plate.Contains("Fixed-canvas module surface", StringComparison.Ordinal)
         && plate.Contains("Reading this PC", StringComparison.Ordinal)
         && plate.Contains("InverseBoolToVisibilityConverter", StringComparison.Ordinal)
@@ -581,10 +581,10 @@ if (File.Exists(sharedPlateXaml))
         // No outer page scroll — only expanded apply report may scroll.
         && !plate.Contains("One normal-flow work surface", StringComparison.Ordinal)
         && plate.Contains("MaxHeight=\"96\"", StringComparison.Ordinal));
-    Expect("SharedModulePlate report without advisor chrome",
+    Expect("ExoModulePlate report without advisor chrome",
         plate.Contains("ApplyReportRows", StringComparison.Ordinal)
         && !plate.Contains("GuidanceText=\"", StringComparison.Ordinal));
-    Expect("SharedModulePlate apply mode dropdown",
+    Expect("ExoModulePlate apply mode dropdown",
         plate.Contains("Apply mode", StringComparison.Ordinal)
         && plate.Contains("SelectedApplyMode", StringComparison.Ordinal)
         && plate.Contains("ApplyModeOptions", StringComparison.Ordinal)
@@ -593,7 +593,7 @@ if (File.Exists(sharedPlateXaml))
 if (File.Exists(sharedPlateCs))
 {
     var plateCs = File.ReadAllText(sharedPlateCs);
-    Expect("SharedModulePlate FeatureTileGrid accessor",
+    Expect("ExoModulePlate FeatureTileGrid accessor",
         plateCs.Contains("FeatureTileGrid", StringComparison.Ordinal)
         && plateCs.Contains("FeatureGrid", StringComparison.Ordinal));
 }
@@ -608,13 +608,12 @@ foreach (var page in new[]
     if (!File.Exists(p)) continue;
     var x = File.ReadAllText(p);
     Expect(page + " CTA", x.Contains("ExoPrimaryButton", StringComparison.Ordinal) || x.Contains("ExoQuietButton", StringComparison.Ordinal));
-    // Module chrome: SharedModulePlate (v3) or legacy plate / page pad.
+    // Module chrome: ExoModulePlate (v3) or legacy page pad.
     Expect(page + " page padding",
-        x.Contains("SharedModulePlate", StringComparison.Ordinal)
-        || x.Contains("ExoModulePlate", StringComparison.Ordinal)
+        x.Contains("ExoModulePlate", StringComparison.Ordinal)
         || x.Contains("ExoPagePadding", StringComparison.Ordinal)
         || x.Contains("ExoPageMaxWidth", StringComparison.Ordinal));
-    Expect(page + " uses SharedModulePlate", x.Contains("SharedModulePlate", StringComparison.Ordinal));
+    Expect(page + " uses ExoModulePlate", x.Contains("ExoModulePlate", StringComparison.Ordinal));
     Expect(page + " no ProgressRing", !x.Contains("<ProgressRing", StringComparison.Ordinal));
     if (page.StartsWith("Internet", StringComparison.Ordinal))
     {
@@ -678,10 +677,10 @@ foreach (var page in new[]
     var p = Path.Combine(repo, "Exo", "Views", page);
     if (!File.Exists(p)) continue;
     var x = File.ReadAllText(p);
-    // Features bind into SharedModulePlate.FeatureItems (grid lives in the plate).
+    // Features bind into ExoModulePlate.FeatureItems (grid lives in the plate).
     Expect(page + " binds feature items to plate",
         x.Contains("FeatureItems=", StringComparison.Ordinal)
-        && x.Contains("SharedModulePlate", StringComparison.Ordinal)
+        && x.Contains("ExoModulePlate", StringComparison.Ordinal)
         && !x.Contains("x:Name=\"FeatureRepeater\"", StringComparison.Ordinal));
     Expect(page + " plate motion host",
         x.Contains("x:Name=\"Plate\"", StringComparison.Ordinal));
@@ -743,8 +742,8 @@ if (File.Exists(launcherVmPath))
     var launcherVm = File.ReadAllText(launcherVmPath);
     Expect("Riot/Epic shared VM has no confirm gate", !launcherVm.Contains("ConfirmAsync", StringComparison.Ordinal));
     Expect("Riot/Epic shared VM wires Apply and exact Repair",
-        launcherVm.Contains("RiotOptimizerScript", StringComparison.Ordinal) &&
-        launcherVm.Contains("EpicOptimizerScript", StringComparison.Ordinal) &&
+        launcherVm.Contains("RiotApplyScript", StringComparison.Ordinal) &&
+        launcherVm.Contains("EpicApplyScript", StringComparison.Ordinal) &&
         launcherVm.Contains("RiotRepairScript", StringComparison.Ordinal) &&
         launcherVm.Contains("EpicRepairScript", StringComparison.Ordinal));
 }
@@ -884,7 +883,7 @@ if (File.Exists(sfxCs))
         && sx.Contains("CreateStartMenuShortcut", StringComparison.Ordinal));
 }
 
-var dashCs = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs");
+var dashCs = Path.Combine(repo, "Exo", "Views", "HomePage.xaml.cs");
 if (File.Exists(dashCs))
 {
     var dc = File.ReadAllText(dashCs);
@@ -1006,7 +1005,7 @@ if (File.Exists(advisorPath))
 
 // Dashboard recommended-next deep-link (Home -> first open module)
 // dashCs already declared above for entrance checks; reuse it.
-var nextActionVmPath = Path.Combine(repo, "Exo", "ViewModels", "DashboardViewModel.cs");
+var nextActionVmPath = Path.Combine(repo, "Exo", "ViewModels", "HomeViewModel.cs");
 if (File.Exists(dash) && File.Exists(dashCs) && File.Exists(nextActionVmPath))
 {
     var nextActionXaml = File.ReadAllText(dash);
@@ -1164,7 +1163,7 @@ if (Directory.Exists(logosDir))
 #endif
 }
 
-var dashVm = Path.Combine(repo, "Exo", "ViewModels", "DashboardViewModel.cs");
+var dashVm = Path.Combine(repo, "Exo", "ViewModels", "HomeViewModel.cs");
 if (File.Exists(dashVm))
 {
     var dvm = File.ReadAllText(dashVm);

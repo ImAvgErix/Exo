@@ -15,5 +15,5 @@ namespace Exo.Serialization;
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(NvidiaPanelSettings))]
-[JsonSerializable(typeof(NetworkBenchmarkResult))]
+[JsonSerializable(typeof(ExoInternetBenchmarkResult))]
 internal sealed partial class ExoJsonContext : JsonSerializerContext;

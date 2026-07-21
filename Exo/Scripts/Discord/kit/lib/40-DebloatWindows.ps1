@@ -1,5 +1,5 @@
 # 40-DebloatWindows.ps1 - Debloat, cache, Windows tweaks, OpenASAR, profile flags
-# Dot-sourced by Disc-Optimizer.ps1 (load order = filename sort).
+# Dot-sourced by Discord-Optimizer.ps1 (load order = filename sort).
 # Universal multi-PC kit - do not assume Equicord/Discord already configured.
 function Get-DiscordOptStatePath {
     $dir = Get-DiscOptEnvPath 'LOCALAPPDATA' 'Exo'
