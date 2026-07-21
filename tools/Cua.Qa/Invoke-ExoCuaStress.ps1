@@ -209,7 +209,7 @@ foreach ($m in $modules) {
     if ($m -eq 'Internet' -and $blob -notmatch 'analyze') {
         $fails.Add('Internet missing Analyze control')
     }
-    if ($blob -match '┬╖|â€') {
+    if ($blob -match '--|?-') {
         $fails.Add("$m mojibake in UIA labels")
     }
 }

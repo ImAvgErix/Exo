@@ -1,3 +1,10 @@
+## 3.16.11
+
+- **MPO flicker clear**: Apply deletes `OverlayTestMode` / `DisableOverlays` instead of writing OverlayTestMode=5 (stock DWM overlays)
+- **Steam detect honesty**: applied status no longer fail-closed on unused memory-guard template; soft reclaim cadence >= 4s
+- **Brave vault default-off**: do not delete Login Data unless an explicit risk-ack setting exists (safer cache clears kept)
+- **Ui.Smoke**: WebView2 full-bleed shell contract (hex allow MainWindow + ThemeResources, React Shell nav, ContentHost)
+
 ## 3.16.10
 
 - **Home dash GPU**: detect **NVIDIA / AMD Radeon / Intel Arc + UHD/Iris** via WMI + registry; prefer discrete dGPU over iGPU

@@ -244,7 +244,7 @@ function New-ExoCompetitivePowerPlan {
     $guid = $existing
 
     if (-not $guid) {
-        # Duplicate Ultimate template ONCE, rename immediately — never leave bare Ultimate clones.
+        # Duplicate Ultimate template ONCE, rename immediately - never leave bare Ultimate clones.
         $dupOut = ''
         try {
             $dupOut = & powercfg -duplicatescheme $script:ExoUltimateTemplateGuid 2>&1 | Out-String

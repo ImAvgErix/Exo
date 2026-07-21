@@ -711,7 +711,7 @@ if ($exoQuiet) {
     if ($exeOk -and $asarOk -and $eqOk -and $modsOk) {
         $Script:DiscordDeferUserBoot = $true
         Write-Ok 'Disk verify passed (Discord stays closed)'
-        Add-ExoReport 'boot-check' 'ok' 'disk verify only — no auto-open'
+        Add-ExoReport 'boot-check' 'ok' 'disk verify only - no auto-open'
     } else {
         Write-Warn "Quiet verify incomplete (exe=$exeOk asar=$asarOk eq=$eqOk mods=$modsOk)"
         if (-not $modsOk -or -not $asarOk) {
@@ -839,8 +839,8 @@ Write-RunSummary -AppDir $app.FullName -Launched $false
 # Disk verify above is enough; user opens Discord from Start Menu when ready.
 # Standalone Disc-Optimizer without -NoLaunch still offers interactive launch.
 if ($NoLaunch -or $env:EXO -eq '1' -or $env:EXO_SKIP_BOOT_FLASH -eq '1') {
-    Write-Ok 'Disc Optimizer finished (Discord left closed — open it from Start Menu when you want).'
-    Add-ExoReport 'relaunch' 'skip' 'NoLaunch / Exo host — no auto-open'
+    Write-Ok 'Disc Optimizer finished (Discord left closed - open it from Start Menu when you want).'
+    Add-ExoReport 'relaunch' 'skip' 'NoLaunch / Exo host - no auto-open'
 } elseif (-not $NoLaunch) {
     Wait-UserThenStartDiscord $app.FullName
 } else {

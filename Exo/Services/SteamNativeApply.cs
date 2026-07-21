@@ -471,7 +471,7 @@ public static class SteamNativeApply
     /// <summary>
     /// Memory guard template — kept in sync with SteamLogic.IsMemoryGuardText classifier.
     /// </summary>
-    public static string BuildMemoryGuardBody(int sleepGame = 1, int sleepIdle = 2)
+    public static string BuildMemoryGuardBody(int sleepGame = 4, int sleepIdle = 4)
     {
         // Literal body must satisfy SteamLogic.IsMemoryGuardText.
         var body = """
@@ -650,7 +650,7 @@ try {
     Set-SteamClientPriority -InGame:$inGame
     $ticks++
     if (($ticks % 15) -eq 0) { Reinstate-SteamQuiet }
-    # Tight loop: competitive cadence.
+    # Soft reclaim cadence: >=4s so steamwebhelper is not thrashed.
     if ($inGame) { Start-Sleep -Seconds __EXO_SLEEP_GAME__ } else { Start-Sleep -Seconds __EXO_SLEEP_IDLE__ }
   }
 } finally {

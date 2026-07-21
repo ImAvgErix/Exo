@@ -530,7 +530,7 @@ $winget = Get-Winget
 $latest = $null
 $criticalOk = $true
 
-# ── .NET 10 Desktop Runtime (NvDisplay + any FDD helpers) ──────────────────
+# -- .NET 10 Desktop Runtime (NvDisplay + any FDD helpers) ------------------
 if (Test-DotNet10DesktopRuntime) {
     Write-DoctorLine '[+] .NET 10 Desktop Runtime is installed.'
     Write-Report 'dotnet-detect' 'ok'
@@ -553,7 +553,7 @@ if (Test-DotNet10DesktopRuntime) {
     }
 }
 
-# ── WebView2 (SPA shell) ───────────────────────────────────────────────────
+# -- WebView2 (SPA shell) ---------------------------------------------------
 if (Test-WebView2Runtime) {
     Write-DoctorLine '[+] WebView2 Runtime is installed.'
     Write-Report 'webview2-detect' 'ok'
@@ -576,7 +576,7 @@ if (Test-WebView2Runtime) {
     }
 }
 
-# ── VC++ redistributable (best-effort; common on Win11 already) ────────────
+# -- VC++ redistributable (best-effort; common on Win11 already) ------------
 if (Test-VCRedistX64) {
     Write-DoctorLine '[+] VC++ 2015-2022 x64 redistributable present.'
     Write-Report 'vcredist-detect' 'ok'
@@ -597,7 +597,7 @@ if (Test-VCRedistX64) {
     }
 }
 
-# ── Stable PowerShell 7 ────────────────────────────────────────────────────
+# -- Stable PowerShell 7 ----------------------------------------------------
 $stable = Get-StablePwsh
 if ($stable) {
     Write-DoctorLine "[+] Stable PowerShell 7: $stable"

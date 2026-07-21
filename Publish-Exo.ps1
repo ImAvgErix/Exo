@@ -220,7 +220,7 @@ if ($runtimeText -notmatch 'includedFrameworks') {
     throw 'Publish check: Exo.runtimeconfig.json is framework-dependent (missing includedFrameworks). Users would be prompted to install .NET 10. Re-run with --self-contained true.'
 }
 if (-not (Test-Path -LiteralPath (Join-Path $OutDir 'coreclr.dll'))) {
-    throw 'Publish check: coreclr.dll missing — payload is not self-contained.'
+    throw 'Publish check: coreclr.dll missing - payload is not self-contained.'
 }
 Write-Host '[+] Publish check: self-contained runtime (includedFrameworks + coreclr)' -ForegroundColor Green
 

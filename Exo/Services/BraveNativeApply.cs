@@ -335,8 +335,15 @@ public static class BraveNativeApply
         Report("Content filter lists (cookie / annoyances / social)…");
         steps.Add(EnableContentFilters(install));
 
-        Report("Surgical vault wipe (passwords/addresses/cards; keep search engines)…");
-        steps.Add(PurgeBraveVaultSurgical(install));
+        // Login Data / vault wipe is default-off — no risk-ack setting exists yet.
+        // Safer cache clears below still run; passwords stay intact.
+        Report("Vault wipe skipped (default-off; Login Data kept)…");
+        steps.Add(new NativeApplyStep
+        {
+            Id = "vault",
+            Status = "skip",
+            Reason = "Login Data wipe default-off (no risk-ack setting)"
+        });
 
         Report("GPU high-performance…");
         steps.Add(ApplyGpu(install));
@@ -365,7 +372,7 @@ public static class BraveNativeApply
             Ok = essentialOk,
             Module = "brave",
             Message = essentialOk
-                ? "Brave absolute debloat applied (expanded policies + verified flags + multi-profile + filters + vault + Proton + quiet background)"
+                ? "Brave absolute debloat applied (expanded policies + verified flags + multi-profile + filters + Proton + quiet background; vault wipe default-off)"
                 : "Brave apply incomplete — accept elevation for full policy pack if prompted",
             Steps = steps,
             NeedsElevation = elevOps.Count > 0 && !admin,
@@ -392,12 +399,11 @@ public static class BraveNativeApply
         Report("Removing Proton Pass force-install policy…");
         steps.Add(RemoveExtensionForceList(admin));
 
-        // Vault purge is intentional — secrets stay deleted.
         steps.Add(new NativeApplyStep
         {
             Id = "vault",
-            Status = "ok",
-            Reason = "purged passwords/addresses/cards not restored (history/bookmarks untouched)"
+            Status = "skip",
+            Reason = "vault wipe was default-off; nothing to undo"
         });
 
         SaveState(false, install, steps, new List<string>());
@@ -406,7 +412,7 @@ public static class BraveNativeApply
         {
             Ok = true,
             Module = "brave",
-            Message = "Brave Exo policies removed; prefs restored from snapshot when available. Vault purge not undone.",
+            Message = "Brave Exo policies removed; prefs restored from snapshot when available.",
             Steps = steps
         };
     }

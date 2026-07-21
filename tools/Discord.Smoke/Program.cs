@@ -357,8 +357,12 @@ Expect("repair restores variant settings",
 
 // Detect script rows for QoS + variants; OpenAsar acceptance removed (negative)
 var detectText = File.ReadAllText(Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Exo-Discord-Detect.ps1"));
-Expect("detect has QoS row", detectText.Contains("Voice priority", StringComparison.Ordinal));
-Expect("detect has variants row", detectText.Contains("Discord variants", StringComparison.Ordinal));
+Expect("detect has QoS row",
+    detectText.Contains("Priority voice traffic", StringComparison.Ordinal) ||
+    detectText.Contains("Voice priority", StringComparison.Ordinal));
+Expect("detect has variants row",
+    detectText.Contains("All Discord builds covered", StringComparison.Ordinal) ||
+    detectText.Contains("Discord variants", StringComparison.Ordinal));
 Expect("detect no legacy OpenAsar acceptance",
     !detectText.Contains("legacyOpenAsarOk", StringComparison.Ordinal) &&
     !detectText.Contains("Test-DiscOptOpenAsarSize", StringComparison.Ordinal));

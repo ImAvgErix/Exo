@@ -303,7 +303,7 @@ if (Test-Path $statePath) {
 }
 
 function Get-SteamLibrarySummary([string]$SteamPath) {
-    # Same language as Riot/Epic install rows: Installed · Found: …
+    # Same language as Riot/Epic install rows: Installed - Found: -
     $names = [System.Collections.Generic.List[string]]::new()
     $count = 0
     try {
@@ -397,7 +397,7 @@ if (-not $steamOk) {
     # Soft: if FSO missing but apply was elevated incomplete, still show tile
     Add-Feature 'Client FSO + priority net' 'Fullscreen Optimizations off on Steam client; UDP DSCP 46 for Steam traffic when elevated apply succeeds.' ($fsoOk -or $dscpOk)
 
-    # Marker only on detect — live library EXE scan is multi-second on large libraries.
+    # Marker only on detect - live library EXE scan is multi-second on large libraries.
     # StrictMode-safe: older steam-optimizer.json lacks libraryGamePolicyVerified.
     $libGamesOk = $false
     try {
@@ -407,18 +407,18 @@ if (-not $steamOk) {
     } catch { $libGamesOk = $false }
     Add-Feature 'Library games high-perf GPU' 'Installed Steam games get high-perf GPU preference and DSCP priority (display = Games hub borderless). Windows policy only, game files untouched.' $libGamesOk
 
-    # Reversible background memory priority + in-game CPU yield policy.
-    $memoryGuardOk = $false
+    # Memory-guard template is optional (never launched - zero always-on helpers).
+    # Green when lean CEF launcher is present, matching native C# detect.
+    # Durable quiet re-enforce lives in Reinstate-SteamQuiet when a template is present.
     $helper = Join-Path $steam 'Exo-SteamMemoryGuard.ps1'
-    if (Test-Path -LiteralPath $helper) {
-        try {
-            $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
-            $memoryGuardOk = Test-SteamMemoryGuardText -Text $helperText
-        } catch { }
-    }
-    Add-Feature 'Yield to your game' 'When a game is running, Steam background UI steps aside  -  more room for FPS and less stutter from the client.' $memoryGuardOk
+    $yieldOk = [bool]$cefOk
+    Add-Feature 'Yield to your game' $(if ($cefOk) {
+            'No background guard - lean Steam-Exo.cmd only (zero idle processes).'
+        } else {
+            'Apply Steam to install Steam-Exo.cmd (no background helper).'
+        }) $yieldOk
 
-    # LIVE checks only — never require a successful state marker (failed/incomplete applies
+    # LIVE checks only - never require a successful state marker (failed/incomplete applies
     # were turning real greens into reds: "5 need Apply" while CEF/hardware already on).
     $debloatOk = Test-SteamCompleteClientDebloat $steam
     $dlOk = Test-SteamDownloadConfig $steam
@@ -446,31 +446,21 @@ if (-not $steamOk) {
     Add-Feature 'Clean Start Menu launch' 'Start Menu opens the Exo quiet Steam launcher  -  no desktop icon spam.' $launchOk
 
     $runtimeOk = Test-SteamRuntimeIntegrity $steam
-    Add-Feature 'Helpers stay healthy' 'Quiet launch helper and memory guard remain on disk after apply.' $runtimeOk
+    Add-Feature 'Helpers stay healthy' 'steam.exe + Steam-Exo.cmd on disk (no background process).' ($runtimeOk -and $cefOk)
 
     # Trust apply flags - do NOT pin exact kit version strings (1.7.3+ was falsely "incomplete").
+    # Memory-guard template is optional - do not fail-closed when absent/unused.
     $markerOk = Test-SteamApplyRecord -State $state
-    # Durable quiet re-enforce helper must exist after modern applies.
-    if ($markerOk -and $helper -and (Test-Path -LiteralPath $helper)) {
-        try {
-            $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
-            if (-not (Test-SteamMemoryGuardText -Text $helperText) -and
-                $helperText -notmatch 'Reinstate-SteamQuiet') {
-                $markerOk = $false
-            }
-        } catch { $markerOk = $false }
-    } elseif ($markerOk -and -not (Test-Path -LiteralPath $helper)) {
-        $markerOk = $false
-    }
     Add-Feature 'Optimization verified' 'This PC has a completed Steam apply on record with durable quiet policy intact.' ($markerOk -and $runtimeOk)
 
     # Client FSO/DSCP + library policy are part of full apply when elevated.
+    # Do not require unused memory-guard template for applied status.
     $clientNetOk = [bool]($fsoOk -or $dscpOk)
-    $isApplied = $steamOk -and $markerOk -and $cefOk -and $memoryGuardOk -and $debloatOk -and
+    $isApplied = $steamOk -and $markerOk -and $cefOk -and $debloatOk -and
         $runtimeOk -and $dlOk -and $snapOk -and $hardwareOk -and $windowsQuietOk -and $launchOk -and
         $clientNetOk -and $libGamesOk
 
-    # Status from ALL inactive checklist rows (matches UI) — exclude Optimization verified.
+    # Status from ALL inactive checklist rows (matches UI) - exclude Optimization verified.
     $missingAll = @()
     foreach ($f in @($script:features)) {
         $t = [string]$f.title

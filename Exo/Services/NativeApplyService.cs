@@ -205,6 +205,29 @@ public sealed class NativeApplyService
                 sb.AppendLine("  $ok++");
                 sb.AppendLine("} catch { $fail++; Write-ExoReport 'reg' 'fail' $_.Exception.Message }");
             }
+            else if (op.StartsWith("delete:", StringComparison.OrdinalIgnoreCase))
+            {
+                // delete:HKLM\path|Name
+                var body = op.Substring("delete:".Length);
+                var parts = body.Split('|');
+                if (parts.Length != 2) continue;
+                var hivePath = parts[0];
+                var name = parts[1];
+                var hive = hivePath.StartsWith("HKLM", StringComparison.OrdinalIgnoreCase) ? "HKLM" : "HKCU";
+                var path = hivePath.Contains('\\')
+                    ? hivePath[(hivePath.IndexOf('\\') + 1)..]
+                    : hivePath;
+                var psPath = path.Replace("'", "''");
+                var psName = name.Replace("'", "''");
+                sb.AppendLine($"Write-ExoProgress {pct} 'Delete {psName}'");
+                sb.AppendLine("try {");
+                sb.AppendLine($"  $p = '{hive}:\\{psPath}'");
+                sb.AppendLine("  if (Test-Path -LiteralPath $p) {");
+                sb.AppendLine($"    Remove-ItemProperty -LiteralPath $p -Name '{psName}' -Force -ErrorAction SilentlyContinue");
+                sb.AppendLine("  }");
+                sb.AppendLine("  $ok++");
+                sb.AppendLine("} catch { $fail++; Write-ExoReport 'reg' 'fail' $_.Exception.Message }");
+            }
             else if (op.StartsWith("qos:", StringComparison.OrdinalIgnoreCase))
             {
                 // qos:PolicyName|exeName

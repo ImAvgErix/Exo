@@ -72,8 +72,7 @@ public static partial class SteamLogic
             if (line.Contains("Suspend-Process", StringComparison.OrdinalIgnoreCase)) return false;
         }
 
-        // Competitive cadence: 1s in-game / 2s library. Any loop sleep in 1-15s is valid.
-        // Do not require the first match (often the 1s game branch) to be >= 2.
+        // Soft reclaim cadence: prefer >=4s. Accept any loop sleep in 1-15s for legacy templates.
         foreach (Match sec in SleepSecondsRegex().Matches(text))
         {
             if (int.TryParse(sec.Groups[1].Value, out var s) && s is >= 1 and <= 15)

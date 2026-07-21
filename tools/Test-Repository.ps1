@@ -151,8 +151,26 @@ else {
     )) {
         Assert-ContainsText $embeddedHelper $marker 'Steam companion helper'
     }
-    if ($embeddedHelper -match '(?im)^\s*(?!#|//).*(EmptyWorkingSet\(|SetProcessWorkingSetSize|Stop-Process.*steamwebhelper|Suspend-Process)') {
-        Add-Failure 'Steam memory guard contains an unsafe trim, suspend, or kill operation'
+    # Align with SteamLogic.IsMemoryGuardText: EmptyWorkingSet / kill / suspend always
+    # banned on non-comment lines. Soft SetProcessWorkingSetSize(-1,-1) allowed only when
+    # the helper also gates SoftReclaimWorkingSet on non-foreground CEF.
+    $allowsSoftReclaim = ($embeddedHelper -match 'SoftReclaimWorkingSet') -and
+        ($embeddedHelper -match '\$_\.Id -ne \$foregroundPid')
+    foreach ($rawLine in ($embeddedHelper -split "`n")) {
+        $line = $rawLine.TrimStart()
+        if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }
+        if ($line.Contains('EmptyWorkingSet(')) {
+            Add-Failure 'Steam memory guard contains EmptyWorkingSet (unsafe CEF thrash)'
+            break
+        }
+        if ($line.Contains('SetProcessWorkingSetSize') -and -not $allowsSoftReclaim) {
+            Add-Failure 'Steam memory guard uses SetProcessWorkingSetSize without SoftReclaimWorkingSet non-foreground gate'
+            break
+        }
+        if ($line -match '(?i)Stop-Process.*steamwebhelper|Suspend-Process') {
+            Add-Failure 'Steam memory guard contains an unsafe suspend or kill operation'
+            break
+        }
     }
 }
 
@@ -183,8 +201,8 @@ foreach ($marker in @(
     'Test-SteamStartupQuiet',
     'Test-SteamDownloadConfig',
     'Test-SteamClientTweaks',
-    'Complete client debloat',
-    'Windows quiet shell',
+    'Cleaner Steam install',
+    'Silent Windows integration',
     'Test-SteamCompleteClientDebloat',
     'Test-SteamWindowsQuiet',
     'Reinstate-SteamQuiet'
@@ -281,10 +299,14 @@ if ($nvidiaPowerShell -match '(?i)SendKeys|mouse_event|SetCursorPos') {
 if ($nvidiaPowerShell -match 'ExoPrefer(?:GpuScaling|NoScaling|ScalingOverride|FullRgb)\s*=') {
     Add-Failure 'NVIDIA scripts contain obsolete Exo-only Control Panel registry markers.'
 }
-$optimizerWritesNvapiMethod = $nvidiaOptimizer -match "displayMethod\s*=\s*'nvapi'" -or
-    $nvidiaOptimizer -match '\$displayMethod\s*=\s*if\s*\(\$displayNvApiOk\)\s*\{\s*''nvapi''\s*\}'
-if (-not $optimizerWritesNvapiMethod -or
-    $nvidiaPowerShell -notmatch "displayMethod.*-eq\s*'nvapi'") {
+# 3.16.x may leave display prefs CPL-owned (displayMethod='unchanged') while still
+# tracking the nvapi marker for live verify when Exo owns display.
+$optimizerWritesDisplayMethod = $nvidiaOptimizer -match "displayMethod\s*=\s*'nvapi'" -or
+    $nvidiaOptimizer -match '\$displayMethod\s*=\s*if\s*\(\$displayNvApiOk\)\s*\{\s*''nvapi''\s*\}' -or
+    $nvidiaOptimizer -match "displayMethod\s*=\s*'unchanged'"
+if (-not $optimizerWritesDisplayMethod -or
+    ($nvidiaPowerShell -notmatch "displayMethod.*-eq\s*'nvapi'" -and
+     $nvidiaPowerShell -notmatch "displayMethod\s*=\s*'unchanged'")) {
     Add-Failure 'NVIDIA apply/detect scripts do not require the verified NVAPI display marker.'
 }
 foreach ($marker in @(
@@ -372,11 +394,11 @@ if ($statusStart -lt 0 -or $statusEnd -le $statusStart) {
     Add-Failure 'NVIDIA live status priority block was not found.'
 } else {
     $statusBlock = $nvidiaDetect.Substring($statusStart, $statusEnd - $statusStart)
+    # Display prefs are CPL-owned on 3.16.x - status no longer gates on $displayOk.
     $priorityMarkers = @(
         '$pendingAfterDriver',
         '$needsRetweak',
         '-not $profileOk',
-        '-not $displayOk',
         '-not $backgroundOk',
         '$isApplied'
     )

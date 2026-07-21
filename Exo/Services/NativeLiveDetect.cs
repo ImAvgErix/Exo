@@ -179,7 +179,14 @@ public static class NativeLiveDetect
             NativeReg.MatchesDword("HKCU", @"Software\Microsoft\GameBar", "AutoGameModeEnabled", 1)
             || NativeReg.MatchesDword("HKCU", @"Software\Microsoft\GameBar", "AllowAutoGameMode", 1);
         bool Win32() => NativeReg.MatchesDword("HKLM", @"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation", 38);
-        bool Mpo() => NativeReg.MatchesDword("HKLM", @"SOFTWARE\Microsoft\Windows\Dwm", "OverlayTestMode", 5);
+        // Stock = no OverlayTestMode=5 and no DisableOverlays=1 (those flicker the desktop).
+        bool Mpo()
+        {
+            var overlay = NativeReg.GetDword("HKLM", @"SOFTWARE\Microsoft\Windows\Dwm", "OverlayTestMode");
+            var disable = NativeReg.GetDword(
+                "HKLM", @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "DisableOverlays");
+            return overlay is not 5 && disable is not 1;
+        }
         bool Sticky()
         {
             var v = NativeReg.GetValue("HKCU", @"Control Panel\Accessibility\StickyKeys", "Flags")?.ToString();
@@ -279,7 +286,10 @@ public static class NativeLiveDetect
         features.Add(F("Hardware GPU scheduling", "HAGS on (HwSchMode=2).", Hags()));
         features.Add(F("Windows Game Mode", "Game Mode on for focused games.", GameMode()));
         features.Add(F("Foreground boost", "Win32PrioritySeparation=38.", Win32()));
-        features.Add(F("Smoother multi-monitor", "MPO OverlayTestMode=5.", Mpo()));
+        features.Add(F(
+            "Stock DWM overlays",
+            "No OverlayTestMode=5 / DisableOverlays (those flicker the screen).",
+            Mpo()));
         features.Add(F("No sticky-key popups", "Sticky Keys flags quiet.", Sticky()));
         features.Add(F(powerName, Power()
             ? $"Active live: {activeLine.Trim()}"

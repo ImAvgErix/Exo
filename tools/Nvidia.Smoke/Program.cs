@@ -219,14 +219,19 @@ Expect("display apply retries NVAPI",
 Expect("display apply success without partial exit 2",
     displayApplySrc.Contains("SUCCESS registry", StringComparison.Ordinal) &&
     !displayApplySrc.Contains("PARTIAL registry-ok nvapi-failed", StringComparison.Ordinal));
+// 3.16.x: display prefs are CPL-owned (no Exo force). Method stays 'unchanged'.
 Expect("safe policy leaves display settings unchanged",
-    optimizerSrc.Contains("Display settings unchanged by safe policy", StringComparison.Ordinal) &&
-    optimizerSrc.Contains("displayPrefs        = $(if ($SafePolicy) { $false }", StringComparison.Ordinal));
-Expect("optimizer records registry display method",
-    optimizerSrc.Contains("$displayMethod = if ($displayNvApiOk) { 'nvapi' } elseif ($displayRegistryOk) { 'registry' } else { $null }", StringComparison.Ordinal));
-Expect("optimizer retries display before fail",
-    optimizerSrc.Contains("display-policy-retry", StringComparison.Ordinal) &&
-    optimizerSrc.Contains("forcing one more Display-Apply pass", StringComparison.Ordinal));
+    optimizerSrc.Contains("displayMethod       = 'unchanged'", StringComparison.Ordinal) &&
+    optimizerSrc.Contains("displayPrefs        = $false", StringComparison.Ordinal) &&
+    (optimizerSrc.Contains("no display force", StringComparison.OrdinalIgnoreCase) ||
+     optimizerSrc.Contains("Display settings unchanged", StringComparison.OrdinalIgnoreCase) ||
+     optimizerSrc.Contains("Profile Inspector DRS policy", StringComparison.Ordinal)));
+Expect("optimizer records unchanged display method",
+    optimizerSrc.Contains("$displayMethod = 'unchanged'", StringComparison.Ordinal) ||
+    optimizerSrc.Contains("displayMethod       = 'unchanged'", StringComparison.Ordinal));
+Expect("optimizer keeps failure-state path without display retry thrash",
+    optimizerSrc.Contains("Save-ExoFailureState -Stage $failStage -Message $failMessage", StringComparison.Ordinal) &&
+    !optimizerSrc.Contains("forcing one more Display-Apply pass", StringComparison.Ordinal));
 Expect("optimizer catch still saves failure state",
     optimizerSrc.Contains("if (-not [bool]$Script:CompletedPartialDisplayPolicy)", StringComparison.Ordinal) &&
     optimizerSrc.Contains("Save-ExoFailureState -Stage $failStage -Message $failMessage", StringComparison.Ordinal));
@@ -271,9 +276,10 @@ var nvidiaPageXaml = Path.Combine(repo, "Exo", "Views", "NvidiaOptimizerPage.xam
 if (File.Exists(nvidiaPageXaml))
 {
     var nx = File.ReadAllText(nvidiaPageXaml);
-    Expect("NVIDIA page Repair CTA + DRS copy",
+    Expect("NVIDIA page Repair CTA wired without full-rollback claim",
         nx.Contains("SecondaryLeftLabel=\"Repair\"", StringComparison.Ordinal) &&
-        nx.Contains("Repair restores the complete NVIDIA profile database", StringComparison.Ordinal));
+        nx.Contains("SecondaryLeftClick=\"Repair_Click\"", StringComparison.Ordinal) &&
+        !nx.Contains("Repair restores the complete NVIDIA profile database", StringComparison.Ordinal));
 }
 Expect("optimizer selects policy from hardware inventory",
     optimizerSrc.Contains("function Get-NvidiaHardwarePolicy", StringComparison.Ordinal) &&
@@ -292,7 +298,9 @@ Expect("raw-latency disables every VRR path",
 Expect("global ULL Ultra remains authoritative fallback",
     optimizerSrc.Contains("'390467'    = '2'", StringComparison.Ordinal) &&
     optimizerSrc.Contains("'277041152' = '1'", StringComparison.Ordinal) &&
-    detectSrc.Contains("Reflex takes priority automatically", StringComparison.Ordinal));
+    (detectSrc.Contains("Reflex takes priority automatically", StringComparison.Ordinal) ||
+     detectSrc.Contains("Reflex still wins in supported titles", StringComparison.Ordinal) ||
+     optimizerSrc.Contains("Reflex overrides this in supported games", StringComparison.Ordinal)));
 Expect("display helper detects refresh and EDID evidence",
     nvDisplaySrc.Contains("maxHz", StringComparison.Ordinal) &&
     nvDisplaySrc.Contains("ReadMonitorVerticalRange", StringComparison.Ordinal) &&
