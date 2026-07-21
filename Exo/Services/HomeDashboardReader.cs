@@ -563,8 +563,8 @@ public static class HomeDashboardReader
     }
 
     /// <summary>
-    /// Best-effort GPU utilization (0–100). Prefers nvidia-smi (whole-GPU), then
-    /// sums engtype_3D process counters (capped). Throttled; null when unavailable.
+    /// Best-effort GPU utilization (0–100). Prefers vendor tools (nvidia-smi, amd-smi),
+    /// then Windows GPU engine counters (works for AMD/Intel/NVIDIA). Throttled; null when unavailable.
     /// </summary>
     public static double? TryReadGpuLoadPercent()
     {
@@ -578,6 +578,13 @@ public static class HomeDashboardReader
         if (nv is not null)
         {
             _cachedGpuLoad = nv;
+            return _cachedGpuLoad;
+        }
+
+        var amd = TryReadAmdSmiGpuLoad();
+        if (amd is not null)
+        {
+            _cachedGpuLoad = amd;
             return _cachedGpuLoad;
         }
 
@@ -600,8 +607,12 @@ public static class HomeDashboardReader
                     var util = Convert.ToDouble(item.UtilizationPercentage);
                     if (util < 0 || util > 100) continue;
                     bestAny = Math.Max(bestAny, util);
+                    // engtype_3D / engtype_3Dnode cover NVIDIA + AMD on modern Windows counters
                     if (!string.IsNullOrEmpty(name) &&
-                        name.Contains("engtype_3D", StringComparison.OrdinalIgnoreCase))
+                        (name.Contains("engtype_3D", StringComparison.OrdinalIgnoreCase) ||
+                         (name.Contains("3D", StringComparison.OrdinalIgnoreCase) &&
+                          !name.Contains("Copy", StringComparison.OrdinalIgnoreCase) &&
+                          !name.Contains("Video", StringComparison.OrdinalIgnoreCase))))
                     {
                         sum3d += util;
                         any3d = true;
@@ -610,6 +621,7 @@ public static class HomeDashboardReader
                 catch { }
             }
 
+            // Cap: multi-engine sum can exceed 100 on multi-GPU; take max(sum3d, bestAny) clamped
             double best = any3d ? Math.Min(100, sum3d) : bestAny;
             if (best < 0)
             {
@@ -634,6 +646,81 @@ public static class HomeDashboardReader
         {
             return _cachedGpuLoad;
         }
+    }
+
+    /// <summary>
+    /// AMD GPU load via amd-smi (ROCm / Adrenalin toolkit) when on PATH.
+    /// Falls back silently — WMI counters cover most AMD desktop installs.
+    /// </summary>
+    private static double? TryReadAmdSmiGpuLoad()
+    {
+        foreach (var (file, args) in new[]
+                 {
+                     ("amd-smi", "metric --usage --json"),
+                     ("rocm-smi", "--showuse --csv"),
+                 })
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = file,
+                    Arguments = args,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using var p = Process.Start(psi);
+                if (p is null) continue;
+                if (!p.WaitForExit(900))
+                {
+                    try { p.Kill(entireProcessTree: true); } catch { }
+                    continue;
+                }
+                if (p.ExitCode != 0) continue;
+                var text = p.StandardOutput.ReadToEnd();
+                if (string.IsNullOrWhiteSpace(text)) continue;
+
+                // amd-smi JSON: look for "gfx_activity" / "gpu_activity" / "GFX"
+                if (file.StartsWith("amd", StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (var key in new[] { "gfx_activity", "gpu_activity", "GFX", "gpu" })
+                    {
+                        var m = System.Text.RegularExpressions.Regex.Match(
+                            text, "\"" + key + "\"\\s*:\\s*(\\d+(?:\\.\\d+)?)",
+                            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        if (m.Success &&
+                            double.TryParse(m.Groups[1].Value,
+                                System.Globalization.NumberStyles.Float,
+                                System.Globalization.CultureInfo.InvariantCulture, out var v) &&
+                            v is >= 0 and <= 100)
+                            return Math.Round(v, 0);
+                    }
+                }
+
+                // rocm-smi CSV / text: last numeric percent-looking token on a GPU line
+                foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (line.Contains("GPU", StringComparison.OrdinalIgnoreCase) ||
+                        line.Contains('%') ||
+                        char.IsDigit(line[0]))
+                    {
+                        var nums = System.Text.RegularExpressions.Regex.Matches(line, @"\d+(?:\.\d+)?");
+                        foreach (System.Text.RegularExpressions.Match m in nums)
+                        {
+                            if (double.TryParse(m.Value,
+                                    System.Globalization.NumberStyles.Float,
+                                    System.Globalization.CultureInfo.InvariantCulture, out var v) &&
+                                v is >= 0 and <= 100)
+                                return Math.Round(v, 0);
+                        }
+                    }
+                }
+            }
+            catch { /* tool missing */ }
+        }
+        return null;
     }
 
     private static double? TryReadNvidiaSmiGpuLoad()
@@ -695,67 +782,283 @@ public static class HomeDashboardReader
         return name;
     }
 
+    /// <summary>
+    /// Pick the primary gaming GPU name for the home strip.
+    /// Sources: Win32_VideoController (best AdapterRAM + discrete score) then display-class registry.
+    /// NVIDIA apply state is only used as a label polish when live hardware is actually NVIDIA —
+    /// never hides an AMD / Intel dGPU on multi-adapter or AMD-only machines.
+    /// </summary>
     private static string? TryReadPrimaryGpuName()
     {
-        // Prefer last verified NVIDIA apply identity when present.
-        try
-        {
-            var nv = TryReadNvidiaPath();
-            if (!string.IsNullOrWhiteSpace(nv?.GpuName))
-                return CompactGpuName(nv!.GpuName!);
-            if (!string.IsNullOrWhiteSpace(nv?.Series))
-                return CompactGpuName(nv!.Series!);
-        }
-        catch { /* fall through */ }
+        var candidates = new List<(string Name, long RamBytes, int Score)>(8);
 
-        // Enumerate display adapter class keys (0000, 0001, …).
+        foreach (var (name, ram) in EnumerateWmiVideoControllers())
+        {
+            if (IsSkippedGpuAdapter(name)) continue;
+            var compact = CompactGpuName(name);
+            if (string.IsNullOrWhiteSpace(compact)) continue;
+            candidates.Add((compact, ram, ScoreGpuCandidate(compact, ram)));
+        }
+
+        foreach (var (name, ram) in EnumerateRegistryDisplayAdapters())
+        {
+            if (IsSkippedGpuAdapter(name)) continue;
+            var compact = CompactGpuName(name);
+            if (string.IsNullOrWhiteSpace(compact)) continue;
+            // Avoid exact name duplicates (WMI + registry often match).
+            if (candidates.Any(c => c.Name.Equals(compact, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            candidates.Add((compact, ram, ScoreGpuCandidate(compact, ram)));
+        }
+
+        if (candidates.Count == 0) return null;
+
+        // Prefer discrete NVIDIA / AMD / Arc over iGPU (UHD / Iris / "Radeon Graphics").
+        var best = candidates
+            .OrderByDescending(c => c.Score)
+            .ThenByDescending(c => c.RamBytes)
+            .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+            .First();
+
+        // Optional: if NVIDIA profile was applied on this PC, prefer its polished name
+        // only when live hardware already looks NVIDIA.
         try
         {
-            const string classPath =
-                @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+            if (IsNvidiaGpuName(best.Name))
+            {
+                var nv = TryReadNvidiaPath();
+                if (!string.IsNullOrWhiteSpace(nv?.GpuName) && IsNvidiaGpuName(nv.GpuName!))
+                    return CompactGpuName(nv.GpuName!);
+                if (!string.IsNullOrWhiteSpace(nv?.Series) && IsNvidiaGpuName(nv.Series!))
+                    return CompactGpuName(nv.Series!);
+            }
+        }
+        catch { /* keep WMI/registry pick */ }
+
+        return best.Name;
+    }
+
+    private static List<(string Name, long RamBytes)> EnumerateWmiVideoControllers()
+    {
+        var list = new List<(string, long)>(4);
+        if (!OperatingSystem.IsWindows()) return list;
+        try
+        {
+            var t = Type.GetTypeFromProgID("WbemScripting.SWbemLocator");
+            if (t is null) return list;
+            dynamic locator = Activator.CreateInstance(t)!;
+            dynamic services = locator.ConnectServer(".", "root\\cimv2");
+            dynamic items = services.ExecQuery(
+                "SELECT Name, AdapterRAM FROM Win32_VideoController");
+            foreach (dynamic item in items)
+            {
+                try
+                {
+                    var name = item.Name?.ToString() as string;
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    long ram = 0;
+                    try
+                    {
+                        // AdapterRAM is often UInt32-capped for >4GB cards — still useful ranking signal.
+                        var raw = item.AdapterRAM;
+                        if (raw is not null)
+                            ram = Convert.ToInt64(raw);
+                    }
+                    catch { ram = 0; }
+                    list.Add((name.Trim(), Math.Max(0, ram)));
+                }
+                catch { }
+            }
+        }
+        catch { }
+        return list;
+    }
+
+    private static List<(string Name, long RamBytes)> EnumerateRegistryDisplayAdapters()
+    {
+        var list = new List<(string, long)>(4);
+        const string classPath =
+            @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+        try
+        {
             using var root = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(classPath);
-            if (root is null) return null;
-            string? best = null;
+            if (root is null) return list;
             foreach (var sub in root.GetSubKeyNames())
             {
                 if (sub.Length != 4 || !char.IsDigit(sub[0])) continue;
-                using var key = root.OpenSubKey(sub);
-                var desc = key?.GetValue("DriverDesc") as string;
-                if (string.IsNullOrWhiteSpace(desc)) continue;
-                // Skip Microsoft Basic / remote display adapters.
-                if (desc.Contains("Microsoft", StringComparison.OrdinalIgnoreCase) &&
-                    !desc.Contains("Xbox", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                if (desc.Contains("Remote", StringComparison.OrdinalIgnoreCase)) continue;
-                // Prefer discrete NVIDIA/AMD names over generic.
-                if (desc.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
-                    desc.Contains("AMD", StringComparison.OrdinalIgnoreCase) ||
-                    desc.Contains("Radeon", StringComparison.OrdinalIgnoreCase) ||
-                    desc.Contains("GeForce", StringComparison.OrdinalIgnoreCase) ||
-                    desc.Contains("RTX", StringComparison.OrdinalIgnoreCase) ||
-                    desc.Contains("RX ", StringComparison.OrdinalIgnoreCase))
-                    return CompactGpuName(desc);
-                best ??= CompactGpuName(desc);
+                try
+                {
+                    using var key = root.OpenSubKey(sub);
+                    if (key is null) continue;
+                    var desc = key.GetValue("DriverDesc") as string
+                               ?? key.GetValue("HardwareInformation.AdapterString") as string;
+                    if (string.IsNullOrWhiteSpace(desc)) continue;
+                    long ram = 0;
+                    try
+                    {
+                        var mem = key.GetValue("HardwareInformation.MemorySize");
+                        if (mem is long l) ram = l;
+                        else if (mem is int i) ram = i;
+                        else if (mem is byte[] b && b.Length >= 4)
+                            ram = BitConverter.ToUInt32(b, 0);
+                    }
+                    catch { ram = 0; }
+                    list.Add((desc.Trim(), Math.Max(0, ram)));
+                }
+                catch { }
             }
-            return best;
         }
-        catch
-        {
-            return null;
-        }
+        catch { }
+        return list;
+    }
+
+    private static bool IsSkippedGpuAdapter(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return true;
+        if (name.Contains("Microsoft Basic", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.Contains("Remote Desktop", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.Contains("Virtual", StringComparison.OrdinalIgnoreCase) &&
+            !name.Contains("Radeon", StringComparison.OrdinalIgnoreCase) &&
+            !name.Contains("GeForce", StringComparison.OrdinalIgnoreCase) &&
+            !name.Contains("Arc", StringComparison.OrdinalIgnoreCase) &&
+            !name.Contains("Intel", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (name.Contains("Parsec", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.Contains("Citrix", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.Contains("VMware", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.Contains("VirtualBox", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.Contains("Hyper-V", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static bool IsNvidiaGpuName(string name) =>
+        name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("GeForce", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("RTX ", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("GTX ", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("Quadro", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAmdGpuName(string name) =>
+        name.Contains("AMD", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("Radeon", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("ATI ", StringComparison.OrdinalIgnoreCase) ||
+        System.Text.RegularExpressions.Regex.IsMatch(name, @"(?i)\bRX\s?\d{3,4}\b") ||
+        System.Text.RegularExpressions.Regex.IsMatch(name, @"(?i)\bR[579]\s?\d{3}\b");
+
+    private static bool IsIntelGpuName(string name) =>
+        name.Contains("Intel", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("Arc", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("Iris", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("UHD Graphics", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("HD Graphics", StringComparison.OrdinalIgnoreCase) ||
+        System.Text.RegularExpressions.Regex.IsMatch(name, @"(?i)\bArc\s+[AB]?\d{3,4}\b");
+
+    /// <summary>Desktop/laptop Arc dGPU (A770, B580…), not "Intel Arc Graphics" iGPU.</summary>
+    private static bool IsIntelDiscreteGpu(string name)
+    {
+        if (System.Text.RegularExpressions.Regex.IsMatch(name, @"(?i)\bArc\s+(A|B)\d{3,4}\b"))
+            return true;
+        if (name.Contains("Arc A", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Arc B", StringComparison.OrdinalIgnoreCase))
+            return true;
+        // Bare "Arc 770" style without A/B prefix
+        if (System.Text.RegularExpressions.Regex.IsMatch(name, @"(?i)\bArc\s+\d{3,4}\b"))
+            return true;
+        // "Intel Arc" without "Graphics" suffix often means discrete branding leftovers
+        if (name.Contains("Arc", StringComparison.OrdinalIgnoreCase) &&
+            !name.Contains("Graphics", StringComparison.OrdinalIgnoreCase) &&
+            !name.Contains("Iris", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
     }
 
     /// <summary>
-    /// Keep product family (GeForce / Radeon) so the UI reads "GeForce RTX 3070",
-    /// not just "RTX 3070". Strip only redundant vendor noise.
+    /// Higher = more likely the gaming dGPU we should show on the home strip.
+    /// NVIDIA GeForce / AMD Radeon RX / Intel Arc beat laptop iGPUs (UHD / Iris / APU).
+    /// </summary>
+    private static int ScoreGpuCandidate(string name, long ramBytes)
+    {
+        var n = name ?? "";
+        var score = 0;
+
+        // Discrete NVIDIA
+        if (IsNvidiaGpuName(n))
+        {
+            score += 200;
+            if (n.Contains("RTX", StringComparison.OrdinalIgnoreCase) ||
+                n.Contains("GTX", StringComparison.OrdinalIgnoreCase) ||
+                n.Contains("GeForce", StringComparison.OrdinalIgnoreCase))
+                score += 40;
+        }
+        // Discrete AMD (RX / R9 / gaming Radeon) vs APU "Radeon Graphics"
+        else if (IsAmdGpuName(n))
+        {
+            score += 180;
+            if (System.Text.RegularExpressions.Regex.IsMatch(n, @"(?i)\bRX\s?\d{3,4}\b") ||
+                n.Contains("XT", StringComparison.OrdinalIgnoreCase) ||
+                n.Contains("XTX", StringComparison.OrdinalIgnoreCase) ||
+                n.Contains("Fury", StringComparison.OrdinalIgnoreCase) ||
+                n.Contains("Vega 56", StringComparison.OrdinalIgnoreCase) ||
+                n.Contains("Vega 64", StringComparison.OrdinalIgnoreCase) ||
+                n.Contains("VII", StringComparison.OrdinalIgnoreCase))
+                score += 50;
+            // APU / laptop iGPU style names score lower so dGPU wins on hybrid systems
+            if (n.Equals("Radeon Graphics", StringComparison.OrdinalIgnoreCase) ||
+                n.Contains("Radeon(TM) Graphics", StringComparison.OrdinalIgnoreCase) ||
+                (n.Contains("Graphics", StringComparison.OrdinalIgnoreCase) &&
+                 !n.Contains("RX", StringComparison.OrdinalIgnoreCase) &&
+                 !System.Text.RegularExpressions.Regex.IsMatch(n, @"(?i)\bR[579]\b")))
+                score -= 80;
+        }
+        // Intel Arc (desktop/laptop dGPU) vs UHD / Iris Xe iGPU
+        else if (IsIntelGpuName(n))
+        {
+            if (IsIntelDiscreteGpu(n))
+            {
+                score += 175;
+                if (System.Text.RegularExpressions.Regex.IsMatch(n, @"(?i)\bArc\s+(A|B)?\d{3,4}\b"))
+                    score += 25;
+            }
+            else if (n.Contains("Iris", StringComparison.OrdinalIgnoreCase) ||
+                     n.Contains("Xe", StringComparison.OrdinalIgnoreCase))
+            {
+                score += 55; // capable iGPU, still below discrete
+            }
+            else
+            {
+                score += 35; // UHD / HD Graphics
+            }
+        }
+        else
+        {
+            score += 20;
+        }
+
+        // VRAM signal (WMI often clamps at ~4GB for large cards — still separates from iGPU)
+        if (ramBytes >= 6L << 30) score += 30;
+        else if (ramBytes >= 3L << 30) score += 20;
+        else if (ramBytes >= 1L << 30) score += 10;
+        else if (ramBytes > 0) score += 2;
+
+        return score;
+    }
+
+    /// <summary>
+    /// Keep product family (GeForce / Radeon / Arc) so the UI reads "GeForce RTX 3070" /
+    /// "Radeon RX 7800 XT" / "Arc A770", not bare vendorless codes.
     /// </summary>
     private static string CompactGpuName(string name)
     {
         name = name
             .Replace("NVIDIA GeForce ", "GeForce ", StringComparison.OrdinalIgnoreCase)
             .Replace("NVIDIA ", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("AMD Radeon(TM) ", "Radeon ", StringComparison.OrdinalIgnoreCase)
             .Replace("AMD Radeon ", "Radeon ", StringComparison.OrdinalIgnoreCase)
             .Replace("AMD ", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("Advanced Micro Devices, Inc. ", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("ATI ", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("Intel(R) ", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("Intel ", "", StringComparison.OrdinalIgnoreCase)
             .Replace("(R)", "", StringComparison.OrdinalIgnoreCase)
             .Replace("(TM)", "", StringComparison.OrdinalIgnoreCase)
             .Replace("  ", " ")
@@ -764,6 +1067,18 @@ public static class HomeDashboardReader
         if (name.StartsWith("RTX ", StringComparison.OrdinalIgnoreCase) ||
             name.StartsWith("GTX ", StringComparison.OrdinalIgnoreCase))
             name = "GeForce " + name;
+        // Prefer "Radeon RX 7800 XT" over bare "RX 7800 XT"
+        if (System.Text.RegularExpressions.Regex.IsMatch(name, @"(?i)^RX\s?\d") &&
+            !name.Contains("Radeon", StringComparison.OrdinalIgnoreCase))
+            name = "Radeon " + name;
+        // Prefer "Arc A770" / "Arc B580" family when driver says bare model or "Intel Arc ..."
+        if (System.Text.RegularExpressions.Regex.IsMatch(name, @"(?i)^A\d{3,4}\b") &&
+            !name.Contains("Arc", StringComparison.OrdinalIgnoreCase) &&
+            !name.Contains("Radeon", StringComparison.OrdinalIgnoreCase) &&
+            !name.Contains("GeForce", StringComparison.OrdinalIgnoreCase))
+            name = "Arc " + name;
+        if (name.StartsWith("Arc Graphics", StringComparison.OrdinalIgnoreCase))
+            name = "Arc Graphics";
         if (name.Length > 40) name = name[..37].TrimEnd() + "…";
         return name;
     }

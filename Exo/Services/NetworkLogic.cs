@@ -105,7 +105,8 @@ public static partial class NetworkLogic
             InterruptMod: bulk ? "1" : "0",
             FlowControl: bulk ? "3" : "0",
             IdleRestrict: bulk ? "0" : "1",
-            NagleOff: true);
+            // Nagle left adaptive — never force ACK/NoDelay pins (smoke + community safety).
+            NagleOff: false);
     }
 
     /// <summary>

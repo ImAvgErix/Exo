@@ -46,18 +46,12 @@
 | QoS NonBestEffortLimit | 0 | 0 | Real reserve removal |
 | Games MMCSS | High / GPU 8 | same | Real when apps use MMCSS |
 | Dynamic ports | netsh full range | same | Modern API |
-| powercfg wireless | Max Performance | Max Performance | Stops radio power save |
-| powercfg PCIe ASPM | Off | Off | Link state power stalls |
-| powercfg USB sel-suspend (AC) | Off | Off | USB NIC dongles |
-| TCP timestamps | disabled | disabled | 12-byte header saving, documented netsh |
-| TCP Fast Open (+fallback) | enabled | enabled | RFC 7413, Win10+ |
-| pacingprofile | **off** | untouched | Removes send pacing delay (latency) |
-| HyStart | **disabled** | untouched | Avoids slow-start ramp stalls (latency) |
-| UDP URO | **disabled** (24H2+ only, else skip-with-reason) | untouched | Coalescing adds latency; build-gated ≥ 26100 |
-| ECN capability | **disabled** | **enabled** | AQM marks help throughput, spare marks hurt latency |
-| InitialRtoMs / MinRtoMs | **1000 / 300** | untouched | Faster retransmit on loss (latency) |
-| MaxSynRetransmissions | 2 | 2 | Faster connect failure |
-| NonSackRttResiliency | Disabled | Disabled | Default-off resiliency stays off |
+| powercfg wireless | Max Performance | Max Performance | Stops radio power save (AC+DC; was snapshot-only bug) |
+| powercfg PCIe ASPM | Off | Off | Link state power stalls (AC+DC) |
+| powercfg USB sel-suspend | Off AC (+DC laptop) | same | USB NIC dongles |
+| wlansvc | Start if stopped | same | netsh/band detect needs AutoConfig |
+| TCP timestamps / Fast Open / pacing / HyStart / URO / ECN / RTO | **Windows adaptive (not forced)** | same | Forced knobs removed — community safety + smoke gates |
+| MaxSynRetransmissions / NonSackRttResiliency | Windows default | same | Not forced by Exo |
 | DNS ServiceProvider priorities | defaults 499/500/2000/2001 | same | 4/5/6/7 retired as folklore (v3.0.11): measured DNS 100ms → 1s+ |
 | RSS BaseProcessorNumber | **2** on Ethernet when ≥ 4 logical CPUs | same | Keeps NIC interrupts off core 0 |
 | IPv4 fast path | prefixpolicy `::ffff:0:0/96` 55 4 | same | Documented precedence, replaces old "IPv6 metric = IPv4+20" hack |

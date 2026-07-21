@@ -199,6 +199,18 @@ Expect("eth DMA coalescing off", latScript.Contains("DMACoalescing", StringCompa
     || latScript.Contains("DMA Coalescing", StringComparison.OrdinalIgnoreCase));
 Expect("wifi transmit power", latScript.Contains("Transmit Power", StringComparison.OrdinalIgnoreCase));
 Expect("wifi MU-MIMO", latScript.Contains("MU-MIMO", StringComparison.OrdinalIgnoreCase));
+Expect("wifi powercfg max performance applied (not skip-only)",
+    latScript.Contains("12bbebe6-58d6-4636-95bb-3217ef867c1a", StringComparison.OrdinalIgnoreCase) &&
+    latScript.Contains("setacvalueindex", StringComparison.OrdinalIgnoreCase) &&
+    latScript.Contains("wifi-max-perf", StringComparison.OrdinalIgnoreCase) &&
+    !latScript.Contains("Report 'power-policy' 'skip' 'AC/DC power plans retained'", StringComparison.Ordinal));
+Expect("wifi-tune report step present", latScript.Contains("wifi-tune", StringComparison.OrdinalIgnoreCase));
+Expect("wlansvc start before band probe", latScript.Contains("wlansvc", StringComparison.OrdinalIgnoreCase));
+Expect("wifi-only eth-metrics is skip not fail",
+    latScript.Contains("no ethernet adapter (wifi-only PC)", StringComparison.OrdinalIgnoreCase));
+Expect("wifi-only restores AutomaticMetric",
+    latScript.Contains("wifi-only path", StringComparison.OrdinalIgnoreCase) &&
+    latScript.Contains("AutomaticMetric Enabled", StringComparison.OrdinalIgnoreCase));
 Expect("NetBIOS is not changed by apply",
     !latScript.Contains("Set-Dword $nb 'NetbiosOptions'", StringComparison.OrdinalIgnoreCase) &&
     !latScript.Contains("Set-ItemProperty -LiteralPath $nb", StringComparison.OrdinalIgnoreCase));

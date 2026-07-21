@@ -202,8 +202,13 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
     }
   }
 
+  // Sit under the shell header (z-70) so Settings gear / min / close always receive clicks.
+  // Full-screen overlay used to cover the gear — toggle felt broken ("settings bug again").
   return (
-    <div className="pointer-events-none absolute inset-0 z-50" aria-hidden={false}>
+    <div
+      className="pointer-events-none absolute inset-x-0 bottom-0 top-[58px] z-50"
+      aria-hidden={false}
+    >
       <button
         type="button"
         aria-label="Close settings"
@@ -216,13 +221,13 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
         }}
       />
 
-      {/* Main settings sheet */}
+      {/* Main settings sheet — top: 0 is already below header (parent top 58) */}
       {!changelogOpen && (
         <div
           role="dialog"
           aria-label="Settings"
           className="glass specular pointer-events-auto absolute overflow-hidden rounded-2xl"
-          style={{ top: 58, left: 12, width: 304 }}
+          style={{ top: 8, left: 12, width: 304 }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex flex-col gap-3 p-4">
@@ -358,8 +363,8 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
         <div
           role="dialog"
           aria-label="Changelog"
-          className="glass specular pointer-events-auto absolute flex max-h-[min(520px,calc(100%-80px))] w-[min(360px,calc(100%-24px))] flex-col overflow-hidden rounded-2xl"
-          style={{ top: 58, left: 12 }}
+          className="glass specular pointer-events-auto absolute flex max-h-[min(520px,calc(100%-24px))] w-[min(360px,calc(100%-24px))] flex-col overflow-hidden rounded-2xl"
+          style={{ top: 8, left: 12 }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-glass-border px-4">

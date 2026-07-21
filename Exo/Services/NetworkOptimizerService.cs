@@ -1107,11 +1107,11 @@ public sealed class NetworkOptimizerService
         {
             mediaProfile = await DetectMediaProfileAsync(ct).ConfigureAwait(false);
             features.Add(Row("Path policy", mediaProfile.PolicyLine, true));
+            var presetApplied = LoadSavedPreset() is NetworkPreset.LowestLatency
+                or NetworkPreset.HighestThroughput;
             // Adapter Properties checkboxes (Ethernet Properties → Networking)
             if (mediaProfile.EthernetAvailable || mediaProfile.WifiAvailable)
             {
-                var presetApplied = LoadSavedPreset() is NetworkPreset.LowestLatency
-                    or NetworkPreset.HighestThroughput;
                 // Apply only enables QoS+IPv4+IPv6 - never forces Client/LLDP off (fail-closed).
                 var bindStatus = mediaProfile.AdapterBindingsOk
                     ? "Applied (QoS + IPv4/IPv6 on)"
@@ -1157,7 +1157,31 @@ public sealed class NetworkOptimizerService
                     bandDetail += $" - {mediaProfile.ConnectedRadioHint}";
                 if (mediaProfile.CurrentBandSetting is not ("-" or ""))
                     bandDetail += $" - set: {mediaProfile.CurrentBandSetting}";
-                features.Add(Row("Wi‑Fi capability", bandDetail, true));
+                // After apply: 2.4-only / No Preference is a miss when target is prefer 5/6.
+                // Missing driver setting stays OK (not every NIC exposes Preferred Band).
+                var bandOk = true;
+                if (presetApplied &&
+                    (mediaProfile.PreferredBandTarget is "5GHz" or "6GHz") &&
+                    mediaProfile.CurrentBandSetting is not ("-" or ""))
+                {
+                    var cur = mediaProfile.CurrentBandSetting;
+                    var noPref = cur.Contains("No Preference", StringComparison.OrdinalIgnoreCase) ||
+                                 cur.Contains("not set", StringComparison.OrdinalIgnoreCase);
+                    var is24Only = cur.Contains("2.4", StringComparison.OrdinalIgnoreCase) &&
+                                   (cur.Contains("only", StringComparison.OrdinalIgnoreCase) ||
+                                    cur.Contains("prefer", StringComparison.OrdinalIgnoreCase));
+                    var wants6 = mediaProfile.PreferredBandTarget == "6GHz";
+                    var onTarget = wants6
+                        ? cur.Contains("6", StringComparison.OrdinalIgnoreCase) &&
+                          !cur.Contains("2.4", StringComparison.OrdinalIgnoreCase)
+                        : (cur.Contains('5', StringComparison.OrdinalIgnoreCase) ||
+                           cur.Contains('6', StringComparison.OrdinalIgnoreCase)) &&
+                          !cur.Contains("2.4", StringComparison.OrdinalIgnoreCase);
+                    if (noPref || is24Only) bandOk = false;
+                    else if (onTarget) bandOk = true;
+                    // else: odd vendor string — leave OK (don't red-flag after apply)
+                }
+                features.Add(Row("Wi‑Fi capability", bandDetail, bandOk));
             }
             if (!string.IsNullOrWhiteSpace(mediaProfile.NicHints) && mediaProfile.NicHints is not "-")
                 features.Add(Row("NIC status", mediaProfile.NicHints, mediaProfile.NicOk));
@@ -1263,6 +1287,14 @@ public sealed class NetworkOptimizerService
             // - NIC status: Flow Control, SelectiveSuspend, InterruptModeration, IdleRestriction
             await File.WriteAllTextAsync(probePs, """
 $ErrorActionPreference = 'SilentlyContinue'
+# Community PCs often have wlansvc stopped → netsh wlan returns nothing and band detect fails.
+try {
+  $wlanSvc = Get-Service -Name 'wlansvc' -EA SilentlyContinue
+  if ($wlanSvc -and $wlanSvc.Status -ne 'Running' -and $wlanSvc.StartType -ne 'Disabled') {
+    Start-Service -Name 'wlansvc' -EA SilentlyContinue
+    Start-Sleep -Milliseconds 400
+  }
+} catch {}
 function IsWifi($a) {
   # Mirrors NetworkLogic.IsWifiAdapter
   $pm = [string]$a.PhysicalMediaType

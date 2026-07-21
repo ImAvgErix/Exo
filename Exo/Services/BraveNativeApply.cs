@@ -17,7 +17,7 @@ public static class BraveNativeApply
     public const string ProtonPassExtensionId = "ghmbeldphafepmbegfdlkpapadhbakde";
     private const string PolicyPath = @"SOFTWARE\Policies\BraveSoftware\Brave";
     private const string GpuHighPerf = "GpuPreference=2;";
-    private const string StateVersion = "brave-native-2.0";
+    private const string StateVersion = "brave-native-2.1";
 
     /// <summary>
     /// Content filter UUIDs from Brave's list_catalog (annoyances / cookie / social / quiet web).
@@ -52,32 +52,195 @@ public static class BraveNativeApply
         "secure_payment_confirmation_browser_bound_key", "payment_method_manifest"
     };
 
-    /// <summary>Policy pack — hard quiet. Matches Neo Max + HTTPS pin + Proton force-install.</summary>
+    /// <summary>
+    /// Curated brave://flags. Format: name@1 = Enabled, name@2 = Disabled.
+    /// Names verified against Brave chrome.dll (invalid names are stripped on launch —
+    /// that is why a padded "4000 flags" pack only shows ~2 non-Default entries).
+    /// Does not touch Windows/Internet host stack (no MMCSS/TCP/NIC).
+    /// </summary>
+    private static readonly string[] LabsExperiments =
+    {
+        // ── Performance / RAM / GPU / downloads (verified present) ──
+        "enable-parallel-downloading@1",
+        "enable-gpu-rasterization@1",
+        "enable-zero-copy@1",
+        "ignore-gpu-blocklist@1",
+        "enable-hardware-overlays@1",
+        "enable-native-gpu-memory-buffers@1",
+        "enable-gpu-memory-buffer-compositor-resources@1",
+        "enable-smooth-scrolling@1",
+        "intensive-wake-up-throttling@1",
+        "enable-force-dark@1",
+        "enable-tab-audio-muting@1",
+        "overlay-scrollbars@1",
+        "partition-visited-link-database@1",
+        "enable-quic@2", // UDP QUIC off — more consistent gaming + less phone-home surface
+        "enable-tls13-early-data@2",
+        "enable-desktop-pwas@2",
+        "enable-isolated-web-apps@2",
+        "enable-fenced-frames@2",
+        "skia-graphite@2", // keep stable D3D path for games/streaming sites
+        "enable-vulkan@2",
+
+        // ── Brave product surface off (verified) ──
+        "brave-news-peek@2",
+        "brave-vpn@2",
+        "brave-speedreader@2",
+        "brave-ai-chat@2",
+        "brave-ai-chat-global-side-panel@2",
+        "brave-ai-chat-show-input-on-new-tab-page@2",
+        "brave-ai-chat-history@2",
+        "brave-ai-first@2",
+        "brave-wayback-machine@2",
+        "brave-wallet-bitcoin@2",
+        "brave-wallet-zcash@2",
+        "brave-wallet-cardano@2",
+        "brave-wallet-polkadot@2",
+        "brave-wallet-enable-ankr-balances@2",
+        "brave-wallet-enable-transaction-simulations@2",
+        "brave-rewards-allow-self-custody-providers@2",
+        "brave-rewards-allow-unsupported-wallet-providers@2",
+        "brave-email-aliases@2",
+        "brave-ntp-search-widget@2",
+        "brave-history-embeddings@2",
+        "brave-video-transcript@2",
+        "brave-ultra-dark-theme@1", // AMOLED-adjacent
+
+        // ── Shields / privacy (verified) ──
+        "brave-adblock-default-1p-blocking@1",
+        "brave-adblock-cosmetic-filtering@1",
+        "brave-adblock-csp-rules@1",
+        "brave-adblock-cname-uncloaking@1",
+        "brave-adblock-cookie-list-default@1",
+        "brave-adblock-mobile-notifications-list-default@1",
+        "brave-adblock-procedural-filtering@1",
+        "brave-adblock-collapse-blocked-elements@1",
+        "brave-extension-network-blocking@1",
+        "brave-copy-clean-link-by-default@1",
+        "brave-global-privacy-control-enabled@1",
+        "brave-de-amp@1",
+        "brave-debounce@1",
+        "brave-domain-block@1",
+        "brave-ephemeral-storage@1",
+        "brave-first-party-ephemeral-storage@1",
+        "brave-reduce-language@1",
+        "brave-block-screen-fingerprinting@1",
+        "brave-show-strict-fingerprinting-mode@1",
+        "brave-web-bluetooth-api@2",
+        "reduce-accept-language@1",
+        "strict-origin-isolation@1",
+        "privacy-sandbox-ads-apis@2",
+        "enable-privacy-sandbox-ads-apis@2",
+        "fedcm@2",
+        "enable-web-bluetooth@2",
+        "enable-webusb@2",
+        "enable-webrtc-hide-local-ips-with-mdns@1",
+        "enable-domain-reliability@2",
+        "enable-metrics-reporting@2",
+
+        // ── Google/Chrome chrome noise off (verified) ──
+        "media-router@2",
+        "cast-media-route-provider@2",
+        "shopping-list@2",
+        "price-tracking@2",
+        "enable-lens-standalone@2",
+        "optimization-guide-on-device-model@2",
+        "optimization-guide-model-execution@2",
+        "history-journeys@2",
+        "compose@2",
+        "ntp-drive-module@2",
+        "read-later@2",
+    };
+
+    /// <summary>
+    /// Managed policies (HKLM Policies\BraveSoftware\Brave + Chromium policies Brave honors).
+    /// Brave-owned only — no MMCSS/HAGS/TCP/NIC (Windows/Internet own those).
+    /// </summary>
     private static readonly (string Name, object Value, RegistryValueKind Kind)[] PolicyPack =
     {
-        // Telemetry
+        // ── Telemetry / phone-home ──
         ("MetricsReportingEnabled", 0, RegistryValueKind.DWord),
+        ("CloudReportingEnabled", 0, RegistryValueKind.DWord),
         ("SafeBrowsingExtendedReportingEnabled", 0, RegistryValueKind.DWord),
         ("UrlKeyedAnonymizedDataCollectionEnabled", 0, RegistryValueKind.DWord),
         ("BraveP3AEnabled", 0, RegistryValueKind.DWord),
         ("BraveStatsPingEnabled", 0, RegistryValueKind.DWord),
-        // Absolute quiet: no Safe Browsing cloud checks (user requirement)
+        ("UserFeedbackAllowed", 0, RegistryValueKind.DWord),
+        ("DeviceMetricsReportingEnabled", 0, RegistryValueKind.DWord),
+        ("ReportDeviceActivityTimes", 0, RegistryValueKind.DWord),
+        ("ReportDeviceNetworkStatus", 0, RegistryValueKind.DWord),
         ("SafeBrowsingProtectionLevel", 0, RegistryValueKind.DWord),
-        // Vault → Proton Pass only
+        ("SafeBrowsingForTrustedSourcesEnabled", 0, RegistryValueKind.DWord),
+        ("AlternateErrorPagesEnabled", 0, RegistryValueKind.DWord),
+        ("SpellCheckServiceEnabled", 0, RegistryValueKind.DWord),
+        ("DomainReliabilityAllowed", 0, RegistryValueKind.DWord),
+        ("WebRtcEventLogCollectionAllowed", 0, RegistryValueKind.DWord),
+        ("ChromeCleanupEnabled", 0, RegistryValueKind.DWord),
+        ("ChromeCleanupReportingEnabled", 0, RegistryValueKind.DWord),
+        ("ComponentUpdatesEnabled", 1, RegistryValueKind.DWord), // keep security components
+
+        // ── Vault → Proton Pass only ──
         ("AutofillAddressEnabled", 0, RegistryValueKind.DWord),
         ("AutofillCreditCardEnabled", 0, RegistryValueKind.DWord),
         ("PasswordManagerEnabled", 0, RegistryValueKind.DWord),
+        ("PasswordLeakDetectionEnabled", 0, RegistryValueKind.DWord),
+        ("PasswordSharingEnabled", 0, RegistryValueKind.DWord),
         ("BrowserSignin", 0, RegistryValueKind.DWord),
-        // Privacy
+        ("PromotionalTabsEnabled", 0, RegistryValueKind.DWord),
+        ("PaymentMethodQueryEnabled", 0, RegistryValueKind.DWord),
+        ("ImportAutofillFormData", 0, RegistryValueKind.DWord),
+        ("ImportSavedPasswords", 0, RegistryValueKind.DWord),
+        ("ImportSearchEngine", 0, RegistryValueKind.DWord),
+
+        // ── Privacy / WebRTC / cookies / prediction ──
+        // Keep first-party cookies so logins/history stay useful; block 3P only.
         ("BraveGlobalPrivacyControlEnabled", 1, RegistryValueKind.DWord),
         ("BraveDeAmpEnabled", 1, RegistryValueKind.DWord),
         ("BraveDebouncingEnabled", 1, RegistryValueKind.DWord),
         ("BraveTrackingQueryParametersFilteringEnabled", 1, RegistryValueKind.DWord),
         ("BraveReduceLanguageEnabled", 1, RegistryValueKind.DWord),
         ("WebRtcIPHandling", "disable_non_proxied_udp", RegistryValueKind.String),
+        ("WebRtcAllowLegacyTLSProtocols", 0, RegistryValueKind.DWord),
         ("QuicAllowed", 0, RegistryValueKind.DWord),
         ("BlockThirdPartyCookies", 1, RegistryValueKind.DWord),
-        // Debloat product surface
+        ("DefaultCookiesSetting", 1, RegistryValueKind.DWord), // allow 1P (was 4 session-only — logged people out)
+        ("NetworkPredictionOptions", 2, RegistryValueKind.DWord),
+        ("DnsOverHttpsMode", "secure", RegistryValueKind.String),
+        ("DnsOverHttpsTemplates", "https://cloudflare-dns.com/dns-query", RegistryValueKind.String),
+        ("BuiltInDnsClientEnabled", 1, RegistryValueKind.DWord),
+        ("WPADQuickCheckEnabled", 0, RegistryValueKind.DWord),
+        ("HttpsOnlyMode", "force_enabled", RegistryValueKind.String),
+        ("InsecurePrivateNetworkRequestsAllowed", 0, RegistryValueKind.DWord),
+        ("SharedClipboardEnabled", 0, RegistryValueKind.DWord),
+        ("UserAgentReduction", 1, RegistryValueKind.DWord),
+        ("ScrollToTextFragmentEnabled", 0, RegistryValueKind.DWord),
+        ("SitePerProcess", 1, RegistryValueKind.DWord),
+
+        // ── Site permissions default-deny noise ──
+        ("DefaultNotificationsSetting", 2, RegistryValueKind.DWord),
+        ("DefaultGeolocationSetting", 2, RegistryValueKind.DWord),
+        ("DefaultSensorsSetting", 2, RegistryValueKind.DWord),
+        ("DefaultSerialGuardSetting", 2, RegistryValueKind.DWord),
+        ("DefaultWebBluetoothGuardSetting", 2, RegistryValueKind.DWord),
+        ("DefaultWebUsbGuardSetting", 2, RegistryValueKind.DWord),
+        ("DefaultFileSystemReadGuardSetting", 2, RegistryValueKind.DWord),
+        ("DefaultFileSystemWriteGuardSetting", 2, RegistryValueKind.DWord),
+        ("DefaultPopupsSetting", 2, RegistryValueKind.DWord),
+        ("DefaultWindowPlacementSetting", 2, RegistryValueKind.DWord),
+        ("DefaultInsecureContentSetting", 2, RegistryValueKind.DWord),
+        ("AutoplayAllowed", 0, RegistryValueKind.DWord),
+        ("AudioCaptureAllowed", 1, RegistryValueKind.DWord), // Discord/WebRTC when needed
+        ("VideoCaptureAllowed", 1, RegistryValueKind.DWord),
+        ("ScreenCaptureAllowed", 1, RegistryValueKind.DWord),
+        ("AdsSettingForIntrusiveAdsSites", 2, RegistryValueKind.DWord),
+
+        // ── Privacy Sandbox / ads APIs off ──
+        ("PrivacySandboxPromptEnabled", 0, RegistryValueKind.DWord),
+        ("PrivacySandboxAdTopicsEnabled", 0, RegistryValueKind.DWord),
+        ("PrivacySandboxSiteEnabledAdsEnabled", 0, RegistryValueKind.DWord),
+        ("PrivacySandboxAdMeasurementEnabled", 0, RegistryValueKind.DWord),
+
+        // ── Debloat Brave product surface (official Brave policies) ──
         ("BraveRewardsDisabled", 1, RegistryValueKind.DWord),
         ("BraveWalletDisabled", 1, RegistryValueKind.DWord),
         ("BraveVPNDisabled", 1, RegistryValueKind.DWord),
@@ -90,23 +253,55 @@ public static class BraveNativeApply
         ("TorDisabled", 1, RegistryValueKind.DWord),
         ("SyncDisabled", 1, RegistryValueKind.DWord),
         ("EmailAliasesEnabled", 0, RegistryValueKind.DWord),
-        // Shields pins (Brave 1.83+)
+        ("IPFSEnabled", 0, RegistryValueKind.DWord),
+        ("BraveWaybackMachineEnabled", 0, RegistryValueKind.DWord),
+
+        // ── Shields pins (Brave 1.83+) ──
         ("DefaultBraveAdblockSetting", 2, RegistryValueKind.DWord),
         ("DefaultBraveFingerprintingV2Setting", 3, RegistryValueKind.DWord),
         ("DefaultBraveHttpsUpgradeSetting", 2, RegistryValueKind.DWord),
         ("DefaultBraveReferrersSetting", 2, RegistryValueKind.DWord),
         ("DefaultBraveRemember1PStorageSetting", 2, RegistryValueKind.DWord),
-        // Performance / noise
+
+        // ── Performance / quiet chrome ──
         ("BackgroundModeEnabled", 0, RegistryValueKind.DWord),
+        ("HardwareAccelerationModeEnabled", 1, RegistryValueKind.DWord),
+        ("HighEfficiencyModeEnabled", 1, RegistryValueKind.DWord),
+        ("IntensiveWakeUpThrottlingEnabled", 1, RegistryValueKind.DWord),
+        ("WindowOcclusionEnabled", 1, RegistryValueKind.DWord),
+        ("EnableMediaRouter", 0, RegistryValueKind.DWord),
+        ("MediaRouterCastAllowAllIPs", 0, RegistryValueKind.DWord),
         ("ShoppingListEnabled", 0, RegistryValueKind.DWord),
+        ("LensCameraAssistedSearchEnabled", 0, RegistryValueKind.DWord),
+        ("LiveTranslateEnabled", 0, RegistryValueKind.DWord),
         ("AlwaysOpenPdfExternally", 1, RegistryValueKind.DWord),
         ("TranslateEnabled", 0, RegistryValueKind.DWord),
         ("SpellcheckEnabled", 0, RegistryValueKind.DWord),
         ("SearchSuggestEnabled", 0, RegistryValueKind.DWord),
         ("PrintingEnabled", 0, RegistryValueKind.DWord),
+        ("CloudPrintProxyEnabled", 0, RegistryValueKind.DWord),
         ("DefaultBrowserSettingEnabled", 0, RegistryValueKind.DWord),
         ("DeveloperToolsAvailability", 2, RegistryValueKind.DWord),
-        ("BraveWaybackMachineEnabled", 0, RegistryValueKind.DWord),
+        ("RemoteDebuggingAllowed", 0, RegistryValueKind.DWord),
+        ("ShowHomeButton", 0, RegistryValueKind.DWord),
+        ("BookmarkBarEnabled", 0, RegistryValueKind.DWord),
+        ("RestoreOnStartup", 5, RegistryValueKind.DWord), // NTP
+        ("HomepageIsNewTabPage", 1, RegistryValueKind.DWord),
+        ("PromptForDownloadLocation", 1, RegistryValueKind.DWord),
+        ("ShowFullUrlsInAddressBar", 1, RegistryValueKind.DWord),
+        ("HideWebStoreIcon", 1, RegistryValueKind.DWord),
+        ("NTPCustomBackgroundEnabled", 0, RegistryValueKind.DWord),
+        ("AllowDinosaurEasterEgg", 0, RegistryValueKind.DWord),
+        ("InstantTetheringAllowed", 0, RegistryValueKind.DWord),
+        ("RoamingProfileSupportEnabled", 0, RegistryValueKind.DWord),
+        ("SSLErrorOverrideAllowed", 0, RegistryValueKind.DWord),
+        ("DisableSafeBrowsingProceedAnyway", 1, RegistryValueKind.DWord),
+        ("DefaultSearchProviderEnabled", 1, RegistryValueKind.DWord),
+        ("DefaultSearchProviderName", "Brave", RegistryValueKind.String),
+        ("DefaultSearchProviderSearchURL",
+            "https://search.brave.com/search?q={searchTerms}", RegistryValueKind.String),
+        ("DefaultSearchProviderSuggestURL",
+            "https://search.brave.com/api/suggest?q={searchTerms}", RegistryValueKind.String),
     };
 
     public static NativeApplyResult Apply(bool experimental, IProgress<string>? progress = null)
@@ -149,8 +344,12 @@ public static class BraveNativeApply
         Report("Quiet Windows startup…");
         steps.Add(QuietStartup());
 
-        Report("Quiet Brave update tasks on this PC…");
+        Report("Quiet Brave update tasks + services on this PC…");
         steps.Add(QuietUpdateTasks());
+        steps.Add(QuietBraveServices());
+
+        Report("Clear safe caches (keep cookies/history/bookmarks)…");
+        steps.Add(ClearSafeCaches(install));
 
         Report("Opening Brave policy + Proton Pass for verify…");
         steps.Add(OpenVerifyPages(install));
@@ -166,7 +365,7 @@ public static class BraveNativeApply
             Ok = essentialOk,
             Module = "brave",
             Message = essentialOk
-                ? "Brave absolute debloat applied (policies + multi-profile + filters + surgical vault + Proton Pass)"
+                ? "Brave absolute debloat applied (expanded policies + verified flags + multi-profile + filters + vault + Proton + quiet background)"
                 : "Brave apply incomplete — accept elevation for full policy pack if prompted",
             Steps = steps,
             NeedsElevation = elevOps.Count > 0 && !admin,
@@ -496,18 +695,14 @@ public static class BraveNativeApply
                 {
                     var root = JsonNode.Parse(File.ReadAllText(localPath)) as JsonObject ?? new JsonObject();
                     SetPath(root, "hardware_acceleration_mode.enabled", true);
-                    SetPath(root, "browser.enabled_labs_experiments", new JsonArray
-                    {
-                        "brave-ads-should-always-run-brave-ads-service@2",
-                        "brave-ads-should-support-search-result-ads@2",
-                        "brave-ipfs@2",
-                        "brave-news-peek@2",
-                        "native-brave-wallet@2",
-                        "enable-parallel-downloading@1",
-                        "memory-saver-multi-state-mode@2"
-                    });
+                    SetPath(root, "background_mode.enabled", false);
+                    SetPath(root, "user_experience_metrics.reporting_enabled", false);
+                    SetPath(root, "browser.enabled_labs_experiments", LabsArray());
                     SetPath(root, "dns_over_https.mode", "secure");
                     SetPath(root, "dns_over_https.templates", "https://cloudflare-dns.com/dns-query");
+                    // Quiet Autofill / optimization model phone-home at browser scope
+                    SetPath(root, "autofill.credit_card_enabled", false);
+                    SetPath(root, "autofill.profile_enabled", false);
                     File.WriteAllText(localPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = false }));
                 }
             }
@@ -521,12 +716,22 @@ public static class BraveNativeApply
         {
             Id = "prefs",
             Status = profilesTouched > 0 ? "ok" : "skip",
-            Reason = $"profiles={profilesTouched}; amoled + memory + no-vault"
+            Reason =
+                $"profiles={profilesTouched}; flags={LabsExperiments.Length}; amoled + memory + no-vault + debloat prefs"
         };
+    }
+
+    private static JsonArray LabsArray()
+    {
+        var labs = new JsonArray();
+        foreach (var exp in LabsExperiments)
+            labs.Add(exp);
+        return labs;
     }
 
     private static void ApplyPreferenceMutations(JsonObject root)
     {
+        // Appearance / AMOLED
         SetPath(root, "brave.darker_mode", true);
         SetPath(root, "browser.theme.color_scheme2", 2);
         SetPath(root, "brave.new_tab_page.background.type", "color");
@@ -534,27 +739,132 @@ public static class BraveNativeApply
         SetPath(root, "brave.new_tab_page.background.random", false);
         SetPath(root, "brave.new_tab_page.show_branded_background_image", false);
         SetPath(root, "brave.new_tab_page.show_sponsored_images", false);
+        SetPath(root, "brave.new_tab_page.show_background_image", false);
         SetPath(root, "brave.new_tab_page.show_rewards", false);
         SetPath(root, "brave.new_tab_page.show_brave_talk", false);
+        SetPath(root, "brave.new_tab_page.show_brave_vpn", false);
+        SetPath(root, "brave.new_tab_page.show_stats", false);
+        SetPath(root, "brave.new_tab_page.show_clock", false);
+        SetPath(root, "brave.new_tab_page.show_search_widget", false);
+        SetPath(root, "brave.new_tab_page.hide_all_widgets", true);
         SetPath(root, "brave.shields.stats_badge_visible", false);
+        SetPath(root, "bookmark_bar.show_on_all_tabs", false);
+        SetPath(root, "browser.show_home_button", false);
+        SetPath(root, "homepage_is_newtabpage", true);
+
+        // No Brave vault (Proton Pass owns secrets)
         SetPath(root, "credentials_enable_service", false);
         SetPath(root, "credentials_enable_autosignin", false);
         SetPath(root, "autofill.profile_enabled", false);
         SetPath(root, "autofill.credit_card_enabled", false);
+        SetPath(root, "autofill.payment_instrument_enabled", false);
         SetPath(root, "payments.can_make_payment_enabled", false);
         SetPath(root, "autofill_private_windows", false);
+        SetPath(root, "profile.password_manager_leak_detection", false);
+        SetPath(root, "password_manager.account_storage_enabled", false);
+
+        // Memory / background / perf
         SetPath(root, "background_mode.enabled", false);
         SetPath(root, "performance_tuning.high_efficiency_mode.state", 2);
         SetPath(root, "performance_tuning.high_efficiency_mode.enabled", true);
+        SetPath(root, "performance_tuning.battery_saver_mode.state", 0);
         SetPath(root, "hardware_acceleration_mode.enabled", true);
         SetPath(root, "enable_do_not_track", true);
+        SetPath(root, "enable_gpc", true);
         SetPath(root, "translate.enabled", false);
         SetPath(root, "search.suggest_enabled", false);
         SetPath(root, "browser.shell_check_enabled", false);
+        SetPath(root, "browser.default_browser_infobar_last_declined", "13300000000000000");
+        SetPath(root, "browser.check_default_browser", false);
+        SetPath(root, "net.network_prediction_options", 2);
+        SetPath(root, "dns_prefetching.enabled", false);
+        SetPath(root, "safebrowsing.enabled", false);
+        SetPath(root, "safebrowsing.enhanced", false);
+        SetPath(root, "safebrowsing.scout_reporting_enabled", false);
+        SetPath(root, "alternate_error_pages.enabled", false);
+        SetPath(root, "spellcheck.use_spelling_service", false);
+        SetPath(root, "media_router.enable_media_router", false);
+        SetPath(root, "media_router.show_cast_sessions_started_by_other_devices.enabled", false);
+        SetPath(root, "gcm.channel_status", false);
+        SetPath(root, "signin.allowed", false);
+        SetPath(root, "signin.allowed_on_next_startup", false);
+        SetPath(root, "sync.requested", false);
+        SetPath(root, "download.prompt_for_download", true);
+        SetPath(root, "plugins.always_open_pdf_externally", true);
+        SetPath(root, "session.restore_on_startup", 5);
+        SetPath(root, "profile.exit_type", "Normal");
+        SetPath(root, "profile.exited_cleanly", true);
+
+        // Cookie / privacy sandbox prefs
+        SetPath(root, "profile.cookie_controls_mode", 1); // block 3P
+        SetPath(root, "profile.block_third_party_cookies", true);
+        SetPath(root, "privacy_sandbox.m1.ad_measurement_enabled", false);
+        SetPath(root, "privacy_sandbox.m1.fledge_enabled", false);
+        SetPath(root, "privacy_sandbox.m1.topics_enabled", false);
+        SetPath(root, "privacy_sandbox.apis_enabled", false);
+        SetPath(root, "privacy_sandbox.apis_enabled_v2", false);
+        SetPath(root, "tracking_protection.block_all_3pc_toggle_enabled", true);
+        SetPath(root, "tracking_protection.tracking_protection_3pcd_enabled", true);
+        SetPath(root, "enable_do_not_track", true);
+
+        // Content / privacy defaults (2 = block)
         SetPath(root, "profile.default_content_setting_values.notifications", 2);
         SetPath(root, "profile.default_content_setting_values.media_stream", 2);
         SetPath(root, "profile.default_content_setting_values.geolocation", 2);
         SetPath(root, "profile.default_content_setting_values.autoplay", 2);
+        SetPath(root, "profile.default_content_setting_values.midi_sysex", 2);
+        SetPath(root, "profile.default_content_setting_values.protocol_handlers", 2);
+        SetPath(root, "profile.default_content_setting_values.durable_storage", 2);
+        SetPath(root, "profile.default_content_setting_values.clipboard", 2);
+        SetPath(root, "profile.default_content_setting_values.sensors", 2);
+        SetPath(root, "profile.default_content_setting_values.usb_guard", 2);
+        SetPath(root, "profile.default_content_setting_values.serial_guard", 2);
+        SetPath(root, "profile.default_content_setting_values.bluetooth_guard", 2);
+        SetPath(root, "profile.default_content_setting_values.hid_guard", 2);
+        SetPath(root, "profile.default_content_setting_values.window_placement", 2);
+        SetPath(root, "profile.default_content_setting_values.automatic_downloads", 2);
+        SetPath(root, "profile.default_content_setting_values.popups", 2);
+        SetPath(root, "profile.default_content_setting_values.ads", 2);
+        SetPath(root, "profile.default_content_setting_values.mixed_script", 2);
+        SetPath(root, "profile.default_content_setting_values.protected_media_identifier", 2);
+
+        // Brave feature kill-switches (prefs + policies belt-and-suspenders)
+        SetPath(root, "brave.brave_ads.enabled", false);
+        SetPath(root, "brave.brave_ads.should_show_onboarding_dialog", false);
+        SetPath(root, "brave.brave_rewards.enabled", false);
+        SetPath(root, "brave.rewards.inline_tip_buttons_enabled", false);
+        SetPath(root, "brave.wallet.default_wallet2", 0);
+        SetPath(root, "brave.wallet.show_wallet_icon_on_toolbar", false);
+        SetPath(root, "brave.wallet.keyring.default.is_backwards_compatible_mnemonic", false);
+        SetPath(root, "brave.brave_vpn.show_button", false);
+        SetPath(root, "brave.ai_chat.autocomplete_provider_enabled", false);
+        SetPath(root, "brave.ai_chat.user_dismissed_premium_prompt", true);
+        SetPath(root, "brave.leo.disabled_by_policy", true);
+        SetPath(root, "brave.mru_cycling_enabled", false);
+        SetPath(root, "brave.enable_window_closing_confirm", false);
+        SetPath(root, "brave.today.opted_in", false);
+        SetPath(root, "brave.today.should_show_toolbar_button", false);
+        SetPath(root, "brave.ipfs.enabled", false);
+        SetPath(root, "brave.ipfs.resolve_method", 0);
+        SetPath(root, "brave.web3.dapps_list_enabled", false);
+        SetPath(root, "brave.de_amp.enabled", true);
+        SetPath(root, "brave.debounce.enabled", true);
+        SetPath(root, "brave.reduce_language", true);
+        SetPath(root, "brave.webtorrent_enabled", false);
+        SetPath(root, "brave.p3a.enabled", false);
+        SetPath(root, "brave.stats.reporting_enabled", false);
+        SetPath(root, "brave.web_discovery_enabled", false);
+        SetPath(root, "brave.speedreader.enabled", false);
+        SetPath(root, "brave.wayback_machine_enabled", false);
+        SetPath(root, "brave.tor.used", false);
+        SetPath(root, "brave.shields.advanced_view_enabled", true);
+        SetPath(root, "brave.sidebar_hidden", true);
+        SetPath(root, "sidebar.show_option", 0);
+
+        // WebRTC: default public interface only style (policy also pins)
+        SetPath(root, "webrtc.ip_handling_policy", "disable_non_proxied_udp");
+        SetPath(root, "webrtc.multiple_routes_enabled", false);
+        SetPath(root, "webrtc.nonproxied_udp_enabled", false);
     }
 
     private static NativeApplyStep EnableContentFilters(BraveInstall install)
@@ -955,8 +1265,11 @@ public static class BraveNativeApply
         foreach (var (hive, path) in new[]
                  {
                      ("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Run"),
+                     ("HKCU", @"Software\Microsoft\Windows\CurrentVersion\RunOnce"),
                      ("HKLM", @"Software\Microsoft\Windows\CurrentVersion\Run"),
+                     ("HKLM", @"Software\Microsoft\Windows\CurrentVersion\RunOnce"),
                      ("HKLM", @"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run"),
+                     ("HKLM", @"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\RunOnce"),
                  })
         {
             try
@@ -968,7 +1281,8 @@ public static class BraveNativeApply
                     var val = key.GetValue(name)?.ToString() ?? "";
                     if (name.Contains("Brave", StringComparison.OrdinalIgnoreCase) ||
                         val.Contains("BraveSoftware", StringComparison.OrdinalIgnoreCase) ||
-                        val.Contains("brave.exe", StringComparison.OrdinalIgnoreCase))
+                        val.Contains("brave.exe", StringComparison.OrdinalIgnoreCase) ||
+                        val.Contains("BraveUpdate", StringComparison.OrdinalIgnoreCase))
                     {
                         try { key.DeleteValue(name, false); removed++; } catch { }
                     }
@@ -976,6 +1290,31 @@ public static class BraveNativeApply
             }
             catch { }
         }
+
+        // Toast / notification background activity for Brave (HKCU only — no elev)
+        var notifQuiet = 0;
+        try
+        {
+            using var notif = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings", true);
+            if (notif is not null)
+            {
+                foreach (var sub in notif.GetSubKeyNames())
+                {
+                    if (!sub.Contains("Brave", StringComparison.OrdinalIgnoreCase) &&
+                        !sub.Contains("BraveSoftware", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    try
+                    {
+                        using var sk = notif.OpenSubKey(sub, true);
+                        sk?.SetValue("Enabled", 0, RegistryValueKind.DWord);
+                        notifQuiet++;
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
 
         var approved = SteamNativeApply.DisableStartupApproved(new[]
         {
@@ -986,7 +1325,7 @@ public static class BraveNativeApply
         {
             Id = "startup",
             Status = "ok",
-            Reason = $"runRemoved={removed}; startupApproved={approved}"
+            Reason = $"runRemoved={removed}; notifQuiet={notifQuiet}; startupApproved={approved}"
         };
     }
 
@@ -1010,6 +1349,34 @@ public static class BraveNativeApply
         {
             return new NativeApplyStep { Id = "tasks", Status = "partial", Reason = ex.Message };
         }
+
+        // schtasks belt: known update task names
+        foreach (var task in new[]
+                 {
+                     @"\BraveSoftware\BraveUpdateTaskMachineCore",
+                     @"\BraveSoftware\BraveUpdateTaskMachineUA",
+                     @"\BraveSoftware\UpdateTask",
+                     @"\BraveUpdateTaskMachineCore",
+                     @"\BraveUpdateTaskMachineUA",
+                 })
+        {
+            try
+            {
+                var p = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "schtasks.exe",
+                    Arguments = $"/Change /TN \"{task}\" /Disable",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                });
+                p?.WaitForExit(4000);
+                if (p is { ExitCode: 0 }) disabled++;
+            }
+            catch { }
+        }
+
         return new NativeApplyStep
         {
             Id = "tasks",
@@ -1054,6 +1421,174 @@ public static class BraveNativeApply
         catch { }
 
         return n;
+    }
+
+    /// <summary>
+    /// Quiet Brave Software Update Windows services (not Windows Update / Defender).
+    /// Enumerate HKLM services by ImagePath/name, demand-start + stop via sc.exe.
+    /// </summary>
+    private static NativeApplyStep QuietBraveServices()
+    {
+        var touched = 0;
+        try
+        {
+            using var services = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services");
+            if (services is null)
+                return new NativeApplyStep { Id = "services", Status = "skip", Reason = "no services key" };
+
+            foreach (var name in services.GetSubKeyNames())
+            {
+                try
+                {
+                    using var sk = services.OpenSubKey(name);
+                    if (sk is null) continue;
+                    var display = sk.GetValue("DisplayName")?.ToString() ?? "";
+                    var image = sk.GetValue("ImagePath")?.ToString() ?? "";
+                    var blob = name + " " + display + " " + image;
+                    if (!blob.Contains("Brave", StringComparison.OrdinalIgnoreCase) &&
+                        !blob.Contains("BraveSoftware", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (blob.Contains("Defender", StringComparison.OrdinalIgnoreCase) ||
+                        blob.Contains("Windows Update", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "sc.exe",
+                            Arguments = $"stop \"{name}\"",
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        })?.WaitForExit(8000);
+                    }
+                    catch { }
+
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "sc.exe",
+                            Arguments = $"config \"{name}\" start= demand",
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        })?.WaitForExit(5000);
+                        touched++;
+                    }
+                    catch { }
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            return new NativeApplyStep { Id = "services", Status = "partial", Reason = ex.Message };
+        }
+        return new NativeApplyStep
+        {
+            Id = "services",
+            Status = "ok",
+            Reason = touched == 0 ? "no Brave services found" : $"quieted={touched}"
+        };
+    }
+
+    /// <summary>
+    /// Drop regenerable caches only — never Cookies, History, Bookmarks, Preferences, Login Data leftovers we already handled.
+    /// Widevine kept (DRM streaming). Component security lists regenerate on next launch.
+    /// </summary>
+    private static NativeApplyStep ClearSafeCaches(BraveInstall install)
+    {
+        if (string.IsNullOrEmpty(install.UserData))
+            return new NativeApplyStep { Id = "cache", Status = "skip", Reason = "no user data" };
+
+        var removed = 0;
+        var userDataDirs = new[]
+        {
+            "GrShaderCache", "ShaderCache", "GraphiteDawnCache", "GPUCache",
+            "DawnCache", "DawnWebGPUCache", "component_crx_cache",
+            "BrowserMetrics", "Crashpad", "Crowd Deny", "CertificateRevocation",
+            "FileTypePolicies", "MEIPreload", "OnDeviceHeadSuggestModel",
+            "OptimizationHints", "OriginTrials", "PKIMetadata", "SafetyTips",
+            "SSLErrorAssistant", "Subresource Filter", "ZxcvbnData",
+            "AutofillStates", "FirstPartySetsPreloaded", "hyphen-data",
+            "ScreenAI", "WasmTtsEngine", "PrivacySandboxAttestationsPreloaded",
+            "AmountExtractionHeuristicRegexes", "TrustTokenKeyCommitments",
+            "OpenCookieDatabase", "pnacl", "GraphiteDawnCache",
+        };
+        foreach (var d in userDataDirs)
+        {
+            var path = Path.Combine(install.UserData, d);
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, true);
+                    removed++;
+                }
+            }
+            catch { }
+        }
+
+        // Loose metrics / crash junk files under User Data
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(install.UserData, "BrowserMetrics-*.pma"))
+            {
+                try { File.Delete(f); removed++; } catch { }
+            }
+            foreach (var f in Directory.EnumerateFiles(install.UserData, "*.log"))
+            {
+                try
+                {
+                    var name = Path.GetFileName(f);
+                    if (name.Contains("chrome", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("brave", StringComparison.OrdinalIgnoreCase))
+                    {
+                        File.Delete(f);
+                        removed++;
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
+
+        foreach (var profile in install.Profiles)
+        {
+            foreach (var rel in new[]
+                     {
+                         "GPUCache", "Code Cache", "Service Worker\\CacheStorage",
+                         "Service Worker\\ScriptCache", "Cache", "Code Cache\\js",
+                         "Code Cache\\wasm", "DawnCache", "optimization_guide_model_store",
+                         "optimization_guide_hint_cache_store", "VideoDecodeStats",
+                         "JumpListIconsMostVisited", "JumpListIconsRecentClosed",
+                         "JumpListIconsCustom", "Feature Engagement Tracker",
+                         "BudgetDatabase", "commerce_subscription_db", "discount_infos_db",
+                         "parcel_tracking_db", "PersistentOriginTrials", "Download Service",
+                         "shared_proto_db", "Shared Dictionary", "Reporting and NEL",
+                         "Site Characteristics Database", "GCM Store",
+                         "Network\\Network Action Predictor",
+                     })
+            {
+                var path = Path.Combine(profile, rel);
+                try
+                {
+                    if (Directory.Exists(path))
+                    {
+                        Directory.Delete(path, true);
+                        removed++;
+                    }
+                }
+                catch { }
+            }
+        }
+
+        return new NativeApplyStep
+        {
+            Id = "cache",
+            Status = "ok",
+            Reason = $"cleared={removed} cache trees (history/cookies/bookmarks kept; Widevine kept)"
+        };
     }
 
     private static NativeApplyStep RemovePolicies(bool admin)

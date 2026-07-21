@@ -1,7 +1,16 @@
+## 3.16.10
+
+- **Home dash GPU**: detect **NVIDIA / AMD Radeon / Intel Arc + UHD/Iris** via WMI + registry; prefer discrete dGPU over iGPU
+- GPU load: nvidia-smi → amd-smi/rocm-smi → Windows engine counters
+- **Internet Wi‑Fi fix**: powercfg Wireless Max Performance (AC+DC) actually applied; PCIe ASPM off; USB SS off; start wlansvc; wifi-only metrics skip
+- Internet: leave TCP algorithms adaptive (no forced timestamps/HyStart/Nagle pins); clear legacy ACK folklore when present
+- **Brave pack 2.1**: ~150 policies + ~80 verified flags; cookie 1P keep; deeper prefs; quiet background
+- Settings gear: Shell header z-index / grid nav overlap fix
+
 ## 3.16.9
 
-- **Brave optimizer** (native): absolute debloat at SlimBrave Neo Max class + more — policies, AMOLED/dark, Memory Saver, no background, **surgical vault wipe** (SQL; keeps search engines), **content filter lists** (cookie/annoyances/social/AI/chat/shorts), **all profiles**, **full prefs snapshot Repair**, **Proton Pass** force-install, GPU high-perf, startup + update-task quiet, opens `brave://policy` + filters + extension for verify
-- Keeps history/bookmarks; closes Brave on Apply; PC-aware multi-channel discover
+- **Brave optimizer** (native): absolute debloat — expanded **managed policies** (Chromium + Brave), curated flags, multi-profile prefs, **content filters**, **surgical vault wipe**, Proton Pass force-install, GPU/startup, **Brave services + update tasks**, **safe cache clear**, full prefs snapshot Repair, post-Apply verify pages
+- Keeps history/bookmarks; closes Brave on Apply; does not touch Windows/Internet host stack
 - **Internet Analyze & Apply** (Web UI) now runs the full connection quality test before apply — home dashboard **Load ↓ / Load ↑ / Loss** fill for every PC (not only idle + DNS)
 - Quality sample is persisted to `network-optimizer.json` so the dash shows it after reopen
 

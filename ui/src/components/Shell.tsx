@@ -17,9 +17,6 @@ const modules: { id: ModuleId; label: string; logo: string }[] = [
   { id: 'epic', label: 'Epic', logo: '/logos/epic.png' },
 ]
 
-/** Fixed side width so center nav never shifts when home appears. */
-const SIDE_W = 'w-[96px]'
-
 export function Shell() {
   const loc = useLocation()
   const nav = useNavigate()
@@ -30,9 +27,14 @@ export function Shell() {
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-page text-text">
       <WelcomePrompt />
-      <div className="shrink-0 px-3 pt-2.5">
-        <header className="glass specular relative z-20 flex h-12 shrink-0 items-center rounded-2xl px-2">
-          <div className={`relative z-10 flex ${SIDE_W} shrink-0 items-center gap-1`}>
+      {/*
+        Header is a 3-column grid so the module rail can never cover Settings / caption.
+        Absolute-centered nav used to steal gear clicks once Brave made the rail wider.
+        z-[70] keeps chrome above SettingsDrawer backdrop so the gear always toggles.
+      */}
+      <div className="relative z-[70] shrink-0 px-3 pt-2.5">
+        <header className="glass specular grid h-12 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 rounded-2xl px-2">
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => setSettingsOpen((v) => !v)}
@@ -69,11 +71,11 @@ export function Shell() {
           </div>
 
           <nav
-            className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center"
+            className="flex min-w-0 items-center justify-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             aria-label="Optimizers"
           >
             <LayoutGroup id="exo-nav">
-              <div className="pointer-events-auto flex items-center gap-0.5">
+              <div className="flex max-w-full items-center gap-0.5">
                 {modules.map((m) => {
                   const active =
                     loc.pathname === `/module/${m.id}` ||
@@ -83,7 +85,7 @@ export function Shell() {
                       key={m.id}
                       to={`/module/${m.id}`}
                       onClick={() => setSettingsOpen(false)}
-                      className={`relative flex items-center gap-1 rounded-xl px-1.5 py-1.5 text-[10px] font-semibold tracking-wide sm:gap-1.5 sm:px-2 sm:text-[11px] ${
+                      className={`relative flex shrink-0 items-center gap-1 rounded-xl px-1.5 py-1.5 text-[10px] font-semibold tracking-wide sm:gap-1.5 sm:px-2 sm:text-[11px] ${
                         active ? 'text-text' : 'text-muted hover:text-secondary'
                       }`}
                       title={m.label}
@@ -114,9 +116,7 @@ export function Shell() {
             </LayoutGroup>
           </nav>
 
-          <div
-            className={`relative z-10 ml-auto flex ${SIDE_W} shrink-0 items-center justify-end gap-1`}
-          >
+          <div className="flex shrink-0 items-center justify-end gap-1">
             <button
               type="button"
               onClick={() => void host.minimize()}

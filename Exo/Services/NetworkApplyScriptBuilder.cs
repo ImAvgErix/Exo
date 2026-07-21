@@ -507,7 +507,9 @@ if (-not $snapshotOk) {
         sb.AppendLine("Report 'host-policy' 'ok' 'network: NonBestEffortLimit=0 (MMCSS/HAGS/Game Mode owned by Windows)'");
         sb.AppendLine("Report 'registry-host' 'ok' 'tcpip + psched only'");
 
-        // --- netsh / Set-NetTCPSetting (competitive path) ---
+        // --- netsh / Set-NetTCPSetting (safe competitive path) ---
+        // Keep Windows adaptive TCP algorithms (timestamps / HyStart / pacing / ECN / URO /
+        // Fast Open / RTO folklore are intentionally NOT forced — smoke + golden path).
         sb.AppendLine("netsh int tcp set global rss=enabled | Out-Null");
         sb.AppendLine("netsh int tcp set global autotuninglevel=" + autotune + " | Out-Null");
         sb.AppendLine("netsh int tcp set global rsc=" + rsc + " | Out-Null");
@@ -515,38 +517,23 @@ if (-not $snapshotOk) {
         sb.AppendLine("try { netsh int tcp set supplemental template=internet congestionprovider=cubic | Out-Null } catch {}");
         sb.AppendLine("try { netsh int tcp set supplemental template=internetcustom congestionprovider=cubic | Out-Null } catch {}");
         sb.AppendLine("try { netsh int ip set global taskoffload=enabled | Out-Null } catch {}");
-        // Competitive TCP knobs used by major gaming optimizers
-        sb.AppendLine("try { netsh int tcp set global timestamps=disabled | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int tcp set global hystart=" + (latency ? "disabled" : "enabled") + " | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int tcp set global pacingprofile=" + (latency ? "off" : "initialwindow") + " | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int tcp set global ecncapability=" + (latency ? "disabled" : "enabled") + " | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int tcp set global fastopen=enabled | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int tcp set global fastopenfallback=enabled | Out-Null } catch {}");
-        sb.AppendLine("try { netsh int udp set global uro=disabled | Out-Null } catch {}");
         sb.AppendLine("Report 'tcp-globals' 'ok'");
-        sb.AppendLine("Report 'tcp-algorithms' 'ok' 'timestamps off; HyStart/pacing/ECN by preset; Fast Open; URO off'");
+        sb.AppendLine("Report 'tcp-algorithms' 'skip' 'Windows adaptive TCP retained (no timestamps/HyStart/pacing/ECN/URO force)'");
         sb.AppendLine("foreach ($pr in @('Internet','InternetCustom')) {");
         sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -CongestionProvider CUBIC -EA SilentlyContinue } catch {}");
         sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -AutoTuningLevelLocal " + autoTuningPs + " -EA SilentlyContinue } catch {}");
         sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -ScalingHeuristics Disabled -EA SilentlyContinue } catch {}");
-        if (latency)
-        {
-            sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -InitialRtoMs 1000 -EA SilentlyContinue } catch {}");
-            sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -MinRtoMs 300 -EA SilentlyContinue } catch {}");
-            sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -MaxSynRetransmissions 2 -EA SilentlyContinue } catch {}");
-            sb.AppendLine("  try { Set-NetTCPSetting -SettingName $pr -NonSackRttResiliency Disabled -EA SilentlyContinue } catch {}");
-        }
         sb.AppendLine("}");
         sb.AppendLine("Report 'tcp-settings' 'ok'");
 
-        // Per-interface Nagle/ACK pins (Nexus/Paragon-class) for lower TCP latency
+        // Per-interface Nagle/ACK folklore: remove if present, never force pins.
         sb.AppendLine("Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces' -EA SilentlyContinue | ForEach-Object {");
         sb.AppendLine("  $p = $_.PSPath");
-        sb.AppendLine("  Set-Dword $p 'TcpAckFrequency' 1");
-        sb.AppendLine("  Set-Dword $p 'TCPNoDelay' 1");
-        sb.AppendLine("  Set-Dword $p 'TcpDelAckTicks' 0");
+        sb.AppendLine("  Remove-Prop $p 'TcpAckFrequency'");
+        sb.AppendLine("  Remove-Prop $p 'TCPNoDelay'");
+        sb.AppendLine("  Remove-Prop $p 'TcpDelAckTicks'");
         sb.AppendLine("}");
-        sb.AppendLine("Report 'nagle-ack' 'ok' 'TcpAckFrequency=1 TCPNoDelay=1 TcpDelAckTicks=0 on all interfaces'");
+        sb.AppendLine("Report 'legacy-ack-pins' 'ok' 'cleared folklore ACK/Nagle pins; Nagle left adaptive'");
 
         // --- Per-adapter: branch Ethernet vs Wi‑Fi (MS: wireless often has no RSS/LSO) ---
         // Apply to all physical NICs so dual-homed PCs are ready on either media.
@@ -625,6 +612,21 @@ if (-not $snapshotOk) {
         sb.AppendLine("  }");
         sb.AppendLine("  return $null");
         sb.AppendLine("}");
+        // Ensure WLAN AutoConfig is running so netsh/driver radio facts work on community PCs
+        // where wlansvc was stopped (detect and band prefer both need it).
+        sb.AppendLine("""
+try {
+  $wlanSvc = Get-Service -Name 'wlansvc' -EA SilentlyContinue
+  if ($wlanSvc -and $wlanSvc.Status -ne 'Running') {
+    if ($wlanSvc.StartType -eq 'Disabled') {
+      Set-Service -Name 'wlansvc' -StartupType Manual -EA SilentlyContinue
+    }
+    Start-Service -Name 'wlansvc' -EA SilentlyContinue
+    Start-Sleep -Milliseconds 600
+    Log '[wlan] started Wireless AutoConfig (wlansvc)'
+  }
+} catch { Log ('[wlan] wlansvc start skipped: ' + $_.Exception.Message) }
+""");
         // Live band capability re-probe once (do not trust only pre-apply C# snapshot)
         sb.AppendLine("$wantBand6Live = $false");
         sb.AppendLine("$drvLive = (netsh wlan show drivers 2>$null | Out-String)");
@@ -634,6 +636,8 @@ if (-not $snapshotOk) {
         sb.AppendLine("$rssBaseCount = 0");
         sb.AppendLine("$rssPolicyCount = 0");
         sb.AppendLine("$packetCoalescingCount = 0");
+        sb.AppendLine("$wifiTuneCount = 0");
+        sb.AppendLine("$wifiBandSet = 0");
         sb.AppendLine("$adapters = @(Get-ExoPhysicalAdapters | Where-Object { $_.Status -eq 'Up' -or $_.Status -eq 'Disconnected' })");
         sb.AppendLine("if ($adapters.Count -eq 0) { $adapters = @(Get-ExoPhysicalAdapters) }");
         sb.AppendLine("foreach ($a in $adapters) {");
@@ -821,29 +825,50 @@ if (-not $snapshotOk) {
         sb.AppendLine("      Log \"[buf] $n $kw => $pick ($BufferStrategy)\"");
         sb.AppendLine("    } catch {}");
         sb.AppendLine("  }");
-        // Wi-Fi: full gaming radio path
+        // Wi-Fi: full gaming radio path (DisplayName + RegistryKeyword + powercfg above)
         sb.AppendLine("  if ($isWifi) {");
+        sb.AppendLine("    $wifiTuneCount++");
         sb.AppendLine("    function Set-WifiOff($adapterName, [string[]]$hints) {");
         sb.AppendLine("      $pp = Find-AdvPropByName $adapterName $hints");
-        sb.AppendLine("      if (-not $pp) { return }");
+        sb.AppendLine("      if (-not $pp) { return $false }");
         sb.AppendLine("      foreach ($off in @('Disabled','Off','Disable','No','Maximum Performance','Highest','0')) {");
         sb.AppendLine("        if (@($pp.ValidDisplayValues).Count -eq 0 -or @($pp.ValidDisplayValues) -contains $off) {");
-        sb.AppendLine("          try { Set-NetAdapterAdvancedProperty -Name $adapterName -DisplayName $pp.DisplayName -DisplayValue $off -NoRestart -EA SilentlyContinue; Log \"[Wi-Fi] $($pp.DisplayName) => $off\"; return } catch {}");
+        sb.AppendLine("          try { Set-NetAdapterAdvancedProperty -Name $adapterName -DisplayName $pp.DisplayName -DisplayValue $off -NoRestart -EA SilentlyContinue; Log \"[Wi-Fi] $($pp.DisplayName) => $off\"; return $true } catch {}");
         sb.AppendLine("        }");
         sb.AppendLine("      }");
+        sb.AppendLine("      return $false");
         sb.AppendLine("    }");
         sb.AppendLine("    function Set-WifiBest($adapterName, [string[]]$hints, [string[]]$prefer) {");
         sb.AppendLine("      $pp = Find-AdvPropByName $adapterName $hints");
-        sb.AppendLine("      if (-not $pp) { return }");
+        sb.AppendLine("      if (-not $pp) { return $false }");
         sb.AppendLine("      $vals = @($pp.ValidDisplayValues)");
         sb.AppendLine("      foreach ($want in $prefer) {");
         sb.AppendLine("        $hit = $vals | Where-Object { $_ -match ('(?i)' + [regex]::Escape($want)) } | Select-Object -First 1");
         sb.AppendLine("        if (-not $hit -and ($vals.Count -eq 0)) { $hit = $want }");
         sb.AppendLine("        if ($hit) {");
-        sb.AppendLine("          try { Set-NetAdapterAdvancedProperty -Name $adapterName -DisplayName $pp.DisplayName -DisplayValue $hit -NoRestart -EA SilentlyContinue; Log \"[Wi-Fi] $($pp.DisplayName) => $hit\"; return } catch {}");
+        sb.AppendLine("          try { Set-NetAdapterAdvancedProperty -Name $adapterName -DisplayName $pp.DisplayName -DisplayValue $hit -NoRestart -EA SilentlyContinue; Log \"[Wi-Fi] $($pp.DisplayName) => $hit\"; return $true } catch {}");
         sb.AppendLine("        }");
         sb.AppendLine("      }");
+        sb.AppendLine("      return $false");
         sb.AppendLine("    }");
+        sb.AppendLine("    function Set-WifiKw($adapterName, [string[]]$keywords, $value) {");
+        sb.AppendLine("      foreach ($kw in $keywords) {");
+        sb.AppendLine("        try {");
+        sb.AppendLine("          $p = Get-NetAdapterAdvancedProperty -Name $adapterName -RegistryKeyword $kw -EA SilentlyContinue");
+        sb.AppendLine("          if (-not $p) { continue }");
+        sb.AppendLine("          Set-NetAdapterAdvancedProperty -Name $adapterName -RegistryKeyword $kw -RegistryValue $value -NoRestart -EA SilentlyContinue");
+        sb.AppendLine("          Log \"[Wi-Fi] keyword $kw => $value\"");
+        sb.AppendLine("          return $true");
+        sb.AppendLine("        } catch {}");
+        sb.AppendLine("      }");
+        sb.AppendLine("      return $false");
+        sb.AppendLine("    }");
+        // Registry-keyword power-save / wake kill (locale-independent; Intel/Realtek/MediaTek/Qualcomm)
+        sb.AppendLine("    foreach ($kw in @(");
+        sb.AppendLine("      'PowerSaveMode','*PowerSaveMode','MIMOPowerSaveMode','uAPSDSupport','*uAPSDSupport',");
+        sb.AppendLine("      '*DeviceSleepOnDisconnect','*PMWiFiRekeyOffload','*WakeOnMagicPacket','*WakeOnPattern',");
+        sb.AppendLine("      'FatChannelIntolerant','*PacketCoalescing','UltraLowPowerMode','ULPMode'");
+        sb.AppendLine("    )) { [void](Set-WifiKw $n @($kw) 0) }");
         // Power / coalescing / BT coexistence - always off for gaming
         sb.AppendLine("    foreach ($hint in @(");
         sb.AppendLine("      'MIMO Power Save','uAPSD support','uAPSD','Power Saving Mode','Power Saving','Power Save Mode','Power Save',");
@@ -851,14 +876,12 @@ if (-not $snapshotOk) {
         sb.AppendLine("      'System Idle Power Saver','Modern Standby WoWLAN','Wake on Magic Packet','Wake on Pattern Match',");
         sb.AppendLine("      'WoWLAN','Wake on WLAN','ARP offload for WoWLAN','NS offload for WoWLAN',");
         sb.AppendLine("      'Bluetooth Collaboration','Bluetooth AMP','Bluetooth Cooperation','Fat Channel Intolerant',");
-        sb.AppendLine("      'Mixed Mode Protection','Throughput Booster','Network Address' )) {");
-        sb.AppendLine("      # Throughput Booster: on for download preset only");
-        sb.AppendLine("      if ($hint -match '(?i)Throughput Booster') { continue }");
-        sb.AppendLine("      if ($hint -match '(?i)Network Address') { continue }");
-        sb.AppendLine("      Set-WifiOff $n @($hint)");
+        sb.AppendLine("      'Mixed Mode Protection','Intel(R) Throughput Enhancement','Throughput Booster' )) {");
+        sb.AppendLine("      if ($hint -match '(?i)Throughput') { continue }");
+        sb.AppendLine("      [void](Set-WifiOff $n @($hint))");
         sb.AppendLine("    }");
         sb.AppendLine("    foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $n -EA SilentlyContinue)) {");
-        sb.AppendLine("      if ($p.RegistryKeyword -match '(?i)power.?save|uapsd|mimo.?power|packet.?coalesc|ulp|IdlePower|WoW|WakeOn|Bluetooth') {");
+        sb.AppendLine("      if ($p.RegistryKeyword -match '(?i)power.?save|uapsd|mimo.?power|packet.?coalesc|ulp|IdlePower|WoW|WakeOn|Bluetooth|DeviceSleep') {");
         sb.AppendLine("        foreach ($off in @('Disabled','Off','0','Maximum Performance')) {");
         sb.AppendLine("          if (@($p.ValidDisplayValues).Count -eq 0 -or @($p.ValidDisplayValues) -contains $off) {");
         sb.AppendLine("            try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $p.DisplayName -DisplayValue $off -NoRestart -EA SilentlyContinue; break } catch {}");
@@ -867,43 +890,57 @@ if (-not $snapshotOk) {
         sb.AppendLine("      }");
         sb.AppendLine("    }");
         // Transmit power highest
-        sb.AppendLine("    Set-WifiBest $n @('Transmit Power','Tx Power','Transmission Power','Output Power') @('Highest','Maximum','100','5','Level 5')");
+        sb.AppendLine("    [void](Set-WifiBest $n @('Transmit Power','Tx Power','Transmission Power','Output Power','Transmit Power Level') @('Highest','Maximum','100','5','Level 5'))");
         // Channel width: best / auto / 160 / 80
-        sb.AppendLine("    Set-WifiBest $n @('Channel Width','Channel Width for 5GHz','Channel Width for 5 GHz','802.11n Channel Width for band 2','802.11n Channel Width for band 1') @('Auto','160','80','40','Best')");
-        sb.AppendLine("    Set-WifiBest $n @('Channel Width for 2.4GHz','Channel Width for 2.4 GHz') @('Auto','20')");
+        sb.AppendLine("    [void](Set-WifiBest $n @('Channel Width','Channel Width for 5GHz','Channel Width for 5 GHz','802.11n Channel Width for band 2','Channel Width for 5.2GHz','VHT Channel Width') @('Auto','160 MHz','160','80 MHz','80','40','Best'))");
+        sb.AppendLine("    [void](Set-WifiBest $n @('Channel Width for 2.4GHz','Channel Width for 2.4 GHz','802.11n Channel Width for band 1') @('Auto','20'))");
         // 802.11 mode - prefer latest
-        sb.AppendLine("    Set-WifiBest $n @('Wireless Mode','802.11a/b/g Wireless Mode','802.11 Mode','Wi-Fi Mode') @('802.11be','802.11ax','802.11ac','6','5','Auto','Default')");
+        sb.AppendLine("    [void](Set-WifiBest $n @('Wireless Mode','802.11a/b/g Wireless Mode','802.11 Mode','Wi-Fi Mode','Wireless Mode Selection') @('802.11be','802.11ax','802.11ac','6','5','Auto','Default'))");
         // MU-MIMO / OFDMA / Beamform - on when present
-        sb.AppendLine("    Set-WifiBest $n @('MU-MIMO','Multi-User MIMO') @('Enabled','On','Enable')");
-        sb.AppendLine("    Set-WifiBest $n @('OFDMA','Orthogonal Frequency Division Multiple Access') @('Enabled','On','Enable','Auto')");
-        sb.AppendLine("    Set-WifiBest $n @('Beamforming','Explicit Beamforming','Implicit Beamforming','Transmit Beamforming') @('Enabled','On','Enable')");
-        sb.AppendLine("    Set-WifiBest $n @('BSS Color','BSS Coloring') @('Enabled','On','Enable','Auto')");
+        sb.AppendLine("    [void](Set-WifiBest $n @('MU-MIMO','Multi-User MIMO') @('Enabled','On','Enable'))");
+        sb.AppendLine("    [void](Set-WifiBest $n @('OFDMA','Orthogonal Frequency Division Multiple Access') @('Enabled','On','Enable','Auto'))");
+        sb.AppendLine("    [void](Set-WifiBest $n @('Beamforming','Explicit Beamforming','Implicit Beamforming','Transmit Beamforming') @('Enabled','On','Enable'))");
+        sb.AppendLine("    [void](Set-WifiBest $n @('BSS Color','BSS Coloring') @('Enabled','On','Enable','Auto'))");
         // Throughput booster only for highest-download preset
         if (!latency)
         {
-            sb.AppendLine("    Set-WifiBest $n @('Throughput Booster') @('Enabled','On','Enable')");
+            sb.AppendLine("    [void](Set-WifiBest $n @('Throughput Booster','Intel(R) Throughput Enhancement') @('Enabled','On','Enable'))");
         }
         else
         {
-            sb.AppendLine("    Set-WifiOff $n @('Throughput Booster')");
+            sb.AppendLine("    [void](Set-WifiOff $n @('Throughput Booster','Intel(R) Throughput Enhancement'))");
         }
-        // Preferred band + roam
+        // Preferred band + roam (DisplayName + keyword)
         sb.AppendLine("    $adapterWants6 = $wantBand6Live");
         sb.AppendLine("    foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $n -EA SilentlyContinue)) {");
         sb.AppendLine("      $blob = \"$($p.DisplayName) $(($p.ValidDisplayValues) -join ' ')\"");
         sb.AppendLine("      if ($blob -match '(?i)6\\s*GHz|6GHz|Wi-?Fi\\s*6E') { $adapterWants6 = $true }");
         sb.AppendLine("    }");
-        sb.AppendLine("    $bandProp = Find-AdvPropByName $n @('Preferred Band','Preferable Band','Band Preference','Preferred Band Selection','Preferred WLAN Band','Wireless Band Preference','Band Selection')");
+        sb.AppendLine("    $bandProp = Find-AdvPropByName $n @('Preferred Band','Preferable Band','Band Preference','Preferred Band Selection','Preferred WLAN Band','Wireless Band Preference','Band Selection','Preferred Band (2.4/5/6 GHz)','802.11a/b/g Preferred Band')");
+        sb.AppendLine("    if (-not $bandProp) {");
+        sb.AppendLine("      $bandProp = @(Get-NetAdapterAdvancedProperty -Name $n -EA SilentlyContinue) | Where-Object {");
+        sb.AppendLine("        $_.RegistryKeyword -match '(?i)preferred.?band|band.?pref|preferable.?band|PreferredBand' -or");
+        sb.AppendLine("        [string]$_.DisplayName -match '(?i)prefer.*band|band.*prefer'");
+        sb.AppendLine("      } | Select-Object -First 1");
+        sb.AppendLine("    }");
         sb.AppendLine("    if ($bandProp) {");
         sb.AppendLine("      $vals = @($bandProp.ValidDisplayValues)");
         sb.AppendLine("      if ($vals.Count -eq 0 -and $bandProp.DisplayValue) { $vals = @($bandProp.DisplayValue) }");
         sb.AppendLine("      $pick = Select-BandDisplayValue -vals $vals -want6 $adapterWants6");
         sb.AppendLine("      if ($pick) {");
-        sb.AppendLine("        try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName $bandProp.DisplayName -DisplayValue $pick -NoRestart -EA SilentlyContinue");
-        sb.AppendLine("          Log \"[Wi-Fi] $($bandProp.DisplayName) => $pick (want6=$adapterWants6)\" } catch {}");
+        sb.AppendLine("        try {");
+        sb.AppendLine("          Set-NetAdapterAdvancedProperty -Name $n -DisplayName $bandProp.DisplayName -DisplayValue $pick -NoRestart -EA SilentlyContinue");
+        sb.AppendLine("          $wifiBandSet++");
+        sb.AppendLine("          Log \"[Wi-Fi] $($bandProp.DisplayName) => $pick (want6=$adapterWants6)\"");
+        sb.AppendLine("        } catch { Log \"[Wi-Fi] band set failed: $($_.Exception.Message)\" }");
         sb.AppendLine("      } else { Log \"[Wi-Fi] no suitable band value in: $($vals -join ' | ')\" }");
         sb.AppendLine("    } else { Log '[Wi-Fi] no Preferred Band-like property on this driver' }");
-        sb.AppendLine("    $roam = Find-AdvPropByName $n @('Roaming Aggressiveness','Roaming Sensitivity','Roam Aggressiveness','Roaming Aggressive')");
+        sb.AppendLine("    $roam = Find-AdvPropByName $n @('Roaming Aggressiveness','Roaming Sensitivity','Roam Aggressiveness','Roaming Aggressive','Roaming Aggressiveness Level')");
+        sb.AppendLine("    if (-not $roam) {");
+        sb.AppendLine("      $roam = @(Get-NetAdapterAdvancedProperty -Name $n -EA SilentlyContinue) | Where-Object {");
+        sb.AppendLine("        $_.RegistryKeyword -match '(?i)roam' -or [string]$_.DisplayName -match '(?i)roam'");
+        sb.AppendLine("      } | Select-Object -First 1");
+        sb.AppendLine("    }");
         sb.AppendLine("    if ($roam) {");
         // Latency: Low roam (stable BSS). Throughput: Medium (balanced handoff).
         if (latency)
@@ -929,6 +966,11 @@ if (-not $snapshotOk) {
         sb.AppendLine("  } catch {}");
         sb.AppendLine("}");
         sb.AppendLine("Report 'adapters' 'ok' ('tuned ' + $adapters.Count + ' physical adapter(s)')");
+        sb.AppendLine("if ($wifiTuneCount -gt 0) {");
+        sb.AppendLine("  Report 'wifi-tune' 'ok' ('wifiAdapters=' + $wifiTuneCount + ' preferredBandSet=' + $wifiBandSet)");
+        sb.AppendLine("} else {");
+        sb.AppendLine("  Report 'wifi-tune' 'skip' 'no Wi-Fi adapter on this PC'");
+        sb.AppendLine("}");
         sb.AppendLine("if ($rssBaseCount -gt 0) { Report 'rss-base' 'ok' ('BaseProcessorNumber=2 on ' + $rssBaseCount + ' adapter(s)') }");
         sb.AppendLine("else { Report 'rss-base' 'skip' 'no ethernet adapter or fewer than 4 logical processors' }");
         sb.AppendLine("if ($rssPolicyCount -gt 0) { Report 'rss-policy' 'ok' ('adaptive RSS placement on ' + $rssPolicyCount + ' adapter(s)') }");
@@ -1157,7 +1199,10 @@ function Set-EthMetrics {
 }
 """);
         sb.AppendLine("$ethReadyOk = Set-EthMetrics");
-        sb.AppendLine("if ($ethReadyOk) { Report 'eth-metrics' 'ok' } else { Report 'eth-metrics' 'fail' 'metric not verified (AutomaticMetric may still be on)' }");
+        sb.AppendLine("$anyEth = @((Get-ExoPhysicalAdapters) | Where-Object { -not (Test-IsWifiAdapter $_) }).Count -gt 0");
+        sb.AppendLine("if ($ethReadyOk) { Report 'eth-metrics' 'ok' }");
+        sb.AppendLine("elseif (-not $anyEth) { Report 'eth-metrics' 'skip' 'no ethernet adapter (wifi-only PC)' }");
+        sb.AppendLine("else { Report 'eth-metrics' 'fail' 'metric not verified (AutomaticMetric may still be on)' }");
         sb.AppendLine("Report 'prefix-policy' 'skip' 'Windows IPv4/IPv6 precedence retained'");
         // Analyze always chooses a healthy public resolver on this exact route.
         // Apply it to active physical adapters and register the matching encrypted
@@ -1213,7 +1258,66 @@ function Set-EthMetrics {
         sb.AppendLine("  Report 'dns-auto' 'ok' ($ExoDnsProvider + ' - ' + $dohStatus)");
         sb.AppendLine("  Log ('[DNS] ' + $ExoDnsProvider + ' selected by Analyze: ' + ($dnsServers -join ', '))");
         sb.AppendLine("} catch { Report 'dns-auto' 'fail' $_.Exception.Message }");
-        sb.AppendLine("Report 'power-policy' 'skip' 'AC/DC power plans retained'");
+        // ============================================================================
+        // POWERCFG — wireless radio + PCIe ASPM + USB sel-suspend.
+        // Was previously only snapshotted then "skip" — radio power-save stayed on,
+        // so Wi-Fi "optimizer" looked applied but did nothing for latency on laptops.
+        // GUIDs: Wireless Power Saving Mode / PCI Express Link State / USB selective suspend.
+        // ============================================================================
+        sb.AppendLine("""
+$wifiPowerOk = 0; $pcieAspmOk = 0; $usbSsOk = 0
+try {
+  $schemeLine = (powercfg /getactivescheme 2>$null | Out-String)
+  $scheme = $null
+  if ($schemeLine -match 'GUID:\s*([0-9a-fA-F\-]{36})') { $scheme = $Matches[1] }
+  if ($scheme) {
+    # Wireless Adapter Settings \ Power Saving Mode = 0 (Maximum Performance) AC+DC
+    $wSub = '19cbb8fa-5279-450e-9fac-8a3d5fedd0c1'
+    $wSet = '12bbebe6-58d6-4636-95bb-3217ef867c1a'
+    $qW = (powercfg /q $scheme $wSub $wSet 2>$null | Out-String)
+    if ($qW -match 'Power Setting GUID') {
+      powercfg /setacvalueindex $scheme $wSub $wSet 0 | Out-Null
+      powercfg /setdcvalueindex $scheme $wSub $wSet 0 | Out-Null
+      $wifiPowerOk = 1
+      Log '[powercfg] Wireless Adapter Power Saving Mode = Maximum Performance (AC+DC)'
+    } else {
+      Log '[powercfg] Wireless Adapter Settings not exposed on this scheme/build'
+    }
+    # PCI Express \ Link State Power Management = 0 (Off) AC+DC
+    $pSub = '501a4d13-42af-4429-9fd1-a8218c268e20'
+    $pSet = 'ee12f906-d277-404b-b6da-e5fa1a576df5'
+    $qP = (powercfg /q $scheme $pSub $pSet 2>$null | Out-String)
+    if ($qP -match 'Power Setting GUID') {
+      powercfg /setacvalueindex $scheme $pSub $pSet 0 | Out-Null
+      powercfg /setdcvalueindex $scheme $pSub $pSet 0 | Out-Null
+      $pcieAspmOk = 1
+      Log '[powercfg] PCI Express Link State Power Management = Off (AC+DC)'
+    }
+    # USB \ USB selective suspend = 0 (Disabled) — AC always; DC when laptop (dongle NICs)
+    $uSub = '2a737441-1930-4402-8d77-b2bebba308a3'
+    $uSet = '48e6b7a6-50f5-4782-a5d4-53bb8f07e226'
+    $qU = (powercfg /q $scheme $uSub $uSet 2>$null | Out-String)
+    if ($qU -match 'Power Setting GUID') {
+      powercfg /setacvalueindex $scheme $uSub $uSet 0 | Out-Null
+      if ($IsLaptopHint -eq 1) { powercfg /setdcvalueindex $scheme $uSub $uSet 0 | Out-Null }
+      $usbSsOk = 1
+      Log ('[powercfg] USB selective suspend Off AC' + $(if ($IsLaptopHint -eq 1) { '+DC (laptop)' } else { '' }))
+    }
+    powercfg /setactive $scheme | Out-Null
+  } else {
+    Log '[powercfg] could not parse active scheme GUID'
+  }
+} catch { Log ('[powercfg] error: ' + $_.Exception.Message) }
+$pcBits = @()
+if ($wifiPowerOk -eq 1) { $pcBits += 'wifi-max-perf' }
+if ($pcieAspmOk -eq 1) { $pcBits += 'pcie-aspm-off' }
+if ($usbSsOk -eq 1) { $pcBits += 'usb-ss-off' }
+if ($pcBits.Count -gt 0) {
+  Report 'power-policy' 'ok' ($pcBits -join ', ')
+} else {
+  Report 'power-policy' 'skip' 'powercfg wireless/ASPM/USB settings not exposed'
+}
+""");
         // ============================================================================
         // ETHERNET-FIRST = METRICS ONLY. Never Disable-NetAdapter on Wi-Fi.
         // Disabling Wi-Fi after a brief Ethernet probe stranded users when the
@@ -1221,13 +1325,23 @@ function Set-EthMetrics {
         // ============================================================================
         sb.AppendLine("if (" + preferEth + " -eq 1) {");
         sb.AppendLine("  $ads = @(Get-ExoPhysicalAdapters)");
-        sb.AppendLine("  $ethAdapters = @($ads | Where-Object { -not (Test-IsWifiAdapter $_) -and $_.Status -eq 'Up' })");
+        sb.AppendLine("  $ethAdapters = @($ads | Where-Object { -not (Test-IsWifiAdapter $_) -and ($_.Status -eq 'Up' -or [string]$_.MediaConnectionState -eq 'Connected') })");
+        sb.AppendLine("  $wifiAdapters = @($ads | Where-Object { Test-IsWifiAdapter $_ })");
         sb.AppendLine("  if ($ethAdapters.Count -eq 0) {");
-        sb.AppendLine("    Report 'wifi-disable' 'skip' 'no up ethernet - wifi metrics unchanged'");
+        sb.AppendLine("    # Wi-Fi only: ensure automatic metric is not stuck at raised 75 from a prior dual-NIC apply");
+        sb.AppendLine("    foreach ($w in $wifiAdapters) {");
+        sb.AppendLine("      try {");
+        sb.AppendLine("        Set-NetIPInterface -InterfaceIndex $w.ifIndex -AddressFamily IPv4 -AutomaticMetric Enabled -EA SilentlyContinue");
+        sb.AppendLine("        Set-NetIPInterface -InterfaceIndex $w.ifIndex -AddressFamily IPv6 -AutomaticMetric Enabled -EA SilentlyContinue");
+        sb.AppendLine("        Log ('[NIC] Wi-Fi only: AutomaticMetric restored for ' + $w.Name)");
+        sb.AppendLine("      } catch {}");
+        sb.AppendLine("    }");
+        sb.AppendLine("    Report 'wifi-disable' 'skip' 'wifi-only path - metrics left automatic (never disable wifi adapters)'");
         sb.AppendLine("  } else {");
-        sb.AppendLine("    foreach ($w in @($ads | Where-Object { Test-IsWifiAdapter $_ })) {");
+        sb.AppendLine("    foreach ($w in $wifiAdapters) {");
         sb.AppendLine("      try {");
         sb.AppendLine("        Set-NetIPInterface -InterfaceIndex $w.ifIndex -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric 75 -EA SilentlyContinue");
+        sb.AppendLine("        Set-NetIPInterface -InterfaceIndex $w.ifIndex -AddressFamily IPv6 -AutomaticMetric Disabled -InterfaceMetric 75 -EA SilentlyContinue");
         sb.AppendLine("        Log ('[NIC] Wi-Fi metric raised (adapter STAYS ENABLED): ' + $w.Name)");
         sb.AppendLine("      } catch {}");
         sb.AppendLine("    }");
