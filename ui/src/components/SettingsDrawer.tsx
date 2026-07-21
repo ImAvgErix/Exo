@@ -2,27 +2,33 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { host, onHostEvent } from '../lib/host'
 
 const FALLBACK_COFFEE = 'https://www.buymeacoffee.com/UhhErix'
-const FALLBACK_CHANGELOG =
-  'https://github.com/ImAvgErix/Exo/blob/main/CHANGELOG.md'
-const FALLBACK_RELEASES = 'https://github.com/ImAvgErix/Exo/releases/latest'
+const FALLBACK_ISSUES = 'https://github.com/ImAvgErix/Exo/issues'
+
+type ChangelogSection = { version: string; bullets: string[] }
 
 /**
- * Compact settings popover. Parent must be the shell root (position: relative).
- * Spacing: 12px stack gaps; equal chip padding; one primary CTA.
+ * Settings popover — glass sheet aligned with exo-ui-craft.
+ * Links: Logs · Changelog (in-app) · Report issue · Buy me a coffee.
  */
 export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [version, setVersion] = useState('—')
   const [checkOnLaunch, setCheckOnLaunch] = useState(false)
   const [coffeeUrl, setCoffeeUrl] = useState(FALLBACK_COFFEE)
-  const [changelogUrl, setChangelogUrl] = useState(FALLBACK_CHANGELOG)
+  const [issuesUrl, setIssuesUrl] = useState(FALLBACK_ISSUES)
   const [line, setLine] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  /** null = hidden; -1 = indeterminate; 0–100 = determinate */
   const [progress, setProgress] = useState<number | null>(null)
   const [phase, setPhase] = useState<string | null>(null)
+  const [changelogOpen, setChangelogOpen] = useState(false)
+  const [changelogLoading, setChangelogLoading] = useState(false)
+  const [changelogSections, setChangelogSections] = useState<ChangelogSection[]>([])
+  const [changelogError, setChangelogError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setChangelogOpen(false)
+      return
+    }
     setLine(null)
     setProgress(null)
     setPhase(null)
@@ -32,7 +38,7 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
         setVersion(s.appVersion)
         setCheckOnLaunch(!!s.checkForUpdatesOnLaunch)
         if (s.buyMeACoffeeUrl) setCoffeeUrl(s.buyMeACoffeeUrl)
-        if (s.changelogUrl) setChangelogUrl(s.changelogUrl)
+        if (s.issuesUrl) setIssuesUrl(s.issuesUrl)
       })
       .catch(() => setVersion('—'))
   }, [open])
@@ -40,11 +46,16 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) onClose()
+      if (e.key !== 'Escape' || busy) return
+      if (changelogOpen) {
+        setChangelogOpen(false)
+        return
+      }
+      onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose, busy])
+  }, [open, onClose, busy, changelogOpen])
 
   useEffect(() => {
     return onHostEvent('settings.updateProgress', (data) => {
@@ -144,11 +155,7 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
     }
   }
 
-  async function openLink(
-    url: string,
-    okLine: string,
-    failFallback = 'Could not open browser.',
-  ) {
+  async function openLink(url: string, okLine: string, failFallback = 'Could not open browser.') {
     if (busy) return
     try {
       const r = await host.openUrl(url)
@@ -168,6 +175,27 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
     }
   }
 
+  async function openChangelog() {
+    if (busy) return
+    setChangelogOpen(true)
+    setChangelogLoading(true)
+    setChangelogError(null)
+    try {
+      const r = await host.getChangelog()
+      if (!r.ok || !r.sections?.length) {
+        setChangelogSections([])
+        setChangelogError(r.message || 'No changelog available.')
+      } else {
+        setChangelogSections(r.sections)
+      }
+    } catch (e) {
+      setChangelogSections([])
+      setChangelogError(e instanceof Error ? e.message : 'Could not load changelog.')
+    } finally {
+      setChangelogLoading(false)
+    }
+  }
+
   return (
     <div className="pointer-events-none absolute inset-0 z-50" aria-hidden={false}>
       <button
@@ -176,172 +204,213 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
         className="pointer-events-auto absolute inset-0 bg-page"
         style={{ opacity: 0.72 }}
         onClick={() => {
-          if (!busy) onClose()
+          if (busy) return
+          if (changelogOpen) setChangelogOpen(false)
+          else onClose()
         }}
       />
 
-      <div
-        role="dialog"
-        aria-label="Settings"
-        className="glass specular pointer-events-auto absolute overflow-hidden rounded-2xl"
-        style={{ top: 58, left: 12, width: 304 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Outer pad 16px; stack gap 12px — exo-ui-craft */}
-        <div className="flex flex-col gap-3 p-4">
-          {/* Header */}
-          <div className="flex h-12 items-center justify-between gap-3">
+      {/* Main settings sheet */}
+      {!changelogOpen && (
+        <div
+          role="dialog"
+          aria-label="Settings"
+          className="glass specular pointer-events-auto absolute overflow-hidden rounded-2xl"
+          style={{ top: 58, left: 12, width: 304 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex flex-col gap-3 p-4">
+            <div className="flex h-12 items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[15px] font-semibold leading-none tracking-tight">Settings</p>
+                <p className="mt-1.5 text-[11px] leading-none text-muted">
+                  Exo <span className="tabular text-secondary">v{version}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!busy) onClose()
+                }}
+                disabled={busy}
+                className="glass-chip flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] text-muted hover:text-text disabled:opacity-40"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <section className="flex flex-col gap-3" aria-label="Updates">
+              <p className="px-0.5 text-[10px] font-semibold tracking-[0.1em] text-muted">
+                UPDATES
+              </p>
+
+              <button
+                type="button"
+                onClick={() => void toggleCheckOnLaunch()}
+                disabled={busy}
+                className="glass-chip flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left disabled:opacity-50"
+              >
+                <span className="min-w-0 flex-1 text-[12px] font-semibold leading-tight">
+                  Check on launch
+                </span>
+                <span
+                  className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                    checkOnLaunch ? 'bg-white' : 'bg-sunken ring-1 ring-glass-border'
+                  }`}
+                  aria-hidden
+                >
+                  <span
+                    className={`absolute top-0.5 h-4 w-4 rounded-full shadow transition-[left] ${
+                      checkOnLaunch ? 'left-4 bg-black' : 'left-0.5 bg-secondary'
+                    }`}
+                  />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void checkUpdates()}
+                className="flex h-11 w-full items-center justify-center rounded-xl bg-white text-[13px] font-semibold text-black shadow-[0_0_20px_rgb(255_255_255/0.08)] disabled:opacity-40"
+              >
+                {busy
+                  ? progress != null && progress >= 0
+                    ? `${phaseLabel ?? 'Updating'} · ${Math.round(progress)}%`
+                    : phaseLabel
+                      ? `${phaseLabel}…`
+                      : 'Working…'
+                  : 'Check for updates'}
+              </button>
+
+              {progress != null && (
+                <div className="glass-chip rounded-xl px-3 py-2.5">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-semibold tracking-[0.08em] text-muted">
+                      {(phaseLabel ?? 'UPDATE').toUpperCase()}
+                    </p>
+                    {progress >= 0 && (
+                      <p className="text-[11px] font-semibold tabular text-text">
+                        {Math.round(progress)}%
+                      </p>
+                    )}
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10">
+                    <div
+                      className={`h-full rounded-full bg-white transition-[width] duration-200 ${
+                        progress < 0 ? 'animate-pulse' : ''
+                      }`}
+                      style={{ width: `${barWidth}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {line && !busy && (
+                <div className="glass-chip max-h-32 overflow-y-auto rounded-xl px-3 py-2.5">
+                  <p className="whitespace-pre-wrap text-[11px] leading-snug text-secondary">
+                    {line}
+                  </p>
+                </div>
+              )}
+            </section>
+
+            <section className="flex flex-col gap-3" aria-label="More">
+              <p className="px-0.5 text-[10px] font-semibold tracking-[0.1em] text-muted">
+                MORE
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <LinkChip disabled={busy} onClick={() => void openLogs()}>
+                  Logs
+                </LinkChip>
+                <LinkChip disabled={busy} onClick={() => void openChangelog()}>
+                  Changelog
+                </LinkChip>
+                <LinkChip
+                  disabled={busy}
+                  onClick={() => void openLink(issuesUrl, 'Opened GitHub issues.')}
+                >
+                  Report issue
+                </LinkChip>
+                <LinkChip
+                  disabled={busy}
+                  onClick={() =>
+                    void openLink(coffeeUrl, 'Thanks — opened Buy Me a Coffee.')
+                  }
+                >
+                  Buy me a coffee
+                </LinkChip>
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
+
+      {/* In-app changelog sheet */}
+      {changelogOpen && (
+        <div
+          role="dialog"
+          aria-label="Changelog"
+          className="glass specular pointer-events-auto absolute flex max-h-[min(520px,calc(100%-80px))] w-[min(360px,calc(100%-24px))] flex-col overflow-hidden rounded-2xl"
+          style={{ top: 58, left: 12 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-glass-border px-4">
             <div className="min-w-0">
-              <p className="text-[15px] font-semibold leading-none tracking-tight">Settings</p>
+              <p className="text-[15px] font-semibold leading-none tracking-tight">Changelog</p>
               <p className="mt-1.5 text-[11px] leading-none text-muted">
-                Exo <span className="tabular text-secondary">v{version}</span>
+                What&apos;s new in Exo
               </p>
             </div>
             <button
               type="button"
-              onClick={() => {
-                if (!busy) onClose()
-              }}
-              disabled={busy}
-              className="glass-chip flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] text-muted hover:text-text disabled:opacity-40"
-              aria-label="Close"
+              onClick={() => setChangelogOpen(false)}
+              className="glass-chip flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] text-muted hover:text-text"
+              aria-label="Back to settings"
             >
               ✕
             </button>
           </div>
 
-          {/* Updates */}
-          <section className="flex flex-col gap-3" aria-label="Updates">
-            <p className="px-0.5 text-[10px] font-semibold tracking-[0.1em] text-muted">
-              UPDATES
-            </p>
-
-            <button
-              type="button"
-              onClick={() => void toggleCheckOnLaunch()}
-              disabled={busy}
-              className="glass-chip flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left disabled:opacity-50"
-            >
-              <span className="min-w-0 flex-1 text-[12px] font-semibold leading-tight">
-                Check on launch
-              </span>
-              <span
-                className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                  checkOnLaunch ? 'bg-white' : 'bg-sunken ring-1 ring-glass-border'
-                }`}
-                aria-hidden
-              >
-                <span
-                  className={`absolute top-0.5 h-4 w-4 rounded-full shadow transition-[left] ${
-                    checkOnLaunch ? 'left-4 bg-black' : 'left-0.5 bg-secondary'
-                  }`}
-                />
-              </span>
-            </button>
-
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void checkUpdates()}
-              className="flex h-11 w-full items-center justify-center rounded-xl bg-white text-[13px] font-semibold text-black shadow-[0_0_20px_rgb(255_255_255/0.08)] disabled:opacity-40"
-            >
-              {busy
-                ? progress != null && progress >= 0
-                  ? `${phaseLabel ?? 'Updating'} · ${Math.round(progress)}%`
-                  : phaseLabel
-                    ? `${phaseLabel}…`
-                    : 'Working…'
-                : 'Check for updates'}
-            </button>
-
-            {progress != null && (
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+            {changelogLoading && (
+              <p className="text-[12px] text-muted">Loading…</p>
+            )}
+            {!changelogLoading && changelogError && (
               <div className="glass-chip rounded-xl px-3 py-2.5">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-[10px] font-semibold tracking-[0.08em] text-muted">
-                    {(phaseLabel ?? 'UPDATE').toUpperCase()}
-                  </p>
-                  {progress >= 0 && (
-                    <p className="text-[11px] font-semibold tabular text-text">
-                      {Math.round(progress)}%
-                    </p>
+                <p className="text-[12px] text-secondary">{changelogError}</p>
+              </div>
+            )}
+            {!changelogLoading &&
+              !changelogError &&
+              changelogSections.map((sec) => (
+                <div key={sec.version} className="mb-4 last:mb-0">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="glass-chip rounded-lg px-2 py-0.5 text-[11px] font-semibold tabular text-text">
+                      v{sec.version}
+                    </span>
+                  </div>
+                  {sec.bullets.length === 0 ? (
+                    <p className="text-[12px] text-muted">No notes for this release.</p>
+                  ) : (
+                    <ul className="flex flex-col gap-1.5">
+                      {sec.bullets.map((b, i) => (
+                        <li
+                          key={`${sec.version}-${i}`}
+                          className="flex gap-2 text-[12px] leading-snug text-secondary"
+                        >
+                          <span className="mt-[6px] h-1 w-1 shrink-0 rounded-full bg-muted" />
+                          <span>{b}</span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10">
-                  <div
-                    className={`h-full rounded-full bg-white transition-[width] duration-200 ${
-                      progress < 0 ? 'animate-pulse' : ''
-                    }`}
-                    style={{ width: `${barWidth}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {line && !busy && (
-              <div className="glass-chip max-h-32 overflow-y-auto rounded-xl px-3 py-2.5">
-                <p className="whitespace-pre-wrap text-[11px] leading-snug text-secondary">
-                  {line}
-                </p>
-              </div>
-            )}
-          </section>
-
-          {/* Links — equal grid, same row height */}
-          <section className="flex flex-col gap-3" aria-label="More">
-            <p className="px-0.5 text-[10px] font-semibold tracking-[0.1em] text-muted">
-              MORE
-            </p>
-
-            <div className="grid grid-cols-2 gap-3">
-              <LinkChip
-                disabled={busy}
-                onClick={() =>
-                  void openLink(changelogUrl, 'Opened changelog.', 'Could not open changelog.')
-                }
-              >
-                Changelog
-              </LinkChip>
-              <LinkChip
-                disabled={busy}
-                onClick={() =>
-                  void openLink(
-                    FALLBACK_RELEASES,
-                    'Opened releases.',
-                    'Could not open releases.',
-                  )
-                }
-              >
-                Releases
-              </LinkChip>
-              <LinkChip disabled={busy} onClick={() => void openLogs()}>
-                Logs
-              </LinkChip>
-              <LinkChip
-                disabled={busy}
-                onClick={() =>
-                  void openLink(
-                    'https://github.com/ImAvgErix/Exo/issues',
-                    'Opened GitHub issues.',
-                  )
-                }
-              >
-                Report issue
-              </LinkChip>
-            </div>
-
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void openLink(coffeeUrl, 'Thanks — opened Buy Me a Coffee.')
-              }
-              className="glass-chip flex h-11 w-full items-center justify-center rounded-xl text-[12px] font-semibold text-secondary hover:text-text hover:brightness-110 disabled:opacity-40"
-            >
-              Buy me a coffee
-            </button>
-          </section>
+              ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

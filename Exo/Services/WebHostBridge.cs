@@ -106,6 +106,7 @@ public sealed class WebHostBridge
                 "shell.close" => CloseWindow(),
                 "settings.get" => BuildSettings(),
                 "settings.set" => SetSettings(paramsEl, hasParams),
+                "settings.getChangelog" => BuildChangelog(),
                 "settings.checkUpdates" => await CheckUpdatesAsync().ConfigureAwait(true),
                 _ => throw new InvalidOperationException($"Unknown method: {method}")
             };
@@ -394,8 +395,6 @@ public sealed class WebHostBridge
 
     /// <summary>Public tip jar — free app; optional support.</summary>
     public const string BuyMeACoffeeUrl = "https://www.buymeacoffee.com/UhhErix";
-    public const string ChangelogUrl = "https://github.com/ImAvgErix/Exo/blob/main/CHANGELOG.md";
-    public const string ReleasesUrl = "https://github.com/ImAvgErix/Exo/releases/latest";
     public const string IssuesUrl = "https://github.com/ImAvgErix/Exo/issues";
 
     private object BuildSettings()
@@ -407,8 +406,6 @@ public sealed class WebHostBridge
             checkForUpdatesOnLaunch = s.CheckForUpdatesOnLaunch,
             welcomePromptSeen = s.WelcomePromptSeen,
             buyMeACoffeeUrl = BuyMeACoffeeUrl,
-            changelogUrl = ChangelogUrl,
-            releasesUrl = ReleasesUrl,
             issuesUrl = IssuesUrl,
             experimentalDefaults = new
             {
@@ -421,6 +418,112 @@ public sealed class WebHostBridge
                 epic = s.ExperimentalEpic
             }
         };
+    }
+
+    /// <summary>
+    /// In-app changelog from bundled CHANGELOG.md (repo root next to app).
+    /// Parsed into version sections for the glass settings sheet.
+    /// </summary>
+    private object BuildChangelog()
+    {
+        try
+        {
+            var path = ResolveChangelogPath();
+            if (path is null || !File.Exists(path))
+            {
+                return new
+                {
+                    ok = false,
+                    message = "Changelog file not found.",
+                    sections = Array.Empty<object>()
+                };
+            }
+
+            var text = File.ReadAllText(path);
+            var sections = ParseChangelogMarkdown(text);
+            return new
+            {
+                ok = true,
+                path,
+                sections
+            };
+        }
+        catch (Exception ex)
+        {
+            return new
+            {
+                ok = false,
+                message = ex.Message,
+                sections = Array.Empty<object>()
+            };
+        }
+    }
+
+    private static string? ResolveChangelogPath()
+    {
+        // Published: next to Exo.exe. Dev: repo root / AppDirectory parents.
+        var candidates = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "CHANGELOG.md"),
+            Path.Combine(PathHelper.AppDirectory, "CHANGELOG.md"),
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "CHANGELOG.md")),
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "CHANGELOG.md")),
+        };
+        foreach (var c in candidates)
+        {
+            try
+            {
+                if (File.Exists(c)) return c;
+            }
+            catch { /* skip */ }
+        }
+        return null;
+    }
+
+    /// <summary>Parse ## version headers + - bullets into UI sections (newest first, cap 40).</summary>
+    internal static List<object> ParseChangelogMarkdown(string text)
+    {
+        var sections = new List<object>();
+        string? version = null;
+        var bullets = new List<string>();
+
+        void Flush()
+        {
+            if (version is null) return;
+            sections.Add(new
+            {
+                version,
+                bullets = bullets.ToArray()
+            });
+            bullets.Clear();
+            version = null;
+        }
+
+        foreach (var raw in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            var line = raw.TrimEnd();
+            if (line.StartsWith("## ", StringComparison.Ordinal))
+            {
+                Flush();
+                version = line[3..].Trim().TrimStart('v', 'V');
+                continue;
+            }
+            if (version is null) continue;
+            var t = line.Trim();
+            if (t.StartsWith("- ", StringComparison.Ordinal) || t.StartsWith("* ", StringComparison.Ordinal))
+            {
+                var b = t[2..].Trim();
+                // Drop markdown bold markers for cleaner in-app text
+                b = b.Replace("**", "", StringComparison.Ordinal);
+                if (b.Length > 0) bullets.Add(b);
+            }
+        }
+        Flush();
+
+        // Newest first already if file is newest-first; cap for UI
+        if (sections.Count > 40)
+            sections = sections.Take(40).ToList();
+        return sections;
     }
 
     private object SetSettings(JsonElement p, bool hasParams)

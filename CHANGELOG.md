@@ -1,3 +1,8 @@
+## 3.16.7
+
+- Settings: **in-app Changelog** sheet (glass UI, version chips + bullets from bundled CHANGELOG.md)
+- Settings links simplified to **Logs · Changelog · Report issue · Buy me a coffee** (no Releases button)
+
 ## 3.16.6
 
 - **PC-aware law** (`docs/PC-AWARE.md`): community multi-PC — discover this machine live, act only on hits, protect must-keep

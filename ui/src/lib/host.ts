@@ -255,8 +255,6 @@ export const host = {
       checkForUpdatesOnLaunch?: boolean
       welcomePromptSeen?: boolean
       buyMeACoffeeUrl?: string
-      changelogUrl?: string
-      releasesUrl?: string
       issuesUrl?: string
       experimentalDefaults: Record<string, boolean>
     }>('settings.get'),
@@ -269,11 +267,15 @@ export const host = {
       checkForUpdatesOnLaunch?: boolean
       welcomePromptSeen?: boolean
       buyMeACoffeeUrl?: string
-      changelogUrl?: string
-      releasesUrl?: string
       issuesUrl?: string
       experimentalDefaults: Record<string, boolean>
     }>('settings.set', patch),
+  getChangelog: () =>
+    call<{
+      ok: boolean
+      message?: string
+      sections: Array<{ version: string; bullets: string[] }>
+    }>('settings.getChangelog'),
   /** Check + download/install when available. Long timeout for multi-minute SFX download. */
   checkUpdates: () =>
     call<{
@@ -367,10 +369,26 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
       checkForUpdatesOnLaunch: true,
       welcomePromptSeen: true,
       buyMeACoffeeUrl: 'https://www.buymeacoffee.com/UhhErix',
-      changelogUrl: 'https://github.com/ImAvgErix/Exo/blob/main/CHANGELOG.md',
-      releasesUrl: 'https://github.com/ImAvgErix/Exo/releases/latest',
       issuesUrl: 'https://github.com/ImAvgErix/Exo/issues',
       experimentalDefaults: {},
+    } as T)
+  }
+  if (method === 'settings.getChangelog') {
+    return Promise.resolve({
+      ok: true,
+      sections: [
+        {
+          version: '3.16.6',
+          bullets: [
+            'PC-aware: discover this machine live before applying',
+            'Task Scheduler inventory per PC',
+          ],
+        },
+        {
+          version: '3.16.3',
+          bullets: ['Welcome tip jar', 'Buy me a coffee in Settings'],
+        },
+      ],
     } as T)
   }
   if (method === 'settings.checkUpdates') {
