@@ -35,6 +35,15 @@ public sealed class AppSettings
     /// </summary>
     public bool WelcomePromptSeen { get; set; }
 
+    /// <summary>Optional xAI API key for Grok 4.5 deep analysis (stored in settings.json).</summary>
+    public string XaiApiKey { get; set; } = string.Empty;
+
+    /// <summary>When true, Home skips deep AI run if optimal-state digest matches.</summary>
+    public bool AiOptimalGateEnabled { get; set; } = true;
+
+    /// <summary>User acknowledged Upscaler Swapper risk (AC titles included — no hard-skip).</summary>
+    public bool UpscalerRiskAcknowledged { get; set; }
+
     public AppSettings Clone() => new()
     {
         CheckForUpdatesOnLaunch = CheckForUpdatesOnLaunch,
@@ -48,6 +57,9 @@ public sealed class AppSettings
         ExperimentalInternet = ExperimentalInternet,
         ExperimentalRiot = ExperimentalRiot,
         ExperimentalEpic = ExperimentalEpic,
-        WelcomePromptSeen = WelcomePromptSeen
+        WelcomePromptSeen = WelcomePromptSeen,
+        XaiApiKey = XaiApiKey,
+        AiOptimalGateEnabled = AiOptimalGateEnabled,
+        UpscalerRiskAcknowledged = UpscalerRiskAcknowledged
     };
 }

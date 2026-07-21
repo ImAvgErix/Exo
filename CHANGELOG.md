@@ -1,3 +1,9 @@
+## 4.0.0
+
+- **Maximize rehaul** on the released **3.16.11** base: WebView2 shell kept; MPO flicker clear (`OverlayTestMode` / `DisableOverlays` deleted, never OverlayTestMode=5) kept
+- **Living Grok AI spine**: `ExoAIAgent` + tool registry + conflict matrix + Home Maximize chip + Settings xAI key; local maximize plan without a key
+- Plan: `docs/EXO-MAXIMIZE-PLAN.md`
+
 ## 3.16.11
 
 - **MPO flicker clear**: Apply deletes `OverlayTestMode` / `DisableOverlays` instead of writing OverlayTestMode=5 (stock DWM overlays)

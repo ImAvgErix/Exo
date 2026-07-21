@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Exo.Helpers;
 using Exo.Models;
+using Exo.Services.Ai;
 using Exo.ViewModels;
 using Microsoft.UI.Dispatching;
 using Microsoft.Web.WebView2.Core;
@@ -108,6 +109,9 @@ public sealed class WebHostBridge
                 "settings.set" => SetSettings(paramsEl, hasParams),
                 "settings.getChangelog" => BuildChangelog(),
                 "settings.checkUpdates" => await CheckUpdatesAsync().ConfigureAwait(true),
+                "ai.getStatus" => BuildAiStatus(),
+                "ai.run" => await RunAiAsync(paramsEl, hasParams).ConfigureAwait(true),
+                "ai.cancel" => CancelAi(),
                 _ => throw new InvalidOperationException($"Unknown method: {method}")
             };
 
@@ -408,6 +412,9 @@ public sealed class WebHostBridge
             welcomePromptSeen = s.WelcomePromptSeen,
             buyMeACoffeeUrl = BuyMeACoffeeUrl,
             issuesUrl = IssuesUrl,
+            hasXaiApiKey = !string.IsNullOrWhiteSpace(s.XaiApiKey),
+            aiOptimalGateEnabled = s.AiOptimalGateEnabled,
+            upscalerRiskAcknowledged = s.UpscalerRiskAcknowledged,
             experimentalDefaults = new
             {
                 discord = s.ExperimentalDiscord,
@@ -419,6 +426,88 @@ public sealed class WebHostBridge
                 epic = s.ExperimentalEpic
             }
         };
+    }
+
+    private object BuildAiStatus()
+    {
+        var gate = _services.AiAgent.GetStatus();
+        var s = _services.Settings.Current;
+        return new
+        {
+            hasOptimal = gate.HasOptimal,
+            isOptimal = gate.IsOptimal,
+            message = gate.Message,
+            driftCount = gate.Drifts.Count,
+            drifts = gate.Drifts.Take(12).Select(d => new
+            {
+                domain = d.Domain,
+                key = d.Key,
+                expected = d.Expected,
+                actual = d.Actual,
+                severity = d.Severity
+            }),
+            hasXaiApiKey = !string.IsNullOrWhiteSpace(s.XaiApiKey),
+            aiOptimalGateEnabled = s.AiOptimalGateEnabled,
+            toolCount = _services.AiTools.CatalogIds().Count,
+            catalogDomains = ExoSystemInventory.CatalogDomains.Count
+        };
+    }
+
+    private async Task<object> RunAiAsync(JsonElement p, bool hasParams)
+    {
+        var force = hasParams && p.ValueKind == JsonValueKind.Object &&
+                    p.TryGetProperty("force", out var f) && f.ValueKind == JsonValueKind.True;
+        var requireGrok = hasParams && p.ValueKind == JsonValueKind.Object &&
+                          p.TryGetProperty("requireGrok", out var g) && g.ValueKind == JsonValueKind.True;
+        var gateEnabled = _services.Settings.Current.AiOptimalGateEnabled;
+        if (!force && gateEnabled)
+        {
+            var status = _services.AiAgent.GetStatus();
+            if (status.IsOptimal)
+            {
+                return new
+                {
+                    success = true,
+                    skippedOptimal = true,
+                    message = status.Message,
+                    results = Array.Empty<object>()
+                };
+            }
+        }
+
+        var ct = _services.BeginAiRun();
+        var progress = new Progress<string>(line =>
+        {
+            PostEvent("ai.progress", new { status = line });
+        });
+
+        var result = await _services.AiAgent
+            .RunAsync(force: force || !gateEnabled, requireGrok: requireGrok, progress: progress, ct: ct)
+            .ConfigureAwait(true);
+
+        return new
+        {
+            success = result.Success,
+            skippedOptimal = result.SkippedOptimal,
+            message = result.Message,
+            source = result.Analysis?.Source,
+            analysis = result.Analysis?.Analysis,
+            actionCount = result.Results.Count,
+            okCount = result.Results.Count(r => r.Success),
+            results = result.Results.Select(r => new
+            {
+                toolId = r.ToolId,
+                success = r.Success,
+                status = r.Status,
+                message = r.Message
+            })
+        };
+    }
+
+    private object CancelAi()
+    {
+        _services.CancelAiRun();
+        return new { ok = true, message = "AI run cancel requested" };
     }
 
     /// <summary>
@@ -540,6 +629,14 @@ public sealed class WebHostBridge
             if (p.TryGetProperty("welcomePromptSeen", out var w) &&
                 (w.ValueKind is JsonValueKind.True or JsonValueKind.False))
                 s.WelcomePromptSeen = w.ValueKind == JsonValueKind.True;
+            if (p.TryGetProperty("xaiApiKey", out var key) && key.ValueKind == JsonValueKind.String)
+                s.XaiApiKey = key.GetString()?.Trim() ?? string.Empty;
+            if (p.TryGetProperty("aiOptimalGateEnabled", out var gate) &&
+                (gate.ValueKind is JsonValueKind.True or JsonValueKind.False))
+                s.AiOptimalGateEnabled = gate.ValueKind == JsonValueKind.True;
+            if (p.TryGetProperty("upscalerRiskAcknowledged", out var up) &&
+                (up.ValueKind is JsonValueKind.True or JsonValueKind.False))
+                s.UpscalerRiskAcknowledged = up.ValueKind == JsonValueKind.True;
         });
         return BuildSettings();
     }

@@ -23,6 +23,10 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
   const [changelogLoading, setChangelogLoading] = useState(false)
   const [changelogSections, setChangelogSections] = useState<ChangelogSection[]>([])
   const [changelogError, setChangelogError] = useState<string | null>(null)
+  const [hasXaiKey, setHasXaiKey] = useState(false)
+  const [xaiKeyDraft, setXaiKeyDraft] = useState('')
+  const [aiGate, setAiGate] = useState(true)
+  const [upscalerAck, setUpscalerAck] = useState(false)
 
   useEffect(() => {
     if (!open) {
@@ -32,6 +36,7 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
     setLine(null)
     setProgress(null)
     setPhase(null)
+    setXaiKeyDraft('')
     void host
       .getSettings()
       .then((s) => {
@@ -39,6 +44,9 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
         setCheckOnLaunch(!!s.checkForUpdatesOnLaunch)
         if (s.buyMeACoffeeUrl) setCoffeeUrl(s.buyMeACoffeeUrl)
         if (s.issuesUrl) setIssuesUrl(s.issuesUrl)
+        setHasXaiKey(!!s.hasXaiApiKey)
+        setAiGate(s.aiOptimalGateEnabled !== false)
+        setUpscalerAck(!!s.upscalerRiskAcknowledged)
       })
       .catch(() => setVersion('—'))
   }, [open])
@@ -88,6 +96,46 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
       setCheckOnLaunch(!!s.checkForUpdatesOnLaunch)
     } catch {
       setCheckOnLaunch(!next)
+      setLine('Could not save.')
+    }
+  }
+
+  async function saveXaiKey() {
+    if (busy) return
+    const trimmed = xaiKeyDraft.trim()
+    if (!trimmed && !hasXaiKey) return
+    try {
+      const s = await host.setSettings({ xaiApiKey: trimmed })
+      setHasXaiKey(!!s.hasXaiApiKey)
+      setXaiKeyDraft('')
+      setLine(trimmed ? 'xAI key saved.' : 'xAI key cleared.')
+    } catch {
+      setLine('Could not save API key.')
+    }
+  }
+
+  async function toggleAiGate() {
+    if (busy) return
+    const next = !aiGate
+    setAiGate(next)
+    try {
+      const s = await host.setSettings({ aiOptimalGateEnabled: next })
+      setAiGate(s.aiOptimalGateEnabled !== false)
+    } catch {
+      setAiGate(!next)
+      setLine('Could not save.')
+    }
+  }
+
+  async function toggleUpscalerAck() {
+    if (busy) return
+    const next = !upscalerAck
+    setUpscalerAck(next)
+    try {
+      const s = await host.setSettings({ upscalerRiskAcknowledged: next })
+      setUpscalerAck(!!s.upscalerRiskAcknowledged)
+    } catch {
+      setUpscalerAck(!next)
       setLine('Could not save.')
     }
   }
@@ -250,6 +298,76 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
                 ✕
               </button>
             </div>
+
+            <section className="flex flex-col gap-3" aria-label="Exo AI">
+              <p className="px-0.5 text-[10px] font-semibold tracking-[0.1em] text-muted">
+                EXO AI
+              </p>
+
+              <label className="glass-chip flex flex-col gap-1.5 rounded-xl px-3 py-2.5">
+                <span className="text-[11px] font-semibold text-secondary">xAI API key (Grok 4.5)</span>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder={hasXaiKey ? '•••••••• (saved)' : 'Paste key — optional'}
+                  value={xaiKeyDraft}
+                  disabled={busy}
+                  onChange={(e) => setXaiKeyDraft(e.target.value)}
+                  onBlur={() => void saveXaiKey()}
+                  className="h-9 w-full rounded-lg bg-sunken px-2.5 text-[12px] text-text outline-none ring-1 ring-glass-border focus:ring-white/30 disabled:opacity-50"
+                />
+                <span className="text-[10px] leading-snug text-muted">
+                  Stored locally. Without a key, Exo still runs a local maximize plan.
+                </span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => void toggleAiGate()}
+                disabled={busy}
+                className="glass-chip flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left disabled:opacity-50"
+              >
+                <span className="min-w-0 flex-1 text-[12px] font-semibold leading-tight">
+                  Skip AI when optimal
+                </span>
+                <span
+                  className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                    aiGate ? 'bg-white' : 'bg-sunken ring-1 ring-glass-border'
+                  }`}
+                  aria-hidden
+                >
+                  <span
+                    className={`absolute top-0.5 h-4 w-4 rounded-full shadow transition-[left] ${
+                      aiGate ? 'left-4 bg-black' : 'left-0.5 bg-secondary'
+                    }`}
+                  />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void toggleUpscalerAck()}
+                disabled={busy}
+                className="glass-chip flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left disabled:opacity-50"
+              >
+                <span className="min-w-0 flex-1 text-[12px] font-semibold leading-tight">
+                  Upscaler risk acknowledged
+                </span>
+                <span
+                  className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                    upscalerAck ? 'bg-white' : 'bg-sunken ring-1 ring-glass-border'
+                  }`}
+                  aria-hidden
+                >
+                  <span
+                    className={`absolute top-0.5 h-4 w-4 rounded-full shadow transition-[left] ${
+                      upscalerAck ? 'left-4 bg-black' : 'left-0.5 bg-secondary'
+                    }`}
+                  />
+                </span>
+              </button>
+            </section>
 
             <section className="flex flex-col gap-3" aria-label="Updates">
               <p className="px-0.5 text-[10px] font-semibold tracking-[0.1em] text-muted">

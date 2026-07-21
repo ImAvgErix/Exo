@@ -44,7 +44,8 @@ $smokes = @(
     @{ Name = 'Network.Smoke'; Project = 'tools/Network.Smoke' },
     @{ Name = 'Steam.Smoke'; Project = 'tools/Steam.Smoke' },
     @{ Name = 'Nvidia.Smoke'; Project = 'tools/Nvidia.Smoke' },
-    @{ Name = 'GameLaunchers.Smoke'; Project = 'tools/GameLaunchers.Smoke' }
+    @{ Name = 'GameLaunchers.Smoke'; Project = 'tools/GameLaunchers.Smoke' },
+    @{ Name = 'Ai.Smoke'; Project = 'tools/Ai.Smoke' }
 )
 if (-not $SkipDiscord) {
     $smokes += @{ Name = 'Discord.Smoke'; Project = 'tools/Discord.Smoke' }
