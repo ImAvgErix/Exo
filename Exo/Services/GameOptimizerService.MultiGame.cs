@@ -210,7 +210,8 @@ public sealed partial class GameOptimizerService
             Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["gameId"] = gameId,
-                ["preset"] = preferredPreset ?? activePreset ?? PresetOptimized,
+                // Prefer last applied profile so UI Potato/Optimized toggle matches disk.
+                ["preset"] = activePreset ?? preferredPreset ?? PresetOptimized,
                 ["installed"] = probe.Installed ? "1" : "0",
                 ["installPath"] = probe.ConfigRoot ?? "",
                 ["activePreset"] = activePreset ?? "",
@@ -326,7 +327,7 @@ public sealed partial class GameOptimizerService
                     // Always force borderless after quality writes (idempotent).
                     ApplyDisplayPreference(gameId, DisplayBorderless, probe);
 
-                    File.WriteAllText(MarkerPath(gameId), $"{preset}\n{DisplayBorderless}\n{DateTimeOffset.UtcNow:o}\n");
+                    WriteConfigText(MarkerPath(gameId), $"{preset}\n{DisplayBorderless}\n{DateTimeOffset.UtcNow:o}\n");
 
                     var state = LoadState();
                     UpsertRecord(state, gameId, new GameApplyRecord
@@ -345,7 +346,18 @@ public sealed partial class GameOptimizerService
             }, ct).ConfigureAwait(false);
 
             if (writeEx is not null)
-                return (false, string.IsNullOrWhiteSpace(writeEx.Message) ? "Apply failed." : writeEx.Message);
+            {
+                var m = string.IsNullOrWhiteSpace(writeEx.Message) ? "Apply failed." : writeEx.Message;
+                if (writeEx is IOException ||
+                    m.Contains("being used", StringComparison.OrdinalIgnoreCase) ||
+                    m.Contains("in use", StringComparison.OrdinalIgnoreCase))
+                {
+                    return (false,
+                        $"{GameTitle(gameId)} config is locked (game still running). " +
+                        "Close the game completely — including Battle.net / Steam overlay if needed — then Apply again.");
+                }
+                return (false, m);
+            }
 
             // Soft verify: marker + state is enough. Strict file probes can false-fail
             // when games rewrite configs on exit while Exo still has the game "installed".
@@ -431,7 +443,7 @@ public sealed partial class GameOptimizerService
                 text = SetCodKey(text, "PreferredDisplayMode", "Fullscreen borderless window");
             else
                 text = SetCodKey(text, "PreferredDisplayMode", "Fullscreen");
-            File.WriteAllText(path, text);
+            WriteConfigText(path, text);
         }
     }
 
@@ -476,7 +488,7 @@ public sealed partial class GameOptimizerService
                 @"(?im)^(\s*PreferredFullscreenMode\s*=\s*).*$",
                 $"${{1}}{mode}");
 
-            File.WriteAllText(path, text);
+            WriteConfigText(path, text);
         }
     }
 
@@ -486,7 +498,7 @@ public sealed partial class GameOptimizerService
         if (path is null || !File.Exists(path)) return;
         var text = File.ReadAllText(path);
         text = EnsureSectionLine(text, "General", "WindowMode", windowMode);
-        File.WriteAllText(path, text);
+        WriteConfigText(path, text);
     }
 
     private static void ApplyApexDisplay(ConfigProbe probe, bool borderless)
@@ -496,7 +508,7 @@ public sealed partial class GameOptimizerService
         var text = File.ReadAllText(path);
         text = SetQuotedSetting(text, "setting.fullscreen", "1");
         text = SetQuotedSetting(text, "setting.nowindowborder", borderless ? "1" : "0");
-        File.WriteAllText(path, text);
+        WriteConfigText(path, text);
     }
 
     private static void ApplyCs2Display(ConfigProbe probe, bool borderless)
@@ -509,7 +521,7 @@ public sealed partial class GameOptimizerService
             var text = File.ReadAllText(path);
             text = SetQuotedSetting(text, "setting.fullscreen", "1");
             text = SetQuotedSetting(text, "setting.nowindowborder", borderless ? "1" : "0");
-            File.WriteAllText(path, text);
+            WriteConfigText(path, text);
         }
     }
 
@@ -528,7 +540,7 @@ public sealed partial class GameOptimizerService
         Try("fullscreen", borderless ? "false" : "true");
         Try("window_mode", borderless ? "borderless" : "fullscreen");
         Try("screen_mode", borderless ? "borderless" : "fullscreen");
-        File.WriteAllText(path, text);
+        WriteConfigText(path, text);
     }
 
     private async Task<(bool Ok, string Message)> RepairConfigGameAsync(
@@ -575,15 +587,21 @@ public sealed partial class GameOptimizerService
     {
         try
         {
-            // Marker is authoritative — live clients often rewrite config bodies after launch.
+            preset = NormalizePreset(preset);
+            // Marker is authoritative — first line must match the stored preset (potato vs optimized).
             var marker = MarkerPath(gameId);
             if (File.Exists(marker))
             {
+                var lines = File.ReadAllLines(marker);
+                var first = lines.Length > 0 ? lines[0].Trim() : "";
+                if (string.Equals(first, preset, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                // Legacy markers: whole-file contains profile= token
                 var m = File.ReadAllText(marker);
-                if (m.Contains(preset, StringComparison.OrdinalIgnoreCase) ||
-                    m.Contains("borderless", StringComparison.OrdinalIgnoreCase) ||
-                    m.Contains("potato", StringComparison.OrdinalIgnoreCase) ||
-                    m.Contains("optimized", StringComparison.OrdinalIgnoreCase))
+                if (m.Contains($"profile={preset}", StringComparison.OrdinalIgnoreCase))
+                    return true;
+                // Marker exists but wrong/empty preset — still count as applied only if preset matches anywhere as sole token
+                if (Regex.IsMatch(m, $@"(?im)^\s*{Regex.Escape(preset)}\s*$"))
                     return true;
             }
 
@@ -604,15 +622,67 @@ public sealed partial class GameOptimizerService
                 return false;
 
             var text = File.ReadAllText(probe.PrimaryConfig);
-            // Inline profile markers written into configs
-            if (!text.Contains("Exo Games", StringComparison.OrdinalIgnoreCase))
-                return false;
-            if (text.Contains($"profile={preset}", StringComparison.OrdinalIgnoreCase))
-                return true;
-            return text.Contains("profile=potato", StringComparison.OrdinalIgnoreCase)
-                   || text.Contains("profile=optimized", StringComparison.OrdinalIgnoreCase);
+            // Must match this preset — do not treat "any Exo profile" as Potato when Optimized is stored (and vice versa).
+            return text.Contains("Exo Games", StringComparison.OrdinalIgnoreCase)
+                   && text.Contains($"profile={preset}", StringComparison.OrdinalIgnoreCase);
         }
         catch { return false; }
+    }
+
+    /// <summary>
+    /// Write text with retries — COD/Riot lock configs while the client is open.
+    /// Uses share-friendly open so readers can hold the file; still fails after retries if exclusive-locked.
+    /// </summary>
+    private static void WriteConfigText(string path, string text)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        const int attempts = 10;
+        Exception? last = null;
+        for (var i = 0; i < attempts; i++)
+        {
+            try
+            {
+                // Prefer atomic-ish: write temp then replace when possible
+                var tmp = path + ".exo-tmp";
+                using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.Read))
+                using (var sw = new StreamWriter(fs, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
+                {
+                    sw.Write(text);
+                }
+
+                try
+                {
+                    File.Copy(tmp, path, overwrite: true);
+                    try { File.Delete(tmp); } catch { /* ignore */ }
+                    return;
+                }
+                catch (IOException)
+                {
+                    // Destination locked — try direct open with share
+                    using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+                    using var sw = new StreamWriter(fs, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                    sw.Write(text);
+                    try { File.Delete(tmp); } catch { /* ignore */ }
+                    return;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                last = ex;
+                Thread.Sleep(120 * (i + 1));
+            }
+        }
+
+        var name = Path.GetFileName(path);
+        var msg = last?.Message ?? "file locked";
+        if (msg.Contains("being used", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("in use", StringComparison.OrdinalIgnoreCase) ||
+            last is IOException)
+        {
+            throw new IOException(
+                $"Config '{name}' is in use by the game. Fully close Call of Duty / the game (tray + launcher), wait a few seconds, then Apply again. ({msg})");
+        }
+        throw last ?? new IOException($"Could not write {name}.");
     }
 
     // ── Backup / restore ──────────────────────────────────────────────────
@@ -633,7 +703,7 @@ public sealed partial class GameOptimizerService
             }
             catch { /* skip busy */ }
         }
-        File.WriteAllText(Path.Combine(root, "backup.ok"), DateTimeOffset.UtcNow.ToString("o"));
+        WriteConfigText(Path.Combine(root, "backup.ok"), DateTimeOffset.UtcNow.ToString("o"));
     }
 
     private static void RestoreConfigFiles(string gameId)
@@ -765,7 +835,7 @@ public sealed partial class GameOptimizerService
             foreach (var (key, value) in keys)
                 text = SetCodKey(text, key, value);
 
-            File.WriteAllText(path, text);
+            WriteConfigText(path, text);
         }
 
         foreach (var path in ordered.Where(p => p.EndsWith("txt0", StringComparison.OrdinalIgnoreCase)))
@@ -950,7 +1020,7 @@ public sealed partial class GameOptimizerService
         text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "bUseVSync", "False");
         // Never force FullscreenMode / resolution
 
-        File.WriteAllText(path, text);
+        WriteConfigText(path, text);
 
         var enginePath = Path.Combine(dir, "Engine.ini");
         var eng = File.Exists(enginePath) ? File.ReadAllText(enginePath) : "";
@@ -965,7 +1035,7 @@ public sealed partial class GameOptimizerService
         eng = EnsureSectionLine(eng, "SystemSettings", "r.DefaultFeature.Bloom", "0");
         eng = EnsureSectionLine(eng, "SystemSettings", "r.SceneColorFringeQuality", "0");
         eng = EnsureSectionLine(eng, "SystemSettings", "r.Tonemapper.Quality", "0");
-        File.WriteAllText(enginePath, eng);
+        WriteConfigText(enginePath, eng);
 
         ApplyDisplayPreference(GameIdFortnite, displayMode, probe);
     }
@@ -1071,7 +1141,7 @@ public sealed partial class GameOptimizerService
                 if (text.Contains("MultithreadedRendering", StringComparison.OrdinalIgnoreCase))
                     text = EnsureSectionLine(text, "Settings", "EAresBoolSettingName::MultithreadedRendering", "True");
 
-                File.WriteAllText(path, text);
+                WriteConfigText(path, text);
                 continue;
             }
 
@@ -1089,7 +1159,7 @@ public sealed partial class GameOptimizerService
                 if (!Regex.IsMatch(text, @"(?im)^\s*FrameRateLimit\s*=") ||
                     Regex.IsMatch(text, @"(?im)^\s*FrameRateLimit\s*=\s*0"))
                     text = EnsureSectionLine(text, "/Script/ShooterGame.ShooterGameUserSettings", "FrameRateLimit", "0.000000");
-                File.WriteAllText(path, text);
+                WriteConfigText(path, text);
             }
         }
 
@@ -1248,7 +1318,7 @@ public sealed partial class GameOptimizerService
         text = EnsureSectionLine(text, "Performance", "EnableFXAA", "0");
         text = EnsureSectionLine(text, "Performance", "EnableHUDAnimations", potato ? "0" : "1");
 
-        File.WriteAllText(path, text);
+        WriteConfigText(path, text);
         ApplyDisplayPreference(GameIdLeague, displayMode, probe);
     }
 
@@ -1329,7 +1399,7 @@ public sealed partial class GameOptimizerService
         // Never pull internal 3D resolution below 100 on Optimized (blurs targets)
         text = EnsureSectionLine(text, "ScalabilityGroups", "sg.ResolutionQuality", potato ? "85" : "100");
 
-        File.WriteAllText(path, text);
+        WriteConfigText(path, text);
 
         var engPath = Path.Combine(dir, "Engine.ini");
         var eng = File.Exists(engPath) ? File.ReadAllText(engPath) : "";
@@ -1342,7 +1412,7 @@ public sealed partial class GameOptimizerService
         eng = EnsureSectionLine(eng, "SystemSettings", "r.DepthOfFieldQuality", "0");
         eng = EnsureSectionLine(eng, "SystemSettings", "r.DefaultFeature.MotionBlur", "0");
         eng = EnsureSectionLine(eng, "SystemSettings", "r.VolumetricFog", "0");
-        File.WriteAllText(engPath, eng);
+        WriteConfigText(engPath, eng);
 
         ApplyDisplayPreference(GameIdPredecessor, displayMode, probe);
     }
@@ -1411,7 +1481,7 @@ public sealed partial class GameOptimizerService
         Try("vsync_enabled", "false");
         Try("async_compute", "true");
 
-        File.WriteAllText(path, text);
+        WriteConfigText(path, text);
         ApplyDisplayPreference(GameIdHelldivers2, displayMode, probe);
     }
 
@@ -1481,7 +1551,7 @@ public sealed partial class GameOptimizerService
         SetIfPresent("setting.dvs_enable", "0");
         // Display mode only via ApplyDisplayPreference when user asks
 
-        File.WriteAllText(path, text);
+        WriteConfigText(path, text);
         ApplyDisplayPreference(GameIdApex, displayMode, probe);
     }
 
@@ -1585,7 +1655,7 @@ public sealed partial class GameOptimizerService
         sb.AppendLine("r_show_build_info false");
         sb.AppendLine("cl_teamcounter_playercount_instead_of_avatars true");
         sb.AppendLine("host_writeconfig");
-        File.WriteAllText(autoexec, sb.ToString());
+        WriteConfigText(autoexec, sb.ToString());
 
         foreach (var path in probe.ConfigFiles.Where(f =>
                      f.EndsWith("video.txt", StringComparison.OrdinalIgnoreCase) ||
@@ -1608,7 +1678,7 @@ public sealed partial class GameOptimizerService
             if (text.Contains("r_csgo_cmaa_enable", StringComparison.OrdinalIgnoreCase) ||
                 text.Contains("setting.r_csgo_cmaa_enable", StringComparison.OrdinalIgnoreCase))
                 text = SetQuotedSetting(text, "setting.r_csgo_cmaa_enable", "0");
-            File.WriteAllText(path, text);
+            WriteConfigText(path, text);
         }
 
         ApplyDisplayPreference(GameIdCs2, displayMode, probe);
@@ -1726,7 +1796,7 @@ public sealed partial class GameOptimizerService
             text = EnsureSectionLine(text, "ScalabilityGroups", "sg.ShadingQuality", potato ? "0" : "1");
             text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "bUseVSync", "False");
             text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "bUseDynamicResolution", "False");
-            File.WriteAllText(path, text);
+            WriteConfigText(path, text);
         }
 
         foreach (var path in probe.ConfigFiles.Where(f =>
@@ -1744,7 +1814,7 @@ public sealed partial class GameOptimizerService
             eng = EnsureSectionLine(eng, "SystemSettings", "r.DefaultFeature.MotionBlur", "0");
             eng = EnsureSectionLine(eng, "SystemSettings", "r.Lumen.DiffuseIndirect.Allow", "0");
             eng = EnsureSectionLine(eng, "SystemSettings", "r.Lumen.Reflections.Allow", "0");
-            File.WriteAllText(path, eng);
+            WriteConfigText(path, eng);
         }
 
         ApplyDisplayPreference(GameIdTheFinals, displayMode, probe);

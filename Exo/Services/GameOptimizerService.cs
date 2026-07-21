@@ -119,8 +119,10 @@ public sealed partial class GameOptimizerService
             Selected = detail,
             StatusText = installedCount == 0
                 ? "No supported games detected"
-                : $"{installedCount} installed · {appliedCount} optimized",
-            Detail = "Pick a game, choose Potato or Optimized, then Apply."
+                : appliedCount == 0
+                    ? $"{installedCount} installed · none applied yet"
+                    : $"{installedCount} installed · {appliedCount} with profile",
+            Detail = "Pick a game, choose Potato or Optimized, then Apply. Close the game first if Apply says in use."
         };
     }
 
@@ -311,7 +313,7 @@ public sealed partial class GameOptimizerService
             Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["gameId"] = GameIdMarvelRivals,
-                ["preset"] = preferredPreset ?? activePreset ?? PresetOptimized,
+                ["preset"] = activePreset ?? preferredPreset ?? PresetOptimized,
                 ["installed"] = probe.Installed ? "1" : "0",
                 ["installPath"] = probe.InstallPath ?? "",
                 ["bypass"] = probe.BypassPresent ? "1" : "0",
@@ -469,8 +471,7 @@ public sealed partial class GameOptimizerService
 
                 try
                 {
-                    Directory.CreateDirectory(Path.Combine(PathHelper.AppDataDir, "game-backups", GameIdMarvelRivals));
-                    File.WriteAllText(
+                    WriteConfigText(
                         Path.Combine(PathHelper.AppDataDir, "game-backups", GameIdMarvelRivals, "exo-profile.txt"),
                         $"{preset}\n{DisplayBorderless}\n{DateTimeOffset.UtcNow:o}\n");
                 }
@@ -1341,7 +1342,35 @@ public sealed partial class GameOptimizerService
     private static void WriteUtf16Le(string path, string content)
     {
         var enc = new UnicodeEncoding(bigEndian: false, byteOrderMark: true);
-        File.WriteAllText(path, content.TrimStart('\uFEFF'), enc);
+        var body = content.TrimStart('\uFEFF');
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        Exception? last = null;
+        for (var i = 0; i < 10; i++)
+        {
+            try
+            {
+                var tmp = path + ".exo-tmp";
+                File.WriteAllText(tmp, body, enc);
+                try
+                {
+                    File.Copy(tmp, path, overwrite: true);
+                    try { File.Delete(tmp); } catch { /* ignore */ }
+                    return;
+                }
+                catch (IOException)
+                {
+                    File.WriteAllText(path, body, enc);
+                    try { File.Delete(tmp); } catch { /* ignore */ }
+                    return;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                last = ex;
+                Thread.Sleep(120 * (i + 1));
+            }
+        }
+        throw last ?? new IOException($"Could not write {Path.GetFileName(path)} — close the game and retry.");
     }
 
     // ── State ─────────────────────────────────────────────────────────────

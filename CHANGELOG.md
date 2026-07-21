@@ -1,3 +1,9 @@
+## 3.15.4
+
+- Call of Duty: retry locked config writes + clear “close the game” error when files are in use
+- Potato vs Optimized labeling fixed (no more “optimized installed” for Potato profiles)
+- Profile status shows Potato/Optimized correctly after Apply
+
 ## 3.15.3
 
 - Always force borderless on every game optimizer (per-game config tokens; no Leave/Exclusive choice)

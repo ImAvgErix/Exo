@@ -180,11 +180,16 @@ export function GamesPage() {
       const on = feats.filter((f) => f.active).length
       const total = feats.length
       // Apply RPC succeeded → always show applied. Live feature rows are diagnostics only.
+      const label = preset === 'potato' ? 'Potato' : 'Optimized'
+      // Keep toggle on what we just applied (host may also echo it back).
+      setPreset(preset)
+      const p = snap.selected?.options?.gamePreset
+      if (p === 'potato' || p === 'optimized') setPreset(p)
       setOutcome('applied')
       setOutcomeMsg(
         total > 0
-          ? `Applied (borderless) — ${on}/${total} checks on. Restart the game.`
-          : 'Applied (borderless). Restart the game.',
+          ? `${label} applied (borderless) — ${on}/${total} checks on. Restart the game.`
+          : `${label} applied (borderless). Restart the game.`,
       )
       if ((snap.selected?.applyReport?.length ?? 0) > 0) setReportOpen(true)
     } catch (e) {
@@ -341,8 +346,8 @@ export function GamesPage() {
                               ? 'Coming soon'
                               : g.applied
                                 ? g.activePreset
-                                  ? `${g.activePreset} · applied`
-                                  : 'Applied'
+                                  ? `${g.activePreset} profile on`
+                                  : 'Profile on'
                                 : g.installed
                                   ? g.platform
                                   : 'Not installed'}

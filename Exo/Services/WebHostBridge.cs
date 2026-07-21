@@ -943,12 +943,15 @@ public sealed class WebHostBridge
         string statusKind;
         string statusText;
         // Games hub: host IsApplied / profile marker is source of truth. Live quality rows are diagnostics.
+        // Keep "Potato applied" / "Optimized applied" from the service — never generic "optimized".
         if (string.Equals(id, "games", StringComparison.OrdinalIgnoreCase) && state.IsApplied)
         {
             statusKind = "applied";
-            statusText = visibleTotal > 0
-                ? $"Applied · {visibleOn}/{visibleTotal} on"
-                : "Applied";
+            statusText = !string.IsNullOrWhiteSpace(state.StatusText)
+                ? state.StatusText
+                : visibleTotal > 0
+                    ? $"Applied · {visibleOn}/{visibleTotal} on"
+                    : "Applied";
         }
         else if (missing && !state.IsApplied)
         {
