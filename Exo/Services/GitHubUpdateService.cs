@@ -194,7 +194,7 @@ public sealed class GitHubUpdateService
         // Download Exo.exe (SFX installer) and run it. In-place replace cannot
         // overwrite a locked running Exo.exe, so the installer stage-swaps under
         // %LocalAppData%\Exo\app after we exit.
-        Report(status, progress, $"Downloading Exo v{check.RemoteVersion}...", percent: 0);
+        Report(status, progress, "Downloading…", percent: 0);
 
         try
         {
@@ -251,9 +251,8 @@ public sealed class GitHubUpdateService
                         if (pct != lastReport && (pct - lastReport >= 1 || pct >= 85))
                         {
                             lastReport = pct;
-                            Report(status, progress,
-                                $"Downloading v{check.RemoteVersion}…",
-                                percent: pct);
+                            // Phase stays "Downloading…" — percent is on the bar (no double text).
+                            Report(status, progress, "Downloading…", percent: pct);
                         }
                     }
                     else if (written > 0)
@@ -263,9 +262,7 @@ public sealed class GitHubUpdateService
                         if (soft != lastReport)
                         {
                             lastReport = soft;
-                            Report(status, progress,
-                                $"Downloading v{check.RemoteVersion}…",
-                                percent: soft);
+                            Report(status, progress, "Downloading…", percent: soft);
                         }
                     }
                 }
@@ -298,7 +295,7 @@ public sealed class GitHubUpdateService
 
             if (!string.IsNullOrWhiteSpace(check.Sha256))
             {
-                Report(status, progress, "Verifying integrity (SHA-256)…", percent: 88);
+                Report(status, progress, "Verifying…", percent: 88);
                 var actualSha256 = await ComputeFileSha256Async(setupPath, ct).ConfigureAwait(false);
                 if (!string.Equals(actualSha256, check.Sha256, StringComparison.OrdinalIgnoreCase))
                 {
@@ -338,7 +335,7 @@ public sealed class GitHubUpdateService
                 };
             }
 
-            Report(status, progress, $"Applying v{check.RemoteVersion}…", percent: 95);
+            Report(status, progress, "Installing…", percent: 95);
             // Quiet in-app update: SFX waits for THIS process to exit (/waitpid) so it can
             // replace %LocalAppData%\Exo\app without "file in use" failures, then relaunches.
             var selfPid = Environment.ProcessId;
@@ -396,7 +393,7 @@ public sealed class GitHubUpdateService
             // Brief settle so the child is fully running before we exit.
             try { await Task.Delay(350, ct).ConfigureAwait(false); } catch { /* ignore */ }
 
-            Report(status, progress, $"Restarting into v{check.RemoteVersion}…", percent: 100);
+            Report(status, progress, "Restarting…", percent: 100);
             return new AppUpdateResult
             {
                 UpdateAvailable = true,

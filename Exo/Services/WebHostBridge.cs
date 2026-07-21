@@ -532,12 +532,8 @@ public sealed class WebHostBridge
                 };
             }
 
-            // Surface TLDR in the settings panel before download begins.
-            if (!string.IsNullOrWhiteSpace(check.ReleaseSummary))
-                PushProgress($"What's new in v{check.RemoteVersion}:\n{check.ReleaseSummary}", 0);
-
-            // Auto-download + apply (no "Update available" card).
-            PushProgress($"Downloading Exo v{check.RemoteVersion}…", 0);
+            // InstallAppUpdateAsync already reports Downloading / Verifying / Installing —
+            // do not pre-push a second "Downloading" line (UI showed it twice).
             var install = await _services.Updater
                 .InstallAppUpdateAsync(check, status: status, progress: detail)
                 .ConfigureAwait(true);

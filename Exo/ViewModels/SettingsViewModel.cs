@@ -140,8 +140,7 @@ public partial class SettingsViewModel : ObservableObject
 
             if (app.UpdateAvailable)
             {
-                // No consent card — download + quiet install with the inline progress bar.
-                UpdateStatus = $"Downloading v{app.RemoteVersion}…";
+                // InstallAppUpdateAsync reports phase status once — do not pre-set Downloading.
                 IsUpdateProgressIndeterminate = false;
                 UpdateProgressPercent = 0;
                 var install = await _services.Updater.InstallAppUpdateAsync(

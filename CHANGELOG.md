@@ -1,3 +1,7 @@
+## 3.15.5
+
+- Real free official game logos for every hub title (Steam / Icons8 brand marks — no placeholders or AI)
+- Update UI: liquid-glass card, cleaner “what’s new”, no double “Downloading” status text
 ## 3.15.4
 
 - Call of Duty: retry locked config writes + clear “close the game” error when files are in use
@@ -1289,6 +1293,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

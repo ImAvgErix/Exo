@@ -19,7 +19,7 @@ type Outcome = 'idle' | 'applied' | 'partial' | 'failed' | 'repaired'
 
 /** Per-game logos — cache-bust so new assets load after rebuild. */
 function gameIcon(g: GameListItem): { src: string; src2x?: string } {
-  const v = 'v=5'
+  const v = 'v=6'
   if (g.id === 'marvel-rivals') {
     return {
       src: `/logos/marvel-rivals.png?${v}`,
