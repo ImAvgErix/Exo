@@ -69,7 +69,8 @@ internal static class Program
                 (envSilent == "1" || envSilent.Equals("true", StringComparison.OrdinalIgnoreCase)))
                 silent = true;
             string envPid = Environment.GetEnvironmentVariable("EXO_UPDATE_WAIT_PID");
-            if (!string.IsNullOrEmpty(envPid) && int.TryParse(envPid.Trim(), out int envWait) && envWait > 0)
+            int envWait = 0;
+            if (!string.IsNullOrEmpty(envPid) && int.TryParse(envPid.Trim(), out envWait) && envWait > 0)
                 waitPid = envWait;
         }
         catch { }
