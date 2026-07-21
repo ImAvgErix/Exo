@@ -16,7 +16,7 @@ function Get-DiscOptTempPath([string]$Child = '') {
     return (Join-Path $base $Child)
 }
 
-$manifest = Invoke-RestMethod -Uri 'https://updates.discord.com/distributions/app/manifests/latest?channel=stable&platform=win&arch=x64' -Headers @{ 'User-Agent' = 'Disc-Optimizer/1.0' }
+$manifest = Invoke-RestMethod -Uri 'https://updates.discord.com/distributions/app/manifests/latest?channel=stable&platform=win&arch=x64' -Headers @{ 'User-Agent' = 'Discord-Optimizer/1.0' }
 $url = $manifest.modules.discord_krisp.full.url
 if (-not $url) { throw 'discord_krisp missing from manifest' }
 

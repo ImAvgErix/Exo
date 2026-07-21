@@ -9,7 +9,7 @@ namespace Exo.Services;
 /// <list type="bullet">
 /// <item>Riot / Epic / Windows / Brave — native C# is the full competitive apply</item>
 /// <item>Steam — native C# essentials; optional PS deep pack soft-fails</item>
-/// <item>Internet — NetworkOptimizerService (not this class)</item>
+/// <item>Internet — ExoInternetOptimizerService (not this class)</item>
 /// <item>Discord / NVIDIA — specialized PowerShell kits only</item>
 /// </list>
 /// HKLM ops that need admin use one compact elevated reg script (no lib imports).

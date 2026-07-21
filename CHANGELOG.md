@@ -205,7 +205,7 @@
   | **Windows** | Native C# only (default). Experimental optional depth pack soft-fails. |
   | **Riot / Epic** | Native C# only (PS was duplicate + stripped yield). Repair still PS. |
   | **Steam** | Native C# primary; PS deep pack soft-fails if native OK. |
-  | **Internet** | C# NetworkOptimizerService + MS-safe SR/NTI=10 restamp. |
+  | **Internet** | C# ExoInternetOptimizerService + MS-safe SR/NTI=10 restamp. |
   | **Discord / NVIDIA** | Specialized PowerShell kits (unchanged depth). |
 - Windows PS deep pack is **depth-only** (tasks / optional features / policy Defender) — skips re-running host glue when `path=native-csharp`.
 - Deep pack failure no longer fails the whole Apply when native essentials succeeded.
@@ -439,8 +439,8 @@
 
 ## 3.0.0
 
-- **SharedModulePlate**: all four optimizer pages (Internet / Discord / Steam / NVIDIA) host chrome via one instrument plate (header, advisor, features, sticky foot, apply report)
-- **Network builder split**: `NetworkApplyScriptBuilder` partials — `.Repair.cs` + `.Benchmark.cs` (smoke-linked)
+- **ExoModulePlate**: all four optimizer pages (Internet / Discord / Steam / NVIDIA) host chrome via one instrument plate (header, advisor, features, sticky foot, apply report)
+- **Network builder split**: `ExoInternetApplyScriptBuilder` partials — `.Repair.cs` + `.Benchmark.cs` (smoke-linked)
 - **Detect = Apply contracts**: `tools/Contracts.Smoke` gates required/forbidden markers + detect/apply concept pairs for all modules
 - **Thin Steam/NVIDIA stage libs**: `Steam/lib/Steam.Bootstrap.ps1` + `Nvidia/lib/Nvidia.Bootstrap.ps1` (stage IDs; god-scripts remain with documented size exception)
 - **CI / Release**: Contracts.Smoke in validate-before-publish
@@ -535,7 +535,7 @@
 
 - **UI — full remodel**: left icon rail (`NavRail` + Home/Discord/Steam/Internet/NVIDIA) replaces the old chrome; home is an editorial directory (hero tagline + full-width module rows) instead of a wrap-grid of product cards; module features are a vertical `FeatureTileGrid` (`StackLayout`) with sticky `ExoActionBar` footers — fixed 1180×760, AMOLED shell, settings still a gear flyout on the rail
 - **Naming — Opti→Exo**: theme/styles/motion/loader keys are `Exo*` (`ExoPrimaryButton`, `ExoFeatureTile`, `ExoMotion`, `ExoLoader`, …) — no `Opti*` leftovers
-- **Tooling — Peak→Logic/Smoke**: peak classifiers and smoke harnesses renamed to `*Logic` / `*.Smoke` (e.g. `NetworkLogic`, `DiscordLogic`, `Ui.Smoke`)
+- **Tooling — Peak→Logic/Smoke**: peak classifiers and smoke harnesses renamed to `*Logic` / `*.Smoke` (e.g. `ExoInternetLogic`, `DiscordLogic`, `Ui.Smoke`)
 
 ## 2.4.3
 
@@ -605,7 +605,7 @@
 ## 2.2.7
 
 - **Runtime bootstrap works without winget**: when PowerShell 7 Preview or Windows Terminal Preview are missing and winget is unavailable or fails (common on debloated Windows), Exo now installs them directly from the official Microsoft GitHub releases — PowerShell Preview as a per-user portable zip under `%LocalAppData%\Exo\runtime` (no elevation), Terminal Preview sideloaded per-user via `Add-AppxPackage`; downloads are verified against the release size and SHA-256 digest
-- **Standalone Disc-Optimizer**: same portable Preview fallback when run outside the app without winget
+- **Standalone Discord-Optimizer**: same portable Preview fallback when run outside the app without winget
 
 ## 2.2.6
 
@@ -1020,7 +1020,7 @@
 - Smoke + live probe-summary cover both latency and throughput with false_fail_count=0
 ## 1.9.33
 
-- **Internet peak freeze**: pure shipped decision core `NetworkPeakLogic` + `NetworkApplyScriptBuilder` (band score, path policy, preset knobs, apply audit)
+- **Internet peak freeze**: pure shipped decision core `NetworkPeakLogic` + `ExoInternetApplyScriptBuilder` (band score, path policy, preset knobs, apply audit)
 - Smoke tests drive real sources (`tools/NetworkPeak.Smoke`): Prefer>Only, eth-usable vs link-no-IP, latency vs throughput script diverge, no folklore
 - Detection/apply Wi-Fi classifier aligned (exclude Bluetooth/Hyper-V/VPN tunnels); live 6 GHz re-probe at apply
 - Docs/golden path frozen at 1.9.33

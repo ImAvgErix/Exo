@@ -1,10 +1,10 @@
 # Disc Optimizer - stable PowerShell 7 host (any 7.x; never Windows PowerShell 5.1).
 # First run installs + optimizes Discord. After that, use the Start menu Discord shortcut.
 #
-#   Disc-Optimizer.ps1           first-time / full setup (log in when prompted)
-#   Disc-Optimizer.ps1 -Launch   start Discord only (daily)
-#   Disc-Optimizer.ps1 -Quick    re-apply after a Discord update
-#   Disc-Optimizer.ps1 -SkipCacheClean
+#   Discord-Optimizer.ps1           first-time / full setup (log in when prompted)
+#   Discord-Optimizer.ps1 -Launch   start Discord only (daily)
+#   Discord-Optimizer.ps1 -Quick    re-apply after a Discord update
+#   Discord-Optimizer.ps1 -SkipCacheClean
 
 param(
     [switch]$Launch,
@@ -545,7 +545,7 @@ Write-Banner
 Test-KitIntegrity
 
 if ($VerifyOnly) {
-    Write-Ok 'Verify-only passed. Kit is ready - run Disc-Optimizer.ps1 on any PC with internet.'
+    Write-Ok 'Verify-only passed. Kit is ready - run Discord-Optimizer.ps1 on any PC with internet.'
     Write-Host '  The script will download Discord, then apply all mods automatically.'
     Write-LogLine 'OK' 'Verify-only finished successfully'
     exit 0
@@ -837,7 +837,7 @@ Write-RunSummary -AppDir $app.FullName -Launched $false
 
 # Never auto-reopen Discord after Exo Apply (-NoLaunch / EXO=1).
 # Disk verify above is enough; user opens Discord from Start Menu when ready.
-# Standalone Disc-Optimizer without -NoLaunch still offers interactive launch.
+# Standalone Discord-Optimizer without -NoLaunch still offers interactive launch.
 if ($NoLaunch -or $env:EXO -eq '1' -or $env:EXO_SKIP_BOOT_FLASH -eq '1') {
     Write-Ok 'Disc Optimizer finished (Discord left closed — open it from Start Menu when you want).'
     Add-ExoReport 'relaunch' 'skip' 'NoLaunch / Exo host — no auto-open'

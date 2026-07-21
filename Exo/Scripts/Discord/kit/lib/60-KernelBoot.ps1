@@ -1,5 +1,5 @@
 # 60-KernelBoot.ps1 - Kernel, boot check, summary
-# Dot-sourced by Disc-Optimizer.ps1 (load order = filename sort).
+# Dot-sourced by Discord-Optimizer.ps1 (load order = filename sort).
 # Universal multi-PC kit - do not assume Equicord/Discord already configured.
 
 function Copy-KernelFileWithRetry {

@@ -243,7 +243,7 @@ PriorityClass=3
 // --- Apply path audit: concatenate shipped apply sources ---
 var applyFiles = new[]
 {
-    Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Disc-Optimizer.ps1"),
+    Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Discord-Optimizer.ps1"),
     Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "Exo-Discord-Run.ps1"),
     Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "kit", "lib", "10-Logging.ps1"),
     Path.Combine(repoRoot, "Exo", "Scripts", "Discord", "kit", "lib", "40-DebloatWindows.ps1"),
@@ -256,7 +256,7 @@ Expect("apply audit", auditOk, string.Join("; ", auditIssues));
 Expect("no Exo-Discord scheduled task create",
     applyBlob.IndexOf("Register-ScheduledTask -TaskName 'Exo-Discord", StringComparison.OrdinalIgnoreCase) < 0);
 // Boot safety: keep kernel after a healthy boot; disarm only after real boot failure.
-// Single end-open path (no thrash open/kill mid-apply) — see Disc-Optimizer + Confirm-DiscordBootsAfterMods.
+// Single end-open path (no thrash open/kill mid-apply) — see Discord-Optimizer + Confirm-DiscordBootsAfterMods.
 Expect("boot check keeps kernel when Discord loads",
     applyBlob.Contains("Confirm-DiscordBootsAfterMods", StringComparison.Ordinal) &&
     applyBlob.Contains("Boot check passed", StringComparison.Ordinal) &&

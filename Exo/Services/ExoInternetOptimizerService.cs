@@ -20,12 +20,12 @@ namespace Exo.Services;
 /// Presets: LowestLatency (gaming) vs HighestThroughput (downloads) vs Balanced.
 /// Safe across Ethernet / Wi‑Fi / multi-NIC; missing properties are skipped.
 /// </summary>
-public sealed class NetworkOptimizerService
+public sealed class ExoInternetOptimizerService
 {
     private readonly PowerShellRunnerService _runner;
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(6) };
 
-    public NetworkOptimizerService(PowerShellRunnerService runner)
+    public ExoInternetOptimizerService(PowerShellRunnerService runner)
     {
         _runner = runner;
     }
@@ -35,6 +35,8 @@ public sealed class NetworkOptimizerService
         "Exo", "network-optimizer.json");
 
     /// <summary>Pristine pre-apply baseline written by the elevated apply script (never overwritten).</summary>
+    // On-disk name kept as network-snapshot.json for Repair compatibility with
+    // existing installs (do not rename to internet-snapshot.json).
     private static readonly string SnapshotPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Exo", "network-snapshot.json");
@@ -76,48 +78,48 @@ public sealed class NetworkOptimizerService
         catch { }
     }
 
-    public NetworkPreset LoadSavedPreset()
+    public ExoInternetPreset LoadSavedPreset()
     {
         try
         {
-            if (!File.Exists(StatePath)) return NetworkPreset.Balanced;
+            if (!File.Exists(StatePath)) return ExoInternetPreset.Balanced;
             using var doc = JsonDocument.Parse(File.ReadAllText(StatePath));
             if (doc.RootElement.TryGetProperty("preset", out var p) &&
-                Enum.TryParse<NetworkPreset>(p.GetString(), true, out var preset))
+                Enum.TryParse<ExoInternetPreset>(p.GetString(), true, out var preset))
                 return preset;
         }
         catch { }
-        return NetworkPreset.Balanced;
+        return ExoInternetPreset.Balanced;
     }
 
     /// <summary>
     /// User-selected policy for Analyze &amp; Apply. Defaults to lowest latency
     /// (gaming default). Independent of last applied preset until Apply runs.
     /// </summary>
-    public NetworkPreset LoadPreferredPolicy()
+    public ExoInternetPreset LoadPreferredPolicy()
     {
         try
         {
-            if (!File.Exists(StatePath)) return NetworkPreset.LowestLatency;
+            if (!File.Exists(StatePath)) return ExoInternetPreset.LowestLatency;
             using var doc = JsonDocument.Parse(File.ReadAllText(StatePath));
             if (doc.RootElement.TryGetProperty("preferredPolicy", out var p) &&
-                Enum.TryParse<NetworkPreset>(p.GetString(), true, out var preferred) &&
-                preferred is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput)
+                Enum.TryParse<ExoInternetPreset>(p.GetString(), true, out var preferred) &&
+                preferred is ExoInternetPreset.LowestLatency or ExoInternetPreset.HighestThroughput)
                 return preferred;
             // Fall back to last applied non-balanced preset when preference was never saved.
             if (doc.RootElement.TryGetProperty("preset", out var applied) &&
-                Enum.TryParse<NetworkPreset>(applied.GetString(), true, out var preset) &&
-                preset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput)
+                Enum.TryParse<ExoInternetPreset>(applied.GetString(), true, out var preset) &&
+                preset is ExoInternetPreset.LowestLatency or ExoInternetPreset.HighestThroughput)
                 return preset;
         }
         catch { }
-        return NetworkPreset.LowestLatency;
+        return ExoInternetPreset.LowestLatency;
     }
 
-    public void SavePreferredPolicy(NetworkPreset preferred)
+    public void SavePreferredPolicy(ExoInternetPreset preferred)
     {
-        if (preferred is not (NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput))
-            preferred = NetworkPreset.LowestLatency;
+        if (preferred is not (ExoInternetPreset.LowestLatency or ExoInternetPreset.HighestThroughput))
+            preferred = ExoInternetPreset.LowestLatency;
         try
         {
             var state = LoadStateObject();
@@ -127,19 +129,19 @@ public sealed class NetworkOptimizerService
         catch { }
     }
 
-    public void SavePreset(NetworkPreset preset, NetworkApplyOptions? options = null)
+    public void SavePreset(ExoInternetPreset preset, ExoInternetApplyOptions? options = null)
     {
         try
         {
             // Merge-write: keep benchmark / report / rollback keys intact across preset saves.
             var state = LoadStateObject();
             state["preset"] = preset.ToString();
-            state["preferredPolicy"] = preset is NetworkPreset.HighestThroughput
-                ? NetworkPreset.HighestThroughput.ToString()
-                : NetworkPreset.LowestLatency.ToString();
+            state["preferredPolicy"] = preset is ExoInternetPreset.HighestThroughput
+                ? ExoInternetPreset.HighestThroughput.ToString()
+                : ExoInternetPreset.LowestLatency.ToString();
             state["appliedUtc"] = DateTime.UtcNow.ToString("o");
             // Metrics-only prefer-ethernet flag (Wi-Fi is never disabled as of 2.6.6+).
-            // Default false matches NetworkApplyOptions and InternetOptimizerViewModel.
+            // Default false matches ExoInternetApplyOptions and InternetOptimizerViewModel.
             state["preferEthernetDisableWifi"] = options?.PreferEthernetDisableWifi ?? false;
             SaveStateObject(state);
         }
@@ -193,7 +195,7 @@ public sealed class NetworkOptimizerService
         progress?.Report(hadSnapshot
             ? "Preparing repair (exact restore from pre-apply snapshot)..."
             : "Preparing repair (stock network stack - no snapshot found)...");
-        var script = NetworkApplyScriptBuilder.BuildRepair();
+        var script = ExoInternetApplyScriptBuilder.BuildRepair();
         var path = Path.Combine(Path.GetTempPath(), $"exo-net-repair-{Guid.NewGuid():N}.ps1");
         await File.WriteAllTextAsync(path, script, ct).ConfigureAwait(false);
         try
@@ -251,9 +253,9 @@ public sealed class NetworkOptimizerService
     /// Proof layer: run the non-elevated ping/DNS benchmark script and parse its
     /// EXO_BENCH JSON line. Returns null when the benchmark could not run/parse.
     /// </summary>
-    public async Task<NetworkBenchmarkResult?> RunBenchmarkAsync(CancellationToken ct = default)
+    public async Task<ExoInternetBenchmarkResult?> RunBenchmarkAsync(CancellationToken ct = default)
     {
-        var script = NetworkApplyScriptBuilder.BuildBenchmark();
+        var script = ExoInternetApplyScriptBuilder.BuildBenchmark();
         var path = Path.Combine(Path.GetTempPath(), $"exo-net-bench-{Guid.NewGuid():N}.ps1");
         try
         {
@@ -263,7 +265,7 @@ public sealed class NetworkOptimizerService
                 elevate: false,
                 cancellationToken: ct,
                 workingDirectory: Path.GetDirectoryName(path)).ConfigureAwait(false);
-            return result.Success ? NetworkLogic.TryParseBenchmark(result.FullOutput) : null;
+            return result.Success ? ExoInternetLogic.TryParseBenchmark(result.FullOutput) : null;
         }
         catch { return null; }
         finally
@@ -308,8 +310,8 @@ public sealed class NetworkOptimizerService
     /// DNS candidates are tested directly on this network and the fastest healthy
     /// resolver plus its DoH template is returned for the same transaction.
     /// </summary>
-    public async Task<NetworkBenchmarkResult?> RunQualityBenchmarkAsync(
-        NetworkMediaProfile media,
+    public async Task<ExoInternetBenchmarkResult?> RunQualityBenchmarkAsync(
+        ExoInternetMediaProfile media,
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
@@ -352,7 +354,7 @@ public sealed class NetworkOptimizerService
             // targets commonly deprioritize ICMP while the upload/download workers are
             // intentionally filling the link; counting those missed replies as packet
             // loss produced alarming numbers that were not baseline connection loss.
-            var packetLoss = NetworkLogic.CalculateIdlePacketLossPercent(
+            var packetLoss = ExoInternetLogic.CalculateIdlePacketLossPercent(
                 idleSeries.Attempts,
                 idle.Count);
 
@@ -381,7 +383,7 @@ public sealed class NetworkOptimizerService
                     ? "multi-gig Ethernet gets full RSS and offload throughput without latency folklore"
                     : "the measured path is stable enough for balanced throughput and latency tuning";
 
-            return new NetworkBenchmarkResult
+            return new ExoInternetBenchmarkResult
             {
                 Ok = true,
                 IsQualityTest = true,
@@ -661,40 +663,40 @@ public sealed class NetworkOptimizerService
         return samples.Zip(samples.Skip(1), (a, b) => Math.Abs(b - a)).Average();
     }
 
-    public NetworkBenchmarkResult? LoadQualityBenchmark()
+    public ExoInternetBenchmarkResult? LoadQualityBenchmark()
     {
         try
         {
             var state = LoadStateObject();
             return state["qualityBenchmark"] is JsonObject o
-                ? JsonSerializer.Deserialize(o.ToJsonString(), ExoJsonContext.Default.NetworkBenchmarkResult)
+                ? JsonSerializer.Deserialize(o.ToJsonString(), ExoJsonContext.Default.ExoInternetBenchmarkResult)
                 : null;
         }
         catch { return null; }
     }
 
-    public void PersistQualityBenchmark(NetworkBenchmarkResult result)
+    public void PersistQualityBenchmark(ExoInternetBenchmarkResult result)
     {
         try
         {
             var state = LoadStateObject();
             state["qualityBenchmark"] = JsonSerializer.SerializeToNode(
-                result, ExoJsonContext.Default.NetworkBenchmarkResult);
+                result, ExoJsonContext.Default.ExoInternetBenchmarkResult);
             SaveStateObject(state);
         }
         catch { }
     }
 
     /// <summary>Persisted before/after benchmark pair (state JSON: benchmark.before / benchmark.after).</summary>
-    public (NetworkBenchmarkResult? Before, NetworkBenchmarkResult? After) LoadBenchmark()
+    public (ExoInternetBenchmarkResult? Before, ExoInternetBenchmarkResult? After) LoadBenchmark()
     {
         try
         {
             var state = LoadStateObject();
             if (state["benchmark"] is not JsonObject bench) return (null, null);
-            NetworkBenchmarkResult? Read(string key) =>
+            ExoInternetBenchmarkResult? Read(string key) =>
                 bench[key] is JsonObject o
-                    ? JsonSerializer.Deserialize(o.ToJsonString(), ExoJsonContext.Default.NetworkBenchmarkResult)
+                    ? JsonSerializer.Deserialize(o.ToJsonString(), ExoJsonContext.Default.ExoInternetBenchmarkResult)
                     : null;
             return (Read("before"), Read("after"));
         }
@@ -702,20 +704,20 @@ public sealed class NetworkOptimizerService
     }
 
     /// <summary>Structured step list parsed from the last elevated apply run (EXO_REPORT lines).</summary>
-    public IReadOnlyList<NetworkApplyReportStep> LoadLastApplyReport()
+    public IReadOnlyList<ExoInternetApplyReportStep> LoadLastApplyReport()
     {
         try
         {
             var state = LoadStateObject();
-            if (state["lastApplyReport"] is not JsonArray arr) return Array.Empty<NetworkApplyReportStep>();
-            var list = new List<NetworkApplyReportStep>();
+            if (state["lastApplyReport"] is not JsonArray arr) return Array.Empty<ExoInternetApplyReportStep>();
+            var list = new List<ExoInternetApplyReportStep>();
             foreach (var node in arr)
             {
                 if (node is not JsonObject o) continue;
                 var name = o["name"]?.GetValue<string>();
                 var status = o["status"]?.GetValue<string>();
                 if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(status)) continue;
-                list.Add(new NetworkApplyReportStep
+                list.Add(new ExoInternetApplyReportStep
                 {
                     Name = name,
                     Status = status,
@@ -724,14 +726,14 @@ public sealed class NetworkOptimizerService
             }
             return list;
         }
-        catch { return Array.Empty<NetworkApplyReportStep>(); }
+        catch { return Array.Empty<ExoInternetApplyReportStep>(); }
     }
 
     /// <summary>
     /// Honest rollback status recorded by the elevated apply script
     /// (%LocalAppData%\Exo\network-apply-state.json). Null when no apply ran yet.
     /// </summary>
-    public NetworkRollbackStatus? LoadRollbackStatus()
+    public ExoInternetRollbackStatus? LoadRollbackStatus()
     {
         try
         {
@@ -745,7 +747,7 @@ public sealed class NetworkOptimizerService
                     if (w.ValueKind == JsonValueKind.String && w.GetString() is { Length: > 0 } s)
                         wifi.Add(s);
             }
-            return new NetworkRollbackStatus
+            return new ExoInternetRollbackStatus
             {
                 RolledBack = root.TryGetProperty("rollback", out var rb) && rb.ValueKind == JsonValueKind.True,
                 Reason = root.TryGetProperty("rollbackReason", out var rr) && rr.ValueKind == JsonValueKind.String
@@ -760,23 +762,23 @@ public sealed class NetworkOptimizerService
         catch { return null; }
     }
 
-    private void PersistBenchmark(NetworkBenchmarkResult? before, NetworkBenchmarkResult? after)
+    private void PersistBenchmark(ExoInternetBenchmarkResult? before, ExoInternetBenchmarkResult? after)
     {
         try
         {
             var state = LoadStateObject();
             var bench = state["benchmark"] as JsonObject ?? new JsonObject();
             if (before is not null)
-                bench["before"] = JsonSerializer.SerializeToNode(before, ExoJsonContext.Default.NetworkBenchmarkResult);
+                bench["before"] = JsonSerializer.SerializeToNode(before, ExoJsonContext.Default.ExoInternetBenchmarkResult);
             if (after is not null)
-                bench["after"] = JsonSerializer.SerializeToNode(after, ExoJsonContext.Default.NetworkBenchmarkResult);
+                bench["after"] = JsonSerializer.SerializeToNode(after, ExoJsonContext.Default.ExoInternetBenchmarkResult);
             state["benchmark"] = bench;
             SaveStateObject(state);
         }
         catch { }
     }
 
-    private void PersistApplyOutcome(IReadOnlyList<NetworkApplyReportStep> report, NetworkRollbackStatus? rollback)
+    private void PersistApplyOutcome(IReadOnlyList<ExoInternetApplyReportStep> report, ExoInternetRollbackStatus? rollback)
     {
         try
         {
@@ -811,9 +813,9 @@ public sealed class NetworkOptimizerService
         catch { }
     }
 
-    public async Task<NetworkSnapshot> ProbeAsync(CancellationToken ct = default)
+    public async Task<ExoInternetSnapshot> ProbeAsync(CancellationToken ct = default)
     {
-        var features = new List<NetworkFeatureRow>();
+        var features = new List<ExoInternetFeatureRow>();
         string adapterName = "-", adapterDesc = "-", linkSpeed = "-", connType = "Unknown";
         string ipv4 = "-", gateway = "-", dns = "-", mtu = "-";
         bool? taskOffloadDisabled = null, lso = null, rsc = null;
@@ -871,8 +873,8 @@ public sealed class NetworkOptimizerService
             }
 
             var activePreset = LoadSavedPreset();
-            var latency = activePreset == NetworkPreset.LowestLatency;
-            var throughput = activePreset == NetworkPreset.HighestThroughput;
+            var latency = activePreset == ExoInternetPreset.LowestLatency;
+            var throughput = activePreset == ExoInternetPreset.HighestThroughput;
 
             try
             {
@@ -885,7 +887,7 @@ public sealed class NetworkOptimizerService
             // Live NIC policy: only annotate applied Ethernet presets.
             // Many multi-gig NICs (Realtek etc.) have no MSFT_NetAdapterRssSettingData -
             // that is N/A soft-ok, not a failed optimize.
-            if (connType == "Ethernet" && activePreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput)
+            if (connType == "Ethernet" && activePreset is ExoInternetPreset.LowestLatency or ExoInternetPreset.HighestThroughput)
             {
                 try
                 {
@@ -972,16 +974,16 @@ public sealed class NetworkOptimizerService
             netPing = await PingMsAsync("1.1.1.1", ct).ConfigureAwait(false)
                       ?? await PingMsAsync("8.8.8.8", ct).ConfigureAwait(false);
 
-            // Feature cards = optimizer knobs only (aligned with NetworkLogic.KnobsFor)
-            var lsoOk = NetworkLogic.LsoMatches(activePreset, lso);
-            var rscOk = NetworkLogic.RscMatches(activePreset, rsc);
-            var autoOk = NetworkLogic.AutotuneMatches(activePreset, autoTuning);
+            // Feature cards = optimizer knobs only (aligned with ExoInternetLogic.KnobsFor)
+            var lsoOk = ExoInternetLogic.LsoMatches(activePreset, lso);
+            var rscOk = ExoInternetLogic.RscMatches(activePreset, rsc);
+            var autoOk = ExoInternetLogic.AutotuneMatches(activePreset, autoTuning);
             features.Add(Row("Full network offload",
                 taskOffloadDisabled == true ? "Blocked (bad)" : "On",
                 taskOffloadDisabled != true));
 
             // Network-owned knobs only. MMCSS / HAGS / Game Mode / Win32 priority → Windows card.
-            var gamingPreset = activePreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput;
+            var gamingPreset = activePreset is ExoInternetPreset.LowestLatency or ExoInternetPreset.HighestThroughput;
 
             var qosReserve = ReadQosReserve();
             features.Add(Row("Full bandwidth for apps",
@@ -1081,10 +1083,10 @@ public sealed class NetworkOptimizerService
                     : rsc == false ? (latency ? "Off — latency path" : "Off") : "-",
                 rscOk));
             features.Add(Row("Smart window scaling",
-                autoOk ? autoTuning : $"{autoTuning} (want {NetworkLogic.KnobsFor(activePreset).AutotuneNetsh})",
+                autoOk ? autoTuning : $"{autoTuning} (want {ExoInternetLogic.KnobsFor(activePreset).AutotuneNetsh})",
                 autoOk));
             // Interrupt moderation / flow control target from preset
-            var knobs = NetworkLogic.KnobsFor(activePreset);
+            var knobs = ExoInternetLogic.KnobsFor(activePreset);
             features.Add(Row("Interrupt timing",
                 knobs.InterruptMod == "0" ? "Immediate — latency path" : "Batched — throughput path",
                 true));
@@ -1102,13 +1104,13 @@ public sealed class NetworkOptimizerService
             detail = ex.Message;
         }
 
-        var mediaProfile = new NetworkMediaProfile();
+        var mediaProfile = new ExoInternetMediaProfile();
         try
         {
             mediaProfile = await DetectMediaProfileAsync(ct).ConfigureAwait(false);
             features.Add(Row("Path policy", mediaProfile.PolicyLine, true));
-            var presetApplied = LoadSavedPreset() is NetworkPreset.LowestLatency
-                or NetworkPreset.HighestThroughput;
+            var presetApplied = LoadSavedPreset() is ExoInternetPreset.LowestLatency
+                or ExoInternetPreset.HighestThroughput;
             // Adapter Properties checkboxes (Ethernet Properties → Networking)
             if (mediaProfile.EthernetAvailable || mediaProfile.WifiAvailable)
             {
@@ -1216,7 +1218,7 @@ public sealed class NetworkOptimizerService
         }
         catch { }
 
-        return new NetworkSnapshot
+        return new ExoInternetSnapshot
         {
             AdapterName = adapterName,
             AdapterDescription = adapterDesc,
@@ -1248,7 +1250,7 @@ public sealed class NetworkOptimizerService
     /// Deep local detection: PhysicalMediaType, usable Ethernet, Wi‑Fi 5/6/6E/7 radios, connected band.
     /// See docs/INTERNET-GOLDEN-PATH.md. No cloud model.
     /// </summary>
-    public async Task<NetworkMediaProfile> DetectMediaProfileAsync(CancellationToken ct = default)
+    public async Task<ExoInternetMediaProfile> DetectMediaProfileAsync(CancellationToken ct = default)
     {
         var ethAvail = false;
         var ethUp = false;
@@ -1296,7 +1298,7 @@ try {
   }
 } catch {}
 function IsWifi($a) {
-  # Mirrors NetworkLogic.IsWifiAdapter
+  # Mirrors ExoInternetLogic.IsWifiAdapter
   $pm = [string]$a.PhysicalMediaType
   $m  = [string]$a.MediaType
   $d  = [string]$a.InterfaceDescription
@@ -1374,7 +1376,7 @@ if ($hint -match '(?i)6\s*GHz|6GHz') { $band6 = $true }
 if ($hint -match '(?i)5\s*GHz|5GHz') { $band5 = $true }
 if ($hint -match '(?i)802\.11be') { $be = $true }
 if ($hint -match '(?i)802\.11ax') { $ax = $true }
-# Raw NIC facts (C# scores preset-aware via NetworkLogic.EvaluateNic)
+# Raw NIC facts (C# scores preset-aware via ExoInternetLogic.EvaluateNic)
 # FC/IM/IDLE/SS: 1=on, 0=off, -1=not exposed
 $fcR = -1; $imR = -1; $idleR = -1; $ssR = -1
 $primary = if ($bestEth) { $bestEth } else { @($phys | Where-Object Status -eq 'Up' | Select-Object -First 1) }
@@ -1527,15 +1529,15 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                             primaryMedia = v;
                             break;
                         case "DESC" when v is not ("-" or "") && nicVendor is ("Unknown" or ""):
-                            nicVendor = NetworkLogic.ClassifyNicVendor(v);
+                            nicVendor = ExoInternetLogic.ClassifyNicVendor(v);
                             break;
                     }
                 }
 
                 static bool? Tri(int r) => r < 0 ? null : r != 0;
-                var nicEval = NetworkLogic.EvaluateNic(
+                var nicEval = ExoInternetLogic.EvaluateNic(
                     activePreset,
-                    new NetworkLogic.NicFacts(
+                    new ExoInternetLogic.NicFacts(
                         FlowControlOn: Tri(fcR),
                         InterruptModerationOn: Tri(imR),
                         IdleRestrictOn: Tri(idleR),
@@ -1588,7 +1590,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
 
         if (wifiAvail && !supports5 && !supports6) supports5 = true;
 
-        var path = NetworkLogic.DecidePath(
+        var path = ExoInternetLogic.DecidePath(
             ethAvail, ethUp, ethInUse, wifiAvail, wifiUp,
             supports6, supports5, wifi6 || supports6, wifi7);
 
@@ -1599,7 +1601,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         if (physicalCores <= 0)
             physicalCores = Math.Max(1, logicals / 2);
 
-        return new NetworkMediaProfile
+        return new ExoInternetMediaProfile
         {
             EthernetAvailable = ethAvail,
             EthernetUp = ethUp,
@@ -1630,13 +1632,13 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
     }
 
     /// <summary>True when live settings match the preset knobs (no false fail for intentional offs).</summary>
-    public bool MatchesPreset(NetworkSnapshot snap, NetworkPreset preset)
+    public bool MatchesPreset(ExoInternetSnapshot snap, ExoInternetPreset preset)
     {
         if (!snap.ProbeOk) return false;
         if (snap.TaskOffloadDisabled == true) return false;
-        if (!NetworkLogic.AutotuneMatches(preset, snap.AutoTuning)) return false;
-        if (!NetworkLogic.LsoMatches(preset, snap.LsoEnabled)) return false;
-        if (!NetworkLogic.RscMatches(preset, snap.RscEnabled)) return false;
+        if (!ExoInternetLogic.AutotuneMatches(preset, snap.AutoTuning)) return false;
+        if (!ExoInternetLogic.LsoMatches(preset, snap.LsoEnabled)) return false;
+        if (!ExoInternetLogic.RscMatches(preset, snap.RscEnabled)) return false;
         // NIC status: when probe computed it for this saved preset, require OK
         if (snap.ActivePreset == preset && !snap.Media.NicOk &&
             snap.Media.NicHints is not ("-" or "" or null))
@@ -1645,18 +1647,18 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
     }
 
     public Task<(bool Ok, string Message)> ApplyPresetAsync(
-        NetworkPreset preset,
+        ExoInternetPreset preset,
         IProgress<string>? progress = null,
         CancellationToken ct = default)
-        => ApplyPresetAsync(preset, new NetworkApplyOptions(), progress, ct);
+        => ApplyPresetAsync(preset, new ExoInternetApplyOptions(), progress, ct);
 
     public async Task<(bool Ok, string Message)> ApplyPresetAsync(
-        NetworkPreset preset,
-        NetworkApplyOptions options,
+        ExoInternetPreset preset,
+        ExoInternetApplyOptions options,
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
-        options ??= new NetworkApplyOptions();
+        options ??= new ExoInternetApplyOptions();
         progress?.Report("Detecting adapters & radio capabilities...");
         var media = await DetectMediaProfileAsync(ct).ConfigureAwait(false);
 
@@ -1670,7 +1672,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
         }
 
         progress?.Report("Preparing stack (Ethernet-first when available)...");
-        var script = NetworkApplyScriptBuilder.Build(preset, options, media);
+        var script = ExoInternetApplyScriptBuilder.Build(preset, options, media);
         var path = Path.Combine(Path.GetTempPath(), $"exo-net-{Guid.NewGuid():N}.ps1");
         await File.WriteAllTextAsync(path, script, ct).ConfigureAwait(false);
 
@@ -1697,11 +1699,11 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
 
             // Honest apply outcome: structured EXO_REPORT steps from the elevated run log
             // + rollback marker written by the script itself.
-            IReadOnlyList<NetworkApplyReportStep> report = Array.Empty<NetworkApplyReportStep>();
+            IReadOnlyList<ExoInternetApplyReportStep> report = Array.Empty<ExoInternetApplyReportStep>();
             try
             {
                 if (File.Exists(ApplyLogPath))
-                    report = NetworkLogic.ParseApplyReport(await File.ReadAllTextAsync(ApplyLogPath, ct).ConfigureAwait(false));
+                    report = ExoInternetLogic.ParseApplyReport(await File.ReadAllTextAsync(ApplyLogPath, ct).ConfigureAwait(false));
             }
             catch { }
             var rollback = LoadRollbackStatus();
@@ -1785,19 +1787,19 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
 
     /// <summary>Expose apply script generation for audit/smokes (same path as elevated apply).</summary>
     public static string BuildApplyScript(
-        NetworkPreset preset,
-        NetworkApplyOptions options,
-        NetworkMediaProfile media) =>
-        NetworkApplyScriptBuilder.Build(preset, options, media);
+        ExoInternetPreset preset,
+        ExoInternetApplyOptions options,
+        ExoInternetMediaProfile media) =>
+        ExoInternetApplyScriptBuilder.Build(preset, options, media);
 
     /// <summary>Expose repair script generation for audit/smokes (same path as elevated repair).</summary>
-    public static string BuildRepairScript() => NetworkApplyScriptBuilder.BuildRepair();
+    public static string BuildRepairScript() => ExoInternetApplyScriptBuilder.BuildRepair();
 
     /// <summary>Expose benchmark script generation for audit/smokes (same path as RunBenchmarkAsync).</summary>
-    public static string BuildBenchmarkScript() => NetworkApplyScriptBuilder.BuildBenchmark();
+    public static string BuildBenchmarkScript() => ExoInternetApplyScriptBuilder.BuildBenchmark();
 
-    // BuildFullApplyScript removed - see NetworkApplyScriptBuilder
-    private static NetworkFeatureRow Row(string title, string status, bool ok, string? note = null) => new()
+    // BuildFullApplyScript removed - see ExoInternetApplyScriptBuilder
+    private static ExoInternetFeatureRow Row(string title, string status, bool ok, string? note = null) => new()
     {
         Title = title,
         Status = string.IsNullOrWhiteSpace(note) ? status : $"{status} - {note}",

@@ -6,7 +6,7 @@
 .DESCRIPTION
   Runs every test that is meaningful without WinUI:
     - repository / script / data integrity
-    - Network / Steam / Nvidia / Discord / Ui smokes
+    - Internet / Steam / Nvidia / Discord / Ui smokes
 
   The WinUI app itself cannot build or run on Linux (XamlCompiler.exe is a
   Windows binary). Use Windows CI or a local Windows install for GUI QA.
@@ -41,7 +41,7 @@ Invoke-Step 'Test-Repository' {
 }
 
 $smokes = @(
-    @{ Name = 'Network.Smoke'; Project = 'tools/Network.Smoke' },
+    @{ Name = 'Internet.Smoke'; Project = 'tools/Internet.Smoke' },
     @{ Name = 'Steam.Smoke'; Project = 'tools/Steam.Smoke' },
     @{ Name = 'Nvidia.Smoke'; Project = 'tools/Nvidia.Smoke' },
     @{ Name = 'GameLaunchers.Smoke'; Project = 'tools/GameLaunchers.Smoke' }

@@ -19,7 +19,7 @@ public sealed class WebHostBridge
     private CoreWebView2? _web;
 
     /// <summary>Internet ProbeAsync cache — full probe is multi-process + ping.</summary>
-    private NetworkSnapshot? _internetProbeCache;
+    private ExoInternetSnapshot? _internetProbeCache;
     private DateTimeOffset _internetProbeCacheUtc = DateTimeOffset.MinValue;
     private static readonly TimeSpan InternetProbeFreshness = TimeSpan.FromSeconds(90);
 
@@ -203,7 +203,7 @@ public sealed class WebHostBridge
 
     private object BuildDashboard()
     {
-        var vm = new DashboardViewModel(_services);
+        var vm = new HomeViewModel(_services);
         var modules = new[]
         {
             Row("discord", "Discord", vm.DiscordStatusTag),
@@ -239,7 +239,7 @@ public sealed class WebHostBridge
                 os = vm.SpecsOs
             },
             // Prefer lightweight live snapshot so home meters never depend on a
-            // second full DashboardViewModel construct (detect + seed).
+            // second full HomeViewModel construct (detect + seed).
             live = BuildLiveSnapshot(),
             modules,
             next
@@ -247,7 +247,7 @@ public sealed class WebHostBridge
     }
 
     /// <summary>
-    /// Lightweight live tick — never construct DashboardViewModel (that runs full
+    /// Lightweight live tick — never construct HomeViewModel (that runs full
     /// detect/seed and starves the UI every ~1s, emptying meter cards).
     /// </summary>
     private object BuildLive() => BuildLiveSnapshot();
@@ -278,7 +278,7 @@ public sealed class WebHostBridge
             ? $"{link.Label} {link.MediaKind}"
             : "No link";
 
-        var quality = _services.Network.LoadQualityBenchmark();
+        var quality = _services.Internet.LoadQualityBenchmark();
         double? idleMs = null;
         double? down = null, up = null, loadedDown = null, loadedUp = null, loss = null;
         string? dns = null;
@@ -300,7 +300,7 @@ public sealed class WebHostBridge
         }
         else
         {
-            var latency = HomeDashboardReader.TryReadLatency(_services.Network);
+            var latency = HomeDashboardReader.TryReadLatency(_services.Internet);
             if (latency is not null)
                 idleMs = latency.AfterP50Ms;
             dns ??= HomeDashboardReader.TryReadInternetDnsStatus();
@@ -834,7 +834,7 @@ public sealed class WebHostBridge
     /// </summary>
     private async Task<object> MapInternetAsync(bool force = false)
     {
-        NetworkSnapshot? snap = null;
+        ExoInternetSnapshot? snap = null;
         try
         {
             if (!force &&
@@ -845,7 +845,7 @@ public sealed class WebHostBridge
             }
             else
             {
-                snap = await _services.Network.ProbeAsync().ConfigureAwait(true);
+                snap = await _services.Internet.ProbeAsync().ConfigureAwait(true);
                 _internetProbeCache = snap;
                 _internetProbeCacheUtc = DateTimeOffset.UtcNow;
             }
@@ -855,14 +855,14 @@ public sealed class WebHostBridge
             /* probe optional — fall back to persisted state */
         }
 
-        var savedPreset = snap?.ActivePreset ?? _services.Network.LoadSavedPreset();
+        var savedPreset = snap?.ActivePreset ?? _services.Internet.LoadSavedPreset();
         // Only competitive presets count as applied — not Balanced / leftover status strings.
-        var applied = savedPreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput;
-        var preferLowest = savedPreset != NetworkPreset.HighestThroughput;
+        var applied = savedPreset is ExoInternetPreset.LowestLatency or ExoInternetPreset.HighestThroughput;
+        var preferLowest = savedPreset != ExoInternetPreset.HighestThroughput;
         var presetLabel = savedPreset switch
         {
-            NetworkPreset.HighestThroughput => "high throughput",
-            NetworkPreset.LowestLatency => "lowest latency",
+            ExoInternetPreset.HighestThroughput => "high throughput",
+            ExoInternetPreset.LowestLatency => "lowest latency",
             _ => "balanced"
         };
 
@@ -885,7 +885,7 @@ public sealed class WebHostBridge
                 ? $"Current resolvers: {dns}"
                 : "Tests Cloudflare, Google, and Quad9 on this route, selects the fastest healthy resolver, and requests automatic DoH when Windows supports it.";
 
-        var hasSnapshot = NetworkOptimizerService.HasRestoreSnapshot();
+        var hasSnapshot = ExoInternetOptimizerService.HasRestoreSnapshot();
         var repairDetail = hasSnapshot
             ? "A pre-Exo snapshot is ready; Repair restores DNS, DoH, routes, TCP, and NIC settings."
             : "Apply takes a pre-change snapshot; Repair can return the Windows network stack to stock defaults.";
@@ -901,7 +901,7 @@ public sealed class WebHostBridge
         // Last apply steps (compact) when available.
         try
         {
-            var report = _services.Network.LoadLastApplyReport();
+            var report = _services.Internet.LoadLastApplyReport();
             if (report is { Count: > 0 })
             {
                 var fails = report.Where(r =>
@@ -991,7 +991,7 @@ public sealed class WebHostBridge
         {
             statusKind = applied ? "applied" : "ready";
             statusText = applied
-                ? (savedPreset == NetworkPreset.HighestThroughput
+                ? (savedPreset == ExoInternetPreset.HighestThroughput
                     ? "High-throughput stack applied"
                     : "Lowest-latency stack applied")
                 : "Ready to optimize";
@@ -1456,7 +1456,7 @@ public sealed class WebHostBridge
         {
             if (module == "internet")
             {
-                var net = _services.Network;
+                var net = _services.Internet;
                 var strProgress = new Progress<string>(s =>
                 {
                     log.Line("NET  " + s);
@@ -1492,12 +1492,12 @@ public sealed class WebHostBridge
                     $"dns={quality.DnsProvider} down={quality.DownloadMbps:0}Mbps up={quality.UploadMbps:0}Mbps");
                 Report(35, $"Quality: {quality.PingP50Ms:0.#} ms idle · {quality.DnsProvider} DNS");
 
-                var preset = preferLowestLatency ? NetworkPreset.LowestLatency : NetworkPreset.HighestThroughput;
+                var preset = preferLowestLatency ? ExoInternetPreset.LowestLatency : ExoInternetPreset.HighestThroughput;
                 log.Line($"Internet Apply preset={preset}");
                 Report(40, $"Applying {preset} stack…");
                 var (aok, amsg) = await net.ApplyPresetAsync(
                     preset,
-                    new NetworkApplyOptions { Experimental = experimental, RestartEthernet = true },
+                    new ExoInternetApplyOptions { Experimental = experimental, RestartEthernet = true },
                     strProgress).ConfigureAwait(true);
                 log.Line($"Internet Apply result ok={aok} msg={amsg}");
                 if (!aok) throw new InvalidOperationException(amsg);
@@ -1535,7 +1535,7 @@ public sealed class WebHostBridge
 
             // ── Apply pipeline policy (repair always uses full PS kit) ──────────
             // discord / nvidia  → specialized PowerShell kits only
-            // internet          → NetworkOptimizerService only (handled above)
+            // internet          → ExoInternetOptimizerService only (handled above)
             // riot / epic / brave → native C# ONLY
             // windows / steam   → native C# primary; PS deep pack soft-fails if native OK
             //
@@ -1614,29 +1614,29 @@ public sealed class WebHostBridge
             switch (module)
             {
                 case "discord":
-                    script = repair ? scripts.DiscordRepairScript : scripts.DiscordOptimizerScript;
+                    script = repair ? scripts.DiscordRepairScript : scripts.DiscordApplyScript;
                     workDir = scripts.GetDiscordRoot();
                     break;
                 case "steam":
-                    script = repair ? scripts.SteamRepairScript : scripts.SteamOptimizerScript;
+                    script = repair ? scripts.SteamRepairScript : scripts.SteamApplyScript;
                     workDir = scripts.GetSteamRoot();
                     break;
                 case "windows":
-                    script = repair ? scripts.WindowsRepairScript : scripts.WindowsOptimizerScript;
+                    script = repair ? scripts.WindowsRepairScript : scripts.WindowsApplyScript;
                     workDir = scripts.GetWindowsRoot();
                     break;
                 case "nvidia":
-                    script = repair ? scripts.NvidiaRepairScript : scripts.NvidiaOptimizerScript;
+                    script = repair ? scripts.NvidiaRepairScript : scripts.NvidiaApplyScript;
                     workDir = scripts.GetNvidiaRoot();
                     if (!repair)
                         args.Add(useGsync ? "-Gsync" : "-RawLatency");
                     break;
                 case "riot":
-                    script = repair ? scripts.RiotRepairScript : scripts.RiotOptimizerScript;
+                    script = repair ? scripts.RiotRepairScript : scripts.RiotApplyScript;
                     workDir = scripts.GetGameLaunchersRoot();
                     break;
                 case "epic":
-                    script = repair ? scripts.EpicRepairScript : scripts.EpicOptimizerScript;
+                    script = repair ? scripts.EpicRepairScript : scripts.EpicApplyScript;
                     workDir = scripts.GetGameLaunchersRoot();
                     break;
                 default:
@@ -1679,7 +1679,7 @@ public sealed class WebHostBridge
                 Report(5, repair ? "Repair (elevated)..." : "Apply (elevated)...");
 
             // Clean PC: Discord/Steam/NVIDIA kits need PowerShell 7. Internet already
-            // bootstraps pwsh via NetworkOptimizerService; native-only modules skip this path.
+            // bootstraps pwsh via ExoInternetOptimizerService; native-only modules skip this path.
             var needPwshBootstrap = module is "discord" or "steam" or "nvidia" or "windows";
             var result = await runner.RunAsync(
                 script,

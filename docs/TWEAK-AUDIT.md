@@ -169,7 +169,7 @@ Repair restores the full pre-Exo DRS database captured before the first Apply.
 | Surface | Verdict | Why |
 |---------|---------|-----|
 | Self-contained win-x64 + ReadyToRun publish | **Keep** | End users need no runtime; R2R removes JIT warmup |
-| Native AOT publish | **Excluded (v2.4.1)** | App state serialization (`SettingsService`, `NetworkOptimizerService`, `NvidiaPanelSettingsService`) is reflection-based `System.Text.Json`; AOT silently degrades those loads to defaults instead of failing loudly. Adoption requires a source-generated-context migration plus on-hardware QA. CI carries an informational compile probe (`EXO_AOT_PROBE`) so the toolchain status stays visible |
+| Native AOT publish | **Excluded (v2.4.1)** | App state serialization (`SettingsService`, `ExoInternetOptimizerService`, `NvidiaPanelSettingsService`) is reflection-based `System.Text.Json`; AOT silently degrades those loads to defaults instead of failing loudly. Adoption requires a source-generated-context migration plus on-hardware QA. CI carries an informational compile probe (`EXO_AOT_PROBE`) so the toolchain status stays visible |
 | Native AOT / trimming | **Prepared, not shipped** | Source-generated JSON and reflection-free app paths now pass the AOT analysis phase without warnings. Shipping stays on the verified self-contained WinUI path until a native C++ linker build is available for full runtime QA. |
 | CI startup measurement | **Implemented (v2.4.1)** | e2e job publishes the real app and reports `EXO_STARTUP_MS` (process start → main window); headless-runner misses warn instead of faking a number |
 

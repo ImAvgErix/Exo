@@ -55,7 +55,7 @@ TRACK A — ARCHITECTURE (weeks 2–14, never blocks Track P hotfixes)
   A1  Shared EXO_REPORT + contract tables
   A2  Split Internet builder (template)
   A3  Split Steam / Discord / NVIDIA god-scripts
-  A4  SharedModulePlate + Advisor v2
+  A4  ExoModulePlate + Advisor v2
   A5  v3.0 when contracts + plate + all modules extracted
 ```
 
@@ -120,7 +120,7 @@ Users should click **Apply** and get:
 
 ### 1.3 Strategy: strangle, not big-bang
 
-1. Extract pure C# cores (like NetworkLogic today).  
+1. Extract pure C# cores (like ExoInternetLogic today).  
 2. Split god-scripts into stage libraries.  
 3. One module per PR stack.  
 4. Ship weekly on main.  
@@ -141,7 +141,7 @@ Ship blockers — any PR that violates is rejected.
 | L3 | Apply must work (retry, alternate path, loud fail only if nothing landed) | Module acceptance |
 | L4 | Detect equals Apply contract | Contract smoke tables |
 | L5 | No invented registry folklore | Forbidden marker lists |
-| L6 | Internet: never disable Wi-Fi; never auto winsock; snapshot+rollback | Network.Smoke + golden path |
+| L6 | Internet: never disable Wi-Fi; never auto winsock; snapshot+rollback | Internet.Smoke + golden path |
 | L7 | Discord/Steam: Repair restores bootable client | E2E + human |
 | L8 | NVIDIA Reset = status clear only | UI copy + smoke |
 | L9 | Motion: XAML Storyboards only | Ui.Smoke |
@@ -194,11 +194,11 @@ WinUI Page -> ViewModel
 
 ```
 SHELL (WinUI 3 / .NET 10 / fixed frame)
-  Home | SharedModulePlate | AdvisorV2 | NVIDIA Panel
+  Home | ExoModulePlate | AdvisorV2 | NVIDIA Panel
            |
 CONTRACTS (pure C#, Linux CI unit tests)
   FeatureId | DetectResult | ApplyPlan | Forbidden[]
-  NetworkLogic | DiscordLogic | SteamLogic | NvidiaLogic
+  ExoInternetLogic | DiscordLogic | SteamLogic | NvidiaLogic
            |
 EXECUTORS (thin PS7 + small helpers)
   one Run.ps1 per module | lib/Step-*.ps1 | no god-files
@@ -227,7 +227,7 @@ Exo/Modules/<Name>/
   <Name>Detect (C# and/or PS)
   <Name>Apply steps (PS lib)
   <Name>Repair
-  ViewModel + Page (via SharedModulePlate)
+  ViewModel + Page (via ExoModulePlate)
 ```
 
 Migrate by adding files first; delete god-script last.
@@ -286,7 +286,7 @@ EXO_PROGRESS:<0-100>|<human status>
 - Run key to Exo path
 - New-Service Exo*
 - ElementCompositionPreview in motion paths
-- Folklore markers (NetworkLogic.Forbidden + module lists)
+- Folklore markers (ExoInternetLogic.Forbidden + module lists)
 
 ---
 
@@ -296,8 +296,8 @@ EXO_PROGRESS:<0-100>|<human status>
 
 Full inventory: **docs/rewrite/research-internet.md** (~720 lines)
 
-**Strengths:** fail-closed path; snapshot; NetworkLogic; dense smoke.  
-**Weak:** NetworkApplyScriptBuilder god-file; repair triplicated; detect subset of apply; stale strings; MMCSS snapshot gap.
+**Strengths:** fail-closed path; snapshot; ExoInternetLogic; dense smoke.  
+**Weak:** ExoInternetApplyScriptBuilder god-file; repair triplicated; detect subset of apply; stale strings; MMCSS snapshot gap.
 
 | WP | Work | Days |
 |----|------|------|
@@ -384,7 +384,7 @@ Full inventory: **docs/rewrite/research-shell-ci.md**
 | WP | Work | Days |
 |----|------|------|
 | U-1 | Token audit vs exo-ui-craft | 1-2 |
-| U-2 | SharedModulePlate control | 3-4 |
+| U-2 | ExoModulePlate control | 3-4 |
 | U-3 | Migrate 4 pages to plate | 2-3 |
 | U-4 | Advisor v2 from EXO_REPORT | 2-3 |
 | U-5 | DPI strategy | 2-3 |
@@ -424,7 +424,7 @@ Full inventory: **docs/rewrite/research-shell-ci.md**
 | W5–W6 | Steam god-script split | **v2.8.0** |
 | W7–W8 | Discord kit ownership + update heal | **v2.8.1** |
 | W9–W11 | NVIDIA split + display reliability | **v2.9.0** |
-| W12–W14 | SharedModulePlate + Advisor v2 + DPI | **v3.0.0** |
+| W12–W14 | ExoModulePlate + Advisor v2 + DPI | **v3.0.0** |
 | W15+ | Stabilize; no new modules | bugfix |
 
 ~14 weeks to v3.0 structure; **first trust release at week 2**, not week 4.
@@ -458,12 +458,12 @@ PR-N1  nvidia split
   ->
 PR-N2  nvidia display reliability -> v2.9.0
   ->
-PR-U1  SharedModulePlate migrate
+PR-U1  ExoModulePlate migrate
   ->
 PR-U2  advisor v2 + DPI + motion -> v3.0.0
 ```
 
-Optional parallel after C2: SharedModulePlate scaffold only (no module behavior).
+Optional parallel after C2: ExoModulePlate scaffold only (no module behavior).
 
 ---
 
@@ -550,7 +550,7 @@ Tag: ____  SHA: ____  Date: ____
 
 - [x] All four modules have contract tables + smokes (`tools/Contracts.Smoke`)  
 - [x] No PS god-file > 80 KB without exception note (**exception:** `Steam-Optimizer.ps1` ~118 KB and `Nvidia-Optimizer.ps1` ~204 KB remain monoliths with thin `lib/*Bootstrap.ps1` stage entry points; full strangle deferred post-v3)  
-- [x] SharedModulePlate on all optimizers  
+- [x] ExoModulePlate on all optimizers  
 - [x] Advisor v2 from detect + EXO_REPORT  
 - [x] Release requires CI  
 - [ ] Human checklist R1-R4 done once  
@@ -565,7 +565,7 @@ Tag: ____  SHA: ____  Date: ____
 |------|-----:|--------|
 | `Exo/Scripts/Steam/Steam-Optimizer.ps1` | ~118 KB | **Exception** — thin `Steam/lib/Steam.Bootstrap.ps1` stage IDs; full extract next |
 | `Exo/Scripts/Nvidia/Nvidia-Optimizer.ps1` | ~204 KB | **Exception** — thin `Nvidia/lib/Nvidia.Bootstrap.ps1` stage IDs; full extract next |
-| `NetworkApplyScriptBuilder` | split | **Done** — `.Repair.cs` + `.Benchmark.cs` partials |
+| `ExoInternetApplyScriptBuilder` | split | **Done** — `.Repair.cs` + `.Benchmark.cs` partials |
 
 ---
 
