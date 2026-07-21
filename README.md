@@ -2,7 +2,9 @@
 
 **Competitive Windows optimization — measured, reversible, product-grade.**
 
-Exo is a private WinUI 3 app that tunes the host stack that actually affects gaming and voice: network path, GPU driver policy, Discord, Steam, Riot, Epic, and Windows itself. Every change is detected on the live PC, applied through a controlled pipeline, and restorable with Repair.
+Exo is a community WinUI 3 app: it **inventories *this* PC first** (hardware, adapters, installs, Task Scheduler, configs), then applies only what exists and is safe. Different drives, GPUs, and software on every machine — fixed “dev box” assumptions are not allowed. See [docs/PC-AWARE.md](docs/PC-AWARE.md).
+
+Every change is live-detected, applied through a controlled pipeline, and restorable with Repair.
 
 **Exo is free.** No ads, no account, no paywall. Building and shipping it still costs real money — if it helps you, even **$1** keeps the project going:
 

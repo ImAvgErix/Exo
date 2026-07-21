@@ -482,31 +482,18 @@ public static class NativeLiveDetect
 
     private static bool LiveSteamLibraryGpu(string steamPath)
     {
-        // Probe up to 12 real game EXEs under steamapps\common — GPU only (no FSO).
-        var common = Path.Combine(steamPath, "steamapps", "common");
-        if (!Directory.Exists(common)) return true; // nothing to pin yet
-        var samples = new List<string>();
+        // Same multi-library discovery as Apply (libraryfolders.vdf on every PC).
+        List<string> samples;
         try
         {
-            foreach (var dir in Directory.EnumerateDirectories(common).Take(20))
-            {
-                foreach (var exe in Directory.EnumerateFiles(dir, "*.exe", SearchOption.AllDirectories).Take(8))
-                {
-                    var leaf = Path.GetFileName(exe);
-                    if (leaf.Contains("Crash", StringComparison.OrdinalIgnoreCase) ||
-                        leaf.Contains("Unins", StringComparison.OrdinalIgnoreCase) ||
-                        leaf.Contains("vcredist", StringComparison.OrdinalIgnoreCase) ||
-                        leaf.Contains("EasyAntiCheat", StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    samples.Add(exe);
-                    if (samples.Count >= 12) break;
-                }
-                if (samples.Count >= 12) break;
-            }
+            samples = SteamNativeApply.DiscoverLibraryGameExes(steamPath).Take(24).ToList();
         }
-        catch { return false; }
+        catch
+        {
+            return false;
+        }
 
-        if (samples.Count == 0) return true;
+        if (samples.Count == 0) return true; // no games yet — not a fail
 
         using var gpu = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\DirectX\UserGpuPreferences");
         var ok = 0;

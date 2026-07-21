@@ -1,5 +1,7 @@
 # Windows tweak ownership
 
+Also see **[PC-AWARE.md](PC-AWARE.md)** — community multi-PC: discover this machine live before every write.
+
 ## Strategy
 
 **One writer per key-family. App optimizers keep app-scoped integration; Windows owns machine-wide gaming host policy; Internet stays network-only; Games owns display (borderless).**

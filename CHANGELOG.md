@@ -1,3 +1,10 @@
+## 3.16.6
+
+- **PC-aware law** (`docs/PC-AWARE.md`): community multi-PC — discover this machine live, act only on hits, protect must-keep
+- Windows tasks: **enumerate this PC’s Task Scheduler**, classify (protect / quiet / leave), disable only live noise — no blind 150-path firehose
+- Steam detect library GPU uses **same multi-library discovery as Apply** (`libraryfolders.vdf` on every PC)
+- Empty task folders still purged after quiet
+
 ## 3.16.5
 
 - Windows scheduled tasks: expanded quiet list (path fixes for DeviceDirectoryClient, UpdateOrchestrator, Windows AI, AppListBackup, EDP, …)

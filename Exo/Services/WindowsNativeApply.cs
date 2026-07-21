@@ -585,38 +585,56 @@ public static class WindowsNativeApply
     }
 
     /// <summary>
-    /// Disable competitive-quiet tasks by exact path (never delete Microsoft tasks).
-    /// Then remove truly empty Task Scheduler folders. Never touches security/recovery
-    /// stacks (BitLocker, TPM, certs, chkdsk, restore, AC) or user tools like cua-driver.
+    /// PC-aware Task Scheduler quiet: enumerate THIS PC's tree, classify each task,
+    /// disable only noise that is present and enabled. Then drop empty folders.
+    /// Never deletes Microsoft task definitions; never touches protected stacks.
     /// </summary>
     private static NativeApplyStep DisableKnownBloatTasks()
     {
-        // Exact paths only — Task Scheduler is case-insensitive but folder spacing matters
-        // (Win11 uses DeviceDirectoryClient, not "Device Directory Client").
-        var tasks = BloatScheduledTaskPaths();
-        var disabled = 0;
-        var timedOut = 0;
-        var missing = 0;
         var budgetMs = 120_000;
         var sw = Stopwatch.StartNew();
-        foreach (var tn in tasks)
+        var disabled = 0;
+        var timedOut = 0;
+        var skippedProtected = 0;
+        var skippedAlreadyOff = 0;
+        var skippedUnknown = 0;
+        var seen = 0;
+
+        // Live inventory first — every PC has a different task set.
+        var live = EnumerateScheduledTasksLive(budgetMs, sw);
+        seen = live.Count;
+        foreach (var task in live)
         {
             if (sw.ElapsedMilliseconds > budgetMs)
             {
                 timedOut++;
                 break;
             }
+
+            var decision = ClassifyScheduledTask(task.Path, task.Name, task.Enabled);
+            if (decision == TaskQuietDecision.Protect)
+            {
+                skippedProtected++;
+                continue;
+            }
+            if (decision == TaskQuietDecision.Leave)
+            {
+                skippedUnknown++;
+                continue;
+            }
+            // Quiet
+            if (!task.Enabled)
+            {
+                skippedAlreadyOff++;
+                continue;
+            }
+
+            var tn = task.FullPath;
             var (code, _, to) = RunTimed("schtasks.exe", $"/Change /TN \"{tn}\" /DISABLE", 2500);
             if (to) timedOut++;
             else if (code == 0) disabled++;
-            else missing++;
+            // access denied / race → ignore
         }
-
-        // Root-folder third-party updaters (Edge/Brave GUIDs differ per machine).
-        var rootExtra = 0;
-        if (sw.ElapsedMilliseconds < budgetMs)
-            rootExtra = DisableRootNoiseTasks(budgetMs, sw);
-        disabled += rootExtra;
 
         var foldersRemoved = 0;
         if (sw.ElapsedMilliseconds < budgetMs)
@@ -624,9 +642,9 @@ public static class WindowsNativeApply
 
         var status = timedOut > 0
             ? "partial"
-            : disabled > 0 || foldersRemoved > 0
+            : disabled > 0 || foldersRemoved > 0 || skippedAlreadyOff > 0
                 ? "ok"
-                : missing > 0
+                : seen == 0
                     ? "skip"
                     : "ok";
         return new NativeApplyStep
@@ -634,210 +652,242 @@ public static class WindowsNativeApply
             Id = "scheduled-tasks",
             Status = status,
             Reason =
-                $"disabled={disabled}; rootExtra={rootExtra}; missing/denied={missing}; timedOut={timedOut}; " +
-                $"list={tasks.Length}; emptyFoldersRemoved={foldersRemoved}; ms={sw.ElapsedMilliseconds}"
+                $"live={seen}; disabled={disabled}; alreadyOff={skippedAlreadyOff}; " +
+                $"protected={skippedProtected}; leftAlone={skippedUnknown}; timedOut={timedOut}; " +
+                $"emptyFoldersRemoved={foldersRemoved}; ms={sw.ElapsedMilliseconds}"
         };
     }
 
-    /// <summary>Full quiet list — ban-safe noise only. Paths verified against Win10/11 layouts.</summary>
-    private static string[] BloatScheduledTaskPaths() =>
-    [
-        // Application Experience / CEIP / Feedback / WER
-        @"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
-        @"\Microsoft\Windows\Application Experience\ProgramDataUpdater",
-        @"\Microsoft\Windows\Application Experience\StartupAppTask",
-        @"\Microsoft\Windows\Application Experience\PcaPatchDbTask",
-        @"\Microsoft\Windows\Application Experience\MareBackup",
-        @"\Microsoft\Windows\Application Experience\SdbinstMergeDbTask",
-        @"\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
-        @"\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
-        @"\Microsoft\Windows\Customer Experience Improvement Program\KernelCeipTask",
-        @"\Microsoft\Windows\Feedback\Siuf\DmClient",
-        @"\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload",
-        @"\Microsoft\Windows\Windows Error Reporting\QueueReporting",
-        @"\Microsoft\Windows\UsageAndQualityInsights\UsageAndQualityInsights-MaintenanceTask",
-        // Cloud / maps / location / restore demos
-        @"\Microsoft\Windows\CloudExperienceHost\CreateObjectTask",
-        @"\Microsoft\Windows\CloudRestore\Backup",
-        @"\Microsoft\Windows\CloudRestore\Restore",
-        @"\Microsoft\Windows\Maps\MapsToastTask",
-        @"\Microsoft\Windows\Maps\MapsUpdateTask",
-        @"\Microsoft\Windows\Location\Notifications",
-        @"\Microsoft\Windows\Location\WindowsActionDialog",
-        // Diagnosis / maintenance noise
-        @"\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector",
-        @"\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticResolver",
-        @"\Microsoft\Windows\Power Efficiency Diagnostics\AnalyzeSystem",
-        @"\Microsoft\Windows\Maintenance\WinSAT",
-        @"\Microsoft\Windows\Diagnosis\Scheduled",
-        @"\Microsoft\Windows\MemoryDiagnostic\ProcessMemoryDiagnosticEvents",
-        @"\Microsoft\Windows\MemoryDiagnostic\RunFullMemoryDiagnostic",
-        @"\Microsoft\Windows\PerformanceTrace\RequestTrace",
-        @"\Microsoft\Windows\PerformanceTrace\WhesvcToast",
-        // Shell / family / PI / retail / pictures
-        @"\Microsoft\Windows\Shell\FamilySafetyMonitor",
-        @"\Microsoft\Windows\Shell\FamilySafetyRefreshTask",
-        @"\Microsoft\Windows\Shell\IndexerAutomaticMaintenance",
-        @"\Microsoft\Windows\Shell\UpdateUserPictureTask",
-        @"\Microsoft\Windows\Shell\UpdateUserPictureTaskContained",
-        @"\Microsoft\Windows\PI\Sqm-Tasks",
-        @"\Microsoft\Windows\RetailDemo\CleanupOfflineContent",
-        @"\Microsoft\Windows\AppListBackup\Backup",
-        @"\Microsoft\Windows\AppListBackup\BackupNonMaintenance",
-        // Xbox (not anti-cheat)
-        @"\Microsoft\XblGameSave\XblGameSaveTask",
-        // Push / device telemetry (both path spellings)
-        @"\Microsoft\Windows\PushToInstall\LoginCheck",
-        @"\Microsoft\Windows\PushToInstall\Registration",
-        @"\Microsoft\Windows\Device Information\Device",
-        @"\Microsoft\Windows\Device Information\Device User",
-        @"\Microsoft\Windows\DeviceDirectoryClient\HandleCommand",
-        @"\Microsoft\Windows\DeviceDirectoryClient\HandleWnsCommand",
-        @"\Microsoft\Windows\DeviceDirectoryClient\IntegrityCheck",
-        @"\Microsoft\Windows\DeviceDirectoryClient\LocateCommandUserSession",
-        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterDeviceAccountChange",
-        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterDeviceLocationRightsChange",
-        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterDevicePeriodic24",
-        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterDevicePolicyChange",
-        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterDeviceProtectionStateChanged",
-        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterDeviceSettingChange",
-        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterUserDevice",
-        // legacy spaced path (Win10)
-        @"\Microsoft\Windows\Device Directory Client\HandleCommand",
-        @"\Microsoft\Windows\Device Directory Client\HandleWnsCommand",
-        @"\Microsoft\Windows\Device Directory Client\IntegrityCheck",
-        @"\Microsoft\Windows\Device Directory Client\LocateCommandUserSession",
-        @"\Microsoft\Windows\Device Directory Client\RegisterDeviceAccountChange",
-        @"\Microsoft\Windows\Device Directory Client\RegisterDeviceLocationRightsChange",
-        @"\Microsoft\Windows\Device Directory Client\RegisterDevicePeriodic24",
-        @"\Microsoft\Windows\Device Directory Client\RegisterDevicePolicyChange",
-        @"\Microsoft\Windows\Device Directory Client\RegisterDeviceProtectionStateChanged",
-        @"\Microsoft\Windows\Device Directory Client\RegisterDeviceSettingChange",
-        @"\Microsoft\Windows\Device Directory Client\RegisterUserDevice",
-        // WU / WaaS / flighting / UpdateOrchestrator noise (companion to WU pause)
-        @"\Microsoft\Windows\WindowsUpdate\Scheduled Start",
-        @"\Microsoft\Windows\WindowsUpdate\Refresh Group Policy Cache",
-        @"\Microsoft\Windows\WaaSMedic\PerformRemediation",
-        @"\Microsoft\Windows\Flighting\FeatureConfig\ReconcileFeatures",
-        @"\Microsoft\Windows\Flighting\FeatureConfig\UsageDataFlushing",
-        @"\Microsoft\Windows\Flighting\FeatureConfig\UsageDataReporting",
-        @"\Microsoft\Windows\Flighting\OneSettings\RefreshCache",
-        @"\Microsoft\Windows\UpdateOrchestrator\Schedule Scan",
-        @"\Microsoft\Windows\UpdateOrchestrator\Schedule Scan Static Task",
-        @"\Microsoft\Windows\UpdateOrchestrator\Start Oobe Expedite Work",
-        @"\Microsoft\Windows\UpdateOrchestrator\StartOobeAppsScan_LicenseAccepted",
-        @"\Microsoft\Windows\UpdateOrchestrator\StartOobeAppsScanAfterUpdate",
-        @"\Microsoft\Windows\UpdateOrchestrator\UIEOrchestrator",
-        @"\Microsoft\Windows\UpdateOrchestrator\UUS Failover Task",
-        // Input / speech / international
-        @"\Microsoft\Windows\Speech\SpeechModelDownloadTask",
-        @"\Microsoft\Windows\International\Synchronize Language Settings",
-        @"\Microsoft\Windows\LanguageComponentsInstaller\Installation",
-        @"\Microsoft\Windows\LanguageComponentsInstaller\ReconcileLanguageResources",
-        // Defender scheduled scans (policy path; residual tasks)
-        @"\Microsoft\Windows\Windows Defender\Windows Defender Cache Maintenance",
-        @"\Microsoft\Windows\Windows Defender\Windows Defender Cleanup",
-        @"\Microsoft\Windows\Windows Defender\Windows Defender Scheduled Scan",
-        @"\Microsoft\Windows\Windows Defender\Windows Defender Verification",
-        // Media / UPnP / WOF
-        @"\Microsoft\Windows\Windows Media Sharing\UpdateLibrary",
-        @"\Microsoft\Windows\UPnP\UPnPHostConfig",
-        @"\Microsoft\Windows\WOF\WIM-Hash-Management",
-        @"\Microsoft\Windows\WOF\WIM-Hash-Validation",
-        // Setting sync / subscription / clip
-        @"\Microsoft\Windows\SettingSync\BackgroundUploadTask",
-        @"\Microsoft\Windows\SettingSync\NetworkStateChangeTask",
-        @"\Microsoft\Windows\Subscription\EnableLicenseAcquisition",
-        @"\Microsoft\Windows\Clip\License Validation",
-        // DirectX / DUSM / Nla
-        @"\Microsoft\Windows\DirectX\DirectXDatabaseUpdater",
-        @"\Microsoft\Windows\DirectX\DXGIAdapterCache",
-        @"\Microsoft\Windows\DUSM\dusmtask",
-        @"\Microsoft\Windows\NlaSvc\WiFiTask",
-        // Space / sustainability / work folders
-        @"\Microsoft\Windows\SpacePort\SpaceAgentTask",
-        @"\Microsoft\Windows\SpacePort\SpaceManagerTask",
-        @"\Microsoft\Windows\Sustainability\PowerGridForecastTask",
-        @"\Microsoft\Windows\Sustainability\SustainabilityTelemetry",
-        @"\Microsoft\Windows\Work Folders\Work Folders Logon Synchronization",
-        @"\Microsoft\Windows\Work Folders\Work Folders Maintenance Work",
-        // Install / provisioning
-        @"\Microsoft\Windows\InstallService\ScanForUpdates",
-        @"\Microsoft\Windows\InstallService\ScanForUpdatesAsUser",
-        @"\Microsoft\Windows\InstallService\SmartRetry",
-        @"\Microsoft\Windows\InstallService\WakeUpAndContinueUpdates",
-        @"\Microsoft\Windows\InstallService\WakeUpAndScanForUpdates",
-        @"\Microsoft\Windows\Management\Provisioning\Cellular",
-        @"\Microsoft\Windows\Management\Provisioning\Logon",
-        // Defrag / cleanup
-        @"\Microsoft\Windows\Defrag\ScheduledDefrag",
-        @"\Microsoft\Windows\DiskCleanup\SilentCleanup",
-        @"\Microsoft\Windows\DiskFootprint\Diagnostics",
-        @"\Microsoft\Windows\DiskFootprint\StorageSense",
-        // Enterprise / EDP (harmless to disable on home gaming PCs)
-        @"\Microsoft\Windows\EDP\EDP App Launch Task",
-        @"\Microsoft\Windows\EDP\EDP Auth Task",
-        @"\Microsoft\Windows\EDP\EDP Inaccessible Credentials Task",
-        @"\Microsoft\Windows\EDP\StorageCardEncryption Task",
-        @"\Microsoft\Windows\Active Directory Rights Management Services Client\AD RMS Rights Policy Template Management (Manual)",
-        @"\Microsoft\Windows\Active Directory Rights Management Services Client\AD RMS Rights Policy Template Management (Automated)",
-        // Windows AI / Recall / ClickToDo (not needed for gaming)
-        @"\Microsoft\Windows\WindowsAI\ClickToDo\ModelCachingLimit",
-        @"\Microsoft\Windows\WindowsAI\ClickToDo\ModelCachingUpdate",
-        @"\Microsoft\Windows\WindowsAI\ClickToDo\CacheMaintenance",
-        @"\Microsoft\Windows\WindowsAI\Recall\PolicyConfiguration",
-        @"\Microsoft\Windows\WindowsAI\Recall\Maintenance",
-        @"\Microsoft\Windows\WindowsAI\Settings\InitialConfiguration",
-        // EQ update checker (Lucid/Equalizer APO) — app still works; just no background poll
-        @"\EqualizerAPOUpdateChecker",
-    ];
-
-    /// <summary>
-    /// Disable root-level (\ ) noise: Edge/Brave machine update tasks.
-    /// Never touches cua-driver-serve, CreateExplorerShellUnelevatedTask, or anti-cheat.
-    /// </summary>
-    private static int DisableRootNoiseTasks(int budgetMs, Stopwatch sw)
+    private enum TaskQuietDecision
     {
-        var n = 0;
+        Protect,
+        Quiet,
+        Leave
+    }
+
+    private sealed record LiveTask(string Path, string Name, string FullPath, bool Enabled);
+
+    /// <summary>Walk Schedule.Service on this PC (folder tree). Timeout-budgeted.</summary>
+    private static List<LiveTask> EnumerateScheduledTasksLive(int budgetMs, Stopwatch sw)
+    {
+        var list = new List<LiveTask>(256);
         try
         {
             var t = Type.GetTypeFromProgID("Schedule.Service");
-            if (t is null) return 0;
+            if (t is null) return list;
             dynamic? service = Activator.CreateInstance(t);
-            if (service is null) return 0;
+            if (service is null) return list;
             service.Connect();
             dynamic root = service.GetFolder("\\");
-            dynamic tasks = root.GetTasks(0);
-            foreach (dynamic task in tasks)
-            {
-                if (sw.ElapsedMilliseconds > budgetMs) break;
-                string name;
-                try { name = (string)task.Name; }
-                catch { continue; }
-                if (string.IsNullOrEmpty(name)) continue;
-                // Keep user tooling / shell helpers
-                if (name.Contains("cua-driver", StringComparison.OrdinalIgnoreCase)) continue;
-                if (name.Contains("CreateExplorerShell", StringComparison.OrdinalIgnoreCase)) continue;
-                if (name.Contains("Vanguard", StringComparison.OrdinalIgnoreCase) ||
-                    name.Contains("FACEIT", StringComparison.OrdinalIgnoreCase) ||
-                    name.Contains("EasyAntiCheat", StringComparison.OrdinalIgnoreCase) ||
-                    name.Contains("BattlEye", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                var quiet =
-                    name.StartsWith("MicrosoftEdgeUpdate", StringComparison.OrdinalIgnoreCase) ||
-                    name.StartsWith("BraveSoftwareUpdate", StringComparison.OrdinalIgnoreCase) ||
-                    name.Equals("EqualizerAPOUpdateChecker", StringComparison.OrdinalIgnoreCase) ||
-                    name.StartsWith("GoogleUpdate", StringComparison.OrdinalIgnoreCase) ||
-                    name.StartsWith("GoogleUpdater", StringComparison.OrdinalIgnoreCase);
-                if (!quiet) continue;
-
-                var (code, _, to) = RunTimed("schtasks.exe", $"/Change /TN \"\\{name}\" /DISABLE", 2500);
-                if (!to && code == 0) n++;
-            }
+            EnumerateTaskFolder(service, root, list, budgetMs, sw);
         }
         catch { /* COM unavailable */ }
-        return n;
+        return list;
+    }
+
+    private static void EnumerateTaskFolder(
+        dynamic service, dynamic folder, List<LiveTask> list, int budgetMs, Stopwatch sw)
+    {
+        if (sw.ElapsedMilliseconds > budgetMs) return;
+        string folderPath;
+        try { folderPath = (string)folder.Path; }
+        catch { return; }
+        if (string.IsNullOrEmpty(folderPath)) folderPath = "\\";
+        if (!folderPath.EndsWith('\\')) folderPath += "\\";
+
+        try
+        {
+            dynamic tasks = folder.GetTasks(0);
+            foreach (dynamic task in tasks)
+            {
+                if (sw.ElapsedMilliseconds > budgetMs) return;
+                try
+                {
+                    string name = (string)task.Name;
+                    if (string.IsNullOrEmpty(name)) continue;
+                    // Enabled property: 1 enabled, 0 disabled (Task Scheduler 2.0)
+                    var enabled = true;
+                    try { enabled = Convert.ToInt32(task.Enabled) != 0; }
+                    catch { enabled = true; }
+                    var full = folderPath == "\\" ? "\\" + name : folderPath.TrimEnd('\\') + "\\" + name;
+                    // schtasks wants leading backslash path
+                    if (!full.StartsWith('\\')) full = "\\" + full;
+                    list.Add(new LiveTask(folderPath, name, full, enabled));
+                }
+                catch { /* skip bad task */ }
+            }
+        }
+        catch { /* no tasks */ }
+
+        try
+        {
+            dynamic children = folder.GetFolders(0);
+            var childPaths = new List<string>();
+            foreach (dynamic child in children)
+            {
+                try { childPaths.Add((string)child.Path); }
+                catch { }
+            }
+            foreach (var cp in childPaths)
+            {
+                if (sw.ElapsedMilliseconds > budgetMs) return;
+                try
+                {
+                    dynamic child = service.GetFolder(cp);
+                    EnumerateTaskFolder(service, child, list, budgetMs, sw);
+                }
+                catch { }
+            }
+        }
+        catch { /* no subfolders */ }
+    }
+
+    /// <summary>
+    /// Classify a live task. Rules are portable across PCs — match path/name patterns,
+    /// not a single machine's GUID list.
+    /// </summary>
+    private static TaskQuietDecision ClassifyScheduledTask(string folderPath, string name, bool enabled)
+    {
+        var path = (folderPath + name).Replace('/', '\\');
+        var full = path;
+
+        // ── Always protect (security / recovery / shell / AC / user tools) ──
+        if (IsProtectedScheduledTask(full, name))
+            return TaskQuietDecision.Protect;
+
+        // ── Quiet: Xbox game-save noise ──
+        if (full.Contains(@"\XblGameSave\", StringComparison.OrdinalIgnoreCase))
+            return TaskQuietDecision.Quiet;
+
+        // ── Quiet: root-level browser / store updaters (GUIDs differ per PC) ──
+        if (folderPath is "\\" or "")
+        {
+            if (name.StartsWith("MicrosoftEdgeUpdate", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("BraveSoftwareUpdate", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("GoogleUpdate", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("GoogleUpdater", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("Adobe Acrobat Update", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("AdobeAAMUpdater", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("CCleaner", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("EqualizerAPOUpdateChecker", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("UpdateTaskMachine", StringComparison.OrdinalIgnoreCase) ||
+                (name.Contains("Update", StringComparison.OrdinalIgnoreCase) &&
+                 name.Contains("Machine", StringComparison.OrdinalIgnoreCase) &&
+                 !name.Contains("Windows", StringComparison.OrdinalIgnoreCase)))
+                return TaskQuietDecision.Quiet;
+        }
+
+        // ── Quiet: common third-party OEM telemetry folders ──
+        if (folderPath.Contains(@"\Microsoft\Windows\WindowsAI\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Customer Experience", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Application Experience\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Feedback\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Flighting\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\UsageAndQualityInsights\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\DeviceDirectoryClient\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Device Directory Client\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\UpdateOrchestrator\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\InstallService\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\EDP\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Maps\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\CloudExperienceHost\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\CloudRestore\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\PushToInstall\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\RetailDemo\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Sustainability\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\SpacePort\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Work Folders\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\WaaSMedic\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\SettingSync\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\AppListBackup\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\PerformanceTrace\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\PI\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Diagnosis\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\DiskFootprint\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\DiskCleanup\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Defrag\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\DiskDiagnostic\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\MemoryDiagnostic\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Power Efficiency\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Maintenance\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Location\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Speech\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Windows Media Sharing\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\UPnP\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\WOF\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\DUSM\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\DirectX\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Subscription\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Clip\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Device Information\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Management\Provisioning\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\International\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\LanguageComponentsInstaller\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Windows Error Reporting\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Customer Experience Improvement\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\Windows Defender\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\WindowsUpdate\", StringComparison.OrdinalIgnoreCase) ||
+            folderPath.Contains(@"\Microsoft\Windows\NlaSvc\", StringComparison.OrdinalIgnoreCase))
+            return TaskQuietDecision.Quiet;
+
+        // Shell family safety / picture updaters only (not all Shell)
+        if (folderPath.Contains(@"\Microsoft\Windows\Shell\", StringComparison.OrdinalIgnoreCase) &&
+            (name.Contains("FamilySafety", StringComparison.OrdinalIgnoreCase) ||
+             name.Contains("UpdateUserPicture", StringComparison.OrdinalIgnoreCase) ||
+             name.Contains("IndexerAutomaticMaintenance", StringComparison.OrdinalIgnoreCase)))
+            return TaskQuietDecision.Quiet;
+
+        // Unknown third-party: leave alone (PC-aware = don't invent policy for random apps)
+        _ = enabled;
+        return TaskQuietDecision.Leave;
+    }
+
+    private static bool IsProtectedScheduledTask(string full, string name)
+    {
+        if (name.Contains("cua-driver", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.Contains("CreateExplorerShell", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.Contains("Vanguard", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("FACEIT", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("EasyAntiCheat", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("BattlEye", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Ricochet", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Steam", StringComparison.OrdinalIgnoreCase) &&
+            name.Contains("Service", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Security / recovery / credentials / integrity
+        if (full.Contains("BitLocker", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\TPM\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains("CertificateServices", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains("SystemRestore", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains("RecoveryEnvironment", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains("Data Integrity", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\Chkdsk\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains("SecureBoot", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains("Pluton", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains("BrokerInfrastructure", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains("SystemSoundsService", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\Multimedia\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\Plug and Play\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\Time Synchronization\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\Time Zone\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@".NET Framework\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\Registry\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\Servicing\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\SoftwareProtectionPlatform\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\WindowsColorSystem\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\TextServicesFramework\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\StateRepository\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\AppxDeploymentClient\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\User Profile Service\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\Bluetooth\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\USB\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\Setup\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\ApplicationData\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\AppID\", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
     }
 
     /// <summary>

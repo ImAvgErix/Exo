@@ -1122,7 +1122,8 @@ try {
         };
     }
 
-    private static List<string> DiscoverLibraryGameExes(string steamPath)
+    /// <summary>PC-aware: all libraryfolders.vdf roots + depth-limited game EXEs.</summary>
+    internal static List<string> DiscoverLibraryGameExes(string steamPath)
     {
         var result = new List<string>();
         var roots = new List<string> { steamPath };
