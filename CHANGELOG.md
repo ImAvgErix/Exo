@@ -1,3 +1,9 @@
+## 3.15.8
+
+- All games: force borderless like Valorant — walk every config path, not just the first file
+- UE titles (Fortnite, Pred, Finals, Marvel): FullscreenMode=1 + letterbox off on all GUS copies
+- BO7 / League / Apex / CS2 / HD2: hardened display tokens across all player/cfg copies
+- Feature row shows live display mode; Apply reminds to fully close the game
 ## 3.15.7
 
 - Steam: Silent Windows no longer stuck red — re-pins StartupMode Steam rewrites after launch
@@ -1302,6 +1308,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

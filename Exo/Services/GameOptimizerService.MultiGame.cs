@@ -119,6 +119,9 @@ public sealed partial class GameOptimizerService
                             ? "Last choice: Optimized (high FPS / clearer)"
                             : "Toggle: Potato or Optimized",
                     true),
+                F("Display mode",
+                    DescribeDisplayLive(gameId, probe),
+                    true), // informational — Apply always forces borderless
                 F("One-click Repair ready",
                     File.Exists(Path.Combine(BackupRoot(gameId), "backup.ok"))
                         ? "Backups present"
@@ -373,21 +376,9 @@ public sealed partial class GameOptimizerService
             var label = preset == PresetPotato ? "Potato" : "Optimized";
             var title = GameTitle(gameId);
 
-            if (string.Equals(gameId, GameIdValorant, StringComparison.OrdinalIgnoreCase))
-                return (true,
-                    $"{label} for Valorant — quality lows + borderless written. " +
-                    "Fully close Valorant (and Riot Client if open), then launch again so display sticks.");
-
-            if (string.Equals(gameId, GameIdPredecessor, StringComparison.OrdinalIgnoreCase))
-                return (true, $"{label} for Predecessor — quality cut + borderless. Restart the game.");
-
-            if (string.Equals(gameId, GameIdLeague, StringComparison.OrdinalIgnoreCase))
-                return (true, $"{label} written to League game.cfg (borderless). Restart the client.");
-
-            if (string.Equals(gameId, GameIdBlackOps7, StringComparison.OrdinalIgnoreCase))
-                return (true, $"{label} for Black Ops 7 (borderless). Restart COD.");
-
-            return (true, $"{label} for {title} (borderless). Restart the game.");
+            // Same close-game rule for every title — display keys only stick if the client is fully closed.
+            return (true,
+                $"{label} for {title} (borderless). Fully close the game, then launch again so display + quality stick.");
         }
         catch (Exception ex)
         {
@@ -396,43 +387,55 @@ public sealed partial class GameOptimizerService
     }
 
     /// <summary>
-    /// Per-title display tokens (verified against live clients / engine docs).
-    /// leave = no write. Independent flip cannot be forced — borderless only enables the path.
-    /// </summary>
-    /// <summary>
-    /// Always borderless using each game's real tokens (verified on live clients).
+    /// Always force borderless using each game's real tokens (same thoroughness as Valorant).
+    /// Walks all known config paths under ConfigRoot — never only the first probed file.
     /// </summary>
     private static void ApplyDisplayPreference(string gameId, string displayMode, ConfigProbe probe)
     {
-        // Policy: borderless only (ignore exclusive/leave).
-        _ = displayMode;
+        _ = displayMode; // product policy: borderless only
 
         switch (gameId)
         {
             case GameIdBlackOps7:
-                // Live cod25 enum: "Fullscreen borderless window"
-                ApplyBo7Display(probe, "Fullscreen borderless window");
+                ApplyBo7DisplayEverywhere(probe.ConfigRoot ?? CodPlayersDir);
                 break;
             case GameIdValorant:
-                // Always force borderless on every GUS under VALORANT\Saved\Config
                 ApplyValorantBorderlessEverywhere(probe.ConfigRoot);
                 break;
             case GameIdFortnite:
+                ApplyUeBorderlessEverywhere(
+                    probe.ConfigRoot ?? FortniteConfigDir,
+                    extraSections: new[] { "/Script/FortniteGame.FortGameUserSettings" });
+                break;
             case GameIdTheFinals:
+                ApplyUeBorderlessEverywhere(
+                    probe.ConfigRoot,
+                    extraRoots: new[]
+                    {
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                            "Discovery", "Saved", "Config"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                            "TheFinals", "Saved", "Config"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                            "Embark", "TheFinals", "Saved", "Config"),
+                    },
+                    extraSections: new[] { "/Script/Discovery.DiscoveryGameUserSettings" });
+                break;
             case GameIdPredecessor:
-                // UE EWindowMode: 1 = WindowedFullscreen (borderless)
-                ApplyUeFullscreenMode(probe, "1");
+                ApplyUeBorderlessEverywhere(
+                    probe.ConfigRoot ?? Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "Predecessor", "Saved", "Config", "WindowsClient"),
+                    extraSections: new[] { "/Script/Predecessor.LyraSettingsLocal" });
                 break;
             case GameIdLeague:
-                // game.cfg: WindowMode 1 = Borderless
                 ApplyLeagueDisplay(probe, "1");
                 break;
             case GameIdApex:
-                // Source: fullscreen=1 + nowindowborder=1
                 ApplyApexDisplay(probe, borderless: true);
                 break;
             case GameIdCs2:
-                ApplyCs2Display(probe, borderless: true);
+                ApplyCs2DisplayEverywhere(probe);
                 break;
             case GameIdHelldivers2:
                 ApplyHelldivers2Display(probe, borderless: true);
@@ -440,97 +443,260 @@ public sealed partial class GameOptimizerService
         }
     }
 
-    private static void ApplyBo7Display(ConfigProbe probe, string displayToken)
+    /// <summary>COD: every s.*/g.* players config under AppData players.</summary>
+    private static void ApplyBo7DisplayEverywhere(string playersRoot)
     {
-        foreach (var path in probe.ConfigFiles)
+        if (string.IsNullOrWhiteSpace(playersRoot) || !Directory.Exists(playersRoot)) return;
+        var files = new List<string>();
+        try
         {
-            if (!File.Exists(path)) continue;
-            var text = File.ReadAllText(path);
-            text = SetCodKey(text, "DisplayMode", displayToken);
-            // PreferredDisplayMode enum omits plain Windowed
-            if (displayToken.Contains("borderless", StringComparison.OrdinalIgnoreCase))
-                text = SetCodKey(text, "PreferredDisplayMode", "Fullscreen borderless window");
-            else
-                text = SetCodKey(text, "PreferredDisplayMode", "Fullscreen");
-            WriteConfigText(path, text);
+            foreach (var name in new[] { "s.1.0.cod25.txt0", "s.1.0.cod25.txt1", "s.1.0.cod24.txt0", "s.1.0.cod24.txt1" })
+            {
+                var p = Path.Combine(playersRoot, name);
+                if (File.Exists(p)) files.Add(p);
+            }
+            foreach (var p in Directory.EnumerateFiles(playersRoot, "s.1.0.cod*.txt*", SearchOption.TopDirectoryOnly))
+                files.Add(p);
+            foreach (var p in Directory.EnumerateFiles(playersRoot, "g.cod25*.txt*", SearchOption.AllDirectories))
+                files.Add(p);
+            foreach (var p in Directory.EnumerateFiles(playersRoot, "g.cod24*.txt*", SearchOption.AllDirectories))
+                files.Add(p);
+        }
+        catch { /* ignore */ }
+
+        const string token = "Fullscreen borderless window";
+        foreach (var path in files.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                if (!File.Exists(path)) continue;
+                var text = File.ReadAllText(path);
+                text = SetCodKey(text, "DisplayMode", token);
+                text = SetCodKey(text, "PreferredDisplayMode", token);
+                // Some builds use shorter tokens
+                text = SetCodKey(text, "DisplayMode", token);
+                WriteConfigText(path, text);
+            }
+            catch { /* locked */ }
         }
     }
 
-    private static void ApplyUeFullscreenMode(ConfigProbe probe, string mode)
+    /// <summary>
+    /// UE: force WindowedFullscreen (1) on every GameUserSettings.ini under root(s).
+    /// Always writes Engine + game sections even if empty (Valorant lesson).
+    /// </summary>
+    private static void ApplyUeBorderlessEverywhere(
+        string? primaryRoot,
+        IEnumerable<string>? extraRoots = null,
+        IEnumerable<string>? extraSections = null)
     {
-        foreach (var path in probe.ConfigFiles.Where(f =>
-                     f.EndsWith("GameUserSettings.ini", StringComparison.OrdinalIgnoreCase)))
+        var roots = new List<string>();
+        if (!string.IsNullOrWhiteSpace(primaryRoot)) roots.Add(primaryRoot);
+        if (extraRoots is not null) roots.AddRange(extraRoots.Where(r => !string.IsNullOrWhiteSpace(r))!);
+
+        var sections = new List<string>
         {
-            if (!File.Exists(path)) continue;
-            var text = File.ReadAllText(path);
-            // Patch every section that already has FullscreenMode, or standard UE sections
+            "/Script/Engine.GameUserSettings",
+            "/Script/ShooterGame.ShooterGameUserSettings",
+            "/Script/FortniteGame.FortGameUserSettings",
+            "/Script/Predecessor.LyraSettingsLocal",
+            "/Script/Discovery.DiscoveryGameUserSettings",
+            "/Script/Marvel.MarvelGameUserSettings",
+        };
+        if (extraSections is not null) sections.AddRange(extraSections);
+
+        var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var root in roots)
+        {
+            try
+            {
+                if (!Directory.Exists(root)) continue;
+                // If root is a file's parent Config folder or deeper
+                foreach (var f in Directory.EnumerateFiles(root, "GameUserSettings.ini", SearchOption.AllDirectories))
+                    files.Add(f);
+                // Also one level up (Saved/Config/WindowsClient vs Saved/Config)
+                var parent = Path.GetDirectoryName(root);
+                if (parent is not null && Directory.Exists(parent))
+                {
+                    foreach (var f in Directory.EnumerateFiles(parent, "GameUserSettings.ini", SearchOption.AllDirectories))
+                        files.Add(f);
+                }
+            }
+            catch { /* ignore */ }
+        }
+
+        // Ensure at least one GUS exists for primary root
+        if (files.Count == 0 && !string.IsNullOrWhiteSpace(primaryRoot))
+        {
+            try
+            {
+                var dir = primaryRoot.EndsWith("GameUserSettings.ini", StringComparison.OrdinalIgnoreCase)
+                    ? Path.GetDirectoryName(primaryRoot)!
+                    : primaryRoot;
+                Directory.CreateDirectory(dir);
+                var created = Path.Combine(dir, "GameUserSettings.ini");
+                if (!File.Exists(created)) File.WriteAllText(created, "");
+                files.Add(created);
+            }
+            catch { /* ignore */ }
+        }
+
+        foreach (var path in files)
+            WriteUeBorderlessFile(path, sections);
+    }
+
+    private static void WriteUeBorderlessFile(string path, IReadOnlyList<string> sections)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var text = File.Exists(path) ? File.ReadAllText(path) : "";
+            const string mode = "1"; // WindowedFullscreen
+
+            // Always force Engine section
             text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "FullscreenMode", mode);
             text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "LastConfirmedFullscreenMode", mode);
             text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "PreferredFullscreenMode", mode);
+            text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "bUseVSync", "False");
+            text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "bUseDynamicResolution", "False");
 
-            // Game-specific sections seen live
-            foreach (var section in new[]
-                     {
-                         "/Script/ShooterGame.ShooterGameUserSettings",
-                         "/Script/FortniteGame.FortGameUserSettings",
-                         "/Script/Predecessor.LyraSettingsLocal",
-                         "/Script/Discovery.DiscoveryGameUserSettings",
-                     })
+            // Always force every known game section (create if missing)
+            foreach (var section in sections.Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                if (text.Contains($"[{section}]", StringComparison.OrdinalIgnoreCase) ||
-                    text.Contains(section, StringComparison.OrdinalIgnoreCase))
-                {
-                    text = EnsureSectionLine(text, section, "FullscreenMode", mode);
-                    text = EnsureSectionLine(text, section, "LastConfirmedFullscreenMode", mode);
-                    text = EnsureSectionLine(text, section, "PreferredFullscreenMode", mode);
-                }
+                text = EnsureSectionLine(text, section, "FullscreenMode", mode);
+                text = EnsureSectionLine(text, section, "LastConfirmedFullscreenMode", mode);
+                text = EnsureSectionLine(text, section, "PreferredFullscreenMode", mode);
+                text = EnsureSectionLine(text, section, "bUseVSync", "False");
+                // Letterbox makes exclusive-looking edges — kill when present/created
+                text = EnsureSectionLine(text, section, "bShouldLetterbox", "False");
+                text = EnsureSectionLine(text, section, "bLastConfirmedShouldLetterbox", "False");
             }
 
-            // Generic: any FullscreenMode= line already present
-            text = Regex.Replace(text,
-                @"(?im)^(\s*FullscreenMode\s*=\s*).*$",
-                $"${{1}}{mode}");
-            text = Regex.Replace(text,
-                @"(?im)^(\s*LastConfirmedFullscreenMode\s*=\s*).*$",
-                $"${{1}}{mode}");
-            text = Regex.Replace(text,
-                @"(?im)^(\s*PreferredFullscreenMode\s*=\s*).*$",
-                $"${{1}}{mode}");
+            // Regex sweep any leftover lines
+            text = Regex.Replace(text, @"(?im)^(\s*FullscreenMode\s*=\s*).*$", $"${{1}}{mode}");
+            text = Regex.Replace(text, @"(?im)^(\s*LastConfirmedFullscreenMode\s*=\s*).*$", $"${{1}}{mode}");
+            text = Regex.Replace(text, @"(?im)^(\s*PreferredFullscreenMode\s*=\s*).*$", $"${{1}}{mode}");
+            text = Regex.Replace(text, @"(?im)^(\s*bShouldLetterbox\s*=\s*).*$", "${1}False");
+            text = Regex.Replace(text, @"(?im)^(\s*bLastConfirmedShouldLetterbox\s*=\s*).*$", "${1}False");
 
             WriteConfigText(path, text);
         }
+        catch { /* one path locked */ }
     }
 
     private static void ApplyLeagueDisplay(ConfigProbe probe, string windowMode)
     {
-        var path = probe.PrimaryConfig ?? TryFindLeagueGameCfg();
-        if (path is null || !File.Exists(path)) return;
-        var text = File.ReadAllText(path);
-        text = EnsureSectionLine(text, "General", "WindowMode", windowMode);
-        WriteConfigText(path, text);
+        // WindowMode: 0=windowed, 1=borderless, 2=exclusive (League)
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (probe.PrimaryConfig is not null) paths.Add(probe.PrimaryConfig);
+        foreach (var f in probe.ConfigFiles) paths.Add(f);
+        var found = TryFindLeagueGameCfg();
+        if (found is not null) paths.Add(found);
+        // Also every game.cfg under Riot Games
+        try
+        {
+            foreach (var root in new[]
+                     {
+                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Riot Games"),
+                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Riot Games"),
+                         @"C:\Riot Games",
+                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Riot Games"),
+                     })
+            {
+                if (!Directory.Exists(root)) continue;
+                foreach (var f in Directory.EnumerateFiles(root, "game.cfg", SearchOption.AllDirectories))
+                    paths.Add(f);
+            }
+        }
+        catch { /* ignore */ }
+
+        foreach (var path in paths)
+        {
+            try
+            {
+                if (!File.Exists(path)) continue;
+                var text = File.ReadAllText(path);
+                text = EnsureSectionLine(text, "General", "WindowMode", windowMode);
+                text = EnsureSectionLine(text, "General", "WaitForVerticalSync", "0");
+                WriteConfigText(path, text);
+            }
+            catch { /* locked */ }
+        }
     }
 
     private static void ApplyApexDisplay(ConfigProbe probe, bool borderless)
     {
-        var path = probe.PrimaryConfig;
-        if (path is null || !File.Exists(path)) return;
-        var text = File.ReadAllText(path);
-        text = SetQuotedSetting(text, "setting.fullscreen", "1");
-        text = SetQuotedSetting(text, "setting.nowindowborder", borderless ? "1" : "0");
-        WriteConfigText(path, text);
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (probe.PrimaryConfig is not null) paths.Add(probe.PrimaryConfig);
+        foreach (var f in probe.ConfigFiles) paths.Add(f);
+        var saved = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Saved Games", "Respawn", "Apex", "local");
+        if (Directory.Exists(saved))
+        {
+            foreach (var name in new[] { "videoconfig.txt", "settings.cfg" })
+            {
+                var p = Path.Combine(saved, name);
+                if (File.Exists(p)) paths.Add(p);
+            }
+        }
+
+        foreach (var path in paths)
+        {
+            try
+            {
+                if (!File.Exists(path)) continue;
+                var text = File.ReadAllText(path);
+                // fullscreen + nowindowborder = borderless (Source)
+                text = SetQuotedSetting(text, "setting.fullscreen", "1");
+                text = SetQuotedSetting(text, "setting.nowindowborder", borderless ? "1" : "0");
+                text = SetQuotedSetting(text, "setting.mat_vsync", "0");
+                WriteConfigText(path, text);
+            }
+            catch { /* locked */ }
+        }
     }
 
-    private static void ApplyCs2Display(ConfigProbe probe, bool borderless)
+    private static void ApplyCs2DisplayEverywhere(ConfigProbe probe)
     {
-        foreach (var path in probe.ConfigFiles.Where(f =>
-                     f.EndsWith("video.txt", StringComparison.OrdinalIgnoreCase) ||
-                     f.EndsWith("cs2_video.txt", StringComparison.OrdinalIgnoreCase)))
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in probe.ConfigFiles)
         {
-            if (!File.Exists(path)) continue;
-            var text = File.ReadAllText(path);
-            text = SetQuotedSetting(text, "setting.fullscreen", "1");
-            text = SetQuotedSetting(text, "setting.nowindowborder", borderless ? "1" : "0");
-            WriteConfigText(path, text);
+            if (f.EndsWith("video.txt", StringComparison.OrdinalIgnoreCase) ||
+                f.EndsWith("cs2_video.txt", StringComparison.OrdinalIgnoreCase))
+                paths.Add(f);
+        }
+        // Re-scan Steam userdata for every CS2 video file
+        try
+        {
+            foreach (var lib in EnumerateSteamLibraryRoots())
+            {
+                var userdata = Path.Combine(lib, "userdata");
+                if (!Directory.Exists(userdata)) continue;
+                foreach (var user in Directory.EnumerateDirectories(userdata))
+                {
+                    foreach (var name in new[] { "cs2_video.txt", "video.txt" })
+                    {
+                        var vid = Path.Combine(user, SteamAppIdCs2, "local", "cfg", name);
+                        if (File.Exists(vid)) paths.Add(vid);
+                    }
+                }
+            }
+        }
+        catch { /* ignore */ }
+
+        foreach (var path in paths)
+        {
+            try
+            {
+                if (!File.Exists(path)) continue;
+                var text = File.ReadAllText(path);
+                text = SetQuotedSetting(text, "setting.fullscreen", "1");
+                text = SetQuotedSetting(text, "setting.nowindowborder", "1");
+                text = SetQuotedSetting(text, "setting.mat_vsync", "0");
+                WriteConfigText(path, text);
+            }
+            catch { /* locked */ }
         }
     }
 
@@ -539,16 +705,13 @@ public sealed partial class GameOptimizerService
         var path = probe.PrimaryConfig ?? Helldivers2ConfigPath;
         if (!File.Exists(path)) return;
         var text = File.ReadAllText(path);
-        // Only rewrite keys that already exist (Arrowhead nested config)
-        void Try(string key, string value)
-        {
-            if (Regex.IsMatch(text, $@"(?im)^\s*{Regex.Escape(key)}\s*="))
-                text = SetConfigLooseKey(text, key, value);
-        }
-        // Common names across versions — only hit if present
-        Try("fullscreen", borderless ? "false" : "true");
-        Try("window_mode", borderless ? "borderless" : "fullscreen");
-        Try("screen_mode", borderless ? "borderless" : "fullscreen");
+        // Force borderless tokens — create if missing (Arrowhead accepts extras)
+        void Force(string key, string value) => text = SetConfigLooseKey(text, key, value);
+        Force("fullscreen", borderless ? "false" : "true");
+        Force("window_mode", borderless ? "borderless" : "fullscreen");
+        Force("screen_mode", borderless ? "borderless" : "fullscreen");
+        Force("vsync", "false");
+        Force("vsync_enabled", "false");
         WriteConfigText(path, text);
     }
 
@@ -1027,7 +1190,13 @@ public sealed partial class GameOptimizerService
         // Mouse accel off is competitive standard (not a display-mode force)
         text = EnsureSectionLine(text, fort, "bDisableMouseAcceleration", "True");
         text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "bUseVSync", "False");
-        // Never force FullscreenMode / resolution
+        // Borderless (1) — also re-walked under FortniteGame after this write
+        text = EnsureSectionLine(text, fort, "FullscreenMode", "1");
+        text = EnsureSectionLine(text, fort, "LastConfirmedFullscreenMode", "1");
+        text = EnsureSectionLine(text, fort, "PreferredFullscreenMode", "1");
+        text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "FullscreenMode", "1");
+        text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "LastConfirmedFullscreenMode", "1");
+        text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "PreferredFullscreenMode", "1");
 
         WriteConfigText(path, text);
 
@@ -1400,9 +1569,9 @@ public sealed partial class GameOptimizerService
             throw new InvalidOperationException("League game.cfg not found. Launch League once first.");
 
         var text = File.ReadAllText(path);
-        text = Regex.Replace(text, @"(?m)^;\s*Exo Games[^\r\n]*\r?\n?", "");
+        text = StripIniExoMarkers(text);
         text = "; Exo Games — league-of-legends profile=" + preset + "\r\n"
-               + "; Performance qualities — WindowMode only if display pref set; FrameCapType left alone.\r\n"
+               + "; Performance + borderless WindowMode=1. FrameCapType left alone.\r\n"
                + text.TrimStart('\uFEFF');
 
         text = EnsureSectionLine(text, "General", "WaitForVerticalSync", "0");
@@ -1471,12 +1640,18 @@ public sealed partial class GameOptimizerService
         var text = File.ReadAllText(path);
         text = StripIniExoMarkers(text);
         text = ExoIniMarkerLine(GameIdPredecessor, preset) + "\r\n"
-               + "; Scalability + latency only — FullscreenMode / resolution / DLSS mode left alone.\r\n"
+               + "; Scalability + borderless + latency. DLSS mode left alone.\r\n"
                + text.TrimStart('\uFEFF');
 
         const string lyra = "/Script/Predecessor.LyraSettingsLocal";
         text = EnsureSectionLine(text, lyra, "bUseVSync", "False");
         text = EnsureSectionLine(text, lyra, "bUseDynamicResolution", "False");
+        text = EnsureSectionLine(text, lyra, "FullscreenMode", "1");
+        text = EnsureSectionLine(text, lyra, "LastConfirmedFullscreenMode", "1");
+        text = EnsureSectionLine(text, lyra, "PreferredFullscreenMode", "1");
+        text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "FullscreenMode", "1");
+        text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "LastConfirmedFullscreenMode", "1");
+        text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "PreferredFullscreenMode", "1");
         text = EnsureSectionLine(text, lyra, "bUseMotionBlur", "False");
         text = EnsureSectionLine(text, lyra, "ReflexMode", "Boost");
         text = EnsureSectionLine(text, lyra, "FrameEnhancementMode", "Off");
@@ -1896,6 +2071,12 @@ public sealed partial class GameOptimizerService
             text = EnsureSectionLine(text, "ScalabilityGroups", "sg.ShadingQuality", potato ? "0" : "1");
             text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "bUseVSync", "False");
             text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "bUseDynamicResolution", "False");
+            text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "FullscreenMode", "1");
+            text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "LastConfirmedFullscreenMode", "1");
+            text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "PreferredFullscreenMode", "1");
+            text = EnsureSectionLine(text, "/Script/Discovery.DiscoveryGameUserSettings", "FullscreenMode", "1");
+            text = EnsureSectionLine(text, "/Script/Discovery.DiscoveryGameUserSettings", "LastConfirmedFullscreenMode", "1");
+            text = EnsureSectionLine(text, "/Script/Discovery.DiscoveryGameUserSettings", "PreferredFullscreenMode", "1");
             WriteConfigText(path, text);
         }
 
@@ -1922,8 +2103,110 @@ public sealed partial class GameOptimizerService
 
     // ── Generic text helpers ──────────────────────────────────────────────
 
-    private static string StripIniExoMarkers(string text) =>
-        Regex.Replace(text, @"(?m)^;\s*Exo Games[^\r\n]*\r?\n?", "");
+    private static string StripIniExoMarkers(string text)
+    {
+        // Exo header + repeated meta lines from older applies
+        text = Regex.Replace(text, @"(?m)^;\s*Exo Games[^\r\n]*\r?\n?", "");
+        text = Regex.Replace(text, @"(?m)^;\s*(Performance qualities|Meta:|Scalability \+|Quality \+)[^\r\n]*\r?\n?", "");
+        text = Regex.Replace(text, @"(?m)^//\s*Exo Games[^\r\n]*\r?\n?", "");
+        text = Regex.Replace(text, @"(?m)^//\s*(Meta:|Quality \+|Video quality)[^\r\n]*\r?\n?", "");
+        return text;
+    }
+
+    /// <summary>Honest live display readout for feature tiles (informational).</summary>
+    private static string DescribeDisplayLive(string gameId, ConfigProbe probe)
+    {
+        try
+        {
+            if (string.Equals(gameId, GameIdLeague, StringComparison.OrdinalIgnoreCase))
+            {
+                var path = probe.PrimaryConfig ?? TryFindLeagueGameCfg();
+                if (path is null || !File.Exists(path)) return "Unknown — Apply forces borderless";
+                var t = File.ReadAllText(path);
+                var m = Regex.Match(t, @"(?im)^\s*WindowMode\s*=\s*(\d+)");
+                return m.Success
+                    ? m.Groups[1].Value switch
+                    {
+                        "0" => "Windowed (Apply → borderless)",
+                        "1" => "Borderless",
+                        "2" => "Exclusive (Apply → borderless)",
+                        _ => $"Mode {m.Groups[1].Value}"
+                    }
+                    : "Unknown — Apply forces borderless";
+            }
+
+            if (string.Equals(gameId, GameIdBlackOps7, StringComparison.OrdinalIgnoreCase))
+            {
+                var path = probe.PrimaryConfig;
+                if (path is null || !File.Exists(path)) return "Unknown — Apply forces borderless";
+                var t = File.ReadAllText(path);
+                if (t.Contains("Fullscreen borderless", StringComparison.OrdinalIgnoreCase))
+                    return "Borderless (COD token)";
+                if (t.Contains("Fullscreen", StringComparison.OrdinalIgnoreCase))
+                    return "Fullscreen token — re-Apply if not borderless in-game";
+                return "Unknown — Apply forces borderless";
+            }
+
+            if (string.Equals(gameId, GameIdApex, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(gameId, GameIdCs2, StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var path in probe.ConfigFiles.Where(f => File.Exists(f)))
+                {
+                    var t = File.ReadAllText(path);
+                    var nb = Regex.Match(t, @"(?im)""setting\.nowindowborder""\s+""(\d+)""");
+                    var fs = Regex.Match(t, @"(?im)""setting\.fullscreen""\s+""(\d+)""");
+                    if (nb.Success || fs.Success)
+                    {
+                        var borderless = nb.Success && nb.Groups[1].Value == "1";
+                        return borderless
+                            ? "Borderless (fullscreen+nowindowborder)"
+                            : "Not borderless yet — Apply forces it";
+                    }
+                }
+                return "Unknown — Apply forces borderless";
+            }
+
+            if (string.Equals(gameId, GameIdHelldivers2, StringComparison.OrdinalIgnoreCase))
+            {
+                var path = probe.PrimaryConfig ?? Helldivers2ConfigPath;
+                if (!File.Exists(path)) return "Unknown — Apply forces borderless";
+                var t = File.ReadAllText(path);
+                if (t.Contains("borderless", StringComparison.OrdinalIgnoreCase))
+                    return "Borderless token present";
+                return "Check after Apply — forces window_mode=borderless";
+            }
+
+            // UE family: Fortnite / Predecessor / Finals
+            var roots = new List<string>();
+            if (!string.IsNullOrWhiteSpace(probe.ConfigRoot)) roots.Add(probe.ConfigRoot!);
+            if (!string.IsNullOrWhiteSpace(probe.PrimaryConfig))
+            {
+                var d = Path.GetDirectoryName(probe.PrimaryConfig);
+                if (d is not null) roots.Add(d);
+            }
+            foreach (var root in roots.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!Directory.Exists(root)) continue;
+                foreach (var path in Directory.EnumerateFiles(root, "GameUserSettings.ini", SearchOption.AllDirectories)
+                             .OrderByDescending(p => new FileInfo(p).Length))
+                {
+                    if (new FileInfo(path).Length < 20) continue;
+                    var t = File.ReadAllText(path);
+                    var m = Regex.Match(t, @"(?im)^\s*FullscreenMode\s*=\s*(\d+)");
+                    if (!m.Success) continue;
+                    return m.Groups[1].Value switch
+                    {
+                        "0" => "Exclusive fullscreen (Apply → borderless)",
+                        "1" => "Borderless (windowed fullscreen)",
+                        "2" => "Windowed (Apply → borderless)",
+                        _ => $"Mode {m.Groups[1].Value}"
+                    };
+                }
+            }
+        }
+        catch { /* ignore */ }
+        return "Apply forces borderless — close the game first";
+    }
 
     /// <summary>Loose key = value (Helldivers-style nested config).</summary>
     private static string SetConfigLooseKey(string text, string key, string value)

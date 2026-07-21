@@ -1305,19 +1305,45 @@ public sealed partial class GameOptimizerService
         text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "bUseVSync", "False");
         text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "bNvidiaReflex", "True");
 
-        // UE EWindowMode: 0=Fullscreen exclusive, 1=WindowedFullscreen (borderless), 2=Windowed
-        if (displayMode is DisplayBorderless or DisplayExclusive)
-        {
-            var mode = displayMode == DisplayBorderless ? "1" : "0";
-            text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "FullscreenMode", mode);
-            text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "LastConfirmedFullscreenMode", mode);
-            text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "PreferredFullscreenMode", mode);
-            text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "FullscreenMode", mode);
-            text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "LastConfirmedFullscreenMode", mode);
-            text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "PreferredFullscreenMode", mode);
-        }
+        // Always force borderless (product policy) — same as other UE titles.
+        _ = displayMode;
+        const string mode = "1";
+        text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "FullscreenMode", mode);
+        text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "LastConfirmedFullscreenMode", mode);
+        text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "PreferredFullscreenMode", mode);
+        text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "FullscreenMode", mode);
+        text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "LastConfirmedFullscreenMode", mode);
+        text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "PreferredFullscreenMode", mode);
+        text = Regex.Replace(text, @"(?im)^(\s*FullscreenMode\s*=\s*).*$", $"${{1}}{mode}");
+        text = Regex.Replace(text, @"(?im)^(\s*LastConfirmedFullscreenMode\s*=\s*).*$", $"${{1}}{mode}");
+        text = Regex.Replace(text, @"(?im)^(\s*PreferredFullscreenMode\s*=\s*).*$", $"${{1}}{mode}");
 
         WriteUtf16Le(path, text);
+
+        // Walk every Marvel GUS under Local AppData (WindowsClient + any mirrored folders).
+        try
+        {
+            var root = Path.GetDirectoryName(MarvelConfigDir); // …\Saved\Config
+            if (root is not null && Directory.Exists(root))
+            {
+                foreach (var gus in Directory.EnumerateFiles(root, "GameUserSettings.ini", SearchOption.AllDirectories))
+                {
+                    if (string.Equals(gus, path, StringComparison.OrdinalIgnoreCase)) continue;
+                    try
+                    {
+                        var t = File.ReadAllText(gus);
+                        t = EnsureSectionLine(t, "/Script/Marvel.MarvelGameUserSettings", "FullscreenMode", mode);
+                        t = EnsureSectionLine(t, "/Script/Marvel.MarvelGameUserSettings", "LastConfirmedFullscreenMode", mode);
+                        t = EnsureSectionLine(t, "/Script/Marvel.MarvelGameUserSettings", "PreferredFullscreenMode", mode);
+                        t = EnsureSectionLine(t, "/Script/Engine.GameUserSettings", "FullscreenMode", mode);
+                        t = Regex.Replace(t, @"(?im)^(\s*FullscreenMode\s*=\s*).*$", $"${{1}}{mode}");
+                        WriteUtf16Le(gus, t);
+                    }
+                    catch { /* locked */ }
+                }
+            }
+        }
+        catch { /* ignore */ }
     }
 
     private static string EnsureSectionLine(string text, string section, string key, string value)
