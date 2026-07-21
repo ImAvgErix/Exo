@@ -95,6 +95,7 @@ public sealed class WebHostBridge
                     _services.Games.ListGames(ReadString(paramsEl, hasParams, "gameId"))),
                 "games.apply" => await ApplyGameHubAsync(paramsEl, hasParams).ConfigureAwait(true),
                 "games.repair" => await RepairGameHubAsync(paramsEl, hasParams).ConfigureAwait(true),
+                "games.openInstall" => OpenGameInstall(paramsEl, hasParams),
                 "shell.navigate" => null,
                 "shell.settings" => RequestSettings(),
                 "shell.openLogs" => OpenLogsFolder(),
@@ -1013,7 +1014,12 @@ public sealed class WebHostBridge
                              state.Extra.TryGetValue("preset", out var gp) &&
                              !string.IsNullOrWhiteSpace(gp)
                     ? gp
-                    : "optimized"
+                    : "optimized",
+                displayMode = state.Extra is not null &&
+                              state.Extra.TryGetValue("displayMode", out var dm) &&
+                              !string.IsNullOrWhiteSpace(dm)
+                    ? dm
+                    : "leave"
             }
         };
     }
@@ -1593,6 +1599,8 @@ public sealed class WebHostBridge
         var gamePreset = ReadString(p, hasParams, "gamePreset")
                          ?? ReadString(p, hasParams, "preset")
                          ?? GameOptimizerService.PresetOptimized;
+        var displayMode = ReadString(p, hasParams, "displayMode")
+                          ?? GameOptimizerService.DisplayLeave;
         using var log = new ModuleApplyLog("games");
         void Report(double percent, string status)
         {
@@ -1606,7 +1614,7 @@ public sealed class WebHostBridge
             Report(-1, s);
         });
         var (ok, msg) = await _services.Games
-            .ApplyAsync(gameId, gamePreset, strProgress, CancellationToken.None)
+            .ApplyAsync(gameId, gamePreset, displayMode, strProgress, CancellationToken.None)
             .ConfigureAwait(true);
         log.Line($"result ok={ok} msg={msg}");
         if (!ok)
@@ -1651,6 +1659,16 @@ public sealed class WebHostBridge
         return MapGamesHub(_services.Games.ListGames(gameId));
     }
 
+    private object OpenGameInstall(JsonElement p, bool hasParams)
+    {
+        var gameId = ReadString(p, hasParams, "gameId")
+                     ?? GameOptimizerService.GameIdMarvelRivals;
+        var (ok, msg) = _services.Games.OpenInstallPage(gameId);
+        if (!ok)
+            throw new InvalidOperationException(msg);
+        return new { ok = true, message = msg, gameId };
+    }
+
     private object MapGamesHub(GameOptimizerService.GamesHubSnapshot hub)
     {
         var selectedMapped = MapState("games", hub.Selected);
@@ -1673,7 +1691,9 @@ public sealed class WebHostBridge
                 applied = g.Applied,
                 activePreset = g.ActivePreset,
                 statusText = g.StatusText,
-                detail = g.Detail
+                detail = g.Detail,
+                installUrl = g.InstallUrl,
+                installLabel = g.InstallLabel
             }).ToArray(),
             selected = selectedMapped
         };

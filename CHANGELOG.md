@@ -1,3 +1,10 @@
+## 3.15.0
+
+- Games hub multi-title optimizers (BO7, Fortnite, Valorant, League, CS2, Apex, HD2, Finals, Predecessor, Rivals)
+- Per-game display preference: Leave / Borderless / Exclusive (game-specific tokens; no silent force)
+- Ban-safe quality profiles only; never force display by default
+- Not-installed games greyed; Apply/Repair locked; no store install button
+- Valorant honest detect when already on competitive lows
 ## 3.14.2
 
 - **Update popup TLDR**
@@ -1261,6 +1268,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

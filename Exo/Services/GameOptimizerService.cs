@@ -7,23 +7,75 @@ using Exo.Models;
 namespace Exo.Services;
 
 /// <summary>
-/// Multi-game catalog: detect installs, then apply per-game Potato / Optimized profiles.
-/// Add new titles to <see cref="Catalog"/> — each can ship its own probe/apply later.
-/// Does not touch anti-cheat processes.
+/// Multi-game catalog: detect installs / AppData configs, then apply Potato / Optimized profiles.
+/// Methods are ban-safe user configs + optional Rivals packs — never AC process tampering.
 /// </summary>
-public sealed class GameOptimizerService
+public sealed partial class GameOptimizerService
 {
     public const string GameIdMarvelRivals = "marvel-rivals";
+    public const string GameIdBlackOps7 = "black-ops-7";
+    public const string GameIdFortnite = "fortnite";
+    public const string GameIdValorant = "valorant";
+    public const string GameIdCs2 = "cs2";
+    public const string GameIdApex = "apex-legends";
+    public const string GameIdHelldivers2 = "helldivers-2";
+    public const string GameIdTheFinals = "the-finals";
+    public const string GameIdPredecessor = "predecessor";
+    public const string GameIdLeague = "league-of-legends";
+
     public const string SteamAppIdMarvelRivals = "2767030";
+    public const string SteamAppIdCs2 = "730";
+    public const string SteamAppIdApex = "1172470";
+    public const string SteamAppIdHelldivers2 = "553850";
+    public const string SteamAppIdTheFinals = "2073850";
+    public const string SteamAppIdPredecessor = "961200";
+    /// <summary>Call of Duty HQ / shared client (BO7 ships through it).</summary>
+    public const string SteamAppIdCallOfDuty = "1938090";
+
     public const string PresetPotato = "potato";
     public const string PresetOptimized = "optimized";
 
-    /// <summary>Known games with a full detect/apply path (Marvel Rivals only for now).</summary>
+    /// <summary>Leave the game's current display mode alone (default).</summary>
+    public const string DisplayLeave = "leave";
+    /// <summary>Borderless / fullscreen windowed — alt-tab friendly; can still hit independent flip.</summary>
+    public const string DisplayBorderless = "borderless";
+    /// <summary>Exclusive / true fullscreen — sometimes lower latency on single-monitor.</summary>
+    public const string DisplayExclusive = "exclusive";
+
+    /// <summary>Most-popular titles first, then Marvel Rivals (full pack path).</summary>
     public static readonly IReadOnlyList<GameCatalogEntry> Catalog =
     [
+        // Each title uses a different surface — researched for current (2026) client versions.
+        new(GameIdBlackOps7, "Black Ops 7", "Battle.net / Steam", SteamAppIdCallOfDuty, Ready: true,
+            Blurb: "cod25 players dvars (competitive FPS meta)",
+            Icon: "/logos/black-ops-7.png"),
+        new(GameIdFortnite, "Fortnite", "Epic", null, Ready: true,
+            Blurb: "Ch7 Performance-mode GameUserSettings",
+            Icon: "/logos/fortnite.png"),
+        new(GameIdValorant, "Valorant", "Riot", null, Ready: true,
+            Blurb: "RiotUserSettings graphics (not Vanguard)",
+            Icon: "/logos/valorant.png"),
+        new(GameIdLeague, "League of Legends", "Riot", null, Ready: true,
+            Blurb: "game.cfg Performance block (no Vanguard)",
+            Icon: "/logos/league-of-legends.png"),
+        new(GameIdCs2, "Counter-Strike 2", "Steam", SteamAppIdCs2, Ready: true,
+            Blurb: "cs2_video.txt + modern autoexec",
+            Icon: "/logos/cs2.png"),
+        new(GameIdApex, "Apex Legends", "Steam / EA", SteamAppIdApex, Ready: true,
+            Blurb: "Respawn videoconfig.txt quality ladder",
+            Icon: "/logos/apex-legends.png"),
+        new(GameIdHelldivers2, "Helldivers 2", "Steam", SteamAppIdHelldivers2, Ready: true,
+            Blurb: "Arrowhead user_settings.config",
+            Icon: "/logos/helldivers-2.png"),
+        new(GameIdTheFinals, "The Finals", "Steam / Epic", SteamAppIdTheFinals, Ready: true,
+            Blurb: "Embark UE scalability (Season meta)",
+            Icon: "/logos/the-finals.png"),
+        new(GameIdPredecessor, "Predecessor", "Steam", SteamAppIdPredecessor, Ready: true,
+            Blurb: "UE GameUserSettings scalability",
+            Icon: "/logos/predecessor.png"),
         new(GameIdMarvelRivals, "Marvel Rivals", "Steam", SteamAppIdMarvelRivals, Ready: true,
-            Blurb: "IoStore packs + Engine.ini profiles",
-            Icon: "/logos/marvel-rivals-96.png"),
+            Blurb: "Engine.ini + optional IoStore packs",
+            Icon: "/logos/marvel-rivals.png"),
     ];
 
     private static readonly JsonSerializerOptions JsonOpts = new()
@@ -122,13 +174,13 @@ public sealed class GameOptimizerService
             };
         }
 
-        if (!entry.Ready || !string.Equals(entry.Id, GameIdMarvelRivals, StringComparison.OrdinalIgnoreCase))
+        if (!entry.Ready)
         {
             return new OptimizerStateInfo
             {
                 IsApplied = false,
                 StatusText = "Coming soon",
-                Detail = $"{entry.Title} is not wired yet — pick Marvel Rivals for now.",
+                Detail = $"{entry.Title} is not wired yet.",
                 Features =
                 [
                     F(entry.Title, entry.Blurb, false),
@@ -144,7 +196,32 @@ public sealed class GameOptimizerService
             };
         }
 
-        return DetectMarvelRivals(preferredPreset);
+        return entry.Id switch
+        {
+            GameIdMarvelRivals => DetectMarvelRivals(preferredPreset),
+            GameIdBlackOps7 => DetectConfigGame(GameIdBlackOps7, preferredPreset),
+            GameIdFortnite => DetectConfigGame(GameIdFortnite, preferredPreset),
+            GameIdValorant => DetectConfigGame(GameIdValorant, preferredPreset),
+            GameIdLeague => DetectConfigGame(GameIdLeague, preferredPreset),
+            GameIdCs2 => DetectConfigGame(GameIdCs2, preferredPreset),
+            GameIdApex => DetectConfigGame(GameIdApex, preferredPreset),
+            GameIdHelldivers2 => DetectConfigGame(GameIdHelldivers2, preferredPreset),
+            GameIdTheFinals => DetectConfigGame(GameIdTheFinals, preferredPreset),
+            GameIdPredecessor => DetectConfigGame(GameIdPredecessor, preferredPreset),
+            _ => new OptimizerStateInfo
+            {
+                IsApplied = false,
+                StatusText = "Coming soon",
+                Detail = $"{entry.Title} is not wired yet.",
+                Features = [F(entry.Title, entry.Blurb, false)],
+                Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["gameId"] = entry.Id,
+                    ["preset"] = preferredPreset ?? PresetOptimized,
+                    ["ready"] = "0"
+                }
+            }
+        };
     }
 
     private OptimizerStateInfo DetectMarvelRivals(string? preferredPreset)
@@ -240,6 +317,9 @@ public sealed class GameOptimizerService
                 ["bypass"] = probe.BypassPresent ? "1" : "0",
                 ["mods"] = probe.ModsDirPresent ? "1" : "0",
                 ["activePreset"] = activePreset ?? "",
+                ["displayMode"] = rec?.DisplayMode is DisplayBorderless or DisplayExclusive
+                    ? rec.DisplayMode!
+                    : DisplayLeave,
                 ["ready"] = "1"
             }
         };
@@ -260,6 +340,7 @@ public sealed class GameOptimizerService
                 PresetOptimized => "Optimized",
                 _ => null
             };
+            var (installUrl, installLabel) = GetInstallTarget(entry.Id);
             return new GameListItem
             {
                 Id = entry.Id,
@@ -278,43 +359,68 @@ public sealed class GameOptimizerService
                         : "Installed",
                 Detail = probe.Installed
                     ? ShortPath(probe.InstallPath!)
-                    : "Steam App " + (entry.SteamAppId ?? "—")
+                    : "Steam App " + (entry.SteamAppId ?? "—"),
+                InstallUrl = installUrl,
+                InstallLabel = installLabel
             };
         }
 
-        return new GameListItem
+        if (IsConfigGame(entry.Id))
+            return BuildConfigGameListItem(entry, state);
+
         {
-            Id = entry.Id,
-            Title = entry.Title,
-            Platform = entry.Platform,
-            Blurb = entry.Blurb,
-            Icon = entry.Icon,
-            Ready = entry.Ready,
-            Installed = false,
-            Applied = false,
-            ActivePreset = null,
-            StatusText = entry.Ready ? "Not installed" : "Coming soon",
-            Detail = entry.Blurb
-        };
+            var (installUrl, installLabel) = GetInstallTarget(entry.Id);
+            return new GameListItem
+            {
+                Id = entry.Id,
+                Title = entry.Title,
+                Platform = entry.Platform,
+                Blurb = entry.Blurb,
+                Icon = entry.Icon,
+                Ready = entry.Ready,
+                Installed = false,
+                Applied = false,
+                ActivePreset = null,
+                StatusText = entry.Ready ? "Not installed" : "Coming soon",
+                Detail = entry.Blurb,
+                InstallUrl = installUrl,
+                InstallLabel = installLabel
+            };
+        }
     }
 
     public async Task<(bool Ok, string Message)> ApplyAsync(
         string preset,
         IProgress<string>? progress = null,
         CancellationToken ct = default) =>
-        await ApplyAsync(GameIdMarvelRivals, preset, progress, ct).ConfigureAwait(false);
+        await ApplyAsync(GameIdMarvelRivals, preset, DisplayLeave, progress, ct).ConfigureAwait(false);
 
     public async Task<(bool Ok, string Message)> ApplyAsync(
         string gameId,
         string preset,
         IProgress<string>? progress = null,
+        CancellationToken ct = default) =>
+        await ApplyAsync(gameId, preset, DisplayLeave, progress, ct).ConfigureAwait(false);
+
+    public async Task<(bool Ok, string Message)> ApplyAsync(
+        string gameId,
+        string preset,
+        string? displayMode,
+        IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
         gameId = NormalizeGameId(gameId);
         preset = NormalizePreset(preset);
+        displayMode = NormalizeDisplayMode(displayMode);
+
+        if (!IsGameInstalled(gameId))
+            return (false, $"{GameTitlePublic(gameId)} is not installed. Launch it once so configs exist, then Apply.");
+
+        if (IsConfigGame(gameId))
+            return await ApplyConfigGameAsync(gameId, preset, displayMode, progress, ct).ConfigureAwait(false);
 
         if (!string.Equals(gameId, GameIdMarvelRivals, StringComparison.OrdinalIgnoreCase))
-            return (false, "That game is not available yet. Choose Marvel Rivals.");
+            return (false, "That game is not available yet.");
 
         progress?.Report("Probing Marvel Rivals…");
         var probe = ProbeMarvelRivals();
@@ -335,7 +441,7 @@ public sealed class GameOptimizerService
                     : "Writing Optimized configs…");
                 WriteEngineIni(preset);
                 WriteScalabilityIni(preset);
-                PatchGameUserSettings(preset);
+                PatchGameUserSettings(preset, displayMode);
 
                 // Clean PC path: create folders → seed cache (bundled first) →
                 // install bypass → install packs → verify.
@@ -364,6 +470,7 @@ public sealed class GameOptimizerService
                 UpsertRecord(state, GameIdMarvelRivals, new GameApplyRecord
                 {
                     Preset = preset,
+                    DisplayMode = displayMode,
                     AppliedUtc = DateTimeOffset.UtcNow,
                     InstallPath = probe.InstallPath
                 });
@@ -407,6 +514,12 @@ public sealed class GameOptimizerService
         CancellationToken ct = default)
     {
         gameId = NormalizeGameId(gameId);
+        if (!IsGameInstalled(gameId))
+            return (false, $"{GameTitlePublic(gameId)} is not installed — nothing to repair.");
+
+        if (IsConfigGame(gameId))
+            return await RepairConfigGameAsync(gameId, progress, ct).ConfigureAwait(false);
+
         if (!string.Equals(gameId, GameIdMarvelRivals, StringComparison.OrdinalIgnoreCase))
             return (false, "That game is not available yet.");
 
@@ -466,6 +579,20 @@ public sealed class GameOptimizerService
             string.Equals(preset, "maxfps", StringComparison.OrdinalIgnoreCase))
             return PresetPotato;
         return PresetOptimized;
+    }
+
+    public static string NormalizeDisplayMode(string? mode)
+    {
+        if (string.Equals(mode, DisplayBorderless, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(mode, "borderless-windowed", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(mode, "windowedfullscreen", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(mode, "windowed_fullscreen", StringComparison.OrdinalIgnoreCase))
+            return DisplayBorderless;
+        if (string.Equals(mode, DisplayExclusive, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(mode, "fullscreen", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(mode, "true-fullscreen", StringComparison.OrdinalIgnoreCase))
+            return DisplayExclusive;
+        return DisplayLeave;
     }
 
     // ── Probe ─────────────────────────────────────────────────────────────
@@ -546,26 +673,32 @@ public sealed class GameOptimizerService
 
     // ── Steam discovery ───────────────────────────────────────────────────
 
-    public static string? TryFindMarvelRivals()
+    public static string? TryFindMarvelRivals() =>
+        TryFindSteamApp(SteamAppIdMarvelRivals, "MarvelRivals")
+        ?? TryFindSteamApp(SteamAppIdMarvelRivals, "Marvel Rivals");
+
+    /// <summary>Locate a Steam app by appmanifest + optional common-folder name hints.</summary>
+    public static string? TryFindSteamApp(string appId, params string[] commonFolderHints)
     {
         foreach (var lib in EnumerateSteamLibraryRoots())
         {
-            var candidates = new[]
+            foreach (var hint in commonFolderHints)
             {
-                Path.Combine(lib, "steamapps", "common", "MarvelRivals"),
-                Path.Combine(lib, "common", "MarvelRivals"),
-            };
-            foreach (var c in candidates)
-            {
-                if (Directory.Exists(c) &&
-                    (File.Exists(Path.Combine(c, "MarvelRivals_Launcher.exe")) ||
-                     Directory.Exists(Path.Combine(c, "MarvelGame"))))
-                    return c;
+                if (string.IsNullOrWhiteSpace(hint)) continue;
+                var candidates = new[]
+                {
+                    Path.Combine(lib, "steamapps", "common", hint),
+                    Path.Combine(lib, "common", hint),
+                };
+                foreach (var c in candidates)
+                {
+                    if (Directory.Exists(c)) return c;
+                }
             }
 
-            var manifest = Path.Combine(lib, "steamapps", $"appmanifest_{SteamAppIdMarvelRivals}.acf");
+            var manifest = Path.Combine(lib, "steamapps", $"appmanifest_{appId}.acf");
             if (!File.Exists(manifest))
-                manifest = Path.Combine(lib, $"appmanifest_{SteamAppIdMarvelRivals}.acf");
+                manifest = Path.Combine(lib, $"appmanifest_{appId}.acf");
             if (!File.Exists(manifest)) continue;
             try
             {
@@ -1131,7 +1264,7 @@ public sealed class GameOptimizerService
         WriteUtf16Le(ScalabilityIniPath, sb.ToString());
     }
 
-    private static void PatchGameUserSettings(string preset)
+    private static void PatchGameUserSettings(string preset, string displayMode = DisplayLeave)
     {
         Directory.CreateDirectory(MarvelConfigDir);
         var path = GameUserSettingsPath;
@@ -1154,6 +1287,18 @@ public sealed class GameOptimizerService
 
         text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "bUseVSync", "False");
         text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "bNvidiaReflex", "True");
+
+        // UE EWindowMode: 0=Fullscreen exclusive, 1=WindowedFullscreen (borderless), 2=Windowed
+        if (displayMode is DisplayBorderless or DisplayExclusive)
+        {
+            var mode = displayMode == DisplayBorderless ? "1" : "0";
+            text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "FullscreenMode", mode);
+            text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "LastConfirmedFullscreenMode", mode);
+            text = EnsureSectionLine(text, "/Script/Marvel.MarvelGameUserSettings", "PreferredFullscreenMode", mode);
+            text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "FullscreenMode", mode);
+            text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "LastConfirmedFullscreenMode", mode);
+            text = EnsureSectionLine(text, "/Script/Engine.GameUserSettings", "PreferredFullscreenMode", mode);
+        }
 
         WriteUtf16Le(path, text);
     }
@@ -1263,6 +1408,121 @@ public sealed class GameOptimizerService
         public string? ActivePreset { get; init; }
         public string StatusText { get; init; } = "";
         public string Detail { get; init; } = "";
+        /// <summary>steam:// or https:// store page to install this game.</summary>
+        public string? InstallUrl { get; init; }
+        /// <summary>Short button label e.g. "Open Steam".</summary>
+        public string? InstallLabel { get; init; }
+    }
+
+    /// <summary>True when configs/install are present enough to Apply.</summary>
+    public bool IsGameInstalled(string gameId)
+    {
+        gameId = NormalizeGameId(gameId);
+        if (string.Equals(gameId, GameIdMarvelRivals, StringComparison.OrdinalIgnoreCase))
+            return ProbeMarvelRivals().Installed;
+        if (IsConfigGame(gameId))
+            return ProbeConfigGame(gameId).Installed;
+        return false;
+    }
+
+    private static string GameTitlePublic(string gameId) =>
+        Catalog.FirstOrDefault(c => string.Equals(c.Id, gameId, StringComparison.OrdinalIgnoreCase))?.Title
+        ?? gameId;
+
+    /// <summary>Store / launcher URI for install. Prefer steam://install when Steam owns the title.</summary>
+    public static (string? Url, string Label) GetInstallTarget(string gameId)
+    {
+        gameId = NormalizeGameId(gameId);
+        return gameId switch
+        {
+            GameIdBlackOps7 => PreferSteamInstall(SteamAppIdCallOfDuty,
+                "https://store.steampowered.com/app/1938090/Call_of_Duty/",
+                "Open Steam — Call of Duty"),
+            GameIdFortnite => ("https://store.epicgames.com/p/fortnite", "Open Epic — Fortnite"),
+            GameIdValorant => ("https://playvalorant.com/", "Open Valorant install page"),
+            GameIdLeague => ("https://www.leagueoflegends.com/", "Open League of Legends"),
+            GameIdCs2 => PreferSteamInstall(SteamAppIdCs2,
+                "https://store.steampowered.com/app/730/CounterStrike_2/",
+                "Open Steam — CS2"),
+            GameIdApex => PreferSteamInstall(SteamAppIdApex,
+                "https://store.steampowered.com/app/1172470/Apex_Legends/",
+                "Open Steam — Apex"),
+            GameIdHelldivers2 => PreferSteamInstall(SteamAppIdHelldivers2,
+                "https://store.steampowered.com/app/553850/HELLDIVERS_2/",
+                "Open Steam — Helldivers 2"),
+            GameIdTheFinals => PreferSteamInstall(SteamAppIdTheFinals,
+                "https://store.steampowered.com/app/2073850/THE_FINALS/",
+                "Open Steam — The Finals"),
+            GameIdPredecessor => PreferSteamInstall(SteamAppIdPredecessor,
+                "https://store.steampowered.com/app/961200/Predecessor/",
+                "Open Steam — Predecessor"),
+            GameIdMarvelRivals => PreferSteamInstall(SteamAppIdMarvelRivals,
+                "https://store.steampowered.com/app/2767030/Marvel_Rivals/",
+                "Open Steam — Marvel Rivals"),
+            _ => (null, "Install")
+        };
+    }
+
+    private static (string Url, string Label) PreferSteamInstall(string appId, string httpsFallback, string label)
+    {
+        // steam://install opens the install dialog when Steam is present
+        if (TryFindSteamRoot() is not null)
+            return ($"steam://install/{appId}", label);
+        return (httpsFallback, label);
+    }
+
+    /// <summary>Open the platform store / install page for a catalog game.</summary>
+    public (bool Ok, string Message) OpenInstallPage(string gameId)
+    {
+        gameId = NormalizeGameId(gameId);
+        var (url, label) = GetInstallTarget(gameId);
+        if (string.IsNullOrWhiteSpace(url))
+            return (false, "No install page is configured for this game.");
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+            return (true, label);
+        }
+        catch (Exception ex)
+        {
+            // steam:// may fail if Steam is broken — fall back to HTTPS store
+            var https = url.StartsWith("steam://", StringComparison.OrdinalIgnoreCase)
+                ? GetInstallTarget(gameId).Url // already steam preferred; force https from known apps
+                : null;
+            // Rebuild https fallbacks only
+            https = gameId switch
+            {
+                GameIdBlackOps7 => "https://store.steampowered.com/app/1938090/Call_of_Duty/",
+                GameIdCs2 => "https://store.steampowered.com/app/730/CounterStrike_2/",
+                GameIdApex => "https://store.steampowered.com/app/1172470/Apex_Legends/",
+                GameIdHelldivers2 => "https://store.steampowered.com/app/553850/HELLDIVERS_2/",
+                GameIdTheFinals => "https://store.steampowered.com/app/2073850/THE_FINALS/",
+                GameIdMarvelRivals => "https://store.steampowered.com/app/2767030/Marvel_Rivals/",
+                GameIdFortnite => "https://store.epicgames.com/p/fortnite",
+                GameIdValorant => "https://playvalorant.com/",
+                _ => null
+            };
+            if (https is null)
+                return (false, string.IsNullOrWhiteSpace(ex.Message) ? "Could not open install page." : ex.Message);
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = https,
+                    UseShellExecute = true
+                });
+                return (true, "Opened store page in browser");
+            }
+            catch (Exception ex2)
+            {
+                return (false, string.IsNullOrWhiteSpace(ex2.Message) ? "Could not open install page." : ex2.Message);
+            }
+        }
     }
 
     public sealed class GamesHubSnapshot
@@ -1287,6 +1547,8 @@ public sealed class GameOptimizerService
     private sealed class GameApplyRecord
     {
         public string? Preset { get; set; }
+        /// <summary>leave | borderless | exclusive — last Apply display preference.</summary>
+        public string? DisplayMode { get; set; }
         public DateTimeOffset? AppliedUtc { get; set; }
         public string? InstallPath { get; set; }
     }

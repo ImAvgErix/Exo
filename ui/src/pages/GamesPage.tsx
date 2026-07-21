@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import {
   host,
+  type GameDisplayMode,
   type GameHubSnapshot,
   type GameListItem,
   type GamePreset,
@@ -17,15 +18,30 @@ const easeOut = [0.23, 1, 0.32, 1] as const
 
 type Outcome = 'idle' | 'applied' | 'partial' | 'failed' | 'repaired'
 
-/** Marvel.exe icon — use 2× pre-scaled asset so the list tile stays sharp on DPI. */
+/** Per-game logos — cache-bust so new assets load after rebuild. */
 function gameIcon(g: GameListItem): { src: string; src2x?: string } {
-  if (g.id === 'marvel-rivals' || (g.icon && g.icon.includes('marvel-rivals'))) {
+  const v = 'v=5'
+  if (g.id === 'marvel-rivals') {
     return {
-      src: '/logos/marvel-rivals-96.png?v=4',
-      src2x: '/logos/marvel-rivals-128.png?v=4',
+      src: `/logos/marvel-rivals.png?${v}`,
+      src2x: `/logos/marvel-rivals-128.png?${v}`,
     }
   }
-  const src = g.icon?.trim() || `/logos/${g.id}.png`
+  const byId: Record<string, string> = {
+    'black-ops-7': `/logos/black-ops-7.png?${v}`,
+    fortnite: `/logos/fortnite.png?${v}`,
+    valorant: `/logos/valorant.png?${v}`,
+    cs2: `/logos/cs2.png?${v}`,
+    'apex-legends': `/logos/apex-legends.png?${v}`,
+    'helldivers-2': `/logos/helldivers-2.png?${v}`,
+    'the-finals': `/logos/the-finals.png?${v}`,
+    predecessor: `/logos/predecessor.png?${v}`,
+    'league-of-legends': `/logos/league-of-legends.png?${v}`,
+    'marvel-rivals': `/logos/marvel-rivals.png?${v}`,
+  }
+  const src = g.icon?.trim()
+    ? `${g.icon.trim()}${g.icon.includes('?') ? '&' : '?'}${v}`
+    : byId[g.id] || `/logos/${g.id}.png?${v}`
   return { src }
 }
 
@@ -60,7 +76,7 @@ function GameRowIcon({
           const el = e.currentTarget
           if (el.dataset.fallback) return
           el.dataset.fallback = '1'
-          el.src = '/logos/marvel-rivals.png?v=4'
+          el.src = '/logos/games.png'
           el.removeAttribute('srcset')
         }}
       />
@@ -78,6 +94,7 @@ export function GamesPage() {
   const [hub, setHub] = useState<GameHubSnapshot | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [preset, setPreset] = useState<GamePreset>('optimized')
+  const [displayMode, setDisplayMode] = useState<GameDisplayMode>('leave')
   const [detecting, setDetecting] = useState(true)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -96,6 +113,8 @@ export function GamesPage() {
       setSelectedId(snap.selectedGameId)
       const p = snap.selected?.options?.gamePreset
       if (p === 'potato' || p === 'optimized') setPreset(p)
+      const d = (snap.selected?.options as { displayMode?: string } | undefined)?.displayMode
+      if (d === 'borderless' || d === 'exclusive' || d === 'leave') setDisplayMode(d)
       if (snap.selected?.isApplied) {
         setOutcome('applied')
         setOutcomeMsg(null)
@@ -136,6 +155,13 @@ export function GamesPage() {
 
   async function runApply() {
     if (!selectedId) return
+    const row = hub?.games.find((g) => g.id === selectedId)
+    if (!row?.installed) {
+      setError('Game is not installed — Apply is blocked.')
+      setOutcome('failed')
+      setOutcomeMsg('Not installed.')
+      return
+    }
     setBusy(true)
     setError(null)
     setOutcome('idle')
@@ -144,7 +170,7 @@ export function GamesPage() {
     setProgressText('Starting…')
     setReportOpen(false)
     try {
-      let snap = await host.applyGame(selectedId, preset)
+      let snap = await host.applyGame(selectedId, preset, displayMode)
       setHub(snap)
       setSelectedId(snap.selectedGameId)
       setProgressText('Verifying live…')
@@ -177,6 +203,13 @@ export function GamesPage() {
 
   async function runRepair() {
     if (!selectedId) return
+    const row = hub?.games.find((g) => g.id === selectedId)
+    if (!row?.installed) {
+      setError('Game is not installed — nothing to repair.')
+      setOutcome('failed')
+      setOutcomeMsg('Not installed — Repair is blocked.')
+      return
+    }
     setBusy(true)
     setError(null)
     setOutcome('idle')
@@ -201,7 +234,12 @@ export function GamesPage() {
   const selected = hub?.selected ?? null
   const features = selected?.features ?? []
   const locked = detecting || busy
-  const canApply = !!selectedId && (hub?.games.find((g) => g.id === selectedId)?.ready ?? false)
+  const selectedRow = hub?.games.find((g) => g.id === selectedId) ?? null
+  const isInstalled = selectedRow?.installed === true
+  const isReady = selectedRow?.ready === true
+  /** Apply/Repair only when installed + optimizer wired */
+  const canApply = !!selectedId && isReady && isInstalled
+  const notInstalled = !!selectedId && isReady && !isInstalled
 
   const classified = useMemo(
     () =>
@@ -271,6 +309,7 @@ export function GamesPage() {
                 ))
               : games.map((g) => {
                   const active = g.id === selectedId
+                  const missing = g.ready && !g.installed
                   return (
                     <li key={g.id}>
                       <button
@@ -280,17 +319,25 @@ export function GamesPage() {
                         className={`flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors ${
                           active
                             ? 'bg-white text-black shadow-[0_1px_0_rgb(255_255_255/0.25)_inset]'
-                            : 'bg-transparent text-text hover:bg-raised'
+                            : missing
+                              ? 'bg-transparent text-text/45 hover:bg-raised/60 hover:text-text/70'
+                              : 'bg-transparent text-text hover:bg-raised'
                         } disabled:opacity-50`}
                       >
-                        <GameRowIcon game={g} active={active} />
+                        <span className={missing && !active ? 'opacity-45 grayscale' : undefined}>
+                          <GameRowIcon game={g} active={active} />
+                        </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block w-full truncate text-[12px] font-semibold leading-tight">
+                          <span
+                            className={`block w-full truncate text-[12px] font-semibold leading-tight ${
+                              missing && !active ? 'text-text/50' : ''
+                            }`}
+                          >
                             {g.title}
                           </span>
                           <span
                             className={`mt-0.5 block w-full truncate text-[10px] ${
-                              active ? 'text-black/55' : 'text-muted'
+                              active ? 'text-black/55' : missing ? 'text-muted/80' : 'text-muted'
                             }`}
                           >
                             {!g.ready
@@ -441,64 +488,109 @@ export function GamesPage() {
                   ? 'Max FPS — low textures, short draw distance, heavy effect cuts.'
                   : 'High FPS — normal-looking textures; cuts post, fog, and heavy shadows.'}
               </p>
+              <p className="mt-2.5 text-[11px] font-semibold tracking-[0.04em] text-secondary">
+                Display
+              </p>
+              <div className="mt-1.5">
+                <Segmented
+                  value={displayMode}
+                  onChange={(v) =>
+                    setDisplayMode(
+                      v === 'borderless' ? 'borderless' : v === 'exclusive' ? 'exclusive' : 'leave',
+                    )
+                  }
+                  disabled={locked}
+                  options={[
+                    { id: 'leave', label: 'Leave' },
+                    { id: 'borderless', label: 'Borderless' },
+                    { id: 'exclusive', label: 'Exclusive' },
+                  ]}
+                />
+              </div>
+              <p className="mt-1.5 text-[11px] leading-snug text-muted">
+                {displayMode === 'leave'
+                  ? 'Keep whatever display mode the game already uses.'
+                  : displayMode === 'borderless'
+                    ? 'Force borderless (per-game token). Can still get independent flip when Windows allows.'
+                    : 'Force exclusive/true fullscreen (per-game token). Best on single monitor.'}
+              </p>
             </section>
           )}
 
-          <section className="glass specular flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl">
-            <div className="flex shrink-0 items-baseline justify-between gap-2 border-b border-white/[0.06] px-3 py-2">
-              <p className="text-[11px] font-semibold tracking-[0.06em] text-secondary">Checks</p>
-              <p className="text-[11px] tabular text-muted">
-                {detecting || !selected
-                  ? '…'
-                  : classified.total === 0
-                    ? '—'
-                    : `${classified.on}/${classified.total} on`}
+          {notInstalled && (
+            <section className="glass specular shrink-0 rounded-2xl px-3 py-2.5">
+              <p className="text-[11px] font-semibold tracking-[0.04em] text-secondary">
+                Not installed
               </p>
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden px-2 py-1.5">
-              {detecting && !selected ? (
-                <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                  {Array.from({ length: 8 }, (_, i) => (
-                    <div key={i} className="h-7 animate-pulse rounded-md bg-raised/50" aria-hidden />
-                  ))}
-                </div>
-              ) : features.length === 0 ? (
-                <p className="px-2 py-4 text-center text-[12px] text-muted">
-                  {canApply
-                    ? 'Apply to verify this game’s stack.'
-                    : 'This title is not available yet.'}
+              <p className="mt-1 text-[12px] leading-snug text-muted">
+                This game isn&apos;t on this PC (or hasn&apos;t been launched yet). Apply stays
+                locked until it is installed and run once.
+              </p>
+            </section>
+          )}
+
+          {/* Checks only when installed — hide empty feature noise for missing titles */}
+          {isInstalled && (
+            <section className="glass specular flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl">
+              <div className="flex shrink-0 items-baseline justify-between gap-2 border-b border-white/[0.06] px-3 py-2">
+                <p className="text-[11px] font-semibold tracking-[0.06em] text-secondary">Checks</p>
+                <p className="text-[11px] tabular text-muted">
+                  {detecting || !selected
+                    ? '…'
+                    : classified.total === 0
+                      ? '—'
+                      : `${classified.on}/${classified.total} on`}
                 </p>
-              ) : (
-                <ul className="grid h-full grid-cols-2 content-start gap-x-1 gap-y-0.5">
-                  {features.map((f) => (
-                    <li
-                      key={f.title}
-                      title={f.detail || f.title}
-                      className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1"
-                    >
-                      <span
-                        className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${
-                          f.active
-                            ? 'bg-success/20 text-success'
-                            : 'bg-white/5 text-muted'
-                        }`}
+              </div>
+              <div className="min-h-0 flex-1 overflow-hidden px-2 py-1.5">
+                {detecting && !selected ? (
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                    {Array.from({ length: 8 }, (_, i) => (
+                      <div
+                        key={i}
+                        className="h-7 animate-pulse rounded-md bg-raised/50"
                         aria-hidden
+                      />
+                    ))}
+                  </div>
+                ) : features.length === 0 ? (
+                  <p className="px-2 py-4 text-center text-[12px] text-muted">
+                    Apply to verify this game’s stack.
+                  </p>
+                ) : (
+                  <ul className="grid h-full grid-cols-2 content-start gap-x-1 gap-y-0.5">
+                    {features.map((f) => (
+                      <li
+                        key={f.title}
+                        title={f.detail || f.title}
+                        className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1"
                       >
-                        {f.active ? '✓' : '·'}
-                      </span>
-                      <span
-                        className={`min-w-0 truncate text-[11px] font-medium leading-tight ${
-                          f.active ? 'text-text' : 'text-muted'
-                        }`}
-                      >
-                        {f.title}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </section>
+                        <span
+                          className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${
+                            f.active
+                              ? 'bg-success/20 text-success'
+                              : 'bg-white/5 text-muted'
+                          }`}
+                          aria-hidden
+                        >
+                          {f.active ? '✓' : '·'}
+                        </span>
+                        <span
+                          className={`min-w-0 truncate text-[11px] font-medium leading-tight ${
+                            f.active ? 'text-text' : 'text-muted'
+                          }`}
+                        >
+                          {f.title}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+          )}
+
+          {!isInstalled && <div className="min-h-0 flex-1" aria-hidden />}
 
           <div className="flex shrink-0 gap-2">
             <motion.button

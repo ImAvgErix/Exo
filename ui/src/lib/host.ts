@@ -11,6 +11,8 @@ export type ModuleId =
   | 'epic'
 
 export type GamePreset = 'potato' | 'optimized'
+/** leave = keep game setting; borderless / exclusive use per-game tokens */
+export type GameDisplayMode = 'leave' | 'borderless' | 'exclusive'
 
 export interface GameListItem {
   id: string
@@ -25,6 +27,10 @@ export interface GameListItem {
   activePreset?: string | null
   statusText: string
   detail: string
+  /** steam:// or https:// store install page */
+  installUrl?: string | null
+  /** Button label e.g. Open Steam — CS2 */
+  installLabel?: string | null
 }
 
 export interface GameHubSnapshot {
@@ -100,6 +106,8 @@ export interface ModuleStatus {
     preferLowestLatency?: boolean
     /** Games module: potato | optimized */
     gamePreset?: GamePreset | string
+    /** Games: leave | borderless | exclusive */
+    displayMode?: GameDisplayMode | string
   }
 }
 
@@ -235,8 +243,11 @@ export const host = {
   /** Games hub: catalog + selected game detail */
   listGames: (gameId?: string | null) =>
     call<GameHubSnapshot>('games.list', gameId ? { gameId } : {}),
-  applyGame: (gameId: string, gamePreset: GamePreset | string) =>
-    call<GameHubSnapshot>('games.apply', { gameId, gamePreset }),
+  applyGame: (
+    gameId: string,
+    gamePreset: GamePreset | string,
+    displayMode: GameDisplayMode | string = 'leave',
+  ) => call<GameHubSnapshot>('games.apply', { gameId, gamePreset, displayMode }),
   repairGame: (gameId: string) => call<GameHubSnapshot>('games.repair', { gameId }),
   getSettings: () =>
     call<{
@@ -396,25 +407,40 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
       },
     }
     if (method.startsWith('games.')) {
+      const applied = method.includes('apply')
+      const mockGames = [
+        { id: 'black-ops-7', title: 'Black Ops 7', platform: 'Battle.net / Steam', blurb: 'AppData players config', icon: '/logos/games.png' },
+        { id: 'fortnite', title: 'Fortnite', platform: 'Epic', blurb: 'GameUserSettings.ini', icon: '/logos/epic.png' },
+        { id: 'valorant', title: 'Valorant', platform: 'Riot', blurb: 'GameUserSettings.ini only', icon: '/logos/riot.png' },
+        { id: 'cs2', title: 'Counter-Strike 2', platform: 'Steam', blurb: 'video + autoexec', icon: '/logos/steam.png' },
+        { id: 'apex-legends', title: 'Apex Legends', platform: 'Steam / EA', blurb: 'videoconfig.txt', icon: '/logos/steam.png' },
+        { id: 'helldivers-2', title: 'Helldivers 2', platform: 'Steam', blurb: 'user_settings.config', icon: '/logos/steam.png' },
+        { id: 'the-finals', title: 'The Finals', platform: 'Steam / Epic', blurb: 'GameUserSettings.ini', icon: '/logos/steam.png' },
+        { id: 'marvel-rivals', title: 'Marvel Rivals', platform: 'Steam', blurb: 'IoStore packs + Engine.ini', icon: '/logos/marvel-rivals.png' },
+      ].map((g) => {
+        const installed =
+          g.id === 'black-ops-7' || g.id === 'valorant' || g.id === 'marvel-rivals'
+        return {
+          ...g,
+          ready: true,
+          installed,
+          applied: applied && (g.id === 'black-ops-7' || g.id === 'marvel-rivals'),
+          activePreset: applied ? 'Optimized' : null,
+          statusText: installed
+            ? applied
+              ? 'Optimized applied'
+              : 'Installed'
+            : 'Not installed',
+          detail: 'Mock path',
+          installUrl: 'https://store.steampowered.com/',
+          installLabel: installed ? null : `Open store — ${g.title}`,
+        }
+      })
       return Promise.resolve({
-        selectedGameId: (params?.gameId as string) || 'marvel-rivals',
-        statusText: '1 installed · 0 optimized',
+        selectedGameId: (params?.gameId as string) || 'black-ops-7',
+        statusText: '3 installed · 0 optimized',
         detail: 'Pick a game, choose Potato or Optimized, then Apply.',
-        games: [
-          {
-            id: 'marvel-rivals',
-            title: 'Marvel Rivals',
-            platform: 'Steam',
-            blurb: 'IoStore packs + Engine.ini',
-            icon: '/logos/marvel-rivals.png',
-            ready: true,
-            installed: true,
-            applied: method.includes('apply'),
-            activePreset: method.includes('apply') ? 'Optimized' : null,
-            statusText: method.includes('apply') ? 'Optimized applied' : 'Installed',
-            detail: 'Mock path',
-          },
-        ],
+        games: mockGames,
         selected: mockStatus,
       } as T)
     }
