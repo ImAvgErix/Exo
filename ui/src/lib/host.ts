@@ -255,6 +255,9 @@ export const host = {
       checkForUpdatesOnLaunch?: boolean
       welcomePromptSeen?: boolean
       buyMeACoffeeUrl?: string
+      changelogUrl?: string
+      releasesUrl?: string
+      issuesUrl?: string
       experimentalDefaults: Record<string, boolean>
     }>('settings.get'),
   setSettings: (patch: {
@@ -266,6 +269,9 @@ export const host = {
       checkForUpdatesOnLaunch?: boolean
       welcomePromptSeen?: boolean
       buyMeACoffeeUrl?: string
+      changelogUrl?: string
+      releasesUrl?: string
+      issuesUrl?: string
       experimentalDefaults: Record<string, boolean>
     }>('settings.set', patch),
   /** Check + download/install when available. Long timeout for multi-minute SFX download. */
@@ -361,6 +367,9 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
       checkForUpdatesOnLaunch: true,
       welcomePromptSeen: true,
       buyMeACoffeeUrl: 'https://www.buymeacoffee.com/UhhErix',
+      changelogUrl: 'https://github.com/ImAvgErix/Exo/blob/main/CHANGELOG.md',
+      releasesUrl: 'https://github.com/ImAvgErix/Exo/releases/latest',
+      issuesUrl: 'https://github.com/ImAvgErix/Exo/issues',
       experimentalDefaults: {},
     } as T)
   }

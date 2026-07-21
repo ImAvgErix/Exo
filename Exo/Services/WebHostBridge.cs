@@ -394,6 +394,9 @@ public sealed class WebHostBridge
 
     /// <summary>Public tip jar — free app; optional support.</summary>
     public const string BuyMeACoffeeUrl = "https://www.buymeacoffee.com/UhhErix";
+    public const string ChangelogUrl = "https://github.com/ImAvgErix/Exo/blob/main/CHANGELOG.md";
+    public const string ReleasesUrl = "https://github.com/ImAvgErix/Exo/releases/latest";
+    public const string IssuesUrl = "https://github.com/ImAvgErix/Exo/issues";
 
     private object BuildSettings()
     {
@@ -404,6 +407,9 @@ public sealed class WebHostBridge
             checkForUpdatesOnLaunch = s.CheckForUpdatesOnLaunch,
             welcomePromptSeen = s.WelcomePromptSeen,
             buyMeACoffeeUrl = BuyMeACoffeeUrl,
+            changelogUrl = ChangelogUrl,
+            releasesUrl = ReleasesUrl,
+            issuesUrl = IssuesUrl,
             experimentalDefaults = new
             {
                 discord = s.ExperimentalDiscord,
@@ -498,7 +504,7 @@ public sealed class WebHostBridge
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "https://github.com/ImAvgErix/Exo/issues",
+                FileName = IssuesUrl,
                 UseShellExecute = true
             });
             return new { ok = true };

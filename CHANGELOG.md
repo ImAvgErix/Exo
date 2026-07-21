@@ -1,3 +1,8 @@
+## 3.16.4
+
+- Settings: Changelog + Releases buttons; cleaner layout (16px pad, 12px gaps, equal row heights)
+- Section labels (Updates / More); shared link chips; coffee CTA aligned with welcome prompt
+
 ## 3.16.3
 
 - First-install welcome: Exo is free; optional Buy Me a Coffee (costs real money — even $1 helps)
