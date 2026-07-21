@@ -46,12 +46,12 @@ if ($Kit -notmatch '^\d+\.\d+\.\d+$') { throw "Kit version must be x.y.z (got $K
 
 Set-TextFile (Join-Path $Root 'Exo\Scripts\Discord\VERSION') $Kit
 
-$opt = Join-Path $Root 'Exo\Scripts\Discord\Discord-Optimizer.ps1'
+$opt = Join-Path $Root 'Exo\Scripts\Discord\Disc-Optimizer.ps1'
 if (Test-Path $opt) {
     $raw = Get-Content $opt -Raw
     $raw2 = [regex]::Replace($raw, "\`$Script:DiscOptVersion = '[^']+'", "`$Script:DiscOptVersion = '$Kit'")
     [IO.File]::WriteAllText($opt, $raw2, [Text.UTF8Encoding]::new($false))
-    Write-Host "[+] Discord-Optimizer DiscOptVersion=$Kit" -ForegroundColor Green
+    Write-Host "[+] Disc-Optimizer DiscOptVersion=$Kit" -ForegroundColor Green
 }
 
 foreach ($update in @(

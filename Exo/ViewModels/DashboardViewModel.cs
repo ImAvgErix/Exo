@@ -9,7 +9,7 @@ using Windows.UI;
 
 namespace Exo.ViewModels;
 
-public partial class HomeViewModel : ObservableObject
+public partial class DashboardViewModel : ObservableObject
 {
     private const int SparkCapacity = 36;
     private readonly AppServices _services;
@@ -18,7 +18,7 @@ public partial class HomeViewModel : ObservableObject
     private readonly Queue<double> _gpuSpark = new();
     private readonly Queue<double> _netSpark = new();
 
-    public HomeViewModel(AppServices services)
+    public DashboardViewModel(AppServices services)
     {
         _services = services;
         Cards = new List<OptimizerCardViewModel>
@@ -268,8 +268,8 @@ public partial class HomeViewModel : ObservableObject
     private void RefreshNetworkLiveTile()
     {
         var link = HomeDashboardReader.TryReadPrimaryLinkSpeed();
-        var latency = HomeDashboardReader.TryReadLatency(_services.Internet);
-        var quality = _services.Internet.LoadQualityBenchmark();
+        var latency = HomeDashboardReader.TryReadLatency(_services.Network);
+        var quality = _services.Network.LoadQualityBenchmark();
 
         // Caption = link; hero = idle latency (honest sample, not a fake “health” score).
         if (link is not null && link.BitsPerSecond > 0)
@@ -344,8 +344,8 @@ public partial class HomeViewModel : ObservableObject
 
     private void RefreshInternetTile()
     {
-        var latency = HomeDashboardReader.TryReadLatency(_services.Internet);
-        var quality = _services.Internet.LoadQualityBenchmark();
+        var latency = HomeDashboardReader.TryReadLatency(_services.Network);
+        var quality = _services.Network.LoadQualityBenchmark();
         var link = HomeDashboardReader.TryReadPrimaryLinkSpeed();
         var linkBit = link is not null && link.BitsPerSecond > 0
             ? $"{link.Label} {link.MediaKind}"
@@ -389,7 +389,7 @@ public partial class HomeViewModel : ObservableObject
         InternetLiveMetric = "No current route sample";
     }
 
-    private static string BuildInternetLiveMetric(ExoInternetBenchmarkResult quality, HomeDashboardReader.LatencySnapshot? latency)
+    private static string BuildInternetLiveMetric(NetworkBenchmarkResult quality, HomeDashboardReader.LatencySnapshot? latency)
     {
         var downLoaded = Math.Max(0, quality.DownloadLoadedMs - quality.PingP50Ms);
         var upLoaded = Math.Max(0, quality.UploadLoadedMs - quality.PingP50Ms);

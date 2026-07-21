@@ -1,18 +1,9 @@
-## 4.0.0
+## 3.16.11
 
-- **Exo 4.0 — Exhaustive Maximize + Living AI** (reveal release)
-- Living **ExoAIAgent**: Grok 4.5 deep brain when an xAI key is set; local Host OS maximize without a key
-- Optimal-state memory + Home **Maximize** gate (skip when digest matches)
-- Real hands (`ExoAiHands`): Host OS → Windows native AI purge + Exo Competitive power + full Windows Apply; Brave-only + auto-install; Internet quality+Apply; Discord/Steam/Riot/Epic/NVIDIA Apply paths; GPU Control; upscaler scan/swap with AC skip + backups (risk ack); companions
-- Soft process policy: EcoQoS + soft reclaim on non-foreground owned helpers (never EmptyWorkingSet thrash; AC untouched)
-- Spooler gate (printer-aware), ShellEx audit via Windows declutter, Host OS expansion catalog
-- Deepened power knobs (Intel hybrid / AMD CPPC / USB / PCIe / Wi-Fi / multimedia) via `ExoPowerPlanNative`
-- Exhaustive Copilot/Recall/Widgets/Search/CloudContent AI purge + task quiet
-- Naming standardization: `ExoInternet*`, `Discord-Optimizer.ps1`, `ExoModulePlate`, Home
-- Top-bar shell contract restored for Ui.Smoke (EXO pill + centered modules + TitleBar)
-- Repo integrity green: ASCII PowerShell/VBS, Steam 1.15.0 + soft-reclaim guard contract, NVIDIA NVAPI display markers
-- Settings: xAI API key, optimal gate, upscaler risk ack
-- `tools/Ai.Smoke` in Linux gate; Test-Linux smokes green
+- **MPO flicker clear**: Apply deletes `OverlayTestMode` / `DisableOverlays` instead of writing OverlayTestMode=5 (stock DWM overlays)
+- **Steam detect honesty**: applied status no longer fail-closed on unused memory-guard template; soft reclaim cadence >= 4s
+- **Brave vault default-off**: do not delete Login Data unless an explicit risk-ack setting exists (safer cache clears kept)
+- **Ui.Smoke**: WebView2 full-bleed shell contract (hex allow MainWindow + ThemeResources, React Shell nav, ContentHost)
 
 ## 3.16.10
 
@@ -221,7 +212,7 @@
   | **Windows** | Native C# only (default). Experimental optional depth pack soft-fails. |
   | **Riot / Epic** | Native C# only (PS was duplicate + stripped yield). Repair still PS. |
   | **Steam** | Native C# primary; PS deep pack soft-fails if native OK. |
-  | **Internet** | C# ExoInternetOptimizerService + MS-safe SR/NTI=10 restamp. |
+  | **Internet** | C# NetworkOptimizerService + MS-safe SR/NTI=10 restamp. |
   | **Discord / NVIDIA** | Specialized PowerShell kits (unchanged depth). |
 - Windows PS deep pack is **depth-only** (tasks / optional features / policy Defender) — skips re-running host glue when `path=native-csharp`.
 - Deep pack failure no longer fails the whole Apply when native essentials succeeded.
@@ -455,8 +446,8 @@
 
 ## 3.0.0
 
-- **ExoModulePlate**: all four optimizer pages (Internet / Discord / Steam / NVIDIA) host chrome via one instrument plate (header, advisor, features, sticky foot, apply report)
-- **Network builder split**: `ExoInternetApplyScriptBuilder` partials — `.Repair.cs` + `.Benchmark.cs` (smoke-linked)
+- **SharedModulePlate**: all four optimizer pages (Internet / Discord / Steam / NVIDIA) host chrome via one instrument plate (header, advisor, features, sticky foot, apply report)
+- **Network builder split**: `NetworkApplyScriptBuilder` partials — `.Repair.cs` + `.Benchmark.cs` (smoke-linked)
 - **Detect = Apply contracts**: `tools/Contracts.Smoke` gates required/forbidden markers + detect/apply concept pairs for all modules
 - **Thin Steam/NVIDIA stage libs**: `Steam/lib/Steam.Bootstrap.ps1` + `Nvidia/lib/Nvidia.Bootstrap.ps1` (stage IDs; god-scripts remain with documented size exception)
 - **CI / Release**: Contracts.Smoke in validate-before-publish
@@ -551,7 +542,7 @@
 
 - **UI — full remodel**: left icon rail (`NavRail` + Home/Discord/Steam/Internet/NVIDIA) replaces the old chrome; home is an editorial directory (hero tagline + full-width module rows) instead of a wrap-grid of product cards; module features are a vertical `FeatureTileGrid` (`StackLayout`) with sticky `ExoActionBar` footers — fixed 1180×760, AMOLED shell, settings still a gear flyout on the rail
 - **Naming — Opti→Exo**: theme/styles/motion/loader keys are `Exo*` (`ExoPrimaryButton`, `ExoFeatureTile`, `ExoMotion`, `ExoLoader`, …) — no `Opti*` leftovers
-- **Tooling — Peak→Logic/Smoke**: peak classifiers and smoke harnesses renamed to `*Logic` / `*.Smoke` (e.g. `ExoInternetLogic`, `DiscordLogic`, `Ui.Smoke`)
+- **Tooling — Peak→Logic/Smoke**: peak classifiers and smoke harnesses renamed to `*Logic` / `*.Smoke` (e.g. `NetworkLogic`, `DiscordLogic`, `Ui.Smoke`)
 
 ## 2.4.3
 
@@ -621,7 +612,7 @@
 ## 2.2.7
 
 - **Runtime bootstrap works without winget**: when PowerShell 7 Preview or Windows Terminal Preview are missing and winget is unavailable or fails (common on debloated Windows), Exo now installs them directly from the official Microsoft GitHub releases — PowerShell Preview as a per-user portable zip under `%LocalAppData%\Exo\runtime` (no elevation), Terminal Preview sideloaded per-user via `Add-AppxPackage`; downloads are verified against the release size and SHA-256 digest
-- **Standalone Discord-Optimizer**: same portable Preview fallback when run outside the app without winget
+- **Standalone Disc-Optimizer**: same portable Preview fallback when run outside the app without winget
 
 ## 2.2.6
 
@@ -1036,7 +1027,7 @@
 - Smoke + live probe-summary cover both latency and throughput with false_fail_count=0
 ## 1.9.33
 
-- **Internet peak freeze**: pure shipped decision core `NetworkPeakLogic` + `ExoInternetApplyScriptBuilder` (band score, path policy, preset knobs, apply audit)
+- **Internet peak freeze**: pure shipped decision core `NetworkPeakLogic` + `NetworkApplyScriptBuilder` (band score, path policy, preset knobs, apply audit)
 - Smoke tests drive real sources (`tools/NetworkPeak.Smoke`): Prefer>Only, eth-usable vs link-no-IP, latency vs throughput script diverge, no folklore
 - Detection/apply Wi-Fi classifier aligned (exclude Bluetooth/Hyper-V/VPN tunnels); live 6 GHz re-probe at apply
 - Docs/golden path frozen at 1.9.33

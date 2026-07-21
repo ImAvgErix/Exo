@@ -12,9 +12,9 @@ namespace Exo.ViewModels;
 public partial class InternetOptimizerViewModel : ObservableObject
 {
     private readonly AppServices _services;
-    private ExoInternetSnapshot? _lastSnap;
-    private ExoInternetBenchmarkResult? _lastQuality;
-    private IReadOnlyList<ExoInternetApplyReportStep> _lastApplyReport = Array.Empty<ExoInternetApplyReportStep>();
+    private NetworkSnapshot? _lastSnap;
+    private NetworkBenchmarkResult? _lastQuality;
+    private IReadOnlyList<NetworkApplyReportStep> _lastApplyReport = Array.Empty<NetworkApplyReportStep>();
 
     public InternetOptimizerViewModel(AppServices services)
     {
@@ -23,8 +23,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
         MessageGlyph = banner.Glyph;
         MessageBrush = ResolveBrush(banner.BrushKey, Color.FromArgb(255, 34, 197, 94));
         // Gaming default: lowest latency. User can flip to high throughput.
-        var preferred = _services.Internet.LoadPreferredPolicy();
-        PreferLowestLatency = preferred != ExoInternetPreset.HighestThroughput;
+        var preferred = _services.Network.LoadPreferredPolicy();
+        PreferLowestLatency = preferred != NetworkPreset.HighestThroughput;
         SelectedProfileOption = PreferLowestLatency ? "Lowest latency" : "High throughput";
         try
         {
@@ -69,8 +69,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
         }
     }
 
-    public ExoInternetPreset SelectedPolicy =>
-        PreferLowestLatency ? ExoInternetPreset.LowestLatency : ExoInternetPreset.HighestThroughput;
+    public NetworkPreset SelectedPolicy =>
+        PreferLowestLatency ? NetworkPreset.LowestLatency : NetworkPreset.HighestThroughput;
 
     partial void OnPreferLowestLatencyChanged(bool value)
     {
@@ -79,7 +79,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
             SelectedProfileOption = opt;
         OnPropertyChanged(nameof(PreferHighThroughput));
         OnPropertyChanged(nameof(SelectedPolicy));
-        try { _services.Internet.SavePreferredPolicy(SelectedPolicy); } catch { }
+        try { _services.Network.SavePreferredPolicy(SelectedPolicy); } catch { }
     }
 
     public IReadOnlyList<string> ApplyModeOptions { get; } = new[] { "Stable", "Experimental" };
@@ -171,7 +171,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
         try
         {
-            var snap = await _services.Internet.ProbeAsync(ct).ConfigureAwait(true);
+            var snap = await _services.Network.ProbeAsync(ct).ConfigureAwait(true);
             if (gen != _probeGen || ct.IsCancellationRequested) return;
             ApplySnapshotToUi(snap, preserveSuccessMessage: false);
             _lastProbeUtc = DateTimeOffset.UtcNow;
@@ -207,11 +207,11 @@ public partial class InternetOptimizerViewModel : ObservableObject
         {
             var (report, bench, rollback, hasSnapshot, quality) = await Task.Run(() =>
             {
-                var r = _services.Internet.LoadLastApplyReport();
-                var b = _services.Internet.LoadBenchmark();
-                var rb = _services.Internet.LoadRollbackStatus();
-                var hs = ExoInternetOptimizerService.HasRestoreSnapshot();
-                var qb = _services.Internet.LoadQualityBenchmark();
+                var r = _services.Network.LoadLastApplyReport();
+                var b = _services.Network.LoadBenchmark();
+                var rb = _services.Network.LoadRollbackStatus();
+                var hs = NetworkOptimizerService.HasRestoreSnapshot();
+                var qb = _services.Network.LoadQualityBenchmark();
                 return (r, b, rb, hs, qb);
             });
 
@@ -262,7 +262,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
     private static string FormatMs(double value) =>
         value < 0 ? "-" : value.ToString(value >= 100 ? "0" : "0.0");
 
-    private void ApplyQualityResult(ExoInternetBenchmarkResult? result)
+    private void ApplyQualityResult(NetworkBenchmarkResult? result)
     {
         if (result is not { Ok: true, IsQualityTest: true })
         {
@@ -279,7 +279,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
         HasQualityResult = true;
     }
 
-    private void ApplySnapshotToUi(ExoInternetSnapshot snap, bool preserveSuccessMessage)
+    private void ApplySnapshotToUi(NetworkSnapshot snap, bool preserveSuccessMessage)
     {
         _lastSnap = snap;
         HeaderStatus = BuildStatus(snap);
@@ -298,7 +298,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
         RefreshGuidance(snap);
     }
 
-    private void RefreshGuidance(ExoInternetSnapshot snap)
+    private void RefreshGuidance(NetworkSnapshot snap)
     {
         _ = snap;
         GuidanceText = string.Empty;
@@ -309,10 +309,10 @@ public partial class InternetOptimizerViewModel : ObservableObject
     /// Full probe feature list (SMB, LLMNR, multi-app DSCP, host MMCSS, NIC knobs, …)
     /// plus a short path/DNS/repair summary so new tweaks are visible, not buried.
     /// </summary>
-    private void RefreshInfoCards(ExoInternetSnapshot snap)
+    private void RefreshInfoCards(NetworkSnapshot snap)
     {
         Rows.Clear();
-        var applied = snap.ActivePreset is ExoInternetPreset.LowestLatency or ExoInternetPreset.HighestThroughput;
+        var applied = snap.ActivePreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput;
 
         var path = snap.Media.EthernetInUse
             ? $"{snap.LinkSpeed} Ethernet gets the lowest route metric; Wi-Fi is never disabled."
@@ -352,7 +352,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
 
         AddInfoCard(
             "Safe repair",
-            ExoInternetOptimizerService.HasRestoreSnapshot()
+            NetworkOptimizerService.HasRestoreSnapshot()
                 ? "A pre-Exo snapshot is ready; Repair restores DNS, DoH, routes, TCP, and NIC settings."
                 : "Apply takes a pre-change snapshot; Repair can return the Windows network stack to stock defaults.",
             true);
@@ -373,10 +373,10 @@ public partial class InternetOptimizerViewModel : ObservableObject
         });
     }
 
-    private static string PresetLabel(ExoInternetPreset preset) => preset switch
+    private static string PresetLabel(NetworkPreset preset) => preset switch
     {
-        ExoInternetPreset.HighestThroughput => "high throughput",
-        ExoInternetPreset.LowestLatency => "lowest latency",
+        NetworkPreset.HighestThroughput => "high throughput",
+        NetworkPreset.LowestLatency => "lowest latency",
         _ => "balanced"
     };
 
@@ -387,14 +387,14 @@ public partial class InternetOptimizerViewModel : ObservableObject
         IsBusy = true;
         HasMessage = false;
         ProgressStatus = "Starting sustained connection analysis...";
-        ExoInternetBenchmarkResult? result = null;
+        NetworkBenchmarkResult? result = null;
         // Toggle owns the stack (latency vs throughput). Analyze picks DNS + quality proof only.
         var preset = SelectedPolicy;
         try
         {
-            var snap = _lastSnap ?? await _services.Internet.ProbeAsync();
+            var snap = _lastSnap ?? await _services.Network.ProbeAsync();
             var testProgress = new Progress<string>(s => ProgressStatus = s);
-            result = await _services.Internet.RunQualityBenchmarkAsync(snap.Media, testProgress);
+            result = await _services.Network.RunQualityBenchmarkAsync(snap.Media, testProgress);
             if (result is not { Ok: true, IsQualityTest: true })
             {
                 SetMessage("Connection test could not finish. No settings were changed.", success: false);
@@ -402,8 +402,8 @@ public partial class InternetOptimizerViewModel : ObservableObject
             }
 
             // Surface what auto-mode would have chosen, but never override the toggle.
-            var suggested = ExoInternetLogic.RecommendPreset(result, snap.Media);
-            _services.Internet.PersistQualityBenchmark(result);
+            var suggested = NetworkLogic.RecommendPreset(result, snap.Media);
+            _services.Network.PersistQualityBenchmark(result);
             ApplyQualityResult(result);
             ProgressStatus = suggested == preset
                 ? $"Applying {PresetLabel(preset)} stack..."
@@ -434,7 +434,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
     }
 
     /// <summary>Apply chosen stack immediately, then refresh header + feature rows in place.</summary>
-    private async Task<bool> ApplyPresetAsync(ExoInternetPreset preset, ExoInternetBenchmarkResult result)
+    private async Task<bool> ApplyPresetAsync(NetworkPreset preset, NetworkBenchmarkResult result)
     {
         if (IsBusy) return false;
 
@@ -444,14 +444,14 @@ public partial class InternetOptimizerViewModel : ObservableObject
         var succeeded = false;
         try
         {
-            var snap = await _services.Internet.ProbeAsync();
+            var snap = await _services.Network.ProbeAsync();
             _lastSnap = snap;
             HeaderStatus = BuildStatus(snap);
 
             // Fail-closed: never disable Wi-Fi. Restart Ethernet briefly so advanced
             // NIC props (flow control, interrupt moderation) actually stick on drivers
             // that ignore NoRestart writes (Intel I226 etc.).
-            var options = new ExoInternetApplyOptions
+            var options = new NetworkApplyOptions
             {
                 PreferEthernetDisableWifi = false,
                 RestartEthernet = snap.Media.EthernetInUse || snap.Media.EthernetUp,
@@ -470,7 +470,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
                     ? "Applying Wi‑Fi stack..."
                     : "Applying...";
             var progress = new Progress<string>(s => ProgressStatus = s);
-            var (ok, msg) = await _services.Internet.ApplyPresetAsync(preset, options, progress);
+            var (ok, msg) = await _services.Network.ApplyPresetAsync(preset, options, progress);
             succeeded = ok;
             // Same finish banner as Discord / Steam / NVIDIA.
             SetMessage(ok ? Helpers.OptimizerMessages.Done : msg, ok);
@@ -479,7 +479,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
             ProgressStatus = "Refreshing...";
             try
             {
-                var after = await _services.Internet.ProbeAsync();
+                var after = await _services.Network.ProbeAsync();
                 ApplySnapshotToUi(after, preserveSuccessMessage: true);
                 SetMessage(ok ? Helpers.OptimizerMessages.Done : msg, ok);
             }
@@ -516,12 +516,12 @@ public partial class InternetOptimizerViewModel : ObservableObject
         try
         {
             var progress = new Progress<string>(s => ProgressStatus = s);
-            var (success, msg) = await _services.Internet.RepairAsync(progress);
+            var (success, msg) = await _services.Network.RepairAsync(progress);
             SetMessage(success ? Helpers.OptimizerMessages.RepairFinished : msg, success);
             ProgressStatus = "Refreshing...";
             try
             {
-                var after = await _services.Internet.ProbeAsync();
+                var after = await _services.Network.ProbeAsync();
                 ApplySnapshotToUi(after, preserveSuccessMessage: true);
                 SetMessage(success ? Helpers.OptimizerMessages.RepairFinished : msg, success);
             }
@@ -539,7 +539,7 @@ public partial class InternetOptimizerViewModel : ObservableObject
         }
     }
 
-    private static string BuildStatus(ExoInternetSnapshot snap)
+    private static string BuildStatus(NetworkSnapshot snap)
     {
         if (!snap.ProbeOk) return "Probe incomplete";
 
@@ -553,13 +553,13 @@ public partial class InternetOptimizerViewModel : ObservableObject
                     ? $"Wi-Fi - {snap.Media.PreferredBandTarget}"
                     : snap.ConnectionType;
 
-        if (snap.ActivePreset == ExoInternetPreset.Balanced)
+        if (snap.ActivePreset == NetworkPreset.Balanced)
             return string.IsNullOrWhiteSpace(snap.LinkSpeed)
                 ? media
                 : $"{media} - {snap.LinkSpeed}";
 
         // Ignore soft N/A style rows that are informational, not failures.
-        static bool IsRealOpen(ExoInternetFeatureRow f)
+        static bool IsRealOpen(NetworkFeatureRow f)
         {
             if (f.IsOk || string.IsNullOrWhiteSpace(f.Title)) return false;
             var s = f.Status ?? string.Empty;

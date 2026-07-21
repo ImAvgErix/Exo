@@ -1,4 +1,4 @@
-' Exo-RunHidden.vbs  -  run a full command line with window style 0 (no console flash).
+' Exo-RunHidden.vbs - run a full command line with window style 0 (no console flash).
 ' Usage: wscript.exe //nologo Exo-RunHidden.vbs "full command line"
 Option Explicit
 If WScript.Arguments.Count < 1 Then WScript.Quit 1

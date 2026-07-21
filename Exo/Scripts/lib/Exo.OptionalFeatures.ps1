@@ -1,4 +1,4 @@
-# Exo.OptionalFeatures.ps1  -  timeout-safe optional feature quieting via dism.exe only.
+# Exo.OptionalFeatures.ps1 - timeout-safe optional feature quieting via dism.exe only.
 # NEVER call Get-WindowsOptionalFeature / Disable-WindowsOptionalFeature (DismHost hang).
 
 Set-StrictMode -Version Latest
@@ -43,7 +43,7 @@ function Invoke-ExoDismTimed {
 }
 
 function Set-ExoOptionalFeaturesQuieted {
-    # Full shortlist with hard timeouts  -  never hangs Apply.
+    # Full shortlist with hard timeouts - never hangs Apply.
     param([switch]$Force)
     $disabled = 0
     $skipped = 0

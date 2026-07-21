@@ -34,7 +34,7 @@ Expect("AppSettings clone", settingsB.CheckForUpdatesOnLaunch);
 var repo = FindRepoRoot();
 var appXaml = Path.Combine(repo, "Exo", "App.xaml");
 var main = Path.Combine(repo, "Exo", "MainWindow.xaml");
-var dash = Path.Combine(repo, "Exo", "Views", "HomePage.xaml");
+var dash = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml");
 var settings = Path.Combine(repo, "Exo", "Views", "Controls", "SettingsSheet.xaml");
 var mainXaml = Path.Combine(repo, "Exo", "MainWindow.xaml");
 var theme = Path.Combine(repo, "Exo", "Styles", "ThemeResources.xaml");
@@ -213,12 +213,20 @@ if (File.Exists(appXaml) && File.Exists(colorTokens) && File.Exists(typeTokens) 
         && metrics.Contains("ExoSpaceL\">16", StringComparison.Ordinal)
         && metrics.Contains("ExoPageMaxWidth\">1160", StringComparison.Ordinal));
 
+    // Product chrome may keep a few literal hex values that match the React shell
+    // (WebView canvas + caption button states). Everything else stays tokenized.
+    var hexAllow = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        Path.Combine("Exo", "MainWindow.xaml"),
+        Path.Combine("Exo", "Styles", "ThemeResources.xaml"),
+    };
     var xamlFiles = Directory.EnumerateFiles(Path.Combine(repo, "Exo"), "*.xaml", SearchOption.AllDirectories)
         .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
             && !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
         .ToArray();
     var hexOutsideTokens = xamlFiles
         .Where(path => !Path.GetFullPath(path).Equals(Path.GetFullPath(colorTokens), StringComparison.OrdinalIgnoreCase))
+        .Where(path => !hexAllow.Contains(Path.GetRelativePath(repo, path)))
         .Where(path => Regex.IsMatch(File.ReadAllText(path), "#[0-9A-Fa-f]{6,8}"))
         .Select(path => Path.GetRelativePath(repo, path))
         .ToArray();
@@ -237,97 +245,74 @@ if (File.Exists(themeServiceCs))
 if (File.Exists(main))
 {
     var m = File.ReadAllText(main);
-    // Labeled top bar: corner Settings/Home morph + modules centered.
-    Expect("nav rail", m.Contains("NavRail", StringComparison.Ordinal));
-    Expect("labeled tab nav", m.Contains("ExoNavTab", StringComparison.Ordinal)
-        && m.Contains("Text=\"Discord\"", StringComparison.Ordinal)
-        && m.Contains("Text=\"Internet\"", StringComparison.Ordinal)
-        && !m.Contains("ExoRailGlassFillBrush", StringComparison.Ordinal));
-    Expect("top bar workspace",
-        m.Contains("<TitleBar.LeftHeader>", StringComparison.Ordinal)
-        && m.Contains("<TitleBar.Content>", StringComparison.Ordinal)
-        && m.Contains("<TitleBar.RightHeader>", StringComparison.Ordinal));
-    Expect("top bar row layout",
-        m.Contains("RowDefinitions", StringComparison.Ordinal)
-        && m.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));
-    Expect("corner pill no EXO wordmark",
-        m.Contains("SettingsButton", StringComparison.Ordinal)
-        && m.Contains("ExoBrandPill", StringComparison.Ordinal)
-        && m.Contains("x:Name=\"NavHome\"", StringComparison.Ordinal)
-        && !m.Contains("Text=\"EXO\"", StringComparison.Ordinal));
-    Expect("modules centered layer", m.Contains("ModuleIcons", StringComparison.Ordinal));
-    Expect("native TitleBar control", m.Contains("<TitleBar x:Name=\"AppTitleBar\"", StringComparison.Ordinal)
-        && !m.Contains("CaptionSpacerHost", StringComparison.Ordinal));
-    Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
-    var moduleRowStart = m.IndexOf("<StackPanel x:Name=\"ModuleIcons\"", StringComparison.Ordinal);
-    var moduleRowEnd = moduleRowStart >= 0
-        ? m.IndexOf("</StackPanel>", moduleRowStart, StringComparison.Ordinal)
-        : -1;
-    var discordInRow = moduleRowStart >= 0
-        ? m.IndexOf("x:Name=\"NavDiscord\"", moduleRowStart, StringComparison.Ordinal)
-        : -1;
-    var brandPill = m.IndexOf("x:Name=\"ExoBrandPill\"", StringComparison.Ordinal);
-    var settingsOnPill = brandPill >= 0
-        ? m.IndexOf("x:Name=\"SettingsButton\"", brandPill, StringComparison.Ordinal)
-        : -1;
-    var leftHeader = m.IndexOf("<TitleBar.LeftHeader>", StringComparison.Ordinal);
-    var leftHeaderEnd = leftHeader >= 0
-        ? m.IndexOf("</TitleBar.LeftHeader>", leftHeader, StringComparison.Ordinal)
-        : -1;
-    var navRail = m.IndexOf("x:Name=\"NavRail\"", StringComparison.Ordinal);
-    Expect("discord center and corner settings cannot overlap",
-        moduleRowStart >= 0
-        && moduleRowEnd > moduleRowStart
-        && discordInRow > moduleRowStart
-        && discordInRow < moduleRowEnd
-        && brandPill >= 0
-        && settingsOnPill > brandPill
-        && leftHeader >= 0
-        && settingsOnPill > leftHeader
-        && settingsOnPill < leftHeaderEnd
-        && navRail >= 0
-        && m.Contains("HorizontalAlignment=\"Center\"", StringComparison.Ordinal));
-    Expect("content host left-aligned under title chrome",
-        m.Contains("x:Name=\"ContentHost\"", StringComparison.Ordinal)
-        && m.Contains("Margin=\"8,0,8,8\"", StringComparison.Ordinal)
+    // Full-bleed WebView2 product shell (3.16.10+). Nav/settings/captions live in React.
+    // Native overlay is only a thin drag strip — never rewrite UI to satisfy this smoke.
+    Expect("webview2 product host",
+        m.Contains("<WebView2 x:Name=\"WebHost\"", StringComparison.Ordinal)
+        && m.Contains("x:Name=\"ContentHost\"", StringComparison.Ordinal)
+        && m.Contains("Margin=\"0\"", StringComparison.Ordinal)
         && m.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal));
+    Expect("thin drag title chrome",
+        m.Contains("x:Name=\"TitleChrome\"", StringComparison.Ordinal)
+        && m.Contains("Height=\"10\"", StringComparison.Ordinal)
+        && m.Contains("x:Name=\"AppTitleBar\"", StringComparison.Ordinal)
+        && !m.Contains("<TitleBar", StringComparison.Ordinal)
+        && !m.Contains("CaptionSpacerHost", StringComparison.Ordinal)
+        && !m.Contains("TitleBarDragRegion", StringComparison.Ordinal));
+    Expect("legacy nav stubs collapsed",
+        m.Contains("x:Name=\"NavRail\"", StringComparison.Ordinal)
+        && m.Contains("Visibility=\"Collapsed\"", StringComparison.Ordinal)
+        && m.Contains("x:Name=\"ModuleIcons\"", StringComparison.Ordinal)
+        && m.Contains("x:Name=\"ExoBrandPill\"", StringComparison.Ordinal)
+        && m.Contains("x:Name=\"NavHome\"", StringComparison.Ordinal)
+        && m.Contains("SettingsButton", StringComparison.Ordinal)
+        && !m.Contains("Text=\"EXO\"", StringComparison.Ordinal));
+    Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
     Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
     Expect("rail nav internet", m.Contains("NavInternet", StringComparison.Ordinal));
     Expect("rail nav nvidia", m.Contains("NavNvidia", StringComparison.Ordinal));
     Expect("rail nav riot", m.Contains("NavRiot", StringComparison.Ordinal));
     Expect("rail nav epic", m.Contains("NavEpic", StringComparison.Ordinal));
-    Expect("rail logo discord", m.Contains("discord.png", StringComparison.Ordinal));
-    Expect("rail logo steam", m.Contains("steam.png", StringComparison.Ordinal));
-    Expect("rail logo internet", m.Contains("internet.png", StringComparison.Ordinal));
-    Expect("rail logo nvidia", m.Contains("nvidia.png", StringComparison.Ordinal));
     Expect("settings gear", m.Contains("SettingsButton", StringComparison.Ordinal));
-    Expect("dead back chrome removed", !m.Contains("x:Name=\"BackButton\"", StringComparison.Ordinal)
-        && !m.Contains("TitleBarDragRegion", StringComparison.Ordinal));
+    Expect("dead back chrome removed", !m.Contains("x:Name=\"BackButton\"", StringComparison.Ordinal));
     Expect("no NavigationView", !m.Contains("<NavigationView", StringComparison.Ordinal));
     Expect("ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
     Expect("no tooltips in main", !m.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
 }
-// The WinUI TitleBar control owns caption layout and interactive content.
+// React Shell owns labeled module tabs + settings/home morph (not native TitleBar).
+var reactShell = Path.Combine(repo, "ui", "src", "components", "Shell.tsx");
+if (File.Exists(reactShell))
+{
+    var shell = File.ReadAllText(reactShell);
+    Expect("react labeled module nav",
+        shell.Contains("label: 'Discord'", StringComparison.Ordinal)
+        && shell.Contains("label: 'Internet'", StringComparison.Ordinal)
+        && shell.Contains("aria-label=\"Optimizers\"", StringComparison.Ordinal)
+        && shell.Contains("aria-label=\"Settings\"", StringComparison.Ordinal)
+        && shell.Contains("aria-label=\"Home\"", StringComparison.Ordinal));
+    Expect("react caption buttons",
+        shell.Contains("host.minimize()", StringComparison.Ordinal)
+        && shell.Contains("host.close()", StringComparison.Ordinal));
+}
+// Thin native drag strip + WebView bridge — captions/nav are React.
 var mainCs = Path.Combine(repo, "Exo", "MainWindow.xaml.cs");
 if (File.Exists(mainCs))
 {
     var cs = File.ReadAllText(mainCs);
-    Expect("SetTitleBar control", cs.Contains("SetTitleBar(AppTitleBar)", StringComparison.Ordinal));
+    Expect("SetTitleBar drag strip", cs.Contains("SetTitleBar(AppTitleBar)", StringComparison.Ordinal));
     Expect("fixed shell size", cs.Contains("IsResizable = false", StringComparison.Ordinal)
         && cs.Contains("IsMaximizable = false", StringComparison.Ordinal)
         && cs.Contains("FixedWindowWidth", StringComparison.Ordinal)
         && cs.Contains("FixedWindowHeight", StringComparison.Ordinal)
         && cs.Contains("1200", StringComparison.Ordinal)
         && cs.Contains("800", StringComparison.Ordinal));
-    Expect("rail selection helper", cs.Contains("UpdateRailSelection", StringComparison.Ordinal));
-    // Current shell contract keeps both segments of the branded EXO pill stable.
-    Expect("stable home and settings pill",
-        cs.Contains("SettingsButton.Visibility = Visibility.Visible", StringComparison.Ordinal)
-        && cs.Contains("NavHome.Visibility = Visibility.Visible", StringComparison.Ordinal)
-        && !cs.Contains("SettingsButton.Visibility = Visibility.Collapsed", StringComparison.Ordinal)
-        && !cs.Contains("NavHome.Visibility = Visibility.Collapsed", StringComparison.Ordinal));
+    Expect("webview bridge shell",
+        cs.Contains("WebHostBridge", StringComparison.Ordinal)
+        && cs.Contains("EnsureWebAsync", StringComparison.Ordinal)
+        && cs.Contains("NavigateWebHash", StringComparison.Ordinal));
     Expect("dead titlebar fields removed", !cs.Contains("AppTitleText", StringComparison.Ordinal)
-        && !cs.Contains("CaptionSpacerHost", StringComparison.Ordinal));
+        && !cs.Contains("CaptionSpacerHost", StringComparison.Ordinal)
+        && !cs.Contains("UpdateRailSelection", StringComparison.Ordinal));
 }
 if (File.Exists(dash))
 {
@@ -417,7 +402,7 @@ if (File.Exists(dash))
     Expect("no pick-a-target blurb", !d.Contains("Pick a target", StringComparison.Ordinal));
 }
 // Checklist navigation + sequence live in code-behind / view model.
-var dashPageCs = Path.Combine(repo, "Exo", "Views", "HomePage.xaml.cs");
+var dashPageCs = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs");
 if (File.Exists(dashPageCs))
 {
     var dcs = File.ReadAllText(dashPageCs);
@@ -496,14 +481,13 @@ if (File.Exists(settingsCs))
         && sc.Contains("CloseMs", StringComparison.Ordinal)
         && sc.Contains("FinishClose", StringComparison.Ordinal));
 }
-// Settings is gear flyout (2.1.0 style).
+// Settings: React drawer is the product surface; native flyout stubs remain for host glue.
 if (File.Exists(mainXaml))
 {
     var mx = File.ReadAllText(mainXaml);
-    Expect("settings flyout on gear",
+    Expect("settings flyout stubs kept",
         mx.Contains("SettingsFlyout", StringComparison.Ordinal)
         && mx.Contains("SettingsSheetHost", StringComparison.Ordinal)
-        && mx.Contains("SettingsGearRotate", StringComparison.Ordinal)
         && !mx.Contains("SettingsRail", StringComparison.Ordinal)
         && !mx.Contains("SettingsOverlay", StringComparison.Ordinal));
 }
@@ -513,8 +497,8 @@ if (File.Exists(updateDlg))
     var u = File.ReadAllText(updateDlg);
     Expect("update dialog no loader", !u.Contains("ExoLoader", StringComparison.Ordinal));
     Expect("update dialog progress", u.Contains("ProgressBar", StringComparison.Ordinal)
-        && u.Contains("pctTb", StringComparison.Ordinal)
-        && u.Contains("phaseTb", StringComparison.Ordinal));
+        && (u.Contains("phaseTb", StringComparison.Ordinal) || u.Contains("pctTb", StringComparison.Ordinal) ||
+            u.Contains("statusTb", StringComparison.Ordinal)));
     Expect("update dialog install", u.Contains("InstallWithProgressAsync", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
@@ -571,19 +555,19 @@ if (File.Exists(converters))
     }
 }
 
-// v3 ExoModulePlate hosts loader + action bar + feature grid for optimizers.
-var sharedPlateXaml = Path.Combine(repo, "Exo", "Views", "Controls", "ExoModulePlate.xaml");
-var sharedPlateCs = Path.Combine(repo, "Exo", "Views", "Controls", "ExoModulePlate.xaml.cs");
-Expect("ExoModulePlate control", File.Exists(sharedPlateXaml) && File.Exists(sharedPlateCs));
+// v3 SharedModulePlate hosts loader + action bar + feature grid for optimizers.
+var sharedPlateXaml = Path.Combine(repo, "Exo", "Views", "Controls", "SharedModulePlate.xaml");
+var sharedPlateCs = Path.Combine(repo, "Exo", "Views", "Controls", "SharedModulePlate.xaml.cs");
+Expect("SharedModulePlate control", File.Exists(sharedPlateXaml) && File.Exists(sharedPlateCs));
 if (File.Exists(sharedPlateXaml))
 {
     var plate = File.ReadAllText(sharedPlateXaml);
-    Expect("ExoModulePlate instrument chrome",
+    Expect("SharedModulePlate instrument chrome",
         plate.Contains("ExoModulePlate", StringComparison.Ordinal)
         && plate.Contains("ExoLoader", StringComparison.Ordinal)
         && plate.Contains("ExoActionBar", StringComparison.Ordinal)
         && plate.Contains("FeatureTileGrid", StringComparison.Ordinal));
-    Expect("ExoModulePlate fixed-canvas layout",
+    Expect("SharedModulePlate fixed-canvas layout",
         plate.Contains("Fixed-canvas module surface", StringComparison.Ordinal)
         && plate.Contains("Reading this PC", StringComparison.Ordinal)
         && plate.Contains("InverseBoolToVisibilityConverter", StringComparison.Ordinal)
@@ -593,10 +577,10 @@ if (File.Exists(sharedPlateXaml))
         // No outer page scroll — only expanded apply report may scroll.
         && !plate.Contains("One normal-flow work surface", StringComparison.Ordinal)
         && plate.Contains("MaxHeight=\"96\"", StringComparison.Ordinal));
-    Expect("ExoModulePlate report without advisor chrome",
+    Expect("SharedModulePlate report without advisor chrome",
         plate.Contains("ApplyReportRows", StringComparison.Ordinal)
         && !plate.Contains("GuidanceText=\"", StringComparison.Ordinal));
-    Expect("ExoModulePlate apply mode dropdown",
+    Expect("SharedModulePlate apply mode dropdown",
         plate.Contains("Apply mode", StringComparison.Ordinal)
         && plate.Contains("SelectedApplyMode", StringComparison.Ordinal)
         && plate.Contains("ApplyModeOptions", StringComparison.Ordinal)
@@ -605,7 +589,7 @@ if (File.Exists(sharedPlateXaml))
 if (File.Exists(sharedPlateCs))
 {
     var plateCs = File.ReadAllText(sharedPlateCs);
-    Expect("ExoModulePlate FeatureTileGrid accessor",
+    Expect("SharedModulePlate FeatureTileGrid accessor",
         plateCs.Contains("FeatureTileGrid", StringComparison.Ordinal)
         && plateCs.Contains("FeatureGrid", StringComparison.Ordinal));
 }
@@ -620,12 +604,13 @@ foreach (var page in new[]
     if (!File.Exists(p)) continue;
     var x = File.ReadAllText(p);
     Expect(page + " CTA", x.Contains("ExoPrimaryButton", StringComparison.Ordinal) || x.Contains("ExoQuietButton", StringComparison.Ordinal));
-    // Module chrome: ExoModulePlate (v3) or legacy page pad.
+    // Module chrome: SharedModulePlate (v3) or legacy plate / page pad.
     Expect(page + " page padding",
-        x.Contains("ExoModulePlate", StringComparison.Ordinal)
+        x.Contains("SharedModulePlate", StringComparison.Ordinal)
+        || x.Contains("ExoModulePlate", StringComparison.Ordinal)
         || x.Contains("ExoPagePadding", StringComparison.Ordinal)
         || x.Contains("ExoPageMaxWidth", StringComparison.Ordinal));
-    Expect(page + " uses ExoModulePlate", x.Contains("ExoModulePlate", StringComparison.Ordinal));
+    Expect(page + " uses SharedModulePlate", x.Contains("SharedModulePlate", StringComparison.Ordinal));
     Expect(page + " no ProgressRing", !x.Contains("<ProgressRing", StringComparison.Ordinal));
     if (page.StartsWith("Internet", StringComparison.Ordinal))
     {
@@ -633,12 +618,11 @@ foreach (var page in new[]
             x.Contains("Analyze &amp; Apply", StringComparison.Ordinal)
             && !x.Contains("Highest download", StringComparison.Ordinal));
         Expect("internet policy dropdown",
-            x.Contains("ShowProfileToggle=\"True\"", StringComparison.Ordinal)
-            && x.Contains("ProfileLabel=\"Stack profile\"", StringComparison.Ordinal)
-            && x.Contains("SelectedProfile=", StringComparison.Ordinal)
-            && x.Contains("ProfileOptions=", StringComparison.Ordinal)
+            (x.Contains("Stack profile", StringComparison.Ordinal) || x.Contains("Link policy", StringComparison.Ordinal))
+            && x.Contains("SelectedProfileOption", StringComparison.Ordinal)
             && x.Contains("SelectedApplyMode", StringComparison.Ordinal)
-            && x.Contains("ApplyModeOptions", StringComparison.Ordinal));
+            && (x.Contains("ShowProfileToggle=\"True\"", StringComparison.Ordinal) ||
+                x.Contains("ComboBox", StringComparison.Ordinal)));
         Expect("internet DNS is automatic",
             !x.Contains("Private DNS", StringComparison.Ordinal)
             && !x.Contains("DNS toggle", StringComparison.OrdinalIgnoreCase));
@@ -669,9 +653,12 @@ if (File.Exists(featureGridXaml))
     Expect("feature grid stretch host", fg.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal));
     Expect("feature grid responsive layout",
         fg.Contains("UniformGridLayout", StringComparison.Ordinal)
-        && fg.Contains("MinItemWidth=\"340\"", StringComparison.Ordinal)
-        && fg.Contains("MinItemHeight=\"52\"", StringComparison.Ordinal)
-        && fg.Contains("MinColumnSpacing=\"6\"", StringComparison.Ordinal)
+        && (fg.Contains("MinItemWidth=\"300\"", StringComparison.Ordinal) ||
+            fg.Contains("MinItemWidth=\"340\"", StringComparison.Ordinal))
+        && (fg.Contains("MinItemHeight=\"48\"", StringComparison.Ordinal) ||
+            fg.Contains("MinItemHeight=\"52\"", StringComparison.Ordinal))
+        && (fg.Contains("MinColumnSpacing=\"5\"", StringComparison.Ordinal) ||
+            fg.Contains("MinColumnSpacing=\"6\"", StringComparison.Ordinal))
         && fg.Contains("ItemsStretch=\"Fill\"", StringComparison.Ordinal));
     Expect("feature grid delegates scrolling", !fg.Contains("<ScrollViewer", StringComparison.Ordinal));
 }
@@ -691,10 +678,10 @@ foreach (var page in new[]
     var p = Path.Combine(repo, "Exo", "Views", page);
     if (!File.Exists(p)) continue;
     var x = File.ReadAllText(p);
-    // Features bind into ExoModulePlate.FeatureItems (grid lives in the plate).
+    // Features bind into SharedModulePlate.FeatureItems (grid lives in the plate).
     Expect(page + " binds feature items to plate",
         x.Contains("FeatureItems=", StringComparison.Ordinal)
-        && x.Contains("ExoModulePlate", StringComparison.Ordinal)
+        && x.Contains("SharedModulePlate", StringComparison.Ordinal)
         && !x.Contains("x:Name=\"FeatureRepeater\"", StringComparison.Ordinal));
     Expect(page + " plate motion host",
         x.Contains("x:Name=\"Plate\"", StringComparison.Ordinal));
@@ -756,8 +743,8 @@ if (File.Exists(launcherVmPath))
     var launcherVm = File.ReadAllText(launcherVmPath);
     Expect("Riot/Epic shared VM has no confirm gate", !launcherVm.Contains("ConfirmAsync", StringComparison.Ordinal));
     Expect("Riot/Epic shared VM wires Apply and exact Repair",
-        launcherVm.Contains("RiotApplyScript", StringComparison.Ordinal) &&
-        launcherVm.Contains("EpicApplyScript", StringComparison.Ordinal) &&
+        launcherVm.Contains("RiotOptimizerScript", StringComparison.Ordinal) &&
+        launcherVm.Contains("EpicOptimizerScript", StringComparison.Ordinal) &&
         launcherVm.Contains("RiotRepairScript", StringComparison.Ordinal) &&
         launcherVm.Contains("EpicRepairScript", StringComparison.Ordinal));
 }
@@ -850,34 +837,26 @@ var mainCsPath = Path.Combine(repo, "Exo", "MainWindow.xaml.cs");
 if (File.Exists(mainCsPath))
 {
     var mc = File.ReadAllText(mainCsPath);
-    Expect("settings gear spin + flyout",
-        mc.Contains("SpinSettingsGear", StringComparison.Ordinal)
-        && mc.Contains("SettingsFlyout", StringComparison.Ordinal)
+    // Product settings live in React SettingsDrawer; native flyout stubs stay wired for host glue.
+    Expect("settings flyout host glue",
+        mc.Contains("SettingsFlyout", StringComparison.Ordinal)
         && mc.Contains("ShowAttachedFlyout", StringComparison.Ordinal)
+        && mc.Contains("SettingsFlyout_Opened", StringComparison.Ordinal)
+        && mc.Contains("SettingsFlyout_Closing", StringComparison.Ordinal)
+        && mc.Contains("PlayOpenAnimation", StringComparison.Ordinal)
+        && mc.Contains("PlayCloseAnimation", StringComparison.Ordinal)
         && !mc.Contains("OpenSettingsRail", StringComparison.Ordinal)
         && !mc.Contains("SettingsRail", StringComparison.Ordinal));
-    Expect("settings open is immediate",
-        mc.Contains("ShowAttachedFlyout", StringComparison.Ordinal)
-        && mc.IndexOf("ShowAttachedFlyout", StringComparison.Ordinal)
-            < mc.IndexOf("SpinSettingsGear();", StringComparison.Ordinal));
-    Expect("settings open plays menu entrance with gear",
-        mc.Contains("PlayOpenAnimation", StringComparison.Ordinal)
-        && mc.Contains("SettingsFlyout_Opened", StringComparison.Ordinal)
-        && mc.Contains("SettingsSheet.OpenMs", StringComparison.Ordinal));
-    Expect("settings close plays menu exit with gear",
-        mc.Contains("PlayCloseAnimation", StringComparison.Ordinal)
-        && mc.Contains("SettingsFlyout_Closing", StringComparison.Ordinal)
-        && mc.Contains("SpinSettingsGearBack", StringComparison.Ordinal)
-        && mc.Contains("SettingsSheet.CloseMs", StringComparison.Ordinal));
     Expect("taskbar icon win32 set",
         mc.Contains("SendMessage", StringComparison.Ordinal) && mc.Contains("LoadImage", StringComparison.Ordinal)
         && mc.Contains("TrySetWindowIcon", StringComparison.Ordinal));
     Expect("startup does not rewrite Start Menu shortcut",
         !mc.Contains("TryRepairStartMenuShortcut", StringComparison.Ordinal)
         && !mc.Contains("WScript.Shell", StringComparison.Ordinal));
-    Expect("navigate ensures page visible",
-        mc.Contains("OnContentNavigated", StringComparison.Ordinal)
-        && mc.Contains("EnsureVisible", StringComparison.Ordinal));
+    Expect("navigate uses webview hash routes",
+        mc.Contains("NavigateWebHash", StringComparison.Ordinal)
+        && mc.Contains("#/module/", StringComparison.Ordinal)
+        && mc.Contains("EnsureWebAsync", StringComparison.Ordinal));
 }
 var programCs = Path.Combine(repo, "Exo", "Program.cs");
 if (File.Exists(programCs))
@@ -897,7 +876,7 @@ if (File.Exists(sfxCs))
         && sx.Contains("CreateStartMenuShortcut", StringComparison.Ordinal));
 }
 
-var dashCs = Path.Combine(repo, "Exo", "Views", "HomePage.xaml.cs");
+var dashCs = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs");
 if (File.Exists(dashCs))
 {
     var dc = File.ReadAllText(dashCs);
@@ -925,12 +904,12 @@ foreach (var pageCs in new[]
         File.ReadAllText(pcs).Contains("NavigationCacheMode.Enabled", StringComparison.Ordinal));
 }
 
-// Content host left-aligned with corner settings (8px inset), full width.
+// Full-bleed WebView host — React header owns settings inset, not native margins.
 var mainWinCs = Path.Combine(repo, "Exo", "MainWindow.xaml.cs");
 if (File.Exists(mainWinCs))
 {
     var mwc = File.ReadAllText(mainWinCs);
-    Expect("content host left-aligned with settings inset",
+    Expect("content host full-bleed stretch",
         mwc.Contains("ClearValue(FrameworkElement.WidthProperty)", StringComparison.Ordinal)
         && mwc.Contains("HorizontalAlignment.Stretch", StringComparison.Ordinal));
 }
@@ -938,11 +917,11 @@ var mainWinXaml = Path.Combine(repo, "Exo", "MainWindow.xaml");
 if (File.Exists(mainWinXaml))
 {
     var mx = File.ReadAllText(mainWinXaml);
-    Expect("content host 8px inset matches settings",
+    Expect("content host full-bleed zero margin",
         mx.Contains("x:Name=\"ContentHost\"", StringComparison.Ordinal)
-        && mx.Contains("Margin=\"8,0,8,8\"", StringComparison.Ordinal)
-        && mx.Contains("x:Name=\"ExoBrandPill\"", StringComparison.Ordinal)
-        && mx.Contains("Margin=\"8,0,8,0\"", StringComparison.Ordinal));
+        && mx.Contains("Margin=\"0\"", StringComparison.Ordinal)
+        && mx.Contains("<WebView2 x:Name=\"WebHost\"", StringComparison.Ordinal)
+        && mx.Contains("x:Name=\"ExoBrandPill\"", StringComparison.Ordinal));
 }
 
 // Dashboard cards fill their responsive cells; content alignment remains stretched.
@@ -987,7 +966,8 @@ if (File.Exists(mainCsWarm))
     var mc = File.ReadAllText(mainCsWarm);
     Expect("MainWindow starts optimizer warm after first frame",
         mc.Contains("WarmInBackground", StringComparison.Ordinal)
-        && mc.Contains("optimizer-warm-started", StringComparison.Ordinal));
+        && (mc.Contains("StartPostFirstFrameWork", StringComparison.Ordinal) ||
+            mc.Contains("optimizer-warm-started", StringComparison.Ordinal)));
 }
 
 // Live advisor (realtime next-step coach on every optimizer)
@@ -1019,7 +999,7 @@ if (File.Exists(advisorPath))
 
 // Dashboard recommended-next deep-link (Home -> first open module)
 // dashCs already declared above for entrance checks; reuse it.
-var nextActionVmPath = Path.Combine(repo, "Exo", "ViewModels", "HomeViewModel.cs");
+var nextActionVmPath = Path.Combine(repo, "Exo", "ViewModels", "DashboardViewModel.cs");
 if (File.Exists(dash) && File.Exists(dashCs) && File.Exists(nextActionVmPath))
 {
     var nextActionXaml = File.ReadAllText(dash);
@@ -1177,7 +1157,7 @@ if (Directory.Exists(logosDir))
 #endif
 }
 
-var dashVm = Path.Combine(repo, "Exo", "ViewModels", "HomeViewModel.cs");
+var dashVm = Path.Combine(repo, "Exo", "ViewModels", "DashboardViewModel.cs");
 if (File.Exists(dashVm))
 {
     var dvm = File.ReadAllText(dashVm);

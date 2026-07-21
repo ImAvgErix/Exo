@@ -209,9 +209,7 @@ foreach ($m in $modules) {
     if ($m -eq 'Internet' -and $blob -notmatch 'analyze') {
         $fails.Add('Internet missing Analyze control')
     }
-    $middleDotMojibake = ([char]0x252C).ToString() + ([char]0x2556).ToString()
-    $smartQuoteMojibake = ([char]0x00E2).ToString() + ([char]0x20AC).ToString()
-    if ($blob.Contains($middleDotMojibake) -or $blob.Contains($smartQuoteMojibake)) {
+    if ($blob -match '--|?-') {
         $fails.Add("$m mojibake in UIA labels")
     }
 }

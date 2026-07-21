@@ -630,9 +630,9 @@ $latencyPolicyOk = $profileOk -and ($drsLive -ne 'drifted') -and $drsExpectedMap
 $features.Add(@{
     title  = 'Low-latency rendering'
     detail = $(if ($gsyncPolicy) {
-        'G-SYNC + driver VSync on + Ultra Low Latency; NVIDIA Reflex takes priority automatically in supported games.'
+        'G-SYNC / VRR pack: ultra low latency with adaptive sync. Reflex still wins in supported titles.'
     } else {
-        'Raw-latency path: G-SYNC/VRR and VSync off + Ultra Low Latency; Reflex takes priority automatically in supported games.'
+        'Competitive pack: G-SYNC off, VSync off, ultra low latency  -  built for minimum input lag.'
     })
     active = [bool]$latencyPolicyOk
 })
@@ -859,7 +859,6 @@ elseif ($driverChanged -or (-not $profileOk -and $state -and ($state.PSObject.Pr
 elseif ($profileOk -and $drsLive -eq 'drifted') { 'Profile drifted - reapply' }
 elseif (-not $profileOk) { '3D profile incomplete' }
 elseif (-not $gameOk) { 'Game profiles incomplete' }
-elseif (-not $safePolicy -and -not $displayOk) { 'Display policy incomplete' }
 elseif (-not $safePolicy -and -not $clientOk) { 'NVIDIA App still present' }
 elseif (-not $advanced3dOk) { '3D profile incomplete' }
 elseif (-not $safePolicy -and -not $backgroundOk) { 'Background re-armed - reapply' }
@@ -877,7 +876,6 @@ elseif ($driverChanged) { "Driver is now $currentNv but last verified $($state.p
 elseif ($profileOk -and $drsLive -eq 'drifted') { "The driver DRS no longer matches the imported Exo pack ($($drsMismatch.Count) pin(s) drifted). Apply again to re-import." }
 elseif (-not $profileOk) { $(if ($applyInProgress) { 'Previous Apply was interrupted. Apply again.' } else { '3D profile not fully verified. Apply again (Profile Inspector).' }) }
 elseif (-not $gameOk) { 'Base profile is present but per-game catalog is incomplete. Apply again.' }
-elseif (-not $safePolicy -and -not $displayOk) { 'Live NVAPI display verification failed. Re-Apply or check Exo.NvDisplay / connected panels.' }
 elseif (-not $safePolicy -and -not $clientOk) { 'NVIDIA App is still installed. Apply removes it; Exo uses the driver directly.' }
 elseif (-not $advanced3dOk) { '3D profiles not fully verified. Apply imports them via Profile Inspector.' }
 elseif (-not $safePolicy -and -not $backgroundOk) { "Background settings need another pass ($($backgroundIssues -join '; '))." }

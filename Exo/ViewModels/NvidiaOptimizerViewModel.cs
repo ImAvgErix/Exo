@@ -169,7 +169,7 @@ public partial class NvidiaOptimizerViewModel : ObservableObject
             args.Add("-Experimental");
 
             var result = await _services.PowerShell.RunAsync(
-                _services.Scripts.NvidiaApplyScript,
+                _services.Scripts.NvidiaOptimizerScript,
                 arguments: args,
                 elevate: true,
                 progress: progress,

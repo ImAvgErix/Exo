@@ -257,29 +257,43 @@ function Set-ExoMousePrecision {
 }
 
 function Test-ExoMpoDisabled {
+    # "Applied" now means stock overlays (flicker keys cleared) - NOT OverlayTestMode=5.
     try {
-        $v = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm' -Name 'OverlayTestMode' -ErrorAction SilentlyContinue
-        return ($null -ne $v -and [int]$v.OverlayTestMode -eq 5)
-    } catch { return $false }
+        $overlay = $null
+        try {
+            $overlay = [int](Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm' -Name 'OverlayTestMode' -ErrorAction Stop)
+        } catch { $overlay = $null }
+        $disable = $null
+        try {
+            $disable = [int](Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -Name 'DisableOverlays' -ErrorAction Stop)
+        } catch { $disable = $null }
+        return ($overlay -ne 5 -and $disable -ne 1)
+    } catch { return $true }
 }
 
 function Set-ExoMpoDisabled {
-    # Multi-Plane Overlay off  -  Nexus/Atlas/CTT-class fix for multi-monitor stutter / FPS drops
+    # Clear OverlayTestMode / DisableOverlays. OverlayTestMode=5 flickers the desktop -
+    # never write it. Keep the function name for call-site compatibility.
     param([switch]$Force)
     $n = 0
     try {
         $path = 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm'
-        if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
-        if ($Force -or -not (Test-ExoMpoDisabled)) {
-            New-ItemProperty -Path $path -Name 'OverlayTestMode' -Value 5 -PropertyType DWord -Force | Out-Null
-            $n++
+        if (Test-Path -LiteralPath $path) {
+            if ($null -ne (Get-ItemProperty -Path $path -Name 'OverlayTestMode' -ErrorAction SilentlyContinue)) {
+                Remove-ItemProperty -Path $path -Name 'OverlayTestMode' -Force -ErrorAction SilentlyContinue
+                $n++
+            }
         }
-        # CTT also sets DisableOverlays under GraphicsDrivers
         $gd = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
-        if (-not (Test-Path $gd)) { New-Item -Path $gd -Force | Out-Null }
-        New-ItemProperty -Path $gd -Name 'DisableOverlays' -Value 1 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
-        $n++
+        if (Test-Path -LiteralPath $gd) {
+            if ($null -ne (Get-ItemProperty -Path $gd -Name 'DisableOverlays' -ErrorAction SilentlyContinue)) {
+                Remove-ItemProperty -Path $gd -Name 'DisableOverlays' -Force -ErrorAction SilentlyContinue
+                $n++
+            }
+        }
     } catch { }
+    # Always report success when stock (keys absent) so detect greens after Apply.
+    if ($n -eq 0 -and (Test-ExoMpoDisabled)) { return 1 }
     return $n
 }
 
@@ -329,7 +343,7 @@ function Set-ExoHighPerfPower {
         return [int](Set-ExoCompetitivePowerPlan -Force:$Force)
     }
     try {
-        # Fallback only: High performance  -  do not duplicatescheme Ultimate.
+        # Fallback only: High performance - do not duplicatescheme Ultimate.
         powercfg -S SCHEME_MIN | Out-Null
         return 1
     } catch { return 0 }
@@ -351,7 +365,7 @@ function Set-ExoHostLatencyProfile {
         if (-not (Test-Path $mm)) { New-Item -Path $mm -Force | Out-Null }
         # MS clamps values <10 to 20 (default). 10 is the real gaming minimum that takes effect.
         New-ItemProperty -Path $mm -Name 'SystemResponsiveness' -Value 10 -PropertyType DWord -Force | Out-Null
-        # Keep default-class NTI=10 (ffffffff can raise DPC/audio issues; forbidden in ExoInternetLogic)
+        # Keep default-class NTI=10 (ffffffff can raise DPC/audio issues; forbidden in NetworkLogic)
         New-ItemProperty -Path $mm -Name 'NetworkThrottlingIndex' -Value 10 -PropertyType DWord -Force | Out-Null
         $n++
     } catch { }
@@ -547,8 +561,8 @@ function Get-ExoSharedGamingFeatureRows {
             active = [bool]$t.win32Priority
         },
         [ordered]@{
-            title  = 'Smoother multi-monitor'
-            detail = 'Desktop composition plane that causes FPS hitches is disabled for cleaner gaming frames.'
+            title  = 'Stock DWM overlays'
+            detail = 'No OverlayTestMode=5 / DisableOverlays - those keys flicker the screen.'
             active = [bool]$t.mpo
         },
         [ordered]@{

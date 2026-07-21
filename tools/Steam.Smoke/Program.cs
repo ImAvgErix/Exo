@@ -247,9 +247,13 @@ Expect("preview host asserts removed",
 // turn this assertion back into a presence check.
 Expect("no half-wired reclaim stats while trim disabled",
     !optimizerText.Contains("Save-TrimStats", StringComparison.Ordinal));
-Expect("current Steam copy describes contention guard, not retired trim",
-    detectorText.Contains("in-game CPU yield", StringComparison.OrdinalIgnoreCase) &&
-    detectorText.Contains("contention guard", StringComparison.OrdinalIgnoreCase) &&
+Expect("current Steam copy describes yield honesty, not retired trim",
+    (detectorText.Contains("in-game CPU yield", StringComparison.OrdinalIgnoreCase) ||
+     detectorText.Contains("No background guard", StringComparison.OrdinalIgnoreCase) ||
+     detectorText.Contains("lean Steam-Exo.cmd", StringComparison.OrdinalIgnoreCase)) &&
+    (detectorText.Contains("contention guard", StringComparison.OrdinalIgnoreCase) ||
+     optimizerText.Contains("contention guard", StringComparison.OrdinalIgnoreCase) ||
+     optimizerText.Contains("soft reclaim", StringComparison.OrdinalIgnoreCase)) &&
     !detectorText.Contains("RAM trim", StringComparison.OrdinalIgnoreCase) &&
     !optimizerText.Contains("aggressive webhelper trim", StringComparison.OrdinalIgnoreCase) &&
     !optimizerText.Contains("gentle webhelper trim", StringComparison.OrdinalIgnoreCase));
@@ -295,10 +299,10 @@ var bodyStart = helperStart >= 0 ? optimizerText.IndexOf("$body = @'", helperSta
 var bodyEnd = bodyStart >= 0 ? optimizerText.IndexOf("'@", bodyStart + 1, StringComparison.Ordinal) : -1;
 Expect("shipped helper body located", bodyStart > helperStart && bodyEnd > bodyStart);
 var helperBody = bodyEnd > bodyStart ? optimizerText.Substring(bodyStart, bodyEnd - bodyStart) : "";
-// Expand competitive cadence placeholders (install path writes 1s game / 2s library).
+// Expand soft-reclaim cadence placeholders (install path writes >=4s).
 var helperExpanded = helperBody
-    .Replace("__EXO_SLEEP_GAME__", "1", StringComparison.Ordinal)
-    .Replace("__EXO_SLEEP_IDLE__", "2", StringComparison.Ordinal);
+    .Replace("__EXO_SLEEP_GAME__", "4", StringComparison.Ordinal)
+    .Replace("__EXO_SLEEP_IDLE__", "4", StringComparison.Ordinal);
 Expect("memory guard uses Windows priority and passes shipped classifier",
     SteamLogic.IsMemoryGuardText(helperExpanded) &&
     helperExpanded.Contains("SetProcessInformation", StringComparison.Ordinal) &&

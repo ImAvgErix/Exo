@@ -7,8 +7,8 @@
     xmlns:controls="using:Exo.Views.Controls"
     Background="Transparent">
 
-    <!-- ExoModulePlate (v3): Steam instrument plate. -->
-    <controls:ExoModulePlate
+    <!-- SharedModulePlate (v3): Steam instrument plate. -->
+    <controls:SharedModulePlate
         x:Name="Plate"
         StatusText="{x:Bind ViewModel.StatusText, Mode=OneWay}"
         FeatureItems="{x:Bind ViewModel.Features, Mode=OneWay}"
@@ -33,13 +33,13 @@
         SecondaryActionsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
         ToggleReportClick="ToggleReport_Click"
         SecondaryLeftClick="Repair_Click">
-        <controls:ExoModulePlate.PrimaryActions>
+        <controls:SharedModulePlate.PrimaryActions>
             <Button Style="{StaticResource ExoPrimaryButton}"
                     Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
                     Click="Run_Click"
                     HorizontalAlignment="Stretch"
                     IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                     AutomationProperties.Name="Apply Steam" />
-        </controls:ExoModulePlate.PrimaryActions>
-    </controls:ExoModulePlate>
+        </controls:SharedModulePlate.PrimaryActions>
+    </controls:SharedModulePlate>
 </Page>

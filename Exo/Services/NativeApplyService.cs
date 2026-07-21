@@ -9,7 +9,7 @@ namespace Exo.Services;
 /// <list type="bullet">
 /// <item>Riot / Epic / Windows / Brave — native C# is the full competitive apply</item>
 /// <item>Steam — native C# essentials; optional PS deep pack soft-fails</item>
-/// <item>Internet — ExoInternetOptimizerService (not this class)</item>
+/// <item>Internet — NetworkOptimizerService (not this class)</item>
 /// <item>Discord / NVIDIA — specialized PowerShell kits only</item>
 /// </list>
 /// HKLM ops that need admin use one compact elevated reg script (no lib imports).
@@ -202,6 +202,29 @@ public sealed class NativeApplyService
                 sb.AppendLine($"  $p = '{hive}:\\{psPath}'");
                 sb.AppendLine("  if (-not (Test-Path -LiteralPath $p)) { New-Item -Path $p -Force | Out-Null }");
                 sb.AppendLine($"  New-ItemProperty -LiteralPath $p -Name '{psName}' -Value '{val}' -PropertyType String -Force | Out-Null");
+                sb.AppendLine("  $ok++");
+                sb.AppendLine("} catch { $fail++; Write-ExoReport 'reg' 'fail' $_.Exception.Message }");
+            }
+            else if (op.StartsWith("delete:", StringComparison.OrdinalIgnoreCase))
+            {
+                // delete:HKLM\path|Name
+                var body = op.Substring("delete:".Length);
+                var parts = body.Split('|');
+                if (parts.Length != 2) continue;
+                var hivePath = parts[0];
+                var name = parts[1];
+                var hive = hivePath.StartsWith("HKLM", StringComparison.OrdinalIgnoreCase) ? "HKLM" : "HKCU";
+                var path = hivePath.Contains('\\')
+                    ? hivePath[(hivePath.IndexOf('\\') + 1)..]
+                    : hivePath;
+                var psPath = path.Replace("'", "''");
+                var psName = name.Replace("'", "''");
+                sb.AppendLine($"Write-ExoProgress {pct} 'Delete {psName}'");
+                sb.AppendLine("try {");
+                sb.AppendLine($"  $p = '{hive}:\\{psPath}'");
+                sb.AppendLine("  if (Test-Path -LiteralPath $p) {");
+                sb.AppendLine($"    Remove-ItemProperty -LiteralPath $p -Name '{psName}' -Force -ErrorAction SilentlyContinue");
+                sb.AppendLine("  }");
                 sb.AppendLine("  $ok++");
                 sb.AppendLine("} catch { $fail++; Write-ExoReport 'reg' 'fail' $_.Exception.Message }");
             }

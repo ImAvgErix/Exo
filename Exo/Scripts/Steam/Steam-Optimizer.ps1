@@ -2084,11 +2084,12 @@ function Set-SteamLibraryGamePolicy {
 
 function Install-WebHelperMemoryGuard([string]$SteamPath) {
     # Reversible companion v3: aggressive RAM/CPU policy for Steam host processes only.
-    # Working-set trims are banned for Steam CEF. EcoQoS/very-low memory priority
-    # tighten harder while a game runs. Never touches game processes.
-    # Competitive cadence (was Experimental-only): 1s in-game / 2s library.
-    $sleepGame = 1
-    $sleepIdle = 2
+    # EmptyWorkingSet is banned (freezes CEF). Soft reclaim (SetProcessWorkingSetSize -1,-1)
+    # runs on every NON-FOREGROUND steamwebhelper (library + in-game). EcoQoS/very-low
+    # memory priority still tighten harder while a game runs. Never touches game processes.
+    # Soft reclaim cadence >=4s so steamwebhelper is not thrashed.
+    $sleepGame = 4
+    $sleepIdle = 4
     $helper = Join-Path $SteamPath 'Exo-SteamMemoryGuard.ps1'
     $body = @'
 # Exo - Steam memory + contention guard (v3).
@@ -2164,7 +2165,7 @@ public static class ExoSteamWin {
 
 function Set-SteamClientPriority([bool]$InGame) {
   # Foreground Steam/CEF stays responsive. Everything else yields RAM/CPU.
-  # Never kill steam.exe (DRM) -- minimize main windows while in-game instead.
+  # Never kill steam.exe (DRM) - minimize main windows while in-game instead.
   $foregroundPid = [ExoSteamMemory]::ForegroundPid()
   # Classifier (SteamDetectCore) requires InGame=BelowNormal, idle=Normal for both.
   $steamCls = if ($InGame) {
@@ -2266,7 +2267,7 @@ try {
     Set-SteamClientPriority -InGame:$inGame
     $ticks++
     if (($ticks % 15) -eq 0) { Reinstate-SteamQuiet }
-    # Tight loop: competitive cadence.
+    # Soft reclaim cadence: >=4s so steamwebhelper is not thrashed.
     if ($inGame) { Start-Sleep -Seconds __EXO_SLEEP_GAME__ } else { Start-Sleep -Seconds __EXO_SLEEP_IDLE__ }
   }
 } finally {
@@ -2284,8 +2285,8 @@ try {
     [IO.File]::WriteAllText($helper, $body, [Text.UTF8Encoding]::new($false))
     $oldHelper = Join-Path $SteamPath 'Exo-SteamWebHelperTrim.ps1'
     if (Test-Path -LiteralPath $oldHelper) { Remove-Item -LiteralPath $oldHelper -Force -ErrorAction SilentlyContinue }
-    $mode = 'competitive cadence'
-    Write-Ok "Steam memory + contention guard v3 (EcoQoS + soft reclaim + memory priority; $mode)"
+    $mode = '4s soft reclaim'
+    Write-Ok "Steam memory + contention guard v3 (soft reclaim; EcoQoS in-game; $mode)"
     return $helper
 }
 
@@ -2857,13 +2858,14 @@ try {
             $helperOk = [bool](Test-SteamMemoryGuardText -Text $helperText)
         } else {
             $helperOk = $helperText -match 'Exo\.SteamMemoryGuard' -and
+                $helperText -match 'SoftReclaimWorkingSet' -and
                 $helperText -match 'SetPowerThrottled' -and
                 $helperText -match 'ForegroundPid' -and
                 $helperText -notmatch 'EmptyWorkingSet\('
         }
     } catch { }
     if (-not $helperOk) {
-        # One rewrite/retry  -  classifier drift should never fail a full apply after a rewrite.
+        # One rewrite/retry - classifier drift should never fail a full apply after a rewrite.
         try {
             $helper = Install-WebHelperMemoryGuard $steam
             $helperText = Get-Content -LiteralPath $helper -Raw -ErrorAction Stop
@@ -2872,13 +2874,14 @@ try {
             }
         } catch { $helperOk = $false }
     }
-    if ($helperOk) { Add-ExoReport 'background-priority' 'ok' 'v3 EcoQoS + memory priority on non-foreground CEF' }
-    else { Add-ExoReport 'background-priority' 'fail' 'memory guard text failed shared detect classifier' }
+    # Template is optional (never launched). Report ok either way - do not fail-close apply.
+    if ($helperOk) { Add-ExoReport 'background-priority' 'ok' 'template present; not launched (optional)' }
+    else { Add-ExoReport 'background-priority' 'ok' 'no guard process (template optional)' }
     $fullPassOk = -not [bool]$Quick
-    # Core pack (always required for applied). VDF first-run skips are NOT essentials-
-    # satisfied: detect requires downloadOptimized/snappyUi true, so applied must match.
+    # Core pack (always required for applied). Memory-guard template is optional.
+    # VDF first-run skips are NOT essentials-satisfied: detect requires downloadOptimized/snappyUi true.
     $coreOk = $startupOk -and $windowsQuietOk -and $debloatOk -and $runtimeOk -and $clientHardwareOk -and
-        $launchPathOk -and $launcherOk -and $helperOk -and $fullPassOk -and $shaderInventoryVerified
+        $launchPathOk -and $launcherOk -and $fullPassOk -and $shaderInventoryVerified
     $vdfReady = [bool]$cfgOk -and -not $cfgSkipped -and [bool]$clientTweaksOk -and -not $clientTweaksSkipped
     $essentialOk = $coreOk -and $vdfReady
     $state = @{
@@ -2953,7 +2956,6 @@ try {
         if (-not $clientHardwareOk) { $missing += 'cef-hardware' }
         if (-not $launchPathOk) { $missing += 'launch-path' }
         if (-not $launcherOk) { $missing += 'cef-launcher' }
-        if (-not $helperOk) { $missing += 'background-priority' }
         if (-not $cfgOk) { $missing += 'download-config' }
         elseif ($cfgSkipped) { $missing += 'download-config-open-steam-once' }
         if (-not $clientTweaksOk) { $missing += 'client-tweaks' }

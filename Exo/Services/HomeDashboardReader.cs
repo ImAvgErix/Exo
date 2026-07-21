@@ -1207,7 +1207,7 @@ public static class HomeDashboardReader
     private static long FileTimeToInt64(FILETIME ft) =>
         ((long)ft.dwHighDateTime << 32) | (uint)ft.dwLowDateTime;
 
-    public static LatencySnapshot? TryReadLatency(ExoInternetOptimizerService network)
+    public static LatencySnapshot? TryReadLatency(NetworkOptimizerService network)
     {
         try
         {

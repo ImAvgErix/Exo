@@ -1,8 +1,8 @@
 # 10-Logging.ps1 - Logging, progress, GitHub downloads
-# Dot-sourced by Discord-Optimizer.ps1 (load order = filename sort).
+# Dot-sourced by Disc-Optimizer.ps1 (load order = filename sort).
 # Universal multi-PC kit - do not assume Equicord/Discord already configured.
 
-# Auto-split from Discord-Optimizer.ps1 - functions only (dot-sourced).
+# Auto-split from Disc-Optimizer.ps1 - functions only (dot-sourced).
 # Requires caller to set kit paths and switches ($KitDir, $Quick, ...).
 
 function Write-Banner {
@@ -235,7 +235,7 @@ function Initialize-Network {
 
 function Get-GitHubHeaders {
     return @{
-        'User-Agent' = 'Discord-Optimizer/1.0 (Windows; PowerShell)'
+        'User-Agent' = 'Disc-Optimizer/1.0 (Windows; PowerShell)'
         'Accept'     = 'application/vnd.github+json'
     }
 }
@@ -255,7 +255,7 @@ function Get-EquicordReleaseFile {
         [Parameter(Mandatory)][string]$OutFile
     )
 
-    $ua = @{ 'User-Agent' = 'Discord-Optimizer/1.0 (Windows; PowerShell)' }
+    $ua = @{ 'User-Agent' = 'Disc-Optimizer/1.0 (Windows; PowerShell)' }
     $release = Get-EquicordLatestRelease
     if ($release) {
         $asset = $release.assets | Where-Object { $_.name -eq $FileName } | Select-Object -First 1

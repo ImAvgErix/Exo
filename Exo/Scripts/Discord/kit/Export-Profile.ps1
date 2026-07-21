@@ -113,7 +113,7 @@ try {
     Start-Sleep 2
 
     if (-not (Test-Path $OverridesPath)) {
-        throw "Missing $OverridesPath - run Discord-Optimizer.ps1 first."
+        throw "Missing $OverridesPath - run Disc-Optimizer.ps1 first."
     }
     if (-not (Test-Path $LivePath)) {
         throw 'Live Equicord settings not found. Open Discord once, then run this again.'

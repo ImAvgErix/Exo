@@ -272,7 +272,7 @@ function Capture-Module {
                 Write-Host "[cua-qa]   landed on $Name"
                 break
             }
-            Write-Host "[cua-qa]   not landed after $($att.Mode)  -  escalate"
+            Write-Host "[cua-qa]   not landed after $($att.Mode) - escalate"
         }
     } else {
         $landed = $true

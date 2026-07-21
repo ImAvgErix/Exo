@@ -1,4 +1,4 @@
-# Exo.NoBackground.ps1  -  purge ALL Exo Run-key companions (no always-on yield).
+# Exo.NoBackground.ps1 - purge ALL Exo Run-key companions (no always-on yield).
 # Product policy: zero idle background processes. One-shot Apply only.
 
 Set-StrictMode -Version Latest
@@ -72,7 +72,7 @@ function Unregister-ExoBackground {
         } catch { }
     }
 
-    # Do NOT wipe StartupApproved for Exo-*-Yield  -  that re-enables the "disabled at login" bit wrongly.
+    # Do NOT wipe StartupApproved for Exo-*-Yield - that re-enables the "disabled at login" bit wrongly.
     try {
         $sa = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
         if (Test-Path $sa) {

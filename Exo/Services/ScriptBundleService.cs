@@ -157,7 +157,7 @@ public sealed class ScriptBundleService
         }
     }
 
-    public string DiscordApplyScript =>
+    public string DiscordOptimizerScript =>
         Path.Combine(GetDiscordRoot(), "Exo-Discord-Run.ps1");
 
     public string DiscordDetectScript =>
@@ -166,7 +166,7 @@ public sealed class ScriptBundleService
     public string DiscordRepairScript =>
         Path.Combine(GetDiscordRoot(), "Exo-Discord-Repair.ps1");
 
-    public string SteamApplyScript =>
+    public string SteamOptimizerScript =>
         Path.Combine(GetSteamRoot(), "Exo-Steam-Run.ps1");
 
     public string SteamDetectScript =>
@@ -175,7 +175,7 @@ public sealed class ScriptBundleService
     public string SteamRepairScript =>
         Path.Combine(GetSteamRoot(), "Exo-Steam-Repair.ps1");
 
-    public string NvidiaApplyScript =>
+    public string NvidiaOptimizerScript =>
         Path.Combine(GetNvidiaRoot(), "Exo-Nvidia-Run.ps1");
 
     public string NvidiaDetectScript =>
@@ -184,14 +184,14 @@ public sealed class ScriptBundleService
     public string NvidiaRepairScript =>
         Path.Combine(GetNvidiaRoot(), "Exo-Nvidia-Repair.ps1");
 
-    public string RiotApplyScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Riot-Run.ps1");
+    public string RiotOptimizerScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Riot-Run.ps1");
     public string RiotDetectScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Riot-Detect.ps1");
     public string RiotRepairScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Riot-Repair.ps1");
-    public string EpicApplyScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Epic-Run.ps1");
+    public string EpicOptimizerScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Epic-Run.ps1");
     public string EpicDetectScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Epic-Detect.ps1");
     public string EpicRepairScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Epic-Repair.ps1");
 
-    public string WindowsApplyScript => Path.Combine(GetWindowsRoot(), "Exo-Windows-Run.ps1");
+    public string WindowsOptimizerScript => Path.Combine(GetWindowsRoot(), "Exo-Windows-Run.ps1");
     public string WindowsDetectScript => Path.Combine(GetWindowsRoot(), "Exo-Windows-Detect.ps1");
     public string WindowsRepairScript => Path.Combine(GetWindowsRoot(), "Exo-Windows-Repair.ps1");
 
@@ -261,7 +261,7 @@ public sealed class ScriptBundleService
         foreach (var job in new (string Name, string Bundled, string[] Required)[]
                  {
                      ("Discord", PathHelper.DiscordScriptsDir,
-                         ["Discord-Optimizer.ps1", "Exo-Discord-Run.ps1"]),
+                         ["Disc-Optimizer.ps1", "Exo-Discord-Run.ps1"]),
                      ("Steam", PathHelper.SteamScriptsDir,
                          ["Steam-Optimizer.ps1", "Exo-Steam-Run.ps1", "Exo-Steam-Detect.ps1"]),
                      ("Nvidia", PathHelper.NvidiaScriptsDir,
@@ -551,13 +551,13 @@ public sealed class ScriptBundleService
         if (_discordSyncDone &&
             string.Equals(_lastSyncedBundledVersion, bundledVersion, StringComparison.Ordinal) &&
             string.Equals(_lastSyncedWorkingVersion, workingVersion, StringComparison.Ordinal) &&
-            File.Exists(Path.Combine(working, "Discord-Optimizer.ps1")) &&
+            File.Exists(Path.Combine(working, "Disc-Optimizer.ps1")) &&
             File.Exists(Path.Combine(working, "Exo-Discord-Run.ps1")))
         {
             return;
         }
 
-        var marker = Path.Combine(working, "Discord-Optimizer.ps1");
+        var marker = Path.Combine(working, "Disc-Optimizer.ps1");
         var hubRun = Path.Combine(working, "Exo-Discord-Run.ps1");
         var repairScript = Path.Combine(working, "Exo-Discord-Repair.ps1");
         var repairText = File.Exists(repairScript) ? File.ReadAllText(repairScript) : string.Empty;
@@ -601,7 +601,7 @@ public sealed class ScriptBundleService
             !string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))
         {
             ReplaceWorkingKitFromBundled("Discord", bundled,
-                ["Discord-Optimizer.ps1", "Exo-Discord-Run.ps1"]);
+                ["Disc-Optimizer.ps1", "Exo-Discord-Run.ps1"]);
             workingVersion = ReadVersionFile(workingVersionPath) ?? bundledVersion;
         }
 

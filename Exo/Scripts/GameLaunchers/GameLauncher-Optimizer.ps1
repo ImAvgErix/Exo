@@ -46,7 +46,7 @@ if (-not (Get-Command Set-ExoGameQosPolicy -ErrorAction SilentlyContinue)) {
     }
 }
 if (-not (Get-Command Set-ExoGameQosPolicy -ErrorAction SilentlyContinue)) {
-    Write-Warning 'Exo.GameBar.ps1 not loaded  -  per-game DSCP will be skipped'
+    Write-Warning 'Exo.GameBar.ps1 not loaded - per-game DSCP will be skipped'
 }
 
 function Write-ProgressLine([int]$Percent, [string]$Text) {
@@ -545,7 +545,7 @@ function Remove-YieldGuard {
 }
 
 function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
-    # Hidden PowerShell companion  -  NEVER wscript (WSH error dialogs + WindowsApps stub failures).
+    # Hidden PowerShell companion - NEVER wscript (WSH error dialogs + WindowsApps stub failures).
     # Soft reclaim + demote launcher while game runs. Never touches AC/game files.
     [void](Remove-YieldGuard)
 
@@ -564,7 +564,7 @@ function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
     $gameList = ($gameNames | ForEach-Object { "'$($_ -replace '''','''''')'" }) -join ','
     $launcherList = ($launcherNames | ForEach-Object { "'$($_ -replace '''','''''')'" }) -join ','
     $lines = @(
-        "# Exo $Module companion  -  hidden PowerShell only (no wscript)."
+        "# Exo $Module companion - hidden PowerShell only (no wscript)."
         '$ErrorActionPreference = ''SilentlyContinue'''
         '$created = $false'
         ("`$mutex = [Threading.Mutex]::new(`$true, 'Local\Exo.{0}.YieldGuard', [ref]`$created)" -f $Module)
@@ -657,7 +657,7 @@ function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
         return $false
     }
 
-    # Fully quoted Run key  -  no wscript, no WindowsApps stub
+    # Fully quoted Run key - no wscript, no WindowsApps stub
     $runCmd = '"{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $hostExe, $YieldHelperPath
 
     try {
@@ -675,7 +675,7 @@ function Install-YieldGuard([object[]]$Targets, [object[]]$Launchers) {
         return $false
     }
 
-    # Start now with CreateNoWindow  -  never wscript (no WSH dialogs)
+    # Start now with CreateNoWindow - never wscript (no WSH dialogs)
     try {
         $psi = [Diagnostics.ProcessStartInfo]::new()
         $psi.FileName = $hostExe
@@ -698,7 +698,7 @@ function Restore-Value([Microsoft.Win32.RegistryKey]$Key, [string]$Name, $Snapsh
 }
 
 function Clear-LegacyGameFso([Microsoft.Win32.RegistryKey]$FsoKey, [string]$Path) {
-    # Games hub forces borderless  -  do not stamp DISABLEDXMAXIMIZEDWINDOWEDMODE on game EXEs.
+    # Games hub forces borderless - do not stamp DISABLEDXMAXIMIZEDWINDOWEDMODE on game EXEs.
     # Strip legacy Exo exclusive-fullscreen FSO-off stamps on re-apply.
     if ($null -eq $FsoKey -or [string]::IsNullOrWhiteSpace($Path)) { return $false }
     $cur = [string]$FsoKey.GetValue($Path, $null)
@@ -748,7 +748,7 @@ function Apply-WindowsGamePolicy([object[]]$Targets, [object[]]$Launchers, [swit
             if ([string]::IsNullOrWhiteSpace($path)) { continue }
             if (Clear-LegacyGameFso $fso $path) { $fsoCleared++ }
         }
-        # Also clear leftover FSO stamps on launchers (LauncherFso param ignored  -  legacy).
+        # Also clear leftover FSO stamps on launchers (LauncherFso param ignored - legacy).
         foreach ($t in @($Launchers)) {
             $path = [string]$t.path
             if ([string]::IsNullOrWhiteSpace($path)) { continue }

@@ -30,26 +30,26 @@ var repo = FindRepoRoot();
 Expect("repo root", Directory.Exists(repo));
 
 // --- Internet: generated apply + repair share safety/report contract ---
-var media = new ExoInternetMediaProfile
+var media = new NetworkMediaProfile
 {
     ClientSupports6Ghz = true,
     ClientSupports5Ghz = true,
     EthernetInUse = true,
     WifiAvailable = true
 };
-var opts = new ExoInternetApplyOptions { PreferEthernetDisableWifi = true, RestartEthernet = false };
-var lat = ExoInternetApplyScriptBuilder.Build(ExoInternetPreset.LowestLatency, opts, media);
-var thr = ExoInternetApplyScriptBuilder.Build(ExoInternetPreset.HighestThroughput, opts, media);
-var repair = ExoInternetApplyScriptBuilder.BuildRepair();
-var bench = ExoInternetApplyScriptBuilder.BuildBenchmark();
+var opts = new NetworkApplyOptions { PreferEthernetDisableWifi = true, RestartEthernet = false };
+var lat = NetworkApplyScriptBuilder.Build(NetworkPreset.LowestLatency, opts, media);
+var thr = NetworkApplyScriptBuilder.Build(NetworkPreset.HighestThroughput, opts, media);
+var repair = NetworkApplyScriptBuilder.BuildRepair();
+var bench = NetworkApplyScriptBuilder.BuildBenchmark();
 
-var (latOk, latIssues) = ExoInternetLogic.AuditApplyScript(lat, ExoInternetPreset.LowestLatency);
-var (thrOk, thrIssues) = ExoInternetLogic.AuditApplyScript(thr, ExoInternetPreset.HighestThroughput);
+var (latOk, latIssues) = NetworkLogic.AuditApplyScript(lat, NetworkPreset.LowestLatency);
+var (thrOk, thrIssues) = NetworkLogic.AuditApplyScript(thr, NetworkPreset.HighestThroughput);
 Expect("internet latency AuditApply", latOk, string.Join("; ", latIssues));
 Expect("internet throughput AuditApply", thrOk, string.Join("; ", thrIssues));
 
 // Detect UI row labels must not require folklore that Apply never writes.
-foreach (var forbidden in ExoInternetLogic.ForbiddenApplyPatterns)
+foreach (var forbidden in NetworkLogic.ForbiddenApplyPatterns)
 {
     Expect("internet apply free of folklore: " + Short(forbidden),
         lat.IndexOf(forbidden, StringComparison.OrdinalIgnoreCase) < 0
@@ -72,11 +72,11 @@ Expect("internet never disables Wi-Fi (latency)",
     || lat.Contains("never disable wifi adapters", StringComparison.OrdinalIgnoreCase));
 Expect("internet benchmark EXO_BENCH", bench.Contains("EXO_BENCH:", StringComparison.Ordinal));
 Expect("network builder partials linked",
-    File.Exists(Path.Combine(repo, "Exo", "Services", "ExoInternetApplyScriptBuilder.Repair.cs"))
-    && File.Exists(Path.Combine(repo, "Exo", "Services", "ExoInternetApplyScriptBuilder.Benchmark.cs")));
+    File.Exists(Path.Combine(repo, "Exo", "Services", "NetworkApplyScriptBuilder.Repair.cs"))
+    && File.Exists(Path.Combine(repo, "Exo", "Services", "NetworkApplyScriptBuilder.Benchmark.cs")));
 
 // Internet detect service must not hard-require Client/LLDP off (fail-closed honesty).
-var netService = File.ReadAllText(Path.Combine(repo, "Exo", "Services", "ExoInternetOptimizerService.cs"));
+var netService = File.ReadAllText(Path.Combine(repo, "Exo", "Services", "NetworkOptimizerService.cs"));
 Expect("internet detect bindings QoS+IP only (no Client/LLDP hard fail)",
     !netService.Contains("Client/LLDP", StringComparison.Ordinal)
     || netService.Contains("QoS", StringComparison.Ordinal));
@@ -116,7 +116,7 @@ Expect("steam stage lib bootstrap",
 // --- Discord: audit concatenated apply sources (same blob as Discord.Smoke) ---
 var discFiles = new[]
 {
-    Path.Combine(repo, "Exo", "Scripts", "Discord", "Discord-Optimizer.ps1"),
+    Path.Combine(repo, "Exo", "Scripts", "Discord", "Disc-Optimizer.ps1"),
     Path.Combine(repo, "Exo", "Scripts", "Discord", "Exo-Discord-Run.ps1"),
     Path.Combine(repo, "Exo", "Scripts", "Discord", "kit", "lib", "10-Logging.ps1"),
     Path.Combine(repo, "Exo", "Scripts", "Discord", "kit", "lib", "40-DebloatWindows.ps1"),
@@ -174,12 +174,12 @@ Expect("nvidia Run wires bootstrap",
     nvRun.Contains("Nvidia.Bootstrap.ps1", StringComparison.Ordinal));
 
 // --- Shared plate + no Exo background create across optimizers ---
-Expect("ExoModulePlate shipped",
-    File.Exists(Path.Combine(repo, "Exo", "Views", "Controls", "ExoModulePlate.xaml")));
+Expect("SharedModulePlate shipped",
+    File.Exists(Path.Combine(repo, "Exo", "Views", "Controls", "SharedModulePlate.xaml")));
 foreach (var page in new[] { "Discord", "Steam", "Internet", "Nvidia" })
 {
     var xaml = File.ReadAllText(Path.Combine(repo, "Exo", "Views", page + "OptimizerPage.xaml"));
-    Expect(page + " page uses ExoModulePlate", xaml.Contains("ExoModulePlate", StringComparison.Ordinal));
+    Expect(page + " page uses SharedModulePlate", xaml.Contains("SharedModulePlate", StringComparison.Ordinal));
 }
 
 // Cross-module EXO_REPORT vocabulary (apply path or shared bootstrap emitters)

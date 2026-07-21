@@ -10,7 +10,7 @@ namespace Exo.Views;
 /// <summary>
 /// Dense instrument home: machine strip, 2×2 meters, compact optimizer chips.
 /// </summary>
-public sealed partial class HomePage : Page
+public sealed partial class DashboardPage : Page
 {
     private CancellationTokenSource? _refreshCts;
     private CancellationTokenSource? _checkCts;
@@ -21,12 +21,12 @@ public sealed partial class HomePage : Page
     private DispatcherTimer? _pulseTimer;
     private double _pulsePhase;
 
-    public HomeViewModel ViewModel { get; }
+    public DashboardViewModel ViewModel { get; }
 
-    public HomePage()
+    public DashboardPage()
     {
         NavigationCacheMode = NavigationCacheMode.Enabled;
-        ViewModel = new HomeViewModel(App.Services);
+        ViewModel = new DashboardViewModel(App.Services);
         InitializeComponent();
         DataContext = ViewModel;
         ViewModel.CheckRowSettled += OnCheckRowSettled;

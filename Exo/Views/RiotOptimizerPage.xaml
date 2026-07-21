@@ -4,7 +4,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:controls="using:Exo.Views.Controls"
       Background="Transparent">
-    <controls:ExoModulePlate x:Name="Plate"
+    <controls:SharedModulePlate x:Name="Plate"
         StatusText="{x:Bind ViewModel.StatusText, Mode=OneWay}"
         FeatureItems="{x:Bind ViewModel.Features, Mode=OneWay}"
         IsLoading="{x:Bind ViewModel.IsStatusLoading, Mode=OneWay}"
@@ -28,12 +28,12 @@
         SecondaryActionsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
         ToggleReportClick="ToggleReport_Click"
         SecondaryLeftClick="Repair_Click">
-        <controls:ExoModulePlate.PrimaryActions>
+        <controls:SharedModulePlate.PrimaryActions>
             <Button Style="{StaticResource ExoPrimaryButton}"
                     Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
                     Click="Run_Click" HorizontalAlignment="Stretch"
                     IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                     AutomationProperties.Name="Apply Riot" />
-        </controls:ExoModulePlate.PrimaryActions>
-    </controls:ExoModulePlate>
+        </controls:SharedModulePlate.PrimaryActions>
+    </controls:SharedModulePlate>
 </Page>

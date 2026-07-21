@@ -18,7 +18,7 @@ WinUI Page (DiscordOptimizerPage | SteamOptimizerPage)
        │     ├─ C# heuristic (DiscordLogic | SteamLogic + filesystem/registry)
        │     └─ PowerShell Exo-*-Detect.ps1 → JSON { isApplied, statusText, features[] }
        ├─ Apply  → PowerShellRunnerService (elevate:true)
-       │     └─ Exo-*-Run.ps1 → *Optimizer.ps1 (or Discord-Optimizer + kit/lib)
+       │     └─ Exo-*-Run.ps1 → *Optimizer.ps1 (or Disc-Optimizer + kit/lib)
        └─ Repair → Exo-*-Repair.ps1
              └─ (Steam: Steam-Optimizer -Repair; Discord: standalone reinstall path)
 ```
@@ -56,7 +56,7 @@ Exo/Scripts/Discord/
   Exo-Discord-Run.ps1          # WinUI apply wrapper (progress map, forces NoLaunch)
   Exo-Discord-Detect.ps1       # Live detect → JSON
   Exo-Discord-Repair.ps1       # Clean reinstall + recovery restore
-  Discord-Optimizer.ps1           # God orchestrator + PS7 bootstrap (~850+ lines main)
+  Disc-Optimizer.ps1           # God orchestrator + PS7 bootstrap (~850+ lines main)
   DiscordDetectCore.ps1        # Pure classifiers (dot-sourced by detect + smoke)
   VERSION                      # 1.3.44
   kit/
@@ -81,7 +81,7 @@ Exo/Scripts/Discord/
 DiscordOptimizerViewModel.RunAsync
   → PS elevate: Exo-Discord-Run.ps1 -NonInteractive
        sets EXO=1, DISCOPT_NONINTERACTIVE=1, EXO_SKIP_BOOT_FLASH=1, NoLaunch=$true
-       → Discord-Optimizer.ps1
+       → Disc-Optimizer.ps1
             Initialize-DiscOptRuntime (PS7 / elevate / portable zip fallback)
             dot-source kit/lib/*.ps1 (sorted name)
             main:
@@ -719,7 +719,7 @@ Exo/Services/
 | Dimension | Discord | Steam | Rebuild priority |
 |-----------|---------|-------|------------------|
 | Brick risk | **High** (DLL/asar) | Low–Medium | Discord first for safety protocol |
-| God-script size | Kit lib modular already; Discord-Optimizer still thick | Single ~2.5k line file | Steam split easier |
+| God-script size | Kit lib modular already; Disc-Optimizer still thick | Single ~2.5k line file | Steam split easier |
 | Soft-skip culture | Kernel/modules/QoS | VDF absent | Align policy engine |
 | Repair quality | Strong reinstall | Strong bak+integration | Keep both patterns |
 | Update churn | **Very high** | Medium | Discord reapply UX |

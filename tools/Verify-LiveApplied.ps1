@@ -174,7 +174,7 @@ if (Test-Path $drs) { Ok "DRS pre-backup exists ($((Get-Item $drs).Length) bytes
 Sec "INTERNET"
 $net = Get-Content (Join-Path $exo 'network-optimizer.json') -Raw -EA SilentlyContinue | ConvertFrom-Json
 if ($net.qualityBenchmark.ok) {
-  Ok "Quality sample ok: idle $($net.qualityBenchmark.pingP50Ms) ms  -  down $($net.qualityBenchmark.downloadMbps) Mbps  -  DNS $($net.qualityBenchmark.dnsProvider)"
+  Ok "Quality sample ok: idle $($net.qualityBenchmark.pingP50Ms) ms . down $($net.qualityBenchmark.downloadMbps) Mbps . DNS $($net.qualityBenchmark.dnsProvider)"
 } else { Warn "No quality benchmark ok" }
 $snap = Join-Path $exo 'network-snapshot.json'
 if (Test-Path $snap) { Ok "network-snapshot.json present (rollback base)" } else { Bad "network-snapshot.json missing" }
@@ -221,6 +221,6 @@ if ($fail -eq 0) {
   Write-Host "Live checks: no hard FAILs. Review WARNs for partial elev/optional rows." -ForegroundColor Green
   exit 0
 } else {
-  Write-Host "Live checks: $fail hard FAIL(s)  -  UI 'Applied' overstates those." -ForegroundColor Red
+  Write-Host "Live checks: $fail hard FAIL(s) - UI 'Applied' overstates those." -ForegroundColor Red
   exit 1
 }

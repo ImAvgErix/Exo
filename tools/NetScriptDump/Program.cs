@@ -14,21 +14,21 @@ if (args.Length < 1 || string.IsNullOrWhiteSpace(args[0]))
 var outDir = Path.GetFullPath(args[0]);
 Directory.CreateDirectory(outDir);
 
-var media = new ExoInternetMediaProfile
+var media = new NetworkMediaProfile
 {
     ClientSupports6Ghz = true,
     ClientSupports5Ghz = true,
     EthernetInUse = true,
     WifiAvailable = true
 };
-var opts = new ExoInternetApplyOptions { PreferEthernetDisableWifi = true, RestartEthernet = false };
+var opts = new NetworkApplyOptions { PreferEthernetDisableWifi = true, RestartEthernet = false };
 
 var files = new (string Name, string Text)[]
 {
-    ("apply-lowest-latency.ps1", ExoInternetApplyScriptBuilder.Build(ExoInternetPreset.LowestLatency, opts, media)),
-    ("apply-highest-throughput.ps1", ExoInternetApplyScriptBuilder.Build(ExoInternetPreset.HighestThroughput, opts, media)),
-    ("repair.ps1", ExoInternetApplyScriptBuilder.BuildRepair()),
-    ("benchmark.ps1", ExoInternetApplyScriptBuilder.BuildBenchmark()),
+    ("apply-lowest-latency.ps1", NetworkApplyScriptBuilder.Build(NetworkPreset.LowestLatency, opts, media)),
+    ("apply-highest-throughput.ps1", NetworkApplyScriptBuilder.Build(NetworkPreset.HighestThroughput, opts, media)),
+    ("repair.ps1", NetworkApplyScriptBuilder.BuildRepair()),
+    ("benchmark.ps1", NetworkApplyScriptBuilder.BuildBenchmark()),
 };
 
 foreach (var (name, text) in files)

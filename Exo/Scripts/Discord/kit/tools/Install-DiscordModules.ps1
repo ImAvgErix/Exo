@@ -15,7 +15,7 @@ function Get-DiscOptTempPath([string]$Child = '') {
 }
 
 $manifestUrl = 'https://updates.discord.com/distributions/app/manifests/latest?channel=stable&platform=win&arch=x64'
-$manifest = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'User-Agent' = 'Discord-Optimizer/1.0' }
+$manifest = Invoke-RestMethod -Uri $manifestUrl -Headers @{ 'User-Agent' = 'Disc-Optimizer/1.0' }
 $exclude = @('discord_hook', 'discord_clips')
 $temp = Get-DiscOptTempPath "discopt-modules-$Version"
 if (Test-Path $temp) { Remove-Item $temp -Recurse -Force }

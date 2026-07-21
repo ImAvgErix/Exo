@@ -226,10 +226,6 @@ public static class ExoPowerPlanNative
         n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "LATENCYHINTPERF", 100);
         n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "LATENCYHINTUNPARK", 100);
         n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "PERFDUTYCYCLING", 0);
-        // Unhide + write distribution / parking depth (ignore fail on older Windows).
-        n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "DISTRIBUTEUTIL", 0);
-        n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "CPCONCURRENCY", 95);
-        n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "CPHEADROOM", 0);
 
         if (vendor == "intel")
         {
@@ -240,7 +236,6 @@ public static class ExoPowerPlanNative
                 n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "SHORTSCHEDPOLICY", 2);
                 n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "HETEROCLASS1INITIALPERF", 100);
                 n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "HETEROCLASS0FLOORPERF", 100);
-                n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "HETEROPOLICY", 4);
             }
             n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "PERFBOOSTPOL", 100);
         }
@@ -252,8 +247,6 @@ public static class ExoPowerPlanNative
             n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "PERFBOOSTPOL", 100);
             n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "SCHEDPOLICY", 2);
             n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "SHORTSCHEDPOLICY", 2);
-            n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "CPPCAUTONOMOUS", 1);
-            n += SetAcDc(schemeGuid, "SUB_PROCESSOR", "CPPPEPP", 0);
         }
         else
         {
@@ -266,12 +259,8 @@ public static class ExoPowerPlanNative
         n += SetAcDc(schemeGuid, "SUB_SLEEP", "STANDBYIDLE", 0);
         n += SetAcDc(schemeGuid, "SUB_SLEEP", "HYBRIDSLEEP", 0);
         n += SetAcDc(schemeGuid, "SUB_SLEEP", "HIBERNATEIDLE", 0);
-        // USB selective suspend off
         n += SetAcDc(schemeGuid, "2a737441-1930-4402-8d77-b2bebba308a3", "48e6b7a6-50f5-4782-a5d4-53bb8f07e226", 0);
         n += SetAcDc(schemeGuid, "SUB_VIDEO", "VIDEOIDLE", 0);
-        // Multimedia / Wi-Fi power when present (GUID aliases — powercfg ignores unknowns)
-        n += SetAcDc(schemeGuid, "9596fb26-9850-41fd-ac3e-f7c3c00afd4b", "10778347-1370-4ee0-8bad-65cae17fcb93", 2);
-        n += SetAcDc(schemeGuid, "19cbb8fa-5279-450e-9fac-8a3d5fedd0c1", "12bbebe6-58d6-4636-95bb-3217ef867c1a", 0);
 
         return n;
     }

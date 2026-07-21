@@ -1,7 +1,7 @@
-# Exo.DefenderPurge.ps1  -  policy-first Defender quiet (no hang-prone teardown).
+# Exo.DefenderPurge.ps1 - policy-first Defender quiet (no hang-prone teardown).
 # Honest limit: modern Windows may rehydrate Defender after upgrades / Tamper Protection.
 # Registry policy is the durable, fast, verifiable pin. Stop-Service / MpCmdRun /
-# Remove-Appx / Get-AppxProvisionedPackage hang for minutes under TP  -  not used.
+# Remove-Appx / Get-AppxProvisionedPackage hang for minutes under TP - not used.
 
 Set-StrictMode -Version Latest
 
@@ -150,7 +150,7 @@ function Set-ExoDefenderPurged {
         } catch { }
     }
 
-    # 5) SmartScreen off  -  registry only
+    # 5) SmartScreen off - registry only
     try {
         $ex = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer'
         $key = [Microsoft.Win32.Registry]::LocalMachine.CreateSubKey($ex, $true)
@@ -184,7 +184,7 @@ function Set-ExoDefenderPurged {
 }
 
 function Test-ExoDefenderPurged {
-    # Policy pin only. WinDefend may still report Running under Tamper Protection  - 
+    # Policy pin only. WinDefend may still report Running under Tamper Protection -
     # requiring service-dead made Apply look failed even when policy is correctly set.
     try {
         $pol = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender' -Name 'DisableAntiSpyware' -ErrorAction SilentlyContinue

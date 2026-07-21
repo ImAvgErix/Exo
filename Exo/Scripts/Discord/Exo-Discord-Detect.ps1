@@ -369,7 +369,7 @@ if (-not (Test-Path $discordRoot)) {
                 break
             }
         }
-        Add-Feature 'Voice priority' 'Voice packets get network priority on routers that honor DSCP - clearer calls under load.' $qosOk
+        Add-Feature 'Priority voice traffic' 'Voice packets get network priority on routers that honor DSCP  -  clearer calls under load.' $qosOk
 
         # PTB / Canary variants: all installed variants must be optimized
         $extraVariants = @($installedVariants | Where-Object { [string]$_.Name -ne 'stable' })
@@ -394,7 +394,7 @@ if (-not (Test-Path $discordRoot)) {
         } else {
             'PTB and Canary get the same quiet launch, no autostart, and priority voice treatment.'
         }
-        Add-Feature 'Discord variants' $variantDetail $variantsOk
+        Add-Feature 'All Discord builds covered' $variantDetail $variantsOk
 
         # Host Game Mode / HAGS / Game Bar live on the Windows card only.
 

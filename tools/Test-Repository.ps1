@@ -52,7 +52,7 @@ if ($projectVersion -ne $appVersion) {
     Add-Failure "VERSION mismatch: VERSION=$appVersion, Exo.csproj=$projectVersion"
 }
 
-$discordOptimizerPath = Join-Path $Root 'Exo\Scripts\Discord\Discord-Optimizer.ps1'
+$discordOptimizerPath = Join-Path $Root 'Exo\Scripts\Discord\Disc-Optimizer.ps1'
 $discordOptimizer = Get-Content -LiteralPath $discordOptimizerPath -Raw
 $discordMatch = [regex]::Match($discordOptimizer, '\$Script:DiscOptVersion\s*=\s*''([^'']+)''')
 if (-not $discordMatch.Success -or $discordMatch.Groups[1].Value -ne $discordVersion) {
@@ -201,8 +201,8 @@ foreach ($marker in @(
     'Test-SteamStartupQuiet',
     'Test-SteamDownloadConfig',
     'Test-SteamClientTweaks',
-    'Complete client debloat',
-    'Windows quiet shell',
+    'Cleaner Steam install',
+    'Silent Windows integration',
     'Test-SteamCompleteClientDebloat',
     'Test-SteamWindowsQuiet',
     'Reinstate-SteamQuiet'
@@ -299,10 +299,14 @@ if ($nvidiaPowerShell -match '(?i)SendKeys|mouse_event|SetCursorPos') {
 if ($nvidiaPowerShell -match 'ExoPrefer(?:GpuScaling|NoScaling|ScalingOverride|FullRgb)\s*=') {
     Add-Failure 'NVIDIA scripts contain obsolete Exo-only Control Panel registry markers.'
 }
-$optimizerWritesNvapiMethod = $nvidiaOptimizer -match "displayMethod\s*=\s*'nvapi'" -or
-    $nvidiaOptimizer -match '\$displayMethod\s*=\s*if\s*\(\$displayNvApiOk\)\s*\{\s*''nvapi''\s*\}'
-if (-not $optimizerWritesNvapiMethod -or
-    $nvidiaPowerShell -notmatch "displayMethod.*-eq\s*'nvapi'") {
+# 3.16.x may leave display prefs CPL-owned (displayMethod='unchanged') while still
+# tracking the nvapi marker for live verify when Exo owns display.
+$optimizerWritesDisplayMethod = $nvidiaOptimizer -match "displayMethod\s*=\s*'nvapi'" -or
+    $nvidiaOptimizer -match '\$displayMethod\s*=\s*if\s*\(\$displayNvApiOk\)\s*\{\s*''nvapi''\s*\}' -or
+    $nvidiaOptimizer -match "displayMethod\s*=\s*'unchanged'"
+if (-not $optimizerWritesDisplayMethod -or
+    ($nvidiaPowerShell -notmatch "displayMethod.*-eq\s*'nvapi'" -and
+     $nvidiaPowerShell -notmatch "displayMethod\s*=\s*'unchanged'")) {
     Add-Failure 'NVIDIA apply/detect scripts do not require the verified NVAPI display marker.'
 }
 foreach ($marker in @(
@@ -390,11 +394,11 @@ if ($statusStart -lt 0 -or $statusEnd -le $statusStart) {
     Add-Failure 'NVIDIA live status priority block was not found.'
 } else {
     $statusBlock = $nvidiaDetect.Substring($statusStart, $statusEnd - $statusStart)
+    # Display prefs are CPL-owned on 3.16.x - status no longer gates on $displayOk.
     $priorityMarkers = @(
         '$pendingAfterDriver',
         '$needsRetweak',
         '-not $profileOk',
-        '-not $displayOk',
         '-not $backgroundOk',
         '$isApplied'
     )

@@ -7,7 +7,7 @@
     xmlns:controls="using:Exo.Views.Controls"
     Background="Transparent">
 
-    <controls:ExoModulePlate
+    <controls:SharedModulePlate
         x:Name="Plate"
         StatusText="{x:Bind ViewModel.StatusText, Mode=OneWay}"
         FeatureItems="{x:Bind ViewModel.Features, Mode=OneWay}"
@@ -32,7 +32,7 @@
         SecondaryLeftLabel="Repair"
         SecondaryActionsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
         SecondaryLeftClick="Repair_Click">
-        <controls:ExoModulePlate.HeaderExtra>
+        <controls:SharedModulePlate.HeaderExtra>
             <Button Style="{StaticResource ExoQuietButton}"
                     Content="Control Panel"
                     Command="{x:Bind ViewModel.OpenControlPanelCommand}"
@@ -40,14 +40,14 @@
                     MinHeight="36"
                     IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                     AutomationProperties.Name="Open NVIDIA Control Panel" />
-        </controls:ExoModulePlate.HeaderExtra>
-        <controls:ExoModulePlate.PrimaryActions>
+        </controls:SharedModulePlate.HeaderExtra>
+        <controls:SharedModulePlate.PrimaryActions>
             <Button Style="{StaticResource ExoPrimaryButton}"
                     Content="{x:Bind ViewModel.RunButtonLabel, Mode=OneWay}"
                     Click="Run_Click"
                     HorizontalAlignment="Stretch"
                     IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}"
                     AutomationProperties.Name="Apply NVIDIA" />
-        </controls:ExoModulePlate.PrimaryActions>
-    </controls:ExoModulePlate>
+        </controls:SharedModulePlate.PrimaryActions>
+    </controls:SharedModulePlate>
 </Page>

@@ -5,11 +5,11 @@ namespace Exo.Services;
 
 /// <summary>
 /// Generates the elevated PowerShell apply script (shipped path).
-/// Pure string build - no elevation. Driven by <see cref="ExoInternetLogic"/> knobs.
+/// Pure string build - no elevation. Driven by <see cref="NetworkLogic"/> knobs.
 /// Split (v3): Build here; BuildRepair / BuildBenchmark in partial files.
 /// Safety: pristine snapshot, metrics-only eth prefer, post-apply rollback, EXO_REPORT.
 /// </summary>
-public static partial class ExoInternetApplyScriptBuilder
+public static partial class NetworkApplyScriptBuilder
 {
     private static string PsQuote(string value) => "'" + (value ?? string.Empty).Replace("'", "''") + "'";
 
@@ -116,12 +116,12 @@ function Test-ExoDnsResolve {
 """;
 
     public static string Build(
-        ExoInternetPreset preset,
-        ExoInternetApplyOptions options,
-        ExoInternetMediaProfile media)
+        NetworkPreset preset,
+        NetworkApplyOptions options,
+        NetworkMediaProfile media)
     {
-        var knobs = ExoInternetLogic.KnobsFor(preset);
-        var latency = preset == ExoInternetPreset.LowestLatency;
+        var knobs = NetworkLogic.KnobsFor(preset);
+        var latency = preset == NetworkPreset.LowestLatency;
         var autotune = knobs.AutotuneNetsh;
         var autoTuningPs = knobs.AutotunePs;
         var rsc = knobs.Rsc;
@@ -138,8 +138,8 @@ function Test-ExoDnsResolve {
             ? media.PhysicalCores
             : (media.LogicalProcessors > 0 ? Math.Max(1, media.LogicalProcessors / 2) : Math.Max(1, Environment.ProcessorCount / 2));
         var logicalCpus = media.LogicalProcessors > 0 ? media.LogicalProcessors : Environment.ProcessorCount;
-        var rssBudget = ExoInternetLogic.RssQueueBudget(preset, coreBudget);
-        var bufferStrategy = ExoInternetLogic.BufferStrategy(preset);
+        var rssBudget = NetworkLogic.RssQueueBudget(preset, coreBudget);
+        var bufferStrategy = NetworkLogic.BufferStrategy(preset);
         // Set-NetAdapterRss exposes the enum name "Closest" on supported Windows
         // builds. "ClosestProcessor" is not a valid Profile value and silently
         // left latency applies on the previous (usually NUMAStatic) policy.
@@ -198,7 +198,7 @@ function Invoke-ExoNetshGlobal([string]$Step, [string[]]$NetshArgs) {
 }
 """);
 
-        // Classification mirrors ExoInternetLogic.IsWifiAdapter (keep in sync).
+        // Classification mirrors NetworkLogic.IsWifiAdapter (keep in sync).
         // Defined before the snapshot so the baseline records Wi-Fi vs Ethernet correctly.
         sb.AppendLine("function Test-IsWifiAdapter($a) {");
         sb.AppendLine("  $pm = [string]$a.PhysicalMediaType; $m = [string]$a.MediaType");
@@ -230,8 +230,6 @@ function Get-ExoPhysicalAdapters {
         sb.AppendLine(BuildRegistryTargetsPs());
         sb.AppendLine("""
 function Save-ExoNetworkSnapshot {
-  # Function name kept as Save-ExoNetworkSnapshot (and path network-snapshot.json)
-  # for Repair compatibility with existing installs — do not rename.
   if (Test-Path -LiteralPath $ExoSnapshotPath) {
     Log '[snapshot] pristine baseline already exists - keeping it (re-apply)'
     Report 'snapshot' 'skip' 'pristine baseline kept from first apply'
@@ -1551,7 +1549,7 @@ if (-not $postOk) {
 } else {
   Report 'post-probe' 'ok' ('reachable via ' + $postVia + ' (' + $probeDetail + ')')
 }
-# Honest apply-state marker (surfaced by ExoInternetOptimizerService status/probe API)
+# Honest apply-state marker (surfaced by NetworkOptimizerService status/probe API)
 try {
   New-Item -ItemType Directory -Path $ExoDir -Force | Out-Null
   $applyState = [ordered]@{

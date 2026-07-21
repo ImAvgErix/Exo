@@ -1,5 +1,5 @@
 ' Exo Discord launcher - prefer official Update.exe (modern Discord host integrity).
-' Falls back to Discord.exe, then Discord-Optimizer -Launch only if host files are missing.
+' Falls back to Discord.exe, then Disc-Optimizer -Launch only if host files are missing.
 Option Explicit
 Dim fso, shell, kitDir, rootDir, localApp, discordRoot, updateExe, exe
 Dim bestApp, folder, ver, bestVer, ps, optimizer, portable, stable, fallback
@@ -45,7 +45,7 @@ If bestApp <> "" Then
 End If
 
 ' 3) Heal path: no host found
-optimizer = rootDir & "\Discord-Optimizer.ps1"
+optimizer = rootDir & "\Disc-Optimizer.ps1"
 portable = kitDir & "\tools\pwsh\pwsh.exe"
 stable = shell.ExpandEnvironmentStrings("%ProgramFiles%\PowerShell\7\pwsh.exe")
 fallback = shell.ExpandEnvironmentStrings("%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe")

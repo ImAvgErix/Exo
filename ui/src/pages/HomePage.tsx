@@ -18,9 +18,6 @@ export function HomePage() {
   const [error, setError] = useState<string | null>(null)
   const [verifying, setVerifying] = useState(false)
   const [verifyLabel, setVerifyLabel] = useState('Verify')
-  const [aiLabel, setAiLabel] = useState('Maximize')
-  const [aiBusy, setAiBusy] = useState(false)
-  const [aiHint, setAiHint] = useState<string | null>(null)
 
   const loadDashboard = useCallback(async () => {
     const d = await host.getDashboard()
@@ -37,25 +34,12 @@ export function HomePage() {
     }
   }, [])
 
-  const refreshAiStatus = useCallback(async () => {
-    try {
-      const st = await host.getAiStatus()
-      setAiHint(st.message)
-      if (st.isOptimal) setAiLabel('Optimal')
-      else if (st.hasOptimal) setAiLabel('Re-max')
-      else setAiLabel('Maximize')
-    } catch {
-      /* optional */
-    }
-  }, [])
-
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
         const d = await host.getDashboard()
         if (!cancelled) setDash(d)
-        if (!cancelled) await refreshAiStatus()
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load')
       }
@@ -67,7 +51,7 @@ export function HomePage() {
       window.clearInterval(t)
       window.clearTimeout(boot)
     }
-  }, [refreshLive, refreshAiStatus])
+  }, [refreshLive])
 
   useEffect(() => {
     return onHostEvent('settings.verifyProgress', (data) => {
@@ -76,15 +60,6 @@ export function HomePage() {
         setVerifyLabel(`Verify ${Math.round(d.percent)}%`)
       } else if (typeof d.status === 'string' && d.status.trim()) {
         // keep chip compact — percent when available
-      }
-    })
-  }, [])
-
-  useEffect(() => {
-    return onHostEvent('ai.progress', (data) => {
-      const d = data as { status?: string }
-      if (typeof d.status === 'string' && d.status.trim()) {
-        setAiHint(d.status)
       }
     })
   }, [])
@@ -107,25 +82,6 @@ export function HomePage() {
       window.setTimeout(() => setVerifyLabel('Verify'), 2200)
     } finally {
       setVerifying(false)
-    }
-  }
-
-  async function runAiMaximize() {
-    if (aiBusy) return
-    setAiBusy(true)
-    setAiLabel('…')
-    try {
-      const r = await host.runAi({ force: aiLabel === 'Optimal' || aiLabel === 'Re-max' })
-      setAiHint(r.message)
-      setAiLabel(r.skippedOptimal ? 'Optimal' : r.success ? 'Done' : 'Failed')
-      await refreshAiStatus()
-      window.setTimeout(() => void refreshAiStatus(), 2200)
-    } catch (e) {
-      setAiLabel('Failed')
-      setAiHint(e instanceof Error ? e.message : 'AI run failed')
-      window.setTimeout(() => void refreshAiStatus(), 2200)
-    } finally {
-      setAiBusy(false)
     }
   }
 
@@ -159,15 +115,6 @@ export function HomePage() {
             </p>
             <button
               type="button"
-              disabled={aiBusy}
-              onClick={() => void runAiMaximize()}
-              title={aiHint || 'Deep whole-PC maximize (Grok when key set)'}
-              className={`${chipClass} hover:bg-[#24242C] hover:text-text disabled:opacity-50`}
-            >
-              {aiLabel}
-            </button>
-            <button
-              type="button"
               disabled={verifying}
               onClick={() => void runVerify()}
               title="Live re-check every optimizer. Does not apply changes."
@@ -177,11 +124,6 @@ export function HomePage() {
             </button>
           </div>
         </div>
-        {aiHint && (
-          <p className="mt-2 truncate text-[11px] text-muted" title={aiHint}>
-            {aiHint}
-          </p>
-        )}
         <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-4">
           <Spec label="CPU" value={specs.cpu} />
           <Spec label="GPU" value={specs.gpu} />

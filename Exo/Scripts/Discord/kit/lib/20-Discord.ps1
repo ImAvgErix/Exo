@@ -1,5 +1,5 @@
 # 20-Discord.ps1 - Discord install, modules, kit integrity
-# Dot-sourced by Discord-Optimizer.ps1 (load order = filename sort).
+# Dot-sourced by Disc-Optimizer.ps1 (load order = filename sort).
 # Universal multi-PC kit - do not assume Equicord/Discord already configured.
 
 function Get-ActiveApp {
@@ -654,7 +654,7 @@ function Ensure-DiscordLoggedIn([string]$AppDir) {
 
     if (-not (Test-DiscordLoggedIn)) {
         Stop-Discord
-        throw 'Login not detected within 15 minutes. Log in to Discord, then rerun Discord-Optimizer.ps1'
+        throw 'Login not detected within 15 minutes. Log in to Discord, then rerun Disc-Optimizer.ps1'
     }
 
     Write-Ok 'Login verified - session saved; applying optimizations now'
@@ -691,7 +691,7 @@ function Ensure-DiscordBootReady([string]$AppDir) {
     }
 
     if (-not (Test-DiscordModulesReady $AppDir)) {
-        throw 'Discord modules not ready - quit Discord from tray, rerun Discord-Optimizer.ps1'
+        throw 'Discord modules not ready - quit Discord from tray, rerun Disc-Optimizer.ps1'
     }
 
     [void](Invoke-DiscordLaunch -AppDir $AppDir)

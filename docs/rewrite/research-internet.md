@@ -10,7 +10,7 @@
 
 ## 0. Executive summary
 
-The Internet module is the most mature Exo optimizer: pure decision core (`ExoInternetLogic`), giant elevated PowerShell generator (`ExoInternetApplyScriptBuilder`), orchestration + detect UI feed (`ExoInternetOptimizerService`), WinUI page + VM, standalone rescue (`Repair-Internet.ps1`), and the densest smoke suite (`tools/Internet.Smoke`).
+The Internet module is the most mature Exo optimizer: pure decision core (`NetworkLogic`), giant elevated PowerShell generator (`NetworkApplyScriptBuilder`), orchestration + detect UI feed (`NetworkOptimizerService`), WinUI page + VM, standalone rescue (`Repair-Internet.ps1`), and the densest smoke suite (`tools/Network.Smoke`).
 
 **What works well**
 
@@ -22,7 +22,7 @@ The Internet module is the most mature Exo optimizer: pure decision core (`ExoIn
 
 **What is weak / rebuild drivers**
 
-- `ExoInternetApplyScriptBuilder.cs` is a single ~1.8k-line string god-file (apply + repair + benchmark + snapshot + rollback duplicated with `Repair-Internet.ps1`).
+- `NetworkApplyScriptBuilder.cs` is a single ~1.8k-line string god-file (apply + repair + benchmark + snapshot + rollback duplicated with `Repair-Internet.ps1`).
 - Detect feature rows only cover a **subset** of apply mutations; several applied knobs have no UI row (powercfg, DNS cache, NetBIOS, tunnels, DO, prefix policy, extended TCP).
 - Stale copy still exists in a few places (success string about “Wi‑Fi disabled”; model XML comment about Client/LLDP off; older CHANGELOG/golden-path sentences about Wi‑Fi disable gates).
 - `Balanced` preset exists in the enum/state but has **no Apply CTA** (only latency / highest download).
@@ -48,17 +48,17 @@ The Internet module is the most mature Exo optimizer: pure decision core (`ExoIn
                                 │
                                 ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ AppServices.Internet = ExoInternetOptimizerService                            │
+│ AppServices.Network = NetworkOptimizerService                            │
 │                                                                          │
 │  ProbeAsync ──► .NET NetworkInterface + registry + netsh capture         │
 │            ──► DetectMediaProfileAsync (temp PS probe script)            │
-│            ──► ExoInternetLogic (path / NIC eval / LSO/RSC/autotune match)   │
-│            ──► ExoInternetSnapshot + ExoInternetFeatureRow[]                     │
+│            ──► NetworkLogic (path / NIC eval / LSO/RSC/autotune match)   │
+│            ──► NetworkSnapshot + NetworkFeatureRow[]                     │
 │                                                                          │
 │  ApplyPresetAsync                                                        │
 │    1. DetectMediaProfileAsync                                            │
 │    2. RunBenchmarkAsync (before, once)                                   │
-│    3. ExoInternetApplyScriptBuilder.Build(preset, options, media)            │
+│    3. NetworkApplyScriptBuilder.Build(preset, options, media)            │
 │    4. Write %TEMP%\exo-net-*.ps1 → powershell -Verb runas (elevated)     │
 │    5. Parse %TEMP%\exo-net-last.log EXO_REPORT                           │
 │    6. Load network-apply-state.json (rollback)                           │
@@ -70,7 +70,7 @@ The Internet module is the most mature Exo optimizer: pure decision core (`ExoIn
                                 │ pure (no I/O)
                                 ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ ExoInternetLogic (static)                                                    │
+│ NetworkLogic (static)                                                    │
 │  KnobsFor · DecidePath · IsWifiAdapter · SelectBandDisplayValue          │
 │  EvaluateNic · Autotune/Lso/RscMatches · AuditApplyScript                │
 │  ParseApplyReport · TryParseBenchmark · Forbidden/Required markers       │
@@ -78,7 +78,7 @@ The Internet module is the most mature Exo optimizer: pure decision core (`ExoIn
                                 │ generates strings
                                 ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ ExoInternetApplyScriptBuilder                                                │
+│ NetworkApplyScriptBuilder                                                │
 │  Build()           → elevated apply (snapshot → mutate → probe → rollback)│
 │  BuildRepair()     → elevated true-restore / stock fallback              │
 │  BuildBenchmark()  → non-elevated EXO_BENCH JSON                         │
@@ -101,7 +101,7 @@ Standalone rescue (no app):
   ↻ duplicates restore logic from BuildRepair (drift risk)
 
 Gate:
-  tools/Internet.Smoke  → ExoInternetLogic + builder audit + PS parse + SnapshotExecHarness
+  tools/Network.Smoke  → NetworkLogic + builder audit + PS parse + SnapshotExecHarness
   tools/NetScriptDump  → dump generated scripts for CI/manual E2E
   docs/INTERNET-GOLDEN-PATH.md → product contract doc
 ```
@@ -110,14 +110,14 @@ Gate:
 
 | Layer | File(s) | Role |
 |-------|---------|------|
-| Pure decisions | `Exo/Services/ExoInternetLogic.cs` | Preset knobs, band score, path policy, Wi‑Fi classifier, NIC score, script audit markers, report/bench parsers |
-| Script generation | `Exo/Services/ExoInternetApplyScriptBuilder.cs` | All elevated mutations + snapshot/rollback/repair/benchmark as PS text |
-| Orchestration + detect | `Exo/Services/ExoInternetOptimizerService.cs` | Probe, apply/repair process elevation, state files, feature rows, matches-preset verify |
-| Models | `Exo/Models/ExoInternetSnapshot.cs` | Presets, media profile, feature rows, apply options, report steps, bench, rollback status |
+| Pure decisions | `Exo/Services/NetworkLogic.cs` | Preset knobs, band score, path policy, Wi‑Fi classifier, NIC score, script audit markers, report/bench parsers |
+| Script generation | `Exo/Services/NetworkApplyScriptBuilder.cs` | All elevated mutations + snapshot/rollback/repair/benchmark as PS text |
+| Orchestration + detect | `Exo/Services/NetworkOptimizerService.cs` | Probe, apply/repair process elevation, state files, feature rows, matches-preset verify |
+| Models | `Exo/Models/NetworkSnapshot.cs` | Presets, media profile, feature rows, apply options, report steps, bench, rollback status |
 | UI | `InternetOptimizerViewModel.cs`, `InternetOptimizerPage.xaml(.cs)` | Dual CTA, repair/refresh, feature tiles, proof layer |
 | Rescue | `Repair-Internet.ps1` | Offline-capable restore; `-Hard` nuclear |
 | Contract doc | `docs/INTERNET-GOLDEN-PATH.md` | What apply is allowed to do |
-| Tests | `tools/Internet.Smoke/*` | Compile-time/string/exec-mock gates |
+| Tests | `tools/Network.Smoke/*` | Compile-time/string/exec-mock gates |
 
 ### Data flow: Apply
 
@@ -142,7 +142,7 @@ Gate:
 
 ## 2. Complete list of apply steps / mutations
 
-Sources: `ExoInternetApplyScriptBuilder.Build`, `RegistryTargets[]`, `ExoInternetLogic.KnobsFor`, golden-path doc.
+Sources: `NetworkApplyScriptBuilder.Build`, `RegistryTargets[]`, `NetworkLogic.KnobsFor`, golden-path doc.
 
 ### 2.1 Pre-flight (no mutation)
 
@@ -462,8 +462,8 @@ On connectivity failure after 60s window:
 
 1. Congestion always OK → either verify CUBIC or drop row.  
 2. Preferred Band not checked as applied.  
-3. Success message still can claim “Wi‑Fi disabled when Ethernet has a real IP” (`ExoInternetOptimizerService` policy string) — **false**.  
-4. `ExoInternetMediaProfile` XML comment still mentions Client/LLDP off.  
+3. Success message still can claim “Wi‑Fi disabled when Ethernet has a real IP” (`NetworkOptimizerService` policy string) — **false**.  
+4. `NetworkMediaProfile` XML comment still mentions Client/LLDP off.  
 5. Golden-path doc still has residual “Wi‑Fi disable gated on probe” language vs code never disables.  
 6. Latency roam: code prefers Low; golden-path table says Medium for latency — **doc bug**.  
 7. Ring buffers: golden-path says Max for latency; code uses mid — **doc bug**.
@@ -575,19 +575,19 @@ Goal: PR-2.1 style modules; pure C# decisions stay pure; PS becomes thin executo
 Exo/
   Modules/Internet/                          # or keep Services/ + Models/ split
     Models/
-      ExoInternetPreset.cs                       # enum only
-      ExoInternetMediaProfile.cs
-      ExoInternetSnapshot.cs                     # probe aggregate
-      ExoInternetFeatureRow.cs
-      ExoInternetApplyOptions.cs
-      ExoInternetApplyReportStep.cs
-      ExoInternetBenchmarkResult.cs
-      ExoInternetRollbackStatus.cs
-      ExoInternetSnapshotDocument.cs             # typed snapshot schema v1/v2 (NEW)
+      NetworkPreset.cs                       # enum only
+      NetworkMediaProfile.cs
+      NetworkSnapshot.cs                     # probe aggregate
+      NetworkFeatureRow.cs
+      NetworkApplyOptions.cs
+      NetworkApplyReportStep.cs
+      NetworkBenchmarkResult.cs
+      NetworkRollbackStatus.cs
+      NetworkSnapshotDocument.cs             # typed snapshot schema v1/v2 (NEW)
 
     Logic/                                   # pure, no I/O — smoke-friendly
-      ExoInternetLogic.cs                        # facade re-export or thin
-      ExoInternetPresetKnobs.cs                  # KnobsFor + PresetKnobs
+      NetworkLogic.cs                        # facade re-export or thin
+      NetworkPresetKnobs.cs                  # KnobsFor + PresetKnobs
       NetworkPathPolicy.cs                   # DecidePath, ShouldDisableWifi, IsUsableIpv4
       NetworkWifiClassifier.cs               # IsWifiAdapter + regexes
       NetworkBandSelector.cs                 # Score/SelectBand + InferBandSupport
@@ -600,7 +600,7 @@ Exo/
       INetworkProbe.cs
       NetworkProbeService.cs                 # ProbeAsync host facts
       NetworkMediaDetector.cs                # DetectMediaProfileAsync (+ optional PS)
-      ExoInternetFeatureRowBuilder.cs            # ALL rows; contract table driven
+      NetworkFeatureRowBuilder.cs            # ALL rows; contract table driven
 
     Apply/
       INetworkApplyEngine.cs
@@ -613,7 +613,7 @@ Exo/
       NetworkScriptPaths.cs                  # LocalAppData/TEMP constants
       NetworkRegistryCatalog.cs              # RegistryTargets MUST equal writes
       NetworkSafetyScript.cs                 # CommonSafetyFunctions, Report, probes
-      ExoInternetSnapshotScript.cs               # Save-ExoNetworkSnapshot
+      NetworkSnapshotScript.cs               # Save-ExoNetworkSnapshot
       NetworkHostStackScript.cs              # registry, mmcss, qos, powercfg, tcp, dns
       NetworkAdapterScript.cs                # eth/wifi advanced + RSS + buffers
       NetworkBindingMetricScript.cs          # bindings, metrics, prefix, prefer-eth
@@ -634,10 +634,10 @@ Exo/
 
 | File | Responsibility | Must not |
 |------|----------------|----------|
-| `ExoInternetPresetKnobs.cs` | Single source for latency/throughput/balanced knobs | Touch disk |
+| `NetworkPresetKnobs.cs` | Single source for latency/throughput/balanced knobs | Touch disk |
 | `NetworkPathPolicy.cs` | Eth-first metrics-only policy | Disable Wi‑Fi |
 | `NetworkRegistryCatalog.cs` | Every reg write listed once; snapshot consumes same list | Drift from host stack writer |
-| `ExoInternetFeatureRowBuilder.cs` | One table: detect field ↔ apply step ↔ OK rule | Invent rows without apply |
+| `NetworkFeatureRowBuilder.cs` | One table: detect field ↔ apply step ↔ OK rule | Invent rows without apply |
 | `NetworkPostApplyScript.cs` | 60s probe + full rollback only | Partial Wi‑Fi-only rollback |
 | `NetworkRepairScript.cs` | Shared by in-app + Rescue | Auto Hard |
 | `NetworkStateStore.cs` | All JSON paths/schema | Silent swallow without tests |
@@ -666,7 +666,7 @@ Smoke asserts every Apply step appears in catalog.
 
 | Suite | What it proves |
 |-------|----------------|
-| `tools/Internet.Smoke` pure logic | Band scores, wifi class, path, knobs, match rules |
+| `tools/Network.Smoke` pure logic | Band scores, wifi class, path, knobs, match rules |
 | Script audit | Required markers, forbidden folklore, preset divergence |
 | Ordering | Snapshot before mutate; abort; rollback after body |
 | Parse | PS AST zero errors for apply L/T, repair, bench |
@@ -754,14 +754,14 @@ Rebuild Phase 2 is **done** when all of the following are true:
 
 ### 9.3 Structure
 
-- [ ] `ExoInternetApplyScriptBuilder` split into named modules ≤ ~300–400 lines each.  
+- [ ] `NetworkApplyScriptBuilder` split into named modules ≤ ~300–400 lines each.  
 - [ ] Pure logic has no process/registry I/O.  
 - [ ] Repair-Internet generated or drift-gated.  
 - [ ] Contract table checked into repo.
 
 ### 9.4 Test gates
 
-- [ ] `Internet.Smoke` exit 0 on CI (Windows).  
+- [ ] `Network.Smoke` exit 0 on CI (Windows).  
 - [ ] Fixture matrix F-* covered by unit/smoke.  
 - [ ] Real-machine R1 + R3 + R10 signed off once per release train.  
 - [ ] PS parse zero errors for all generated scripts.
@@ -809,19 +809,19 @@ Rebuild Phase 2 is **done** when all of the following are true:
 
 | Path | Role |
 |------|------|
-| `C:\Users\Erix\Exo\Exo\Services\ExoInternetLogic.cs` | Pure decisions + audit + parsers |
-| `C:\Users\Erix\Exo\Exo\Services\ExoInternetApplyScriptBuilder.cs` | Apply/repair/benchmark PS generation |
-| `C:\Users\Erix\Exo\Exo\Services\ExoInternetOptimizerService.cs` | Probe, elevate apply/repair, state, feature rows |
-| `C:\Users\Erix\Exo\Exo\Models\ExoInternetSnapshot.cs` | DTOs / presets / options |
+| `C:\Users\Erix\Exo\Exo\Services\NetworkLogic.cs` | Pure decisions + audit + parsers |
+| `C:\Users\Erix\Exo\Exo\Services\NetworkApplyScriptBuilder.cs` | Apply/repair/benchmark PS generation |
+| `C:\Users\Erix\Exo\Exo\Services\NetworkOptimizerService.cs` | Probe, elevate apply/repair, state, feature rows |
+| `C:\Users\Erix\Exo\Exo\Models\NetworkSnapshot.cs` | DTOs / presets / options |
 | `C:\Users\Erix\Exo\Exo\ViewModels\InternetOptimizerViewModel.cs` | UI state + fail-closed options |
 | `C:\Users\Erix\Exo\Exo\Views\InternetOptimizerPage.xaml` | Layout + CTAs |
 | `C:\Users\Erix\Exo\Exo\Views\InternetOptimizerPage.xaml.cs` | Code-behind |
 | `C:\Users\Erix\Exo\Repair-Internet.ps1` | Standalone rescue |
 | `C:\Users\Erix\Exo\docs\INTERNET-GOLDEN-PATH.md` | Product contract |
 | `C:\Users\Erix\Exo\docs\REWRITE-PROGRAM.md` | Phase 2 plan |
-| `C:\Users\Erix\Exo\tools\Internet.Smoke\Program.cs` | Primary smoke |
-| `C:\Users\Erix\Exo\tools\Internet.Smoke\SnapshotExecHarness.ps1` | Exec regression |
-| `C:\Users\Erix\Exo\tools\Internet.Smoke\SnapshotExecMocks.ps1` | Mocks |
+| `C:\Users\Erix\Exo\tools\Network.Smoke\Program.cs` | Primary smoke |
+| `C:\Users\Erix\Exo\tools\Network.Smoke\SnapshotExecHarness.ps1` | Exec regression |
+| `C:\Users\Erix\Exo\tools\Network.Smoke\SnapshotExecMocks.ps1` | Mocks |
 | `C:\Users\Erix\Exo\tools\NetScriptDump\` | Script dump utility |
 
 ### State / log paths (runtime)
@@ -882,4 +882,4 @@ Fits `REWRITE-PROGRAM` Phase 2 (4–7 days core) stretched for multi-week FULL r
 
 ---
 
-*End of research inventory. Product code untouched. Next implementation step: Phase 2 PR-2.1 module split behind green `Internet.Smoke`.*
+*End of research inventory. Product code untouched. Next implementation step: Phase 2 PR-2.1 module split behind green `Network.Smoke`.*

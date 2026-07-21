@@ -217,7 +217,7 @@ public partial class DiscordOptimizerViewModel : ObservableObject
                     ProgressStatus = p.Status;
             });
 
-            var script = _services.Scripts.DiscordApplyScript;
+            var script = _services.Scripts.DiscordOptimizerScript;
             var result = await _services.PowerShell.RunAsync(
                 script,
                 arguments: args,

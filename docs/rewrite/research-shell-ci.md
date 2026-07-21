@@ -110,7 +110,7 @@ From `App.xaml` ThemeDictionaries:
 
 | Page | ViewModel | Layout pattern |
 |------|-----------|----------------|
-| `HomePage` | `HomeViewModel` | Plate + hero brand + 2×2 metrics (FPS, frame time, RAM, latency) |
+| `DashboardPage` | `DashboardViewModel` | Plate + hero brand + 2×2 metrics (FPS, frame time, RAM, latency) |
 | `DiscordOptimizerPage` | `DiscordOptimizerViewModel` | Standard module plate |
 | `SteamOptimizerPage` | `SteamOptimizerViewModel` | Same + trim stats + apply report |
 | `InternetOptimizerPage` | `InternetOptimizerViewModel` | Same + dual primary CTAs + report + benchmark |
@@ -262,7 +262,7 @@ Shared concepts reimplemented per module:
 - `IsBusy`, progress percent/status, last result glyph/brush
 - `GuidanceText` / `HasGuidance` via `OptimizerAdvisor.Build`
 - `Features` vs Internet `Rows` (same `FeatureRowViewModel` shape, different property name)
-- Apply report load: Discord/Steam via `OptimizerStateService.TryReadApplyReport`; Internet via `ExoInternetOptimizerService.LoadLastApplyReport`
+- Apply report load: Discord/Steam via `OptimizerStateService.TryReadApplyReport`; Internet via `NetworkOptimizerService.LoadLastApplyReport`
 - Detect + elevate apply/repair orchestration with module-specific scripts
 
 ### 3.4 Shared plate opportunity (PR-6.2 target)
@@ -347,7 +347,7 @@ Shared concepts reimplemented per module:
 | `OptimizerStateService` | Detect Discord/Steam/NVIDIA; read apply reports |
 | `GitHubUpdateService` | App + script kits from GitHub |
 | `NvidiaPanelSettingsService` | Panel apply |
-| `ExoInternetOptimizerService` | Internet apply/repair/benchmark (own elevation paths) |
+| `NetworkOptimizerService` | Internet apply/repair/benchmark (own elevation paths) |
 
 `Initialize()`: fire-and-forget kit stamp + PowerShell 7 ensure + warm Get\*Root (off first paint).
 
@@ -392,7 +392,7 @@ EXO_REPORT:<step>|skip:<reason>
 **Persisted form:**
 
 - Discord/Steam: `%LocalAppData%\Exo\{discord|steam}-optimizer.json` → `applyReport` string array
-- Internet: network state / last apply report via `ExoInternetOptimizerService` + snapshot JSON
+- Internet: network state / last apply report via `NetworkOptimizerService` + snapshot JSON
 - UI: `ApplyReportPresentation` → expandable list in foot (Discord/Steam/Internet)
 
 **Detect path:** non-elevated detect scripts emit JSON line with `isApplied`, `statusText`, `features[]` (`title`/`detail`/`active`); `OptimizerStateService` falls back to heuristics if script fails.
@@ -534,7 +534,7 @@ Honest comment in workflow: **no NVIDIA GPU** on hosted runners → NVIDIA Apply
 | Project | Proves |
 |---------|--------|
 | `Ui.Smoke` | Shell structure tokens, motion bans, theme unity, version match gates |
-| `Internet.Smoke` | ExoInternetLogic, builder markers, EXO_REPORT parsing, fixtures |
+| `Network.Smoke` | NetworkLogic, builder markers, EXO_REPORT parsing, fixtures |
 | `Discord.Smoke` / `Steam.Smoke` / `Nvidia.Smoke` | DetectLogic + script markers + report emitters |
 | `NetScriptDump` | Dump generated Internet scripts for E2E |
 
@@ -717,7 +717,7 @@ pwsh -NoProfile -File ./tools/Test-Linux.ps1          # Linux/cloud
 # or Windows:
 dotnet run --project tools/Ui.Smoke -c Release
 .\tools\Test-Repository.ps1
-dotnet run --project tools/Internet.Smoke -c Release
+dotnet run --project tools/Network.Smoke -c Release
 dotnet run --project tools/Discord.Smoke -c Release
 dotnet run --project tools/Steam.Smoke -c Release
 dotnet run --project tools/Nvidia.Smoke -c Release
@@ -741,7 +741,7 @@ Exo/
   Helpers/ExoUpdateDialog.cs      Update UI
   Helpers/StartupLog.cs           Crash-loop breadcrumbs
   Helpers/UiStatusPresentation.cs Status tone helper
-  Views/HomePage.*
+  Views/DashboardPage.*
   Views/*OptimizerPage.*
   Views/NvidiaPanelPage.*
   Views/Controls/ExoLoader.*
@@ -755,12 +755,12 @@ Exo/
   Services/GitHubUpdateService.cs
   Services/OptimizerStateService.cs
   Services/ThemeService.cs
-  Services/ExoInternetOptimizerService.cs
+  Services/NetworkOptimizerService.cs
   Services/SettingsService.cs
 tools/
   Test-Repository.ps1
   Test-Linux.ps1
-  Ui.Smoke / Internet.Smoke / Discord.Smoke / Steam.Smoke / Nvidia.Smoke
+  Ui.Smoke / Network.Smoke / Discord.Smoke / Steam.Smoke / Nvidia.Smoke
   Exo.UiPreview/                  Agent mock shell
   ExoSfx.cs                       Installer source
 Publish-Exo.ps1 / Release-Exo.ps1 / Install-Exo.ps1

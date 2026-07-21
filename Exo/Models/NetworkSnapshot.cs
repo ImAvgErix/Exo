@@ -1,6 +1,6 @@
 namespace Exo.Models;
 
-public enum ExoInternetPreset
+public enum NetworkPreset
 {
     Balanced,
     LowestLatency,
@@ -8,7 +8,7 @@ public enum ExoInternetPreset
 }
 
 /// <summary>Local media/capability detection for Ethernet-first + band policy (see docs/INTERNET-GOLDEN-PATH.md).</summary>
-public sealed class ExoInternetMediaProfile
+public sealed class NetworkMediaProfile
 {
     public bool EthernetAvailable { get; init; }
     public bool EthernetUp { get; init; }
@@ -55,7 +55,7 @@ public sealed class ExoInternetMediaProfile
     public int PhysicalCores { get; init; }
 }
 
-public sealed class ExoInternetSnapshot
+public sealed class NetworkSnapshot
 {
     public string AdapterName { get; init; } = "—";
     public string AdapterDescription { get; init; } = "—";
@@ -77,19 +77,19 @@ public sealed class ExoInternetSnapshot
     public int? InternetPingMs { get; init; }
     public string Detail { get; init; } = string.Empty;
     public bool ProbeOk { get; init; }
-    public ExoInternetPreset ActivePreset { get; init; } = ExoInternetPreset.Balanced;
-    public ExoInternetMediaProfile Media { get; init; } = new();
-    public IReadOnlyList<ExoInternetFeatureRow> Features { get; init; } = Array.Empty<ExoInternetFeatureRow>();
+    public NetworkPreset ActivePreset { get; init; } = NetworkPreset.Balanced;
+    public NetworkMediaProfile Media { get; init; } = new();
+    public IReadOnlyList<NetworkFeatureRow> Features { get; init; } = Array.Empty<NetworkFeatureRow>();
 }
 
-public sealed class ExoInternetFeatureRow
+public sealed class NetworkFeatureRow
 {
     public required string Title { get; init; }
     public required string Status { get; init; }
     public bool IsOk { get; init; }
 }
 
-public sealed class ExoInternetApplyOptions
+public sealed class NetworkApplyOptions
 {
     /// <summary>When true, Restart-NetAdapter on Ethernet after props (user-confirmed).</summary>
     public bool RestartEthernet { get; init; }
@@ -119,7 +119,7 @@ public sealed class ExoInternetApplyOptions
 /// One structured step emitted by the generated apply/repair scripts as
 /// <c>EXO_REPORT:&lt;name&gt;|ok</c> / <c>|fail:&lt;reason&gt;</c> / <c>|skip:&lt;reason&gt;</c>.
 /// </summary>
-public sealed class ExoInternetApplyReportStep
+public sealed class NetworkApplyReportStep
 {
     public required string Name { get; init; }
     /// <summary>ok | fail | skip</summary>
@@ -131,7 +131,7 @@ public sealed class ExoInternetApplyReportStep
 /// Quick ping/DNS benchmark (BuildBenchmark output, one EXO_BENCH JSON line).
 /// Persisted as before/after pairs in the optimizer state so the UI can show deltas.
 /// </summary>
-public sealed class ExoInternetBenchmarkResult
+public sealed class NetworkBenchmarkResult
 {
     public bool Ok { get; init; }
     public double PingP50Ms { get; init; }
@@ -174,7 +174,7 @@ public sealed class ExoInternetBenchmarkResult
 /// Honest post-apply outcome written by the elevated apply script into
 /// %LocalAppData%\Exo\network-apply-state.json (rollback marker + Wi‑Fi record).
 /// </summary>
-public sealed class ExoInternetRollbackStatus
+public sealed class NetworkRollbackStatus
 {
     /// <summary>True when the apply script auto-rolled back path changes (Wi‑Fi + metrics).</summary>
     public bool RolledBack { get; init; }

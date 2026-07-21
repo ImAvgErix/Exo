@@ -6,205 +6,68 @@
     xmlns:controls="using:Exo.Views.Controls"
     Title="Exo">
 
-    <!-- Dark-only fixed workspace. The native TitleBar owns caption spacing and drag behavior. -->
+    <!--
+      Full-bleed WebView2. Caption min/close + optimizers are in React.
+      Native overlay is ONLY a thin drag strip above the glass bar so it
+      cannot steal clicks from settings / nav / caption buttons.
+    -->
     <Grid x:Name="RootGrid"
-          Background="{ThemeResource ExoPageBackgroundBrush}"
+          Background="#050506"
           Padding="0"
           UseLayoutRounding="True"
           SizeChanged="RootGrid_SizeChanged">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="8" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <!-- EXO pill left, module tabs in the true window center, native captions right. -->
-        <Grid x:Name="TitleChrome"
-              Grid.Row="0"
-              MinHeight="48"
-              UseLayoutRounding="True">
-            <TitleBar x:Name="AppTitleBar"
-                      IsBackButtonVisible="False"
-                      IsPaneToggleButtonVisible="False">
-                <TitleBar.LeftHeader>
-                    <Border x:Name="ExoBrandPill"
-                            Height="40"
-                            MinHeight="40"
-                            Margin="8,0,8,0"
-                            CornerRadius="11"
-                            BorderThickness="1"
-                            BorderBrush="Transparent"
-                            Background="Transparent"
-                            VerticalAlignment="Center"
-                            UseLayoutRounding="True">
-                        <StackPanel Orientation="Horizontal" Spacing="0">
-                            <Button x:Name="NavHome"
-                                    Style="{StaticResource ExoNavTab}"
-                                    MinWidth="76"
-                                    Padding="12,0,10,0"
-                                    BorderThickness="0"
-                                    CornerRadius="11,0,0,11"
-                                    AutomationProperties.Name="Open system overview"
-                                    AutomationProperties.FullDescription="Exo home"
-                                    Click="NavHome_Click">
-                                <StackPanel Orientation="Horizontal" Spacing="7">
-                                    <Border Width="6"
-                                            Height="6"
-                                            CornerRadius="3"
-                                            Background="{ThemeResource ExoAccentBrush}"
-                                            VerticalAlignment="Center" />
-                                    <TextBlock Text="Home"
-                                               FontFamily="{StaticResource ExoUiFontMedium}"
-                                               FontSize="12"
-                                               Foreground="{ThemeResource ExoPrimaryTextBrush}"
-                                               VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                            <Border Width="1"
-                                    Height="16"
-                                    Background="{ThemeResource ExoDividerBrush}"
-                                    Opacity="0.9"
-                                    VerticalAlignment="Center" />
-                            <Button x:Name="SettingsButton"
-                                    Style="{StaticResource ExoNavTab}"
-                                    MinWidth="40"
-                                    Width="40"
-                                    Padding="0"
-                                    BorderThickness="0"
-                                    CornerRadius="0,11,11,0"
-                                    AutomationProperties.Name="Settings"
-                                    AutomationProperties.FullDescription="Exo settings"
-                                    Click="SettingsButton_Click">
-                                <FontIcon x:Name="SettingsGearIcon"
-                                          Glyph="&#xE713;"
-                                          FontSize="14"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"
-                                          IsHitTestVisible="False"
-                                          RenderTransformOrigin="0.5,0.5">
-                                    <FontIcon.RenderTransform>
-                                        <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
-                                    </FontIcon.RenderTransform>
-                                </FontIcon>
-                                <FlyoutBase.AttachedFlyout>
-                                    <Flyout x:Name="SettingsFlyout"
-                                            Placement="Bottom"
-                                            Opened="SettingsFlyout_Opened"
-                                            Closing="SettingsFlyout_Closing"
-                                            Closed="SettingsFlyout_Closed">
-                                        <Flyout.FlyoutPresenterStyle>
-                                            <Style TargetType="FlyoutPresenter">
-                                                <Setter Property="Padding" Value="0" />
-                                                <Setter Property="BorderThickness" Value="0" />
-                                                <Setter Property="Background" Value="Transparent" />
-                                                <Setter Property="CornerRadius" Value="0" />
-                                                <Setter Property="MaxWidth" Value="392" />
-                                            </Style>
-                                        </Flyout.FlyoutPresenterStyle>
-                                        <controls:SettingsSheet x:Name="SettingsSheetHost" />
-                                    </Flyout>
-                                </FlyoutBase.AttachedFlyout>
-                            </Button>
-                        </StackPanel>
-                    </Border>
-                </TitleBar.LeftHeader>
-
-                <TitleBar.Content>
-                    <Border Height="1" Width="1" Opacity="0" IsHitTestVisible="False" />
-                </TitleBar.Content>
-
-                <TitleBar.RightHeader>
-                    <Border Width="8" Height="1" Opacity="0" IsHitTestVisible="False" />
-                </TitleBar.RightHeader>
-            </TitleBar>
-
-            <Border x:Name="NavRail"
-                    Background="Transparent"
-                    BorderThickness="0"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    MinHeight="48"
-                    IsHitTestVisible="True">
-                <StackPanel x:Name="ModuleIcons"
-                            Orientation="Horizontal"
-                            Spacing="6"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center">
-                    <Button x:Name="NavDiscord"
-                            Style="{StaticResource ExoNavTab}"
-                            AutomationProperties.Name="Discord"
-                            Click="NavDiscord_Click"
-                            Tag="discord">
-                        <StackPanel Orientation="Horizontal" Spacing="7">
-                            <Image Source="ms-appx:///Assets/Logos/discord.png" Width="16" Height="16" Stretch="Uniform" />
-                            <TextBlock Text="Discord" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="NavSteam"
-                            Style="{StaticResource ExoNavTab}"
-                            AutomationProperties.Name="Steam"
-                            Click="NavSteam_Click"
-                            Tag="steam">
-                        <StackPanel Orientation="Horizontal" Spacing="7">
-                            <Image Source="ms-appx:///Assets/Logos/steam.png" Width="16" Height="16" Stretch="Uniform" />
-                            <TextBlock Text="Steam" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="NavInternet"
-                            Style="{StaticResource ExoNavTab}"
-                            AutomationProperties.Name="Internet"
-                            Click="NavInternet_Click"
-                            Tag="internet">
-                        <StackPanel Orientation="Horizontal" Spacing="7">
-                            <Image Source="ms-appx:///Assets/Logos/internet.png" Width="16" Height="16" Stretch="Uniform" />
-                            <TextBlock Text="Internet" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="NavNvidia"
-                            Style="{StaticResource ExoNavTab}"
-                            AutomationProperties.Name="NVIDIA"
-                            Click="NavNvidia_Click"
-                            Tag="nvidia">
-                        <StackPanel Orientation="Horizontal" Spacing="7">
-                            <Image Source="ms-appx:///Assets/Logos/nvidia.png" Width="16" Height="16" Stretch="Uniform" />
-                            <TextBlock Text="NVIDIA" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="NavRiot"
-                            Style="{StaticResource ExoNavTab}"
-                            AutomationProperties.Name="Riot"
-                            Click="NavRiot_Click"
-                            Tag="riot">
-                        <StackPanel Orientation="Horizontal" Spacing="7">
-                            <Image Source="ms-appx:///Assets/Logos/riot.png" Width="16" Height="16" Stretch="Uniform" />
-                            <TextBlock Text="Riot" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="NavEpic"
-                            Style="{StaticResource ExoNavTab}"
-                            AutomationProperties.Name="Epic"
-                            Click="NavEpic_Click"
-                            Tag="epic">
-                        <StackPanel Orientation="Horizontal" Spacing="7">
-                            <Image Source="ms-appx:///Assets/Logos/epic.png" Width="16" Height="16" Stretch="Uniform" />
-                            <TextBlock Text="Epic" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </Border>
-        </Grid>
 
         <Grid x:Name="ContentHost"
-              Grid.Row="2"
-              Margin="8,0,8,8"
+              Margin="0"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
-            <Frame x:Name="ContentFrame"
-                   Padding="0"
-                   IsTabStop="True"
-                   IsNavigationStackEnabled="False"
-                   HorizontalAlignment="Stretch"
-                   VerticalAlignment="Stretch" />
+            <WebView2 x:Name="WebHost"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      DefaultBackgroundColor="#050506" />
         </Grid>
+
+        <!-- ~10px drag-only strip (matches React pt-2.5). Must NOT cover h-12 bar. -->
+        <Border x:Name="TitleChrome"
+                Height="10"
+                VerticalAlignment="Top"
+                Background="Transparent"
+                IsHitTestVisible="True">
+            <Border x:Name="AppTitleBar"
+                    Background="Transparent"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch" />
+        </Border>
+
+        <!-- Hidden legacy pieces kept for settings flyout / smoke string gates -->
+        <Border x:Name="ExoBrandPill" Visibility="Collapsed" Width="0" Height="0">
+            <Grid>
+                <Button x:Name="NavHome" Visibility="Collapsed" Click="NavHome_Click" />
+                <Button x:Name="SettingsButton"
+                        Visibility="Collapsed"
+                        Click="SettingsButton_Click">
+                    <FlyoutBase.AttachedFlyout>
+                        <Flyout x:Name="SettingsFlyout"
+                                Placement="Bottom"
+                                Opened="SettingsFlyout_Opened"
+                                Closing="SettingsFlyout_Closing"
+                                Closed="SettingsFlyout_Closed">
+                            <controls:SettingsSheet x:Name="SettingsSheetHost" />
+                        </Flyout>
+                    </FlyoutBase.AttachedFlyout>
+                </Button>
+            </Grid>
+        </Border>
+        <Border x:Name="NavRail" Visibility="Collapsed" Width="0" Height="0">
+            <StackPanel x:Name="ModuleIcons">
+                <Button x:Name="NavDiscord" Tag="discord" Click="NavDiscord_Click" />
+                <Button x:Name="NavSteam" Tag="steam" Click="NavSteam_Click" />
+                <Button x:Name="NavInternet" Tag="internet" Click="NavInternet_Click" />
+                <Button x:Name="NavNvidia" Tag="nvidia" Click="NavNvidia_Click" />
+                <Button x:Name="NavRiot" Tag="riot" Click="NavRiot_Click" />
+                <Button x:Name="NavEpic" Tag="epic" Click="NavEpic_Click" />
+            </StackPanel>
+        </Border>
+        <Frame x:Name="ContentFrame" Visibility="Collapsed" Width="0" Height="0" />
     </Grid>
 </Window>

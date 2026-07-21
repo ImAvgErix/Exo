@@ -27,7 +27,7 @@ $discordApp = Get-ChildItem (Join-Path $LocalAppData 'Discord') -Directory -Filt
     Sort-Object { [version]($_.Name -replace '^app-', '') } -Descending |
     Select-Object -First 1
 
-if (-not $discordApp) { throw 'Install Discord first, then run Discord-Optimizer.ps1' }
+if (-not $discordApp) { throw 'Install Discord first, then run Disc-Optimizer.ps1' }
 
 $appDir = $discordApp.FullName
 $real = Join-Path $appDir 'ffmpeg_real.dll'

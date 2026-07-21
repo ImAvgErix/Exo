@@ -43,8 +43,7 @@ function Test-SteamMemoryGuardText {
         if ($line.Contains('SetProcessWorkingSetSize') -and -not $allowsSoftReclaim) { return $false }
         if ($line -match '(?i)Stop-Process.*steamwebhelper|Suspend-Process') { return $false }
     }
-    # Competitive cadence uses 1s in-game / 2s library. Accept any loop sleep in 1-15s
-    # (first match may be the 1s game branch  -  do not require >=2 only).
+    # Soft reclaim cadence prefers >=4s. Accept any loop sleep in 1-15s for legacy templates.
     $secHits = [regex]::Matches($Text, 'Start-Sleep\s+-Seconds\s+(\d+)', 'IgnoreCase')
     foreach ($m in $secHits) {
         $sec = [int]$m.Groups[1].Value
@@ -175,7 +174,7 @@ function Get-SteamInstalledGameExes {
 }
 
 function Test-SteamLibraryGamePolicy {
-    # GPU high-perf only  -  Games hub owns borderless; FSO-off on games is legacy.
+    # GPU high-perf only - Games hub owns borderless; FSO-off on games is legacy.
     param([Parameter(Mandatory)][string]$SteamPath)
     $paths = @(Get-SteamInstalledGameExes -SteamPath $SteamPath -MaxPaths 40)
     if ($paths.Count -eq 0) { return $true }

@@ -7,7 +7,7 @@ namespace Exo.Services;
 /// Pure path decisions for Internet optimizer (no elevation, no I/O).
 /// Used by detect, apply-script generation, and smoke tests — single source of truth.
 /// </summary>
-public static partial class ExoInternetLogic
+public static partial class NetworkLogic
 {
     [GeneratedRegex(@"(?i)\bonly\b|\bexclusive\b")]
     private static partial Regex BandOnlyRegex();
@@ -90,11 +90,11 @@ public static partial class ExoInternetLogic
         bool KeepWifiBecauseEthNoIp);
 
     /// <summary>Documented tradeoffs only — latency vs highest download.</summary>
-    public static PresetKnobs KnobsFor(ExoInternetPreset preset)
+    public static PresetKnobs KnobsFor(NetworkPreset preset)
     {
-        var latency = preset == ExoInternetPreset.LowestLatency;
+        var latency = preset == NetworkPreset.LowestLatency;
         // Balanced uses latency-leaning host knobs but without aggressive nagle (treat as latency stack lite)
-        var bulk = preset == ExoInternetPreset.HighestThroughput;
+        var bulk = preset == NetworkPreset.HighestThroughput;
         return new PresetKnobs(
             // Competitive stack (Nexus/Paragon/Evolve-class): low latency disables
             // RSC/LSO/IM/flow; throughput enables them. Nagle off on both gaming presets.
@@ -134,23 +134,23 @@ public static partial class ExoInternetLogic
     /// Buffer strategy: latency uses mid-high (not always absolute max — large rings can add jitter);
     /// throughput uses max. Returns "max" | "mid".
     /// </summary>
-    public static string BufferStrategy(ExoInternetPreset preset) =>
-        preset == ExoInternetPreset.HighestThroughput ? "max" : "mid";
+    public static string BufferStrategy(NetworkPreset preset) =>
+        preset == NetworkPreset.HighestThroughput ? "max" : "mid";
 
     /// <summary>
     /// RSS queue budget from physical core count (not HT threads).
     /// Latency: up to physical cores; throughput: same ceiling (driver max still wins).
     /// </summary>
-    public static int RssQueueBudget(ExoInternetPreset preset, int physicalCores)
+    public static int RssQueueBudget(NetworkPreset preset, int physicalCores)
     {
         var n = Math.Max(1, physicalCores);
-        if (preset == ExoInternetPreset.HighestThroughput) return n;
+        if (preset == NetworkPreset.HighestThroughput) return n;
         // Latency: prefer fewer queues on high-core counts (less DPC scatter)
         return Math.Max(2, Math.Min(n, Math.Max(2, n / 2 + n % 2)));
     }
 
     /// <summary>Exo leaves Windows' RFC-aware IPv4/IPv6 prefix precedence unchanged.</summary>
-    public static bool PreferIpv4First(ExoInternetPreset preset, bool ethernetInUse) => false;
+    public static bool PreferIpv4First(NetworkPreset preset, bool ethernetInUse) => false;
 
     /// <summary>Raw NIC advanced-property facts (null = not exposed by driver).</summary>
     public sealed record NicFacts(
@@ -163,9 +163,9 @@ public static partial class ExoInternetLogic
     /// Preset-aware NIC status: latency wants flow/IM off + idle-restrict on;
     /// highest download wants flow/IM on + idle-restrict off. Missing props do not fail.
     /// </summary>
-    public static (bool Ok, string Hints) EvaluateNic(ExoInternetPreset preset, NicFacts f)
+    public static (bool Ok, string Hints) EvaluateNic(NetworkPreset preset, NicFacts f)
     {
-        var bulk = preset == ExoInternetPreset.HighestThroughput;
+        var bulk = preset == NetworkPreset.HighestThroughput;
         var bits = new List<string>();
         var ok = true;
 
@@ -229,7 +229,7 @@ public static partial class ExoInternetLogic
     /// Unknown / unread ("—", empty) skips — same as null LSO/RSC — so a probe gap
     /// never marks the row "not checked" after a successful apply.
     /// </summary>
-    public static bool AutotuneMatches(ExoInternetPreset preset, string? autoTuning)
+    public static bool AutotuneMatches(NetworkPreset preset, string? autoTuning)
     {
         if (string.IsNullOrWhiteSpace(autoTuning) || autoTuning is "—") return true;
         var want = KnobsFor(preset).AutotuneNetsh;
@@ -240,7 +240,7 @@ public static partial class ExoInternetLogic
     }
 
     /// <summary>RSC enabled state matches preset (null unknown = skip).</summary>
-    public static bool RscMatches(ExoInternetPreset preset, bool? rscEnabled)
+    public static bool RscMatches(NetworkPreset preset, bool? rscEnabled)
     {
         if (rscEnabled is null) return true;
         var wantOn = KnobsFor(preset).Rsc.Equals("enabled", StringComparison.OrdinalIgnoreCase);
@@ -248,7 +248,7 @@ public static partial class ExoInternetLogic
     }
 
     /// <summary>LSO enabled state matches preset (null unknown = skip).</summary>
-    public static bool LsoMatches(ExoInternetPreset preset, bool? lsoEnabled)
+    public static bool LsoMatches(NetworkPreset preset, bool? lsoEnabled)
     {
         if (lsoEnabled is null) return true;
         var wantOn = KnobsFor(preset).Lso == "1";
@@ -488,7 +488,7 @@ public static partial class ExoInternetLogic
     };
 
     /// <summary>Audit a generated apply script for host markers and folklore absence.</summary>
-    public static (bool Ok, List<string> Issues) AuditApplyScript(string script, ExoInternetPreset preset)
+    public static (bool Ok, List<string> Issues) AuditApplyScript(string script, NetworkPreset preset)
     {
         var issues = new List<string>();
         if (string.IsNullOrWhiteSpace(script))
@@ -548,13 +548,13 @@ public static partial class ExoInternetLogic
     /// Parse EXO_REPORT structured lines from the elevated apply/repair run log
     /// (%TEMP%\exo-net-last.log). Order preserved; duplicates kept (honest trace).
     /// </summary>
-    public static IReadOnlyList<ExoInternetApplyReportStep> ParseApplyReport(string? logText)
+    public static IReadOnlyList<NetworkApplyReportStep> ParseApplyReport(string? logText)
     {
-        var list = new List<ExoInternetApplyReportStep>();
+        var list = new List<NetworkApplyReportStep>();
         if (string.IsNullOrEmpty(logText)) return list;
         foreach (System.Text.RegularExpressions.Match m in ApplyReportRegex().Matches(logText))
         {
-            list.Add(new ExoInternetApplyReportStep
+            list.Add(new NetworkApplyReportStep
             {
                 Name = m.Groups[1].Value.Trim(),
                 Status = m.Groups[2].Value.ToLowerInvariant(),
@@ -568,7 +568,7 @@ public static partial class ExoInternetLogic
     /// Parse the single EXO_BENCH JSON line printed by the BuildBenchmark script.
     /// Returns null when no valid benchmark line is present.
     /// </summary>
-    public static ExoInternetBenchmarkResult? TryParseBenchmark(string? output)
+    public static NetworkBenchmarkResult? TryParseBenchmark(string? output)
     {
         if (string.IsNullOrEmpty(output)) return null;
         const string marker = "EXO_BENCH:";
@@ -587,7 +587,7 @@ public static partial class ExoInternetLogic
             string S(string n) =>
                 root.TryGetProperty(n, out var e) && e.ValueKind == System.Text.Json.JsonValueKind.String
                     ? e.GetString() ?? string.Empty : string.Empty;
-            return new ExoInternetBenchmarkResult
+            return new NetworkBenchmarkResult
             {
                 Ok = root.TryGetProperty("ok", out var ok) && ok.ValueKind == System.Text.Json.JsonValueKind.True,
                 PingP50Ms = D("pingP50Ms"),
@@ -626,10 +626,10 @@ public static partial class ExoInternetLogic
         catch { return null; }
     }
 
-    public static ExoInternetPreset RecommendPreset(ExoInternetBenchmarkResult result, ExoInternetMediaProfile media)
+    public static NetworkPreset RecommendPreset(NetworkBenchmarkResult result, NetworkMediaProfile media)
     {
         if (!result.Ok || !result.IsQualityTest)
-            return ExoInternetPreset.LowestLatency;
+            return NetworkPreset.LowestLatency;
 
         var downPenalty = Math.Max(0, result.DownloadLoadedMs - result.PingP50Ms);
         var upPenalty = Math.Max(0, result.UploadLoadedMs - result.PingP50Ms);
@@ -642,14 +642,14 @@ public static partial class ExoInternetLogic
         // host knobs when the measured path is unstable.
         var fastEthernet = media.EthernetInUse && media.PrimaryLinkSpeedBps >= 1_000_000_000;
         if (!fastEthernet && (unstable || media.WifiUp && !media.EthernetInUse))
-            return ExoInternetPreset.LowestLatency;
+            return NetworkPreset.LowestLatency;
 
         // A short-lived public endpoint must never downgrade a verified multi-gig
         // Ethernet link. Endpoint saturation is recorded separately in the UI.
         return fastEthernet ||
                result.DownloadMbps >= 300 && media.PrimaryLinkSpeedBps >= 1_000_000_000
-            ? ExoInternetPreset.HighestThroughput
-            : ExoInternetPreset.LowestLatency;
+            ? NetworkPreset.HighestThroughput
+            : NetworkPreset.LowestLatency;
     }
 
     /// <summary>

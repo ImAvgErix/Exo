@@ -1,5 +1,5 @@
 # Exo Discord Optimizer runner
-# Wraps Discord-Optimizer.ps1 with live progress markers for the WinUI host.
+# Wraps Disc-Optimizer.ps1 with live progress markers for the WinUI host.
 
 param(
     [switch]$Quick,
@@ -107,10 +107,10 @@ function Get-ProgressForLine([string]$Line, [int]$Current) {
 }
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Optimizer = Join-Path $Root 'Discord-Optimizer.ps1'
+$Optimizer = Join-Path $Root 'Disc-Optimizer.ps1'
 
 if (-not (Test-Path $Optimizer)) {
-    Write-HubErr "Discord-Optimizer.ps1 not found beside this script: $Root"
+    Write-HubErr "Disc-Optimizer.ps1 not found beside this script: $Root"
     Write-HubProgress 100 'Missing optimizer script'
     exit 1
 }
@@ -127,7 +127,7 @@ Write-HubProgress 14 'Preparing Disc Optimizer...'
 $runArgs = @()
 if ($Quick) { $runArgs += '-Quick' }
 if ($SkipCacheClean) { $runArgs += '-SkipCacheClean' }
-# Always non-interactive under Exo so Discord-Optimizer never waits on a keypress.
+# Always non-interactive under Exo so Disc-Optimizer never waits on a keypress.
 $NoLaunch = $true
 $runArgs += '-NoLaunch'
 $runArgs += '-SkipManifestSync'
@@ -138,7 +138,7 @@ if ($SkipKernel) { $runArgs += '-SkipKernel' }
 if ($FreshInstall) { $runArgs += '-FreshInstall' }
 if ($Experimental) { $runArgs += '-Experimental'; Write-HubStep 'Experimental apply mode' }
 
-Write-HubProgress 18 'Running Discord-Optimizer...'
+Write-HubProgress 18 'Running Disc-Optimizer...'
 Write-HubStep "Arguments: $($runArgs -join ' ')"
 
 # Run in-process so EXO_PROGRESS / Write-Output reach the elevated wrapper log.
@@ -147,7 +147,7 @@ try {
     & $Optimizer @runArgs 2>&1 | ForEach-Object {
         $line = "$_"
         if ([string]::IsNullOrWhiteSpace($line)) { return }
-        # Discord-Optimizer already mirrors to EXO_LOG; only forward stdout once.
+        # Disc-Optimizer already mirrors to EXO_LOG; only forward stdout once.
         if ($line -notmatch '^EXO_PROGRESS:') {
             Write-Output $line
         }

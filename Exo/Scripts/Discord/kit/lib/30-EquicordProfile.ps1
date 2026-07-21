@@ -1,5 +1,5 @@
 # 30-EquicordProfile.ps1 - Plugin manifests + hashtable utils
-# Dot-sourced by Discord-Optimizer.ps1 (load order = filename sort).
+# Dot-sourced by Disc-Optimizer.ps1 (load order = filename sort).
 # Universal multi-PC kit - do not assume Equicord/Discord already configured.
 
 function Sync-PluginManifests {

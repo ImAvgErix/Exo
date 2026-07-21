@@ -134,11 +134,11 @@
 
 ## Implementation core
 
-- `ExoInternetLogic` — pure band/path/knob decisions + report/benchmark parsing
-- `ExoInternetApplyScriptBuilder` — elevated apply/repair scripts + non-elevated benchmark (snapshot, probe gate, rollback baked in)
-- `ExoInternetOptimizerService` — apply/repair orchestration, benchmark before/after, report + rollback surfacing
+- `NetworkLogic` — pure band/path/knob decisions + report/benchmark parsing
+- `NetworkApplyScriptBuilder` — elevated apply/repair scripts + non-elevated benchmark (snapshot, probe gate, rollback baked in)
+- `NetworkOptimizerService` — apply/repair orchestration, benchmark before/after, report + rollback surfacing
 - `Repair-Internet.ps1` — standalone self-elevating rescue (snapshot restore or stock reset)
-- `tools/Internet.Smoke` — gates band/media/script audit, ordering (snapshot → probe → disable → rollback), tweak markers, and PS parse of every generated script
+- `tools/Network.Smoke` — gates band/media/script audit, ordering (snapshot → probe → disable → rollback), tweak markers, and PS parse of every generated script
 - `tools/NetScriptDump` — dumps generated scripts for Windows CI E2E execution
 
 ## Change rule

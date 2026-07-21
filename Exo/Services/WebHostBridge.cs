@@ -19,7 +19,7 @@ public sealed class WebHostBridge
     private CoreWebView2? _web;
 
     /// <summary>Internet ProbeAsync cache — full probe is multi-process + ping.</summary>
-    private ExoInternetSnapshot? _internetProbeCache;
+    private NetworkSnapshot? _internetProbeCache;
     private DateTimeOffset _internetProbeCacheUtc = DateTimeOffset.MinValue;
     private static readonly TimeSpan InternetProbeFreshness = TimeSpan.FromSeconds(90);
 
@@ -108,9 +108,6 @@ public sealed class WebHostBridge
                 "settings.set" => SetSettings(paramsEl, hasParams),
                 "settings.getChangelog" => BuildChangelog(),
                 "settings.checkUpdates" => await CheckUpdatesAsync().ConfigureAwait(true),
-                "ai.getStatus" => BuildAiStatus(),
-                "ai.run" => await RunAiAsync(paramsEl, hasParams).ConfigureAwait(true),
-                "ai.cancel" => CancelAi(),
                 _ => throw new InvalidOperationException($"Unknown method: {method}")
             };
 
@@ -206,7 +203,7 @@ public sealed class WebHostBridge
 
     private object BuildDashboard()
     {
-        var vm = new HomeViewModel(_services);
+        var vm = new DashboardViewModel(_services);
         var modules = new[]
         {
             Row("discord", "Discord", vm.DiscordStatusTag),
@@ -242,7 +239,7 @@ public sealed class WebHostBridge
                 os = vm.SpecsOs
             },
             // Prefer lightweight live snapshot so home meters never depend on a
-            // second full HomeViewModel construct (detect + seed).
+            // second full DashboardViewModel construct (detect + seed).
             live = BuildLiveSnapshot(),
             modules,
             next
@@ -250,7 +247,7 @@ public sealed class WebHostBridge
     }
 
     /// <summary>
-    /// Lightweight live tick — never construct HomeViewModel (that runs full
+    /// Lightweight live tick — never construct DashboardViewModel (that runs full
     /// detect/seed and starves the UI every ~1s, emptying meter cards).
     /// </summary>
     private object BuildLive() => BuildLiveSnapshot();
@@ -281,7 +278,7 @@ public sealed class WebHostBridge
             ? $"{link.Label} {link.MediaKind}"
             : "No link";
 
-        var quality = _services.Internet.LoadQualityBenchmark();
+        var quality = _services.Network.LoadQualityBenchmark();
         double? idleMs = null;
         double? down = null, up = null, loadedDown = null, loadedUp = null, loss = null;
         string? dns = null;
@@ -303,7 +300,7 @@ public sealed class WebHostBridge
         }
         else
         {
-            var latency = HomeDashboardReader.TryReadLatency(_services.Internet);
+            var latency = HomeDashboardReader.TryReadLatency(_services.Network);
             if (latency is not null)
                 idleMs = latency.AfterP50Ms;
             dns ??= HomeDashboardReader.TryReadInternetDnsStatus();
@@ -411,9 +408,6 @@ public sealed class WebHostBridge
             welcomePromptSeen = s.WelcomePromptSeen,
             buyMeACoffeeUrl = BuyMeACoffeeUrl,
             issuesUrl = IssuesUrl,
-            hasXaiApiKey = !string.IsNullOrWhiteSpace(s.XaiApiKey),
-            aiOptimalGateEnabled = s.AiOptimalGateEnabled,
-            upscalerRiskAcknowledged = s.UpscalerRiskAcknowledged,
             experimentalDefaults = new
             {
                 discord = s.ExperimentalDiscord,
@@ -425,88 +419,6 @@ public sealed class WebHostBridge
                 epic = s.ExperimentalEpic
             }
         };
-    }
-
-    private object BuildAiStatus()
-    {
-        var gate = _services.AiAgent.GetStatus();
-        var s = _services.Settings.Current;
-        return new
-        {
-            hasOptimal = gate.HasOptimal,
-            isOptimal = gate.IsOptimal,
-            message = gate.Message,
-            driftCount = gate.Drifts.Count,
-            drifts = gate.Drifts.Take(12).Select(d => new
-            {
-                domain = d.Domain,
-                key = d.Key,
-                expected = d.Expected,
-                actual = d.Actual,
-                severity = d.Severity
-            }),
-            hasXaiApiKey = !string.IsNullOrWhiteSpace(s.XaiApiKey),
-            aiOptimalGateEnabled = s.AiOptimalGateEnabled,
-            toolCount = _services.AiTools.CatalogIds().Count,
-            catalogDomains = Exo.Services.Ai.ExoSystemInventory.CatalogDomains.Count
-        };
-    }
-
-    private async Task<object> RunAiAsync(JsonElement p, bool hasParams)
-    {
-        var force = hasParams && p.ValueKind == JsonValueKind.Object &&
-                    p.TryGetProperty("force", out var f) && f.ValueKind == JsonValueKind.True;
-        var requireGrok = hasParams && p.ValueKind == JsonValueKind.Object &&
-                          p.TryGetProperty("requireGrok", out var g) && g.ValueKind == JsonValueKind.True;
-        var gateEnabled = _services.Settings.Current.AiOptimalGateEnabled;
-        if (!force && gateEnabled)
-        {
-            var status = _services.AiAgent.GetStatus();
-            if (status.IsOptimal)
-            {
-                return new
-                {
-                    success = true,
-                    skippedOptimal = true,
-                    message = status.Message,
-                    results = Array.Empty<object>()
-                };
-            }
-        }
-
-        var ct = _services.BeginAiRun();
-        var progress = new Progress<string>(line =>
-        {
-            PostEvent("ai.progress", new { status = line });
-        });
-
-        var result = await _services.AiAgent
-            .RunAsync(force: force || !gateEnabled, requireGrok: requireGrok, progress: progress, ct: ct)
-            .ConfigureAwait(true);
-
-        return new
-        {
-            success = result.Success,
-            skippedOptimal = result.SkippedOptimal,
-            message = result.Message,
-            source = result.Analysis?.Source,
-            analysis = result.Analysis?.Analysis,
-            actionCount = result.Results.Count,
-            okCount = result.Results.Count(r => r.Success),
-            results = result.Results.Select(r => new
-            {
-                toolId = r.ToolId,
-                success = r.Success,
-                status = r.Status,
-                message = r.Message
-            })
-        };
-    }
-
-    private object CancelAi()
-    {
-        _services.CancelAiRun();
-        return new { ok = true, message = "AI run cancel requested" };
     }
 
     /// <summary>
@@ -628,14 +540,6 @@ public sealed class WebHostBridge
             if (p.TryGetProperty("welcomePromptSeen", out var w) &&
                 (w.ValueKind is JsonValueKind.True or JsonValueKind.False))
                 s.WelcomePromptSeen = w.ValueKind == JsonValueKind.True;
-            if (p.TryGetProperty("xaiApiKey", out var key) && key.ValueKind == JsonValueKind.String)
-                s.XaiApiKey = key.GetString()?.Trim() ?? string.Empty;
-            if (p.TryGetProperty("aiOptimalGateEnabled", out var gate) &&
-                (gate.ValueKind is JsonValueKind.True or JsonValueKind.False))
-                s.AiOptimalGateEnabled = gate.ValueKind == JsonValueKind.True;
-            if (p.TryGetProperty("upscalerRiskAcknowledged", out var up) &&
-                (up.ValueKind is JsonValueKind.True or JsonValueKind.False))
-                s.UpscalerRiskAcknowledged = up.ValueKind == JsonValueKind.True;
         });
         return BuildSettings();
     }
@@ -930,7 +834,7 @@ public sealed class WebHostBridge
     /// </summary>
     private async Task<object> MapInternetAsync(bool force = false)
     {
-        ExoInternetSnapshot? snap = null;
+        NetworkSnapshot? snap = null;
         try
         {
             if (!force &&
@@ -941,7 +845,7 @@ public sealed class WebHostBridge
             }
             else
             {
-                snap = await _services.Internet.ProbeAsync().ConfigureAwait(true);
+                snap = await _services.Network.ProbeAsync().ConfigureAwait(true);
                 _internetProbeCache = snap;
                 _internetProbeCacheUtc = DateTimeOffset.UtcNow;
             }
@@ -951,14 +855,14 @@ public sealed class WebHostBridge
             /* probe optional — fall back to persisted state */
         }
 
-        var savedPreset = snap?.ActivePreset ?? _services.Internet.LoadSavedPreset();
+        var savedPreset = snap?.ActivePreset ?? _services.Network.LoadSavedPreset();
         // Only competitive presets count as applied — not Balanced / leftover status strings.
-        var applied = savedPreset is ExoInternetPreset.LowestLatency or ExoInternetPreset.HighestThroughput;
-        var preferLowest = savedPreset != ExoInternetPreset.HighestThroughput;
+        var applied = savedPreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput;
+        var preferLowest = savedPreset != NetworkPreset.HighestThroughput;
         var presetLabel = savedPreset switch
         {
-            ExoInternetPreset.HighestThroughput => "high throughput",
-            ExoInternetPreset.LowestLatency => "lowest latency",
+            NetworkPreset.HighestThroughput => "high throughput",
+            NetworkPreset.LowestLatency => "lowest latency",
             _ => "balanced"
         };
 
@@ -981,7 +885,7 @@ public sealed class WebHostBridge
                 ? $"Current resolvers: {dns}"
                 : "Tests Cloudflare, Google, and Quad9 on this route, selects the fastest healthy resolver, and requests automatic DoH when Windows supports it.";
 
-        var hasSnapshot = ExoInternetOptimizerService.HasRestoreSnapshot();
+        var hasSnapshot = NetworkOptimizerService.HasRestoreSnapshot();
         var repairDetail = hasSnapshot
             ? "A pre-Exo snapshot is ready; Repair restores DNS, DoH, routes, TCP, and NIC settings."
             : "Apply takes a pre-change snapshot; Repair can return the Windows network stack to stock defaults.";
@@ -997,7 +901,7 @@ public sealed class WebHostBridge
         // Last apply steps (compact) when available.
         try
         {
-            var report = _services.Internet.LoadLastApplyReport();
+            var report = _services.Network.LoadLastApplyReport();
             if (report is { Count: > 0 })
             {
                 var fails = report.Where(r =>
@@ -1087,7 +991,7 @@ public sealed class WebHostBridge
         {
             statusKind = applied ? "applied" : "ready";
             statusText = applied
-                ? (savedPreset == ExoInternetPreset.HighestThroughput
+                ? (savedPreset == NetworkPreset.HighestThroughput
                     ? "High-throughput stack applied"
                     : "Lowest-latency stack applied")
                 : "Ready to optimize";
@@ -1552,7 +1456,7 @@ public sealed class WebHostBridge
         {
             if (module == "internet")
             {
-                var net = _services.Internet;
+                var net = _services.Network;
                 var strProgress = new Progress<string>(s =>
                 {
                     log.Line("NET  " + s);
@@ -1588,12 +1492,12 @@ public sealed class WebHostBridge
                     $"dns={quality.DnsProvider} down={quality.DownloadMbps:0}Mbps up={quality.UploadMbps:0}Mbps");
                 Report(35, $"Quality: {quality.PingP50Ms:0.#} ms idle · {quality.DnsProvider} DNS");
 
-                var preset = preferLowestLatency ? ExoInternetPreset.LowestLatency : ExoInternetPreset.HighestThroughput;
+                var preset = preferLowestLatency ? NetworkPreset.LowestLatency : NetworkPreset.HighestThroughput;
                 log.Line($"Internet Apply preset={preset}");
                 Report(40, $"Applying {preset} stack…");
                 var (aok, amsg) = await net.ApplyPresetAsync(
                     preset,
-                    new ExoInternetApplyOptions { Experimental = experimental, RestartEthernet = true },
+                    new NetworkApplyOptions { Experimental = experimental, RestartEthernet = true },
                     strProgress).ConfigureAwait(true);
                 log.Line($"Internet Apply result ok={aok} msg={amsg}");
                 if (!aok) throw new InvalidOperationException(amsg);
@@ -1631,7 +1535,7 @@ public sealed class WebHostBridge
 
             // ── Apply pipeline policy (repair always uses full PS kit) ──────────
             // discord / nvidia  → specialized PowerShell kits only
-            // internet          → ExoInternetOptimizerService only (handled above)
+            // internet          → NetworkOptimizerService only (handled above)
             // riot / epic / brave → native C# ONLY
             // windows / steam   → native C# primary; PS deep pack soft-fails if native OK
             //
@@ -1710,29 +1614,29 @@ public sealed class WebHostBridge
             switch (module)
             {
                 case "discord":
-                    script = repair ? scripts.DiscordRepairScript : scripts.DiscordApplyScript;
+                    script = repair ? scripts.DiscordRepairScript : scripts.DiscordOptimizerScript;
                     workDir = scripts.GetDiscordRoot();
                     break;
                 case "steam":
-                    script = repair ? scripts.SteamRepairScript : scripts.SteamApplyScript;
+                    script = repair ? scripts.SteamRepairScript : scripts.SteamOptimizerScript;
                     workDir = scripts.GetSteamRoot();
                     break;
                 case "windows":
-                    script = repair ? scripts.WindowsRepairScript : scripts.WindowsApplyScript;
+                    script = repair ? scripts.WindowsRepairScript : scripts.WindowsOptimizerScript;
                     workDir = scripts.GetWindowsRoot();
                     break;
                 case "nvidia":
-                    script = repair ? scripts.NvidiaRepairScript : scripts.NvidiaApplyScript;
+                    script = repair ? scripts.NvidiaRepairScript : scripts.NvidiaOptimizerScript;
                     workDir = scripts.GetNvidiaRoot();
                     if (!repair)
                         args.Add(useGsync ? "-Gsync" : "-RawLatency");
                     break;
                 case "riot":
-                    script = repair ? scripts.RiotRepairScript : scripts.RiotApplyScript;
+                    script = repair ? scripts.RiotRepairScript : scripts.RiotOptimizerScript;
                     workDir = scripts.GetGameLaunchersRoot();
                     break;
                 case "epic":
-                    script = repair ? scripts.EpicRepairScript : scripts.EpicApplyScript;
+                    script = repair ? scripts.EpicRepairScript : scripts.EpicOptimizerScript;
                     workDir = scripts.GetGameLaunchersRoot();
                     break;
                 default:
@@ -1775,7 +1679,7 @@ public sealed class WebHostBridge
                 Report(5, repair ? "Repair (elevated)..." : "Apply (elevated)...");
 
             // Clean PC: Discord/Steam/NVIDIA kits need PowerShell 7. Internet already
-            // bootstraps pwsh via ExoInternetOptimizerService; native-only modules skip this path.
+            // bootstraps pwsh via NetworkOptimizerService; native-only modules skip this path.
             var needPwshBootstrap = module is "discord" or "steam" or "nvidia" or "windows";
             var result = await runner.RunAsync(
                 script,
