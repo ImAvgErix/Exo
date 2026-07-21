@@ -6,7 +6,7 @@
 .DESCRIPTION
   Runs every test that is meaningful without WinUI:
     - repository / script / data integrity
-    - Internet / Steam / Nvidia / Discord / Ui smokes
+    - Internet / Steam / Nvidia / Discord / Ai / Ui smokes
 
   The WinUI app itself cannot build or run on Linux (XamlCompiler.exe is a
   Windows binary). Use Windows CI or a local Windows install for GUI QA.
@@ -44,7 +44,8 @@ $smokes = @(
     @{ Name = 'Internet.Smoke'; Project = 'tools/Internet.Smoke' },
     @{ Name = 'Steam.Smoke'; Project = 'tools/Steam.Smoke' },
     @{ Name = 'Nvidia.Smoke'; Project = 'tools/Nvidia.Smoke' },
-    @{ Name = 'GameLaunchers.Smoke'; Project = 'tools/GameLaunchers.Smoke' }
+    @{ Name = 'GameLaunchers.Smoke'; Project = 'tools/GameLaunchers.Smoke' },
+    @{ Name = 'Ai.Smoke'; Project = 'tools/Ai.Smoke' }
 )
 if (-not $SkipDiscord) {
     $smokes += @{ Name = 'Discord.Smoke'; Project = 'tools/Discord.Smoke' }
