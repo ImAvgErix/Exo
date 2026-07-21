@@ -52,6 +52,16 @@ if ($projectVersion -ne $appVersion) {
     Add-Failure "VERSION mismatch: VERSION=$appVersion, Exo.csproj=$projectVersion"
 }
 
+# Product WebView UI must ship; missing wwwroot shows "Exo UI not built" to users.
+$wwwIndex = Join-Path $Root 'Exo\wwwroot\index.html'
+if (-not (Test-Path -LiteralPath $wwwIndex)) {
+    Add-Failure 'Exo/wwwroot/index.html missing - run: cd ui && npm ci && npm run build'
+}
+$csprojText = Get-Content -LiteralPath (Join-Path $Root 'Exo\Exo.csproj') -Raw
+if ($csprojText -notmatch 'Content Include="wwwroot\\') {
+    Add-Failure 'Exo.csproj must always Content-Include wwwroot/** (do not pack UI only inside BuildWebUi/node_modules)'
+}
+
 $discordOptimizerPath = Join-Path $Root 'Exo\Scripts\Discord\Disc-Optimizer.ps1'
 $discordOptimizer = Get-Content -LiteralPath $discordOptimizerPath -Raw
 $discordMatch = [regex]::Match($discordOptimizer, '\$Script:DiscOptVersion\s*=\s*''([^'']+)''')

@@ -175,6 +175,29 @@ if (Test-Path -LiteralPath $nvDisplayProj) {
     throw "Exo.NvDisplay project missing at $nvDisplayProj - display Apply will fail on user PCs"
 }
 
+# React UI must be in Exo/wwwroot before publish. CI runners have no ui/node_modules
+# unless we install here - without this, users get "Exo UI not built".
+$uiDir = Join-Path $Root 'ui'
+$wwwIndex = Join-Path $Root 'Exo\wwwroot\index.html'
+if (-not (Test-Path -LiteralPath (Join-Path $uiDir 'package.json'))) {
+    throw "Missing ui/package.json - cannot build product WebView UI."
+}
+Write-Host '[*] Building React UI (npm ci + npm run build)...' -ForegroundColor DarkGray
+Push-Location $uiDir
+try {
+    & npm ci
+    if ($LASTEXITCODE -ne 0) { throw "npm ci failed (exit $LASTEXITCODE)" }
+    & npm run build
+    if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE)" }
+}
+finally {
+    Pop-Location
+}
+if (-not (Test-Path -LiteralPath $wwwIndex)) {
+    throw "Exo/wwwroot/index.html missing after npm run build"
+}
+Write-Host '[+] React UI built into Exo/wwwroot' -ForegroundColor Green
+
 # WinUI's incremental XAML compiler can retain an obsolete connection-id map
 # after named controls move or change type. A normal build may still succeed while
 # the packaged XBF crashes during InitializeComponent. Release builds always clean
@@ -201,6 +224,12 @@ if ($LASTEXITCODE -ne 0) { throw "Publish failed (exit $LASTEXITCODE)" }
 
 $publishedExe = Join-Path $OutDir 'Exo.exe'
 if (-not (Test-Path $publishedExe)) { throw "Exo.exe not found in $OutDir" }
+
+$publishedWww = Join-Path $OutDir 'wwwroot\index.html'
+if (-not (Test-Path -LiteralPath $publishedWww)) {
+    throw "Publish check: wwwroot/index.html missing from $OutDir - UI would show 'Exo UI not built' for users."
+}
+Write-Host '[+] Publish check: wwwroot/index.html packed' -ForegroundColor Green
 
 $fv = (Get-Item $publishedExe).VersionInfo.FileVersion
 $pv = (Get-Item $publishedExe).VersionInfo.ProductVersion
