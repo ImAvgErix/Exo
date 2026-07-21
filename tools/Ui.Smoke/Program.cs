@@ -260,12 +260,20 @@ if (File.Exists(main))
         && !m.Contains("CaptionSpacerHost", StringComparison.Ordinal));
     Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
     var moduleRowStart = m.IndexOf("<StackPanel x:Name=\"ModuleIcons\"", StringComparison.Ordinal);
-    var moduleRowEnd = m.IndexOf("</StackPanel>", moduleRowStart, StringComparison.Ordinal);
-    var discordInRow = m.IndexOf("x:Name=\"NavDiscord\"", moduleRowStart, StringComparison.Ordinal);
+    var moduleRowEnd = moduleRowStart >= 0
+        ? m.IndexOf("</StackPanel>", moduleRowStart, StringComparison.Ordinal)
+        : -1;
+    var discordInRow = moduleRowStart >= 0
+        ? m.IndexOf("x:Name=\"NavDiscord\"", moduleRowStart, StringComparison.Ordinal)
+        : -1;
     var brandPill = m.IndexOf("x:Name=\"ExoBrandPill\"", StringComparison.Ordinal);
-    var settingsOnPill = m.IndexOf("x:Name=\"SettingsButton\"", brandPill, StringComparison.Ordinal);
+    var settingsOnPill = brandPill >= 0
+        ? m.IndexOf("x:Name=\"SettingsButton\"", brandPill, StringComparison.Ordinal)
+        : -1;
     var leftHeader = m.IndexOf("<TitleBar.LeftHeader>", StringComparison.Ordinal);
-    var leftHeaderEnd = m.IndexOf("</TitleBar.LeftHeader>", leftHeader, StringComparison.Ordinal);
+    var leftHeaderEnd = leftHeader >= 0
+        ? m.IndexOf("</TitleBar.LeftHeader>", leftHeader, StringComparison.Ordinal)
+        : -1;
     var navRail = m.IndexOf("x:Name=\"NavRail\"", StringComparison.Ordinal);
     Expect("discord center and corner settings cannot overlap",
         moduleRowStart >= 0
@@ -312,9 +320,12 @@ if (File.Exists(mainCs))
         && cs.Contains("1200", StringComparison.Ordinal)
         && cs.Contains("800", StringComparison.Ordinal));
     Expect("rail selection helper", cs.Contains("UpdateRailSelection", StringComparison.Ordinal));
-    Expect("corner morphs settings and home",
-        cs.Contains("SettingsButton.Visibility = onHome ? Visibility.Visible : Visibility.Collapsed", StringComparison.Ordinal)
-        && cs.Contains("NavHome.Visibility = onHome ? Visibility.Collapsed : Visibility.Visible", StringComparison.Ordinal));
+    // Current shell contract keeps both segments of the branded EXO pill stable.
+    Expect("stable home and settings pill",
+        cs.Contains("SettingsButton.Visibility = Visibility.Visible", StringComparison.Ordinal)
+        && cs.Contains("NavHome.Visibility = Visibility.Visible", StringComparison.Ordinal)
+        && !cs.Contains("SettingsButton.Visibility = Visibility.Collapsed", StringComparison.Ordinal)
+        && !cs.Contains("NavHome.Visibility = Visibility.Collapsed", StringComparison.Ordinal));
     Expect("dead titlebar fields removed", !cs.Contains("AppTitleText", StringComparison.Ordinal)
         && !cs.Contains("CaptionSpacerHost", StringComparison.Ordinal));
 }
@@ -502,7 +513,8 @@ if (File.Exists(updateDlg))
     var u = File.ReadAllText(updateDlg);
     Expect("update dialog no loader", !u.Contains("ExoLoader", StringComparison.Ordinal));
     Expect("update dialog progress", u.Contains("ProgressBar", StringComparison.Ordinal)
-        && u.Contains("statusTb", StringComparison.Ordinal));
+        && u.Contains("pctTb", StringComparison.Ordinal)
+        && u.Contains("phaseTb", StringComparison.Ordinal));
     Expect("update dialog install", u.Contains("InstallWithProgressAsync", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
@@ -621,10 +633,12 @@ foreach (var page in new[]
             x.Contains("Analyze &amp; Apply", StringComparison.Ordinal)
             && !x.Contains("Highest download", StringComparison.Ordinal));
         Expect("internet policy dropdown",
-            x.Contains("Link policy", StringComparison.Ordinal)
-            && x.Contains("SelectedProfileOption", StringComparison.Ordinal)
+            x.Contains("ShowProfileToggle=\"True\"", StringComparison.Ordinal)
+            && x.Contains("ProfileLabel=\"Stack profile\"", StringComparison.Ordinal)
+            && x.Contains("SelectedProfile=", StringComparison.Ordinal)
+            && x.Contains("ProfileOptions=", StringComparison.Ordinal)
             && x.Contains("SelectedApplyMode", StringComparison.Ordinal)
-            && x.Contains("ComboBox", StringComparison.Ordinal));
+            && x.Contains("ApplyModeOptions", StringComparison.Ordinal));
         Expect("internet DNS is automatic",
             !x.Contains("Private DNS", StringComparison.Ordinal)
             && !x.Contains("DNS toggle", StringComparison.OrdinalIgnoreCase));

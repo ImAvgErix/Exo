@@ -175,7 +175,7 @@ function Get-SteamInstalledGameExes {
 }
 
 function Test-SteamLibraryGamePolicy {
-    # GPU high-perf only — Games hub owns borderless; FSO-off on games is legacy.
+    # GPU high-perf only  -  Games hub owns borderless; FSO-off on games is legacy.
     param([Parameter(Mandatory)][string]$SteamPath)
     $paths = @(Get-SteamInstalledGameExes -SteamPath $SteamPath -MaxPaths 40)
     if ($paths.Count -eq 0) { return $true }

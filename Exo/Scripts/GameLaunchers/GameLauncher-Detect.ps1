@@ -100,7 +100,7 @@ function Get-LiveGameEntries {
         return @($entries)
     }
 
-    # Epic: prefer DisplayName from manifests (same “Found: …” language as Riot).
+    # Epic: prefer DisplayName from manifests (same "Found: ..." language as Riot).
     $manifestRoot = Join-Path $env:ProgramData 'Epic\EpicGamesLauncher\Data\Manifests'
     foreach ($file in @(Get-ChildItem -LiteralPath $manifestRoot -Filter '*.item' -File -ErrorAction SilentlyContinue)) {
         try {
@@ -237,7 +237,7 @@ try {
     }
     $dscpCount = $hits
     if ($need -eq 0) {
-        $dscpOk = $true # no games → not a blocker
+        $dscpOk = $true # no games -> not a blocker
     } else {
         $dscpOk = ($hits -ge $need)
     }
@@ -247,7 +247,7 @@ try {
 
 $applied = [bool]($installed -and $markerOk -and $startupQuiet -and $shellQuiet -and $yieldOk -and $snapshotReady -and $targetsPresent -gt 0 -and $gpuOk -and $fsoClean -and $dscpOk)
 
-# Consistent install copy for Riot + Epic: "Installed · Found: A, B" or guidance.
+# Consistent install copy for Riot + Epic: "Installed  -  Found: A, B" or guidance.
 function Format-FoundGames([string[]]$Names, [int]$Count) {
     if ($Count -le 0) { return $null }
     if ($Names.Count -gt 0) {
@@ -331,9 +331,9 @@ $features = [System.Collections.Generic.List[object]]::new()
 [void]$features.Add([ordered]@{
     title = 'Display left to Games hub'
     detail = if ($fsoClean) {
-        'No exclusive FSO-off on game EXEs — Games hub owns borderless.'
+        'No exclusive FSO-off on game EXEs  -  Games hub owns borderless.'
     } else {
-        'Legacy FSO-off still on some game EXEs — re-Apply to clear (borderless-friendly).'
+        'Legacy FSO-off still on some game EXEs  -  re-Apply to clear (borderless-friendly).'
     }
     active = [bool]$fsoClean
 })
@@ -373,7 +373,7 @@ $features = [System.Collections.Generic.List[object]]::new()
 })
 $features = @($features)
 
-# Status from the same rows the UI shows — exclude pure info tiles.
+# Status from the same rows the UI shows  -  exclude pure info tiles.
 $infoTitles = @(
     'Optimization verified',
     'Anti-cheat untouched',

@@ -1,5 +1,9 @@
+using System.Diagnostics;
+using System.Text.Json;
+using Exo.Helpers;
 using Exo.Models;
 using Exo.Models.Ai;
+using Microsoft.Win32;
 
 namespace Exo.Services.Ai;
 
@@ -349,25 +353,36 @@ public sealed class ExoAiHands
 
         ct.ThrowIfCancellationRequested();
         var roots = new List<string>();
-        var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-        var steam = Path.Combine(pf, "Steam", "steamapps", "common");
-        if (Directory.Exists(steam)) roots.Add(steam);
+        var pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        foreach (var steamRoot in new[]
+                 {
+                     Path.Combine(pf86, "Steam", "steamapps", "common"),
+                     Path.Combine(pf, "Steam", "steamapps", "common")
+                 })
+        {
+            if (Directory.Exists(steamRoot)) roots.Add(steamRoot);
+        }
+
         if (parameters.TryGetValue("root", out var custom) && Directory.Exists(custom))
             roots.Add(custom);
 
-        progress?.Report($"upscaler: scanning {roots.Count} root(s)");
-        var hits = _upscaler.Scan(roots);
-        progress?.Report($"upscaler: {hits.Count} DLL hit(s)");
+        // Source: parameters["source"] file/dir OR newest vendor DLL under Program Files NVIDIA/AMD/Intel.
+        var sourceRoots = new List<string>();
+        if (parameters.TryGetValue("source", out var source) && !string.IsNullOrWhiteSpace(source))
+            sourceRoots.Add(source);
+
+        progress?.Report($"upscaler: scanning {roots.Count} game root(s); resolving vendor sources");
+        var apply = _upscaler.ApplySupportedGameSwaps(roots, sourceRoots, riskAcknowledged: true);
+        progress?.Report(apply.Message);
         return Task.FromResult(new ExoToolResult
         {
             ToolId = "upscaler.maximizeSupportedGames",
             Success = true,
-            Status = "ok",
-            Message =
-                hits.Count == 0
-                    ? "No DLSS/FSR/XeSS DLLs found in scanned libraries (ack on; ready when games present)"
-                    : $"Found {hits.Count} upscaler DLL(s); AC-tagged={hits.Count(h => h.AntiCheatTagged)}. " +
-                      "Swap uses newest vendor DLL with backup when source provided."
+            Status = apply.Swapped > 0 || apply.Scanned == 0 ? "ok" : "partial",
+            Message = apply.Message,
+            After =
+                $"scanned={apply.Scanned};swapped={apply.Swapped};skippedAc={apply.SkippedAc};backedUp={apply.BackupsCreated}"
         });
     }
 
@@ -440,13 +455,27 @@ public sealed class ExoAiHands
     {
         if (!OperatingSystem.IsWindows())
             return Task.FromResult(Skip("process.ecoQosLaunchers", "EcoQoS requires Windows"));
-        // Yield companions are installed by launcher native Apply; stamp policy note.
+
+        // Host latency already owns PowerThrottlingOff — reuse that key (no folklore FPS keys).
+        var reg = 0;
+        if (NativeReg.TrySetDword(
+                "HKLM",
+                @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling",
+                "PowerThrottlingOff",
+                1))
+            reg++;
+
+        // Live EcoQoS on Exo-owned launcher/CEF helpers (non-foreground only). Steam memory
+        // guard + Riot/Epic Apply install deeper companions; this stamps running processes now.
+        var live = ExoProcessSoftPolicy.ApplyEcoQosToOwnedHelpers();
         return Task.FromResult(new ExoToolResult
         {
             ToolId = "process.ecoQosLaunchers",
             Success = true,
-            Status = "ok",
-            Message = "EcoQoS/yield for launchers is applied with Riot/Epic/Steam native Apply (no always-on malware service)"
+            Status = (reg > 0 || live > 0) ? "ok" : "partial",
+            Message =
+                $"EcoQoS: PowerThrottlingOff written={reg}; liveHelpers={live} " +
+                "(non-FG Steam/Discord/Riot/Epic helpers; AC untouched; Steam guard remains Apply-owned)"
         });
     }
 
@@ -454,15 +483,52 @@ public sealed class ExoAiHands
     {
         if (!OperatingSystem.IsWindows())
             return Task.FromResult(Skip("print.spoolerGate", "Spooler gate requires Windows"));
+
         try
         {
-            // Soft: only stop if no printers — detect via PowerShell would be better; use sc query soft.
+            var printerCount = CountInstalledPrinters();
+            if (printerCount > 0)
+            {
+                return Task.FromResult(new ExoToolResult
+                {
+                    ToolId = "print.spoolerGate",
+                    Success = true,
+                    Status = "ok",
+                    Message = $"Spooler left running — {printerCount} printer(s) installed (would brick print)"
+                });
+            }
+
+            var snapPath = Path.Combine(PathHelper.AppDataDir, "ai", "spooler-snapshot.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(snapPath)!);
+            var priorStart = QueryServiceStartType("Spooler");
+            var priorState = QueryServiceState("Spooler");
+            if (!File.Exists(snapPath))
+            {
+                var snap = JsonSerializer.Serialize(new
+                {
+                    service = "Spooler",
+                    startType = priorStart,
+                    state = priorState,
+                    disabledByExo = true,
+                    savedUtc = DateTime.UtcNow.ToString("o")
+                });
+                File.WriteAllText(snapPath, snap);
+            }
+
+            // No printers → demand-disable + stop (Repair restores from snapshot).
+            RunSc($"config Spooler start= disabled", 5000);
+            RunSc("stop Spooler", 8000);
+            var afterStart = QueryServiceStartType("Spooler");
+            var afterState = QueryServiceState("Spooler");
             return Task.FromResult(new ExoToolResult
             {
                 ToolId = "print.spoolerGate",
                 Success = true,
                 Status = "ok",
-                Message = "Spooler left running when printers may exist; Host OS skips hard-disable (safe)"
+                Message =
+                    $"No printers — Spooler gated (start {priorStart}->{afterStart}, " +
+                    $"state {priorState}->{afterState}); snapshot={snapPath}",
+                After = snapPath
             });
         }
         catch (Exception ex)
@@ -475,13 +541,191 @@ public sealed class ExoAiHands
     {
         if (!OperatingSystem.IsWindows())
             return Task.FromResult(Skip("shell.shellExAudit", "ShellEx audit requires Windows"));
+
+        // Prefer Windows-owned Explorer declutter over inventing mass ShellEx disables.
+        var declutter = WindowsNativeApply.ApplyShellQuietOnly(null);
+        var (approved, blocked, curatedBlocked) = AuditAndCurateShellExtensions();
         return Task.FromResult(new ExoToolResult
         {
             ToolId = "shell.shellExAudit",
+            Success = declutter.Ok || curatedBlocked >= 0,
+            Status = declutter.Ok ? "ok" : "partial",
+            Message =
+                $"Shell declutter: {declutter.Message}; " +
+                $"Approved={approved} Blocked={blocked} curatedBlocked={curatedBlocked} " +
+                "(noisy OneDrive/namespace CLSIDs already owned by Windows explorer pack)"
+        });
+    }
+
+    private Task<ExoToolResult> SoftReclaimAsync()
+    {
+        if (!OperatingSystem.IsWindows())
+            return Task.FromResult(Skip("memory.softReclaim", "Soft reclaim requires Windows"));
+
+        // Soft SetProcessWorkingSetSize(-1,-1) on non-foreground Exo-owned helpers only.
+        // Never EmptyWorkingSet. Never touch anti-cheat. steamwebhelper OK when not FG.
+        var n = ExoProcessSoftPolicy.SoftReclaimOwnedHelpers();
+        return Task.FromResult(new ExoToolResult
+        {
+            ToolId = "memory.softReclaim",
             Success = true,
             Status = "ok",
-            Message = "ShellEx audit recorded — noisy context-menu handlers quieted via Windows shell declutter when present"
+            Message =
+                $"Soft reclaim SetProcessWorkingSetSize(-1,-1) on {n} non-foreground " +
+                "Discord/Steam/Riot/Epic helper(s); never EmptyWorkingSet; AC skipped"
         });
+    }
+
+    private Task<ExoToolResult> ExpansionStubAsync(string toolId)
+    {
+        // Unknown expansion tools: Linux structured skip; Windows inventory-only (honest).
+        if (!OperatingSystem.IsWindows())
+        {
+            return Task.FromResult(new ExoToolResult
+            {
+                ToolId = toolId,
+                Success = true,
+                Status = "skip",
+                Message = $"{toolId} skipped (Windows-only; not applied)"
+            });
+        }
+
+        return Task.FromResult(new ExoToolResult
+        {
+            ToolId = toolId,
+            Success = true,
+            Status = "skip",
+            Message =
+                $"{toolId} inventory-only — no dedicated writer; use Host OS / module Apply when mapped"
+        });
+    }
+
+    private static int CountInstalledPrinters()
+    {
+        var count = 0;
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Control\Print\Printers");
+            if (key is null) return 0;
+            foreach (var name in key.GetSubKeyNames())
+            {
+                // Skip empty / placeholder
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                count++;
+            }
+        }
+        catch { }
+
+        return count;
+    }
+
+    private static string QueryServiceStartType(string service)
+    {
+        var (code, stdout, _) = RunScCapture($"qc {service}", 4000);
+        if (code != 0 && string.IsNullOrWhiteSpace(stdout)) return "unknown";
+        // START_TYPE lines look like: "START_TYPE         : 2   AUTO_START"
+        foreach (var line in stdout.Split('\n'))
+        {
+            if (!line.Contains("START_TYPE", StringComparison.OrdinalIgnoreCase)) continue;
+            if (line.Contains("DISABLED", StringComparison.OrdinalIgnoreCase)) return "disabled";
+            if (line.Contains("DEMAND", StringComparison.OrdinalIgnoreCase)) return "demand";
+            if (line.Contains("AUTO", StringComparison.OrdinalIgnoreCase)) return "auto";
+        }
+
+        return "unknown";
+    }
+
+    private static string QueryServiceState(string service)
+    {
+        var (_, stdout, _) = RunScCapture($"query {service}", 4000);
+        foreach (var line in stdout.Split('\n'))
+        {
+            if (!line.Contains("STATE", StringComparison.OrdinalIgnoreCase)) continue;
+            if (line.Contains("RUNNING", StringComparison.OrdinalIgnoreCase)) return "running";
+            if (line.Contains("STOPPED", StringComparison.OrdinalIgnoreCase)) return "stopped";
+            if (line.Contains("STOP_PENDING", StringComparison.OrdinalIgnoreCase)) return "stopping";
+        }
+
+        return "unknown";
+    }
+
+    private static void RunSc(string args, int timeoutMs) =>
+        RunScCapture(args, timeoutMs);
+
+    private static (int ExitCode, string StdOut, bool TimedOut) RunScCapture(string args, int timeoutMs)
+    {
+        try
+        {
+            using var p = Process.Start(new ProcessStartInfo
+            {
+                FileName = "sc.exe",
+                Arguments = args,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            });
+            if (p is null) return (-1, "", true);
+            var stdout = p.StandardOutput.ReadToEnd();
+            if (!p.WaitForExit(timeoutMs))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { try { p.Kill(); } catch { } }
+                return (-1, stdout, true);
+            }
+
+            return (p.ExitCode, stdout, false);
+        }
+        catch (Exception ex)
+        {
+            return (-1, ex.Message, true);
+        }
+    }
+
+    /// <summary>
+    /// Audit Shell Extensions Approved/Blocked; block curated noisy CLSIDs already owned by
+    /// Windows explorer declutter (OneDrive namespace) — no mass disable of unknown handlers.
+    /// </summary>
+    private static (int Approved, int Blocked, int CuratedBlocked) AuditAndCurateShellExtensions()
+    {
+        var approved = CountRegValues(@"Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved");
+        var blocked = CountRegValues(@"Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked");
+
+        // OneDrive namespace CLSID — already decluttered via WindowsNativeApply nav pin.
+        const string oneDriveClsid = "{018D5C66-4533-4307-9B53-224DE2ED1FE6}";
+        var curated = 0;
+        try
+        {
+            if (NativeReg.TrySetString(
+                    "HKCU",
+                    @"Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked",
+                    oneDriveClsid,
+                    ""))
+                curated++;
+        }
+        catch { }
+
+        return (approved, blocked + curated, curated);
+    }
+
+    private static int CountRegValues(string relativePath)
+    {
+        var n = 0;
+        try
+        {
+            using var hkcu = Registry.CurrentUser.OpenSubKey(relativePath);
+            if (hkcu is not null) n += hkcu.GetValueNames().Length;
+        }
+        catch { }
+
+        try
+        {
+            using var hklm = Registry.LocalMachine.OpenSubKey(relativePath);
+            if (hklm is not null) n += hklm.GetValueNames().Length;
+        }
+        catch { }
+
+        return n;
     }
 
     private Task<ExoToolResult> TrimAsync()
@@ -595,36 +839,6 @@ public sealed class ExoAiHands
             Message =
                 "Ownership dry-run: app modules keep app-scoped keys; Windows module owns machine-wide; " +
                 "Internet owns NIC/TCP; NVIDIA owns DRS — see docs/WINDOWS-OWNERSHIP.md"
-        });
-    }
-
-    private Task<ExoToolResult> SoftReclaimAsync()
-    {
-        if (!OperatingSystem.IsWindows())
-            return Task.FromResult(Skip("memory.softReclaim", "Soft reclaim requires Windows"));
-
-        // Never EmptyWorkingSet steamwebhelper — soft SetProcessWorkingSetSize on non-foreground only
-        // is handled by Steam memory guard when Steam Apply runs.
-        return Task.FromResult(new ExoToolResult
-        {
-            ToolId = "memory.softReclaim",
-            Success = true,
-            Status = "ok",
-            Message = "Soft reclaim policy active via Steam memory guard (no steamwebhelper EmptyWorkingSet)"
-        });
-    }
-
-    private Task<ExoToolResult> ExpansionStubAsync(string toolId)
-    {
-        // Remaining expansion tools: inventory-covered; apply with Host OS / module paths when Windows.
-        return Task.FromResult(new ExoToolResult
-        {
-            ToolId = toolId,
-            Success = true,
-            Status = OperatingSystem.IsWindows() ? "ok" : "skip",
-            Message = OperatingSystem.IsWindows()
-                ? $"{toolId} applied via Host OS / ownership-safe path"
-                : $"{toolId} registered (Windows apply)"
         });
     }
 

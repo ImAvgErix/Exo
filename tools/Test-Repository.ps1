@@ -151,8 +151,26 @@ else {
     )) {
         Assert-ContainsText $embeddedHelper $marker 'Steam companion helper'
     }
-    if ($embeddedHelper -match '(?im)^\s*(?!#|//).*(EmptyWorkingSet\(|SetProcessWorkingSetSize|Stop-Process.*steamwebhelper|Suspend-Process)') {
-        Add-Failure 'Steam memory guard contains an unsafe trim, suspend, or kill operation'
+    # Align with SteamLogic.IsMemoryGuardText: EmptyWorkingSet / kill / suspend always
+    # banned on non-comment lines. Soft SetProcessWorkingSetSize(-1,-1) allowed only when
+    # the helper also gates SoftReclaimWorkingSet on non-foreground CEF.
+    $allowsSoftReclaim = ($embeddedHelper -match 'SoftReclaimWorkingSet') -and
+        ($embeddedHelper -match '\$_\.Id -ne \$foregroundPid')
+    foreach ($rawLine in ($embeddedHelper -split "`n")) {
+        $line = $rawLine.TrimStart()
+        if ($line.StartsWith('#') -or $line.StartsWith('//')) { continue }
+        if ($line.Contains('EmptyWorkingSet(')) {
+            Add-Failure 'Steam memory guard contains EmptyWorkingSet (unsafe CEF thrash)'
+            break
+        }
+        if ($line.Contains('SetProcessWorkingSetSize') -and -not $allowsSoftReclaim) {
+            Add-Failure 'Steam memory guard uses SetProcessWorkingSetSize without SoftReclaimWorkingSet non-foreground gate'
+            break
+        }
+        if ($line -match '(?i)Stop-Process.*steamwebhelper|Suspend-Process') {
+            Add-Failure 'Steam memory guard contains an unsafe suspend or kill operation'
+            break
+        }
     }
 }
 

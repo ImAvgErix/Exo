@@ -17,7 +17,7 @@ function Test-RegValue($path, $name, $expect) {
   } catch { return $false }
 }
 
-# ── WINDOWS ──────────────────────────────────────────────────────────────
+# -- WINDOWS --------------------------------------------------------------
 Sec "WINDOWS"
 $wp = powercfg /getactivescheme 2>&1 | Out-String
 if ($wp -match 'Exo Competitive') { Ok "Active power plan: Exo Competitive*" } else { Bad "Power plan not Exo Competitive: $wp" }
@@ -51,7 +51,7 @@ try {
 $gamedvr = (Get-ItemProperty 'HKCU:\System\GameConfigStore' -Name GameDVR_Enabled -EA SilentlyContinue).GameDVR_Enabled
 if ($gamedvr -eq 0) { Ok "GameDVR_Enabled=0" } else { Warn "GameDVR_Enabled=$gamedvr" }
 
-# ── STEAM ────────────────────────────────────────────────────────────────
+# -- STEAM ----------------------------------------------------------------
 Sec "STEAM"
 $steam = $null
 foreach ($c in @(
@@ -85,7 +85,7 @@ else {
   } else { Warn "QoS policy root missing" }
 }
 
-# ── RIOT ─────────────────────────────────────────────────────────────────
+# -- RIOT -----------------------------------------------------------------
 Sec "RIOT"
 $riotCmd = Join-Path $exo 'launchers\Riot-Exo.cmd'
 $riotGuard = Join-Path $exo 'riot-yield-guard.ps1'
@@ -120,7 +120,7 @@ if ($val) {
 $nRiot = (Get-ChildItem 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS' -EA SilentlyContinue | Where-Object { $_.PSChildName -like 'Exo-Riot*' }).Count
 if ($nRiot -gt 0) { Ok "Riot DSCP policies: $nRiot" } else { Warn "No Exo-Riot* DSCP policies" }
 
-# ── EPIC ─────────────────────────────────────────────────────────────────
+# -- EPIC -----------------------------------------------------------------
 Sec "EPIC"
 $epicCmd = Join-Path $exo 'launchers\Epic-Exo.cmd'
 $epicGuard = Join-Path $exo 'epic-yield-guard.ps1'
@@ -134,7 +134,7 @@ if ($epicRun -and $epicRun -match 'yield-guard' -and $epicRun -match 'Hidden') {
 $nEpic = (Get-ChildItem 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS' -EA SilentlyContinue | Where-Object { $_.PSChildName -like 'Exo-Epic*' }).Count
 if ($nEpic -gt 0) { Ok "Epic DSCP policies: $nEpic" } else { Warn "No Exo-Epic* DSCP policies" }
 
-# ── DISCORD ──────────────────────────────────────────────────────────────
+# -- DISCORD --------------------------------------------------------------
 Sec "DISCORD"
 $discordApp = Get-ChildItem "$env:LOCALAPPDATA\Discord" -Directory -Filter 'app-*' -EA SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
 if ($discordApp) { Ok "Discord app: $($discordApp.FullName)" } else { Bad "Discord app-* not found" }
@@ -158,7 +158,7 @@ if ($discordApp) {
 $nDisc = (Get-ChildItem 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS' -EA SilentlyContinue | Where-Object { $_.PSChildName -like '*Discord*' -or $_.PSChildName -like 'Exo*Discord*' }).Count
 if ($nDisc -gt 0) { Ok "Discord-related QoS policies: $nDisc" } else { Warn "No Discord QoS policies found" }
 
-# ── NVIDIA ───────────────────────────────────────────────────────────────
+# -- NVIDIA ---------------------------------------------------------------
 Sec "NVIDIA"
 $nv = Get-Content (Join-Path $exo 'nvidia-optimizer.json') -Raw -EA SilentlyContinue | ConvertFrom-Json
 if ($nv.drsVerified) { Ok "State says DRS verified at $($nv.drsVerifiedAt) profile=$($nv.profileFile) gsync=$($nv.gsync)" }
@@ -170,11 +170,11 @@ if ($npi) { Ok "NPI present: $($npi.FullName)" } else { Warn "NPI folder missing
 $drs = Join-Path $exo 'nvidia-drs-pre-exo.bin'
 if (Test-Path $drs) { Ok "DRS pre-backup exists ($((Get-Item $drs).Length) bytes)" } else { Warn "No DRS pre-backup file" }
 
-# ── INTERNET ─────────────────────────────────────────────────────────────
+# -- INTERNET -------------------------------------------------------------
 Sec "INTERNET"
 $net = Get-Content (Join-Path $exo 'network-optimizer.json') -Raw -EA SilentlyContinue | ConvertFrom-Json
 if ($net.qualityBenchmark.ok) {
-  Ok "Quality sample ok: idle $($net.qualityBenchmark.pingP50Ms) ms · down $($net.qualityBenchmark.downloadMbps) Mbps · DNS $($net.qualityBenchmark.dnsProvider)"
+  Ok "Quality sample ok: idle $($net.qualityBenchmark.pingP50Ms) ms  -  down $($net.qualityBenchmark.downloadMbps) Mbps  -  DNS $($net.qualityBenchmark.dnsProvider)"
 } else { Warn "No quality benchmark ok" }
 $snap = Join-Path $exo 'network-snapshot.json'
 if (Test-Path $snap) { Ok "network-snapshot.json present (rollback base)" } else { Bad "network-snapshot.json missing" }
@@ -184,7 +184,7 @@ try {
   Ok "Tcpip Parameters readable (GlobalMaxTcpWindowSize=$($tcp.GlobalMaxTcpWindowSize))"
 } catch { Warn "Tcpip Parameters unreadable" }
 
-# ── GAMES / MARVEL RIVALS ────────────────────────────────────────────────
+# -- GAMES / MARVEL RIVALS ------------------------------------------------
 Sec "GAMES (Marvel Rivals)"
 $rivals = 'C:\Program Files (x86)\Steam\steamapps\common\MarvelRivals'
 $eng = Join-Path $env:LOCALAPPDATA 'Marvel\Saved\Config\Windows\Engine.ini'
@@ -214,13 +214,13 @@ if (Test-Path $mods) {
   }
 } else { Bad "~mods missing" }
 
-# ── SUMMARY ──────────────────────────────────────────────────────────────
+# -- SUMMARY --------------------------------------------------------------
 Sec "SUMMARY"
 Write-Host "FAIL=$fail  WARN=$warn"
 if ($fail -eq 0) {
   Write-Host "Live checks: no hard FAILs. Review WARNs for partial elev/optional rows." -ForegroundColor Green
   exit 0
 } else {
-  Write-Host "Live checks: $fail hard FAIL(s) — UI 'Applied' overstates those." -ForegroundColor Red
+  Write-Host "Live checks: $fail hard FAIL(s)  -  UI 'Applied' overstates those." -ForegroundColor Red
   exit 1
 }
