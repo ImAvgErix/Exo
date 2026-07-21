@@ -1,3 +1,7 @@
+## 3.15.2
+
+- Fix update install when app folder is locked: in-place overwrite fallback + WebView2 cleanup
+- Retries and rename-aside for locked files so Update now can finish
 ## 3.15.1
 
 - Fix in-app update install: SFX waits for parent PID before replacing app folder (file-in-use race)
@@ -1274,6 +1278,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

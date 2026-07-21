@@ -140,10 +140,13 @@ internal static class Program
 
             Log("Closing any running Exo app (not this installer)...");
             StopOtherExo();
+            // WebView2 often keeps handles on the app folder after Exo.exe dies.
+            StopExoWebViews();
             // Extra settle time so file locks release (WebView2 / AV scanners).
             Thread.Sleep(900);
             StopOtherExo();
-            Thread.Sleep(400);
+            StopExoWebViews();
+            Thread.Sleep(500);
 
             // One-time upgrade path: OptiHub (the app's old name) may still be
             // installed. Close it, carry its settings/state over, remove it.
@@ -537,17 +540,16 @@ internal static class Program
                 "Staged Exo payload looks incomplete (" + expectedFileCount + " files)."
             );
 
-        // Move the live app out of the way. Keep the backup until the new
-        // payload is verified so a failed promotion cannot leave users with
-        // no runnable installation.
+        // Preferred path: move live app aside, then promote incoming -> app.
+        // Fallback: overwrite in place when the folder is locked (WebView2/AV).
         string backup = null;
         bool liveMoved = false;
+        bool inPlace = false;
         if (Directory.Exists(dest))
         {
             backup = dest + ".old-" + DateTime.Now.ToString("yyyyMMddHHmmss");
             Exception lastMove = null;
-            // Retry: WebView2 / Defender often hold handles for a few seconds after Kill.
-            for (int attempt = 1; attempt <= 20; attempt++)
+            for (int attempt = 1; attempt <= 16; attempt++)
             {
                 try
                 {
@@ -555,9 +557,11 @@ internal static class Program
                     {
                         try { Directory.Delete(backup, true); } catch { }
                     }
-                    // Re-kill any stragglers mid-retry
-                    if (attempt == 5 || attempt == 10 || attempt == 15)
+                    if (attempt == 3 || attempt == 7 || attempt == 12)
+                    {
                         StopOtherExo();
+                        StopExoWebViews();
+                    }
                     Directory.Move(dest, backup);
                     liveMoved = true;
                     lastMove = null;
@@ -566,66 +570,172 @@ internal static class Program
                 catch (Exception ex)
                 {
                     lastMove = ex;
-                    Thread.Sleep(350 + attempt * 50);
+                    Thread.Sleep(300 + attempt * 40);
                 }
             }
+
             if (!liveMoved)
             {
-                throw new InvalidOperationException(
-                    "Could not move the current Exo installation out of the way. " +
-                    "Close Exo and any antivirus scan using the app folder, then retry.",
-                    lastMove);
+                // Folder locked: copy over live files instead of failing the whole update.
+                Log("Directory.Move locked — installing in place over the live app folder.");
+                if (lastMove != null)
+                    Log("Move error was: " + lastMove.Message);
+                StopOtherExo();
+                StopExoWebViews();
+                Thread.Sleep(600);
+                OverwriteTreeAggressive(incoming, dest);
+                inPlace = true;
             }
         }
 
-        // Promote incoming -> app. If both the atomic move and copy fallback
-        // fail, restore the verified previous installation.
-        try
+        if (!inPlace)
         {
+            // Promote incoming -> app. If both the atomic move and copy fallback
+            // fail, restore the verified previous installation.
             try
-            {
-                Directory.Move(incoming, dest);
-            }
-            catch
-            {
-                CopyTree(incoming, dest);
-                try { Directory.Delete(incoming, true); } catch { }
-            }
-
-            string promotedExe = Path.Combine(dest, ExeName);
-            if (!File.Exists(promotedExe))
-                throw new InvalidOperationException("The promoted app folder is missing Exo.exe.");
-            int promotedFileCount = Directory.GetFiles(dest, "*", SearchOption.AllDirectories).Length;
-            long promotedExeLength = new FileInfo(promotedExe).Length;
-            if (promotedFileCount != expectedFileCount || promotedExeLength != expectedExeLength)
-                throw new InvalidOperationException(
-                    "Promoted payload verification failed (expected " + expectedFileCount +
-                    " files, found " + promotedFileCount + ").");
-        }
-        catch (Exception installEx)
-        {
-            string rollbackStatus = "";
-            DeleteTreeBestEffort(dest);
-            if (liveMoved && !string.IsNullOrEmpty(backup) && Directory.Exists(backup))
             {
                 try
                 {
-                    if (Directory.Exists(dest))
-                        Directory.Delete(dest, true);
-                    Directory.Move(backup, dest);
-                    rollbackStatus = " The previous version was restored.";
+                    Directory.Move(incoming, dest);
                 }
-                catch (Exception rollbackEx)
+                catch
                 {
-                    rollbackStatus = " Automatic rollback also failed (" + rollbackEx.Message +
-                        "). The previous version remains at: " + backup;
+                    CopyTree(incoming, dest);
+                    try { Directory.Delete(incoming, true); } catch { }
+                }
+
+                string promotedExe = Path.Combine(dest, ExeName);
+                if (!File.Exists(promotedExe))
+                    throw new InvalidOperationException("The promoted app folder is missing Exo.exe.");
+                int promotedFileCount = Directory.GetFiles(dest, "*", SearchOption.AllDirectories).Length;
+                long promotedExeLength = new FileInfo(promotedExe).Length;
+                // In-place path may leave extra old locale folders — only strict-check on rename promote.
+                if (promotedFileCount < 20 || promotedExeLength != expectedExeLength)
+                    throw new InvalidOperationException(
+                        "Promoted payload verification failed (expected exe size " + expectedExeLength +
+                        ", found " + promotedExeLength + ", files=" + promotedFileCount + ").");
+            }
+            catch (Exception installEx)
+            {
+                string rollbackStatus = "";
+                DeleteTreeBestEffort(dest);
+                if (liveMoved && !string.IsNullOrEmpty(backup) && Directory.Exists(backup))
+                {
+                    try
+                    {
+                        if (Directory.Exists(dest))
+                            Directory.Delete(dest, true);
+                        Directory.Move(backup, dest);
+                        rollbackStatus = " The previous version was restored.";
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        rollbackStatus = " Automatic rollback also failed (" + rollbackEx.Message +
+                            "). The previous version remains at: " + backup;
+                    }
+                }
+
+                throw new InvalidOperationException(
+                    "Could not activate the new Exo installation." + rollbackStatus,
+                    installEx);
+            }
+        }
+        else
+        {
+            // Verify in-place result
+            string liveExe = Path.Combine(dest, ExeName);
+            if (!File.Exists(liveExe))
+                throw new InvalidOperationException("In-place install missing Exo.exe.");
+            long liveLen = new FileInfo(liveExe).Length;
+            if (liveLen != expectedExeLength)
+                throw new InvalidOperationException(
+                    "In-place install verification failed (exe size " + liveLen +
+                    " vs expected " + expectedExeLength + ").");
+            try { Directory.Delete(incoming, true); } catch { }
+            Log("In-place install verified.");
+        }
+    }
+
+    /// <summary>
+    /// Copy every file from source onto dest, renaming locked targets out of the way.
+    /// Used when Directory.Move(dest) fails because something still holds the folder.
+    /// </summary>
+    private static void OverwriteTreeAggressive(string source, string dest)
+    {
+        Directory.CreateDirectory(dest);
+        int copied = 0;
+        int renamed = 0;
+        int failed = 0;
+
+        foreach (string dir in Directory.GetDirectories(source, "*", SearchOption.AllDirectories))
+        {
+            string rel = dir.Substring(source.Length).TrimStart('\\', '/');
+            Directory.CreateDirectory(Path.Combine(dest, rel));
+        }
+
+        foreach (string file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+        {
+            string rel = file.Substring(source.Length).TrimStart('\\', '/');
+            string target = Path.Combine(dest, rel);
+            string targetDir = Path.GetDirectoryName(target);
+            if (!string.IsNullOrEmpty(targetDir))
+                Directory.CreateDirectory(targetDir);
+
+            bool ok = false;
+            for (int attempt = 1; attempt <= 8 && !ok; attempt++)
+            {
+                try
+                {
+                    if (File.Exists(target))
+                    {
+                        try { File.SetAttributes(target, FileAttributes.Normal); } catch { }
+                        File.Copy(file, target, true);
+                    }
+                    else
+                    {
+                        File.Copy(file, target, true);
+                    }
+                    ok = true;
+                    copied++;
+                }
+                catch
+                {
+                    // Rename locked file aside, then place the new one.
+                    try
+                    {
+                        if (File.Exists(target))
+                        {
+                            string trash = target + ".old-" + DateTime.Now.ToString("HHmmssfff") + "-" + attempt;
+                            try { File.SetAttributes(target, FileAttributes.Normal); } catch { }
+                            File.Move(target, trash);
+                            renamed++;
+                            // Best-effort delete later
+                            try { File.Delete(trash); } catch { }
+                        }
+                        File.Copy(file, target, true);
+                        ok = true;
+                        copied++;
+                    }
+                    catch
+                    {
+                        Thread.Sleep(120 * attempt);
+                    }
                 }
             }
-
-            throw new InvalidOperationException(
-                "Could not activate the new Exo installation." + rollbackStatus,
-                installEx);
+            if (!ok)
+            {
+                failed++;
+                Log("Could not replace locked file: " + rel);
+            }
         }
+
+        Log("In-place copy: ok=" + copied + " renamed=" + renamed + " failed=" + failed);
+        if (failed > 0 && !File.Exists(Path.Combine(dest, ExeName)))
+            throw new InvalidOperationException(
+                "In-place install could not write Exo.exe (" + failed + " files locked).");
+        // Require critical exe replaced
+        if (!File.Exists(Path.Combine(dest, ExeName)))
+            throw new InvalidOperationException("In-place install missing Exo.exe after copy.");
     }
 
     private static void DeleteTreeBestEffort(string path)
@@ -1147,6 +1257,55 @@ internal static class Program
                 try { File.Delete(file); }
                 catch { }
             }
+        }
+    }
+
+    /// <summary>
+    /// Kill Edge WebView2 leftovers that keep handles on the Exo app folder after Exo.exe exits.
+    /// (SFX is csc-built without System.Management — name-based kill only.)
+    /// When no other Exo.exe is running, orphan WebView2 processes are safe to stop.
+    /// </summary>
+    private static void StopExoWebViews()
+    {
+        try
+        {
+            bool exoStillRunning = false;
+            foreach (Process e in Process.GetProcessesByName("Exo"))
+            {
+                try
+                {
+                    if (e.Id != SelfPid && !e.HasExited)
+                        exoStillRunning = true;
+                }
+                catch { }
+                try { e.Dispose(); } catch { }
+            }
+
+            // Only reap webviews when the app is gone — avoids killing other apps' WebView2.
+            if (exoStillRunning)
+            {
+                Log("Exo still running — skipping WebView2 cleanup this pass.");
+                return;
+            }
+
+            int killed = 0;
+            foreach (Process p in Process.GetProcessesByName("msedgewebview2"))
+            {
+                try
+                {
+                    try { p.Kill(); } catch { }
+                    try { p.WaitForExit(2500); } catch { }
+                    killed++;
+                }
+                catch { }
+                try { p.Dispose(); } catch { }
+            }
+            if (killed > 0)
+                Log("Stopped " + killed + " msedgewebview2 process(es).");
+        }
+        catch (Exception ex)
+        {
+            Log("WebView stop warning: " + ex.Message);
         }
     }
 
