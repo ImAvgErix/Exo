@@ -1,3 +1,11 @@
+## 4.0.1
+
+- **Hotfix for users on 4.0.0**: restore the real **3.16.10 full-bleed WebView2** shell (React nav/settings/captions). 4.0.0 incorrectly shipped a native TitleBar rewrite that looked like an old build
+- **Ui.Smoke** now asserts the WebView2 + React Shell contract — never rewrite product UI to satisfy smoke
+- **Windows**: stop writing `OverlayTestMode=5` / `DisableOverlays` (MPO "disable") — those keys flicker the desktop
+- Apply now **clears** leftover MPO flicker keys (elevated delete); detect greens when stock overlays are intact
+- Canonical maximize program checked in as `docs/EXO-MAXIMIZE-PLAN.md` (A–Z + AA+/BB+/CC+) for the forthcoming full 4.x rehaul
+
 ## 4.0.0
 
 - **Exo 4.0 — Exhaustive Maximize + Living AI** (reveal release)
@@ -9,10 +17,10 @@
 - Deepened power knobs (Intel hybrid / AMD CPPC / USB / PCIe / Wi-Fi / multimedia) via `ExoPowerPlanNative`
 - Exhaustive Copilot/Recall/Widgets/Search/CloudContent AI purge + task quiet
 - Naming standardization: `ExoInternet*`, `Discord-Optimizer.ps1`, `ExoModulePlate`, Home
-- Top-bar shell contract restored for Ui.Smoke (EXO pill + centered modules + TitleBar)
-- Repo integrity green: ASCII PowerShell/VBS, Steam 1.15.0 + soft-reclaim guard contract, NVIDIA NVAPI display markers
+- Repo integrity: ASCII PowerShell/VBS, Steam 1.15.0 + soft-reclaim guard contract, NVIDIA NVAPI display markers
 - Settings: xAI API key, optimal gate, upscaler risk ack
-- `tools/Ai.Smoke` in Linux gate; Test-Linux smokes green
+- `tools/Ai.Smoke` in Linux gate
+- Note: 4.0.0 briefly shipped a native TitleBar shell regression — fixed in 4.0.1
 
 ## 3.16.10
 

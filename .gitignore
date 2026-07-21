@@ -62,3 +62,7 @@ docs/cua-qa/*-state.json
 
 .tmp-logos/
 
+
+# Local agent secrets (never commit)
+.local/
+

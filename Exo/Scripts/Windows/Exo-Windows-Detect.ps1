@@ -77,7 +77,7 @@ foreach ($row in @(
     [ordered]@{ title = 'Hardware GPU scheduling'; detail = 'HAGS on for lower CPU tax.'; active = [bool]$t.hags },
     [ordered]@{ title = 'Windows Game Mode'; detail = 'Game Mode on for focused games.'; active = [bool]$t.gameMode },
     [ordered]@{ title = 'Foreground boost'; detail = 'Foreground process priority bias for gaming.'; active = [bool]$t.win32Priority },
-    [ordered]@{ title = 'Smoother multi-monitor'; detail = 'MPO disabled to reduce hitching.'; active = [bool]$t.mpo },
+    [ordered]@{ title = 'Stock DWM overlays'; detail = 'No OverlayTestMode=5 / DisableOverlays (those flicker the screen).'; active = [bool]$t.mpo },
     [ordered]@{ title = 'No sticky-key popups'; detail = 'Sticky Keys prompts disabled.'; active = [bool]$t.stickyKeys },
     [ordered]@{ title = $planTitle; detail = $planDetail; active = [bool]$powerOk },
     [ordered]@{ title = 'Host latency profile'; detail = 'Power throttling off, MMCSS SystemResponsiveness tuned, Games task High.'; active = [bool]$hostOk },

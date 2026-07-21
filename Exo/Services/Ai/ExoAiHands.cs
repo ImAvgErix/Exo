@@ -439,15 +439,15 @@ public sealed class ExoAiHands
     {
         if (!OperatingSystem.IsWindows())
             return Skip("display.hagsMpoVrrMatrix", "Display matrix requires Windows");
-        // HAGS + MPO are part of Windows native Apply.
-        progress?.Report("display: HAGS×MPO via Windows host stack");
+        // HAGS stays via Windows native Apply; OverlayTestMode=5 is never written (screen flicker).
+        progress?.Report("display: HAGS via Windows host stack (MPO flicker keys cleared)");
         var win = await ModuleNativeAsync("windows", progress, ct).ConfigureAwait(false);
         return new ExoToolResult
         {
             ToolId = "display.hagsMpoVrrMatrix",
             Success = win.Success,
             Status = win.Status,
-            Message = "HAGS/MPO applied via Windows host: " + win.Message
+            Message = "HAGS via Windows host; OverlayTestMode/DisableOverlays cleared: " + win.Message
         };
     }
 

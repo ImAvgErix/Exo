@@ -82,8 +82,10 @@ public static class WindowsNativeApply
         Report("Host latency profile...");
         steps.Add(SetHostLatency(admin, elevOps));
 
-        Report("MPO / overlays...");
-        steps.Add(SetMpoDisabled(admin, elevOps));
+        // Never set OverlayTestMode=5 / DisableOverlays — that path flickers the desktop.
+        // Clear any leftover Exo (or CTT-class) MPO-disable keys so stock DWM overlays stay on.
+        Report("Clear MPO flicker keys...");
+        steps.Add(ClearMpoFlickerKeys(admin, elevOps));
 
         Report("File Explorer + shell declutter...");
         steps.Add(SetShellQuietHkcu(admin, elevOps));
@@ -272,18 +274,28 @@ public static class WindowsNativeApply
         return new NativeApplyStep { Id = "host-latency", Status = n >= 3 ? "ok" : "partial", Reason = $"written={n}" };
     }
 
-    private static NativeApplyStep SetMpoDisabled(bool admin, List<string> elevOps)
+    /// <summary>
+    /// Remove OverlayTestMode / DisableOverlays. OverlayTestMode=5 (force-disable MPO)
+    /// flickers the screen and breaks desktop composition — never write it again.
+    /// </summary>
+    private static NativeApplyStep ClearMpoFlickerKeys(bool admin, List<string> elevOps)
     {
         if (!admin)
         {
-            elevOps.Add(@"dword:HKLM\SOFTWARE\Microsoft\Windows\Dwm|OverlayTestMode|5");
-            elevOps.Add(@"dword:HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers|DisableOverlays|1");
-            return new NativeApplyStep { Id = "mpo", Status = "pending-elev", Reason = "needs admin" };
+            elevOps.Add(@"delete:HKLM\SOFTWARE\Microsoft\Windows\Dwm|OverlayTestMode");
+            elevOps.Add(@"delete:HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers|DisableOverlays");
+            return new NativeApplyStep { Id = "mpo", Status = "pending-elev", Reason = "needs admin to clear flicker keys" };
         }
+
         var n = 0;
-        if (NativeReg.TrySetDword("HKLM", @"SOFTWARE\Microsoft\Windows\Dwm", "OverlayTestMode", 5)) n++;
-        if (NativeReg.TrySetDword("HKLM", @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "DisableOverlays", 1)) n++;
-        return new NativeApplyStep { Id = "mpo", Status = n > 0 ? "ok" : "fail" };
+        if (NativeReg.TryDeleteValue("HKLM", @"SOFTWARE\Microsoft\Windows\Dwm", "OverlayTestMode")) n++;
+        if (NativeReg.TryDeleteValue("HKLM", @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "DisableOverlays")) n++;
+        return new NativeApplyStep
+        {
+            Id = "mpo",
+            Status = "ok",
+            Reason = n > 0 ? $"cleared={n}" : "already stock (no OverlayTestMode/DisableOverlays)"
+        };
     }
 
     // Well-known Explorer namespace CLSIDs (Win10/11)

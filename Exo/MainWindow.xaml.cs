@@ -1,19 +1,21 @@
 using System.Runtime.InteropServices;
 using Exo.Helpers;
-using Exo.Views;
+using Exo.Services;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Animation;
+using Microsoft.Web.WebView2.Core;
 using Windows.Graphics;
 using WinRT.Interop;
 
 namespace Exo;
 
-/// <summary>Fixed native WinUI shell for Exo's home and optimizer modules.</summary>
+/// <summary>
+/// Thin native shell: fixed window + WebView2 product UI.
+/// Optimizers stay C#/PS via <see cref="WebHostBridge"/>.
+/// </summary>
 public sealed partial class MainWindow : Window
 {
     [DllImport("user32.dll")]
@@ -28,21 +30,15 @@ public sealed partial class MainWindow : Window
     private const int FixedWindowWidth = 1200;
     private const int FixedWindowHeight = 800;
 
-    private enum ShellMode
-    {
-        Home,
-        Discord,
-        Steam,
-        Internet,
-        Nvidia,
-        Riot,
-        Epic
-    }
-
-    private ShellMode _mode = ShellMode.Home;
     private readonly CancellationTokenSource _lifetimeCts = new();
-    private bool _gearSpinning;
+    private WebHostBridge? _bridge;
     private bool _firstFrameMarked;
+    private bool _webReady;
+    /// <summary>
+    /// Single-flight for web init. RootGrid.Loaded and Activated both call EnsureWebAsync;
+    /// without this, two concurrent inits each Attach() a bridge → every shell.openUrl runs twice.
+    /// </summary>
+    private Task? _ensureWebTask;
     private bool _homeBootstrapped;
     private bool _postFirstFrameWorkStarted;
     private bool _stickySafeMode;
@@ -70,7 +66,14 @@ public sealed partial class MainWindow : Window
         }
         catch { StartupLog.Mark("chrome-setup-partial"); }
 
+        // Custom glass caption owns min/close; hide stock Win11 title-bar buttons.
         ExtendsContentIntoTitleBar = true;
+        try
+        {
+            if (AppWindow.Presenter is OverlappedPresenter op)
+                op.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: false);
+        }
+        catch { /* best-effort on older presenters */ }
 
         AppWindow.Changed += (_, args) =>
         {
@@ -78,26 +81,24 @@ public sealed partial class MainWindow : Window
                 ApplyResponsiveWindowChrome();
         };
 
-        RootGrid.Loaded += (_, _) =>
+        RootGrid.Loaded += async (_, _) =>
         {
             ApplyResponsiveWindowChrome();
             SyncContentHostWidth();
-            ClearChromeFocus();
+            await EnsureWebAsync();
             BootstrapHomeOnce("root-loaded");
         };
         RootGrid.ActualThemeChanged += (_, _) => ApplyShellChrome();
-        Activated += OnWindowActivatedClearFocus;
         Activated += OnFirstActivationBootstrap;
         Closed += (_, _) =>
         {
             _lifetimeCts.Cancel();
+            try { _bridge?.Detach(); } catch { }
             App.Services.Settings.Flush();
             App.MainAppWindow = null;
         };
 
         ApplyShellChrome();
-        ContentFrame.Navigated += OnContentNavigated;
-        Activated += OnFirstActivationReapplyIcon;
         StartupLog.Mark("main-window-ctor-done");
     }
 
@@ -127,24 +128,16 @@ public sealed partial class MainWindow : Window
     private void OnFirstActivationBootstrap(object sender, WindowActivatedEventArgs e)
     {
         if (e.WindowActivationState == WindowActivationState.Deactivated) return;
-        Activated -= OnFirstActivationBootstrap;
         BootstrapHomeOnce("window-activated");
+        _ = EnsureWebAsync();
     }
 
     private void BootstrapHomeOnce(string reason)
     {
         if (_homeBootstrapped) return;
         _homeBootstrapped = true;
-        try
-        {
-            NavigateHome(suppressTransition: true);
-            StartupLog.Mark("home-navigated:" + reason);
-            ClearChromeFocus();
-        }
-        catch (Exception ex)
-        {
-            StartupLog.Mark("home-navigate-failed:" + ex.GetType().Name);
-        }
+        StartupLog.Mark("bootstrap-home:" + reason);
+        NavigateHome(suppressTransition: true);
     }
 
     private void StartPostFirstFrameWork()
@@ -245,114 +238,124 @@ public sealed partial class MainWindow : Window
         {
             var hWnd = WindowNative.GetWindowHandle(this);
             _ = ShowWindow(hWnd, ShowRestore);
-            Activate();
             _ = SetForegroundWindow(hWnd);
-        }
-        catch { Activate(); }
-    }
-
-    private void OnContentNavigated(object sender, Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
-    {
-        if (e.Content is not FrameworkElement page) return;
-        try
-        {
-            ExoMotion.EnsureVisible(page);
-            ExoMotion.EnsureVisible(ContentFrame);
-            if (page is not HomePage)
-                ExoMotion.PlayPageEnter(page);
-        }
-        catch
-        {
-            try { ExoMotion.EnsureVisible(page); } catch { }
-        }
-    }
-
-    private bool _reappliedIcon;
-
-    private void OnFirstActivationReapplyIcon(object sender, WindowActivatedEventArgs args)
-    {
-        if (_reappliedIcon || args.WindowActivationState == WindowActivationState.Deactivated) return;
-        _reappliedIcon = true;
-        Activated -= OnFirstActivationReapplyIcon;
-        TrySetWindowIcon();
-    }
-
-    private bool _clearedInitialFocus;
-
-    private void OnWindowActivatedClearFocus(object sender, WindowActivatedEventArgs args)
-    {
-        if (_clearedInitialFocus || args.WindowActivationState == WindowActivationState.Deactivated) return;
-        _clearedInitialFocus = true;
-        Activated -= OnWindowActivatedClearFocus;
-        DispatcherQueue.TryEnqueue(ClearChromeFocus);
-    }
-
-    private void ClearChromeFocus()
-    {
-        try
-        {
-            ContentFrame.IsTabStop = true;
-            if (ContentFrame.Content is UIElement page)
-            {
-                page.IsTabStop = true;
-                _ = page.Focus(FocusState.Programmatic);
-            }
-            else
-            {
-                _ = ContentFrame.Focus(FocusState.Programmatic);
-            }
+            Activate();
         }
         catch { }
     }
 
-    private static NavigationTransitionInfo Slide() => new SuppressNavigationTransitionInfo();
-    private static NavigationTransitionInfo SlideBack() => new SuppressNavigationTransitionInfo();
-
-    public void NavigateHome(bool suppressTransition = false) =>
-        Navigate(
-            ShellMode.Home,
-            typeof(HomePage),
-            suppressTransition ? new SuppressNavigationTransitionInfo() : SlideBack());
-
-    public void NavigateToDiscord() =>
-        Navigate(ShellMode.Discord, typeof(DiscordOptimizerPage), Slide());
-
-    public void NavigateToSteam() =>
-        Navigate(ShellMode.Steam, typeof(SteamOptimizerPage), Slide());
-
-    public void NavigateToInternet() =>
-        Navigate(ShellMode.Internet, typeof(InternetOptimizerPage), Slide());
-
-    public void NavigateToNvidia()
+    private Task EnsureWebAsync()
     {
+        if (_webReady) return Task.CompletedTask;
+        // Single-flight: Loaded + Activated race must not double-Attach the bridge.
+        return _ensureWebTask ??= EnsureWebCoreAsync();
+    }
+
+    private async Task EnsureWebCoreAsync()
+    {
+        if (_webReady) return;
         try
         {
-            StabilizeShellAfterExternalWork();
-            Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), Slide());
-            StabilizeShellAfterExternalWork();
+            await WebHost.EnsureCoreWebView2Async();
+            var core = WebHost.CoreWebView2;
+            if (core is null)
+            {
+                // Allow a later EnsureWebAsync to retry instead of sticking on a no-op task.
+                _ensureWebTask = null;
+                return;
+            }
+
+            var www = ResolveWwwRoot();
+            if (www is null || !Directory.Exists(www))
+            {
+                StartupLog.Mark("wwwroot-missing");
+                // Dev fallback: show a tiny diagnostic page.
+                core.NavigateToString(
+                    "<html><body style='background:#000;color:#fff;font-family:Segoe UI;padding:24px'>" +
+                    "<h2>Exo UI not built</h2><p>Run: <code>cd ui &amp;&amp; npm run build</code></p></body></html>");
+                _webReady = true;
+                return;
+            }
+
+            core.Settings.IsStatusBarEnabled = false;
+            core.Settings.AreDefaultContextMenusEnabled = false;
+            core.Settings.IsZoomControlEnabled = false;
+            try { core.Settings.AreDevToolsEnabled = true; } catch { }
+
+            core.SetVirtualHostNameToFolderMapping(
+                "app.exo.local",
+                www,
+                CoreWebView2HostResourceAccessKind.Allow);
+
+            // Replace any prior bridge so WebMessageReceived never stacks handlers.
+            try { _bridge?.Detach(); } catch { }
+            _bridge = new WebHostBridge(App.Services, DispatcherQueue);
+            _bridge.Attach(core);
+            _bridge.SettingsRequested += (_, _) =>
+            {
+                try { DispatcherQueue.TryEnqueue(() => SettingsButton_Click(SettingsButton, new RoutedEventArgs())); }
+                catch { }
+            };
+
+            core.NavigationCompleted += (_, args) =>
+            {
+                if (args.IsSuccess)
+                    StartupLog.Mark("web-nav-ok");
+                else
+                    StartupLog.Mark("web-nav-fail:" + args.WebErrorStatus);
+            };
+
+            WebHost.Source = new Uri("https://app.exo.local/index.html");
+            _webReady = true;
+            StartupLog.Mark("web-host-ready");
         }
         catch (Exception ex)
         {
-            StartupLog.Mark("nav-nvidia-failed:" + ex.GetType().Name);
-            try
-            {
-                ExoMotion.MotionDisabled = true;
-                StabilizeShellAfterExternalWork();
-                Navigate(ShellMode.Nvidia, typeof(NvidiaOptimizerPage), null);
-            }
-            catch { StartupLog.Mark("nav-nvidia-hard-failed"); }
+            // Allow a later call to retry if CoreWebView2 init failed mid-flight.
+            _ensureWebTask = null;
+            StartupLog.Mark("web-host-failed:" + ex.GetType().Name);
         }
     }
 
-    public void NavigateToRiot() =>
-        Navigate(ShellMode.Riot, typeof(RiotOptimizerPage), Slide());
+    private static string? ResolveWwwRoot()
+    {
+        var baseDir = AppContext.BaseDirectory;
+        var candidates = new[]
+        {
+            Path.Combine(baseDir, "wwwroot"),
+            Path.Combine(baseDir, "ui"),
+            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "wwwroot")),
+        };
+        foreach (var c in candidates)
+        {
+            if (Directory.Exists(c) && File.Exists(Path.Combine(c, "index.html")))
+                return c;
+        }
+        return null;
+    }
 
-    public void NavigateToEpic() =>
-        Navigate(ShellMode.Epic, typeof(EpicOptimizerPage), Slide());
+    private async void NavigateWebHash(string hash)
+    {
+        try
+        {
+            await EnsureWebAsync();
+            if (WebHost.CoreWebView2 is null) return;
+            // HashRouter: set location hash without full reload when possible.
+            var script = $"window.location.hash = {System.Text.Json.JsonSerializer.Serialize(hash)};";
+            await WebHost.CoreWebView2.ExecuteScriptAsync(script);
+        }
+        catch { }
+    }
 
-    // These modules do not yet have native pages; keep callers safe until they ship.
-    public void NavigateToWindows() => NavigateHome();
-    public void NavigateToGames() => NavigateHome();
+    public void NavigateHome(bool suppressTransition = false) => NavigateWebHash("#/");
+    public void NavigateToDiscord() => NavigateWebHash("#/module/discord");
+    public void NavigateToSteam() => NavigateWebHash("#/module/steam");
+    public void NavigateToWindows() => NavigateWebHash("#/module/windows");
+    public void NavigateToInternet() => NavigateWebHash("#/module/internet");
+    public void NavigateToNvidia() => NavigateWebHash("#/module/nvidia");
+    public void NavigateToRiot() => NavigateWebHash("#/module/riot");
+    public void NavigateToEpic() => NavigateWebHash("#/module/epic");
+    public void NavigateToGames() => NavigateWebHash("#/module/games");
 
     public void StabilizeShellAfterExternalWork()
     {
@@ -363,12 +366,6 @@ public sealed partial class MainWindow : Window
             {
                 try { SetTitleBar(AppTitleBar); } catch { }
             }
-            try
-            {
-                ExoMotion.EnsureVisible(ContentFrame);
-                ExoMotion.EnsureVisible(RootGrid);
-            }
-            catch { }
         }
         catch { }
     }
@@ -384,7 +381,25 @@ public sealed partial class MainWindow : Window
             presenter.PreferredMinimumHeight = FixedWindowHeight;
             presenter.PreferredMaximumWidth = FixedWindowWidth;
             presenter.PreferredMaximumHeight = FixedWindowHeight;
+            try { presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: false); }
+            catch { }
         }
+    }
+
+    private void CaptionMinimize_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (AppWindow.Presenter is OverlappedPresenter presenter)
+                presenter.Minimize();
+        }
+        catch { }
+    }
+
+    private void CaptionClose_Click(object sender, RoutedEventArgs e)
+    {
+        try { Close(); }
+        catch { }
     }
 
     private void ApplyInitialWindowBounds()
@@ -426,70 +441,6 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    private void ApplyChrome(ShellMode mode)
-    {
-        _mode = mode;
-        SettingsButton.Visibility = Visibility.Visible;
-        NavHome.Visibility = Visibility.Visible;
-        ExoBrandPill.Visibility = Visibility.Visible;
-        UpdateRailSelection(mode);
-    }
-
-    private void UpdateRailSelection(ShellMode mode)
-    {
-        var selected = mode switch
-        {
-            ShellMode.Discord => NavDiscord,
-            ShellMode.Steam => NavSteam,
-            ShellMode.Internet => NavInternet,
-            ShellMode.Nvidia => NavNvidia,
-            ShellMode.Riot => NavRiot,
-            ShellMode.Epic => NavEpic,
-            _ => null
-        };
-
-        var selectionFill = ResourceBrush("ExoAccentSoftBrush");
-        var selectionOff = ResourceBrush("ExoTransparentBrush");
-        var ringOn = ResourceBrush("ExoGlassCircleStrokeBrush");
-        var ringOff = ResourceBrush("ExoTransparentBrush");
-        var homeOn = mode == ShellMode.Home;
-
-        ExoBrandPill.Opacity = homeOn ? 1.0 : 0.92;
-        ExoBrandPill.Background = homeOn ? selectionFill : selectionOff;
-        ExoBrandPill.BorderBrush = homeOn ? ringOn : ringOff;
-        NavHome.Opacity = 1.0;
-        NavHome.Background = selectionOff;
-        NavHome.BorderBrush = ringOff;
-        SettingsButton.Opacity = 1.0;
-        SettingsButton.Background = selectionOff;
-        SettingsButton.BorderBrush = ringOff;
-
-        foreach (var button in new[] { NavDiscord, NavSteam, NavInternet, NavNvidia, NavRiot, NavEpic })
-        {
-            var on = selected is not null && ReferenceEquals(button, selected);
-            button.Opacity = on ? 1.0 : 0.76;
-            button.Background = on ? selectionFill : selectionOff;
-            button.BorderBrush = on ? ringOn : ringOff;
-            button.BorderThickness = new Thickness(1);
-        }
-    }
-
-    private static Brush ResourceBrush(string key) =>
-        Application.Current.Resources.TryGetValue(key, out var value) && value is Brush brush
-            ? brush
-            : new SolidColorBrush(Colors.Transparent);
-
-    private void Navigate(ShellMode mode, Type pageType, NavigationTransitionInfo? transition)
-    {
-        HideSettingsFlyout();
-
-        if (_mode == mode && ContentFrame.CurrentSourcePageType == pageType)
-            return;
-
-        if (ContentFrame.Navigate(pageType, null, transition))
-            ApplyChrome(mode);
-    }
-
     private void NavHome_Click(object sender, RoutedEventArgs e) => NavigateHome();
     private void NavDiscord_Click(object sender, RoutedEventArgs e) => NavigateToDiscord();
     private void NavSteam_Click(object sender, RoutedEventArgs e) => NavigateToSteam();
@@ -515,7 +466,6 @@ public sealed partial class MainWindow : Window
         {
             try { SettingsFlyout.ShowAt(SettingsButton); } catch { }
         }
-        SpinSettingsGear();
     }
 
     private void SettingsFlyout_Opened(object sender, object e)
@@ -531,7 +481,6 @@ public sealed partial class MainWindow : Window
         if (SettingsSheetHost is null) return;
         args.Cancel = true;
         _settingsCloseAnimated = true;
-        SpinSettingsGearBack();
         try
         {
             SettingsSheetHost.PlayCloseAnimation(() =>
@@ -549,98 +498,6 @@ public sealed partial class MainWindow : Window
     {
         _settingsCloseAnimated = false;
         try { SettingsSheetHost?.ResetOpenVisual(); } catch { }
-        try
-        {
-            if (SettingsGearRotate is not null)
-                SettingsGearRotate.Angle = 0;
-        }
-        catch { }
-        _gearSpinning = false;
-    }
-
-    private void HideSettingsFlyout()
-    {
-        try
-        {
-            if (SettingsFlyout.IsOpen)
-                SettingsFlyout.Hide();
-        }
-        catch { }
-    }
-
-    private void SpinSettingsGear()
-    {
-        if (_gearSpinning) return;
-        _gearSpinning = true;
-        try
-        {
-            if (SettingsGearRotate is null)
-            {
-                _gearSpinning = false;
-                return;
-            }
-
-            SettingsGearRotate.Angle = 0;
-            var animation = new DoubleAnimation
-            {
-                From = 0,
-                To = 180,
-                Duration = TimeSpan.FromMilliseconds(Views.Controls.SettingsSheet.OpenMs),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-                EnableDependentAnimation = true
-            };
-            Storyboard.SetTarget(animation, SettingsGearRotate);
-            Storyboard.SetTargetProperty(animation, "Angle");
-            var storyboard = new Storyboard();
-            storyboard.Children.Add(animation);
-            storyboard.Completed += (_, _) =>
-            {
-                try { SettingsGearRotate.Angle = 180; } catch { }
-                _gearSpinning = false;
-            };
-            storyboard.Begin();
-        }
-        catch
-        {
-            _gearSpinning = false;
-        }
-    }
-
-    private void SpinSettingsGearBack()
-    {
-        if (_gearSpinning) return;
-        _gearSpinning = true;
-        try
-        {
-            if (SettingsGearRotate is null)
-            {
-                _gearSpinning = false;
-                return;
-            }
-
-            var animation = new DoubleAnimation
-            {
-                From = SettingsGearRotate.Angle,
-                To = 0,
-                Duration = TimeSpan.FromMilliseconds(Views.Controls.SettingsSheet.CloseMs),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-                EnableDependentAnimation = true
-            };
-            Storyboard.SetTarget(animation, SettingsGearRotate);
-            Storyboard.SetTargetProperty(animation, "Angle");
-            var storyboard = new Storyboard();
-            storyboard.Children.Add(animation);
-            storyboard.Completed += (_, _) =>
-            {
-                try { SettingsGearRotate.Angle = 0; } catch { }
-                _gearSpinning = false;
-            };
-            storyboard.Begin();
-        }
-        catch
-        {
-            _gearSpinning = false;
-        }
     }
 
     private void TrySetWindowIcon()

@@ -16,10 +16,10 @@
                    HorizontalAlignment="Stretch"
                    VerticalAlignment="Stretch">
         <ItemsRepeater.Layout>
-            <UniformGridLayout MinItemWidth="340"
-                               MinItemHeight="52"
-                               MinRowSpacing="6"
-                               MinColumnSpacing="6"
+            <UniformGridLayout MinItemWidth="300"
+                               MinItemHeight="48"
+                               MinRowSpacing="5"
+                               MinColumnSpacing="5"
                                ItemsJustification="Start"
                                ItemsStretch="Fill" />
         </ItemsRepeater.Layout>
@@ -30,10 +30,10 @@
                         BorderThickness="1"
                         CornerRadius="10"
                         Opacity="{x:Bind Opacity}"
-                        Height="52"
-                        MinHeight="52"
-                        MaxHeight="52"
-                        Padding="10,6"
+                        Height="48"
+                        MinHeight="48"
+                        MaxHeight="48"
+                        Padding="10,5"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Stretch"
                         UseLayoutRounding="True">
