@@ -405,7 +405,7 @@ if (-not $steamOk) {
             $libGamesOk = [bool]$state.libraryGamePolicyVerified
         }
     } catch { $libGamesOk = $false }
-    Add-Feature 'Library games GPU & FSO' 'Installed Steam games get high-perf GPU preference, FSO off, and DSCP priority - Windows policy only, game files untouched.' $libGamesOk
+    Add-Feature 'Library games high-perf GPU' 'Installed Steam games get high-perf GPU preference and DSCP priority (display = Games hub borderless). Windows policy only, game files untouched.' $libGamesOk
 
     # Reversible background memory priority + in-game CPU yield policy.
     $memoryGuardOk = $false

@@ -20,16 +20,16 @@ Expect("Riot and Epic parameter gate", source.Contains("ValidateSet('Riot','Epic
 Expect("pristine snapshot precedes startup mutation",
     source.IndexOf("New-Snapshot $targets", StringComparison.Ordinal) is var snapshot && snapshot >= 0 &&
     source.IndexOf("Remove-StartupEntries", snapshot, StringComparison.Ordinal) > snapshot);
-// Windows high-perf GPU + FSO are re-owned by Riot/Epic apply (user-requested).
+// Windows high-perf GPU re-owned by Riot/Epic apply. Game FSO-off removed (Games borderless).
 Expect("applies high-perf GPU preference",
     source.Contains("GpuPreference=2;", StringComparison.Ordinal) &&
     source.Contains("Apply-WindowsGamePolicy", StringComparison.Ordinal));
-Expect("applies FSO off for game exes",
+Expect("clears legacy FSO-off on game exes (borderless policy)",
+    source.Contains("Clear-LegacyGameFso", StringComparison.Ordinal) &&
     source.Contains("DISABLEDXMAXIMIZEDWINDOWEDMODE", StringComparison.Ordinal) &&
-    source.Contains("fso", StringComparison.OrdinalIgnoreCase));
-Expect("experimental forces Windows policy rewrite",
-    source.Contains("-Force:$Experimental", StringComparison.Ordinal) ||
-    source.Contains("Force:$Experimental", StringComparison.Ordinal));
+    !source.Contains("$fso.SetValue($path, $FsoDisable", StringComparison.Ordinal));
+Expect("apply force-restamps Windows GPU policy",
+    source.Contains("Apply-WindowsGamePolicy -Targets $targets -Launchers $launchers -Force", StringComparison.Ordinal));
 Expect("no forced game scheduling priority",
     !source.Contains("CpuPriorityClass", StringComparison.Ordinal) &&
     !source.Contains("PerfOptions", StringComparison.Ordinal));
@@ -38,9 +38,9 @@ Expect("hybrid graphics capability flag only",
 Expect("Steam-parity shell quiet cross-connect",
     source.Contains("Apply-LauncherShellQuiet", StringComparison.Ordinal) &&
     source.Contains("shell-quiet", StringComparison.Ordinal));
-Expect("detect verifies GPU and FSO",
-    detect.Contains("High-perf GPU", StringComparison.Ordinal) &&
-    detect.Contains("Fullscreen Optimizations", StringComparison.Ordinal));
+Expect("detect verifies GPU and display ownership",
+    detect.Contains("High-performance GPU", StringComparison.Ordinal) &&
+    detect.Contains("Display left to Games hub", StringComparison.Ordinal));
 Expect("Epic uses launcher manifests",
     source.Contains("EpicGamesLauncher\\Data\\Manifests", StringComparison.Ordinal) &&
     source.Contains("LaunchExecutable", StringComparison.Ordinal));

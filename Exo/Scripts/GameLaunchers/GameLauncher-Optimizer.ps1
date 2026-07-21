@@ -1,6 +1,6 @@
 # Exo Riot / Epic optimizer.
-# Owns: quiet startup, shell quiet, launcher yield while gaming, per-game Windows
-# high-perf GPU preference + Fullscreen Optimizations off, exact Repair.
+# Owns: quiet startup, shell quiet, per-game Windows high-perf GPU preference,
+# DSCP, exact Repair. Display/borderless is owned by the Games hub (no FSO-off).
 # Anti-cheat, services, game files, and caches stay untouched.
 [CmdletBinding()]
 param(
@@ -22,8 +22,6 @@ $GpuSubKey = 'Software\Microsoft\DirectX\UserGpuPreferences'
 $FsoSubKey = 'Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
 # High performance discrete GPU (Windows Graphics settings).
 $GpuHighPerf = 'GpuPreference=2;'
-# Disable Fullscreen Optimizations for the exe path.
-$FsoDisable = '~ DISABLEDXMAXIMIZEDWINDOWEDMODE'
 $Report = [System.Collections.Generic.List[string]]::new()
 
 # Shared Game Bar / DSCP + competitive gaming glue (script-scope dotsource)
@@ -699,13 +697,28 @@ function Restore-Value([Microsoft.Win32.RegistryKey]$Key, [string]$Name, $Snapsh
     } else { $Key.DeleteValue($Name, $false) }
 }
 
+function Clear-LegacyGameFso([Microsoft.Win32.RegistryKey]$FsoKey, [string]$Path) {
+    # Games hub forces borderless — do not stamp DISABLEDXMAXIMIZEDWINDOWEDMODE on game EXEs.
+    # Strip legacy Exo exclusive-fullscreen FSO-off stamps on re-apply.
+    if ($null -eq $FsoKey -or [string]::IsNullOrWhiteSpace($Path)) { return $false }
+    $cur = [string]$FsoKey.GetValue($Path, $null)
+    if ([string]::IsNullOrEmpty($cur)) { return $false }
+    if ($cur -notmatch 'DISABLEDXMAXIMIZEDWINDOWEDMODE') { return $false }
+    $cleaned = ($cur -replace '\s*DISABLEDXMAXIMIZEDWINDOWEDMODE', '').Trim()
+    if ([string]::IsNullOrEmpty($cleaned) -or $cleaned -eq '~') {
+        $FsoKey.DeleteValue($Path, $false)
+    } else {
+        $FsoKey.SetValue($Path, $cleaned, [Microsoft.Win32.RegistryValueKind]::String)
+    }
+    return $true
+}
+
 function Apply-WindowsGamePolicy([object[]]$Targets, [object[]]$Launchers, [switch]$Force, [switch]$LauncherFso) {
-    # Games always high-perf dGPU + FSO off.
+    # Games always high-perf dGPU. Never FSO-off on games (conflicts with Games borderless).
     # Hybrid systems: launchers prefer integrated (GpuPreference=1) so the UI
     # stays off the gaming GPU; single-GPU leaves launchers on high-perf / automatic.
-    # Launcher FSO on for max aggression (windowed UI; usually no-op, harmless).
     $gpuWritten = 0
-    $fsoWritten = 0
+    $fsoCleared = 0
     $hybrid = [bool](Test-HybridGraphics)
     $launcherGpu = if ($hybrid) { 'GpuPreference=1;' } else { $GpuHighPerf }
     $gpu = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($GpuSubKey, $true)
@@ -733,25 +746,20 @@ function Apply-WindowsGamePolicy([object[]]$Targets, [object[]]$Launchers, [swit
         foreach ($t in @($Targets)) {
             $path = [string]$t.path
             if ([string]::IsNullOrWhiteSpace($path)) { continue }
-            $cur = [string]$fso.GetValue($path, $null)
-            if (-not $Force -and $cur -eq $FsoDisable) { continue }
-            $fso.SetValue($path, $FsoDisable, [Microsoft.Win32.RegistryValueKind]::String)
-            $fsoWritten++
+            if (Clear-LegacyGameFso $fso $path) { $fsoCleared++ }
         }
-        if ($LauncherFso) {
-            # Also pin FSO off on launcher UI (usually no-op but keeps parity).
-            foreach ($t in @($Launchers)) {
-                $path = [string]$t.path
-                if ([string]::IsNullOrWhiteSpace($path)) { continue }
-                $fso.SetValue($path, $FsoDisable, [Microsoft.Win32.RegistryValueKind]::String)
-                $fsoWritten++
-            }
+        # Also clear leftover FSO stamps on launchers (LauncherFso param ignored — legacy).
+        foreach ($t in @($Launchers)) {
+            $path = [string]$t.path
+            if ([string]::IsNullOrWhiteSpace($path)) { continue }
+            if (Clear-LegacyGameFso $fso $path) { $fsoCleared++ }
         }
     } finally { $fso.Dispose() }
 
     return @{
         Gpu = $gpuWritten
-        Fso = $fsoWritten
+        Fso = $fsoCleared
+        FsoCleared = $fsoCleared
         Hybrid = $hybrid
         LauncherGpu = $(if ($hybrid) { 'integrated' } else { 'high-perf' })
     }
@@ -833,15 +841,15 @@ try {
     # Re-stamp shell quiet a second time (toast/task drift after first pass).
     $shell2 = Apply-LauncherShellQuiet
     Add-Report 'shell-quiet-restamp' 'ok' ("toasts={0}; tasks={1}" -f [int]$shell2.Notify, [int]$shell2.Tasks)
-    # Full apply always re-stamps game GPU/FSO + launcher FSO + tight yield cadence.
-    $winPolicy = Apply-WindowsGamePolicy -Targets $targets -Launchers $launchers -Force -LauncherFso
+    # Full apply re-stamps game GPU high-perf + clears legacy FSO-off (Games owns borderless).
+    $winPolicy = Apply-WindowsGamePolicy -Targets $targets -Launchers $launchers -Force
     $gpuReason = if ([bool]$winPolicy.Hybrid) {
         "game GpuPreference=2; launcher integrated on hybrid ({0} path(s))" -f [int]$winPolicy.Gpu
     } else {
         "high-perf GpuPreference=2 on {0} executable(s)" -f [int]$winPolicy.Gpu
     }
     Add-Report 'gpu-preference' 'ok' $gpuReason
-    Add-Report 'fso' 'ok' ("Fullscreen Optimizations off on {0} path(s)" -f [int]$winPolicy.Fso)
+    Add-Report 'fso' 'ok' ("legacy FSO-off cleared on {0} path(s); display owned by Games hub" -f [int]$winPolicy.Fso)
     Write-ProgressLine 48 'Cleaning launcher logs/cache (games untouched)...'
     $cacheFreed = Clear-LauncherSafeCaches
     Add-Report 'launcher-cache' 'ok' ("freed ~{0:N1} MB launcher junk" -f ($cacheFreed / 1MB))
@@ -897,7 +905,8 @@ try {
         startupQuiet = $true
         shellQuiet = $true
         gamePolicyVerified = $true
-        fsoVerified = $true
+        fsoVerified = $false # product: no FSO-off on games (borderless via Games hub)
+        fsoCleared = $true
         gameBarQuiet = $false # host Game Bar quiet is owned by the Windows module
         gameDscp = @($qosNames)
         windowsGpuPolicyOwnedBy = $Module.ToLowerInvariant()

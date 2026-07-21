@@ -905,6 +905,7 @@ public sealed class WebHostBridge
                    || t.Equals("Latency / sync policy", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Stack profile", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Gaming multimedia stack", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Host gaming stack", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Profile", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("DLSS left alone", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Exo packs ready", StringComparison.OrdinalIgnoreCase)
@@ -1323,8 +1324,7 @@ public sealed class WebHostBridge
                     strProgress).ConfigureAwait(true);
                 log.Line($"Internet Apply result ok={aok} msg={amsg}");
                 if (!aok) throw new InvalidOperationException(amsg);
-                // Enforce MS-safe MMCSS pins after network script (never leave folklore 0 / ffffffff).
-                RestampHostLatency(log);
+                // Host gaming stack (MMCSS/HAGS/Game Mode) is Windows-owned — do not restamp from Internet.
                 log.Finish(true, "Internet apply ok");
                 return;
             }
@@ -1375,9 +1375,9 @@ public sealed class WebHostBridge
                 {
                     var essentialFailed = nativeResult.Steps.Any(s =>
                         s.Status == "fail" &&
-                        s.Id is "startup" or "memory-guard-write" or "launcher-write"
-                            or "background-priority" or "cef-launcher" or "game-mode" or "game-bar"
-                            or "gpu-fso" or "power-plan" or "yield");
+                        s.Id is "startup" or "launcher-write"
+                            or "cef-launcher" or "game-mode" or "game-bar"
+                            or "gpu-fso" or "power-plan");
                     if (essentialFailed || nativeResult.Steps.Count == 0)
                     {
                         log.Finish(false, nativeResult.Message);
@@ -1564,11 +1564,12 @@ public sealed class WebHostBridge
                 }
             }
 
-            // Re-stamp yield if PS path ran (riot/epic native-only skips this).
+            // Product: zero always-on yield companions. If a deep pack ever ran for
+            // riot/epic, re-run native apply to purge leftovers + restamp GPU/DSCP.
             if (!repair && (module is "riot" or "epic") && !skipDeepPack)
             {
-                log.Line("Re-stamp native yield companion after deep pack...");
-                Report(97, "Re-stamping yield companion...");
+                log.Line("Re-stamp native launcher policy (purge yield; GPU/DSCP)...");
+                Report(97, "Re-stamping launcher policy...");
                 try
                 {
                     var restamp = LauncherNativeApply.Apply(module, experimental, new Progress<string>(s => log.Line("RESTAMP  " + s)));

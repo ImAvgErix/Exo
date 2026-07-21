@@ -1,3 +1,19 @@
+## 3.16.2
+
+- Cross-optimizer ownership pass — pick one owner per key-family and stop dual-writes
+- **Internet** no longer writes MMCSS / HAGS / Game Mode / Win32 priority (Windows-only); Repair no longer undoes Windows host stack
+- Internet detect drops folklore “gaming multimedia” rows that expected NTI=max / resp=0
+- **Windows** “No Exo background” requires zero Run companions (yield not greened)
+- **Steam** success no longer requires memory-guard template (never launched)
+- Launchers: yield restamp language = purge + GPU/DSCP; borderless/FSO ownership from 3.16.1 kept
+
+## 3.16.1
+
+- Fix borderless vs launcher FSO conflict: Games hub owns display (always borderless); Riot/Epic/Steam library no longer stamp FSO-off on game EXEs
+- Re-Apply clears legacy `DISABLEDXMAXIMIZEDWINDOWEDMODE` on game paths (exclusive-fullscreen lean)
+- Keep high-perf GPU + DSCP; Steam **client** FSO-off unchanged (launcher only)
+- Detect: “True fullscreen path” → “Display left to Games hub”; library GPU row no longer requires FSO
+
 ## 3.16.0
 
 - No always-on background companions — Riot/Epic yield Run keys removed; Steam launches without memory-guard process

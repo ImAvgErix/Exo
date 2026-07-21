@@ -2,27 +2,31 @@
 
 ## Strategy
 
-**App optimizers keep app-scoped Windows integration. A future Windows module owns only machine-wide host policy and skips keys already owned by another module.**
+**One writer per key-family. App optimizers keep app-scoped integration; Windows owns machine-wide gaming host policy; Internet stays network-only; Games owns display (borderless).**
 
 | Kind | Examples | Owner |
 |------|----------|--------|
-| App-scoped | Discord toasts/autostart/tray/GPU/FSO for `Discord.exe`; Steam quiet shell + GPU for Steam CEF; Internet DNS/TCP/NIC | That optimizer |
-| App-scoped (games launchers) | High-perf GPU / FSO for Riot/Epic **discovered game + launcher exes** | Riot / Epic |
-| Machine-wide (future) | Global power/Game Mode/shell defaults/unaffiliated startup clutter | Windows module |
+| App-scoped | Discord toasts/autostart/tray/GPU/FSO for `Discord.exe`; Steam quiet shell + GPU for Steam CEF | That optimizer |
+| App-scoped (game launchers) | High-perf GPU for Riot/Epic/Steam library **game + launcher exes** (no FSO-off) | Riot / Epic / Steam |
+| Display mode | Borderless / windowed-fullscreen config tokens | **Games hub** |
+| Machine-wide host gaming | Game Mode, HAGS, Game Bar quiet, Win32 priority, MMCSS (`SystemResponsiveness=10`, Games task), PowerThrottling, power plan, MPO | **Windows** |
+| Network | TCP/IP, DNS/DoH, NIC advanced, Psched `NonBestEffortLimit`, DSCP for voice/game leaves | Internet / Discord / launchers |
 
 ## Rules
 
 1. **One writer per key.** Discord owns Discord notification IDs; Steam owns Steam’s; Windows must not re-set them on Apply.
-2. **Detect before write.** Windows Apply skips rows already verified by Discord/Steam/Internet/NVIDIA ownership.
-3. **Repair is scoped.** Discord Repair undoes Discord keys only; Windows Repair undoes Windows-owned keys only.
-4. **Internet stays network.** Windows is not “Internet 2”.
-5. **Do not strip Discord/Steam Windows tweaks** while waiting for a Windows module — they deliver value today.
-6. **Riot/Epic own per-game GPU/FSO** for their discovered executables (snapshot + Repair).
+2. **Internet never writes Windows host gaming stack** (MMCSS / HAGS / Game Mode / Win32). Internet Repair must not undo them.
+3. **Repair is scoped.** Discord Repair undoes Discord keys only; Windows Repair undoes Windows-owned keys only; Internet Repair is network-only.
+4. **Games hub owns borderless.** Launchers do not stamp `DISABLEDXMAXIMIZEDWINDOWEDMODE` on game EXEs (cleared on re-Apply).
+5. **Zero always-on background.** No yield/memory-guard Run companions; Steam-Exo.cmd does not spawn helpers.
+6. **Riot/Epic/Steam own per-game GPU** (`GpuPreference=2`) for their discovered executables. Cooperative when values match.
 
 ## Module inventory (current)
 
+- **Windows** — Game Mode, HAGS, Game Bar, Win32=38, MMCSS 10/10 + Games MMCSS, power plan, input, shell, Defender/WU policy, no Exo Run companions
 - **Discord** — Run, StartupApproved, notifications, tray, `UserGpuPreferences` for Discord.exe, AppCompat FSO, voice QoS
-- **Steam** — Run/StartupMode, notifications, tray, tasks, GPU prefs for steam/CEF
-- **Internet** — TCP/IP, DNS/DoH, metrics, NIC advanced (Ethernet + Wi-Fi paths); Experimental adds MMCSS/Psched host knobs
-- **NVIDIA** — driver/DRS; Experimental force re-imports profile
-- **Riot / Epic** — Run quiet + shell quiet + yield companion + high-perf GPU + FSO off for game exes
+- **Steam** — Run/StartupMode, notifications, tray, client FSO, library GPU (no game FSO), client/library DSCP, lean CEF launcher
+- **Internet** — TCP/IP, DNS/DoH, metrics, NIC advanced, Psched NonBestEffortLimit only (no host gaming stack)
+- **NVIDIA** — driver/DRS only; display mode left to Games
+- **Riot / Epic** — Run quiet + shell quiet + high-perf GPU + DSCP; purge yield; no FSO-off on games
+- **Games** — per-title quality + always borderless configs

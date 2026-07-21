@@ -123,8 +123,7 @@ public static class NativeLiveDetect
         features.Add(F("Windows Update paused", "NoAutoUpdate or pause expiry set.", Wu()));
         features.Add(F("Defender purged", "DisableAntiSpyware policy=1.", Defender()));
 
-        // No noisy Exo console helpers. Hidden yield companions (-WindowStyle Hidden -File)
-        // are allowed; visible/console-style Exo Run keys are not.
+        // Product: zero always-on Exo Run companions (including yield / memory guards).
         var noBg = true;
         try
         {
@@ -135,26 +134,21 @@ public static class NativeLiveDetect
                 {
                     if (!n.StartsWith("Exo-", StringComparison.OrdinalIgnoreCase)) continue;
                     var v = run.GetValue(n)?.ToString() ?? "";
-                    // Allowed: hidden PowerShell yield companions only (no wscript — WSH pops errors)
-                    if (v.Contains("-WindowStyle", StringComparison.OrdinalIgnoreCase) &&
-                        v.Contains("Hidden", StringComparison.OrdinalIgnoreCase) &&
-                        v.Contains("-File", StringComparison.OrdinalIgnoreCase) &&
-                        v.Contains("yield-guard", StringComparison.OrdinalIgnoreCase) &&
-                        !v.Contains("wscript", StringComparison.OrdinalIgnoreCase) &&
-                        !v.Contains(@"WindowsApps\pwsh", StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    // Anything else Exo on Run is noisy (including legacy wscript)
+                    // Any Exo Run entry is a background companion — not allowed.
                     if (v.Contains("pwsh", StringComparison.OrdinalIgnoreCase) ||
                         v.Contains("powershell", StringComparison.OrdinalIgnoreCase) ||
                         v.Contains("wscript", StringComparison.OrdinalIgnoreCase) ||
-                        v.Contains("cmd.exe", StringComparison.OrdinalIgnoreCase))
+                        v.Contains("cmd.exe", StringComparison.OrdinalIgnoreCase) ||
+                        v.Contains("yield-guard", StringComparison.OrdinalIgnoreCase) ||
+                        v.Contains("MemoryGuard", StringComparison.OrdinalIgnoreCase) ||
+                        n.Contains("Yield", StringComparison.OrdinalIgnoreCase))
                         noBg = false;
                 }
             }
         }
         catch { }
 
-        features.Add(F("No Exo background", "No noisy Exo console Run keys (hidden yield companions OK).", noBg));
+        features.Add(F("No Exo background", "No always-on Exo Run companions (zero idle helpers).", noBg));
 
         // Deep rows: only green when last applyReport proves real work (not a fake "ok" marker).
         var (deepTasks, deepTasksDetail) = ReadWindowsDeepPass(
@@ -230,9 +224,9 @@ public static class NativeLiveDetect
         catch { }
         features.Add(F("Client FSO + priority net", "Client FSO off and/or DSCP 46.", fsoOk || dscpOk));
 
-        // Library: sample installed game EXEs for GpuPreference=2
-        var libOk = LiveSteamLibraryGpuFso(steam);
-        features.Add(F("Library games GPU & FSO", "Live GpuPreference=2 + FSO on library games.", libOk));
+        // Library: sample installed game EXEs for GpuPreference=2 (no FSO — Games owns borderless)
+        var libOk = LiveSteamLibraryGpu(steam);
+        features.Add(F("Library games high-perf GPU", "Live GpuPreference=2 on library games (display = Games hub).", libOk));
 
         // No always-on memory guard — green when CEF lean launcher is present (one-shot path).
         features.Add(F("Yield to your game",
@@ -295,7 +289,7 @@ public static class NativeLiveDetect
                 : off.Count == 1 ? $"1 setting needs Apply ({off[0]})"
                 : $"{off.Count} settings need Apply",
             Detail = applied
-                ? "Live: CEF launcher, HW accel, Windows quiet, library GPU/FSO (no background helpers)."
+                ? "Live: CEF launcher, HW accel, Windows quiet, library GPU (no background helpers)."
                 : "Off: " + string.Join(", ", off) + ".",
             Features = features
         };
@@ -318,7 +312,7 @@ public static class NativeLiveDetect
         features.Add(F("Games found", games.Count > 0 ? $"Found {games.Count} game EXE(s)." : "No game EXEs yet.", games.Count > 0));
 
         var startupQuiet = !RunKeyHasModule(module);
-        features.Add(F("Silent startup", "No launcher Run keys (Exo yield allowed).", startupQuiet));
+        features.Add(F("Silent startup", "No launcher Run keys (no Exo yield companions).", startupQuiet));
 
         var shellQuiet = LiveShellQuiet(module);
         var approvedQuiet = module == "riot"
@@ -334,9 +328,16 @@ public static class NativeLiveDetect
                     : "Windows Startup apps still On for this launcher — re-Apply.",
             silentWin));
 
-        var (gpuOk, fsoOk) = LiveGpuFso(games);
+        var gpuOk = LiveGpuHighPerf(games);
         features.Add(F("High-performance GPU", "Every game path GpuPreference=2; (live readback).", gpuOk));
-        features.Add(F("True fullscreen path", "FSO flag on every game path.", fsoOk));
+        // Games hub forces borderless — do not require (or re-stamp) FSO-off on game EXEs.
+        var fsoClean = LiveGameFsoNotForced(games);
+        features.Add(F(
+            "Display left to Games hub",
+            fsoClean
+                ? "No exclusive FSO-off on game EXEs (borderless-friendly)."
+                : "Legacy FSO-off still on some game EXEs — re-Apply Riot/Epic to clear.",
+            fsoClean));
 
         var dscpOk = LiveDscp(module, games);
         features.Add(F("Priority game traffic", "DSCP 46 policies for game EXEs.", dscpOk));
@@ -345,7 +346,7 @@ public static class NativeLiveDetect
         features.Add(F(
             "No background companion",
             yieldOk
-                ? "No always-on yield process (one-shot Apply only — GPU/FSO/startup)."
+                ? "No always-on yield process (one-shot Apply only — GPU/startup)."
                 : "Leftover yield Run key — re-Apply to purge.",
             yieldOk));
 
@@ -369,10 +370,10 @@ public static class NativeLiveDetect
         var off = checkable.Where(f => !f.IsActive).Select(f => f.Title).ToList();
         // If no games, "Games found" stays off — not a full fail if user only has launcher
         if (games.Count == 0)
-            off.RemoveAll(t => t == "Games found" || t == "High-performance GPU" || t == "True fullscreen path" || t == "Priority game traffic");
+            off.RemoveAll(t => t == "Games found" || t == "High-performance GPU" || t == "Display left to Games hub" || t == "Priority game traffic");
 
         var applied = installed && startupQuiet && silentWin && yieldOk && snapOk && menuOk
-                      && (games.Count == 0 || (gpuOk && fsoOk && dscpOk))
+                      && (games.Count == 0 || (gpuOk && fsoClean && dscpOk))
                       && off.Count == 0;
 
         return new OptimizerStateInfo
@@ -384,7 +385,7 @@ public static class NativeLiveDetect
                 : off.Count > 1 ? $"{off.Count} settings need Apply"
                 : "Ready to optimize",
             Detail = applied
-                ? "Live: GPU/FSO/DSCP/yield/startup verified."
+                ? "Live: GPU/DSCP/startup verified; display owned by Games (borderless)."
                 : off.Count > 0 ? "Off: " + string.Join(", ", off) + "." : "",
             Features = features
         };
@@ -479,9 +480,9 @@ public static class NativeLiveDetect
         return m.Success && int.TryParse(m.Groups[1].Value, out var n) ? n : 0;
     }
 
-    private static bool LiveSteamLibraryGpuFso(string steamPath)
+    private static bool LiveSteamLibraryGpu(string steamPath)
     {
-        // Probe up to 12 real game EXEs under steamapps\common
+        // Probe up to 12 real game EXEs under steamapps\common — GPU only (no FSO).
         var common = Path.Combine(steamPath, "steamapps", "common");
         if (!Directory.Exists(common)) return true; // nothing to pin yet
         var samples = new List<string>();
@@ -508,15 +509,11 @@ public static class NativeLiveDetect
         if (samples.Count == 0) return true;
 
         using var gpu = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\DirectX\UserGpuPreferences");
-        using var fso = Registry.CurrentUser.OpenSubKey(
-            @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers");
         var ok = 0;
         foreach (var exe in samples)
         {
             var g = gpu?.GetValue(exe)?.ToString() ?? "";
-            var f = fso?.GetValue(exe)?.ToString() ?? "";
-            if (g.Contains("GpuPreference=2", StringComparison.OrdinalIgnoreCase) &&
-                f.Contains("DISABLEDXMAXIMIZEDWINDOWEDMODE", StringComparison.OrdinalIgnoreCase))
+            if (g.Contains("GpuPreference=2", StringComparison.OrdinalIgnoreCase))
                 ok++;
         }
         // Require majority of samples (library may include tools)
@@ -744,22 +741,34 @@ public static class NativeLiveDetect
         return seen > 0 && on == 0;
     }
 
-    private static (bool Gpu, bool Fso) LiveGpuFso(List<string> games)
+    private static bool LiveGpuHighPerf(List<string> games)
     {
-        if (games.Count == 0) return (true, true);
+        if (games.Count == 0) return true;
         using var gpu = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\DirectX\UserGpuPreferences");
-        using var fso = Registry.CurrentUser.OpenSubKey(
-            @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers");
         var gOk = 0;
-        var fOk = 0;
         foreach (var path in games)
         {
             var g = gpu?.GetValue(path)?.ToString() ?? "";
-            var f = fso?.GetValue(path)?.ToString() ?? "";
             if (g.Contains("GpuPreference=2", StringComparison.OrdinalIgnoreCase)) gOk++;
-            if (f.Contains("DISABLEDXMAXIMIZEDWINDOWEDMODE", StringComparison.OrdinalIgnoreCase)) fOk++;
         }
-        return (gOk == games.Count, fOk == games.Count);
+        return gOk == games.Count;
+    }
+
+    /// <summary>
+    /// Green when games do not have DISABLEDXMAXIMIZEDWINDOWEDMODE (legacy exclusive path).
+    /// </summary>
+    private static bool LiveGameFsoNotForced(List<string> games)
+    {
+        if (games.Count == 0) return true;
+        using var fso = Registry.CurrentUser.OpenSubKey(
+            @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers");
+        foreach (var path in games)
+        {
+            var f = fso?.GetValue(path)?.ToString() ?? "";
+            if (f.Contains("DISABLEDXMAXIMIZEDWINDOWEDMODE", StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+        return true;
     }
 
     private static bool LiveDscp(string module, List<string> games)

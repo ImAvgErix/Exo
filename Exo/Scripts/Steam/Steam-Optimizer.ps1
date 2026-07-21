@@ -2007,20 +2007,20 @@ function Get-SteamInstalledGameExes {
 }
 
 function Set-SteamLibraryGamePolicy {
-    # Riot/Epic-parity: high-perf GPU + FSO off + DSCP 46 on installed Steam game EXEs.
+    # High-perf GPU + DSCP 46 on installed Steam game EXEs.
+    # Does NOT force FSO-off on games (Games hub owns borderless); clears legacy stamps.
     # Does not touch game files, launch options, anti-cheat, or Steamworks.
     param([Parameter(Mandatory)][string]$SteamPath)
     $paths = @(Get-SteamInstalledGameExes -SteamPath $SteamPath)
     $gpuKey = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
     $fsoKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
-    $fsoFlag = '~ DISABLEDXMAXIMIZEDWINDOWEDMODE'
     $gpuN = 0
-    $fsoN = 0
+    $fsoCleared = 0
     $dscpN = 0
     $dscpNames = [System.Collections.Generic.List[string]]::new()
 
     if ($paths.Count -eq 0) {
-        Write-Warn 'No Steam library game EXEs discovered for Windows GPU/FSO policy'
+        Write-Warn 'No Steam library game EXEs discovered for Windows GPU policy'
         return @{ Paths = 0; Gpu = 0; Fso = 0; Dscp = 0; Names = @() }
     }
 
@@ -2033,12 +2033,20 @@ function Set-SteamLibraryGamePolicy {
                 $gpuN++
             } catch { }
             try {
-                New-ItemProperty -LiteralPath $fsoKey -Name $exe -Value $fsoFlag -PropertyType String -Force -ErrorAction Stop | Out-Null
-                $fsoN++
+                $cur = [string](Get-ItemProperty -LiteralPath $fsoKey -Name $exe -ErrorAction SilentlyContinue).$exe
+                if ($cur -and $cur -match 'DISABLEDXMAXIMIZEDWINDOWEDMODE') {
+                    $cleaned = ($cur -replace '\s*DISABLEDXMAXIMIZEDWINDOWEDMODE', '').Trim()
+                    if ([string]::IsNullOrEmpty($cleaned) -or $cleaned -eq '~') {
+                        Remove-ItemProperty -LiteralPath $fsoKey -Name $exe -Force -ErrorAction SilentlyContinue
+                    } else {
+                        New-ItemProperty -LiteralPath $fsoKey -Name $exe -Value $cleaned -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    $fsoCleared++
+                }
             } catch { }
         }
     } catch {
-        Write-Warn "Steam library GPU/FSO: $($_.Exception.Message)"
+        Write-Warn "Steam library GPU policy: $($_.Exception.Message)"
     }
 
     if (-not (Get-Command Set-ExoGameQosPolicy -ErrorAction SilentlyContinue)) {
@@ -2063,11 +2071,11 @@ function Set-SteamLibraryGamePolicy {
         }
     }
 
-    Write-Ok ("Steam library policy: {0} game path(s); GPU={1}; FSO={2}; DSCP={3}" -f $paths.Count, $gpuN, $fsoN, $dscpN)
+    Write-Ok ("Steam library policy: {0} game path(s); GPU={1}; FSO cleared={2}; DSCP={3}" -f $paths.Count, $gpuN, $fsoCleared, $dscpN)
     return @{
         Paths = $paths.Count
         Gpu   = $gpuN
-        Fso   = $fsoN
+        Fso   = $fsoCleared
         Dscp  = $dscpN
         Names = @($dscpNames)
         Sample = @($paths | Select-Object -First 12)

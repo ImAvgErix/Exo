@@ -177,17 +177,16 @@ $markerOk = [bool]($state -and [bool]$state.applied -and [string]$state.applySta
 $shellQuiet = [bool]($state -and $state.shellQuiet -eq $true -and $startupQuiet)
 
 $gpuOk = $false
-$fsoOk = $false
+# Green when games do NOT have FSO-off (legacy exclusive path fights Games borderless).
+$fsoClean = $true
 $gpuHigh = 'GpuPreference=2;'
-$gpuIntegrated = 'GpuPreference=1;'
-$fsoDisable = '~ DISABLEDXMAXIMIZEDWINDOWEDMODE'
 try {
     $gpuKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\DirectX\UserGpuPreferences')
     $fsoKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers')
     try {
         $gpuHits = 0
-        $fsoHits = 0
         $need = 0
+        $fsoDirty = 0
         foreach ($p in @($targets)) {
             $p = [string]$p
             if ([string]::IsNullOrWhiteSpace($p)) { continue }
@@ -197,18 +196,21 @@ try {
                 $v = [string]$gpuKey.GetValue($p, '')
                 if ($v -eq $gpuHigh) { $gpuHits++ }
             }
-            if ($fsoKey -and [string]$fsoKey.GetValue($p, '') -eq $fsoDisable) { $fsoHits++ }
+            if ($fsoKey) {
+                $fv = [string]$fsoKey.GetValue($p, '')
+                if ($fv -match 'DISABLEDXMAXIMIZEDWINDOWEDMODE') { $fsoDirty++ }
+            }
         }
         # Live registry only for isApplied honesty (markers are informational).
         $gpuOk = ($need -gt 0 -and $gpuHits -ge $need)
-        $fsoOk = ($need -gt 0 -and $fsoHits -ge $need)
+        $fsoClean = ($need -eq 0 -or $fsoDirty -eq 0)
     } finally {
         if ($gpuKey) { $gpuKey.Dispose() }
         if ($fsoKey) { $fsoKey.Dispose() }
     }
 } catch {
     $gpuOk = $false
-    $fsoOk = $false
+    $fsoClean = $false
 }
 
 # Per-game DSCP 46 (Game Bar quiet lives on the Windows card)
@@ -243,7 +245,7 @@ try {
     $dscpOk = $false
 }
 
-$applied = [bool]($installed -and $markerOk -and $startupQuiet -and $shellQuiet -and $yieldOk -and $snapshotReady -and $targetsPresent -gt 0 -and $gpuOk -and $fsoOk -and $dscpOk)
+$applied = [bool]($installed -and $markerOk -and $startupQuiet -and $shellQuiet -and $yieldOk -and $snapshotReady -and $targetsPresent -gt 0 -and $gpuOk -and $fsoClean -and $dscpOk)
 
 # Consistent install copy for Riot + Epic: "Installed · Found: A, B" or guidance.
 function Format-FoundGames([string[]]$Names, [int]$Count) {
@@ -292,7 +294,7 @@ $yieldDetail = if ($yieldOk) {
 
 $discoveryDetail = if ($targetsPresent -gt 0) {
     $found = Format-FoundGames $labels $targetsPresent
-    "$found Used for Windows GPU/FSO policy."
+    "$found Used for Windows high-perf GPU policy (display = Games hub)."
 } else {
     'No game executables found yet  -  install a game, then Apply.'
 }
@@ -327,9 +329,13 @@ $features = [System.Collections.Generic.List[object]]::new()
     active = [bool]$gpuOk
 })
 [void]$features.Add([ordered]@{
-    title = 'True fullscreen path'
-    detail = if ($fsoOk) { 'Fullscreen Optimizations off so games present frames with less OS interference.' } else { 'Apply turns off Fullscreen Optimizations on your game executables.' }
-    active = [bool]$fsoOk
+    title = 'Display left to Games hub'
+    detail = if ($fsoClean) {
+        'No exclusive FSO-off on game EXEs — Games hub owns borderless.'
+    } else {
+        'Legacy FSO-off still on some game EXEs — re-Apply to clear (borderless-friendly).'
+    }
+    active = [bool]$fsoClean
 })
 
 # Host Game Mode / HAGS / Game Bar live on the Windows card only.
@@ -400,13 +406,13 @@ $status = if (-not $installed) {
 $detail = if (-not $installed) {
     "Install $Module before applying."
 } elseif ($appliedHonest) {
-    "Verified: startup quiet, high-perf GPU, FSO off, game DSCP, yield while gaming. Anti-cheat untouched."
+    "Verified: startup quiet, high-perf GPU, game DSCP; display owned by Games (borderless). Anti-cheat untouched."
 } elseif ($state -and ($state.PSObject.Properties.Name -contains 'lastError') -and $state.lastError) {
     [string]$state.lastError
 } elseif ($missing.Count -gt 0) {
     'Off: ' + ($missing -join ', ') + '.'
 } else {
-    'Apply a reversible policy: startup quiet, high-perf GPU, FSO off, game DSCP, yield while gaming.'
+    'Apply a reversible policy: startup quiet, high-perf GPU, game DSCP; Games hub owns borderless.'
 }
 
 [ordered]@{

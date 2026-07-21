@@ -10,7 +10,7 @@ namespace Exo.Services;
 
 /// <summary>
 /// Pure C# Steam apply path — registry, CEF launcher, memory guard template,
-/// GPU/FSO, library game prefs. No PowerShell kit required for core success.
+/// client FSO, library GPU (no game FSO — Games hub owns borderless).
 /// </summary>
 public static class SteamNativeApply
 {
@@ -79,7 +79,7 @@ public static class SteamNativeApply
         Report("App Paths...");
         steps.Add(SetAppPaths(steamPath));
 
-        Report("Library game GPU + FSO...");
+        Report("Library game GPU (clear legacy FSO-off)...");
         steps.Add(ApplyLibraryGamePolicy(steamPath, elevOps, admin));
 
         Report("Steam client DSCP...");
@@ -114,13 +114,14 @@ public static class SteamNativeApply
         var toastOk = steps.Any(s => s.Id == "toasts" && s.Status == "ok");
         var libOk = steps.Any(s => s.Id == "library-policy" && s.Status is "ok" or "partial");
 
-        // Core success: launcher + memory guard + startup quiet (HKCU always works)
-        var essentialOk = guardOk && launcherOk && startupOk;
+        // Core success: lean CEF launcher + startup quiet. Memory-guard file is optional
+        // legacy template (never launched — zero background processes).
+        var essentialOk = launcherOk && startupOk;
 
         if (!guardOk)
-            steps.Add(new NativeApplyStep { Id = "background-priority", Status = "fail", Reason = "memory guard classifier" });
+            steps.Add(new NativeApplyStep { Id = "background-priority", Status = "ok", Reason = "no guard process (template optional)" });
         else
-            steps.Add(new NativeApplyStep { Id = "background-priority", Status = "ok", Reason = "classifier pass" });
+            steps.Add(new NativeApplyStep { Id = "background-priority", Status = "ok", Reason = "template present; not launched" });
 
         if (!launcherOk)
             steps.Add(new NativeApplyStep { Id = "cef-launcher", Status = "fail", Reason = "CEF classifier" });
@@ -1059,12 +1060,16 @@ try {
         return new NativeApplyStep { Id = "app-paths", Status = ok ? "ok" : "fail" };
     }
 
+    /// <summary>
+    /// High-perf GPU + DSCP for library games. Does not force FSO-off on game EXEs
+    /// (conflicts with Games hub borderless). Clears legacy Exo FSO stamps on re-apply.
+    /// Steam client FSO remains via <see cref="SetClientFso"/>.
+    /// </summary>
     private static NativeApplyStep ApplyLibraryGamePolicy(string steamPath, List<string> elevOps, bool admin)
     {
         var gameExes = DiscoverLibraryGameExes(steamPath).Take(80).ToList();
         var gpuN = 0;
-        var fsoN = 0;
-        const string flag = "~ DISABLEDXMAXIMIZEDWINDOWEDMODE";
+        var fsoCleared = 0;
         try
         {
             using var gpu = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\DirectX\UserGpuPreferences", true);
@@ -1086,12 +1091,8 @@ try {
                     gpuN++;
                 }
                 catch { }
-                try
-                {
-                    fso?.SetValue(exe, flag, RegistryValueKind.String);
-                    fsoN++;
-                }
-                catch { }
+
+                if (LauncherNativeApply.ClearLegacyFsoFlag(fso, exe)) fsoCleared++;
 
                 // DSCP by leaf name — real game EXEs only
                 if (string.IsNullOrEmpty(leaf)) continue;
@@ -1117,7 +1118,7 @@ try {
         {
             Id = "library-policy",
             Status = gameExes.Count == 0 ? "ok" : (gpuN > 0 ? "ok" : "partial"),
-            Reason = $"games={gameExes.Count}; gpu={gpuN}; fso={fsoN}"
+            Reason = $"games={gameExes.Count}; gpu={gpuN}; fsoCleared={fsoCleared}"
         };
     }
 

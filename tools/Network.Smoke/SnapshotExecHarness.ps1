@@ -73,7 +73,7 @@ if ($null -ne $parsed) {
     ($bin | ConvertTo-Json -Compress -Depth 3)
   $qword = Find-Reg 'GlobalMaxTcpWindowSize'
   Assert 'snapshot-exec QWord numeric' ($qword -and [string]$qword.kind -eq 'QWord' -and [long]$qword.value -eq 65535)
-  $dwordNeg = Find-Reg 'NetworkThrottlingIndex'
+  $dwordNeg = Find-Reg 'NonBestEffortLimit'
   Assert 'snapshot-exec DWord 0xffffffff round-trips as -1' ($dwordNeg -and [int]$dwordNeg.value -eq -1)
   $expand = Find-Reg 'EnableDCA'
   Assert 'snapshot-exec ExpandString preserved unexpanded' `
@@ -116,7 +116,7 @@ Assert 'repair-exec MultiString restored as String[]' `
 Assert 'repair-exec Binary restored as Byte[]' `
   ($capture -match [regex]::Escape('|EnableTCPA|Binary|System.Byte[]|1,2,3,4'))
 Assert 'repair-exec QWord restored' ($capture -match '\|GlobalMaxTcpWindowSize\|QWord\|System\.Int\d+\|65535')
-Assert 'repair-exec DWord -1 restored' ($capture -match '\|NetworkThrottlingIndex\|DWord\|System\.Int\d+\|-1')
+Assert 'repair-exec DWord -1 restored' ($capture -match '\|NonBestEffortLimit\|DWord\|System\.Int\d+\|-1')
 Assert 'repair-exec ExpandString restored' `
   ($capture -match [regex]::Escape('|EnableDCA|ExpandString|System.String|%SystemRoot%\dca'))
 Assert 'repair-exec absent value removed' ($capture -match [regex]::Escape('DEL|HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\ServiceProvider|LocalPriority'))

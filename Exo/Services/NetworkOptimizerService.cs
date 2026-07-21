@@ -980,53 +980,15 @@ public sealed class NetworkOptimizerService
                 taskOffloadDisabled == true ? "Blocked (bad)" : "On",
                 taskOffloadDisabled != true));
 
-            // Host stack written on every latency/throughput apply
+            // Network-owned knobs only. MMCSS / HAGS / Game Mode / Win32 priority → Windows card.
             var gamingPreset = activePreset is NetworkPreset.LowestLatency or NetworkPreset.HighestThroughput;
-            try
-            {
-                using var mm = Registry.LocalMachine.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile");
-                var nti = ReadRegistryDword(mm?.GetValue("NetworkThrottlingIndex"));
-                var resp = ReadRegistryDword(mm?.GetValue("SystemResponsiveness"));
-                // Competitive: NTI=0xFFFFFFFF (reads as -1 as signed int) and Responsiveness=0
-                var ntiMax = nti is -1 or int.MaxValue;
-                var hostOk = ntiMax && resp is 0;
-                features.Add(Row("Gaming multimedia stack",
-                    hostOk ? "Network throttle off · max responsiveness" :
-                    nti is null && resp is null ? "Stock / not applied" :
-                    "Partial — re-Apply",
-                    hostOk || !gamingPreset));
-            }
-            catch
-            {
-                features.Add(Row("Gaming multimedia stack", "-", true));
-            }
-
-            try
-            {
-                using var games = Registry.LocalMachine.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games");
-                var pri = ReadRegistryDword(games?.GetValue("Priority"));
-                var gpuPri = ReadRegistryDword(games?.GetValue("GPU Priority"));
-                var sched = games?.GetValue("Scheduling Category") as string;
-                var gamesOk = pri is 6 && gpuPri is 8 &&
-                              string.Equals(sched, "High", StringComparison.OrdinalIgnoreCase);
-                features.Add(Row("Games priority class",
-                    gamesOk ? "High scheduling · GPU priority boosted" :
-                    games is null ? "Stock / not applied" : "Partial — re-Apply",
-                    gamesOk || !gamingPreset));
-            }
-            catch
-            {
-                features.Add(Row("Games priority class", "-", true));
-            }
 
             var qosReserve = ReadQosReserve();
             features.Add(Row("Full bandwidth for apps",
                 qosReserve is "0%" ? "No reserved bandwidth tax" : qosReserve,
                 qosReserve is "0%" or "-" || !gamingPreset));
 
-            // Competitive Nagle/ACK pins
+            // Competitive Nagle/ACK pins (Internet-owned TCP path)
             try
             {
                 var ackOk = false;
@@ -1051,33 +1013,10 @@ public sealed class NetworkOptimizerService
                 features.Add(Row("Instant TCP response", "-", true));
             }
 
-            try
-            {
-                using var pri = Registry.LocalMachine.OpenSubKey(
-                    @"SYSTEM\CurrentControlSet\Control\PriorityControl");
-                var w32 = ReadRegistryDword(pri?.GetValue("Win32PrioritySeparation"));
-                features.Add(Row("Foreground boost",
-                    w32 is 38 ? "Snappy foreground priority" : w32?.ToString() ?? "Stock",
-                    w32 is 38 || !gamingPreset));
-            }
-            catch
-            {
-                features.Add(Row("Foreground boost", "-", true));
-            }
-
-            try
-            {
-                using var gfx = Registry.LocalMachine.OpenSubKey(
-                    @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers");
-                var hags = ReadRegistryDword(gfx?.GetValue("HwSchMode"));
-                features.Add(Row("Hardware GPU scheduling",
-                    hags is 2 ? "On" : "Off / stock",
-                    hags is 2 || !gamingPreset));
-            }
-            catch
-            {
-                features.Add(Row("Hardware GPU scheduling", "-", true));
-            }
+            // Informational pointer — not checkable for Internet isApplied
+            features.Add(Row("Host gaming stack",
+                "Game Mode / HAGS / MMCSS / foreground boost live on the Windows card",
+                true));
 
             // SMB transfer throttle + LLMNR (written on latency/throughput apply; repair clears)
             try

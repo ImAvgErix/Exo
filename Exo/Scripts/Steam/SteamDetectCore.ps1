@@ -175,27 +175,21 @@ function Get-SteamInstalledGameExes {
 }
 
 function Test-SteamLibraryGamePolicy {
+    # GPU high-perf only — Games hub owns borderless; FSO-off on games is legacy.
     param([Parameter(Mandatory)][string]$SteamPath)
     $paths = @(Get-SteamInstalledGameExes -SteamPath $SteamPath -MaxPaths 40)
     if ($paths.Count -eq 0) { return $true }
     $gpuKey = $null
-    $fsoKey = $null
     $hits = 0
     $need = 0
     try {
         $gpuKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\DirectX\UserGpuPreferences')
-        $fsoKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers')
         foreach ($p in $paths) {
             $need++
-            $gpuOk = $false
-            $fsoOk = $false
-            if ($gpuKey -and [string]$gpuKey.GetValue($p, '') -eq 'GpuPreference=2;') { $gpuOk = $true }
-            if ($fsoKey -and [string]$fsoKey.GetValue($p, '') -eq '~ DISABLEDXMAXIMIZEDWINDOWEDMODE') { $fsoOk = $true }
-            if ($gpuOk -and $fsoOk) { $hits++ }
+            if ($gpuKey -and [string]$gpuKey.GetValue($p, '') -eq 'GpuPreference=2;') { $hits++ }
         }
     } finally {
         if ($gpuKey) { $gpuKey.Dispose() }
-        if ($fsoKey) { $fsoKey.Dispose() }
     }
     if ($need -eq 0) { return $true }
     return (($hits / $need) -ge 0.5)

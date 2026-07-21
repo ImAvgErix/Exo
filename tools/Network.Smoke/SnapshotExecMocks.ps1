@@ -48,16 +48,12 @@ $script:MockRegistry['HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\ServiceProvi
   -PsPath 'Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\ServiceProvider' `
   -Values @{ 'Class' = [int]8 } -Kinds @{ 'Class' = [Microsoft.Win32.RegistryValueKind]::DWord }
 
-# 0xffffffff round-trips as Int32 -1 on real Windows
-$script:MockRegistry['HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'] = New-MockRegKey `
-  -PsPath 'Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' `
-  -Values @{ 'SystemResponsiveness' = [int]20; 'NetworkThrottlingIndex' = [int]-1 } `
-  -Kinds  @{ 'SystemResponsiveness' = [Microsoft.Win32.RegistryValueKind]::DWord; 'NetworkThrottlingIndex' = [Microsoft.Win32.RegistryValueKind]::DWord }
-
-$script:MockRegistry['HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games'] = New-MockRegKey `
-  -PsPath 'Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games' `
-  -Values @{ 'GPU Priority' = [int]2; 'Scheduling Category' = 'Medium'; 'SFIO Priority' = 'Normal' } `
-  -Kinds  @{ 'GPU Priority' = [Microsoft.Win32.RegistryValueKind]::DWord; 'Scheduling Category' = [Microsoft.Win32.RegistryValueKind]::String; 'SFIO Priority' = [Microsoft.Win32.RegistryValueKind]::String }
+# 0xffffffff round-trips as Int32 -1 on real Windows (network-owned Psched key;
+# MMCSS is Windows-owned and no longer snapshotted by Internet).
+$script:MockRegistry['HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched'] = New-MockRegKey `
+  -PsPath 'Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Psched' `
+  -Values @{ 'NonBestEffortLimit' = [int]-1 } `
+  -Kinds  @{ 'NonBestEffortLimit' = [Microsoft.Win32.RegistryValueKind]::DWord }
 
 $script:MockNagleKeys = @(
   (New-MockRegKey -PsPath 'Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{mock-guid-1}' `

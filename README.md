@@ -32,8 +32,10 @@ Most “FPS packs” dump folklore registry keys and hope for the best. Exo is b
 | **Internet** | Lowest-latency or high-throughput profile from measured quality; TCP/QoS/NIC knobs only — no folklore DNS/MTU packs |
 | **NVIDIA** | Verified DRS / profile path with G-SYNC vs raw-latency choice; display policy without unsigned driver hacks |
 | **Discord** | Lean client path, voice QoS, Windows quiet (toasts/startup/tray) — in-app audio prefs left alone on Stable |
-| **Steam** | Quiet CEF launcher, memory-guard yield, library GPU/FSO policy, download/config hygiene |
-| **Riot / Epic** | Startup quiet, high-perf GPU preference, FSO off, DSCP 46, silent yield companion — **never** anti-cheat or game files |
+| **Steam** | Quiet CEF launcher, library high-perf GPU (display = Games borderless), download/config hygiene — no background helpers |
+| **Riot / Epic** | Startup quiet, high-perf GPU, DSCP 46 — **never** anti-cheat or game files; display owned by Games hub |
+| **Internet** | TCP/DNS/NIC only — host Game Mode/HAGS/MMCSS live on **Windows** |
+| **Games** | Per-title quality + always borderless |
 
 Stable Apply is the safe reversible stack. Experimental only forces tighter re-imports or deeper loops where the module defines them.
 

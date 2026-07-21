@@ -34,14 +34,8 @@ public static partial class NetworkApplyScriptBuilder
         (@"HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\ServiceProvider", "HostsPriority"),
         (@"HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\ServiceProvider", "DnsPriority"),
         (@"HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\ServiceProvider", "NetbtPriority"),
-        (@"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness"),
-        (@"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NetworkThrottlingIndex"),
-        (@"HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation"),
-        (@"HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode"),
-        (@"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "GPU Priority"),
-        (@"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "Priority"),
-        (@"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "Scheduling Category"),
-        (@"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "SFIO Priority"),
+        // Host gaming stack (MMCSS / HAGS / Game Mode / Win32 priority) is owned by Windows —
+        // never snapshot or mutate those keys from Internet (Repair must not undo Windows).
         (@"HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched", "NonBestEffortLimit"),
         (@"HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config", "DODownloadMode"),
         (@"HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator", "NoActiveProbe"),
@@ -506,36 +500,12 @@ if (-not $snapshotOk) {
         sb.AppendLine("Remove-Prop $tcp 'TcpNumConnections'");
         sb.AppendLine("Remove-Prop $tcp 'LargeSystemCache'");
         sb.AppendLine("Remove-Prop $tcp 'MaxUserPort'");
-        // Competitive host stack — MS-safe MMCSS pins only.
-        // SystemResponsiveness: values <10 clamp to 20 (stock). 10 is the real gaming minimum.
-        // NetworkThrottlingIndex: keep 10 (OS default class); ffffffff is forbidden folklore.
-        sb.AppendLine("$mm = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'");
-        sb.AppendLine("Set-Dword $mm 'NetworkThrottlingIndex' 10");
-        sb.AppendLine("Set-Dword $mm 'SystemResponsiveness' 10");
-        sb.AppendLine("$games = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games'");
-        sb.AppendLine("if (-not (Test-Path -LiteralPath $games)) { New-Item -Path $games -Force | Out-Null }");
-        sb.AppendLine("Set-Dword $games 'GPU Priority' 8");
-        sb.AppendLine("Set-Dword $games 'Priority' 6");
-        sb.AppendLine("Set-String $games 'Scheduling Category' 'High'");
-        sb.AppendLine("Set-String $games 'SFIO Priority' 'High'");
-        sb.AppendLine("Set-String $games 'Background Only' 'False'");
-        sb.AppendLine("Set-Dword $games 'Clock Rate' 10000");
-        sb.AppendLine("Set-Dword $games 'Affinity' 0");
+        // Network-only host QoS: remove the old 20% reserved-bandwidth tax.
+        // MMCSS / Games MMCSS / Win32 priority / HAGS / Game Mode → Windows optimizer only.
         sb.AppendLine("$psched = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Psched'");
         sb.AppendLine("Set-Dword $psched 'NonBestEffortLimit' 0");
-        // Short quantum + variable + high foreground boost (0x26) — competitive default
-        sb.AppendLine("Set-Dword 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' 'Win32PrioritySeparation' 38");
-        // HAGS on when supported
-        sb.AppendLine("try { Set-Dword 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' 'HwSchMode' 2 } catch {}");
-        // Game Mode on (HKCU)
-        sb.AppendLine("try {");
-        sb.AppendLine("  $gb = 'HKCU:\\Software\\Microsoft\\GameBar'");
-        sb.AppendLine("  if (-not (Test-Path $gb)) { New-Item -Path $gb -Force | Out-Null }");
-        sb.AppendLine("  Set-Dword $gb 'AutoGameModeEnabled' 1");
-        sb.AppendLine("  Set-Dword $gb 'AllowAutoGameMode' 1");
-        sb.AppendLine("} catch {}");
-        sb.AppendLine("Report 'host-policy' 'ok' 'competitive: NTI=10, SystemResponsiveness=10, Games MMCSS, Win32Pri=38, HAGS, Game Mode'");
-        sb.AppendLine("Report 'registry-host' 'ok'");
+        sb.AppendLine("Report 'host-policy' 'ok' 'network: NonBestEffortLimit=0 (MMCSS/HAGS/Game Mode owned by Windows)'");
+        sb.AppendLine("Report 'registry-host' 'ok' 'tcpip + psched only'");
 
         // --- netsh / Set-NetTCPSetting (competitive path) ---
         sb.AppendLine("netsh int tcp set global rss=enabled | Out-Null");

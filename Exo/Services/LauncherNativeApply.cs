@@ -6,15 +6,16 @@ using Microsoft.Win32;
 namespace Exo.Services;
 
 /// <summary>
-/// Pure C# Riot / Epic apply: high-perf GPU + FSO off for games, launcher
-/// integrated on hybrid, startup quiet, shell toasts off, DSCP when elevated.
-/// Never touches anti-cheat, services, or game binaries.
+/// Pure C# Riot / Epic apply: high-perf GPU for games, launcher integrated on
+/// hybrid, startup quiet, shell toasts off, DSCP when elevated.
+/// Never stamps game FSO-off (Games hub owns borderless display). Never touches
+/// anti-cheat, services, or game binaries.
 /// </summary>
 public static class LauncherNativeApply
 {
     private const string GpuHighPerf = "GpuPreference=2;";
     private const string GpuPowerSave = "GpuPreference=1;";
-    private const string FsoDisable = "~ DISABLEDXMAXIMIZEDWINDOWEDMODE";
+    private const string FsoDisableToken = "DISABLEDXMAXIMIZEDWINDOWEDMODE";
 
     public static NativeApplyResult Apply(string module, bool experimental, IProgress<string>? progress = null)
     {
@@ -42,14 +43,15 @@ public static class LauncherNativeApply
         Report("Shell notifications quiet...");
         steps.Add(QuietShell(module));
 
-        Report("Game GPU high-perf + FSO off...");
-        steps.Add(ApplyGpuFso(games, launchers, elevOps, admin, module));
+        // GPU high-perf only — no FSO-off on games (conflicts with Games borderless policy).
+        Report("Game GPU high-perf (clearing legacy FSO-off)...");
+        steps.Add(ApplyGpuPolicy(games, launchers, elevOps, admin, module));
 
         Report("Per-game DSCP...");
         steps.Add(ApplyDscp(games, module, admin, elevOps));
 
         // Product policy: no always-on background companions (Run-key yield loops).
-        // One-shot apply only: GPU, FSO, startup quiet, caches. Zero idle processes.
+        // One-shot apply only: GPU, startup quiet, caches. Zero idle processes.
         Report("Removing background companions...");
         steps.Add(PurgeYieldCompanion(module));
 
@@ -306,8 +308,8 @@ public static class LauncherNativeApply
                       val.Contains("Epic Games", StringComparison.OrdinalIgnoreCase) ||
                       name.Contains("Epic", StringComparison.OrdinalIgnoreCase);
                 if (!hit) continue;
-                // Keep yield companions we own
-                if (name.StartsWith($"Exo-", StringComparison.OrdinalIgnoreCase)) continue;
+                // Never delete other Exo-* keys here (yield purge is its own step).
+                if (name.StartsWith("Exo-", StringComparison.OrdinalIgnoreCase)) continue;
                 try { key.DeleteValue(name, false); removed++; } catch { }
             }
         }
@@ -354,13 +356,21 @@ public static class LauncherNativeApply
         };
     }
 
-    private static NativeApplyStep ApplyGpuFso(
+    /// <summary>
+    /// High-perf GPU for games. Purges legacy Exo FSO-off stamps so Games borderless
+    /// is not fighting DISABLEDXMAXIMIZEDWINDOWEDMODE (exclusive-fullscreen lean).
+    /// Step id stays <c>gpu-fso</c> for state/UI compatibility.
+    /// </summary>
+    private static NativeApplyStep ApplyGpuPolicy(
         List<string> games, List<string> launchers, List<string> elevOps, bool admin, string module)
     {
+        _ = elevOps;
+        _ = admin;
+        _ = module;
         var hybrid = IsHybridGraphics();
         var launcherGpu = hybrid ? GpuPowerSave : GpuHighPerf;
         var gpuN = 0;
-        var fsoN = 0;
+        var fsoCleared = 0;
         try
         {
             using var gpu = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\DirectX\UserGpuPreferences", true);
@@ -370,12 +380,13 @@ public static class LauncherNativeApply
             {
                 // Force full string — AppStatus=0 alone is NOT high-perf GPU (Rocket League bug).
                 try { gpu?.SetValue(path, GpuHighPerf, RegistryValueKind.String); gpuN++; } catch { }
-                try { fso?.SetValue(path, FsoDisable, RegistryValueKind.String); fsoN++; } catch { }
+                if (ClearLegacyFsoFlag(fso, path)) fsoCleared++;
             }
             foreach (var path in launchers)
             {
                 try { gpu?.SetValue(path, launcherGpu, RegistryValueKind.String); gpuN++; } catch { }
-                try { fso?.SetValue(path, FsoDisable, RegistryValueKind.String); fsoN++; } catch { }
+                // Launchers never needed FSO-off either — clear leftover stamps.
+                if (ClearLegacyFsoFlag(fso, path)) fsoCleared++;
             }
 
             // Verify live: every game path must read back GpuPreference=2;
@@ -404,8 +415,38 @@ public static class LauncherNativeApply
         {
             Id = "gpu-fso",
             Status = (games.Count == 0 && launchers.Count == 0) || gpuN > 0 ? "ok" : "fail",
-            Reason = $"games={games.Count}; launchers={launchers.Count}; gpu={gpuN}; fso={fsoN}; hybrid={hybrid}"
+            Reason = $"games={games.Count}; launchers={launchers.Count}; gpu={gpuN}; fsoCleared={fsoCleared}; hybrid={hybrid}"
         };
+    }
+
+    /// <summary>
+    /// Removes DISABLEDXMAXIMIZEDWINDOWEDMODE Exo used to force for exclusive FS.
+    /// Keeps other AppCompat flags (e.g. HIGHDPIAWARE) if present.
+    /// </summary>
+    internal static bool ClearLegacyFsoFlag(RegistryKey? fso, string path)
+    {
+        if (fso is null || string.IsNullOrWhiteSpace(path)) return false;
+        try
+        {
+            var cur = fso.GetValue(path)?.ToString();
+            if (string.IsNullOrEmpty(cur)) return false;
+            if (!cur.Contains(FsoDisableToken, StringComparison.OrdinalIgnoreCase)) return false;
+
+            // Exact Exo stamp or "~ " only after strip → delete.
+            var cleaned = Regex.Replace(cur, @"\s*" + FsoDisableToken, "", RegexOptions.IgnoreCase).Trim();
+            if (string.IsNullOrEmpty(cleaned) || cleaned == "~")
+            {
+                fso.DeleteValue(path, throwOnMissingValue: false);
+                return true;
+            }
+
+            fso.SetValue(path, cleaned, RegistryValueKind.String);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static NativeApplyStep ApplyDscp(List<string> games, string module, bool admin, List<string> elevOps)
@@ -461,7 +502,7 @@ public static class LauncherNativeApply
 
     /// <summary>
     /// Product policy: no always-on background yield processes.
-    /// Removes Run keys + helper scripts. One-shot Apply (GPU/FSO/startup) stays.
+    /// Removes Run keys + helper scripts. One-shot Apply (GPU/startup) stays.
     /// </summary>
     private static NativeApplyStep PurgeYieldCompanion(string module)
     {

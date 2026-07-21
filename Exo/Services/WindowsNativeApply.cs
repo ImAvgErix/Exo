@@ -121,7 +121,7 @@ public static class WindowsNativeApply
         Report("Optional features (DISM shortlist, hard-timeout each)...");
         steps.Add(DisableOptionalFeaturesShortlist());
 
-        Report("No noisy Exo Run keys (keep yield companions)...");
+        Report("No Exo background Run companions...");
         steps.Add(PurgeNoisyExoRunKeys());
 
         var essentialOk = steps.FirstOrDefault(s => s.Id == "game-mode")?.Status == "ok"
@@ -566,13 +566,15 @@ public static class WindowsNativeApply
             {
                 if (!name.StartsWith("Exo-", StringComparison.OrdinalIgnoreCase)) continue;
                 var v = run.GetValue(name)?.ToString() ?? "";
-                // Drop ALL Exo background companions (yield, memory guard, wscript, console)
+                // Drop ALL Exo Run companions (yield, memory guard, any pwsh/cmd/wscript).
                 if (v.Contains("yield-guard", StringComparison.OrdinalIgnoreCase) ||
                     v.Contains("wscript", StringComparison.OrdinalIgnoreCase) ||
-                    v.Contains(@"WindowsApps\pwsh", StringComparison.OrdinalIgnoreCase) ||
-                    (v.Contains("pwsh", StringComparison.OrdinalIgnoreCase) && !v.Contains("Hidden", StringComparison.OrdinalIgnoreCase)) ||
+                    v.Contains("pwsh", StringComparison.OrdinalIgnoreCase) ||
+                    v.Contains("powershell", StringComparison.OrdinalIgnoreCase) ||
+                    v.Contains("cmd.exe", StringComparison.OrdinalIgnoreCase) ||
                     v.Contains("MemoryGuard", StringComparison.OrdinalIgnoreCase) ||
-                    name.Contains("Yield", StringComparison.OrdinalIgnoreCase))
+                    name.Contains("Yield", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("Memory", StringComparison.OrdinalIgnoreCase))
                 {
                     try { run.DeleteValue(name, false); removed++; } catch { }
                 }

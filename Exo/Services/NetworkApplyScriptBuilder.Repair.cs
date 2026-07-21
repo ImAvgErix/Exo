@@ -345,23 +345,12 @@ if ($snap) {
   # ============================================================================
   Log '[Exo-NET-REPAIR] No snapshot found - APPROXIMATE stock reset (fallback path)'
   Report 'restore-mode' 'skip' 'no-snapshot-fallback-stock-reset'
-  # Host stack → Windows defaults
+  # Network-only stock reset. Never touch Windows-owned host gaming stack
+  # (MMCSS / HAGS / Game Mode / Win32 priority) — those belong to Windows Repair.
   $tcp = 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters'
   Set-Dword $tcp 'DisableTaskOffload' 0
   Remove-Prop $tcp 'GlobalMaxTcpWindowSize'
   Remove-Prop $tcp 'TcpWindowSize'
-  $mm = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
-  # Default SystemResponsiveness is 20
-  Set-Dword $mm 'SystemResponsiveness' 20
-  # Default NetworkThrottlingIndex is 10
-  Set-Dword $mm 'NetworkThrottlingIndex' 10
-  # Competitive extras → stock-ish
-  try { Set-Dword 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' 'Win32PrioritySeparation' 2 } catch {}
-  try { Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'HwSchMode' } catch {}
-  try {
-    Remove-Prop 'HKCU:\Software\Microsoft\GameBar' 'AutoGameModeEnabled'
-    Remove-Prop 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode'
-  } catch {}
   # Remove QoS reserve policy so OS default applies again
   Remove-Prop 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit'
   try { Remove-Item 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' -Recurse -Force -EA SilentlyContinue } catch {}
@@ -452,7 +441,7 @@ if ($snap) {
   try { netsh interface teredo set state default | Out-Null } catch {}
   try { netsh interface isatap set state default | Out-Null } catch {}
   try { netsh interface 6to4 set state default | Out-Null } catch {}
-  Log '[repair] host stack + tunnels restored (approximate stock)'
+  Log '[repair] network stack restored (approximate stock; Windows host gaming stack left alone)'
   # Ethernet Properties checkboxes → stock Windows-like (most ON except Multiplexor)
   $enable = @('ms_msclient','ms_server','ms_pacer','ms_tcpip','ms_tcpip6','ms_lldp','ms_lltdio','ms_rspndr')
   $disable = @('ms_implat')
