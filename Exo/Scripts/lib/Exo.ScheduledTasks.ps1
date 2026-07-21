@@ -1,4 +1,4 @@
-# Exo.ScheduledTasks.ps1 — PC-aware Task Scheduler quiet (community multi-PC).
+# Exo.ScheduledTasks.ps1  -  PC-aware Task Scheduler quiet (community multi-PC).
 # Enumerate THIS machine, classify, disable noise only. Empty folders removed.
 # Never delete Microsoft task definitions. Never touch AC / recovery / cua-driver.
 
@@ -25,7 +25,7 @@ function Test-ExoTaskQuiet {
     if ($TaskPath -match '(?i)\\Shell\\' -and $TaskName -match '(?i)FamilySafety|UpdateUserPicture|IndexerAutomaticMaintenance') {
         return $true
     }
-    # Root updaters — names/GUIDs differ per install
+    # Root updaters  -  names/GUIDs differ per install
     if ($TaskPath -eq '\' -or $TaskPath -eq '') {
         if ($TaskName -match '(?i)^(MicrosoftEdgeUpdate|BraveSoftwareUpdate|GoogleUpdate|GoogleUpdater|EqualizerAPO|Adobe|CCleaner)') { return $true }
         if ($TaskName -match '(?i)UpdateTaskMachine') { return $true }

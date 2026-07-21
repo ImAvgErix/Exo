@@ -33,7 +33,13 @@ public sealed class ExoCompanionService
         Directory.CreateDirectory(dir);
         var marker = Path.Combine(dir, "installed.marker");
         File.WriteAllText(marker, DateTime.UtcNow.ToString("o"));
-        // Full WinUI companion binaries ship in later Windows builds; marker enables Host OS defaults.
+        // Repair-friendly stubs: launch.cmd + uninstall.marker (full WinUI binaries later).
+        var launch = Path.Combine(dir, "launch.cmd");
+        if (!File.Exists(launch))
+            File.WriteAllText(launch, $"@echo off\r\necho Exo companion {id} (stub)\r\n");
+        var uninstall = Path.Combine(dir, "uninstall.marker");
+        if (!File.Exists(uninstall))
+            File.WriteAllText(uninstall, "remove this folder to uninstall");
         return (true, $"{id} companion registered at {dir}");
     }
 

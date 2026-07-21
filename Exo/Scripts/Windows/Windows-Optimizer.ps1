@@ -129,7 +129,7 @@ function Restore-PowerScheme([string]$Guid) {
 }
 
 function Get-StateProp($Obj, [string]$Name) {
-    # Safe under $ErrorActionPreference=Stop — ConvertFrom-Json objects throw on missing members.
+    # Safe under $ErrorActionPreference=Stop  -  ConvertFrom-Json objects throw on missing members.
     if ($null -eq $Obj) { return $null }
     if ($Obj -is [System.Collections.IDictionary]) {
         if ($Obj.Contains($Name)) { return $Obj[$Name] }
@@ -206,7 +206,7 @@ function Invoke-WindowsApply {
     # Deep pack is OPTIONAL depth after native C# (WebHostBridge).
     # Default product path is native-only. This script only runs for Repair,
     # Experimental, or soft-fail depth. Never re-do the whole host stack when
-    # native already applied — that caused Defender hangs + yield stripping.
+    # native already applied  -  that caused Defender hangs + yield stripping.
     Write-HubProgress 5 'Windows deep pack (depth-only after native)...'
     if (-not (Get-Command Invoke-ExoCompetitiveGamingGlue -ErrorAction SilentlyContinue)) {
         Add-Report 'gaming-glue' 'fail' 'Exo.GamingStack.ps1 not loaded'
@@ -256,7 +256,7 @@ function Invoke-WindowsApply {
         }
     }
 
-    # ── Depth-only steps (native owns competitive host knobs) ──────────────
+    # -- Depth-only steps (native owns competitive host knobs) --------------
     Write-HubProgress 12 'Purging noisy Exo console helpers (keep Hidden yield companions)...'
     $bgRemoved = 0
     if (Get-Command Unregister-ExoBackground -ErrorAction SilentlyContinue) {
@@ -300,7 +300,7 @@ function Invoke-WindowsApply {
 
     # DISM optional features: owned by native C# (bounded dism.exe per feature).
     # Get-WindowsOptionalFeature / Disable-WindowsOptionalFeature hangs for minutes with DismHost.
-    Write-HubProgress 55 'Optional features (skip DISM — native owns shortlist)...'
+    Write-HubProgress 55 'Optional features (skip DISM  -  native owns shortlist)...'
     $optFeat = $null
     Add-Report 'optional-features' 'skip' 'native C# bounded DISM shortlist owns this; PS DISM hang removed'
     Write-Ok 'Optional features: skipped in PS deep pack (native owns DISM)'
@@ -311,7 +311,7 @@ function Invoke-WindowsApply {
     $pad = $null
     $shell = $null
     if (-not $nativeAlready) {
-        Write-HubProgress 65 'Host stack (native path missing — full glue)...'
+        Write-HubProgress 65 'Host stack (native path missing  -  full glue)...'
         if (Get-Command Invoke-ExoShellDebloatPack -ErrorAction SilentlyContinue) {
             $shell = Invoke-ExoShellDebloatPack -Force
             Add-Report 'uac' 'ok' ("written=$($shell.uac)")

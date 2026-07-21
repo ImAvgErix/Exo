@@ -329,7 +329,7 @@ function Set-ExoHighPerfPower {
         return [int](Set-ExoCompetitivePowerPlan -Force:$Force)
     }
     try {
-        # Fallback only: High performance — do not duplicatescheme Ultimate.
+        # Fallback only: High performance  -  do not duplicatescheme Ultimate.
         powercfg -S SCHEME_MIN | Out-Null
         return 1
     } catch { return 0 }

@@ -176,11 +176,41 @@ var companions = new ExoCompanionService();
 Expect("companions list", companions.List().Count >= 4);
 var (cOk, _) = companions.EnsureInstalled("snip");
 Expect("companion register", cOk);
+var snipDir = Path.Combine(companions.CompanionsRoot, "snip");
+Expect("companion launch stub", File.Exists(Path.Combine(snipDir, "launch.cmd")));
+Expect("companion uninstall marker", File.Exists(Path.Combine(snipDir, "uninstall.marker")));
 
 var upscaler = new ExoUpscalerService();
 Expect("upscaler patterns", ExoUpscalerService.DllPatterns.Length >= 5);
+Expect("upscaler vendor roots helper", ExoUpscalerService.DefaultVendorSearchRoots() is not null);
 var (uOk, uMsg) = upscaler.SwapWithBackup("/nope/a.dll", "/nope/b.dll", riskAcknowledged: false);
 Expect("upscaler requires ack", !uOk && uMsg.Contains("Acknowledge", StringComparison.OrdinalIgnoreCase));
+var upTmp = Path.Combine(Path.GetTempPath(), "exo-upscaler-smoke-" + Guid.NewGuid().ToString("N"));
+try
+{
+    var gameDir = Path.Combine(upTmp, "Game");
+    var acDir = Path.Combine(upTmp, "AcGame");
+    var sourceDir = Path.Combine(upTmp, "Source");
+    Directory.CreateDirectory(gameDir);
+    Directory.CreateDirectory(acDir);
+    Directory.CreateDirectory(sourceDir);
+    Directory.CreateDirectory(Path.Combine(acDir, "EasyAntiCheat"));
+    var targetDll = Path.Combine(gameDir, "nvngx_dlss.dll");
+    var acDll = Path.Combine(acDir, "nvngx_dlss.dll");
+    var sourceDll = Path.Combine(sourceDir, "nvngx_dlss.dll");
+    File.WriteAllBytes(targetDll, [1, 2, 3]);
+    File.WriteAllBytes(acDll, [1, 2, 3]);
+    File.WriteAllBytes(sourceDll, [9, 8, 7]);
+    var apply = upscaler.ApplySupportedGameSwaps([upTmp], [sourceDir], riskAcknowledged: true);
+    Expect("upscaler applies safe source swap", apply.Swapped == 1 && File.ReadAllBytes(targetDll).SequenceEqual(new byte[] { 9, 8, 7 }), apply.Message);
+    Expect("upscaler backs up target", apply.BackupsCreated == 1, apply.Message);
+    Expect("upscaler skips AC-tagged", apply.SkippedAc >= 1 && File.ReadAllBytes(acDll).SequenceEqual(new byte[] { 1, 2, 3 }), apply.Message);
+    Expect("upscaler reports scanned", apply.Scanned >= 2, apply.Message);
+}
+finally
+{
+    try { Directory.Delete(upTmp, true); } catch { /* ignore */ }
+}
 
 var hostOs = new ExoHostOsService(registry, optimizer);
 Expect("host os catalog complete", hostOs.CatalogCheck().Count == 0,

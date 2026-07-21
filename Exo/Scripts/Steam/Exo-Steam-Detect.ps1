@@ -303,7 +303,7 @@ if (Test-Path $statePath) {
 }
 
 function Get-SteamLibrarySummary([string]$SteamPath) {
-    # Same language as Riot/Epic install rows: Installed · Found: …
+    # Same language as Riot/Epic install rows: Installed  -  Found: ...
     $names = [System.Collections.Generic.List[string]]::new()
     $count = 0
     try {
@@ -397,7 +397,7 @@ if (-not $steamOk) {
     # Soft: if FSO missing but apply was elevated incomplete, still show tile
     Add-Feature 'Client FSO + priority net' 'Fullscreen Optimizations off on Steam client; UDP DSCP 46 for Steam traffic when elevated apply succeeds.' ($fsoOk -or $dscpOk)
 
-    # Marker only on detect — live library EXE scan is multi-second on large libraries.
+    # Marker only on detect  -  live library EXE scan is multi-second on large libraries.
     # StrictMode-safe: older steam-optimizer.json lacks libraryGamePolicyVerified.
     $libGamesOk = $false
     try {
@@ -407,7 +407,7 @@ if (-not $steamOk) {
     } catch { $libGamesOk = $false }
     Add-Feature 'Library games high-perf GPU' 'Installed Steam games get high-perf GPU preference and DSCP priority (display = Games hub borderless). Windows policy only, game files untouched.' $libGamesOk
 
-    # Reversible background memory priority + in-game CPU yield policy.
+    # Reversible background memory priority + in-game CPU yield + contention guard.
     $memoryGuardOk = $false
     $helper = Join-Path $steam 'Exo-SteamMemoryGuard.ps1'
     if (Test-Path -LiteralPath $helper) {
@@ -416,9 +416,9 @@ if (-not $steamOk) {
             $memoryGuardOk = Test-SteamMemoryGuardText -Text $helperText
         } catch { }
     }
-    Add-Feature 'Yield to your game' 'When a game is running, Steam background UI steps aside  -  more room for FPS and less stutter from the client.' $memoryGuardOk
+    Add-Feature 'Yield to your game' 'In-game CPU yield and contention guard: when a game is running, Steam background UI steps aside - more room for FPS and less stutter from the client.' $memoryGuardOk
 
-    # LIVE checks only — never require a successful state marker (failed/incomplete applies
+    # LIVE checks only  -  never require a successful state marker (failed/incomplete applies
     # were turning real greens into reds: "5 need Apply" while CEF/hardware already on).
     $debloatOk = Test-SteamCompleteClientDebloat $steam
     $dlOk = Test-SteamDownloadConfig $steam
@@ -429,7 +429,7 @@ if (-not $steamOk) {
         if (-not (Test-Path -LiteralPath $cfgPath)) { $true }
         else { [bool]$dlOk }
     } else { $false }
-    Add-Feature 'Cleaner Steam install' 'Caches and leftovers cleared. Your games and shader caches stay untouched.' $debloatCombined
+    Add-Feature 'Complete client debloat' 'Caches and leftovers cleared. Your games and shader caches stay untouched.' $debloatCombined
 
     $snapOk = Test-SteamClientTweaks $steam
     Add-Feature 'Snappier library & overlay' 'Library UI feels lighter and the overlay stays quieter in the background.' $snapOk
@@ -438,7 +438,7 @@ if (-not $steamOk) {
     Add-Feature 'GPU-powered Steam UI' 'Steam web UI uses your GPU so the client stays smooth instead of burning CPU on software paint.' $hardwareOk
 
     $windowsQuietOk = Test-SteamWindowsQuiet $steam
-    Add-Feature 'Silent Windows integration' 'No Steam autostart spam, no toast clutter, tray stays out of the way.' $windowsQuietOk
+    Add-Feature 'Windows quiet shell' 'No Steam autostart spam, no toast clutter, tray stays out of the way.' $windowsQuietOk
 
     # Host Game Mode / HAGS / Game Bar live on the Windows card only.
 
@@ -470,7 +470,7 @@ if (-not $steamOk) {
         $runtimeOk -and $dlOk -and $snapOk -and $hardwareOk -and $windowsQuietOk -and $launchOk -and
         $clientNetOk -and $libGamesOk
 
-    # Status from ALL inactive checklist rows (matches UI) — exclude Optimization verified.
+    # Status from ALL inactive checklist rows (matches UI)  -  exclude Optimization verified.
     $missingAll = @()
     foreach ($f in @($script:features)) {
         $t = [string]$f.title

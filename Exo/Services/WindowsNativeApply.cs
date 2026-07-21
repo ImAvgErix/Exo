@@ -632,6 +632,28 @@ public static class WindowsNativeApply
         };
     }
 
+    /// <summary>
+    /// AI-agent entry: File Explorer / shell declutter already owned by the Windows module
+    /// (nav pins, desktop bin, useful Explorer defaults). No mass ShellEx disable.
+    /// </summary>
+    public static NativeApplyResult ApplyShellQuietOnly(IProgress<string>? progress = null)
+    {
+        var elev = new List<string>();
+        var admin = NativeReg.IsAdministrator();
+        progress?.Report("File Explorer + shell declutter...");
+        var step = SetShellQuietHkcu(admin, elev);
+        progress?.Report(step.Reason);
+        return new NativeApplyResult
+        {
+            Ok = step.Status is "ok" or "partial",
+            Module = "shell",
+            Message = step.Reason,
+            Steps = [step],
+            NeedsElevation = elev.Count > 0 && !admin,
+            ElevatedHklmOps = elev
+        };
+    }
+
     private static NativeApplyStep SetUacNeverNotify(bool admin, List<string> elevOps)
     {
         if (!admin)

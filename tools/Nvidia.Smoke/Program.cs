@@ -271,9 +271,10 @@ var nvidiaPageXaml = Path.Combine(repo, "Exo", "Views", "NvidiaOptimizerPage.xam
 if (File.Exists(nvidiaPageXaml))
 {
     var nx = File.ReadAllText(nvidiaPageXaml);
-    Expect("NVIDIA page Repair CTA + DRS copy",
+    Expect("NVIDIA page Repair CTA wired without full-rollback claim",
         nx.Contains("SecondaryLeftLabel=\"Repair\"", StringComparison.Ordinal) &&
-        nx.Contains("Repair restores the complete NVIDIA profile database", StringComparison.Ordinal));
+        nx.Contains("SecondaryLeftClick=\"Repair_Click\"", StringComparison.Ordinal) &&
+        !nx.Contains("Repair restores the complete NVIDIA profile database", StringComparison.Ordinal));
 }
 Expect("optimizer selects policy from hardware inventory",
     optimizerSrc.Contains("function Get-NvidiaHardwarePolicy", StringComparison.Ordinal) &&

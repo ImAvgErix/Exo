@@ -208,7 +208,7 @@ function Capture-Module {
     $landed = $false
     $clickNote = 'no-nav'
     if ($NavLabels -and $NavLabels.Count -gt 0) {
-        # Ladder: background AX → foreground AX → home-card Open <Module> optimizer
+        # Ladder: background AX -> foreground AX -> home-card Open <Module> optimizer
         $attempts = @(
             @{ Mode = 'background'; Labels = $NavLabels },
             @{ Mode = 'foreground'; Labels = $NavLabels }
@@ -272,7 +272,7 @@ function Capture-Module {
                 Write-Host "[cua-qa]   landed on $Name"
                 break
             }
-            Write-Host "[cua-qa]   not landed after $($att.Mode) — escalate"
+            Write-Host "[cua-qa]   not landed after $($att.Mode)  -  escalate"
         }
     } else {
         $landed = $true

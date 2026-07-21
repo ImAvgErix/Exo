@@ -1,14 +1,18 @@
 ## 4.0.0
 
-- **Exo 4.0 — Exhaustive Maximize + Living AI**
+- **Exo 4.0 — Exhaustive Maximize + Living AI** (reveal release)
 - Living **ExoAIAgent**: Grok 4.5 deep brain when an xAI key is set; local Host OS maximize without a key
 - Optimal-state memory + Home **Maximize** gate (skip when digest matches)
-- Real hands (`ExoAiHands`): Host OS → Windows native AI purge + Exo Competitive power + full Windows Apply; Brave-only + auto-install; Internet quality+Apply; Discord/Steam/Riot/Epic/NVIDIA Apply paths; GPU Control; upscaler scan (risk ack); companions
+- Real hands (`ExoAiHands`): Host OS → Windows native AI purge + Exo Competitive power + full Windows Apply; Brave-only + auto-install; Internet quality+Apply; Discord/Steam/Riot/Epic/NVIDIA Apply paths; GPU Control; upscaler scan/swap with AC skip + backups (risk ack); companions
+- Soft process policy: EcoQoS + soft reclaim on non-foreground owned helpers (never EmptyWorkingSet thrash; AC untouched)
+- Spooler gate (printer-aware), ShellEx audit via Windows declutter, Host OS expansion catalog
 - Deepened power knobs (Intel hybrid / AMD CPPC / USB / PCIe / Wi-Fi / multimedia) via `ExoPowerPlanNative`
 - Exhaustive Copilot/Recall/Widgets/Search/CloudContent AI purge + task quiet
 - Naming standardization: `ExoInternet*`, `Discord-Optimizer.ps1`, `ExoModulePlate`, Home
+- Top-bar shell contract restored for Ui.Smoke (EXO pill + centered modules + TitleBar)
+- Repo integrity green: ASCII PowerShell/VBS, Steam 1.15.0 + soft-reclaim guard contract, NVIDIA NVAPI display markers
 - Settings: xAI API key, optimal gate, upscaler risk ack
-- `tools/Ai.Smoke` in Linux gate
+- `tools/Ai.Smoke` in Linux gate; Test-Linux smokes green
 
 ## 3.16.10
 
