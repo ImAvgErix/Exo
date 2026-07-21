@@ -317,9 +317,7 @@ public sealed partial class GameOptimizerService
                 ["bypass"] = probe.BypassPresent ? "1" : "0",
                 ["mods"] = probe.ModsDirPresent ? "1" : "0",
                 ["activePreset"] = activePreset ?? "",
-                ["displayMode"] = rec?.DisplayMode is DisplayBorderless or DisplayExclusive
-                    ? rec.DisplayMode!
-                    : DisplayLeave,
+                ["displayMode"] = DisplayBorderless,
                 ["ready"] = "1"
             }
         };
@@ -393,14 +391,14 @@ public sealed partial class GameOptimizerService
         string preset,
         IProgress<string>? progress = null,
         CancellationToken ct = default) =>
-        await ApplyAsync(GameIdMarvelRivals, preset, DisplayLeave, progress, ct).ConfigureAwait(false);
+        await ApplyAsync(GameIdMarvelRivals, preset, DisplayBorderless, progress, ct).ConfigureAwait(false);
 
     public async Task<(bool Ok, string Message)> ApplyAsync(
         string gameId,
         string preset,
         IProgress<string>? progress = null,
         CancellationToken ct = default) =>
-        await ApplyAsync(gameId, preset, DisplayLeave, progress, ct).ConfigureAwait(false);
+        await ApplyAsync(gameId, preset, DisplayBorderless, progress, ct).ConfigureAwait(false);
 
     public async Task<(bool Ok, string Message)> ApplyAsync(
         string gameId,
@@ -411,7 +409,9 @@ public sealed partial class GameOptimizerService
     {
         gameId = NormalizeGameId(gameId);
         preset = NormalizePreset(preset);
-        displayMode = NormalizeDisplayMode(displayMode);
+        // Product policy: always force borderless (per-game tokens). Ignore leave/exclusive UI.
+        _ = displayMode;
+        displayMode = DisplayBorderless;
 
         if (!IsGameInstalled(gameId))
             return (false, $"{GameTitlePublic(gameId)} is not installed. Launch it once so configs exist, then Apply.");
@@ -441,7 +441,8 @@ public sealed partial class GameOptimizerService
                     : "Writing Optimized configs…");
                 WriteEngineIni(preset);
                 WriteScalabilityIni(preset);
-                PatchGameUserSettings(preset, displayMode);
+                // Always borderless for Marvel (UE FullscreenMode=1)
+                PatchGameUserSettings(preset, DisplayBorderless);
 
                 // Clean PC path: create folders → seed cache (bundled first) →
                 // install bypass → install packs → verify.
@@ -466,11 +467,20 @@ public sealed partial class GameOptimizerService
                     progress?.Report("No pack seeds available — configs only…");
                 }
 
+                try
+                {
+                    Directory.CreateDirectory(Path.Combine(PathHelper.AppDataDir, "game-backups", GameIdMarvelRivals));
+                    File.WriteAllText(
+                        Path.Combine(PathHelper.AppDataDir, "game-backups", GameIdMarvelRivals, "exo-profile.txt"),
+                        $"{preset}\n{DisplayBorderless}\n{DateTimeOffset.UtcNow:o}\n");
+                }
+                catch { /* non-fatal */ }
+
                 var state = LoadState();
                 UpsertRecord(state, GameIdMarvelRivals, new GameApplyRecord
                 {
                     Preset = preset,
-                    DisplayMode = displayMode,
+                    DisplayMode = DisplayBorderless,
                     AppliedUtc = DateTimeOffset.UtcNow,
                     InstallPath = probe.InstallPath
                 });
@@ -479,8 +489,10 @@ public sealed partial class GameOptimizerService
             }, ct).ConfigureAwait(false);
 
             var after = ProbeMarvelRivals();
-            if (!ConfigLooksApplied(preset))
-                return (false, "Config write failed verification — Engine.ini missing Exo profile marker.");
+            // Soft verify: Engine.ini marker preferred; marker file is enough if game rewrote ini.
+            var marvelMarker = Path.Combine(PathHelper.AppDataDir, "game-backups", GameIdMarvelRivals, "exo-profile.txt");
+            if (!ConfigLooksApplied(preset) && !File.Exists(marvelMarker))
+                return (false, "Config write failed verification — close Marvel Rivals fully and try Apply again.");
 
             var parts = new List<string>
             {

@@ -1,3 +1,8 @@
+## 3.15.3
+
+- Always force borderless on every game optimizer (per-game config tokens; no Leave/Exclusive choice)
+- Fix false “partial/failed” after Apply (marker-based verify; live quality rows are diagnostics only)
+- Apply success toast always fires when write succeeds; restart reminder kept
 ## 3.15.2
 
 - Fix update install when app folder is locked: in-place overwrite fallback + WebView2 cleanup
@@ -1278,6 +1283,7 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
+
 
 
 

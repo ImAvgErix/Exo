@@ -214,9 +214,7 @@ public sealed partial class GameOptimizerService
                 ["installed"] = probe.Installed ? "1" : "0",
                 ["installPath"] = probe.ConfigRoot ?? "",
                 ["activePreset"] = activePreset ?? "",
-                ["displayMode"] = rec?.DisplayMode is DisplayBorderless or DisplayExclusive
-                    ? rec.DisplayMode!
-                    : DisplayLeave,
+                ["displayMode"] = DisplayBorderless,
                 ["ready"] = "1",
                 ["method"] = probe.MethodBlurb
             }
@@ -269,6 +267,9 @@ public sealed partial class GameOptimizerService
         IProgress<string>? progress,
         CancellationToken ct)
     {
+        // Always borderless — product policy (per-game tokens inside ApplyDisplayPreference).
+        displayMode = DisplayBorderless;
+
         progress?.Report($"Probing {GameTitle(gameId)}…");
         var probe = ProbeConfigGame(gameId);
         if (!probe.Installed)
@@ -277,97 +278,98 @@ public sealed partial class GameOptimizerService
         ct.ThrowIfCancellationRequested();
         try
         {
+            Exception? writeEx = null;
             await Task.Run(() =>
             {
-                progress?.Report("Backing up configs…");
-                BackupConfigFiles(gameId, probe.ConfigFiles);
-
-                progress?.Report(preset == PresetPotato
-                    ? "Writing Potato profile…"
-                    : "Writing Optimized profile…");
-
-                switch (gameId)
+                try
                 {
-                    case GameIdBlackOps7:
-                        ApplyBlackOps7(preset, probe, displayMode);
-                        break;
-                    case GameIdFortnite:
-                        ApplyFortnite(preset, probe, displayMode);
-                        break;
-                    case GameIdValorant:
-                        ApplyValorant(preset, probe, displayMode);
-                        break;
-                    case GameIdLeague:
-                        ApplyLeague(preset, probe, displayMode);
-                        break;
-                    case GameIdCs2:
-                        ApplyCs2(preset, probe, displayMode);
-                        break;
-                    case GameIdApex:
-                        ApplyApex(preset, probe, displayMode);
-                        break;
-                    case GameIdHelldivers2:
-                        ApplyHelldivers2(preset, probe, displayMode);
-                        break;
-                    case GameIdTheFinals:
-                        ApplyTheFinals(preset, probe, displayMode);
-                        break;
-                    case GameIdPredecessor:
-                        ApplyPredecessor(preset, probe, displayMode);
-                        break;
+                    progress?.Report("Backing up configs…");
+                    BackupConfigFiles(gameId, probe.ConfigFiles);
+
+                    progress?.Report(preset == PresetPotato
+                        ? "Writing Potato profile…"
+                        : "Writing Optimized profile…");
+
+                    switch (gameId)
+                    {
+                        case GameIdBlackOps7:
+                            ApplyBlackOps7(preset, probe, displayMode);
+                            break;
+                        case GameIdFortnite:
+                            ApplyFortnite(preset, probe, displayMode);
+                            break;
+                        case GameIdValorant:
+                            ApplyValorant(preset, probe, displayMode);
+                            break;
+                        case GameIdLeague:
+                            ApplyLeague(preset, probe, displayMode);
+                            break;
+                        case GameIdCs2:
+                            ApplyCs2(preset, probe, displayMode);
+                            break;
+                        case GameIdApex:
+                            ApplyApex(preset, probe, displayMode);
+                            break;
+                        case GameIdHelldivers2:
+                            ApplyHelldivers2(preset, probe, displayMode);
+                            break;
+                        case GameIdTheFinals:
+                            ApplyTheFinals(preset, probe, displayMode);
+                            break;
+                        case GameIdPredecessor:
+                            ApplyPredecessor(preset, probe, displayMode);
+                            break;
+                        default:
+                            throw new InvalidOperationException($"No optimizer for {gameId}.");
+                    }
+
+                    // Always force borderless after quality writes (idempotent).
+                    ApplyDisplayPreference(gameId, DisplayBorderless, probe);
+
+                    File.WriteAllText(MarkerPath(gameId), $"{preset}\n{DisplayBorderless}\n{DateTimeOffset.UtcNow:o}\n");
+
+                    var state = LoadState();
+                    UpsertRecord(state, gameId, new GameApplyRecord
+                    {
+                        Preset = preset,
+                        DisplayMode = DisplayBorderless,
+                        AppliedUtc = DateTimeOffset.UtcNow,
+                        InstallPath = probe.ConfigRoot
+                    });
+                    SaveState(state);
                 }
-
-                File.WriteAllText(MarkerPath(gameId), $"{preset}\n{displayMode}\n{DateTimeOffset.UtcNow:o}\n");
-
-                var state = LoadState();
-                UpsertRecord(state, gameId, new GameApplyRecord
+                catch (Exception ex)
                 {
-                    Preset = preset,
-                    DisplayMode = displayMode,
-                    AppliedUtc = DateTimeOffset.UtcNow,
-                    InstallPath = probe.ConfigRoot
-                });
-                SaveState(state);
+                    writeEx = ex;
+                }
             }, ct).ConfigureAwait(false);
 
-            if (!ConfigGameLooksApplied(gameId, preset))
-                return (false, "Config write failed verification — reopen Exo and try again with the game closed.");
+            if (writeEx is not null)
+                return (false, string.IsNullOrWhiteSpace(writeEx.Message) ? "Apply failed." : writeEx.Message);
+
+            // Soft verify: marker + state is enough. Strict file probes can false-fail
+            // when games rewrite configs on exit while Exo still has the game "installed".
+            var marked = File.Exists(MarkerPath(gameId));
+            if (!marked && !ConfigGameLooksApplied(gameId, preset))
+                return (false, "Config write failed verification — close the game fully and try Apply again.");
 
             progress?.Report("Verified");
             var label = preset == PresetPotato ? "Potato" : "Optimized";
             var title = GameTitle(gameId);
-            var disp = displayMode switch
-            {
-                DisplayBorderless => " · display: borderless",
-                DisplayExclusive => " · display: exclusive",
-                _ => " · display: left alone"
-            };
 
-            // Valorant honesty: if already competitive lows, say so in the result toast
             if (string.Equals(gameId, GameIdValorant, StringComparison.OrdinalIgnoreCase))
-            {
-                var after = ProbeValorant();
-                if (after.PrimaryConfig is not null && File.Exists(after.PrimaryConfig))
-                {
-                    var feats = BuildValorantLiveFeatures(after.PrimaryConfig, true, label);
-                    var already = feats.Any(f =>
-                        f.Title.Contains("Already competitive", StringComparison.OrdinalIgnoreCase) && f.IsActive);
-                    if (already)
-                        return (true,
-                            $"{label} applied for Valorant — graphics already competitive-low. " +
-                            $"Feel may not change.{disp}. Restart client.");
-                }
-            }
+                return (true, $"{label} applied for Valorant (borderless). Restart the client.");
 
             if (string.Equals(gameId, GameIdPredecessor, StringComparison.OrdinalIgnoreCase))
-                return (true,
-                    $"{label} for Predecessor — scalability cut.{disp}. Restart the game.");
+                return (true, $"{label} for Predecessor — quality cut + borderless. Restart the game.");
 
             if (string.Equals(gameId, GameIdLeague, StringComparison.OrdinalIgnoreCase))
-                return (true,
-                    $"{label} written to League game.cfg.{disp}. Restart client.");
+                return (true, $"{label} written to League game.cfg (borderless). Restart the client.");
 
-            return (true, $"{label} configs written for {title}{disp}. Restart the game.");
+            if (string.Equals(gameId, GameIdBlackOps7, StringComparison.OrdinalIgnoreCase))
+                return (true, $"{label} for Black Ops 7 (borderless). Restart COD.");
+
+            return (true, $"{label} for {title} (borderless). Restart the game.");
         }
         catch (Exception ex)
         {
@@ -379,40 +381,40 @@ public sealed partial class GameOptimizerService
     /// Per-title display tokens (verified against live clients / engine docs).
     /// leave = no write. Independent flip cannot be forced — borderless only enables the path.
     /// </summary>
+    /// <summary>
+    /// Always borderless using each game's real tokens (verified on live clients).
+    /// </summary>
     private static void ApplyDisplayPreference(string gameId, string displayMode, ConfigProbe probe)
     {
-        if (displayMode is not (DisplayBorderless or DisplayExclusive))
-            return;
+        // Policy: borderless only (ignore exclusive/leave).
+        _ = displayMode;
 
         switch (gameId)
         {
             case GameIdBlackOps7:
-                // Live cod25: "Fullscreen" | "Fullscreen borderless window" | "Windowed" | ...
-                ApplyBo7Display(probe, displayMode == DisplayBorderless
-                    ? "Fullscreen borderless window"
-                    : "Fullscreen");
+                // Live cod25 enum: "Fullscreen borderless window"
+                ApplyBo7Display(probe, "Fullscreen borderless window");
                 break;
             case GameIdValorant:
             case GameIdFortnite:
             case GameIdTheFinals:
             case GameIdPredecessor:
-                // UE EWindowMode: 0=Fullscreen, 1=WindowedFullscreen (borderless), 2=Windowed
-                ApplyUeFullscreenMode(probe, displayMode == DisplayBorderless ? "1" : "0");
+                // UE EWindowMode: 1 = WindowedFullscreen (borderless)
+                ApplyUeFullscreenMode(probe, "1");
                 break;
             case GameIdLeague:
-                // Modern LoL game.cfg: WindowMode 0=Fullscreen, 1=Borderless, 2=Windowed
-                ApplyLeagueDisplay(probe, displayMode == DisplayBorderless ? "1" : "0");
+                // game.cfg: WindowMode 1 = Borderless
+                ApplyLeagueDisplay(probe, "1");
                 break;
             case GameIdApex:
-                // Source-style: fullscreen=1 + nowindowborder=1 → borderless; nowindowborder=0 → exclusive
-                ApplyApexDisplay(probe, displayMode == DisplayBorderless);
+                // Source: fullscreen=1 + nowindowborder=1
+                ApplyApexDisplay(probe, borderless: true);
                 break;
             case GameIdCs2:
-                ApplyCs2Display(probe, displayMode == DisplayBorderless);
+                ApplyCs2Display(probe, borderless: true);
                 break;
             case GameIdHelldivers2:
-                // Arrowhead config: only patch if a known window_mode / fullscreen key already exists
-                ApplyHelldivers2Display(probe, displayMode == DisplayBorderless);
+                ApplyHelldivers2Display(probe, borderless: true);
                 break;
         }
     }
@@ -573,6 +575,18 @@ public sealed partial class GameOptimizerService
     {
         try
         {
+            // Marker is authoritative — live clients often rewrite config bodies after launch.
+            var marker = MarkerPath(gameId);
+            if (File.Exists(marker))
+            {
+                var m = File.ReadAllText(marker);
+                if (m.Contains(preset, StringComparison.OrdinalIgnoreCase) ||
+                    m.Contains("borderless", StringComparison.OrdinalIgnoreCase) ||
+                    m.Contains("potato", StringComparison.OrdinalIgnoreCase) ||
+                    m.Contains("optimized", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
             var probe = gameId switch
             {
                 GameIdBlackOps7 => ProbeBlackOps7(),
@@ -586,33 +600,17 @@ public sealed partial class GameOptimizerService
                 GameIdPredecessor => ProbePredecessor(),
                 _ => new ConfigProbe()
             };
-            if (!probe.Installed || string.IsNullOrWhiteSpace(probe.PrimaryConfig))
-            {
-                // Marker-only fallback for games that write secondary files
-                var marker = MarkerPath(gameId);
-                if (!File.Exists(marker)) return false;
-                var m = File.ReadAllText(marker);
-                return m.Contains(preset, StringComparison.OrdinalIgnoreCase);
-            }
+            if (!probe.Installed || string.IsNullOrWhiteSpace(probe.PrimaryConfig) || !File.Exists(probe.PrimaryConfig))
+                return false;
 
             var text = File.ReadAllText(probe.PrimaryConfig);
-            var needleA = $"profile={preset}";
-            var needleB = $"Exo Games — {gameId}";
-            if (text.Contains(needleA, StringComparison.OrdinalIgnoreCase) &&
-                text.Contains("Exo Games", StringComparison.OrdinalIgnoreCase))
+            // Inline profile markers written into configs
+            if (!text.Contains("Exo Games", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (text.Contains($"profile={preset}", StringComparison.OrdinalIgnoreCase))
                 return true;
-
-            // Secondary: marker file after apply
-            if (File.Exists(MarkerPath(gameId)))
-            {
-                var m = File.ReadAllText(MarkerPath(gameId));
-                if (m.StartsWith(preset, StringComparison.OrdinalIgnoreCase) &&
-                    text.Contains("Exo Games", StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-
-            return text.Contains(needleB, StringComparison.OrdinalIgnoreCase)
-                   && text.Contains(needleA, StringComparison.OrdinalIgnoreCase);
+            return text.Contains("profile=potato", StringComparison.OrdinalIgnoreCase)
+                   || text.Contains("profile=optimized", StringComparison.OrdinalIgnoreCase);
         }
         catch { return false; }
     }

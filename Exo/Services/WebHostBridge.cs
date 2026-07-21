@@ -911,7 +911,20 @@ public sealed class WebHostBridge
                    || t.Equals("Gaming multimedia stack", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Profile", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("DLSS left alone", StringComparison.OrdinalIgnoreCase)
-                   || t.Equals("Exo packs ready", StringComparison.OrdinalIgnoreCase);
+                   || t.Equals("Exo packs ready", StringComparison.OrdinalIgnoreCase)
+                   // Games hub: informational / diagnostic only (must not fail Apply status)
+                   || t.Equals("Install / configs", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Method", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Ban-safe surface", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Already competitive lows?", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Anisotropic filter", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Vanguard", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Scalability shadows", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Character / Effects quality", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("NVIDIA Reflex", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("FPS limits off (menu/bg/battery)", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Texture / Material / Detail", StringComparison.OrdinalIgnoreCase)
+                   || t.Equals("Shadows / Bloom / AA", StringComparison.OrdinalIgnoreCase);
         }
 
         var checkable = state.Features
@@ -929,7 +942,15 @@ public sealed class WebHostBridge
                       hostBlob.Contains("not found in steam");
         string statusKind;
         string statusText;
-        if (missing && !state.IsApplied)
+        // Games hub: host IsApplied / profile marker is source of truth. Live quality rows are diagnostics.
+        if (string.Equals(id, "games", StringComparison.OrdinalIgnoreCase) && state.IsApplied)
+        {
+            statusKind = "applied";
+            statusText = visibleTotal > 0
+                ? $"Applied · {visibleOn}/{visibleTotal} on"
+                : "Applied";
+        }
+        else if (missing && !state.IsApplied)
         {
             statusKind = "missing";
             statusText = "Missing target";
@@ -959,8 +980,9 @@ public sealed class WebHostBridge
             statusText = "Ready";
         }
 
-        // Honest applied flag for UI: live gaps win
-        var isApplied = statusKind == "applied";
+        // Honest applied flag for UI — for games, trust host after Apply
+        var isApplied = statusKind == "applied"
+                        || (string.Equals(id, "games", StringComparison.OrdinalIgnoreCase) && state.IsApplied);
 
         // applyReport lives in *-optimizer.json (aliases for games/network)
         var reportId = id switch

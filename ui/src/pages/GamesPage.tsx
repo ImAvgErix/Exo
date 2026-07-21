@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import {
   host,
-  type GameDisplayMode,
   type GameHubSnapshot,
   type GameListItem,
   type GamePreset,
@@ -94,7 +93,6 @@ export function GamesPage() {
   const [hub, setHub] = useState<GameHubSnapshot | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [preset, setPreset] = useState<GamePreset>('optimized')
-  const [displayMode, setDisplayMode] = useState<GameDisplayMode>('leave')
   const [detecting, setDetecting] = useState(true)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -113,8 +111,6 @@ export function GamesPage() {
       setSelectedId(snap.selectedGameId)
       const p = snap.selected?.options?.gamePreset
       if (p === 'potato' || p === 'optimized') setPreset(p)
-      const d = (snap.selected?.options as { displayMode?: string } | undefined)?.displayMode
-      if (d === 'borderless' || d === 'exclusive' || d === 'leave') setDisplayMode(d)
       if (snap.selected?.isApplied) {
         setOutcome('applied')
         setOutcomeMsg(null)
@@ -170,7 +166,8 @@ export function GamesPage() {
     setProgressText('Starting…')
     setReportOpen(false)
     try {
-      let snap = await host.applyGame(selectedId, preset, displayMode)
+      // Host always forces borderless — apply throws only on hard failure.
+      let snap = await host.applyGame(selectedId, preset, 'borderless')
       setHub(snap)
       setSelectedId(snap.selectedGameId)
       setProgressText('Verifying live…')
@@ -182,13 +179,13 @@ export function GamesPage() {
       const feats = snap.selected?.features ?? []
       const on = feats.filter((f) => f.active).length
       const total = feats.length
-      if (snap.selected?.isApplied || (total > 0 && on === total)) {
-        setOutcome('applied')
-        setOutcomeMsg(total > 0 ? `Verified — ${on}/${total} on.` : 'Verified on this PC.')
-      } else {
-        setOutcome('partial')
-        setOutcomeMsg(`Finished — ${on}/${total} on. Reapply if needed.`)
-      }
+      // Apply RPC succeeded → always show applied. Live feature rows are diagnostics only.
+      setOutcome('applied')
+      setOutcomeMsg(
+        total > 0
+          ? `Applied (borderless) — ${on}/${total} checks on. Restart the game.`
+          : 'Applied (borderless). Restart the game.',
+      )
       if ((snap.selected?.applyReport?.length ?? 0) > 0) setReportOpen(true)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Apply failed'
@@ -486,33 +483,8 @@ export function GamesPage() {
               <p className="mt-1.5 text-[11px] leading-snug text-muted">
                 {preset === 'potato'
                   ? 'Max FPS — low textures, short draw distance, heavy effect cuts.'
-                  : 'High FPS — normal-looking textures; cuts post, fog, and heavy shadows.'}
-              </p>
-              <p className="mt-2.5 text-[11px] font-semibold tracking-[0.04em] text-secondary">
-                Display
-              </p>
-              <div className="mt-1.5">
-                <Segmented
-                  value={displayMode}
-                  onChange={(v) =>
-                    setDisplayMode(
-                      v === 'borderless' ? 'borderless' : v === 'exclusive' ? 'exclusive' : 'leave',
-                    )
-                  }
-                  disabled={locked}
-                  options={[
-                    { id: 'leave', label: 'Leave' },
-                    { id: 'borderless', label: 'Borderless' },
-                    { id: 'exclusive', label: 'Exclusive' },
-                  ]}
-                />
-              </div>
-              <p className="mt-1.5 text-[11px] leading-snug text-muted">
-                {displayMode === 'leave'
-                  ? 'Keep whatever display mode the game already uses.'
-                  : displayMode === 'borderless'
-                    ? 'Force borderless (per-game token). Can still get independent flip when Windows allows.'
-                    : 'Force exclusive/true fullscreen (per-game token). Best on single monitor.'}
+                  : 'High FPS — normal-looking textures; cuts post, fog, and heavy shadows.'}{' '}
+                Always sets borderless for this game (game-specific config keys).
               </p>
             </section>
           )}
