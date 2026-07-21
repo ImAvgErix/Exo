@@ -25,7 +25,7 @@
     <AssemblyName>Exo</AssemblyName>
     <Product>Exo</Product>
     <Company>Exo</Company>
-    <Version>3.16.11</Version>
+    <Version>3.16.12</Version>
     <Description>Private, reversible Windows optimization.</Description>
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
@@ -59,11 +59,18 @@
     <Content Include="..\CHANGELOG.md" Link="CHANGELOG.md" Condition="Exists('..\CHANGELOG.md')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!--
+      Always ship committed React UI. Releases previously skipped packing wwwroot
+      when ui/node_modules was absent (CI never ran npm ci) -> "Exo UI not built".
+    -->
+    <Content Include="wwwroot\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <!--
-    Build React UI then re-include wwwroot so hashed asset renames don't leave
-    stale Content paths from evaluation time (MSB3030).
+    Optional rebuild when node_modules exists; re-include so hashed asset renames
+    don't leave stale Content paths from evaluation time (MSB3030).
   -->
   <Target Name="BuildWebUi" BeforeTargets="PrepareForBuild" Condition="Exists('$(MSBuildThisFileDirectory)..\ui\package.json') And Exists('$(MSBuildThisFileDirectory)..\ui\node_modules')">
     <Exec Command="npm run build" WorkingDirectory="$(MSBuildThisFileDirectory)..\ui" IgnoreExitCode="false" />
@@ -73,6 +80,12 @@
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>
     </ItemGroup>
+  </Target>
+
+  <Target Name="EnsureWwwRootPacked" BeforeTargets="PrepareForBuild">
+    <Error
+      Condition="!Exists('$(MSBuildThisFileDirectory)wwwroot\index.html')"
+      Text="Exo/wwwroot/index.html missing. Run: cd ui &amp;&amp; npm ci &amp;&amp; npm run build" />
   </Target>
 
   <!-- Unpackaged WinUI 3 bootstrap -->

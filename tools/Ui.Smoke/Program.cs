@@ -55,6 +55,16 @@ var shippedManifestCs = Path.Combine(repo, "Exo", "Security", "ShippedScriptMani
 var generatedManifestCs = Path.Combine(repo, "Exo", "Security", "ShippedScriptManifest.g.cs");
 
 Expect("files", File.Exists(appXaml) && File.Exists(main) && File.Exists(dash));
+var wwwIndex = Path.Combine(repo, "Exo", "wwwroot", "index.html");
+var exoCsproj = Path.Combine(repo, "Exo", "Exo.csproj");
+Expect("wwwroot index present", File.Exists(wwwIndex));
+if (File.Exists(exoCsproj))
+{
+    var exoProj = File.ReadAllText(exoCsproj);
+    Expect("wwwroot always content-included",
+        exoProj.Contains("Content Include=\"wwwroot\\", StringComparison.Ordinal)
+        && exoProj.Contains("EnsureWwwRootPacked", StringComparison.Ordinal));
+}
 if (File.Exists(programBootCs) && File.Exists(singleInstanceCs) &&
     File.Exists(startupDiagnosticsCs) && File.Exists(nativeSecurityCs))
 {

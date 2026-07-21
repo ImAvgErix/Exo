@@ -1,3 +1,9 @@
+## 3.16.12
+
+- **Ship fix**: always pack `Exo/wwwroot` into the app - CI previously skipped React UI when `ui/node_modules` was missing, so installs showed **Exo UI not built**
+- `Publish-Exo.ps1` runs `npm ci && npm run build` and fails if published `wwwroot/index.html` is missing
+- CI/Release workflows install Node and build the React UI before WinUI build
+
 ## 3.16.11
 
 - **MPO flicker clear**: Apply deletes `OverlayTestMode` / `DisableOverlays` instead of writing OverlayTestMode=5 (stock DWM overlays)
@@ -1401,37 +1407,3 @@
 
 - Deeper kit split: kit/lib modules
 - Universal Equicord profile
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
