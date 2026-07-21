@@ -1,3 +1,9 @@
+## 3.16.3
+
+- First-install welcome: Exo is free; optional Buy Me a Coffee (costs real money — even $1 helps)
+- Settings → Buy me a coffee; README support badge + link → buymeacoffee.com/UhhErix
+- One-time prompt stored in settings (`welcomePromptSeen`); Continue free never blocks the app
+
 ## 3.16.2
 
 - Cross-optimizer ownership pass — pick one owner per key-family and stop dual-writes

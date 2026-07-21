@@ -100,6 +100,7 @@ public sealed class WebHostBridge
                 "shell.settings" => RequestSettings(),
                 "shell.openLogs" => OpenLogsFolder(),
                 "shell.openIssues" => OpenIssues(),
+                "shell.openUrl" => OpenExternalUrl(paramsEl, hasParams),
                 "shell.openNvidiaControlPanel" => OpenNvidiaControlPanel(),
                 "shell.minimize" => MinimizeWindow(),
                 "shell.close" => CloseWindow(),
@@ -391,6 +392,9 @@ public sealed class WebHostBridge
         return (rating, "");
     }
 
+    /// <summary>Public tip jar — free app; optional support.</summary>
+    public const string BuyMeACoffeeUrl = "https://www.buymeacoffee.com/UhhErix";
+
     private object BuildSettings()
     {
         var s = _services.Settings.Current;
@@ -398,6 +402,8 @@ public sealed class WebHostBridge
         {
             appVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "3.7.2",
             checkForUpdatesOnLaunch = s.CheckForUpdatesOnLaunch,
+            welcomePromptSeen = s.WelcomePromptSeen,
+            buyMeACoffeeUrl = BuyMeACoffeeUrl,
             experimentalDefaults = new
             {
                 discord = s.ExperimentalDiscord,
@@ -421,8 +427,36 @@ public sealed class WebHostBridge
             if (p.TryGetProperty("checkForUpdatesOnLaunch", out var u) &&
                 (u.ValueKind is JsonValueKind.True or JsonValueKind.False))
                 s.CheckForUpdatesOnLaunch = u.ValueKind == JsonValueKind.True;
+            if (p.TryGetProperty("welcomePromptSeen", out var w) &&
+                (w.ValueKind is JsonValueKind.True or JsonValueKind.False))
+                s.WelcomePromptSeen = w.ValueKind == JsonValueKind.True;
         });
         return BuildSettings();
+    }
+
+    private object OpenExternalUrl(JsonElement p, bool hasParams)
+    {
+        try
+        {
+            var url = ReadString(p, hasParams, "url")?.Trim();
+            if (string.IsNullOrWhiteSpace(url))
+                url = BuyMeACoffeeUrl;
+            // Only allow http(s) so the bridge cannot launch local files/shells.
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                return new { ok = false, message = "Only http(s) links are allowed." };
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = uri.AbsoluteUri,
+                UseShellExecute = true
+            });
+            return new { ok = true, url = uri.AbsoluteUri };
+        }
+        catch (Exception ex)
+        {
+            return new { ok = false, message = ex.Message };
+        }
     }
 
     private object OpenLogsFolder()

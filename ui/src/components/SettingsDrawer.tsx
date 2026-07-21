@@ -159,6 +159,17 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
     }
   }
 
+  async function openCoffee() {
+    if (busy) return
+    try {
+      const s = await host.getSettings()
+      await host.openUrl(s.buyMeACoffeeUrl || 'https://www.buymeacoffee.com/UhhErix')
+      setLine('Thanks — opened Buy Me a Coffee.')
+    } catch (e) {
+      setLine(e instanceof Error ? e.message : 'Could not open browser.')
+    }
+  }
+
   return (
     <div className="pointer-events-none absolute inset-0 z-50" aria-hidden={false}>
       <button
@@ -261,6 +272,15 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
               <p className="whitespace-pre-wrap text-[11px] leading-snug text-secondary">{line}</p>
             </div>
           )}
+
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void openCoffee()}
+            className="glass-chip mb-1.5 w-full rounded-xl py-2 text-[12px] font-semibold text-secondary hover:text-text hover:brightness-110 disabled:opacity-40"
+          >
+            Buy me a coffee
+          </button>
 
           <div className="grid grid-cols-2 gap-1.5">
             <button

@@ -4,6 +4,12 @@
 
 Exo is a private WinUI 3 app that tunes the host stack that actually affects gaming and voice: network path, GPU driver policy, Discord, Steam, Riot, Epic, and Windows itself. Every change is detected on the live PC, applied through a controlled pipeline, and restorable with Repair.
 
+**Exo is free.** No ads, no account, no paywall. Building and shipping it still costs real money — if it helps you, even **$1** keeps the project going:
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support%20Exo-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/UhhErix)
+
+→ **[buymeacoffee.com/UhhErix](https://www.buymeacoffee.com/UhhErix)** — totally optional.
+
 <p align="center">
   <img src="docs/media/home.png" alt="Exo home — live hardware and network overview" width="920" />
 </p>
@@ -105,6 +111,14 @@ Requirements: Windows 11, .NET 10 SDK, Windows App SDK / WinUI 3 tooling, PowerS
 | [docs/TWEAK-AUDIT.md](docs/TWEAK-AUDIT.md) | Evidence-based tweak keep/drop list |
 | [docs/INTERNET-GOLDEN-PATH.md](docs/INTERNET-GOLDEN-PATH.md) | Network stack contract |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+
+---
+
+## Support the project
+
+Exo is free and always will be. Tips are optional and go a long way:
+
+**[Buy me a coffee →](https://www.buymeacoffee.com/UhhErix)**
 
 ---
 

@@ -29,6 +29,12 @@ public sealed class AppSettings
     public bool ExperimentalRiot { get; set; }
     public bool ExperimentalEpic { get; set; }
 
+    /// <summary>
+    /// When true, the first-install “Exo is free / Buy Me a Coffee” prompt was dismissed.
+    /// Missing on upgrade → false so existing installs see it once.
+    /// </summary>
+    public bool WelcomePromptSeen { get; set; }
+
     public AppSettings Clone() => new()
     {
         CheckForUpdatesOnLaunch = CheckForUpdatesOnLaunch,
@@ -41,6 +47,7 @@ public sealed class AppSettings
         ExperimentalNvidia = ExperimentalNvidia,
         ExperimentalInternet = ExperimentalInternet,
         ExperimentalRiot = ExperimentalRiot,
-        ExperimentalEpic = ExperimentalEpic
+        ExperimentalEpic = ExperimentalEpic,
+        WelcomePromptSeen = WelcomePromptSeen
     };
 }

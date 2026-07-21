@@ -253,12 +253,19 @@ export const host = {
     call<{
       appVersion: string
       checkForUpdatesOnLaunch?: boolean
+      welcomePromptSeen?: boolean
+      buyMeACoffeeUrl?: string
       experimentalDefaults: Record<string, boolean>
     }>('settings.get'),
-  setSettings: (patch: { checkForUpdatesOnLaunch?: boolean }) =>
+  setSettings: (patch: {
+    checkForUpdatesOnLaunch?: boolean
+    welcomePromptSeen?: boolean
+  }) =>
     call<{
       appVersion: string
       checkForUpdatesOnLaunch?: boolean
+      welcomePromptSeen?: boolean
+      buyMeACoffeeUrl?: string
       experimentalDefaults: Record<string, boolean>
     }>('settings.set', patch),
   /** Check + download/install when available. Long timeout for multi-minute SFX download. */
@@ -277,6 +284,11 @@ export const host = {
     }>('settings.checkUpdates', undefined, 30 * 60_000),
   openLogs: () => call<{ ok: boolean; path?: string; message?: string }>('shell.openLogs'),
   openIssues: () => call<{ ok: boolean; message?: string }>('shell.openIssues'),
+  openUrl: (url?: string) =>
+    call<{ ok: boolean; url?: string; message?: string }>(
+      'shell.openUrl',
+      url ? { url } : undefined,
+    ),
   openNvidiaControlPanel: () =>
     call<{ ok: boolean; message?: string }>('shell.openNvidiaControlPanel'),
   minimize: () => call<{ ok: boolean }>('shell.minimize'),
@@ -347,6 +359,8 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
     return Promise.resolve({
       appVersion: '3.7.2-dev',
       checkForUpdatesOnLaunch: true,
+      welcomePromptSeen: true,
+      buyMeACoffeeUrl: 'https://www.buymeacoffee.com/UhhErix',
       experimentalDefaults: {},
     } as T)
   }
@@ -365,6 +379,16 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
   }
   if (method === 'shell.openIssues') {
     return Promise.resolve({ ok: true } as T)
+  }
+  if (method === 'shell.openUrl') {
+    const u =
+      (params?.url as string | undefined) || 'https://www.buymeacoffee.com/UhhErix'
+    try {
+      window.open(u, '_blank', 'noopener,noreferrer')
+    } catch {
+      /* ignore */
+    }
+    return Promise.resolve({ ok: true, url: u } as T)
   }
   if (method === 'shell.minimize' || method === 'shell.close') {
     return Promise.resolve({ ok: true } as T)

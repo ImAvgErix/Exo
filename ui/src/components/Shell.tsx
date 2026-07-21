@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion'
 import { host, type ModuleId } from '../lib/host'
 import { SettingsDrawer } from './SettingsDrawer'
+import { WelcomePrompt } from './WelcomePrompt'
 
 const modules: { id: ModuleId; label: string; logo: string }[] = [
   { id: 'discord', label: 'Discord', logo: '/logos/discord.png' },
@@ -27,6 +28,7 @@ export function Shell() {
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-page text-text">
+      <WelcomePrompt />
       <div className="shrink-0 px-3 pt-2.5">
         <header className="glass specular relative z-20 flex h-12 shrink-0 items-center rounded-2xl px-2">
           <div className={`relative z-10 flex ${SIDE_W} shrink-0 items-center gap-1`}>
