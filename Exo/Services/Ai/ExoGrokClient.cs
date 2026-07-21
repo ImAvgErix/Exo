@@ -143,26 +143,24 @@ public sealed class ExoGrokClient
         return result;
     }
 
-    /// <summary>Local fallback plan when no API key — deterministic Host OS maximize.</summary>
+    /// <summary>Local fallback plan when no API key — deterministic Host OS maximize + apps.</summary>
     public static ExoAnalysisResult LocalMaximizePlan(ExoSystemState state)
     {
         var actions = new List<ExoToolAction>
         {
-            new() { ToolId = "windows.aiPurge", Reason = "Remove Windows AI/background junk" },
-            new() { ToolId = "power.exoCompetitive", Reason = "Deep per-CPU power plan" },
-            new() { ToolId = "hostOs.maximize", Reason = "Exo Host OS coordinated maximize" },
-            new() { ToolId = "browser.braveOnly", Reason = "Brave-only browser policy" },
-            new() { ToolId = "module.internet.apply", Reason = "Internet Golden Path" },
-            new() { ToolId = "module.windows.apply", Reason = "Windows host stack" },
+            new() { ToolId = "hostOs.maximize", Reason = "Exo Host OS: AI purge + power + Windows + input + display" },
+            new() { ToolId = "browser.braveOnly", Reason = "Brave-only + session-safe Brave Apply" },
+            new() { ToolId = "module.internet.apply", Reason = "Internet Golden Path (quality + apply)" },
             new() { ToolId = "module.discord.apply", Reason = "Discord (auto-install if needed)" },
             new() { ToolId = "module.steam.apply", Reason = "Steam (auto-install if needed)" },
-            new() { ToolId = "module.brave.apply", Reason = "Brave session-safe optimize" },
-            new() { ToolId = "gpu.control.maximize", Reason = "Exo GPU Control" },
-            new() { ToolId = "upscaler.maximizeSupportedGames", Reason = "Upscaler swap (risk ack)" },
+            new() { ToolId = "module.riot.apply", Reason = "Riot Client (auto-install if needed)" },
+            new() { ToolId = "module.epic.apply", Reason = "Epic Launcher (auto-install if needed)" },
+            new() { ToolId = "gpu.control.maximize", Reason = "Exo GPU Control + NVIDIA Apply" },
+            new() { ToolId = "upscaler.maximizeSupportedGames", Reason = "Upscaler scan (risk ack)" },
             new() { ToolId = "companion.taskManager.install", Reason = "Exo Task Manager" },
             new() { ToolId = "companion.snip.install", Reason = "Exo Snip" },
             new() { ToolId = "process.ecoQosLaunchers", Reason = "EcoQoS launchers" },
-            new() { ToolId = "display.hagsMpoVrrMatrix", Reason = "Display matrix" }
+            new() { ToolId = "ownership.dryRun", Reason = "Ownership matrix verify" }
         };
 
         return new ExoAnalysisResult
@@ -177,17 +175,17 @@ public sealed class ExoGrokClient
                 new ExoPlanStep
                 {
                     Priority = 1,
-                    Title = "Host OS + AI purge + power",
+                    Title = "Host OS + AI purge + power + Windows",
                     CleanSlate = "Normalize power plan and AI policies before apply",
-                    Reasoning = "Foundational machine-wide maximize",
+                    Reasoning = "Foundational machine-wide maximize via live native Apply",
                     Domain = "hostOs"
                 },
                 new ExoPlanStep
                 {
                     Priority = 2,
-                    Title = "Apps + Brave-only + GPU + upscaler",
+                    Title = "Brave-only + apps + GPU + upscaler",
                     CleanSlate = "Install missing targets; session-safe browser; snapshot GPU/DRS",
-                    Reasoning = "High-impact user surfaces",
+                    Reasoning = "High-impact user surfaces with auto-install",
                     Domain = "apps"
                 }
             ],

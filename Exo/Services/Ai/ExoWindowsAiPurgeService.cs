@@ -3,8 +3,7 @@ using Exo.Models.Ai;
 namespace Exo.Services.Ai;
 
 /// <summary>
-/// Exhaustive Windows + OEM + browser + overlay AI/background purge catalog.
-/// Detect must cover packages + policies + tasks — not a single DWORD.
+/// Exhaustive AI/background purge catalog. Live writes: ExoAiHands → WindowsNativeApply.ApplyAiPurgeOnly.
 /// </summary>
 public sealed class ExoWindowsAiPurgeService
 {
@@ -15,6 +14,7 @@ public sealed class ExoWindowsAiPurgeService
         @"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI|DisableAIDataAnalysis",
         @"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI|TurnOffSavingSnapshots",
         @"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI|AllowRecallEnablement",
+        @"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI|DisableClickToDo",
         @"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced|ShowCopilotButton",
         @"HKCU\Software\Microsoft\Windows\Shell\Copilot|IsCopilotAvailable",
         @"HKLM\SOFTWARE\Policies\Microsoft\Dsh|AllowNewsAndInterests",
@@ -90,28 +90,14 @@ public sealed class ExoWindowsAiPurgeService
         var counts = CatalogCounts();
         progress?.Report(
             $"ai-purge: policies={counts["policies"]} tasks={counts["tasks"]} packages={counts["packages"]}");
-
-        if (!OperatingSystem.IsWindows())
-        {
-            return Task.FromResult(new ExoToolResult
-            {
-                ToolId = "windows.aiPurge",
-                Success = true,
-                Status = "ok",
-                Message =
-                    $"AI purge catalog ready (policies={counts["policies"]}, packages={counts["packages"]}); apply requires Windows"
-            });
-        }
-
-        // Live writes are performed by WindowsNativeApply / Host OS elevated ops.
-        // This service owns the exhaustive detect surface the agent must verify.
         return Task.FromResult(new ExoToolResult
         {
             ToolId = "windows.aiPurge",
             Success = true,
-            Status = "ok",
-            Message =
-                $"AI/background purge queued across {counts.Values.Sum()} surfaces (policies+tasks+packages+OEM+browser+overlay)"
+            Status = OperatingSystem.IsWindows() ? "ok" : "skip",
+            Message = OperatingSystem.IsWindows()
+                ? $"Route via ExoAiHands → ApplyAiPurgeOnly ({counts.Values.Sum()} surfaces)"
+                : $"AI purge catalog ready (policies={counts["policies"]}, packages={counts["packages"]}); apply requires Windows"
         });
     }
 
@@ -122,9 +108,9 @@ public sealed class ExoWindowsAiPurgeService
         {
             ToolId = "windows.backgroundQuiet",
             Success = true,
-            Status = "ok",
+            Status = OperatingSystem.IsWindows() ? "ok" : "skip",
             Message = OperatingSystem.IsWindows()
-                ? "Background quiet queued (CE IP / Feedback / MapsUpdate / Consumer Experience)"
+                ? "Background quiet via Host OS / module.windows.apply (PC-aware Task Scheduler)"
                 : "Background quiet catalog ready (Windows apply)"
         });
     }

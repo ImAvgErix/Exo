@@ -72,6 +72,7 @@ jobs:
             'tools/Steam.Smoke/Steam.Smoke.csproj',
             'tools/Nvidia.Smoke/Nvidia.Smoke.csproj',
             'tools/GameLaunchers.Smoke/GameLaunchers.Smoke.csproj',
+            'tools/Ai.Smoke/Ai.Smoke.csproj',
             'tools/Contracts.Smoke/Contracts.Smoke.csproj'
           )
           foreach ($p in $projects) {

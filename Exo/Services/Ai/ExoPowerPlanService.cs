@@ -3,8 +3,8 @@ using Exo.Models.Ai;
 namespace Exo.Services.Ai;
 
 /// <summary>
-/// Deep per-CPU Exo Competitive power plans — Intel hybrid P/E, AMD CPPC, unlock+write knobs.
-/// Live powercfg writes run on Windows; Linux smoke validates the knob catalog.
+/// Deep per-CPU Exo Competitive power plan catalog (Intel/AMD/hybrid knobs).
+/// Live writes: ExoAiHands → WindowsNativeApply.ApplyPowerPlanOnly / ExoPowerPlanNative.
 /// </summary>
 public sealed class ExoPowerPlanService
 {
@@ -12,7 +12,6 @@ public sealed class ExoPowerPlanService
     public const string SchemeNameAmd = "Exo Competitive AMD";
     public const string SchemeNameHybrid = "Exo Competitive Hybrid";
 
-    /// <summary>powercfg subgroup/setting GUIDs Exo always unhides and writes.</summary>
     public static readonly IReadOnlyList<PowerKnob> Catalog =
     [
         new("PROCESSOR_IDLEDISABLE", "Idle disable (desktop gaming)", "intel,amd,hybrid"),
@@ -43,21 +42,12 @@ public sealed class ExoPowerPlanService
 
     public string DetectVendorHint(ExoSystemState? state = null)
     {
-        var cpu = state?.Hardware.GetValueOrDefault("cpuName")
-                  ?? state?.Domains.GetValueOrDefault("cpu")?.ToString()
-                  ?? "";
+        var cpu = state?.Hardware.GetValueOrDefault("cpuName") ?? "";
         if (cpu.Contains("AMD", StringComparison.OrdinalIgnoreCase) ||
             cpu.Contains("Ryzen", StringComparison.OrdinalIgnoreCase))
             return "amd";
-        if (cpu.Contains("Intel", StringComparison.OrdinalIgnoreCase) ||
-            cpu.Contains("Core", StringComparison.OrdinalIgnoreCase))
-        {
-            // Soft hybrid heuristic: high logical count often means P+E
-            if (Environment.ProcessorCount >= 12)
-                return "hybrid";
-            return "intel";
-        }
-
+        if (Environment.ProcessorCount >= 12)
+            return "hybrid";
         return OperatingSystem.IsWindows() ? "intel" : "linux";
     }
 
@@ -74,54 +64,24 @@ public sealed class ExoPowerPlanService
             (vendor.Equals("hybrid", StringComparison.OrdinalIgnoreCase) &&
              v.Trim().Equals("intel", StringComparison.OrdinalIgnoreCase)))).ToList();
 
-    public async Task<ExoToolResult> ApplyAsync(
+    public Task<ExoToolResult> ApplyAsync(
         ExoSystemState? state = null,
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var vendor = DetectVendorHint(state);
         var scheme = SchemeNameFor(vendor);
         var knobs = KnobsFor(vendor);
         progress?.Report($"power: {scheme} ({knobs.Count} knobs)");
-
-        if (!OperatingSystem.IsWindows())
-        {
-            return new ExoToolResult
-            {
-                ToolId = "power.exoCompetitive",
-                Success = true,
-                Status = "ok",
-                Message = $"catalog ready for {scheme}; apply requires Windows ({knobs.Count} knobs)"
-            };
-        }
-
-        // On Windows Host OS Apply paths call into WindowsNativeApply powercfg.
-        // Here we stamp intent + attempt a non-elevated powercfg query for parity checks.
-        try
-        {
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "powercfg",
-                Arguments = "/getactivescheme",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc is not null)
-                await proc.WaitForExitAsync(ct).ConfigureAwait(false);
-        }
-        catch
-        {
-            // best-effort
-        }
-
-        return new ExoToolResult
+        return Task.FromResult(new ExoToolResult
         {
             ToolId = "power.exoCompetitive",
             Success = true,
-            Status = "ok",
-            Message = $"Exo Competitive {vendor} plan queued ({knobs.Count} knobs; unlock+write via Host OS)"
-        };
+            Status = OperatingSystem.IsWindows() ? "ok" : "skip",
+            Message = OperatingSystem.IsWindows()
+                ? $"Route via ExoAiHands → ExoPowerPlanNative ({scheme}, {knobs.Count} knobs)"
+                : $"catalog ready for {scheme}; apply requires Windows ({knobs.Count} knobs)"
+        });
     }
 }

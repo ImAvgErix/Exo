@@ -1,3 +1,15 @@
+## 4.0.0
+
+- **Exo 4.0 — Exhaustive Maximize + Living AI**
+- Living **ExoAIAgent**: Grok 4.5 deep brain when an xAI key is set; local Host OS maximize without a key
+- Optimal-state memory + Home **Maximize** gate (skip when digest matches)
+- Real hands (`ExoAiHands`): Host OS → Windows native AI purge + Exo Competitive power + full Windows Apply; Brave-only + auto-install; Internet quality+Apply; Discord/Steam/Riot/Epic/NVIDIA Apply paths; GPU Control; upscaler scan (risk ack); companions
+- Deepened power knobs (Intel hybrid / AMD CPPC / USB / PCIe / Wi-Fi / multimedia) via `ExoPowerPlanNative`
+- Exhaustive Copilot/Recall/Widgets/Search/CloudContent AI purge + task quiet
+- Naming standardization: `ExoInternet*`, `Discord-Optimizer.ps1`, `ExoModulePlate`, Home
+- Settings: xAI API key, optimal gate, upscaler risk ack
+- `tools/Ai.Smoke` in Linux gate
+
 ## 3.16.10
 
 - **Home dash GPU**: detect **NVIDIA / AMD Radeon / Intel Arc + UHD/Iris** via WMI + registry; prefer discrete dGPU over iGPU

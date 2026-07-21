@@ -30,6 +30,7 @@ public sealed class AppServices
     public ExoHostOsService AiHostOs { get; }
     public ExoPowerPlanService AiPower { get; } = new();
     public ExoWindowsAiPurgeService AiPurge { get; } = new();
+    public ExoAiHands AiHands { get; }
     public ExoAIAgent AiAgent { get; }
 
     private CancellationTokenSource? _aiRunCts;
@@ -46,6 +47,19 @@ public sealed class AppServices
         AiOptimizer = new ExoOptimizerService(AiTools, AiState);
         AiBraveOnly = new ExoBraveOnlyService(AiAutoInstall);
         AiHostOs = new ExoHostOsService(AiTools, AiOptimizer);
+        AiHands = new ExoAiHands(
+            NativeApply,
+            Internet,
+            PowerShell,
+            Scripts,
+            Settings,
+            AiAutoInstall,
+            AiBraveOnly,
+            AiUpscaler,
+            AiCompanions,
+            AiGpu,
+            AiPcControl,
+            Games);
         AiAgent = new ExoAIAgent(
             AiState,
             AiInventory,
@@ -59,131 +73,18 @@ public sealed class AppServices
 
     private void BindAiToolExecutors()
     {
-        AiTools.Rebind("hostOs.maximize", async (_, ct) =>
+        // Bind every registered tool id to live ExoAiHands (real Apply / native / PS).
+        foreach (var id in AiTools.CatalogIds())
         {
-            var results = await AiOptimizer
-                .ExecuteAsync(ExoHostOsService.BuildMaximizeActions(), ct: ct)
-                .ConfigureAwait(false);
-            var ok = results.Count == 0 || results.Any(r => r.Success);
-            return new Models.Ai.ExoToolResult
-            {
-                Success = ok,
-                Status = ok ? "ok" : "partial",
-                Message = $"Host OS maximize: {results.Count(r => r.Success)}/{results.Count} ok"
-            };
-        });
-
-        AiTools.Rebind("power.exoCompetitive", async (_, ct) =>
-            await AiPower.ApplyAsync(ct: ct).ConfigureAwait(false));
-
-        AiTools.Rebind("windows.aiPurge", async (_, ct) =>
-            await AiPurge.PurgeAsync(ct: ct).ConfigureAwait(false));
-
-        AiTools.Rebind("windows.backgroundQuiet", async (_, ct) =>
-            await AiPurge.BackgroundQuietAsync(ct).ConfigureAwait(false));
-
-        AiTools.Rebind("browser.braveOnly", async (_, ct) =>
-        {
-            var (ok, msg, n) = await AiBraveOnly.EnforceAsync(ct: ct).ConfigureAwait(false);
-            return new Models.Ai.ExoToolResult
-            {
-                Success = ok,
-                Status = ok ? "ok" : "error",
-                Message = msg,
-                After = n.ToString()
-            };
-        });
-
-        AiTools.Rebind("upscaler.maximizeSupportedGames", (_, _) =>
-        {
-            if (!Settings.Current.UpscalerRiskAcknowledged)
-            {
-                return Task.FromResult(new Models.Ai.ExoToolResult
-                {
-                    Success = false,
-                    Status = "blocked",
-                    Message = "Acknowledge upscaler risk in Settings before swapping DLLs."
-                });
-            }
-
-            return Task.FromResult(new Models.Ai.ExoToolResult
-            {
-                Success = true,
-                Status = "ok",
-                Message = "Upscaler maximize ready (scan+swap on Windows with backups)"
-            });
-        });
-
-        AiTools.Rebind("gpu.control.maximize", (_, _) =>
-        {
-            var (ok, msg) = AiGpu.Maximize();
-            return Task.FromResult(new Models.Ai.ExoToolResult
-            {
-                Success = ok,
-                Status = ok ? "ok" : "error",
-                Message = msg
-            });
-        });
-
-        foreach (var (toolId, companionId) in new[]
-                 {
-                     ("companion.snip.install", "snip"),
-                     ("companion.notepad.install", "notepad"),
-                     ("companion.photos.install", "photos"),
-                     ("companion.taskManager.install", "taskManager"),
-                     ("search.everything", "everything"),
-                     ("eartrumpet.install", "earTrumpet")
-                 })
-        {
-            var capture = companionId;
-            AiTools.Rebind(toolId, (_, _) =>
-            {
-                var (ok, msg) = AiCompanions.EnsureInstalled(capture);
-                return Task.FromResult(new Models.Ai.ExoToolResult
-                {
-                    Success = ok,
-                    Status = ok ? "ok" : "error",
-                    Message = msg
-                });
-            });
+            var toolId = id;
+            AiTools.Rebind(toolId, (parameters, ct) =>
+                AiHands.RunAsync(toolId, parameters, progress: null, ct));
         }
-
-        foreach (var target in new[] { "discord", "steam", "brave", "riot", "epic" })
-        {
-            var capture = target;
-            AiTools.Rebind($"module.{capture}.apply", async (_, ct) =>
-            {
-                var (ok, msg) = await AiAutoInstall.EnsureInstalledAsync(capture, ct: ct)
-                    .ConfigureAwait(false);
-                return new Models.Ai.ExoToolResult
-                {
-                    Success = ok || AiAutoInstall.IsPresent(capture),
-                    Status = ok ? "ok" : "needs-network",
-                    Message = msg + " — module Apply follows when present"
-                };
-            });
-        }
-
-        AiTools.Rebind("automation.ui.settings", async (p, ct) =>
-        {
-            var page = p.GetValueOrDefault("page") ?? "display";
-            var (ok, msg) = await AiPcControl.RunUiSequenceAsync("settings:" + page, ct)
-                .ConfigureAwait(false);
-            return new Models.Ai.ExoToolResult
-            {
-                Success = ok,
-                Status = ok ? "ok" : "error",
-                Message = msg
-            };
-        });
     }
 
     public void Initialize()
     {
         Settings.Load();
-        // No startup downloads, package installs, or script copies. Optimizer kits
-        // self-sync in Get*Root(), and PowerShell 7 is prepared only after a user
-        // explicitly starts Apply/Repair.
     }
 
     public CancellationToken BeginAiRun()
@@ -199,10 +100,6 @@ public sealed class AppServices
         try { _aiRunCts?.Cancel(); } catch { /* ignore */ }
     }
 
-    /// <summary>
-    /// After first paint: stage kit trees + resolve pwsh off the UI thread so the
-    /// first module open does not pay a cold kit copy + PATH scan.
-    /// </summary>
     public void WarmInBackground()
     {
         _ = Task.Run(async () =>
@@ -210,21 +107,18 @@ public sealed class AppServices
             try
             {
                 Scripts.EnsureKitsMatchThisApp();
-                // Touch each root once so working kits exist before the user clicks.
                 _ = Scripts.GetDiscordRoot();
                 _ = Scripts.GetSteamRoot();
                 _ = Scripts.GetNvidiaRoot();
                 _ = Scripts.GetGameLaunchersRoot();
                 PowerShell.WarmResolvePowerShell();
-                // Fast heuristics only — prime status JSON path so first module
-                // open is less cold (full script detect still runs on open).
                 _ = await OptimizerState.DetectDiscordAsync(fastOnly: true).ConfigureAwait(false);
                 _ = await OptimizerState.DetectSteamAsync(fastOnly: true).ConfigureAwait(false);
                 _ = await OptimizerState.DetectNvidiaAsync(fastOnly: true).ConfigureAwait(false);
             }
             catch
             {
-                // Best-effort warm; real opens re-run the same paths.
+                // Best-effort warm
             }
         });
     }

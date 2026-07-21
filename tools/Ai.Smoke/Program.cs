@@ -140,7 +140,8 @@ var local = ExoGrokClient.LocalMaximizePlan(state);
 Expect("local plan has actions", local.Actions.Count >= 8);
 Expect("local plan source", local.Source == "local");
 Expect("local includes hostOs", local.Actions.Any(a => a.ToolId == "hostOs.maximize"));
-Expect("local includes ai purge", local.Actions.Any(a => a.ToolId == "windows.aiPurge"));
+Expect("local includes brave-only", local.Actions.Any(a => a.ToolId == "browser.braveOnly"));
+Expect("local includes internet", local.Actions.Any(a => a.ToolId == "module.internet.apply"));
 
 // --- Optimizer execute (stubs) ---
 var optimizer = new ExoOptimizerService(registry, new ExoStateManager());

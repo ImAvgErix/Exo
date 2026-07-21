@@ -17,17 +17,15 @@ public sealed class ExoHostOsService
     public static IReadOnlyList<ExoToolAction> BuildMaximizeActions() =>
     [
         new() { ToolId = "windows.aiPurge", Reason = "AI/background purge" },
-        new() { ToolId = "windows.backgroundQuiet", Reason = "Background quiet" },
         new() { ToolId = "power.exoCompetitive", Reason = "Deep power plan" },
         new() { ToolId = "module.windows.apply", Reason = "Windows host stack" },
-        new() { ToolId = "module.internet.apply", Reason = "Internet" },
-        new() { ToolId = "display.hagsMpoVrrMatrix", Reason = "Display matrix" },
         new() { ToolId = "input.rawMouse", Reason = "Input" },
-        new() { ToolId = "audio.exclusive48k", Reason = "Audio" },
-        new() { ToolId = "storage.trimWeekly", Reason = "Storage" },
+        new() { ToolId = "display.hagsMpoVrrMatrix", Reason = "Display matrix" },
         new() { ToolId = "process.ecoQosLaunchers", Reason = "EcoQoS" },
         new() { ToolId = "shell.shellExAudit", Reason = "ShellEx" },
-        new() { ToolId = "print.spoolerGate", Reason = "Spooler gate" }
+        new() { ToolId = "print.spoolerGate", Reason = "Spooler gate" },
+        new() { ToolId = "storage.trimWeekly", Reason = "Storage" },
+        new() { ToolId = "ownership.dryRun", Reason = "Ownership" }
     ];
 
     public Task<IReadOnlyList<ExoToolResult>> MaximizeAsync(
