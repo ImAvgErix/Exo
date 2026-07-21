@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { host, onHostEvent } from '../lib/host'
 
 const FALLBACK_COFFEE = 'https://www.buymeacoffee.com/UhhErix'
@@ -9,6 +9,10 @@ type ChangelogSection = { version: string; bullets: string[] }
 /**
  * Settings popover — glass sheet aligned with exo-ui-craft.
  * Links: Logs · Changelog (in-app) · Report issue · Buy me a coffee.
+ *
+ * All React hooks must run unconditionally before any early return. A
+ * post-return useMemo (3.16.8 linkGuard) crashed React on open and blanked
+ * the whole WebView UI.
  */
 export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [version, setVersion] = useState('—')
@@ -23,6 +27,8 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
   const [changelogLoading, setChangelogLoading] = useState(false)
   const [changelogSections, setChangelogSections] = useState<ChangelogSection[]>([])
   const [changelogError, setChangelogError] = useState<string | null>(null)
+  // Prevent double-fire (pointer + click, or stacked host handlers) from opening two tabs.
+  const linkGuard = useRef({ last: 0 })
 
   useEffect(() => {
     if (!open) {
@@ -155,14 +161,11 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
     }
   }
 
-  // Prevent double-fire (pointer + click, or stacked host handlers) from opening two tabs.
-  const linkGuard = useMemo(() => ({ last: 0 }), [])
-
   async function openLink(url: string, okLine: string, failFallback = 'Could not open browser.') {
     if (busy) return
     const now = Date.now()
-    if (now - linkGuard.last < 700) return
-    linkGuard.last = now
+    if (now - linkGuard.current.last < 700) return
+    linkGuard.current.last = now
     try {
       const r = await host.openUrl(url)
       setLine(r.ok ? okLine : r.message || failFallback)

@@ -304,6 +304,23 @@ if (File.Exists(reactShell))
         shell.Contains("host.minimize()", StringComparison.Ordinal)
         && shell.Contains("host.close()", StringComparison.Ordinal));
 }
+// SettingsDrawer: hooks after the closed-state early return blank the whole WebView on gear click.
+var settingsDrawer = Path.Combine(repo, "ui", "src", "components", "SettingsDrawer.tsx");
+if (File.Exists(settingsDrawer))
+{
+    var sd = File.ReadAllText(settingsDrawer);
+    // Match the real statement (not JSDoc) — indented code line only.
+    var earlyMatch = System.Text.RegularExpressions.Regex.Match(
+        sd,
+        @"(?m)^[ \t]+if \(!open\) return null\s*$");
+    Expect("settings drawer early return", earlyMatch.Success);
+    var afterEarly = earlyMatch.Success ? sd.Substring(earlyMatch.Index) : sd;
+    Expect(
+        "no React hooks after settings early return",
+        !System.Text.RegularExpressions.Regex.IsMatch(
+            afterEarly,
+            @"\buse(Memo|State|Effect|Ref|Callback|LayoutEffect|Id)\s*\("));
+}
 // Thin native drag strip + WebView bridge — captions/nav are React.
 var mainCs = Path.Combine(repo, "Exo", "MainWindow.xaml.cs");
 if (File.Exists(mainCs))
