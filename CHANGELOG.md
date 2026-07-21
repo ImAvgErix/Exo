@@ -1,3 +1,10 @@
+## 3.16.5
+
+- Windows scheduled tasks: expanded quiet list (path fixes for DeviceDirectoryClient, UpdateOrchestrator, Windows AI, AppListBackup, EDP, …)
+- Root-folder browser/EQ updaters (Edge/Brave/Google/EqualizerAPO) disabled by name match — never touches cua-driver or shell helpers
+- Empty Task Scheduler folders removed bottom-up after quiet (security folders protected)
+- Still **disable-only** for Microsoft tasks (never delete task definitions)
+
 ## 3.16.4
 
 - Settings: Changelog + Releases buttons; cleaner layout (16px pad, 12px gaps, equal row heights)

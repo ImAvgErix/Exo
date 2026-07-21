@@ -115,7 +115,7 @@ public static class WindowsNativeApply
         Report("USB selective suspend off (controllers/devices)...");
         steps.Add(SetUsbNoSelectiveSuspend(admin, elevOps));
 
-        Report("Scheduled-task quiet (full known list, hard-timeout each)...");
+        Report("Scheduled-task quiet (expanded list + empty folders)...");
         steps.Add(DisableKnownBloatTasks());
 
         Report("Optional features (DISM shortlist, hard-timeout each)...");
@@ -585,124 +585,19 @@ public static class WindowsNativeApply
     }
 
     /// <summary>
-    /// Disable known bloat/telemetry tasks by explicit path. Each schtasks call hard-timeout 2.5s.
-    /// No Get-ScheduledTask enumeration (can hang). Full list = all competitive quiet targets.
+    /// Disable competitive-quiet tasks by exact path (never delete Microsoft tasks).
+    /// Then remove truly empty Task Scheduler folders. Never touches security/recovery
+    /// stacks (BitLocker, TPM, certs, chkdsk, restore, AC) or user tools like cua-driver.
     /// </summary>
     private static NativeApplyStep DisableKnownBloatTasks()
     {
-        var tasks = new[]
-        {
-            // Application Experience / CEIP / Feedback
-            @"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
-            @"\Microsoft\Windows\Application Experience\ProgramDataUpdater",
-            @"\Microsoft\Windows\Application Experience\StartupAppTask",
-            @"\Microsoft\Windows\Application Experience\PcaPatchDbTask",
-            @"\Microsoft\Windows\Application Experience\MareBackup",
-            @"\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
-            @"\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
-            @"\Microsoft\Windows\Customer Experience Improvement Program\KernelCeipTask",
-            @"\Microsoft\Windows\Feedback\Siuf\DmClient",
-            @"\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload",
-            @"\Microsoft\Windows\Windows Error Reporting\QueueReporting",
-            // Cloud / content / maps / location
-            @"\Microsoft\Windows\CloudExperienceHost\CreateObjectTask",
-            @"\Microsoft\Windows\CloudRestore\Backup",
-            @"\Microsoft\Windows\CloudRestore\Restore",
-            @"\Microsoft\Windows\Maps\MapsToastTask",
-            @"\Microsoft\Windows\Maps\MapsUpdateTask",
-            @"\Microsoft\Windows\Location\Notifications",
-            @"\Microsoft\Windows\Location\WindowsActionDialog",
-            // Diagnosis / maintenance noise
-            @"\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector",
-            @"\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticResolver",
-            @"\Microsoft\Windows\Power Efficiency Diagnostics\AnalyzeSystem",
-            @"\Microsoft\Windows\Maintenance\WinSAT",
-            @"\Microsoft\Windows\Diagnosis\Scheduled",
-            @"\Microsoft\Windows\MemoryDiagnostic\ProcessMemoryDiagnosticEvents",
-            @"\Microsoft\Windows\MemoryDiagnostic\RunFullMemoryDiagnostic",
-            // Shell / family / PI / retail
-            @"\Microsoft\Windows\Shell\FamilySafetyMonitor",
-            @"\Microsoft\Windows\Shell\FamilySafetyRefreshTask",
-            @"\Microsoft\Windows\Shell\IndexerAutomaticMaintenance",
-            @"\Microsoft\Windows\PI\Sqm-Tasks",
-            @"\Microsoft\Windows\RetailDemo\CleanupOfflineContent",
-            // Xbox / game save noise (not AC)
-            @"\Microsoft\XblGameSave\XblGameSaveTask",
-            // Push / device / autopilot
-            @"\Microsoft\Windows\PushToInstall\LoginCheck",
-            @"\Microsoft\Windows\PushToInstall\Registration",
-            @"\Microsoft\Windows\Device Information\Device",
-            @"\Microsoft\Windows\Device Information\Device User",
-            @"\Microsoft\Windows\Device Directory Client\HandleCommand",
-            @"\Microsoft\Windows\Device Directory Client\HandleWnsCommand",
-            @"\Microsoft\Windows\Device Directory Client\IntegrityCheck",
-            @"\Microsoft\Windows\Device Directory Client\LocateCommandUserSession",
-            @"\Microsoft\Windows\Device Directory Client\RegisterDeviceAccountChange",
-            @"\Microsoft\Windows\Device Directory Client\RegisterDeviceLocationRightsChange",
-            @"\Microsoft\Windows\Device Directory Client\RegisterDevicePeriodic24",
-            @"\Microsoft\Windows\Device Directory Client\RegisterDevicePolicyChange",
-            @"\Microsoft\Windows\Device Directory Client\RegisterDeviceProtectionStateChanged",
-            @"\Microsoft\Windows\Device Directory Client\RegisterDeviceSettingChange",
-            @"\Microsoft\Windows\Device Directory Client\RegisterUserDevice",
-            // WU / WaaS / flighting (pause companion — safe competitive quiet)
-            @"\Microsoft\Windows\WindowsUpdate\Scheduled Start",
-            @"\Microsoft\Windows\WaaSMedic\PerformRemediation",
-            @"\Microsoft\Windows\Flighting\FeatureConfig\ReconcileFeatures",
-            @"\Microsoft\Windows\Flighting\FeatureConfig\UsageDataFlushing",
-            @"\Microsoft\Windows\Flighting\FeatureConfig\UsageDataReporting",
-            @"\Microsoft\Windows\Flighting\OneSettings\RefreshCache",
-            // Input / speech / international
-            @"\Microsoft\Windows\Speech\SpeechModelDownloadTask",
-            @"\Microsoft\Windows\International\Synchronize Language Settings",
-            @"\Microsoft\Windows\LanguageComponentsInstaller\Installation",
-            @"\Microsoft\Windows\LanguageComponentsInstaller\ReconcileLanguageResources",
-            // Defender scheduled scans (policy already disabled AV; quiet residual tasks)
-            @"\Microsoft\Windows\Windows Defender\Windows Defender Cache Maintenance",
-            @"\Microsoft\Windows\Windows Defender\Windows Defender Cleanup",
-            @"\Microsoft\Windows\Windows Defender\Windows Defender Scheduled Scan",
-            @"\Microsoft\Windows\Windows Defender\Windows Defender Verification",
-            // Media sharing / UPnP / WOF
-            @"\Microsoft\Windows\Windows Media Sharing\UpdateLibrary",
-            @"\Microsoft\Windows\UPnP\UPnPHostConfig",
-            @"\Microsoft\Windows\WOF\WIM-Hash-Management",
-            @"\Microsoft\Windows\WOF\WIM-Hash-Validation",
-            // Setting sync / subscription / clip
-            @"\Microsoft\Windows\SettingSync\BackgroundUploadTask",
-            @"\Microsoft\Windows\SettingSync\NetworkStateChangeTask",
-            @"\Microsoft\Windows\Subscription\EnableLicenseAcquisition",
-            @"\Microsoft\Windows\Clip\License Validation",
-            // DirectX / DUSM / Nla
-            @"\Microsoft\Windows\DirectX\DirectXDatabaseUpdater",
-            @"\Microsoft\Windows\DirectX\DXGIAdapterCache",
-            @"\Microsoft\Windows\DUSM\dusmtask",
-            @"\Microsoft\Windows\NlaSvc\WiFiTask",
-            // Space / sustainability / work folders
-            @"\Microsoft\Windows\SpacePort\SpaceAgentTask",
-            @"\Microsoft\Windows\SpacePort\SpaceManagerTask",
-            @"\Microsoft\Windows\Sustainability\PowerGridForecastTask",
-            @"\Microsoft\Windows\Sustainability\SustainabilityTelemetry",
-            @"\Microsoft\Windows\Work Folders\Work Folders Logon Synchronization",
-            @"\Microsoft\Windows\Work Folders\Work Folders Maintenance Work",
-            // Install / recovery noise
-            @"\Microsoft\Windows\InstallService\ScanForUpdates",
-            @"\Microsoft\Windows\InstallService\ScanForUpdatesAsUser",
-            @"\Microsoft\Windows\InstallService\SmartRetry",
-            @"\Microsoft\Windows\InstallService\WakeUpAndContinueUpdates",
-            @"\Microsoft\Windows\InstallService\WakeUpAndScanForUpdates",
-            @"\Microsoft\Windows\Management\Provisioning\Cellular",
-            @"\Microsoft\Windows\Management\Provisioning\Logon",
-            // Defrag / cleanup (user can re-enable)
-            @"\Microsoft\Windows\Defrag\ScheduledDefrag",
-            @"\Microsoft\Windows\DiskCleanup\SilentCleanup",
-            @"\Microsoft\Windows\DiskFootprint\Diagnostics",
-            @"\Microsoft\Windows\DiskFootprint\StorageSense",
-        };
-
+        // Exact paths only — Task Scheduler is case-insensitive but folder spacing matters
+        // (Win11 uses DeviceDirectoryClient, not "Device Directory Client").
+        var tasks = BloatScheduledTaskPaths();
         var disabled = 0;
         var timedOut = 0;
         var missing = 0;
-        // Hard budget: never spend more than ~90s total on task quiet.
-        var budgetMs = 90_000;
+        var budgetMs = 120_000;
         var sw = Stopwatch.StartNew();
         foreach (var tn in tasks)
         {
@@ -714,13 +609,22 @@ public static class WindowsNativeApply
             var (code, _, to) = RunTimed("schtasks.exe", $"/Change /TN \"{tn}\" /DISABLE", 2500);
             if (to) timedOut++;
             else if (code == 0) disabled++;
-            else missing++; // not present or access denied
+            else missing++;
         }
-        // Honest status: timeouts = partial; zero disables with no timeout is still OK
-        // (tasks already gone / denied) but not a "full deep win" for UI deepPass.
+
+        // Root-folder third-party updaters (Edge/Brave GUIDs differ per machine).
+        var rootExtra = 0;
+        if (sw.ElapsedMilliseconds < budgetMs)
+            rootExtra = DisableRootNoiseTasks(budgetMs, sw);
+        disabled += rootExtra;
+
+        var foldersRemoved = 0;
+        if (sw.ElapsedMilliseconds < budgetMs)
+            foldersRemoved = PurgeEmptyTaskFolders(budgetMs, sw);
+
         var status = timedOut > 0
             ? "partial"
-            : disabled > 0
+            : disabled > 0 || foldersRemoved > 0
                 ? "ok"
                 : missing > 0
                     ? "skip"
@@ -729,8 +633,312 @@ public static class WindowsNativeApply
         {
             Id = "scheduled-tasks",
             Status = status,
-            Reason = $"disabled={disabled}; missing/denied={missing}; timedOut={timedOut}; list={tasks.Length}; ms={sw.ElapsedMilliseconds}"
+            Reason =
+                $"disabled={disabled}; rootExtra={rootExtra}; missing/denied={missing}; timedOut={timedOut}; " +
+                $"list={tasks.Length}; emptyFoldersRemoved={foldersRemoved}; ms={sw.ElapsedMilliseconds}"
         };
+    }
+
+    /// <summary>Full quiet list — ban-safe noise only. Paths verified against Win10/11 layouts.</summary>
+    private static string[] BloatScheduledTaskPaths() =>
+    [
+        // Application Experience / CEIP / Feedback / WER
+        @"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
+        @"\Microsoft\Windows\Application Experience\ProgramDataUpdater",
+        @"\Microsoft\Windows\Application Experience\StartupAppTask",
+        @"\Microsoft\Windows\Application Experience\PcaPatchDbTask",
+        @"\Microsoft\Windows\Application Experience\MareBackup",
+        @"\Microsoft\Windows\Application Experience\SdbinstMergeDbTask",
+        @"\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
+        @"\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
+        @"\Microsoft\Windows\Customer Experience Improvement Program\KernelCeipTask",
+        @"\Microsoft\Windows\Feedback\Siuf\DmClient",
+        @"\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload",
+        @"\Microsoft\Windows\Windows Error Reporting\QueueReporting",
+        @"\Microsoft\Windows\UsageAndQualityInsights\UsageAndQualityInsights-MaintenanceTask",
+        // Cloud / maps / location / restore demos
+        @"\Microsoft\Windows\CloudExperienceHost\CreateObjectTask",
+        @"\Microsoft\Windows\CloudRestore\Backup",
+        @"\Microsoft\Windows\CloudRestore\Restore",
+        @"\Microsoft\Windows\Maps\MapsToastTask",
+        @"\Microsoft\Windows\Maps\MapsUpdateTask",
+        @"\Microsoft\Windows\Location\Notifications",
+        @"\Microsoft\Windows\Location\WindowsActionDialog",
+        // Diagnosis / maintenance noise
+        @"\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector",
+        @"\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticResolver",
+        @"\Microsoft\Windows\Power Efficiency Diagnostics\AnalyzeSystem",
+        @"\Microsoft\Windows\Maintenance\WinSAT",
+        @"\Microsoft\Windows\Diagnosis\Scheduled",
+        @"\Microsoft\Windows\MemoryDiagnostic\ProcessMemoryDiagnosticEvents",
+        @"\Microsoft\Windows\MemoryDiagnostic\RunFullMemoryDiagnostic",
+        @"\Microsoft\Windows\PerformanceTrace\RequestTrace",
+        @"\Microsoft\Windows\PerformanceTrace\WhesvcToast",
+        // Shell / family / PI / retail / pictures
+        @"\Microsoft\Windows\Shell\FamilySafetyMonitor",
+        @"\Microsoft\Windows\Shell\FamilySafetyRefreshTask",
+        @"\Microsoft\Windows\Shell\IndexerAutomaticMaintenance",
+        @"\Microsoft\Windows\Shell\UpdateUserPictureTask",
+        @"\Microsoft\Windows\Shell\UpdateUserPictureTaskContained",
+        @"\Microsoft\Windows\PI\Sqm-Tasks",
+        @"\Microsoft\Windows\RetailDemo\CleanupOfflineContent",
+        @"\Microsoft\Windows\AppListBackup\Backup",
+        @"\Microsoft\Windows\AppListBackup\BackupNonMaintenance",
+        // Xbox (not anti-cheat)
+        @"\Microsoft\XblGameSave\XblGameSaveTask",
+        // Push / device telemetry (both path spellings)
+        @"\Microsoft\Windows\PushToInstall\LoginCheck",
+        @"\Microsoft\Windows\PushToInstall\Registration",
+        @"\Microsoft\Windows\Device Information\Device",
+        @"\Microsoft\Windows\Device Information\Device User",
+        @"\Microsoft\Windows\DeviceDirectoryClient\HandleCommand",
+        @"\Microsoft\Windows\DeviceDirectoryClient\HandleWnsCommand",
+        @"\Microsoft\Windows\DeviceDirectoryClient\IntegrityCheck",
+        @"\Microsoft\Windows\DeviceDirectoryClient\LocateCommandUserSession",
+        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterDeviceAccountChange",
+        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterDeviceLocationRightsChange",
+        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterDevicePeriodic24",
+        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterDevicePolicyChange",
+        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterDeviceProtectionStateChanged",
+        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterDeviceSettingChange",
+        @"\Microsoft\Windows\DeviceDirectoryClient\RegisterUserDevice",
+        // legacy spaced path (Win10)
+        @"\Microsoft\Windows\Device Directory Client\HandleCommand",
+        @"\Microsoft\Windows\Device Directory Client\HandleWnsCommand",
+        @"\Microsoft\Windows\Device Directory Client\IntegrityCheck",
+        @"\Microsoft\Windows\Device Directory Client\LocateCommandUserSession",
+        @"\Microsoft\Windows\Device Directory Client\RegisterDeviceAccountChange",
+        @"\Microsoft\Windows\Device Directory Client\RegisterDeviceLocationRightsChange",
+        @"\Microsoft\Windows\Device Directory Client\RegisterDevicePeriodic24",
+        @"\Microsoft\Windows\Device Directory Client\RegisterDevicePolicyChange",
+        @"\Microsoft\Windows\Device Directory Client\RegisterDeviceProtectionStateChanged",
+        @"\Microsoft\Windows\Device Directory Client\RegisterDeviceSettingChange",
+        @"\Microsoft\Windows\Device Directory Client\RegisterUserDevice",
+        // WU / WaaS / flighting / UpdateOrchestrator noise (companion to WU pause)
+        @"\Microsoft\Windows\WindowsUpdate\Scheduled Start",
+        @"\Microsoft\Windows\WindowsUpdate\Refresh Group Policy Cache",
+        @"\Microsoft\Windows\WaaSMedic\PerformRemediation",
+        @"\Microsoft\Windows\Flighting\FeatureConfig\ReconcileFeatures",
+        @"\Microsoft\Windows\Flighting\FeatureConfig\UsageDataFlushing",
+        @"\Microsoft\Windows\Flighting\FeatureConfig\UsageDataReporting",
+        @"\Microsoft\Windows\Flighting\OneSettings\RefreshCache",
+        @"\Microsoft\Windows\UpdateOrchestrator\Schedule Scan",
+        @"\Microsoft\Windows\UpdateOrchestrator\Schedule Scan Static Task",
+        @"\Microsoft\Windows\UpdateOrchestrator\Start Oobe Expedite Work",
+        @"\Microsoft\Windows\UpdateOrchestrator\StartOobeAppsScan_LicenseAccepted",
+        @"\Microsoft\Windows\UpdateOrchestrator\StartOobeAppsScanAfterUpdate",
+        @"\Microsoft\Windows\UpdateOrchestrator\UIEOrchestrator",
+        @"\Microsoft\Windows\UpdateOrchestrator\UUS Failover Task",
+        // Input / speech / international
+        @"\Microsoft\Windows\Speech\SpeechModelDownloadTask",
+        @"\Microsoft\Windows\International\Synchronize Language Settings",
+        @"\Microsoft\Windows\LanguageComponentsInstaller\Installation",
+        @"\Microsoft\Windows\LanguageComponentsInstaller\ReconcileLanguageResources",
+        // Defender scheduled scans (policy path; residual tasks)
+        @"\Microsoft\Windows\Windows Defender\Windows Defender Cache Maintenance",
+        @"\Microsoft\Windows\Windows Defender\Windows Defender Cleanup",
+        @"\Microsoft\Windows\Windows Defender\Windows Defender Scheduled Scan",
+        @"\Microsoft\Windows\Windows Defender\Windows Defender Verification",
+        // Media / UPnP / WOF
+        @"\Microsoft\Windows\Windows Media Sharing\UpdateLibrary",
+        @"\Microsoft\Windows\UPnP\UPnPHostConfig",
+        @"\Microsoft\Windows\WOF\WIM-Hash-Management",
+        @"\Microsoft\Windows\WOF\WIM-Hash-Validation",
+        // Setting sync / subscription / clip
+        @"\Microsoft\Windows\SettingSync\BackgroundUploadTask",
+        @"\Microsoft\Windows\SettingSync\NetworkStateChangeTask",
+        @"\Microsoft\Windows\Subscription\EnableLicenseAcquisition",
+        @"\Microsoft\Windows\Clip\License Validation",
+        // DirectX / DUSM / Nla
+        @"\Microsoft\Windows\DirectX\DirectXDatabaseUpdater",
+        @"\Microsoft\Windows\DirectX\DXGIAdapterCache",
+        @"\Microsoft\Windows\DUSM\dusmtask",
+        @"\Microsoft\Windows\NlaSvc\WiFiTask",
+        // Space / sustainability / work folders
+        @"\Microsoft\Windows\SpacePort\SpaceAgentTask",
+        @"\Microsoft\Windows\SpacePort\SpaceManagerTask",
+        @"\Microsoft\Windows\Sustainability\PowerGridForecastTask",
+        @"\Microsoft\Windows\Sustainability\SustainabilityTelemetry",
+        @"\Microsoft\Windows\Work Folders\Work Folders Logon Synchronization",
+        @"\Microsoft\Windows\Work Folders\Work Folders Maintenance Work",
+        // Install / provisioning
+        @"\Microsoft\Windows\InstallService\ScanForUpdates",
+        @"\Microsoft\Windows\InstallService\ScanForUpdatesAsUser",
+        @"\Microsoft\Windows\InstallService\SmartRetry",
+        @"\Microsoft\Windows\InstallService\WakeUpAndContinueUpdates",
+        @"\Microsoft\Windows\InstallService\WakeUpAndScanForUpdates",
+        @"\Microsoft\Windows\Management\Provisioning\Cellular",
+        @"\Microsoft\Windows\Management\Provisioning\Logon",
+        // Defrag / cleanup
+        @"\Microsoft\Windows\Defrag\ScheduledDefrag",
+        @"\Microsoft\Windows\DiskCleanup\SilentCleanup",
+        @"\Microsoft\Windows\DiskFootprint\Diagnostics",
+        @"\Microsoft\Windows\DiskFootprint\StorageSense",
+        // Enterprise / EDP (harmless to disable on home gaming PCs)
+        @"\Microsoft\Windows\EDP\EDP App Launch Task",
+        @"\Microsoft\Windows\EDP\EDP Auth Task",
+        @"\Microsoft\Windows\EDP\EDP Inaccessible Credentials Task",
+        @"\Microsoft\Windows\EDP\StorageCardEncryption Task",
+        @"\Microsoft\Windows\Active Directory Rights Management Services Client\AD RMS Rights Policy Template Management (Manual)",
+        @"\Microsoft\Windows\Active Directory Rights Management Services Client\AD RMS Rights Policy Template Management (Automated)",
+        // Windows AI / Recall / ClickToDo (not needed for gaming)
+        @"\Microsoft\Windows\WindowsAI\ClickToDo\ModelCachingLimit",
+        @"\Microsoft\Windows\WindowsAI\ClickToDo\ModelCachingUpdate",
+        @"\Microsoft\Windows\WindowsAI\ClickToDo\CacheMaintenance",
+        @"\Microsoft\Windows\WindowsAI\Recall\PolicyConfiguration",
+        @"\Microsoft\Windows\WindowsAI\Recall\Maintenance",
+        @"\Microsoft\Windows\WindowsAI\Settings\InitialConfiguration",
+        // EQ update checker (Lucid/Equalizer APO) — app still works; just no background poll
+        @"\EqualizerAPOUpdateChecker",
+    ];
+
+    /// <summary>
+    /// Disable root-level (\ ) noise: Edge/Brave machine update tasks.
+    /// Never touches cua-driver-serve, CreateExplorerShellUnelevatedTask, or anti-cheat.
+    /// </summary>
+    private static int DisableRootNoiseTasks(int budgetMs, Stopwatch sw)
+    {
+        var n = 0;
+        try
+        {
+            var t = Type.GetTypeFromProgID("Schedule.Service");
+            if (t is null) return 0;
+            dynamic? service = Activator.CreateInstance(t);
+            if (service is null) return 0;
+            service.Connect();
+            dynamic root = service.GetFolder("\\");
+            dynamic tasks = root.GetTasks(0);
+            foreach (dynamic task in tasks)
+            {
+                if (sw.ElapsedMilliseconds > budgetMs) break;
+                string name;
+                try { name = (string)task.Name; }
+                catch { continue; }
+                if (string.IsNullOrEmpty(name)) continue;
+                // Keep user tooling / shell helpers
+                if (name.Contains("cua-driver", StringComparison.OrdinalIgnoreCase)) continue;
+                if (name.Contains("CreateExplorerShell", StringComparison.OrdinalIgnoreCase)) continue;
+                if (name.Contains("Vanguard", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("FACEIT", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("EasyAntiCheat", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("BattlEye", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var quiet =
+                    name.StartsWith("MicrosoftEdgeUpdate", StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith("BraveSoftwareUpdate", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("EqualizerAPOUpdateChecker", StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith("GoogleUpdate", StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith("GoogleUpdater", StringComparison.OrdinalIgnoreCase);
+                if (!quiet) continue;
+
+                var (code, _, to) = RunTimed("schtasks.exe", $"/Change /TN \"\\{name}\" /DISABLE", 2500);
+                if (!to && code == 0) n++;
+            }
+        }
+        catch { /* COM unavailable */ }
+        return n;
+    }
+
+    /// <summary>
+    /// Delete Task Scheduler folders that contain zero tasks and zero subfolders.
+    /// Bottom-up via Schedule.Service COM. Never deletes root.
+    /// </summary>
+    private static int PurgeEmptyTaskFolders(int budgetMs, Stopwatch sw)
+    {
+        try
+        {
+            var t = Type.GetTypeFromProgID("Schedule.Service");
+            if (t is null) return 0;
+            dynamic? service = Activator.CreateInstance(t);
+            if (service is null) return 0;
+            service.Connect();
+            dynamic root = service.GetFolder("\\");
+            return PurgeEmptyTaskFolderRecursive(service, root, true, budgetMs, sw);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static int PurgeEmptyTaskFolderRecursive(
+        dynamic service, dynamic folder, bool isRoot, int budgetMs, Stopwatch sw)
+    {
+        var removed = 0;
+        try
+        {
+            string path;
+            try { path = (string)folder.Path; }
+            catch { return 0; }
+
+            // Collect child folder paths first (COM collections invalidate on mutation)
+            var childPaths = new List<string>();
+            try
+            {
+                dynamic children = folder.GetFolders(0);
+                foreach (dynamic child in children)
+                {
+                    try { childPaths.Add((string)child.Path); }
+                    catch { /* skip */ }
+                }
+            }
+            catch { /* no children API */ }
+
+            foreach (var childPath in childPaths)
+            {
+                if (sw.ElapsedMilliseconds > budgetMs) return removed;
+                try
+                {
+                    dynamic child = service.GetFolder(childPath);
+                    removed += PurgeEmptyTaskFolderRecursive(service, child, false, budgetMs, sw);
+                }
+                catch { /* gone */ }
+            }
+
+            if (isRoot) return removed;
+            if (sw.ElapsedMilliseconds > budgetMs) return removed;
+
+            // Protect security stacks even if emptied
+            if (path.Contains("BitLocker", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains(@"\TPM", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains("CertificateServices", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains("SystemRestore", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains("RecoveryEnvironment", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains("Windows Defender", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains("Data Integrity", StringComparison.OrdinalIgnoreCase))
+                return removed;
+
+            int taskCount = 0;
+            int folderCount = 0;
+            try { taskCount = (int)folder.GetTasks(0).Count; } catch { return removed; }
+            try { folderCount = (int)folder.GetFolders(0).Count; } catch { return removed; }
+            if (taskCount != 0 || folderCount != 0) return removed;
+
+            // Delete via parent
+            var trimmed = path.TrimEnd('\\');
+            var slash = trimmed.LastIndexOf('\\');
+            if (slash < 0) return removed;
+            var parentPath = slash == 0 ? "\\" : trimmed[..slash];
+            var leaf = trimmed[(slash + 1)..];
+            if (string.IsNullOrEmpty(leaf)) return removed;
+            try
+            {
+                dynamic parent = service.GetFolder(parentPath);
+                parent.DeleteFolder(leaf, 0);
+                removed++;
+            }
+            catch
+            {
+                /* access denied / not empty race */
+            }
+        }
+        catch
+        {
+            /* folder vanished */
+        }
+
+        return removed;
     }
 
     /// <summary>
