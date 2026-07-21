@@ -1,7 +1,8 @@
 # Exo bootstrap installer.
 # Downloads the latest release Exo.exe from GitHub (verified: size + SHA-256 +
 # version stamp), then runs it (installs to %LocalAppData%\Exo\app).
-# Optimizer dependencies are prepared only after an explicit Apply/Repair.
+# The SFX installer auto-installs machine deps: .NET 10 Desktop Runtime, WebView2,
+# PowerShell 7, and VC++ redistributable. Optimizer kits still wait for Apply/Repair.
 # Prefer the double-click asset from Releases when you already have it.
 # One-liner stays supported: irm <raw Install-Exo.ps1 url> | iex
 

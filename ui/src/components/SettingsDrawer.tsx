@@ -155,8 +155,14 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
     }
   }
 
+  // Prevent double-fire (pointer + click, or stacked host handlers) from opening two tabs.
+  const linkGuard = useMemo(() => ({ last: 0 }), [])
+
   async function openLink(url: string, okLine: string, failFallback = 'Could not open browser.') {
     if (busy) return
+    const now = Date.now()
+    if (now - linkGuard.last < 700) return
+    linkGuard.last = now
     try {
       const r = await host.openUrl(url)
       setLine(r.ok ? okLine : r.message || failFallback)
@@ -169,7 +175,7 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
     if (busy) return
     try {
       const r = await host.openLogs()
-      setLine(r.ok ? 'Opened logs.' : r.message || 'Could not open logs.')
+      setLine(r.ok ? 'Opened logs folder.' : r.message || 'Could not open logs.')
     } catch (e) {
       setLine(e instanceof Error ? e.message : 'Could not open logs.')
     }

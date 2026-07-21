@@ -95,6 +95,8 @@ export function classifyStatus(args: {
   outcome?: 'idle' | 'applied' | 'partial' | 'failed' | 'repaired'
   hostStatusText?: string
   hostDetail?: string
+  /** Host MapState statusKind — prefer over client regex when set */
+  hostStatusKind?: string
   isApplied?: boolean
   features: FeatureRow[]
 }): {
@@ -165,8 +167,27 @@ export function classifyStatus(args: {
     }
   }
 
+  // Prefer host-provided statusKind when present (honest missing/partial from C#).
+  if (
+    args.hostStatusKind === 'missing' &&
+    !args.isApplied &&
+    args.outcome !== 'applied' &&
+    args.outcome !== 'partial'
+  ) {
+    return {
+      kind: 'missing',
+      headline: headlineForKind('missing'),
+      detail: args.hostDetail || args.hostStatusText || 'Install the target, then reopen.',
+      tone: 'warn',
+      on,
+      total,
+      offCount,
+    }
+  }
+
   const hostText = `${args.hostStatusText || ''} ${args.hostDetail || ''}`.toLowerCase()
   const missing =
+    args.hostStatusKind === 'missing' ||
     /not installed|steam not installed|no .*gpu|marvel rivals not installed|missing target/.test(
       hostText,
     ) ||

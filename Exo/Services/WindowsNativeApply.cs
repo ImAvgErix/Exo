@@ -85,8 +85,8 @@ public static class WindowsNativeApply
         Report("MPO / overlays...");
         steps.Add(SetMpoDisabled(admin, elevOps));
 
-        Report("Shell declutter (HKCU)...");
-        steps.Add(SetShellQuietHkcu());
+        Report("File Explorer + shell declutter...");
+        steps.Add(SetShellQuietHkcu(admin, elevOps));
 
         Report("Input pack (mouse/kbd/mic/USB/desktop)...");
         steps.Add(SetInputPack(admin, elevOps));
@@ -124,9 +124,13 @@ public static class WindowsNativeApply
         Report("No Exo background Run companions...");
         steps.Add(PurgeNoisyExoRunKeys());
 
+        // Core user-scope pins that must land without elev. HKLM (HAGS/MMCSS/long paths)
+        // may still be pending — never claim "full stack" until elev is done or not needed.
         var essentialOk = steps.FirstOrDefault(s => s.Id == "game-mode")?.Status == "ok"
                           && steps.FirstOrDefault(s => s.Id == "game-bar")?.Status is "ok" or "partial"
                           && steps.FirstOrDefault(s => s.Id == "power-plan")?.Status == "ok";
+        var elevPending = elevOps.Count > 0 && !admin;
+        var fullStack = essentialOk && !elevPending;
 
         SaveState(essentialOk, experimental, steps, elevOps);
 
@@ -134,11 +138,13 @@ public static class WindowsNativeApply
         {
             Ok = essentialOk,
             Module = "windows",
-            Message = essentialOk
-                ? "Windows full host stack applied (native C#, timeout-safe)"
-                : "Windows native apply incomplete — open as Administrator for full HKLM pack",
+            Message = fullStack
+                ? "Windows host stack applied (native C#, timeout-safe)"
+                : essentialOk
+                    ? "Windows core applied — accept the elevation prompt for HAGS / MMCSS / long paths / WU pins"
+                    : "Windows native apply incomplete — open as Administrator for full HKLM pack",
             Steps = steps,
-            NeedsElevation = elevOps.Count > 0 && !admin,
+            NeedsElevation = elevPending,
             ElevatedHklmOps = elevOps
         };
     }
@@ -280,25 +286,175 @@ public static class WindowsNativeApply
         return new NativeApplyStep { Id = "mpo", Status = n > 0 ? "ok" : "fail" };
     }
 
-    private static NativeApplyStep SetShellQuietHkcu()
+    // Well-known Explorer namespace CLSIDs (Win10/11)
+    private const string ClsidRecycleBin = "{645FF040-5081-101B-9F08-00AA002F954E}";
+    private const string ClsidHome = "{f874310e-b6b7-47dc-bc84-b9e6b38f5903}";
+    private const string ClsidGallery = "{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}";
+    private const string ClsidNetwork = "{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}";
+    private const string ClsidOneDrive = "{018D5C66-4533-4307-9B53-224DE2ED1FE6}";
+
+    /// <summary>
+    /// File Explorer declutter + useful defaults (per-user + elev long paths).
+    /// Hide Home/Gallery/Network from nav; hide Recycle Bin on desktop; pin bin under This PC;
+    /// show hidden files + extensions; compact mode; long paths when elevated.
+    /// </summary>
+    private static NativeApplyStep SetShellQuietHkcu(bool admin, List<string> elevOps)
     {
         var n = 0;
         var adv = @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
+
+        // Taskbar / search chrome
         if (NativeReg.TrySetDword("HKCU", adv, "ShowTaskViewButton", 0)) n++;
         if (NativeReg.TrySetDword("HKCU", adv, "TaskbarDa", 0)) n++;
         if (NativeReg.TrySetDword("HKCU", adv, "TaskbarMn", 0)) n++;
         if (NativeReg.TrySetDword("HKCU", adv, "ShowCopilotButton", 0)) n++;
-        if (NativeReg.TrySetDword("HKCU", adv, "HideFileExt", 0)) n++;
-        if (NativeReg.TrySetDword("HKCU", adv, "LaunchTo", 1)) n++; // This PC
-        if (NativeReg.TrySetDword("HKCU", adv, "Hidden", 1)) n++;
         if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Search", "SearchboxTaskbarMode", 0)) n++;
         if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\PushNotifications", "ToastEnabled", 0)) n++;
-        // Hide recycle bin from desktop (detect: explorer declutter)
+
+        // Useful Explorer defaults
+        if (NativeReg.TrySetDword("HKCU", adv, "HideFileExt", 0)) n++;           // show extensions
+        if (NativeReg.TrySetDword("HKCU", adv, "LaunchTo", 1)) n++;              // This PC
+        if (NativeReg.TrySetDword("HKCU", adv, "Hidden", 1)) n++;                // show hidden files
+        if (NativeReg.TrySetDword("HKCU", adv, "ShowSuperHidden", 0)) n++;       // keep protected OS files hidden
+        if (NativeReg.TrySetDword("HKCU", adv, "HideDrivesWithNoMedia", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", adv, "NavPaneExpandToCurrentFolder", 1)) n++;
+        if (NativeReg.TrySetDword("HKCU", adv, "NavPaneShowAllFolders", 1)) n++;
+        if (NativeReg.TrySetDword("HKCU", adv, "UseCompactMode", 1)) n++;         // denser Win11 lists
+        if (NativeReg.TrySetDword("HKCU", adv, "ShowSyncProviderNotifications", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", adv, "ShowInfoTip", 1)) n++;
+        if (NativeReg.TrySetDword("HKCU", adv, "AutoCheckSelect", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", adv, "IconsOnly", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", adv, "ListviewAlphaSelect", 1)) n++;
+        if (NativeReg.TrySetDword("HKCU", adv, "ListviewShadow", 0)) n++;
+        // Home / Quick Access clutter
+        if (NativeReg.TrySetDword("HKCU", adv, "Start_TrackDocs", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", adv, "ShowRecent", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", adv, "ShowFrequent", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Explorer", "ShowRecent", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Explorer", "ShowFrequent", 0)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Explorer", "HideRecommendedSection", 1)) n++;
+
+        // Desktop: hide Recycle Bin icon (still available in Explorer / This PC)
         if (NativeReg.TrySetDword("HKCU",
                 @"Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel",
-                "{645FF040-5081-101B-9F08-00AA002F954E}", 1)) n++;
-        return new NativeApplyStep { Id = "explorer", Status = n >= 3 ? "ok" : "partial", Reason = $"written={n}" };
+                ClsidRecycleBin, 1)) n++;
+        if (NativeReg.TrySetDword("HKCU",
+                @"Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\ClassicStartMenu",
+                ClsidRecycleBin, 1)) n++;
+
+        // Nav pane: unpin Home, Gallery, Network (Win11 namespace tree)
+        if (TrySetNamespacePinned(ClsidHome, pinned: false)) n++;
+        if (TrySetNamespacePinned(ClsidGallery, pinned: false)) n++;
+        if (TrySetNamespacePinned(ClsidNetwork, pinned: false)) n++;
+        // Soft OneDrive nav declutter (does not uninstall OneDrive)
+        if (TrySetNamespacePinned(ClsidOneDrive, pinned: false)) n++;
+
+        // Hide Network neighborhood / entire network in Explorer policies
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer", "NoNetHood", 1)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Policies\NonEnum", ClsidNetwork, 1)) n++;
+        // Hide Home / Gallery via NonEnum when present (extra belt for SKUs that ignore pin flag)
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Policies\NonEnum", ClsidHome, 1)) n++;
+        if (NativeReg.TrySetDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Policies\NonEnum", ClsidGallery, 1)) n++;
+
+        // Recycle Bin under This PC / File Explorer (My Computer NameSpace)
+        if (TryEnsureMyComputerNamespace(ClsidRecycleBin)) n++;
+
+        // Long paths (Win10 1607+) — machine-wide
+        if (admin)
+        {
+            if (NativeReg.TrySetDword("HKLM", @"SYSTEM\CurrentControlSet\Control\FileSystem", "LongPathsEnabled", 1)) n++;
+        }
+        else
+        {
+            elevOps.Add(@"dword:HKLM\SYSTEM\CurrentControlSet\Control\FileSystem|LongPathsEnabled|1");
+        }
+
+        SoftRefreshExplorer();
+
+        var ok =
+            NativeReg.MatchesDword("HKCU", adv, "LaunchTo", 1)
+            && NativeReg.MatchesDword("HKCU", adv, "Hidden", 1)
+            && NativeReg.MatchesDword("HKCU", adv, "HideFileExt", 0)
+            && NativeReg.MatchesDword("HKCU",
+                @"Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel",
+                ClsidRecycleBin, 1);
+
+        return new NativeApplyStep
+        {
+            Id = "explorer",
+            Status = ok ? "ok" : (n >= 8 ? "partial" : "fail"),
+            Reason = $"written={n}; home/gallery/network hidden; bin on This PC; desktop bin off; longPaths={(admin ? "set" : "elev")}"
+        };
     }
+
+    /// <summary>Win11 nav pin flag under Classes\CLSID\{guid}.</summary>
+    private static bool TrySetNamespacePinned(string clsid, bool pinned)
+    {
+        var path = $@"Software\Classes\CLSID\{clsid}";
+        var ok = NativeReg.TrySetDword("HKCU", path, "System.IsPinnedToNameSpaceTree", pinned ? 1 : 0);
+        // ShellFolder Attributes bit often used by older shells (0x00100000 = SFGAO_NONENUMERATED when hidden variants)
+        try
+        {
+            using var sf = Registry.CurrentUser.CreateSubKey(path + @"\ShellFolder", true);
+            if (sf is not null && !pinned)
+            {
+                // Keep existing attributes if present; ensure IsPinned is primary signal
+                ok = true;
+            }
+        }
+        catch { /* optional */ }
+        return ok;
+    }
+
+    /// <summary>Ensure Recycle Bin appears under This PC.</summary>
+    private static bool TryEnsureMyComputerNamespace(string clsid)
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.CreateSubKey(
+                $@"Software\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{clsid}", true);
+            if (k is null) return false;
+            // Default value empty string is enough for NameSpace registration
+            if (k.GetValue("") is null)
+                k.SetValue("", "Recycle Bin", RegistryValueKind.String);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Soft shell refresh — no explorer kill (that drops windows on multi-monitor PCs).
+    /// SHChangeNotify + WM_SETTINGCHANGE; user may need F5/sign-out for stubborn nav pins.
+    /// </summary>
+    private static void SoftRefreshExplorer()
+    {
+        try
+        {
+            // SHCNE_ASSOCCHANGED | SHCNF_IDLIST — refresh namespace / desktop icons
+            SHChangeNotify(0x08000000, 0x0000, IntPtr.Zero, IntPtr.Zero);
+            // Broadcast policy/settings change so Explorer reloads HKCU policies
+            var result = IntPtr.Zero;
+            SendMessageTimeout(
+                new IntPtr(0xFFFF), // HWND_BROADCAST
+                0x001A,             // WM_SETTINGCHANGE
+                IntPtr.Zero,
+                "Policy",
+                0x0000,             // SMTO_NORMAL
+                1000,
+                out result);
+        }
+        catch { /* non-fatal — user can sign out */ }
+    }
+
+    [System.Runtime.InteropServices.DllImport("shell32.dll")]
+    private static extern void SHChangeNotify(uint wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern IntPtr SendMessageTimeout(
+        IntPtr hWnd, uint Msg, IntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
 
     private static NativeApplyStep SetInputPack(bool admin, List<string> elevOps)
     {
@@ -786,8 +942,8 @@ public static class WindowsNativeApply
             folderPath.Contains(@"\Microsoft\Windows\UsageAndQualityInsights\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\DeviceDirectoryClient\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\Device Directory Client\", StringComparison.OrdinalIgnoreCase) ||
-            folderPath.Contains(@"\Microsoft\Windows\UpdateOrchestrator\", StringComparison.OrdinalIgnoreCase) ||
-            folderPath.Contains(@"\Microsoft\Windows\InstallService\", StringComparison.OrdinalIgnoreCase) ||
+            // Never quiet UpdateOrchestrator / WindowsUpdate / Defender / WaaSMedic / InstallService —
+            // those keep the PC secure and patchable (see IsProtectedScheduledTask).
             folderPath.Contains(@"\Microsoft\Windows\EDP\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\Maps\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\CloudExperienceHost\", StringComparison.OrdinalIgnoreCase) ||
@@ -797,15 +953,12 @@ public static class WindowsNativeApply
             folderPath.Contains(@"\Microsoft\Windows\Sustainability\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\SpacePort\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\Work Folders\", StringComparison.OrdinalIgnoreCase) ||
-            folderPath.Contains(@"\Microsoft\Windows\WaaSMedic\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\SettingSync\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\AppListBackup\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\PerformanceTrace\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\PI\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\Diagnosis\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\DiskFootprint\", StringComparison.OrdinalIgnoreCase) ||
-            folderPath.Contains(@"\Microsoft\Windows\DiskCleanup\", StringComparison.OrdinalIgnoreCase) ||
-            folderPath.Contains(@"\Microsoft\Windows\Defrag\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\DiskDiagnostic\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\MemoryDiagnostic\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\Power Efficiency\", StringComparison.OrdinalIgnoreCase) ||
@@ -825,8 +978,6 @@ public static class WindowsNativeApply
             folderPath.Contains(@"\Microsoft\Windows\LanguageComponentsInstaller\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\Windows Error Reporting\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\Customer Experience Improvement\", StringComparison.OrdinalIgnoreCase) ||
-            folderPath.Contains(@"\Microsoft\Windows\Windows Defender\", StringComparison.OrdinalIgnoreCase) ||
-            folderPath.Contains(@"\Microsoft\Windows\WindowsUpdate\", StringComparison.OrdinalIgnoreCase) ||
             folderPath.Contains(@"\Microsoft\Windows\NlaSvc\", StringComparison.OrdinalIgnoreCase))
             return TaskQuietDecision.Quiet;
 
@@ -855,7 +1006,7 @@ public static class WindowsNativeApply
             name.Contains("Service", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        // Security / recovery / credentials / integrity
+        // Security / updates / recovery — never disable on community PCs
         if (full.Contains("BitLocker", StringComparison.OrdinalIgnoreCase) ||
             full.Contains(@"\TPM\", StringComparison.OrdinalIgnoreCase) ||
             full.Contains("CertificateServices", StringComparison.OrdinalIgnoreCase) ||
@@ -865,6 +1016,13 @@ public static class WindowsNativeApply
             full.Contains(@"\Chkdsk\", StringComparison.OrdinalIgnoreCase) ||
             full.Contains("SecureBoot", StringComparison.OrdinalIgnoreCase) ||
             full.Contains("Pluton", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains("Windows Defender", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\WindowsUpdate\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains("UpdateOrchestrator", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains("WaaSMedic", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\InstallService\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains(@"\Defrag\", StringComparison.OrdinalIgnoreCase) ||
+            full.Contains("DiskCleanup", StringComparison.OrdinalIgnoreCase) ||
             full.Contains("BrokerInfrastructure", StringComparison.OrdinalIgnoreCase) ||
             full.Contains("SystemSoundsService", StringComparison.OrdinalIgnoreCase) ||
             full.Contains(@"\Multimedia\", StringComparison.OrdinalIgnoreCase) ||

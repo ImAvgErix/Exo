@@ -45,13 +45,17 @@ export function WelcomePrompt() {
     if (busy) return
     setBusy(true)
     try {
+      // Host opens the browser; do not also window.open (would double-tab in mock/host hybrid).
       await host.openUrl(coffeeUrl)
       await host.setSettings({ welcomePromptSeen: true })
     } catch {
-      try {
-        window.open(coffeeUrl, '_blank', 'noopener,noreferrer')
-      } catch {
-        /* ignore */
+      // Only fall back when the host call failed (browser dev / bridge down).
+      if (typeof window !== 'undefined' && !(window as unknown as { chrome?: { webview?: unknown } }).chrome?.webview) {
+        try {
+          window.open(coffeeUrl, '_blank', 'noopener,noreferrer')
+        } catch {
+          /* ignore */
+        }
       }
       try {
         await host.setSettings({ welcomePromptSeen: true })

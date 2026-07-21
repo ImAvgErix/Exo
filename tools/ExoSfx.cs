@@ -221,7 +221,8 @@ internal static class Program
                 }
                 catch { }
 
-                // Ensure WebView2 Runtime is present (required for the SPA shell).
+                // Prerequisites for any PC: WebView2 (UI), .NET 10 Desktop (FDD helpers),
+                // then full dependency doctor (pwsh + VC++ + re-check everything).
                 try
                 {
                     EnsureWebView2Runtime(root, logPath);
@@ -229,6 +230,24 @@ internal static class Program
                 catch (Exception wvEx)
                 {
                     Log("WebView2 prerequisite warning: " + wvEx.Message);
+                }
+
+                try
+                {
+                    EnsureDotNet10DesktopRuntime(root);
+                }
+                catch (Exception netEx)
+                {
+                    Log(".NET 10 Desktop Runtime warning: " + netEx.Message);
+                }
+
+                try
+                {
+                    RunDependencyDoctor(installDir, root);
+                }
+                catch (Exception docEx)
+                {
+                    Log("Dependency doctor warning: " + docEx.Message);
                 }
 
                 // Start Menu only — never create Desktop shortcuts (user policy).
@@ -1144,6 +1163,167 @@ internal static class Program
         return null;
     }
 
+    /// <summary>
+    /// .NET 10 Desktop Runtime for FDD helpers (Exo.NvDisplay). Main Exo.exe is
+    /// self-contained; this is for side tools published without a bundled runtime.
+    /// </summary>
+    private static bool IsDotNet10DesktopRuntimeInstalled()
+    {
+        try
+        {
+            string[] roots =
+            {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    "dotnet", "shared", "Microsoft.WindowsDesktop.App"),
+                Path.Combine(Environment.GetEnvironmentVariable("ProgramW6432") ?? "",
+                    "dotnet", "shared", "Microsoft.WindowsDesktop.App")
+            };
+            foreach (string root in roots)
+            {
+                if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) continue;
+                foreach (string dir in Directory.GetDirectories(root))
+                {
+                    string name = Path.GetFileName(dir);
+                    if (name != null && name.StartsWith("10.", StringComparison.Ordinal))
+                        return true;
+                }
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    private static void EnsureDotNet10DesktopRuntime(string root)
+    {
+        if (IsDotNet10DesktopRuntimeInstalled())
+        {
+            Log(".NET 10 Desktop Runtime already installed.");
+            return;
+        }
+
+        Log(".NET 10 Desktop Runtime missing — downloading quiet installer…");
+        string prereqDir = Path.Combine(root, "prereqs");
+        Directory.CreateDirectory(prereqDir);
+        string setupPath = Path.Combine(prereqDir, "windowsdesktop-runtime-10-win-x64.exe");
+
+        // Always-latest channel redirect from Microsoft.
+        string url = "https://aka.ms/dotnet/10.0/windowsdesktop-runtime-win-x64.exe";
+        try
+        {
+            using (var wc = new System.Net.WebClient())
+            {
+                wc.Headers["User-Agent"] = "Exo-Installer/2.0";
+                wc.DownloadFile(url, setupPath);
+            }
+        }
+        catch (Exception dlEx)
+        {
+            Log(".NET 10 Desktop download failed: " + dlEx.Message);
+            Log("Install manually: winget install Microsoft.DotNet.DesktopRuntime.10");
+            return;
+        }
+
+        if (!File.Exists(setupPath) || new FileInfo(setupPath).Length < 1000000)
+        {
+            Log(".NET 10 Desktop installer looks invalid; skipping.");
+            return;
+        }
+
+        Log("Installing .NET 10 Desktop Runtime (quiet)…");
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = setupPath,
+                Arguments = "/install /quiet /norestart",
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+            using (Process p = Process.Start(psi))
+            {
+                if (p != null)
+                {
+                    if (!p.WaitForExit(15 * 60 * 1000))
+                    {
+                        try { p.Kill(); } catch { }
+                        Log(".NET 10 Desktop installer timed out after 15 minutes.");
+                    }
+                    else
+                    {
+                        Log(".NET 10 Desktop installer exit code: " + p.ExitCode);
+                    }
+                }
+            }
+        }
+        catch (Exception runEx)
+        {
+            Log(".NET 10 Desktop install failed: " + runEx.Message);
+        }
+
+        if (IsDotNet10DesktopRuntimeInstalled())
+            Log(".NET 10 Desktop Runtime is ready.");
+        else
+            Log(".NET 10 Desktop Runtime still missing — dependency doctor will retry.");
+    }
+
+    /// <summary>
+    /// Run shipped Exo-DependencyDoctor.ps1 under Windows PowerShell 5.1 so machines
+    /// without pwsh still get .NET 10, WebView2, PowerShell 7, and VC++ redist.
+    /// </summary>
+    private static void RunDependencyDoctor(string installDir, string root)
+    {
+        string doctor = Path.Combine(installDir, "Scripts", "Setup", "Exo-DependencyDoctor.ps1");
+        if (!File.Exists(doctor))
+        {
+            Log("Dependency doctor script missing at " + doctor);
+            return;
+        }
+
+        string logs = Path.Combine(root, "logs");
+        try { Directory.CreateDirectory(logs); } catch { }
+        string doctorLog = Path.Combine(logs, "dependency-doctor.log");
+
+        string systemRoot = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        string powershell = Path.Combine(systemRoot, "WindowsPowerShell", "v1.0", "powershell.exe");
+        if (!File.Exists(powershell))
+            powershell = "powershell.exe";
+
+        Log("Running dependency doctor (reason=install)…");
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = powershell,
+                Arguments = "-NoProfile -ExecutionPolicy Bypass -File \"" + doctor +
+                            "\" -Reason install -LogPath \"" + doctorLog + "\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                WorkingDirectory = installDir
+            };
+            using (Process p = Process.Start(psi))
+            {
+                if (p == null)
+                {
+                    Log("Could not start dependency doctor.");
+                    return;
+                }
+                // Doctor may download runtimes — allow up to 20 minutes.
+                if (!p.WaitForExit(20 * 60 * 1000))
+                {
+                    try { p.Kill(); } catch { }
+                    Log("Dependency doctor timed out after 20 minutes.");
+                    return;
+                }
+                Log("Dependency doctor exit code: " + p.ExitCode + " (log: " + doctorLog + ")");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("Dependency doctor failed: " + ex.Message);
+        }
+    }
+
     private static void EnsureWebView2Runtime(string root, string logPath)
     {
         if (IsWebView2RuntimeHealthy())
@@ -1403,3 +1583,4 @@ internal static class Program
         Thread.Sleep(400);
     }
 }
+

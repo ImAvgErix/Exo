@@ -69,11 +69,38 @@ public static class NativeLiveDetect
         bool Ai() =>
             NativeReg.MatchesDword("HKCU", @"Software\Policies\Microsoft\Windows\WindowsCopilot", "TurnOffWindowsCopilot", 1)
             || NativeReg.MatchesDword("HKLM", @"SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot", "TurnOffWindowsCopilot", 1);
-        bool Explorer() =>
-            NativeReg.MatchesDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "LaunchTo", 1)
-            && NativeReg.MatchesDword("HKCU",
-                @"Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel",
-                "{645FF040-5081-101B-9F08-00AA002F954E}", 1);
+        bool Explorer()
+        {
+            const string bin = "{645FF040-5081-101B-9F08-00AA002F954E}";
+            const string home = "{f874310e-b6b7-47dc-bc84-b9e6b38f5903}";
+            const string gallery = "{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}";
+            var adv = @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
+            var basics =
+                NativeReg.MatchesDword("HKCU", adv, "LaunchTo", 1)
+                && NativeReg.MatchesDword("HKCU", adv, "Hidden", 1)
+                && NativeReg.MatchesDword("HKCU", adv, "HideFileExt", 0)
+                && NativeReg.MatchesDword("HKCU",
+                    @"Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel",
+                    bin, 1);
+            // Recycle Bin under This PC
+            var binInThisPc = false;
+            try
+            {
+                using var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                    $@"Software\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{bin}");
+                binInThisPc = k is not null;
+            }
+            catch { }
+            // Home/Gallery unpinned when flag is 0 (or NonEnum=1)
+            var homeQuiet =
+                NativeReg.MatchesDword("HKCU", $@"Software\Classes\CLSID\{home}", "System.IsPinnedToNameSpaceTree", 0)
+                || NativeReg.MatchesDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Policies\NonEnum", home, 1);
+            var galleryQuiet =
+                NativeReg.MatchesDword("HKCU", $@"Software\Classes\CLSID\{gallery}", "System.IsPinnedToNameSpaceTree", 0)
+                || NativeReg.MatchesDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Policies\NonEnum", gallery, 1);
+            // Long paths need elev once; don't keep whole module red if only that is pending
+            return basics && binInThisPc && homeQuiet && galleryQuiet;
+        }
         bool Inbox() => NativeReg.MatchesDword("HKCU", @"Software\Microsoft\Windows\CurrentVersion\Search", "BingSearchEnabled", 0);
         bool Wu() =>
             NativeReg.MatchesDword("HKLM", @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "NoAutoUpdate", 1)
@@ -115,7 +142,10 @@ public static class NativeLiveDetect
         // Removed duplicate "Instant menus" (same MenuShowDelay probe as Snappy desktop).
         features.Add(F("No UAC prompts", "ConsentPromptBehaviorAdmin=0.", Uac()));
         features.Add(F("Windows AI removed", "Copilot / WindowsAI policy.", Ai()));
-        features.Add(F("Explorer decluttered", "LaunchTo This PC + recycle bin hidden.", Explorer()));
+        features.Add(F(
+            "File Explorer decluttered",
+            "This PC default · hidden files · extensions · Home/Gallery/Network off nav · bin on This PC, off desktop · long paths.",
+            Explorer()));
         features.Add(F("Inbox apps quiet", "BingSearchEnabled=0.", Inbox()));
         // Honest: USB selective suspend only — Game Bar quiet is a different row.
         features.Add(F("Controllers stay awake", "USB selective suspend off (live).", Usb()));
@@ -248,22 +278,18 @@ public static class NativeLiveDetect
                    && NativeReg.MatchesDword("HKCU", @"Software\Valve\Steam", "GPUAccelWebViewsV3", 1);
         features.Add(F("GPU-powered Steam UI", "H264 + GPUAccelWebViews + V3 = 1.", hwOk));
 
-        // Steam rewrites StartupMode after every client launch (often back to 7).
-        // Core quiet = no Run key + Startup apps Off + toasts Off. Re-pin StartupMode
-        // on every detect so opening Exo does not leave a permanent red "need Apply".
+        // Detect is read-only — never write StartupMode here (Apply owns that pin).
+        // Steam rewrites StartupMode after client launch; silent is green when Windows
+        // won't autostart Steam (no Run + Startup apps Off + toasts Off).
         var noRun = !RunKeyHasSteam();
         var toastOk = LiveSteamToasts();
         var approvedOff = IsStartupApprovedDisabled("Steam");
-        if (noRun && toastOk && approvedOff)
-            NativeReg.TrySetDword("HKCU", @"Software\Valve\Steam", "StartupMode", 0);
         var modeOk = NativeReg.MatchesDword("HKCU", @"Software\Valve\Steam", "StartupMode", 0);
-        // Silent is green when Windows won't autostart Steam. StartupMode is best-effort
-        // (Steam rewrites it) — do not keep the whole module red forever because of it.
         var silentOk = noRun && toastOk && approvedOff;
         var silentDetail = silentOk
             ? (modeOk
                 ? "No Run key, Startup apps Off, toasts Off, StartupMode=0."
-                : "No Run key, Startup apps Off, toasts Off. (Steam rewrites StartupMode after it opens — re-pinned when you open Exo.)")
+                : "No Run key, Startup apps Off, toasts Off. (Steam may rewrite StartupMode after it opens — re-Apply Steam to re-pin.)")
             : string.Join("; ", new[]
             {
                 noRun ? null : "Steam still in Run",
@@ -460,8 +486,9 @@ public static class NativeLiveDetect
             if (status != "ok")
                 return (false, "Not proven live — will run on next Windows Apply.");
 
-            if (requireDisabled && disabled <= 0)
-                return (false, $"Last pass disabled={disabled} — re-Apply if tasks still noisy.");
+            // Quiet machine: disabled=0 but alreadyOff>0 is success (nothing left to flip).
+            if (requireDisabled && disabled <= 0 && alreadyOff <= 0)
+                return (false, $"Last pass disabled={disabled} alreadyOff={alreadyOff} — re-Apply if tasks still noisy.");
 
             // Prefer flag from honest SaveState, but report line wins when present
             return (true, flag
@@ -807,31 +834,11 @@ public static class NativeLiveDetect
         return true;
     }
 
-    private static List<string> DiscoverRiot()
-    {
-        var list = new List<string>();
-        var drive = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
-        var root = Path.Combine(drive, "Riot Games");
-        foreach (var rel in new[]
-                 {
-                     @"VALORANT\live\ShooterGame\Binaries\Win64\VALORANT-Win64-Shipping.exe",
-                     @"VALORANT\live\VALORANT\Binaries\Win64\VALORANT-Win64-Shipping.exe",
-                     @"VALORANT\VALORANT.exe",
-                     @"League of Legends\Game\League of Legends.exe"
-                 })
-        {
-            var p = Path.Combine(root, rel);
-            if (File.Exists(p)) list.Add(Path.GetFullPath(p));
-        }
-        return list;
-    }
+    private static List<string> DiscoverRiot() =>
+        LauncherNativeApply.DiscoverRiotGames();
 
-    private static List<string> DiscoverRiotLaunchers()
-    {
-        var drive = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
-        var p = Path.Combine(drive, @"Riot Games\Riot Client\RiotClientServices.exe");
-        return File.Exists(p) ? new List<string> { Path.GetFullPath(p) } : new List<string>();
-    }
+    private static List<string> DiscoverRiotLaunchers() =>
+        LauncherNativeApply.DiscoverRiotLaunchers();
 
     private static List<string> DiscoverEpic()
     {

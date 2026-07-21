@@ -521,6 +521,23 @@ export function GamesPage() {
                 This game isn&apos;t on this PC (or hasn&apos;t been launched yet). Apply stays
                 locked until it is installed and run once.
               </p>
+              {(selectedRow?.installUrl || selectedRow?.installLabel) && (
+                <button
+                  type="button"
+                  disabled={locked}
+                  onClick={() => {
+                    if (!selectedId) return
+                    void host.openInstall(selectedId).catch(() => {
+                      if (selectedRow?.installUrl) {
+                        void host.openUrl(selectedRow.installUrl)
+                      }
+                    })
+                  }}
+                  className="mt-2.5 flex h-10 w-full items-center justify-center rounded-xl bg-white text-[12px] font-semibold text-black disabled:opacity-40"
+                >
+                  {selectedRow.installLabel || 'Open store'}
+                </button>
+              )}
             </section>
           )}
 

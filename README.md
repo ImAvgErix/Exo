@@ -54,7 +54,7 @@ Stable Apply is the safe reversible stack. Experimental only forces tighter re-i
 **Requirements:** Windows 11 x64
 
 1. Download **`Exo.exe`** from the [latest release](https://github.com/ImAvgErix/Exo/releases/latest)
-2. Double-click to install (self-contained — **no separate .NET install**)
+2. Double-click to install (main app is self-contained; the installer also quietly ensures **.NET 10 Desktop Runtime**, WebView2, PowerShell 7, and VC++ redist)
 3. Launch from Start Menu or `%LocalAppData%\Exo\app\Exo.exe`
 
 PowerShell bootstrap (verifies published SHA-256):

@@ -219,6 +219,7 @@ export function ModulePage() {
         outcome,
         hostStatusText: status?.statusText,
         hostDetail: outcomeMsg || status?.detail,
+        hostStatusKind: status?.statusKind,
         isApplied: status?.isApplied,
         features,
       }),
@@ -232,6 +233,11 @@ export function ModulePage() {
   )
 
   const uiLocked = detecting || busy
+  // Don't run Apply/Repair when the target isn't on this PC (Steam / NVIDIA / Riot / Epic).
+  const canApply =
+    classified.kind !== 'missing' &&
+    classified.kind !== 'blocked' &&
+    status?.statusKind !== 'missing'
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
@@ -467,10 +473,22 @@ export function ModulePage() {
         </div>
       </section>
 
+      {!canApply && !detecting && (
+        <section className="glass specular shrink-0 rounded-2xl px-3 py-2.5">
+          <p className="text-[11px] font-semibold tracking-[0.04em] text-secondary">
+            Not available on this PC
+          </p>
+          <p className="mt-1 text-[12px] leading-snug text-muted">
+            {classified.detail ||
+              'Install the app or hardware for this optimizer, then reopen the card.'}
+          </p>
+        </section>
+      )}
+
       <div className="flex shrink-0 gap-2">
         <motion.button
           type="button"
-          disabled={uiLocked}
+          disabled={uiLocked || !canApply}
           whileTap={reduce ? undefined : { scale: 0.96 }}
           onClick={() => void runApply()}
           className="flex-1 rounded-xl bg-white py-2.5 text-sm font-semibold text-black shadow-[0_0_24px_rgb(255_255_255/0.12)] disabled:opacity-40"
@@ -485,7 +503,7 @@ export function ModulePage() {
         </motion.button>
         <motion.button
           type="button"
-          disabled={uiLocked}
+          disabled={uiLocked || !canApply}
           whileTap={reduce ? undefined : { scale: 0.96 }}
           onClick={() => void runRepair()}
           className="glass-chip rounded-xl px-5 py-2.5 text-sm font-semibold text-text disabled:opacity-40"

@@ -107,13 +107,23 @@ public static class LauncherNativeApply
         return false;
     }
 
-    private static List<string> DiscoverRiotGames()
+    /// <summary>Shared with <see cref="NativeLiveDetect"/> so Apply and Detect see the same install roots.</summary>
+    public static List<string> DiscoverRiotGames()
     {
         var list = new List<string>();
-        var drive = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
         var roots = new List<string>();
-        var riotRoot = Path.Combine(drive, "Riot Games");
-        if (Directory.Exists(riotRoot)) roots.Add(riotRoot);
+        // PC-aware: Riot on D:/E: is common — scan fixed drives + uninstall + processes
+        try
+        {
+            foreach (var d in DriveInfo.GetDrives())
+            {
+                if (d.DriveType != DriveType.Fixed || !d.IsReady) continue;
+                var candidate = Path.Combine(d.RootDirectory.FullName, "Riot Games");
+                if (Directory.Exists(candidate) && !roots.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+                    roots.Add(candidate);
+            }
+        }
+        catch { /* fall through to uninstall */ }
 
         foreach (var root in EnumerateUninstallRoots("Riot|VALORANT|League of Legends"))
             if (!roots.Contains(root, StringComparer.OrdinalIgnoreCase)) roots.Add(root);
@@ -162,7 +172,8 @@ public static class LauncherNativeApply
         return list;
     }
 
-    private static List<string> DiscoverRiotLaunchers()
+    /// <summary>Shared with Detect — system drive + uninstall roots + running client.</summary>
+    public static List<string> DiscoverRiotLaunchers()
     {
         var list = new List<string>();
         var drive = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
@@ -176,6 +187,45 @@ public static class LauncherNativeApply
             var full = Path.Combine(drive, rel);
             if (File.Exists(full)) list.Add(Path.GetFullPath(full));
         }
+
+        foreach (var root in EnumerateUninstallRoots("Riot Client|Riot Games"))
+        {
+            foreach (var rel in new[]
+                     {
+                         @"Riot Client\RiotClientServices.exe",
+                         @"RiotClientServices.exe"
+                     })
+            {
+                var full = Path.Combine(root, rel);
+                if (File.Exists(full) && !list.Contains(full, StringComparer.OrdinalIgnoreCase))
+                    list.Add(Path.GetFullPath(full));
+            }
+            // InstallLocation is often the Riot Games root
+            var services = Path.Combine(root, "Riot Client", "RiotClientServices.exe");
+            if (File.Exists(services) && !list.Contains(services, StringComparer.OrdinalIgnoreCase))
+                list.Add(Path.GetFullPath(services));
+        }
+
+        try
+        {
+            foreach (var name in new[] { "RiotClientServices", "RiotClientUx" })
+            {
+                foreach (var p in System.Diagnostics.Process.GetProcessesByName(name))
+                {
+                    try
+                    {
+                        var path = p.MainModule?.FileName;
+                        if (!string.IsNullOrEmpty(path) && File.Exists(path) &&
+                            !list.Contains(path, StringComparer.OrdinalIgnoreCase))
+                            list.Add(Path.GetFullPath(path));
+                    }
+                    catch { }
+                    finally { p.Dispose(); }
+                }
+            }
+        }
+        catch { }
+
         return list;
     }
 

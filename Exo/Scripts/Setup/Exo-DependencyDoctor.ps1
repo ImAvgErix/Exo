@@ -1,26 +1,31 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Exo dependency doctor - keeps the machine on stable PowerShell 7 and prunes
-  stale Exo update leftovers.
+  Exo dependency doctor - install/update path for machine prerequisites.
 
 .DESCRIPTION
   Idempotent and elevated-safe. Runs under Windows PowerShell 5.1 or PowerShell 7
   so it can bootstrap machines where pwsh is missing entirely.
 
-  Steps (each emits EXO_REPORT:<step>|ok|fail|skip):
-    pwsh-detect              locate stable PowerShell 7
-    pwsh-install             install stable PowerShell 7 via winget, MSI fallback
-    pwsh-upgrade             upgrade an outdated stable PowerShell 7
-    preview-pwsh-uninstall   remove Microsoft.PowerShell.Preview (best effort)
-    preview-terminal-uninstall  remove Microsoft.WindowsTerminal.Preview (best effort)
-    cache-prune              prune %LocalAppData%\Exo update/staging leftovers
+  Called by the Exo.exe SFX after every install/update so community PCs get:
+    * .NET 10 Desktop Runtime (FDD helpers e.g. Exo.NvDisplay)
+    * WebView2 Evergreen Runtime (SPA shell)
+    * Stable PowerShell 7 (optimizer scripts)
+    * VC++ 2015-2022 x64 redistributable (native bits)
+  Also prunes stale Exo update leftovers under %LocalAppData%\Exo.
 
-  The doctor NEVER deletes optimizer state (*-optimizer.json), snapshots
-  (network-snapshot.json), settings.json, or anything under logs\.
+  Steps (each emits EXO_REPORT:<step>|ok|fail|skip):
+    dotnet-detect / dotnet-install
+    webview2-detect / webview2-install
+    vcredist-detect / vcredist-install
+    pwsh-detect / pwsh-install / pwsh-upgrade
+    preview-pwsh-uninstall / preview-terminal-uninstall
+    cache-prune
+
+  NEVER deletes optimizer state (*-optimizer.json), snapshots, settings.json, or logs\.
 
 .EXAMPLE
-  pwsh -NoProfile -ExecutionPolicy Bypass -File .\Exo-DependencyDoctor.ps1 -Reason install
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\Exo-DependencyDoctor.ps1 -Reason install
 #>
 [CmdletBinding()]
 param(
@@ -230,6 +235,166 @@ function Install-StablePwshViaMsi($Release) {
     }
 }
 
+# --- .NET 10 Desktop Runtime ------------------------------------------------
+
+function Test-DotNet10DesktopRuntime {
+    # Shared framework folder is the ground truth (works without `dotnet` on PATH).
+    $roots = @(
+        (Join-Path ${env:ProgramFiles} 'dotnet\shared\Microsoft.WindowsDesktop.App'),
+        (Join-Path ${env:ProgramW6432} 'dotnet\shared\Microsoft.WindowsDesktop.App')
+    ) | Where-Object { $_ } | Select-Object -Unique
+    foreach ($root in $roots) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        $hit = Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^10\.' } |
+            Select-Object -First 1
+        if ($hit) { return $true }
+    }
+    return $false
+}
+
+function Install-DotNet10DesktopRuntime {
+    # Prefer winget; fall back to official quiet installer (Desktop Runtime includes base Runtime).
+    if ($winget) {
+        Write-DoctorLine '[*] Installing .NET 10 Desktop Runtime via winget...'
+        $code = Invoke-DoctorProcess $winget @(
+            'install', '--id', 'Microsoft.DotNet.DesktopRuntime.10', '-e', '--silent',
+            '--accept-package-agreements', '--accept-source-agreements',
+            '--disable-interactivity') 1200
+        if ($code -eq 0 -or $code -eq -1978335189 -or $code -eq -1978335212) {
+            if (Test-DotNet10DesktopRuntime) { return $true }
+        } else {
+            Write-DoctorLine "[!] winget DesktopRuntime.10 exit: $code - trying direct installer..."
+        }
+    } else {
+        Write-DoctorLine '[!] winget not found - downloading .NET 10 Desktop Runtime installer...'
+    }
+
+    # Always-latest x64 Desktop Runtime channel (includes Microsoft.NETCore.App 10).
+    $url = 'https://aka.ms/dotnet/10.0/windowsdesktop-runtime-win-x64.exe'
+    $setup = Join-Path $env:TEMP ('windowsdesktop-runtime-10-' + [guid]::NewGuid().ToString('N') + '.exe')
+    try {
+        try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
+        Write-DoctorLine "[*] Downloading $url"
+        Invoke-WebRequest -Uri $url -OutFile $setup -UseBasicParsing `
+            -Headers @{ 'User-Agent' = 'Exo-DependencyDoctor/2.0' } -TimeoutSec 900
+        if (-not (Test-Path -LiteralPath $setup) -or (Get-Item -LiteralPath $setup).Length -lt 1MB) {
+            Write-DoctorLine '[!] .NET Desktop Runtime download looks invalid.'
+            return $false
+        }
+        Write-DoctorLine '[*] Running .NET Desktop Runtime installer (quiet)...'
+        $code = Invoke-DoctorProcess $setup @('/install', '/quiet', '/norestart') 1200
+        # 0 ok, 1638 already installed, 3010 reboot pending
+        if ($code -eq 0 -or $code -eq 1638 -or $code -eq 3010) {
+            return (Test-DotNet10DesktopRuntime)
+        }
+        Write-DoctorLine "[!] .NET Desktop Runtime installer exit $code"
+        return $false
+    } catch {
+        Write-DoctorLine "[!] .NET Desktop Runtime install failed: $($_.Exception.Message)"
+        return $false
+    } finally {
+        Remove-Item -LiteralPath $setup -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# --- WebView2 Evergreen Runtime ---------------------------------------------
+
+function Test-WebView2Runtime {
+    $keys = @(
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+        'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+    )
+    foreach ($k in $keys) {
+        try {
+            $pv = (Get-ItemProperty -LiteralPath $k -ErrorAction Stop).pv
+            $loc = (Get-ItemProperty -LiteralPath $k -ErrorAction Stop).location
+            if ($pv -and $loc) {
+                $exe = Join-Path $loc (Join-Path $pv 'msedgewebview2.exe')
+                if (Test-Path -LiteralPath $exe) { return $true }
+            }
+        } catch { }
+    }
+    $root = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\EdgeWebView\Application'
+    if (Test-Path -LiteralPath $root) {
+        $hit = Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+            Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'msedgewebview2.exe') } |
+            Select-Object -First 1
+        if ($hit) { return $true }
+    }
+    return $false
+}
+
+function Install-WebView2Runtime {
+    if ($winget) {
+        Write-DoctorLine '[*] Installing WebView2 Runtime via winget...'
+        $code = Invoke-DoctorProcess $winget @(
+            'install', '--id', 'Microsoft.EdgeWebView2Runtime', '-e', '--silent',
+            '--accept-package-agreements', '--accept-source-agreements',
+            '--disable-interactivity') 1200
+        if ($code -eq 0 -or $code -eq -1978335189 -or $code -eq -1978335212) {
+            if (Test-WebView2Runtime) { return $true }
+        } else {
+            Write-DoctorLine "[!] winget WebView2 exit: $code - trying Evergreen bootstrapper..."
+        }
+    }
+    $url = 'https://go.microsoft.com/fwlink/p/?LinkId=2124703'
+    $setup = Join-Path $env:TEMP ('MicrosoftEdgeWebview2Setup-' + [guid]::NewGuid().ToString('N') + '.exe')
+    try {
+        try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
+        Write-DoctorLine '[*] Downloading WebView2 Evergreen bootstrapper...'
+        Invoke-WebRequest -Uri $url -OutFile $setup -UseBasicParsing `
+            -Headers @{ 'User-Agent' = 'Exo-DependencyDoctor/2.0' } -TimeoutSec 600
+        if (-not (Test-Path -LiteralPath $setup) -or (Get-Item -LiteralPath $setup).Length -lt 10KB) {
+            Write-DoctorLine '[!] WebView2 bootstrapper looks invalid.'
+            return $false
+        }
+        $code = Invoke-DoctorProcess $setup @('/silent', '/install') 600
+        if ($null -eq $code) { return $false }
+        for ($i = 0; $i -lt 30 -and -not (Test-WebView2Runtime); $i++) { Start-Sleep -Seconds 1 }
+        return (Test-WebView2Runtime)
+    } catch {
+        Write-DoctorLine "[!] WebView2 install failed: $($_.Exception.Message)"
+        return $false
+    } finally {
+        Remove-Item -LiteralPath $setup -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# --- VC++ 2015-2022 x64 redistributable -------------------------------------
+
+function Test-VCRedistX64 {
+    # VS 2015-2022 unified runtime (x64)
+    $keys = @(
+        'HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64'
+    )
+    foreach ($k in $keys) {
+        try {
+            $installed = (Get-ItemProperty -LiteralPath $k -ErrorAction Stop).Installed
+            if ($installed -eq 1) { return $true }
+        } catch { }
+    }
+    return $false
+}
+
+function Install-VCRedistX64 {
+    if ($winget) {
+        Write-DoctorLine '[*] Installing VC++ 2015-2022 x64 redistributable via winget...'
+        $code = Invoke-DoctorProcess $winget @(
+            'install', '--id', 'Microsoft.VCRedist.2015+.x64', '-e', '--silent',
+            '--accept-package-agreements', '--accept-source-agreements',
+            '--disable-interactivity') 900
+        if ($code -eq 0 -or $code -eq -1978335189 -or $code -eq -1978335212) {
+            return $true
+        }
+        Write-DoctorLine "[!] winget VCRedist exit: $code"
+    } else {
+        Write-DoctorLine '[!] winget not found - skipping VC++ redist (usually already present on Win11).'
+    }
+    return (Test-VCRedistX64)
+}
+
 # --- Cache pruning ----------------------------------------------------------
 
 function Test-ProtectedPath([string]$FullPath) {
@@ -363,8 +528,76 @@ Write-DoctorLine ''
 
 $winget = Get-Winget
 $latest = $null
+$criticalOk = $true
 
-# Step 1: stable PowerShell 7 present?
+# ── .NET 10 Desktop Runtime (NvDisplay + any FDD helpers) ──────────────────
+if (Test-DotNet10DesktopRuntime) {
+    Write-DoctorLine '[+] .NET 10 Desktop Runtime is installed.'
+    Write-Report 'dotnet-detect' 'ok'
+    Write-Report 'dotnet-install' 'skip'
+} else {
+    Write-DoctorLine '[!] .NET 10 Desktop Runtime not found.'
+    Write-Report 'dotnet-detect' 'fail'
+    if ($NoInstall) {
+        Write-Report 'dotnet-install' 'skip'
+        $criticalOk = $false
+    } else {
+        if (Install-DotNet10DesktopRuntime) {
+            Write-DoctorLine '[+] .NET 10 Desktop Runtime ready.'
+            Write-Report 'dotnet-install' 'ok'
+        } else {
+            Write-DoctorLine '[-] Could not install .NET 10 Desktop Runtime. NVIDIA display tools may fail until it is installed.'
+            Write-Report 'dotnet-install' 'fail'
+            $criticalOk = $false
+        }
+    }
+}
+
+# ── WebView2 (SPA shell) ───────────────────────────────────────────────────
+if (Test-WebView2Runtime) {
+    Write-DoctorLine '[+] WebView2 Runtime is installed.'
+    Write-Report 'webview2-detect' 'ok'
+    Write-Report 'webview2-install' 'skip'
+} else {
+    Write-DoctorLine '[!] WebView2 Runtime not found.'
+    Write-Report 'webview2-detect' 'fail'
+    if ($NoInstall) {
+        Write-Report 'webview2-install' 'skip'
+        $criticalOk = $false
+    } else {
+        if (Install-WebView2Runtime) {
+            Write-DoctorLine '[+] WebView2 Runtime ready.'
+            Write-Report 'webview2-install' 'ok'
+        } else {
+            Write-DoctorLine '[-] Could not install WebView2. Exo UI may not load until it is installed.'
+            Write-Report 'webview2-install' 'fail'
+            $criticalOk = $false
+        }
+    }
+}
+
+# ── VC++ redistributable (best-effort; common on Win11 already) ────────────
+if (Test-VCRedistX64) {
+    Write-DoctorLine '[+] VC++ 2015-2022 x64 redistributable present.'
+    Write-Report 'vcredist-detect' 'ok'
+    Write-Report 'vcredist-install' 'skip'
+} else {
+    Write-DoctorLine '[!] VC++ redistributable not detected.'
+    Write-Report 'vcredist-detect' 'fail'
+    if ($NoInstall) {
+        Write-Report 'vcredist-install' 'skip'
+    } else {
+        if (Install-VCRedistX64) {
+            Write-DoctorLine '[+] VC++ redistributable ready (or already present).'
+            Write-Report 'vcredist-install' 'ok'
+        } else {
+            Write-DoctorLine '[!] VC++ redistributable install skipped/failed (non-fatal).'
+            Write-Report 'vcredist-install' 'fail'
+        }
+    }
+}
+
+# ── Stable PowerShell 7 ────────────────────────────────────────────────────
 $stable = Get-StablePwsh
 if ($stable) {
     Write-DoctorLine "[+] Stable PowerShell 7: $stable"
@@ -374,7 +607,7 @@ if ($stable) {
     Write-Report 'pwsh-detect' 'fail'
 }
 
-# Step 2: install when missing / upgrade when outdated.
+# Install when missing / upgrade when outdated.
 if ($NoInstall) {
     Write-Report 'pwsh-install' 'skip'
     Write-Report 'pwsh-upgrade' 'skip'
@@ -403,6 +636,7 @@ if ($NoInstall) {
     } else {
         Write-DoctorLine "[-] Could not install stable PowerShell 7. Install it with 'winget install Microsoft.PowerShell' or from the Microsoft Store ('PowerShell')."
         Write-Report 'pwsh-install' 'fail'
+        $criticalOk = $false
     }
     Write-Report 'pwsh-upgrade' 'skip'
 } else {
@@ -477,15 +711,17 @@ if ($KeepPreview) {
     }
 }
 
-# Step 4: cache hygiene under %LocalAppData%\Exo.
+# Cache hygiene under %LocalAppData%\Exo.
 Invoke-CachePrune ([bool]$stable)
 
-if ($stable) {
-    Write-DoctorLine '[+] Dependency doctor finished.'
+if (-not $stable) { $criticalOk = $false }
+
+if ($criticalOk) {
+    Write-DoctorLine '[+] Dependency doctor finished - .NET 10, WebView2, PowerShell 7 ready.'
     Write-Report 'doctor' 'ok'
     exit 0
 }
 
-Write-DoctorLine '[-] Dependency doctor finished, but stable PowerShell 7 is still missing.'
+Write-DoctorLine '[-] Dependency doctor finished with missing critical deps. See EXO_REPORT lines above.'
 Write-Report 'doctor' 'fail'
 exit 1

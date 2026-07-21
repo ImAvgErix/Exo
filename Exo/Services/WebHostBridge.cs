@@ -543,6 +543,10 @@ public sealed class WebHostBridge
         return BuildSettings();
     }
 
+    /// <summary>Last URL + tick so a double-attached bridge or double-click cannot open two tabs.</summary>
+    private string? _lastOpenUrl;
+    private long _lastOpenUrlTick;
+
     private object OpenExternalUrl(JsonElement p, bool hasParams)
     {
         try
@@ -555,11 +559,9 @@ public sealed class WebHostBridge
                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
                 return new { ok = false, message = "Only http(s) links are allowed." };
 
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = uri.AbsoluteUri,
-                UseShellExecute = true
-            });
+            if (!TryOpenUrlOnce(uri.AbsoluteUri))
+                return new { ok = true, url = uri.AbsoluteUri, deduped = true };
+
             return new { ok = true, url = uri.AbsoluteUri };
         }
         catch (Exception ex)
@@ -576,24 +578,14 @@ public sealed class WebHostBridge
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Exo", "logs");
             Directory.CreateDirectory(logs);
-            // Prefer opening the newest apply-*-latest.log so failures are one click away.
-            string? newest = null;
-            try
-            {
-                newest = Directory.EnumerateFiles(logs, "apply-*-latest.log")
-                    .Select(f => new FileInfo(f))
-                    .OrderByDescending(f => f.LastWriteTimeUtc)
-                    .Select(f => f.FullName)
-                    .FirstOrDefault();
-            }
-            catch { }
-
+            // Always open the folder (user asked for logs directory, not newest file).
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = newest ?? logs,
+                FileName = "explorer.exe",
+                Arguments = "\"" + logs + "\"",
                 UseShellExecute = true
             });
-            return new { ok = true, path = newest ?? logs, folder = logs };
+            return new { ok = true, path = logs, folder = logs };
         }
         catch (Exception ex)
         {
@@ -605,17 +597,33 @@ public sealed class WebHostBridge
     {
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = IssuesUrl,
-                UseShellExecute = true
-            });
+            if (!TryOpenUrlOnce(IssuesUrl))
+                return new { ok = true, deduped = true };
             return new { ok = true };
         }
         catch (Exception ex)
         {
             return new { ok = false, message = ex.Message };
         }
+    }
+
+    /// <returns>false if the same URL was opened within the last 800ms (skip second tab).</returns>
+    private bool TryOpenUrlOnce(string absoluteUrl)
+    {
+        var now = Environment.TickCount64;
+        if (_lastOpenUrl is not null &&
+            string.Equals(_lastOpenUrl, absoluteUrl, StringComparison.OrdinalIgnoreCase) &&
+            now - _lastOpenUrlTick < 800)
+            return false;
+
+        _lastOpenUrl = absoluteUrl;
+        _lastOpenUrlTick = now;
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = absoluteUrl,
+            UseShellExecute = true
+        });
+        return true;
     }
 
     private object OpenNvidiaControlPanel()
@@ -1725,7 +1733,8 @@ public sealed class WebHostBridge
                 }
             }
 
-            if (!repair && module is "windows" or "steam")
+            // Host latency (MMCSS / PowerThrottling) is Windows-owned — never restamp from Steam.
+            if (!repair && module is "windows")
                 RestampHostLatency(log);
 
             var doneMsg = supportsNative

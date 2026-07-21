@@ -137,8 +137,11 @@ function post(msg: unknown) {
   wv.postMessage(typeof msg === 'string' ? msg : JSON.stringify(msg))
 }
 
+let hostBridgeReady = false
+
 export function initHostBridge() {
-  if (!isHost()) return
+  if (!isHost() || hostBridgeReady) return
+  hostBridgeReady = true
   const wv = (window as unknown as {
     chrome: { webview: { addEventListener: (t: string, fn: (e: MessageEvent) => void) => void } }
   }).chrome.webview
@@ -215,7 +218,15 @@ export const host = {
   detect: async (module: ModuleId, opts?: { force?: boolean }) => {
     if (!opts?.force) {
       const hit = detectCache.get(module)
-      if (hit && Date.now() - hit.at < DETECT_TTL_MS) return hit.status
+      // Short TTL when missing — user may have just installed Steam/GPU drivers
+      const ttl =
+        hit?.status.statusKind === 'missing' ||
+        /not installed|no .*gpu|missing target/i.test(
+          `${hit?.status.statusText || ''} ${hit?.status.detail || ''}`,
+        )
+          ? 20_000
+          : DETECT_TTL_MS
+      if (hit && Date.now() - hit.at < ttl) return hit.status
     }
     const status = await call<ModuleStatus>('module.detect', {
       module,
@@ -249,6 +260,9 @@ export const host = {
     displayMode: GameDisplayMode | string = 'leave',
   ) => call<GameHubSnapshot>('games.apply', { gameId, gamePreset, displayMode }),
   repairGame: (gameId: string) => call<GameHubSnapshot>('games.repair', { gameId }),
+  /** Open Steam/Epic/store install page for a catalog game */
+  openInstall: (gameId: string) =>
+    call<{ ok: boolean; message?: string; gameId?: string }>('games.openInstall', { gameId }),
   getSettings: () =>
     call<{
       appVersion: string
@@ -402,10 +416,13 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
     } as T)
   }
   if (method === 'shell.openLogs') {
-    return Promise.resolve({ ok: true, path: 'mock-logs' } as T)
+    return Promise.resolve({ ok: true, path: 'mock-logs', folder: 'mock-logs' } as T)
   }
   if (method === 'shell.openIssues') {
     return Promise.resolve({ ok: true } as T)
+  }
+  if (method === 'games.openInstall') {
+    return Promise.resolve({ ok: true, gameId: params?.gameId as string } as T)
   }
   if (method === 'shell.openUrl') {
     const u =

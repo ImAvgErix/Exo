@@ -1,3 +1,16 @@
+## 3.16.8
+
+- File Explorer: hide **Home / Gallery / Network** from nav; **Recycle Bin on This PC**, hidden on desktop
+- Explorer useful defaults: show hidden files, show extensions, open to This PC, compact mode, less Quick Access noise
+- **Long paths enabled** (HKLM when elevated); soft shell refresh (no Explorer kill)
+- Settings: **Logs opens the logs folder**; Issues / Buy coffee open **one** browser tab (bridge single-flight + URL dedupe)
+- Windows tasks: **never disable Update / Defender / WaaSMedic** trees (community-PC safe)
+- Ownership: Steam no longer restamps Windows host latency; detect no longer writes Steam StartupMode
+- Riot detect/Apply share multi-drive discovery (uninstall + fixed drives + running processes)
+- UI: Apply/Repair locked when target missing; Games **Open store** when not installed
+- Honest Windows apply message when elevation still needed for HAGS/MMCSS pack
+- **Install/update auto-deps**: SFX + dependency doctor install **.NET 10 Desktop Runtime**, WebView2, PowerShell 7, and VC++ redist (log: `%LocalAppData%\Exo\logs\dependency-doctor.log`)
+
 ## 3.16.7
 
 - Settings: **in-app Changelog** sheet (glass UI, version chips + bullets from bundled CHANGELOG.md)

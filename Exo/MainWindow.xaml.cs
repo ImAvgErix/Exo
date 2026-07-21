@@ -34,6 +34,11 @@ public sealed partial class MainWindow : Window
     private WebHostBridge? _bridge;
     private bool _firstFrameMarked;
     private bool _webReady;
+    /// <summary>
+    /// Single-flight for web init. RootGrid.Loaded and Activated both call EnsureWebAsync;
+    /// without this, two concurrent inits each Attach() a bridge → every shell.openUrl runs twice.
+    /// </summary>
+    private Task? _ensureWebTask;
     private bool _homeBootstrapped;
     private bool _postFirstFrameWorkStarted;
     private bool _stickySafeMode;
@@ -234,14 +239,26 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    private async Task EnsureWebAsync()
+    private Task EnsureWebAsync()
+    {
+        if (_webReady) return Task.CompletedTask;
+        // Single-flight: Loaded + Activated race must not double-Attach the bridge.
+        return _ensureWebTask ??= EnsureWebCoreAsync();
+    }
+
+    private async Task EnsureWebCoreAsync()
     {
         if (_webReady) return;
         try
         {
             await WebHost.EnsureCoreWebView2Async();
             var core = WebHost.CoreWebView2;
-            if (core is null) return;
+            if (core is null)
+            {
+                // Allow a later EnsureWebAsync to retry instead of sticking on a no-op task.
+                _ensureWebTask = null;
+                return;
+            }
 
             var www = ResolveWwwRoot();
             if (www is null || !Directory.Exists(www))
@@ -265,6 +282,8 @@ public sealed partial class MainWindow : Window
                 www,
                 CoreWebView2HostResourceAccessKind.Allow);
 
+            // Replace any prior bridge so WebMessageReceived never stacks handlers.
+            try { _bridge?.Detach(); } catch { }
             _bridge = new WebHostBridge(App.Services, DispatcherQueue);
             _bridge.Attach(core);
             _bridge.SettingsRequested += (_, _) =>
@@ -287,6 +306,8 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            // Allow a later call to retry if CoreWebView2 init failed mid-flight.
+            _ensureWebTask = null;
             StartupLog.Mark("web-host-failed:" + ex.GetType().Name);
         }
     }
