@@ -1,3 +1,8 @@
+## 3.16.13
+
+- **Settings blank UI**: opening the gear no longer crashes React — `linkGuard` was a `useMemo` *after* `if (!open) return null` (hooks-order regression from 3.16.8), which wiped the whole WebView
+- Ui.Smoke gates: no React hooks after the SettingsDrawer early return
+
 ## 3.16.12
 
 - **Ship fix**: always pack `Exo/wwwroot` into the app - CI previously skipped React UI when `ui/node_modules` was missing, so installs showed **Exo UI not built**
