@@ -77,6 +77,21 @@ jobs:
         shell: pwsh
         run: ./tools/Test-Repository.ps1
 
+      # ShippedScriptManifest.g.cs is generated, not hand-edited (see
+      # tools/Generate-ScriptManifest.ps1). Elevated Apply/Repair hard-fails on
+      # a hash mismatch, so a stale commit here is a silent time bomb, not a
+      # style nit — regenerate and diff against what's committed.
+      - name: Script manifest is up to date
+        shell: pwsh
+        run: |
+          ./tools/Generate-ScriptManifest.ps1
+          $diff = git diff --stat -- Exo/Security/ShippedScriptManifest.g.cs
+          if ($diff) {
+            Write-Host $diff
+            Write-Error 'Exo/Security/ShippedScriptManifest.g.cs is stale. Run tools/Generate-ScriptManifest.ps1 and commit the result.'
+            exit 1
+          }
+
       # Smokes: UI, Network, Discord, Steam, NVIDIA, Contracts (Detect=Apply).
       - name: UI + optimizer smoke (no UAC)
         shell: pwsh
