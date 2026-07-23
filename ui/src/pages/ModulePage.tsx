@@ -440,15 +440,17 @@ export function ModulePage() {
               Apply to load the feature stack.
             </p>
           ) : (
-            <ul className="grid h-full grid-cols-2 content-start gap-x-1 gap-y-0.5">
+            <ul className="grid h-full grid-cols-2 content-evenly gap-x-2 gap-y-1">
               {features.map((f) => (
                 <li
                   key={f.title}
                   title={f.detail || f.title}
-                  className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1"
+                  className={`flex min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 ${
+                    f.active ? 'bg-white/[0.03]' : ''
+                  }`}
                 >
                   <span
-                    className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${
+                    className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold leading-none ${
                       f.active
                         ? 'bg-success/20 text-success'
                         : 'bg-white/5 text-muted'
@@ -458,7 +460,7 @@ export function ModulePage() {
                     {f.active ? '✓' : '·'}
                   </span>
                   <span
-                    className={`min-w-0 truncate text-[11px] font-medium leading-tight ${
+                    className={`min-w-0 truncate text-[12px] font-medium leading-tight ${
                       f.active ? 'text-text' : 'text-muted'
                     }`}
                   >
