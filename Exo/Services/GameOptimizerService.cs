@@ -420,6 +420,7 @@ public sealed partial class GameOptimizerService
             return (false, "Marvel Rivals was not found in Steam library folders.");
 
         ct.ThrowIfCancellationRequested();
+        var gusSchemaKnown = true;
 
         try
         {
@@ -434,7 +435,7 @@ public sealed partial class GameOptimizerService
                 WriteEngineIni(preset);
                 WriteScalabilityIni(preset);
                 // Always borderless for Marvel (UE FullscreenMode=1)
-                PatchGameUserSettings(preset, DisplayBorderless);
+                gusSchemaKnown = PatchGameUserSettings(preset, DisplayBorderless);
 
                 try
                 {
@@ -463,6 +464,9 @@ public sealed partial class GameOptimizerService
 
             var msg = (preset == PresetPotato ? "Potato configs written" : "Optimized configs written")
                 + " (borderless enforced). Restart Marvel Rivals.";
+            if (!gusSchemaKnown)
+                msg += " Note: GameUserSettings.ini didn't match the sections Exo expects (a game update may have " +
+                       "restructured it) — quality/borderless keys were still written, but verify they stuck in-game.";
             progress?.Report("Verified");
             return (true, msg);
         }
@@ -941,15 +945,29 @@ public sealed partial class GameOptimizerService
         WriteUtf16Le(ScalabilityIniPath, sb.ToString());
     }
 
-    private static void PatchGameUserSettings(string preset, string displayMode = DisplayLeave)
+    /// <summary>
+    /// True when an existing GameUserSettings.ini already has at least one section this
+    /// writer targets. False on a fresh file (nothing to compare against yet — not a
+    /// concern) or when a game patch renamed/restructured the sections we look for; in that
+    /// case EnsureSectionLine still safely appends a recognizable section rather than
+    /// silently landing keys the game's current build won't read.
+    /// </summary>
+    private static bool MarvelConfigSchemaKnown(string existingText) =>
+        existingText.Contains("[/Script/Marvel.MarvelGameUserSettings]", StringComparison.OrdinalIgnoreCase)
+        || existingText.Contains("[/Script/Engine.GameUserSettings]", StringComparison.OrdinalIgnoreCase)
+        || existingText.Contains("[ScalabilityGroups]", StringComparison.OrdinalIgnoreCase);
+
+    private static bool PatchGameUserSettings(string preset, string displayMode = DisplayLeave)
     {
         Directory.CreateDirectory(MarvelConfigDir);
         var path = GameUserSettingsPath;
         string text;
-        if (File.Exists(path))
+        var hadExistingFile = File.Exists(path);
+        if (hadExistingFile)
             text = File.ReadAllText(path);
         else
             text = "[ScalabilityGroups]\r\n[/Script/Marvel.MarvelGameUserSettings]\r\n";
+        var schemaKnown = !hadExistingFile || MarvelConfigSchemaKnown(text);
 
         // Never clobber DLSS / SuperSampling / Reflex / resolution.
         text = EnsureSectionLine(text, "ScalabilityGroups", "sg.ViewDistanceQuality", preset == PresetPotato ? "0" : "1");
@@ -1004,6 +1022,8 @@ public sealed partial class GameOptimizerService
             }
         }
         catch { /* ignore */ }
+
+        return schemaKnown;
     }
 
     private static string EnsureSectionLine(string text, string section, string key, string value)
