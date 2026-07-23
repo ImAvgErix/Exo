@@ -26,6 +26,26 @@ internal static class WebView2Doctor
 
     public static bool IsHealthy() => FindHealthyBrowserFolder() is not null;
 
+    /// <summary>
+    /// Path to the WebView2 Fixed Version runtime bundled inside the app
+    /// (Runtime\WebView2 next to the executable), or null if it isn't present.
+    /// When bundled, Exo runs on this copy instead of the machine's Evergreen
+    /// runtime, so a missing or corrupted system runtime can't black-screen the
+    /// app. The publish step drops the runtime here; a dev build without it
+    /// simply falls back to the system runtime.
+    /// </summary>
+    public static string? ResolveBundledRuntimeFolder()
+    {
+        try
+        {
+            var folder = Path.Combine(AppContext.BaseDirectory, "Runtime", "WebView2");
+            if (File.Exists(Path.Combine(folder, "msedgewebview2.exe")))
+                return folder;
+        }
+        catch { }
+        return null;
+    }
+
     private static string? FindHealthyBrowserFolder()
     {
         var folder = FindBrowserFolder();

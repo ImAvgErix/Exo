@@ -342,7 +342,28 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var init = WebHost.EnsureCoreWebView2Async();
+            // Prefer the WebView2 runtime bundled inside the app: it is always
+            // present and intact, so the machine's Evergreen runtime being
+            // missing or corrupted can no longer black-screen the UI. Falls back
+            // to the system runtime when no bundle is shipped (dev builds) or if
+            // the bundled environment fails to create.
+            CoreWebView2Environment? env = null;
+            var bundled = WebView2Doctor.ResolveBundledRuntimeFolder();
+            if (bundled is not null)
+            {
+                try
+                {
+                    env = await CoreWebView2Environment.CreateAsync(bundled, null, null);
+                    StartupLog.Mark("webview2-bundled-runtime");
+                }
+                catch (Exception ex)
+                {
+                    StartupLog.Mark("webview2-bundled-fail:" + ex.GetType().Name);
+                    env = null;
+                }
+            }
+
+            var init = WebHost.EnsureCoreWebView2Async(env);
             var done = await Task.WhenAny(init, Task.Delay(TimeSpan.FromSeconds(25)));
             if (done != init)
             {
