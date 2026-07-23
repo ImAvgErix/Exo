@@ -61,6 +61,23 @@ jobs:
           }
           exit 0
 
+      # Hard gate: compile exactly the way the release publishes, so a
+      # release-only compile error (e.g. a WebView2 API overload that resolves
+      # under `dotnet build` but not under the RID-specific publish) can never
+      # reach main again. Mirrors Publish-Exo.ps1's publish flags.
+      - name: Release-equivalent publish gate
+        shell: pwsh
+        timeout-minutes: 25
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'publish-gate'
+          dotnet publish Exo/Exo.csproj -c Release -r win-x64 --self-contained true `
+            -p:WindowsPackageType=None `
+            -p:WindowsAppSDKSelfContained=true `
+            -p:PublishReadyToRun=true `
+            -o $out
+          if ($LASTEXITCODE -ne 0) { throw "Release-equivalent publish gate failed (exit $LASTEXITCODE)" }
+          if (-not (Test-Path (Join-Path $out 'Exo.exe'))) { throw "Exo.exe missing after publish gate" }
+
       - name: Verify C# formatting
         run: |
           dotnet format Exo.sln --verify-no-changes --no-restore

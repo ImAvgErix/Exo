@@ -353,7 +353,7 @@ public sealed partial class MainWindow : Window
             {
                 try
                 {
-                    env = await CoreWebView2Environment.CreateAsync(bundled, null, null);
+                    env = await CoreWebView2Environment.CreateAsync(bundled);
                     StartupLog.Mark("webview2-bundled-runtime");
                 }
                 catch (Exception ex)
@@ -363,7 +363,7 @@ public sealed partial class MainWindow : Window
                 }
             }
 
-            var init = WebHost.EnsureCoreWebView2Async(env);
+            var init = WebHost.EnsureCoreWebView2Async(env).AsTask();
             var done = await Task.WhenAny(init, Task.Delay(TimeSpan.FromSeconds(25)));
             if (done != init)
             {
