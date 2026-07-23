@@ -27,6 +27,36 @@
                       DefaultBackgroundColor="#050506" />
         </Grid>
 
+        <!--
+          Native (non-WebView2) fallback shown only when the WebView2 Runtime
+          cannot be reached or repaired. Must not depend on WebView2 to render,
+          since WebView2 being broken is exactly the case this covers.
+        -->
+        <StackPanel x:Name="WebViewFallback"
+                    Visibility="Collapsed"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MaxWidth="440"
+                    Spacing="12">
+            <TextBlock x:Name="WebViewFallbackTitle"
+                       Text="Exo couldn't start its UI runtime"
+                       Foreground="White"
+                       FontSize="18"
+                       FontWeight="SemiBold"
+                       TextWrapping="Wrap"
+                       HorizontalAlignment="Center" />
+            <TextBlock x:Name="WebViewFallbackBody"
+                       Text="The WebView2 Runtime looks corrupted and Exo's automatic repair didn't fix it. Reinstalling the runtime usually resolves this."
+                       Foreground="#B8B8BC"
+                       FontSize="13"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center" />
+            <Button x:Name="WebViewFallbackButton"
+                    Content="Open WebView2 download page"
+                    HorizontalAlignment="Center"
+                    Click="WebViewFallbackButton_Click" />
+        </StackPanel>
+
         <!-- ~10px drag-only strip (matches React pt-2.5). Must NOT cover h-12 bar. -->
         <Border x:Name="TitleChrome"
                 Height="10"
