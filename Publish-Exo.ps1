@@ -296,12 +296,20 @@ if (Test-Path -LiteralPath $wvAppRoot) {
 }
 if ($wvSrc) {
     $wvDest = Join-Path $OutDir 'Runtime\WebView2'
-    New-Item -ItemType Directory -Path $wvDest -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $wvSrc.FullName '*') -Destination $wvDest -Recurse -Force
-    if (Test-Path -LiteralPath (Join-Path $wvDest 'msedgewebview2.exe')) {
+    try {
+        New-Item -ItemType Directory -Path $wvDest -Force | Out-Null
+        # -Path (not -LiteralPath) so the trailing * expands to the folder's
+        # contents; -LiteralPath treats '*' as a real filename and fails.
+        Copy-Item -Path (Join-Path $wvSrc.FullName '*') -Destination $wvDest -Recurse -Force -ErrorAction Stop
+    } catch {
+        Write-Warning "WebView2 bundle copy failed ($($_.Exception.Message)); shipping without a bundled runtime (system-runtime fallback)."
+        Remove-Item -LiteralPath $wvDest -Recurse -Force -ErrorAction SilentlyContinue
+        $wvDest = $null
+    }
+    if ($wvDest -and (Test-Path -LiteralPath (Join-Path $wvDest 'msedgewebview2.exe'))) {
         $wvSize = [math]::Round((Get-ChildItem -LiteralPath $wvDest -Recurse -File | Measure-Object Length -Sum).Sum / 1MB, 0)
         Write-Host "[+] Bundled WebView2 runtime v$($wvSrc.Name) ($wvSize MB) -> Runtime\WebView2" -ForegroundColor Green
-    } else {
+    } elseif ($wvDest) {
         Write-Warning "WebView2 bundle copy looks incomplete; shipping without a bundled runtime (system-runtime fallback)."
         Remove-Item -LiteralPath $wvDest -Recurse -Force -ErrorAction SilentlyContinue
     }
