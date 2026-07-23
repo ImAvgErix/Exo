@@ -33,6 +33,16 @@ Aggressive must still be deterministic: scope actions to the selected applicatio
 - **Feature rows** = thin status rail + Applied/Not applied (live detect)
 - **Version** = `VERSION` file and `Exo/Exo.csproj` must match; Ui.Smoke gates both
 
+## Known god-file exceptions
+
+`Steam-Optimizer.ps1` and `Nvidia-Optimizer.ps1` are single-file scripts well
+over the usual 80 KB tidiness threshold (each covers detect, apply, repair,
+and every safety rail for its module in one runner). This is accepted debt,
+not an oversight — a thin-runner + named-steps split is future work, not a
+blocker for shipping. `Contracts.Smoke` asserts a note like this one exists
+whenever either file crosses 80 KB, so the exception stays documented rather
+than silently growing.
+
 ## Team structure
 
 For substantial audits, refactors, optimizer work, or releases:

@@ -173,13 +173,13 @@ Expect("nvidia stage lib bootstrap",
 Expect("nvidia Run wires bootstrap",
     nvRun.Contains("Nvidia.Bootstrap.ps1", StringComparison.Ordinal));
 
-// --- Shared plate + no Exo background create across optimizers ---
-Expect("SharedModulePlate shipped",
-    File.Exists(Path.Combine(repo, "Exo", "Views", "Controls", "SharedModulePlate.xaml")));
+// --- Legacy WinUI optimizer surface stays deleted (WebView2 shell owns the UI now) ---
+Expect("SharedModulePlate removed",
+    !File.Exists(Path.Combine(repo, "Exo", "Views", "Controls", "SharedModulePlate.xaml")));
 foreach (var page in new[] { "Discord", "Steam", "Internet", "Nvidia" })
 {
-    var xaml = File.ReadAllText(Path.Combine(repo, "Exo", "Views", page + "OptimizerPage.xaml"));
-    Expect(page + " page uses SharedModulePlate", xaml.Contains("SharedModulePlate", StringComparison.Ordinal));
+    Expect(page + "OptimizerPage removed",
+        !File.Exists(Path.Combine(repo, "Exo", "Views", page + "OptimizerPage.xaml")));
 }
 
 // Cross-module EXO_REPORT vocabulary (apply path or shared bootstrap emitters)
@@ -197,10 +197,10 @@ foreach (var (name, blob) in new (string, string)[]
 // God-file size exceptions noted (Wave 3 thin split, full strangle later)
 var steamBytes = new FileInfo(Path.Combine(repo, "Exo", "Scripts", "Steam", "Steam-Optimizer.ps1")).Length;
 var nvBytes = new FileInfo(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Nvidia-Optimizer.ps1")).Length;
-var exceptionDoc = File.ReadAllText(Path.Combine(repo, "docs", "REWRITE-PROGRAM.md"));
+var exceptionDoc = File.ReadAllText(Path.Combine(repo, "AGENTS.md"));
 if (steamBytes > 80_000 || nvBytes > 80_000)
 {
-    Expect("god-file exception note in REWRITE-PROGRAM",
+    Expect("god-file exception note in AGENTS.md",
         exceptionDoc.Contains("god-file", StringComparison.OrdinalIgnoreCase)
         || exceptionDoc.Contains("80 KB", StringComparison.Ordinal)
         || exceptionDoc.Contains("exception", StringComparison.OrdinalIgnoreCase));
