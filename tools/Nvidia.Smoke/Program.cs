@@ -193,16 +193,12 @@ var optimizerPath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Nvidia-Optim
 var displayApplyPath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Display-Apply.ps1");
 var detectPath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-Detect.ps1");
 var corePath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "NvidiaDetectCore.ps1");
-var messagesPath = Path.Combine(repo, "Exo", "Helpers", "OptimizerMessages.cs");
-var nvidiaViewModelPath = Path.Combine(repo, "Exo", "ViewModels", "NvidiaOptimizerViewModel.cs");
 var nvDisplaySourcePath = Path.Combine(repo, "tools", "Exo.NvDisplay", "Program.cs");
 var runScriptPath = Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-Run.ps1");
 var optimizerSrc = File.Exists(optimizerPath) ? File.ReadAllText(optimizerPath) : "";
 var displayApplySrc = File.Exists(displayApplyPath) ? File.ReadAllText(displayApplyPath) : "";
 var detectSrc = File.Exists(detectPath) ? File.ReadAllText(detectPath) : "";
 var coreSrc = File.Exists(corePath) ? File.ReadAllText(corePath) : "";
-var messagesSrc = File.Exists(messagesPath) ? File.ReadAllText(messagesPath) : "";
-var nvidiaViewModelSrc = File.Exists(nvidiaViewModelPath) ? File.ReadAllText(nvidiaViewModelPath) : "";
 var nvDisplaySrc = File.Exists(nvDisplaySourcePath) ? File.ReadAllText(nvDisplaySourcePath) : "";
 var runScriptSrc = File.Exists(runScriptPath) ? File.ReadAllText(runScriptPath) : "";
 
@@ -241,8 +237,7 @@ Expect("optimizer bloat stage runs once",
     CountOf(optimizerSrc, "[void](Remove-NvidiaBloatComponents)") == 1);
 Expect("default app path enables NVIDIA safe policy",
     runScriptSrc.Contains("SafePolicy = $true", StringComparison.Ordinal) &&
-    runScriptSrc.Contains("SkipDriver = $true", StringComparison.Ordinal) &&
-    nvidiaViewModelSrc.Contains("\"-SafePolicy\"", StringComparison.Ordinal));
+    runScriptSrc.Contains("SkipDriver = $true", StringComparison.Ordinal));
 Expect("safe policy blocks destructive NVIDIA stages",
     optimizerSrc.Contains("if ($SafePolicy)", StringComparison.Ordinal) &&
     optimizerSrc.Contains("driver install, package removal, service/task debloat, audio, overlay, and display mutations are disabled", StringComparison.Ordinal));
@@ -309,10 +304,6 @@ Expect("secondary display refresh stays unchanged",
     nvDisplaySrc.Contains("EXO_SECONDARY_REFRESH", StringComparison.Ordinal) &&
     nvDisplaySrc.Contains("?? \"keep\"", StringComparison.Ordinal) &&
     !nvDisplaySrc.Contains("?? \"60\"", StringComparison.Ordinal));
-Expect("NVIDIA reset uses status-cleared copy",
-    messagesSrc.Contains("NvidiaStatusCleared = \"Restored the pre-Exo NVIDIA profile database.\"", StringComparison.Ordinal) &&
-    nvidiaViewModelSrc.Contains("OptimizerMessages.NvidiaStatusCleared", StringComparison.Ordinal));
-
 // Policy: always GitHub Latest for Profile Inspector (no hard-pinned old tags).
 Expect("NPI resolves GitHub Latest",
     optimizerSrc.Contains("Resolve-LatestNpiRelease", StringComparison.Ordinal) &&

@@ -207,14 +207,11 @@ public sealed class WebHostBridge
         var modules = new[]
         {
             Row("discord", "Discord", vm.DiscordStatusTag),
-            Row("brave", "Brave", "READY"),
+            Row("brave", "Brave", vm.BraveStatusTag),
             Row("steam", "Steam", vm.SteamStatusTag),
             Row("games", "Games", vm.GamesStatusTag),
-            Row("windows", "Windows", vm.WindowsStatusTag),
             Row("internet", "Internet", vm.InternetStatusTag),
             Row("nvidia", "NVIDIA", vm.NvidiaStatusTag),
-            Row("riot", "Riot", vm.RiotStatusTag),
-            Row("epic", "Epic", vm.EpicStatusTag),
         };
 
         object? next = null;
@@ -412,11 +409,8 @@ public sealed class WebHostBridge
             {
                 discord = s.ExperimentalDiscord,
                 steam = s.ExperimentalSteam,
-                windows = s.ExperimentalWindows,
                 internet = s.ExperimentalInternet,
-                nvidia = s.ExperimentalNvidia,
-                riot = s.ExperimentalRiot,
-                epic = s.ExperimentalEpic
+                nvidia = s.ExperimentalNvidia
             }
         };
     }
@@ -761,11 +755,8 @@ public sealed class WebHostBridge
             "brave" => "brave",
             "steam" => "steam",
             "games" => "games",
-            "windows" => "windows",
             "internet" => "internet",
             "nvidia" => "nvidia",
-            "riot" => "riot",
-            "epic" => "epic",
             _ => "discord"
         };
 
@@ -799,10 +790,7 @@ public sealed class WebHostBridge
             "brave" => MapState("brave", await _services.OptimizerState.DetectBraveAsync(ct).ConfigureAwait(true)),
             "steam" => MapState("steam", await _services.OptimizerState.DetectSteamAsync(ct, fastOnly: false).ConfigureAwait(true)),
             "games" => MapState("games", await Task.Run(() => _services.Games.Detect()).ConfigureAwait(true)),
-            "windows" => MapState("windows", await _services.OptimizerState.DetectWindowsAsync(ct).ConfigureAwait(true)),
             "nvidia" => MapState("nvidia", await _services.OptimizerState.DetectNvidiaAsync(ct, fastOnly: false).ConfigureAwait(true)),
-            "riot" => MapState("riot", await _services.OptimizerState.DetectRiotAsync(ct).ConfigureAwait(true)),
-            "epic" => MapState("epic", await _services.OptimizerState.DetectEpicAsync(ct).ConfigureAwait(true)),
             "internet" => await MapInternetAsync(force).ConfigureAwait(true),
             _ => throw new InvalidOperationException($"Unknown module: {module}")
         };
@@ -1050,7 +1038,6 @@ public sealed class WebHostBridge
             return t.Equals("Optimization verified", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Anti-cheat untouched", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("One-click Repair ready", StringComparison.OrdinalIgnoreCase)
-                   || t.Equals("Launcher junk cleaned", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Safe repair", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Policy", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Adapter", StringComparison.OrdinalIgnoreCase)
@@ -1058,11 +1045,9 @@ public sealed class WebHostBridge
                    || t.Equals("Display scaling & color", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Latency / sync policy", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Stack profile", StringComparison.OrdinalIgnoreCase)
-                   || t.Equals("Gaming multimedia stack", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Host gaming stack", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Profile", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("DLSS left alone", StringComparison.OrdinalIgnoreCase)
-                   || t.Equals("Exo packs ready", StringComparison.OrdinalIgnoreCase)
                    // Games hub: informational / diagnostic only (must not fail Apply status)
                    || t.Equals("Install / configs", StringComparison.OrdinalIgnoreCase)
                    || t.Equals("Method", StringComparison.OrdinalIgnoreCase)
@@ -1184,11 +1169,8 @@ public sealed class WebHostBridge
                 {
                     "discord" => _services.Settings.Current.ExperimentalDiscord,
                     "steam" => _services.Settings.Current.ExperimentalSteam,
-                    "windows" => _services.Settings.Current.ExperimentalWindows,
                     "internet" => _services.Settings.Current.ExperimentalInternet,
                     "nvidia" => _services.Settings.Current.ExperimentalNvidia,
-                    "riot" => _services.Settings.Current.ExperimentalRiot,
-                    "epic" => _services.Settings.Current.ExperimentalEpic,
                     _ => false
                 },
                 useGsync,
@@ -1219,7 +1201,7 @@ public sealed class WebHostBridge
     {
         var modules = new[]
         {
-            "discord", "brave", "steam", "windows", "internet", "nvidia", "riot", "epic", "games"
+            "discord", "brave", "steam", "internet", "nvidia", "games"
         };
         var results = new List<object>();
         var applied = 0;
@@ -1318,11 +1300,8 @@ public sealed class WebHostBridge
                 {
                     case "discord": s.ExperimentalDiscord = experimental; break;
                     case "steam": s.ExperimentalSteam = experimental; break;
-                    case "windows": s.ExperimentalWindows = experimental; break;
                     case "internet": s.ExperimentalInternet = experimental; break;
                     case "nvidia": s.ExperimentalNvidia = experimental; break;
-                    case "riot": s.ExperimentalRiot = experimental; break;
-                    case "epic": s.ExperimentalEpic = experimental; break;
                 }
             });
         }
@@ -1536,35 +1515,25 @@ public sealed class WebHostBridge
             // ── Apply pipeline policy (repair always uses full PS kit) ──────────
             // discord / nvidia  → specialized PowerShell kits only
             // internet          → NetworkOptimizerService only (handled above)
-            // riot / epic / brave → native C# ONLY
-            // windows / steam   → native C# primary; PS deep pack soft-fails if native OK
-            //
-            // Old hybrid always forced a full elevated PS kit after native → double
-            // work, double elevation, hangs (Defender), and strip of yield Run keys.
+            // brave             → native C# ONLY (handled above)
+            // steam             → native C# primary; PS deep pack soft-fails if native OK
             var supportsNative = !repair && _services.NativeApply.SupportsNativeApply(module);
-            // Modules whose competitive apply is fully covered by native C#.
-            var nativeComplete = module is "riot" or "epic" or "windows" or "brave";
             // Steam still benefits from PS debloat depth; soft-fail if native essentials OK.
-            var softFailDeepPack = module is "steam" or "windows";
-            // Riot/Epic/Windows/Brave: full competitive apply is native C# (every detect row).
-            // No redundant PS kit — hang sources (DISM/schtasks) are hard-timeout inside native.
-            // Steam still runs PS deep pack for CEF/debloat depth (soft-fail if native OK).
-            var skipDeepPack = supportsNative && (module is "riot" or "epic" or "windows" or "brave");
+            var softFailDeepPack = module is "steam";
 
-            log.Line($"pipeline supportsNative={supportsNative} nativeComplete={nativeComplete} skipDeepPack={skipDeepPack} softFailDeep={softFailDeepPack} experimental={experimental}");
+            log.Line($"pipeline supportsNative={supportsNative} softFailDeep={softFailDeepPack} experimental={experimental}");
 
             NativeApplyResult? nativeResult = null;
             if (supportsNative)
             {
                 Report(2, "Native apply (registry / files / policy)...");
                 var step = 0;
-                // Scale native progress: full range when no deep pack, else 2–55%.
-                var nativeCap = skipDeepPack ? 92.0 : 55.0;
+                // Native runs first, then the PS deep pack: scale progress 2–55%.
                 var strProgress = new Progress<string>(s =>
                 {
                     step++;
                     log.Line($"NATIVE  {s}");
-                    var pct = Math.Min(nativeCap, 2 + step * (skipDeepPack ? 5.0 : 2.5));
+                    var pct = Math.Min(55.0, 2 + step * 2.5);
                     Report(pct, s);
                 });
                 nativeResult = await _services.NativeApply.ApplyAsync(
@@ -1593,17 +1562,6 @@ public sealed class WebHostBridge
                     log.Line("NATIVE non-essential gaps — continuing if deep pack allowed");
                 }
 
-                if (skipDeepPack)
-                {
-                    // Final host pins (safe even when Internet folklore previously wrote 0).
-                    if (module is "windows")
-                        RestampHostLatency(log);
-
-                    Report(100, "Native apply complete (no redundant PowerShell kit)");
-                    log.Finish(true, "native-only ok");
-                    return;
-                }
-
                 Report(55, "Native done — optional deep pack (soft-fail if native OK)...");
             }
 
@@ -1621,23 +1579,11 @@ public sealed class WebHostBridge
                     script = repair ? scripts.SteamRepairScript : scripts.SteamOptimizerScript;
                     workDir = scripts.GetSteamRoot();
                     break;
-                case "windows":
-                    script = repair ? scripts.WindowsRepairScript : scripts.WindowsOptimizerScript;
-                    workDir = scripts.GetWindowsRoot();
-                    break;
                 case "nvidia":
                     script = repair ? scripts.NvidiaRepairScript : scripts.NvidiaOptimizerScript;
                     workDir = scripts.GetNvidiaRoot();
                     if (!repair)
                         args.Add(useGsync ? "-Gsync" : "-RawLatency");
-                    break;
-                case "riot":
-                    script = repair ? scripts.RiotRepairScript : scripts.RiotOptimizerScript;
-                    workDir = scripts.GetGameLaunchersRoot();
-                    break;
-                case "epic":
-                    script = repair ? scripts.EpicRepairScript : scripts.EpicOptimizerScript;
-                    workDir = scripts.GetGameLaunchersRoot();
                     break;
                 default:
                     throw new InvalidOperationException($"Unknown module: {module}");
@@ -1680,7 +1626,7 @@ public sealed class WebHostBridge
 
             // Clean PC: Discord/Steam/NVIDIA kits need PowerShell 7. Internet already
             // bootstraps pwsh via NetworkOptimizerService; native-only modules skip this path.
-            var needPwshBootstrap = module is "discord" or "steam" or "nvidia" or "windows";
+            var needPwshBootstrap = module is "discord" or "steam" or "nvidia";
             var result = await runner.RunAsync(
                 script,
                 arguments: args.ToArray(),
@@ -1715,79 +1661,20 @@ public sealed class WebHostBridge
                 {
                     log.Line($"DEEP PACK soft-fail (native OK): {err}");
                     log.Step("deep-pack", "partial", err.Length > 200 ? err[..200] : err);
-                    if (module is "windows" or "steam")
+                    if (module is "steam")
                         RestampHostLatency(log);
                     Report(100, "Native apply complete (deep pack partial — see log)");
                     log.Finish(true, "native ok; deep pack partial");
                     return;
                 }
 
-                // Windows integrity: retry once from bundled Scripts root.
-                if (!repair && module == "windows" &&
-                    err.Contains("signed script manifest", StringComparison.OrdinalIgnoreCase))
-                {
-                    log.Line("RETRY windows deep pack from bundled ScriptsRoot...");
-                    var bundled = Path.Combine(PathHelper.ScriptsRoot, "Windows", "Exo-Windows-Run.ps1");
-                    log.Line($"bundled={bundled} exists={File.Exists(bundled)}");
-                    if (File.Exists(bundled))
-                    {
-                        var retry = await runner.RunAsync(
-                            bundled,
-                            arguments: args.ToArray(),
-                            elevate: true,
-                            progress: deepProgress,
-                            cancellationToken: CancellationToken.None,
-                            workingDirectory: Path.GetDirectoryName(bundled)!).ConfigureAwait(true);
-                        log.Line($"RETRY Success={retry.Success} Exit={retry.ExitCode} Summary={retry.Summary}");
-                        ModuleApplyLog.MirrorElevatedTransaction(module, retry.LogPath, log);
-                        if (retry.Success)
-                        {
-                            result = retry;
-                            err = null!;
-                        }
-                        else if (softFailDeepPack && nativeResult is { Ok: true })
-                        {
-                            log.Line($"RETRY soft-fail (native OK): {retry.ErrorMessage ?? retry.Summary}");
-                            Report(100, "Native apply complete (deep pack retry partial)");
-                            log.Finish(true, "native ok; deep pack partial");
-                            return;
-                        }
-                        else
-                        {
-                            err = string.IsNullOrWhiteSpace(retry.ErrorMessage)
-                                ? (retry.Summary ?? err)
-                                : retry.ErrorMessage!;
-                        }
-                    }
-                }
-
-                if (err is not null)
-                {
-                    log.Finish(false, err);
-                    throw new InvalidOperationException(err + Environment.NewLine + "Full log: " + log.LatestPath);
-                }
+                log.Finish(false, err);
+                throw new InvalidOperationException(err + Environment.NewLine + "Full log: " + log.LatestPath);
             }
 
-            // Product: zero always-on yield companions. If a deep pack ever ran for
-            // riot/epic, re-run native apply to purge leftovers + restamp GPU/DSCP.
-            if (!repair && (module is "riot" or "epic") && !skipDeepPack)
-            {
-                log.Line("Re-stamp native launcher policy (purge yield; GPU/DSCP)...");
-                Report(97, "Re-stamping launcher policy...");
-                try
-                {
-                    var restamp = LauncherNativeApply.Apply(module, experimental, new Progress<string>(s => log.Line("RESTAMP  " + s)));
-                    foreach (var s in restamp.Steps.Where(x => x.Id is "yield" or "gpu-fso" or "game-dscp"))
-                        log.Step(s.Id, s.Status, s.Reason);
-                }
-                catch (Exception ex)
-                {
-                    log.Line("RESTAMP failed (non-fatal): " + ex.Message);
-                }
-            }
-
-            // Host latency (MMCSS / PowerThrottling) is Windows-owned — never restamp from Steam.
-            if (!repair && module is "windows")
+            // Host latency (MMCSS / PowerThrottling) pins ride with Steam now that the
+            // Windows module is gone — Steam is the module that needs them in-game.
+            if (!repair && module is "steam")
                 RestampHostLatency(log);
 
             var doneMsg = supportsNative

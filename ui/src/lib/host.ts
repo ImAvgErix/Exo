@@ -5,11 +5,8 @@ export type ModuleId =
   | 'brave'
   | 'steam'
   | 'games'
-  | 'windows'
   | 'internet'
   | 'nvidia'
-  | 'riot'
-  | 'epic'
 
 export type GamePreset = 'potato' | 'optimized'
 /** leave = keep game setting; borderless / exclusive use per-game tokens */
@@ -368,13 +365,10 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
         { id: 'brave', title: 'Brave', applied: false },
         { id: 'steam', title: 'Steam', applied: true },
         { id: 'games', title: 'Games', applied: false },
-        { id: 'windows', title: 'Windows', applied: false },
         { id: 'internet', title: 'Internet', applied: false },
         { id: 'nvidia', title: 'NVIDIA', applied: true },
-        { id: 'riot', title: 'Riot', applied: false },
-        { id: 'epic', title: 'Epic', applied: false },
       ],
-      next: { id: 'windows', label: 'Windows' },
+      next: { id: 'games', label: 'Games' },
       appVersion: '3.7.2',
     } as T)
   }
@@ -459,15 +453,14 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
       detail: 'Browser mock — run Exo.exe for real optimizers.',
       features: [
         { title: 'Install', detail: 'Present', active: true },
-        { title: 'UTOC signature bypass', detail: 'Present', active: true },
-        { title: '~mods folder', detail: 'OK', active: true },
+        { title: 'Ban-safe surface', detail: 'User configs only — no packs, no game-binary mutation', active: true },
         { title: 'Game profile', detail: method.includes('apply') ? 'Optimized active' : 'Not applied', active: method.includes('apply') },
         { title: 'Profile', detail: 'Optimized', active: true },
         { title: 'DLSS left alone', detail: 'OK', active: true },
         { title: 'One-click Repair ready', detail: 'OK', active: true },
       ],
       applyReport: method.includes('apply')
-        ? ['bypass|ok', 'packs|ok', 'engine.ini|ok']
+        ? ['engine.ini|ok', 'scalability.ini|ok', 'borderless|ok']
         : [],
       options: {
         experimental: false,
@@ -479,14 +472,14 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
     if (method.startsWith('games.')) {
       const applied = method.includes('apply')
       const mockGames = [
-        { id: 'black-ops-7', title: 'Black Ops 7', platform: 'Battle.net / Steam', blurb: 'AppData players config', icon: '/logos/games.png' },
-        { id: 'fortnite', title: 'Fortnite', platform: 'Epic', blurb: 'GameUserSettings.ini', icon: '/logos/epic.png' },
-        { id: 'valorant', title: 'Valorant', platform: 'Riot', blurb: 'GameUserSettings.ini only', icon: '/logos/riot.png' },
-        { id: 'cs2', title: 'Counter-Strike 2', platform: 'Steam', blurb: 'video + autoexec', icon: '/logos/steam.png' },
-        { id: 'apex-legends', title: 'Apex Legends', platform: 'Steam / EA', blurb: 'videoconfig.txt', icon: '/logos/steam.png' },
-        { id: 'helldivers-2', title: 'Helldivers 2', platform: 'Steam', blurb: 'user_settings.config', icon: '/logos/steam.png' },
-        { id: 'the-finals', title: 'The Finals', platform: 'Steam / Epic', blurb: 'GameUserSettings.ini', icon: '/logos/steam.png' },
-        { id: 'marvel-rivals', title: 'Marvel Rivals', platform: 'Steam', blurb: 'IoStore packs + Engine.ini', icon: '/logos/marvel-rivals.png' },
+        { id: 'black-ops-7', title: 'Black Ops 7', platform: 'Battle.net / Steam', blurb: 'AppData players config', icon: '/logos/black-ops-7.png' },
+        { id: 'fortnite', title: 'Fortnite', platform: 'Epic', blurb: 'GameUserSettings.ini', icon: '/logos/fortnite.png' },
+        { id: 'valorant', title: 'Valorant', platform: 'Riot', blurb: 'GameUserSettings.ini only', icon: '/logos/valorant.png' },
+        { id: 'cs2', title: 'Counter-Strike 2', platform: 'Steam', blurb: 'video + autoexec', icon: '/logos/cs2.png' },
+        { id: 'apex-legends', title: 'Apex Legends', platform: 'Steam / EA', blurb: 'videoconfig.txt', icon: '/logos/apex-legends.png' },
+        { id: 'helldivers-2', title: 'Helldivers 2', platform: 'Steam', blurb: 'user_settings.config', icon: '/logos/helldivers-2.png' },
+        { id: 'the-finals', title: 'The Finals', platform: 'Steam / Epic', blurb: 'GameUserSettings.ini', icon: '/logos/the-finals.png' },
+        { id: 'marvel-rivals', title: 'Marvel Rivals', platform: 'Steam', blurb: 'Engine.ini + Scalability quality', icon: '/logos/marvel-rivals.png' },
       ].map((g) => {
         const installed =
           g.id === 'black-ops-7' || g.id === 'valorant' || g.id === 'marvel-rivals'

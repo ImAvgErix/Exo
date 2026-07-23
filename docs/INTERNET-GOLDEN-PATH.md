@@ -74,7 +74,7 @@
 | EEE / green / selective suspend | Off | Off |
 | IdleRestriction (Intel) | **On** (block low-power idle) | Off |
 | ARP/NS offload / Wake | Off | Off |
-| Ring buffers | Max if exposed | Max |
+| Ring buffers | Mid-high (~75th percentile of valid values — absolute max can add jitter on some NICs) | Max |
 | PnP power-off device | Disabled (24) | Disabled |
 | Interface metric | **1** primary usable; others 5+ | same |
 | Adapter bindings (Properties UI) | QoS+IPv4+IPv6 **on** only (Client/LLDP left alone — never disable) | same |
@@ -96,7 +96,7 @@
 | MU-MIMO / OFDMA / Beamforming | On when exposed | On |
 | Throughput Booster | Off | On when exposed |
 | Preferred Band | Prefer **6 GHz** if client supports, else **Prefer 5 GHz** | same |
-| Roaming aggressiveness | Medium when exposed | Medium |
+| Roaming aggressiveness | Low (stable BSS — avoids handoff jitter) | Medium (balanced handoff) |
 | Force band-only | **Never** | Never |
 | Restart | **Never** | Never |
 

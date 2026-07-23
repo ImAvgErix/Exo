@@ -54,7 +54,8 @@ var nativeSecurityCs = Path.Combine(repo, "Exo", "Helpers", "NativeProcessSecuri
 var shippedManifestCs = Path.Combine(repo, "Exo", "Security", "ShippedScriptManifest.cs");
 var generatedManifestCs = Path.Combine(repo, "Exo", "Security", "ShippedScriptManifest.g.cs");
 
-Expect("files", File.Exists(appXaml) && File.Exists(main) && File.Exists(dash));
+Expect("files", File.Exists(appXaml) && File.Exists(main));
+Expect("dead DashboardPage removed", !File.Exists(dash));
 var wwwIndex = Path.Combine(repo, "Exo", "wwwroot", "index.html");
 var exoCsproj = Path.Combine(repo, "Exo", "Exo.csproj");
 Expect("wwwroot index present", File.Exists(wwwIndex));
@@ -168,16 +169,14 @@ if (File.Exists(appServicesCs) && File.Exists(powerShellRunnerCs))
         && runnerSource.Contains("Assert-PlainDirectory", StringComparison.Ordinal)
         && !runnerSource.Contains("$\"exit-{stamp}.txt\"", StringComparison.Ordinal));
 
-    var actionSources = new[]
-    {
-        Path.Combine(repo, "Exo", "ViewModels", "DiscordOptimizerViewModel.cs"),
-        Path.Combine(repo, "Exo", "ViewModels", "SteamOptimizerViewModel.cs"),
-        Path.Combine(repo, "Exo", "ViewModels", "NvidiaOptimizerViewModel.cs"),
-        Path.Combine(repo, "Exo", "Services", "NvidiaPanelSettingsService.cs")
-    };
+    var webBridgeCs = Path.Combine(repo, "Exo", "Services", "WebHostBridge.cs");
+    var nvidiaPanelCs = Path.Combine(repo, "Exo", "Services", "NvidiaPanelSettingsService.cs");
+    var networkOptCs = Path.Combine(repo, "Exo", "Services", "NetworkOptimizerService.cs");
     Expect("Apply and Repair opt in to dependency preparation",
-        actionSources.All(File.Exists)
-        && actionSources.All(path => File.ReadAllText(path).Contains("ensureRuntime: true", StringComparison.Ordinal)));
+        File.Exists(webBridgeCs) && File.Exists(nvidiaPanelCs) && File.Exists(networkOptCs)
+        && File.ReadAllText(webBridgeCs).Contains("ensureRuntime: needPwshBootstrap", StringComparison.Ordinal)
+        && File.ReadAllText(nvidiaPanelCs).Contains("ensureRuntime: true", StringComparison.Ordinal)
+        && File.ReadAllText(networkOptCs).Contains("ensureRuntime: true", StringComparison.Ordinal));
 
     var updateSource = File.Exists(updateServiceCs) ? File.ReadAllText(updateServiceCs) : string.Empty;
     var installerSource = File.Exists(installerPs1) ? File.ReadAllText(installerPs1) : string.Empty;
@@ -200,8 +199,10 @@ if (File.Exists(appXaml) && File.Exists(colorTokens) && File.Exists(typeTokens) 
     var metrics = File.ReadAllText(metricTokens);
     Expect("dark page token", colors.Contains("<Color x:Key=\"ExoColorPage\">#000000</Color>", StringComparison.Ordinal));
     Expect("stone white primary token", colors.Contains("<Color x:Key=\"ExoColorPrimaryText\">#F2F2F0</Color>", StringComparison.Ordinal));
-    Expect("riot brand red", colors.Contains("<Color x:Key=\"ExoColorRiot\">#FF4655</Color>", StringComparison.Ordinal));
     Expect("discord brand blurple", colors.Contains("<Color x:Key=\"ExoColorDiscord\">#5865F2</Color>", StringComparison.Ordinal));
+    Expect("no dead launcher brand colors",
+        !colors.Contains("ExoColorRiot", StringComparison.Ordinal)
+        && !colors.Contains("ExoColorEpic", StringComparison.Ordinal));
     Expect("light theme removed", !colors.Contains("x:Key=\"Light\"", StringComparison.Ordinal)
         && !a.Contains("x:Key=\"Light\"", StringComparison.Ordinal));
     Expect("High Contrast dictionary", colors.Contains("x:Key=\"HighContrast\"", StringComparison.Ordinal)
@@ -269,24 +270,22 @@ if (File.Exists(main))
         && !m.Contains("<TitleBar", StringComparison.Ordinal)
         && !m.Contains("CaptionSpacerHost", StringComparison.Ordinal)
         && !m.Contains("TitleBarDragRegion", StringComparison.Ordinal));
-    Expect("legacy nav stubs collapsed",
-        m.Contains("x:Name=\"NavRail\"", StringComparison.Ordinal)
-        && m.Contains("Visibility=\"Collapsed\"", StringComparison.Ordinal)
-        && m.Contains("x:Name=\"ModuleIcons\"", StringComparison.Ordinal)
-        && m.Contains("x:Name=\"ExoBrandPill\"", StringComparison.Ordinal)
+    Expect("legacy chrome stubs collapsed",
+        m.Contains("x:Name=\"ExoBrandPill\"", StringComparison.Ordinal)
         && m.Contains("x:Name=\"NavHome\"", StringComparison.Ordinal)
         && m.Contains("SettingsButton", StringComparison.Ordinal)
         && !m.Contains("Text=\"EXO\"", StringComparison.Ordinal));
-    Expect("rail nav discord", m.Contains("NavDiscord", StringComparison.Ordinal));
-    Expect("rail nav steam", m.Contains("NavSteam", StringComparison.Ordinal));
-    Expect("rail nav internet", m.Contains("NavInternet", StringComparison.Ordinal));
-    Expect("rail nav nvidia", m.Contains("NavNvidia", StringComparison.Ordinal));
-    Expect("rail nav riot", m.Contains("NavRiot", StringComparison.Ordinal));
-    Expect("rail nav epic", m.Contains("NavEpic", StringComparison.Ordinal));
     Expect("settings gear", m.Contains("SettingsButton", StringComparison.Ordinal));
     Expect("dead back chrome removed", !m.Contains("x:Name=\"BackButton\"", StringComparison.Ordinal));
     Expect("no NavigationView", !m.Contains("<NavigationView", StringComparison.Ordinal));
-    Expect("ContentFrame", m.Contains("ContentFrame", StringComparison.Ordinal));
+    Expect("dead native nav rail removed — React Shell owns module nav",
+        !m.Contains("x:Name=\"NavRail\"", StringComparison.Ordinal)
+        && !m.Contains("x:Name=\"ModuleIcons\"", StringComparison.Ordinal)
+        && !m.Contains("NavDiscord", StringComparison.Ordinal)
+        && !m.Contains("NavRiot", StringComparison.Ordinal)
+        && !m.Contains("NavEpic", StringComparison.Ordinal));
+    Expect("dead ContentFrame removed — WebView2 is the only content host",
+        !m.Contains("ContentFrame", StringComparison.Ordinal));
     Expect("no tooltips in main", !m.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
 }
 // React Shell owns labeled module tabs + settings/home morph (not native TitleBar).
@@ -582,247 +581,35 @@ if (File.Exists(converters))
     }
 }
 
-// v3 SharedModulePlate hosts loader + action bar + feature grid for optimizers.
-var sharedPlateXaml = Path.Combine(repo, "Exo", "Views", "Controls", "SharedModulePlate.xaml");
-var sharedPlateCs = Path.Combine(repo, "Exo", "Views", "Controls", "SharedModulePlate.xaml.cs");
-Expect("SharedModulePlate control", File.Exists(sharedPlateXaml) && File.Exists(sharedPlateCs));
-if (File.Exists(sharedPlateXaml))
-{
-    var plate = File.ReadAllText(sharedPlateXaml);
-    Expect("SharedModulePlate instrument chrome",
-        plate.Contains("ExoModulePlate", StringComparison.Ordinal)
-        && plate.Contains("ExoLoader", StringComparison.Ordinal)
-        && plate.Contains("ExoActionBar", StringComparison.Ordinal)
-        && plate.Contains("FeatureTileGrid", StringComparison.Ordinal));
-    Expect("SharedModulePlate fixed-canvas layout",
-        plate.Contains("Fixed-canvas module surface", StringComparison.Ordinal)
-        && plate.Contains("Reading this PC", StringComparison.Ordinal)
-        && plate.Contains("InverseBoolToVisibilityConverter", StringComparison.Ordinal)
-        // Decluttered: no advisor strip / section title / unlock caption.
-        && !plate.Contains("WHAT EXO WILL CHANGE", StringComparison.Ordinal)
-        && !plate.Contains("Actions unlock when detection finishes", StringComparison.Ordinal)
-        // No outer page scroll — only expanded apply report may scroll.
-        && !plate.Contains("One normal-flow work surface", StringComparison.Ordinal)
-        && plate.Contains("MaxHeight=\"96\"", StringComparison.Ordinal));
-    Expect("SharedModulePlate report without advisor chrome",
-        plate.Contains("ApplyReportRows", StringComparison.Ordinal)
-        && !plate.Contains("GuidanceText=\"", StringComparison.Ordinal));
-    Expect("SharedModulePlate apply mode dropdown",
-        plate.Contains("Apply mode", StringComparison.Ordinal)
-        && plate.Contains("SelectedApplyMode", StringComparison.Ordinal)
-        && plate.Contains("ApplyModeOptions", StringComparison.Ordinal)
-        && plate.Contains("ComboBox", StringComparison.Ordinal));
-}
-if (File.Exists(sharedPlateCs))
-{
-    var plateCs = File.ReadAllText(sharedPlateCs);
-    Expect("SharedModulePlate FeatureTileGrid accessor",
-        plateCs.Contains("FeatureTileGrid", StringComparison.Ordinal)
-        && plateCs.Contains("FeatureGrid", StringComparison.Ordinal));
-}
-
-foreach (var page in new[]
+// The legacy WinUI optimizer surface (SharedModulePlate, FeatureTileGrid, ExoLoader,
+// ExoSparkline, per-module OptimizerPage.xaml, and the optimizer view-models) was
+// deleted in the 2026 cleanup — the app is a WebView2 shell around the React UI
+// (see "webview2 product host" above) and none of that XAML/VM tree was reachable
+// at runtime. Assert it stays gone rather than re-testing content that no longer exists.
+Expect("legacy optimizer XAML surface fully removed",
+    !Directory.Exists(Path.Combine(repo, "Exo", "Views", "Controls"))
+        || (!File.Exists(Path.Combine(repo, "Exo", "Views", "Controls", "SharedModulePlate.xaml"))
+            && !File.Exists(Path.Combine(repo, "Exo", "Views", "Controls", "FeatureTileGrid.xaml"))
+            && !File.Exists(Path.Combine(repo, "Exo", "Views", "Controls", "ExoLoader.xaml"))
+            && !File.Exists(Path.Combine(repo, "Exo", "Views", "Controls", "ExoSparkline.xaml"))));
+foreach (var deadPage in new[]
          {
-             "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml", "InternetOptimizerPage.xaml",
-             "NvidiaOptimizerPage.xaml", "RiotOptimizerPage.xaml", "EpicOptimizerPage.xaml"
+             "DiscordOptimizerPage", "SteamOptimizerPage", "InternetOptimizerPage",
+             "NvidiaOptimizerPage", "RiotOptimizerPage", "EpicOptimizerPage", "DashboardPage"
          })
 {
-    var p = Path.Combine(repo, "Exo", "Views", page);
-    if (!File.Exists(p)) continue;
-    var x = File.ReadAllText(p);
-    Expect(page + " CTA", x.Contains("ExoPrimaryButton", StringComparison.Ordinal) || x.Contains("ExoQuietButton", StringComparison.Ordinal));
-    // Module chrome: SharedModulePlate (v3) or legacy plate / page pad.
-    Expect(page + " page padding",
-        x.Contains("SharedModulePlate", StringComparison.Ordinal)
-        || x.Contains("ExoModulePlate", StringComparison.Ordinal)
-        || x.Contains("ExoPagePadding", StringComparison.Ordinal)
-        || x.Contains("ExoPageMaxWidth", StringComparison.Ordinal));
-    Expect(page + " uses SharedModulePlate", x.Contains("SharedModulePlate", StringComparison.Ordinal));
-    Expect(page + " no ProgressRing", !x.Contains("<ProgressRing", StringComparison.Ordinal));
-    if (page.StartsWith("Internet", StringComparison.Ordinal))
-    {
-        Expect("internet unified analyze apply",
-            x.Contains("Analyze &amp; Apply", StringComparison.Ordinal)
-            && !x.Contains("Highest download", StringComparison.Ordinal));
-        Expect("internet policy dropdown",
-            (x.Contains("Stack profile", StringComparison.Ordinal) || x.Contains("Link policy", StringComparison.Ordinal))
-            && x.Contains("SelectedProfileOption", StringComparison.Ordinal)
-            && x.Contains("SelectedApplyMode", StringComparison.Ordinal)
-            && (x.Contains("ShowProfileToggle=\"True\"", StringComparison.Ordinal) ||
-                x.Contains("ComboBox", StringComparison.Ordinal)));
-        Expect("internet DNS is automatic",
-            !x.Contains("Private DNS", StringComparison.Ordinal)
-            && !x.Contains("DNS toggle", StringComparison.OrdinalIgnoreCase));
-        Expect("internet Repair button", x.Contains("Content=\"Repair\"", StringComparison.Ordinal));
-        // Proof layer: quality summary + rollback only (no repair essay captions).
-        Expect("internet proof layer",
-            !x.Contains("BenchmarkSummary", StringComparison.Ordinal)
-            && x.Contains("QualitySummary", StringComparison.Ordinal)
-            && x.Contains("RollbackNotice", StringComparison.Ordinal)
-            && !x.Contains("RepairHint", StringComparison.Ordinal));
-        var ics = Path.Combine(repo, "Exo", "Views", "InternetOptimizerPage.xaml.cs");
-        if (File.Exists(ics))
-        {
-            var ic = File.ReadAllText(ics);
-            Expect("internet no preset dialog", !ic.Contains("RequestPresetChoice", StringComparison.Ordinal));
-            Expect("internet repair wired", ic.Contains("Repair_Click", StringComparison.Ordinal));
-        }
-    }
+    Expect(deadPage + " removed",
+        !File.Exists(Path.Combine(repo, "Exo", "Views", deadPage + ".xaml"))
+        && !File.Exists(Path.Combine(repo, "Exo", "Views", deadPage + ".xaml.cs")));
 }
-
-// Feature tiles: responsive two-column layout; the module owns scrolling.
-var featureGridXaml = Path.Combine(repo, "Exo", "Views", "Controls", "FeatureTileGrid.xaml");
-var featureGridCs = Path.Combine(repo, "Exo", "Views", "Controls", "FeatureTileGrid.xaml.cs");
-Expect("FeatureTileGrid control", File.Exists(featureGridXaml) && File.Exists(featureGridCs));
-if (File.Exists(featureGridXaml))
-{
-    var fg = File.ReadAllText(featureGridXaml);
-    Expect("feature grid stretch host", fg.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal));
-    Expect("feature grid responsive layout",
-        fg.Contains("UniformGridLayout", StringComparison.Ordinal)
-        && (fg.Contains("MinItemWidth=\"300\"", StringComparison.Ordinal) ||
-            fg.Contains("MinItemWidth=\"340\"", StringComparison.Ordinal))
-        && (fg.Contains("MinItemHeight=\"48\"", StringComparison.Ordinal) ||
-            fg.Contains("MinItemHeight=\"52\"", StringComparison.Ordinal))
-        && (fg.Contains("MinColumnSpacing=\"5\"", StringComparison.Ordinal) ||
-            fg.Contains("MinColumnSpacing=\"6\"", StringComparison.Ordinal))
-        && fg.Contains("ItemsStretch=\"Fill\"", StringComparison.Ordinal));
-    Expect("feature grid delegates scrolling", !fg.Contains("<ScrollViewer", StringComparison.Ordinal));
-}
-if (File.Exists(featureGridCs))
-{
-    var fgc = File.ReadAllText(featureGridCs);
-    Expect("feature grid no manual width sync",
-        !fgc.Contains("TileRepeater.Width", StringComparison.Ordinal)
-        && !fgc.Contains("ScrollHost_SizeChanged", StringComparison.Ordinal));
-}
-foreach (var page in new[]
+foreach (var deadVm in new[]
          {
-             "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml",
-             "NvidiaOptimizerPage.xaml", "RiotOptimizerPage.xaml", "EpicOptimizerPage.xaml"
+             "DiscordOptimizerViewModel", "SteamOptimizerViewModel", "InternetOptimizerViewModel",
+             "NvidiaOptimizerViewModel", "NvidiaPolicyRowViewModel", "ApplyReportRowViewModel",
+             "GameLauncherOptimizerViewModel"
          })
 {
-    var p = Path.Combine(repo, "Exo", "Views", page);
-    if (!File.Exists(p)) continue;
-    var x = File.ReadAllText(p);
-    // Features bind into SharedModulePlate.FeatureItems (grid lives in the plate).
-    Expect(page + " binds feature items to plate",
-        x.Contains("FeatureItems=", StringComparison.Ordinal)
-        && x.Contains("SharedModulePlate", StringComparison.Ordinal)
-        && !x.Contains("x:Name=\"FeatureRepeater\"", StringComparison.Ordinal));
-    Expect(page + " plate motion host",
-        x.Contains("x:Name=\"Plate\"", StringComparison.Ordinal));
-}
-
-var internetDensityXaml = Path.Combine(repo, "Exo", "Views", "InternetOptimizerPage.xaml");
-if (File.Exists(internetDensityXaml))
-{
-    var ix = File.ReadAllText(internetDensityXaml);
-    Expect("internet decluttered action density",
-        ix.Contains("Content=\"Analyze &amp; Apply\"", StringComparison.Ordinal)
-        && ix.Contains("Content=\"Repair\"", StringComparison.Ordinal)
-        && !ix.Contains("Content=\"Refresh\"", StringComparison.Ordinal)
-        && ix.Contains("IsFeatureListVisible=\"{x:Bind ViewModel.IsFeatureListVisible, Mode=OneWay}\"", StringComparison.Ordinal)
-        && ix.Contains("HasApplyReport=\"False\"", StringComparison.Ordinal)
-        && ix.Contains("FeatureItems=\"{x:Bind ViewModel.Rows, Mode=OneWay}\"", StringComparison.Ordinal)
-        && !ix.Contains("ExoInternetActionGrid", StringComparison.Ordinal));
-    Expect("internet compact honest messages",
-        ix.Contains("RollbackNotice", StringComparison.Ordinal)
-        && ix.Contains("Style=\"{StaticResource ExoMessageText}\"", StringComparison.Ordinal)
-        && (ix.Contains("HasMessage", StringComparison.Ordinal)
-            || ix.Contains("ExoInfoMessageText", StringComparison.Ordinal)));
-}
-
-// Friction-free apply/repair: no blocking ContentDialog confirmations on module pages
-// (update consent dialogs live in ExoUpdateDialog only), and every module plays the
-// staggered feature-tile entrance on its first loading → loaded transition.
-foreach (var page in new[]
-         {
-             "DiscordOptimizerPage", "SteamOptimizerPage", "NvidiaOptimizerPage",
-             "RiotOptimizerPage", "EpicOptimizerPage"
-         })
-{
-    var cs = Path.Combine(repo, "Exo", "Views", page + ".xaml.cs");
-    if (!File.Exists(cs)) continue;
-    var code = File.ReadAllText(cs);
-    Expect(page + " no confirm dialog",
-        !code.Contains("ContentDialog", StringComparison.Ordinal)
-        && !code.Contains("ConfirmAsync", StringComparison.Ordinal));
-    Expect(page + " tile entrance",
-        code.Contains("PlayListEnter", StringComparison.Ordinal)
-        && code.Contains("IsFeatureListVisible", StringComparison.Ordinal)
-        && code.Contains("Plate.FeatureTileGrid", StringComparison.Ordinal));
-}
-foreach (var vmName in new[]
-         {
-             "DiscordOptimizerViewModel", "SteamOptimizerViewModel",
-             "InternetOptimizerViewModel", "NvidiaOptimizerViewModel"
-         })
-{
-    var vmPath = Path.Combine(repo, "Exo", "ViewModels", vmName + ".cs");
-    if (!File.Exists(vmPath)) continue;
-    var vmCode = File.ReadAllText(vmPath);
-    Expect(vmName + " no confirm gate", !vmCode.Contains("ConfirmAsync", StringComparison.Ordinal));
-}
-var launcherVmPath = Path.Combine(repo, "Exo", "ViewModels", "GameLauncherOptimizerViewModel.cs");
-if (File.Exists(launcherVmPath))
-{
-    var launcherVm = File.ReadAllText(launcherVmPath);
-    Expect("Riot/Epic shared VM has no confirm gate", !launcherVm.Contains("ConfirmAsync", StringComparison.Ordinal));
-    Expect("Riot/Epic shared VM wires Apply and exact Repair",
-        launcherVm.Contains("RiotOptimizerScript", StringComparison.Ordinal) &&
-        launcherVm.Contains("EpicOptimizerScript", StringComparison.Ordinal) &&
-        launcherVm.Contains("RiotRepairScript", StringComparison.Ordinal) &&
-        launcherVm.Contains("EpicRepairScript", StringComparison.Ordinal));
-}
-
-// Detailed last-apply reports stay on Discord / Steam. Internet is intentionally
-// reduced to its quality result plus Apply / Repair; NVIDIA never fakes report data.
-foreach (var page in new[] { "DiscordOptimizerPage", "SteamOptimizerPage", "RiotOptimizerPage", "EpicOptimizerPage" })
-{
-    var px = Path.Combine(repo, "Exo", "Views", page + ".xaml");
-    if (!File.Exists(px)) continue;
-    var pxText = File.ReadAllText(px);
-    Expect(page + " last apply report",
-        pxText.Contains("ApplyReportRows", StringComparison.Ordinal)
-        && pxText.Contains("ApplyReportSummary", StringComparison.Ordinal));
-}
-var steamXamlPath = Path.Combine(repo, "Exo", "Views", "SteamOptimizerPage.xaml");
-if (File.Exists(steamXamlPath))
-{
-    var sx = File.ReadAllText(steamXamlPath);
-    Expect("steam retired trim stats row removed",
-        !sx.Contains("TrimStatsText", StringComparison.Ordinal)
-        && !sx.Contains("HasTrimStats", StringComparison.Ordinal));
-}
-var nvidiaXamlPath = Path.Combine(repo, "Exo", "Views", "NvidiaOptimizerPage.xaml");
-if (File.Exists(nvidiaXamlPath))
-{
-    var nx = File.ReadAllText(nvidiaXamlPath);
-    // NVIDIA Repair is quiet secondary action — no essay under Apply.
-    Expect("nvidia no repair essay",
-        !nx.Contains("Repair restores the complete NVIDIA profile database", StringComparison.Ordinal)
-        && nx.Contains("SecondaryLeftLabel=\"Repair\"", StringComparison.Ordinal));
-}
-
-var loaderCs = Path.Combine(repo, "Exo", "Views", "Controls", "ExoLoader.xaml.cs");
-Expect("ExoLoader control", File.Exists(loaderCs));
-Expect("no OptiLoader", !File.Exists(Path.Combine(repo, "Exo", "Views", "Controls", "OptiLoader.xaml.cs"))
-    && !File.Exists(Path.Combine(repo, "Exo", "Views", "Controls", "OptiLoader.xaml")));
-if (File.Exists(loaderCs))
-{
-    var lc = File.ReadAllText(loaderCs);
-    Expect("ExoLoader IsActive", lc.Contains("IsActiveProperty", StringComparison.Ordinal));
-    // Pure XAML Storyboards — no ElementCompositionPreview (v2.6.0 crash class).
-    Expect("ExoLoader XAML storyboard orbit",
-        lc.Contains("Storyboard", StringComparison.Ordinal) &&
-        lc.Contains("DoubleAnimation", StringComparison.Ordinal) &&
-        lc.Contains("OrbitRotate", StringComparison.Ordinal) &&
-        !lc.Contains("Bar0Scale", StringComparison.Ordinal));
-    Expect("ExoLoader zero composition API",
-        !lc.Contains("ElementCompositionPreview", StringComparison.Ordinal) &&
-        !lc.Contains("Microsoft.UI.Xaml.Hosting", StringComparison.Ordinal) &&
-        !lc.Contains("StartAnimation", StringComparison.Ordinal));
+    Expect(deadVm + " removed", !File.Exists(Path.Combine(repo, "Exo", "ViewModels", deadVm + ".cs")));
 }
 
 var motionCs = Path.Combine(repo, "Exo", "Helpers", "ExoMotion.cs");
@@ -901,34 +688,6 @@ if (File.Exists(sfxCs))
         sx.Contains("Never use versioned names", StringComparison.Ordinal)
         && sx.Contains("Exo.ico", StringComparison.Ordinal)
         && sx.Contains("CreateStartMenuShortcut", StringComparison.Ordinal));
-}
-
-var dashCs = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs");
-if (File.Exists(dashCs))
-{
-    var dc = File.ReadAllText(dashCs);
-    Expect("home hero stagger entrance",
-        dc.Contains("PlayStagger", StringComparison.Ordinal)
-        && dc.Contains("EnsureVisible", StringComparison.Ordinal)
-        && !dc.Contains("PrimeHidden", StringComparison.Ordinal));
-    Expect("no home card select pulse",
-        !dc.Contains("CardButton_Click", StringComparison.Ordinal));
-    Expect("dashboard cache for clean back",
-        dc.Contains("NavigationCacheMode.Enabled", StringComparison.Ordinal)
-        && dc.Contains("StabilizeHome", StringComparison.Ordinal));
-}
-
-// Module pages stay cached so re-entry skips full tree rebuild (nav latency).
-foreach (var pageCs in new[]
-{
-    "DiscordOptimizerPage.xaml.cs", "SteamOptimizerPage.xaml.cs", "NvidiaOptimizerPage.xaml.cs",
-    "InternetOptimizerPage.xaml.cs", "RiotOptimizerPage.xaml.cs", "EpicOptimizerPage.xaml.cs"
-})
-{
-    var pcs = Path.Combine(repo, "Exo", "Views", pageCs);
-    if (!File.Exists(pcs)) continue;
-    Expect($"{pageCs} NavigationCacheMode",
-        File.ReadAllText(pcs).Contains("NavigationCacheMode.Enabled", StringComparison.Ordinal));
 }
 
 // Full-bleed WebView host — React header owns settings inset, not native margins.
@@ -1024,42 +783,19 @@ if (File.Exists(advisorPath))
         || adv.Contains("One setting", StringComparison.Ordinal));
 }
 
-// Dashboard recommended-next deep-link (Home -> first open module)
-// dashCs already declared above for entrance checks; reuse it.
+// Dashboard recommended-next deep-link state — the CTA itself is React now
+// (HomePage/ModulePage), but DashboardViewModel still computes it for the
+// WebHostBridge dashboard.get payload (next.id / next.label).
 var nextActionVmPath = Path.Combine(repo, "Exo", "ViewModels", "DashboardViewModel.cs");
-if (File.Exists(dash) && File.Exists(dashCs) && File.Exists(nextActionVmPath))
+if (File.Exists(nextActionVmPath))
 {
-    var nextActionXaml = File.ReadAllText(dash);
-    var nextActionCode = File.ReadAllText(dashCs);
     var nextActionVm = File.ReadAllText(nextActionVmPath);
-    Expect("dashboard recommended-next CTA present",
-        nextActionXaml.Contains("NextAction_Click", StringComparison.Ordinal)
-        && nextActionXaml.Contains("Open recommended next optimizer", StringComparison.Ordinal));
-    Expect("dashboard recommended-next navigates modules",
-        nextActionCode.Contains("NextAction_Click", StringComparison.Ordinal)
-        && nextActionCode.Contains("NavigateToDiscord", StringComparison.Ordinal)
-        && nextActionCode.Contains("NavigateToSteam", StringComparison.Ordinal));
     Expect("dashboard NextAction state on view model",
         nextActionVm.Contains("HasNextAction", StringComparison.Ordinal)
         && nextActionVm.Contains("UpdateNextAction", StringComparison.Ordinal)
         && nextActionVm.Contains("NextActionModule", StringComparison.Ordinal));
 }
 
-// Internet plate title stays ASCII-safe (no middle-dot mojibake in header status)
-var internetVmPath = Path.Combine(repo, "Exo", "ViewModels", "InternetOptimizerViewModel.cs");
-if (File.Exists(internetVmPath))
-{
-    var ivm = File.ReadAllText(internetVmPath);
-    // Match the method body only — call sites sit near other · metrics strings.
-    var buildStatusIdx = ivm.IndexOf("private static string BuildStatus(", StringComparison.Ordinal);
-    var slice = buildStatusIdx >= 0
-        ? ivm.Substring(buildStatusIdx, Math.Min(700, ivm.Length - buildStatusIdx))
-        : string.Empty;
-    Expect("Internet BuildStatus uses ASCII separators",
-        buildStatusIdx >= 0
-        && slice.Contains("Ethernet path", StringComparison.Ordinal)
-        && !slice.Contains("·", StringComparison.Ordinal));
-}
 // Wave-2 shared script libs
 Expect("Exo.Common.ps1 shared lib",
     File.Exists(Path.Combine(repo, "Exo", "Scripts", "lib", "Exo.Common.ps1")));
@@ -1069,26 +805,7 @@ var steamRun = File.ReadAllText(Path.Combine(repo, "Exo", "Scripts", "Steam", "E
 Expect("Steam Run wires shared libs",
     steamRun.Contains("Exo.Common.ps1", StringComparison.Ordinal) &&
     steamRun.Contains("Unregister-ExoBackground", StringComparison.Ordinal));
-foreach (var page in new[] { "DiscordOptimizerPage.xaml", "SteamOptimizerPage.xaml", "NvidiaOptimizerPage.xaml", "InternetOptimizerPage.xaml" })
-{
-    var p = Path.Combine(repo, "Exo", "Views", page);
-    if (!File.Exists(p)) continue;
-    var xaml = File.ReadAllText(p);
-    Expect($"no advisor tidbit bindings on {page}",
-        !xaml.Contains("GuidanceText", StringComparison.Ordinal)
-        && !xaml.Contains("HasGuidance", StringComparison.Ordinal));
-}
 
-// Last-apply summary must not count bookkeeping/already-set as "ok work".
-var applyReportCs = Path.Combine(repo, "Exo", "ViewModels", "ApplyReportRowViewModel.cs");
-if (File.Exists(applyReportCs))
-{
-    var ar = File.ReadAllText(applyReportCs);
-    Expect("apply report honest summarize",
-        ar.Contains("IsAlreadyOrMeta", StringComparison.Ordinal)
-        && ar.Contains("already set", StringComparison.Ordinal)
-        && ar.Contains("already applied", StringComparison.Ordinal));
-}
 // Dead modal settings state must stay gone.
 var overlayState = Path.Combine(repo, "Exo", "Helpers", "SettingsOverlayState.cs");
 Expect("no dead SettingsOverlayState", !File.Exists(overlayState));
@@ -1157,29 +874,24 @@ if (Directory.Exists(logosDir))
     var discord = MeasureInkFill(Path.Combine(logosDir, "discord.png"));
     var steam = MeasureInkFill(Path.Combine(logosDir, "steam.png"));
     var nvidia = MeasureInkFill(Path.Combine(logosDir, "nvidia.png"));
-    var amd = MeasureInkFill(Path.Combine(logosDir, "amd.png"));
+    var brave = MeasureInkFill(Path.Combine(logosDir, "brave.png"));
     var internet = MeasureInkFill(Path.Combine(logosDir, "internet.png"));
 
-    Log($"ink discord max={discord.MaxFill:F1}% steam={steam.MaxFill:F1}% nvidia={nvidia.MaxFill:F1}% amd={amd.MaxFill:F1}% internet={internet.MaxFill:F1}%");
+    Log($"ink discord max={discord.MaxFill:F1}% steam={steam.MaxFill:F1}% nvidia={nvidia.MaxFill:F1}% brave={brave.MaxFill:F1}% internet={internet.MaxFill:F1}%");
 
     // Peer floor from real sibling marks — not a magic absolute expected %.
     var peerFloor = Math.Min(Math.Min(discord.MaxFill, steam.MaxFill), nvidia.MaxFill) * 0.70;
-    Expect("amd ink peer weight", amd.MaxFill >= peerFloor && amd.MaxFill >= 70,
-        $"amd={amd.MaxFill:F1} peerFloor={peerFloor:F1}");
+    Expect("brave ink peer weight", brave.MaxFill >= peerFloor && brave.MaxFill >= 70,
+        $"brave={brave.MaxFill:F1} peerFloor={peerFloor:F1}");
     // Wi‑Fi mark is intentionally airy (minimal arcs) — lower absolute floor than solid icons.
     Expect("internet ink peer weight", internet.MaxFill >= Math.Min(peerFloor, 55) && internet.MaxFill >= 55,
         $"internet={internet.MaxFill:F1} peerFloor={peerFloor:F1}");
-    // AMD corporate mark is a wide wordmark on transparent (no white disc).
-    // Require real width + non-micro height — not a filled plate (old bug).
-    Expect("amd wide transparent mark",
-        amd.FillW >= 70 && amd.FillH >= 18 && amd.FillH < 95,
-        $"fillW={amd.FillW:F1} fillH={amd.FillH:F1}");
     // Minimal Wi‑Fi mark is wide arcs — height can sit just under 50% of canvas.
     Expect("internet not tiny", internet.FillH >= 42 && internet.FillW >= 55,
         $"fillW={internet.FillW:F1} fillH={internet.FillH:F1}");
 #else
     Log("SKIP  logo ink measure (System.Drawing.Common Windows-only)");
-    foreach (var name in new[] { "discord.png", "steam.png", "nvidia.png", "amd.png", "internet.png" })
+    foreach (var name in new[] { "discord.png", "steam.png", "nvidia.png", "brave.png", "internet.png" })
         Expect("logo asset " + name, File.Exists(Path.Combine(logosDir, name)));
 #endif
 }
@@ -1220,8 +932,14 @@ if (File.Exists(dashVm))
         && dvm.Contains("ms jitter", StringComparison.Ordinal)
         && !dvm.Contains("BeforeP50Ms:0.0}→", StringComparison.Ordinal)
         && !dvm.Contains("vs before", StringComparison.Ordinal));
-    Expect("windows coming soon card", dvm.Contains("Card(\"windows\"", StringComparison.Ordinal)
-        && dvm.Contains("windows.png", StringComparison.Ordinal));
+    Expect("dashboard module set is exactly the keeper six",
+        dvm.Contains("Card(\"discord\"", StringComparison.Ordinal)
+        && dvm.Contains("Card(\"brave\"", StringComparison.Ordinal)
+        && dvm.Contains("Card(\"steam\"", StringComparison.Ordinal)
+        && !dvm.Contains("Card(\"windows\"", StringComparison.Ordinal)
+        && !dvm.Contains("Card(\"riot\"", StringComparison.Ordinal)
+        && !dvm.Contains("Card(\"epic\"", StringComparison.Ordinal)
+        && !dvm.Contains("Card(\"amd\"", StringComparison.Ordinal));
 }
 var homeDashReader = Path.Combine(repo, "Exo", "Services", "HomeDashboardReader.cs");
 if (File.Exists(homeDashReader))
@@ -1263,10 +981,12 @@ else
 {
     Expect("home dashboard reader exists", false);
 }
-if (File.Exists(Path.Combine(logosDir, "windows.png")))
-    Expect("windows logo asset", true);
-else
-    Expect("windows logo asset", false, "missing Assets/Logos/windows.png");
+Expect("dead-module logos removed",
+    !File.Exists(Path.Combine(logosDir, "windows.png"))
+    && !File.Exists(Path.Combine(logosDir, "riot.png"))
+    && !File.Exists(Path.Combine(logosDir, "epic.png"))
+    && !File.Exists(Path.Combine(logosDir, "amd.png")));
+Expect("brave logo asset", File.Exists(Path.Combine(logosDir, "brave.png")));
 
 Expect("retired custom NVIDIA panel removed",
     !File.Exists(Path.Combine(repo, "Exo", "ViewModels", "NvidiaPanelViewModel.cs")) &&
@@ -1305,11 +1025,6 @@ if (File.Exists(nvHeuristic))
         h.Contains("notebookGpu || driverTweaksApplied", StringComparison.Ordinal));
     Expect("optimizer card parser preserves detector detail",
         h.Contains("string.IsNullOrWhiteSpace(detail)", StringComparison.Ordinal));
-    var optimizerViewModels = new[] { "DiscordOptimizerViewModel.cs", "SteamOptimizerViewModel.cs", "NvidiaOptimizerViewModel.cs" }
-        .Select(name => Path.Combine(repo, "Exo", "ViewModels", name));
-    Expect("optimizer cards render detector detail",
-        optimizerViewModels.All(File.Exists) &&
-        optimizerViewModels.All(path => File.ReadAllText(path).Contains("Detail = feature.Detail", StringComparison.Ordinal)));
 }
 
 Log($"=== SUMMARY failed={failed} ===");

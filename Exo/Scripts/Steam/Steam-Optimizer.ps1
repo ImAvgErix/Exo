@@ -16,7 +16,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:SteamOptVersion = '1.15.0'
+$Script:SteamOptVersion = '1.15.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- PowerShell 7 host (stable pwsh 7.x; never Windows PowerShell 5.1) ---
@@ -780,8 +780,8 @@ function Set-SteamTrayIconHidden([string]$SteamPath) {
 }
 
 function Apply-SteamWindowsQuiet([string]$SteamPath) {
-    # Ownership: Steam-scoped Windows integration only (not a future Windows module).
-    # See docs/WINDOWS-OWNERSHIP.md  -  Windows module must skip these keys if already verified.
+    # Ownership: Steam-scoped Windows integration only (toasts/tray/tasks for the Steam
+    # client itself) - never machine-wide host policy. See AGENTS.md "Windows tweak ownership".
     Write-Step 'Applying Windows quiet shell (toasts, tray, tasks)...'
     Disable-SteamScheduledTasks
     Set-SteamWindowsNotificationsOff

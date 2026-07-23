@@ -31,7 +31,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Script:NvidiaOptVersion = '1.14.0'
+$Script:NvidiaOptVersion = '1.14.1'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfilesDir = Join-Path $Root 'profiles'
 $StateDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Exo'
@@ -728,7 +728,17 @@ function Resolve-LatestNpiRelease {
         $digest = [string]$asset.digest
         if ($digest -match '^sha256:([0-9a-fA-F]{64})$') { $sha = $Matches[1].ToUpperInvariant() }
     } catch {
-        Write-Warn "Profile Inspector latest lookup failed: $($_.Exception.Message)"
+        # GitHub's unauthenticated API quota is 60 req/hr per source IP - the most
+        # likely real-world failure on a shared/corporate NAT, not "GitHub is down".
+        # Give that case a specific, actionable message instead of a generic one.
+        $status = $null
+        try { $status = [int]$_.Exception.Response.StatusCode } catch { }
+        if ($status -eq 403 -or $status -eq 429 -or
+            $_.Exception.Message -match '(?i)rate limit') {
+            Write-Warn 'GitHub API rate limit reached while checking for the latest Profile Inspector release. This resets hourly; a cached copy (if any) will be used in the meantime.'
+        } else {
+            Write-Warn "Profile Inspector latest lookup failed: $($_.Exception.Message)"
+        }
         return $null
     }
     return @{

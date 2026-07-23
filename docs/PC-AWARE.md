@@ -41,14 +41,12 @@ inventory (still offline-first; no silent telemetry).
 
 | Module | Live inventory |
 |--------|----------------|
-| **Windows** | OS keys, power plan, Task Scheduler tree, optional features |
 | **Internet** | Physical NICs, link, DNS path, adapter properties |
 | **NVIDIA** | GPU + displays via NVAPI helper |
 | **Discord** | Stable/PTB/Canary under LocalAppData |
 | **Steam** | steam.exe + all `libraryfolders.vdf` libraries |
-| **Riot / Epic** | Uninstall registry, manifests, process paths, all drives when possible |
 | **Brave** | Stable/Beta/Nightly exe paths, User Data / Default profile, extensions, live policies |
-| **Games** | Per-title probes: Steam/Epic/Riot roots + real config files |
+| **Games** | Per-title probes: install roots (Steam libraries, Epic/Riot game folders) + real config files |
 
 ## Implementation checklist (Apply / Detect)
 

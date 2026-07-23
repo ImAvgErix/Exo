@@ -35,7 +35,8 @@ public sealed class NetworkMediaProfile
     public bool NicOk { get; init; } = true;
     /// <summary>
     /// Ethernet Properties → Networking checkboxes match Exo targets
-    /// (QoS+IPv4+IPv6 on; Client/File share/LLDP/LLTD off).
+    /// (QoS+IPv4+IPv6 on). Client/File share/LLDP/LLTD are never touched —
+    /// disabling those broke LAN recovery on some machines and is fail-closed by design.
     /// </summary>
     public bool AdapterBindingsOk { get; init; } = true;
     public string AdapterBindingsHint { get; init; } = "—";

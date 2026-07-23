@@ -48,7 +48,6 @@ public sealed class AppServices
                 _ = Scripts.GetDiscordRoot();
                 _ = Scripts.GetSteamRoot();
                 _ = Scripts.GetNvidiaRoot();
-                _ = Scripts.GetGameLaunchersRoot();
                 PowerShell.WarmResolvePowerShell();
                 // Fast heuristics only — prime status JSON path so first module
                 // open is less cold (full script detect still runs on open).

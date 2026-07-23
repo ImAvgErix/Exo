@@ -10,11 +10,8 @@ const modules: { id: ModuleId; label: string; logo: string }[] = [
   { id: 'brave', label: 'Brave', logo: '/logos/brave.png' },
   { id: 'steam', label: 'Steam', logo: '/logos/steam.png' },
   { id: 'games', label: 'Games', logo: '/logos/games.png' },
-  { id: 'windows', label: 'Windows', logo: '/logos/windows.png' },
   { id: 'internet', label: 'Internet', logo: '/logos/internet.png' },
   { id: 'nvidia', label: 'NVIDIA', logo: '/logos/nvidia.png' },
-  { id: 'riot', label: 'Riot', logo: '/logos/riot.png' },
-  { id: 'epic', label: 'Epic', logo: '/logos/epic.png' },
 ]
 
 export function Shell() {

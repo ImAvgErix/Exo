@@ -23,11 +23,8 @@ const ids: ModuleId[] = [
   'brave',
   'steam',
   'games',
-  'windows',
   'internet',
   'nvidia',
-  'riot',
-  'epic',
 ]
 
 function isModule(id: string | undefined): id is ModuleId {
@@ -234,7 +231,7 @@ export function ModulePage() {
   )
 
   const uiLocked = detecting || busy
-  // Don't run Apply/Repair when the target isn't on this PC (Steam / NVIDIA / Riot / Epic).
+  // Don't run Apply/Repair when the target isn't on this PC (Steam / NVIDIA).
   const canApply =
     classified.kind !== 'missing' &&
     classified.kind !== 'blocked' &&

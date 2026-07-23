@@ -1092,7 +1092,7 @@ try {
                 }
                 catch { }
 
-                if (LauncherNativeApply.ClearLegacyFsoFlag(fso, exe)) fsoCleared++;
+                if (ClearLegacyFsoFlag(fso, exe)) fsoCleared++;
 
                 // DSCP by leaf name — real game EXEs only
                 if (string.IsNullOrEmpty(leaf)) continue;
@@ -1310,5 +1310,34 @@ try {
             File.WriteAllText(path, JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch { }
+    }
+
+    private const string FsoDisableToken = "DISABLEDXMAXIMIZEDWINDOWEDMODE";
+
+    /// <summary>Strip a stale per-exe FSO-disable stamp left by an older Exo build.</summary>
+    internal static bool ClearLegacyFsoFlag(RegistryKey? fso, string path)
+    {
+        if (fso is null || string.IsNullOrWhiteSpace(path)) return false;
+        try
+        {
+            var cur = fso.GetValue(path)?.ToString();
+            if (string.IsNullOrEmpty(cur)) return false;
+            if (!cur.Contains(FsoDisableToken, StringComparison.OrdinalIgnoreCase)) return false;
+
+            // Exact Exo stamp or "~ " only after strip → delete.
+            var cleaned = Regex.Replace(cur, @"\s*" + FsoDisableToken, "", RegexOptions.IgnoreCase).Trim();
+            if (string.IsNullOrEmpty(cleaned) || cleaned == "~")
+            {
+                fso.DeleteValue(path, throwOnMissingValue: false);
+                return true;
+            }
+
+            fso.SetValue(path, cleaned, RegistryValueKind.String);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }
