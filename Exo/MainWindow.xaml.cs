@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Exo.Helpers;
 using Exo.Services;
@@ -251,6 +252,12 @@ public sealed partial class MainWindow : Window
         if (_webReady) return;
         try
         {
+            if (!WebView2Doctor.IsHealthy())
+            {
+                StartupLog.Mark("webview2-unhealthy-at-launch");
+                await WebView2Doctor.TryRepairAsync(_lifetimeCts.Token);
+            }
+
             await WebHost.EnsureCoreWebView2Async();
             var core = WebHost.CoreWebView2;
             if (core is null)
@@ -259,6 +266,8 @@ public sealed partial class MainWindow : Window
                 _ensureWebTask = null;
                 return;
             }
+
+            WebViewFallback.Visibility = Visibility.Collapsed;
 
             var www = ResolveWwwRoot();
             if (www is null || !Directory.Exists(www))
@@ -309,7 +318,20 @@ public sealed partial class MainWindow : Window
             // Allow a later call to retry if CoreWebView2 init failed mid-flight.
             _ensureWebTask = null;
             StartupLog.Mark("web-host-failed:" + ex.GetType().Name);
+            WebViewFallback.Visibility = Visibility.Visible;
         }
+    }
+
+    private void WebViewFallbackButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("https://go.microsoft.com/fwlink/p/?LinkId=2124703")
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch { }
     }
 
     private static string? ResolveWwwRoot()
