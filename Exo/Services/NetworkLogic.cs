@@ -239,6 +239,18 @@ public static partial class NetworkLogic
         return token.Equals(want, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Congestion provider must read back CUBIC (the only provider Apply ever sets,
+    /// via `netsh ... congestionprovider=cubic` / `Set-NetTCPSetting -CongestionProvider
+    /// CUBIC`, on every preset). Unknown/unread ("-", empty) skips, same rationale as
+    /// <see cref="AutotuneMatches"/> — a probe gap never marks the row "not checked".
+    /// </summary>
+    public static bool CongestionMatches(string? congestionProvider)
+    {
+        if (string.IsNullOrWhiteSpace(congestionProvider) || congestionProvider is "-" or "—") return true;
+        return congestionProvider.Trim().Equals("cubic", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>RSC enabled state matches preset (null unknown = skip).</summary>
     public static bool RscMatches(NetworkPreset preset, bool? rscEnabled)
     {

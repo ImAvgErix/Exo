@@ -1091,7 +1091,7 @@ public sealed class NetworkOptimizerService
             features.Add(Row("Link flow control",
                 knobs.FlowControl == "0" ? "Off — no pause frames" : "On — bulk transfers",
                 true));
-            features.Add(Row("Congestion control", congestion, true));
+            features.Add(Row("Congestion control", congestion, NetworkLogic.CongestionMatches(congestion)));
             features.Add(Row("Multi-core receive", rssPolicy, rssPolicyOk));
             features.Add(Row("No packet batching delay", packetCoalescing, packetCoalescingOk));
             features.Add(Row("Modern TCP stack", "Adaptive Windows defaults retained", true));
@@ -1737,7 +1737,7 @@ Write-Output "ETH=$($eth.Count -gt 0);ETHUP=$eUp;ETHUSE=$eInUse;WIFI=$($wifi.Cou
                 matched = MatchesPreset(snap, preset);
             }
             var policy = media.EthernetInUse
-                ? "Ethernet preferred (Wi‑Fi disabled when Ethernet has a real IP)."
+                ? "Ethernet preferred (Wi‑Fi stays up; metrics only, never disabled)."
                 : media.WifiUp
                     ? $"Wi‑Fi path; prefer {media.PreferredBandTarget}."
                     : media.PolicyLine;
