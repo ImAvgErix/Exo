@@ -1,3 +1,17 @@
+## 4.1.1
+
+**Fixes a real launch bug some 4.1.0 users hit.**
+
+- **Fixed**: a WebView2 Runtime that's registered (registry entry + `msedgewebview2.exe`
+  present) but missing its actual browser data files (usually from a broken Edge auto-update)
+  left Exo stuck on the native "install WebView2 Runtime" screen forever, even though the
+  Microsoft installer refused to reinstall because it saw a runtime "already running." Exo now
+  runs the same install-time health check the installer already used
+  (`tools/ExoSfx.cs::IsWebView2RuntimeHealthy`) at every launch too, and attempts a silent
+  repair before giving up. If the runtime still can't be reached, Exo now shows a real
+  in-window message with a link to the WebView2 download page, instead of a permanently blank
+  window with no explanation.
+
 ## 4.1.0
 
 **Cleanup release — leaner, more focused module set. Breaking: Windows, Riot, and Epic
