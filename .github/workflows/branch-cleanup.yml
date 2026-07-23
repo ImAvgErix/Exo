@@ -1,0 +1,88 @@
+name: Branch Cleanup
+
+# Manual only: run from the Actions tab (or `gh workflow run branch-cleanup.yml`).
+# Deletes branches that are safe to remove -- merged into main, or abandoned
+# (unmerged, no open PR, no new commits for stale_days) -- and never touches
+# main or any branch that has an open PR. Defaults to a dry run so the first
+# use on a repo is safe to inspect before anything is actually deleted.
+#
+# This runs with the workflow's own GITHUB_TOKEN, which has real branch
+# delete/write access to this repo -- unlike a plain `git push --delete`
+# from outside GitHub, which this repo's remote rejects.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List branches that would be deleted, but do not delete them'
+        type: boolean
+        default: true
+      stale_days:
+        description: 'Minimum days since the last commit before an unmerged branch counts as abandoned'
+        type: number
+        default: 14
+      run_release_after:
+        description: 'Also trigger release.yml against main once cleanup finishes (ignored on a dry run)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: read
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete merged / abandoned branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          STALE_DAYS: ${{ inputs.stale_days }}
+        run: |
+          set -euo pipefail
+          git fetch origin --prune
+          default_branch=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name)
+          echo "Default branch: $default_branch"
+
+          for branch in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin | sed 's#^origin/##' | grep -vx 'HEAD'); do
+            if [ "$branch" = "$default_branch" ]; then
+              continue
+            fi
+
+            open_pr=$(gh pr list --head "$branch" --state open --json number -q '.[0].number' 2>/dev/null || true)
+            if [ -n "$open_pr" ]; then
+              echo "skip   $branch  (open PR #$open_pr)"
+              continue
+            fi
+
+            if git merge-base --is-ancestor "origin/$branch" "origin/$default_branch"; then
+              reason="merged into $default_branch"
+            else
+              last_commit_date=$(git log -1 --format=%ct "origin/$branch")
+              age_days=$(( ( $(date +%s) - last_commit_date ) / 86400 ))
+              if [ "$age_days" -lt "$STALE_DAYS" ]; then
+                echo "skip   $branch  (unmerged, ${age_days}d old, below ${STALE_DAYS}d threshold)"
+                continue
+              fi
+              reason="unmerged but stale (${age_days}d old, no open PR)"
+            fi
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "would delete  $branch  [$reason]"
+            else
+              echo "deleting      $branch  [$reason]"
+              git push origin --delete "$branch"
+            fi
+          done
+
+      - name: Trigger release.yml
+        if: ${{ inputs.run_release_after == 'true' && inputs.dry_run == 'false' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --ref main
