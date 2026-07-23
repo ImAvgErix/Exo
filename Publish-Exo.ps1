@@ -302,8 +302,8 @@ if ($wvSrc) {
         # contents; -LiteralPath treats '*' as a real filename and fails.
         Copy-Item -Path (Join-Path $wvSrc.FullName '*') -Destination $wvDest -Recurse -Force -ErrorAction Stop
 
-        # Slim: drop what is never needed to *run* an embedded WebView2 — debug
-        # symbols (.pdb) and the runtime's own installer folder — while leaving
+        # Slim: drop what is never needed to *run* an embedded WebView2 -- debug
+        # symbols (.pdb) and the runtime's own installer folder -- while leaving
         # every browser binary, resource pak, and locale intact (no feature or
         # quality loss). Logs before/after plus the largest remaining files so
         # any further trimming can be targeted from the build output.
