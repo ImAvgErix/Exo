@@ -114,9 +114,7 @@ function Import-ExoSharedLibFiles {
     if (-not $libDir) { return @() }
     $paths = [System.Collections.Generic.List[string]]::new()
     foreach ($name in @(
-        'Exo.NoBackground.ps1', 'Exo.GameBar.ps1', 'Exo.PowerPlan.ps1', 'Exo.AmoledTheme.ps1',
-        'Exo.InputDevices.ps1', 'Exo.Controllers.ps1', 'Exo.ScheduledTasks.ps1', 'Exo.WindowsUpdate.ps1',
-        'Exo.DefenderPurge.ps1', 'Exo.ShellDebloat.ps1', 'Exo.OptionalFeatures.ps1', 'Exo.GamingStack.ps1'
+        'Exo.NoBackground.ps1', 'Exo.GameBar.ps1'
     )) {
         $path = Join-Path $libDir $name
         if (Test-Path -LiteralPath $path) { [void]$paths.Add($path) }
