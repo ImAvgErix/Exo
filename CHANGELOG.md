@@ -1,3 +1,16 @@
+## 4.1.3
+
+**Exo now carries its own WebView2 runtime — the black screen can't come back.**
+
+- **New**: the installer bundles a copy of the WebView2 runtime inside the app
+  (`Runtime\WebView2`), and Exo runs on it via `WEBVIEW2_BROWSER_EXECUTABLE_FOLDER`
+  instead of depending on the machine's system runtime. A missing, corrupted, or
+  "installed-but-broken" system runtime can no longer black-screen the UI — there's
+  nothing on your PC left to break. Fail-soft: if a build ever ships without the
+  bundle, the app falls back to the system runtime exactly as before. Trade-off:
+  the download is larger (the runtime is ~150–180 MB) in exchange for it always
+  working.
+
 ## 4.1.2
 
 **Fixes a black-screen-on-launch introduced by the 4.1.1 WebView2 repair.**

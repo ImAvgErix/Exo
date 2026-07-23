@@ -253,21 +253,26 @@ public sealed partial class MainWindow : Window
         ShowBootPanel("Starting Exo…");
         try
         {
-            // Try the runtime as-is first; only repair when init actually fails,
-            // so a healthy machine is never delayed or disturbed by a needless
-            // download/install.
-            if (!await TryInitCoreAsync())
+            // 1) Prefer the bundled runtime. 2) If it fails to init, fall back to
+            //    the system runtime — a bad or absent bundle must never leave a
+            //    machine whose own runtime is fine worse off than before. 3) If
+            //    that also fails, repair the system runtime and retry once.
+            if (!await TryInitCoreAsync(useBundled: true))
             {
-                StartupLog.Mark("webview2-init-failed-repairing");
-                ShowBootPanel("Preparing the display runtime…");
-                await WebView2Doctor.TryRepairAsync(_lifetimeCts.Token);
-                if (!await TryInitCoreAsync())
+                StartupLog.Mark("webview2-bundled-init-failed-falling-back");
+                if (!await TryInitCoreAsync(useBundled: false))
                 {
-                    // If the runtime is now present but this already-running
-                    // process can't bind to it, a relaunch usually finishes the job.
-                    ShowWebFallback(runtimeNowHealthy: WebView2Doctor.IsHealthy());
-                    _ensureWebTask = null;
-                    return;
+                    StartupLog.Mark("webview2-init-failed-repairing");
+                    ShowBootPanel("Preparing the display runtime…");
+                    await WebView2Doctor.TryRepairAsync(_lifetimeCts.Token);
+                    if (!await TryInitCoreAsync(useBundled: false))
+                    {
+                        // If the runtime is now present but this already-running
+                        // process can't bind to it, a relaunch usually finishes the job.
+                        ShowWebFallback(runtimeNowHealthy: WebView2Doctor.IsHealthy());
+                        _ensureWebTask = null;
+                        return;
+                    }
                 }
             }
 
@@ -335,27 +340,28 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Initializes CoreWebView2, bounded by a timeout so a hung/broken runtime
-    /// falls through to the repair path instead of leaving a permanent spinner.
+    /// Initializes CoreWebView2. When <paramref name="useBundled"/> is true and a
+    /// runtime is bundled inside the app (Runtime\WebView2), WebView2 is pointed at
+    /// it via the documented WEBVIEW2_BROWSER_EXECUTABLE_FOLDER env var so a missing
+    /// or corrupted system runtime can't black-screen the UI. When false (the
+    /// fallback attempt), the override is cleared so WebView2 uses the machine's
+    /// system Evergreen runtime — this is what makes a bad/absent bundle safe: it
+    /// can never leave a machine whose own runtime is fine worse off. The env var
+    /// is read by EnsureCoreWebView2Async when it creates the environment; a prior
+    /// failed attempt created none, so switching the var between attempts takes
+    /// effect. Using the env var avoids CoreWebView2Environment.CreateAsync (its
+    /// overloads differ across the WebView2 projection).
     /// </summary>
-    private async Task<bool> TryInitCoreAsync()
+    private async Task<bool> TryInitCoreAsync(bool useBundled)
     {
         try
         {
-            // Point WebView2 at the runtime bundled inside the app (Runtime\WebView2)
-            // when present, via the documented WEBVIEW2_BROWSER_EXECUTABLE_FOLDER
-            // env var, so a missing or corrupted system runtime can no longer
-            // black-screen the UI. No bundle shipped (dev builds) -> the var is left
-            // unset and WebView2 uses the system Evergreen runtime, unchanged. Using
-            // the env var avoids CoreWebView2Environment.CreateAsync entirely (its
-            // overloads differ across the WebView2 projection); EnsureCoreWebView2Async()
-            // reads the var when it creates the environment on first call.
-            var bundled = WebView2Doctor.ResolveBundledRuntimeFolder();
+            var bundled = useBundled ? WebView2Doctor.ResolveBundledRuntimeFolder() : null;
+            // A null value removes the variable, so the fallback attempt uses the
+            // system runtime; a non-null value pins the bundled runtime.
+            Environment.SetEnvironmentVariable("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", bundled);
             if (bundled is not null)
-            {
-                Environment.SetEnvironmentVariable("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", bundled);
                 StartupLog.Mark("webview2-bundled-runtime");
-            }
 
             await WebHost.EnsureCoreWebView2Async();
             return WebHost.CoreWebView2 is not null;
