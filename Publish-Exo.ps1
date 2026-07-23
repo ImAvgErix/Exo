@@ -302,20 +302,37 @@ if ($wvSrc) {
         # contents; -LiteralPath treats '*' as a real filename and fails.
         Copy-Item -Path (Join-Path $wvSrc.FullName '*') -Destination $wvDest -Recurse -Force -ErrorAction Stop
 
-        # Slim: drop what is never needed to *run* an embedded WebView2 -- debug
-        # symbols (.pdb) and the runtime's own installer folder -- while leaving
-        # every browser binary, resource pak, and locale intact (no feature or
-        # quality loss). Logs before/after plus the largest remaining files so
-        # any further trimming can be targeted from the build output.
+        # Slim: drop what an *embedded* WebView2 host never needs to run, while
+        # leaving every browser binary, resource pak, and locale intact (no
+        # feature or quality loss for Exo's fixed React UI):
+        #   .pdb              -- debug symbols
+        #   installer\        -- the runtime's own self-updater/installer
+        #   ResiliencyLinks\  -- hardlinked self-heal backups of resources.pak /
+        #                        icudtl.dat (~45 MB); a read-only bundled runtime
+        #                        never self-heals, so these duplicates are dead weight
+        #   WidevineCdm\      -- Google Widevine DRM (~19 MB); Exo plays no
+        #                        DRM-protected media
+        #   mspdf.dll         -- the built-in PDF viewer (~18 MB); Exo renders no PDFs
+        # Logs before/after plus the largest remaining files so any further
+        # trimming can be targeted from the build output.
         $wvBefore = (Get-ChildItem -LiteralPath $wvDest -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
         Get-ChildItem -LiteralPath $wvDest -Recurse -File -Filter '*.pdb' -ErrorAction SilentlyContinue |
             Remove-Item -Force -ErrorAction SilentlyContinue
-        foreach ($junk in @('installer')) {
-            $jp = Join-Path $wvDest $junk
-            if (Test-Path -LiteralPath $jp) { Remove-Item -LiteralPath $jp -Recurse -Force -ErrorAction SilentlyContinue }
-        }
+        # Folders that live under the versioned build dir (e.g. Runtime\WebView2\<ver>\).
+        $wvJunkDirs = Get-ChildItem -LiteralPath $wvDest -Recurse -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -in @('installer', 'ResiliencyLinks', 'WidevineCdm') }
+        # Also cover any at the top level (defensive; layout varies by runtime version).
+        $wvJunkDirs = @($wvJunkDirs) + @(
+            foreach ($junk in @('installer', 'ResiliencyLinks', 'WidevineCdm')) {
+                $jp = Join-Path $wvDest $junk
+                if (Test-Path -LiteralPath $jp) { Get-Item -LiteralPath $jp }
+            })
+        $wvJunkDirs | Where-Object { $_ } | Sort-Object FullName -Unique |
+            ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+        Get-ChildItem -LiteralPath $wvDest -Recurse -File -Filter 'mspdf.dll' -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
         $wvAfter = (Get-ChildItem -LiteralPath $wvDest -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
-        Write-Host ("[*] WebView2 slim: {0} MB -> {1} MB (removed {2} MB of .pdb/installer)" -f `
+        Write-Host ("[*] WebView2 slim: {0} MB -> {1} MB (removed {2} MB: .pdb/installer/ResiliencyLinks/WidevineCdm/mspdf)" -f `
             [math]::Round($wvBefore / 1MB), [math]::Round($wvAfter / 1MB), [math]::Round(($wvBefore - $wvAfter) / 1MB)) -ForegroundColor DarkGray
         Write-Host '    largest remaining runtime files:' -ForegroundColor DarkGray
         Get-ChildItem -LiteralPath $wvDest -Recurse -File -ErrorAction SilentlyContinue |
