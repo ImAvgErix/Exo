@@ -1,3 +1,19 @@
+## 4.1.5
+
+**Smaller still -- the bundled runtime drops three components Exo never uses.**
+
+- Building on 4.1.4's slim, the bundled WebView2 runtime now also strips the parts
+  an embedded UI has no use for: the Widevine DRM module (Exo plays no
+  DRM-protected media), the built-in PDF viewer (`mspdf.dll` -- Exo renders no
+  PDFs), and the runtime's `ResiliencyLinks` self-heal backups (duplicate copies of
+  resources that a read-only bundled runtime never needs to repair itself). Every
+  browser binary, resource pak, and locale that actually renders the UI is
+  untouched -- no feature or quality loss. The build log reports the exact
+  before/after size.
+- The irreducible remainder is the Chromium engine itself (`msedge.dll`, ~316 MB);
+  it can't be trimmed without breaking the browser, so this is the practical floor
+  for a self-contained bundle.
+
 ## 4.1.4
 
 **Much smaller download — the bundled runtime is slimmed, with no loss of features.**
