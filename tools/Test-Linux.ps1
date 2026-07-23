@@ -43,8 +43,7 @@ Invoke-Step 'Test-Repository' {
 $smokes = @(
     @{ Name = 'Network.Smoke'; Project = 'tools/Network.Smoke' },
     @{ Name = 'Steam.Smoke'; Project = 'tools/Steam.Smoke' },
-    @{ Name = 'Nvidia.Smoke'; Project = 'tools/Nvidia.Smoke' },
-    @{ Name = 'GameLaunchers.Smoke'; Project = 'tools/GameLaunchers.Smoke' }
+    @{ Name = 'Nvidia.Smoke'; Project = 'tools/Nvidia.Smoke' }
 )
 if (-not $SkipDiscord) {
     $smokes += @{ Name = 'Discord.Smoke'; Project = 'tools/Discord.Smoke' }
