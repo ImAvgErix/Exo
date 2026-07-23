@@ -1,3 +1,14 @@
+## 4.1.4
+
+**Much smaller download — the bundled runtime is slimmed, with no loss of features.**
+
+- The 4.1.3 installer ballooned because it bundled the WebView2 runtime folder
+  verbatim (debug symbols and the runtime's own installer included). 4.1.4 strips
+  those — they are never needed to *run* the embedded browser — while keeping every
+  browser binary, resource, and locale intact. Same reliability, much smaller
+  download. (The build log reports the exact before/after size and the largest
+  remaining files.)
+
 ## 4.1.3
 
 **Exo now carries its own WebView2 runtime — the black screen can't come back.**

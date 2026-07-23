@@ -301,6 +301,26 @@ if ($wvSrc) {
         # -Path (not -LiteralPath) so the trailing * expands to the folder's
         # contents; -LiteralPath treats '*' as a real filename and fails.
         Copy-Item -Path (Join-Path $wvSrc.FullName '*') -Destination $wvDest -Recurse -Force -ErrorAction Stop
+
+        # Slim: drop what is never needed to *run* an embedded WebView2 -- debug
+        # symbols (.pdb) and the runtime's own installer folder -- while leaving
+        # every browser binary, resource pak, and locale intact (no feature or
+        # quality loss). Logs before/after plus the largest remaining files so
+        # any further trimming can be targeted from the build output.
+        $wvBefore = (Get-ChildItem -LiteralPath $wvDest -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+        Get-ChildItem -LiteralPath $wvDest -Recurse -File -Filter '*.pdb' -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+        foreach ($junk in @('installer')) {
+            $jp = Join-Path $wvDest $junk
+            if (Test-Path -LiteralPath $jp) { Remove-Item -LiteralPath $jp -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+        $wvAfter = (Get-ChildItem -LiteralPath $wvDest -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+        Write-Host ("[*] WebView2 slim: {0} MB -> {1} MB (removed {2} MB of .pdb/installer)" -f `
+            [math]::Round($wvBefore / 1MB), [math]::Round($wvAfter / 1MB), [math]::Round(($wvBefore - $wvAfter) / 1MB)) -ForegroundColor DarkGray
+        Write-Host '    largest remaining runtime files:' -ForegroundColor DarkGray
+        Get-ChildItem -LiteralPath $wvDest -Recurse -File -ErrorAction SilentlyContinue |
+            Sort-Object Length -Descending | Select-Object -First 8 |
+            ForEach-Object { Write-Host ("      {0,8:N1} MB  {1}" -f ($_.Length / 1MB), $_.FullName.Substring($wvDest.Length + 1)) -ForegroundColor DarkGray }
     } catch {
         Write-Warning "WebView2 bundle copy failed ($($_.Exception.Message)); shipping without a bundled runtime (system-runtime fallback)."
         Remove-Item -LiteralPath $wvDest -Recurse -Force -ErrorAction SilentlyContinue
