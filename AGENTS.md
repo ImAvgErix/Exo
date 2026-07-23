@@ -2,7 +2,7 @@
 
 ## Product direction
 
-Exo is a no-compromise Windows performance and debloat tool. **Dual-scope:** the same bar applies to **Exo itself** and to **every target** it optimizes (Discord, Steam, Internet, NVIDIA, Riot, Epic, …). Vendor apps are treated as bloated by default — cut RAM, background CPU, autostart, telemetry, and clutter. Do not quietly weaken policies into conservative “leave the host alone” defaults.
+Exo is a no-compromise Windows performance and debloat tool. **Dual-scope:** the same bar applies to **Exo itself** and to **every target** it optimizes (Discord, Steam, Internet, NVIDIA, Brave, Games). Vendor apps are treated as bloated by default — cut RAM, background CPU, autostart, telemetry, and clutter. Do not quietly weaken policies into conservative “leave the host alone” defaults.
 
 **Goals (app + targets):** performance/speed, less RAM / soft-reclaimed idle pages, debloat, privacy, black/uncluttered UI, reversible Apply/Repair.
 
@@ -12,7 +12,7 @@ Exo is a no-compromise Windows performance and debloat tool. **Dual-scope:** the
 3. No folklore (no invented FPS registry, no fake claims).
 4. Never `EmptyWorkingSet` thrash **Steam CEF** (`steamwebhelper`) — it freezes the library UI. Soft reclaim (`SetProcessWorkingSetSize(-1,-1)`) on **non-foreground** CEF/helpers is allowed.
 
-**Lifecycle helpers (authorized):** scoped companions that lower RAM/CPU for a target are OK when they are (a) installed by Apply, (b) reversible by Repair, (c) limited to that target’s processes (e.g. Steam memory guard while Steam runs; Riot/Epic yield on **launcher** processes only). Prefer attaching to the target’s launch path when possible. Do **not** install anonymous always-on malware-style services. Disabling *vendor* junk autostart (Steam/Discord/NVIDIA App) is fine.
+**Lifecycle helpers (authorized):** scoped companions that lower RAM/CPU for a target are OK when they are (a) installed by Apply, (b) reversible by Repair, (c) limited to that target’s processes (e.g. Steam memory guard while Steam runs). Prefer attaching to the target’s launch path when possible. Do **not** install anonymous always-on malware-style services. Disabling *vendor* junk autostart (Steam/Discord/NVIDIA App) is fine.
 
 Aggressive must still be deterministic: scope actions to the selected application or hardware, make Apply *work* (retry hard paths), preserve data needed to prevent corruption, and keep Discord/Steam/Internet/NVIDIA Repair paths working. Never describe NVIDIA Reset as full driver rollback: it clears Exo status / restores DRS snapshot when present; vendor recovery may still need NVIDIA tools.
 
@@ -27,12 +27,11 @@ Aggressive must still be deterministic: scope actions to the selected applicatio
 - **Home** = verified optimizer state + live proof + system memory; no invented FPS/frame-time claims and no optimizer Detect* script probes on home; local state/system counters are cached so returns do not re-stagger
 - **Toolbar consistency** = all nav tabs share `ExoNavTab` height 40, radius 11, spacing 4–6, hairline selection ring; no orphan gear on the far right
 - **Modules** = one `ExoModulePlate` filling the stage (header + hairline feature list + action foot)
-- **Windows tweak ownership** = app optimizers keep **app-scoped** Windows integration (Discord/Steam quiet shell, GPU for that exe, Internet stack); a future **Windows** module owns only **machine-wide** host policy and **skips** keys already owned — see `docs/WINDOWS-OWNERSHIP.md`
+- **Windows tweak ownership** = app optimizers keep **app-scoped** Windows integration (Discord/Steam quiet shell, GPU for that exe, Internet stack); **machine-wide** host policy is out of scope — Exo recommends external tools (Nexus Playbook / FSOS-X) for OS-level optimization
 - **Motion** = short XAML Storyboards only; **never write hand-off composition visuals** (`ElementCompositionPreview` `Visual.Offset`/`Scale`/`Opacity`) — it detaches elements from XAML layout (everything piles at the origin) and pre-first-frame pokes crash real GPUs with `0xC000027B` (v2.6.0 launch regression); no spring bounce on content
 - **Hover feedback** = highlight wash / accent ring — avoid scale transforms on content with logos (softens bitmaps)
 - **Feature rows** = thin status rail + Applied/Not applied (live detect)
 - **Version** = `VERSION` file and `Exo/Exo.csproj` must match; Ui.Smoke gates both
-- **Agent preview** = `tools/Exo.UiPreview` for Linux click QA of this layout language — keep out of public README product marketing
 
 ## Team structure
 
@@ -58,15 +57,14 @@ Use concise prompts and targeted diffs. Do not have the coordinator redo complet
 
 Exo is a **Windows-only WinUI 3** app. Cloud agents run on **Linux**, so what is verifiable here is limited; the full product, real Apply/Repair, `Publish-Exo.ps1`, and CI parity remain Windows-only.
 
-Toolchain (already present via the VM snapshot; the update script only runs `dotnet restore`): **.NET 8 SDK** at `~/.dotnet` (symlinked to `/usr/local/bin/dotnet`) and **PowerShell 7** as `pwsh`. A `/usr/local/bin/powershell.exe -> pwsh` shim exists because the Discord/Steam/Nvidia smoke harnesses hardcode `FileName = "powershell.exe"`; without that shim they abort at the `*DetectCore.ps1` step on Linux.
+Toolchain (already present via the VM snapshot; the update script only runs `dotnet restore`): **.NET 10 SDK** at `~/.dotnet` (symlinked to `/usr/local/bin/dotnet`) and **PowerShell 7** as `pwsh`. A `/usr/local/bin/powershell.exe -> pwsh` shim exists because the Discord/Steam/Nvidia smoke harnesses hardcode `FileName = "powershell.exe"`; without that shim they abort at the `*DetectCore.ps1` step on Linux.
 
 What runs on Linux (one command):
 - `pwsh -NoProfile -File ./tools/Test-Linux.ps1` — repository integrity + Network / Steam / Nvidia / Discord / Ui smokes. Must pass with `failed=0`.
 
-UI click-testing on Linux (mock shell only — not the WinUI app):
-- `cd tools/Exo.UiPreview && npm install && npx playwright install chromium && npm run preview:click`
-- Dev server: `npm run dev` then open `http://127.0.0.1:5173`
-- This is a **React/Vite preview** of the v2.5 rail UI for layout/nav QA. Real Apply/Repair remains Windows-only.
+UI work on Linux: the production React shell in `ui/` builds and typechecks here
+(`cd ui && npm ci && npm run build` — output is committed to `Exo/wwwroot`). Real Apply/Repair
+remains Windows-only.
 
 Also individually:
 - `pwsh -NoProfile -File ./tools/Test-Repository.ps1`
