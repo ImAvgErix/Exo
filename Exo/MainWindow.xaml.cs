@@ -342,35 +342,22 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            // Prefer the WebView2 runtime bundled inside the app: it is always
-            // present and intact, so the machine's Evergreen runtime being
-            // missing or corrupted can no longer black-screen the UI. Falls back
-            // to the system runtime when no bundle is shipped (dev builds) or if
-            // the bundled environment fails to create.
-            CoreWebView2Environment? env = null;
+            // Point WebView2 at the runtime bundled inside the app (Runtime\WebView2)
+            // when present, via the documented WEBVIEW2_BROWSER_EXECUTABLE_FOLDER
+            // env var, so a missing or corrupted system runtime can no longer
+            // black-screen the UI. No bundle shipped (dev builds) -> the var is left
+            // unset and WebView2 uses the system Evergreen runtime, unchanged. Using
+            // the env var avoids CoreWebView2Environment.CreateAsync entirely (its
+            // overloads differ across the WebView2 projection); EnsureCoreWebView2Async()
+            // reads the var when it creates the environment on first call.
             var bundled = WebView2Doctor.ResolveBundledRuntimeFolder();
             if (bundled is not null)
             {
-                try
-                {
-                    env = await CoreWebView2Environment.CreateAsync(bundled, null, null);
-                    StartupLog.Mark("webview2-bundled-runtime");
-                }
-                catch (Exception ex)
-                {
-                    StartupLog.Mark("webview2-bundled-fail:" + ex.GetType().Name);
-                    env = null;
-                }
+                Environment.SetEnvironmentVariable("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", bundled);
+                StartupLog.Mark("webview2-bundled-runtime");
             }
 
-            var init = WebHost.EnsureCoreWebView2Async(env);
-            var done = await Task.WhenAny(init, Task.Delay(TimeSpan.FromSeconds(25)));
-            if (done != init)
-            {
-                StartupLog.Mark("webview2-init-timeout");
-                return false;
-            }
-            await init; // surface any initialization exception
+            await WebHost.EnsureCoreWebView2Async();
             return WebHost.CoreWebView2 is not null;
         }
         catch (Exception ex)
