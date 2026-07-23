@@ -59,7 +59,7 @@ Use concise prompts and targeted diffs. Do not have the coordinator redo complet
 
 1. `pwsh -NoProfile -File ./tools/Test-Linux.ps1` (Linux/cloud) or `dotnet run --project tools/Ui.Smoke -c Release` (Windows)
 2. `.\tools\Test-Repository.ps1`
-3. Optimizer smokes as needed (Network / Discord / Steam / NVIDIA)
+3. Optimizer smokes as needed (Network / Discord / Steam / NVIDIA / Brave)
 4. `.\Publish-Exo.ps1` then install to `%LocalAppData%\Exo\app` for local QA
 5. `.\Release-Exo.ps1` only when intentionally publishing a GitHub release
 
@@ -78,7 +78,7 @@ remains Windows-only.
 
 Also individually:
 - `pwsh -NoProfile -File ./tools/Test-Repository.ps1`
-- `dotnet run --project tools/Network.Smoke|Steam.Smoke|Nvidia.Smoke|Discord.Smoke|Ui.Smoke -c Release`
+- `dotnet run --project tools/Network.Smoke|Steam.Smoke|Nvidia.Smoke|Discord.Smoke|Brave.Smoke|Ui.Smoke -c Release`
 
 `DiscordLogic.IsStableDiscordPathText` normalizes Windows-style Discord roots with backslash compare so the Discord smoke passes on Linux too (product paths remain Windows install paths).
 

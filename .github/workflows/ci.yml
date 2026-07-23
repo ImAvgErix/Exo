@@ -92,7 +92,7 @@ jobs:
             exit 1
           }
 
-      # Smokes: UI, Network, Discord, Steam, NVIDIA, Contracts (Detect=Apply).
+      # Smokes: UI, Network, Discord, Steam, NVIDIA, Brave, Contracts (Detect=Apply).
       - name: UI + optimizer smoke (no UAC)
         shell: pwsh
         run: |
@@ -102,6 +102,7 @@ jobs:
             'tools/Discord.Smoke/Discord.Smoke.csproj',
             'tools/Steam.Smoke/Steam.Smoke.csproj',
             'tools/Nvidia.Smoke/Nvidia.Smoke.csproj',
+            'tools/Brave.Smoke/Brave.Smoke.csproj',
             'tools/Contracts.Smoke/Contracts.Smoke.csproj'
           )
           foreach ($p in $projects) {
