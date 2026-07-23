@@ -780,8 +780,8 @@ function Set-SteamTrayIconHidden([string]$SteamPath) {
 }
 
 function Apply-SteamWindowsQuiet([string]$SteamPath) {
-    # Ownership: Steam-scoped Windows integration only (not a future Windows module).
-    # See docs/WINDOWS-OWNERSHIP.md  -  Windows module must skip these keys if already verified.
+    # Ownership: Steam-scoped Windows integration only (toasts/tray/tasks for the Steam
+    # client itself) - never machine-wide host policy. See AGENTS.md "Windows tweak ownership".
     Write-Step 'Applying Windows quiet shell (toasts, tray, tasks)...'
     Disable-SteamScheduledTasks
     Set-SteamWindowsNotificationsOff

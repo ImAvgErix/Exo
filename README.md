@@ -25,8 +25,8 @@ Most “FPS packs” dump folklore registry keys and hope for the best. Exo is b
 | Principle | What it means |
 |---|---|
 | **Detect first** | Live registry, power plan, netsh, and app paths — not a marketing checklist |
-| **Apply with a real pipeline** | Native C# for host/launcher modules; specialized kits for Discord & NVIDIA |
-| **Never hang** | Hard timeouts on DISM, scheduled tasks, and elevated work |
+| **Apply with a real pipeline** | Native C# for host-integrated apps; specialized kits for Discord & NVIDIA |
+| **Never hang** | Hard timeouts on scheduled tasks and elevated work |
 | **Repair always** | Pre-Exo snapshots so you can undo |
 | **Anti-cheat safe** | No Vanguard, EOS, or game-binary mutation |
 
@@ -34,16 +34,19 @@ Most “FPS packs” dump folklore registry keys and hope for the best. Exo is b
 
 ## Modules
 
+Exo is a **focused** app: six modules it can make provably work, not a kitchen-sink tweaker.
+Machine-wide OS tuning (Game Mode, HAGS, MMCSS, power plan, Defender/WU policy, DISM features)
+is a different problem with different tools — we recommend a dedicated OS-tuning utility
+(**Nexus Playbook** or **FSOS-X**) for that layer instead of half-maintaining it here.
+
 | Module | What Apply does |
 |---|---|
-| **Windows** | Full host stack in native C#: Game Mode, HAGS, MMCSS (`SystemResponsiveness=10`), competitive power plan, input, Defender policy, WU pause, task quiet, optional features (timeout-safe DISM), shell declutter |
 | **Internet** | Lowest-latency or high-throughput profile from measured quality; TCP/QoS/NIC knobs only — no folklore DNS/MTU packs |
 | **NVIDIA** | Verified DRS / profile path with G-SYNC vs raw-latency choice; display policy without unsigned driver hacks |
-| **Discord** | Lean client path, voice QoS, Windows quiet (toasts/startup/tray) — in-app audio prefs left alone on Stable |
 | **Steam** | Quiet CEF launcher, library high-perf GPU (display = Games borderless), download/config hygiene — no background helpers |
-| **Riot / Epic** | Startup quiet, high-perf GPU, DSCP 46 — **never** anti-cheat or game files; display owned by Games hub |
-| **Internet** | TCP/DNS/NIC only — host Game Mode/HAGS/MMCSS live on **Windows** |
-| **Games** | Per-title quality + always borderless |
+| **Discord** | Lean client path, voice QoS, Windows quiet (toasts/startup/tray) — in-app audio prefs left alone on Stable |
+| **Brave** | Privacy/telemetry policy pack, high-perf GPU, quiet startup — full snapshot + restore Repair |
+| **Games** | Per-title config quality + always borderless — user configs only, no packs, no game-binary mutation |
 
 Stable Apply is the safe reversible stack. Experimental only forces tighter re-imports or deeper loops where the module defines them.
 
@@ -82,7 +85,8 @@ Public builds are not code-signed; SmartScreen may appear. Prefer official GitHu
 
 - Apply scripts are integrity-checked (length + SHA-256) across elevation
 - Mutations are snapshotted for Repair where the module owns recovery
-- Riot Vanguard, Epic Online Services, game binaries, saves, and logins are **out of bounds**
+- Anti-cheat, game binaries, saves, and logins are **out of bounds** — Games only ever touches
+  user config files, never packs, mods, or process/binary mutation
 - Exo does **not** install services, tray stay-resident agents, analytics, or ads
 - Exo reports observed policy and metrics; it does not promise universal FPS or ping
 

@@ -1,3 +1,47 @@
+## 4.1.0
+
+**Cleanup release — leaner, more focused module set. Breaking: Windows, Riot, and Epic
+modules are removed, and Marvel Rivals no longer installs the IoStore pack/signature-bypass
+system.** If you applied any of these on 3.16.13 or earlier, run **Repair** on that build
+*before* updating — the new build can no longer undo those specific changes for you (Windows
+registry policy reverts on its own once nothing keeps re-asserting it; this release actively
+removes leftover Marvel Rivals pack/bypass files on next Games Repair).
+
+- **If you used Windows, Riot, Epic, or Marvel Rivals packs on 3.16.13 or earlier: run Repair
+  on that version *before* updating to 4.1.0** — those modules and their Repair paths are gone
+  in this release.
+- **Removed**: Windows host-optimizer module, Riot and Epic launcher modules. Machine-wide OS
+  tuning (Game Mode, HAGS, MMCSS, power plan, Defender/WU policy) is a different problem with
+  different tools — we recommend a dedicated OS-tuning utility (Nexus Playbook or FSOS-X)
+  instead of half-maintaining it here.
+- **Removed**: the Marvel Rivals UTOC signature bypass and IoStore mod-pack system (~61 MB of
+  shipped binaries). Marvel Rivals stays supported as a config-only title like every other
+  game in the Games hub — quality presets and always-borderless via real config tokens, no
+  packs, no game-binary mutation. Games Repair now also cleans up legacy bypass/pack files
+  left behind by older installs.
+- **Promoted**: Brave is now a fully live module (was "coming soon") — its native apply/repair
+  was already production-grade; it just needed a dashboard tile and CI coverage
+  (`tools/Brave.Smoke`).
+- **Removed**: the entire legacy WinUI XAML optimizer surface (`SharedModulePlate`,
+  `FeatureTileGrid`, per-module `OptimizerPage`s, `ExoLoader`, `ExoSparkline`) — none of it was
+  reachable at runtime (the app has been a WebView2 shell around the React UI since 3.16.7+).
+- **Fixed**: Internet's congestion-control detect row no longer always reports OK regardless of
+  the live-read provider; a post-apply success message no longer claims Wi‑Fi gets disabled
+  (it never has, metrics-only); two stale rows in the Internet golden-path doc (ring buffers,
+  roaming aggressiveness) corrected to match what Apply actually does.
+- **Fixed**: NVIDIA Profile Inspector lookup now recognizes a GitHub API rate limit (the
+  realistic failure mode on shared/corporate networks) and says so, instead of a generic
+  network-error message.
+- **Fixed**: Marvel Rivals config Apply now detects when `GameUserSettings.ini` doesn't match
+  the sections Exo expects (a future game patch could restructure it) and says so in the
+  result instead of silently landing keys the game might not read.
+- CI: script-manifest freshness is now a hard gate on both the CI and release workflows
+  (elevated Apply/Repair hard-fails on a hash mismatch, so a stale manifest was a live risk,
+  not a style nit).
+- Removed ~10.5 MB of development scaffolding (vendored AI-agent skills, QA screenshot
+  artifacts, one-off research docs, and nine dev-only tool projects) with no effect on the
+  shipped app.
+
 ## 3.16.13
 
 - **Settings blank UI**: opening the gear no longer crashes React — `linkGuard` was a `useMemo` *after* `if (!open) return null` (hooks-order regression from 3.16.8), which wiped the whole WebView

@@ -65,7 +65,7 @@ without the app. See `docs/INTERNET-GOLDEN-PATH.md`.
 | Automatic public DNS selection | **Implemented (v3.6.0)** | Analyze directly tests Cloudflare, Google, and Quad9 on the current route, selects the fastest healthy responder, registers its published DoH template when Windows supports it, and snapshots exact prior adapter DNS/DoH state for Repair. Cloudflare is only the offline fallback. |
 | Force MTU / jumbo for gaming | **Excluded** | Path-MTU breakage risk (PPPoE/VPN) |
 | Interrupt affinity via registry | **Excluded** | `Set-NetAdapterRss` is the supported path (implemented) |
-| Game Mode / GameDVR / HAGS / power plan | **Out of module scope** | Internet module is network-only since v2.3.4; these belong to the future Windows module |
+| Game Mode / GameDVR / HAGS / power plan | **Out of scope** | Internet module is network-only since v2.3.4; machine-wide host policy isn't an Exo module — use a dedicated OS-tuning tool (Nexus Playbook / FSOS-X) |
 | Scheduled tray tasks | **Excluded** | Background noise |
 
 ### Ethernet vs Wi‑Fi (same apply, different branches)
@@ -150,19 +150,6 @@ Repair restores the full pre-Exo DRS database captured before the first Apply.
 | `-cef-disable-occlusion` / `-cef-disable-renderer-accessibility` | **Excluded (forbidden)** | Documented blanking/hangs on some GPUs |
 | Windows quiet (toasts/tray/autostart) | **Keep** | Real startup/notification reduction |
 | Random "FPS registry packs" | **Not used** | Folklore |
-
-## Riot and Epic
-
-| Surface | Verdict | Why |
-|---------|---------|-----|
-| Installed-game discovery | **Implemented (v3.6.0)** | Riot paths and Epic launcher manifests are parsed locally; missing launchers/games are valid states. |
-| Quiet launcher startup | **Implemented (v3.6.0)** | Only known per-user startup values are snapshotted and changed. Repair restores the exact prior value. |
-| Windows GPU preference | **Implemented (v3.6.0)** | `GpuPreference=2;` is written only for detected game executables, with pristine per-value snapshot and readback verification. |
-| Forced IFEO CPU priority for games | **Removed (v3.6.1)** | The launcher optimizer does not override game scheduling policy with undocumented per-image registry values; engines, anti-cheat, and Windows retain control. |
-| Hybrid-GPU launcher split | **Implemented (v3.6.1)** | Installed games prefer the high-performance adapter. On an actual iGPU+dGPU system, Riot/Epic launcher UI prefers the integrated adapter so it does not wake or contend with the gaming GPU; single-GPU systems keep Windows automatic selection. |
-| Launcher/game cache deletion | **Excluded** | Saves little persistent overhead, can force re-download/rebuild, and is not a latency optimization. |
-| Process killing/background guard | **Excluded** | Exo does not close a game, launcher download, or protected session and installs no resident watcher. |
-| Vanguard/EOS/services/files/manifests/saves | **Forbidden** | Security, anti-cheat, account, game, and store integrity are outside the mutation boundary. |
 
 ## App runtime / publish
 

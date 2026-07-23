@@ -52,9 +52,11 @@ they never install watchers.
   selects the fastest healthy candidate, and requests its published DNS-over-HTTPS template
   where Windows supports automatic DoH. Repair restores the previous DNS servers and removes
   registrations Exo added.
-- **Riot** and **Epic** discovery reads installed executable/manifests locally. Apply changes
-  only Windows startup, GPU preference, and per-executable CPU priority. Exo does not contact
-  Riot/Epic, scan game content, or upload the detected installation list.
+- The **Games** module reads and writes user config files only (quality settings, borderless
+  mode) for installed titles. It never contacts a game's servers, scans game content, mods
+  game binaries, or uploads the detected installation list.
+- The **Brave** module sets local managed policies and profile preferences (telemetry/reporting
+  off, high-perf GPU) and never contacts Brave's servers on your behalf.
 
 ## Verification
 
