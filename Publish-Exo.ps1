@@ -277,6 +277,38 @@ if (-not (Test-Path -LiteralPath $sharedLib) -or -not (Test-Path -LiteralPath $n
 }
 Write-Host '[+] Publish check: shared script libs present' -ForegroundColor Green
 
+# --- Bundle the WebView2 runtime -------------------------------------------
+# Ship a copy of the WebView2 runtime inside the app so a missing or corrupted
+# system Evergreen runtime can never black-screen the UI. Exo points
+# WEBVIEW2_BROWSER_EXECUTABLE_FOLDER at Runtime\WebView2 when it is present
+# (see WebView2Doctor.ResolveBundledRuntimeFolder + MainWindow init). Sourced
+# from the runtime already installed on the build machine (the GitHub
+# windows-latest image ships it) and copied into the payload, i.e. the
+# "fixed version" distribution pattern. Fail-soft: if no runtime is found,
+# ship without it and fall back to the system runtime (pre-4.1.2 behaviour)
+# rather than failing the release.
+$wvAppRoot = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\EdgeWebView\Application'
+$wvSrc = $null
+if (Test-Path -LiteralPath $wvAppRoot) {
+    $wvSrc = Get-ChildItem -LiteralPath $wvAppRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'msedgewebview2.exe') } |
+        Sort-Object Name -Descending | Select-Object -First 1
+}
+if ($wvSrc) {
+    $wvDest = Join-Path $OutDir 'Runtime\WebView2'
+    New-Item -ItemType Directory -Path $wvDest -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $wvSrc.FullName '*') -Destination $wvDest -Recurse -Force
+    if (Test-Path -LiteralPath (Join-Path $wvDest 'msedgewebview2.exe')) {
+        $wvSize = [math]::Round((Get-ChildItem -LiteralPath $wvDest -Recurse -File | Measure-Object Length -Sum).Sum / 1MB, 0)
+        Write-Host "[+] Bundled WebView2 runtime v$($wvSrc.Name) ($wvSize MB) -> Runtime\WebView2" -ForegroundColor Green
+    } else {
+        Write-Warning "WebView2 bundle copy looks incomplete; shipping without a bundled runtime (system-runtime fallback)."
+        Remove-Item -LiteralPath $wvDest -Recurse -Force -ErrorAction SilentlyContinue
+    }
+} else {
+    Write-Warning "No WebView2 runtime found under '$wvAppRoot' on the build machine; shipping without a bundled runtime (system-runtime fallback)."
+}
+
 if (Test-Path $ZipPath) { Remove-Item -LiteralPath $ZipPath -Force }
 Write-Host '[*] Packing payload zip (internal only)...' -ForegroundColor DarkGray
 Compress-Archive -Path (Join-Path $OutDir '*') -DestinationPath $ZipPath -CompressionLevel Optimal
