@@ -58,16 +58,5 @@
                 </Button>
             </Grid>
         </Border>
-        <Border x:Name="NavRail" Visibility="Collapsed" Width="0" Height="0">
-            <StackPanel x:Name="ModuleIcons">
-                <Button x:Name="NavDiscord" Tag="discord" Click="NavDiscord_Click" />
-                <Button x:Name="NavSteam" Tag="steam" Click="NavSteam_Click" />
-                <Button x:Name="NavInternet" Tag="internet" Click="NavInternet_Click" />
-                <Button x:Name="NavNvidia" Tag="nvidia" Click="NavNvidia_Click" />
-                <Button x:Name="NavRiot" Tag="riot" Click="NavRiot_Click" />
-                <Button x:Name="NavEpic" Tag="epic" Click="NavEpic_Click" />
-            </StackPanel>
-        </Border>
-        <Frame x:Name="ContentFrame" Visibility="Collapsed" Width="0" Height="0" />
     </Grid>
 </Window>

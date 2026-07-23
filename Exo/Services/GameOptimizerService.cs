@@ -249,16 +249,9 @@ public sealed partial class GameOptimizerService
             F("Install",
                 probe.Installed ? ShortPath(probe.InstallPath!) : "Not found in Steam libraries",
                 probe.Installed),
-            F("UTOC signature bypass",
-                probe.BypassPresent
-                    ? "dsound.dll + ASI present"
-                    : "Missing — IoStore packs may not load (configs still apply)",
-                probe.BypassPresent),
-            F("~mods folder",
-                probe.ModsDirPresent
-                    ? $"{probe.ModPackCount} pack file(s)"
-                    : "Missing — created on Apply",
-                probe.ModsDirPresent || applied),
+            F("Ban-safe surface",
+                "User configs only — no packs, no game-binary mutation",
+                true),
             F("Game profile",
                 applied
                     ? $"{presetLabel} active"
@@ -288,15 +281,10 @@ public sealed partial class GameOptimizerService
             status = "Not installed";
             detail = "Install Marvel Rivals on Steam, then reopen Games.";
         }
-        else if (!probe.BypassPresent)
-        {
-            status = "Bypass missing";
-            detail = "Signature bypass required for IoStore mods. Configs can still apply.";
-        }
         else if (applied)
         {
             status = $"{presetLabel} applied";
-            detail = $"Active: {presetLabel}. Repair undoes Exo game configs and optional packs.";
+            detail = $"Active: {presetLabel}. Repair restores backed-up configs.";
         }
         else
         {
@@ -316,8 +304,6 @@ public sealed partial class GameOptimizerService
                 ["preset"] = activePreset ?? preferredPreset ?? PresetOptimized,
                 ["installed"] = probe.Installed ? "1" : "0",
                 ["installPath"] = probe.InstallPath ?? "",
-                ["bypass"] = probe.BypassPresent ? "1" : "0",
-                ["mods"] = probe.ModsDirPresent ? "1" : "0",
                 ["activePreset"] = activePreset ?? "",
                 ["displayMode"] = DisplayBorderless,
                 ["ready"] = "1"
@@ -450,29 +436,6 @@ public sealed partial class GameOptimizerService
                 // Always borderless for Marvel (UE FullscreenMode=1)
                 PatchGameUserSettings(preset, DisplayBorderless);
 
-                // Clean PC path: create folders → seed cache (bundled first) →
-                // install bypass → install packs → verify.
-                var modsDir = GetModsDir(probe.InstallPath!);
-                Directory.CreateDirectory(modsDir);
-                progress?.Report("Ensured ~mods folder…");
-
-                progress?.Report("Loading pack + bypass seeds…");
-                RefreshPackCacheFromKnownSources();
-
-                progress?.Report("Installing UTOC signature bypass…");
-                TryInstallBypassFromCache(probe.InstallPath!, progress);
-
-                var bypassOk = HasBypassFiles(probe.InstallPath!);
-                if (bypassOk || PackCacheHasMinimum())
-                {
-                    progress?.Report("Installing Exo packs into ~mods…");
-                    InstallPacksForPreset(preset, modsDir, progress);
-                }
-                else
-                {
-                    progress?.Report("No pack seeds available — configs only…");
-                }
-
                 try
                 {
                     WriteConfigText(
@@ -493,24 +456,13 @@ public sealed partial class GameOptimizerService
                 SaveState(state);
             }, ct).ConfigureAwait(false);
 
-            var after = ProbeMarvelRivals();
             // Soft verify: Engine.ini marker preferred; marker file is enough if game rewrote ini.
             var marvelMarker = Path.Combine(PathHelper.AppDataDir, "game-backups", GameIdMarvelRivals, "exo-profile.txt");
             if (!ConfigLooksApplied(preset) && !File.Exists(marvelMarker))
                 return (false, "Config write failed verification — close Marvel Rivals fully and try Apply again.");
 
-            var parts = new List<string>
-            {
-                preset == PresetPotato ? "Potato configs written" : "Optimized configs written",
-                after.ModsDirPresent ? $"~mods ready ({after.ModPackCount} files)" : "~mods missing",
-                after.BypassPresent ? "bypass installed" : "bypass missing",
-            };
-            if (!after.BypassPresent)
-                parts.Add("IoStore packs may not load without bypass");
-            if (after.ModPackCount == 0)
-                parts.Add("no packs installed (seeds missing from this Exo build)");
-
-            var msg = string.Join(" · ", parts) + ". Restart Marvel Rivals.";
+            var msg = (preset == PresetPotato ? "Potato configs written" : "Optimized configs written")
+                + " (borderless enforced). Restart Marvel Rivals.";
             progress?.Report("Verified");
             return (true, msg);
         }
@@ -549,16 +501,39 @@ public sealed partial class GameOptimizerService
                 var install = TryFindMarvelRivals();
                 if (install is not null)
                 {
+                    // Legacy cleanup (≤3.16.x shipped IoStore packs + a UTOC signature
+                    // bypass; 4.x is config-only). Remove any leftovers Exo installed.
                     var mods = GetModsDir(install);
                     if (Directory.Exists(mods))
                     {
-                        progress?.Report("Removing Exo packs from ~mods…");
+                        progress?.Report("Removing legacy Exo packs from ~mods…");
                         foreach (var f in Directory.EnumerateFiles(mods, "Exo*.*"))
                         {
                             try { File.Delete(f); } catch { /* busy */ }
                         }
                     }
+
+                    progress?.Report("Removing legacy signature bypass…");
+                    var win64 = Path.Combine(install, "MarvelGame", "Marvel", "Binaries", "Win64");
+                    try { File.Delete(Path.Combine(win64, "plugins", "MarvelRivalsUTOCSignatureBypass.asi")); } catch { }
+                    try
+                    {
+                        // Only remove dsound.dll when the Exo-installed ASI loader owned it.
+                        var ds = Path.Combine(win64, "dsound.dll");
+                        if (File.Exists(ds) && !Directory.EnumerateFiles(
+                                Path.Combine(win64, "plugins"), "*.asi").Any())
+                            File.Delete(ds);
+                    }
+                    catch { }
                 }
+
+                // Purge the local pack cache from older Exo builds.
+                try
+                {
+                    if (Directory.Exists(PackCacheDir))
+                        Directory.Delete(PackCacheDir, recursive: true);
+                }
+                catch { }
 
                 var state = LoadState();
                 if (state.Games.TryGetValue(GameIdMarvelRivals, out var rec))
@@ -618,71 +593,19 @@ public sealed partial class GameOptimizerService
     {
         public bool Installed { get; init; }
         public string? InstallPath { get; init; }
-        public bool BypassPresent { get; init; }
-        public bool ModsDirPresent { get; init; }
-        public int ModPackCount { get; init; }
-        public bool ExoPacksReady { get; init; }
     }
 
     public MarvelProbe ProbeMarvelRivals()
     {
         var install = TryFindMarvelRivals();
         if (install is null)
-        {
-            return new MarvelProbe
-            {
-                Installed = false,
-                ExoPacksReady = PackCacheHasMinimum()
-            };
-        }
-
-        var bypass = HasBypassFiles(install);
-        var mods = GetModsDir(install);
-        var modsOk = Directory.Exists(mods);
-        var packCount = 0;
-        if (modsOk)
-        {
-            try
-            {
-                packCount = Directory.EnumerateFiles(mods, "*.*", SearchOption.TopDirectoryOnly)
-                    .Count(f =>
-                    {
-                        var e = Path.GetExtension(f);
-                        return e.Equals(".pak", StringComparison.OrdinalIgnoreCase)
-                               || e.Equals(".ucas", StringComparison.OrdinalIgnoreCase)
-                               || e.Equals(".utoc", StringComparison.OrdinalIgnoreCase);
-                    });
-            }
-            catch { /* ignore */ }
-        }
+            return new MarvelProbe { Installed = false };
 
         return new MarvelProbe
         {
             Installed = true,
-            InstallPath = install,
-            BypassPresent = bypass,
-            ModsDirPresent = modsOk,
-            ModPackCount = packCount,
-            ExoPacksReady = PackCacheHasMinimum() || packCount > 0
+            InstallPath = install
         };
-    }
-
-    private static bool HasBypassFiles(string installRoot)
-    {
-        var win64 = Path.Combine(installRoot, "MarvelGame", "Marvel", "Binaries", "Win64");
-        var dsound = Path.Combine(win64, "dsound.dll");
-        var asi = Path.Combine(win64, "plugins", "MarvelRivalsUTOCSignatureBypass.asi");
-        // Also accept any .asi under plugins if dsound present (community naming)
-        if (File.Exists(dsound) && File.Exists(asi)) return true;
-        if (File.Exists(dsound) && Directory.Exists(Path.Combine(win64, "plugins")))
-        {
-            try
-            {
-                return Directory.EnumerateFiles(Path.Combine(win64, "plugins"), "*.asi").Any();
-            }
-            catch { return false; }
-        }
-        return false;
     }
 
     private static string GetModsDir(string installRoot) =>
@@ -788,269 +711,6 @@ public sealed partial class GameOptimizerService
             if (Directory.Exists(c)) return c;
         }
         return null;
-    }
-
-    // ── Pack cache + install ──────────────────────────────────────────────
-
-    private static bool PackCacheHasMinimum()
-    {
-        try
-        {
-            if (!Directory.Exists(PackCacheDir)) return false;
-            // Need at least one ExoFPS triple or Performance pak
-            return Directory.EnumerateFiles(PackCacheDir, "Exo*.*", SearchOption.AllDirectories).Any();
-        }
-        catch { return false; }
-    }
-
-    /// <summary>
-    /// Seed %LocalAppData%\Exo\game-packs from:
-    /// 1) Bundled with Exo (Scripts/Games/MarvelRivals) — works on clean PCs
-    /// 2) Dev machine caches / Downloads / existing ~mods
-    /// </summary>
-    private static void RefreshPackCacheFromKnownSources()
-    {
-        Directory.CreateDirectory(PackCacheDir);
-        var destRaw = Path.Combine(PackCacheDir, "raw");
-        var destBypass = Path.Combine(PackCacheDir, "bypass");
-        Directory.CreateDirectory(destRaw);
-        Directory.CreateDirectory(destBypass);
-
-        // 1) App-bundled seeds (primary for clean PCs)
-        foreach (var bundled in EnumerateBundledSeedDirs())
-        {
-            var packs = Path.Combine(bundled, "packs");
-            var bypass = Path.Combine(bundled, "bypass");
-            CopyPackFilesFromDir(packs, destRaw);
-            if (Directory.Exists(bypass))
-            {
-                TryCopyFile(Path.Combine(bypass, "dsound.dll"), Path.Combine(destBypass, "dsound.dll"));
-                TryCopyFile(
-                    Path.Combine(bypass, "MarvelRivalsUTOCSignatureBypass.asi"),
-                    Path.Combine(destBypass, "MarvelRivalsUTOCSignatureBypass.asi"));
-            }
-        }
-
-        // 2) Optional local/dev sources
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var sources = new List<string>
-        {
-            Path.Combine(home, "tools", "mod-build", "smarter-fps", "packed-lite"),
-            Path.Combine(home, "tools", "mod-build", "exo-packed"),
-            Path.Combine(home, "tools", "mod-build", "packed"),
-            Path.Combine(home, "Downloads"),
-        };
-
-        var install = TryFindMarvelRivals();
-        if (install is not null)
-        {
-            sources.Add(GetModsDir(install));
-            var win64 = Path.Combine(install, "MarvelGame", "Marvel", "Binaries", "Win64");
-            TryCopyFile(Path.Combine(win64, "dsound.dll"), Path.Combine(destBypass, "dsound.dll"));
-            TryCopyFile(
-                Path.Combine(win64, "plugins", "MarvelRivalsUTOCSignatureBypass.asi"),
-                Path.Combine(destBypass, "MarvelRivalsUTOCSignatureBypass.asi"));
-        }
-
-        foreach (var src in sources)
-            CopyPackFilesFromDir(src, destRaw);
-    }
-
-    private static IEnumerable<string> EnumerateBundledSeedDirs()
-    {
-        // Beside Exo.exe: Scripts/Games/MarvelRivals
-        yield return Path.Combine(PathHelper.AppDirectory, "Scripts", "Games", "MarvelRivals");
-        // Working scripts under %LocalAppData%\Exo\scripts (kit stage)
-        yield return Path.Combine(PathHelper.WorkingScriptsDir, "Games", "MarvelRivals");
-        // Source tree when running from build output
-        yield return Path.Combine(PathHelper.ScriptsRoot, "Games", "MarvelRivals");
-    }
-
-    private static void CopyPackFilesFromDir(string src, string destRaw)
-    {
-        if (!Directory.Exists(src)) return;
-        try
-        {
-            foreach (var f in Directory.EnumerateFiles(src, "*.*", SearchOption.TopDirectoryOnly))
-            {
-                var name = Path.GetFileName(f);
-                var ext = Path.GetExtension(f);
-                if (ext is not (".pak" or ".ucas" or ".utoc")) continue;
-                if (!name.Contains("Exo", StringComparison.OrdinalIgnoreCase) &&
-                    !name.Contains("Rigs", StringComparison.OrdinalIgnoreCase) &&
-                    !name.Contains("NoShake", StringComparison.OrdinalIgnoreCase) &&
-                    !name.Contains("Evolve", StringComparison.OrdinalIgnoreCase) &&
-                    !name.Contains("FPS", StringComparison.OrdinalIgnoreCase) &&
-                    !name.Contains("Performance", StringComparison.OrdinalIgnoreCase) &&
-                    !name.Contains("SmartLite", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                var dest = Path.Combine(destRaw, name);
-                if (File.Exists(dest))
-                {
-                    var di = new FileInfo(dest);
-                    var si = new FileInfo(f);
-                    if (si.Length <= di.Length && si.LastWriteTimeUtc <= di.LastWriteTimeUtc)
-                        continue;
-                }
-                try { File.Copy(f, dest, overwrite: true); } catch { /* locked */ }
-            }
-        }
-        catch { /* ignore */ }
-    }
-
-    private static void InstallPacksForPreset(string preset, string modsDir, IProgress<string>? progress)
-    {
-        Directory.CreateDirectory(modsDir);
-        var raw = Path.Combine(PackCacheDir, "raw");
-        if (!Directory.Exists(raw)) return;
-
-        // Clear old Exo* only so we don't leave dual Performance packs
-        foreach (var f in Directory.EnumerateFiles(modsDir, "Exo*.*"))
-        {
-            try { File.Delete(f); } catch { /* busy */ }
-        }
-
-        // NoShake always (merged coverage)
-        CopyPackFamily(raw, modsDir, "ExoNoShake", "NoShake", "zNoShake", "RigsNoShake");
-
-        // Performance (encrypted Evolve) when available
-        CopyPackFamily(raw, modsDir, "ExoPerformance", "zEvolve", "Performance");
-
-        if (preset == PresetPotato)
-        {
-            // Full stub set preferred for potato
-            if (!CopyPackFamily(raw, modsDir, "ExoFPSBoost", "zRigsFPSBoost", "RigsFPS", "FPSBoost"))
-                CopyPackFamily(raw, modsDir, "ExoFPSBoostSmart", "ExoFPSBoostSmartLite");
-            progress?.Report("Potato packs staged (full FPS stubs when available)…");
-        }
-        else
-        {
-            // Optimized: prefer smarter lite FPS; fall back to full
-            if (!CopyPackFamily(raw, modsDir, "ExoFPSBoostSmartLite", "ExoFPSBoostSmart", "ExoFPSBoost"))
-                CopyPackFamily(raw, modsDir, "ExoFPSBoost", "zRigsFPSBoost");
-            // Normalize installed name to ExoFPSBoost_*
-            NormalizeFpsBoostNames(modsDir);
-            progress?.Report("Optimized packs staged (smarter FPS when available)…");
-        }
-
-        // Ensure Performance named consistently
-        NormalizeNamePrefix(modsDir, "zEvolve", "ExoPerformance");
-    }
-
-    private static void NormalizeFpsBoostNames(string modsDir)
-    {
-        // If we copied ExoFPSBoostSmartLite_*, rename to ExoFPSBoost_*
-        foreach (var ext in new[] { ".pak", ".ucas", ".utoc" })
-        {
-            foreach (var f in Directory.EnumerateFiles(modsDir, "*" + ext))
-            {
-                var name = Path.GetFileName(f);
-                if (name.StartsWith("ExoFPSBoostSmart", StringComparison.OrdinalIgnoreCase) ||
-                    name.StartsWith("zRigsFPSBoost", StringComparison.OrdinalIgnoreCase))
-                {
-                    var dest = Path.Combine(modsDir, "ExoFPSBoost_9999999_P" + ext);
-                    try
-                    {
-                        if (File.Exists(dest)) File.Delete(dest);
-                        File.Move(f, dest);
-                    }
-                    catch { /* ignore */ }
-                }
-            }
-        }
-    }
-
-    private static void NormalizeNamePrefix(string modsDir, string fromPrefix, string toPrefix)
-    {
-        foreach (var f in Directory.EnumerateFiles(modsDir))
-        {
-            var name = Path.GetFileName(f);
-            if (!name.StartsWith(fromPrefix, StringComparison.OrdinalIgnoreCase)) continue;
-            var dest = Path.Combine(modsDir, toPrefix + "_9999999_P" + Path.GetExtension(f));
-            try
-            {
-                if (File.Exists(dest)) File.Delete(dest);
-                File.Move(f, dest);
-            }
-            catch { /* ignore */ }
-        }
-    }
-
-    /// <summary>Copy first matching family of .pak/.ucas/.utoc into modsDir as Exo-named when possible.</summary>
-    private static bool CopyPackFamily(string rawDir, string modsDir, params string[] nameHints)
-    {
-        // Group by stem without extension
-        var files = Directory.EnumerateFiles(rawDir).ToList();
-        foreach (var hint in nameHints)
-        {
-            var matches = files
-                .Where(f => Path.GetFileName(f).Contains(hint, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            if (matches.Count == 0) continue;
-
-            // Prefer sets that include .utoc (IoStore)
-            var stems = matches
-                .Select(f => Path.GetFileNameWithoutExtension(f))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            foreach (var stem in stems)
-            {
-                var group = files
-                    .Where(f => string.Equals(Path.GetFileNameWithoutExtension(f), stem, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                if (group.Count == 0) continue;
-
-                foreach (var src in group)
-                {
-                    var ext = Path.GetExtension(src);
-                    // Map to Exo* product names
-                    string destName;
-                    if (hint.Contains("NoShake", StringComparison.OrdinalIgnoreCase) ||
-                        stem.Contains("NoShake", StringComparison.OrdinalIgnoreCase))
-                        destName = "ExoNoShake_9999999_P" + ext;
-                    else if (hint.Contains("Performance", StringComparison.OrdinalIgnoreCase) ||
-                             hint.Contains("Evolve", StringComparison.OrdinalIgnoreCase) ||
-                             stem.Contains("Evolve", StringComparison.OrdinalIgnoreCase) ||
-                             stem.Contains("Performance", StringComparison.OrdinalIgnoreCase))
-                        destName = "ExoPerformance_9999999_P" + ext;
-                    else if (stem.Contains("FPS", StringComparison.OrdinalIgnoreCase) ||
-                             hint.Contains("FPS", StringComparison.OrdinalIgnoreCase))
-                        destName = "ExoFPSBoost_9999999_P" + ext;
-                    else
-                        destName = Path.GetFileName(src);
-
-                    try { File.Copy(src, Path.Combine(modsDir, destName), overwrite: true); }
-                    catch { /* locked */ }
-                }
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static void TryInstallBypassFromCache(string installRoot, IProgress<string>? progress)
-    {
-        if (HasBypassFiles(installRoot)) return;
-        var cacheBypass = Path.Combine(PackCacheDir, "bypass");
-        var ds = Path.Combine(cacheBypass, "dsound.dll");
-        var asi = Path.Combine(cacheBypass, "MarvelRivalsUTOCSignatureBypass.asi");
-        if (!File.Exists(ds) || !File.Exists(asi)) return;
-
-        var win64 = Path.Combine(installRoot, "MarvelGame", "Marvel", "Binaries", "Win64");
-        var plugins = Path.Combine(win64, "plugins");
-        try
-        {
-            Directory.CreateDirectory(plugins);
-            File.Copy(ds, Path.Combine(win64, "dsound.dll"), overwrite: true);
-            File.Copy(asi, Path.Combine(plugins, "MarvelRivalsUTOCSignatureBypass.asi"), overwrite: true);
-            progress?.Report("Installed UTOC signature bypass from cache…");
-        }
-        catch
-        {
-            progress?.Report("Could not write bypass (need admin / game closed)…");
-        }
     }
 
     private static void TryCopyFile(string src, string dest)

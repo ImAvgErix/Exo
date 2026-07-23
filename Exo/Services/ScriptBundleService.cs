@@ -19,8 +19,6 @@ public sealed class ScriptBundleService
     private bool _discordSyncDone;
     private bool _steamSyncDone;
     private bool _nvidiaSyncDone;
-    private bool _gameLaunchersSyncDone;
-    private bool _windowsSyncDone;
     private bool _appKitStampChecked;
 
     public ScriptBundleService(SettingsService settings)
@@ -114,49 +112,6 @@ public sealed class ScriptBundleService
         }
     }
 
-    public string GetGameLaunchersRoot()
-    {
-        lock (_syncLock)
-        {
-            try
-            {
-                EnsureAppKitStampCore();
-                var working = Path.Combine(PathHelper.WorkingScriptsDir, "GameLaunchers");
-                EnsureGameLauncherScriptsSynced(working);
-                if (Directory.Exists(working) &&
-                    File.Exists(Path.Combine(working, "Exo-Riot-Detect.ps1")) &&
-                    File.Exists(Path.Combine(working, "GameLauncher-Detect.ps1")))
-                {
-                    return working;
-                }
-            }
-            catch
-            {
-                // Staging can fail after a partial cache wipe / file lock; fall back.
-            }
-
-            return PathHelper.GameLauncherScriptsDir;
-        }
-    }
-
-    public string GetWindowsRoot()
-    {
-        lock (_syncLock)
-        {
-            try
-            {
-                EnsureAppKitStampCore();
-                var working = Path.Combine(PathHelper.WorkingScriptsDir, "Windows");
-                EnsureWindowsScriptsSynced(working);
-                if (Directory.Exists(working) && File.Exists(Path.Combine(working, "Exo-Windows-Detect.ps1")))
-                    return working;
-            }
-            catch { }
-
-            return PathHelper.WindowsScriptsDir;
-        }
-    }
-
     public string DiscordOptimizerScript =>
         Path.Combine(GetDiscordRoot(), "Exo-Discord-Run.ps1");
 
@@ -183,17 +138,6 @@ public sealed class ScriptBundleService
 
     public string NvidiaRepairScript =>
         Path.Combine(GetNvidiaRoot(), "Exo-Nvidia-Repair.ps1");
-
-    public string RiotOptimizerScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Riot-Run.ps1");
-    public string RiotDetectScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Riot-Detect.ps1");
-    public string RiotRepairScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Riot-Repair.ps1");
-    public string EpicOptimizerScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Epic-Run.ps1");
-    public string EpicDetectScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Epic-Detect.ps1");
-    public string EpicRepairScript => Path.Combine(GetGameLaunchersRoot(), "Exo-Epic-Repair.ps1");
-
-    public string WindowsOptimizerScript => Path.Combine(GetWindowsRoot(), "Exo-Windows-Run.ps1");
-    public string WindowsDetectScript => Path.Combine(GetWindowsRoot(), "Exo-Windows-Detect.ps1");
-    public string WindowsRepairScript => Path.Combine(GetWindowsRoot(), "Exo-Windows-Repair.ps1");
 
     public string GetBundledVersion()
     {
@@ -265,27 +209,21 @@ public sealed class ScriptBundleService
                      ("Steam", PathHelper.SteamScriptsDir,
                          ["Steam-Optimizer.ps1", "Exo-Steam-Run.ps1", "Exo-Steam-Detect.ps1"]),
                      ("Nvidia", PathHelper.NvidiaScriptsDir,
-                         ["Nvidia-Optimizer.ps1", "Exo-Nvidia-Run.ps1", "Exo-Nvidia-Detect.ps1"]),
-                     ("GameLaunchers", PathHelper.GameLauncherScriptsDir,
-                         ["GameLauncher-Optimizer.ps1", "GameLauncher-Detect.ps1", "Exo-Riot-Run.ps1", "Exo-Epic-Run.ps1"]),
-                     ("Windows", PathHelper.WindowsScriptsDir,
-                         ["Windows-Optimizer.ps1", "Exo-Windows-Run.ps1", "Exo-Windows-Detect.ps1"])
+                         ["Nvidia-Optimizer.ps1", "Exo-Nvidia-Run.ps1", "Exo-Nvidia-Detect.ps1"])
                  })
         {
             try { ReplaceWorkingKitFromBundled(job.Name, job.Bundled, job.Required); }
             catch { /* best-effort; Get*Root falls back to bundled Scripts */ }
         }
 
-        // Shared libs (Game Bar / GamingStack / Common) live under Scripts/lib.
-        // Working kits resolve them as ..\lib relative to Steam/GameLaunchers/etc.
+        // Shared libs (Game Bar / Common) live under Scripts/lib.
+        // Working kits resolve them as ..\lib relative to Steam etc.
         try { SyncSharedLibFromBundled(); }
         catch { /* best-effort */ }
 
         _discordSyncDone = false;
         _steamSyncDone = false;
         _nvidiaSyncDone = false;
-        _gameLaunchersSyncDone = false;
-        _windowsSyncDone = false;
         _cachedBundledVersion = null;
         _lastSyncedBundledVersion = null;
         _lastSyncedWorkingVersion = null;
@@ -491,51 +429,6 @@ public sealed class ScriptBundleService
         }
 
         _nvidiaSyncDone = true;
-    }
-
-    private void EnsureGameLauncherScriptsSynced(string working)
-    {
-        var bundled = PathHelper.GameLauncherScriptsDir;
-        if (!Directory.Exists(bundled)) return;
-        Directory.CreateDirectory(Path.GetDirectoryName(working)!);
-        var required = new[]
-        {
-            "GameLauncher-Optimizer.ps1", "GameLauncher-Detect.ps1",
-            "Exo-Riot-Run.ps1", "Exo-Riot-Detect.ps1", "Exo-Riot-Repair.ps1",
-            "Exo-Epic-Run.ps1", "Exo-Epic-Detect.ps1", "Exo-Epic-Repair.ps1"
-        };
-        var bundledVersion = ReadVersionFile(Path.Combine(bundled, "VERSION")) ?? "0";
-        var workingVersion = ReadVersionFile(Path.Combine(working, "VERSION")) ?? string.Empty;
-        var broken = !Directory.Exists(working) ||
-            required.Any(file => !File.Exists(Path.Combine(working, file)));
-        if (_gameLaunchersSyncDone && !broken &&
-            string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal)) return;
-        if (broken || !string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))
-            ReplaceWorkingKitFromBundled("GameLaunchers", bundled, required);
-        try { SyncSharedLibFromBundled(); } catch { /* best-effort */ }
-        _gameLaunchersSyncDone = true;
-    }
-
-    private void EnsureWindowsScriptsSynced(string working)
-    {
-        var bundled = PathHelper.WindowsScriptsDir;
-        if (!Directory.Exists(bundled))
-            return;
-
-        var required = new[]
-        {
-            "Windows-Optimizer.ps1", "Exo-Windows-Run.ps1", "Exo-Windows-Detect.ps1", "Exo-Windows-Repair.ps1"
-        };
-        var bundledVersion = ReadVersionFile(Path.Combine(bundled, "VERSION")) ?? "0";
-        var workingVersion = ReadVersionFile(Path.Combine(working, "VERSION")) ?? string.Empty;
-        var broken = !Directory.Exists(working) ||
-            required.Any(file => !File.Exists(Path.Combine(working, file)));
-        if (_windowsSyncDone && !broken &&
-            string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal)) return;
-        if (broken || !string.Equals(bundledVersion, workingVersion, StringComparison.Ordinal))
-            ReplaceWorkingKitFromBundled("Windows", bundled, required);
-        try { SyncSharedLibFromBundled(); } catch { /* best-effort */ }
-        _windowsSyncDone = true;
     }
 
     private void EnsureDiscordScriptsSynced(string working)

@@ -25,13 +25,9 @@ public partial class DashboardViewModel : ObservableObject
         {
             Card("discord", "Discord", "Assets/Logos/discord.png", OptimizerStatus.Available),
             Card("steam", "Steam", "Assets/Logos/steam.png", OptimizerStatus.Available),
-            Card("windows", "Windows", "Assets/Logos/windows.png", OptimizerStatus.Available),
             Card("internet", "Internet", "Assets/Logos/internet.png", OptimizerStatus.Available),
             Card("nvidia", "NVIDIA", "Assets/Logos/nvidia.png", OptimizerStatus.Available),
-            Card("amd", "AMD", "Assets/Logos/amd.png", OptimizerStatus.ComingSoon),
-            Card("brave", "Brave", "Assets/Logos/brave.png", OptimizerStatus.ComingSoon),
-            Card("riot", "Riot", "Assets/Logos/riot.png", OptimizerStatus.Available),
-            Card("epic", "Epic", "Assets/Logos/epic.png", OptimizerStatus.Available),
+            Card("brave", "Brave", "Assets/Logos/brave.png", OptimizerStatus.Available),
         };
 
         foreach (var card in Cards)
@@ -42,13 +38,11 @@ public partial class DashboardViewModel : ObservableObject
         CheckRows =
         [
             new OptimizerCheckRowViewModel("Discord", "discord"),
+            new OptimizerCheckRowViewModel("Brave", "brave"),
             new OptimizerCheckRowViewModel("Steam", "steam"),
             new OptimizerCheckRowViewModel("Games", "games"),
-            new OptimizerCheckRowViewModel("Windows", "windows"),
             new OptimizerCheckRowViewModel("Internet", "internet"),
             new OptimizerCheckRowViewModel("NVIDIA", "nvidia"),
-            new OptimizerCheckRowViewModel("Riot", "riot"),
-            new OptimizerCheckRowViewModel("Epic", "epic"),
         ];
 
         RamSeries = new ObservableCollection<double>();
@@ -68,7 +62,7 @@ public partial class DashboardViewModel : ObservableObject
     public ObservableCollection<double> NetSeries { get; }
 
     [ObservableProperty] public partial string HeroSummary { get; set; } = "Maximum performance. No compromise.";
-    [ObservableProperty] public partial string OverviewPrimary { get; set; } = "0 / 7 verified";
+    [ObservableProperty] public partial string OverviewPrimary { get; set; } = "0 / 6 verified";
     [ObservableProperty] public partial string AppliedModulesList { get; set; } = "None applied yet";
 
     [ObservableProperty] public partial string NextActionModule { get; set; } = string.Empty;
@@ -124,22 +118,13 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] public partial string NvidiaPathSecondary { get; set; } = "Apply NVIDIA profiles";
     [ObservableProperty] public partial string NvidiaStatusTag { get; set; } = "NOT APPLIED";
     [ObservableProperty] public partial string NvidiaLiveMetric { get; set; } = "No verified driver profile";
-    [ObservableProperty] public partial string RiotStatusPrimary { get; set; } = "Riot ready";
-    [ObservableProperty] public partial string RiotStatusSecondary { get; set; } = "Apply reversible per-game hardware policy";
-    [ObservableProperty] public partial string RiotStatusTag { get; set; } = "NOT APPLIED";
-    [ObservableProperty] public partial string RiotLiveMetric { get; set; } = "Client and anti-cheat stay untouched";
-    [ObservableProperty] public partial string EpicStatusPrimary { get; set; } = "Epic ready";
-    [ObservableProperty] public partial string EpicStatusSecondary { get; set; } = "Apply policy to games discovered from manifests";
-    [ObservableProperty] public partial string EpicStatusTag { get; set; } = "NOT APPLIED";
-    [ObservableProperty] public partial string EpicLiveMetric { get; set; } = "Launcher files and updates stay untouched";
-    [ObservableProperty] public partial string WindowsStatusPrimary { get; set; } = "Windows ready";
-    [ObservableProperty] public partial string WindowsStatusSecondary { get; set; } = "Apply host Game Mode, HAGS, Game Bar, and priority";
-    [ObservableProperty] public partial string WindowsStatusTag { get; set; } = "NOT APPLIED";
-    [ObservableProperty] public partial string WindowsLiveMetric { get; set; } = "Host gaming stack not applied";
     [ObservableProperty] public partial string GamesStatusPrimary { get; set; } = "Games ready";
     [ObservableProperty] public partial string GamesStatusSecondary { get; set; } = "Potato or Optimized profiles for installed games";
     [ObservableProperty] public partial string GamesStatusTag { get; set; } = "NOT APPLIED";
     [ObservableProperty] public partial string GamesLiveMetric { get; set; } = "No game profile applied";
+    [ObservableProperty] public partial string BraveStatusTag { get; set; } = "NOT APPLIED";
+    [ObservableProperty] public partial string BraveStatusPrimary { get; set; } = "Brave ready";
+    [ObservableProperty] public partial string BraveStatusSecondary { get; set; } = "Lean privacy policies, quiet startup, high-perf GPU";
     [ObservableProperty] public partial string FpsPrimary { get; set; } = "—";
     [ObservableProperty] public partial string FpsSecondary { get; set; } = "";
     [ObservableProperty] public partial string FrameTimePrimary { get; set; } = "—";
@@ -488,23 +473,21 @@ public partial class DashboardViewModel : ObservableObject
         outcomes["steam"] = steamOk;
         if (steamOk) { appliedCount++; appliedNames.Add("Steam"); }
 
-        var windowsOk = ReadModuleState("windows-optimizer.json").Applied;
-        outcomes["windows"] = windowsOk;
-        if (windowsOk)
+        var braveOk = ReadModuleState("brave-optimizer.json").Applied;
+        outcomes["brave"] = braveOk;
+        if (braveOk)
         {
             appliedCount++;
-            appliedNames.Add("Windows");
-            WindowsStatusTag = "VERIFIED";
-            WindowsStatusPrimary = "Host stack active";
-            WindowsStatusSecondary = "Game Mode, HAGS, Game Bar quiet, foreground boost";
-            WindowsLiveMetric = "Windows host gaming stack verified";
+            appliedNames.Add("Brave");
+            BraveStatusTag = "VERIFIED";
+            BraveStatusPrimary = "Brave optimized";
+            BraveStatusSecondary = "Privacy policies, quiet startup, high-perf GPU active";
         }
         else
         {
-            WindowsStatusTag = "NOT APPLIED";
-            WindowsStatusPrimary = "Windows ready";
-            WindowsStatusSecondary = "Apply host Game Mode, HAGS, Game Bar, and priority";
-            WindowsLiveMetric = "Host gaming stack not applied";
+            BraveStatusTag = "NOT APPLIED";
+            BraveStatusPrimary = "Brave ready";
+            BraveStatusSecondary = "Lean privacy policies, quiet startup, high-perf GPU";
         }
 
         var beforeNet = appliedCount;
@@ -558,16 +541,6 @@ public partial class DashboardViewModel : ObservableObject
             }
         }
 
-        var beforeRiot = appliedCount;
-        RefreshLauncherTile("riot", ref appliedCount);
-        outcomes["riot"] = appliedCount > beforeRiot;
-        if (outcomes["riot"]) appliedNames.Add("Riot");
-
-        var beforeEpic = appliedCount;
-        RefreshLauncherTile("epic", ref appliedCount);
-        outcomes["epic"] = appliedCount > beforeEpic;
-        if (outcomes["epic"]) appliedNames.Add("Epic");
-
         // Games module (config profiles) — pure C# state file.
         var gamesOk = false;
         try
@@ -620,24 +593,25 @@ public partial class DashboardViewModel : ObservableObject
         FrameTimePrimary = DiscordStatusPrimary;
         FrameTimeSecondary = DiscordStatusSecondary;
 
-        OverviewPrimary = $"{appliedCount} / 8 verified";
+        var totalModules = CheckRows.Count;
+        OverviewPrimary = $"{appliedCount} / {totalModules} verified";
         AppliedModulesList = appliedNames.Count > 0
             ? string.Join(" · ", appliedNames)
             : "None applied yet";
         UpdateNextAction(appliedCount);
         // Keep one short line for any residual bindings; header no longer stacks essays.
-        HeroSummary = appliedCount == 8
+        HeroSummary = appliedCount >= totalModules
             ? "All optimizers verified"
             : HasNextAction
                 ? $"Next: {NextActionModule}"
-                : $"{appliedCount}/8 verified";
+                : $"{appliedCount}/{totalModules} verified";
 
         RefreshLiveMemory();
     }
 
     private void UpdateNextAction(int appliedCount)
     {
-        if (appliedCount >= 8)
+        if (appliedCount >= CheckRows.Count)
         {
             HasNextAction = false;
             NextActionModule = string.Empty;
@@ -649,13 +623,11 @@ public partial class DashboardViewModel : ObservableObject
         (string Id, string Label, string Tag, string Detail)[] candidates =
         [
             ("Discord", "Open Discord", DiscordStatusTag, DiscordStatusSecondary),
+            ("Brave", "Open Brave", BraveStatusTag, BraveStatusSecondary),
             ("Steam", "Open Steam", SteamStatusTag, SteamStatusSecondary),
             ("Games", "Open Games", GamesStatusTag, GamesStatusSecondary),
-            ("Windows", "Open Windows", WindowsStatusTag, WindowsStatusSecondary),
             ("Internet", "Open Internet", InternetStatusTag, LatencySecondary),
             ("NVIDIA", "Open NVIDIA", NvidiaStatusTag, NvidiaPathSecondary),
-            ("Riot", "Open Riot", RiotStatusTag, RiotStatusSecondary),
-            ("Epic", "Open Epic", EpicStatusTag, EpicStatusSecondary),
         ];
 
         foreach (var c in candidates)
@@ -678,40 +650,6 @@ public partial class DashboardViewModel : ObservableObject
         NextActionModule = string.Empty;
         NextActionLabel = string.Empty;
         NextActionDetail = string.Empty;
-    }
-
-    private void RefreshLauncherTile(string module, ref int appliedCount)
-    {
-        var state = ReadModuleState($"{module}-optimizer.json");
-        var targetCount = 0;
-        try
-        {
-            var path = Path.Combine(PathHelper.AppDataDir, $"{module}-optimizer.json");
-            if (File.Exists(path))
-            {
-                using var doc = JsonDocument.Parse(File.ReadAllText(path));
-                if (doc.RootElement.TryGetProperty("targetCount", out var count) && count.TryGetInt32(out var parsed))
-                    targetCount = parsed;
-            }
-        }
-        catch { }
-        if (state.Applied) appliedCount++;
-        var tag = state.Applied ? "VERIFIED" : !string.IsNullOrWhiteSpace(state.Detail) ? "NEEDS ATTENTION" : "NOT APPLIED";
-        var primary = state.Applied ? "Launcher policy active" : module == "riot" ? "Riot ready" : "Epic ready";
-        var secondary = state.Applied
-            ? "Startup quiet - launcher yield while gaming"
-            : module == "riot" ? "Detect VALORANT and League automatically" : "Discover installed games from Epic manifests";
-        var metric = state.Applied
-            ? $"{targetCount} game executable(s) for yield detect - anti-cheat untouched"
-            : module == "riot" ? "Anti-cheat and Riot services stay untouched" : "Launcher files, caches, and updates stay untouched";
-        if (module == "riot")
-        {
-            RiotStatusTag = tag; RiotStatusPrimary = primary; RiotStatusSecondary = secondary; RiotLiveMetric = metric;
-        }
-        else
-        {
-            EpicStatusTag = tag; EpicStatusPrimary = primary; EpicStatusSecondary = secondary; EpicLiveMetric = metric;
-        }
     }
 
     private static (bool Applied, string? Detail) ReadModuleState(string fileName)

@@ -344,12 +344,10 @@ public sealed partial class MainWindow : Window
 
     public void NavigateHome(bool suppressTransition = false) => NavigateWebHash("#/");
     public void NavigateToDiscord() => NavigateWebHash("#/module/discord");
+    public void NavigateToBrave() => NavigateWebHash("#/module/brave");
     public void NavigateToSteam() => NavigateWebHash("#/module/steam");
-    public void NavigateToWindows() => NavigateWebHash("#/module/windows");
     public void NavigateToInternet() => NavigateWebHash("#/module/internet");
     public void NavigateToNvidia() => NavigateWebHash("#/module/nvidia");
-    public void NavigateToRiot() => NavigateWebHash("#/module/riot");
-    public void NavigateToEpic() => NavigateWebHash("#/module/epic");
     public void NavigateToGames() => NavigateWebHash("#/module/games");
 
     public void StabilizeShellAfterExternalWork()
@@ -437,12 +435,6 @@ public sealed partial class MainWindow : Window
     }
 
     private void NavHome_Click(object sender, RoutedEventArgs e) => NavigateHome();
-    private void NavDiscord_Click(object sender, RoutedEventArgs e) => NavigateToDiscord();
-    private void NavSteam_Click(object sender, RoutedEventArgs e) => NavigateToSteam();
-    private void NavInternet_Click(object sender, RoutedEventArgs e) => NavigateToInternet();
-    private void NavNvidia_Click(object sender, RoutedEventArgs e) => NavigateToNvidia();
-    private void NavRiot_Click(object sender, RoutedEventArgs e) => NavigateToRiot();
-    private void NavEpic_Click(object sender, RoutedEventArgs e) => NavigateToEpic();
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
