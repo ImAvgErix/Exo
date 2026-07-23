@@ -1,3 +1,18 @@
+## 4.1.2
+
+**Fixes a black-screen-on-launch introduced by the 4.1.1 WebView2 repair.**
+
+- **Fixed**: the 4.1.1 WebView2 self-heal ran its silent download/install *before*
+  the window had any content and with no on-screen feedback, so while it worked (or
+  if the freshly-installed runtime couldn't be bound by the already-running process)
+  the window was just black. Launch now shows a native **"Starting Exo…"** panel,
+  tries the runtime as-is first (repairing only if that actually fails), keeps the
+  WebView2 hidden until the interface truly loads (so a non-loading WebView2 can no
+  longer paint a black rectangle over the recovery UI), and — if the runtime was
+  just installed and needs the app to relaunch — shows a **Restart Exo** button.
+  A page that fails to load now shows the same recovery panel instead of a blank
+  window.
+
 ## 4.1.1
 
 **Fixes a real launch bug some 4.1.0 users hit.**

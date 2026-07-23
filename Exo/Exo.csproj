@@ -25,7 +25,7 @@
     <AssemblyName>Exo</AssemblyName>
     <Product>Exo</Product>
     <Company>Exo</Company>
-    <Version>4.1.1</Version>
+    <Version>4.1.2</Version>
     <Description>Private, reversible Windows optimization.</Description>
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>

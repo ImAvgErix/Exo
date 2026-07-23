@@ -21,22 +21,45 @@
               Margin="0"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
+            <!--
+              Hidden until the React page reports a successful navigation. A
+              WebView2 that never loads renders its DefaultBackgroundColor (a
+              black rectangle) over everything, so we keep it collapsed until
+              there is real content, and show the native panels below instead.
+            -->
             <WebView2 x:Name="WebHost"
+                      Visibility="Collapsed"
                       HorizontalAlignment="Stretch"
                       VerticalAlignment="Stretch"
                       DefaultBackgroundColor="#050506" />
         </Grid>
 
+        <!-- Native boot panel: shown while WebView2 initializes / repairs. -->
+        <StackPanel x:Name="WebBootPanel"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="16">
+            <ProgressRing IsActive="True"
+                          Width="34"
+                          Height="34"
+                          HorizontalAlignment="Center" />
+            <TextBlock x:Name="WebBootText"
+                       Text="Starting Exo…"
+                       Foreground="#B8B8BC"
+                       FontSize="13"
+                       HorizontalAlignment="Center" />
+        </StackPanel>
+
         <!--
-          Native (non-WebView2) fallback shown only when the WebView2 Runtime
-          cannot be reached or repaired. Must not depend on WebView2 to render,
-          since WebView2 being broken is exactly the case this covers.
+          Native (non-WebView2) recovery panel, shown only when WebView2 cannot
+          be reached or the page fails to load. Must not depend on WebView2 to
+          render, since WebView2 being broken is exactly the case this covers.
         -->
         <StackPanel x:Name="WebViewFallback"
                     Visibility="Collapsed"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    MaxWidth="440"
+                    MaxWidth="460"
                     Spacing="12">
             <TextBlock x:Name="WebViewFallbackTitle"
                        Text="Exo couldn't start its UI runtime"
@@ -44,17 +67,24 @@
                        FontSize="18"
                        FontWeight="SemiBold"
                        TextWrapping="Wrap"
-                       HorizontalAlignment="Center" />
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center" />
             <TextBlock x:Name="WebViewFallbackBody"
                        Text="The WebView2 Runtime looks corrupted and Exo's automatic repair didn't fix it. Reinstalling the runtime usually resolves this."
                        Foreground="#B8B8BC"
                        FontSize="13"
                        TextWrapping="Wrap"
                        TextAlignment="Center" />
-            <Button x:Name="WebViewFallbackButton"
-                    Content="Open WebView2 download page"
-                    HorizontalAlignment="Center"
-                    Click="WebViewFallbackButton_Click" />
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Spacing="10">
+                <Button x:Name="WebViewRestartButton"
+                        Content="Restart Exo"
+                        Click="WebViewRestartButton_Click" />
+                <Button x:Name="WebViewFallbackButton"
+                        Content="Get WebView2"
+                        Click="WebViewFallbackButton_Click" />
+            </StackPanel>
         </StackPanel>
 
         <!-- ~10px drag-only strip (matches React pt-2.5). Must NOT cover h-12 bar. -->

@@ -250,24 +250,44 @@ public sealed partial class MainWindow : Window
     private async Task EnsureWebCoreAsync()
     {
         if (_webReady) return;
+        ShowBootPanel("Starting Exo…");
         try
         {
-            if (!WebView2Doctor.IsHealthy())
+            // Try the runtime as-is first; only repair when init actually fails,
+            // so a healthy machine is never delayed or disturbed by a needless
+            // download/install.
+            if (!await TryInitCoreAsync())
             {
-                StartupLog.Mark("webview2-unhealthy-at-launch");
+                StartupLog.Mark("webview2-init-failed-repairing");
+                ShowBootPanel("Preparing the display runtime…");
                 await WebView2Doctor.TryRepairAsync(_lifetimeCts.Token);
+                if (!await TryInitCoreAsync())
+                {
+                    // If the runtime is now present but this already-running
+                    // process can't bind to it, a relaunch usually finishes the job.
+                    ShowWebFallback(runtimeNowHealthy: WebView2Doctor.IsHealthy());
+                    _ensureWebTask = null;
+                    return;
+                }
             }
 
-            await WebHost.EnsureCoreWebView2Async();
-            var core = WebHost.CoreWebView2;
-            if (core is null)
+            var core = WebHost.CoreWebView2!;
+
+            // Attach before navigating so both the real page and the dev
+            // diagnostic page below reveal the WebView on a successful load.
+            core.NavigationCompleted += (_, args) =>
             {
-                // Allow a later EnsureWebAsync to retry instead of sticking on a no-op task.
-                _ensureWebTask = null;
-                return;
-            }
-
-            WebViewFallback.Visibility = Visibility.Collapsed;
+                if (args.IsSuccess)
+                {
+                    StartupLog.Mark("web-nav-ok");
+                    RevealWeb();
+                }
+                else
+                {
+                    StartupLog.Mark("web-nav-fail:" + args.WebErrorStatus);
+                    ShowWebFallback(runtimeNowHealthy: true);
+                }
+            };
 
             var www = ResolveWwwRoot();
             if (www is null || !Directory.Exists(www))
@@ -275,7 +295,7 @@ public sealed partial class MainWindow : Window
                 StartupLog.Mark("wwwroot-missing");
                 // Dev fallback: show a tiny diagnostic page.
                 core.NavigateToString(
-                    "<html><body style='background:#000;color:#fff;font-family:Segoe UI;padding:24px'>" +
+                    "<html><body style='background:#050506;color:#fff;font-family:Segoe UI;padding:24px'>" +
                     "<h2>Exo UI not built</h2><p>Run: <code>cd ui &amp;&amp; npm run build</code></p></body></html>");
                 _webReady = true;
                 return;
@@ -301,14 +321,6 @@ public sealed partial class MainWindow : Window
                 catch { }
             };
 
-            core.NavigationCompleted += (_, args) =>
-            {
-                if (args.IsSuccess)
-                    StartupLog.Mark("web-nav-ok");
-                else
-                    StartupLog.Mark("web-nav-fail:" + args.WebErrorStatus);
-            };
-
             WebHost.Source = new Uri("https://app.exo.local/index.html");
             _webReady = true;
             StartupLog.Mark("web-host-ready");
@@ -318,8 +330,79 @@ public sealed partial class MainWindow : Window
             // Allow a later call to retry if CoreWebView2 init failed mid-flight.
             _ensureWebTask = null;
             StartupLog.Mark("web-host-failed:" + ex.GetType().Name);
-            WebViewFallback.Visibility = Visibility.Visible;
+            ShowWebFallback(runtimeNowHealthy: WebView2Doctor.IsHealthy());
         }
+    }
+
+    /// <summary>
+    /// Initializes CoreWebView2, bounded by a timeout so a hung/broken runtime
+    /// falls through to the repair path instead of leaving a permanent spinner.
+    /// </summary>
+    private async Task<bool> TryInitCoreAsync()
+    {
+        try
+        {
+            var init = WebHost.EnsureCoreWebView2Async();
+            var done = await Task.WhenAny(init, Task.Delay(TimeSpan.FromSeconds(25)));
+            if (done != init)
+            {
+                StartupLog.Mark("webview2-init-timeout");
+                return false;
+            }
+            await init; // surface any initialization exception
+            return WebHost.CoreWebView2 is not null;
+        }
+        catch (Exception ex)
+        {
+            StartupLog.Mark("webview2-init-fail:" + ex.GetType().Name);
+            return false;
+        }
+    }
+
+    private void ShowBootPanel(string text)
+    {
+        WebBootText.Text = text;
+        WebBootPanel.Visibility = Visibility.Visible;
+        WebViewFallback.Visibility = Visibility.Collapsed;
+        WebHost.Visibility = Visibility.Collapsed;
+    }
+
+    private void RevealWeb()
+    {
+        WebBootPanel.Visibility = Visibility.Collapsed;
+        WebViewFallback.Visibility = Visibility.Collapsed;
+        WebHost.Visibility = Visibility.Visible;
+    }
+
+    private void ShowWebFallback(bool runtimeNowHealthy)
+    {
+        WebBootPanel.Visibility = Visibility.Collapsed;
+        WebHost.Visibility = Visibility.Collapsed;
+        if (runtimeNowHealthy)
+        {
+            WebViewFallbackTitle.Text = "Almost there — restart Exo";
+            WebViewFallbackBody.Text =
+                "Exo just set up the WebView2 display runtime. Restart the app to finish loading the interface.";
+        }
+        else
+        {
+            WebViewFallbackTitle.Text = "Exo couldn't start its UI runtime";
+            WebViewFallbackBody.Text =
+                "The WebView2 Runtime looks corrupted and Exo's automatic repair didn't fix it. Install it from Microsoft, then reopen Exo.";
+        }
+        WebViewFallback.Visibility = Visibility.Visible;
+    }
+
+    private void WebViewRestartButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe))
+                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+        }
+        catch { }
+        try { Microsoft.UI.Xaml.Application.Current?.Exit(); } catch { }
     }
 
     private void WebViewFallbackButton_Click(object sender, RoutedEventArgs e)
