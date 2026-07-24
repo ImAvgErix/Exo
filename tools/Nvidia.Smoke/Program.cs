@@ -267,15 +267,6 @@ Expect("NVIDIA Repair restores DRS snapshot",
     optimizerSrc.Contains("Repair: restore the exact pre-Exo NVIDIA DRS database", StringComparison.Ordinal) &&
     optimizerSrc.Contains("nvidia-drs-pre-exo.bin", StringComparison.Ordinal) &&
     File.Exists(Path.Combine(repo, "Exo", "Scripts", "Nvidia", "Exo-Nvidia-Repair.ps1")));
-var nvidiaPageXaml = Path.Combine(repo, "Exo", "Views", "NvidiaOptimizerPage.xaml");
-if (File.Exists(nvidiaPageXaml))
-{
-    var nx = File.ReadAllText(nvidiaPageXaml);
-    Expect("NVIDIA page Repair CTA wired without full-rollback claim",
-        nx.Contains("SecondaryLeftLabel=\"Repair\"", StringComparison.Ordinal) &&
-        nx.Contains("SecondaryLeftClick=\"Repair_Click\"", StringComparison.Ordinal) &&
-        !nx.Contains("Repair restores the complete NVIDIA profile database", StringComparison.Ordinal));
-}
 Expect("optimizer selects policy from hardware inventory",
     optimizerSrc.Contains("function Get-NvidiaHardwarePolicy", StringComparison.Ordinal) &&
     optimizerSrc.Contains("--list-displays", StringComparison.Ordinal) &&

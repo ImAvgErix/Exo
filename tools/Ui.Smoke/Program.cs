@@ -356,115 +356,12 @@ if (File.Exists(mainCs))
     Expect("webview bridge shell",
         cs.Contains("WebHostBridge", StringComparison.Ordinal)
         && cs.Contains("EnsureWebAsync", StringComparison.Ordinal)
-        && cs.Contains("NavigateWebHash", StringComparison.Ordinal));
+        && cs.Contains("NavigateWebHashAsync", StringComparison.Ordinal));
     Expect("dead titlebar fields removed", !cs.Contains("AppTitleText", StringComparison.Ordinal)
         && !cs.Contains("CaptionSpacerHost", StringComparison.Ordinal)
         && !cs.Contains("UpdateRailSelection", StringComparison.Ordinal));
 }
-if (File.Exists(dash))
-{
-    var d = File.ReadAllText(dash);
-    // Dense home: machine strip + 2×2 meters (bars only) + optimizer chips.
-    Expect("hero status identity",
-        d.Contains("HeroBrand", StringComparison.Ordinal)
-        && d.Contains("OverviewPrimary", StringComparison.Ordinal)
-        && d.Contains("THIS PC", StringComparison.Ordinal));
-    Expect("hero tagline",
-        d.Contains("HeroTagline", StringComparison.Ordinal)
-        && d.Contains("OverviewPrimary", StringComparison.Ordinal));
-    Expect("home instrument plate", d.Contains("ExoModulePlate", StringComparison.Ordinal));
-    Expect("home optimizer chips",
-        d.Contains("CheckRows", StringComparison.Ordinal)
-        && d.Contains("CheckRow_Click", StringComparison.Ordinal)
-        && d.Contains("OPTIMIZERS", StringComparison.Ordinal)
-        && d.Contains("UniformGridLayout", StringComparison.Ordinal));
-    Expect("home applied summary",
-        d.Contains("OverviewPrimary", StringComparison.Ordinal));
-    Expect("home live system specs panel",
-        d.Contains("SpecsCpu", StringComparison.Ordinal)
-        && d.Contains("SpecsGpu", StringComparison.Ordinal)
-        && d.Contains("SpecsRam", StringComparison.Ordinal)
-        && d.Contains("SpecsOs", StringComparison.Ordinal));
-    Expect("home live memory meter",
-        d.Contains("MemoryPrimary", StringComparison.Ordinal)
-        && d.Contains("MEMORY", StringComparison.Ordinal)
-        && d.Contains("MemoryLoadPercent", StringComparison.Ordinal)
-        && d.Contains("<ProgressBar", StringComparison.Ordinal));
-    Expect("home live cpu meter",
-        d.Contains("CpuPrimary", StringComparison.Ordinal)
-        && d.Contains("CpuLoadPercent", StringComparison.Ordinal)
-        && d.Contains("Text=\"CPU\"", StringComparison.Ordinal)
-        && d.Contains("Text=\"Load\"", StringComparison.Ordinal));
-    Expect("home live gpu meter",
-        d.Contains("GpuPrimary", StringComparison.Ordinal)
-        && d.Contains("GpuLoadPercent", StringComparison.Ordinal)
-        && d.Contains("ExoNvidiaBrush", StringComparison.Ordinal));
-    Expect("home no dead flat sparklines",
-        !d.Contains("ExoSparkline", StringComparison.Ordinal)
-        && !d.Contains("TileDram", StringComparison.Ordinal)
-        && !d.Contains("Link health", StringComparison.Ordinal));
-    Expect("home network meter",
-        d.Contains("NETWORK", StringComparison.Ordinal)
-        && d.Contains("NetPrimary", StringComparison.Ordinal)
-        && d.Contains("NetSecondary", StringComparison.Ordinal)
-        && d.Contains("ExoInternetBrush", StringComparison.Ordinal));
-    Expect("home 2x2 meter grid",
-        d.Contains("TileRam", StringComparison.Ordinal)
-        && d.Contains("TileCpu", StringComparison.Ordinal)
-        && d.Contains("TileGpu", StringComparison.Ordinal)
-        && d.Contains("TileNet", StringComparison.Ordinal));
-    Expect("home no redundant essay stack",
-        !d.Contains("Optimization status", StringComparison.Ordinal)
-        && !d.Contains("AppliedModulesList", StringComparison.Ordinal)
-        && !d.Contains("detects this PC first", StringComparison.Ordinal));
-    Expect("home consistent plate padding",
-        d.Contains("Padding=\"14\"", StringComparison.Ordinal)
-        || d.Contains("Padding=\"14,12\"", StringComparison.Ordinal));
-    var motionPath = Path.Combine(repo, "Exo", "Helpers", "ExoMotion.cs");
-    if (File.Exists(motionPath))
-    {
-        var mo = File.ReadAllText(motionPath);
-        Expect("rich motion unlocked by default",
-            mo.Contains("RichMotion", StringComparison.Ordinal)
-            && mo.Contains("= true", StringComparison.Ordinal));
-        Expect("motion never writes composition offset",
-            !mo.Contains("ElementCompositionPreview", StringComparison.Ordinal)
-            && !mo.Contains("Compositor", StringComparison.Ordinal));
-    }
-    Expect("home checklist rows clickable",
-        d.Contains("CheckRow_Click", StringComparison.Ordinal));
-    Expect("no fixed product cards",
-        !d.Contains("Width=\"248\"", StringComparison.Ordinal)
-        && !d.Contains("Width=\"250\"", StringComparison.Ordinal)
-        && !d.Contains("Height=\"148\"", StringComparison.Ordinal));
-    Expect("no logo tiles on home",
-        !d.Contains("Assets/Logos", StringComparison.Ordinal)
-        && !d.Contains("BladeStrip", StringComparison.Ordinal)
-        && !d.Contains("LiveCards", StringComparison.Ordinal)
-        && !d.Contains("CardList", StringComparison.Ordinal)
-        && !d.Contains("ReadyModules", StringComparison.Ordinal));
-    Expect("home decluttered",
-        !d.Contains("SoonCards", StringComparison.Ordinal)
-        && !d.Contains("Coming soon", StringComparison.Ordinal));
-    Expect("no pick-a-target blurb", !d.Contains("Pick a target", StringComparison.Ordinal));
-}
 // Checklist navigation + sequence live in code-behind / view model.
-var dashPageCs = Path.Combine(repo, "Exo", "Views", "DashboardPage.xaml.cs");
-if (File.Exists(dashPageCs))
-{
-    var dcs = File.ReadAllText(dashPageCs);
-    Expect("home check sequence plays on navigate",
-        dcs.Contains("PlayCheckSequenceAsync", StringComparison.Ordinal)
-        && dcs.Contains("CheckRow_Click", StringComparison.Ordinal)
-        && dcs.Contains("PlayResultPop", StringComparison.Ordinal));
-    Expect("home checklist opens modules",
-        dcs.Contains("NavigateToDiscord", StringComparison.Ordinal)
-        && dcs.Contains("NavigateToSteam", StringComparison.Ordinal)
-        && dcs.Contains("NavigateToInternet", StringComparison.Ordinal)
-        && dcs.Contains("NavigateToNvidia", StringComparison.Ordinal)
-        && dcs.Contains("NavigateToRiot", StringComparison.Ordinal)
-        && dcs.Contains("NavigateToEpic", StringComparison.Ordinal));
-}
 if (File.Exists(theme))
 {
     var t0 = File.ReadAllText(theme);
@@ -537,16 +434,6 @@ if (File.Exists(mainXaml))
         && mx.Contains("SettingsSheetHost", StringComparison.Ordinal)
         && !mx.Contains("SettingsRail", StringComparison.Ordinal)
         && !mx.Contains("SettingsOverlay", StringComparison.Ordinal));
-}
-var updateDlg = Path.Combine(repo, "Exo", "Helpers", "ExoUpdateDialog.cs");
-if (File.Exists(updateDlg))
-{
-    var u = File.ReadAllText(updateDlg);
-    Expect("update dialog no loader", !u.Contains("ExoLoader", StringComparison.Ordinal));
-    Expect("update dialog progress", u.Contains("ProgressBar", StringComparison.Ordinal)
-        && (u.Contains("phaseTb", StringComparison.Ordinal) || u.Contains("pctTb", StringComparison.Ordinal) ||
-            u.Contains("statusTb", StringComparison.Ordinal)));
-    Expect("update dialog install", u.Contains("InstallWithProgressAsync", StringComparison.Ordinal));
 }
 if (File.Exists(theme))
 {
@@ -688,10 +575,16 @@ if (File.Exists(mainCsPath))
     Expect("startup does not rewrite Start Menu shortcut",
         !mc.Contains("TryRepairStartMenuShortcut", StringComparison.Ordinal)
         && !mc.Contains("WScript.Shell", StringComparison.Ordinal));
-    Expect("navigate uses webview hash routes",
-        mc.Contains("NavigateWebHash", StringComparison.Ordinal)
-        && mc.Contains("#/module/", StringComparison.Ordinal)
-        && mc.Contains("EnsureWebAsync", StringComparison.Ordinal));
+    // The orb UI has no router: only the root hash is navigable. The old
+    // "#/module/<id>" deep links pointed at routes that no longer exist, so
+    // asserting them back would re-introduce dead code.
+    Expect("navigate targets the router-less orb root",
+        mc.Contains("NavigateWebHashAsync", StringComparison.Ordinal)
+        && mc.Contains("EnsureWebAsync", StringComparison.Ordinal)
+        && !mc.Contains("#/module/", StringComparison.Ordinal));
+    // Navigation must not be `async void` — an exception there is unobservable
+    // and takes the process down instead of just the navigation.
+    Expect("no async void navigation", !mc.Contains("async void NavigateWebHash", StringComparison.Ordinal));
 }
 var programCs = Path.Combine(repo, "Exo", "Program.cs");
 if (File.Exists(programCs))

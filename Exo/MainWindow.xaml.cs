@@ -404,26 +404,29 @@ public sealed partial class MainWindow : Window
         return null;
     }
 
-    private async void NavigateWebHash(string hash)
+    /// <summary>
+    /// Ensure the web view is up and point it at <paramref name="hash"/>. The orb UI has no
+    /// router, so this only ever needs the root — the per-module deep links it used to serve
+    /// pointed at routes that no longer exist.
+    /// </summary>
+    private async Task NavigateWebHashAsync(string hash)
     {
         try
         {
             await EnsureWebAsync();
             if (WebHost.CoreWebView2 is null) return;
-            // HashRouter: set location hash without full reload when possible.
             var script = $"window.location.hash = {System.Text.Json.JsonSerializer.Serialize(hash)};";
             await WebHost.CoreWebView2.ExecuteScriptAsync(script);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Was `async void` + swallow-all: an exception here could not be observed by the
+            // caller and would tear down the process rather than the navigation.
+            StartupLog.Mark("web-navigate-failed:" + ex.GetType().Name);
+        }
     }
 
-    public void NavigateHome(bool suppressTransition = false) => NavigateWebHash("#/");
-    public void NavigateToDiscord() => NavigateWebHash("#/module/discord");
-    public void NavigateToBrave() => NavigateWebHash("#/module/brave");
-    public void NavigateToSteam() => NavigateWebHash("#/module/steam");
-    public void NavigateToInternet() => NavigateWebHash("#/module/internet");
-    public void NavigateToNvidia() => NavigateWebHash("#/module/nvidia");
-    public void NavigateToGames() => NavigateWebHash("#/module/games");
+    public void NavigateHome(bool suppressTransition = false) => _ = NavigateWebHashAsync("#/");
 
     public void StabilizeShellAfterExternalWork()
     {
