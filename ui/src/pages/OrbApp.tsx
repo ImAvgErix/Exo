@@ -43,9 +43,11 @@ export function OrbApp() {
   // further on this box (stays "partial" after we tried) isn't nagged forever.
   const touched = useRef<Set<string>>(new Set())
   const speakTimer = useRef<number | undefined>(undefined)
-  // A newer build, if one exists — surfaced quietly as a chip after a scan,
-  // never as a launch pop-up. Nothing installs without a tap.
+  // A newer build, if one exists. The brain itself asks about it on launch and
+  // also offers it as a chip on the wrap-up. Nothing installs without a tap.
   const updateRef = useRef<{ version: string } | null>(null)
+  const phaseRef = useRef(phase)
+  phaseRef.current = phase
 
   const say = useCallback((message: string, options: Opt[]) => {
     setMsg(message)
@@ -75,8 +77,7 @@ export function OrbApp() {
 
   useEffect(() => { greet() /* eslint-disable-next-line */ }, [])
 
-  // On launch, quietly note whether a newer Exo exists — but do NOT interrupt
-  // with a pop-up. It only surfaces later as an optional chip on the wrap-up.
+  // On launch, peek for a newer Exo (check-only) and ASK — never auto-install.
   useEffect(() => {
     let stop = false
     ;(async () => {
@@ -86,7 +87,8 @@ export function OrbApp() {
         const u = await host.peekUpdate()
         if (stop || !u.updateAvailable || !u.remoteVersion) return
         updateRef.current = { version: u.remoteVersion }
-      } catch { /* offline or rate-limited — no update chip this launch */ }
+        if (phaseRef.current === 'greet' || phaseRef.current === 'done') askUpdate()
+      } catch { /* offline or rate-limited — don't ask this launch */ }
     })()
     return () => { stop = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,6 +101,19 @@ export function OrbApp() {
     if (updating.current && d.status) setMsg(d.status)
   }), [])
 
+  function askUpdate() {
+    const v = updateRef.current?.version
+    if (!v) return
+    setPhase('ask')
+    say(pick([
+      `A newer me is out — Exo ${v}. Want me to install it and restart?`,
+      `Exo ${v} just dropped. Update now? I'll restart myself when it's done.`,
+    ]), [
+      { label: 'Update now', run: () => void doUpdate(), primary: true },
+      { label: 'Later', run: () => greet() },
+    ])
+  }
+
   async function doUpdate() {
     setPhase('working')
     updating.current = true
@@ -110,14 +125,14 @@ export function OrbApp() {
         updating.current = false
         updateRef.current = null
         setPhase('done')
-        say(r.message || "The update didn't finish. I'll offer it again later.", [
+        say(r.message || "The update didn't finish. I'll ask again next launch.", [
           { label: 'OK', run: () => greet(), primary: true },
         ])
       }
     } catch {
       updating.current = false
       setPhase('done')
-      say("The update didn't finish — I'll offer it again later.", [
+      say("The update didn't finish — I'll ask again next launch.", [
         { label: 'OK', run: () => greet(), primary: true },
       ])
     }

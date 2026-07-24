@@ -7,10 +7,10 @@
   occasional playful spin or little hop -- then glides back up toward the center
   to talk to you. It's meant to feel like something alive that just happens to
   live in your app.
-- **No more update pop-up.** The launch "a newer me is out" card is gone. Exo
-  still checks quietly, but a newer build only shows up as an optional chip after
-  it finishes reading your PC -- never an interruption. Nothing installs without a
-  tap.
+- **Killed a leftover pop-up.** A second, native update dialog from the old UI
+  was still appearing on launch, on top of the brain's own update prompt. That
+  redundant pop-up is gone -- the brain still asks about updates itself ("a newer
+  me is out -- want me to install it and restart?"), consent-first as always.
 - **Removed the spoken voice.** The built-in Windows text-to-speech sounded rough,
   so the voice toggle is gone. (A better, real voice can come later alongside the
   planned AI layer.)

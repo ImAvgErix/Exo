@@ -91,8 +91,8 @@ PowerShell bootstrap (verifies published SHA-256):
 irm https://raw.githubusercontent.com/ImAvgErix/Exo/main/Install-Exo.ps1 | iex
 ```
 
-**Updates:** the brain quietly checks for a newer build and, when one exists, offers it as an
-option once it's done reading your PC — no launch pop-up. Nothing downloads without a yes.
+**Updates:** the brain checks on launch and asks — "A newer me is out. Want me to install it and
+restart?" Nothing downloads without a yes.
 
 Public builds are not code-signed; SmartScreen may appear. Prefer official GitHub releases only.
 

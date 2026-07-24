@@ -179,86 +179,9 @@ public sealed partial class MainWindow : Window
         if (_postFirstFrameWorkStarted) return;
         _postFirstFrameWorkStarted = true;
         try { App.Services.WarmInBackground(); } catch { }
-        // Auto-update consent popup (with release TLDR) when the setting is on.
-        _ = MaybeAutoUpdateAsync();
-    }
-
-    /// <summary>
-    /// After first paint: if "Updates on launch" is on, check GitHub and show the
-    /// branded Update available dialog with a plain-language TLDR of the release.
-    /// </summary>
-    private async Task MaybeAutoUpdateAsync()
-    {
-        try
-        {
-            if (!App.Services.Settings.Current.CheckForUpdatesOnLaunch) return;
-            await Task.Delay(1400, _lifetimeCts.Token).ConfigureAwait(true);
-            if (_lifetimeCts.IsCancellationRequested) return;
-
-            var check = await App.Services.Updater
-                .CheckAppUpdateAsync(status: null, progress: null, _lifetimeCts.Token)
-                .ConfigureAwait(true);
-            if (!check.UpdateAvailable || string.IsNullOrWhiteSpace(check.DownloadUrl))
-                return;
-            if (string.IsNullOrWhiteSpace(check.Sha256))
-                return; // install path would block; don't nag
-
-            var root = RootGrid.XamlRoot;
-            if (root is null) return;
-
-            var go = await ExoUpdateDialog.ConfirmInstallAsync(
-                root,
-                check.LocalVersion,
-                check.RemoteVersion,
-                check.ReleaseSummary).ConfigureAwait(true);
-            if (!go || _lifetimeCts.IsCancellationRequested) return;
-
-            var install = await ExoUpdateDialog.InstallWithProgressAsync(
-                root,
-                check,
-                App.Services.Updater,
-                _lifetimeCts.Token).ConfigureAwait(true);
-
-            if (install.ShouldExit)
-            {
-                // Exit promptly so the SFX (/waitpid) can replace %LocalAppData%\Exo\app.
-                try { await Task.Delay(200, _lifetimeCts.Token).ConfigureAwait(true); } catch { }
-                try { Microsoft.UI.Xaml.Application.Current?.Exit(); } catch { }
-                try { Environment.Exit(0); } catch { }
-            }
-            else if (!string.IsNullOrWhiteSpace(install.Message))
-            {
-                // Surface install failure (previously silent when quiet SFX failed).
-                try
-                {
-                    await ExoUpdateDialog.ShowMessageAsync(
-                        root,
-                        "Update did not finish",
-                        install.Message + "\n\nYou can also download Exo.exe from GitHub Releases.").ConfigureAwait(true);
-                }
-                catch { /* ignore */ }
-            }
-        }
-        catch (OperationCanceledException) when (_lifetimeCts.IsCancellationRequested)
-        {
-            /* window closed */
-        }
-        catch (Exception ex)
-        {
-            StartupLog.Mark("auto-update-failed:" + ex.GetType().Name + ":" + ex.Message);
-            try
-            {
-                var root = RootGrid.XamlRoot;
-                if (root is not null)
-                {
-                    await ExoUpdateDialog.ShowMessageAsync(
-                        root,
-                        "Update failed",
-                        ex.Message).ConfigureAwait(true);
-                }
-            }
-            catch { /* ignore */ }
-        }
+        // Update consent lives entirely in the React brain now (it asks "a newer
+        // me is out — want me to install it?"). The old native ContentDialog
+        // pop-up was a second, redundant prompt from the pre-orb UI — removed.
     }
 
     public void BringToForeground()
