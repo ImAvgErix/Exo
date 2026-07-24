@@ -46,13 +46,12 @@ The committed `Exo/wwwroot/` build must be regenerated and committed alongside a
 ## The interface, specifically
 
 - The orb is a hand-rolled Fibonacci dot-sphere on canvas — sharp at any size,
-  monochrome, and autonomously animated (drift, self-directed glances, state
-  gestures). Reduced-motion (Windows "animation effects off") calms it; it never
-  freezes.
+  monochrome, and autonomously animated. It roams the whole app on its own
+  (wide wander, self-directed glances, playful spins and hops) and glides back
+  toward center to talk. Reduced-motion (Windows "animation effects off") makes
+  it roam gentler; it never freezes.
 - Fonts are self-hosted and offline: **Instrument Serif** is the brain's voice,
   **Bricolage Grotesque** is the UI face. No CDN, no web fonts.
-- The optional spoken voice uses the local OS speech engine only (no network) and
-  is off until the user turns it on.
 - Personality is one place — the `pick([...])` lines in `OrbApp.tsx`. Keep it in
   character, plain-language, and never overpromising.
 

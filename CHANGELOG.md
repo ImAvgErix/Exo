@@ -1,3 +1,20 @@
+## 4.2.3
+
+**The orb lives in the app now — and less clutter around it.**
+
+- **It roams free.** The brain no longer sits dead center. It drifts across the
+  whole space on its own, wanders and glances while it's idle, and throws in the
+  occasional playful spin or little hop -- then glides back up toward the center
+  to talk to you. It's meant to feel like something alive that just happens to
+  live in your app.
+- **No more update pop-up.** The launch "a newer me is out" card is gone. Exo
+  still checks quietly, but a newer build only shows up as an optional chip after
+  it finishes reading your PC -- never an interruption. Nothing installs without a
+  tap.
+- **Removed the spoken voice.** The built-in Windows text-to-speech sounded rough,
+  so the voice toggle is gone. (A better, real voice can come later alongside the
+  planned AI layer.)
+
 ## 4.2.2
 
 **The orb gets a soul — and an honest verdict.**
