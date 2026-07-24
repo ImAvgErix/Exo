@@ -160,3 +160,6 @@ body,
 @media (prefers-reduced-motion: reduce) {
   .exo-chip-stagger { animation: none !important; }
 }
+
+/* Redesign: the brain speaking — message fade/rise in */
+@keyframes exo-say { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }

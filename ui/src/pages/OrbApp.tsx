@@ -1,33 +1,38 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ThinkingOrb, type OrbState } from 'thinking-orbs'
-import { host, onHostEvent, type DashboardSnapshot, type ModuleId, type ModuleStatus } from '../lib/host'
+import { BrainOrb, type BrainState } from '../components/BrainOrb'
+import { host, type DashboardSnapshot, type ModuleId } from '../lib/host'
 
-/* The whole app IS the thinking orb. Monochrome. The orb's state reflects what
-   the PC is doing; a minimal black-and-white shell wraps it. */
+/* Exo is a brain. The orb is the whole UI: it reads the PC and *asks* what to
+   optimize; you answer; it works. Monochrome. No module grid — the brain leads. */
 
-const SYSTEMS = ['discord', 'brave', 'steam', 'internet', 'nvidia', 'games'] as const
 const LABEL: Record<string, string> = {
   discord: 'Discord', brave: 'Brave', steam: 'Steam', internet: 'Internet', nvidia: 'NVIDIA', games: 'Games',
 }
+const ORDER = ['nvidia', 'internet', 'steam', 'discord', 'brave', 'games'] as const
+
+type Opt = { label: string; run: () => void; primary?: boolean }
 
 export function OrbApp() {
   const [dash, setDash] = useState<DashboardSnapshot | null>(null)
-  const [sel, setSel] = useState(0)
-  const [detail, setDetail] = useState<Record<string, ModuleStatus>>({})
-  const [verifying, setVerifying] = useState(false)
-  const [busy, setBusy] = useState<{ id: string; label: string } | null>(null)
-  const [repairing, setRepairing] = useState(false)
-  const [caption, setCaption] = useState('')
-  const capTimer = useRef<number | undefined>(undefined)
+  const [phase, setPhase] = useState<'greet' | 'scanning' | 'ask' | 'working' | 'done'>('greet')
+  const [msg, setMsg] = useState('')
+  const [opts, setOpts] = useState<Opt[]>([])
+  const [msgKey, setMsgKey] = useState(0)
+  const [speaking, setSpeaking] = useState(false)
+  const queue = useRef<string[]>([])
+  const qi = useRef(0)
+  const speakTimer = useRef<number | undefined>(undefined)
 
-  const id = SYSTEMS[sel]
-
-  const flash = useCallback((s: string) => {
-    setCaption(s)
-    window.clearTimeout(capTimer.current)
-    capTimer.current = window.setTimeout(() => setCaption(''), 2600)
+  const say = useCallback((message: string, options: Opt[]) => {
+    setMsg(message)
+    setOpts(options)
+    setMsgKey((k) => k + 1)
+    setSpeaking(true)
+    window.clearTimeout(speakTimer.current)
+    speakTimer.current = window.setTimeout(() => setSpeaking(false), 850)
   }, [])
 
+  // bootstrap + telemetry
   useEffect(() => {
     let stop = false
     ;(async () => {
@@ -45,88 +50,111 @@ export function OrbApp() {
     return () => { stop = true; window.clearInterval(poll) }
   }, [])
 
-  const loadDetail = useCallback(async (m: string, force = false) => {
+  // opening line
+  const greet = useCallback(() => {
+    setPhase('greet')
+    say("I'm Exo — the brain for your rig. Want me to look at what we can make faster?", [
+      { label: 'Scan my PC', run: () => void scan(), primary: true },
+      { label: 'Not now', run: () => idle() },
+    ])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [say])
+
+  useEffect(() => { greet() /* eslint-disable-next-line */ }, [])
+
+  function idle() {
+    setPhase('done')
+    say('Standing by. Wake me whenever.', [{ label: 'Scan my PC', run: () => void scan(), primary: true }])
+  }
+
+  async function scan() {
+    setPhase('scanning')
+    say('Reading every system on your machine…', [])
     try {
-      const s = await host.detect(m as ModuleId, force ? { force: true } : undefined)
-      setDetail((d) => ({ ...d, [m]: s }))
-    } catch { /* keep */ }
-  }, [])
-
-  useEffect(() => {
-    if (id !== 'games' && !detail[id]) void loadDetail(id)
-  }, [id, detail, loadDetail])
-
-  useEffect(() => onHostEvent('module.progress', (data) => {
-    const p = data as { status?: string }
-    if (p.status) setBusy((b) => (b ? { ...b, label: p.status! } : b))
-  }), [])
-
-  const det = detail[id] ?? null
-  const applied = dash?.modules.find((m) => m.id === id)?.applied ?? false
-  const optimized = dash?.modules.filter((m) => m.applied).length ?? 0
-
-  // Orb state reflects activity.
-  const orbState: OrbState = verifying ? 'searching' : busy ? 'working' : repairing ? 'solving' : 'listening'
-
-  async function runVerify() {
-    if (verifying || busy) return
-    setVerifying(true)
-    flash('Scanning every system…')
-    try {
-      const r = await host.verifyAll()
+      await host.verifyAll()
       const d = await host.getDashboard()
       setDash(d)
-      setDetail({})
-      flash(`${r.applied} of ${r.applied + r.partial + r.ready + r.missing} verified`)
+      const notOptimized = ORDER.filter((id) => !d.modules.find((m) => m.id === id)?.applied)
+      queue.current = notOptimized
+      qi.current = 0
+      if (notOptimized.length === 0) {
+        done(d)
+      } else {
+        ask()
+      }
     } catch {
-      flash('Scan failed')
-    } finally {
-      setVerifying(false)
+      say("I couldn't finish the scan. Want to try again?", [{ label: 'Retry', run: () => void scan(), primary: true }])
     }
   }
 
-  async function apply() {
-    if (busy || verifying) return
-    setBusy({ id, label: 'Starting…' })
-    flash(`Optimizing ${LABEL[id]}…`)
-    try {
-      const s = await host.apply(id as ModuleId)
-      setDetail((d) => ({ ...d, [id]: s }))
-      const d = await host.getDashboard()
-      setDash(d)
-      flash(`${LABEL[id]} optimized`)
-    } catch {
-      flash(`${LABEL[id]} failed`)
-      await loadDetail(id, true)
-    } finally {
-      setBusy(null)
-    }
+  function ask() {
+    const id = queue.current[qi.current]
+    if (!id) return done()
+    const name = LABEL[id]
+    const remaining = queue.current.length - qi.current
+    setPhase('ask')
+    const lead =
+      remaining > 1
+        ? `${name} isn't optimized yet — one of ${remaining} I'd tune.`
+        : `${name} is the last one that isn't optimized.`
+    say(`${lead} Want me to do it?`, [
+      { label: `Optimize ${name}`, run: () => void apply(id), primary: true },
+      { label: 'Skip', run: () => next() },
+      { label: 'Stop for now', run: () => done() },
+    ])
   }
 
-  async function repair() {
-    if (busy || verifying) return
-    setRepairing(true)
-    flash(`Reverting ${LABEL[id]}…`)
+  function next() {
+    qi.current += 1
+    if (qi.current >= queue.current.length) done()
+    else ask()
+  }
+
+  async function apply(id: string) {
+    const name = LABEL[id]
+    setPhase('working')
+    say(`On it — tuning ${name}…`, [])
     try {
-      const s = await host.repair(id as ModuleId)
-      setDetail((d) => ({ ...d, [id]: s }))
+      await host.apply(id as ModuleId)
       const d = await host.getDashboard()
       setDash(d)
-      flash(`${LABEL[id]} reverted`)
-    } catch {
-      flash('Repair failed')
-    } finally {
-      setRepairing(false)
-    }
+    } catch { /* still advance; report */ }
+    setPhase('ask')
+    // brief confirmation, then continue
+    say(`${name} is optimized.`, [
+      { label: 'Next', run: () => next(), primary: true },
+      { label: 'Done for now', run: () => done() },
+    ])
   }
+
+  function done(d?: DashboardSnapshot) {
+    const snap = d ?? dash
+    const applied = snap?.modules.filter((m) => m.applied).length ?? 0
+    setPhase('done')
+    say(
+      applied >= (snap?.modules.length ?? 6)
+        ? "That's everything — your rig is fully dialed in."
+        : "Done. Everything you okayed is optimized.",
+      [
+        { label: 'Scan again', run: () => void scan(), primary: true },
+      ],
+    )
+  }
+
+  const orbState: BrainState = speaking
+    ? 'speak'
+    : phase === 'scanning'
+      ? 'think'
+      : phase === 'working'
+        ? 'work'
+        : 'idle'
 
   const live = dash?.live
   const tel = live
     ? `CPU ${live.hasCpu === false ? '—' : Math.round(live.cpuPercent) + '%'}   GPU ${live.hasGpu === false ? '—' : Math.round(live.gpuPercent) + '%'}   MEM ${Math.round(live.memoryPercent)}%   NET ${live.netLinkSpeed && live.netLinkSpeed !== '—' ? live.netLinkSpeed : live.netLink.split(' ')[0]}`
     : ''
-
-  const statusWord = busy?.label || (verifying ? 'Searching' : det?.statusText || (applied ? 'Optimized' : 'Ready'))
-  const working = verifying || !!busy || repairing
+  const optimized = dash?.modules.filter((m) => m.applied).length ?? 0
+  const total = dash?.modules.length ?? 6
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', color: '#e9e9ec', fontFamily: 'var(--font-mono)', overflow: 'hidden', userSelect: 'none' }}>
@@ -135,72 +163,30 @@ export function OrbApp() {
         <button onClick={() => void host.minimize()} aria-label="Minimize" style={winBtn}><svg width="11" height="11" viewBox="0 0 12 12"><path d="M2 6.5h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg></button>
         <button onClick={() => void host.close()} aria-label="Close" style={winBtn}><svg width="11" height="11" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3L3 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg></button>
       </div>
-
-      {/* telemetry — whisper-quiet, top-left */}
       <div style={{ position: 'absolute', top: 16, left: 20, fontSize: 10, letterSpacing: '0.14em', color: '#5c5c62', zIndex: 10 }}>{tel}</div>
+      <div style={{ position: 'absolute', top: 15, left: '50%', transform: 'translateX(-50%)', fontSize: 10, letterSpacing: '0.22em', color: '#6a6a70', zIndex: 10 }}>{optimized}/{total} OPTIMIZED</div>
 
-      {/* integrity — top center */}
-      <div style={{ position: 'absolute', top: 15, left: '50%', transform: 'translateX(-50%)', fontSize: 10, letterSpacing: '0.22em', color: '#6a6a70', zIndex: 10 }}>
-        {optimized}/{SYSTEMS.length} OPTIMIZED
-      </div>
+      {/* the brain */}
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 24 }}>
+        <BrainOrb state={orbState} size={300} />
 
-      {/* THE ORB — the whole app */}
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-        <button
-          onClick={() => void runVerify()}
-          title="Scan every system"
-          style={{ width: 300, height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', cursor: working ? 'default' : 'pointer', padding: 0, filter: 'drop-shadow(0 0 44px rgba(255,255,255,0.09))' }}
-        >
-          {/* package tunes only size 64 — scale up to hero size */}
-          <div style={{ transform: 'scale(4.6)', transformOrigin: 'center', lineHeight: 0 }}>
-            <ThinkingOrb state={orbState} size={64} theme="dark" speed={working ? 1.15 : 0.75} />
-          </div>
-        </button>
-
-        {/* selected system + status, right under the orb */}
-        <div style={{ marginTop: 10, textAlign: 'center' }}>
-          <div style={{ ...DISPLAY, fontSize: 26, fontWeight: 600, letterSpacing: '-0.01em' }}>{LABEL[id]}</div>
-          <div style={{ marginTop: 6, fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: caption ? '#e9e9ec' : '#6a6a70', transition: 'color .3s' }}>
-            {caption || statusWord}
-          </div>
+        {/* what the brain says */}
+        <div key={msgKey} style={{ marginTop: 18, maxWidth: 560, textAlign: 'center', animation: 'exo-say .5s var(--ease-spring, ease) both' }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 21, fontWeight: 500, lineHeight: 1.4, letterSpacing: '-0.01em' }}>{msg}</p>
         </div>
 
-        {/* actions */}
-        <div style={{ marginTop: 16, display: 'flex', gap: 10 }}>
-          <button onClick={() => void apply()} disabled={working} style={primaryBtn(working)}>
-            {busy && busy.id === id ? 'Working…' : applied ? 'Reapply' : 'Optimize'}
-          </button>
-          <button onClick={() => void repair()} disabled={working} style={ghostBtn(working)}>Revert</button>
+        {/* the answers */}
+        <div style={{ marginTop: 20, display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', minHeight: 44 }}>
+          {opts.map((o, i) => (
+            <button key={i} onClick={o.run} style={o.primary ? primaryBtn : ghostBtn}>{o.label}</button>
+          ))}
         </div>
-      </div>
-
-      {/* system selector — minimal dotted strip along the bottom */}
-      <div style={{ position: 'absolute', bottom: 22, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 4, alignItems: 'center', zIndex: 10 }}>
-        {SYSTEMS.map((s, i) => {
-          const on = i === sel
-          const isApplied = dash?.modules.find((m) => m.id === s)?.applied
-          return (
-            <button
-              key={s}
-              onClick={() => setSel(i)}
-              title={LABEL[s]}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 12px', borderRadius: 999, border: 'none', cursor: 'pointer', background: on ? 'rgba(255,255,255,0.08)' : 'transparent', transition: 'background .25s' }}
-            >
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: isApplied ? '#e9e9ec' : '#3a3a40', boxShadow: isApplied ? '0 0 6px rgba(255,255,255,0.5)' : 'none' }} />
-              <span style={{ fontSize: 10.5, letterSpacing: '0.1em', color: on ? '#e9e9ec' : '#6a6a70', transition: 'color .25s' }}>{LABEL[s]}</span>
-            </button>
-          )
-        })}
       </div>
     </div>
   )
 }
 
-const DISPLAY = { fontFamily: 'var(--font-display)' }
 const winBtn: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 26, borderRadius: 9, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#9a9aa0', cursor: 'pointer' }
-function primaryBtn(disabled: boolean): React.CSSProperties {
-  return { padding: '11px 26px', borderRadius: 999, background: '#f4f4f6', color: '#0b0b0d', ...DISPLAY, fontSize: 13, fontWeight: 700, border: 'none', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, boxShadow: '0 0 30px rgba(255,255,255,0.12)' }
-}
-function ghostBtn(disabled: boolean): React.CSSProperties {
-  return { padding: '11px 22px', borderRadius: 999, background: 'transparent', color: '#c4c4ca', ...DISPLAY, fontSize: 13, fontWeight: 600, border: '1px solid rgba(255,255,255,0.16)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1 }
-}
+const DISPLAY = { fontFamily: 'var(--font-display)' }
+const primaryBtn: React.CSSProperties = { padding: '11px 24px', borderRadius: 999, background: '#f4f4f6', color: '#0b0b0d', ...DISPLAY, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 0 30px rgba(255,255,255,0.12)' }
+const ghostBtn: React.CSSProperties = { padding: '11px 20px', borderRadius: 999, background: 'transparent', color: '#c4c4ca', ...DISPLAY, fontSize: 13, fontWeight: 600, border: '1px solid rgba(255,255,255,0.16)', cursor: 'pointer' }
