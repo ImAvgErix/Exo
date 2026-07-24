@@ -988,10 +988,15 @@ public sealed class NetworkOptimizerService
                 qosReserve is "0%" ? "No reserved bandwidth tax" : qosReserve,
                 qosReserve is "0%" or "-" || !gamingPreset));
 
-            // Competitive Nagle/ACK pins (Internet-owned TCP path)
+            // Nagle/ACK pins (Internet-owned TCP path). Exo deliberately does NOT force
+            // TcpAckFrequency/TCPNoDelay/TcpDelAckTicks: modern games run on UDP, so pinning
+            // TCP ACK/Nagle only adds ACK overhead without touching game traffic. Apply
+            // *removes* these folklore pins (NetworkApplyScriptBuilder 'legacy-ack-pins'
+            // report, "Nagle left adaptive"). Detect must verify the same thing — the pins
+            // stay cleared — or a correct Apply would leave this row permanently failed.
             try
             {
-                var ackOk = false;
+                var folklorePinsPresent = false;
                 using var ifRoot = Registry.LocalMachine.OpenSubKey(
                     @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces");
                 if (ifRoot is not null)
@@ -1001,16 +1006,16 @@ public sealed class NetworkOptimizerService
                         using var iface = ifRoot.OpenSubKey(sub);
                         var ack = ReadRegistryDword(iface?.GetValue("TcpAckFrequency"));
                         var nd = ReadRegistryDword(iface?.GetValue("TCPNoDelay"));
-                        if (ack is 1 && nd is 1) { ackOk = true; break; }
+                        if (ack is 1 || nd is 1) { folklorePinsPresent = true; break; }
                     }
                 }
-                features.Add(Row("Instant TCP response",
-                    ackOk ? "Low-latency ACK path on" : "Stock / not applied",
-                    ackOk || !gamingPreset));
+                features.Add(Row("Nagle / ACK path",
+                    folklorePinsPresent ? "Legacy pins present (cleared on apply)" : "Adaptive — no folklore pins",
+                    !folklorePinsPresent || !gamingPreset));
             }
             catch
             {
-                features.Add(Row("Instant TCP response", "-", true));
+                features.Add(Row("Nagle / ACK path", "-", true));
             }
 
             // Informational pointer — not checkable for Internet isApplied
