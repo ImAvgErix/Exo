@@ -744,6 +744,9 @@ public static class BraveNativeApply
         SetPath(root, "brave.new_tab_page.background.selected_value", "#000000");
         SetPath(root, "brave.new_tab_page.background.random", false);
         SetPath(root, "brave.new_tab_page.show_branded_background_image", false);
+        // Real key per brave-core components/constants/pref_names.h is
+        // show_sponsored_sites; the _images spelling is kept for older builds.
+        SetPath(root, "brave.new_tab_page.show_sponsored_sites", false);
         SetPath(root, "brave.new_tab_page.show_sponsored_images", false);
         SetPath(root, "brave.new_tab_page.show_background_image", false);
         SetPath(root, "brave.new_tab_page.show_rewards", false);
@@ -754,7 +757,6 @@ public static class BraveNativeApply
         // stats" look: stats on, every other widget off, and crucially
         // hide_all_widgets MUST be false or it suppresses the stats too.
         SetPath(root, "brave.new_tab_page.show_stats", true);
-        SetPath(root, "brave.new_tab_page.show_shortcuts", false);
         SetPath(root, "brave.new_tab_page.show_top_sites", false);
         SetPath(root, "brave.new_tab_page.show_clock", false);
         SetPath(root, "brave.new_tab_page.show_search_widget", false);
