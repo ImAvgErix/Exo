@@ -117,6 +117,9 @@ export function OrbApp() {
   }, [])
 
   useEffect(() => { greet() /* eslint-disable-next-line */ }, [])
+  // The speak timer is re-armed on every line; without this it can outlive the
+  // component and fire setSpeaking on an unmounted tree.
+  useEffect(() => () => window.clearTimeout(speakTimer.current), [])
 
   // On launch, peek for a newer Exo (check-only) and ASK — never auto-install.
   useEffect(() => {
