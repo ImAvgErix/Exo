@@ -647,8 +647,10 @@ public sealed partial class GameOptimizerService
             {
                 if (!File.Exists(path)) continue;
                 var text = File.ReadAllText(path);
-                // fullscreen + nowindowborder = borderless (Source)
-                text = SetQuotedSetting(text, "setting.fullscreen", "1");
+                // Source borderless = fullscreen 0 + nowindowborder 1. Writing
+                // fullscreen 1 alongside nowindowborder 1 is contradictory and does
+                // NOT give borderless (the engine stays exclusive) — that was the bug.
+                text = SetQuotedSetting(text, "setting.fullscreen", borderless ? "0" : "1");
                 text = SetQuotedSetting(text, "setting.nowindowborder", borderless ? "1" : "0");
                 text = SetQuotedSetting(text, "setting.mat_vsync", "0");
                 WriteConfigText(path, text);
@@ -691,10 +693,15 @@ public sealed partial class GameOptimizerService
             {
                 if (!File.Exists(path)) continue;
                 var text = File.ReadAllText(path);
-                text = SetQuotedSetting(text, "setting.fullscreen", "1");
+                // CS2 borderless (Source 2) = fullscreen 0 + nowindowborder 1.
+                // fullscreen 1 + nowindowborder 1 is contradictory and leaves the
+                // game exclusive-fullscreen — the previous values never applied.
+                text = SetQuotedSetting(text, "setting.fullscreen", "0");
                 text = SetQuotedSetting(text, "setting.nowindowborder", "1");
                 text = SetQuotedSetting(text, "setting.mat_vsync", "0");
-                WriteConfigText(path, text);
+                // CS2 rewrites video.txt on launch (and Steam Cloud can restore an
+                // older copy) — lock it so the values actually survive to the match.
+                WriteConfigTextLocked(path, text);
             }
             catch { /* locked */ }
         }
@@ -805,9 +812,51 @@ public sealed partial class GameOptimizerService
     /// Write text with retries — COD/Riot lock configs while the client is open.
     /// Uses share-friendly open so readers can hold the file; still fails after retries if exclusive-locked.
     /// </summary>
+    /// <summary>
+    /// Clear the read-only bit so a write can land. Several games' configs are
+    /// commonly set read-only (community advice, because the game rewrites them on
+    /// launch) — without this our write throws UnauthorizedAccessException and the
+    /// caller's catch swallows it, so the tweak silently does nothing.
+    /// </summary>
+    private static void ClearReadOnly(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return;
+            var attrs = File.GetAttributes(path);
+            if ((attrs & FileAttributes.ReadOnly) != 0)
+                File.SetAttributes(path, attrs & ~FileAttributes.ReadOnly);
+        }
+        catch { /* best-effort */ }
+    }
+
+    /// <summary>
+    /// Mark a config read-only so the game can't overwrite it on next launch.
+    /// Required for the titles that reset their config every start (Rocket League
+    /// TASystemSettings.ini, CS2 video.txt) — otherwise the tweak is a phantom that
+    /// looks applied and is gone by the time you're in a match. Repair clears it.
+    /// </summary>
+    private static void SetReadOnly(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return;
+            File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+        }
+        catch { /* best-effort */ }
+    }
+
+    /// <summary>Write, then lock the file read-only so the game keeps our values.</summary>
+    private static void WriteConfigTextLocked(string path, string text)
+    {
+        WriteConfigText(path, text);
+        SetReadOnly(path);
+    }
+
     private static void WriteConfigText(string path, string text)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        ClearReadOnly(path);
         const int attempts = 10;
         Exception? last = null;
         for (var i = 0; i < attempts; i++)
@@ -891,7 +940,14 @@ public sealed partial class GameOptimizerService
                 var original = DecodeBackupName(name);
                 if (string.IsNullOrWhiteSpace(original)) continue;
                 Directory.CreateDirectory(Path.GetDirectoryName(original)!);
+                // Apply may have locked this file read-only (CS2/Rocket League keep
+                // their configs that way so the game can't reset them). Copying onto
+                // a read-only file throws and the catch below would swallow it —
+                // Repair must never silently fail, so clear the bit first and leave
+                // the file writable afterwards (pre-Exo state).
+                ClearReadOnly(original);
                 File.Copy(bak, original, overwrite: true);
+                ClearReadOnly(original);
             }
             catch { /* skip */ }
         }
