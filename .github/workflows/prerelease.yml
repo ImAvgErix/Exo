@@ -1,0 +1,91 @@
+name: Prerelease (test build)
+
+# Opt-in TEST builds for validating unverified work (native NVAPI, driver work,
+# browser changes) on real hardware WITHOUT touching the stable channel.
+#
+# GitHub marks these prerelease=true. The app's updater only reads
+# /releases/latest, which EXCLUDES prereleases, so stable installs never see or
+# auto-update to a test build. To also stop a stable build from ever prompting to
+# replace a tester's prerelease, bump the source branch's VERSION *ahead* of the
+# current stable version before dispatching (the tester's app is then "newer"
+# than latest stable, so its updater stays quiet).
+#
+# This workflow only ever CREATES a prerelease; it never prunes or edits stable
+# releases, so it can't disturb the stable channel.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or SHA to build (the code you want to test)'
+        required: true
+        default: 'main'
+      label:
+        description: 'Short tag label, e.g. nvidia, brave'
+        required: true
+        default: 'test'
+
+permissions:
+  contents: write
+
+jobs:
+  prerelease:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build React UI into Exo/wwwroot
+        working-directory: ui
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          test -f ../Exo/wwwroot/index.html
+
+      - name: Build Exo and NVIDIA display helper (compile gate)
+        run: |
+          dotnet build Exo.sln -c Release -p:Platform=x64
+          dotnet build tools/Exo.NvDisplay/Exo.NvDisplay.csproj -c Release
+
+      - name: Validate scripts and bundled data
+        shell: pwsh
+        run: ./tools/Test-Repository.ps1
+
+      - name: Build Exo.exe (self-extracting installer)
+        shell: pwsh
+        run: ./Publish-Exo.ps1 -Configuration Release
+
+      - name: Publish GitHub prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $env:Path = "C:\Program Files\GitHub CLI;C:\Program Files\Git\cmd;C:\Program Files\dotnet;" + $env:Path
+          $version = (Get-Content VERSION -Raw).Trim()
+          $label = "${{ github.event.inputs.label }}"
+          $sha = (git rev-parse HEAD).Trim()
+          $short = $sha.Substring(0, 7)
+          $tag = "v$version-$label.${{ github.run_number }}"
+          $sfx = Join-Path 'release' 'Exo.exe'
+          if (-not (Test-Path $sfx)) { throw "Missing Exo.exe at $sfx" }
+          $notes = "Prerelease / test build from ${{ github.event.inputs.ref }} (@$short). The stable channel does not see or auto-update to this. Download Exo.exe below and double-click to install (installs to %LocalAppData%\Exo\app; Windows 11 x64; if SmartScreen appears: More info -> Run anyway)."
+          gh release create $tag $sfx --repo "${{ github.repository }}" --title "Exo $version test - $label" --notes $notes --prerelease --target $sha
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed for $tag" }
+          Write-Host "Prerelease published: https://github.com/${{ github.repository }}/releases/tag/$tag"
