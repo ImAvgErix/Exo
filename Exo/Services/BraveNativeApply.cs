@@ -17,7 +17,7 @@ public static class BraveNativeApply
     public const string ProtonPassExtensionId = "ghmbeldphafepmbegfdlkpapadhbakde";
     private const string PolicyPath = @"SOFTWARE\Policies\BraveSoftware\Brave";
     private const string GpuHighPerf = "GpuPreference=2;";
-    private const string StateVersion = "brave-native-2.1";
+    private const string StateVersion = "brave-native-2.2";
 
     /// <summary>
     /// Content filter UUIDs from Brave's list_catalog (annoyances / cookie / social / quiet web).
@@ -749,11 +749,17 @@ public static class BraveNativeApply
         SetPath(root, "brave.new_tab_page.show_rewards", false);
         SetPath(root, "brave.new_tab_page.show_brave_talk", false);
         SetPath(root, "brave.new_tab_page.show_brave_vpn", false);
-        SetPath(root, "brave.new_tab_page.show_stats", false);
+        // Black background with JUST the Brave stats card (trackers/ads blocked,
+        // bandwidth + time saved) — nothing else. This is the "black with just
+        // stats" look: stats on, every other widget off, and crucially
+        // hide_all_widgets MUST be false or it suppresses the stats too.
+        SetPath(root, "brave.new_tab_page.show_stats", true);
+        SetPath(root, "brave.new_tab_page.show_shortcuts", false);
+        SetPath(root, "brave.new_tab_page.show_top_sites", false);
         SetPath(root, "brave.new_tab_page.show_clock", false);
         SetPath(root, "brave.new_tab_page.show_search_widget", false);
-        SetPath(root, "brave.new_tab_page.hide_all_widgets", true);
-        SetPath(root, "brave.shields.stats_badge_visible", false);
+        SetPath(root, "brave.new_tab_page.hide_all_widgets", false);
+        SetPath(root, "brave.shields.stats_badge_visible", true);
         SetPath(root, "bookmark_bar.show_on_all_tabs", false);
         SetPath(root, "browser.show_home_button", false);
         SetPath(root, "homepage_is_newtabpage", true);
