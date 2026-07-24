@@ -56,6 +56,19 @@ Expect("component updates stay enabled (security exception)",
 // High-perf GPU preference for the browser process (competitive-gaming host tweak).
 Expect("high-perf GPU preference", src.Contains("GpuPreference=2;", StringComparison.Ordinal));
 
+// New tab = black background with JUST the Brave stats card. The stats widget
+// must be ON and hide_all_widgets OFF (true suppresses the stats too), on a
+// solid black background. Bookmark bar hidden via managed policy.
+Expect("new tab: black background",
+    src.Contains("\"brave.new_tab_page.background.type\", \"color\"", StringComparison.Ordinal)
+    && src.Contains("\"brave.new_tab_page.background.selected_value\", \"#000000\"", StringComparison.Ordinal));
+Expect("new tab: stats card shown, all other widgets off",
+    src.Contains("\"brave.new_tab_page.show_stats\", true", StringComparison.Ordinal)
+    && src.Contains("\"brave.new_tab_page.hide_all_widgets\", false", StringComparison.Ordinal));
+Expect("bookmark bar hidden by policy", src.Contains("\"BookmarkBarEnabled\", 0", StringComparison.Ordinal));
+Expect("Proton Pass force-installed", src.Contains("ProtonPassExtensionId", StringComparison.Ordinal)
+    && src.Contains("ghmbeldphafepmbegfdlkpapadhbakde", StringComparison.Ordinal));
+
 // Repair must be a real undo: full pre-apply snapshot + restore, not a partial reset.
 Expect("full snapshot before apply", src.Contains("WriteFullSnapshot(install)", StringComparison.Ordinal));
 Expect("full snapshot restore on repair", src.Contains("RestoreFullSnapshot(install)", StringComparison.Ordinal));
