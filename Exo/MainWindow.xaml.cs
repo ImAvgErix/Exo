@@ -67,9 +67,11 @@ public sealed partial class MainWindow : Window
         }
         catch { StartupLog.Mark("chrome-setup-partial"); }
 
-        // Use the standard Windows title bar (native minimize/close). The UI is
-        // the full-bleed orb; window controls are the OS caption.
-        ExtendsContentIntoTitleBar = false;
+        // Extend content under the caption so the title bar is PART of the black
+        // orb UI. Critical: AppWindow.TitleBar color customization is only honored
+        // when ExtendsContentIntoTitleBar is true — with it false, Windows paints
+        // its default (light) bar and ignores the colors (the 4.2.1 white-bar bug).
+        ExtendsContentIntoTitleBar = true;
         try
         {
             if (AppWindow.Presenter is OverlappedPresenter op)
@@ -77,23 +79,28 @@ public sealed partial class MainWindow : Window
         }
         catch { /* best-effort on older presenters */ }
 
-        // Match the caption to the black orb UI: no icon/text, black bar, black
-        // caption buttons (the OS default paints the button strip light).
-        // Win10 lacks customization support -> try/catch leaves system theme.
+        // Paint the caption to match: no icon/text, black bar, black min/close
+        // buttons. Win10 lacks customization support -> try/catch leaves default.
         try
         {
             var tb = AppWindow.TitleBar;
+            tb.ExtendsContentIntoTitleBar = true;
             tb.IconShowOptions = IconShowOptions.HideIconAndSystemMenu;
+            var transparent = Windows.UI.Color.FromArgb(0, 0, 0, 0);
             var black = Windows.UI.Color.FromArgb(255, 0, 0, 0);
             var ink = Windows.UI.Color.FromArgb(255, 233, 233, 236);
             var dim = Windows.UI.Color.FromArgb(255, 106, 106, 112);
             var hover = Windows.UI.Color.FromArgb(255, 26, 26, 31);
+            // Extend mode: the app content paints behind the caption, so the
+            // BACKGROUND colors are moot and the caption BUTTON backgrounds must
+            // be transparent — otherwise the min/close cells render as a light
+            // strip over the black orb. That was the 4.2.1 white-bar symptom.
             tb.BackgroundColor = black;
             tb.InactiveBackgroundColor = black;
             tb.ForegroundColor = ink;
             tb.InactiveForegroundColor = dim;
-            tb.ButtonBackgroundColor = black;
-            tb.ButtonInactiveBackgroundColor = black;
+            tb.ButtonBackgroundColor = transparent;
+            tb.ButtonInactiveBackgroundColor = transparent;
             tb.ButtonForegroundColor = ink;
             tb.ButtonInactiveForegroundColor = dim;
             tb.ButtonHoverBackgroundColor = hover;
@@ -102,6 +109,12 @@ public sealed partial class MainWindow : Window
             tb.ButtonPressedForegroundColor = ink;
         }
         catch { StartupLog.Mark("titlebar-theme-skip"); }
+
+        // Reserve a thin drag strip at the very top so the extended caption can
+        // move the window; the black orb content shows through underneath, and
+        // the WebView2 below never receives these drag events.
+        try { SetTitleBar(AppTitleBar); }
+        catch { StartupLog.Mark("titlebar-drag-skip"); }
 
         AppWindow.Changed += (_, args) =>
         {

@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BrainOrb, type BrainState } from '../components/BrainOrb'
-import { host, onHostEvent, type DashboardSnapshot, type ModuleId, type VerifyAllResult } from '../lib/host'
+import { host, onHostEvent, type DashboardSnapshot, type ModuleId, type ModuleStatus, type VerifyAllResult } from '../lib/host'
+import { setVoiceEnabled, speak, stopVoice, voiceEnabled, voiceSupported } from '../lib/voice'
 
 /* Exo is a brain. The orb is the whole UI: it reads the PC, forms an opinion,
    and *talks* — proposing what to optimize, one thing at a time. You answer;
-   it works. Monochrome. No module grid, no top chrome (native window frame). */
+   it works. It only ever calls the rig "good to go" after re-reading the machine
+   and confirming the tweaks actually stuck. Monochrome. No module grid, no top
+   chrome (the black native window frame).
+
+   Personality lives in the pick([...]) lines below — one place, easy to swap
+   for a generated voice (the planned Grok layer) later without touching flow. */
 
 const LABEL: Record<string, string> = {
   discord: 'Discord', brave: 'Brave', steam: 'Steam', internet: 'Internet', nvidia: 'NVIDIA', games: 'Games',
@@ -13,6 +19,13 @@ const LABEL: Record<string, string> = {
 const ORDER = ['nvidia', 'internet', 'steam', 'games', 'discord', 'brave'] as const
 
 const pick = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)]
+
+function joinNames(ids: string[]): string {
+  const n = ids.map((id) => LABEL[id] ?? id)
+  if (n.length <= 1) return n[0] ?? ''
+  if (n.length === 2) return `${n[0]} and ${n[1]}`
+  return `${n.slice(0, -1).join(', ')}, and ${n[n.length - 1]}`
+}
 
 type Sugg = { id: string; kind: 'optimize' | 'reapply' }
 type Opt = { label: string; run: () => void; primary?: boolean }
@@ -24,19 +37,26 @@ export function OrbApp() {
   const [opts, setOpts] = useState<Opt[]>([])
   const [msgKey, setMsgKey] = useState(0)
   const [speaking, setSpeaking] = useState(false)
+  const [voiceOn, setVoiceOn] = useState(voiceEnabled())
   const queue = useRef<Sugg[]>([])
   const qi = useRef(0)
   const spokeContext = useRef(false)
+  // Modules we've applied/reapplied this pass — so a tweak that simply can't go
+  // further on this box (stays "partial" after we tried) isn't nagged forever.
+  const touched = useRef<Set<string>>(new Set())
   const speakTimer = useRef<number | undefined>(undefined)
   const updateRef = useRef<{ version: string } | null>(null)
+  const msgRef = useRef('')
   const phaseRef = useRef(phase)
   phaseRef.current = phase
 
   const say = useCallback((message: string, options: Opt[]) => {
     setMsg(message)
+    msgRef.current = message
     setOpts(options)
     setMsgKey((k) => k + 1)
     setSpeaking(true)
+    speak(message)
     window.clearTimeout(speakTimer.current)
     speakTimer.current = window.setTimeout(() => setSpeaking(false), 850)
   }, [])
@@ -59,6 +79,7 @@ export function OrbApp() {
   }, [])
 
   useEffect(() => { greet() /* eslint-disable-next-line */ }, [])
+  useEffect(() => () => stopVoice(), [])
 
   // On launch, peek for a newer Exo (check-only) and ASK — never auto-install.
   useEffect(() => {
@@ -83,6 +104,15 @@ export function OrbApp() {
     const d = data as { status?: string }
     if (updating.current && d.status) setMsg(d.status)
   }), [])
+
+  function toggleVoice() {
+    const on = !voiceOn
+    setVoiceEnabled(on)
+    setVoiceOn(on)
+    // The tap is a user gesture, so speaking the current line now is allowed and
+    // gives instant "yes it works" feedback.
+    if (on) speak(msgRef.current)
+  }
 
   function askUpdate() {
     const v = updateRef.current?.version
@@ -153,6 +183,7 @@ export function OrbApp() {
   async function scan() {
     setPhase('scanning')
     spokeContext.current = false
+    touched.current.clear()
     say(pick(['Reading every system on your machine…', 'Feeling out the hardware…', 'Scanning — give me a second…']), [])
     try {
       const r: VerifyAllResult = await host.verifyAll()
@@ -162,13 +193,17 @@ export function OrbApp() {
       for (const id of ORDER) {
         const row = r.results?.find((x) => x.id === id)
         const k = row?.statusKind
+        if (k === 'missing') continue // not installed — can't optimize it
         if (k === 'partial') q.push({ id, kind: 'reapply' })
-        else if (k === 'ready' || (!k && !d.modules.find((m) => m.id === id)?.applied)) q.push({ id, kind: 'optimize' })
-        // applied / missing → nothing to do
+        else if (k === 'ready') q.push({ id, kind: 'optimize' })
+        else if (!k && !d.modules.find((m) => m.id === id)?.applied) q.push({ id, kind: 'optimize' })
+        // 'applied' → already done, nothing to ask
       }
       queue.current = q
       qi.current = 0
-      if (q.length === 0) done(d)
+      // Nothing to do: we JUST verified, so conclude from these fresh rows
+      // directly instead of re-reading the whole machine again.
+      if (q.length === 0) conclude({ rows: r.results ?? [], snap: d })
       else ask()
     } catch {
       say("I couldn't finish reading the PC. Try again?", [{ label: 'Retry', run: () => void scan(), primary: true }])
@@ -177,7 +212,7 @@ export function OrbApp() {
 
   function ask() {
     const s = queue.current[qi.current]
-    if (!s) return done()
+    if (!s) return void conclude()
     const name = LABEL[s.id]
     const remaining = queue.current.length - qi.current
 
@@ -208,18 +243,26 @@ export function OrbApp() {
     say(line.trim(), [
       { label: s.kind === 'reapply' ? `Reapply ${name}` : `Optimize ${name}`, run: () => void apply(s.id), primary: true },
       { label: 'Skip', run: () => next() },
-      { label: 'Stop', run: () => done() },
+      { label: 'Stop', run: () => void conclude() },
     ])
   }
 
   function next() {
     qi.current += 1
-    if (qi.current >= queue.current.length) done()
+    if (qi.current >= queue.current.length) void conclude()
     else ask()
+  }
+
+  function optimizeRest(list: Sugg[]) {
+    queue.current = list
+    qi.current = 0
+    spokeContext.current = true // already talked this session — no "I found N" preamble
+    ask()
   }
 
   async function apply(id: string) {
     const name = LABEL[id]
+    touched.current.add(id)
     setPhase('working')
     say(pick([`On it — tuning ${name}…`, `Working ${name}…`, `Give me a sec on ${name}…`]), [])
     try {
@@ -228,9 +271,9 @@ export function OrbApp() {
       setDash(d)
       setPhase('ask')
       const more = qi.current + 1 < queue.current.length
-      say(pick([`${name}'s optimized${s.statusKind === 'partial' ? ' — mostly' : ''}.`, `Done — ${name}'s dialed in.`, `${name} handled.`]),
+      say(pick([`${name}'s optimized${s.statusKind === 'partial' ? ' — as far as it goes here' : ''}.`, `Done — ${name}'s dialed in.`, `${name} handled.`]),
         more
-          ? [{ label: 'Next', run: () => next(), primary: true }, { label: 'Stop here', run: () => done() }]
+          ? [{ label: 'Next', run: () => next(), primary: true }, { label: 'Stop here', run: () => void conclude() }]
           : [{ label: 'Wrap up', run: () => next(), primary: true }])
     } catch {
       setPhase('ask')
@@ -238,33 +281,82 @@ export function OrbApp() {
     }
   }
 
-  function done(d?: DashboardSnapshot) {
-    const snap = d ?? dash
-    const applied = snap?.modules.filter((m) => m.applied).length ?? 0
-    const total = snap?.modules.length ?? 6
+  // The honest verdict. Re-reads the machine (unless scan just did) so "good to
+  // go" means the tweaks are actually verified in place — not a stale flag.
+  async function conclude(pre?: { rows: ModuleStatus[]; snap: DashboardSnapshot | null }) {
+    let rows: ModuleStatus[] = pre?.rows ?? []
+    let snap: DashboardSnapshot | null = pre?.snap ?? dash
+    if (!pre) {
+      setPhase('scanning')
+      say(pick(['Double-checking everything stuck…', 'Verifying my work…', 'Making sure it all took…']), [])
+      try {
+        const v = await host.verifyAll()
+        rows = v.results ?? []
+      } catch { /* fall back to dashboard flags */ }
+      try {
+        snap = await host.getDashboard()
+        setDash(snap)
+      } catch { /* keep last snapshot */ }
+    }
+
+    const kindOf = (id: string): string => {
+      const k = rows.find((x) => x.id === id)?.statusKind
+      if (k) return k
+      return snap?.modules.find((m) => m.id === id)?.applied ? 'applied' : 'ready'
+    }
+
+    const installed = ORDER.filter((id) => kindOf(id) !== 'missing')
+    const leftover: Sugg[] = installed
+      .filter((id) => {
+        const k = kindOf(id)
+        return k === 'ready' || (k === 'partial' && !touched.current.has(id))
+      })
+      .map((id) => ({ id, kind: kindOf(id) === 'partial' ? ('reapply' as const) : ('optimize' as const) }))
+    const atCeiling = installed.filter((id) => kindOf(id) === 'partial' && touched.current.has(id))
+
     setPhase('done')
     const aside = vitalsAside()
-    const base =
-      applied >= total
-        ? pick(["That's everything — your rig is fully dialed in.", 'All of it optimized. You are as sharp as I can make you.'])
-        : pick(['Done. Everything you okayed is optimized.', "That's handled. Ping me anytime for another pass."])
-    const chips: Opt[] = [{ label: 'Read again', run: () => void scan(), primary: true }]
+    const chips: Opt[] = []
+    let line: string
+
+    if (leftover.length === 0) {
+      // Everything installed is applied — or is something we already pushed as
+      // far as this box allows. That's a real "good to go".
+      line = pick([
+        'Your PC is good to go — everything I can tune is optimized and verified.',
+        "That's the whole rig dialed in. Your PC is good to go.",
+        'All verified and in place. Your PC is good to go.',
+      ])
+      if (atCeiling.length) {
+        const names = joinNames(atCeiling)
+        line += ` ${names} ${atCeiling.length > 1 ? 'are' : 'is'} as far as this machine will take ${atCeiling.length > 1 ? 'them' : 'it'} — and that's fine.`
+      }
+      chips.push({ label: 'Re-scan', run: () => void scan(), primary: true })
+    } else {
+      const names = joinNames(leftover.map((s) => s.id))
+      line = pick([
+        `You're optimized everywhere you said yes. Still stock: ${names}. Want the rest done?`,
+        `Good pass. ${names} ${leftover.length > 1 ? 'are' : 'is'} still untouched — say the word and I'll finish the job.`,
+      ])
+      chips.push({ label: leftover.length > 1 ? 'Do the rest' : `Optimize ${LABEL[leftover[0].id]}`, run: () => optimizeRest(leftover), primary: true })
+      chips.push({ label: 'Re-scan', run: () => void scan() })
+    }
     if (updateRef.current) chips.push({ label: `Install Exo ${updateRef.current.version}`, run: () => void doUpdate() })
-    say(aside ? `${base} One thing though — ${aside}.` : base, chips)
+    say(aside ? `${line} One thing — ${aside}.` : line, chips)
   }
 
   const orbState: BrainState = speaking ? 'speak' : phase === 'scanning' ? 'think' : phase === 'working' ? 'work' : 'idle'
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#000', color: '#e9e9ec', fontFamily: 'var(--font-mono)', overflow: 'hidden', userSelect: 'none' }}>
+    <div style={{ position: 'fixed', inset: 0, background: '#000', color: '#e9e9ec', fontFamily: 'var(--font-display)', overflow: 'hidden', userSelect: 'none' }}>
       {/* True centering: 1fr | orb | 1fr — the orb sits at the exact vertical
           center regardless of how long the message below runs. */}
       <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateRows: '1fr auto 1fr', justifyItems: 'center', textAlign: 'center' }}>
         <div />
         <BrainOrb state={orbState} size={400} />
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 6, minWidth: 0 }}>
-          <div key={msgKey} style={{ maxWidth: 600, padding: '0 24px', animation: 'exo-say .5s var(--ease-spring, ease) both' }}>
-            <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, lineHeight: 1.42, letterSpacing: '-0.01em', color: '#dcdce0' }}>{msg}</p>
+          <div key={msgKey} style={{ maxWidth: 640, padding: '0 24px', animation: 'exo-say .5s var(--ease-spring, ease) both' }}>
+            <p style={{ margin: 0, fontFamily: 'var(--font-voice)', fontSize: 27, fontWeight: 400, lineHeight: 1.28, letterSpacing: '0.005em', color: '#e7e7ec' }}>{msg}</p>
           </div>
           <div style={{ marginTop: 18, display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', minHeight: 44 }}>
             {opts.map((o, i) => (
@@ -273,10 +365,47 @@ export function OrbApp() {
           </div>
         </div>
       </div>
+
+      {/* Voice toggle — the only persistent chrome. Off by default; a tap turns
+          the brain's spoken voice on (and, being a gesture, primes the speech
+          engine). Tucked bottom-right, well clear of the caption buttons. */}
+      {voiceSupported() && (
+        <button
+          onClick={toggleVoice}
+          aria-label={voiceOn ? 'Mute the brain' : 'Let the brain speak'}
+          title={voiceOn ? "Voice on — tap to mute" : "Voice off — tap to let it speak"}
+          style={voiceBtn(voiceOn)}
+        >
+          <SpeakerIcon on={voiceOn} />
+        </button>
+      )}
     </div>
+  )
+}
+
+function SpeakerIcon({ on }: { on: boolean }) {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 9v6h4l5 4V5L8 9H4z" />
+      {on ? (
+        <>
+          <path d="M16.5 8.5a5 5 0 0 1 0 7" />
+          <path d="M19 6a8.5 8.5 0 0 1 0 12" />
+        </>
+      ) : (
+        <path d="M17 9l4 6M21 9l-4 6" />
+      )}
+    </svg>
   )
 }
 
 const DISPLAY = { fontFamily: 'var(--font-display)' }
 const primaryBtn: React.CSSProperties = { padding: '11px 24px', borderRadius: 999, background: '#f4f4f6', color: '#0b0b0d', ...DISPLAY, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 0 30px rgba(255,255,255,0.12)' }
 const ghostBtn: React.CSSProperties = { padding: '11px 20px', borderRadius: 999, background: 'transparent', color: '#c4c4ca', ...DISPLAY, fontSize: 13, fontWeight: 600, border: '1px solid rgba(255,255,255,0.16)', cursor: 'pointer' }
+const voiceBtn = (on: boolean): React.CSSProperties => ({
+  position: 'fixed', right: 16, bottom: 16, width: 38, height: 38, borderRadius: 999,
+  display: 'grid', placeItems: 'center', cursor: 'pointer',
+  background: on ? 'rgba(244,244,246,0.10)' : 'transparent',
+  color: on ? '#e7e7ec' : '#6a6a72',
+  border: `1px solid rgba(255,255,255,${on ? 0.22 : 0.12})`,
+})
