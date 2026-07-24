@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BrainOrb, type BrainState } from '../components/BrainOrb'
-import { host, type DashboardSnapshot, type ModuleId } from '../lib/host'
+import { host, type DashboardSnapshot, type ModuleId, type VerifyAllResult } from '../lib/host'
 
-/* Exo is a brain. The orb is the whole UI: it reads the PC and *asks* what to
-   optimize; you answer; it works. Monochrome. No module grid — the brain leads. */
+/* Exo is a brain. The orb is the whole UI: it reads the PC, forms an opinion,
+   and *talks* — proposing what to optimize, one thing at a time. You answer;
+   it works. Monochrome. No module grid, no top chrome (native window frame). */
 
 const LABEL: Record<string, string> = {
   discord: 'Discord', brave: 'Brave', steam: 'Steam', internet: 'Internet', nvidia: 'NVIDIA', games: 'Games',
 }
-const ORDER = ['nvidia', 'internet', 'steam', 'discord', 'brave', 'games'] as const
+// The order the brain thinks about things — biggest FPS levers first.
+const ORDER = ['nvidia', 'internet', 'steam', 'games', 'discord', 'brave'] as const
 
+const pick = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)]
+
+type Sugg = { id: string; kind: 'optimize' | 'reapply' }
 type Opt = { label: string; run: () => void; primary?: boolean }
 
 export function OrbApp() {
@@ -19,8 +24,9 @@ export function OrbApp() {
   const [opts, setOpts] = useState<Opt[]>([])
   const [msgKey, setMsgKey] = useState(0)
   const [speaking, setSpeaking] = useState(false)
-  const queue = useRef<string[]>([])
+  const queue = useRef<Sugg[]>([])
   const qi = useRef(0)
+  const spokeContext = useRef(false)
   const speakTimer = useRef<number | undefined>(undefined)
 
   const say = useCallback((message: string, options: Opt[]) => {
@@ -32,7 +38,6 @@ export function OrbApp() {
     speakTimer.current = window.setTimeout(() => setSpeaking(false), 850)
   }, [])
 
-  // bootstrap + telemetry
   useEffect(() => {
     let stop = false
     ;(async () => {
@@ -50,57 +55,96 @@ export function OrbApp() {
     return () => { stop = true; window.clearInterval(poll) }
   }, [])
 
-  // opening line
-  const greet = useCallback(() => {
-    setPhase('greet')
-    say("I'm Exo — the brain for your rig. Want me to look at what we can make faster?", [
-      { label: 'Scan my PC', run: () => void scan(), primary: true },
-      { label: 'Not now', run: () => idle() },
-    ])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [say])
-
   useEffect(() => { greet() /* eslint-disable-next-line */ }, [])
 
-  function idle() {
+  function greet() {
+    setPhase('greet')
+    say(pick([
+      "I'm Exo — the brain wired into your rig. Want me to see what we can sharpen?",
+      "Exo, online. Say the word and I'll read your machine for anything holding back frames.",
+      "I'm your rig's brain. Want me to scan for what we can make faster?",
+    ]), [
+      { label: 'Read my PC', run: () => void scan(), primary: true },
+      { label: 'Not now', run: () => rest() },
+    ])
+  }
+
+  function rest() {
     setPhase('done')
-    say('Standing by. Wake me whenever.', [{ label: 'Scan my PC', run: () => void scan(), primary: true }])
+    say(pick(['Standing by. Wake me whenever.', "I'll be here. Ping me when you want a tune-up."]), [
+      { label: 'Read my PC', run: () => void scan(), primary: true },
+    ])
+  }
+
+  // Live-vitals aside the brain can drop in for personality / awareness.
+  function vitalsAside(): string | null {
+    const l = dash?.live
+    if (!l) return null
+    if (l.memoryPercent >= 88) return `your RAM's sitting at ${Math.round(l.memoryPercent)}% — worth closing a few background apps`
+    if (l.netRating === 'Poor') return "your network's rated Poor right now"
+    if (l.hasGpu !== false && l.gpuPercent >= 92) return 'your GPU is pinned — mid-game, maybe?'
+    return null
   }
 
   async function scan() {
     setPhase('scanning')
-    say('Reading every system on your machine…', [])
+    spokeContext.current = false
+    say(pick(['Reading every system on your machine…', 'Feeling out the hardware…', 'Scanning — give me a second…']), [])
     try {
-      await host.verifyAll()
+      const r: VerifyAllResult = await host.verifyAll()
       const d = await host.getDashboard()
       setDash(d)
-      const notOptimized = ORDER.filter((id) => !d.modules.find((m) => m.id === id)?.applied)
-      queue.current = notOptimized
-      qi.current = 0
-      if (notOptimized.length === 0) {
-        done(d)
-      } else {
-        ask()
+      const q: Sugg[] = []
+      for (const id of ORDER) {
+        const row = r.results?.find((x) => x.id === id)
+        const k = row?.statusKind
+        if (k === 'partial') q.push({ id, kind: 'reapply' })
+        else if (k === 'ready' || (!k && !d.modules.find((m) => m.id === id)?.applied)) q.push({ id, kind: 'optimize' })
+        // applied / missing → nothing to do
       }
+      queue.current = q
+      qi.current = 0
+      if (q.length === 0) done(d)
+      else ask()
     } catch {
-      say("I couldn't finish the scan. Want to try again?", [{ label: 'Retry', run: () => void scan(), primary: true }])
+      say("I couldn't finish reading the PC. Try again?", [{ label: 'Retry', run: () => void scan(), primary: true }])
     }
   }
 
   function ask() {
-    const id = queue.current[qi.current]
-    if (!id) return done()
-    const name = LABEL[id]
+    const s = queue.current[qi.current]
+    if (!s) return done()
+    const name = LABEL[s.id]
     const remaining = queue.current.length - qi.current
+
+    let line =
+      s.kind === 'reapply'
+        ? pick([
+            `${name} was tuned, but a few tweaks slipped — want me to top it back up?`,
+            `Something reset part of ${name}. Reapply?`,
+          ])
+        : pick([
+            `${name} is still running stock. Want me to tune it?`,
+            `I can squeeze more out of ${name}. Do it?`,
+            `${name} isn't optimized yet — want the pass?`,
+          ])
+
+    // Weave in awareness on the first ask, or when a vital is relevant.
+    if (!spokeContext.current) {
+      spokeContext.current = true
+      const aside = vitalsAside()
+      const count = remaining > 1 ? `I found ${remaining} things worth doing. ` : ''
+      const ctx = aside ? `Also — ${aside}. ` : ''
+      line = `${count}${ctx}${line}`
+    } else if (s.id === 'internet' && (dash?.live?.netRating === 'Fair' || dash?.live?.netRating === 'Poor')) {
+      line = `Your network's rated ${dash?.live?.netRating}. ${line}`
+    }
+
     setPhase('ask')
-    const lead =
-      remaining > 1
-        ? `${name} isn't optimized yet — one of ${remaining} I'd tune.`
-        : `${name} is the last one that isn't optimized.`
-    say(`${lead} Want me to do it?`, [
-      { label: `Optimize ${name}`, run: () => void apply(id), primary: true },
+    say(line.trim(), [
+      { label: s.kind === 'reapply' ? `Reapply ${name}` : `Optimize ${name}`, run: () => void apply(s.id), primary: true },
       { label: 'Skip', run: () => next() },
-      { label: 'Stop for now', run: () => done() },
+      { label: 'Stop', run: () => done() },
     ])
   }
 
@@ -113,70 +157,50 @@ export function OrbApp() {
   async function apply(id: string) {
     const name = LABEL[id]
     setPhase('working')
-    say(`On it — tuning ${name}…`, [])
+    say(pick([`On it — tuning ${name}…`, `Working ${name}…`, `Give me a sec on ${name}…`]), [])
     try {
-      await host.apply(id as ModuleId)
+      const s = await host.apply(id as ModuleId)
       const d = await host.getDashboard()
       setDash(d)
-    } catch { /* still advance; report */ }
-    setPhase('ask')
-    // brief confirmation, then continue
-    say(`${name} is optimized.`, [
-      { label: 'Next', run: () => next(), primary: true },
-      { label: 'Done for now', run: () => done() },
-    ])
+      setPhase('ask')
+      const more = qi.current + 1 < queue.current.length
+      say(pick([`${name}'s optimized${s.statusKind === 'partial' ? ' — mostly' : ''}.`, `Done — ${name}'s dialed in.`, `${name} handled.`]),
+        more
+          ? [{ label: 'Next', run: () => next(), primary: true }, { label: 'Stop here', run: () => done() }]
+          : [{ label: 'Wrap up', run: () => next(), primary: true }])
+    } catch {
+      setPhase('ask')
+      say(`${name} hit a snag — I logged it. Move on?`, [{ label: 'Next', run: () => next(), primary: true }])
+    }
   }
 
   function done(d?: DashboardSnapshot) {
     const snap = d ?? dash
     const applied = snap?.modules.filter((m) => m.applied).length ?? 0
+    const total = snap?.modules.length ?? 6
     setPhase('done')
-    say(
-      applied >= (snap?.modules.length ?? 6)
-        ? "That's everything — your rig is fully dialed in."
-        : "Done. Everything you okayed is optimized.",
-      [
-        { label: 'Scan again', run: () => void scan(), primary: true },
-      ],
-    )
+    const aside = vitalsAside()
+    const base =
+      applied >= total
+        ? pick(["That's everything — your rig is fully dialed in.", 'All of it optimized. You are as sharp as I can make you.'])
+        : pick(['Done. Everything you okayed is optimized.', "That's handled. Ping me anytime for another pass."])
+    say(aside ? `${base} One thing though — ${aside}.` : base, [
+      { label: 'Read again', run: () => void scan(), primary: true },
+    ])
   }
 
-  const orbState: BrainState = speaking
-    ? 'speak'
-    : phase === 'scanning'
-      ? 'think'
-      : phase === 'working'
-        ? 'work'
-        : 'idle'
-
-  const live = dash?.live
-  const tel = live
-    ? `CPU ${live.hasCpu === false ? '—' : Math.round(live.cpuPercent) + '%'}   GPU ${live.hasGpu === false ? '—' : Math.round(live.gpuPercent) + '%'}   MEM ${Math.round(live.memoryPercent)}%   NET ${live.netLinkSpeed && live.netLinkSpeed !== '—' ? live.netLinkSpeed : live.netLink.split(' ')[0]}`
-    : ''
-  const optimized = dash?.modules.filter((m) => m.applied).length ?? 0
-  const total = dash?.modules.length ?? 6
+  const orbState: BrainState = speaking ? 'speak' : phase === 'scanning' ? 'think' : phase === 'working' ? 'work' : 'idle'
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', color: '#e9e9ec', fontFamily: 'var(--font-mono)', overflow: 'hidden', userSelect: 'none' }}>
-      {/* window controls */}
-      <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 6, zIndex: 10 }}>
-        <button onClick={() => void host.minimize()} aria-label="Minimize" style={winBtn}><svg width="11" height="11" viewBox="0 0 12 12"><path d="M2 6.5h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg></button>
-        <button onClick={() => void host.close()} aria-label="Close" style={winBtn}><svg width="11" height="11" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3L3 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg></button>
-      </div>
-      <div style={{ position: 'absolute', top: 16, left: 20, fontSize: 10, letterSpacing: '0.14em', color: '#5c5c62', zIndex: 10 }}>{tel}</div>
-      <div style={{ position: 'absolute', top: 15, left: '50%', transform: 'translateX(-50%)', fontSize: 10, letterSpacing: '0.22em', color: '#6a6a70', zIndex: 10 }}>{optimized}/{total} OPTIMIZED</div>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0, padding: 24, textAlign: 'center' }}>
+        <BrainOrb state={orbState} size={420} />
 
-      {/* the brain */}
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 24 }}>
-        <BrainOrb state={orbState} size={300} />
-
-        {/* what the brain says */}
-        <div key={msgKey} style={{ marginTop: 18, maxWidth: 560, textAlign: 'center', animation: 'exo-say .5s var(--ease-spring, ease) both' }}>
-          <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 21, fontWeight: 500, lineHeight: 1.4, letterSpacing: '-0.01em' }}>{msg}</p>
+        <div key={msgKey} style={{ marginTop: 8, maxWidth: 600, animation: 'exo-say .5s var(--ease-spring, ease) both' }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, lineHeight: 1.42, letterSpacing: '-0.01em', color: '#dcdce0' }}>{msg}</p>
         </div>
 
-        {/* the answers */}
-        <div style={{ marginTop: 20, display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', minHeight: 44 }}>
+        <div style={{ marginTop: 22, display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', minHeight: 44 }}>
           {opts.map((o, i) => (
             <button key={i} onClick={o.run} style={o.primary ? primaryBtn : ghostBtn}>{o.label}</button>
           ))}
@@ -186,7 +210,6 @@ export function OrbApp() {
   )
 }
 
-const winBtn: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 26, borderRadius: 9, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#9a9aa0', cursor: 'pointer' }
 const DISPLAY = { fontFamily: 'var(--font-display)' }
 const primaryBtn: React.CSSProperties = { padding: '11px 24px', borderRadius: 999, background: '#f4f4f6', color: '#0b0b0d', ...DISPLAY, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 0 30px rgba(255,255,255,0.12)' }
 const ghostBtn: React.CSSProperties = { padding: '11px 20px', borderRadius: 999, background: 'transparent', color: '#c4c4ca', ...DISPLAY, fontSize: 13, fontWeight: 600, border: '1px solid rgba(255,255,255,0.16)', cursor: 'pointer' }
