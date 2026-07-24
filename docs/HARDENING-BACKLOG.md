@@ -29,6 +29,15 @@ Each item should ship with a detect row / smoke marker when fixed.
    (`HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\QoS` → `"Do not use NLA"="1"`),
    snapshotted + repairable. **Still open** — needs a real non-domain-network test rig to verify
    safely; not attempted in this pass.
+9. ~~"Instant TCP response" detect row expected `TcpAckFrequency=1`/`TCPNoDelay=1` pins that
+   Apply deliberately *removes* as folklore~~ — **fixed** (2026 tweak audit). The row was a
+   leftover from before the ACK/Nagle folklore purge: Apply strips those interface pins
+   (`NetworkApplyScriptBuilder` `legacy-ack-pins` report, "Nagle left adaptive"), but Detect
+   still marked their absence as a miss on both gaming presets (`ackOk || !gamingPreset`), so a
+   correct Apply left a permanent red "Stock / not applied" row that could never pass. Rewrote
+   to "Nagle / ACK path" — verifies the folklore pins stay *cleared* (pass when absent),
+   matching what Apply actually does. This was missed by the earlier contract-mismatch sweep
+   (items 1-7); the audit re-derives detect↔apply agreement from source, not from that list.
 
 ## Discord — honesty issues
 
