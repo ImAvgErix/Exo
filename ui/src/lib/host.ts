@@ -190,9 +190,24 @@ async function call<T>(
   const id = crypto.randomUUID()
   const req: HostRequest = { id, method, params }
   return new Promise<T>((resolve, reject) => {
-    pending.set(id, { resolve: (v) => resolve(v as T), reject })
+    // The timeout must be cancelled once the host answers. Previously it stayed
+    // armed for the full window (up to 10 min for verifyAll) even on success, so
+    // with the 1.5s live-stats poll hundreds of dead timers piled up per session.
+    let timer: number | undefined
+    const done = () => {
+      if (timer !== undefined) {
+        clearTimeout(timer)
+        timer = undefined
+      }
+      pending.delete(id)
+    }
+    pending.set(id, {
+      resolve: (v) => { done(); resolve(v as T) },
+      reject: (e) => { done(); reject(e) },
+    })
     post(req)
-    setTimeout(() => {
+    timer = window.setTimeout(() => {
+      timer = undefined
       if (pending.has(id)) {
         pending.delete(id)
         reject(new Error(`host timeout: ${method}`))

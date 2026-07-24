@@ -1,3 +1,24 @@
+## 4.2.6
+
+**Code quality pass -- real defects, not cosmetics.**
+
+- **Fixed a growing memory leak.** Every request to the app's backend armed a
+  timeout that was never cancelled when the answer arrived, so it stayed alive
+  for its full window (up to 10 minutes). With live stats polling every 1.5
+  seconds, hundreds of dead timers piled up over a session. They're now
+  cancelled the moment the host responds.
+- **Steam's tray step could claim success after failing.** A denied registry
+  write aborted the rest of the icons and the step still reported "ok". Each
+  icon is now handled independently, and the step honestly reports ok, partial,
+  or fail.
+- **A corrupt config can no longer hang an optimize.** Config parsing is bounded
+  by a 5-second limit, so a malformed file surfaces an error instead of freezing
+  the apply.
+- **Removed dead code and dead tests.** Six navigation methods pointed at screens
+  that no longer exist, and four test blocks were keyed to deleted files -- they
+  looked like coverage while asserting nothing. All removed, and the stale test
+  that would have *failed the build for deleting dead code* now checks reality.
+
 ## 4.2.5
 
 **Honesty pass on the interface.**

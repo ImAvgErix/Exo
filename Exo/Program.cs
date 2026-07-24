@@ -23,6 +23,13 @@ public static class Program
         {
             Helpers.NativeProcessSecurity.HardenDllSearch();
 
+            // Every optimizer parses app/game config files with regexes. A corrupt or
+            // hostile config (one enormous line, no newline) can drive catastrophic
+            // backtracking and hang an Apply with no way out. This process-wide default
+            // bounds every Regex call that doesn't set its own timeout, turning a hang
+            // into a caught RegexMatchTimeoutException the module can report.
+            AppDomain.CurrentDomain.SetData("REGEX_DEFAULT_MATCH_TIMEOUT", TimeSpan.FromSeconds(5));
+
             // A redirected secondary launch must not reset the primary process's
             // crash-loop log or initialize a second WinUI compositor.
             if (!Helpers.SingleInstanceManager.IsPrimaryInstance())
