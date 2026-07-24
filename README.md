@@ -38,9 +38,10 @@ if it helps you, even **$1** keeps the project going:
 5. **It finishes honestly.** "Done. Everything you okayed is optimized." Nothing is ever applied
    without your yes — including updates to Exo itself.
 
-The orb is alive the whole time: it roams the app on its own, wanders and glances while it
-rests, throws in the odd playful spin or hop, scans while it reads, energizes while it works,
-and glides back to center to talk.
+The orb is alive the whole time, right down to the individual dots: they shimmer and twinkle on
+their own, ripple and pulse and burst apart and reassemble, scan while it reads, energize while
+it works. And when it's idle it thinks out loud — dropping real facts about your machine
+("your GPU's barely awake right now") or just a bit of personality.
 
 ---
 
