@@ -38,7 +38,15 @@ CS2→VAC, Apex→EAC, COD→Ricochet, Marvel Rivals→proprietary, R6→BattlEy
 - Paks/DLLs are only ever on the table for games with **no kernel AC** (mostly single-player) —
   none of the competitive titles below.
 
-## Per-game plan (start: 8 of the most popular)
+## Confirmed scope: the big esports titles (+ Rocket League, League)
+
+Locked list — the games that are actual esports with a real config surface:
+**CS2, Valorant, League of Legends, Dota 2, Rocket League, Overwatch 2, Apex Legends,
+Rainbow Six Siege, Fortnite, Marvel Rivals, Call of Duty (Warzone/BO7).**
+Helldivers 2 / The Finals / Predecessor drop off the priority list (not esports); they stay
+only if their levers are genuinely real, otherwise removed rather than faked.
+
+## Per-game plan
 
 Legend: **DO** = real durable lever we apply · **DROP** = remove (fragile/folklore/no-op) ·
 **OUT** = unsafe, never.
@@ -94,10 +102,27 @@ Legend: **DO** = real durable lever we apply · **DROP** = remove (fragile/folkl
 - **DO** `Settings_v0.ini`: real render toggles (RenderScale 100, dynamic render scale off, local
   fog detail low, shadow detail low, reflections off, VSync off, limit-to-refresh options).
 
-### Candidates for later / on request
-Rainbow Six Siege (`GameSettings.ini`, well-documented), Rocket League (`TASystemSettings.ini`),
-Deadlock (Source 2 autoexec), PUBG. Helldivers 2 / The Finals / Predecessor stay only if their
-levers are real — otherwise dropped rather than faked.
+### 9. Dota 2 (Source 2, VAC)
+- **DO** launch options: `-novid -high -nojoy +fps_max <hz|0> +exec exo.cfg` and an `exo.cfg`
+  (`fps_max`, `dota_embers 0`, `dota_portrait_animate 0`, cheap-render cvars).
+- **DROP** `-nod3d9ex` — CS:GO/Source 1 era, obsolete and pointless on Source 2 (same trap as CS2).
+
+### 10. Rocket League (UE3, EAC)
+- **DO** `TASystemSettings.ini` (`Documents\My Games\Rocket League\TAGame\Config`):
+  `AllowPerFrameSleep=False` (uncaps past the 250 cap), `OneFrameThreadLag=False` (lower input
+  lag — competitive default), `MaxAnisotropy=16`, effects/bloom/DOF/lens-flare off.
+- **CRITICAL durability step:** Rocket League **overwrites this file on launch unless it's set
+  read-only.** So after writing we must set the file read-only (and Repair clears the read-only
+  bit + restores). Without that, the whole tweak is a phantom — exactly the failure this
+  redesign is about.
+
+### 11. Rainbow Six Siege (AnvilNext, BattlEye)
+- **DO** `GameSettings.ini` (`Documents\My Games\Rainbow Six - Siege\<id>\`): `RenderScaling`,
+  shadow/reflection/texture-filter quality, `VSync 0`, `LimitMaximumFPS`/`MaxFPS`, `MotionBlur 0`,
+  `LensEffect 0` — well-documented, game honors them.
+
+### Alternates on request
+Deadlock (Source 2 autoexec), PUBG (BattlEye), Valorant is already the "near-locked" case.
 
 ## Model changes
 
