@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import {
   host,
@@ -14,6 +15,7 @@ const chipClass =
 
 export function HomePage() {
   const reduce = useReducedMotion()
+  const nav = useNavigate()
   const [dash, setDash] = useState<DashboardSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [verifying, setVerifying] = useState(false)
@@ -113,6 +115,14 @@ export function HomePage() {
             <p className={chipClass}>
               {overview || `${applied} / ${modules.length} verified`}
             </p>
+            <button
+              type="button"
+              onClick={() => nav('/advisor')}
+              title="Advisor: ranked, actionable advice from your live PC state."
+              className={`${chipClass} hover:bg-[#24242C] hover:text-text`}
+            >
+              Advisor
+            </button>
             <button
               type="button"
               disabled={verifying}

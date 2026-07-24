@@ -5,6 +5,7 @@ import { Shell } from './components/Shell'
 import { HomePage } from './pages/HomePage'
 import { ModulePage } from './pages/ModulePage'
 import { GamesPage } from './pages/GamesPage'
+import { AdvisorPage } from './pages/AdvisorPage'
 
 export default function App() {
   useEffect(() => {
@@ -16,6 +17,7 @@ export default function App() {
       <Routes>
         <Route element={<Shell />}>
           <Route index element={<HomePage />} />
+          <Route path="advisor" element={<AdvisorPage />} />
           <Route path="module/games" element={<GamesPage />} />
           <Route path="module/:id" element={<ModulePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
