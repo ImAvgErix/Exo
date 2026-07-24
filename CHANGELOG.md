@@ -1,3 +1,17 @@
+## 4.2.1
+
+**Hotfix from first on-box test of the brain UI.**
+
+- The orb no longer freezes on PCs with Windows "animation effects" turned off
+  (common on tuned gaming rigs -- that setting reports reduced-motion and the
+  orb rendered a single frame). It now always stays alive; reduced-motion just
+  makes it calmer (slower rotation, no pulses or cursor parallax).
+- Fixed the white caption-button box in the title bar: the native title bar and
+  its minimize/close buttons are now painted black to match the app, and the
+  WebView2 background is pure black (no white flash).
+- Removed the "Exo" icon and text from the title bar -- just a clean black strip
+  with window controls.
+
 ## 4.2.0
 
 **Exo is now a living brain -- the whole app is one thinking orb.**
