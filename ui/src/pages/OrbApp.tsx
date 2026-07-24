@@ -78,6 +78,7 @@ export function OrbApp() {
   phaseRef.current = phase
   const dashRef = useRef<DashboardSnapshot | null>(null)
   dashRef.current = dash
+  const lastThought = useRef<string>('')
 
   const say = useCallback((message: string, options: Opt[]) => {
     setMsg(message)
@@ -150,7 +151,12 @@ export function OrbApp() {
     const id = window.setInterval(() => {
       if (!alive) return
       if (phaseRef.current !== 'greet' && phaseRef.current !== 'done') return
-      muse(pick(thoughtLines(dashRef.current)))
+      // Never repeat the line it just said — a brain that loops the same thought
+      // reads as a script, not a mind.
+      const lines = thoughtLines(dashRef.current).filter((l) => l !== lastThought.current)
+      const next = pick(lines.length ? lines : thoughtLines(dashRef.current))
+      lastThought.current = next
+      muse(next)
     }, 8500)
     return () => { alive = false; window.clearInterval(id) }
   }, [phase, muse])
@@ -247,7 +253,12 @@ export function OrbApp() {
       if (q.length === 0) conclude({ rows: r.results ?? [], snap: d })
       else ask()
     } catch {
-      say("I couldn't finish reading the PC. Try again?", [{ label: 'Retry', run: () => void scan(), primary: true }])
+      // Dead-end states are a UI bug: always leave a way to act. Retry, or go
+      // look at what actually failed.
+      say("I couldn't finish reading the PC. Try again?", [
+        { label: 'Retry', run: () => void scan(), primary: true },
+        { label: 'Open logs', run: () => void host.openLogs() },
+      ])
     }
   }
 
@@ -312,13 +323,23 @@ export function OrbApp() {
       setDash(d)
       setPhase('ask')
       const more = qi.current + 1 < queue.current.length
-      say(pick([`${name}'s optimized${s.statusKind === 'partial' ? ' — as far as it goes here' : ''}.`, `Done — ${name}'s dialed in.`, `${name} handled.`]),
+      // Be honest about the network ceiling: most latency is your ISP and the
+      // route to the server, not anything a local setting can move. Claiming a
+      // ping win here would be the same overpromising we strip out of tweaks.
+      const ceiling = id === 'internet'
+        ? " Your line's healthy, so don't expect a ping drop — past this it's your route and ISP."
+        : ''
+      say(pick([`${name}'s optimized${s.statusKind === 'partial' ? ' — as far as it goes here' : ''}.${ceiling}`, `Done — ${name}'s dialed in.${ceiling}`, `${name} handled.${ceiling}`]),
         more
           ? [{ label: 'Next', run: () => next(), primary: true }, { label: 'Stop here', run: () => void conclude() }]
           : [{ label: 'Wrap up', run: () => next(), primary: true }])
     } catch {
       setPhase('ask')
-      say(`${name} hit a snag — I logged it. Move on?`, [{ label: 'Next', run: () => next(), primary: true }])
+      // "I logged it" is only honest if you can actually reach the log.
+      say(`${name} hit a snag — I logged it. Move on?`, [
+        { label: 'Next', run: () => next(), primary: true },
+        { label: 'Open logs', run: () => void host.openLogs() },
+      ])
     }
   }
 
