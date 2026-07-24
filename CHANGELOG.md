@@ -1,3 +1,19 @@
+## 4.1.6
+
+**Internet optimizer now reports honestly after a successful apply.**
+
+- Fixed a stale check row that could show a permanent red "Instant TCP response --
+  Stock / not applied" on the gaming presets *even after a correct Apply*. Exo
+  deliberately removes the old `TcpAckFrequency`/`TCPNoDelay` interface pins (they're
+  TCP folklore -- modern games run on UDP, so pinning TCP ACK/Nagle only adds ACK
+  overhead without touching game traffic), but the detect row still expected them to
+  be present, so it could never pass. The row is now "Nagle / ACK path" and verifies
+  the folklore pins stay *cleared*, matching what Apply actually does -- so the
+  post-apply state reads as verified instead of a false miss.
+- Full audit of all five optimizers (Discord, Internet, NVIDIA, Steam, Brave) against
+  best-known 2026 values and anti-folklore guards; this was the one real contract bug
+  found. Everything else was already at correct values.
+
 ## 4.1.5
 
 **Smaller still -- the bundled runtime drops three components Exo never uses.**
