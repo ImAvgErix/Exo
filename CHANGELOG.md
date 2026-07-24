@@ -1,3 +1,19 @@
+## 4.2.4
+
+**The orb gets a mind of its own.**
+
+- **Every dot is alive now.** Instead of a rigid shell, each point shimmers and
+  twinkles on its own -- and the orb throws real gestures with intent: ripples
+  roll across it, it pulses when it talks, bursts apart and reassembles,
+  coalesces into a tight core, and shivers when it's thinking hard. It's anchored
+  near center with just a gentle float, so when it does move, it means something
+  (no more drifting for the sake of drifting).
+- **It thinks out loud.** When it's idle and waiting on you, the brain speaks up
+  on its own -- usually a real fact about your machine ("Your GPU's at 6% right
+  now -- barely awake", "Memory's at 41%", "Your network's rated Excellent"),
+  sometimes just a bit of personality. It never talks over a question it's
+  actually asking you.
+
 ## 4.2.3
 
 **The orb lives in the app now — and less clutter around it.**

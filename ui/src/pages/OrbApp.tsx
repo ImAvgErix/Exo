@@ -29,6 +29,34 @@ function joinNames(ids: string[]): string {
 type Sugg = { id: string; kind: 'optimize' | 'reapply' }
 type Opt = { label: string; run: () => void; primary?: boolean }
 
+// What the brain muses about on its own — mostly real facts read live off the
+// machine, plus a little personality. Falls back to quips when telemetry isn't
+// in yet.
+function thoughtLines(d: DashboardSnapshot | null): string[] {
+  const out: string[] = []
+  const s = d?.specs
+  const l = d?.live
+  if (s?.gpu) out.push(`${s.gpu} under the hood — I know its whole mind.`)
+  if (s?.cpu && s?.ram) out.push(`${s.cpu}, ${s.ram}. I can feel every core from here.`)
+  if (s?.os) out.push(`You're running ${s.os}.`)
+  if (l) {
+    if (l.hasGpu !== false)
+      out.push(`Your GPU's at ${Math.round(l.gpuPercent)}% right now — ${l.gpuPercent < 15 ? 'barely awake' : l.gpuPercent > 80 ? 'working hard' : 'warming up'}.`)
+    if (l.hasCpu !== false) out.push(`CPU's ticking around ${Math.round(l.cpuPercent)}%.`)
+    if (l.memorySecondary) out.push(`Memory's at ${Math.round(l.memoryPercent)}% — ${l.memorySecondary}.`)
+    if (l.netRating) out.push(`Your network's rated ${l.netRating}${l.netIdleMs ? `, ${l.netIdleMs} idle` : ''}.`)
+    else if (l.netLink) out.push(`Hooked up over ${l.netLink}.`)
+  }
+  out.push(
+    'Idle hands. Point me at something.',
+    'I could be making this faster, you know.',
+    "I'm always half-thinking about your frame times.",
+    'Say the word and I go to work.',
+    'I never really sleep — just wait.',
+  )
+  return out
+}
+
 export function OrbApp() {
   const [dash, setDash] = useState<DashboardSnapshot | null>(null)
   const [phase, setPhase] = useState<'greet' | 'scanning' | 'ask' | 'working' | 'done'>('greet')
@@ -48,10 +76,22 @@ export function OrbApp() {
   const updateRef = useRef<{ version: string } | null>(null)
   const phaseRef = useRef(phase)
   phaseRef.current = phase
+  const dashRef = useRef<DashboardSnapshot | null>(null)
+  dashRef.current = dash
 
   const say = useCallback((message: string, options: Opt[]) => {
     setMsg(message)
     setOpts(options)
+    setMsgKey((k) => k + 1)
+    setSpeaking(true)
+    window.clearTimeout(speakTimer.current)
+    speakTimer.current = window.setTimeout(() => setSpeaking(false), 850)
+  }, [])
+
+  // A spontaneous thought — keeps whatever chips are up, just changes the line.
+  // This is the brain "thinking out loud" while it waits on you.
+  const muse = useCallback((message: string) => {
+    setMsg(message)
     setMsgKey((k) => k + 1)
     setSpeaking(true)
     window.clearTimeout(speakTimer.current)
@@ -100,6 +140,20 @@ export function OrbApp() {
     const d = data as { status?: string }
     if (updating.current && d.status) setMsg(d.status)
   }), [])
+
+  // The brain has its own mind. When it's idle and waiting on you, it thinks
+  // out loud on its own — usually a real fact about your machine, sometimes just
+  // a bit of personality. It never talks over a question it's actually asking.
+  useEffect(() => {
+    if (phase !== 'greet' && phase !== 'done') return
+    let alive = true
+    const id = window.setInterval(() => {
+      if (!alive) return
+      if (phaseRef.current !== 'greet' && phaseRef.current !== 'done') return
+      muse(pick(thoughtLines(dashRef.current)))
+    }, 8500)
+    return () => { alive = false; window.clearInterval(id) }
+  }, [phase, muse])
 
   function askUpdate() {
     const v = updateRef.current?.version
