@@ -108,6 +108,7 @@ public sealed class WebHostBridge
                 "settings.set" => SetSettings(paramsEl, hasParams),
                 "settings.getChangelog" => BuildChangelog(),
                 "settings.checkUpdates" => await CheckUpdatesAsync().ConfigureAwait(true),
+                "updates.peek" => await PeekUpdatesAsync().ConfigureAwait(true),
                 _ => throw new InvalidOperationException($"Unknown method: {method}")
             };
 
@@ -639,6 +640,42 @@ public sealed class WebHostBridge
     /// Check GitHub latest; when an update is available, download + quiet-install
     /// without a native ContentDialog card. Progress streams to the WebView settings panel.
     /// </summary>
+    /// <summary>
+    /// Check-only (never downloads/installs): the brain uses this on launch to
+    /// ASK before updating. settings.checkUpdates remains the install path.
+    /// </summary>
+    private async Task<object> PeekUpdatesAsync()
+    {
+        try
+        {
+            var check = await _services.Updater
+                .CheckAppUpdateAsync()
+                .ConfigureAwait(true);
+            return new
+            {
+                updateAvailable = check.UpdateAvailable,
+                message = check.Message,
+                alreadyLatest = check.AlreadyLatest,
+                localVersion = check.LocalVersion,
+                remoteVersion = check.RemoteVersion,
+                releaseSummary = check.ReleaseSummary
+            };
+        }
+        catch (Exception ex)
+        {
+            // Offline / rate-limited: the brain just doesn't ask this launch.
+            return new
+            {
+                updateAvailable = false,
+                message = ex.Message,
+                alreadyLatest = false,
+                localVersion = (string?)null,
+                remoteVersion = (string?)null,
+                releaseSummary = (string?)null
+            };
+        }
+    }
+
     private async Task<object> CheckUpdatesAsync()
     {
         string AppVer()

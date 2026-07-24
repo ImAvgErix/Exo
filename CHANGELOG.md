@@ -11,6 +11,12 @@
   WebView2 background is pure black (no white flash).
 - Removed the "Exo" icon and text from the title bar -- just a clean black strip
   with window controls.
+- The brain now prompts for updates: on launch it quietly checks GitHub Releases
+  (check only -- nothing downloads without a yes) and asks "A newer me is out --
+  want me to install it and restart?" It shows live download progress while
+  updating and restarts itself when done. This also fixes a long-standing quiet
+  bug: the old update-on-launch setting defaulted to OFF, so most installs never
+  saw updates at all. It now defaults to ON, and consent happens in the ask.
 
 ## 4.2.0
 

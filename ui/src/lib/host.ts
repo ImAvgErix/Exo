@@ -288,6 +288,16 @@ export const host = {
       message?: string
       sections: Array<{ version: string; bullets: string[] }>
     }>('settings.getChangelog'),
+  /** Check-only (never installs) — the brain asks before updating. */
+  peekUpdate: () =>
+    call<{
+      updateAvailable: boolean
+      message?: string
+      alreadyLatest?: boolean
+      localVersion?: string | null
+      remoteVersion?: string | null
+      releaseSummary?: string | null
+    }>('updates.peek', undefined, 60_000),
   /** Check + download/install when available. Long timeout for multi-minute SFX download. */
   checkUpdates: () =>
     call<{
@@ -373,6 +383,19 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
     } as T)
   }
   if (method === 'dashboard.live') return Promise.resolve(mockLive() as T)
+  if (method === 'updates.peek') {
+    // Browser dev: append ?update to the URL to exercise the brain's update ask.
+    const wantsUpdate =
+      typeof location !== 'undefined' && location.search.includes('update')
+    return Promise.resolve({
+      updateAvailable: wantsUpdate,
+      alreadyLatest: !wantsUpdate,
+      localVersion: '4.2.1',
+      remoteVersion: wantsUpdate ? '9.9.9' : '4.2.1',
+      releaseSummary: wantsUpdate ? 'Mock release notes' : null,
+      message: 'mock',
+    } as T)
+  }
   if (method === 'settings.get' || method === 'settings.set') {
     return Promise.resolve({
       appVersion: '3.7.2-dev',

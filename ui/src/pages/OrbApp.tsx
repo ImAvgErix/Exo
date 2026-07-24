@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BrainOrb, type BrainState } from '../components/BrainOrb'
-import { host, type DashboardSnapshot, type ModuleId, type VerifyAllResult } from '../lib/host'
+import { host, onHostEvent, type DashboardSnapshot, type ModuleId, type VerifyAllResult } from '../lib/host'
 
 /* Exo is a brain. The orb is the whole UI: it reads the PC, forms an opinion,
    and *talks* — proposing what to optimize, one thing at a time. You answer;
@@ -28,6 +28,9 @@ export function OrbApp() {
   const qi = useRef(0)
   const spokeContext = useRef(false)
   const speakTimer = useRef<number | undefined>(undefined)
+  const updateRef = useRef<{ version: string } | null>(null)
+  const phaseRef = useRef(phase)
+  phaseRef.current = phase
 
   const say = useCallback((message: string, options: Opt[]) => {
     setMsg(message)
@@ -56,6 +59,67 @@ export function OrbApp() {
   }, [])
 
   useEffect(() => { greet() /* eslint-disable-next-line */ }, [])
+
+  // On launch, peek for a newer Exo (check-only) and ASK — never auto-install.
+  useEffect(() => {
+    let stop = false
+    ;(async () => {
+      try {
+        const s = await host.getSettings()
+        if (s.checkForUpdatesOnLaunch === false) return
+        const u = await host.peekUpdate()
+        if (stop || !u.updateAvailable || !u.remoteVersion) return
+        updateRef.current = { version: u.remoteVersion }
+        if (phaseRef.current === 'greet' || phaseRef.current === 'done') askUpdate()
+      } catch { /* offline or rate-limited — don't ask this launch */ }
+    })()
+    return () => { stop = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Live progress lines while the update downloads/installs.
+  const updating = useRef(false)
+  useEffect(() => onHostEvent('settings.updateProgress', (data) => {
+    const d = data as { status?: string }
+    if (updating.current && d.status) setMsg(d.status)
+  }), [])
+
+  function askUpdate() {
+    const v = updateRef.current?.version
+    if (!v) return
+    setPhase('ask')
+    say(pick([
+      `A newer me is out — Exo ${v}. Want me to install it and restart?`,
+      `Exo ${v} just dropped. Update now? I'll restart myself when it's done.`,
+    ]), [
+      { label: 'Update now', run: () => void doUpdate(), primary: true },
+      { label: 'Later', run: () => greet() },
+    ])
+  }
+
+  async function doUpdate() {
+    setPhase('working')
+    updating.current = true
+    say('Updating myself — downloading the new build…', [])
+    try {
+      const r = await host.checkUpdates()
+      // installed/shouldExit -> the app exits and relaunches itself.
+      if (!r.installed && !r.shouldExit) {
+        updating.current = false
+        updateRef.current = null
+        setPhase('done')
+        say(r.message || "The update didn't finish. I'll ask again next launch.", [
+          { label: 'OK', run: () => greet(), primary: true },
+        ])
+      }
+    } catch {
+      updating.current = false
+      setPhase('done')
+      say("The update didn't finish — I'll ask again next launch.", [
+        { label: 'OK', run: () => greet(), primary: true },
+      ])
+    }
+  }
 
   function greet() {
     setPhase('greet')
@@ -184,9 +248,9 @@ export function OrbApp() {
       applied >= total
         ? pick(["That's everything — your rig is fully dialed in.", 'All of it optimized. You are as sharp as I can make you.'])
         : pick(['Done. Everything you okayed is optimized.', "That's handled. Ping me anytime for another pass."])
-    say(aside ? `${base} One thing though — ${aside}.` : base, [
-      { label: 'Read again', run: () => void scan(), primary: true },
-    ])
+    const chips: Opt[] = [{ label: 'Read again', run: () => void scan(), primary: true }]
+    if (updateRef.current) chips.push({ label: `Install Exo ${updateRef.current.version}`, run: () => void doUpdate() })
+    say(aside ? `${base} One thing though — ${aside}.` : base, chips)
   }
 
   const orbState: BrainState = speaking ? 'speak' : phase === 'scanning' ? 'think' : phase === 'working' ? 'work' : 'idle'

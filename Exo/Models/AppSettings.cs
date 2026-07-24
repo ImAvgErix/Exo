@@ -5,11 +5,13 @@ namespace Exo.Models;
 public sealed class AppSettings
 {
     /// <summary>
-    /// When true, check GitHub Releases for a newer Exo app on launch.
-    /// The legacy JSON name keeps existing user settings compatible.
+    /// When true (default), the brain peeks GitHub Releases on launch and ASKS
+    /// before installing anything. New JSON name on purpose: the legacy
+    /// "autoUpdateScripts" default was false, which silently disabled update
+    /// prompts for every existing install — consent now happens in the ask.
     /// </summary>
-    [JsonPropertyName("autoUpdateScripts")]
-    public bool CheckForUpdatesOnLaunch { get; set; }
+    [JsonPropertyName("promptUpdatesOnLaunch")]
+    public bool CheckForUpdatesOnLaunch { get; set; } = true;
 
     /// <summary>Optional custom scripts root; empty = app-bundled Scripts folder.</summary>
     public string CustomScriptsPath { get; set; } = string.Empty;
