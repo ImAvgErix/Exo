@@ -67,12 +67,13 @@ public sealed partial class MainWindow : Window
         }
         catch { StartupLog.Mark("chrome-setup-partial"); }
 
-        // Custom glass caption owns min/close; hide stock Win11 title-bar buttons.
-        ExtendsContentIntoTitleBar = true;
+        // Use the standard Windows title bar (native minimize/close). The UI is
+        // the full-bleed orb; window controls are the OS caption.
+        ExtendsContentIntoTitleBar = false;
         try
         {
             if (AppWindow.Presenter is OverlappedPresenter op)
-                op.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: false);
+                op.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: true);
         }
         catch { /* best-effort on older presenters */ }
 
@@ -493,7 +494,7 @@ public sealed partial class MainWindow : Window
             presenter.PreferredMinimumHeight = FixedWindowHeight;
             presenter.PreferredMaximumWidth = FixedWindowWidth;
             presenter.PreferredMaximumHeight = FixedWindowHeight;
-            try { presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: false); }
+            try { presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: true); }
             catch { }
         }
     }
