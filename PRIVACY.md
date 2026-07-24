@@ -33,6 +33,14 @@ only after your Apply/Repair action.
 
 Nothing is uploaded. Delete the folder and it's gone.
 
+## The brain's voice
+
+Exo can speak its lines out loud. That voice uses **your PC's built-in speech
+engine** (the Windows OneCore voices, via the WebView2 speech API) — entirely
+local, no network, no cloud service, nothing sent anywhere. It is **off until you
+turn it on**, and the on/off choice is stored only in the app's local WebView
+storage on this machine.
+
 ## Background footprint
 
 Exo installs **no services, no scheduled tasks, no startup entries, no drivers**, and keeps

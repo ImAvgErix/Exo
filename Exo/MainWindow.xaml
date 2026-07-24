@@ -34,6 +34,18 @@
                       DefaultBackgroundColor="#000000" />
         </Grid>
 
+        <!--
+          Thin transparent drag strip for the extended (black) caption. Sits
+          above the WebView2 so dragging the top edge moves the window instead
+          of hitting the page. Height clears the system min/close buttons; the
+          orb content shows through since it's transparent. Wired via
+          SetTitleBar(AppTitleBar) in the code-behind.
+        -->
+        <Grid x:Name="AppTitleBar"
+              Height="36"
+              VerticalAlignment="Top"
+              Background="Transparent" />
+
         <!-- Native boot panel: shown while WebView2 initializes / repairs. -->
         <StackPanel x:Name="WebBootPanel"
                     HorizontalAlignment="Center"

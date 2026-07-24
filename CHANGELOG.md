@@ -1,3 +1,31 @@
+## 4.2.2
+
+**The orb gets a soul — and an honest verdict.**
+
+- **The orb is alive now.** It drifts and floats on its own, glances around by
+  itself, and reacts with real gestures: a nod when it speaks, a lean-in while it
+  reads your PC, an energized bob while it works, and the occasional curious
+  "perk" at rest, as if it noticed something. It's no longer a logo that spins in
+  place. (Also fixed a hitch where the motion jumped whenever it changed states.)
+- **"Your PC is good to go."** When everything it can tune is actually optimized,
+  the brain now says so and stops. Before calling it done, it *re-reads the
+  machine* so the verdict is verified, not a stale flag -- and if a tweak simply
+  can't go further on your box, it accepts that as the ceiling instead of nagging
+  you about it forever. If you skipped things, it tells you exactly what's still
+  stock and offers to finish in one tap.
+- **It can talk.** Turn on the voice (the speaker toggle, bottom-right) and the
+  brain speaks its lines out loud, using your PC's built-in speech engine --
+  fully local, nothing sent anywhere. Off by default.
+- **A real face.** New self-hosted fonts: Instrument Serif is the brain's voice,
+  Bricolage Grotesque is the UI -- distinctive and offline, no more default look.
+- **The white title bar is actually gone this time.** The caption is now extended
+  into the app as pure black with the normal Windows minimize/close buttons. (The
+  4.2.1 fix set the colors but left the mode that makes Windows ignore them --
+  that's corrected, and a leftover setting that hid the button glyphs is fixed
+  too.)
+- Refreshed the project pages -- README, CONTRIBUTING, and the privacy note now
+  describe the brain, the voice, and the fonts.
+
 ## 4.2.1
 
 **Hotfix from first on-box test of the brain UI.**

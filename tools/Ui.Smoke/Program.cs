@@ -263,12 +263,16 @@ if (File.Exists(main))
         && m.Contains("x:Name=\"ContentHost\"", StringComparison.Ordinal)
         && m.Contains("Margin=\"0\"", StringComparison.Ordinal)
         && m.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal));
-    Expect("native title bar (no custom caption chrome)",
-        !m.Contains("x:Name=\"TitleChrome\"", StringComparison.Ordinal)
-        && !m.Contains("x:Name=\"AppTitleBar\"", StringComparison.Ordinal)
+    // Extended black caption: a thin transparent drag strip (AppTitleBar) is the
+    // ONLY native overlay. No custom caption buttons in XAML — Windows draws
+    // min/close; React never paints its own caption chrome.
+    Expect("thin transparent drag strip (extended black caption)",
+        m.Contains("x:Name=\"AppTitleBar\"", StringComparison.Ordinal)
+        && m.Contains("Background=\"Transparent\"", StringComparison.Ordinal)
+        && !m.Contains("x:Name=\"TitleChrome\"", StringComparison.Ordinal)
         && !m.Contains("<TitleBar", StringComparison.Ordinal)
         && !m.Contains("CaptionSpacerHost", StringComparison.Ordinal)
-        && !m.Contains("TitleBarDragRegion", StringComparison.Ordinal));
+        && !m.Contains("Text=\"EXO\"", StringComparison.Ordinal));
     Expect("legacy chrome stubs collapsed",
         m.Contains("x:Name=\"ExoBrandPill\"", StringComparison.Ordinal)
         && m.Contains("x:Name=\"NavHome\"", StringComparison.Ordinal)
@@ -318,9 +322,11 @@ var uiPkg = Path.Combine(repo, "ui", "package.json");
 if (File.Exists(uiPkg))
 {
     var pkg = File.ReadAllText(uiPkg);
+    // Distinctive self-hosted pairing: Instrument Serif is the brain's VOICE,
+    // Bricolage Grotesque is the UI face. Both bundled woff2, fully offline.
     Expect("self-hosted fonts bundled",
-        pkg.Contains("@fontsource/space-grotesk", StringComparison.Ordinal)
-        && pkg.Contains("@fontsource/jetbrains-mono", StringComparison.Ordinal));
+        pkg.Contains("@fontsource/instrument-serif", StringComparison.Ordinal)
+        && pkg.Contains("@fontsource/bricolage-grotesque", StringComparison.Ordinal));
     Expect("dead UI deps removed",
         !pkg.Contains("react-router-dom", StringComparison.Ordinal)
         && !pkg.Contains("framer-motion", StringComparison.Ordinal)
@@ -332,10 +338,15 @@ var mainCs = Path.Combine(repo, "Exo", "MainWindow.xaml.cs");
 if (File.Exists(mainCs))
 {
     var cs = File.ReadAllText(mainCs);
-    Expect("native title bar wired",
-        cs.Contains("ExtendsContentIntoTitleBar = false", StringComparison.Ordinal)
+    // Extended caption so AppWindow.TitleBar colors are honored (they are ignored
+    // when ExtendsContentIntoTitleBar is false — the 4.2.1 white-bar bug). Caption
+    // button backgrounds must be transparent so the black orb shows through.
+    Expect("extended black caption wired (drag strip + transparent buttons)",
+        cs.Contains("ExtendsContentIntoTitleBar = true", StringComparison.Ordinal)
         && cs.Contains("hasTitleBar: true", StringComparison.Ordinal)
-        && !cs.Contains("SetTitleBar(AppTitleBar)", StringComparison.Ordinal));
+        && cs.Contains("SetTitleBar(AppTitleBar)", StringComparison.Ordinal)
+        && cs.Contains("ButtonBackgroundColor = transparent", StringComparison.Ordinal)
+        && !cs.Contains("ExtendsContentIntoTitleBar = false", StringComparison.Ordinal));
     Expect("fixed shell size", cs.Contains("IsResizable = false", StringComparison.Ordinal)
         && cs.Contains("IsMaximizable = false", StringComparison.Ordinal)
         && cs.Contains("FixedWindowWidth", StringComparison.Ordinal)
