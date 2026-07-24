@@ -401,6 +401,23 @@ static class Program
 
                     try { after = dev.CurrentColorData; }
                     catch { after = appliedColor ?? before; }
+
+                    // Bandwidth guard (competitive priority: refresh + RGB beat bit depth).
+                    // On a link that can't carry the higher depth at this mode, the driver
+                    // silently falls back to chroma subsampling (YUV 4:2:2) — which looks
+                    // worse than 8-bit RGB and can cost refresh. If the format is no longer
+                    // RGB after the set, step back down to 8-bit to get full RGB returned.
+                    if (appliedColor != null && after.ColorFormat != ColorDataFormat.RGB &&
+                        chosenDepth != ColorDataDepth.BPC8)
+                    {
+                        Console.WriteLine(
+                            $"[NVAPI] Display #{dev.DisplayId}: {chosenDepth} forced {after.ColorFormat} " +
+                            "(link bandwidth) — reverting to 8bpc to keep full RGB at this refresh");
+                        var rgb8 = ApplyColorWithFallbacks(dev, ColorDataDepth.BPC8);
+                        try { after = dev.CurrentColorData; }
+                        catch { after = rgb8 ?? after; }
+                    }
+
                     if (appliedColor != null && IsFullRgbUserColor(after))
                         colorAppliedCount++;
                     else if (appliedColor != null)
