@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AsciiField } from '../components/AsciiField'
+import { Orb } from '../components/Orb'
 import {
   host,
   onHostEvent,
@@ -435,8 +436,9 @@ export function ReelApp() {
 
         {/* Main */}
         <main style={{ position: 'relative', zIndex: 10, flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          {/* Ambient ASCII field — tints to the focused accent, scans on activity */}
+          {/* Ambient: ASCII data-grid backdrop + the JARVIS "brain" orb over it */}
           <AsciiField accent={focusedAccent} active={verifying || busy !== null} />
+          <Orb accent={focusedAccent} active={verifying || busy !== null} />
 
           {/* Reel */}
           <div onWheel={onWheel} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 340, zIndex: 10, perspective: 950 }}>
