@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { AsciiField } from '../components/AsciiField'
 import {
   host,
   onHostEvent,
@@ -32,20 +33,6 @@ const META: Record<string, { label: string; accent: string }> = {
 const TONE = { ok: '#34d399', bad: '#f87171', warn: '#fbbf24', neutral: '#8b8d92' }
 const GLOW = { ok: 'rgba(52,211,153,0.55)', warn: 'rgba(251,191,36,0.5)', bad: 'rgba(248,113,113,0.5)' }
 const L = '/logos/'
-
-const STARS = Array.from({ length: 70 }, (_, i) => {
-  const rand = (seed: number) => {
-    const v = Math.sin(seed * 127.1 + 311.7) * 43758.5453
-    return v - Math.floor(v)
-  }
-  return {
-    left: `${Math.round(rand(i) * 96 + 2)}%`,
-    top: `${Math.round(rand(i + 40) * 92 + 3)}%`,
-    size: rand(i + 80) > 0.72 ? 2 : 1,
-    dur: `${(2.4 + rand(i + 120) * 3.4).toFixed(1)}s`,
-    delay: `${(rand(i + 160) * -4).toFixed(1)}s`,
-  }
-})
 
 function pickText(hex: string) {
   const h = hex.replace('#', '')
@@ -330,14 +317,12 @@ export function ReelApp() {
       <div
         style={{
           position: 'relative',
-          width: 1200,
-          height: 780,
-          maxWidth: '100vw',
-          maxHeight: '100vh',
+          width: '100%',
+          height: '100%',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          borderRadius: 30,
+          borderRadius: 14,
           background: 'radial-gradient(120% 100% at 50% 0%,#060607 0%,#000 62%)',
           border: '1px solid color-mix(in srgb, var(--exo-accent) 22%, rgba(130,150,210,0.14))',
           boxShadow:
@@ -450,31 +435,14 @@ export function ReelApp() {
 
         {/* Main */}
         <main style={{ position: 'relative', zIndex: 10, flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          {/* stars */}
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }}>
-            {STARS.map((st, i) => (
-              <span
-                key={i}
-                style={{
-                  position: 'absolute',
-                  left: st.left,
-                  top: st.top,
-                  width: st.size,
-                  height: st.size,
-                  borderRadius: '50%',
-                  background: '#fff',
-                  animation: `exo-twinkle ${st.dur} ease-in-out infinite`,
-                  animationDelay: st.delay,
-                }}
-              />
-            ))}
-          </div>
+          {/* Ambient ASCII field — tints to the focused accent, scans on activity */}
+          <AsciiField accent={focusedAccent} active={verifying || busy !== null} />
 
           {/* Reel */}
           <div onWheel={onWheel} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 340, zIndex: 10, perspective: 950 }}>
-            <div style={{ position: 'absolute', left: 34, right: 26, top: '50%', height: 1, marginTop: -52, background: 'linear-gradient(90deg,rgba(255,255,255,0.14),transparent)', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', left: 34, right: 26, top: '50%', height: 1, marginTop: 52, background: 'linear-gradient(90deg,rgba(255,255,255,0.14),transparent)', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', left: 20, top: '50%', width: 3, height: 56, marginTop: -28, borderRadius: 2, background: 'var(--exo-accent)', boxShadow: '0 0 12px var(--exo-accent)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', left: 34, right: 26, top: '50%', height: 1, marginTop: -42, background: 'linear-gradient(90deg,rgba(255,255,255,0.14),transparent)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', left: 34, right: 26, top: '50%', height: 1, marginTop: 42, background: 'linear-gradient(90deg,rgba(255,255,255,0.14),transparent)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', left: 20, top: '50%', width: 3, height: 46, marginTop: -23, borderRadius: 2, background: 'var(--exo-accent)', boxShadow: '0 0 12px var(--exo-accent)', pointerEvents: 'none' }} />
             <span style={{ position: 'absolute', left: 34, top: 16, ...MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', color: '#5d5e66', zIndex: 20 }}>SYSTEM {slot + 1}/7</span>
             <button onClick={() => goSlot(slot - 1)} aria-label="Previous" style={{ ...arrowBtn, top: 36 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 15l6-6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -500,18 +468,18 @@ export function ReelApp() {
                     left: 34,
                     right: 16,
                     top: '50%',
-                    height: 88,
-                    marginTop: -44,
+                    height: 72,
+                    marginTop: -36,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 15,
+                    gap: 12,
                     padding: '0 14px',
                     border: 'none',
                     background: 'transparent',
                     cursor: 'pointer',
                     textAlign: 'left',
                     // Compositor-only: translateY (not margin-top) + spring settle.
-                    transform: `translateY(${off * 90}px) perspective(800px) rotateX(${off * -16}deg) scale(${focused ? 1.06 : Math.max(0.8, 1 - abs * 0.08)})`,
+                    transform: `translateY(${off * 76}px) perspective(800px) rotateX(${off * -16}deg) scale(${focused ? 1.06 : Math.max(0.8, 1 - abs * 0.08)})`,
                     opacity: abs > 1.6 ? 0 : focused ? 1 : 0.45,
                     zIndex: 40 - abs,
                     pointerEvents: abs > 1.6 ? 'none' : 'auto',
@@ -519,7 +487,7 @@ export function ReelApp() {
                     transition: 'transform .6s var(--ease-spring), opacity .4s ease',
                   }}
                 >
-                  <span style={{ position: 'relative', flexShrink: 0, width: 54, height: 54, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ position: 'relative', flexShrink: 0, width: 44, height: 44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: `1px solid color-mix(in srgb, ${accent} 45%, transparent)`, boxShadow: `0 0 16px color-mix(in srgb, ${accent} ${focused ? '45%' : '12%'}, transparent),inset 0 0 12px color-mix(in srgb, ${accent} 14%, transparent)`, transition: 'box-shadow .3s' }} />
                     <span style={{ position: 'absolute', left: '50%', top: '50%', width: 34, height: 34, margin: '-17px 0 0 -17px', borderRadius: '50%', background: `radial-gradient(circle,color-mix(in srgb, ${accent} 30%, transparent) 0%,transparent 72%)` }} />
                     {isSettings ? (
@@ -532,9 +500,9 @@ export function ReelApp() {
                     )}
                     <span style={{ position: 'absolute', top: 1, right: 1, width: 8, height: 8, borderRadius: '50%', background: TONE[toneKey], border: '1.5px solid #000', boxShadow: `0 0 8px ${TONE[toneKey]}` }} />
                   </span>
-                  <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span style={{ ...MONO, fontSize: 13, fontWeight: 700, letterSpacing: '0.13em', color: focused ? '#f4f4f6' : '#8a8b91', transition: 'color .3s' }}>{META[id].label.toUpperCase()}</span>
-                    <span style={{ fontSize: 10, letterSpacing: '0.06em', color: focused ? accent : '#5d5e66', transition: 'color .3s' }}>{statusSubFor(id)}</span>
+                  <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <span style={{ ...MONO, fontSize: 11.5, fontWeight: 700, letterSpacing: '0.13em', color: focused ? '#f4f4f6' : '#8a8b91', transition: 'color .3s' }}>{META[id].label.toUpperCase()}</span>
+                    <span style={{ fontSize: 9.5, letterSpacing: '0.06em', color: focused ? accent : '#5d5e66', transition: 'color .3s' }}>{statusSubFor(id)}</span>
                   </span>
                 </button>
               )
@@ -641,21 +609,21 @@ function ModulePane({
   const highlightRight = id === 'nvidia' ? gsync : !lowLatency
 
   return (
-    <section style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', gap: 16, padding: '22px 26px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        <div style={{ position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 62, height: 62, borderRadius: '50%' }}>
+    <section style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', gap: 11, padding: '14px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
+        <div style={{ position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: '50%' }}>
           <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: `1px solid color-mix(in srgb, ${accent} 50%, transparent)`, boxShadow: `0 0 20px color-mix(in srgb, ${accent} 30%, transparent),inset 0 0 14px color-mix(in srgb, ${accent} 16%, transparent)` }} />
-          <img src={`${L}${id}.png`} alt="" draggable={false} style={{ position: 'relative', width: 32, height: 32, objectFit: 'contain', filter: `drop-shadow(0 0 7px color-mix(in srgb, ${accent} 60%, transparent))` }} />
+          <img src={`${L}${id}.png`} alt="" draggable={false} style={{ position: 'relative', width: 24, height: 24, objectFit: 'contain', filter: `drop-shadow(0 0 7px color-mix(in srgb, ${accent} 60%, transparent))` }} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-            <p style={{ margin: 0, ...DISPLAY, fontSize: 21, fontWeight: 600, letterSpacing: '-0.01em' }}>{META[id].label}</p>
-            <StatusPill tone={TONE[toneKey]} label={headline} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <p style={{ margin: 0, ...DISPLAY, fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em' }}>{META[id].label}</p>
+            <StatusPill tone={TONE[toneKey]} label={headline} small />
           </div>
-          <p style={{ margin: '5px 0 0', fontSize: 12, lineHeight: 1.5, color: '#8a8b91', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{detail}</p>
+          <p style={{ margin: '3px 0 0', fontSize: 11, lineHeight: 1.45, color: '#8a8b91', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{detail}</p>
         </div>
         {hasProfile && (
-          <div style={{ flexShrink: 0, position: 'relative', display: 'flex', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 13, padding: 4, width: 220 }}>
+          <div style={{ flexShrink: 0, position: 'relative', display: 'flex', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 3, width: 176 }}>
             <span style={{ position: 'absolute', top: 4, bottom: 4, left: 4, width: 'calc(50% - 4px)', borderRadius: 9, background: accent, boxShadow: `0 2px 14px color-mix(in srgb, ${accent} 55%, transparent)`, transition: 'transform .5s cubic-bezier(0.16,1,0.3,1)', transform: `translateX(${highlightRight ? '100%' : '0%'})` }} />
             {profileOpts.map((o) => (
               <button key={o.id} onClick={o.set} style={{ position: 'relative', zIndex: 1, flex: 1, padding: '9px 8px', borderRadius: 9, fontSize: 11, fontWeight: 600, color: o.on ? pickText(accent) : '#c4c4ca', transition: 'color .3s', border: 'none', background: 'transparent', cursor: 'pointer' }}>{o.label}</button>
@@ -664,19 +632,19 @@ function ModulePane({
         )}
       </div>
 
-      <div key={id} style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gridAutoRows: '1fr', gap: '12px 16px', alignContent: 'stretch' }}>
+      <div key={id} style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gridAutoRows: 'auto', gap: '6px 8px', alignContent: 'start' }}>
         {(features.length ? features : Array.from({ length: 6 }, () => null)).map((f, i) => (
-          <FeatureChip key={i} index={i} title={f?.title ?? '—'} active={!!f?.active} />
+          <FeatureChip key={i} index={i} title={f?.title ?? '—'} active={!!f?.active} small />
         ))}
       </div>
 
       {busy && <ProgressBar pct={busy.pct} accent={accent} />}
 
-      <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ paddingTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
           onClick={onApply}
           disabled={!!busy}
-          style={{ flex: 1, padding: 14, borderRadius: 14, background: `linear-gradient(180deg, ${accent}, color-mix(in srgb, ${accent} 74%, #000))`, color: pickText(accent), ...DISPLAY, fontSize: 13.5, fontWeight: 600, boxShadow: `0 8px 26px color-mix(in srgb, ${accent} 34%, transparent)`, opacity: busy ? 0.6 : 1, border: 'none', cursor: 'pointer' }}
+          style={{ flex: 1, padding: 10, borderRadius: 11, background: `linear-gradient(180deg, ${accent}, color-mix(in srgb, ${accent} 74%, #000))`, color: pickText(accent), ...DISPLAY, fontSize: 12.5, fontWeight: 600, boxShadow: `0 6px 20px color-mix(in srgb, ${accent} 32%, transparent)`, opacity: busy ? 0.6 : 1, border: 'none', cursor: 'pointer' }}
         >
           {applyLabel}
         </button>
@@ -884,9 +852,9 @@ function StatusPill({ tone, label, small }: { tone: string; label: string; small
 
 function FeatureChip({ title, active, small, index = 0 }: { title: string; active: boolean; small?: boolean; index?: number }) {
   return (
-    <span className="exo-chip-stagger" style={{ display: 'flex', alignItems: 'center', gap: small ? 8 : 11, padding: small ? '6px 12px' : '12px 15px', minHeight: 0, overflow: 'hidden', borderRadius: small ? 11 : 12, background: active ? 'rgba(52,211,153,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${active ? 'rgba(52,211,153,0.28)' : 'rgba(255,255,255,0.09)'}`, animation: 'exo-chip-in .45s var(--ease-spring) both', animationDelay: `${index * 0.04}s` }}>
-      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: small ? 15 : 17, height: small ? 15 : 17, borderRadius: '50%', flexShrink: 0, fontSize: small ? 8 : 9, fontWeight: 800, background: active ? 'rgba(52,211,153,0.2)' : 'rgba(255,255,255,0.05)', color: active ? '#34d399' : '#75767d', border: `1px solid ${active ? 'rgba(52,211,153,0.45)' : 'rgba(255,255,255,0.12)'}` }}>{active ? '✓' : ''}</span>
-      <span style={{ fontSize: small ? 11 : 12.5, fontWeight: 500, color: active ? '#f4f4f6' : '#75767d', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>
+    <span className="exo-chip-stagger" style={{ display: 'flex', alignItems: 'center', gap: small ? 7 : 8, padding: small ? '4px 9px' : '5px 10px', minHeight: 0, overflow: 'hidden', borderRadius: small ? 8 : 9, background: active ? 'rgba(52,211,153,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${active ? 'rgba(52,211,153,0.26)' : 'rgba(255,255,255,0.08)'}`, animation: 'exo-chip-in .4s var(--ease-spring) both', animationDelay: `${index * 0.03}s` }}>
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: small ? 13 : 14, height: small ? 13 : 14, borderRadius: '50%', flexShrink: 0, fontSize: small ? 7.5 : 8, fontWeight: 800, background: active ? 'rgba(52,211,153,0.2)' : 'rgba(255,255,255,0.05)', color: active ? '#34d399' : '#75767d', border: `1px solid ${active ? 'rgba(52,211,153,0.45)' : 'rgba(255,255,255,0.12)'}` }}>{active ? '✓' : ''}</span>
+      <span style={{ fontSize: small ? 10 : 11, fontWeight: 500, color: active ? '#e9e9ec' : '#75767d', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>
     </span>
   )
 }
@@ -946,5 +914,5 @@ const winBtn: React.CSSProperties = { display: 'flex', alignItems: 'center', jus
 const arrowBtn: React.CSSProperties = { position: 'absolute', left: '50%', transform: 'translateX(-50%)', width: 36, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 9, border: '1px solid rgba(140,160,220,0.14)', background: 'transparent', color: '#75767d', cursor: 'pointer', zIndex: 20 }
 const settingsRow: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '16px 18px', borderRadius: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(140,160,220,0.13)' }
 function repairBtn(busy: unknown): React.CSSProperties {
-  return { padding: '14px 24px', borderRadius: 14, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#f4f4f6', ...DISPLAY, fontSize: 13.5, fontWeight: 600, opacity: busy ? 0.6 : 1, cursor: 'pointer' }
+  return { padding: '10px 16px', borderRadius: 11, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#f4f4f6', ...DISPLAY, fontSize: 12.5, fontWeight: 600, opacity: busy ? 0.6 : 1, cursor: 'pointer' }
 }
