@@ -77,6 +77,32 @@ public sealed partial class MainWindow : Window
         }
         catch { /* best-effort on older presenters */ }
 
+        // Match the caption to the black orb UI: no icon/text, black bar, black
+        // caption buttons (the OS default paints the button strip light).
+        // Win10 lacks customization support -> try/catch leaves system theme.
+        try
+        {
+            var tb = AppWindow.TitleBar;
+            tb.IconShowOptions = IconShowOptions.HideIconAndSystemMenu;
+            var black = Windows.UI.Color.FromArgb(255, 0, 0, 0);
+            var ink = Windows.UI.Color.FromArgb(255, 233, 233, 236);
+            var dim = Windows.UI.Color.FromArgb(255, 106, 106, 112);
+            var hover = Windows.UI.Color.FromArgb(255, 26, 26, 31);
+            tb.BackgroundColor = black;
+            tb.InactiveBackgroundColor = black;
+            tb.ForegroundColor = ink;
+            tb.InactiveForegroundColor = dim;
+            tb.ButtonBackgroundColor = black;
+            tb.ButtonInactiveBackgroundColor = black;
+            tb.ButtonForegroundColor = ink;
+            tb.ButtonInactiveForegroundColor = dim;
+            tb.ButtonHoverBackgroundColor = hover;
+            tb.ButtonHoverForegroundColor = ink;
+            tb.ButtonPressedBackgroundColor = hover;
+            tb.ButtonPressedForegroundColor = ink;
+        }
+        catch { StartupLog.Mark("titlebar-theme-skip"); }
+
         AppWindow.Changed += (_, args) =>
         {
             if (args.DidPresenterChange)

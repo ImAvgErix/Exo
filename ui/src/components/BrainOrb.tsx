@@ -46,18 +46,24 @@ export function BrainOrb({ state = 'idle', size = 320 }: { state?: BrainState; s
       ptr.current.ty = (e.clientY / window.innerHeight - 0.5) * 2
     }
     window.addEventListener('pointermove', onMove)
+    // Gaming rigs often have Windows "animation effects" off, which reports
+    // prefers-reduced-motion. The orb is the whole app — it must stay alive.
+    // Reduced motion = calm mode (slower, no parallax, no ripples), never frozen.
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const calm = reduced ? 0.45 : 1
     let lastState = state
 
     const frame = (now: number) => {
       const st = stateRef.current
-      if (st !== lastState && (st === 'speak' || st === 'work')) pulseT = now
+      if (!reduced && st !== lastState && (st === 'speak' || st === 'work')) pulseT = now
       lastState = st
       const energy = st === 'work' ? 1 : st === 'think' ? 0.7 : st === 'speak' ? 0.4 : 0.15
-      const t = ((now - t0) / 1000) * (0.5 + energy * 1.1)
+      const t = ((now - t0) / 1000) * (0.5 + energy * 1.1) * calm
       const p = ptr.current
-      p.x += (p.tx - p.x) * 0.05
-      p.y += (p.ty - p.y) * 0.05
+      if (!reduced) {
+        p.x += (p.tx - p.x) * 0.05
+        p.y += (p.ty - p.y) * 0.05
+      }
 
       ctx.clearRect(0, 0, px, px)
       const cx = px / 2
@@ -110,7 +116,7 @@ export function BrainOrb({ state = 'idle', size = 320 }: { state?: BrainState; s
         ctx.fill()
       }
 
-      if (!reduced) raf = requestAnimationFrame(frame)
+      raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)
     return () => {

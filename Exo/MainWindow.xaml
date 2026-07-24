@@ -4,7 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:Exo.Views.Controls"
-    Title="Exo">
+    Title="">
 
     <!--
       Full-bleed WebView2. Caption min/close + optimizers are in React.
@@ -31,7 +31,7 @@
                       Visibility="Collapsed"
                       HorizontalAlignment="Stretch"
                       VerticalAlignment="Stretch"
-                      DefaultBackgroundColor="#050506" />
+                      DefaultBackgroundColor="#000000" />
         </Grid>
 
         <!-- Native boot panel: shown while WebView2 initializes / repairs. -->

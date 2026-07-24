@@ -1,3 +1,23 @@
+## 4.2.1
+
+**Hotfix from first on-box test of the brain UI.**
+
+- The orb no longer freezes on PCs with Windows "animation effects" turned off
+  (common on tuned gaming rigs -- that setting reports reduced-motion and the
+  orb rendered a single frame). It now always stays alive; reduced-motion just
+  makes it calmer (slower rotation, no pulses or cursor parallax).
+- Fixed the white caption-button box in the title bar: the native title bar and
+  its minimize/close buttons are now painted black to match the app, and the
+  WebView2 background is pure black (no white flash).
+- Removed the "Exo" icon and text from the title bar -- just a clean black strip
+  with window controls.
+- The brain now prompts for updates: on launch it quietly checks GitHub Releases
+  (check only -- nothing downloads without a yes) and asks "A newer me is out --
+  want me to install it and restart?" It shows live download progress while
+  updating and restarts itself when done. This also fixes a long-standing quiet
+  bug: the old update-on-launch setting defaulted to OFF, so most installs never
+  saw updates at all. It now defaults to ON, and consent happens in the ask.
+
 ## 4.2.0
 
 **Exo is now a living brain -- the whole app is one thinking orb.**
