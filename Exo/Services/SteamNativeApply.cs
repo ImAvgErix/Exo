@@ -327,6 +327,8 @@ public static class SteamNativeApply
     private static NativeApplyStep QuietTray(string steamPath)
     {
         var n = 0;
+        var failed = 0;
+        string? firstError = null;
         try
         {
             var prefix = Path.GetFullPath(steamPath).TrimEnd('\\') + "\\";
@@ -347,13 +349,37 @@ public static class SteamNativeApply
                     var full = Path.GetFullPath(exe);
                     match = match || full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
                 }
-                catch { }
+                catch { /* unparseable path: fall back to the name/segment match above */ }
                 if (!match) continue;
-                k.SetValue("IsPromoted", 0, RegistryValueKind.DWord);
-                n++;
+                // Per-key try: one locked/denied entry must not abandon the rest.
+                // Previously a single throw escaped to the outer catch, left the
+                // remaining icons untouched, and still reported "ok".
+                try
+                {
+                    k.SetValue("IsPromoted", 0, RegistryValueKind.DWord);
+                    n++;
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    firstError ??= ex.Message;
+                }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            return new NativeApplyStep { Id = "tray", Status = "fail", Reason = ex.Message };
+        }
+
+        if (failed > 0)
+        {
+            return new NativeApplyStep
+            {
+                Id = "tray",
+                Status = n > 0 ? "partial" : "fail",
+                Reason = $"hidden={n}; failed={failed} ({firstError})"
+            };
+        }
         return new NativeApplyStep { Id = "tray", Status = "ok", Reason = n > 0 ? $"hidden={n}" : "launch once then reapply" };
     }
 
