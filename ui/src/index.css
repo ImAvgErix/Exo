@@ -17,7 +17,12 @@
   --color-steam: #1a9fff;
   --color-internet: #22d3ee;
   --color-nvidia: #76b900;
+  --color-warn: #fbbf24;
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  /* Redesign display/mono. Fonts self-host as woff2 later (docs/UI-REDESIGN.md);
+     until then these fall back to strong system stacks so layout is stable. */
+  --font-display: "Space Grotesk", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --ease-out-expo: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
@@ -134,3 +139,18 @@ body,
   height: 0;
   display: none;
 }
+
+/* ── Redesign: ambient background + integrity ring (Tab Bar / Liquid Glass) ── */
+@keyframes exo-drift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(40px,30px)} }
+@keyframes exo-drift2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-36px,-26px)} }
+@keyframes exo-drift3 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(26px,-34px)} }
+@keyframes exo-pulse  { 0%,100%{opacity:.55} 50%{opacity:1} }
+
+.exo-ambient { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+.exo-blob { position:absolute; border-radius:50%; filter:blur(100px); }
+.exo-blob.b1 { top:-14%; left:-10%; width:640px; height:640px;
+  background:radial-gradient(circle,#233a99 0%,transparent 68%); opacity:.55; animation:exo-drift1 24s ease-in-out infinite; }
+.exo-blob.b2 { bottom:-18%; right:-12%; width:600px; height:600px;
+  background:radial-gradient(circle,#0a4f47 0%,transparent 68%); opacity:.48; animation:exo-drift2 28s ease-in-out infinite; }
+.exo-blob.b3 { top:28%; left:50%; width:560px; height:560px;
+  background:radial-gradient(circle,#45206b 0%,transparent 68%); opacity:.46; animation:exo-drift3 22s ease-in-out infinite; }
