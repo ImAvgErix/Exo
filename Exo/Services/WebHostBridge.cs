@@ -91,6 +91,7 @@ public sealed class WebHostBridge
                 "module.apply" => await ApplyModuleAsync(paramsEl, hasParams).ConfigureAwait(true),
                 "module.repair" => await RepairModuleAsync(paramsEl, hasParams).ConfigureAwait(true),
                 "module.verifyAll" => await VerifyAllModulesAsync().ConfigureAwait(true),
+                "advisor.insights" => await BuildAdvisorInsightsAsync().ConfigureAwait(true),
                 "games.list" => MapGamesHub(
                     _services.Games.ListGames(ReadString(paramsEl, hasParams, "gameId"))),
                 "games.apply" => await ApplyGameHubAsync(paramsEl, hasParams).ConfigureAwait(true),
@@ -1259,6 +1260,155 @@ public sealed class WebHostBridge
             case "missing": missing++; break;
             default: ready++; break;
         }
+    }
+
+    // Ordered worst-first so the UI can render highest-priority advice at the top.
+    private static readonly string[] AdvisorModules =
+    {
+        "nvidia", "internet", "steam", "discord", "brave", "games"
+    };
+
+    private static readonly Dictionary<string, string> AdvisorModuleNames = new()
+    {
+        ["nvidia"] = "NVIDIA",
+        ["internet"] = "Internet",
+        ["steam"] = "Steam",
+        ["discord"] = "Discord",
+        ["brave"] = "Brave",
+        ["games"] = "Games",
+    };
+
+    /// <summary>
+    /// Deterministic, offline optimization advisor. Combines each module's live
+    /// applied/verified state with real system vitals into a ranked, actionable
+    /// insight list — the JARVIS "brain" reading real data, no LLM, no PC writes.
+    /// Every insight points at an existing module action (apply/repair) or is
+    /// purely informational; it never invents a tweak.
+    /// </summary>
+    private async Task<object> BuildAdvisorInsightsAsync()
+    {
+        var insights = new List<object>();
+        var optimized = 0;
+        var actionable = 0;
+
+        foreach (var id in AdvisorModules)
+        {
+            var name = AdvisorModuleNames.TryGetValue(id, out var n) ? n : id;
+            try
+            {
+                var row = await DetectCoreAsync(id, force: false).ConfigureAwait(true);
+                var (kind, _, detail) = ExtractStatusParts(row);
+                switch (kind)
+                {
+                    case "applied":
+                        optimized++;
+                        break;
+                    case "partial":
+                        actionable++;
+                        insights.Add(MakeInsight("warn", 0, id,
+                            $"{name}: some tweaks need attention",
+                            string.IsNullOrWhiteSpace(detail)
+                                ? "Applied, but not every feature verified live — re-apply to close the gaps."
+                                : detail,
+                            "reapply"));
+                        break;
+                    case "ready":
+                        actionable++;
+                        insights.Add(MakeInsight("suggest", 1, id,
+                            $"{name}: detected but not optimized yet",
+                            "Ready on this PC — apply it to get the gains.",
+                            "apply"));
+                        break;
+                    case "failed":
+                        insights.Add(MakeInsight("warn", 0, id,
+                            $"{name}: couldn't read live state",
+                            string.IsNullOrWhiteSpace(detail) ? "Detection failed — open the module to retry." : detail,
+                            "open"));
+                        break;
+                    // "missing" (not installed on this PC) -> nothing to advise; skip.
+                }
+            }
+            catch
+            {
+                // A single module failing detection must not sink the whole advisor.
+            }
+        }
+
+        // Real system vitals -> honest, non-folklore advice.
+        try
+        {
+            var mem = HomeDashboardReader.TryReadMemory();
+            if (mem is not null && mem.LoadPercent >= 90)
+            {
+                actionable++;
+                insights.Add(MakeInsight("warn", 0, null,
+                    "Memory nearly full",
+                    $"{mem.LoadPercent:0}% of RAM is in use — close background apps before gaming for steadier frametimes.",
+                    null));
+            }
+        }
+        catch { }
+
+        // Stable worst-first ordering: severity rank asc, then insertion order.
+        var ordered = insights
+            .Select((o, i) => (o, i))
+            .OrderBy(t => AdvisorRank(t.o))
+            .ThenBy(t => t.i)
+            .Select(t => t.o)
+            .ToList();
+
+        var summary = actionable == 0
+            ? (optimized > 0 ? "All detected modules optimized — nothing to do." : "Nothing to optimize yet.")
+            : $"{actionable} thing{(actionable == 1 ? "" : "s")} to look at · {optimized} already optimized";
+
+        return new
+        {
+            insights = ordered,
+            actionable,
+            optimized,
+            summary,
+            generatedAt = DateTime.Now.ToString("o"),
+        };
+    }
+
+    private static object MakeInsight(string severity, int rank, string? moduleId, string title, string detail, string? action)
+        => new { severity, rank, moduleId, title, detail, action };
+
+    private static int AdvisorRank(object insight)
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(insight);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("rank", out var r) && r.TryGetInt32(out var v))
+                return v;
+        }
+        catch { }
+        return 5;
+    }
+
+    /// <summary>Pull (statusKind, statusText, detail) off an anonymous detect row.</summary>
+    private static (string kind, string text, string detail) ExtractStatusParts(object mapped)
+    {
+        var kind = "ready";
+        var text = "";
+        var detail = "";
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(mapped);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("statusKind", out var k) && k.ValueKind == JsonValueKind.String)
+                kind = k.GetString() ?? "ready";
+            else if (root.TryGetProperty("isApplied", out var a) && a.ValueKind == JsonValueKind.True)
+                kind = "applied";
+            if (root.TryGetProperty("statusText", out var t) && t.ValueKind == JsonValueKind.String)
+                text = t.GetString() ?? "";
+            if (root.TryGetProperty("detail", out var d) && d.ValueKind == JsonValueKind.String)
+                detail = d.GetString() ?? "";
+        }
+        catch { }
+        return (kind, text, detail);
     }
 
     private static string ExtractStatusKind(object mapped)

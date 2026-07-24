@@ -8,6 +8,26 @@ export type ModuleId =
   | 'internet'
   | 'nvidia'
 
+export type AdvisorSeverity = 'warn' | 'suggest' | 'ok'
+export type AdvisorAction = 'apply' | 'reapply' | 'open' | null
+
+export interface AdvisorInsight {
+  severity: AdvisorSeverity
+  rank: number
+  moduleId: ModuleId | null
+  title: string
+  detail: string
+  action: AdvisorAction
+}
+
+export interface AdvisorResult {
+  insights: AdvisorInsight[]
+  actionable: number
+  optimized: number
+  summary: string
+  generatedAt: string
+}
+
 export type GamePreset = 'potato' | 'optimized'
 /** leave = keep game setting; borderless / exclusive use per-game tokens */
 export type GameDisplayMode = 'leave' | 'borderless' | 'exclusive'
@@ -325,6 +345,12 @@ export const host = {
     }
     return r
   },
+  /**
+   * Optimization advisor: deterministic, offline, ranked insights built from each
+   * module's live applied/verified state + real system vitals. No LLM, no PC writes —
+   * every insight points at an existing module action.
+   */
+  advisorInsights: () => call<AdvisorResult>('advisor.insights', undefined, 2 * 60_000),
 }
 
 const mockLive = (): LiveStats => ({
@@ -373,6 +399,32 @@ function mockCall<T>(method: string, params?: Record<string, unknown>): Promise<
     } as T)
   }
   if (method === 'dashboard.live') return Promise.resolve(mockLive() as T)
+  if (method === 'advisor.insights') {
+    return Promise.resolve({
+      insights: [
+        {
+          severity: 'warn',
+          rank: 0,
+          moduleId: 'nvidia',
+          title: 'NVIDIA: some tweaks need attention',
+          detail: 'Applied, but not every feature verified live — re-apply to close the gaps.',
+          action: 'reapply',
+        },
+        {
+          severity: 'suggest',
+          rank: 1,
+          moduleId: 'internet',
+          title: 'Internet: detected but not optimized yet',
+          detail: 'Ready on this PC — apply it to get the gains.',
+          action: 'apply',
+        },
+      ],
+      actionable: 2,
+      optimized: 3,
+      summary: '2 things to look at · 3 already optimized',
+      generatedAt: new Date().toISOString(),
+    } as T)
+  }
   if (method === 'settings.get' || method === 'settings.set') {
     return Promise.resolve({
       appVersion: '3.7.2-dev',
