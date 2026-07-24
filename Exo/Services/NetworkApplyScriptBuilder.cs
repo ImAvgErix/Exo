@@ -241,6 +241,12 @@ function Save-ExoNetworkSnapshot {
       snapshotVersion = 2
       timestampUtc    = (Get-Date).ToUniversalTime().ToString('o')
     }
+    # --- QoS 'Do not use NLA' prior state (Apply sets it so DSCP works off-domain) ---
+    $snap.qosDoNotUseNla = 'absent'
+    try {
+      $nlaCur = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS' -Name 'Do not use NLA' -EA SilentlyContinue).'Do not use NLA'
+      if ($null -ne $nlaCur) { $snap.qosDoNotUseNla = [string]$nlaCur }
+    } catch { }
     # --- netsh raw dumps (restore parses value tokens; raw kept for support/debug) ---
     $snap.netshTcpGlobalRaw     = ((netsh int tcp show global 2>$null | Out-String)).Trim()
     $snap.netshTcpHeuristicsRaw = ((netsh int tcp show heuristics 2>$null | Out-String)).Trim()
@@ -1057,6 +1063,15 @@ try {
 try {
   $qosRoot = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS'
   if (-not (Test-Path -LiteralPath $qosRoot)) { New-Item -Path $qosRoot -Force | Out-Null }
+  # CRITICAL: on a non-domain (home) network Windows only honours these QoS
+  # policies when 'Do not use NLA' is set. Without it the DSCP marking below is
+  # written, looks applied, and is silently never used - a phantom tweak. Snapshot
+  # the prior value so Repair restores exactly (absent stays absent).
+  # (prior value is captured in network-snapshot.json as qosDoNotUseNla; Repair restores it)
+  try {
+    New-ItemProperty -LiteralPath $qosRoot -Name 'Do not use NLA' -Value '1' -PropertyType String -Force | Out-Null
+    Log '[QoS] Do not use NLA=1 (DSCP marking is ignored on home networks without it)'
+  } catch { Log '[QoS] Do not use NLA could not be set - DSCP may not apply off-domain' }
   $candidates = [System.Collections.Generic.List[object]]::new()
   $steamPaths = @(
     (Join-Path ${env:ProgramFiles(x86)} 'Steam\steam.exe'),

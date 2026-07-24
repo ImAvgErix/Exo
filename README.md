@@ -144,6 +144,9 @@ for UI rebuilds.
 |---|---|
 | [CHANGELOG.md](CHANGELOG.md) | Release notes |
 | [docs/TWEAK-AUDIT.md](docs/TWEAK-AUDIT.md) | Evidence-based tweak keep/drop list |
+| [docs/NETWORK-EVIDENCE.md](docs/NETWORK-EVIDENCE.md) | Why each network knob stays or goes (and the folklore we refuse) |
+| [docs/DISCORD-EVIDENCE.md](docs/DISCORD-EVIDENCE.md) | Discord keep/drop + the honesty trade-offs |
+| [docs/GAMES-REDESIGN.md](docs/GAMES-REDESIGN.md) | Per-game real tweaks; why there's no universal "potato" preset |
 | [docs/INTERNET-GOLDEN-PATH.md](docs/INTERNET-GOLDEN-PATH.md) | Network stack contract |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
 

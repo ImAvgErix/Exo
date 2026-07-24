@@ -415,6 +415,17 @@ if ($snap) {
         Get-ChildItem -LiteralPath $qosRoot -ErrorAction SilentlyContinue |
           Where-Object { $_.PSChildName -like 'Exo-Net-DSCP-*' } |
           ForEach-Object { Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction SilentlyContinue }
+        # Restore 'Do not use NLA' to exactly its pre-Exo state (Apply sets it to 1
+        # so DSCP marking is honoured off-domain). Absent before => remove it now.
+        $nlaPrev = $null
+        try { if ($snap) { $nlaPrev = $snap.qosDoNotUseNla } } catch { }
+        if ([string]::IsNullOrWhiteSpace([string]$nlaPrev) -or [string]$nlaPrev -eq 'absent') {
+          Remove-ItemProperty -LiteralPath $qosRoot -Name 'Do not use NLA' -Force -ErrorAction SilentlyContinue
+          Log '[QoS] Do not use NLA removed (was absent before Exo)'
+        } else {
+          New-ItemProperty -LiteralPath $qosRoot -Name 'Do not use NLA' -Value ([string]$nlaPrev) -PropertyType String -Force | Out-Null
+          Log ("[QoS] Do not use NLA restored to " + [string]$nlaPrev)
+        }
       }
     } catch {}
     Remove-Prop 'HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters' 'MaxCacheTtl'
