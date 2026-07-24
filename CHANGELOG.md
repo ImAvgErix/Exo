@@ -1,3 +1,18 @@
+## 4.2.7
+
+**Discord honesty.**
+
+- **It tells you the trade before you say yes.** Optimizing Discord pins the
+  client version so a Discord update can't wipe the tuning -- the cost is that
+  Discord stops auto-updating until you Repair. That's a real trade-off and the
+  brain now says it *in the question*, not after you've already agreed.
+- **A dead kernel no longer reports itself as active.** Discord replaces its own
+  files on every host update, so "Exo installed this" and "it's actually running"
+  are different facts. They used to collapse into one yes/no, which meant a
+  kernel that Discord had updated past still showed as applied. It now
+  distinguishes never-applied from needs-reapply, so "Reapply" appears when it's
+  genuinely needed.
+
 ## 4.2.6
 
 **Code quality pass -- real defects, not cosmetics.**
