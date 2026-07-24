@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BrainOrb, type BrainState } from '../components/BrainOrb'
 import { host, onHostEvent, type DashboardSnapshot, type ModuleId, type ModuleStatus, type VerifyAllResult } from '../lib/host'
-import { setVoiceEnabled, speak, stopVoice, voiceEnabled, voiceSupported } from '../lib/voice'
 
-/* Exo is a brain. The orb is the whole UI: it reads the PC, forms an opinion,
-   and *talks* — proposing what to optimize, one thing at a time. You answer;
-   it works. It only ever calls the rig "good to go" after re-reading the machine
-   and confirming the tweaks actually stuck. Monochrome. No module grid, no top
-   chrome (the black native window frame).
+/* Exo is a brain. The orb is the whole UI: it lives in the app — roaming,
+   thinking, reacting — reads the PC, forms an opinion, and *talks*, proposing
+   what to optimize one thing at a time. You answer; it works. It only ever calls
+   the rig "good to go" after re-reading the machine and confirming the tweaks
+   actually stuck. Monochrome. No module grid, no top chrome (black native frame).
 
-   Personality lives in the pick([...]) lines below — one place, easy to swap
-   for a generated voice (the planned Grok layer) later without touching flow. */
+   Personality lives in the pick([...]) lines below — one place, easy to swap for
+   a generated voice (the planned Grok layer) later without touching flow. */
 
 const LABEL: Record<string, string> = {
   discord: 'Discord', brave: 'Brave', steam: 'Steam', internet: 'Internet', nvidia: 'NVIDIA', games: 'Games',
@@ -37,7 +36,6 @@ export function OrbApp() {
   const [opts, setOpts] = useState<Opt[]>([])
   const [msgKey, setMsgKey] = useState(0)
   const [speaking, setSpeaking] = useState(false)
-  const [voiceOn, setVoiceOn] = useState(voiceEnabled())
   const queue = useRef<Sugg[]>([])
   const qi = useRef(0)
   const spokeContext = useRef(false)
@@ -45,18 +43,17 @@ export function OrbApp() {
   // further on this box (stays "partial" after we tried) isn't nagged forever.
   const touched = useRef<Set<string>>(new Set())
   const speakTimer = useRef<number | undefined>(undefined)
+  // A newer build, if one exists. The brain itself asks about it on launch and
+  // also offers it as a chip on the wrap-up. Nothing installs without a tap.
   const updateRef = useRef<{ version: string } | null>(null)
-  const msgRef = useRef('')
   const phaseRef = useRef(phase)
   phaseRef.current = phase
 
   const say = useCallback((message: string, options: Opt[]) => {
     setMsg(message)
-    msgRef.current = message
     setOpts(options)
     setMsgKey((k) => k + 1)
     setSpeaking(true)
-    speak(message)
     window.clearTimeout(speakTimer.current)
     speakTimer.current = window.setTimeout(() => setSpeaking(false), 850)
   }, [])
@@ -79,7 +76,6 @@ export function OrbApp() {
   }, [])
 
   useEffect(() => { greet() /* eslint-disable-next-line */ }, [])
-  useEffect(() => () => stopVoice(), [])
 
   // On launch, peek for a newer Exo (check-only) and ASK — never auto-install.
   useEffect(() => {
@@ -98,21 +94,12 @@ export function OrbApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Live progress lines while the update downloads/installs.
+  // Live progress lines while an update downloads/installs.
   const updating = useRef(false)
   useEffect(() => onHostEvent('settings.updateProgress', (data) => {
     const d = data as { status?: string }
     if (updating.current && d.status) setMsg(d.status)
   }), [])
-
-  function toggleVoice() {
-    const on = !voiceOn
-    setVoiceEnabled(on)
-    setVoiceOn(on)
-    // The tap is a user gesture, so speaking the current line now is allowed and
-    // gives instant "yes it works" feedback.
-    if (on) speak(msgRef.current)
-  }
 
   function askUpdate() {
     const v = updateRef.current?.version
@@ -349,63 +336,24 @@ export function OrbApp() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', color: '#e9e9ec', fontFamily: 'var(--font-display)', overflow: 'hidden', userSelect: 'none' }}>
-      {/* True centering: 1fr | orb | 1fr — the orb sits at the exact vertical
-          center regardless of how long the message below runs. */}
-      <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateRows: '1fr auto 1fr', justifyItems: 'center', textAlign: 'center' }}>
-        <div />
-        <BrainOrb state={orbState} size={400} />
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 6, minWidth: 0 }}>
-          <div key={msgKey} style={{ maxWidth: 640, padding: '0 24px', animation: 'exo-say .5s var(--ease-spring, ease) both' }}>
-            <p style={{ margin: 0, fontFamily: 'var(--font-voice)', fontSize: 27, fontWeight: 400, lineHeight: 1.28, letterSpacing: '0.005em', color: '#e7e7ec' }}>{msg}</p>
-          </div>
-          <div style={{ marginTop: 18, display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', minHeight: 44 }}>
-            {opts.map((o, i) => (
-              <button key={i} onClick={o.run} style={o.primary ? primaryBtn : ghostBtn}>{o.label}</button>
-            ))}
-          </div>
+      {/* The orb lives across the whole screen — it roams the upper room on its
+          own. The conversation is anchored to the lower band so it stays put and
+          readable while the brain drifts above it. */}
+      <BrainOrb state={orbState} />
+      <div style={{ position: 'absolute', left: 0, right: 0, top: '63%', bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '0 24px' }}>
+        <div key={msgKey} style={{ maxWidth: 640, animation: 'exo-say .5s var(--ease-spring, ease) both' }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-voice)', fontSize: 27, fontWeight: 400, lineHeight: 1.28, letterSpacing: '0.005em', color: '#e7e7ec' }}>{msg}</p>
+        </div>
+        <div style={{ marginTop: 18, display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', minHeight: 44 }}>
+          {opts.map((o, i) => (
+            <button key={i} onClick={o.run} style={o.primary ? primaryBtn : ghostBtn}>{o.label}</button>
+          ))}
         </div>
       </div>
-
-      {/* Voice toggle — the only persistent chrome. Off by default; a tap turns
-          the brain's spoken voice on (and, being a gesture, primes the speech
-          engine). Tucked bottom-right, well clear of the caption buttons. */}
-      {voiceSupported() && (
-        <button
-          onClick={toggleVoice}
-          aria-label={voiceOn ? 'Mute the brain' : 'Let the brain speak'}
-          title={voiceOn ? "Voice on — tap to mute" : "Voice off — tap to let it speak"}
-          style={voiceBtn(voiceOn)}
-        >
-          <SpeakerIcon on={voiceOn} />
-        </button>
-      )}
     </div>
-  )
-}
-
-function SpeakerIcon({ on }: { on: boolean }) {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M4 9v6h4l5 4V5L8 9H4z" />
-      {on ? (
-        <>
-          <path d="M16.5 8.5a5 5 0 0 1 0 7" />
-          <path d="M19 6a8.5 8.5 0 0 1 0 12" />
-        </>
-      ) : (
-        <path d="M17 9l4 6M21 9l-4 6" />
-      )}
-    </svg>
   )
 }
 
 const DISPLAY = { fontFamily: 'var(--font-display)' }
 const primaryBtn: React.CSSProperties = { padding: '11px 24px', borderRadius: 999, background: '#f4f4f6', color: '#0b0b0d', ...DISPLAY, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 0 30px rgba(255,255,255,0.12)' }
 const ghostBtn: React.CSSProperties = { padding: '11px 20px', borderRadius: 999, background: 'transparent', color: '#c4c4ca', ...DISPLAY, fontSize: 13, fontWeight: 600, border: '1px solid rgba(255,255,255,0.16)', cursor: 'pointer' }
-const voiceBtn = (on: boolean): React.CSSProperties => ({
-  position: 'fixed', right: 16, bottom: 16, width: 38, height: 38, borderRadius: 999,
-  display: 'grid', placeItems: 'center', cursor: 'pointer',
-  background: on ? 'rgba(244,244,246,0.10)' : 'transparent',
-  color: on ? '#e7e7ec' : '#6a6a72',
-  border: `1px solid rgba(255,255,255,${on ? 0.22 : 0.12})`,
-})

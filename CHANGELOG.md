@@ -1,3 +1,20 @@
+## 4.2.3
+
+**The orb lives in the app now — and less clutter around it.**
+
+- **It roams free.** The brain no longer sits dead center. It drifts across the
+  whole space on its own, wanders and glances while it's idle, and throws in the
+  occasional playful spin or little hop -- then glides back up toward the center
+  to talk to you. It's meant to feel like something alive that just happens to
+  live in your app.
+- **Killed a leftover pop-up.** A second, native update dialog from the old UI
+  was still appearing on launch, on top of the brain's own update prompt. That
+  redundant pop-up is gone -- the brain still asks about updates itself ("a newer
+  me is out -- want me to install it and restart?"), consent-first as always.
+- **Removed the spoken voice.** The built-in Windows text-to-speech sounded rough,
+  so the voice toggle is gone. (A better, real voice can come later alongside the
+  planned AI layer.)
+
 ## 4.2.2
 
 **The orb gets a soul — and an honest verdict.**
