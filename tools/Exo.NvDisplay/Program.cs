@@ -3,10 +3,12 @@
 //
 // Applies per active display:
 //   - Current resolution kept
-//   - PRIMARY monitor: highest supported refresh (gaming)
-//   - SECONDARY monitors: 60 Hz (performance / less GPU load for desktop clone)
+//   - PRIMARY (gaming) monitor: highest supported refresh, first claim on the
+//     bandwidth budget
+//   - SECONDARY monitors: refresh kept as-is (they don't compete for the
+//     primary's high-refresh bandwidth), but still get best color
 //   - Color policy User (NVIDIA color settings)
-//   - RGB + Full (VESA) + current supported color depth (10/8 bpc fallback)
+//   - RGB + Full (VESA) + HIGHEST supported color depth (10 → 8 bpc)
 //   - HDMI info-frame RGB quantization Full (fixes "Limited" on HDMI)
 //   - GPU no-scaling path where the driver allows it
 //   - NVTweak: PerformScalingOn=GPU, ScalingOverride=ON, No-scaling mode
@@ -345,7 +347,7 @@ static class Program
 
             if (apply && nvidiaGdiNames.Count > 0)
             {
-                // Keep current resolution. Primary -> max Hz; secondary -> 60 Hz.
+                // Keep current resolution. Primary -> max Hz; secondary -> keep.
                 var modeResult = ApplyTargetRefreshModes(nvidiaGdiNames);
                 bestModes = modeResult.Modes;
                 modesOk = modeResult.Success;
@@ -399,6 +401,23 @@ static class Program
 
                     try { after = dev.CurrentColorData; }
                     catch { after = appliedColor ?? before; }
+
+                    // Bandwidth guard (competitive priority: refresh + RGB beat bit depth).
+                    // On a link that can't carry the higher depth at this mode, the driver
+                    // silently falls back to chroma subsampling (YUV 4:2:2) — which looks
+                    // worse than 8-bit RGB and can cost refresh. If the format is no longer
+                    // RGB after the set, step back down to 8-bit to get full RGB returned.
+                    if (appliedColor != null && after.ColorFormat != ColorDataFormat.RGB &&
+                        chosenDepth != ColorDataDepth.BPC8)
+                    {
+                        Console.WriteLine(
+                            $"[NVAPI] Display #{dev.DisplayId}: {chosenDepth} forced {after.ColorFormat} " +
+                            "(link bandwidth) — reverting to 8bpc to keep full RGB at this refresh");
+                        var rgb8 = ApplyColorWithFallbacks(dev, ColorDataDepth.BPC8);
+                        try { after = dev.CurrentColorData; }
+                        catch { after = rgb8 ?? after; }
+                    }
+
                     if (appliedColor != null && IsFullRgbUserColor(after))
                         colorAppliedCount++;
                     else if (appliedColor != null)
@@ -1445,13 +1464,17 @@ static class Program
 
     static ColorDataDepth PickBestDepth(DisplayDevice dev, ColorDataDepth? current)
     {
-        // Prefer the live working depth — do not force 12-bit when the panel only runs 8.
-        // Upgrade path: current → 10 → 8 (12 only if already current).
+        // HIGHEST supported depth the panel accepts at its current mode — so an
+        // 8-bit panel that can do 10-bit actually gets upgraded. The old code
+        // probed the *current* depth first and returned it, so it never climbed
+        // (an 8-bit display stayed 8-bit even when 10-bit was available). Try
+        // high → low; IsColorDataSupported gates each candidate against the live
+        // mode/bandwidth, so we never force a depth the link can't carry.
+        // 12-bit only when the panel is already there (HDR/pro) — never forced up
+        // to 12, since most gaming panels top out at 10-bit and 12 can cost Hz.
         var order = new List<ColorDataDepth>();
-        if (current is not null) order.Add(current.Value);
+        if (current == ColorDataDepth.BPC12) order.Add(ColorDataDepth.BPC12);
         order.AddRange(new[] { ColorDataDepth.BPC10, ColorDataDepth.BPC8, ColorDataDepth.BPC6 });
-        if (current == ColorDataDepth.BPC12)
-            order.Insert(1, ColorDataDepth.BPC12);
 
         foreach (var depth in order.Distinct())
         {
