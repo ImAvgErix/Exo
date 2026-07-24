@@ -339,10 +339,25 @@ export function ReelApp() {
           overflow: 'hidden',
           borderRadius: 30,
           background: 'radial-gradient(120% 100% at 50% 0%,#060607 0%,#000 62%)',
-          border: '1px solid rgba(130,150,210,0.14)',
-          boxShadow: '0 55px 150px rgba(0,0,0,0.9),inset 0 1px 0 rgba(255,255,255,0.08)',
-        }}
+          border: '1px solid color-mix(in srgb, var(--exo-accent) 22%, rgba(130,150,210,0.14))',
+          boxShadow:
+            '0 55px 150px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 130px -34px var(--exo-accent)',
+          // Signature: the whole window tunes to the focused system's accent.
+          ['--exo-accent' as string]: focusedAccent,
+          transition: '--exo-accent .55s ease, border-color .55s ease, box-shadow .55s ease',
+        } as React.CSSProperties}
       >
+        {/* Accent light-wash — bleeds the focused system's color behind the pane */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            zIndex: 2,
+            background:
+              'radial-gradient(72% 62% at 74% 40%, color-mix(in srgb, var(--exo-accent) 11%, transparent), transparent 62%)',
+          }}
+        />
         <div
           style={{
             position: 'absolute',
@@ -459,7 +474,7 @@ export function ReelApp() {
           <div onWheel={onWheel} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 340, zIndex: 10, perspective: 950 }}>
             <div style={{ position: 'absolute', left: 34, right: 26, top: '50%', height: 1, marginTop: -52, background: 'linear-gradient(90deg,rgba(255,255,255,0.14),transparent)', pointerEvents: 'none' }} />
             <div style={{ position: 'absolute', left: 34, right: 26, top: '50%', height: 1, marginTop: 52, background: 'linear-gradient(90deg,rgba(255,255,255,0.14),transparent)', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', left: 20, top: '50%', width: 3, height: 56, marginTop: -28, borderRadius: 2, background: focusedAccent, boxShadow: `0 0 12px ${focusedAccent}`, pointerEvents: 'none', transition: 'background .3s,box-shadow .3s' }} />
+            <div style={{ position: 'absolute', left: 20, top: '50%', width: 3, height: 56, marginTop: -28, borderRadius: 2, background: 'var(--exo-accent)', boxShadow: '0 0 12px var(--exo-accent)', pointerEvents: 'none' }} />
             <span style={{ position: 'absolute', left: 34, top: 16, ...MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', color: '#5d5e66', zIndex: 20 }}>SYSTEM {slot + 1}/7</span>
             <button onClick={() => goSlot(slot - 1)} aria-label="Previous" style={{ ...arrowBtn, top: 36 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 15l6-6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -486,7 +501,7 @@ export function ReelApp() {
                     right: 16,
                     top: '50%',
                     height: 88,
-                    marginTop: -44 + off * 90,
+                    marginTop: -44,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 15,
@@ -495,11 +510,13 @@ export function ReelApp() {
                     background: 'transparent',
                     cursor: 'pointer',
                     textAlign: 'left',
-                    transform: `perspective(800px) rotateX(${off * -16}deg) scale(${focused ? 1.06 : Math.max(0.8, 1 - abs * 0.08)})`,
+                    // Compositor-only: translateY (not margin-top) + spring settle.
+                    transform: `translateY(${off * 90}px) perspective(800px) rotateX(${off * -16}deg) scale(${focused ? 1.06 : Math.max(0.8, 1 - abs * 0.08)})`,
                     opacity: abs > 1.6 ? 0 : focused ? 1 : 0.45,
                     zIndex: 40 - abs,
                     pointerEvents: abs > 1.6 ? 'none' : 'auto',
-                    transition: 'margin-top .55s cubic-bezier(0.22,1,0.36,1),transform .55s cubic-bezier(0.22,1,0.36,1),opacity .4s',
+                    willChange: 'transform, opacity',
+                    transition: 'transform .6s var(--ease-spring), opacity .4s ease',
                   }}
                 >
                   <span style={{ position: 'relative', flexShrink: 0, width: 54, height: 54, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -647,9 +664,9 @@ function ModulePane({
         )}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gridAutoRows: '1fr', gap: '12px 16px', alignContent: 'stretch' }}>
+      <div key={id} style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gridAutoRows: '1fr', gap: '12px 16px', alignContent: 'stretch' }}>
         {(features.length ? features : Array.from({ length: 6 }, () => null)).map((f, i) => (
-          <FeatureChip key={i} title={f?.title ?? '—'} active={!!f?.active} />
+          <FeatureChip key={i} index={i} title={f?.title ?? '—'} active={!!f?.active} />
         ))}
       </div>
 
@@ -757,9 +774,9 @@ function GamesPane({
           </div>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gridAutoRows: 'minmax(0,1fr)', gap: '9px 10px', alignContent: 'stretch' }}>
+        <div key={sel.id} style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gridAutoRows: 'minmax(0,1fr)', gap: '9px 10px', alignContent: 'stretch' }}>
           {(features.length ? features : Array.from({ length: 6 }, () => null)).map((f, i) => (
-            <FeatureChip key={i} title={f?.title ?? '—'} active={!!f?.active} small />
+            <FeatureChip key={i} index={i} title={f?.title ?? '—'} active={!!f?.active} small />
           ))}
         </div>
 
@@ -865,9 +882,9 @@ function StatusPill({ tone, label, small }: { tone: string; label: string; small
   )
 }
 
-function FeatureChip({ title, active, small }: { title: string; active: boolean; small?: boolean }) {
+function FeatureChip({ title, active, small, index = 0 }: { title: string; active: boolean; small?: boolean; index?: number }) {
   return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: small ? 8 : 11, padding: small ? '6px 12px' : '12px 15px', minHeight: 0, overflow: 'hidden', borderRadius: small ? 11 : 12, background: active ? 'rgba(52,211,153,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${active ? 'rgba(52,211,153,0.28)' : 'rgba(255,255,255,0.09)'}` }}>
+    <span className="exo-chip-stagger" style={{ display: 'flex', alignItems: 'center', gap: small ? 8 : 11, padding: small ? '6px 12px' : '12px 15px', minHeight: 0, overflow: 'hidden', borderRadius: small ? 11 : 12, background: active ? 'rgba(52,211,153,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${active ? 'rgba(52,211,153,0.28)' : 'rgba(255,255,255,0.09)'}`, animation: 'exo-chip-in .45s var(--ease-spring) both', animationDelay: `${index * 0.04}s` }}>
       <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: small ? 15 : 17, height: small ? 15 : 17, borderRadius: '50%', flexShrink: 0, fontSize: small ? 8 : 9, fontWeight: 800, background: active ? 'rgba(52,211,153,0.2)' : 'rgba(255,255,255,0.05)', color: active ? '#34d399' : '#75767d', border: `1px solid ${active ? 'rgba(52,211,153,0.45)' : 'rgba(255,255,255,0.12)'}` }}>{active ? '✓' : ''}</span>
       <span style={{ fontSize: small ? 11 : 12.5, fontWeight: 500, color: active ? '#f4f4f6' : '#75767d', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>
     </span>
