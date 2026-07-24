@@ -53,6 +53,27 @@ Expect("kernel fails without proxy hash",
 // Old false-fail: requiring exact TrimIntervalMs=5000 while kit is 4000
 Expect("4000 is not rejected as non-5000", DiscordLogic.IsKernelConfigText(kitCfg));
 
+// Kernel state must distinguish "never applied" from "applied, then Discord updated
+// past it". Collapsing those into one bool is how a dead kernel gets reported as
+// active — the honesty gap this state machine closes.
+Expect("kernel state: live when everything agrees",
+    DiscordLogic.GetKernelState(24000, 2_000_000, 120000, kitCfg, true, true)
+        == DiscordLogic.DiscordKernelState.Applied);
+Expect("kernel state: no layout => NotApplied (not a stale reapply prompt)",
+    DiscordLogic.GetKernelState(2_000_000, 2_000_000, 120000, kitCfg, true, true)
+        == DiscordLogic.DiscordKernelState.NotApplied);
+Expect("kernel state: our layout + stale proxy hash => NeedsReapply, never Applied",
+    DiscordLogic.GetKernelState(24000, 2_000_000, 120000, kitCfg, false, true)
+        == DiscordLogic.DiscordKernelState.NeedsReapply);
+Expect("kernel state: our layout + stale version hash => NeedsReapply",
+    DiscordLogic.GetKernelState(24000, 2_000_000, 120000, kitCfg, true, false)
+        == DiscordLogic.DiscordKernelState.NeedsReapply);
+Expect("kernel state: our layout + wiped config => NeedsReapply",
+    DiscordLogic.GetKernelState(24000, 2_000_000, 120000, null, true, true)
+        == DiscordLogic.DiscordKernelState.NeedsReapply);
+Expect("kernel state: NeedsReapply is never reported as applied",
+    !DiscordLogic.IsKernelApplied(24000, 2_000_000, 120000, kitCfg, false, true));
+
 // Equicord loader (legacy OpenAsar size classifier is intentionally removed)
 var loader = "module.exports = require('C:\\\\Users\\\\x\\\\AppData\\\\Roaming\\\\Equicord\\\\equicord.asar');";
 Expect("equicord loader text", DiscordLogic.IsEquicordLoaderText(loader, loader.Length));

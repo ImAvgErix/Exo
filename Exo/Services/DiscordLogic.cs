@@ -128,7 +128,29 @@ public static partial class DiscordLogic
         return trimMs is >= 2000 and <= 15000;
     }
 
-    public static bool IsKernelApplied(
+    /// <summary>
+    /// What the ffmpeg-proxy kernel is actually doing on disk right now.
+    /// The kernel is the most update-sensitive thing Exo ships: Discord replaces its
+    /// own files on every host update, so "Exo put it there once" and "it is live"
+    /// are different facts and must not collapse into one boolean.
+    /// </summary>
+    public enum DiscordKernelState
+    {
+        /// <summary>No Exo kernel layout on disk — never applied, or fully undone.</summary>
+        NotApplied,
+
+        /// <summary>
+        /// Exo's layout is present but the binaries no longer match the shipped kit —
+        /// a Discord (or kit) update moved past it. It is NOT active; Reapply restores it.
+        /// Reporting this as "applied" is the dishonesty this state exists to prevent.
+        /// </summary>
+        NeedsReapply,
+
+        /// <summary>Layout, config, and both kit hashes all agree — the kernel is live.</summary>
+        Applied
+    }
+
+    public static DiscordKernelState GetKernelState(
         long ffmpegProxyBytes,
         long ffmpegRealBytes,
         long versionDllBytes,
@@ -136,10 +158,27 @@ public static partial class DiscordLogic
         bool proxyHashMatchesKit,
         bool versionHashMatchesKit)
     {
-        if (!IsKernelLayout(ffmpegProxyBytes, ffmpegRealBytes, versionDllBytes)) return false;
-        if (!IsKernelConfigText(configText)) return false;
-        return proxyHashMatchesKit && versionHashMatchesKit;
+        // No proxy layout at all => Exo's kernel simply isn't installed.
+        if (!IsKernelLayout(ffmpegProxyBytes, ffmpegRealBytes, versionDllBytes))
+            return DiscordKernelState.NotApplied;
+
+        // Layout is ours, so this machine has been through an apply. From here a
+        // mismatch means "superseded", never "absent".
+        if (!IsKernelConfigText(configText)) return DiscordKernelState.NeedsReapply;
+        if (!proxyHashMatchesKit || !versionHashMatchesKit) return DiscordKernelState.NeedsReapply;
+        return DiscordKernelState.Applied;
     }
+
+    public static bool IsKernelApplied(
+        long ffmpegProxyBytes,
+        long ffmpegRealBytes,
+        long versionDllBytes,
+        string? configText,
+        bool proxyHashMatchesKit,
+        bool versionHashMatchesKit) =>
+        GetKernelState(
+            ffmpegProxyBytes, ffmpegRealBytes, versionDllBytes,
+            configText, proxyHashMatchesKit, versionHashMatchesKit) == DiscordKernelState.Applied;
 
     /// <summary>
     /// Toast policy: at least one Discord notification key present; every present key Enabled=0.

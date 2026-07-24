@@ -17,6 +17,13 @@ const LABEL: Record<string, string> = {
 // The order the brain thinks about things — biggest FPS levers first.
 const ORDER = ['nvidia', 'internet', 'steam', 'games', 'discord', 'brave'] as const
 
+// Honest trade-offs, stated at the moment of consent. A cost the user only finds
+// out about later is a cost we hid.
+const CAVEAT: Record<string, string> = {
+  discord:
+    "Heads up: it pins Discord's version so an update can't wipe the tuning — Discord stops auto-updating until you Repair.",
+}
+
 const pick = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)]
 
 function joinNames(ids: string[]): string {
@@ -282,6 +289,13 @@ export function OrbApp() {
             `${name} isn't optimized yet. Want me to do it?`,
             `I can make ${name} faster. Should I?`,
           ])
+
+    // Trade-offs get said BEFORE the yes, not discovered afterwards. Discord's
+    // lean path pins the client version so a Discord update can't wipe the tuning
+    // — the cost is that Discord stops updating itself until you repair, and
+    // that's the user's call to make knowingly, not something to slip past them.
+    const caveat = CAVEAT[s.id]
+    if (caveat) line = `${line} ${caveat}`
 
     // Weave in awareness on the first ask, or when a vital is relevant.
     if (!spokeContext.current) {
