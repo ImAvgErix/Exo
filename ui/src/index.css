@@ -17,7 +17,12 @@
   --color-steam: #1a9fff;
   --color-internet: #22d3ee;
   --color-nvidia: #76b900;
+  --color-warn: #fbbf24;
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  /* Redesign display/mono. Self-host as woff2 later (offline); until then strong
+     system fallbacks keep layout + weights stable. */
+  --font-display: "Space Grotesk", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --ease-out-expo: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
@@ -134,3 +139,9 @@ body,
   height: 0;
   display: none;
 }
+
+/* ── Redesign: reel / starfield keyframes ── */
+@keyframes exo-sweep { 0%{transform:translateX(-160%) skewX(-14deg)} 55%,100%{transform:translateX(160%) skewX(-14deg)} }
+@keyframes exo-twinkle { 0%,100%{opacity:.12} 50%{opacity:.7} }
+@keyframes exo-pulse { 0%,100%{opacity:.55} 50%{opacity:1} }
+@keyframes exo-scalein { from{transform:translate(-50%,-50%) scale(.94);opacity:0} to{transform:translate(-50%,-50%) scale(1);opacity:1} }
