@@ -1,3 +1,17 @@
+## 4.2.5
+
+**Honesty pass on the interface.**
+
+- **Errors are no longer dead ends.** If a scan or an optimize fails, the brain
+  now offers **Open logs** alongside Retry/Next -- saying "I logged it" while
+  giving you no way to reach the log wasn't honest.
+- **It won't repeat itself.** Idle thoughts never say the same line twice in a
+  row, so it reads like a mind rather than a script on loop.
+- **Straight talk about your network.** After tuning Internet it now says plainly
+  that your line is healthy and not to expect a ping drop -- past that it's your
+  route and your ISP. Most latency isn't something any local setting can move,
+  and implying otherwise is the kind of overpromising this project strips out.
+
 ## 4.2.4
 
 **The orb gets a mind of its own.**
