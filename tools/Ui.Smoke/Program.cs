@@ -263,10 +263,9 @@ if (File.Exists(main))
         && m.Contains("x:Name=\"ContentHost\"", StringComparison.Ordinal)
         && m.Contains("Margin=\"0\"", StringComparison.Ordinal)
         && m.Contains("HorizontalAlignment=\"Stretch\"", StringComparison.Ordinal));
-    Expect("thin drag title chrome",
-        m.Contains("x:Name=\"TitleChrome\"", StringComparison.Ordinal)
-        && m.Contains("Height=\"10\"", StringComparison.Ordinal)
-        && m.Contains("x:Name=\"AppTitleBar\"", StringComparison.Ordinal)
+    Expect("native title bar (no custom caption chrome)",
+        !m.Contains("x:Name=\"TitleChrome\"", StringComparison.Ordinal)
+        && !m.Contains("x:Name=\"AppTitleBar\"", StringComparison.Ordinal)
         && !m.Contains("<TitleBar", StringComparison.Ordinal)
         && !m.Contains("CaptionSpacerHost", StringComparison.Ordinal)
         && !m.Contains("TitleBarDragRegion", StringComparison.Ordinal));
@@ -288,44 +287,55 @@ if (File.Exists(main))
         !m.Contains("ContentFrame", StringComparison.Ordinal));
     Expect("no tooltips in main", !m.Contains("ToolTip", StringComparison.OrdinalIgnoreCase));
 }
-// React Shell owns labeled module tabs + settings/home morph (not native TitleBar).
-var reactShell = Path.Combine(repo, "ui", "src", "components", "Shell.tsx");
-if (File.Exists(reactShell))
+// The brain UI: the whole app is OrbApp (BrainOrb + conversation) — no shell,
+// no router, no module grid. Old Shell/ModulePage/GamesPage/HomePage must stay gone.
+var orbApp = Path.Combine(repo, "ui", "src", "pages", "OrbApp.tsx");
+var brainOrb = Path.Combine(repo, "ui", "src", "components", "BrainOrb.tsx");
+Expect("brain UI present", File.Exists(orbApp) && File.Exists(brainOrb));
+Expect("old shell layer removed",
+    !File.Exists(Path.Combine(repo, "ui", "src", "components", "Shell.tsx"))
+    && !File.Exists(Path.Combine(repo, "ui", "src", "components", "SettingsDrawer.tsx"))
+    && !File.Exists(Path.Combine(repo, "ui", "src", "pages", "HomePage.tsx"))
+    && !File.Exists(Path.Combine(repo, "ui", "src", "pages", "ModulePage.tsx"))
+    && !File.Exists(Path.Combine(repo, "ui", "src", "pages", "GamesPage.tsx"))
+    && !File.Exists(Path.Combine(repo, "ui", "src", "pages", "ReelApp.tsx")));
+if (File.Exists(orbApp))
 {
-    var shell = File.ReadAllText(reactShell);
-    Expect("react labeled module nav",
-        shell.Contains("label: 'Discord'", StringComparison.Ordinal)
-        && shell.Contains("label: 'Internet'", StringComparison.Ordinal)
-        && shell.Contains("aria-label=\"Optimizers\"", StringComparison.Ordinal)
-        && shell.Contains("aria-label=\"Settings\"", StringComparison.Ordinal)
-        && shell.Contains("aria-label=\"Home\"", StringComparison.Ordinal));
-    Expect("react caption buttons",
-        shell.Contains("host.minimize()", StringComparison.Ordinal)
-        && shell.Contains("host.close()", StringComparison.Ordinal));
+    var orb = File.ReadAllText(orbApp);
+    Expect("brain talks through real host bridge",
+        orb.Contains("host.verifyAll()", StringComparison.Ordinal)
+        && orb.Contains("host.apply(", StringComparison.Ordinal)
+        && orb.Contains("host.getLive()", StringComparison.Ordinal));
+    Expect("brain asks before acting (Skip/Stop answer chips)",
+        orb.Contains("'Skip'", StringComparison.Ordinal)
+        && orb.Contains("'Stop'", StringComparison.Ordinal)
+        && orb.Contains("'reapply'", StringComparison.Ordinal));
+    Expect("brain has no in-app captions (native title bar)",
+        !orb.Contains("host.minimize()", StringComparison.Ordinal)
+        && !orb.Contains("host.close()", StringComparison.Ordinal));
 }
-// SettingsDrawer: hooks after the closed-state early return blank the whole WebView on gear click.
-var settingsDrawer = Path.Combine(repo, "ui", "src", "components", "SettingsDrawer.tsx");
-if (File.Exists(settingsDrawer))
+var uiPkg = Path.Combine(repo, "ui", "package.json");
+if (File.Exists(uiPkg))
 {
-    var sd = File.ReadAllText(settingsDrawer);
-    // Match the real statement (not JSDoc) — indented code line only.
-    var earlyMatch = System.Text.RegularExpressions.Regex.Match(
-        sd,
-        @"(?m)^[ \t]+if \(!open\) return null\s*$");
-    Expect("settings drawer early return", earlyMatch.Success);
-    var afterEarly = earlyMatch.Success ? sd.Substring(earlyMatch.Index) : sd;
-    Expect(
-        "no React hooks after settings early return",
-        !System.Text.RegularExpressions.Regex.IsMatch(
-            afterEarly,
-            @"\buse(Memo|State|Effect|Ref|Callback|LayoutEffect|Id)\s*\("));
+    var pkg = File.ReadAllText(uiPkg);
+    Expect("self-hosted fonts bundled",
+        pkg.Contains("@fontsource/space-grotesk", StringComparison.Ordinal)
+        && pkg.Contains("@fontsource/jetbrains-mono", StringComparison.Ordinal));
+    Expect("dead UI deps removed",
+        !pkg.Contains("react-router-dom", StringComparison.Ordinal)
+        && !pkg.Contains("framer-motion", StringComparison.Ordinal)
+        && !pkg.Contains("thinking-orbs", StringComparison.Ordinal)
+        && !pkg.Contains("tailwindcss", StringComparison.Ordinal));
 }
 // Thin native drag strip + WebView bridge — captions/nav are React.
 var mainCs = Path.Combine(repo, "Exo", "MainWindow.xaml.cs");
 if (File.Exists(mainCs))
 {
     var cs = File.ReadAllText(mainCs);
-    Expect("SetTitleBar drag strip", cs.Contains("SetTitleBar(AppTitleBar)", StringComparison.Ordinal));
+    Expect("native title bar wired",
+        cs.Contains("ExtendsContentIntoTitleBar = false", StringComparison.Ordinal)
+        && cs.Contains("hasTitleBar: true", StringComparison.Ordinal)
+        && !cs.Contains("SetTitleBar(AppTitleBar)", StringComparison.Ordinal));
     Expect("fixed shell size", cs.Contains("IsResizable = false", StringComparison.Ordinal)
         && cs.Contains("IsMaximizable = false", StringComparison.Ordinal)
         && cs.Contains("FixedWindowWidth", StringComparison.Ordinal)

@@ -1,26 +1,14 @@
-@import "tailwindcss";
+/* Self-hosted fonts — bundled woff2, no CDN, works fully offline. */
+@import "@fontsource/space-grotesk/500.css";
+@import "@fontsource/space-grotesk/600.css";
+@import "@fontsource/space-grotesk/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
 
-@theme {
-  --color-page: #050506;
-  --color-sunken: #0a0a0c;
-  --color-card: #121216;
-  --color-raised: #1a1a1f;
-  --color-glass: #141418;
-  --color-glass-border: #2a2a32;
-  --color-hairline: #1e1e24;
-  --color-text: #f4f4f2;
-  --color-muted: #8b8d92;
-  --color-secondary: #c4c5c8;
-  --color-success: #34d399;
-  --color-error: #f87171;
-  --color-discord: #5865f2;
-  --color-steam: #1a9fff;
-  --color-internet: #22d3ee;
-  --color-nvidia: #76b900;
-  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --ease-out-expo: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+:root {
+  --font-display: "Space Grotesk", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  /* Physical spring settle (CSS linear() easing — no JS animation lib). */
+  --ease-spring: linear(0, 0.006, 0.025 2.8%, 0.101 6.1%, 0.539 18.9%, 0.721 25.3%, 0.849, 0.937 38.5%, 0.968, 0.991 48.1%, 1.006, 1.014 55.8%, 1.016, 1.01, 1.003 79.5%, 1);
 }
 
 * {
@@ -33,39 +21,30 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  /* Solid page wash — soft light wells, no see-through layers */
-  background:
-    radial-gradient(1100px 520px at 18% -8%, #1a1a28 0%, transparent 55%),
-    radial-gradient(900px 480px at 92% 0%, #101820 0%, transparent 50%),
-    #050506;
-  color: var(--color-text);
-  font-family: var(--font-sans);
+  background: #000;
+  color: #e9e9ec;
+  font-family: var(--font-mono);
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
 
-/* Base only — stay in @layer so Tailwind utilities win. */
-@layer base {
-  button {
-    font: inherit;
-    cursor: pointer;
-    border: none;
-    background: transparent;
-    color: inherit;
-  }
+button {
+  font: inherit;
+  transition:
+    transform 140ms var(--ease-spring),
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+}
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
 
-  /* Press feedback on interactive chrome (not layout-shifting) */
-  button:not(:disabled):active {
-    transform: scale(0.97);
-  }
-  button {
-    transition:
-      transform 140ms var(--ease-out-expo),
-      background-color 160ms ease,
-      color 160ms ease,
-      box-shadow 160ms ease,
-      opacity 160ms ease;
-  }
+/* The brain speaking — message fade/rise in. */
+@keyframes exo-say {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -79,54 +58,6 @@ body,
   button:not(:disabled):active {
     transform: none;
   }
-}
-
-.tabular {
-  font-variant-numeric: tabular-nums;
-}
-
-/*
-  Liquid-glass look, fully opaque.
-  Depth from solid fills + edge light + soft shadow — no backdrop blur, no alpha glass.
-*/
-.glass {
-  background:
-    linear-gradient(165deg, #1c1c24 0%, #141418 42%, #101014 100%);
-  border: 1px solid #2e2e38;
-  box-shadow:
-    inset 0 1px 0 #3a3a46,
-    inset 0 -1px 0 #0a0a0c,
-    0 10px 28px #000000aa;
-}
-
-.glass-soft {
-  background: linear-gradient(180deg, #18181e 0%, #141418 100%);
-  border: 1px solid #282830;
-  box-shadow: inset 0 1px 0 #32323c;
-}
-
-.glass-chip {
-  background: linear-gradient(180deg, #1a1a20 0%, #151519 100%);
-  border: 1px solid #2c2c34;
-  box-shadow: inset 0 1px 0 #34343e;
-}
-
-/* Specular edge light on solid surfaces (not a frosted pane) */
-.specular {
-  position: relative;
-  overflow: hidden;
-}
-.specular::before {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    125deg,
-    #ffffff18 0%,
-    transparent 38%,
-    transparent 100%
-  );
 }
 
 ::-webkit-scrollbar {

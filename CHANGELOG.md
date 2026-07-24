@@ -1,3 +1,22 @@
+## 4.2.0
+
+**Exo is now a living brain -- the whole app is one thinking orb.**
+
+- The interface is a single monochrome dot-sphere orb, centered, on pure black.
+  It reads your PC live and *talks*: after a scan it asks about each system that
+  needs work -- "NVIDIA is still running stock settings. Want me to optimize it?"
+  -- and you answer with a tap (Optimize / Skip / Stop). It works through your
+  answers one at a time, then tells you when the rig is dialed in.
+- The orb is alive: it breathes at rest, sweeps a scan line while reading the
+  PC, energizes while applying, and pulses when it speaks. It also notices real
+  conditions ("your RAM's sitting at 92%") and weaves them into what it says.
+- Everything runs on the same verified Apply/Repair/Detect engine underneath --
+  nothing about the actual optimizations changed in this release.
+- Window chrome is now the standard Windows title bar (native minimize/close).
+- Cleanup: the old module-grid UI, its pages, and three UI libraries are gone;
+  fonts (Space Grotesk / JetBrains Mono) are bundled and work fully offline.
+  The UI bundle is roughly half its previous size.
+
 ## 4.1.6
 
 **Internet optimizer now reports honestly after a successful apply.**

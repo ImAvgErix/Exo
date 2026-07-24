@@ -67,12 +67,13 @@ public sealed partial class MainWindow : Window
         }
         catch { StartupLog.Mark("chrome-setup-partial"); }
 
-        // Custom glass caption owns min/close; hide stock Win11 title-bar buttons.
-        ExtendsContentIntoTitleBar = true;
+        // Use the standard Windows title bar (native minimize/close). The UI is
+        // the full-bleed orb; window controls are the OS caption.
+        ExtendsContentIntoTitleBar = false;
         try
         {
             if (AppWindow.Presenter is OverlappedPresenter op)
-                op.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: false);
+                op.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: true);
         }
         catch { /* best-effort on older presenters */ }
 
@@ -115,13 +116,6 @@ public sealed partial class MainWindow : Window
             ExoMotion.MotionDisabled = false;
             StartupLog.Mark("boot-motion-enabled");
         }
-
-        try
-        {
-            SetTitleBar(AppTitleBar);
-            StartupLog.Mark("titlebar-set");
-        }
-        catch { StartupLog.Mark("titlebar-set-failed"); }
 
         StartPostFirstFrameWork();
     }
@@ -471,14 +465,7 @@ public sealed partial class MainWindow : Window
 
     public void StabilizeShellAfterExternalWork()
     {
-        try
-        {
-            ApplyResponsiveWindowChrome();
-            if (_firstFrameMarked)
-            {
-                try { SetTitleBar(AppTitleBar); } catch { }
-            }
-        }
+        try { ApplyResponsiveWindowChrome(); }
         catch { }
     }
 
@@ -493,25 +480,9 @@ public sealed partial class MainWindow : Window
             presenter.PreferredMinimumHeight = FixedWindowHeight;
             presenter.PreferredMaximumWidth = FixedWindowWidth;
             presenter.PreferredMaximumHeight = FixedWindowHeight;
-            try { presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: false); }
+            try { presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: true); }
             catch { }
         }
-    }
-
-    private void CaptionMinimize_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            if (AppWindow.Presenter is OverlappedPresenter presenter)
-                presenter.Minimize();
-        }
-        catch { }
-    }
-
-    private void CaptionClose_Click(object sender, RoutedEventArgs e)
-    {
-        try { Close(); }
-        catch { }
     }
 
     private void ApplyInitialWindowBounds()
