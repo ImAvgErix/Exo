@@ -117,13 +117,6 @@ public sealed partial class MainWindow : Window
             StartupLog.Mark("boot-motion-enabled");
         }
 
-        try
-        {
-            SetTitleBar(AppTitleBar);
-            StartupLog.Mark("titlebar-set");
-        }
-        catch { StartupLog.Mark("titlebar-set-failed"); }
-
         StartPostFirstFrameWork();
     }
 
@@ -472,14 +465,7 @@ public sealed partial class MainWindow : Window
 
     public void StabilizeShellAfterExternalWork()
     {
-        try
-        {
-            ApplyResponsiveWindowChrome();
-            if (_firstFrameMarked)
-            {
-                try { SetTitleBar(AppTitleBar); } catch { }
-            }
-        }
+        try { ApplyResponsiveWindowChrome(); }
         catch { }
     }
 
@@ -497,22 +483,6 @@ public sealed partial class MainWindow : Window
             try { presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: true); }
             catch { }
         }
-    }
-
-    private void CaptionMinimize_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            if (AppWindow.Presenter is OverlappedPresenter presenter)
-                presenter.Minimize();
-        }
-        catch { }
-    }
-
-    private void CaptionClose_Click(object sender, RoutedEventArgs e)
-    {
-        try { Close(); }
-        catch { }
     }
 
     private void ApplyInitialWindowBounds()

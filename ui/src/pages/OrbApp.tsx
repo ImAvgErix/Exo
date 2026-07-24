@@ -120,13 +120,13 @@ export function OrbApp() {
     let line =
       s.kind === 'reapply'
         ? pick([
-            `${name} was tuned, but a few tweaks slipped — want me to top it back up?`,
-            `Something reset part of ${name}. Reapply?`,
+            `${name} was optimized before, but some tweaks got reset. Want me to reapply them?`,
+            `Something undid part of ${name}'s tuning. Want me to fix it?`,
           ])
         : pick([
-            `${name} is still running stock. Want me to tune it?`,
-            `I can squeeze more out of ${name}. Do it?`,
-            `${name} isn't optimized yet — want the pass?`,
+            `${name} is still running stock settings. Want me to optimize it?`,
+            `${name} isn't optimized yet. Want me to do it?`,
+            `I can make ${name} faster. Should I?`,
           ])
 
     // Weave in awareness on the first ask, or when a vital is relevant.
@@ -193,17 +193,20 @@ export function OrbApp() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', color: '#e9e9ec', fontFamily: 'var(--font-mono)', overflow: 'hidden', userSelect: 'none' }}>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0, padding: 24, textAlign: 'center' }}>
-        <BrainOrb state={orbState} size={420} />
-
-        <div key={msgKey} style={{ marginTop: 8, maxWidth: 600, animation: 'exo-say .5s var(--ease-spring, ease) both' }}>
-          <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, lineHeight: 1.42, letterSpacing: '-0.01em', color: '#dcdce0' }}>{msg}</p>
-        </div>
-
-        <div style={{ marginTop: 22, display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', minHeight: 44 }}>
-          {opts.map((o, i) => (
-            <button key={i} onClick={o.run} style={o.primary ? primaryBtn : ghostBtn}>{o.label}</button>
-          ))}
+      {/* True centering: 1fr | orb | 1fr — the orb sits at the exact vertical
+          center regardless of how long the message below runs. */}
+      <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateRows: '1fr auto 1fr', justifyItems: 'center', textAlign: 'center' }}>
+        <div />
+        <BrainOrb state={orbState} size={400} />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 6, minWidth: 0 }}>
+          <div key={msgKey} style={{ maxWidth: 600, padding: '0 24px', animation: 'exo-say .5s var(--ease-spring, ease) both' }}>
+            <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, lineHeight: 1.42, letterSpacing: '-0.01em', color: '#dcdce0' }}>{msg}</p>
+          </div>
+          <div style={{ marginTop: 18, display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', minHeight: 44 }}>
+            {opts.map((o, i) => (
+              <button key={i} onClick={o.run} style={o.primary ? primaryBtn : ghostBtn}>{o.label}</button>
+            ))}
+          </div>
         </div>
       </div>
     </div>

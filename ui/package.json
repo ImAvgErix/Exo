@@ -1,7 +1,7 @@
 {
   "name": "exo-ui",
   "private": true,
-  "version": "4.1.6",
+  "version": "4.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,18 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "framer-motion": "^12.23.12",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "react-router-dom": "^7.8.2",
-    "thinking-orbs": "^0.1.1"
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.12",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.2",
-    "tailwindcss": "^4.1.12",
     "typescript": "~5.9.2",
     "vite": "^7.1.3"
   }

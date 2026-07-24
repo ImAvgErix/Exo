@@ -87,18 +87,6 @@
             </StackPanel>
         </StackPanel>
 
-        <!-- ~10px drag-only strip (matches React pt-2.5). Must NOT cover h-12 bar. -->
-        <Border x:Name="TitleChrome"
-                Height="10"
-                VerticalAlignment="Top"
-                Background="Transparent"
-                IsHitTestVisible="True">
-            <Border x:Name="AppTitleBar"
-                    Background="Transparent"
-                    HorizontalAlignment="Stretch"
-                    VerticalAlignment="Stretch" />
-        </Border>
-
         <!-- Hidden legacy pieces kept for settings flyout / smoke string gates -->
         <Border x:Name="ExoBrandPill" Visibility="Collapsed" Width="0" Height="0">
             <Grid>
