@@ -4,11 +4,11 @@
 
 Exo Hub is a **Windows gaming optimizer** that finds what is on your PC, applies only what helps, and checks that it stuck — without bloatware, accounts, or folklore tweak packs.
 
-[![Download](https://img.shields.io/github/v/release/ImAvgErix/Exo?style=flat-square&label=download&color=111)](https://github.com/ImAvgErix/Exo/releases/latest)
-[![License](https://img.shields.io/github/license/ImAvgErix/Exo?style=flat-square)](LICENSE)
+[![Download](https://img.shields.io/github/v/release/ImAvgErix/ExoHub?style=flat-square&label=download&color=111)](https://github.com/ImAvgErix/ExoHub/releases/latest)
+[![License](https://img.shields.io/github/license/ImAvgErix/ExoHub?style=flat-square)](LICENSE)
 
 <p align="center">
-  <a href="https://github.com/ImAvgErix/Exo/releases/latest"><strong>Download Exo Hub</strong></a>
+  <a href="https://github.com/ImAvgErix/ExoHub/releases/latest"><strong>Download Exo Hub</strong></a>
 </p>
 
 <p align="center">
@@ -26,7 +26,7 @@ Exo Hub is a **Windows gaming optimizer** that finds what is on your PC, applies
 
 ## How you use it
 
-1. Download **Exo.exe** from [Releases](https://github.com/ImAvgErix/Exo/releases/latest)  
+1. Download **ExoHub.exe** (or **Exo.exe**) from [Releases](https://github.com/ImAvgErix/ExoHub/releases/latest)  
 2. Run the Windows installer → Start menu → open Exo Hub  
 3. Detect → pick modules → apply → verify  
 
@@ -36,7 +36,7 @@ Windows 11 x64. Builds are unsigned; SmartScreen may ask once.
 
 | Product | Role |
 | --- | --- |
-| **[Exo Hub](https://github.com/ImAvgErix/Exo)** | Gaming optimizers (this repo) |
+| **[Exo Hub](https://github.com/ImAvgErix/ExoHub)** | Gaming optimizers (this repo) |
 | **[Exo OS](https://github.com/ImAvgErix/ExoOS)** | Windows gaming transform |
 | **[Exo Link](https://github.com/ImAvgErix/ExoLink)** | Desktop chat & voice |
 | **[Exo Launcher](https://github.com/ImAvgErix/ExoLauncher)** | Game library |

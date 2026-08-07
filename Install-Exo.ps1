@@ -16,7 +16,7 @@ $ErrorActionPreference = 'Stop'
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Windows only.' }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$Repo = 'ImAvgErix/Exo'
+$Repo = 'ImAvgErix/ExoHub'
 Write-Host ''
 Write-Host '  Exo - downloading Exo.exe...' -ForegroundColor Cyan
 Write-Host ''
