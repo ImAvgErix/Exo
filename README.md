@@ -1,6 +1,6 @@
 # Exo
 
-**Built quiet. Tuned sharp.**
+**Presence without weight.**
 
 Native **Windows gaming optimizer**. Detect what’s on this PC. Apply verified modules. Snapshot first, verify after, repair when something drifts. No account. No ads. No folklore tweak packs.
 
@@ -101,5 +101,5 @@ Detect  →  Plan  →  Snapshot  →  Apply  →  Verify  →  (Repair)
 
 MIT © 2026 Erix ([ImAvgErix](https://github.com/ImAvgErix)) — [LICENSE](LICENSE) · [PRIVACY.md](PRIVACY.md) · [SECURITY.md](SECURITY.md)
 
-<p align="center"><sub>Built quiet. Tuned sharp.</sub></p>
+<p align="center"><sub>Presence without weight.</sub></p>
 
