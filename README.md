@@ -74,7 +74,7 @@ A module covers whatever is present. Ryzen + GeForce gets AMD for chipset and NV
 irm https://raw.githubusercontent.com/ImAvgErix/Exo/main/Install-Exo.ps1 | iex
 ```
 
-Or download **Exo.exe** from [Releases](https://github.com/ImAvgErix/Exo/releases/latest). Builds are unsigned; SmartScreen may prompt. Use official GitHub releases only.
+Or download **Exo.exe** from [Releases](https://github.com/ImAvgErix/Exo/releases/latest). Run the installer — it installs under your user profile, adds a Start menu entry, and launches Exo. Builds are unsigned; SmartScreen may prompt. Use official GitHub releases only.
 
 ---
 
@@ -99,7 +99,7 @@ Detect  →  Plan  →  Snapshot  →  Apply  →  Verify  →  (Repair)
 
 ## License
 
-MIT © 2026 Erix ([ImAvgErix](https://github.com/ImAvgErix)) — see [LICENSE](LICENSE)
+MIT © 2026 Erix ([ImAvgErix](https://github.com/ImAvgErix)) — [LICENSE](LICENSE) · [PRIVACY.md](PRIVACY.md) · [SECURITY.md](SECURITY.md)
 
 <p align="center"><sub>Built quiet. Tuned sharp.</sub></p>
 
