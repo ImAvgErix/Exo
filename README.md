@@ -92,8 +92,8 @@ Detect  →  Plan  →  Snapshot  →  Apply  →  Verify  →  (Repair)
 | --- | --- |
 | **[Exo](https://github.com/ImAvgErix/Exo)** | Gaming optimizers (this repo) |
 | **[Exo OS](https://github.com/ImAvgErix/ExoOS)** | Full Windows transform — Balanced or Extreme |
-| **[Exocord](https://github.com/ImAvgErix/exocord)** | Native desktop chat & voice |
-| **[Exo Launcher](https://github.com/ImAvgErix/Exo-Launcher)** | One library UI; store clients as invisible backends |
+| **[Exocord](https://github.com/ImAvgErix/Exocord)** | Native desktop chat & voice |
+| **[Exo Launcher](https://github.com/ImAvgErix/ExoLauncher)** | One library UI; store clients as invisible backends |
 
 ---
 
@@ -102,3 +102,4 @@ Detect  →  Plan  →  Snapshot  →  Apply  →  Verify  →  (Repair)
 MIT © 2026 Erix ([ImAvgErix](https://github.com/ImAvgErix)) — see [LICENSE](LICENSE)
 
 <p align="center"><sub>Built quiet. Tuned sharp.</sub></p>
+
